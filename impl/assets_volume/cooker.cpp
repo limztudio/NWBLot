@@ -83,7 +83,6 @@ bool AssetVolumeCooker::cook(const Core::Assets::AssetCookOptions& options){
 bool AssetVolumeCooker::cookAssetVolume(const AssetVolumeCookEnvironment& environment, AssetVolumeCookResult& outResult){
     outResult = {};
 
-    ShaderCook shaderCook(m_arena);
     Core::Alloc::ScratchArena scratchArena;
 
     AssetsVolumeCookDetail::ResolvedCookPaths resolvedPaths(m_arena);
@@ -106,7 +105,6 @@ bool AssetVolumeCooker::cookAssetVolume(const AssetVolumeCookEnvironment& enviro
         return false;
     if(!AssetsVolumeMetadataParser::ParseAssetMetadata(
         m_arena,
-        shaderCook,
         nwbFiles,
         parsedMetadata,
         environment.threadPool,
@@ -122,7 +120,6 @@ bool AssetVolumeCooker::cookAssetVolume(const AssetVolumeCookEnvironment& enviro
     AssetsVolumeCookDetail::AssetVolumeExternalWriterVector externalWriters(m_arena);
     AssetsVolumeCookDetail::AssetVolumePrepareContext prepareContext{
         m_arena,
-        shaderCook,
         resolvedPaths,
         configurationSafeName,
         parsedMetadata,

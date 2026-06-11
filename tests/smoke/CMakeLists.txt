@@ -86,7 +86,7 @@ if(Python3_Interpreter_FOUND)
                 --asset-root "impl/assets"
                 --asset-root "tests/smoke/assets"
                 --output-directory "${_nwb_transparent_multi_runtime_root}/res"
-                --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/shader_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
+                --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/asset_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_transparent_multi_asset_stamp}"
             DEPENDS
@@ -194,7 +194,7 @@ if(Python3_Interpreter_FOUND)
                 --asset-root "impl/assets"
                 --asset-root "tests/smoke/assets"
                 --output-directory "${_nwb_csg_visible_runtime_root}/res"
-                --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/shader_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
+                --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/asset_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_visible_asset_stamp}"
             DEPENDS
@@ -280,7 +280,7 @@ if(Python3_Interpreter_FOUND)
                 --asset-root "impl/assets"
                 --asset-root "tests/smoke/assets"
                 --output-directory "${_nwb_csg_skinned_visible_runtime_root}/res"
-                --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/shader_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
+                --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/asset_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_skinned_visible_asset_stamp}"
             DEPENDS
@@ -468,7 +468,7 @@ if(Python3_Interpreter_FOUND)
                 --asset-root "impl/assets"
                 --asset-root "tests/smoke/assets"
                 --output-directory "${_nwb_skinning_culling_runtime_root}/res"
-                --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/shader_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
+                --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/asset_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_skinning_culling_asset_stamp}"
             DEPENDS

@@ -12,10 +12,9 @@ static bool ParseMaterialEntryFromMetaText(
     if(!doc.parse(metaText))
         return false;
 
-    NWB::Impl::ShaderCook shaderCook(testArena.arena);
     const Path assetRoot = AssetsGraphicsTestCaseRoot("material_meta") / "assets";
     const Path nwbFilePath = assetRoot / "materials" / "test_material.nwb";
-    return NWB::Impl::ParseMaterialCookMetadata(shaderCook, assetRoot, "project", nwbFilePath, doc, outEntry, scratchArena);
+    return NWB::Impl::ParseMaterialCookMetadata(assetRoot, "project", nwbFilePath, doc, outEntry, scratchArena);
 }
 
 static bool ContainsText(const AStringView text, const AStringView expected){

@@ -16,6 +16,7 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/material_validation.h"
         "${CMAKE_CURRENT_LIST_DIR}/shader_cook_plan.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/shader_cook_plan.h"
+        "${CMAKE_CURRENT_LIST_DIR}/shader_stage_key.h"
         "${CMAKE_CURRENT_LIST_DIR}/shader_volume_writer.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/shader_volume_writer.h"
         "${CMAKE_CURRENT_LIST_DIR}/volume_prepare.cpp"

@@ -14,7 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_shader/cook.h>
+#include "../global.h"
 
 #include <core/alloc/scratch.h>
 #include <core/metascript/parser.h>
@@ -38,7 +38,10 @@ namespace AssetsCsgCook{
 inline constexpr Name s_CsgShapeAssetTypeName("csg_shape");
 inline constexpr AStringView s_DefaultGeneratedIncludeDirectory = "csg/generated";
 
-using CookString = ShaderCook::CookString;
+using CookArena = Core::Alloc::GlobalArena;
+using CookString = AString<CookArena>;
+template<typename T>
+using CookVector = Vector<T, CookArena>;
 using ScratchArena = Core::Alloc::ScratchArena;
 
 struct CsgShapeCookEntry{
@@ -48,20 +51,20 @@ struct CsgShapeCookEntry{
     CookString evalInclude;
     CookString moduleInclude;
 
-    explicit CsgShapeCookEntry(ShaderCook::CookArena& arena)
+    explicit CsgShapeCookEntry(CookArena& arena)
         : evalInclude(arena)
         , moduleInclude(arena)
     {}
 };
 
-using CsgShapeCookEntryVector = ShaderCook::CookVector<CsgShapeCookEntry>;
+using CsgShapeCookEntryVector = CookVector<CsgShapeCookEntry>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] bool ParseCsgShapeCookMetadata(
-    ShaderCook::CookArena& cookArena,
+    CookArena& cookArena,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     CsgShapeCookEntry& outEntry,

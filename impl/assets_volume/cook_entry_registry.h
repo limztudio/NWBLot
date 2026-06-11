@@ -14,10 +14,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "shader_stage_key.h"
+#include "../global.h"
 
-#include <impl/assets_shader/cook.h>
-
+#include <core/alloc/scratch.h>
 #include <core/assets/module.h>
 #include <core/filesystem/module.h>
 
@@ -40,13 +39,14 @@ namespace AssetsVolumeCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CookString = ShaderCook::CookString;
+using CookArena = Core::Alloc::GlobalArena;
+using CookString = AString<CookArena>;
 template<typename T>
-using CookVector = ShaderCook::CookVector<T>;
+using CookVector = Vector<T, CookArena>;
 template<typename T, typename V>
-using CookMap = ShaderCook::CookMap<T, V>;
+using CookMap = HashMap<T, V, Hasher<T>, EqualTo<T>, CookArena>;
 template<typename T>
-using CookHashSet = ShaderCook::CookHashSet<T>;
+using CookHashSet = HashSet<T, Hasher<T>, EqualTo<T>, CookArena>;
 using ScratchArena = Core::Alloc::ScratchArena;
 using ScratchString = AString<ScratchArena>;
 using CookEntryPathHashSet = CookHashSet<NameHash>;
@@ -56,8 +56,7 @@ using CookEntryPathHashSet = CookHashSet<NameHash>;
 
 
 struct CookEntryParseContext{
-    ShaderCook::CookArena& cookArena;
-    ShaderCook& shaderCook;
+    CookArena& cookArena;
     Core::Alloc::ThreadPool& threadPool;
     ScratchArena& scratchArena;
     CookEntryPathHashSet& seenVirtualPathHashes;
@@ -216,7 +215,7 @@ public:
 
 public:
     CookEntryBucket(
-        ShaderCook::CookArena& arena,
+        CookArena& arena,
         const Name& assetType,
         const tchar* assetKindText,
         DocumentParseFunction parseDocument,
@@ -361,7 +360,7 @@ private:
     using BucketLookup = CookMap<Name, ICookEntryBucket*>;
 
 public:
-    explicit CookEntryRegistry(ShaderCook::CookArena& arena)
+    explicit CookEntryRegistry(CookArena& arena)
         : m_arena(arena)
         , m_buckets(arena)
         , m_lookup(0, Hasher<Name>(), EqualTo<Name>(), arena)
@@ -495,7 +494,7 @@ public:
     }
 
 private:
-    ShaderCook::CookArena& m_arena;
+    CookArena& m_arena;
     BucketVector m_buckets;
     BucketLookup m_lookup;
 };

@@ -23,17 +23,13 @@ namespace SkeletonRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_Epsilon = static_cast<f32>(NWB_SKINNED_MESH_EPSILON);
+static constexpr f32 s_Epsilon = 0.000001f;
 static constexpr f32 s_JointDeterminantEpsilon = 0.000000000001f;
 static constexpr f32 s_RigidJointEpsilon = 0.001f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] inline bool ActiveWeight(const f32 value){
-    return value > s_Epsilon || value < -s_Epsilon;
-}
 
 [[nodiscard]] inline bool FiniteVector(const SIMDVector value, const u32 activeMask){
     const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
@@ -77,6 +73,14 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return IsFinite(determinant) && Abs(determinant) > s_JointDeterminantEpsilon;
 }
 
+[[nodiscard]] inline const SIMDMatrix& ToSimdJointMatrix(const SIMDMatrix& matrix){
+    return matrix;
+}
+
+[[nodiscard]] inline SIMDMatrix ToSimdJointMatrix(const SkeletonJointMatrix& matrix){
+    return LoadFloat(matrix);
+}
+
 [[nodiscard]] inline bool ResolveSkinningJointMatrix(
     const SIMDMatrix& poseJoint,
     const bool hasInverseBind,
@@ -95,7 +99,7 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 }
 
 template<typename JointMatrixVector>
-[[nodiscard]] inline bool BuildJointPaletteFromSkeletonPose(
+[[nodiscard]] inline bool BuildSimdJointPaletteFromSkeletonPose(
     const SkeletonPoseComponent& pose,
     JointMatrixVector& outJointPalette,
     u32& outSkinningMode){
@@ -126,49 +130,36 @@ template<typename JointMatrixVector>
             if(parentJoint >= jointIndex)
                 return false;
 
-            jointMatrix = MultiplyJointMatrices(LoadFloat(outJointPalette[parentJoint]), jointMatrix);
+            jointMatrix = MultiplyJointMatrices(outJointPalette[parentJoint], jointMatrix);
             if(!IsInvertibleAffineJointMatrix(jointMatrix))
                 return false;
         }
 
-        SkeletonJointMatrix storedJointMatrix{};
-        StoreFloat(jointMatrix, &storedJointMatrix);
-        outJointPalette.push_back(storedJointMatrix);
+        outJointPalette.push_back(jointMatrix);
     }
 
     outSkinningMode = pose.skinningMode;
     return true;
 }
 
-[[nodiscard]] inline bool TryBuildJointNormalMatrix(const SIMDMatrix& matrix, SIMDMatrix& outNormalMatrix){
-    const SIMDVector row0 = VectorSetW(matrix.v[0], 0.0f);
-    const SIMDVector row1 = VectorSetW(matrix.v[1], 0.0f);
-    const SIMDVector row2 = VectorSetW(matrix.v[2], 0.0f);
-    const SIMDVector cross12 = Vector3Cross(row1, row2);
-    const SIMDVector cross20 = Vector3Cross(row2, row0);
-    const SIMDVector cross01 = Vector3Cross(row0, row1);
-    const f32 determinant = VectorGetX(Vector3Dot(row0, cross12));
-    if(!IsFinite(determinant) || Abs(determinant) <= s_Epsilon)
+template<typename SimdJointMatrixVector, typename JointMatrixVector>
+[[nodiscard]] inline bool BuildStoredJointPaletteFromSkeletonPose(
+    const SkeletonPoseComponent& pose,
+    SimdJointMatrixVector& scratchSimdJointPalette,
+    JointMatrixVector& outJointPalette,
+    u32& outSkinningMode){
+    if(!BuildSimdJointPaletteFromSkeletonPose(pose, scratchSimdJointPalette, outSkinningMode))
         return false;
 
-    const SIMDVector inverseDeterminant = VectorReplicate(1.0f / determinant);
-    outNormalMatrix.v[0] = VectorSetW(VectorMultiply(cross12, inverseDeterminant), 0.0f);
-    outNormalMatrix.v[1] = VectorSetW(VectorMultiply(cross20, inverseDeterminant), 0.0f);
-    outNormalMatrix.v[2] = VectorSetW(VectorMultiply(cross01, inverseDeterminant), 0.0f);
-    outNormalMatrix.v[3] = VectorZero();
-    return FiniteVector(outNormalMatrix.v[0], 0x7u) && FiniteVector(outNormalMatrix.v[1], 0x7u) && FiniteVector(outNormalMatrix.v[2], 0x7u);
-}
+    outJointPalette.clear();
+    outJointPalette.reserve(scratchSimdJointPalette.size());
+    for(const SIMDMatrix& jointMatrix : scratchSimdJointPalette){
+        SkeletonJointMatrix storedJointMatrix{};
+        StoreFloat(jointMatrix, &storedJointMatrix);
+        outJointPalette.push_back(storedJointMatrix);
+    }
 
-[[nodiscard]] inline bool TryTransformJointNormalDirection(const SIMDMatrix& matrix, const SIMDVector directionVector, SIMDVector& outDirection){
-    SIMDMatrix normalMatrix;
-    if(!TryBuildJointNormalMatrix(matrix, normalMatrix))
-        return false;
-
-    SIMDVector result = VectorMultiply(VectorSplatX(directionVector), normalMatrix.v[0]);
-    result = VectorMultiplyAdd(VectorSplatY(directionVector), normalMatrix.v[1], result);
-    result = VectorMultiplyAdd(VectorSplatZ(directionVector), normalMatrix.v[2], result);
-    outDirection = VectorSetW(result, 0.0f);
-    return FiniteVector(outDirection, 0x7u);
+    return true;
 }
 
 [[nodiscard]] inline bool IsRigidJointMatrix(const SIMDMatrix& matrix){

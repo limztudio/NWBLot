@@ -14,8 +14,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "shader_stage_key.h"
+
 #include <impl/assets_volume/cook_types.h>
 #include <impl/assets_material/cook.h>
+#include <impl/assets_shader/cook.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,9 +37,9 @@ namespace AssetsGraphicsCsgShaderVariants{
 
 
 using ShaderStageKeySet = HashSet<
-    AssetsVolumeCookDetail::ShaderStageKey,
-    AssetsVolumeCookDetail::ShaderStageKeyHasher,
-    EqualTo<AssetsVolumeCookDetail::ShaderStageKey>,
+    AssetsGraphicsCookDetail::ShaderStageKey,
+    AssetsGraphicsCookDetail::ShaderStageKeyHasher,
+    EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>,
     Core::Alloc::ScratchArena
 >;
 

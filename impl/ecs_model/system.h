@@ -67,7 +67,7 @@ private:
     Core::ECS::World& m_world;
     Core::Assets::AssetManager& m_assetManager;
     Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena> m_scratchEntities;
-    Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena> m_scratchJoints;
+    Vector<SIMDMatrix, Core::Alloc::GlobalArena> m_scratchJoints;
 };
 
 

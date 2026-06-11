@@ -8,7 +8,6 @@
 #include "../global.h"
 
 #include <core/alloc/general.h>
-#include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/assets_skeleton/joint_types.h>
 
 
@@ -23,8 +22,8 @@ NWB_IMPL_BEGIN
 
 namespace SkeletonSkinningMode{
     enum Enum : u32{
-        LinearBlend = NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND,
-        DualQuaternion = NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION,
+        LinearBlend = 0u,
+        DualQuaternion = 1u,
     };
 };
 

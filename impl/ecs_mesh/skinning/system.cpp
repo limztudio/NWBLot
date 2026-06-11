@@ -69,7 +69,7 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Run
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -127,10 +127,7 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
             MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
             if(!instance)
                 return;
-#if defined(NWB_DEBUG)
-            if(!instance->valid())
-                return;
-#endif
+            NWB_ASSERT(instance->valid());
 
             const SkeletonJointPaletteComponent* jointPalette = nullptr;
             const SkeletonPoseComponent* skeletonPose = nullptr;
@@ -158,12 +155,8 @@ bool MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Ru
         return false;
     if((instance->dirtyFlags & (RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != 0u)
         return false;
-#if defined(NWB_DEBUG)
-    if(!instance->valid())
-        return false;
-    if(instance->meshlets.size() > static_cast<usize>(Limit<u32>::s_Max))
-        return false;
-#endif
+    NWB_ASSERT(instance->valid());
+    NWB_ASSERT(instance->meshlets.size() <= static_cast<usize>(Limit<u32>::s_Max));
 
     outMesh.entity = entity;
     outMesh.meshKey = DeriveRuntimeResourceName(
@@ -188,11 +181,8 @@ bool MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Ru
     outMesh.version = instance->editRevision;
     outMesh.dynamicMeshletBoundsFresh = __hidden_system::s_RuntimeSkinningMeshletFrustumCullingEnabled;
     outMesh.dynamicMeshletConesFresh = __hidden_system::s_RuntimeSkinningMeshletConeCullingEnabled;
-#if defined(NWB_DEBUG)
-    return outMesh.valid();
-#else
+    NWB_ASSERT(outMesh.valid());
     return true;
-#endif
 }
 
 bool MeshSkinningSystem::containsRuntimeMesh(const Name& meshKey, const u64 version){
@@ -255,10 +245,7 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
             MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
             if(!instance)
                 return;
-#if defined(NWB_DEBUG)
-            if(!instance->valid())
-                return;
-#endif
+            NWB_ASSERT(instance->valid());
 
             const SkeletonJointPaletteComponent* jointPalette = nullptr;
             const SkeletonPoseComponent* skeletonPose = nullptr;

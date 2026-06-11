@@ -33,7 +33,8 @@ namespace __hidden_assets_csg_cook{
 namespace Metascript = Core::Metascript;
 using AssetsCsgCook::CsgShapeCookEntry;
 using AssetsCsgCook::CsgShapeCookEntryVector;
-using CookString = ShaderCook::CookString;
+using AssetsCsgCook::CookArena;
+using AssetsCsgCook::CookString;
 using ScratchArena = Core::Alloc::ScratchArena;
 using ScratchString = AString<ScratchArena>;
 
@@ -333,7 +334,7 @@ namespace AssetsCsgCook{
 
 
 [[nodiscard]] static bool BuildDefaultCsgShapeModuleInclude(
-    ShaderCook::CookArena& arena,
+    CookArena& arena,
     const Name shaderModule,
     CookString& outInclude
 ){
@@ -354,7 +355,7 @@ namespace AssetsCsgCook{
 }
 
 bool ParseCsgShapeCookMetadata(
-    ShaderCook::CookArena& cookArena,
+    CookArena& cookArena,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     CsgShapeCookEntry& outEntry,

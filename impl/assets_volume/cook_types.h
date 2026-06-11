@@ -15,7 +15,6 @@
 
 
 #include "cook_entry_registry.h"
-#include "shader_stage_key.h"
 
 #include <core/alloc/arena_object.h>
 #include <core/alloc/scratch.h>
@@ -43,11 +42,7 @@ inline constexpr AStringView s_AssetVolumeCookerLogPrefix = "AssetVolumeCooker";
 using ScratchArena = Core::Alloc::ScratchArena;
 using ScratchString = AString<ScratchArena>;
 using StagedVolumePaths = StagedDirectoryPaths;
-using IncludeMetadataMap = ShaderCook::CookMap<CookString, ShaderCook::IncludeEntry>;
-using ShaderEntryVector = CookVector<ShaderCook::ShaderEntry>;
 using VirtualPathHashSet = CookEntryPathHashSet;
-using PreparedShaderKey = ShaderStageKey;
-using PreparedShaderKeyHasher = ShaderStageKeyHasher;
 using ParsedMetadataExtensionMap = CookMap<Name, void*>;
 
 
@@ -56,11 +51,11 @@ using ParsedMetadataExtensionMap = CookMap<Name, void*>;
 
 struct ResolvedCookPaths{
     Path repoRoot;
-    ShaderCook::CookVector<Path> assetRoots;
+    CookVector<Path> assetRoots;
     Path outputDirectory;
     Path cacheDirectory;
 
-    explicit ResolvedCookPaths(ShaderCook::CookArena& arena)
+    explicit ResolvedCookPaths(CookArena& arena)
         : assetRoots(arena)
     {}
 };
@@ -71,7 +66,7 @@ struct DiscoveredNwbFile{
     CookString normalizedPathText;
     ACompactString virtualRoot;
 
-    DiscoveredNwbFile(ShaderCook::CookArena& arena, const Path& inAssetRoot, const Path& inFilePath, AStringView inNormalizedPathText, ACompactString inVirtualRoot)
+    DiscoveredNwbFile(CookArena& arena, const Path& inAssetRoot, const Path& inFilePath, AStringView inNormalizedPathText, ACompactString inVirtualRoot)
         : assetRoot(inAssetRoot)
         , filePath(inFilePath)
         , normalizedPathText(inNormalizedPathText, arena)
@@ -83,16 +78,12 @@ using DiscoveredNwbFileVector = CookVector<DiscoveredNwbFile>;
 using DiscoveredBindFileVector = CookVector<DiscoveredNwbFile>;
 
 struct ParsedAssetMetadata{
-    ShaderCook::CookArena& arena;
-    IncludeMetadataMap includeMetadata;
-    ShaderEntryVector shaderEntries;
+    CookArena& arena;
     CookEntryRegistry entryRegistry;
     ParsedMetadataExtensionMap extensions;
 
-    explicit ParsedAssetMetadata(ShaderCook::CookArena& arena)
+    explicit ParsedAssetMetadata(CookArena& arena)
         : arena(arena)
-        , includeMetadata(arena)
-        , shaderEntries(arena)
         , entryRegistry(arena)
         , extensions(0, Hasher<Name>(), EqualTo<Name>(), arena)
     {}

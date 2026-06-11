@@ -29,9 +29,9 @@ namespace __hidden_asset_volume_cook_extension{
 
 
 struct AutoPrepareQueue{
-    ShaderCook::CookArena arena;
+    AssetsVolumeCookDetail::CookArena arena;
     Futex mutex;
-    ShaderCook::CookVector<AssetsVolumeCookDetail::AssetVolumePrepareFunction> functions;
+    AssetsVolumeCookDetail::CookVector<AssetsVolumeCookDetail::AssetVolumePrepareFunction> functions;
 
     AutoPrepareQueue()
         : arena("NWB::AssetsVolumeCookDetail::AssetVolumePrepareQueue")
@@ -45,9 +45,9 @@ struct AutoMetadataParser{
 };
 
 struct AutoMetadataParserQueue{
-    ShaderCook::CookArena arena;
+    AssetsVolumeCookDetail::CookArena arena;
     Futex mutex;
-    ShaderCook::CookVector<AutoMetadataParser> parsers;
+    AssetsVolumeCookDetail::CookVector<AutoMetadataParser> parsers;
 
     AutoMetadataParserQueue()
         : arena("NWB::AssetsVolumeCookDetail::AssetVolumeMetadataParserQueue")
@@ -66,7 +66,7 @@ AutoMetadataParserQueue& QueryAutoMetadataParserQueue(){
 }
 
 static bool ContainsPrepareFunction(
-    const ShaderCook::CookVector<AssetsVolumeCookDetail::AssetVolumePrepareFunction>& functions,
+    const AssetsVolumeCookDetail::CookVector<AssetsVolumeCookDetail::AssetVolumePrepareFunction>& functions,
     const AssetsVolumeCookDetail::AssetVolumePrepareFunction function
 ){
     for(const AssetsVolumeCookDetail::AssetVolumePrepareFunction current : functions){
@@ -78,7 +78,7 @@ static bool ContainsPrepareFunction(
 }
 
 static bool ContainsMetadataParser(
-    const ShaderCook::CookVector<AutoMetadataParser>& parsers,
+    const AssetsVolumeCookDetail::CookVector<AutoMetadataParser>& parsers,
     const AssetsVolumeCookDetail::AssetVolumeDocumentMetadataParseFunction documentFunction,
     const AssetsVolumeCookDetail::AssetVolumeValueMetadataParseFunction valueFunction
 ){

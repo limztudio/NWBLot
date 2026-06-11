@@ -12,7 +12,9 @@
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
+#include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_model/module.h>
+#include <impl/ecs_render/module.h>
 #include <impl/ecs_ui/module.h>
 
 #include <imgui.h>

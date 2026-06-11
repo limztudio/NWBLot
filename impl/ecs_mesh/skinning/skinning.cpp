@@ -91,11 +91,13 @@ static void SetSkinnedBufferStates(
 struct RuntimeSkinPayloadScratch{
     Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena> skinInfluences;
     Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> jointMatrices;
+    Vector<SIMDMatrix, Core::Alloc::ScratchArena> poseJoints;
     u32 resolvedSkinningMode = SkeletonSkinningMode::LinearBlend;
 
     explicit RuntimeSkinPayloadScratch(Core::Alloc::ScratchArena& scratchArena)
         : skinInfluences(scratchArena)
         , jointMatrices(scratchArena)
+        , poseJoints(scratchArena)
     {}
 
     [[nodiscard]] bool hasActiveSkin()const{
@@ -111,14 +113,13 @@ static bool BuildRuntimeSkinPayload(
 ){
     payload.resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkeletonSkinningMode::LinearBlend;
     if(SkeletonRuntime::HasSkeletonPose(skeletonPose)){
-        Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> poseJoints{ payload.skinInfluences.get_allocator().arena() };
-        if(!SkeletonRuntime::BuildJointPaletteFromSkeletonPose(*skeletonPose, poseJoints, payload.resolvedSkinningMode)){
+        if(!SkeletonRuntime::BuildSimdJointPaletteFromSkeletonPose(*skeletonPose, payload.poseJoints, payload.resolvedSkinningMode)){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
             return false;
         }
         return MeshSkinningPayload::BuildSkinPayloadFromJointMatrices(
             instance,
-            poseJoints,
+            payload.poseJoints,
             payload.resolvedSkinningMode,
             payload.skinInfluences,
             payload.jointMatrices
@@ -216,22 +217,11 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     if(foundRuntimeResources == m_runtimeResources.end())
         return false;
     RuntimeResources* resources = &foundRuntimeResources.value();
-#if defined(NWB_DEBUG)
-    if(
-        !resources
-        || !resources->boundsBindingSet
-    )
-        return false;
-    if(
-        hasActiveSkin
-        && (
-            !resources->skinningBindingSet
-            || !resources->skinBuffer
-            || !resources->jointPaletteBuffer
-        )
-    )
-        return false;
-#endif
+    NWB_ASSERT(resources != nullptr);
+    NWB_ASSERT(resources->boundsBindingSet);
+    NWB_ASSERT(!hasActiveSkin || resources->skinningBindingSet);
+    NWB_ASSERT(!hasActiveSkin || resources->skinBuffer);
+    NWB_ASSERT(!hasActiveSkin || resources->jointPaletteBuffer);
 
     if(!hasActiveSkin){
         if(skinnedMeshInputDirty || hadSkinningResources){

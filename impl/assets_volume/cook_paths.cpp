@@ -24,64 +24,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_cook_paths{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace AssetsVolumeCookDetail;
-
-using IncludeDirectoryScratchSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static bool AppendIncludeDirectory(
-    const Path& includeDirectory,
-    const ShaderCook::ShaderEntry& entry,
-    IncludeDirectoryScratchSet& seenIncludeDirectories,
-    ShaderCook::CookVector<Path>& outIncludeDirectories,
-    ScratchArena& scratchArena
-){
-    ErrorCode errorCode;
-    const bool isDirectory = IsDirectory(includeDirectory, errorCode);
-    if(errorCode){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to query include root '{}' for entry '{}': {}")
-            , PathToString<tchar>(includeDirectory)
-            , StringConvert(entry.name)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-    if(!isDirectory){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: include root is not a directory for entry '{}': '{}'")
-            , StringConvert(entry.name)
-            , PathToString<tchar>(includeDirectory)
-        );
-        return false;
-    }
-
-    ScratchString normalizedIncludeDirectory = PathToString(scratchArena, includeDirectory.lexically_normal());
-    CanonicalizeTextInPlace(normalizedIncludeDirectory);
-    if(!seenIncludeDirectories.insert(Move(normalizedIncludeDirectory)).second)
-        return true;
-
-    outIncludeDirectories.push_back(includeDirectory);
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace AssetsVolumeCookDetail{
 
 
@@ -178,7 +120,7 @@ bool ResolveCookPaths(
         }
     }
 
-    const Path defaultCacheDirectory = outPaths.repoRoot / "__build_obj/shader_cache";
+    const Path defaultCacheDirectory = outPaths.repoRoot / "__build_obj/asset_cache";
     const Path requestedCacheDirectory = environment.cacheDirectory.empty()
         ? defaultCacheDirectory
         : environment.cacheDirectory
@@ -217,12 +159,12 @@ bool ResolveCookPaths(
 
 
 bool DiscoverFilesWithExtension(
-    const ShaderCook::CookVector<Path>& assetRoots,
+    const CookVector<Path>& assetRoots,
     const AStringView expectedExtension,
     DiscoveredNwbFileVector& outFiles,
     ScratchArena& scratchArena
 ){
-    ShaderCook::CookArena& cookArena = outFiles.get_allocator().arena();
+    CookArena& cookArena = outFiles.get_allocator().arena();
     ErrorCode errorCode;
     HashSet<u64, Hasher<u64>, EqualTo<u64>, ScratchArena> seenPathHashes(
         0,
@@ -301,79 +243,6 @@ bool DiscoverFilesWithExtension(
 
     return true;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool BuildIncludeDirectories(
-    const Path& repoRoot,
-    const ShaderCook::CookVector<Path>& assetRoots,
-    const ShaderCook::CookVector<Path>& implicitIncludeRoots,
-    const ShaderCook::ShaderEntry& entry,
-    ShaderCook::CookVector<Path>& outIncludeDirectories,
-    ScratchArena& scratchArena
-){
-    ErrorCode errorCode;
-    __hidden_cook_paths::IncludeDirectoryScratchSet seenIncludeDirectories(
-        0,
-        Hasher<ScratchString>(),
-        EqualTo<ScratchString>(),
-        scratchArena
-    );
-
-    outIncludeDirectories.clear();
-    if(
-        entry.includeRoots.size() > Limit<usize>::s_Max - implicitIncludeRoots.size()
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: include root count overflow for entry '{}'"), StringConvert(entry.name));
-        return false;
-    }
-
-    outIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRoots.size());
-    seenIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRoots.size());
-
-    for(const Path& implicitIncludeRoot : implicitIncludeRoots){
-        if(!__hidden_cook_paths::AppendIncludeDirectory(implicitIncludeRoot, entry, seenIncludeDirectories, outIncludeDirectories, scratchArena))
-            return false;
-    }
-
-    for(const CookString& includeRoot : entry.includeRoots){
-        Path includeDirectory;
-        if(!Core::Assets::ResolveVirtualAssetPath(assetRoots, includeRoot, includeDirectory, scratchArena)){
-            if(Core::Assets::HasReservedAssetVirtualRoot(includeRoot, scratchArena)){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to resolve virtual include root '{}' for entry '{}'")
-                    , StringConvert(includeRoot)
-                    , StringConvert(entry.name)
-                );
-                return false;
-            }
-
-            errorCode.clear();
-            if(!ResolveAbsolutePath(repoRoot, includeRoot, includeDirectory, errorCode)){
-                if(errorCode){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to resolve include root '{}' for entry '{}': {}")
-                        , StringConvert(includeRoot)
-                        , StringConvert(entry.name)
-                        , StringConvert(errorCode.message())
-                    );
-                }
-                else{
-                    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: include root '{}' is empty or invalid for entry '{}'")
-                        , StringConvert(includeRoot)
-                        , StringConvert(entry.name)
-                    );
-                }
-                return false;
-            }
-        }
-
-        if(!__hidden_cook_paths::AppendIncludeDirectory(includeDirectory, entry, seenIncludeDirectories, outIncludeDirectories, scratchArena))
-            return false;
-    }
-
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

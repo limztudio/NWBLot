@@ -31,8 +31,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ShaderCook;
-
 struct MaterialCookEntry{
     using StageShaderMap = MaterialCookMap<Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>;
     using ParameterMap = MaterialBindParameterMap;
@@ -78,7 +76,6 @@ struct MaterialCookEntry{
 
 
 [[nodiscard]] bool ParseMaterialCookMetadata(
-    ShaderCook& shaderCook,
     const Path& assetRoot,
     AStringView virtualRoot,
     const Path& nwbFilePath,

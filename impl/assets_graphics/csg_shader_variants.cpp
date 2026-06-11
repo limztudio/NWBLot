@@ -47,7 +47,7 @@ static void InsertShaderKey(
     const Name& stageName
 ){
     if(shaderName && stageName)
-        outShaderKeys.insert(AssetsVolumeCookDetail::ShaderStageKey{ shaderName, stageName });
+        outShaderKeys.insert(AssetsGraphicsCookDetail::ShaderStageKey{ shaderName, stageName });
 }
 
 static void CollectMaterialMeshShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys){
@@ -88,7 +88,7 @@ void CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>
 }
 
 bool SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry){
-    const AssetsVolumeCookDetail::ShaderStageKey shaderKey{
+    const AssetsGraphicsCookDetail::ShaderStageKey shaderKey{
         ToName(shaderEntry.name),
         ToName(shaderEntry.archiveStage.view())
     };

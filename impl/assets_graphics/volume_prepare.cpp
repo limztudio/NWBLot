@@ -15,6 +15,7 @@
 #include <impl/assets_csg/cook.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_shader/asset.h>
+#include <impl/assets_shader/cook.h>
 #include <impl/assets_volume/cook_extension.h>
 #include <impl/assets_volume/cook_paths.h>
 
@@ -43,24 +44,30 @@ using MaterialBindEntryVector = ShaderCook::CookVector<MaterialBindEntry>;
 using CsgShapeEntryVector = ShaderCook::CookVector<AssetsCsgCook::CsgShapeCookEntry>;
 
 struct GraphicsVolumeMetadata{
+    ShaderCook shaderCook;
+    AssetsGraphicsCookDetail::IncludeMetadataMap includeMetadata;
+    AssetsGraphicsCookDetail::ShaderEntryVector shaderEntries;
     MaterialBindEntryVector materialBindEntries;
     CsgShapeEntryVector csgShapeEntries;
-    AssetsVolumeCookDetail::PreparedShaderPlan preparedPlan;
+    AssetsGraphicsCookDetail::PreparedShaderPlan preparedPlan;
     HashSet<
-        AssetsVolumeCookDetail::PreparedShaderKey,
-        AssetsVolumeCookDetail::PreparedShaderKeyHasher,
-        EqualTo<AssetsVolumeCookDetail::PreparedShaderKey>,
+        AssetsGraphicsCookDetail::PreparedShaderKey,
+        AssetsGraphicsCookDetail::PreparedShaderKeyHasher,
+        EqualTo<AssetsGraphicsCookDetail::PreparedShaderKey>,
         ShaderCook::CookArena
     > seenShaderIdentityKeys;
 
     explicit GraphicsVolumeMetadata(ShaderCook::CookArena& arena)
-        : materialBindEntries(arena)
+        : shaderCook(arena)
+        , includeMetadata(arena)
+        , shaderEntries(arena)
+        , materialBindEntries(arena)
         , csgShapeEntries(arena)
         , preparedPlan(arena)
         , seenShaderIdentityKeys(
             0,
-            AssetsVolumeCookDetail::PreparedShaderKeyHasher(),
-            EqualTo<AssetsVolumeCookDetail::PreparedShaderKey>(),
+            AssetsGraphicsCookDetail::PreparedShaderKeyHasher(),
+            EqualTo<AssetsGraphicsCookDetail::PreparedShaderKey>(),
             arena
         )
     {}
@@ -78,12 +85,12 @@ static bool AppendUniqueShaderEntry(
     ShaderCook::ShaderEntry& shaderEntry,
     const Path& nwbFilePath,
     GraphicsVolumeMetadata& graphicsMetadata,
-    AssetsVolumeCookDetail::ShaderEntryVector& outShaderEntries
+    AssetsGraphicsCookDetail::ShaderEntryVector& outShaderEntries
 ){
     if(shaderEntry.name.empty())
         return true;
 
-    const AssetsVolumeCookDetail::PreparedShaderKey shaderIdentityKey{
+    const AssetsGraphicsCookDetail::PreparedShaderKey shaderIdentityKey{
         ToName(shaderEntry.name),
         ToName(shaderEntry.archiveStage.view())
     };
@@ -108,7 +115,7 @@ static AssetsVolumeCookDetail::AssetVolumeMetadataParseResult ParseGraphicsDocum
     if(context.assetType == Shader::AssetTypeName()){
         GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
         ShaderCook::ShaderEntry shaderEntry(context.cookArena);
-        if(!context.shaderCook.parseShaderMeta(context.discoveredNwbFile.filePath, context.doc, shaderEntry, context.scratchArena))
+        if(!graphicsMetadata.shaderCook.parseShaderMeta(context.discoveredNwbFile.filePath, context.doc, shaderEntry, context.scratchArena))
             return AssetVolumeMetadataParseResult::Error;
 
         if(!Core::Assets::BuildDerivedAssetVirtualPath(
@@ -119,14 +126,15 @@ static AssetsVolumeCookDetail::AssetVolumeMetadataParseResult ParseGraphicsDocum
         ))
             return AssetVolumeMetadataParseResult::Error;
 
-        if(!AppendUniqueShaderEntry(shaderEntry, context.discoveredNwbFile.filePath, graphicsMetadata, context.parsedMetadata.shaderEntries))
+        if(!AppendUniqueShaderEntry(shaderEntry, context.discoveredNwbFile.filePath, graphicsMetadata, graphicsMetadata.shaderEntries))
             return AssetVolumeMetadataParseResult::Error;
         return AssetVolumeMetadataParseResult::Parsed;
     }
 
     if(context.assetType == s_IncludeAssetTypeName){
+        GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
         ShaderCook::IncludeEntry includeEntry(context.cookArena);
-        if(!context.shaderCook.parseIncludeMeta(context.discoveredNwbFile.filePath, context.doc, includeEntry, context.scratchArena))
+        if(!graphicsMetadata.shaderCook.parseIncludeMeta(context.discoveredNwbFile.filePath, context.doc, includeEntry, context.scratchArena))
             return AssetVolumeMetadataParseResult::Error;
 
         if(!includeEntry.source.empty() && !includeEntry.defineValues.empty()){
@@ -144,7 +152,7 @@ static AssetsVolumeCookDetail::AssetVolumeMetadataParseResult ParseGraphicsDocum
             ScratchString key = PathToString(context.scratchArena, absSource);
             CanonicalizeTextInPlace(key);
             CookString cookKey(key, context.cookArena);
-            if(!context.parsedMetadata.includeMetadata.emplace(Move(cookKey), Move(includeEntry)).second){
+            if(!graphicsMetadata.includeMetadata.emplace(Move(cookKey), Move(includeEntry)).second){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate include metadata for source '{}'")
                     , PathToString<tchar>(absSource)
                 );
@@ -216,7 +224,7 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
         return false;
 
     auto& materialEntries = context.parsedMetadata.entryRegistry.entries<MaterialCookEntry>(Material::AssetTypeName());
-    if(context.parsedMetadata.shaderEntries.empty() && !materialEntries.empty()){
+    if(graphicsMetadata.shaderEntries.empty() && !materialEntries.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: material assets require at least one shader entry"));
         return false;
     }
@@ -245,22 +253,22 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     ))
         return false;
 
-    if(!PrepareShaderEntriesForCook(
+    if(!AssetsGraphicsCookDetail::PrepareShaderEntriesForCook(
         context.arena,
-        context.shaderCook,
+        graphicsMetadata.shaderCook,
         context.resolvedPaths,
         materialBindIncludeRoot,
         csgShapeIncludeRoot,
-        context.parsedMetadata.includeMetadata,
-        context.parsedMetadata.shaderEntries,
+        graphicsMetadata.includeMetadata,
+        graphicsMetadata.shaderEntries,
         materialEntries,
         graphicsMetadata.preparedPlan,
         context.scratchArena
     ))
         return false;
 
-    if(!ValidateMaterials(
-        context.shaderCook,
+    if(!AssetsGraphicsCookDetail::ValidateMaterials(
+        graphicsMetadata.shaderCook,
         graphicsMetadata.preparedPlan.preparedEntries,
         materialEntries,
         context.scratchArena
@@ -274,9 +282,9 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
         VirtualPathHashSet& seenVirtualPathHashes,
         ScratchArena& writeScratchArena
     ){
-        return AppendPreparedShadersToVolume(
+        return AssetsGraphicsCookDetail::AppendPreparedShadersToVolume(
             context.arena,
-            context.shaderCook,
+            GraphicsMetadata(context.parsedMetadata).shaderCook,
             context.resolvedPaths.cacheDirectory,
             context.configurationSafeName,
             GraphicsMetadata(context.parsedMetadata).preparedPlan.preparedEntries,

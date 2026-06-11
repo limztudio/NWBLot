@@ -14,12 +14,10 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/cooker.h"
         "${CMAKE_CURRENT_LIST_DIR}/metadata_parser.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/metadata_parser.h"
-        "${CMAKE_CURRENT_LIST_DIR}/shader_stage_key.h"
     )
     target_link_libraries(nwb_assets_volume_cook PUBLIC nwb_assets)
     target_link_libraries(nwb_assets_volume_cook PRIVATE
         nwb_assets_bunch_cook
-        nwb_assets_shader_cook
         nwb_metascript
         nwb_filesystem
     )

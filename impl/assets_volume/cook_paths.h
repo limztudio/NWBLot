@@ -45,17 +45,9 @@ namespace AssetsVolumeCookDetail{
     ScratchArena& scratchArena
 );
 [[nodiscard]] bool DiscoverFilesWithExtension(
-    const ShaderCook::CookVector<Path>& assetRoots,
+    const CookVector<Path>& assetRoots,
     AStringView expectedExtension,
     DiscoveredNwbFileVector& outFiles,
-    ScratchArena& scratchArena
-);
-[[nodiscard]] bool BuildIncludeDirectories(
-    const Path& repoRoot,
-    const ShaderCook::CookVector<Path>& assetRoots,
-    const ShaderCook::CookVector<Path>& implicitIncludeRoots,
-    const ShaderCook::ShaderEntry& entry,
-    ShaderCook::CookVector<Path>& outIncludeDirectories,
     ScratchArena& scratchArena
 );
 

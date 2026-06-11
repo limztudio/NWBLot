@@ -35,8 +35,7 @@ namespace AssetsVolumeMetadataParser{
 
 
 [[nodiscard]] bool ParseAssetMetadata(
-    ShaderCook::CookArena& cookArena,
-    ShaderCook& shaderCook,
+    AssetsVolumeCookDetail::CookArena& cookArena,
     const AssetsVolumeCookDetail::DiscoveredNwbFileVector& nwbFiles,
     AssetsVolumeCookDetail::ParsedAssetMetadata& outMetadata,
     Core::Alloc::ThreadPool& threadPool,

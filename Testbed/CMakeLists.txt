@@ -48,7 +48,7 @@ if(TARGET nwb_resource_cooker)
             --asset-root "impl/assets"
             --asset-root "Testbed/assets"
             --output-directory "${NWB_OUTPUT_ROOT}/res"
-            --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/shader_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
+            --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/asset_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
             --configuration "$<CONFIG>"
         COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_testbed_asset_stamp}"
         DEPENDS

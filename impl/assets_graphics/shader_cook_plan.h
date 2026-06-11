@@ -14,8 +14,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "shader_stage_key.h"
+
 #include <impl/assets_volume/cook_types.h>
 #include <impl/assets_material/cook.h>
+#include <impl/assets_shader/cook.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,11 +30,24 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetsVolumeCookDetail{
+namespace AssetsGraphicsCookDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+using CookString = AssetsVolumeCookDetail::CookString;
+template<typename T>
+using CookVector = AssetsVolumeCookDetail::CookVector<T>;
+template<typename T, typename V>
+using CookMap = AssetsVolumeCookDetail::CookMap<T, V>;
+using ResolvedCookPaths = AssetsVolumeCookDetail::ResolvedCookPaths;
+using ScratchArena = AssetsVolumeCookDetail::ScratchArena;
+using VirtualPathHashSet = AssetsVolumeCookDetail::VirtualPathHashSet;
+using IncludeMetadataMap = CookMap<CookString, ShaderCook::IncludeEntry>;
+using ShaderEntryVector = CookVector<ShaderCook::ShaderEntry>;
+using PreparedShaderKey = ShaderStageKey;
+using PreparedShaderKeyHasher = ShaderStageKeyHasher;
 
 struct PreparedShaderEntry{
     ShaderCook::ShaderEntry entry;

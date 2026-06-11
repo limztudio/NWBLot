@@ -37,7 +37,6 @@ static bool ParseMaterialDocument(
     AssetsVolumeCookDetail::CookEntryParseContext& context
 ){
     return ParseMaterialCookMetadata(
-        context.shaderCook,
         assetRoot,
         virtualRoot,
         nwbFilePath,

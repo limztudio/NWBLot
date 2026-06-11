@@ -27,9 +27,9 @@ namespace __hidden_cook_entry_registry{
 
 
 struct AutoRegistrationQueue{
-    ShaderCook::CookArena arena;
+    AssetsVolumeCookDetail::CookArena arena;
     Futex mutex;
-    ShaderCook::CookVector<AssetsVolumeCookDetail::CookEntryRegistrationFunction> functions;
+    AssetsVolumeCookDetail::CookVector<AssetsVolumeCookDetail::CookEntryRegistrationFunction> functions;
 
     AutoRegistrationQueue()
         : arena("NWB::AssetsVolumeCookDetail::CookEntryAutoRegistrationQueue")
@@ -43,7 +43,7 @@ AutoRegistrationQueue& QueryAutoRegistrationQueue(){
 }
 
 static bool ContainsRegistrationFunction(
-    const ShaderCook::CookVector<AssetsVolumeCookDetail::CookEntryRegistrationFunction>& functions,
+    const AssetsVolumeCookDetail::CookVector<AssetsVolumeCookDetail::CookEntryRegistrationFunction>& functions,
     const AssetsVolumeCookDetail::CookEntryRegistrationFunction function
 ){
     for(const AssetsVolumeCookDetail::CookEntryRegistrationFunction current : functions){

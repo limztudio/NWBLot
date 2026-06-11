@@ -12,11 +12,10 @@
 
 #include "csg_shader_variants.h"
 
-#include <impl/assets_volume/cook_paths.h>
-
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/shader_stage_names.h>
 
+#include <core/assets/paths.h>
 #include <core/common/log.h>
 
 
@@ -38,6 +37,112 @@ namespace __hidden_shader_cook_plan{
 using namespace AssetsVolumeCookDetail;
 
 static constexpr AStringView s_EnabledImplicitDefineValue = "1";
+using IncludeDirectoryScratchSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static bool AppendIncludeDirectory(
+    const Path& includeDirectory,
+    const ShaderCook::ShaderEntry& entry,
+    IncludeDirectoryScratchSet& seenIncludeDirectories,
+    CookVector<Path>& outIncludeDirectories,
+    ScratchArena& scratchArena
+){
+    ErrorCode errorCode;
+    const bool isDirectory = IsDirectory(includeDirectory, errorCode);
+    if(errorCode){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to query include root '{}' for entry '{}': {}")
+            , PathToString<tchar>(includeDirectory)
+            , StringConvert(entry.name)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+    if(!isDirectory){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: include root is not a directory for entry '{}': '{}'")
+            , StringConvert(entry.name)
+            , PathToString<tchar>(includeDirectory)
+        );
+        return false;
+    }
+
+    ScratchString normalizedIncludeDirectory = PathToString(scratchArena, includeDirectory.lexically_normal());
+    CanonicalizeTextInPlace(normalizedIncludeDirectory);
+    if(!seenIncludeDirectories.insert(Move(normalizedIncludeDirectory)).second)
+        return true;
+
+    outIncludeDirectories.push_back(includeDirectory);
+    return true;
+}
+
+static bool BuildIncludeDirectories(
+    const Path& repoRoot,
+    const CookVector<Path>& assetRoots,
+    const CookVector<Path>& implicitIncludeRoots,
+    const ShaderCook::ShaderEntry& entry,
+    CookVector<Path>& outIncludeDirectories,
+    ScratchArena& scratchArena
+){
+    ErrorCode errorCode;
+    IncludeDirectoryScratchSet seenIncludeDirectories(
+        0,
+        Hasher<ScratchString>(),
+        EqualTo<ScratchString>(),
+        scratchArena
+    );
+
+    outIncludeDirectories.clear();
+    if(entry.includeRoots.size() > Limit<usize>::s_Max - implicitIncludeRoots.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: include root count overflow for entry '{}'"), StringConvert(entry.name));
+        return false;
+    }
+
+    outIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRoots.size());
+    seenIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRoots.size());
+
+    for(const Path& implicitIncludeRoot : implicitIncludeRoots){
+        if(!AppendIncludeDirectory(implicitIncludeRoot, entry, seenIncludeDirectories, outIncludeDirectories, scratchArena))
+            return false;
+    }
+
+    for(const CookString& includeRoot : entry.includeRoots){
+        Path includeDirectory;
+        if(!Core::Assets::ResolveVirtualAssetPath(assetRoots, includeRoot, includeDirectory, scratchArena)){
+            if(Core::Assets::HasReservedAssetVirtualRoot(includeRoot, scratchArena)){
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to resolve virtual include root '{}' for entry '{}'")
+                    , StringConvert(includeRoot)
+                    , StringConvert(entry.name)
+                );
+                return false;
+            }
+
+            errorCode.clear();
+            if(!ResolveAbsolutePath(repoRoot, includeRoot, includeDirectory, errorCode)){
+                if(errorCode){
+                    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to resolve include root '{}' for entry '{}': {}")
+                        , StringConvert(includeRoot)
+                        , StringConvert(entry.name)
+                        , StringConvert(errorCode.message())
+                    );
+                }
+                else{
+                    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: include root '{}' is empty or invalid for entry '{}'")
+                        , StringConvert(includeRoot)
+                        , StringConvert(entry.name)
+                    );
+                }
+                return false;
+            }
+        }
+
+        if(!AppendIncludeDirectory(includeDirectory, entry, seenIncludeDirectories, outIncludeDirectories, scratchArena))
+            return false;
+    }
+
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -251,7 +356,7 @@ static bool AppendCsgProjectEvaluatorModuleDependencies(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetsVolumeCookDetail{
+namespace AssetsGraphicsCookDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -373,7 +478,7 @@ bool PrepareShaderEntriesForCook(
             return false;
         }
 
-        if(!BuildIncludeDirectories(
+        if(!__hidden_shader_cook_plan::BuildIncludeDirectories(
             resolvedPaths.repoRoot,
             resolvedPaths.assetRoots,
             implicitIncludeRoots,
@@ -450,7 +555,7 @@ bool PrepareShaderEntriesForCook(
             return false;
         if(preparedEntry.supportsAvboitCsgClipVariant && !AssetsGraphicsCsgShaderVariants::AddClipVariantCount(preparedEntry.entry, baseVariantCount, preparedEntry.variantCount))
             return false;
-        if(!AddPlannedFileCount(preparedEntry.variantCount, outPreparedPlan.plannedFileCount))
+        if(!AssetsVolumeCookDetail::AddPlannedFileCount(preparedEntry.variantCount, outPreparedPlan.plannedFileCount))
             return false;
 
         const bool emitMeshComputeShadow = preparedEntry.entry.archiveStage.view() == "mesh" && preparedEntry.entry.emitMeshComputeShadow;
@@ -479,7 +584,7 @@ bool PrepareShaderEntriesForCook(
         meshComputeShadowEntry.materialTypedBindingInterface = meshShaderEntry.materialTypedBindingInterface;
         meshComputeShadowEntry.usesMaterialTypedBinding = meshShaderEntry.usesMaterialTypedBinding;
 
-        if(!AddPlannedFileCount(meshComputeShadowEntry.variantCount, outPreparedPlan.plannedFileCount))
+        if(!AssetsVolumeCookDetail::AddPlannedFileCount(meshComputeShadowEntry.variantCount, outPreparedPlan.plannedFileCount))
             return false;
 
         outPreparedPlan.preparedEntries.push_back(Move(meshComputeShadowEntry));

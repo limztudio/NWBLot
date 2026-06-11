@@ -34,7 +34,6 @@ namespace AssetsVolumeCookDetail{
 
 struct AssetVolumePrepareContext{
     Core::Alloc::GlobalArena& arena;
-    ShaderCook& shaderCook;
     const ResolvedCookPaths& resolvedPaths;
     CookString& configurationSafeName;
     ParsedAssetMetadata& parsedMetadata;
@@ -52,8 +51,7 @@ enum class AssetVolumeMetadataParseResult : u8{
 };
 
 struct AssetVolumeDocumentMetadataParseContext{
-    ShaderCook::CookArena& cookArena;
-    ShaderCook& shaderCook;
+    CookArena& cookArena;
     const DiscoveredNwbFile& discoveredNwbFile;
     Name assetType = NAME_NONE;
     const Core::Metascript::Document& doc;
@@ -62,8 +60,7 @@ struct AssetVolumeDocumentMetadataParseContext{
 };
 
 struct AssetVolumeValueMetadataParseContext{
-    ShaderCook::CookArena& cookArena;
-    ShaderCook& shaderCook;
+    CookArena& cookArena;
     const DiscoveredNwbFile& discoveredNwbFile;
     Name assetType = NAME_NONE;
     Name virtualPath = NAME_NONE;

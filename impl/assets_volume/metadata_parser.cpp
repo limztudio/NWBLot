@@ -40,9 +40,38 @@ using namespace AssetsVolumeCookDetail;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] static bool ParseMetascriptDocument(
+    CookArena& cookArena,
+    const Path& nwbFilePath,
+    Core::Metascript::Document& outDoc
+){
+    CookString metaText{cookArena};
+    if(!ReadTextFile(nwbFilePath, metaText)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to read meta '{}'"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+    StripUtf8Bom(metaText);
+
+    if(!outDoc.parse(AStringView(metaText))){
+        for(const Core::Metascript::ParseError& err : outDoc.errors()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}' parse error at {}:{}: {}")
+                , PathToString<tchar>(nwbFilePath)
+                , err.line
+                , err.column
+                , StringConvert(AStringView(err.message.data(), err.message.size()))
+            );
+        }
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static bool ParseDeclaredAssetItem(
-    ShaderCook::CookArena& cookArena,
-    ShaderCook& shaderCook,
+    CookArena& cookArena,
     const DiscoveredNwbFile& discoveredNwbFile,
     const Name assetType,
     const Name virtualPath,
@@ -54,7 +83,6 @@ using namespace AssetsVolumeCookDetail;
 ){
     AssetVolumeValueMetadataParseContext metadataParseContext{
         cookArena,
-        shaderCook,
         discoveredNwbFile,
         assetType,
         virtualPath,
@@ -70,7 +98,6 @@ using namespace AssetsVolumeCookDetail;
 
     CookEntryParseContext parseContext{
         cookArena,
-        shaderCook,
         threadPool,
         scratchArena,
         seenPropertyAssetPathHashes
@@ -89,15 +116,12 @@ using namespace AssetsVolumeCookDetail;
 
 
 bool ParseAssetMetadata(
-    ShaderCook::CookArena& cookArena,
-    ShaderCook& shaderCook,
+    CookArena& cookArena,
     const DiscoveredNwbFileVector& nwbFiles,
     ParsedAssetMetadata& outMetadata,
     Core::Alloc::ThreadPool& threadPool,
     ScratchArena& scratchArena
 ){
-    outMetadata.includeMetadata.reserve(nwbFiles.size());
-    outMetadata.shaderEntries.reserve(nwbFiles.size());
     outMetadata.entryRegistry.reserveEntries(nwbFiles.size());
     CookEntryPathHashSet seenPropertyAssetPathHashes(
         0,
@@ -108,10 +132,11 @@ bool ParseAssetMetadata(
 
     seenPropertyAssetPathHashes.reserve(nwbFiles.size());
 
+    bool parsedAnyMetadata = false;
     for(const DiscoveredNwbFile& discoveredNwbFile : nwbFiles){
         const Path& nwbFile = discoveredNwbFile.filePath;
         Core::Metascript::Document doc(cookArena);
-        if(!shaderCook.parseDocument(nwbFile, doc))
+        if(!ParseMetascriptDocument(cookArena, nwbFile, doc))
             return false;
 
         const usize assetBunchDeclarationCount = AssetsBunchCook::AssetBunchDeclarationCount(doc);
@@ -137,7 +162,6 @@ bool ParseAssetMetadata(
             for(const AssetsBunchCook::ExpandedAsset& expandedAsset : expandedAssets){
                 if(!ParseDeclaredAssetItem(
                     cookArena,
-                    shaderCook,
                     discoveredNwbFile,
                     expandedAsset.assetType,
                     expandedAsset.virtualPath,
@@ -148,6 +172,7 @@ bool ParseAssetMetadata(
                     scratchArena
                 ))
                     return false;
+                parsedAnyMetadata = true;
             }
             continue;
         }
@@ -162,7 +187,6 @@ bool ParseAssetMetadata(
         const Name assetType = ToName(rawAssetTypeText);
         AssetVolumeDocumentMetadataParseContext metadataParseContext{
             cookArena,
-            shaderCook,
             discoveredNwbFile,
             assetType,
             doc,
@@ -170,15 +194,16 @@ bool ParseAssetMetadata(
             scratchArena
         };
         const AssetVolumeMetadataParseResult metadataParseResult = TryAutoCollectedDocumentMetadataParsers(metadataParseContext);
-        if(metadataParseResult == AssetVolumeMetadataParseResult::Parsed)
+        if(metadataParseResult == AssetVolumeMetadataParseResult::Parsed){
+            parsedAnyMetadata = true;
             continue;
+        }
         if(metadataParseResult == AssetVolumeMetadataParseResult::Error)
             return false;
 
         if(outMetadata.entryRegistry.has(assetType)){
             CookEntryParseContext parseContext{
                 cookArena,
-                shaderCook,
                 threadPool,
                 scratchArena,
                 seenPropertyAssetPathHashes
@@ -192,6 +217,7 @@ bool ParseAssetMetadata(
                 parseContext
             ))
                 return false;
+            parsedAnyMetadata = true;
             continue;
         }
 
@@ -202,10 +228,7 @@ bool ParseAssetMetadata(
         return false;
     }
 
-    if(outMetadata.shaderEntries.empty()){
-        if(!outMetadata.entryRegistry.empty())
-            return true;
-
+    if(!parsedAnyMetadata){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: no asset metadata found in asset roots"));
         return false;
     }

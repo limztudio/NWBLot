@@ -64,34 +64,11 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         );
         return false;
     }
-#if defined(NWB_DEBUG)
-    if(instance.skeletonJointCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has skin but no skeleton joint count")
-            , instance.handle.value
-        );
-        return false;
-    }
-    if(instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits")
-            , instance.handle.value
-            , instance.skeletonJointCount
-        );
-        return false;
-    }
-    if(!SkinValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' inverse bind matrices are invalid")
-            , instance.handle.value
-        );
-        return false;
-    }
-    if(
-        instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || sourceJoints.size() > static_cast<usize>(Limit<u32>::s_Max)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skin payload exceeds u32 limits"), instance.handle.value);
-        return false;
-    }
-#endif
+    NWB_ASSERT(instance.skeletonJointCount != 0u);
+    NWB_ASSERT(instance.skeletonJointCount <= static_cast<u32>(Limit<u16>::s_Max) + 1u);
+    NWB_ASSERT(SkinValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount));
+    NWB_ASSERT(instance.skin.size() <= static_cast<usize>(Limit<u32>::s_Max));
+    NWB_ASSERT(sourceJoints.size() <= static_cast<usize>(Limit<u32>::s_Max));
     if(sourceJoints.size() < static_cast<usize>(instance.skeletonJointCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette count {} is smaller than skeleton joint count {}")
             , instance.handle.value
@@ -108,17 +85,9 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
     outJointPalette.reserve(jointCount);
 
     for(usize jointIndex = 0; jointIndex < jointCount; ++jointIndex){
-#if defined(NWB_DEBUG)
-        if(hasInverseBindMatrices && jointIndex >= instance.inverseBindMatrices.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} has no inverse bind matrix")
-                , instance.handle.value
-                , jointIndex
-            );
-            return false;
-        }
-#endif
+        NWB_ASSERT(!hasInverseBindMatrices || jointIndex < instance.inverseBindMatrices.size());
 
-        const SIMDMatrix poseJoint = LoadFloat(sourceJoints[jointIndex]);
+        const SIMDMatrix poseJoint = SkeletonRuntime::ToSimdJointMatrix(sourceJoints[jointIndex]);
         const SIMDMatrix inverseBind = hasInverseBindMatrices
             ? LoadFloat(instance.inverseBindMatrices[jointIndex])
             : SIMDMatrix{}
@@ -163,38 +132,19 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
     outSkinInfluences.reserve(skinCount);
     for(usize vertexIndex = 0; vertexIndex < skinCount; ++vertexIndex){
         const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
-#if defined(NWB_DEBUG)
-        const SIMDVector weights = VectorSet(
+        NWB_ASSERT(SkinValidation::ValidSkinInfluenceWeights(VectorSet(
             sourceSkin.weight[0u],
             sourceSkin.weight[1u],
             sourceSkin.weight[2u],
             sourceSkin.weight[3u]
-        );
-        if(!SkinValidation::ValidSkinInfluenceWeights(weights)){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' vertex {} has invalid skin weights")
-                , instance.handle.value
-                , vertexIndex
-            );
-            return false;
-        }
-
+        )));
         u32 failedSkeletonJoint = 0u;
-        if(
-            !SkinValidation::SkinInfluenceFitsSkeleton(
-                sourceSkin,
-                instance.skeletonJointCount,
-                failedSkeletonJoint
-            )
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' vertex {} references joint {} outside skeleton joint count {}")
-                , instance.handle.value
-                , vertexIndex
-                , failedSkeletonJoint
-                , instance.skeletonJointCount
-            );
-            return false;
-        }
-#endif
+        NWB_ASSERT(SkinValidation::SkinInfluenceFitsSkeleton(
+            sourceSkin,
+            instance.skeletonJointCount,
+            failedSkeletonJoint
+        ));
+        static_cast<void>(failedSkeletonJoint);
 
         MeshSkinningInfluenceGpu gpuSkin;
         for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){

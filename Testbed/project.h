@@ -9,10 +9,6 @@
 
 #include <core/ecs/module.h>
 #include <core/input/module.h>
-#include <impl/ecs_skeleton/module.h>
-#include <impl/ecs_mesh/skinning/module.h>
-#include <impl/ecs_mesh/module.h>
-#include <impl/ecs_render/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

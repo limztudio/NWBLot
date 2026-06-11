@@ -12,8 +12,6 @@
 #include "metadata.h"
 #include "binary_payload.h"
 
-#include <impl/assets_shader/cook.h>
-
 #include <core/alloc/scratch.h>
 #include <core/assets/paths.h>
 #include <core/filesystem/module.h>
@@ -196,7 +194,6 @@ static bool ResolveMaterialBindDependencyInterface(
 
 
 static bool ParseVariantField(
-    ShaderCook& shaderCook,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const AStringView fieldName,
@@ -263,14 +260,90 @@ static bool ParseVariantField(
         return true;
     }
 
-    CookString canonicalVariant{arena};
-    if(!shaderCook.canonicalizeVariantSignature(rawVariantView, canonicalVariant, scratchArena)){
+    using ScratchString = AString<ScratchArena>;
+    using ScratchDefineCombo = HashMap<ScratchString, ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena>;
+    ScratchDefineCombo assignments(
+        0,
+        Hasher<ScratchString>(),
+        EqualTo<ScratchString>(),
+        scratchArena
+    );
+    usize assignmentReserve = 1u;
+    for(const char ch : rawVariantView){
+        if(ch == ';')
+            ++assignmentReserve;
+    }
+    assignments.reserve(assignmentReserve);
+
+    auto failInvalidVariant = [&](){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' has invalid variant signature '{}'")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
             , StringConvert(rawVariantView)
         );
         return false;
+    };
+
+    usize begin = 0u;
+    while(begin < rawVariantView.size()){
+        usize segmentEnd = rawVariantView.find(';', begin);
+        if(segmentEnd == AStringView::npos)
+            segmentEnd = rawVariantView.size();
+
+        const AStringView segment = TrimView(rawVariantView.substr(begin, segmentEnd - begin));
+        if(segment.empty())
+            return failInvalidVariant();
+
+        const usize equalPos = segment.find('=');
+        if(equalPos == AStringView::npos || equalPos == 0u || equalPos + 1u >= segment.size())
+            return failInvalidVariant();
+
+        ScratchString defineName(TrimView(segment.substr(0u, equalPos)), scratchArena);
+        ScratchString defineValue(TrimView(segment.substr(equalPos + 1u)), scratchArena);
+        if(defineName.empty() || defineValue.empty())
+            return failInvalidVariant();
+        if(!assignments.emplace(Move(defineName), Move(defineValue)).second)
+            return failInvalidVariant();
+
+        begin = segmentEnd + 1u;
+    }
+
+    CookString canonicalVariant{arena};
+    if(assignments.size() == 1u){
+        const auto& [defineName, defineValue] = *assignments.begin();
+        canonicalVariant.reserve(defineName.size() + defineValue.size() + 1u);
+        canonicalVariant += defineName;
+        canonicalVariant += '=';
+        canonicalVariant += defineValue;
+    }
+    else{
+        struct AssignmentPtr{
+            const ScratchString* key = nullptr;
+            const ScratchString* value = nullptr;
+        };
+        Vector<AssignmentPtr, ScratchArena> sortedAssignments{scratchArena};
+        sortedAssignments.reserve(assignments.size());
+        for(const auto& [defineName, defineValue] : assignments)
+            sortedAssignments.push_back(AssignmentPtr{ &defineName, &defineValue });
+        Sort(sortedAssignments.begin(), sortedAssignments.end(), [](const AssignmentPtr& lhs, const AssignmentPtr& rhs){
+            return *lhs.key < *rhs.key;
+        });
+
+        usize canonicalVariantSize = sortedAssignments.size() - 1u;
+        for(const AssignmentPtr& assignment : sortedAssignments)
+            canonicalVariantSize += assignment.key->size() + assignment.value->size() + 1u;
+
+        canonicalVariant.reserve(canonicalVariantSize);
+        bool first = true;
+        for(const AssignmentPtr& assignment : sortedAssignments){
+            if(!first)
+                canonicalVariant += ';';
+            first = false;
+
+            canonicalVariant += *assignment.key;
+            canonicalVariant += '=';
+            canonicalVariant += *assignment.value;
+        }
     }
 
     outVariant = Move(canonicalVariant);
@@ -1530,7 +1603,6 @@ static bool ValidateMaterialCookInterfaces(
 }
 
 static bool ParseMaterialMeta(
-    ShaderCook& shaderCook,
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
@@ -1563,7 +1635,6 @@ static bool ParseMaterialMeta(
         return false;
 
     if(!ParseVariantField(
-        shaderCook,
         nwbFilePath,
         asset,
         MaterialAssetMetadataSchema::s_ShaderVariantField,
@@ -1594,7 +1665,6 @@ static bool ParseMaterialMeta(
 
 
 bool ParseMaterialCookMetadata(
-    ShaderCook& shaderCook,
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
@@ -1603,7 +1673,6 @@ bool ParseMaterialCookMetadata(
     Core::Alloc::ScratchArena& scratchArena
 ){
     return __hidden_cook::ParseMaterialMeta(
-        shaderCook,
         assetRoot,
         virtualRoot,
         nwbFilePath,

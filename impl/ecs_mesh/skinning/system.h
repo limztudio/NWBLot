@@ -46,6 +46,11 @@ class Shader;
 struct MeshSkinningRuntimeInstance;
 struct MeshSkinningInfluenceGpu;
 
+static_assert(
+    SkeletonSkinningMode::LinearBlend == NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND && SkeletonSkinningMode::DualQuaternion == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION
+    , "Skeleton skinning mode values must match the shader ABI"
+);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

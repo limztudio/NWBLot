@@ -50,14 +50,13 @@ namespace __hidden_camera{
     TransformComponent& transform,
     CameraComponent& camera,
     const f32 fallbackAspectRatio,
+    const SIMDVector position,
+    const SIMDVector rotation,
+    const SIMDVector scale,
     SceneCameraView& outCameraView
 ){
     outCameraView = SceneCameraView{};
-    if(!SceneCameraTransformValid(
-        LoadFloat(transform.position),
-        LoadFloat(transform.rotation),
-        LoadFloat(transform.scale)
-    ))
+    if(!SceneCameraTransformValid(position, rotation, scale))
         return false;
 
     CameraProjectionData projectionData;
@@ -112,7 +111,16 @@ SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallba
     for(auto it = cameraView.begin(); it != cameraView.end(); ++it){
         auto&& [entity, transform, camera] = *it;
         SceneCameraView resolvedCamera;
-        if(!__hidden_camera::TryBuildSceneCameraView(entity, transform, camera, fallbackAspectRatio, resolvedCamera))
+        if(!__hidden_camera::TryBuildSceneCameraView(
+            entity,
+            transform,
+            camera,
+            fallbackAspectRatio,
+            LoadFloat(transform.position),
+            LoadFloat(transform.rotation),
+            LoadFloat(transform.scale),
+            resolvedCamera
+        ))
             continue;
 
         if(!fallbackCamera.valid())

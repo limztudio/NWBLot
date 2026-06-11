@@ -192,7 +192,12 @@ inline InstanceGpuData BuildInstanceGpuData(
     InstanceGpuData data;
     if(transform){
         data.rotation = transform->rotation;
-        StoreFloatInt(LoadFloat(transform->position), materialTypedRanges.mutableRange.byteOffset, &data.translation);
+        data.translation = Float3UInt(
+            transform->position.x,
+            transform->position.y,
+            transform->position.z,
+            materialTypedRanges.mutableRange.byteOffset
+        );
         data.scale = transform->scale;
     }
     else

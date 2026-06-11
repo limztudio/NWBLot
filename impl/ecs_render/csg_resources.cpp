@@ -85,27 +85,23 @@ static void CopyCsgCutterInlineParameters(
 }
 
 [[nodiscard]] static bool BuildCsgReceiverWorldToLocal(
-    const Scene::TransformComponent* transform,
+    const SIMDMatrix* localToWorld,
     SIMDMatrix& outWorldToLocal
 ){
-    if(!transform){
+    if(!localToWorld){
         outWorldToLocal = MatrixIdentity();
         return true;
     }
 
-    const SIMDVector scale = LoadFloat(transform->scale);
-    const SIMDVector rotation = LoadFloat(transform->rotation);
-    const SIMDVector translation = LoadFloat(transform->position);
-    const SIMDMatrix localToWorld = MatrixAffineTransformation(scale, VectorZero(), rotation, translation);
     SIMDVector determinant;
-    outWorldToLocal = MatrixInverse(&determinant, localToWorld);
+    outWorldToLocal = MatrixInverse(&determinant, *localToWorld);
     const f32 det = VectorGetX(determinant);
     return IsFinite(det) && Abs(det) > 0.0f;
 }
 
 [[nodiscard]] static bool BuildCsgReceiverWorldBounds(
     const CsgReceiverCpuBounds& receiverBounds,
-    const Scene::TransformComponent* transform,
+    const SIMDMatrix* localToWorld,
     SIMDVector& outMinBounds,
     SIMDVector& outMaxBounds
 ){
@@ -117,21 +113,18 @@ static void CopyCsgCutterInlineParameters(
     if(!AabbTests::Valid(localMinBounds, localMaxBounds))
         return false;
 
-    if(!transform){
+    if(!localToWorld){
         outMinBounds = localMinBounds;
         outMaxBounds = localMaxBounds;
         return true;
     }
 
-    const SIMDVector scale = LoadFloat(transform->scale);
-    const SIMDVector rotation = LoadFloat(transform->rotation);
-    const SIMDVector translation = LoadFloat(transform->position);
-    const SIMDMatrix localToWorld = MatrixAffineTransformation(scale, VectorZero(), rotation, translation);
-    return AabbTests::Transform(localToWorld, localMinBounds, localMaxBounds, outMinBounds, outMaxBounds);
+    return AabbTests::Transform(*localToWorld, localMinBounds, localMaxBounds, outMinBounds, outMaxBounds);
 }
 
 static void BuildResolvedClipCutterGpuData(
     const CsgResolvedClipCutter& resolvedCutter,
+    const SIMDMatrix& worldToShape,
     CsgCutterGpuData& outCutter
 ){
     NWB_ASSERT(resolvedCutter.cutter);
@@ -139,7 +132,6 @@ static void BuildResolvedClipCutterGpuData(
     NWB_ASSERT(resolvedCutter.parameterByteSize == 0u || resolvedCutter.parameterBytes);
 
     outCutter = CsgCutterGpuData{};
-    const SIMDMatrix worldToShape = LoadFloat(resolvedCutter.cutter->worldToShape);
     StoreFloat(worldToShape, &outCutter.worldToShape);
     const f32 worldToShapeScaleBound = VectorGetX(ComputeWorldToShapeScaleBound(worldToShape));
     if(IsFinite(worldToShapeScaleBound) && worldToShapeScaleBound > 0.0f)
@@ -188,8 +180,9 @@ static void BuildResolvedClipCutterGpuData(
 [[nodiscard]] static CsgClipCutterResolveResult ResolveReceiverClipCutter(
     const CsgShapeRegistry& shapeRegistry,
     const CsgCutterComponent& cutter,
+    const SIMDMatrix& cutterShapeToWorld,
     const CsgReceiverCpuBounds& receiverBounds,
-    const Scene::TransformComponent* transform,
+    const SIMDMatrix* receiverLocalToWorld,
     CsgResolvedClipCutter& outCutter
 ){
     outCutter = CsgResolvedClipCutter{};
@@ -201,7 +194,7 @@ static void BuildResolvedClipCutterGpuData(
 
     SIMDVector receiverMinBounds;
     SIMDVector receiverMaxBounds;
-    if(!BuildCsgReceiverWorldBounds(receiverBounds, transform, receiverMinBounds, receiverMaxBounds))
+    if(!BuildCsgReceiverWorldBounds(receiverBounds, receiverLocalToWorld, receiverMinBounds, receiverMaxBounds))
         return CsgClipCutterResolveResult::Ready;
 
     SIMDVector cutterMinBounds;
@@ -209,7 +202,7 @@ static void BuildResolvedClipCutterGpuData(
     bool finiteBounds = false;
     if(!shapeRegistry.buildShapeBounds(
         outCutter.shapeType.id,
-        LoadFloat(cutter.shapeToWorld),
+        cutterShapeToWorld,
         outCutter.parameterBytes,
         outCutter.parameterByteSize,
         cutterMinBounds,
@@ -232,7 +225,7 @@ template<typename CutterHandler>
     const CsgFrameReceiverLookup& receiverLookup,
     const Core::ECS::EntityID entity,
     const CsgReceiverCpuBounds& receiverBounds,
-    const Scene::TransformComponent* transform,
+    const SIMDMatrix* receiverLocalToWorld,
     CutterHandler&& handler
 ){
     bool resolved = true;
@@ -242,12 +235,14 @@ template<typename CutterHandler>
             if(!resolved)
                 return;
 
+            const SIMDMatrix cutterShapeToWorld = LoadFloat(cutter.shapeToWorld);
             CsgResolvedClipCutter resolvedCutter;
             const CsgClipCutterResolveResult resolveResult = ResolveReceiverClipCutter(
                 shapeRegistry,
                 cutter,
+                cutterShapeToWorld,
                 receiverBounds,
-                transform,
+                receiverLocalToWorld,
                 resolvedCutter
             );
             if(resolveResult == CsgClipCutterResolveResult::Skipped)
@@ -418,12 +413,24 @@ bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
 )const{
     outInfo = CsgReceiverClipDrawInfo{};
 
+    SIMDMatrix receiverLocalToWorld;
+    const SIMDMatrix* receiverLocalToWorldPtr = nullptr;
+    if(transform){
+        receiverLocalToWorld = MatrixAffineTransformation(
+            LoadFloat(transform->scale),
+            VectorZero(),
+            LoadFloat(transform->rotation),
+            LoadFloat(transform->position)
+        );
+        receiverLocalToWorldPtr = &receiverLocalToWorld;
+    }
+
     return __hidden_csg_resources::ForEachReceiverClipCutter(
         csgShapeRegistry(),
         receiverLookup,
         entity,
         receiverBounds,
-        transform,
+        receiverLocalToWorldPtr,
         [&](const __hidden_csg_resources::CsgResolvedClipCutter& resolvedCutter){
             if(resolvedCutter.shapeType.desc.shaderModule){
                 if(!outInfo.evaluatorVariant)
@@ -454,8 +461,20 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
     if(!receiverBounds.valid() || !receiverBounds.finite())
         return false;
 
+    SIMDMatrix receiverLocalToWorld;
+    const SIMDMatrix* receiverLocalToWorldPtr = nullptr;
+    if(transform){
+        receiverLocalToWorld = MatrixAffineTransformation(
+            LoadFloat(transform->scale),
+            VectorZero(),
+            LoadFloat(transform->rotation),
+            LoadFloat(transform->position)
+        );
+        receiverLocalToWorldPtr = &receiverLocalToWorld;
+    }
+
     SIMDMatrix worldToReceiver;
-    if(!__hidden_csg_resources::BuildCsgReceiverWorldToLocal(transform, worldToReceiver))
+    if(!__hidden_csg_resources::BuildCsgReceiverWorldToLocal(receiverLocalToWorldPtr, worldToReceiver))
         return false;
 
     StoreFloat(worldToReceiver, &outRange.worldToReceiver);
@@ -466,13 +485,17 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
         receiverLookup,
         entity,
         receiverBounds,
-        transform,
+        receiverLocalToWorldPtr,
         [&](const __hidden_csg_resources::CsgResolvedClipCutter& resolvedCutter){
             CsgCutterGpuData cutterGpuData;
             if(csgFrameData.cutters.size() >= static_cast<usize>(Limit<u32>::s_Max)){
                 return false;
             }
-            __hidden_csg_resources::BuildResolvedClipCutterGpuData(resolvedCutter, cutterGpuData);
+            __hidden_csg_resources::BuildResolvedClipCutterGpuData(
+                resolvedCutter,
+                LoadFloat(resolvedCutter.cutter->worldToShape),
+                cutterGpuData
+            );
 
             csgFrameData.cutters.push_back(cutterGpuData);
             ++outRange.cutterCount;

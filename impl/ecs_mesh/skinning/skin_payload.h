@@ -87,7 +87,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
     for(usize jointIndex = 0; jointIndex < jointCount; ++jointIndex){
         NWB_ASSERT(!hasInverseBindMatrices || jointIndex < instance.inverseBindMatrices.size());
 
-        const SIMDMatrix poseJoint = SkeletonRuntime::ToSimdJointMatrix(sourceJoints[jointIndex]);
+        const SIMDMatrix poseJoint = LoadFloat(sourceJoints[jointIndex]);
         const SIMDMatrix inverseBind = hasInverseBindMatrices
             ? LoadFloat(instance.inverseBindMatrices[jointIndex])
             : SIMDMatrix{}

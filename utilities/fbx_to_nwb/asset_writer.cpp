@@ -116,10 +116,9 @@ JointMatrix StoreJointMatrix(const SIMDMatrix& matrix){
     return result;
 }
 
-bool InvertJointMatrix(const JointMatrix& matrix, SIMDMatrix& outInverse){
-    const SIMDMatrix source = LoadJointMatrix(matrix);
+bool InvertJointMatrix(const SIMDMatrix& matrix, SIMDMatrix& outInverse){
     SIMDVector determinant;
-    outInverse = MatrixInverse(&determinant, source);
+    outInverse = MatrixInverse(&determinant, matrix);
 
     const f32 scalarDeterminant = VectorGetX(determinant);
     return IsFinite(scalarDeterminant)
@@ -139,11 +138,13 @@ bool BuildLocalBindPoseMatrix(
         return true;
     }
 
+    const SIMDMatrix globalBindPoseMatrix = LoadJointMatrix(globalBindPose);
+    const SIMDMatrix parentGlobalBindPoseMatrix = LoadJointMatrix(*parentGlobalBindPose);
     SIMDMatrix parentInverse;
-    if(!InvertJointMatrix(*parentGlobalBindPose, parentInverse))
+    if(!InvertJointMatrix(parentGlobalBindPoseMatrix, parentInverse))
         return false;
 
-    const SIMDMatrix localBindPose = MatrixMultiply(parentInverse, LoadJointMatrix(globalBindPose));
+    const SIMDMatrix localBindPose = MatrixMultiply(parentInverse, globalBindPoseMatrix);
     if(MatrixIsNaN(localBindPose) || MatrixIsInfinite(localBindPose))
         return false;
 

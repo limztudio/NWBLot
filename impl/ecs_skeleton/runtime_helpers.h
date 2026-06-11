@@ -73,10 +73,6 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return IsFinite(determinant) && Abs(determinant) > s_JointDeterminantEpsilon;
 }
 
-[[nodiscard]] inline SIMDMatrix ToSimdJointMatrix(const SkeletonJointMatrix& matrix){
-    return LoadFloat(matrix);
-}
-
 [[nodiscard]] inline bool ResolveSkinningJointMatrix(
     const SIMDMatrix& poseJoint,
     const bool hasInverseBind,

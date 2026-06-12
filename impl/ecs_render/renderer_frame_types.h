@@ -149,6 +149,49 @@ struct DeferredFrameTargets{
     Core::BindingSetHandle compositeBindingSet;
     AvboitFrameTargets avboit;
 
+    [[nodiscard]] bool csgIntervalTargetsValid()const noexcept{
+        return
+            csgCapNormalFormat != Core::Format::UNKNOWN
+            && csgIntervalDepthFormat != Core::Format::UNKNOWN
+            && csgIntervalLinearDepthFormat != Core::Format::UNKNOWN
+            && csgIntervalIdFormat != Core::Format::UNKNOWN
+            && csgReceiverEventDepthFormat != Core::Format::UNKNOWN
+            && csgReceiverEventDataFormat != Core::Format::UNKNOWN
+            && csgReceiverEventCountFormat != Core::Format::UNKNOWN
+            && csgReceiverEventFlagsFormat != Core::Format::UNKNOWN
+            && csgReceiverSpanDepthFormat != Core::Format::UNKNOWN
+            && csgReceiverSpanDataFormat != Core::Format::UNKNOWN
+            && csgReceiverSpanCountFormat != Core::Format::UNKNOWN
+            && csgReceiverSpanFlagsFormat != Core::Format::UNKNOWN
+            && csgRemovedIntervalDepthFormat != Core::Format::UNKNOWN
+            && csgRemovedIntervalCapNormalFormat != Core::Format::UNKNOWN
+            && csgRemovedIntervalDataFormat != Core::Format::UNKNOWN
+            && csgRemovedIntervalCountFormat != Core::Format::UNKNOWN
+            && csgRemovedIntervalFlagsFormat != Core::Format::UNKNOWN
+            && csgPeelLayerCount > 0u
+            && csgReceiverEventLayerCount > 0u
+            && csgReceiverSpanLayerCount > 0u
+            && csgRemovedIntervalLayerCount > 0u
+            && csgCapBackNormal != nullptr
+            && csgIntervalDepth != nullptr
+            && csgIntervalLinearDepth != nullptr
+            && csgIntervalId != nullptr
+            && csgReceiverEventDepth != nullptr
+            && csgReceiverEventData != nullptr
+            && csgReceiverEventCount != nullptr
+            && csgReceiverEventFlags != nullptr
+            && csgReceiverSpanDepth != nullptr
+            && csgReceiverSpanData != nullptr
+            && csgReceiverSpanCount != nullptr
+            && csgReceiverSpanFlags != nullptr
+            && csgRemovedIntervalDepth != nullptr
+            && csgRemovedIntervalCapNormal != nullptr
+            && csgRemovedIntervalData != nullptr
+            && csgRemovedIntervalCount != nullptr
+            && csgRemovedIntervalFlags != nullptr
+        ;
+    }
+
     [[nodiscard]] bool valid()const noexcept{
 #if defined(NWB_DEBUG)
         return
@@ -183,23 +226,6 @@ struct DeferredFrameTargets{
             && albedo != nullptr
             && normal != nullptr
             && worldPosition != nullptr
-            && csgCapBackNormal != nullptr
-            && csgIntervalDepth != nullptr
-            && csgIntervalLinearDepth != nullptr
-            && csgIntervalId != nullptr
-            && csgReceiverEventDepth != nullptr
-            && csgReceiverEventData != nullptr
-            && csgReceiverEventCount != nullptr
-            && csgReceiverEventFlags != nullptr
-            && csgReceiverSpanDepth != nullptr
-            && csgReceiverSpanData != nullptr
-            && csgReceiverSpanCount != nullptr
-            && csgReceiverSpanFlags != nullptr
-            && csgRemovedIntervalDepth != nullptr
-            && csgRemovedIntervalCapNormal != nullptr
-            && csgRemovedIntervalData != nullptr
-            && csgRemovedIntervalCount != nullptr
-            && csgRemovedIntervalFlags != nullptr
             && opaqueColor != nullptr
             && depth != nullptr
             && framebuffer != nullptr

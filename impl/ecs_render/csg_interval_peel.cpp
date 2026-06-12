@@ -676,7 +676,7 @@ static void AddCsgRemovedIntervalBindingSetItems(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& targets){
+bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& targets, const bool capFillRequired){
     auto* device = graphics().getDevice();
     if(!createCsgClipResources())
         return false;
@@ -787,18 +787,20 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
             return false;
     }
 
-    if(!m_renderer.shaderSystem().loadDeferredCompositeVertexShader())
-        return false;
-
-    if(!csgState().m_intervalCapFillPixelShader){
-        if(!m_renderer.shaderSystem().loadShader(
-            csgState().m_intervalCapFillPixelShader,
-            AssetsGraphicsCsg::s_IntervalCapFillPixelShaderName,
-            Core::ShaderArchive::s_DefaultVariant,
-            Core::ShaderType::Pixel,
-            "ECSRender_CsgIntervalCapFillPS"
-        ))
+    if(capFillRequired){
+        if(!m_renderer.shaderSystem().loadDeferredCompositeVertexShader())
             return false;
+
+        if(!csgState().m_intervalCapFillPixelShader){
+            if(!m_renderer.shaderSystem().loadShader(
+                csgState().m_intervalCapFillPixelShader,
+                AssetsGraphicsCsg::s_IntervalCapFillPixelShaderName,
+                Core::ShaderArchive::s_DefaultVariant,
+                Core::ShaderType::Pixel,
+                "ECSRender_CsgIntervalCapFillPS"
+            ))
+                return false;
+        }
     }
 
     if(!__hidden_csg_interval_peel::CreateIntervalPeelPipeline(
@@ -832,7 +834,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         return false;
     }
 
-    if(!__hidden_csg_interval_peel::CreateIntervalCapFillPipeline(
+    if(capFillRequired && !__hidden_csg_interval_peel::CreateIntervalCapFillPipeline(
         *device,
         csgState().m_intervalCapFillPipeline,
         deferredState().m_compositeVertexShader,

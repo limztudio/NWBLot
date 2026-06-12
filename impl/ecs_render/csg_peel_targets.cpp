@@ -15,23 +15,31 @@ NWB_IMPL_BEGIN
 
 
 bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
-    NWB_ASSERT(!targets.csgCapBackNormal);
-    NWB_ASSERT(!targets.csgIntervalDepth);
-    NWB_ASSERT(!targets.csgIntervalLinearDepth);
-    NWB_ASSERT(!targets.csgIntervalId);
-    NWB_ASSERT(!targets.csgReceiverEventDepth);
-    NWB_ASSERT(!targets.csgReceiverEventData);
-    NWB_ASSERT(!targets.csgReceiverEventCount);
-    NWB_ASSERT(!targets.csgReceiverEventFlags);
-    NWB_ASSERT(!targets.csgReceiverSpanDepth);
-    NWB_ASSERT(!targets.csgReceiverSpanData);
-    NWB_ASSERT(!targets.csgReceiverSpanCount);
-    NWB_ASSERT(!targets.csgReceiverSpanFlags);
-    NWB_ASSERT(!targets.csgRemovedIntervalDepth);
-    NWB_ASSERT(!targets.csgRemovedIntervalCapNormal);
-    NWB_ASSERT(!targets.csgRemovedIntervalData);
-    NWB_ASSERT(!targets.csgRemovedIntervalCount);
-    NWB_ASSERT(!targets.csgRemovedIntervalFlags);
+    if(targets.csgIntervalTargetsValid())
+        return true;
+
+    destroyCsgIntervalPeelBindingSet();
+    csgState().m_receiverSurfaceBindingSet.reset();
+    csgState().m_intervalSampleBindingSet.reset();
+
+    targets.csgCapBackNormal.reset();
+    targets.csgIntervalDepth.reset();
+    targets.csgIntervalLinearDepth.reset();
+    targets.csgIntervalId.reset();
+    targets.csgReceiverEventDepth.reset();
+    targets.csgReceiverEventData.reset();
+    targets.csgReceiverEventCount.reset();
+    targets.csgReceiverEventFlags.reset();
+    targets.csgReceiverSpanDepth.reset();
+    targets.csgReceiverSpanData.reset();
+    targets.csgReceiverSpanCount.reset();
+    targets.csgReceiverSpanFlags.reset();
+    targets.csgRemovedIntervalDepth.reset();
+    targets.csgRemovedIntervalCapNormal.reset();
+    targets.csgRemovedIntervalData.reset();
+    targets.csgRemovedIntervalCount.reset();
+    targets.csgRemovedIntervalFlags.reset();
+
     NWB_ASSERT(targets.width > 0u && targets.height > 0u);
     NWB_ASSERT(targets.csgCapNormalFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgIntervalDepthFormat != Core::Format::UNKNOWN);

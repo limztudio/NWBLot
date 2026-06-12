@@ -85,7 +85,7 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     if(!m_meshSystem.createMeshViewBuffer())
         return false;
 
-    return m_csgSystem.createCsgIntervalPeelResources(deferredTargets);
+    return true;
 }
 
 bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
@@ -107,29 +107,13 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     ;
     m_preparedCsgFrameStateValid = true;
     const bool hasCsgFrameWork = !m_preparedCsgFrameState.empty();
-    if(
-        hasCsgFrameWork
-        && (
-            !deferredTargets.csgCapBackNormal
-            || !deferredTargets.csgIntervalDepth
-            || !deferredTargets.csgIntervalLinearDepth
-            || !deferredTargets.csgIntervalId
-            || !deferredTargets.csgReceiverEventDepth
-            || !deferredTargets.csgReceiverEventData
-            || !deferredTargets.csgReceiverEventCount
-            || !deferredTargets.csgReceiverEventFlags
-            || !deferredTargets.csgReceiverSpanDepth
-            || !deferredTargets.csgReceiverSpanData
-            || !deferredTargets.csgReceiverSpanCount
-            || !deferredTargets.csgReceiverSpanFlags
-            || !deferredTargets.csgRemovedIntervalDepth
-            || !deferredTargets.csgRemovedIntervalCapNormal
-            || !deferredTargets.csgRemovedIntervalData
-            || !deferredTargets.csgRemovedIntervalCount
-            || !deferredTargets.csgRemovedIntervalFlags
-        )
-    )
-        return false;
+    const bool hasOpaqueCsgFrameWork = m_preparedCsgFrameState.hasOpaqueStaticWork || m_preparedCsgFrameState.hasOpaqueSkinnedWork;
+    if(hasCsgFrameWork){
+        if(!m_csgSystem.createCsgPeelTargets(deferredTargets))
+            return false;
+        if(!m_csgSystem.createCsgIntervalPeelResources(deferredTargets, hasOpaqueCsgFrameWork))
+            return false;
+    }
 
     if(!m_materialSystem.prepareMaterialPassResources(
         deferredTargets.framebuffer.get(),
@@ -171,28 +155,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::Alloc::ScratchArena scratchArena;
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
     const bool hasCsgFrameWork = !csgFrameState.empty();
-    if(
-        hasCsgFrameWork
-        && (
-            !deferredTargets.csgCapBackNormal
-            || !deferredTargets.csgIntervalDepth
-            || !deferredTargets.csgIntervalLinearDepth
-            || !deferredTargets.csgIntervalId
-            || !deferredTargets.csgReceiverEventDepth
-            || !deferredTargets.csgReceiverEventData
-            || !deferredTargets.csgReceiverEventCount
-            || !deferredTargets.csgReceiverEventFlags
-            || !deferredTargets.csgReceiverSpanDepth
-            || !deferredTargets.csgReceiverSpanData
-            || !deferredTargets.csgReceiverSpanCount
-            || !deferredTargets.csgReceiverSpanFlags
-            || !deferredTargets.csgRemovedIntervalDepth
-            || !deferredTargets.csgRemovedIntervalCapNormal
-            || !deferredTargets.csgRemovedIntervalData
-            || !deferredTargets.csgRemovedIntervalCount
-            || !deferredTargets.csgRemovedIntervalFlags
-        )
-    )
+    const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
+    if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
         return;
     auto* device = m_graphics.getDevice();
     Core::CommandListHandle commandList = device->createCommandList();
@@ -202,7 +166,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     commandList->open();
 
-    m_deferredSystem.clearDeferredTargets(*commandList, deferredTargets, hasCsgFrameWork);
+    m_deferredSystem.clearDeferredTargets(*commandList, deferredTargets, hasOpaqueCsgFrameWork);
 
     MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};

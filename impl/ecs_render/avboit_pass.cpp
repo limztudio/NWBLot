@@ -190,15 +190,21 @@ bool RendererAvboitSystem::prepareAvboitPassResources(
     if(!avboitTargets.valid())
         return false;
 
-    return
-        m_renderer.materialSystem().prepareMaterialPassResources(
+    const bool hasTransparentCsgWork = csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork;
+    if(
+        hasTransparentCsgWork
+        && !m_renderer.materialSystem().prepareMaterialPassResources(
             targets.framebuffer.get(),
             MaterialPipelinePass::CsgReceiverSurface,
             true,
             csgFrameState,
             nullptr
         )
-        && m_renderer.materialSystem().prepareMaterialPassResources(
+    )
+        return false;
+
+    return
+        m_renderer.materialSystem().prepareMaterialPassResources(
             avboitTargets.lowFramebuffer.get(),
             MaterialPipelinePass::AvboitOccupancy,
             true,

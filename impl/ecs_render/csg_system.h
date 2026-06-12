@@ -26,7 +26,7 @@ public:
     [[nodiscard]] bool createCsgClipResources();
     void destroyCsgClipBindingSet();
     [[nodiscard]] bool createCsgPeelTargets(DeferredFrameTargets& targets);
-    [[nodiscard]] bool createCsgIntervalPeelResources(DeferredFrameTargets& targets);
+    [[nodiscard]] bool createCsgIntervalPeelResources(DeferredFrameTargets& targets, bool capFillRequired);
     [[nodiscard]] bool createCsgIntervalSampleResources(DeferredFrameTargets& targets);
     void destroyCsgIntervalPeelBindingSet();
     void dispatchCsgIntervalPeels(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);

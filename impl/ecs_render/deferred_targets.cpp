@@ -442,6 +442,8 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     NWB_ASSERT(!clearCsgTargets || targets.csgReceiverSpanLayerCount > 0u);
     NWB_ASSERT(!clearCsgTargets || targets.csgRemovedIntervalLayerCount > 0u);
 
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredClear, graphics().getDevice(), commandList);
+
     const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
     const Core::TextureSubresourceSet csgReceiverEventSubresources(0, 1, 0, targets.csgReceiverEventLayerCount);
     const Core::TextureSubresourceSet csgReceiverEventCounterSubresources(0, 1, 0, 1);
@@ -537,6 +539,8 @@ void RendererDeferredSystem::clearCsgIntervalTargets(Core::CommandList& commandL
     NWB_ASSERT(targets.csgReceiverEventLayerCount > 0u);
     NWB_ASSERT(targets.csgReceiverSpanLayerCount > 0u);
     NWB_ASSERT(targets.csgRemovedIntervalLayerCount > 0u);
+
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, graphics().getDevice(), commandList);
 
     const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
     const Core::TextureSubresourceSet csgReceiverEventSubresources(0, 1, 0, targets.csgReceiverEventLayerCount);

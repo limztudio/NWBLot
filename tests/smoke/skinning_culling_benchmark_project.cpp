@@ -64,11 +64,21 @@ struct BenchmarkAccumulation{
     f64 cpuFrameSeconds = 0.0;
     f64 skinningSeconds = 0.0;
     f64 boundsSeconds = 0.0;
+    f64 renderFrameSeconds = 0.0;
+    f64 deferredClearSeconds = 0.0;
+    f64 deferredLightingSeconds = 0.0;
+    f64 deferredCompositeSeconds = 0.0;
+    f64 materialUploadSeconds = 0.0;
     f64 meshDispatchSeconds = 0.0;
     f64 rasterSeconds = 0.0;
     u32 frameCount = 0u;
     u32 skinningSamples = 0u;
     u32 boundsSamples = 0u;
+    u32 renderFrameSamples = 0u;
+    u32 deferredClearSamples = 0u;
+    u32 deferredLightingSamples = 0u;
+    u32 deferredCompositeSamples = 0u;
+    u32 materialUploadSamples = 0u;
     u32 meshDispatchSamples = 0u;
     u32 rasterSamples = 0u;
 };
@@ -77,11 +87,21 @@ struct BenchmarkTimingSummary{
     f64 cpuFrameSeconds = 0.0;
     f64 skinningSeconds = 0.0;
     f64 boundsSeconds = 0.0;
+    f64 renderFrameSeconds = 0.0;
+    f64 deferredClearSeconds = 0.0;
+    f64 deferredLightingSeconds = 0.0;
+    f64 deferredCompositeSeconds = 0.0;
+    f64 materialUploadSeconds = 0.0;
     f64 meshDispatchSeconds = 0.0;
     f64 rasterSeconds = 0.0;
     u32 frameCount = 0u;
     u32 skinningSamples = 0u;
     u32 boundsSamples = 0u;
+    u32 renderFrameSamples = 0u;
+    u32 deferredClearSamples = 0u;
+    u32 deferredLightingSamples = 0u;
+    u32 deferredCompositeSamples = 0u;
+    u32 materialUploadSamples = 0u;
     u32 meshDispatchSamples = 0u;
     u32 rasterSamples = 0u;
 
@@ -231,11 +251,21 @@ static void AccumulateBenchmarkSummary(BenchmarkTimingSummary& summary, const Be
     summary.cpuFrameSeconds += accum.cpuFrameSeconds;
     summary.skinningSeconds += accum.skinningSeconds;
     summary.boundsSeconds += accum.boundsSeconds;
+    summary.renderFrameSeconds += accum.renderFrameSeconds;
+    summary.deferredClearSeconds += accum.deferredClearSeconds;
+    summary.deferredLightingSeconds += accum.deferredLightingSeconds;
+    summary.deferredCompositeSeconds += accum.deferredCompositeSeconds;
+    summary.materialUploadSeconds += accum.materialUploadSeconds;
     summary.meshDispatchSeconds += accum.meshDispatchSeconds;
     summary.rasterSeconds += accum.rasterSeconds;
     summary.frameCount += accum.frameCount;
     summary.skinningSamples += accum.skinningSamples;
     summary.boundsSamples += accum.boundsSamples;
+    summary.renderFrameSamples += accum.renderFrameSamples;
+    summary.deferredClearSamples += accum.deferredClearSamples;
+    summary.deferredLightingSamples += accum.deferredLightingSamples;
+    summary.deferredCompositeSamples += accum.deferredCompositeSamples;
+    summary.materialUploadSamples += accum.materialUploadSamples;
     summary.meshDispatchSamples += accum.meshDispatchSamples;
     summary.rasterSamples += accum.rasterSamples;
 }
@@ -526,7 +556,7 @@ private:
     void finishCase(){
         const BenchmarkCase& benchmarkCase = s_BenchmarkCases[m_caseIndex];
         const BenchmarkAccumulation& accum = m_accumulations[m_caseIndex];
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: result repeat={}/{} mode={} view={} frames={} cpu_ms={} skinning_gpu_ms={} bounds_gpu_ms={} mesh_dispatch_gpu_ms={} raster_gpu_ms={} skinning_samples={} bounds_samples={} mesh_samples={} raster_samples={}")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: result repeat={}/{} mode={} view={} frames={} cpu_ms={} skinning_gpu_ms={} bounds_gpu_ms={} render_frame_gpu_ms={} deferred_clear_gpu_ms={} deferred_lighting_gpu_ms={} deferred_composite_gpu_ms={} material_upload_gpu_ms={} mesh_dispatch_gpu_ms={} raster_gpu_ms={} skinning_samples={} bounds_samples={} render_frame_samples={} deferred_clear_samples={} deferred_lighting_samples={} deferred_composite_samples={} material_upload_samples={} mesh_samples={} raster_samples={}")
             , m_repeatIndex + 1u
             , s_BenchmarkRepeatCount
             , StringConvert(BenchmarkModeName(benchmarkCase.mode))
@@ -535,10 +565,20 @@ private:
             , AverageSeconds(accum.cpuFrameSeconds, accum.frameCount) * 1000.0
             , AverageSeconds(accum.skinningSeconds, accum.skinningSamples) * 1000.0
             , AverageSeconds(accum.boundsSeconds, accum.boundsSamples) * 1000.0
+            , AverageSeconds(accum.renderFrameSeconds, accum.renderFrameSamples) * 1000.0
+            , AverageSeconds(accum.deferredClearSeconds, accum.deferredClearSamples) * 1000.0
+            , AverageSeconds(accum.deferredLightingSeconds, accum.deferredLightingSamples) * 1000.0
+            , AverageSeconds(accum.deferredCompositeSeconds, accum.deferredCompositeSamples) * 1000.0
+            , AverageSeconds(accum.materialUploadSeconds, accum.materialUploadSamples) * 1000.0
             , AverageSeconds(accum.meshDispatchSeconds, accum.meshDispatchSamples) * 1000.0
             , AverageSeconds(accum.rasterSeconds, accum.rasterSamples) * 1000.0
             , accum.skinningSamples
             , accum.boundsSamples
+            , accum.renderFrameSamples
+            , accum.deferredClearSamples
+            , accum.deferredLightingSamples
+            , accum.deferredCompositeSamples
+            , accum.materialUploadSamples
             , accum.meshDispatchSamples
             , accum.rasterSamples
         );
@@ -629,6 +669,11 @@ private:
         const NWB::Core::GpuTimingRecorder& gpuTiming = m_context.graphics.gpuTiming();
         AccumulateGpuScope(gpuTiming, SkinnedTiming::s_Skinning, accum.skinningSeconds, accum.skinningSamples);
         AccumulateGpuScope(gpuTiming, SkinnedTiming::s_MeshletBounds, accum.boundsSeconds, accum.boundsSamples);
+        AccumulateGpuScope(gpuTiming, RendererTiming::s_Frame, accum.renderFrameSeconds, accum.renderFrameSamples);
+        AccumulateGpuScope(gpuTiming, RendererTiming::s_DeferredClear, accum.deferredClearSeconds, accum.deferredClearSamples);
+        AccumulateGpuScope(gpuTiming, RendererTiming::s_DeferredLighting, accum.deferredLightingSeconds, accum.deferredLightingSamples);
+        AccumulateGpuScope(gpuTiming, RendererTiming::s_DeferredComposite, accum.deferredCompositeSeconds, accum.deferredCompositeSamples);
+        AccumulateGpuScope(gpuTiming, RendererTiming::s_MaterialUpload, accum.materialUploadSeconds, accum.materialUploadSamples);
         AccumulateGpuScope(gpuTiming, RendererTiming::s_MeshDispatch, accum.meshDispatchSeconds, accum.meshDispatchSamples);
         AccumulateGpuScope(gpuTiming, RendererTiming::s_Raster, accum.rasterSeconds, accum.rasterSamples);
     }

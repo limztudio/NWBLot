@@ -67,6 +67,15 @@ struct MaterialTypedByteRangeKeyHasher{
     }
 }
 
+[[nodiscard]] static const Name& MaterialPassGpuTimingScope(const MaterialPipelinePass::Enum pass){
+    switch(pass){
+    case MaterialPipelinePass::AvboitOccupancy: return RendererGpuTimingScope::s_AvboitOccupancy;
+    case MaterialPipelinePass::AvboitExtinction: return RendererGpuTimingScope::s_AvboitExtinction;
+    case MaterialPipelinePass::AvboitAccumulate: return RendererGpuTimingScope::s_AvboitAccumulate;
+    default: return NAME_NONE;
+    }
+}
+
 };
 
 
@@ -176,6 +185,13 @@ void RendererMaterialSystem::renderMaterialPass(
     );
     if(drawItems.empty())
         return;
+
+    Core::GpuTimingMeasure timing(
+        graphics().gpuTiming(),
+        __hidden_material_pass::MaterialPassGpuTimingScope(pass),
+        graphics().getDevice(),
+        commandList
+    );
 
     f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(framebuffer->getFramebufferInfo());
     if(avboitTargets && avboitTargets->fullWidth > 0 && avboitTargets->fullHeight > 0)

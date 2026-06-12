@@ -15,6 +15,7 @@
 #include "renderer_push_constants_private.h"
 #include "renderer_render_state_private.h"
 #include "renderer_scene_private.h"
+#include "timing_names.h"
 
 #include <core/assets/manager.h>
 #include <core/common/log.h>

@@ -1055,6 +1055,8 @@ bool RendererCsgSystem::uploadCsgIntervalSampleState(
     if(!csgState().m_intervalSampleStateBuffer)
         return false;
 
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgSampleStateUpload, graphics().getDevice(), commandList);
+
     const __hidden_csg_interval_peel::CsgIntervalSampleStateGpuData state =
         __hidden_csg_interval_peel::BuildCsgIntervalSampleState(targets, csgFrameData)
     ;
@@ -1082,6 +1084,8 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     NWB_ASSERT(csgState().m_intervalPeelPipeline);
     NWB_ASSERT(csgState().m_intervalPeelBindingSet);
     NWB_ASSERT(csgState().m_clipBindingSet);
+
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalPeel, graphics().getDevice(), commandList);
 
     commandList.setResourceStatesForBindingSet(csgState().m_intervalPeelBindingSet.get());
     commandList.setResourceStatesForBindingSet(csgState().m_clipBindingSet.get());
@@ -1117,6 +1121,8 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     NWB_ASSERT(csgState().m_receiverSpanBuildPipeline);
     NWB_ASSERT(csgState().m_receiverSpanBuildBindingSet);
 
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgReceiverSpanBuild, graphics().getDevice(), commandList);
+
     commandList.endRenderPass();
     commandList.setResourceStatesForBindingSet(csgState().m_receiverSpanBuildBindingSet.get());
     commandList.commitBarriers();
@@ -1149,6 +1155,8 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     NWB_ASSERT(csgState().m_intervalCombinePipeline);
     NWB_ASSERT(csgState().m_intervalCombineBindingSet);
 
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalCombine, graphics().getDevice(), commandList);
+
     commandList.endRenderPass();
     commandList.setResourceStatesForBindingSet(csgState().m_intervalCombineBindingSet.get());
     commandList.commitBarriers();
@@ -1176,6 +1184,8 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     NWB_ASSERT(csgState().m_intervalSampleBindingSet);
     NWB_ASSERT(csgState().m_clipBindingSet);
     NWB_ASSERT(targets.framebuffer);
+
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, graphics().getDevice(), commandList);
 
     commandList.setResourceStatesForBindingSet(csgState().m_intervalSampleBindingSet.get());
     commandList.setResourceStatesForBindingSet(csgState().m_clipBindingSet.get());

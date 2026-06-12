@@ -454,6 +454,8 @@ bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, co
     NWB_ASSERT(csgState().m_cutterBufferCapacity >= csgFrameData.cutters.size());
     NWB_ASSERT(csgState().m_clipBindingSet);
 
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgUpload, graphics().getDevice(), commandList);
+
     commandList.setBufferState(csgState().m_receiverRangeBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.setBufferState(csgState().m_cutterBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();

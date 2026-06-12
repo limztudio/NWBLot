@@ -318,6 +318,8 @@ bool RendererMaterialSystem::uploadMaterialPassDrawBuffers(
         return false;
 #endif
 
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MaterialUpload, graphics().getDevice(), commandList);
+
     return uploadInstanceBuffer(commandList, instanceData) && uploadMaterialTypedBuffer(commandList, materialTypedBytes);
 }
 

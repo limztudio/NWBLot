@@ -129,6 +129,8 @@ bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandLi
     NWB_ASSERT(targets.opaqueLightingFramebuffer);
     NWB_ASSERT(deferredState().m_lightingPipeline);
 
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, graphics().getDevice(), commandList);
+
     commandList.setResourceStatesForBindingSet(targets.lightingBindingSet.get());
     commandList.commitBarriers();
 

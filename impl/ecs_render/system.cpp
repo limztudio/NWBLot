@@ -166,139 +166,152 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     commandList->open();
 
-    MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
-    InstanceGpuDataVector instanceData{scratchArena};
-    CsgFrameGpuData csgFrameData{scratchArena};
+    bool commandListReady = true;
+    {
+        Core::GpuTimingMeasure frameTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Frame, device, *commandList);
+
+        MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
+        InstanceGpuDataVector instanceData{scratchArena};
+        CsgFrameGpuData csgFrameData{scratchArena};
 #if defined(NWB_DEBUG)
-    ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
+        ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
 #endif
-    MaterialTypedByteDataVector materialTypedBytes{scratchArena};
+        MaterialTypedByteDataVector materialTypedBytes{scratchArena};
 
-    Core::ViewportState deferredViewportState;
-    deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
+        Core::ViewportState deferredViewportState;
+        deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
 
-    const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
-    const bool meshViewReady = m_meshSystem.updateMeshViewBuffer(*commandList, meshViewAspectRatio);
-    const bool sceneShadingReady = m_deferredSystem.updateSceneShadingBuffer(*commandList, meshViewAspectRatio);
-    if(meshViewReady && sceneShadingReady){
-        m_materialSystem.gatherMaterialPassDrawItems(
-            deferredTargets.framebuffer.get(),
-            MaterialPipelinePass::Opaque,
-            false,
-            csgFrameState,
-            opaqueDrawItems,
-            instanceData,
-            csgFrameData,
+        const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
+        const bool meshViewReady = m_meshSystem.updateMeshViewBuffer(*commandList, meshViewAspectRatio);
+        const bool sceneShadingReady = m_deferredSystem.updateSceneShadingBuffer(*commandList, meshViewAspectRatio);
+        if(meshViewReady && sceneShadingReady){
+            m_materialSystem.gatherMaterialPassDrawItems(
+                deferredTargets.framebuffer.get(),
+                MaterialPipelinePass::Opaque,
+                false,
+                csgFrameState,
+                opaqueDrawItems,
+                instanceData,
+                csgFrameData,
 #if defined(NWB_DEBUG)
-            materialTypedRanges,
+                materialTypedRanges,
 #endif
-            materialTypedBytes,
-            RendererResourceLookupMode::PreparedOnly
-        );
-    }
-
-    const Core::Rect opaqueCsgClearRect = csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height);
-    m_deferredSystem.clearDeferredTargets(*commandList, deferredTargets, hasOpaqueCsgFrameWork, opaqueCsgClearRect);
-
-    const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
-    const bool deferredResourcesReady =
-        hasDeferredDrawItems
-        && m_materialSystem.materialPassDrawBuffersReady(instanceData, materialTypedBytes)
-    ;
-    const bool regularDrawResourcesReady =
-        deferredResourcesReady
-        && m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular)
-    ;
-    const bool csgResourcesReady =
-        deferredResourcesReady
-        && (opaqueDrawItems.csg.empty() || m_csgSystem.csgFrameBuffersReady(csgFrameData))
-    ;
-    const bool csgDrawResourcesReady =
-        csgResourcesReady
-        && (opaqueDrawItems.csg.empty() || m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csg))
-    ;
-    const bool csgReceiverSurfaceDrawResourcesReady =
-        csgResourcesReady
-        && (opaqueDrawItems.csgReceiverSurface.empty() || m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
-    ;
-    const bool deferredUploadReady =
-        deferredResourcesReady
-        && m_materialSystem.uploadMaterialPassDrawBuffers(
-            *commandList,
-            instanceData,
-#if defined(NWB_DEBUG)
-            materialTypedRanges,
-#endif
-            materialTypedBytes
-        )
-    ;
-    if(deferredUploadReady){
-        const bool csgUploadReady = csgResourcesReady && (opaqueDrawItems.csg.empty() || m_csgSystem.uploadCsgFrameBuffers(*commandList, csgFrameData));
-        const bool csgSampleStateReady =
-            csgUploadReady
-            && (!csgFrameData.hasWork() || m_csgSystem.uploadCsgIntervalSampleState(*commandList, deferredTargets, csgFrameData))
-        ;
-        if(csgSampleStateReady && csgFrameData.hasWork())
-            m_csgSystem.dispatchCsgIntervalPeels(*commandList, deferredTargets, csgFrameData);
-        const MaterialPassDrawContext opaqueDrawContext{
-            *commandList,
-            deferredTargets.framebuffer.get(),
-            MaterialPipelinePass::Opaque,
-            nullptr,
-            nullptr,
-            deferredViewportState
-        };
-        if(regularDrawResourcesReady)
-            m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
-
-        Core::ViewportState csgIntervalViewportState;
-        csgIntervalViewportState
-            .addViewport(deferredTargets.framebuffer->getFramebufferInfo().getViewport())
-            .addScissorRect(csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height))
-        ;
-        const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
-            *commandList,
-            deferredTargets.framebuffer.get(),
-            MaterialPipelinePass::CsgReceiverSurface,
-            nullptr,
-            nullptr,
-            csgIntervalViewportState
-        };
-        if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady)
-            m_materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, opaqueDrawItems.csgReceiverSurface);
-        if(csgSampleStateReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
-            m_csgSystem.dispatchCsgReceiverSpanBuild(*commandList, deferredTargets, csgFrameData);
-        if(csgSampleStateReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
-            m_csgSystem.dispatchCsgIntervalCombine(*commandList, deferredTargets, csgFrameData);
-        if(csgSampleStateReady && csgDrawResourcesReady){
-            m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
-            if(csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
-                m_csgSystem.renderCsgIntervalCaps(*commandList, deferredTargets, csgFrameData);
+                materialTypedBytes,
+                RendererResourceLookupMode::PreparedOnly
+            );
         }
-    }
-    commandList->endRenderPass();
 
-    if(!m_deferredSystem.renderDeferredLighting(*commandList, deferredTargets)){
-        commandList->close();
-        return;
-    }
+        const Core::Rect opaqueCsgClearRect = csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height);
+        m_deferredSystem.clearDeferredTargets(*commandList, deferredTargets, hasOpaqueCsgFrameWork, opaqueCsgClearRect);
 
-    const bool hasTransparentRenderers = m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly);
-    if(hasTransparentRenderers || m_avboitState.m_targetsNeedClear){
-        m_avboitSystem.clearAvboitTargets(*commandList, deferredTargets.avboit);
-        m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
-    }
-    if(hasTransparentRenderers)
-        m_avboitSystem.renderAvboitPasses(*commandList, deferredTargets, csgFrameState);
+        const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
+        const bool deferredResourcesReady =
+            hasDeferredDrawItems
+            && m_materialSystem.materialPassDrawBuffersReady(instanceData, materialTypedBytes)
+        ;
+        const bool regularDrawResourcesReady =
+            deferredResourcesReady
+            && m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular)
+        ;
+        const bool csgResourcesReady =
+            deferredResourcesReady
+            && (opaqueDrawItems.csg.empty() || m_csgSystem.csgFrameBuffersReady(csgFrameData))
+        ;
+        const bool csgDrawResourcesReady =
+            csgResourcesReady
+            && (opaqueDrawItems.csg.empty() || m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csg))
+        ;
+        const bool csgReceiverSurfaceDrawResourcesReady =
+            csgResourcesReady
+            && (opaqueDrawItems.csgReceiverSurface.empty() || m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
+        ;
+        const bool deferredUploadReady =
+            deferredResourcesReady
+            && m_materialSystem.uploadMaterialPassDrawBuffers(
+                *commandList,
+                instanceData,
+#if defined(NWB_DEBUG)
+                materialTypedRanges,
+#endif
+                materialTypedBytes
+            )
+        ;
+        if(deferredUploadReady){
+            const bool csgUploadReady = csgResourcesReady && (opaqueDrawItems.csg.empty() || m_csgSystem.uploadCsgFrameBuffers(*commandList, csgFrameData));
+            const bool csgSampleStateReady =
+                csgUploadReady
+                && (!csgFrameData.hasWork() || m_csgSystem.uploadCsgIntervalSampleState(*commandList, deferredTargets, csgFrameData))
+            ;
+            if(csgSampleStateReady && csgFrameData.hasWork())
+                m_csgSystem.dispatchCsgIntervalPeels(*commandList, deferredTargets, csgFrameData);
+            const MaterialPassDrawContext opaqueDrawContext{
+                *commandList,
+                deferredTargets.framebuffer.get(),
+                MaterialPipelinePass::Opaque,
+                nullptr,
+                nullptr,
+                deferredViewportState
+            };
+            if(regularDrawResourcesReady && !opaqueDrawItems.regular.empty()){
+                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, device, *commandList);
 
-    commandList->setResourceStatesForBindingSet(deferredTargets.compositeBindingSet.get());
-    commandList->commitBarriers();
-    if(!m_deferredSystem.renderDeferredComposite(*commandList, deferredTargets, framebuffer)){
-        commandList->close();
-        return;
+                m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
+            }
+
+            Core::ViewportState csgIntervalViewportState;
+            csgIntervalViewportState
+                .addViewport(deferredTargets.framebuffer->getFramebufferInfo().getViewport())
+                .addScissorRect(csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height))
+            ;
+            const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
+                *commandList,
+                deferredTargets.framebuffer.get(),
+                MaterialPipelinePass::CsgReceiverSurface,
+                nullptr,
+                nullptr,
+                csgIntervalViewportState
+            };
+            if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
+                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, device, *commandList);
+
+                m_materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, opaqueDrawItems.csgReceiverSurface);
+            }
+            if(csgSampleStateReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
+                m_csgSystem.dispatchCsgReceiverSpanBuild(*commandList, deferredTargets, csgFrameData);
+            if(csgSampleStateReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
+                m_csgSystem.dispatchCsgIntervalCombine(*commandList, deferredTargets, csgFrameData);
+            if(csgSampleStateReady && csgDrawResourcesReady){
+                if(!opaqueDrawItems.csg.empty()){
+                    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsg, device, *commandList);
+
+                    m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
+                }
+                if(csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
+                    m_csgSystem.renderCsgIntervalCaps(*commandList, deferredTargets, csgFrameData);
+            }
+        }
+        commandList->endRenderPass();
+
+        commandListReady = m_deferredSystem.renderDeferredLighting(*commandList, deferredTargets);
+        if(commandListReady){
+            const bool hasTransparentRenderers = m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly);
+            if(hasTransparentRenderers || m_avboitState.m_targetsNeedClear){
+                m_avboitSystem.clearAvboitTargets(*commandList, deferredTargets.avboit);
+                m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
+            }
+            if(hasTransparentRenderers)
+                m_avboitSystem.renderAvboitPasses(*commandList, deferredTargets, csgFrameState);
+
+            commandList->setResourceStatesForBindingSet(deferredTargets.compositeBindingSet.get());
+            commandList->commitBarriers();
+            commandListReady = m_deferredSystem.renderDeferredComposite(*commandList, deferredTargets, framebuffer);
+        }
     }
 
     commandList->close();
+    if(!commandListReady)
+        return;
+
     Core::CommandList* commandLists[] = { commandList.get() };
     device->executeCommandLists(commandLists, 1);
 }

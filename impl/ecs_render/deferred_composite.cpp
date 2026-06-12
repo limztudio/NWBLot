@@ -93,6 +93,8 @@ bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandL
         && deferredState().m_compositePipeline->getFramebufferInfo() == presentationFramebuffer->getFramebufferInfo()
     );
 
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredComposite, graphics().getDevice(), commandList);
+
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(presentationFramebuffer->getFramebufferInfo().getViewport());
 

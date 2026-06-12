@@ -251,8 +251,42 @@ inline bool TextureClearRectCoversSubresources(const TextureDesc& desc, const Te
     return true;
 }
 
+inline constexpr u64 s_TextureClearRectMergedLayerUploadThreshold = 64ull * 1024ull;
+
 inline void WriteClearPatternValue(u8* outBytes, const usize outByteCount, const void* value, const usize valueByteCount){
     NWB_MEMCPY(outBytes, outByteCount, value, valueByteCount);
+}
+
+inline f32 ClampClearFloat(const f32 value, const f32 minValue, const f32 maxValue){
+    if(!(value > minValue))
+        return minValue;
+    if(value > maxValue)
+        return maxValue;
+    return value;
+}
+
+inline u32 RoundClearFloatToUInt(const f32 value){
+    return static_cast<u32>(Floor(value + 0.5f));
+}
+
+inline u32 FloatToUNormClearValue(const f32 value, const u32 maxValue){
+    const f32 clamped = ClampClearFloat(value, 0.0f, 1.0f);
+    return Min(RoundClearFloatToUInt(clamped * static_cast<f32>(maxValue)), maxValue);
+}
+
+inline i32 FloatToSNormClearValue(const f32 value, const i32 maxValue){
+    const f32 clamped = ClampClearFloat(value, -1.0f, 1.0f);
+    const f32 scaled = clamped * static_cast<f32>(maxValue);
+    if(scaled < 0.0f)
+        return -static_cast<i32>(RoundClearFloatToUInt(-scaled));
+    return static_cast<i32>(RoundClearFloatToUInt(scaled));
+}
+
+inline f32 LinearToSRGBClearValue(const f32 value){
+    const f32 clamped = ClampClearFloat(value, 0.0f, 1.0f);
+    if(clamped <= 0.0031308f)
+        return clamped * 12.92f;
+    return 1.055f * Pow(clamped, 1.0f / 2.4f) - 0.055f;
 }
 
 inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkClearColorValue& clearValue, u8* outPattern, u32& outPatternSize){
@@ -264,6 +298,51 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
         clearValue.float32[3],
     };
 
+    auto writeUNorm8Components = [&](const u32 componentCount, const bool srgb){
+        for(u32 component = 0u; component < componentCount; ++component){
+            const bool colorComponent = component < 3u;
+            const f32 value = srgb && colorComponent ? LinearToSRGBClearValue(values[component]) : values[component];
+            const u8 packed = static_cast<u8>(FloatToUNormClearValue(value, static_cast<u32>(Limit<u8>::s_Max)));
+            WriteClearPatternValue(outPattern + component * sizeof(packed), sizeof(packed), &packed, sizeof(packed));
+        }
+        outPatternSize = componentCount * static_cast<u32>(sizeof(u8));
+        return true;
+    };
+    auto writeUNorm8BGRAComponents = [&](const bool srgb){
+        const f32 orderedValues[] = { values[2], values[1], values[0], values[3] };
+        for(u32 component = 0u; component < 4u; ++component){
+            const bool colorComponent = component < 3u;
+            const f32 value = srgb && colorComponent ? LinearToSRGBClearValue(orderedValues[component]) : orderedValues[component];
+            const u8 packed = static_cast<u8>(FloatToUNormClearValue(value, static_cast<u32>(Limit<u8>::s_Max)));
+            WriteClearPatternValue(outPattern + component * sizeof(packed), sizeof(packed), &packed, sizeof(packed));
+        }
+        outPatternSize = 4u * static_cast<u32>(sizeof(u8));
+        return true;
+    };
+    auto writeSNorm8Components = [&](const u32 componentCount){
+        for(u32 component = 0u; component < componentCount; ++component){
+            const i8 packed = static_cast<i8>(FloatToSNormClearValue(values[component], static_cast<i32>(Limit<i8>::s_Max)));
+            WriteClearPatternValue(outPattern + component * sizeof(packed), sizeof(packed), &packed, sizeof(packed));
+        }
+        outPatternSize = componentCount * static_cast<u32>(sizeof(i8));
+        return true;
+    };
+    auto writeUNorm16Components = [&](const u32 componentCount){
+        for(u32 component = 0u; component < componentCount; ++component){
+            const u16 packed = static_cast<u16>(FloatToUNormClearValue(values[component], static_cast<u32>(Limit<u16>::s_Max)));
+            WriteClearPatternValue(outPattern + component * sizeof(packed), sizeof(packed), &packed, sizeof(packed));
+        }
+        outPatternSize = componentCount * static_cast<u32>(sizeof(u16));
+        return true;
+    };
+    auto writeSNorm16Components = [&](const u32 componentCount){
+        for(u32 component = 0u; component < componentCount; ++component){
+            const i16 packed = static_cast<i16>(FloatToSNormClearValue(values[component], static_cast<i32>(Limit<i16>::s_Max)));
+            WriteClearPatternValue(outPattern + component * sizeof(packed), sizeof(packed), &packed, sizeof(packed));
+        }
+        outPatternSize = componentCount * static_cast<u32>(sizeof(i16));
+        return true;
+    };
     auto writeHalfComponents = [&](const u32 componentCount){
         for(u32 component = 0u; component < componentCount; ++component){
             const Half value = ConvertFloatToHalf(values[component]);
@@ -281,8 +360,23 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
     };
 
     switch(format){
+    case Format::R8_UNORM: return writeUNorm8Components(1u, false);
+    case Format::R8_SNORM: return writeSNorm8Components(1u);
+    case Format::RG8_UNORM: return writeUNorm8Components(2u, false);
+    case Format::RG8_SNORM: return writeSNorm8Components(2u);
+    case Format::RGBA8_UNORM: return writeUNorm8Components(4u, false);
+    case Format::RGBA8_SNORM: return writeSNorm8Components(4u);
+    case Format::RGBA8_UNORM_SRGB: return writeUNorm8Components(4u, true);
+    case Format::BGRA8_UNORM: return writeUNorm8BGRAComponents(false);
+    case Format::BGRA8_UNORM_SRGB: return writeUNorm8BGRAComponents(true);
+    case Format::R16_UNORM: return writeUNorm16Components(1u);
+    case Format::R16_SNORM: return writeSNorm16Components(1u);
     case Format::R16_FLOAT: return writeHalfComponents(1u);
+    case Format::RG16_UNORM: return writeUNorm16Components(2u);
+    case Format::RG16_SNORM: return writeSNorm16Components(2u);
     case Format::RG16_FLOAT: return writeHalfComponents(2u);
+    case Format::RGBA16_UNORM: return writeUNorm16Components(4u);
+    case Format::RGBA16_SNORM: return writeSNorm16Components(4u);
     case Format::RGBA16_FLOAT: return writeHalfComponents(4u);
     case Format::R32_FLOAT: return writeFloatComponents(1u);
     case Format::RG32_FLOAT: return writeFloatComponents(2u);
@@ -302,6 +396,14 @@ inline bool BuildTextureUIntClearPattern(const Format::Enum format, const VkClea
         clearValue.uint32[3],
     };
 
+    auto writeI8Components = [&](const u32 componentCount){
+        for(u32 component = 0u; component < componentCount; ++component){
+            const i8 value = static_cast<i8>(Min(values[component], static_cast<u32>(Limit<i8>::s_Max)));
+            WriteClearPatternValue(outPattern + component * sizeof(value), sizeof(value), &value, sizeof(value));
+        }
+        outPatternSize = componentCount * static_cast<u32>(sizeof(i8));
+        return true;
+    };
     auto writeU8Components = [&](const u32 componentCount){
         for(u32 component = 0u; component < componentCount; ++component){
             const u8 value = static_cast<u8>(Min(values[component], static_cast<u32>(Limit<u8>::s_Max)));
@@ -310,12 +412,28 @@ inline bool BuildTextureUIntClearPattern(const Format::Enum format, const VkClea
         outPatternSize = componentCount * static_cast<u32>(sizeof(u8));
         return true;
     };
+    auto writeI16Components = [&](const u32 componentCount){
+        for(u32 component = 0u; component < componentCount; ++component){
+            const i16 value = static_cast<i16>(Min(values[component], static_cast<u32>(Limit<i16>::s_Max)));
+            WriteClearPatternValue(outPattern + component * sizeof(value), sizeof(value), &value, sizeof(value));
+        }
+        outPatternSize = componentCount * static_cast<u32>(sizeof(i16));
+        return true;
+    };
     auto writeU16Components = [&](const u32 componentCount){
         for(u32 component = 0u; component < componentCount; ++component){
             const u16 value = static_cast<u16>(Min(values[component], static_cast<u32>(Limit<u16>::s_Max)));
             WriteClearPatternValue(outPattern + component * sizeof(value), sizeof(value), &value, sizeof(value));
         }
         outPatternSize = componentCount * static_cast<u32>(sizeof(u16));
+        return true;
+    };
+    auto writeI32Components = [&](const u32 componentCount){
+        for(u32 component = 0u; component < componentCount; ++component){
+            const i32 value = static_cast<i32>(Min(values[component], static_cast<u32>(Limit<i32>::s_Max)));
+            WriteClearPatternValue(outPattern + component * sizeof(value), sizeof(value), &value, sizeof(value));
+        }
+        outPatternSize = componentCount * static_cast<u32>(sizeof(i32));
         return true;
     };
     auto writeU32Components = [&](const u32 componentCount){
@@ -328,15 +446,25 @@ inline bool BuildTextureUIntClearPattern(const Format::Enum format, const VkClea
 
     switch(format){
     case Format::R8_UINT: return writeU8Components(1u);
+    case Format::R8_SINT: return writeI8Components(1u);
     case Format::RG8_UINT: return writeU8Components(2u);
+    case Format::RG8_SINT: return writeI8Components(2u);
     case Format::RGBA8_UINT: return writeU8Components(4u);
+    case Format::RGBA8_SINT: return writeI8Components(4u);
     case Format::R16_UINT: return writeU16Components(1u);
+    case Format::R16_SINT: return writeI16Components(1u);
     case Format::RG16_UINT: return writeU16Components(2u);
+    case Format::RG16_SINT: return writeI16Components(2u);
     case Format::RGBA16_UINT: return writeU16Components(4u);
+    case Format::RGBA16_SINT: return writeI16Components(4u);
     case Format::R32_UINT: return writeU32Components(1u);
+    case Format::R32_SINT: return writeI32Components(1u);
     case Format::RG32_UINT: return writeU32Components(2u);
+    case Format::RG32_SINT: return writeI32Components(2u);
     case Format::RGB32_UINT: return writeU32Components(3u);
+    case Format::RGB32_SINT: return writeI32Components(3u);
     case Format::RGBA32_UINT: return writeU32Components(4u);
+    case Format::RGBA32_SINT: return writeI32Components(4u);
     default:
         return false;
     }
@@ -1276,7 +1404,11 @@ void CommandList::clearColorTextureRect(
         : __hidden_vulkan_texture::BuildTextureFloatClearPattern(desc.format, clearValue, clearPattern, clearPatternSize)
     ;
     if(!patternReady || clearPatternSize != texture.m_formatLayout.bytesPerBlock){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: bounded texture rect clears do not support texture format {}"), valueName, GetFormatInfo(desc.format).name);
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to clear texture rect with {}: bounded texture rect clears do not support texture format {}"),
+            valueName,
+            StringConvert(GetFormatInfo(desc.format).name)
+        );
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: bounded texture rect clears do not support texture format"), valueName);
         return;
     }
@@ -1307,7 +1439,15 @@ void CommandList::clearColorTextureRect(
             return;
         }
 
-        Vector<u8, Alloc::ScratchArena> clearBytes(static_cast<usize>(uploadSize64), scratchArena);
+        const u64 arrayLayerCount = static_cast<u64>(resolvedSubresources.numArraySlices);
+        const bool mergeArrayLayerCopies =
+            desc.dimension != TextureDimension::Texture3D
+            && arrayLayerCount > 1ull
+            && uploadSize64 <= (__hidden_vulkan_texture::s_TextureClearRectMergedLayerUploadThreshold / arrayLayerCount)
+        ;
+        const u64 clearByteSize64 = mergeArrayLayerCopies ? uploadSize64 * arrayLayerCount : uploadSize64;
+
+        Vector<u8, Alloc::ScratchArena> clearBytes(static_cast<usize>(clearByteSize64), scratchArena);
         __hidden_vulkan_texture::FillTextureClearBytes(clearBytes, clearPattern, clearPatternSize);
 
         Buffer* stagingBuffer = nullptr;
@@ -1323,13 +1463,13 @@ void CommandList::clearColorTextureRect(
             region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), static_cast<u32>(clearDepth) };
             vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
         }
-        else{
+        else if(mergeArrayLayerCopies){
             Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
             const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
             u32 regionIndex = 0u;
             for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
                 VkBufferImageCopy region{};
-                region.bufferOffset = stagingOffset;
+                region.bufferOffset = stagingOffset + static_cast<u64>(regionIndex) * uploadSize64;
                 region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, arraySlice, 1u);
                 region.imageOffset = { resolvedRect.minX, resolvedRect.minY, 0 };
                 region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
@@ -1338,6 +1478,17 @@ void CommandList::clearColorTextureRect(
 
             if(!regions.empty())
                 vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
+        }
+        else{
+            const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+            for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+                VkBufferImageCopy region{};
+                region.bufferOffset = stagingOffset;
+                region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, arraySlice, 1u);
+                region.imageOffset = { resolvedRect.minX, resolvedRect.minY, 0 };
+                region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
+                vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
+            }
         }
 
         retainStagingBuffer(*stagingBuffer);

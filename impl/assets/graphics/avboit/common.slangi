@@ -23,6 +23,9 @@
 #ifndef NWB_CSG_CLIP_SET
 #define NWB_CSG_CLIP_SET 2
 #endif
+#ifndef NWB_CSG_INTERVAL_SAMPLE_ENABLED
+#define NWB_CSG_INTERVAL_SAMPLE_ENABLED 0
+#endif
 #endif
 
 static const float NWB_AVBOIT_ALPHA_EPSILON = 0.0001;
@@ -47,6 +50,13 @@ ConstantBuffer<NwbAvboitDrawPushConstants> g_NwbAvboitDraw;
 #if NWB_CSG_ENABLED
 #define NWB_CSG_MESH_INSTANCE_INDEX (g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX])
 #include "../csg/pixel_runtime.slangi"
+#if NWB_CSG_INTERVAL_SAMPLE_ENABLED
+#define NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED 1
+#define NWB_MESH_SET NWB_CSG_INTERVAL_SAMPLE_SET
+#include "../csg/interval_sample.slangi"
+#undef NWB_MESH_SET
+#undef NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
+#endif
 #undef NWB_CSG_MESH_INSTANCE_INDEX
 #endif
 
@@ -59,12 +69,29 @@ float nwbAvboitResolveFragmentAlpha(float4 color){
 }
 
 #if NWB_CSG_ENABLED
-bool nwbAvboitCsgPixelDiscard(const float4 worldPosition){
+bool nwbAvboitCsgPixelDiscard(const float4 rasterPosition, const float4 worldPosition){
     const uint rasterFlags = uint(worldPosition.w + 0.5);
     if((rasterFlags & NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED) != 0u)
         return false;
 
-    return nwbCsgReceiverPixelDiscard(nwbCsgMeshInstanceIndex(), worldPosition.xyz);
+    const uint receiverIndex = nwbCsgMeshInstanceIndex();
+    const float worldDistanceTolerance = nwbCsgPixelWorldDistanceTolerance(worldPosition.xyz);
+    bool csgPixelDiscard = nwbCsgReceiverPixelDiscardWithWorldTolerance(
+        receiverIndex,
+        worldPosition.xyz,
+        worldDistanceTolerance
+    );
+#if NWB_CSG_INTERVAL_SAMPLE_ENABLED
+    if(!csgPixelDiscard){
+        csgPixelDiscard = nwbCsgReceiverIntervalPixelDiscard(
+            rasterPosition,
+            receiverIndex,
+            worldPosition.xyz,
+            worldDistanceTolerance
+        );
+    }
+#endif
+    return csgPixelDiscard;
 }
 #endif
 
@@ -126,6 +153,11 @@ uint2 nwbAvboitLowPixelFromFragCoord(float2 fragCoord){
 float2 nwbAvboitFullUvFromLowFragCoord(float2 fragCoord){
     const float2 lowSize = max(float2(float(nwbAvboitLowWidth()), float(nwbAvboitLowHeight())), float2(1.0));
     return clamp(fragCoord / lowSize, float2(0.0), float2(1.0));
+}
+
+float4 nwbAvboitFullRasterPositionFromLowFragCoord(float4 fragCoord){
+    const float2 fullSize = float2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight()));
+    return float4(nwbAvboitFullUvFromLowFragCoord(fragCoord.xy) * fullSize, fragCoord.zw);
 }
 
 uint2 nwbAvboitLowPixelFromLowFragCoord(float2 fragCoord){

@@ -74,16 +74,14 @@ namespace __hidden_material_pipeline{
         ECSRenderMaterialShaderVariants::s_CsgEnabledDefineName,
         ECSRenderMaterialShaderVariants::s_CsgEnabledDefineAssignment
     };
+    defineAssignments[defineAssignmentCount++] = {
+        ECSRenderMaterialShaderVariants::s_CsgIntervalSampleEnabledDefineName,
+        ECSRenderMaterialShaderVariants::s_CsgIntervalSampleEnabledDefineAssignment
+    };
     if(avboitClipSet){
         defineAssignments[defineAssignmentCount++] = {
             ECSRenderMaterialShaderVariants::s_CsgIntervalSampleSetDefineName,
             ECSRenderMaterialShaderVariants::s_CsgAvboitIntervalSampleSetDefineAssignment
-        };
-    }
-    else{
-        defineAssignments[defineAssignmentCount++] = {
-            ECSRenderMaterialShaderVariants::s_CsgIntervalSampleEnabledDefineName,
-            ECSRenderMaterialShaderVariants::s_CsgIntervalSampleEnabledDefineAssignment
         };
     }
     if(!projectEvaluatorModuleAssignment.empty()){

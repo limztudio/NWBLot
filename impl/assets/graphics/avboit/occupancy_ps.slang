@@ -30,7 +30,10 @@ static float4 inColor;
 void main(NwbAvboitOccupancyPixelInput input, float4 fragCoord : SV_Position){
     inColor = input.color;
 #if NWB_CSG_ENABLED
-    if(nwbAvboitCsgPixelDiscard(input.worldPosition))
+    if(nwbAvboitCsgPixelDiscard(
+        nwbAvboitFullRasterPositionFromLowFragCoord(fragCoord),
+        input.worldPosition
+    ))
         discard;
 #endif
 

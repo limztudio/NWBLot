@@ -18,7 +18,10 @@
 #endif
 #if NWB_CSG_INTERVAL_SAMPLE_ENABLED
 #define NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED 1
+#define NWB_MESH_SET NWB_CSG_INTERVAL_SAMPLE_SET
 #include "../csg/interval_sample.slangi"
+#undef NWB_MESH_SET
+#undef NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
 #endif
 #endif
 

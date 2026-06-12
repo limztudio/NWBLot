@@ -62,7 +62,10 @@ void nwbAvboitSplatExtinction(uint2 lowPixel, uint virtualSlice, float extinctio
 void main(NwbAvboitExtinctionPixelInput input, float4 fragCoord : SV_Position){
     inColor = input.color;
 #if NWB_CSG_ENABLED
-    if(nwbAvboitCsgPixelDiscard(input.worldPosition))
+    if(nwbAvboitCsgPixelDiscard(
+        nwbAvboitFullRasterPositionFromLowFragCoord(fragCoord),
+        input.worldPosition
+    ))
         discard;
 #endif
 

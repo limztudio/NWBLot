@@ -34,7 +34,7 @@ inline constexpr AStringView s_CsgIntervalSampleEnabledDefineAssignment = "NWB_C
 inline constexpr AStringView s_CsgIntervalSampleSetDefineName = "NWB_CSG_INTERVAL_SAMPLE_SET";
 inline constexpr AStringView s_CsgAvboitIntervalSampleSetDefineAssignment = "NWB_CSG_INTERVAL_SAMPLE_SET=3";
 inline constexpr AStringView s_CsgProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
-inline constexpr usize s_MaxCsgClipShaderVariantDefineAssignments = 4u;
+inline constexpr usize s_MaxCsgClipShaderVariantDefineAssignments = 5u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

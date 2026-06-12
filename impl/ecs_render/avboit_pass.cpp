@@ -192,6 +192,13 @@ bool RendererAvboitSystem::prepareAvboitPassResources(
 
     return
         m_renderer.materialSystem().prepareMaterialPassResources(
+            targets.framebuffer.get(),
+            MaterialPipelinePass::CsgReceiverSurface,
+            true,
+            csgFrameState,
+            nullptr
+        )
+        && m_renderer.materialSystem().prepareMaterialPassResources(
             avboitTargets.lowFramebuffer.get(),
             MaterialPipelinePass::AvboitOccupancy,
             true,
@@ -215,6 +222,90 @@ bool RendererAvboitSystem::prepareAvboitPassResources(
     ;
 }
 
+void RendererAvboitSystem::buildTransparentCsgIntervals(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const CsgFrameState& csgFrameState
+){
+    if(!targets.framebuffer)
+        return;
+    if(!csgFrameState.hasTransparentStaticWork && !csgFrameState.hasTransparentSkinnedWork)
+        return;
+
+    Core::Alloc::ScratchArena scratchArena;
+    MaterialPassDrawItemPartitions drawItems{scratchArena};
+    InstanceGpuDataVector instanceData{scratchArena};
+    CsgFrameGpuData csgFrameData{scratchArena};
+#if defined(NWB_DEBUG)
+    ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
+#endif
+    MaterialTypedByteDataVector materialTypedBytes{scratchArena};
+
+    m_renderer.materialSystem().gatherMaterialPassDrawItems(
+        targets.framebuffer.get(),
+        MaterialPipelinePass::CsgReceiverSurface,
+        true,
+        csgFrameState,
+        drawItems,
+        instanceData,
+        csgFrameData,
+#if defined(NWB_DEBUG)
+        materialTypedRanges,
+#endif
+        materialTypedBytes,
+        RendererResourceLookupMode::PreparedOnly
+    );
+    if(drawItems.csgReceiverSurface.empty() || !csgFrameData.hasWork())
+        return;
+
+    m_renderer.m_deferredSystem.clearCsgIntervalTargets(commandList, targets);
+
+    const bool drawBuffersReady = m_renderer.materialSystem().materialPassDrawBuffersReady(instanceData, materialTypedBytes);
+    const bool csgResourcesReady = m_renderer.csgSystem().csgFrameBuffersReady(csgFrameData);
+    const bool receiverSurfaceDrawResourcesReady =
+        m_renderer.materialSystem().materialPassDrawResourcesReady(drawItems.csgReceiverSurface)
+    ;
+    if(!drawBuffersReady || !csgResourcesReady || !receiverSurfaceDrawResourcesReady)
+        return;
+
+    if(!m_renderer.materialSystem().uploadMaterialPassDrawBuffers(
+        commandList,
+        instanceData,
+#if defined(NWB_DEBUG)
+        materialTypedRanges,
+#endif
+        materialTypedBytes
+    ))
+        return;
+    if(!m_renderer.csgSystem().uploadCsgFrameBuffers(commandList, csgFrameData))
+        return;
+
+    const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(targets.framebuffer->getFramebufferInfo());
+    if(!m_renderer.meshSystem().updateMeshViewBuffer(commandList, meshViewAspectRatio))
+        return;
+
+    Core::ViewportState viewportState;
+    viewportState.addViewportAndScissorRect(targets.framebuffer->getFramebufferInfo().getViewport());
+
+    m_renderer.csgSystem().dispatchCsgIntervalPeels(commandList, targets, csgFrameData);
+
+    const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
+        commandList,
+        targets.framebuffer.get(),
+        MaterialPipelinePass::CsgReceiverSurface,
+        nullptr,
+        nullptr,
+        viewportState
+    };
+    m_renderer.materialSystem().renderMaterialPassDrawItems(
+        csgReceiverSurfaceDrawContext,
+        drawItems.csgReceiverSurface
+    );
+
+    m_renderer.csgSystem().dispatchCsgReceiverSpanBuild(commandList, targets, csgFrameData);
+    m_renderer.csgSystem().dispatchCsgIntervalCombine(commandList, targets, csgFrameData);
+}
+
 void RendererAvboitSystem::renderAvboitPasses(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -224,6 +315,8 @@ void RendererAvboitSystem::renderAvboitPasses(
     NWB_ASSERT(avboitTargets.valid());
     NWB_ASSERT(avboitState().m_depthWarpPipeline);
     NWB_ASSERT(avboitState().m_integratePipeline);
+
+    buildTransparentCsgIntervals(commandList, targets, csgFrameState);
 
     m_renderer.materialSystem().renderMaterialPass(
         commandList,

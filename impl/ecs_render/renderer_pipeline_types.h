@@ -79,8 +79,9 @@ namespace MaterialPipelineCsgMode{
 [[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgClip(const MaterialPipelinePass::Enum pass, const bool transparent){
     switch(pass){
     case MaterialPipelinePass::Opaque:
-    case MaterialPipelinePass::CsgReceiverSurface:
         return !transparent;
+    case MaterialPipelinePass::CsgReceiverSurface:
+        return true;
     default:
         return transparent && MaterialPipelinePassUsesRendererAvboit(pass);
     }
@@ -91,7 +92,7 @@ namespace MaterialPipelineCsgMode{
 }
 
 [[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgIntervalSample(const MaterialPipelinePass::Enum pass){
-    return pass == MaterialPipelinePass::Opaque;
+    return pass == MaterialPipelinePass::Opaque || MaterialPipelinePassUsesRendererAvboit(pass);
 }
 
 

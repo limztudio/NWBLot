@@ -86,7 +86,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input, float4 
     inTangent = input.tangent;
     inWorldPosition = input.worldPosition.xyz;
 #if NWB_CSG_ENABLED
-    if(nwbAvboitCsgPixelDiscard(input.worldPosition))
+    if(nwbAvboitCsgPixelDiscard(fragCoord, input.worldPosition))
         discard;
 #endif
 

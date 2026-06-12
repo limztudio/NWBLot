@@ -115,7 +115,7 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
 
     const bool drawBuffersReady = prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes);
     const bool regularDrawResourcesReady = prepareMaterialPassDrawResources(drawItems.regular);
-    const bool csgResourcesReady = drawItems.csg.empty() || m_renderer.csgSystem().prepareCsgFrameBuffers(csgFrameData);
+    const bool csgResourcesReady = !csgFrameData.hasWork() || m_renderer.csgSystem().prepareCsgFrameBuffers(csgFrameData);
     const bool csgDrawResourcesReady = csgResourcesReady && (drawItems.csg.empty() || prepareMaterialPassDrawResources(drawItems.csg));
     const bool csgReceiverSurfaceDrawResourcesReady =
         csgResourcesReady
@@ -185,7 +185,7 @@ void RendererMaterialSystem::renderMaterialPass(
     if(!materialPassDrawBuffersReady(instanceData, materialTypedBytes))
         return;
     const bool regularDrawResourcesReady = materialPassDrawResourcesReady(drawItems.regular);
-    const bool csgResourcesReady = drawItems.csg.empty() || m_renderer.csgSystem().csgFrameBuffersReady(csgFrameData);
+    const bool csgResourcesReady = !csgFrameData.hasWork() || m_renderer.csgSystem().csgFrameBuffersReady(csgFrameData);
     const bool csgDrawResourcesReady = csgResourcesReady && (drawItems.csg.empty() || materialPassDrawResourcesReady(drawItems.csg));
     if(!uploadMaterialPassDrawBuffers(
         commandList,
@@ -375,32 +375,6 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             pipelineKey.twoSided = true;
         }
 
-        MaterialPipelineResources* pipelineResources = nullptr;
-        const bool pipelineReady = lookupMode == RendererResourceLookupMode::CreateMissing
-            ? createRendererPipeline(*materialInfo, pipelineKey, framebuffer, pipelineResources)
-            : findRendererPipeline(pipelineKey, pipelineResources)
-        ;
-        if(!pipelineReady)
-            return false;
-        NWB_ASSERT(pipelineResources);
-        const RenderPath::Enum renderPath = pipelineResources->renderPath;
-
-        const bool csgReceiverSurfaceActive = csgClipActive && pass == MaterialPipelinePass::Opaque;
-        MaterialPipelineKey csgReceiverSurfacePipelineKey = pipelineKey;
-        MaterialPipelineResources* csgReceiverSurfacePipelineResources = nullptr;
-        RenderPath::Enum csgReceiverSurfaceRenderPath = RenderPath::MeshShader;
-        if(csgReceiverSurfaceActive){
-            csgReceiverSurfacePipelineKey.pass = MaterialPipelinePass::CsgReceiverSurface;
-            const bool csgReceiverSurfacePipelineReady = lookupMode == RendererResourceLookupMode::CreateMissing
-                ? createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey, framebuffer, csgReceiverSurfacePipelineResources)
-                : findRendererPipeline(csgReceiverSurfacePipelineKey, csgReceiverSurfacePipelineResources)
-            ;
-            if(!csgReceiverSurfacePipelineReady)
-                return false;
-            NWB_ASSERT(csgReceiverSurfacePipelineResources);
-            csgReceiverSurfaceRenderPath = csgReceiverSurfacePipelineResources->renderPath;
-        }
-
         auto appendInstance = [&](ECSRenderDetail::MaterialTypedInstanceRanges& typedRanges) -> u32{
 #if defined(NWB_DEBUG)
             if(instanceData.size() >= static_cast<usize>(Limit<u32>::s_Max)){
@@ -423,6 +397,49 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 #endif
             return instanceIndex;
         };
+
+        if(pass == MaterialPipelinePass::CsgReceiverSurface && !csgClipActive){
+            if(!csgReceiverLookupPtr)
+                return false;
+
+            ECSRenderDetail::MaterialTypedInstanceRanges typedRanges;
+            return appendInstance(typedRanges) != Limit<u32>::s_Max;
+        }
+
+        MaterialPipelineResources* pipelineResources = nullptr;
+        const bool pipelineReady = lookupMode == RendererResourceLookupMode::CreateMissing
+            ? createRendererPipeline(*materialInfo, pipelineKey, framebuffer, pipelineResources)
+            : findRendererPipeline(pipelineKey, pipelineResources)
+        ;
+        if(!pipelineReady)
+            return false;
+        NWB_ASSERT(pipelineResources);
+        const RenderPath::Enum renderPath = pipelineResources->renderPath;
+
+        const bool passDrawItemActive = pass != MaterialPipelinePass::CsgReceiverSurface;
+        const bool csgReceiverSurfaceActive =
+            csgClipActive
+            && (pass == MaterialPipelinePass::Opaque || pass == MaterialPipelinePass::CsgReceiverSurface)
+        ;
+        MaterialPipelineKey csgReceiverSurfacePipelineKey = pipelineKey;
+        MaterialPipelineResources* csgReceiverSurfacePipelineResources = nullptr;
+        RenderPath::Enum csgReceiverSurfaceRenderPath = RenderPath::MeshShader;
+        if(csgReceiverSurfaceActive){
+            csgReceiverSurfacePipelineKey.pass = MaterialPipelinePass::CsgReceiverSurface;
+            if(pass == MaterialPipelinePass::CsgReceiverSurface){
+                csgReceiverSurfacePipelineResources = pipelineResources;
+            }
+            else{
+                const bool csgReceiverSurfacePipelineReady = lookupMode == RendererResourceLookupMode::CreateMissing
+                    ? createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey, framebuffer, csgReceiverSurfacePipelineResources)
+                    : findRendererPipeline(csgReceiverSurfacePipelineKey, csgReceiverSurfacePipelineResources)
+                ;
+                if(!csgReceiverSurfacePipelineReady)
+                    return false;
+            }
+            NWB_ASSERT(csgReceiverSurfacePipelineResources);
+            csgReceiverSurfaceRenderPath = csgReceiverSurfacePipelineResources->renderPath;
+        }
 
         auto appendDrawItemForRenderPath = [](
             const RenderPath::Enum renderPath,
@@ -474,8 +491,10 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             : true
         ;
 
-        MaterialPassDrawItems& targetDrawItems = csgClipActive ? drawItems.csg : drawItems.regular;
-        appendDrawItemForRenderPath(renderPath, drawItem, targetDrawItems);
+        if(passDrawItemActive){
+            MaterialPassDrawItems& targetDrawItems = csgClipActive ? drawItems.csg : drawItems.regular;
+            appendDrawItemForRenderPath(renderPath, drawItem, targetDrawItems);
+        }
 
         if(csgReceiverSurfaceActive){
             MaterialPassDrawItem csgReceiverSurfaceDrawItem = drawItem;

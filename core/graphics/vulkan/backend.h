@@ -1934,6 +1934,8 @@ public:
     void clearDepthStencilTextureRect(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
     void clearTextureUInt(Texture* texture, TextureSubresourceSet subresources, u32 clearColor);
     void clearTextureRectUInt(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, u32 clearColor);
+    void clearTextureInt(Texture* texture, TextureSubresourceSet subresources, i32 clearColor);
+    void clearTextureRectInt(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, i32 clearColor);
 
     void copyTexture(Texture* dest, const TextureSlice& destSlice, Texture* src, const TextureSlice& srcSlice);
     void copyTexture(StagingTexture* dest, const TextureSlice& destSlice, Texture* src, const TextureSlice& srcSlice);
@@ -2019,7 +2021,7 @@ private:
     bool validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
     bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode, Buffer*& outIndirectBuffer)const;
     void clearColorTexture(Texture* textureResource, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue);
-    void clearColorTextureRect(Texture* textureResource, TextureSubresourceSet subresources, const Rect& rect, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue);
+    void clearColorTextureRect(Texture* textureResource, TextureSubresourceSet subresources, const Rect& rect, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, const tchar* valueName);
     bool clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
     bool prepareStagingTextureCopy(

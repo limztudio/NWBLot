@@ -36,6 +36,18 @@ class RendererAvboitSystem;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct CsgFrameStateCacheSignature{
+    u64 contentHash = 0u;
+
+    friend bool operator==(const CsgFrameStateCacheSignature& lhs, const CsgFrameStateCacheSignature& rhs){
+        return lhs.contentHash == rhs.contentHash;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class RendererMeshState final : NoCopy{
     friend class RendererSystem;
     friend class RendererShaderSystem;
@@ -155,8 +167,11 @@ private:
     Core::GraphicsPipelineHandle m_intervalCapFillPipeline;
     Core::BufferHandle m_receiverRangeBuffer;
     Core::BufferHandle m_cutterBuffer;
+    CsgFrameStateCacheSignature m_frameStateCacheSignature;
+    CsgFrameState m_frameStateCache;
     usize m_receiverRangeBufferCapacity = 0u;
     usize m_cutterBufferCapacity = 0u;
+    bool m_frameStateCacheValid = false;
 };
 
 class RendererDeferredState final : NoCopy{

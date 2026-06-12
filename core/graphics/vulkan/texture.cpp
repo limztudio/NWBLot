@@ -222,6 +222,10 @@ inline bool TextureClearRectEmpty(const Rect& rect){
     return rect.minX >= rect.maxX || rect.minY >= rect.maxY;
 }
 
+inline bool TextureClearBoxEmpty(const Box& box){
+    return box.minX >= box.maxX || box.minY >= box.maxY || box.minZ >= box.maxZ;
+}
+
 inline Rect ResolveTextureClearRect(const TextureDesc& desc, const MipLevel mipLevel, const Rect& rect){
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
     const i32 width = static_cast<i32>(mipExtent.width);
@@ -234,16 +238,33 @@ inline Rect ResolveTextureClearRect(const TextureDesc& desc, const MipLevel mipL
     );
 }
 
-inline bool TextureClearRectCoversSubresources(const TextureDesc& desc, const TextureSubresourceSet& subresources, const Rect& rect){
+inline Box ResolveTextureClearBox(const TextureDesc& desc, const MipLevel mipLevel, const Box& box){
+    const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
+    const i32 width = static_cast<i32>(mipExtent.width);
+    const i32 height = static_cast<i32>(mipExtent.height);
+    const i32 depth = static_cast<i32>(mipExtent.depth);
+    return Box(
+        Max<i32>(0, Min<i32>(box.minX, width)),
+        Max<i32>(0, Min<i32>(box.maxX, width)),
+        Max<i32>(0, Min<i32>(box.minY, height)),
+        Max<i32>(0, Min<i32>(box.maxY, height)),
+        Max<i32>(0, Min<i32>(box.minZ, depth)),
+        Max<i32>(0, Min<i32>(box.maxZ, depth))
+    );
+}
+
+inline bool TextureClearBoxCoversSubresources(const TextureDesc& desc, const TextureSubresourceSet& subresources, const Box& box){
     const MipLevel mipEnd = subresources.baseMipLevel + subresources.numMipLevels;
     for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
         const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
-        const Rect resolvedRect = ResolveTextureClearRect(desc, mipLevel, rect);
+        const Box resolvedBox = ResolveTextureClearBox(desc, mipLevel, box);
         if(
-            resolvedRect.minX != 0
-            || resolvedRect.minY != 0
-            || resolvedRect.maxX != static_cast<i32>(mipExtent.width)
-            || resolvedRect.maxY != static_cast<i32>(mipExtent.height)
+            resolvedBox.minX != 0
+            || resolvedBox.minY != 0
+            || resolvedBox.minZ != 0
+            || resolvedBox.maxX != static_cast<i32>(mipExtent.width)
+            || resolvedBox.maxY != static_cast<i32>(mipExtent.height)
+            || resolvedBox.maxZ != static_cast<i32>(mipExtent.depth)
         )
             return false;
     }
@@ -276,6 +297,53 @@ inline VkClearRect BuildTextureAttachmentClearRect(const TextureSubresourceSet& 
     return clearRect;
 }
 
+struct TextureAttachmentClearTarget{
+    TextureSubresourceSet resolvedSubresources;
+    u32 colorAttachmentIndex = 0u;
+};
+
+inline bool ResolveTextureAttachmentClearSubresources(
+    Texture& texture,
+    const FramebufferAttachment& attachment,
+    const TextureSubresourceSet& requestedSubresources,
+    TextureSubresourceSet& outResolvedSubresources
+){
+    if(attachment.texture != &texture)
+        return false;
+
+    const TextureSubresourceSet resolvedAttachmentSubresources = attachment.subresources.resolve(texture.getDescription(), TextureSubresourceMipResolve::Single);
+    if(!TextureClearSubresourcesContainedBy(requestedSubresources, resolvedAttachmentSubresources))
+        return false;
+
+    outResolvedSubresources = resolvedAttachmentSubresources;
+    return true;
+}
+
+inline bool FindTextureColorAttachmentClearTarget(
+    Texture& texture,
+    const TextureSubresourceSet& requestedSubresources,
+    const FramebufferDesc& fbDesc,
+    TextureAttachmentClearTarget& outTarget
+){
+    u32 colorAttachmentIndex = 0u;
+    for(usize i = 0; i < fbDesc.colorAttachments.size(); ++i){
+        const FramebufferAttachment& attachment = fbDesc.colorAttachments[i];
+        if(!attachment.texture)
+            continue;
+
+        const u32 activeColorAttachmentIndex = colorAttachmentIndex++;
+        TextureSubresourceSet resolvedAttachmentSubresources;
+        if(!ResolveTextureAttachmentClearSubresources(texture, attachment, requestedSubresources, resolvedAttachmentSubresources))
+            continue;
+
+        outTarget.resolvedSubresources = resolvedAttachmentSubresources;
+        outTarget.colorAttachmentIndex = activeColorAttachmentIndex;
+        return true;
+    }
+
+    return false;
+}
+
 inline bool TextureAttachmentClearRectContainedByFramebuffer(const VkClearRect& clearRect, const FramebufferInfoEx& framebufferInfo){
     if(clearRect.rect.offset.x < 0 || clearRect.rect.offset.y < 0)
         return false;
@@ -290,24 +358,116 @@ inline bool TextureAttachmentClearRectContainedByFramebuffer(const VkClearRect& 
     ;
 }
 
-inline bool TextureClearRectAlignedToBlocks(const Rect& rect, const VkExtent3D& mipExtent, const VulkanDetail::TextureFormatBlockLayout& formatLayout){
+inline bool TextureClearBoxAlignedToBlocks(const Box& box, const VkExtent3D& mipExtent, const VulkanDetail::TextureFormatBlockLayout& formatLayout){
     if(formatLayout.blockWidth <= 1u && formatLayout.blockHeight <= 1u)
         return true;
 
     const i32 blockWidth = static_cast<i32>(formatLayout.blockWidth);
     const i32 blockHeight = static_cast<i32>(formatLayout.blockHeight);
     return
-        (rect.minX % blockWidth) == 0
-        && (rect.minY % blockHeight) == 0
-        && (rect.maxX == static_cast<i32>(mipExtent.width) || (rect.maxX % blockWidth) == 0)
-        && (rect.maxY == static_cast<i32>(mipExtent.height) || (rect.maxY % blockHeight) == 0)
+        (box.minX % blockWidth) == 0
+        && (box.minY % blockHeight) == 0
+        && (box.maxX == static_cast<i32>(mipExtent.width) || (box.maxX % blockWidth) == 0)
+        && (box.maxY == static_cast<i32>(mipExtent.height) || (box.maxY % blockHeight) == 0)
     ;
 }
 
-inline constexpr u64 s_TextureClearRectMergedLayerUploadThreshold = 64ull * 1024ull;
+inline constexpr u64 s_TextureClearMergedLayerUploadThreshold = 64ull * 1024ull;
 
 inline void WriteClearPatternValue(u8* outBytes, const usize outByteCount, const void* value, const usize valueByteCount){
     NWB_MEMCPY(outBytes, outByteCount, value, valueByteCount);
+}
+
+inline VkClearColorValue BuildTextureClearColorValue(const Color& clearColor){
+    VkClearColorValue clearValue{};
+    clearValue.float32[0] = clearColor.r;
+    clearValue.float32[1] = clearColor.g;
+    clearValue.float32[2] = clearColor.b;
+    clearValue.float32[3] = clearColor.a;
+    return clearValue;
+}
+
+inline VkClearColorValue BuildTextureClearColorValue(const UIntColor& clearColor){
+    VkClearColorValue clearValue{};
+    clearValue.uint32[0] = clearColor.r;
+    clearValue.uint32[1] = clearColor.g;
+    clearValue.uint32[2] = clearColor.b;
+    clearValue.uint32[3] = clearColor.a;
+    return clearValue;
+}
+
+inline VkClearColorValue BuildTextureClearColorValue(const IntColor& clearColor){
+    VkClearColorValue clearValue{};
+    clearValue.int32[0] = clearColor.r;
+    clearValue.int32[1] = clearColor.g;
+    clearValue.int32[2] = clearColor.b;
+    clearValue.int32[3] = clearColor.a;
+    return clearValue;
+}
+
+inline bool TextureColorClearValueTypeMatchesFormat(const FormatInfo& formatInfo, const bool integerValue, const bool signedIntegerValue){
+    if(formatInfo.kind == FormatKind::Integer)
+        return integerValue && formatInfo.isSigned == signedIntegerValue;
+
+    return !integerValue;
+}
+
+inline bool ValidateTextureColorClear(
+    const TextureDesc& desc,
+    const VkImageAspectFlags aspectMask,
+    const tchar* operationName,
+    const tchar* valueName,
+    const bool integerValue,
+    const bool signedIntegerValue
+){
+#if defined(NWB_DEBUG)
+    if((aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {} with {}: texture format is depth/stencil"), operationName, valueName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {} with {}: texture format is depth/stencil"), operationName, valueName);
+        return false;
+    }
+#else
+    static_cast<void>(aspectMask);
+#endif
+
+    const FormatInfo& formatInfo = GetFormatInfo(desc.format);
+    if(!TextureColorClearValueTypeMatchesFormat(formatInfo, integerValue, signedIntegerValue)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to {} with {}: clear value type does not match texture format {}"),
+            operationName,
+            valueName,
+            StringConvert(formatInfo.name)
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {} with {}: clear value type does not match texture format"), operationName, valueName);
+        return false;
+    }
+
+    return true;
+}
+
+inline bool ValidateTextureDepthStencilClearAspects(
+    const VkImageAspectFlags aspectMask,
+    const bool clearDepth,
+    const bool clearStencil,
+    const tchar* operationName
+){
+#if defined(NWB_DEBUG)
+    if(
+        (clearDepth && (aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) == 0)
+        || (clearStencil && (aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) == 0)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: requested aspect is not present in the texture format"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: requested aspect is not present in the texture format"), operationName);
+        return false;
+    }
+#else
+    static_cast<void>(aspectMask);
+    static_cast<void>(clearDepth);
+    static_cast<void>(clearStencil);
+    static_cast<void>(operationName);
+#endif
+
+    return true;
 }
 
 inline f32 ClampClearFloat(const f32 value, const f32 minValue, const f32 maxValue){
@@ -642,14 +802,6 @@ inline bool BuildTextureUIntClearPattern(const Format::Enum format, const VkClea
         clearValue.uint32[3],
     };
 
-    auto writeI8Components = [&](const u32 componentCount){
-        for(u32 component = 0u; component < componentCount; ++component){
-            const i8 value = static_cast<i8>(Min(values[component], static_cast<u32>(Limit<i8>::s_Max)));
-            WriteClearPatternValue(outPattern + component * sizeof(value), sizeof(value), &value, sizeof(value));
-        }
-        outPatternSize = componentCount * static_cast<u32>(sizeof(i8));
-        return true;
-    };
     auto writeU8Components = [&](const u32 componentCount){
         for(u32 component = 0u; component < componentCount; ++component){
             const u8 value = static_cast<u8>(Min(values[component], static_cast<u32>(Limit<u8>::s_Max)));
@@ -658,28 +810,12 @@ inline bool BuildTextureUIntClearPattern(const Format::Enum format, const VkClea
         outPatternSize = componentCount * static_cast<u32>(sizeof(u8));
         return true;
     };
-    auto writeI16Components = [&](const u32 componentCount){
-        for(u32 component = 0u; component < componentCount; ++component){
-            const i16 value = static_cast<i16>(Min(values[component], static_cast<u32>(Limit<i16>::s_Max)));
-            WriteClearPatternValue(outPattern + component * sizeof(value), sizeof(value), &value, sizeof(value));
-        }
-        outPatternSize = componentCount * static_cast<u32>(sizeof(i16));
-        return true;
-    };
     auto writeU16Components = [&](const u32 componentCount){
         for(u32 component = 0u; component < componentCount; ++component){
             const u16 value = static_cast<u16>(Min(values[component], static_cast<u32>(Limit<u16>::s_Max)));
             WriteClearPatternValue(outPattern + component * sizeof(value), sizeof(value), &value, sizeof(value));
         }
         outPatternSize = componentCount * static_cast<u32>(sizeof(u16));
-        return true;
-    };
-    auto writeI32Components = [&](const u32 componentCount){
-        for(u32 component = 0u; component < componentCount; ++component){
-            const i32 value = static_cast<i32>(Min(values[component], static_cast<u32>(Limit<i32>::s_Max)));
-            WriteClearPatternValue(outPattern + component * sizeof(value), sizeof(value), &value, sizeof(value));
-        }
-        outPatternSize = componentCount * static_cast<u32>(sizeof(i32));
         return true;
     };
     auto writeU32Components = [&](const u32 componentCount){
@@ -692,25 +828,15 @@ inline bool BuildTextureUIntClearPattern(const Format::Enum format, const VkClea
 
     switch(format){
     case Format::R8_UINT: return writeU8Components(1u);
-    case Format::R8_SINT: return writeI8Components(1u);
     case Format::RG8_UINT: return writeU8Components(2u);
-    case Format::RG8_SINT: return writeI8Components(2u);
     case Format::RGBA8_UINT: return writeU8Components(4u);
-    case Format::RGBA8_SINT: return writeI8Components(4u);
     case Format::R16_UINT: return writeU16Components(1u);
-    case Format::R16_SINT: return writeI16Components(1u);
     case Format::RG16_UINT: return writeU16Components(2u);
-    case Format::RG16_SINT: return writeI16Components(2u);
     case Format::RGBA16_UINT: return writeU16Components(4u);
-    case Format::RGBA16_SINT: return writeI16Components(4u);
     case Format::R32_UINT: return writeU32Components(1u);
-    case Format::R32_SINT: return writeI32Components(1u);
     case Format::RG32_UINT: return writeU32Components(2u);
-    case Format::RG32_SINT: return writeI32Components(2u);
     case Format::RGB32_UINT: return writeU32Components(3u);
-    case Format::RGB32_SINT: return writeI32Components(3u);
     case Format::RGBA32_UINT: return writeU32Components(4u);
-    case Format::RGBA32_SINT: return writeI32Components(4u);
     default:
         return false;
     }
@@ -1331,23 +1457,18 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
 
 
 void CommandList::clearTextureFloat(Texture* textureResource, TextureSubresourceSet subresources, const Color& clearColor){
-    VkClearColorValue clearValue{};
-    clearValue.float32[0] = clearColor.r;
-    clearValue.float32[1] = clearColor.g;
-    clearValue.float32[2] = clearColor.b;
-    clearValue.float32[3] = clearColor.a;
-
-    clearColorTexture(textureResource, subresources, NWB_TEXT("color value"), clearValue);
+    const VkClearColorValue clearValue = __hidden_vulkan_texture::BuildTextureClearColorValue(clearColor);
+    clearColorTexture(textureResource, subresources, NWB_TEXT("color value"), clearValue, false, false);
 }
 
 void CommandList::clearTextureRectFloat(Texture* textureResource, TextureSubresourceSet subresources, const Rect& rect, const Color& clearColor){
-    VkClearColorValue clearValue{};
-    clearValue.float32[0] = clearColor.r;
-    clearValue.float32[1] = clearColor.g;
-    clearValue.float32[2] = clearColor.b;
-    clearValue.float32[3] = clearColor.a;
+    const VkClearColorValue clearValue = __hidden_vulkan_texture::BuildTextureClearColorValue(clearColor);
+    clearColorTextureBox(textureResource, subresources, Box(rect, 0, Limit<i32>::s_Max), NWB_TEXT("color value"), clearValue, false, false);
+}
 
-    clearColorTextureRect(textureResource, subresources, rect, NWB_TEXT("color value"), clearValue, false, false);
+void CommandList::clearTextureBoxFloat(Texture* textureResource, TextureSubresourceSet subresources, const Box& box, const Color& clearColor){
+    const VkClearColorValue clearValue = __hidden_vulkan_texture::BuildTextureClearColorValue(clearColor);
+    clearColorTextureBox(textureResource, subresources, box, NWB_TEXT("color value"), clearValue, false, false);
 }
 
 void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil){
@@ -1357,16 +1478,13 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
         return;
 
     Texture& texture = *textureResource;
-#if defined(NWB_DEBUG)
-    if(
-        (clearDepth && (texture.m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) == 0)
-        || (clearStencil && (texture.m_aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) == 0)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture: requested aspect is not present in the texture format"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture: requested aspect is not present in the texture format"));
+    if(!__hidden_vulkan_texture::ValidateTextureDepthStencilClearAspects(
+        texture.m_aspectMask,
+        clearDepth,
+        clearStencil,
+        NWB_TEXT("clear depth/stencil texture")
+    ))
         return;
-    }
-#endif
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("clear depth/stencil texture")))
@@ -1375,6 +1493,13 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
     VkClearDepthStencilValue clearValue{};
     clearValue.depth = depth;
     clearValue.stencil = stencil;
+
+    if(m_renderPassActive){
+        const Rect fullRect(0, Limit<i32>::s_Max, 0, Limit<i32>::s_Max);
+        if(clearActiveRenderPassDepthStencilTextureRect(texture, resolvedSubresources, fullRect, clearDepth, depth, clearStencil, stencil))
+            retainResource(textureResource);
+        return;
+    }
 
     VkImageAspectFlags aspectMask = 0;
     if(clearDepth)
@@ -1399,36 +1524,23 @@ bool CommandList::clearActiveRenderPassColorTextureRect(
     static_cast<void>(valueName);
 #endif
     if(!m_renderPassActive || !m_renderPassFramebuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: multisampled bounded rect clears require the texture to be an active color attachment"), valueName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: multisampled bounded rect clears require the texture to be an active color attachment"), valueName);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: active-render-pass bounded rect clears require the texture to be an active color attachment"), valueName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: active-render-pass bounded rect clears require the texture to be an active color attachment"), valueName);
         return false;
     }
 
-    const FramebufferDesc& fbDesc = m_renderPassFramebuffer->getDescription();
-    u32 colorAttachmentIndex = 0u;
-    for(usize i = 0; i < fbDesc.colorAttachments.size(); ++i){
-        const FramebufferAttachment& attachment = fbDesc.colorAttachments[i];
-        if(!attachment.texture)
-            continue;
-
-        const u32 activeColorAttachmentIndex = colorAttachmentIndex++;
-        if(attachment.texture != &texture)
-            continue;
-
-        const TextureSubresourceSet resolvedAttachmentSubresources = attachment.subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Single);
-        if(!__hidden_vulkan_texture::TextureClearSubresourcesContainedBy(resolvedSubresources, resolvedAttachmentSubresources))
-            continue;
-
+    __hidden_vulkan_texture::TextureAttachmentClearTarget clearTarget;
+    if(__hidden_vulkan_texture::FindTextureColorAttachmentClearTarget(texture, resolvedSubresources, m_renderPassFramebuffer->getDescription(), clearTarget)){
         const Rect resolvedRect = __hidden_vulkan_texture::ResolveTextureClearRect(texture.m_desc, resolvedSubresources.baseMipLevel, rect);
         if(__hidden_vulkan_texture::TextureClearRectEmpty(resolvedRect))
             return true;
 
         VkClearAttachment clearAttachment{};
         clearAttachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        clearAttachment.colorAttachment = activeColorAttachmentIndex;
+        clearAttachment.colorAttachment = clearTarget.colorAttachmentIndex;
         clearAttachment.clearValue.color = clearValue;
 
-        const VkClearRect clearRect = __hidden_vulkan_texture::BuildTextureAttachmentClearRect(resolvedSubresources, resolvedAttachmentSubresources, resolvedRect);
+        const VkClearRect clearRect = __hidden_vulkan_texture::BuildTextureAttachmentClearRect(resolvedSubresources, clearTarget.resolvedSubresources, resolvedRect);
         if(!__hidden_vulkan_texture::TextureAttachmentClearRectContainedByFramebuffer(clearRect, m_renderPassFramebuffer->getFramebufferInfo())){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear rect is outside the active render area"), valueName);
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear rect is outside the active render area"), valueName);
@@ -1439,8 +1551,8 @@ bool CommandList::clearActiveRenderPassColorTextureRect(
         return true;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: multisampled bounded rect clears require the requested subresources to be active color attachments"), valueName);
-    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: multisampled bounded rect clears require the requested subresources to be active color attachments"), valueName);
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: active-render-pass bounded rect clears require the requested subresources to be active color attachments"), valueName);
+    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: active-render-pass bounded rect clears require the requested subresources to be active color attachments"), valueName);
     return false;
 }
 
@@ -1454,16 +1566,16 @@ bool CommandList::clearActiveRenderPassDepthStencilTextureRect(
     const u8 stencil
 ){
     if(!m_renderPassActive || !m_renderPassFramebuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: multisampled bounded rect clears require the texture to be an active depth/stencil attachment"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: multisampled bounded rect clears require the texture to be an active depth/stencil attachment"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active-render-pass bounded rect clears require the texture to be an active depth/stencil attachment"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active-render-pass bounded rect clears require the texture to be an active depth/stencil attachment"));
         return false;
     }
 
     const FramebufferDesc& fbDesc = m_renderPassFramebuffer->getDescription();
     const FramebufferAttachment& attachment = fbDesc.depthAttachment;
     if(attachment.texture != &texture){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: multisampled bounded rect clears require the requested subresources to be active depth/stencil attachments"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: multisampled bounded rect clears require the requested subresources to be active depth/stencil attachments"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active-render-pass bounded rect clears require the requested subresources to be active depth/stencil attachments"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active-render-pass bounded rect clears require the requested subresources to be active depth/stencil attachments"));
         return false;
     }
     if(attachment.isReadOnly){
@@ -1472,10 +1584,10 @@ bool CommandList::clearActiveRenderPassDepthStencilTextureRect(
         return false;
     }
 
-    const TextureSubresourceSet resolvedAttachmentSubresources = attachment.subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Single);
-    if(!__hidden_vulkan_texture::TextureClearSubresourcesContainedBy(resolvedSubresources, resolvedAttachmentSubresources)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: multisampled bounded rect clears require the requested subresources to be active depth/stencil attachments"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: multisampled bounded rect clears require the requested subresources to be active depth/stencil attachments"));
+    TextureSubresourceSet resolvedAttachmentSubresources;
+    if(!__hidden_vulkan_texture::ResolveTextureAttachmentClearSubresources(texture, attachment, resolvedSubresources, resolvedAttachmentSubresources)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active-render-pass bounded rect clears require the requested subresources to be active depth/stencil attachments"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active-render-pass bounded rect clears require the requested subresources to be active depth/stencil attachments"));
         return false;
     }
 
@@ -1511,44 +1623,65 @@ void CommandList::clearDepthStencilTextureRect(
     const bool clearStencil,
     const u8 stencil
 ){
+    clearDepthStencilTextureBox(textureResource, subresources, Box(rect, 0, Limit<i32>::s_Max), clearDepth, depth, clearStencil, stencil);
+}
+
+void CommandList::clearDepthStencilTextureBox(
+    Texture* textureResource,
+    TextureSubresourceSet subresources,
+    const Box& box,
+    const bool clearDepth,
+    const f32 depth,
+    const bool clearStencil,
+    const u8 stencil
+){
     if(!clearDepth && !clearStencil)
         return;
-    if(__hidden_vulkan_texture::TextureClearRectEmpty(rect))
+    if(__hidden_vulkan_texture::TextureClearBoxEmpty(box))
         return;
-    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear depth/stencil texture rect"), NWB_TEXT("texture is null"), textureResource))
+    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear depth/stencil texture box"), NWB_TEXT("texture is null"), textureResource))
         return;
 
     Texture& texture = *textureResource;
     const TextureDesc& desc = texture.m_desc;
-#if defined(NWB_DEBUG)
-    if(
-        (clearDepth && (texture.m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) == 0)
-        || (clearStencil && (texture.m_aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) == 0)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: requested aspect is not present in the texture format"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: requested aspect is not present in the texture format"));
+    if(!__hidden_vulkan_texture::ValidateTextureDepthStencilClearAspects(
+        texture.m_aspectMask,
+        clearDepth,
+        clearStencil,
+        NWB_TEXT("clear depth/stencil texture box")
+    ))
         return;
-    }
-#endif
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
-    if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("clear depth/stencil texture rect")))
+    if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("clear depth/stencil texture box")))
         return;
 
-    if(__hidden_vulkan_texture::TextureClearRectCoversSubresources(desc, resolvedSubresources, rect)){
+    if(__hidden_vulkan_texture::TextureClearBoxCoversSubresources(desc, resolvedSubresources, box)){
         clearDepthStencilTexture(textureResource, resolvedSubresources, clearDepth, depth, clearStencil, stencil);
         return;
     }
 
-    if(desc.sampleCount != 1u){
+    if(m_renderPassActive || desc.sampleCount != 1u){
+        const Box resolvedBox = __hidden_vulkan_texture::ResolveTextureClearBox(desc, resolvedSubresources.baseMipLevel, box);
+        if(__hidden_vulkan_texture::TextureClearBoxEmpty(resolvedBox))
+            return;
+
+        const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, resolvedSubresources.baseMipLevel);
+        if(resolvedBox.minZ != 0 || resolvedBox.maxZ != static_cast<i32>(mipExtent.depth)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: attachment bounded clears require the box to cover the full attachment depth"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: attachment bounded clears require the box to cover the full attachment depth"));
+            return;
+        }
+
+        const Rect rect(resolvedBox.minX, resolvedBox.maxX, resolvedBox.minY, resolvedBox.maxY);
         if(clearActiveRenderPassDepthStencilTextureRect(texture, resolvedSubresources, rect, clearDepth, depth, clearStencil, stencil))
             retainResource(textureResource);
         return;
     }
 #if defined(NWB_DEBUG)
     if(desc.dimension == TextureDimension::Texture3D){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded texture rect clears do not support 3D depth/stencil textures"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded texture rect clears do not support 3D depth/stencil textures"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded texture box clears do not support 3D depth/stencil textures"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded texture box clears do not support 3D depth/stencil textures"));
         return;
     }
 #endif
@@ -1558,16 +1691,16 @@ void CommandList::clearDepthStencilTextureRect(
     u8 depthPattern[4] = {};
     u32 depthPatternSize = 0u;
     if(clearDepth && !__hidden_vulkan_texture::BuildTextureDepthClearPattern(desc.format, depth, depthPattern, depthPatternSize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded depth rect clears do not support texture format {}"), StringConvert(GetFormatInfo(desc.format).name));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded depth rect clears do not support texture format"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded depth box clears do not support texture format {}"), StringConvert(GetFormatInfo(desc.format).name));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded depth box clears do not support texture format"));
         return;
     }
 
     u8 stencilPattern[1] = {};
     u32 stencilPatternSize = 0u;
     if(clearStencil && !__hidden_vulkan_texture::BuildTextureStencilClearPattern(desc.format, stencil, stencilPattern, stencilPatternSize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded stencil rect clears do not support texture format {}"), StringConvert(GetFormatInfo(desc.format).name));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded stencil rect clears do not support texture format"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded stencil box clears do not support texture format {}"), StringConvert(GetFormatInfo(desc.format).name));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded stencil box clears do not support texture format"));
         return;
     }
 
@@ -1578,41 +1711,48 @@ void CommandList::clearDepthStencilTextureRect(
     const auto copyAspect = [&](const VkImageAspectFlagBits aspect, const u8* clearPattern, const u32 clearPatternSize) -> bool {
         const u64 arrayLayerCount = static_cast<u64>(resolvedSubresources.numArraySlices);
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-            const Rect resolvedRect = __hidden_vulkan_texture::ResolveTextureClearRect(desc, mipLevel, rect);
-            if(__hidden_vulkan_texture::TextureClearRectEmpty(resolvedRect))
+            const Box resolvedBox = __hidden_vulkan_texture::ResolveTextureClearBox(desc, mipLevel, box);
+            if(__hidden_vulkan_texture::TextureClearBoxEmpty(resolvedBox))
                 continue;
 
-            const u64 clearWidth = static_cast<u64>(resolvedRect.width());
-            const u64 clearHeight = static_cast<u64>(resolvedRect.height());
+            const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
+            if(resolvedBox.minZ != 0 || resolvedBox.maxZ != static_cast<i32>(mipExtent.depth)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded depth/stencil clears require the box to cover the full attachment depth"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded depth/stencil clears require the box to cover the full attachment depth"));
+                return false;
+            }
+
+            const u64 clearWidth = static_cast<u64>(resolvedBox.width());
+            const u64 clearHeight = static_cast<u64>(resolvedBox.height());
             const u64 texelCount = clearWidth * clearHeight;
             if(texelCount > Limit<u64>::s_Max / clearPatternSize){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size overflows"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size overflows"));
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
                 return false;
             }
 
             const u64 uploadSize64 = texelCount * clearPatternSize;
             u64 layerPitch64 = uploadSize64;
             if(!AlignUpU64Checked(layerPitch64, 4ull, layerPitch64)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size overflows"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size overflows"));
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
                 return false;
             }
 
             const bool mergeArrayLayerCopies =
                 arrayLayerCount > 1ull
-                && layerPitch64 <= (__hidden_vulkan_texture::s_TextureClearRectMergedLayerUploadThreshold / arrayLayerCount)
+                && layerPitch64 <= (__hidden_vulkan_texture::s_TextureClearMergedLayerUploadThreshold / arrayLayerCount)
             ;
             if(mergeArrayLayerCopies && arrayLayerCount - 1ull > (Limit<u64>::s_Max - uploadSize64) / layerPitch64){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size overflows"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size overflows"));
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
                 return false;
             }
 
             const u64 clearByteSize64 = mergeArrayLayerCopies ? layerPitch64 * (arrayLayerCount - 1ull) + uploadSize64 : uploadSize64;
             if(clearByteSize64 > static_cast<u64>(Limit<usize>::s_Max)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size exceeds addressable memory"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size exceeds addressable memory"));
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size exceeds addressable memory"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size exceeds addressable memory"));
                 return false;
             }
 
@@ -1621,7 +1761,7 @@ void CommandList::clearDepthStencilTextureRect(
 
             Buffer* stagingBuffer = nullptr;
             u64 stagingOffset = 0;
-            if(!prepareUploadStaging(clearBytes.data(), clearBytes.size(), NWB_TEXT("clearDepthStencilTextureRect"), stagingBuffer, stagingOffset))
+            if(!prepareUploadStaging(clearBytes.data(), clearBytes.size(), NWB_TEXT("clearDepthStencilTextureBox"), stagingBuffer, stagingOffset))
                 return false;
 
             if(mergeArrayLayerCopies){
@@ -1632,7 +1772,7 @@ void CommandList::clearDepthStencilTextureRect(
                     VkBufferImageCopy region{};
                     region.bufferOffset = stagingOffset + static_cast<u64>(regionIndex) * layerPitch64;
                     region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspect, mipLevel, arraySlice, 1u);
-                    region.imageOffset = { resolvedRect.minX, resolvedRect.minY, 0 };
+                    region.imageOffset = { resolvedBox.minX, resolvedBox.minY, 0 };
                     region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
                     regions[regionIndex++] = region;
                 }
@@ -1646,7 +1786,7 @@ void CommandList::clearDepthStencilTextureRect(
                     VkBufferImageCopy region{};
                     region.bufferOffset = stagingOffset;
                     region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspect, mipLevel, arraySlice, 1u);
-                    region.imageOffset = { resolvedRect.minX, resolvedRect.minY, 0 };
+                    region.imageOffset = { resolvedBox.minX, resolvedBox.minY, 0 };
                     region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
                     vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
                 }
@@ -1667,43 +1807,57 @@ void CommandList::clearDepthStencilTextureRect(
 }
 
 void CommandList::clearTextureUInt(Texture* textureResource, TextureSubresourceSet subresources, u32 clearColor){
-    VkClearColorValue clearValue{};
-    clearValue.uint32[0] = clearColor;
-    clearValue.uint32[1] = clearColor;
-    clearValue.uint32[2] = clearColor;
-    clearValue.uint32[3] = clearColor;
+    clearTextureUInt(textureResource, subresources, UIntColor(clearColor));
+}
 
-    clearColorTexture(textureResource, subresources, NWB_TEXT("integer value"), clearValue);
+void CommandList::clearTextureUInt(Texture* textureResource, TextureSubresourceSet subresources, const UIntColor& clearColor){
+    const VkClearColorValue clearValue = __hidden_vulkan_texture::BuildTextureClearColorValue(clearColor);
+    clearColorTexture(textureResource, subresources, NWB_TEXT("unsigned integer value"), clearValue, true, false);
 }
 
 void CommandList::clearTextureRectUInt(Texture* textureResource, TextureSubresourceSet subresources, const Rect& rect, u32 clearColor){
-    VkClearColorValue clearValue{};
-    clearValue.uint32[0] = clearColor;
-    clearValue.uint32[1] = clearColor;
-    clearValue.uint32[2] = clearColor;
-    clearValue.uint32[3] = clearColor;
+    clearTextureRectUInt(textureResource, subresources, rect, UIntColor(clearColor));
+}
 
-    clearColorTextureRect(textureResource, subresources, rect, NWB_TEXT("unsigned integer value"), clearValue, true, false);
+void CommandList::clearTextureRectUInt(Texture* textureResource, TextureSubresourceSet subresources, const Rect& rect, const UIntColor& clearColor){
+    const VkClearColorValue clearValue = __hidden_vulkan_texture::BuildTextureClearColorValue(clearColor);
+    clearColorTextureBox(textureResource, subresources, Box(rect, 0, Limit<i32>::s_Max), NWB_TEXT("unsigned integer value"), clearValue, true, false);
+}
+
+void CommandList::clearTextureBoxUInt(Texture* textureResource, TextureSubresourceSet subresources, const Box& box, u32 clearColor){
+    clearTextureBoxUInt(textureResource, subresources, box, UIntColor(clearColor));
+}
+
+void CommandList::clearTextureBoxUInt(Texture* textureResource, TextureSubresourceSet subresources, const Box& box, const UIntColor& clearColor){
+    const VkClearColorValue clearValue = __hidden_vulkan_texture::BuildTextureClearColorValue(clearColor);
+    clearColorTextureBox(textureResource, subresources, box, NWB_TEXT("unsigned integer value"), clearValue, true, false);
 }
 
 void CommandList::clearTextureInt(Texture* textureResource, TextureSubresourceSet subresources, i32 clearColor){
-    VkClearColorValue clearValue{};
-    clearValue.int32[0] = clearColor;
-    clearValue.int32[1] = clearColor;
-    clearValue.int32[2] = clearColor;
-    clearValue.int32[3] = clearColor;
+    clearTextureInt(textureResource, subresources, IntColor(clearColor));
+}
 
-    clearColorTexture(textureResource, subresources, NWB_TEXT("signed integer value"), clearValue);
+void CommandList::clearTextureInt(Texture* textureResource, TextureSubresourceSet subresources, const IntColor& clearColor){
+    const VkClearColorValue clearValue = __hidden_vulkan_texture::BuildTextureClearColorValue(clearColor);
+    clearColorTexture(textureResource, subresources, NWB_TEXT("signed integer value"), clearValue, true, true);
 }
 
 void CommandList::clearTextureRectInt(Texture* textureResource, TextureSubresourceSet subresources, const Rect& rect, i32 clearColor){
-    VkClearColorValue clearValue{};
-    clearValue.int32[0] = clearColor;
-    clearValue.int32[1] = clearColor;
-    clearValue.int32[2] = clearColor;
-    clearValue.int32[3] = clearColor;
+    clearTextureRectInt(textureResource, subresources, rect, IntColor(clearColor));
+}
 
-    clearColorTextureRect(textureResource, subresources, rect, NWB_TEXT("signed integer value"), clearValue, true, true);
+void CommandList::clearTextureRectInt(Texture* textureResource, TextureSubresourceSet subresources, const Rect& rect, const IntColor& clearColor){
+    const VkClearColorValue clearValue = __hidden_vulkan_texture::BuildTextureClearColorValue(clearColor);
+    clearColorTextureBox(textureResource, subresources, Box(rect, 0, Limit<i32>::s_Max), NWB_TEXT("signed integer value"), clearValue, true, true);
+}
+
+void CommandList::clearTextureBoxInt(Texture* textureResource, TextureSubresourceSet subresources, const Box& box, i32 clearColor){
+    clearTextureBoxInt(textureResource, subresources, box, IntColor(clearColor));
+}
+
+void CommandList::clearTextureBoxInt(Texture* textureResource, TextureSubresourceSet subresources, const Box& box, const IntColor& clearColor){
+    const VkClearColorValue clearValue = __hidden_vulkan_texture::BuildTextureClearColorValue(clearColor);
+    clearColorTextureBox(textureResource, subresources, box, NWB_TEXT("signed integer value"), clearValue, true, true);
 }
 
 void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSlice, Texture* srcResource, const TextureSlice& srcSlice){
@@ -1961,24 +2115,41 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::clearColorTexture(Texture* textureResource, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue){
+void CommandList::clearColorTexture(
+    Texture* textureResource,
+    TextureSubresourceSet subresources,
+    const tchar* valueName,
+    const VkClearColorValue& clearValue,
+    const bool integerValue,
+    const bool signedIntegerValue
+){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear texture"), NWB_TEXT("texture is null"), textureResource))
         return;
 #if !defined(NWB_DEBUG)
     static_cast<void>(valueName);
 #endif
     Texture& texture = *textureResource;
-#if defined(NWB_DEBUG)
-    if((texture.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture with {}: texture format is depth/stencil"), valueName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture with {}: texture format is depth/stencil"), valueName);
-        return;
-    }
-#endif
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("clear texture")))
         return;
+
+    if(!__hidden_vulkan_texture::ValidateTextureColorClear(
+        texture.m_desc,
+        texture.m_aspectMask,
+        NWB_TEXT("clear texture"),
+        valueName,
+        integerValue,
+        signedIntegerValue
+    ))
+        return;
+
+    if(m_renderPassActive){
+        const Rect fullRect(0, Limit<i32>::s_Max, 0, Limit<i32>::s_Max);
+        if(clearActiveRenderPassColorTextureRect(texture, resolvedSubresources, fullRect, clearValue, valueName))
+            retainResource(textureResource);
+        return;
+    }
 
     const VkImageSubresourceRange range = VulkanDetail::BuildImageSubresourceRange(resolvedSubresources, VK_IMAGE_ASPECT_COLOR_BIT);
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
@@ -1986,18 +2157,18 @@ void CommandList::clearColorTexture(Texture* textureResource, TextureSubresource
     retainResource(textureResource);
 }
 
-void CommandList::clearColorTextureRect(
+void CommandList::clearColorTextureBox(
     Texture* textureResource,
     TextureSubresourceSet subresources,
-    const Rect& rect,
+    const Box& box,
     const tchar* valueName,
     const VkClearColorValue& clearValue,
     const bool integerValue,
     const bool signedIntegerValue
 ){
-    if(__hidden_vulkan_texture::TextureClearRectEmpty(rect))
+    if(__hidden_vulkan_texture::TextureClearBoxEmpty(box))
         return;
-    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear texture rect"), NWB_TEXT("texture is null"), textureResource))
+    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear texture box"), NWB_TEXT("texture is null"), textureResource))
         return;
 #if !defined(NWB_DEBUG)
     static_cast<void>(valueName);
@@ -2005,25 +2176,39 @@ void CommandList::clearColorTextureRect(
 
     Texture& texture = *textureResource;
     const TextureDesc& desc = texture.m_desc;
-#if defined(NWB_DEBUG)
-    if((texture.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: texture format is depth/stencil"), valueName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: texture format is depth/stencil"), valueName);
-        return;
-    }
-#endif
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
-    if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("clear texture rect")))
+    if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("clear texture box")))
         return;
 
-    if(__hidden_vulkan_texture::TextureClearRectCoversSubresources(desc, resolvedSubresources, rect)){
-        clearColorTexture(textureResource, resolvedSubresources, valueName, clearValue);
+    if(!__hidden_vulkan_texture::ValidateTextureColorClear(
+        desc,
+        texture.m_aspectMask,
+        NWB_TEXT("clear texture box"),
+        valueName,
+        integerValue,
+        signedIntegerValue
+    ))
+        return;
+
+    if(__hidden_vulkan_texture::TextureClearBoxCoversSubresources(desc, resolvedSubresources, box)){
+        clearColorTexture(textureResource, resolvedSubresources, valueName, clearValue, integerValue, signedIntegerValue);
         return;
     }
 
-    if(desc.sampleCount != 1u){
-        if(clearActiveRenderPassColorTextureRect(texture, resolvedSubresources, rect, clearValue, valueName))
+    if(m_renderPassActive || desc.sampleCount != 1u){
+        const Box resolvedBox = __hidden_vulkan_texture::ResolveTextureClearBox(desc, resolvedSubresources.baseMipLevel, box);
+        if(__hidden_vulkan_texture::TextureClearBoxEmpty(resolvedBox))
+            return;
+
+        const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, resolvedSubresources.baseMipLevel);
+        if(resolvedBox.minZ != 0 || resolvedBox.maxZ != static_cast<i32>(mipExtent.depth)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture box with {}: attachment bounded box clears must cover the full attachment depth"), valueName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: attachment bounded box clears must cover the full attachment depth"), valueName);
+            return;
+        }
+
+        if(clearActiveRenderPassColorTextureRect(texture, resolvedSubresources, Rect(resolvedBox.minX, resolvedBox.maxX, resolvedBox.minY, resolvedBox.maxY), clearValue, valueName))
             retainResource(textureResource);
         return;
     }
@@ -2040,11 +2225,11 @@ void CommandList::clearColorTextureRect(
     ;
     if(!patternReady || clearPatternSize != texture.m_formatLayout.bytesPerBlock){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to clear texture rect with {}: bounded texture rect clears do not support texture format {}"),
+            NWB_TEXT("Vulkan: Failed to clear texture box with {}: bounded texture box clears do not support texture format {}"),
             valueName,
             StringConvert(GetFormatInfo(desc.format).name)
         );
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: bounded texture rect clears do not support texture format"), valueName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: bounded texture box clears do not support texture format"), valueName);
         return;
     }
 
@@ -2053,17 +2238,17 @@ void CommandList::clearColorTextureRect(
     Alloc::ScratchArena scratchArena;
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-        const Rect resolvedRect = __hidden_vulkan_texture::ResolveTextureClearRect(desc, mipLevel, rect);
-        if(__hidden_vulkan_texture::TextureClearRectEmpty(resolvedRect))
+        const Box resolvedBox = __hidden_vulkan_texture::ResolveTextureClearBox(desc, mipLevel, box);
+        if(__hidden_vulkan_texture::TextureClearBoxEmpty(resolvedBox))
             continue;
 
         const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
-        const u64 clearWidth = static_cast<u64>(resolvedRect.width());
-        const u64 clearHeight = static_cast<u64>(resolvedRect.height());
-        const u64 clearDepth = desc.dimension == TextureDimension::Texture3D ? static_cast<u64>(mipExtent.depth) : 1ull;
-        if(!__hidden_vulkan_texture::TextureClearRectAlignedToBlocks(resolvedRect, mipExtent, texture.m_formatLayout)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: bounded block-compressed rect clears require block-aligned rect edges except at texture edges"), valueName);
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: bounded block-compressed rect clears require block-aligned rect edges except at texture edges"), valueName);
+        const u64 clearWidth = static_cast<u64>(resolvedBox.width());
+        const u64 clearHeight = static_cast<u64>(resolvedBox.height());
+        const u64 clearDepth = static_cast<u64>(resolvedBox.depth());
+        if(!__hidden_vulkan_texture::TextureClearBoxAlignedToBlocks(resolvedBox, mipExtent, texture.m_formatLayout)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture box with {}: bounded block-compressed box clears require block-aligned box edges except at texture edges"), valueName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: bounded block-compressed box clears require block-aligned box edges except at texture edges"), valueName);
             return;
         }
 
@@ -2072,26 +2257,26 @@ void CommandList::clearColorTextureRect(
         const u64 clearBlockCountX = DivideUp(clearWidth, blockWidth);
         const u64 clearBlockCountY = DivideUp(clearHeight, blockHeight);
         if(clearBlockCountX > Limit<u64>::s_Max / clearBlockCountY){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear byte size overflows"), valueName);
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear byte size overflows"), valueName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size overflows"), valueName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size overflows"), valueName);
             return;
         }
         const u64 clearSliceBlockCount = clearBlockCountX * clearBlockCountY;
         if(clearDepth > 1ull && clearSliceBlockCount > Limit<u64>::s_Max / clearDepth){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear byte size overflows"), valueName);
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear byte size overflows"), valueName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size overflows"), valueName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size overflows"), valueName);
             return;
         }
         const u64 clearBlockCount = clearSliceBlockCount * clearDepth;
         if(clearBlockCount > Limit<u64>::s_Max / clearPatternSize){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear byte size overflows"), valueName);
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear byte size overflows"), valueName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size overflows"), valueName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size overflows"), valueName);
             return;
         }
         const u64 uploadSize64 = clearBlockCount * clearPatternSize;
         if(uploadSize64 > static_cast<u64>(Limit<usize>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear byte size exceeds addressable memory"), valueName);
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear byte size exceeds addressable memory"), valueName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size exceeds addressable memory"), valueName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size exceeds addressable memory"), valueName);
             return;
         }
 
@@ -2099,7 +2284,7 @@ void CommandList::clearColorTextureRect(
         const bool mergeArrayLayerCopies =
             desc.dimension != TextureDimension::Texture3D
             && arrayLayerCount > 1ull
-            && uploadSize64 <= (__hidden_vulkan_texture::s_TextureClearRectMergedLayerUploadThreshold / arrayLayerCount)
+            && uploadSize64 <= (__hidden_vulkan_texture::s_TextureClearMergedLayerUploadThreshold / arrayLayerCount)
         ;
         const u64 clearByteSize64 = mergeArrayLayerCopies ? uploadSize64 * arrayLayerCount : uploadSize64;
 
@@ -2108,14 +2293,14 @@ void CommandList::clearColorTextureRect(
 
         Buffer* stagingBuffer = nullptr;
         u64 stagingOffset = 0;
-        if(!prepareUploadStaging(clearBytes.data(), clearBytes.size(), NWB_TEXT("clearTextureRect"), stagingBuffer, stagingOffset))
+        if(!prepareUploadStaging(clearBytes.data(), clearBytes.size(), NWB_TEXT("clearTextureBox"), stagingBuffer, stagingOffset))
             return;
 
         if(desc.dimension == TextureDimension::Texture3D){
             VkBufferImageCopy region{};
             region.bufferOffset = stagingOffset;
             region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, 0u, 1u);
-            region.imageOffset = { resolvedRect.minX, resolvedRect.minY, 0 };
+            region.imageOffset = { resolvedBox.minX, resolvedBox.minY, resolvedBox.minZ };
             region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), static_cast<u32>(clearDepth) };
             vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
         }
@@ -2127,7 +2312,7 @@ void CommandList::clearColorTextureRect(
                 VkBufferImageCopy region{};
                 region.bufferOffset = stagingOffset + static_cast<u64>(regionIndex) * uploadSize64;
                 region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, arraySlice, 1u);
-                region.imageOffset = { resolvedRect.minX, resolvedRect.minY, 0 };
+                region.imageOffset = { resolvedBox.minX, resolvedBox.minY, 0 };
                 region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
                 regions[regionIndex++] = region;
             }
@@ -2141,7 +2326,7 @@ void CommandList::clearColorTextureRect(
                 VkBufferImageCopy region{};
                 region.bufferOffset = stagingOffset;
                 region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, arraySlice, 1u);
-                region.imageOffset = { resolvedRect.minX, resolvedRect.minY, 0 };
+                region.imageOffset = { resolvedBox.minX, resolvedBox.minY, 0 };
                 region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
                 vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
             }

@@ -181,7 +181,10 @@ concept CommandListApi = requires(
     const TextureSlice& textureSlice,
     const TextureSubresourceSet& subresources,
     const Rect& rect,
+    const Box& box,
     const Color& color,
+    const UIntColor& uintColor,
+    const IntColor& intColor,
     const void* data,
     const GraphicsState& graphicsState,
     const DrawArguments& drawArguments,
@@ -203,12 +206,22 @@ concept CommandListApi = requires(
 
     commandList.clearTextureFloat(texture, subresources, color);
     commandList.clearTextureRectFloat(texture, subresources, rect, color);
+    commandList.clearTextureBoxFloat(texture, subresources, box, color);
     commandList.clearDepthStencilTexture(texture, subresources, bool{}, f32{}, bool{}, u8{});
     commandList.clearDepthStencilTextureRect(texture, subresources, rect, bool{}, f32{}, bool{}, u8{});
+    commandList.clearDepthStencilTextureBox(texture, subresources, box, bool{}, f32{}, bool{}, u8{});
     commandList.clearTextureUInt(texture, subresources, u32{});
+    commandList.clearTextureUInt(texture, subresources, uintColor);
     commandList.clearTextureRectUInt(texture, subresources, rect, u32{});
+    commandList.clearTextureRectUInt(texture, subresources, rect, uintColor);
+    commandList.clearTextureBoxUInt(texture, subresources, box, u32{});
+    commandList.clearTextureBoxUInt(texture, subresources, box, uintColor);
     commandList.clearTextureInt(texture, subresources, i32{});
+    commandList.clearTextureInt(texture, subresources, intColor);
     commandList.clearTextureRectInt(texture, subresources, rect, i32{});
+    commandList.clearTextureRectInt(texture, subresources, rect, intColor);
+    commandList.clearTextureBoxInt(texture, subresources, box, i32{});
+    commandList.clearTextureBoxInt(texture, subresources, box, intColor);
     commandList.copyTexture(texture, textureSlice, texture, textureSlice);
     commandList.copyTexture(stagingTexture, textureSlice, texture, textureSlice);
     commandList.copyTexture(texture, textureSlice, stagingTexture, textureSlice);

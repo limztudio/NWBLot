@@ -251,19 +251,34 @@ bool nwbCsgReceiverIntervalPixelDiscard(
     const float3 worldPosition,
     const float worldDistanceTolerance
 ){
-    if(!nwbCsgReceiverPixelDiscardWithWorldTolerance(receiverIndex, worldPosition, worldDistanceTolerance * 2.0))
+    if(!nwbCsgReceiverPixelDiscardWithWorldTolerance(
+        receiverIndex,
+        worldPosition,
+        worldDistanceTolerance * NWB_CSG_RECEIVER_INTERVAL_WORLD_TOLERANCE_SCALE
+    ))
         return false;
 
     const uint2 pixel = uint2(rasterPosition.xy);
     const float receiverLinearDepth = length(worldPosition - g_NwbMeshCameraPosition.xyz);
-    const float linearDepthTolerance = max(abs(worldDistanceTolerance) * 2.0, fwidth(receiverLinearDepth));
+    const float linearDepthTolerance = max(
+        abs(worldDistanceTolerance) * NWB_CSG_RECEIVER_INTERVAL_LINEAR_DEPTH_TOLERANCE_SCALE,
+        fwidth(receiverLinearDepth)
+    );
     if(nwbCsgReceiverRemovedIntervalPixelDiscardAtPixel(pixel, receiverIndex, receiverLinearDepth, linearDepthTolerance))
         return true;
 
     [unroll]
-    for(int offsetY = -1; offsetY <= 1; ++offsetY){
+    for(
+        int offsetY = -NWB_CSG_RECEIVER_INTERVAL_DISCARD_NEIGHBOR_RADIUS;
+        offsetY <= NWB_CSG_RECEIVER_INTERVAL_DISCARD_NEIGHBOR_RADIUS;
+        ++offsetY
+    ){
         [unroll]
-        for(int offsetX = -1; offsetX <= 1; ++offsetX){
+        for(
+            int offsetX = -NWB_CSG_RECEIVER_INTERVAL_DISCARD_NEIGHBOR_RADIUS;
+            offsetX <= NWB_CSG_RECEIVER_INTERVAL_DISCARD_NEIGHBOR_RADIUS;
+            ++offsetX
+        ){
             if(offsetX == 0 && offsetY == 0)
                 continue;
 
@@ -291,9 +306,17 @@ void nwbCsgSampleNearestRemovedIntervalCapNeighborhood(
     const uint2 outputPixel
 ){
     [unroll]
-    for(int offsetY = -1; offsetY <= 1; ++offsetY){
+    for(
+        int offsetY = -NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS;
+        offsetY <= NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS;
+        ++offsetY
+    ){
         [unroll]
-        for(int offsetX = -1; offsetX <= 1; ++offsetX){
+        for(
+            int offsetX = -NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS;
+            offsetX <= NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS;
+            ++offsetX
+        ){
             if(offsetX == 0 && offsetY == 0)
                 continue;
 

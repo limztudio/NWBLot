@@ -87,7 +87,7 @@ void nwbCsgBuildPixelRay(const uint2 pixel, out float3 outRayBegin, out float3 o
 }
 
 uint nwbCsgPackIntervalId(const uint receiverIndex){
-    const uint receiverBits = (receiverIndex + 1u) & NWB_CSG_RECEIVER_SURFACE_MASK_RECEIVER_MASK;
+    const uint receiverBits = (receiverIndex + 1u) & NWB_CSG_RECEIVER_INDEX_MASK;
     return receiverBits;
 }
 

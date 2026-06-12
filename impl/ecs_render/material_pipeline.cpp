@@ -103,7 +103,7 @@ namespace __hidden_material_pipeline{
 
 struct MaterialPipelineCsgBindingLayouts{
     const Core::BindingLayoutHandle& clip;
-    const Core::BindingLayoutHandle& receiverSurfaceMask;
+    const Core::BindingLayoutHandle& receiverSurface;
     const Core::BindingLayoutHandle& intervalSample;
     const Core::BindingLayoutHandle& avboitEmpty;
 };
@@ -118,14 +118,14 @@ template<typename PipelineDesc>
         return true;
     if(!bindingLayouts.clip)
         return false;
-    if(csgBindingUse.receiverSurfaceMask && !bindingLayouts.receiverSurfaceMask)
+    if(csgBindingUse.receiverSurface && !bindingLayouts.receiverSurface)
         return false;
     if(csgBindingUse.intervalSample && !bindingLayouts.intervalSample)
         return false;
 
     pipelineDesc.addBindingLayout(bindingLayouts.clip);
-    if(csgBindingUse.receiverSurfaceMask)
-        pipelineDesc.addBindingLayout(bindingLayouts.receiverSurfaceMask);
+    if(csgBindingUse.receiverSurface)
+        pipelineDesc.addBindingLayout(bindingLayouts.receiverSurface);
     if(csgBindingUse.intervalSample)
         pipelineDesc.addBindingLayout(bindingLayouts.intervalSample);
     return true;

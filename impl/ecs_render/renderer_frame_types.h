@@ -104,8 +104,6 @@ struct DeferredFrameTargets{
     Core::Format::Enum csgIntervalDepthFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgIntervalLinearDepthFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgIntervalIdFormat = Core::Format::UNKNOWN;
-    Core::Format::Enum csgReceiverSurfaceMaskFormat = Core::Format::UNKNOWN;
-    Core::Format::Enum csgReceiverBackSurfaceMaskFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgReceiverEventDepthFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgReceiverEventDataFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgReceiverEventCountFormat = Core::Format::UNKNOWN;
@@ -130,8 +128,6 @@ struct DeferredFrameTargets{
     Core::TextureHandle csgIntervalDepth;
     Core::TextureHandle csgIntervalLinearDepth;
     Core::TextureHandle csgIntervalId;
-    Core::TextureHandle csgReceiverSurfaceMask;
-    Core::TextureHandle csgReceiverBackSurfaceMask;
     Core::TextureHandle csgReceiverEventDepth;
     Core::TextureHandle csgReceiverEventData;
     Core::TextureHandle csgReceiverEventCount;
@@ -167,8 +163,6 @@ struct DeferredFrameTargets{
             && csgIntervalDepthFormat != Core::Format::UNKNOWN
             && csgIntervalLinearDepthFormat != Core::Format::UNKNOWN
             && csgIntervalIdFormat != Core::Format::UNKNOWN
-            && csgReceiverSurfaceMaskFormat != Core::Format::UNKNOWN
-            && csgReceiverBackSurfaceMaskFormat != Core::Format::UNKNOWN
             && csgReceiverEventDepthFormat != Core::Format::UNKNOWN
             && csgReceiverEventDataFormat != Core::Format::UNKNOWN
             && csgReceiverEventCountFormat != Core::Format::UNKNOWN
@@ -193,8 +187,6 @@ struct DeferredFrameTargets{
             && csgIntervalDepth != nullptr
             && csgIntervalLinearDepth != nullptr
             && csgIntervalId != nullptr
-            && csgReceiverSurfaceMask != nullptr
-            && csgReceiverBackSurfaceMask != nullptr
             && csgReceiverEventDepth != nullptr
             && csgReceiverEventData != nullptr
             && csgReceiverEventCount != nullptr

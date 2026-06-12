@@ -101,7 +101,7 @@ uint nwbCsgIntervalCombineRemovedIntervalLayerCount(){
 }
 
 uint nwbCsgIntervalCombineIdReceiverIndex(const uint id){
-    const uint receiverBits = id & NWB_CSG_RECEIVER_SURFACE_MASK_RECEIVER_MASK;
+    const uint receiverBits = id & NWB_CSG_RECEIVER_INDEX_MASK;
     return receiverBits == 0u ? 0xffffffffu : receiverBits - 1u;
 }
 

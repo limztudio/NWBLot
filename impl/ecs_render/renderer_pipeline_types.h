@@ -86,7 +86,7 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgReceiverSurface(const MaterialPipelinePass::Enum pass){
     return pass == MaterialPipelinePass::CsgReceiverSurface;
 }
 
@@ -119,7 +119,7 @@ struct MaterialPipelineKey{
 struct MaterialPipelineCsgBindingUse{
     bool clip = false;
     bool avboitClip = false;
-    bool receiverSurfaceMask = false;
+    bool receiverSurface = false;
     bool intervalSample = false;
 };
 
@@ -136,9 +136,9 @@ struct MaterialPipelineCsgBindingUse{
         result.clip
         && MaterialPipelinePassUsesRendererAvboit(pass)
     ;
-    result.receiverSurfaceMask =
+    result.receiverSurface =
         result.clip
-        && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(pass)
+        && MaterialPipelinePassUsesRendererCsgReceiverSurface(pass)
     ;
     result.intervalSample =
         result.clip

@@ -23,7 +23,7 @@ namespace __hidden_material_pass_draw{
 
 struct MaterialPassCsgBindingSets{
     const Core::BindingSetHandle& clip;
-    const Core::BindingSetHandle& receiverSurfaceMask;
+    const Core::BindingSetHandle& receiverSurface;
     const Core::BindingSetHandle& intervalSample;
 };
 
@@ -36,7 +36,7 @@ struct MaterialPassCsgBindingSets{
     const MaterialPipelineCsgBindingUse csgBindingUse = MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
     if(csgBindingUse.clip && !bindingSets.clip)
         return false;
-    if(csgBindingUse.receiverSurfaceMask && !bindingSets.receiverSurfaceMask)
+    if(csgBindingUse.receiverSurface && !bindingSets.receiverSurface)
         return false;
     if(requireIntervalSample && csgBindingUse.intervalSample && !bindingSets.intervalSample)
         return false;
@@ -48,7 +48,7 @@ static void AssertCsgBindingSetsReady(
     const MaterialPassCsgBindingSets& bindingSets
 ){
     NWB_ASSERT(!csgBindingUse.clip || bindingSets.clip);
-    NWB_ASSERT(!csgBindingUse.receiverSurfaceMask || bindingSets.receiverSurfaceMask);
+    NWB_ASSERT(!csgBindingUse.receiverSurface || bindingSets.receiverSurface);
     NWB_ASSERT(!csgBindingUse.intervalSample || bindingSets.intervalSample);
 }
 
@@ -62,8 +62,8 @@ static void SetCsgBindingSetResourceStates(
         return;
 
     csgSystem.setCsgClipBufferStates(commandList);
-    if(csgBindingUse.receiverSurfaceMask)
-        commandList.setResourceStatesForBindingSet(bindingSets.receiverSurfaceMask.get());
+    if(csgBindingUse.receiverSurface)
+        commandList.setResourceStatesForBindingSet(bindingSets.receiverSurface.get());
     if(csgBindingUse.intervalSample)
         commandList.setResourceStatesForBindingSet(bindingSets.intervalSample.get());
 }
@@ -76,8 +76,8 @@ static void AddCsgGraphicsBindingSets(
 ){
     if(csgBindingUse.clip)
         graphicsState.addBindingSet(bindingSets.clip.get());
-    if(csgBindingUse.receiverSurfaceMask)
-        graphicsState.addBindingSet(bindingSets.receiverSurfaceMask.get());
+    if(csgBindingUse.receiverSurface)
+        graphicsState.addBindingSet(bindingSets.receiverSurface.get());
     if(csgBindingUse.intervalSample)
         graphicsState.addBindingSet(bindingSets.intervalSample.get());
 }

@@ -114,8 +114,6 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
             || !deferredTargets.csgIntervalDepth
             || !deferredTargets.csgIntervalLinearDepth
             || !deferredTargets.csgIntervalId
-            || !deferredTargets.csgReceiverSurfaceMask
-            || !deferredTargets.csgReceiverBackSurfaceMask
             || !deferredTargets.csgReceiverEventDepth
             || !deferredTargets.csgReceiverEventData
             || !deferredTargets.csgReceiverEventCount
@@ -180,8 +178,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !deferredTargets.csgIntervalDepth
             || !deferredTargets.csgIntervalLinearDepth
             || !deferredTargets.csgIntervalId
-            || !deferredTargets.csgReceiverSurfaceMask
-            || !deferredTargets.csgReceiverBackSurfaceMask
             || !deferredTargets.csgReceiverEventDepth
             || !deferredTargets.csgReceiverEventData
             || !deferredTargets.csgReceiverEventCount

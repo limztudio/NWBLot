@@ -36,6 +36,7 @@ static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH
 
 
 enum class CsgTextureAccess{
+    None,
     SRV,
     UAV
 };
@@ -46,6 +47,8 @@ static void AddCsgTextureBindingLayoutItem(
     CsgTextureAccess access
 ){
     switch(access){
+    case CsgTextureAccess::None:
+        break;
     case CsgTextureAccess::SRV:
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(slot, 1));
         break;
@@ -64,6 +67,8 @@ static void AddCsgTextureBindingSetItem(
     CsgTextureAccess access
 ){
     switch(access){
+    case CsgTextureAccess::None:
+        break;
     case CsgTextureAccess::SRV:
         bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
             slot,
@@ -93,14 +98,6 @@ static void AddCsgIntervalTargetLayoutItems(
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_DEPTH, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_LINEAR_DEPTH, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_ID, access);
-}
-
-static void AddCsgReceiverMaskLayoutItems(
-    Core::BindingLayoutDesc& bindingLayoutDesc,
-    CsgTextureAccess access
-){
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_SURFACE_MASK, access);
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_BACK_SURFACE_MASK, access);
 }
 
 static void AddCsgReceiverEventLayoutItems(
@@ -169,30 +166,6 @@ static void AddCsgIntervalTargetBindingSetItems(
         NWB_CSG_INTERVAL_BINDING_ID,
         targets.csgIntervalId.get(),
         targets.csgIntervalIdFormat,
-        subresources,
-        access
-    );
-}
-
-static void AddCsgReceiverMaskBindingSetItems(
-    Core::BindingSetDesc& bindingSetDesc,
-    const DeferredFrameTargets& targets,
-    const Core::TextureSubresourceSet& subresources,
-    CsgTextureAccess access
-){
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_RECEIVER_SURFACE_MASK,
-        targets.csgReceiverSurfaceMask.get(),
-        targets.csgReceiverSurfaceMaskFormat,
-        subresources,
-        access
-    );
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_RECEIVER_BACK_SURFACE_MASK,
-        targets.csgReceiverBackSurfaceMask.get(),
-        targets.csgReceiverBackSurfaceMaskFormat,
         subresources,
         access
     );
@@ -335,9 +308,7 @@ static void AddCsgRemovedIntervalBindingSetItems(
     Core::BindingLayoutHandle& layout,
     Core::ShaderType::Mask visibility,
     CsgTextureAccess intervalAccess,
-    bool includeReceiverMasks,
-    CsgTextureAccess receiverMaskAccess,
-    bool includeRemovedIntervals,
+    CsgTextureAccess receiverEventAccess,
     CsgTextureAccess removedIntervalAccess
 ){
     if(layout)
@@ -345,12 +316,11 @@ static void AddCsgRemovedIntervalBindingSetItems(
 
     Core::BindingLayoutDesc bindingLayoutDesc(arena);
     bindingLayoutDesc.setVisibility(visibility);
-    AddCsgIntervalTargetLayoutItems(bindingLayoutDesc, intervalAccess);
-    if(includeReceiverMasks){
-        AddCsgReceiverMaskLayoutItems(bindingLayoutDesc, receiverMaskAccess);
-        AddCsgReceiverEventLayoutItems(bindingLayoutDesc, receiverMaskAccess);
-    }
-    if(includeRemovedIntervals)
+    if(intervalAccess != CsgTextureAccess::None)
+        AddCsgIntervalTargetLayoutItems(bindingLayoutDesc, intervalAccess);
+    if(receiverEventAccess != CsgTextureAccess::None)
+        AddCsgReceiverEventLayoutItems(bindingLayoutDesc, receiverEventAccess);
+    if(removedIntervalAccess != CsgTextureAccess::None)
         AddCsgRemovedIntervalLayoutItems(bindingLayoutDesc, removedIntervalAccess);
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, 1));
 
@@ -366,26 +336,29 @@ static void AddCsgRemovedIntervalBindingSetItems(
     Core::BindingLayout* layout,
     Core::BindingSetHandle& bindingSet,
     CsgTextureAccess intervalAccess,
-    bool includeReceiverMasks,
-    CsgTextureAccess receiverMaskAccess,
-    bool includeRemovedIntervals,
+    CsgTextureAccess receiverEventAccess,
     CsgTextureAccess removedIntervalAccess
 ){
     if(bindingSet)
         return true;
     if(
-        !targets.csgCapBackNormal
-        || !targets.csgIntervalDepth
-        || !targets.csgIntervalLinearDepth
-        || !targets.csgIntervalId
-        || !meshViewBuffer
+        !meshViewBuffer
         || !layout
     )
         return false;
-    if(includeReceiverMasks && (!targets.csgReceiverSurfaceMask || !targets.csgReceiverBackSurfaceMask))
+    if(
+        intervalAccess != CsgTextureAccess::None
+        && (
+            !targets.csgCapBackNormal
+            || !targets.csgIntervalDepth
+            || !targets.csgIntervalLinearDepth
+            || !targets.csgIntervalId
+            || targets.csgPeelLayerCount == 0u
+        )
+    )
         return false;
     if(
-        includeReceiverMasks
+        receiverEventAccess != CsgTextureAccess::None
         && (
             !targets.csgReceiverEventDepth
             || !targets.csgReceiverEventData
@@ -395,7 +368,7 @@ static void AddCsgRemovedIntervalBindingSetItems(
     )
         return false;
     if(
-        includeRemovedIntervals
+        removedIntervalAccess != CsgTextureAccess::None
         && (
             !targets.csgRemovedIntervalDepth
             || !targets.csgRemovedIntervalCapNormal
@@ -407,25 +380,25 @@ static void AddCsgRemovedIntervalBindingSetItems(
     )
         return false;
 
-    const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
-    const Core::TextureSubresourceSet csgReceiverSurfaceSubresources(0, 1, 0, ECSRenderDetail::s_CsgReceiverSurfaceLayerCount);
-    const Core::TextureSubresourceSet csgReceiverEventSubresources(0, 1, 0, targets.csgReceiverEventLayerCount);
-    const Core::TextureSubresourceSet csgReceiverEventCounterSubresources(0, 1, 0, 1);
-    const Core::TextureSubresourceSet csgRemovedIntervalSubresources(0, 1, 0, targets.csgRemovedIntervalLayerCount);
-    const Core::TextureSubresourceSet csgRemovedIntervalCounterSubresources(0, 1, 0, 1);
     Core::BindingSetDesc bindingSetDesc(arena);
-    AddCsgIntervalTargetBindingSetItems(bindingSetDesc, targets, csgPeelSubresources, intervalAccess);
-    if(includeReceiverMasks){
-        AddCsgReceiverMaskBindingSetItems(bindingSetDesc, targets, csgReceiverSurfaceSubresources, receiverMaskAccess);
+    if(intervalAccess != CsgTextureAccess::None){
+        const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
+        AddCsgIntervalTargetBindingSetItems(bindingSetDesc, targets, csgPeelSubresources, intervalAccess);
+    }
+    if(receiverEventAccess != CsgTextureAccess::None){
+        const Core::TextureSubresourceSet csgReceiverEventSubresources(0, 1, 0, targets.csgReceiverEventLayerCount);
+        const Core::TextureSubresourceSet csgReceiverEventCounterSubresources(0, 1, 0, 1);
         AddCsgReceiverEventBindingSetItems(
             bindingSetDesc,
             targets,
             csgReceiverEventSubresources,
             csgReceiverEventCounterSubresources,
-            receiverMaskAccess
+            receiverEventAccess
         );
     }
-    if(includeRemovedIntervals){
+    if(removedIntervalAccess != CsgTextureAccess::None){
+        const Core::TextureSubresourceSet csgRemovedIntervalSubresources(0, 1, 0, targets.csgRemovedIntervalLayerCount);
+        const Core::TextureSubresourceSet csgRemovedIntervalCounterSubresources(0, 1, 0, 1);
         AddCsgRemovedIntervalBindingSetItems(
             bindingSetDesc,
             targets,
@@ -585,10 +558,8 @@ static void AddCsgRemovedIntervalBindingSetItems(
         device,
         intervalSampleBindingLayout,
         Core::ShaderType::Pixel,
-        CsgTextureAccess::SRV,
-        true,
-        CsgTextureAccess::SRV,
-        true,
+        CsgTextureAccess::None,
+        CsgTextureAccess::None,
         CsgTextureAccess::SRV
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval sample binding layout"));
@@ -600,11 +571,9 @@ static void AddCsgRemovedIntervalBindingSetItems(
         device,
         receiverSurfaceBindingLayout,
         Core::ShaderType::Pixel,
-        CsgTextureAccess::SRV,
-        true,
+        CsgTextureAccess::None,
         CsgTextureAccess::UAV,
-        false,
-        CsgTextureAccess::UAV
+        CsgTextureAccess::None
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver surface binding layout"));
         return false;
@@ -724,8 +693,6 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         || !targets.csgIntervalDepth
         || !targets.csgIntervalLinearDepth
         || !targets.csgIntervalId
-        || !targets.csgReceiverSurfaceMask
-        || !targets.csgReceiverBackSurfaceMask
         || !targets.csgReceiverEventDepth
         || !targets.csgReceiverEventData
         || !targets.csgReceiverEventCount
@@ -754,10 +721,8 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         csgState().m_intervalPeelBindingLayout,
         Core::ShaderType::Compute,
         __hidden_csg_interval_peel::CsgTextureAccess::UAV,
-        false,
-        __hidden_csg_interval_peel::CsgTextureAccess::SRV,
-        false,
-        __hidden_csg_interval_peel::CsgTextureAccess::SRV
+        __hidden_csg_interval_peel::CsgTextureAccess::None,
+        __hidden_csg_interval_peel::CsgTextureAccess::None
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval peel binding layout"));
         return false;
@@ -888,10 +853,8 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         csgState().m_intervalPeelBindingLayout.get(),
         csgState().m_intervalPeelBindingSet,
         __hidden_csg_interval_peel::CsgTextureAccess::UAV,
-        false,
-        __hidden_csg_interval_peel::CsgTextureAccess::SRV,
-        false,
-        __hidden_csg_interval_peel::CsgTextureAccess::SRV
+        __hidden_csg_interval_peel::CsgTextureAccess::None,
+        __hidden_csg_interval_peel::CsgTextureAccess::None
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval peel binding set"));
         return false;
@@ -932,13 +895,7 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         return false;
     }
     if(
-        !targets.csgCapBackNormal
-        || !targets.csgIntervalDepth
-        || !targets.csgIntervalLinearDepth
-        || !targets.csgIntervalId
-        || !targets.csgReceiverSurfaceMask
-        || !targets.csgReceiverBackSurfaceMask
-        || !targets.csgReceiverEventDepth
+        !targets.csgReceiverEventDepth
         || !targets.csgReceiverEventData
         || !targets.csgReceiverEventCount
         || !targets.csgReceiverEventFlags
@@ -947,7 +904,6 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         || !targets.csgRemovedIntervalData
         || !targets.csgRemovedIntervalCount
         || !targets.csgRemovedIntervalFlags
-        || targets.csgPeelLayerCount == 0u
         || targets.csgReceiverEventLayerCount == 0u
         || targets.csgRemovedIntervalLayerCount == 0u
     ){
@@ -970,11 +926,9 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         drawState().m_meshViewBuffer.get(),
         csgState().m_receiverSurfaceBindingLayout.get(),
         csgState().m_receiverSurfaceBindingSet,
-        __hidden_csg_interval_peel::CsgTextureAccess::SRV,
-        true,
+        __hidden_csg_interval_peel::CsgTextureAccess::None,
         __hidden_csg_interval_peel::CsgTextureAccess::UAV,
-        false,
-        __hidden_csg_interval_peel::CsgTextureAccess::UAV
+        __hidden_csg_interval_peel::CsgTextureAccess::None
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver surface binding set"));
         return false;
@@ -987,10 +941,8 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         drawState().m_meshViewBuffer.get(),
         csgState().m_intervalSampleBindingLayout.get(),
         csgState().m_intervalSampleBindingSet,
-        __hidden_csg_interval_peel::CsgTextureAccess::SRV,
-        true,
-        __hidden_csg_interval_peel::CsgTextureAccess::SRV,
-        true,
+        __hidden_csg_interval_peel::CsgTextureAccess::None,
+        __hidden_csg_interval_peel::CsgTextureAccess::None,
         __hidden_csg_interval_peel::CsgTextureAccess::SRV
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval sample binding set"));

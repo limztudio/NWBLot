@@ -7,6 +7,8 @@
 
 #include "api.h"
 
+#include <core/perf/timing.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,13 +21,6 @@ NWB_CORE_BEGIN
 
 class GpuTimingAccumulator;
 class GpuTimingMeasure;
-
-struct GpuTimingStats{
-    f32 seconds = 0.0f;
-    u32 sampleCount = 0u;
-
-    [[nodiscard]] bool valid()const{ return sampleCount != 0u; }
-};
 
 struct GpuTimingScope{
     GpuTimingAccumulator* accumulator = nullptr;
@@ -43,6 +38,8 @@ class GpuTimingAccumulator final : NoCopy{
 private:
     struct QueryRecord{
         TimerQueryHandle query;
+        u64 frameIndex = 0u;
+        u32 epoch = 0u;
         bool pending = false;
     };
 
@@ -50,23 +47,20 @@ private:
 
 
 public:
-    explicit GpuTimingAccumulator(Alloc::GlobalArena& arena)
+    explicit GpuTimingAccumulator(Alloc::GlobalArena& arena, const Perf::TimingScopeId timingScope)
         : m_queries(arena)
+        , m_timingScope(timingScope)
     {}
 
 
 public:
     void setEnabled(const bool enabled){
         m_enabled = enabled;
-        if(!m_enabled)
-            m_lastStats = GpuTimingStats{};
     }
 
-    void collect(Device& device);
-    [[nodiscard]] GpuTimingScope beginQuery(Device& device, CommandList& commandList);
+    void collect(Device& device, Perf::TimingSink& timing, u32 epoch);
+    [[nodiscard]] GpuTimingScope beginQuery(Device& device, CommandList& commandList, u64 frameIndex, u32 epoch);
     void endQuery(CommandList& commandList, const GpuTimingScope& scope);
-
-    [[nodiscard]] const GpuTimingStats& lastStats()const{ return m_lastStats; }
 
 
 private:
@@ -75,7 +69,7 @@ private:
 
 private:
     QueryVector m_queries;
-    GpuTimingStats m_lastStats;
+    Perf::TimingScopeId m_timingScope;
     bool m_enabled = false;
 };
 
@@ -92,82 +86,33 @@ private:
 
 
 public:
-    explicit GpuTimingRecorder(Alloc::GlobalArena& arena)
-        : m_arena(arena)
-        , m_accumulators(0, Hasher<Name>(), EqualTo<Name>(), arena)
-    {}
+    GpuTimingRecorder(Alloc::GlobalArena& arena, Perf::TimingSink& timing);
 
 
 public:
-    void setEnabled(const bool enabled){
-        m_enabled = enabled;
-        for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
-            it.value()->setEnabled(enabled);
-        if(!m_enabled)
-            m_emptyStats = GpuTimingStats{};
-    }
-
-    void clear(){
-        m_accumulators.clear();
-        m_emptyStats = GpuTimingStats{};
-    }
-
-    void collect(Device& device){
-        if(!m_enabled)
-            return;
-
-        for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
-            it.value()->collect(device);
-    }
-
-    [[nodiscard]] const GpuTimingStats& stats(const Name& scopeName)const{
-        const auto found = m_accumulators.find(scopeName);
-        if(found == m_accumulators.end())
-            return m_emptyStats;
-
-        return found.value()->lastStats();
-    }
+    void setQueryCollectionEnabled(bool enabled);
+    [[nodiscard]] bool queryCollectionEnabled()const{ return m_enabled; }
+    void resetQueries();
+    void collect(Device& device);
+    void collect(Device& device, u64 publishFrameIndex);
+    void beginFrame(u64 frameIndex);
 
 
 private:
-    [[nodiscard]] GpuTimingScope beginScope(const Name& scopeName, Device* device, CommandList& commandList){
-        if(!m_enabled || !scopeName || !device)
-            return {};
-
-        GpuTimingAccumulator* accumulator = findOrCreateAccumulator(scopeName);
-        if(!accumulator)
-            return {};
-
-        return accumulator->beginQuery(*device, commandList);
-    }
-
-    void endScope(CommandList& commandList, const GpuTimingScope& scope){
-        if(!scope.valid())
-            return;
-
-        scope.accumulator->endQuery(commandList, scope);
-    }
-
-    [[nodiscard]] GpuTimingAccumulator* findOrCreateAccumulator(const Name& scopeName){
-        auto found = m_accumulators.find(scopeName);
-        if(found != m_accumulators.end())
-            return found.value().get();
-
-        AccumulatorPtr accumulator = MakeGlobalUnique<GpuTimingAccumulator>(m_arena, m_arena);
-        if(!accumulator)
-            return nullptr;
-
-        auto [it, inserted] = m_accumulators.try_emplace(scopeName, Move(accumulator));
-        static_cast<void>(inserted);
-        it.value()->setEnabled(m_enabled);
-        return it.value().get();
-    }
+    [[nodiscard]] GpuTimingScope beginScope(const Name& scopeName, Device* device, CommandList& commandList);
+    void endScope(CommandList& commandList, const GpuTimingScope& scope);
+    [[nodiscard]] GpuTimingAccumulator* findOrCreateAccumulator(const Name& scopeName);
+    void syncActiveState();
+    void advanceEpoch();
 
 
 private:
     Alloc::GlobalArena& m_arena;
+    Perf::TimingSink& m_timing;
     AccumulatorMap m_accumulators;
-    GpuTimingStats m_emptyStats;
+    u64 m_currentFrameIndex = 0u;
+    u32 m_epoch = 1u;
+    bool m_accumulatorsActive = false;
     bool m_enabled = false;
 };
 

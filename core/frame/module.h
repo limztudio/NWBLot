@@ -10,6 +10,7 @@
 #include <core/common/module.h>
 #include <core/input/module.h>
 #include <core/graphics/module.h>
+#include <core/perf/session.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,6 +82,10 @@ public:
     [[nodiscard]] inline Alloc::JobSystem& projectJobSystem(){ return m_projectJobSystem; }
     [[nodiscard]] inline const Alloc::JobSystem& projectJobSystem()const{ return m_projectJobSystem; }
 
+    [[nodiscard]] Perf::SessionReport perfReport()const;
+    void setPerfCapture(const Perf::CaptureOptions& options);
+    [[nodiscard]] bool flushPerfSamples();
+
     [[nodiscard]] inline FrameString& appliedWindowTitle(){ return m_appliedWindowTitle; }
     [[nodiscard]] inline const FrameString& appliedWindowTitle()const{ return m_appliedWindowTitle; }
 
@@ -105,6 +110,9 @@ private:
     InputDispatcher m_input;
 
     Alloc::GlobalArena m_projectObjectArena;
+    Perf::Session m_perfSession;
+    Perf::MemoryScopeId m_graphicsObjectArenaMemoryScope;
+    Perf::MemoryScopeId m_projectObjectArenaMemoryScope;
     Alloc::ThreadPool m_projectThreadPool;
     Alloc::JobSystem m_projectJobSystem;
 

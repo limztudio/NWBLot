@@ -16,6 +16,25 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_frame_perf{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr Name s_GraphicsObjectArenaMemoryScope("core/frame/memory/graphics_object_arena");
+inline constexpr Name s_ProjectObjectArenaMemoryScope("core/frame/memory/project_object_arena");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void Frame::ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY){
     auto* frame = static_cast<Frame*>(userData);
     NWB_ASSERT(frame);
@@ -47,15 +66,18 @@ Frame::Frame(void* inst, u16 width, u16 height)
     , m_graphicsThreadPool(queryGraphicsWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_graphicsJobSystem(m_graphicsThreadPool)
     , m_projectObjectArena("NWB::Core::Frame::ProjectObjectArena")
+    , m_perfSession(m_projectObjectArena)
     , m_projectThreadPool(queryProjectWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_projectJobSystem(m_projectThreadPool)
-    , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem)
+    , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem, m_perfSession.gpuTimingSink())
 {
     auto& frameData = data<Common::FrameData>();
     frameData.width() = width;
     frameData.height() = height;
     setupPlatform(inst);
     m_graphics.setPointerScaleChangedCallback(&Frame::ApplyPointerScale, this);
+    m_graphicsObjectArenaMemoryScope = m_perfSession.registerMemoryScope(__hidden_frame_perf::s_GraphicsObjectArenaMemoryScope);
+    m_projectObjectArenaMemoryScope = m_perfSession.registerMemoryScope(__hidden_frame_perf::s_ProjectObjectArenaMemoryScope);
 }
 Frame::~Frame(){
     cleanup();
@@ -77,7 +99,24 @@ void Frame::cleanup(){
 void Frame::requestQuit(){
     m_quitRequested = true;
 }
+Perf::SessionReport Frame::perfReport()const{
+    return m_perfSession.report();
+}
+void Frame::setPerfCapture(const Perf::CaptureOptions& options){
+    m_perfSession.setCaptureOptions(options);
+    m_graphics.gpuTiming().setQueryCollectionEnabled(options.gpuTimingActive());
+}
+bool Frame::flushPerfSamples(){
+    auto* device = m_graphics.getDevice();
+    if(!device)
+        return false;
+
+    device->waitForIdle();
+    m_graphics.gpuTiming().collect(*device);
+    return true;
+}
 bool Frame::update(f32 delta){
+    m_perfSession.beginFrame(m_graphics.getFrameIndex());
     if(m_projectUpdateCallback){
         if(!m_projectUpdateCallback(m_projectUpdateUserData, delta)){
             NWB_LOGGER_ERROR(NWB_TEXT("Frame: project update callback returned false"));
@@ -93,6 +132,9 @@ bool Frame::update(f32 delta){
         return false;
     }
 
+    m_perfSession.recordMemorySnapshot(m_graphicsObjectArenaMemoryScope, m_graphicsObjectArena);
+    m_perfSession.recordMemorySnapshot(m_projectObjectArenaMemoryScope, m_projectObjectArena);
+    m_perfSession.publishFrame();
     return true;
 }
 bool Frame::render(){

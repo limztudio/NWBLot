@@ -6,6 +6,7 @@
 
 
 #include <core/global.h>
+#include <core/perf/report.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,6 +58,9 @@ struct ProjectFrameClientSize{
 
 struct ProjectRuntimeContext{
     using ShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
+    using PerfCaptureCallback = Function<void(const Core::Perf::CaptureOptions& options)>;
+    using PerfSampleFlushCallback = Function<bool()>;
+    using PerfReportCallback = Function<Core::Perf::SessionReport()>;
     using RequestQuitCallback = Function<void()>;
 
     Core::Graphics& graphics;
@@ -66,7 +70,15 @@ struct ProjectRuntimeContext{
     Core::Alloc::JobSystem& jobSystem;
     Core::Assets::AssetManager& assetManager;
     ShaderPathResolveCallback shaderPathResolver;
+    PerfCaptureCallback perfCapture;
+    PerfSampleFlushCallback perfSampleFlush;
+    PerfReportCallback perfReportReader;
     RequestQuitCallback requestQuit;
+
+    void setPerfCapture(const Core::Perf::CaptureOptions& options);
+    void setGpuTimingEnabled(bool enabled);
+    [[nodiscard]] bool flushPerfSamples();
+    [[nodiscard]] Core::Perf::SessionReport perfReport()const;
 };
 
 

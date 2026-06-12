@@ -39,17 +39,32 @@ public:
     inline void* allocate(usize align, usize size){
         size = Alignment(align, size);
 
-        return (align <= 1) ? CoreAlloc(size, log()) : CoreAllocAligned(size, align, log());
+        void* p = (align <= 1) ? CoreAlloc(size, log()) : CoreAllocAligned(size, align, log());
+        if(p){
+            m_memoryStats.addReservedBytes(size);
+            m_memoryStats.recordAllocation(size);
+        }
+        return p;
     }
 
     inline void deallocate(void* p, usize align, usize size){
-        static_cast<void>(size);
+        size = Alignment(align, size);
 
+        if(p){
+            m_memoryStats.recordDeallocation(size);
+            m_memoryStats.removeReservedBytes(size);
+        }
         if(align <= 1)
             CoreFree(p, log());
         else
             CoreFreeAligned(p, log());
     }
+
+    [[nodiscard]] ArenaMemoryStats memoryStats()const{ return m_memoryStats.snapshot(); }
+
+
+private:
+    ArenaMemoryTracker m_memoryStats;
 };
 
 

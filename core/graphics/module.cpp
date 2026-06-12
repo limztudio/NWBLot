@@ -305,13 +305,14 @@ void Graphics::BackBufferResizedCallback(void* userData){
 Graphics::Graphics(
     GraphicsAllocator& allocator,
     Alloc::ThreadPool& threadPool,
-    Alloc::JobSystem& jobSystem
+    Alloc::JobSystem& jobSystem,
+    Perf::TimingSink& gpuTiming
 )
     : m_allocator(allocator)
     , m_threadPool(threadPool)
     , m_jobSystem(jobSystem)
     , m_deviceCreationParams(m_allocator.getObjectArena())
-    , m_gpuTiming(m_allocator.getObjectArena())
+    , m_gpuTiming(m_allocator.getObjectArena(), gpuTiming)
     , m_backend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool)
     , m_renderPasses(m_allocator.getObjectArena())
     , m_swapChainFramebuffers(m_allocator.getObjectArena())
@@ -442,7 +443,7 @@ void Graphics::destroy(){
 
     invalidateRenderPassResources();
     m_renderPasses.clear();
-    m_gpuTiming.clear();
+    m_gpuTiming.resetQueries();
 
     m_swapChainFramebuffers.clear();
     m_backend.destroy();
@@ -571,7 +572,8 @@ void Graphics::animate(f64 elapsedTime){
 void Graphics::render(){
     Framebuffer* framebuffer = getCurrentFramebuffer();
     if(auto* device = getDevice())
-        m_gpuTiming.collect(*device);
+        m_gpuTiming.collect(*device, m_frameIndex);
+    m_gpuTiming.beginFrame(m_frameIndex);
 
     for(auto* renderPass : m_renderPasses){
         if(!renderPass->prepareResources(framebuffer)){

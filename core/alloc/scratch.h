@@ -149,13 +149,19 @@ public:
 
         if(!bucket.head){
             bucket.head = new Chunk(align, bucket.size, Base::log());
+            m_memoryStats.addReservedBytes(static_cast<u64>(bucket.head->m_size));
             bucket.last = bucket.head;
         }
         else if(size > bucket.last->m_remaining){
             bucket.last->add(new Chunk(align, bucket.size, Base::log()));
             bucket.last = bucket.last->m_next;
+            m_memoryStats.addReservedBytes(static_cast<u64>(bucket.last->m_size));
         }
-        return bucket.last->allocate(size);
+
+        void* p = bucket.last->allocate(size);
+        if(p)
+            m_memoryStats.recordAllocation(size);
+        return p;
     }
 
     inline void deallocate(void* p, usize align, usize size){
@@ -175,12 +181,16 @@ public:
             return;
 
         size = Alignment(align, size);
-        bucket.last->deallocate(p, size);
+        if(bucket.last->deallocate(p, size))
+            m_memoryStats.recordDeallocation(size);
     }
+
+    [[nodiscard]] ArenaMemoryStats memoryStats()const{ return m_memoryStats.snapshot(); }
 
 
 private:
     ChunkWrapper m_bucket[FloorLog2(s_MaxAlignSize) + 1];
+    ArenaMemoryTracker m_memoryStats;
 };
 
 

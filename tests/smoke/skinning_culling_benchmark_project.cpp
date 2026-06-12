@@ -8,6 +8,7 @@
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/module.h>
+#include <core/perf/report.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_skeleton/asset.h>
@@ -230,7 +231,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     return EnvironmentFlagEnabled(s_StaticPreviewEnv);
 }
 
-static void AccumulateGpuStats(const NWB::Core::GpuTimingStats& stats, f64& seconds, u32& samples){
+static void AccumulateGpuStats(const NWB::Core::Perf::TimingStats& stats, f64& seconds, u32& samples){
     if(!stats.valid())
         return;
 
@@ -239,7 +240,7 @@ static void AccumulateGpuStats(const NWB::Core::GpuTimingStats& stats, f64& seco
 }
 
 static void AccumulateGpuScope(
-    const NWB::Core::GpuTimingRecorder& gpuTiming,
+    const NWB::Core::Perf::TimingView& gpuTiming,
     const Name& scopeName,
     f64& seconds,
     u32& samples
@@ -422,7 +423,7 @@ private:
             meshSystem,
             context.shaderPathResolver
         );
-        context.graphics.gpuTiming().setEnabled(true);
+        context.setGpuTimingEnabled(true);
 
         context.graphics.addRenderPassToBack(meshSkinningSystem);
         context.graphics.addRenderPassToBack(rendererSystem);
@@ -662,11 +663,9 @@ private:
         accum.cpuFrameSeconds += IsFinite(delta) && delta > 0.0f ? static_cast<f64>(delta) : 0.0;
         ++accum.frameCount;
 
-        if(auto* device = m_context.graphics.getDevice()){
-            device->waitForIdle();
-            m_context.graphics.gpuTiming().collect(*device);
-        }
-        const NWB::Core::GpuTimingRecorder& gpuTiming = m_context.graphics.gpuTiming();
+        static_cast<void>(m_context.flushPerfSamples());
+        const NWB::Core::Perf::SessionReport perfReport = m_context.perfReport();
+        const NWB::Core::Perf::TimingView& gpuTiming = perfReport.gpuTiming;
         AccumulateGpuScope(gpuTiming, SkinnedTiming::s_Skinning, accum.skinningSeconds, accum.skinningSamples);
         AccumulateGpuScope(gpuTiming, SkinnedTiming::s_MeshletBounds, accum.boundsSeconds, accum.boundsSamples);
         AccumulateGpuScope(gpuTiming, RendererTiming::s_Frame, accum.renderFrameSeconds, accum.renderFrameSamples);

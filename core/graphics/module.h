@@ -95,7 +95,8 @@ public:
     Graphics(
         GraphicsAllocator& allocator,
         Alloc::ThreadPool& threadPool,
-        Alloc::JobSystem& jobSystem
+        Alloc::JobSystem& jobSystem,
+        Perf::TimingSink& gpuTiming
     );
     ~Graphics();
 
@@ -126,6 +127,7 @@ public:
     [[nodiscard]] const tchar* getRendererString()const{ return m_backend.getRendererString(); }
     [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const{ return GraphicsBackend::s_Api; }
     [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
+    [[nodiscard]] u64 getFrameIndex()const{ return m_frameIndex; }
     [[nodiscard]] GpuTimingRecorder& gpuTiming(){ return m_gpuTiming; }
     [[nodiscard]] const GpuTimingRecorder& gpuTiming()const{ return m_gpuTiming; }
     [[nodiscard]] bool isVsyncEnabled()const{ return m_swapChainState.vsyncEnabled; }

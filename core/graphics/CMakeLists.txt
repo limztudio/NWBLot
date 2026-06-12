@@ -44,6 +44,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vma.h"
 )
 target_link_libraries(nwb_graphics PUBLIC nwb_common)
+target_link_libraries(nwb_graphics PUBLIC nwb_perf)
 target_link_libraries(nwb_graphics PUBLIC nwb::volk)
 target_link_libraries(nwb_graphics PRIVATE nwb::vma_headers)
 target_link_libraries(nwb_graphics PRIVATE nwb_filesystem)

@@ -1931,6 +1931,7 @@ public:
     void clearTextureFloat(Texture* texture, TextureSubresourceSet subresources, const Color& clearColor);
     void clearTextureRectFloat(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, const Color& clearColor);
     void clearDepthStencilTexture(Texture* texture, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
+    void clearDepthStencilTextureRect(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
     void clearTextureUInt(Texture* texture, TextureSubresourceSet subresources, u32 clearColor);
     void clearTextureRectUInt(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, u32 clearColor);
 

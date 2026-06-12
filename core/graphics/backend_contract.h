@@ -204,6 +204,7 @@ concept CommandListApi = requires(
     commandList.clearTextureFloat(texture, subresources, color);
     commandList.clearTextureRectFloat(texture, subresources, rect, color);
     commandList.clearDepthStencilTexture(texture, subresources, bool{}, f32{}, bool{}, u8{});
+    commandList.clearDepthStencilTextureRect(texture, subresources, rect, bool{}, f32{}, bool{}, u8{});
     commandList.clearTextureUInt(texture, subresources, u32{});
     commandList.clearTextureRectUInt(texture, subresources, rect, u32{});
     commandList.copyTexture(texture, textureSlice, texture, textureSlice);

@@ -470,6 +470,46 @@ inline bool BuildTextureUIntClearPattern(const Format::Enum format, const VkClea
     }
 }
 
+inline bool BuildTextureDepthClearPattern(const Format::Enum format, const f32 depth, u8* outPattern, u32& outPatternSize){
+    outPatternSize = 0u;
+    switch(format){
+    case Format::D16:{
+        const u16 packed = static_cast<u16>(FloatToUNormClearValue(depth, static_cast<u32>(Limit<u16>::s_Max)));
+        WriteClearPatternValue(outPattern, sizeof(packed), &packed, sizeof(packed));
+        outPatternSize = sizeof(packed);
+        return true;
+    }
+    case Format::D24S8:{
+        const u32 packed = FloatToUNormClearValue(depth, 0x00ffffffu);
+        WriteClearPatternValue(outPattern, sizeof(packed), &packed, sizeof(packed));
+        outPatternSize = sizeof(packed);
+        return true;
+    }
+    case Format::D32:
+    case Format::D32S8:{
+        const f32 packed = ClampClearFloat(depth, 0.0f, 1.0f);
+        WriteClearPatternValue(outPattern, sizeof(packed), &packed, sizeof(packed));
+        outPatternSize = sizeof(packed);
+        return true;
+    }
+    default:
+        return false;
+    }
+}
+
+inline bool BuildTextureStencilClearPattern(const Format::Enum format, const u8 stencil, u8* outPattern, u32& outPatternSize){
+    outPatternSize = 0u;
+    switch(format){
+    case Format::D24S8:
+    case Format::D32S8:
+        WriteClearPatternValue(outPattern, sizeof(stencil), &stencil, sizeof(stencil));
+        outPatternSize = sizeof(stencil);
+        return true;
+    default:
+        return false;
+    }
+}
+
 inline void FillTextureClearBytes(Vector<u8, Alloc::ScratchArena>& bytes, const u8* pattern, const u32 patternSize){
     for(usize offset = 0; offset < bytes.size(); offset += patternSize)
         NWB_MEMCPY(bytes.data() + offset, bytes.size() - offset, pattern, patternSize);
@@ -1044,6 +1084,170 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
 
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
     vkCmdClearDepthStencilImage(m_currentCmdBuf->m_cmdBuf, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
+    retainResource(textureResource);
+}
+
+void CommandList::clearDepthStencilTextureRect(
+    Texture* textureResource,
+    TextureSubresourceSet subresources,
+    const Rect& rect,
+    const bool clearDepth,
+    const f32 depth,
+    const bool clearStencil,
+    const u8 stencil
+){
+    if(!clearDepth && !clearStencil)
+        return;
+    if(__hidden_vulkan_texture::TextureClearRectEmpty(rect))
+        return;
+    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear depth/stencil texture rect"), NWB_TEXT("texture is null"), textureResource))
+        return;
+
+    Texture& texture = *textureResource;
+    const TextureDesc& desc = texture.m_desc;
+#if defined(NWB_DEBUG)
+    if(
+        (clearDepth && (texture.m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) == 0)
+        || (clearStencil && (texture.m_aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) == 0)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: requested aspect is not present in the texture format"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: requested aspect is not present in the texture format"));
+        return;
+    }
+#endif
+
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
+    if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("clear depth/stencil texture rect")))
+        return;
+
+    if(__hidden_vulkan_texture::TextureClearRectCoversSubresources(desc, resolvedSubresources, rect)){
+        clearDepthStencilTexture(textureResource, resolvedSubresources, clearDepth, depth, clearStencil, stencil);
+        return;
+    }
+
+#if defined(NWB_DEBUG)
+    if(desc.sampleCount != 1u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded texture rect clears require a single-sampled texture"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded texture rect clears require a single-sampled texture"));
+        return;
+    }
+    if(desc.dimension == TextureDimension::Texture3D){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded texture rect clears do not support 3D depth/stencil textures"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded texture rect clears do not support 3D depth/stencil textures"));
+        return;
+    }
+#endif
+    if(desc.sampleCount != 1u || desc.dimension == TextureDimension::Texture3D)
+        return;
+
+    u8 depthPattern[4] = {};
+    u32 depthPatternSize = 0u;
+    if(clearDepth && !__hidden_vulkan_texture::BuildTextureDepthClearPattern(desc.format, depth, depthPattern, depthPatternSize)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded depth rect clears do not support texture format {}"), StringConvert(GetFormatInfo(desc.format).name));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded depth rect clears do not support texture format"));
+        return;
+    }
+
+    u8 stencilPattern[1] = {};
+    u32 stencilPatternSize = 0u;
+    if(clearStencil && !__hidden_vulkan_texture::BuildTextureStencilClearPattern(desc.format, stencil, stencilPattern, stencilPatternSize)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded stencil rect clears do not support texture format {}"), StringConvert(GetFormatInfo(desc.format).name));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: bounded stencil rect clears do not support texture format"));
+        return;
+    }
+
+    setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
+
+    Alloc::ScratchArena scratchArena;
+    const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
+    const auto copyAspect = [&](const VkImageAspectFlagBits aspect, const u8* clearPattern, const u32 clearPatternSize) -> bool {
+        const u64 arrayLayerCount = static_cast<u64>(resolvedSubresources.numArraySlices);
+        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+            const Rect resolvedRect = __hidden_vulkan_texture::ResolveTextureClearRect(desc, mipLevel, rect);
+            if(__hidden_vulkan_texture::TextureClearRectEmpty(resolvedRect))
+                continue;
+
+            const u64 clearWidth = static_cast<u64>(resolvedRect.width());
+            const u64 clearHeight = static_cast<u64>(resolvedRect.height());
+            const u64 texelCount = clearWidth * clearHeight;
+            if(texelCount > Limit<u64>::s_Max / clearPatternSize){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size overflows"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size overflows"));
+                return false;
+            }
+
+            const u64 uploadSize64 = texelCount * clearPatternSize;
+            u64 layerPitch64 = uploadSize64;
+            if(!AlignUpU64Checked(layerPitch64, 4ull, layerPitch64)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size overflows"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size overflows"));
+                return false;
+            }
+
+            const bool mergeArrayLayerCopies =
+                arrayLayerCount > 1ull
+                && layerPitch64 <= (__hidden_vulkan_texture::s_TextureClearRectMergedLayerUploadThreshold / arrayLayerCount)
+            ;
+            if(mergeArrayLayerCopies && arrayLayerCount - 1ull > (Limit<u64>::s_Max - uploadSize64) / layerPitch64){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size overflows"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size overflows"));
+                return false;
+            }
+
+            const u64 clearByteSize64 = mergeArrayLayerCopies ? layerPitch64 * (arrayLayerCount - 1ull) + uploadSize64 : uploadSize64;
+            if(clearByteSize64 > static_cast<u64>(Limit<usize>::s_Max)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size exceeds addressable memory"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear byte size exceeds addressable memory"));
+                return false;
+            }
+
+            Vector<u8, Alloc::ScratchArena> clearBytes(static_cast<usize>(clearByteSize64), scratchArena);
+            __hidden_vulkan_texture::FillTextureClearBytes(clearBytes, clearPattern, clearPatternSize);
+
+            Buffer* stagingBuffer = nullptr;
+            u64 stagingOffset = 0;
+            if(!prepareUploadStaging(clearBytes.data(), clearBytes.size(), NWB_TEXT("clearDepthStencilTextureRect"), stagingBuffer, stagingOffset))
+                return false;
+
+            if(mergeArrayLayerCopies){
+                Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
+                const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+                u32 regionIndex = 0u;
+                for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+                    VkBufferImageCopy region{};
+                    region.bufferOffset = stagingOffset + static_cast<u64>(regionIndex) * layerPitch64;
+                    region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspect, mipLevel, arraySlice, 1u);
+                    region.imageOffset = { resolvedRect.minX, resolvedRect.minY, 0 };
+                    region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
+                    regions[regionIndex++] = region;
+                }
+
+                if(!regions.empty())
+                    vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
+            }
+            else{
+                const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+                for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+                    VkBufferImageCopy region{};
+                    region.bufferOffset = stagingOffset;
+                    region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspect, mipLevel, arraySlice, 1u);
+                    region.imageOffset = { resolvedRect.minX, resolvedRect.minY, 0 };
+                    region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
+                    vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
+                }
+            }
+
+            retainStagingBuffer(*stagingBuffer);
+        }
+
+        return true;
+    };
+
+    if(clearDepth && !copyAspect(VK_IMAGE_ASPECT_DEPTH_BIT, depthPattern, depthPatternSize))
+        return;
+    if(clearStencil && !copyAspect(VK_IMAGE_ASPECT_STENCIL_BIT, stencilPattern, stencilPatternSize))
+        return;
+
     retainResource(textureResource);
 }
 

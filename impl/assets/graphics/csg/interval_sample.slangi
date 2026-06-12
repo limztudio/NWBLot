@@ -18,11 +18,22 @@
 #define NWB_CSG_RECEIVER_SURFACE_MASK_WRITABLE 0
 #endif
 
+#ifndef NWB_CSG_RECEIVER_EVENTS_WRITABLE
+#define NWB_CSG_RECEIVER_EVENTS_WRITABLE NWB_CSG_RECEIVER_SURFACE_MASK_WRITABLE
+#endif
+
+#ifndef NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
+#define NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED 0
+#endif
+
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL, NWB_CSG_INTERVAL_SAMPLE_SET)]]
 Texture2DArray<float4> g_NwbCsgSampleBackCapNormal;
 
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_DEPTH, NWB_CSG_INTERVAL_SAMPLE_SET)]]
 Texture2DArray<float2> g_NwbCsgSampleIntervalDepth;
+
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_LINEAR_DEPTH, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<float2> g_NwbCsgSampleIntervalLinearDepth;
 
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_ID, NWB_CSG_INTERVAL_SAMPLE_SET)]]
 Texture2DArray<uint> g_NwbCsgSampleIntervalId;
@@ -37,6 +48,39 @@ RWTexture2DArray<uint> g_NwbCsgReceiverBackSurfaceMask;
 Texture2DArray<uint> g_NwbCsgReceiverSurfaceMask;
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_BACK_SURFACE_MASK, NWB_CSG_INTERVAL_SAMPLE_SET)]]
 Texture2DArray<uint> g_NwbCsgReceiverBackSurfaceMask;
+#endif
+
+#if NWB_CSG_RECEIVER_EVENTS_WRITABLE
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DEPTH, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_EVENT_DEPTH_IMAGE_FORMAT)]]
+RWTexture2DArray<float> g_NwbCsgReceiverEventDepth;
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DATA, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_EVENT_DATA_IMAGE_FORMAT)]]
+RWTexture2DArray<uint4> g_NwbCsgReceiverEventData;
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_COUNT, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_EVENT_COUNT_IMAGE_FORMAT)]]
+RWTexture2DArray<uint> g_NwbCsgReceiverEventCount;
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_FLAGS, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_EVENT_FLAGS_IMAGE_FORMAT)]]
+RWTexture2DArray<uint> g_NwbCsgReceiverEventFlags;
+#else
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DEPTH, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<float> g_NwbCsgReceiverEventDepth;
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DATA, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<uint4> g_NwbCsgReceiverEventData;
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_COUNT, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<uint> g_NwbCsgReceiverEventCount;
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_FLAGS, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<uint> g_NwbCsgReceiverEventFlags;
+#endif
+
+#if NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DEPTH, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<float4> g_NwbCsgRemovedIntervalDepth;
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_CAP_NORMAL, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<float4> g_NwbCsgRemovedIntervalCapNormal;
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DATA, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<uint4> g_NwbCsgRemovedIntervalData;
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_COUNT, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<uint> g_NwbCsgRemovedIntervalCount;
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_FLAGS, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<uint> g_NwbCsgRemovedIntervalFlags;
 #endif
 
 
@@ -66,6 +110,24 @@ uint nwbCsgReceiverSurfaceLayerCount(){
     g_NwbCsgReceiverSurfaceMask.GetDimensions(width, height, layerCount);
     return min(layerCount, NWB_CSG_RECEIVER_SURFACE_LAYER_COUNT);
 }
+
+uint nwbCsgReceiverEventLayerCount(){
+    uint width = 1u;
+    uint height = 1u;
+    uint layerCount = 1u;
+    g_NwbCsgReceiverEventDepth.GetDimensions(width, height, layerCount);
+    return min(layerCount, NWB_CSG_RECEIVER_EVENT_LAYER_COUNT);
+}
+
+#if NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
+uint nwbCsgRemovedIntervalLayerCount(){
+    uint width = 1u;
+    uint height = 1u;
+    uint layerCount = 1u;
+    g_NwbCsgRemovedIntervalDepth.GetDimensions(width, height, layerCount);
+    return min(layerCount, NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT);
+}
+#endif
 
 uint nwbCsgReceiverSurfaceMaskMaxDepthBits(){
     return (NWB_CSG_RECEIVER_SURFACE_MASK_INVALID >> NWB_CSG_RECEIVER_SURFACE_MASK_PAYLOAD_BITS) - 1u;
@@ -172,6 +234,37 @@ void nwbCsgMarkReceiverBackSurface(const float4 rasterPosition, const uint recei
         return;
 
     nwbCsgInsertReceiverBackSurfaceValue(uint2(rasterPosition.xy), receiverSurfaceValue);
+}
+#endif
+
+#if NWB_CSG_RECEIVER_EVENTS_WRITABLE
+void nwbCsgMarkReceiverSurfaceEvent(
+    const float4 rasterPosition,
+    const float3 worldPosition,
+    const uint receiverIndex,
+    const bool frontFace
+){
+    const uint layerCount = nwbCsgReceiverEventLayerCount();
+    if(layerCount == 0u)
+        return;
+
+    const uint2 pixel = uint2(rasterPosition.xy);
+    uint eventIndex;
+    InterlockedAdd(g_NwbCsgReceiverEventCount[uint3(pixel, 0u)], 1u, eventIndex);
+    if(eventIndex >= layerCount){
+        uint previousFlags;
+        InterlockedOr(
+            g_NwbCsgReceiverEventFlags[uint3(pixel, 0u)],
+            NWB_CSG_RECEIVER_EVENT_OVERFLOW_FLAG,
+            previousFlags
+        );
+        return;
+    }
+
+    const uint faceSign = frontFace ? NWB_CSG_RECEIVER_EVENT_FACE_FRONT : NWB_CSG_RECEIVER_EVENT_FACE_BACK;
+    const uint3 eventTexel = uint3(pixel, eventIndex);
+    g_NwbCsgReceiverEventDepth[eventTexel] = length(worldPosition - g_NwbMeshCameraPosition.xyz);
+    g_NwbCsgReceiverEventData[eventTexel] = uint4(receiverIndex, faceSign, 0u, 0u);
 }
 #endif
 
@@ -369,6 +462,42 @@ void nwbCsgSelectNearestIntervalCap(inout NwbCsgIntervalCapPixel result, const N
     result = candidate;
 }
 
+#if NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
+NwbCsgIntervalCapPixel nwbCsgSampleNearestRemovedIntervalCapAtPixel(const uint2 outputPixel, const uint2 intervalPixel){
+    NwbCsgIntervalCapPixel result;
+    result.visible = false;
+    result.depth = 1e30;
+    result.normal = float3(0.0, 0.0, 1.0);
+    result.worldPosition = float3(0.0, 0.0, 0.0);
+
+    const uint removedIntervalLayerCount = nwbCsgRemovedIntervalLayerCount();
+    const uint rawIntervalCount = g_NwbCsgRemovedIntervalCount.Load(int4(int2(intervalPixel), 0, 0));
+    const uint intervalCount = min(rawIntervalCount, removedIntervalLayerCount);
+    [unroll]
+    for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex){
+        if(layerIndex >= intervalCount)
+            break;
+
+        const int4 texel = int4(int2(intervalPixel), int(layerIndex), 0);
+        const uint4 intervalData = g_NwbCsgRemovedIntervalData.Load(texel);
+        if((intervalData.y & NWB_CSG_REMOVED_INTERVAL_BACK_CAP_VISIBLE_FLAG) == 0u)
+            continue;
+
+        const float4 intervalDepth = g_NwbCsgRemovedIntervalDepth.Load(texel);
+        const float capDepth = intervalDepth.y;
+        if(!isfinite(capDepth) || capDepth >= result.depth)
+            continue;
+
+        const float3 capWorldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(outputPixel, capDepth);
+        result.visible = true;
+        result.depth = capDepth;
+        result.normal = nwbCsgIntervalSampleVisibleCapNormal(g_NwbCsgRemovedIntervalCapNormal.Load(texel).xyz, capWorldPosition);
+        result.worldPosition = capWorldPosition;
+    }
+
+    return result;
+}
+#else
 NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCapAtPixels(
     const uint2 outputPixel,
     const uint2 receiverPixel,
@@ -422,6 +551,7 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCapAtPixels(
 
     return result;
 }
+#endif
 
 bool nwbCsgReceiverIntervalPixelDiscardAtPixels(
     const uint2 receiverPixel,
@@ -511,6 +641,40 @@ bool nwbCsgReceiverIntervalPixelDiscard(
 }
 #endif
 
+#if NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
+void nwbCsgSampleNearestRemovedIntervalCapNeighborhood(
+    inout NwbCsgIntervalCapPixel result,
+    const uint2 outputPixel
+){
+    [unroll]
+    for(int offsetY = -1; offsetY <= 1; ++offsetY){
+        [unroll]
+        for(int offsetX = -1; offsetX <= 1; ++offsetX){
+            if(offsetX == 0 && offsetY == 0)
+                continue;
+
+            const int2 neighborPixel = int2(outputPixel) + int2(offsetX, offsetY);
+            if(!nwbCsgIntervalSamplePixelInFrame(neighborPixel))
+                continue;
+
+            nwbCsgSelectNearestIntervalCap(
+                result,
+                nwbCsgSampleNearestRemovedIntervalCapAtPixel(outputPixel, uint2(neighborPixel))
+            );
+        }
+    }
+}
+
+NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPosition){
+    const uint2 pixel = uint2(rasterPosition.xy);
+    NwbCsgIntervalCapPixel result = nwbCsgSampleNearestRemovedIntervalCapAtPixel(pixel, pixel);
+    if(result.visible)
+        return result;
+
+    nwbCsgSampleNearestRemovedIntervalCapNeighborhood(result, pixel);
+    return result;
+}
+#else
 void nwbCsgSampleNearestIntervalCapNeighborhood(
     inout NwbCsgIntervalCapPixel result,
     const uint2 outputPixel,
@@ -550,6 +714,7 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPositio
     nwbCsgSampleNearestIntervalCapNeighborhood(result, pixel, false);
     return result;
 }
+#endif
 
 #endif
 

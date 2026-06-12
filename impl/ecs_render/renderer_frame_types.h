@@ -102,18 +102,49 @@ struct DeferredFrameTargets{
     Core::Format::Enum depthFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgCapNormalFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgIntervalDepthFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgIntervalLinearDepthFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgIntervalIdFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgReceiverSurfaceMaskFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgReceiverBackSurfaceMaskFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgReceiverEventDepthFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgReceiverEventDataFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgReceiverEventCountFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgReceiverEventFlagsFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgReceiverSpanDepthFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgReceiverSpanDataFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgReceiverSpanCountFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgReceiverSpanFlagsFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgRemovedIntervalDepthFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgRemovedIntervalCapNormalFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgRemovedIntervalDataFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgRemovedIntervalCountFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgRemovedIntervalFlagsFormat = Core::Format::UNKNOWN;
     u32 csgPeelLayerCount = 0u;
+    u32 csgReceiverEventLayerCount = 0u;
+    u32 csgReceiverSpanLayerCount = 0u;
+    u32 csgRemovedIntervalLayerCount = 0u;
     Core::TextureHandle albedo;
     Core::TextureHandle normal;
     Core::TextureHandle worldPosition;
     Core::TextureHandle csgCapBackNormal;
     Core::TextureHandle csgIntervalDepth;
+    Core::TextureHandle csgIntervalLinearDepth;
     Core::TextureHandle csgIntervalId;
     Core::TextureHandle csgReceiverSurfaceMask;
     Core::TextureHandle csgReceiverBackSurfaceMask;
+    Core::TextureHandle csgReceiverEventDepth;
+    Core::TextureHandle csgReceiverEventData;
+    Core::TextureHandle csgReceiverEventCount;
+    Core::TextureHandle csgReceiverEventFlags;
+    Core::TextureHandle csgReceiverSpanDepth;
+    Core::TextureHandle csgReceiverSpanData;
+    Core::TextureHandle csgReceiverSpanCount;
+    Core::TextureHandle csgReceiverSpanFlags;
+    Core::TextureHandle csgRemovedIntervalDepth;
+    Core::TextureHandle csgRemovedIntervalCapNormal;
+    Core::TextureHandle csgRemovedIntervalData;
+    Core::TextureHandle csgRemovedIntervalCount;
+    Core::TextureHandle csgRemovedIntervalFlags;
     Core::TextureHandle opaqueColor;
     Core::TextureHandle depth;
     Core::FramebufferHandle framebuffer;
@@ -134,18 +165,49 @@ struct DeferredFrameTargets{
             && depthFormat != Core::Format::UNKNOWN
             && csgCapNormalFormat != Core::Format::UNKNOWN
             && csgIntervalDepthFormat != Core::Format::UNKNOWN
+            && csgIntervalLinearDepthFormat != Core::Format::UNKNOWN
             && csgIntervalIdFormat != Core::Format::UNKNOWN
             && csgReceiverSurfaceMaskFormat != Core::Format::UNKNOWN
             && csgReceiverBackSurfaceMaskFormat != Core::Format::UNKNOWN
+            && csgReceiverEventDepthFormat != Core::Format::UNKNOWN
+            && csgReceiverEventDataFormat != Core::Format::UNKNOWN
+            && csgReceiverEventCountFormat != Core::Format::UNKNOWN
+            && csgReceiverEventFlagsFormat != Core::Format::UNKNOWN
+            && csgReceiverSpanDepthFormat != Core::Format::UNKNOWN
+            && csgReceiverSpanDataFormat != Core::Format::UNKNOWN
+            && csgReceiverSpanCountFormat != Core::Format::UNKNOWN
+            && csgReceiverSpanFlagsFormat != Core::Format::UNKNOWN
+            && csgRemovedIntervalDepthFormat != Core::Format::UNKNOWN
+            && csgRemovedIntervalCapNormalFormat != Core::Format::UNKNOWN
+            && csgRemovedIntervalDataFormat != Core::Format::UNKNOWN
+            && csgRemovedIntervalCountFormat != Core::Format::UNKNOWN
+            && csgRemovedIntervalFlagsFormat != Core::Format::UNKNOWN
             && csgPeelLayerCount > 0u
+            && csgReceiverEventLayerCount > 0u
+            && csgReceiverSpanLayerCount > 0u
+            && csgRemovedIntervalLayerCount > 0u
             && albedo != nullptr
             && normal != nullptr
             && worldPosition != nullptr
             && csgCapBackNormal != nullptr
             && csgIntervalDepth != nullptr
+            && csgIntervalLinearDepth != nullptr
             && csgIntervalId != nullptr
             && csgReceiverSurfaceMask != nullptr
             && csgReceiverBackSurfaceMask != nullptr
+            && csgReceiverEventDepth != nullptr
+            && csgReceiverEventData != nullptr
+            && csgReceiverEventCount != nullptr
+            && csgReceiverEventFlags != nullptr
+            && csgReceiverSpanDepth != nullptr
+            && csgReceiverSpanData != nullptr
+            && csgReceiverSpanCount != nullptr
+            && csgReceiverSpanFlags != nullptr
+            && csgRemovedIntervalDepth != nullptr
+            && csgRemovedIntervalCapNormal != nullptr
+            && csgRemovedIntervalData != nullptr
+            && csgRemovedIntervalCount != nullptr
+            && csgRemovedIntervalFlags != nullptr
             && opaqueColor != nullptr
             && depth != nullptr
             && framebuffer != nullptr

@@ -30,6 +30,8 @@ public:
     [[nodiscard]] bool createCsgIntervalSampleResources(DeferredFrameTargets& targets);
     void destroyCsgIntervalPeelBindingSet();
     void dispatchCsgIntervalPeels(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
+    void dispatchCsgReceiverSpanBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
+    void dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     void renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
     [[nodiscard]] bool reserveCsgCutterBufferCapacity(usize cutterCount);

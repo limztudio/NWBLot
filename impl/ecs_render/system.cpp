@@ -112,9 +112,23 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         && (
             !deferredTargets.csgCapBackNormal
             || !deferredTargets.csgIntervalDepth
+            || !deferredTargets.csgIntervalLinearDepth
             || !deferredTargets.csgIntervalId
             || !deferredTargets.csgReceiverSurfaceMask
             || !deferredTargets.csgReceiverBackSurfaceMask
+            || !deferredTargets.csgReceiverEventDepth
+            || !deferredTargets.csgReceiverEventData
+            || !deferredTargets.csgReceiverEventCount
+            || !deferredTargets.csgReceiverEventFlags
+            || !deferredTargets.csgReceiverSpanDepth
+            || !deferredTargets.csgReceiverSpanData
+            || !deferredTargets.csgReceiverSpanCount
+            || !deferredTargets.csgReceiverSpanFlags
+            || !deferredTargets.csgRemovedIntervalDepth
+            || !deferredTargets.csgRemovedIntervalCapNormal
+            || !deferredTargets.csgRemovedIntervalData
+            || !deferredTargets.csgRemovedIntervalCount
+            || !deferredTargets.csgRemovedIntervalFlags
         )
     )
         return false;
@@ -164,9 +178,23 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && (
             !deferredTargets.csgCapBackNormal
             || !deferredTargets.csgIntervalDepth
+            || !deferredTargets.csgIntervalLinearDepth
             || !deferredTargets.csgIntervalId
             || !deferredTargets.csgReceiverSurfaceMask
             || !deferredTargets.csgReceiverBackSurfaceMask
+            || !deferredTargets.csgReceiverEventDepth
+            || !deferredTargets.csgReceiverEventData
+            || !deferredTargets.csgReceiverEventCount
+            || !deferredTargets.csgReceiverEventFlags
+            || !deferredTargets.csgReceiverSpanDepth
+            || !deferredTargets.csgReceiverSpanData
+            || !deferredTargets.csgReceiverSpanCount
+            || !deferredTargets.csgReceiverSpanFlags
+            || !deferredTargets.csgRemovedIntervalDepth
+            || !deferredTargets.csgRemovedIntervalCapNormal
+            || !deferredTargets.csgRemovedIntervalData
+            || !deferredTargets.csgRemovedIntervalCount
+            || !deferredTargets.csgRemovedIntervalFlags
         )
     )
         return;
@@ -267,6 +295,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         };
         if(csgUploadReady && csgReceiverSurfaceDrawResourcesReady)
             m_materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, opaqueDrawItems.csgReceiverSurface);
+        if(csgUploadReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
+            m_csgSystem.dispatchCsgReceiverSpanBuild(*commandList, deferredTargets, csgFrameData);
+        if(csgUploadReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
+            m_csgSystem.dispatchCsgIntervalCombine(*commandList, deferredTargets, csgFrameData);
         if(csgUploadReady && csgDrawResourcesReady){
             m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
             if(csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)

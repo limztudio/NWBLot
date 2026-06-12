@@ -25,6 +25,7 @@ struct NwbCsgReceiverSurfacePixelInput{
 [earlydepthstencil]
 void main(const NwbCsgReceiverSurfacePixelInput input){
     const uint receiverIndex = nwbCsgMeshInstanceIndex();
+    nwbCsgMarkReceiverSurfaceEvent(input.position, input.worldPosition.xyz, receiverIndex, input.frontFace);
     if(input.frontFace){
         if(nwbCsgReceiverPixelDiscard(receiverIndex, input.worldPosition.xyz))
             nwbCsgMarkReceiverOpeningSurface(input.position, receiverIndex);

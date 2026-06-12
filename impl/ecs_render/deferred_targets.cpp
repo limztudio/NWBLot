@@ -43,6 +43,8 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     deferredState().m_targets.compositeBindingSet.reset();
     resetAvboitFrameTargets(deferredState().m_targets.avboit);
     csgState().m_intervalPeelBindingSet.reset();
+    csgState().m_receiverSpanBuildBindingSet.reset();
+    csgState().m_intervalCombineBindingSet.reset();
     csgState().m_receiverSurfaceBindingSet.reset();
     csgState().m_intervalSampleBindingSet.reset();
 
@@ -54,9 +56,23 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     deferredState().m_targets.worldPosition.reset();
     deferredState().m_targets.csgCapBackNormal.reset();
     deferredState().m_targets.csgIntervalDepth.reset();
+    deferredState().m_targets.csgIntervalLinearDepth.reset();
     deferredState().m_targets.csgIntervalId.reset();
     deferredState().m_targets.csgReceiverSurfaceMask.reset();
     deferredState().m_targets.csgReceiverBackSurfaceMask.reset();
+    deferredState().m_targets.csgReceiverEventDepth.reset();
+    deferredState().m_targets.csgReceiverEventData.reset();
+    deferredState().m_targets.csgReceiverEventCount.reset();
+    deferredState().m_targets.csgReceiverEventFlags.reset();
+    deferredState().m_targets.csgReceiverSpanDepth.reset();
+    deferredState().m_targets.csgReceiverSpanData.reset();
+    deferredState().m_targets.csgReceiverSpanCount.reset();
+    deferredState().m_targets.csgReceiverSpanFlags.reset();
+    deferredState().m_targets.csgRemovedIntervalDepth.reset();
+    deferredState().m_targets.csgRemovedIntervalCapNormal.reset();
+    deferredState().m_targets.csgRemovedIntervalData.reset();
+    deferredState().m_targets.csgRemovedIntervalCount.reset();
+    deferredState().m_targets.csgRemovedIntervalFlags.reset();
     deferredState().m_targets.opaqueColor.reset();
     deferredState().m_targets.depth.reset();
 
@@ -80,9 +96,23 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     const Core::Format::Enum depthFormat = ECSRenderDetail::SelectGBufferDepthFormat(*device);
     const Core::Format::Enum csgCapNormalFormat = ECSRenderDetail::SelectCsgCapNormalFormat(*device);
     const Core::Format::Enum csgIntervalDepthFormat = ECSRenderDetail::SelectCsgIntervalDepthFormat(*device);
+    const Core::Format::Enum csgIntervalLinearDepthFormat = ECSRenderDetail::SelectCsgIntervalLinearDepthFormat(*device);
     const Core::Format::Enum csgIntervalIdFormat = ECSRenderDetail::SelectCsgIntervalIdFormat(*device);
     const Core::Format::Enum csgReceiverSurfaceMaskFormat = ECSRenderDetail::SelectCsgReceiverSurfaceMaskFormat(*device);
     const Core::Format::Enum csgReceiverBackSurfaceMaskFormat = ECSRenderDetail::SelectCsgReceiverBackSurfaceMaskFormat(*device);
+    const Core::Format::Enum csgReceiverEventDepthFormat = ECSRenderDetail::SelectCsgReceiverEventDepthFormat(*device);
+    const Core::Format::Enum csgReceiverEventDataFormat = ECSRenderDetail::SelectCsgReceiverEventDataFormat(*device);
+    const Core::Format::Enum csgReceiverEventCountFormat = ECSRenderDetail::SelectCsgReceiverEventCountFormat(*device);
+    const Core::Format::Enum csgReceiverEventFlagsFormat = ECSRenderDetail::SelectCsgReceiverEventFlagsFormat(*device);
+    const Core::Format::Enum csgReceiverSpanDepthFormat = ECSRenderDetail::SelectCsgReceiverSpanDepthFormat(*device);
+    const Core::Format::Enum csgReceiverSpanDataFormat = ECSRenderDetail::SelectCsgReceiverSpanDataFormat(*device);
+    const Core::Format::Enum csgReceiverSpanCountFormat = ECSRenderDetail::SelectCsgReceiverSpanCountFormat(*device);
+    const Core::Format::Enum csgReceiverSpanFlagsFormat = ECSRenderDetail::SelectCsgReceiverSpanFlagsFormat(*device);
+    const Core::Format::Enum csgRemovedIntervalDepthFormat = ECSRenderDetail::SelectCsgRemovedIntervalDepthFormat(*device);
+    const Core::Format::Enum csgRemovedIntervalCapNormalFormat = ECSRenderDetail::SelectCsgRemovedIntervalCapNormalFormat(*device);
+    const Core::Format::Enum csgRemovedIntervalDataFormat = ECSRenderDetail::SelectCsgRemovedIntervalDataFormat(*device);
+    const Core::Format::Enum csgRemovedIntervalCountFormat = ECSRenderDetail::SelectCsgRemovedIntervalCountFormat(*device);
+    const Core::Format::Enum csgRemovedIntervalFlagsFormat = ECSRenderDetail::SelectCsgRemovedIntervalFlagsFormat(*device);
     const Core::Format::Enum avboitLowRasterFormat = SelectRendererAvboitLowRasterFormat(*device);
     const Core::Format::Enum avboitAccumColorFormat = SelectRendererAvboitAccumColorFormat(*device);
     const Core::Format::Enum avboitAccumExtinctionFormat = SelectRendererAvboitAccumExtinctionFormat(*device);
@@ -95,9 +125,23 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         || depthFormat == Core::Format::UNKNOWN
         || csgCapNormalFormat == Core::Format::UNKNOWN
         || csgIntervalDepthFormat == Core::Format::UNKNOWN
+        || csgIntervalLinearDepthFormat == Core::Format::UNKNOWN
         || csgIntervalIdFormat == Core::Format::UNKNOWN
         || csgReceiverSurfaceMaskFormat == Core::Format::UNKNOWN
         || csgReceiverBackSurfaceMaskFormat == Core::Format::UNKNOWN
+        || csgReceiverEventDepthFormat == Core::Format::UNKNOWN
+        || csgReceiverEventDataFormat == Core::Format::UNKNOWN
+        || csgReceiverEventCountFormat == Core::Format::UNKNOWN
+        || csgReceiverEventFlagsFormat == Core::Format::UNKNOWN
+        || csgReceiverSpanDepthFormat == Core::Format::UNKNOWN
+        || csgReceiverSpanDataFormat == Core::Format::UNKNOWN
+        || csgReceiverSpanCountFormat == Core::Format::UNKNOWN
+        || csgReceiverSpanFlagsFormat == Core::Format::UNKNOWN
+        || csgRemovedIntervalDepthFormat == Core::Format::UNKNOWN
+        || csgRemovedIntervalCapNormalFormat == Core::Format::UNKNOWN
+        || csgRemovedIntervalDataFormat == Core::Format::UNKNOWN
+        || csgRemovedIntervalCountFormat == Core::Format::UNKNOWN
+        || csgRemovedIntervalFlagsFormat == Core::Format::UNKNOWN
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to find supported deferred framebuffer formats"));
         return false;
@@ -134,10 +178,27 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     createdTargets.depthFormat = depthFormat;
     createdTargets.csgCapNormalFormat = csgCapNormalFormat;
     createdTargets.csgIntervalDepthFormat = csgIntervalDepthFormat;
+    createdTargets.csgIntervalLinearDepthFormat = csgIntervalLinearDepthFormat;
     createdTargets.csgIntervalIdFormat = csgIntervalIdFormat;
     createdTargets.csgReceiverSurfaceMaskFormat = csgReceiverSurfaceMaskFormat;
     createdTargets.csgReceiverBackSurfaceMaskFormat = csgReceiverBackSurfaceMaskFormat;
+    createdTargets.csgReceiverEventDepthFormat = csgReceiverEventDepthFormat;
+    createdTargets.csgReceiverEventDataFormat = csgReceiverEventDataFormat;
+    createdTargets.csgReceiverEventCountFormat = csgReceiverEventCountFormat;
+    createdTargets.csgReceiverEventFlagsFormat = csgReceiverEventFlagsFormat;
+    createdTargets.csgReceiverSpanDepthFormat = csgReceiverSpanDepthFormat;
+    createdTargets.csgReceiverSpanDataFormat = csgReceiverSpanDataFormat;
+    createdTargets.csgReceiverSpanCountFormat = csgReceiverSpanCountFormat;
+    createdTargets.csgReceiverSpanFlagsFormat = csgReceiverSpanFlagsFormat;
+    createdTargets.csgRemovedIntervalDepthFormat = csgRemovedIntervalDepthFormat;
+    createdTargets.csgRemovedIntervalCapNormalFormat = csgRemovedIntervalCapNormalFormat;
+    createdTargets.csgRemovedIntervalDataFormat = csgRemovedIntervalDataFormat;
+    createdTargets.csgRemovedIntervalCountFormat = csgRemovedIntervalCountFormat;
+    createdTargets.csgRemovedIntervalFlagsFormat = csgRemovedIntervalFlagsFormat;
     createdTargets.csgPeelLayerCount = ECSRenderDetail::s_CsgPeelLayerCount;
+    createdTargets.csgReceiverEventLayerCount = ECSRenderDetail::s_CsgReceiverEventLayerCount;
+    createdTargets.csgReceiverSpanLayerCount = ECSRenderDetail::s_CsgReceiverSpanLayerCount;
+    createdTargets.csgRemovedIntervalLayerCount = ECSRenderDetail::s_CsgRemovedIntervalLayerCount;
 
     Core::TextureDesc albedoDesc;
     albedoDesc
@@ -327,7 +388,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver surface mask {}, receiver back surface mask {}, AVBOIT color {}, extinction {}, transmittance {})")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval linear depth {}, interval id {}, receiver surface mask {}, receiver back surface mask {}, receiver events {} layers: event depth {}, event data {}, event count {}, event flags {}, receiver spans {} layers: span depth {}, span data {}, span count {}, span flags {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, interval flags {}, AVBOIT color {}, extinction {}, transmittance {})")
         , deferredState().m_targets.width
         , deferredState().m_targets.height
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.albedoFormat).name)
@@ -338,9 +399,26 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         , deferredState().m_targets.csgPeelLayerCount
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgCapNormalFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgIntervalDepthFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgIntervalLinearDepthFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgIntervalIdFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverSurfaceMaskFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverBackSurfaceMaskFormat).name)
+        , deferredState().m_targets.csgReceiverEventLayerCount
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverEventDepthFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverEventDataFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverEventCountFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverEventFlagsFormat).name)
+        , deferredState().m_targets.csgReceiverSpanLayerCount
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverSpanDepthFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverSpanDataFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverSpanCountFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgReceiverSpanFlagsFormat).name)
+        , deferredState().m_targets.csgRemovedIntervalLayerCount
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgRemovedIntervalDepthFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgRemovedIntervalCapNormalFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgRemovedIntervalDataFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgRemovedIntervalCountFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgRemovedIntervalFlagsFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.avboit.accumColorFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.avboit.accumExtinctionFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.avboit.transmittanceFormat).name)
@@ -356,13 +434,36 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     NWB_ASSERT(targets.depth);
     NWB_ASSERT(!clearCsgTargets || targets.csgCapBackNormal);
     NWB_ASSERT(!clearCsgTargets || targets.csgIntervalDepth);
+    NWB_ASSERT(!clearCsgTargets || targets.csgIntervalLinearDepth);
     NWB_ASSERT(!clearCsgTargets || targets.csgIntervalId);
     NWB_ASSERT(!clearCsgTargets || targets.csgReceiverSurfaceMask);
     NWB_ASSERT(!clearCsgTargets || targets.csgReceiverBackSurfaceMask);
+    NWB_ASSERT(!clearCsgTargets || targets.csgReceiverEventDepth);
+    NWB_ASSERT(!clearCsgTargets || targets.csgReceiverEventData);
+    NWB_ASSERT(!clearCsgTargets || targets.csgReceiverEventCount);
+    NWB_ASSERT(!clearCsgTargets || targets.csgReceiverEventFlags);
+    NWB_ASSERT(!clearCsgTargets || targets.csgReceiverSpanDepth);
+    NWB_ASSERT(!clearCsgTargets || targets.csgReceiverSpanData);
+    NWB_ASSERT(!clearCsgTargets || targets.csgReceiverSpanCount);
+    NWB_ASSERT(!clearCsgTargets || targets.csgReceiverSpanFlags);
+    NWB_ASSERT(!clearCsgTargets || targets.csgRemovedIntervalDepth);
+    NWB_ASSERT(!clearCsgTargets || targets.csgRemovedIntervalCapNormal);
+    NWB_ASSERT(!clearCsgTargets || targets.csgRemovedIntervalData);
+    NWB_ASSERT(!clearCsgTargets || targets.csgRemovedIntervalCount);
+    NWB_ASSERT(!clearCsgTargets || targets.csgRemovedIntervalFlags);
     NWB_ASSERT(!clearCsgTargets || targets.csgPeelLayerCount > 0u);
+    NWB_ASSERT(!clearCsgTargets || targets.csgReceiverEventLayerCount > 0u);
+    NWB_ASSERT(!clearCsgTargets || targets.csgReceiverSpanLayerCount > 0u);
+    NWB_ASSERT(!clearCsgTargets || targets.csgRemovedIntervalLayerCount > 0u);
 
     const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
     const Core::TextureSubresourceSet csgReceiverSurfaceSubresources(0, 1, 0, ECSRenderDetail::s_CsgReceiverSurfaceLayerCount);
+    const Core::TextureSubresourceSet csgReceiverEventSubresources(0, 1, 0, targets.csgReceiverEventLayerCount);
+    const Core::TextureSubresourceSet csgReceiverEventCounterSubresources(0, 1, 0, 1);
+    const Core::TextureSubresourceSet csgReceiverSpanSubresources(0, 1, 0, targets.csgReceiverSpanLayerCount);
+    const Core::TextureSubresourceSet csgReceiverSpanCounterSubresources(0, 1, 0, 1);
+    const Core::TextureSubresourceSet csgRemovedIntervalSubresources(0, 1, 0, targets.csgRemovedIntervalLayerCount);
+    const Core::TextureSubresourceSet csgRemovedIntervalCounterSubresources(0, 1, 0, 1);
 
     commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
@@ -371,9 +472,23 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     if(clearCsgTargets){
         commandList.setTextureState(targets.csgCapBackNormal.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
         commandList.setTextureState(targets.csgIntervalDepth.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgIntervalLinearDepth.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
         commandList.setTextureState(targets.csgIntervalId.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
         commandList.setTextureState(targets.csgReceiverSurfaceMask.get(), csgReceiverSurfaceSubresources, Core::ResourceStates::CopyDest);
         commandList.setTextureState(targets.csgReceiverBackSurfaceMask.get(), csgReceiverSurfaceSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgReceiverEventDepth.get(), csgReceiverEventSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgReceiverEventData.get(), csgReceiverEventSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgReceiverEventCount.get(), csgReceiverEventCounterSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgReceiverEventFlags.get(), csgReceiverEventCounterSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgReceiverSpanDepth.get(), csgReceiverSpanSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgReceiverSpanData.get(), csgReceiverSpanSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgReceiverSpanCount.get(), csgReceiverSpanCounterSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgReceiverSpanFlags.get(), csgReceiverSpanCounterSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), csgRemovedIntervalSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), csgRemovedIntervalSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgRemovedIntervalData.get(), csgRemovedIntervalSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgRemovedIntervalCount.get(), csgRemovedIntervalCounterSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgRemovedIntervalFlags.get(), csgRemovedIntervalCounterSubresources, Core::ResourceStates::CopyDest);
     }
 
     commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
@@ -388,9 +503,23 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     if(clearCsgTargets){
         commandList.clearTextureFloat(targets.csgCapBackNormal.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
         commandList.clearTextureFloat(targets.csgIntervalDepth.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureFloat(targets.csgIntervalLinearDepth.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
         commandList.clearTextureUInt(targets.csgIntervalId.get(), csgPeelSubresources, 0u);
         commandList.clearTextureUInt(targets.csgReceiverSurfaceMask.get(), csgReceiverSurfaceSubresources, NWB_CSG_RECEIVER_SURFACE_MASK_INVALID);
         commandList.clearTextureUInt(targets.csgReceiverBackSurfaceMask.get(), csgReceiverSurfaceSubresources, NWB_CSG_RECEIVER_BACK_SURFACE_MASK_INVALID);
+        commandList.clearTextureFloat(targets.csgReceiverEventDepth.get(), csgReceiverEventSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureUInt(targets.csgReceiverEventData.get(), csgReceiverEventSubresources, 0u);
+        commandList.clearTextureUInt(targets.csgReceiverEventCount.get(), csgReceiverEventCounterSubresources, 0u);
+        commandList.clearTextureUInt(targets.csgReceiverEventFlags.get(), csgReceiverEventCounterSubresources, 0u);
+        commandList.clearTextureFloat(targets.csgReceiverSpanDepth.get(), csgReceiverSpanSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureUInt(targets.csgReceiverSpanData.get(), csgReceiverSpanSubresources, 0u);
+        commandList.clearTextureUInt(targets.csgReceiverSpanCount.get(), csgReceiverSpanCounterSubresources, 0u);
+        commandList.clearTextureUInt(targets.csgReceiverSpanFlags.get(), csgReceiverSpanCounterSubresources, 0u);
+        commandList.clearTextureFloat(targets.csgRemovedIntervalDepth.get(), csgRemovedIntervalSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureFloat(targets.csgRemovedIntervalCapNormal.get(), csgRemovedIntervalSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureUInt(targets.csgRemovedIntervalData.get(), csgRemovedIntervalSubresources, 0u);
+        commandList.clearTextureUInt(targets.csgRemovedIntervalCount.get(), csgRemovedIntervalCounterSubresources, 0u);
+        commandList.clearTextureUInt(targets.csgRemovedIntervalFlags.get(), csgRemovedIntervalCounterSubresources, 0u);
     }
 
     commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);

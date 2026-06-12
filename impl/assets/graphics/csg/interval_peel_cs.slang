@@ -21,6 +21,8 @@ struct NwbCsgIntervalPeelPushConstants{
 struct NwbCsgIntervalPeelEntry{
     float frontDepth;
     float backDepth;
+    float frontLinearDepth;
+    float backLinearDepth;
     float3 backCapNormal;
     uint id;
 };
@@ -33,6 +35,9 @@ RWTexture2DArray<float4> g_NwbCsgBackCapNormal;
 
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_DEPTH, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_INTERVAL_DEPTH_IMAGE_FORMAT)]]
 RWTexture2DArray<float2> g_NwbCsgIntervalDepth;
+
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_LINEAR_DEPTH, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_INTERVAL_LINEAR_DEPTH_IMAGE_FORMAT)]]
+RWTexture2DArray<float2> g_NwbCsgIntervalLinearDepth;
 
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_ID, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_INTERVAL_ID_IMAGE_FORMAT)]]
 RWTexture2DArray<uint> g_NwbCsgIntervalId;
@@ -90,6 +95,8 @@ NwbCsgIntervalPeelEntry nwbCsgInvalidIntervalPeelEntry(){
     NwbCsgIntervalPeelEntry entry;
     entry.frontDepth = 1e30;
     entry.backDepth = 1e30;
+    entry.frontLinearDepth = 1e30;
+    entry.backLinearDepth = 1e30;
     entry.backCapNormal = float3(0.0, 0.0, 0.0);
     entry.id = 0u;
     return entry;
@@ -230,12 +237,16 @@ bool nwbCsgFindCutterIntervalOnRay(
 
                 const float frontDepth = saturate(nwbCsgWorldToDepth(frontWorldPosition));
                 const float backDepth = saturate(nwbCsgWorldToDepth(backWorldPosition));
+                const float frontLinearDepth = length(frontWorldPosition - g_NwbMeshCameraPosition.xyz);
+                const float backLinearDepth = length(backWorldPosition - g_NwbMeshCameraPosition.xyz);
                 outEntry.frontDepth = min(frontDepth, backDepth);
                 outEntry.backDepth = max(frontDepth, backDepth);
+                outEntry.frontLinearDepth = min(frontLinearDepth, backLinearDepth);
+                outEntry.backLinearDepth = max(frontLinearDepth, backLinearDepth);
                 const float3 viewFacingFallback = normalize(rayBegin - rayEnd);
                 outEntry.backCapNormal = nwbCsgFlippedCutterWorldNormal(backWorldPosition, cutter, viewFacingFallback);
                 outEntry.id = nwbCsgPackIntervalId(receiverIndex);
-                return outEntry.backDepth >= outEntry.frontDepth && outEntry.id != 0u;
+                return outEntry.backLinearDepth >= outEntry.frontLinearDepth && outEntry.id != 0u;
             }
         }
 
@@ -255,7 +266,7 @@ void nwbCsgInsertIntervalPeelEntry(
 
     [unroll]
     for(uint layerIndex = 0u; layerIndex < NWB_CSG_PEEL_LAYER_COUNT; ++layerIndex){
-        if(candidate.frontDepth >= entries[layerIndex].frontDepth)
+        if(candidate.frontLinearDepth >= entries[layerIndex].frontLinearDepth)
             continue;
 
         NwbCsgIntervalPeelEntry displaced = entries[layerIndex];
@@ -287,6 +298,7 @@ void nwbCsgWriteIntervalPeelEntries(
 
         g_NwbCsgBackCapNormal[texel] = float4(entry.backCapNormal, 1.0);
         g_NwbCsgIntervalDepth[texel] = float2(entry.frontDepth, entry.backDepth);
+        g_NwbCsgIntervalLinearDepth[texel] = float2(entry.frontLinearDepth, entry.backLinearDepth);
         g_NwbCsgIntervalId[texel] = entry.id;
     }
 }

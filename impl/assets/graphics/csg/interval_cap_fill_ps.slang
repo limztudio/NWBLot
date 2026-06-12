@@ -3,6 +3,7 @@
 
 
 #define NWB_CSG_INTERVAL_SAMPLE_SET 0
+#define NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED 1
 #include "interval_sample.slangi"
 
 #include "../deferred/binding_slots.h"

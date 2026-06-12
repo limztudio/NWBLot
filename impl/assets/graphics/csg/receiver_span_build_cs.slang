@@ -16,6 +16,14 @@ struct NwbCsgReceiverSurfaceEvent{
     uint flags;
 };
 
+struct NwbCsgIntervalDispatchPushConstants{
+    uint4 frame;
+    uint4 workRegion;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
+
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DEPTH, NWB_CSG_INTERVAL_SET)]]
 Texture2DArray<float> g_NwbCsgReceiverEventDepth;
 
@@ -66,6 +74,20 @@ uint nwbCsgReceiverSpanBuildSpanLayerCount(){
     uint layerCount = 1u;
     g_NwbCsgReceiverSpanDepth.GetDimensions(width, height, layerCount);
     return min(layerCount, NWB_CSG_RECEIVER_SPAN_LAYER_COUNT);
+}
+
+uint2 nwbCsgReceiverSpanBuildWorkOffset(){
+    return uint2(
+        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_X],
+        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_Y]
+    );
+}
+
+uint2 nwbCsgReceiverSpanBuildWorkExtent(){
+    return uint2(
+        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_X],
+        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_Y]
+    );
 }
 
 uint nwbCsgReceiverSpanBuildLoadEventCount(const uint2 pixel, const uint eventLayerCount, inout uint inOutFlags){
@@ -210,10 +232,14 @@ void nwbCsgReceiverSpanBuildPairEvents(
 [numthreads(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X, NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 frameExtent = nwbCsgReceiverSpanBuildFrameExtent();
-    if(dispatchThreadID.x >= frameExtent.x || dispatchThreadID.y >= frameExtent.y)
+    const uint2 workExtent = nwbCsgReceiverSpanBuildWorkExtent();
+    if(dispatchThreadID.x >= workExtent.x || dispatchThreadID.y >= workExtent.y)
         return;
 
-    const uint2 pixel = dispatchThreadID.xy;
+    const uint2 pixel = dispatchThreadID.xy + nwbCsgReceiverSpanBuildWorkOffset();
+    if(pixel.x >= frameExtent.x || pixel.y >= frameExtent.y)
+        return;
+
     uint flags = 0u;
     const uint eventLayerCount = nwbCsgReceiverSpanBuildEventLayerCount();
     const uint spanLayerCount = nwbCsgReceiverSpanBuildSpanLayerCount();

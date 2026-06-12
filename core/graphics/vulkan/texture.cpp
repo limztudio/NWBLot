@@ -5,6 +5,7 @@
 #include "backend.h"
 
 #include <core/common/log.h>
+#include <global/math/convert.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -215,6 +216,135 @@ inline VkBufferImageCopy BuildStagingTextureCopyRegion(
     region.imageOffset = { static_cast<i32>(imageSlice.x), static_cast<i32>(imageSlice.y), static_cast<i32>(imageSlice.z) };
     region.imageExtent = { imageSlice.width, imageSlice.height, imageSlice.depth };
     return region;
+}
+
+inline bool TextureClearRectEmpty(const Rect& rect){
+    return rect.minX >= rect.maxX || rect.minY >= rect.maxY;
+}
+
+inline Rect ResolveTextureClearRect(const TextureDesc& desc, const MipLevel mipLevel, const Rect& rect){
+    const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
+    const i32 width = static_cast<i32>(mipExtent.width);
+    const i32 height = static_cast<i32>(mipExtent.height);
+    return Rect(
+        Max<i32>(0, Min<i32>(rect.minX, width)),
+        Max<i32>(0, Min<i32>(rect.maxX, width)),
+        Max<i32>(0, Min<i32>(rect.minY, height)),
+        Max<i32>(0, Min<i32>(rect.maxY, height))
+    );
+}
+
+inline bool TextureClearRectCoversSubresources(const TextureDesc& desc, const TextureSubresourceSet& subresources, const Rect& rect){
+    const MipLevel mipEnd = subresources.baseMipLevel + subresources.numMipLevels;
+    for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+        const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
+        const Rect resolvedRect = ResolveTextureClearRect(desc, mipLevel, rect);
+        if(
+            resolvedRect.minX != 0
+            || resolvedRect.minY != 0
+            || resolvedRect.maxX != static_cast<i32>(mipExtent.width)
+            || resolvedRect.maxY != static_cast<i32>(mipExtent.height)
+        )
+            return false;
+    }
+
+    return true;
+}
+
+inline void WriteClearPatternValue(u8* outBytes, const usize outByteCount, const void* value, const usize valueByteCount){
+    NWB_MEMCPY(outBytes, outByteCount, value, valueByteCount);
+}
+
+inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkClearColorValue& clearValue, u8* outPattern, u32& outPatternSize){
+    outPatternSize = 0u;
+    const f32 values[] = {
+        clearValue.float32[0],
+        clearValue.float32[1],
+        clearValue.float32[2],
+        clearValue.float32[3],
+    };
+
+    auto writeHalfComponents = [&](const u32 componentCount){
+        for(u32 component = 0u; component < componentCount; ++component){
+            const Half value = ConvertFloatToHalf(values[component]);
+            WriteClearPatternValue(outPattern + component * sizeof(value), sizeof(value), &value, sizeof(value));
+        }
+        outPatternSize = componentCount * static_cast<u32>(sizeof(Half));
+        return true;
+    };
+    auto writeFloatComponents = [&](const u32 componentCount){
+        for(u32 component = 0u; component < componentCount; ++component){
+            WriteClearPatternValue(outPattern + component * sizeof(f32), sizeof(f32), &values[component], sizeof(f32));
+        }
+        outPatternSize = componentCount * static_cast<u32>(sizeof(f32));
+        return true;
+    };
+
+    switch(format){
+    case Format::R16_FLOAT: return writeHalfComponents(1u);
+    case Format::RG16_FLOAT: return writeHalfComponents(2u);
+    case Format::RGBA16_FLOAT: return writeHalfComponents(4u);
+    case Format::R32_FLOAT: return writeFloatComponents(1u);
+    case Format::RG32_FLOAT: return writeFloatComponents(2u);
+    case Format::RGB32_FLOAT: return writeFloatComponents(3u);
+    case Format::RGBA32_FLOAT: return writeFloatComponents(4u);
+    default:
+        return false;
+    }
+}
+
+inline bool BuildTextureUIntClearPattern(const Format::Enum format, const VkClearColorValue& clearValue, u8* outPattern, u32& outPatternSize){
+    outPatternSize = 0u;
+    const u32 values[] = {
+        clearValue.uint32[0],
+        clearValue.uint32[1],
+        clearValue.uint32[2],
+        clearValue.uint32[3],
+    };
+
+    auto writeU8Components = [&](const u32 componentCount){
+        for(u32 component = 0u; component < componentCount; ++component){
+            const u8 value = static_cast<u8>(Min(values[component], static_cast<u32>(Limit<u8>::s_Max)));
+            WriteClearPatternValue(outPattern + component * sizeof(value), sizeof(value), &value, sizeof(value));
+        }
+        outPatternSize = componentCount * static_cast<u32>(sizeof(u8));
+        return true;
+    };
+    auto writeU16Components = [&](const u32 componentCount){
+        for(u32 component = 0u; component < componentCount; ++component){
+            const u16 value = static_cast<u16>(Min(values[component], static_cast<u32>(Limit<u16>::s_Max)));
+            WriteClearPatternValue(outPattern + component * sizeof(value), sizeof(value), &value, sizeof(value));
+        }
+        outPatternSize = componentCount * static_cast<u32>(sizeof(u16));
+        return true;
+    };
+    auto writeU32Components = [&](const u32 componentCount){
+        for(u32 component = 0u; component < componentCount; ++component){
+            WriteClearPatternValue(outPattern + component * sizeof(u32), sizeof(u32), &values[component], sizeof(u32));
+        }
+        outPatternSize = componentCount * static_cast<u32>(sizeof(u32));
+        return true;
+    };
+
+    switch(format){
+    case Format::R8_UINT: return writeU8Components(1u);
+    case Format::RG8_UINT: return writeU8Components(2u);
+    case Format::RGBA8_UINT: return writeU8Components(4u);
+    case Format::R16_UINT: return writeU16Components(1u);
+    case Format::RG16_UINT: return writeU16Components(2u);
+    case Format::RGBA16_UINT: return writeU16Components(4u);
+    case Format::R32_UINT: return writeU32Components(1u);
+    case Format::RG32_UINT: return writeU32Components(2u);
+    case Format::RGB32_UINT: return writeU32Components(3u);
+    case Format::RGBA32_UINT: return writeU32Components(4u);
+    default:
+        return false;
+    }
+}
+
+inline void FillTextureClearBytes(Vector<u8, Alloc::ScratchArena>& bytes, const u8* pattern, const u32 patternSize){
+    for(usize offset = 0; offset < bytes.size(); offset += patternSize)
+        NWB_MEMCPY(bytes.data() + offset, bytes.size() - offset, pattern, patternSize);
 }
 
 
@@ -741,6 +871,16 @@ void CommandList::clearTextureFloat(Texture* textureResource, TextureSubresource
     clearColorTexture(textureResource, subresources, NWB_TEXT("color value"), clearValue);
 }
 
+void CommandList::clearTextureRectFloat(Texture* textureResource, TextureSubresourceSet subresources, const Rect& rect, const Color& clearColor){
+    VkClearColorValue clearValue{};
+    clearValue.float32[0] = clearColor.r;
+    clearValue.float32[1] = clearColor.g;
+    clearValue.float32[2] = clearColor.b;
+    clearValue.float32[3] = clearColor.a;
+
+    clearColorTextureRect(textureResource, subresources, rect, NWB_TEXT("color value"), clearValue, false);
+}
+
 void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil){
     if(!clearDepth && !clearStencil)
         return;
@@ -787,6 +927,16 @@ void CommandList::clearTextureUInt(Texture* textureResource, TextureSubresourceS
     clearValue.uint32[3] = clearColor;
 
     clearColorTexture(textureResource, subresources, NWB_TEXT("integer value"), clearValue);
+}
+
+void CommandList::clearTextureRectUInt(Texture* textureResource, TextureSubresourceSet subresources, const Rect& rect, u32 clearColor){
+    VkClearColorValue clearValue{};
+    clearValue.uint32[0] = clearColor;
+    clearValue.uint32[1] = clearColor;
+    clearValue.uint32[2] = clearColor;
+    clearValue.uint32[3] = clearColor;
+
+    clearColorTextureRect(textureResource, subresources, rect, NWB_TEXT("integer value"), clearValue, true);
 }
 
 void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSlice, Texture* srcResource, const TextureSlice& srcSlice){
@@ -1066,6 +1216,133 @@ void CommandList::clearColorTexture(Texture* textureResource, TextureSubresource
     const VkImageSubresourceRange range = VulkanDetail::BuildImageSubresourceRange(resolvedSubresources, VK_IMAGE_ASPECT_COLOR_BIT);
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
     vkCmdClearColorImage(m_currentCmdBuf->m_cmdBuf, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
+    retainResource(textureResource);
+}
+
+void CommandList::clearColorTextureRect(
+    Texture* textureResource,
+    TextureSubresourceSet subresources,
+    const Rect& rect,
+    const tchar* valueName,
+    const VkClearColorValue& clearValue,
+    const bool integerValue
+){
+    if(__hidden_vulkan_texture::TextureClearRectEmpty(rect))
+        return;
+    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear texture rect"), NWB_TEXT("texture is null"), textureResource))
+        return;
+#if !defined(NWB_DEBUG)
+    static_cast<void>(valueName);
+#endif
+
+    Texture& texture = *textureResource;
+    const TextureDesc& desc = texture.m_desc;
+#if defined(NWB_DEBUG)
+    if((texture.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: texture format is depth/stencil"), valueName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: texture format is depth/stencil"), valueName);
+        return;
+    }
+#endif
+
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
+    if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("clear texture rect")))
+        return;
+
+    if(__hidden_vulkan_texture::TextureClearRectCoversSubresources(desc, resolvedSubresources, rect)){
+        clearColorTexture(textureResource, resolvedSubresources, valueName, clearValue);
+        return;
+    }
+
+#if defined(NWB_DEBUG)
+    if(desc.sampleCount != 1u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: bounded texture rect clears require a single-sampled texture"), valueName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: bounded texture rect clears require a single-sampled texture"), valueName);
+        return;
+    }
+    if(texture.m_formatLayout.blockWidth != 1u || texture.m_formatLayout.blockHeight != 1u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: bounded texture rect clears do not support block-compressed formats"), valueName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: bounded texture rect clears do not support block-compressed formats"), valueName);
+        return;
+    }
+#endif
+    if(desc.sampleCount != 1u || texture.m_formatLayout.blockWidth != 1u || texture.m_formatLayout.blockHeight != 1u)
+        return;
+
+    u8 clearPattern[16] = {};
+    u32 clearPatternSize = 0u;
+    const bool patternReady = integerValue
+        ? __hidden_vulkan_texture::BuildTextureUIntClearPattern(desc.format, clearValue, clearPattern, clearPatternSize)
+        : __hidden_vulkan_texture::BuildTextureFloatClearPattern(desc.format, clearValue, clearPattern, clearPatternSize)
+    ;
+    if(!patternReady || clearPatternSize != texture.m_formatLayout.bytesPerBlock){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: bounded texture rect clears do not support texture format {}"), valueName, GetFormatInfo(desc.format).name);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: bounded texture rect clears do not support texture format"), valueName);
+        return;
+    }
+
+    setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
+
+    Alloc::ScratchArena scratchArena;
+    const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
+    for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+        const Rect resolvedRect = __hidden_vulkan_texture::ResolveTextureClearRect(desc, mipLevel, rect);
+        if(__hidden_vulkan_texture::TextureClearRectEmpty(resolvedRect))
+            continue;
+
+        const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
+        const u64 clearWidth = static_cast<u64>(resolvedRect.width());
+        const u64 clearHeight = static_cast<u64>(resolvedRect.height());
+        const u64 clearDepth = desc.dimension == TextureDimension::Texture3D ? static_cast<u64>(mipExtent.depth) : 1ull;
+        const u64 texelCount = clearWidth * clearHeight * clearDepth;
+        if(texelCount > Limit<u64>::s_Max / clearPatternSize){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear byte size overflows"), valueName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear byte size overflows"), valueName);
+            return;
+        }
+        const u64 uploadSize64 = texelCount * clearPatternSize;
+        if(uploadSize64 > static_cast<u64>(Limit<usize>::s_Max)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear byte size exceeds addressable memory"), valueName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture rect with {}: clear byte size exceeds addressable memory"), valueName);
+            return;
+        }
+
+        Vector<u8, Alloc::ScratchArena> clearBytes(static_cast<usize>(uploadSize64), scratchArena);
+        __hidden_vulkan_texture::FillTextureClearBytes(clearBytes, clearPattern, clearPatternSize);
+
+        Buffer* stagingBuffer = nullptr;
+        u64 stagingOffset = 0;
+        if(!prepareUploadStaging(clearBytes.data(), clearBytes.size(), NWB_TEXT("clearTextureRect"), stagingBuffer, stagingOffset))
+            return;
+
+        if(desc.dimension == TextureDimension::Texture3D){
+            VkBufferImageCopy region{};
+            region.bufferOffset = stagingOffset;
+            region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, 0u, 1u);
+            region.imageOffset = { resolvedRect.minX, resolvedRect.minY, 0 };
+            region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), static_cast<u32>(clearDepth) };
+            vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
+        }
+        else{
+            Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
+            const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+            u32 regionIndex = 0u;
+            for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+                VkBufferImageCopy region{};
+                region.bufferOffset = stagingOffset;
+                region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, arraySlice, 1u);
+                region.imageOffset = { resolvedRect.minX, resolvedRect.minY, 0 };
+                region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
+                regions[regionIndex++] = region;
+            }
+
+            if(!regions.empty())
+                vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
+        }
+
+        retainStagingBuffer(*stagingBuffer);
+    }
+
     retainResource(textureResource);
 }
 

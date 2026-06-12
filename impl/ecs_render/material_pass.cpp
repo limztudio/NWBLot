@@ -271,7 +271,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     );
     mutableMaterialTypedRanges.reserve(rendererCapacity);
 
-    const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
+    const Core::FramebufferInfoEx& framebufferInfo = framebuffer->getFramebufferInfo();
     const CsgReceiverPass::Enum csgReceiverPass = transparent ? CsgReceiverPass::Transparent : CsgReceiverPass::Opaque;
     const bool csgPassActive =
         MaterialPipelinePassUsesRendererCsgClip(pass, transparent)
@@ -473,6 +473,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 entity,
                 mesh.csgLocalBounds,
                 transform,
+                framebufferInfo.width,
+                framebufferInfo.height,
                 csgFrameData,
                 csgRange
             ))

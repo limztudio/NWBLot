@@ -8,6 +8,7 @@
 #include "components.h"
 
 #include <core/alloc/scratch.h>
+#include <core/graphics/api.h>
 #include <impl/assets/graphics/csg/constants.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_csg/frame_state.h>
@@ -84,6 +85,52 @@ using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchAren
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct CsgFrameWorkRegion{
+    u32 minX = Limit<u32>::s_Max;
+    u32 minY = Limit<u32>::s_Max;
+    u32 maxX = 0u;
+    u32 maxY = 0u;
+    bool fullFrame = false;
+
+    [[nodiscard]] bool bounded()const noexcept{ return !fullFrame && minX < maxX && minY < maxY; }
+    [[nodiscard]] bool valid()const noexcept{ return fullFrame || bounded(); }
+    [[nodiscard]] u32 width()const noexcept{ return bounded() ? maxX - minX : 0u; }
+    [[nodiscard]] u32 height()const noexcept{ return bounded() ? maxY - minY : 0u; }
+
+    void expandFull()noexcept{ fullFrame = true; }
+    void expandClamped(const i32 rectMinX, const i32 rectMaxX, const i32 rectMinY, const i32 rectMaxY, const u32 frameWidth, const u32 frameHeight)noexcept{
+        if(fullFrame || frameWidth == 0u || frameHeight == 0u)
+            return;
+
+        const i32 clampedMinX = Max<i32>(0, Min<i32>(rectMinX, static_cast<i32>(frameWidth)));
+        const i32 clampedMaxX = Max<i32>(0, Min<i32>(rectMaxX, static_cast<i32>(frameWidth)));
+        const i32 clampedMinY = Max<i32>(0, Min<i32>(rectMinY, static_cast<i32>(frameHeight)));
+        const i32 clampedMaxY = Max<i32>(0, Min<i32>(rectMaxY, static_cast<i32>(frameHeight)));
+        if(clampedMinX >= clampedMaxX || clampedMinY >= clampedMaxY)
+            return;
+
+        minX = Min(minX, static_cast<u32>(clampedMinX));
+        minY = Min(minY, static_cast<u32>(clampedMinY));
+        maxX = Max(maxX, static_cast<u32>(clampedMaxX));
+        maxY = Max(maxY, static_cast<u32>(clampedMaxY));
+    }
+    [[nodiscard]] Core::Rect resolveRect(const u32 frameWidth, const u32 frameHeight)const noexcept{
+        if(!bounded())
+            return Core::Rect(static_cast<i32>(frameWidth), static_cast<i32>(frameHeight));
+
+        return Core::Rect(
+            static_cast<i32>(minX),
+            static_cast<i32>(Min(maxX, frameWidth)),
+            static_cast<i32>(minY),
+            static_cast<i32>(Min(maxY, frameHeight))
+        );
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct CsgReceiverClipDrawInfo{
     u32 cutterCount = 0u;
     Name evaluatorVariant = NAME_NONE;
@@ -92,6 +139,7 @@ struct CsgReceiverClipDrawInfo{
 struct CsgFrameGpuData{
     CsgReceiverRangeGpuDataVector receiverRanges;
     CsgCutterGpuDataVector cutters;
+    CsgFrameWorkRegion workRegion;
 
     explicit CsgFrameGpuData(Core::Alloc::ScratchArena& arena)
         : receiverRanges(arena)

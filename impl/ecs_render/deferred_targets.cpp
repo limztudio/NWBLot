@@ -414,7 +414,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     return true;
 }
 
-void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const bool clearCsgTargets){
+void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const bool clearCsgTargets, const Core::Rect& csgClearRect){
     NWB_ASSERT(targets.albedo);
     NWB_ASSERT(targets.normal);
     NWB_ASSERT(targets.worldPosition);
@@ -484,23 +484,23 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
 
     if(clearCsgTargets){
-        commandList.clearTextureFloat(targets.csgCapBackNormal.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-        commandList.clearTextureFloat(targets.csgIntervalDepth.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-        commandList.clearTextureFloat(targets.csgIntervalLinearDepth.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-        commandList.clearTextureUInt(targets.csgIntervalId.get(), csgPeelSubresources, 0u);
-        commandList.clearTextureFloat(targets.csgReceiverEventDepth.get(), csgReceiverEventSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-        commandList.clearTextureUInt(targets.csgReceiverEventData.get(), csgReceiverEventSubresources, 0u);
-        commandList.clearTextureUInt(targets.csgReceiverEventCount.get(), csgReceiverEventCounterSubresources, 0u);
-        commandList.clearTextureUInt(targets.csgReceiverEventFlags.get(), csgReceiverEventCounterSubresources, 0u);
-        commandList.clearTextureFloat(targets.csgReceiverSpanDepth.get(), csgReceiverSpanSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-        commandList.clearTextureUInt(targets.csgReceiverSpanData.get(), csgReceiverSpanSubresources, 0u);
-        commandList.clearTextureUInt(targets.csgReceiverSpanCount.get(), csgReceiverSpanCounterSubresources, 0u);
-        commandList.clearTextureUInt(targets.csgReceiverSpanFlags.get(), csgReceiverSpanCounterSubresources, 0u);
-        commandList.clearTextureFloat(targets.csgRemovedIntervalDepth.get(), csgRemovedIntervalSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-        commandList.clearTextureFloat(targets.csgRemovedIntervalCapNormal.get(), csgRemovedIntervalSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-        commandList.clearTextureUInt(targets.csgRemovedIntervalData.get(), csgRemovedIntervalSubresources, 0u);
-        commandList.clearTextureUInt(targets.csgRemovedIntervalCount.get(), csgRemovedIntervalCounterSubresources, 0u);
-        commandList.clearTextureUInt(targets.csgRemovedIntervalFlags.get(), csgRemovedIntervalCounterSubresources, 0u);
+        commandList.clearTextureRectFloat(targets.csgCapBackNormal.get(), csgPeelSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureRectFloat(targets.csgIntervalDepth.get(), csgPeelSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureRectFloat(targets.csgIntervalLinearDepth.get(), csgPeelSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureRectUInt(targets.csgIntervalId.get(), csgPeelSubresources, csgClearRect, 0u);
+        commandList.clearTextureRectFloat(targets.csgReceiverEventDepth.get(), csgReceiverEventSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureRectUInt(targets.csgReceiverEventData.get(), csgReceiverEventSubresources, csgClearRect, 0u);
+        commandList.clearTextureRectUInt(targets.csgReceiverEventCount.get(), csgReceiverEventCounterSubresources, csgClearRect, 0u);
+        commandList.clearTextureRectUInt(targets.csgReceiverEventFlags.get(), csgReceiverEventCounterSubresources, csgClearRect, 0u);
+        commandList.clearTextureRectFloat(targets.csgReceiverSpanDepth.get(), csgReceiverSpanSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureRectUInt(targets.csgReceiverSpanData.get(), csgReceiverSpanSubresources, csgClearRect, 0u);
+        commandList.clearTextureRectUInt(targets.csgReceiverSpanCount.get(), csgReceiverSpanCounterSubresources, csgClearRect, 0u);
+        commandList.clearTextureRectUInt(targets.csgReceiverSpanFlags.get(), csgReceiverSpanCounterSubresources, csgClearRect, 0u);
+        commandList.clearTextureRectFloat(targets.csgRemovedIntervalDepth.get(), csgRemovedIntervalSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureRectFloat(targets.csgRemovedIntervalCapNormal.get(), csgRemovedIntervalSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureRectUInt(targets.csgRemovedIntervalData.get(), csgRemovedIntervalSubresources, csgClearRect, 0u);
+        commandList.clearTextureRectUInt(targets.csgRemovedIntervalCount.get(), csgRemovedIntervalCounterSubresources, csgClearRect, 0u);
+        commandList.clearTextureRectUInt(targets.csgRemovedIntervalFlags.get(), csgRemovedIntervalCounterSubresources, csgClearRect, 0u);
     }
 
     commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
@@ -515,7 +515,7 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     );
 }
 
-void RendererDeferredSystem::clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets){
+void RendererDeferredSystem::clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect){
     NWB_ASSERT(targets.csgCapBackNormal);
     NWB_ASSERT(targets.csgIntervalDepth);
     NWB_ASSERT(targets.csgIntervalLinearDepth);
@@ -566,23 +566,23 @@ void RendererDeferredSystem::clearCsgIntervalTargets(Core::CommandList& commandL
 
     commandList.commitBarriers();
 
-    commandList.clearTextureFloat(targets.csgCapBackNormal.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    commandList.clearTextureFloat(targets.csgIntervalDepth.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    commandList.clearTextureFloat(targets.csgIntervalLinearDepth.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    commandList.clearTextureUInt(targets.csgIntervalId.get(), csgPeelSubresources, 0u);
-    commandList.clearTextureFloat(targets.csgReceiverEventDepth.get(), csgReceiverEventSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    commandList.clearTextureUInt(targets.csgReceiverEventData.get(), csgReceiverEventSubresources, 0u);
-    commandList.clearTextureUInt(targets.csgReceiverEventCount.get(), csgReceiverEventCounterSubresources, 0u);
-    commandList.clearTextureUInt(targets.csgReceiverEventFlags.get(), csgReceiverEventCounterSubresources, 0u);
-    commandList.clearTextureFloat(targets.csgReceiverSpanDepth.get(), csgReceiverSpanSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    commandList.clearTextureUInt(targets.csgReceiverSpanData.get(), csgReceiverSpanSubresources, 0u);
-    commandList.clearTextureUInt(targets.csgReceiverSpanCount.get(), csgReceiverSpanCounterSubresources, 0u);
-    commandList.clearTextureUInt(targets.csgReceiverSpanFlags.get(), csgReceiverSpanCounterSubresources, 0u);
-    commandList.clearTextureFloat(targets.csgRemovedIntervalDepth.get(), csgRemovedIntervalSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    commandList.clearTextureFloat(targets.csgRemovedIntervalCapNormal.get(), csgRemovedIntervalSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    commandList.clearTextureUInt(targets.csgRemovedIntervalData.get(), csgRemovedIntervalSubresources, 0u);
-    commandList.clearTextureUInt(targets.csgRemovedIntervalCount.get(), csgRemovedIntervalCounterSubresources, 0u);
-    commandList.clearTextureUInt(targets.csgRemovedIntervalFlags.get(), csgRemovedIntervalCounterSubresources, 0u);
+    commandList.clearTextureRectFloat(targets.csgCapBackNormal.get(), csgPeelSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+    commandList.clearTextureRectFloat(targets.csgIntervalDepth.get(), csgPeelSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+    commandList.clearTextureRectFloat(targets.csgIntervalLinearDepth.get(), csgPeelSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+    commandList.clearTextureRectUInt(targets.csgIntervalId.get(), csgPeelSubresources, csgClearRect, 0u);
+    commandList.clearTextureRectFloat(targets.csgReceiverEventDepth.get(), csgReceiverEventSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+    commandList.clearTextureRectUInt(targets.csgReceiverEventData.get(), csgReceiverEventSubresources, csgClearRect, 0u);
+    commandList.clearTextureRectUInt(targets.csgReceiverEventCount.get(), csgReceiverEventCounterSubresources, csgClearRect, 0u);
+    commandList.clearTextureRectUInt(targets.csgReceiverEventFlags.get(), csgReceiverEventCounterSubresources, csgClearRect, 0u);
+    commandList.clearTextureRectFloat(targets.csgReceiverSpanDepth.get(), csgReceiverSpanSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+    commandList.clearTextureRectUInt(targets.csgReceiverSpanData.get(), csgReceiverSpanSubresources, csgClearRect, 0u);
+    commandList.clearTextureRectUInt(targets.csgReceiverSpanCount.get(), csgReceiverSpanCounterSubresources, csgClearRect, 0u);
+    commandList.clearTextureRectUInt(targets.csgReceiverSpanFlags.get(), csgReceiverSpanCounterSubresources, csgClearRect, 0u);
+    commandList.clearTextureRectFloat(targets.csgRemovedIntervalDepth.get(), csgRemovedIntervalSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+    commandList.clearTextureRectFloat(targets.csgRemovedIntervalCapNormal.get(), csgRemovedIntervalSubresources, csgClearRect, Core::Color(0.f, 0.f, 0.f, 0.f));
+    commandList.clearTextureRectUInt(targets.csgRemovedIntervalData.get(), csgRemovedIntervalSubresources, csgClearRect, 0u);
+    commandList.clearTextureRectUInt(targets.csgRemovedIntervalCount.get(), csgRemovedIntervalCounterSubresources, csgClearRect, 0u);
+    commandList.clearTextureRectUInt(targets.csgRemovedIntervalFlags.get(), csgRemovedIntervalCounterSubresources, csgClearRect, 0u);
 }
 
 NWB_IMPL_END

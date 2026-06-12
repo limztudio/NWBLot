@@ -180,6 +180,7 @@ concept CommandListApi = requires(
     TimerQuery* timerQuery,
     const TextureSlice& textureSlice,
     const TextureSubresourceSet& subresources,
+    const Rect& rect,
     const Color& color,
     const void* data,
     const GraphicsState& graphicsState,
@@ -201,8 +202,10 @@ concept CommandListApi = requires(
     commandList.endRenderPass();
 
     commandList.clearTextureFloat(texture, subresources, color);
+    commandList.clearTextureRectFloat(texture, subresources, rect, color);
     commandList.clearDepthStencilTexture(texture, subresources, bool{}, f32{}, bool{}, u8{});
     commandList.clearTextureUInt(texture, subresources, u32{});
+    commandList.clearTextureRectUInt(texture, subresources, rect, u32{});
     commandList.copyTexture(texture, textureSlice, texture, textureSlice);
     commandList.copyTexture(stagingTexture, textureSlice, texture, textureSlice);
     commandList.copyTexture(texture, textureSlice, stagingTexture, textureSlice);

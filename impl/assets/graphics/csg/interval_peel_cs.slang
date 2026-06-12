@@ -14,8 +14,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct NwbCsgIntervalPeelPushConstants{
+struct NwbCsgIntervalDispatchPushConstants{
     uint4 frame;
+    uint4 workRegion;
 };
 
 struct NwbCsgIntervalPeelEntry{
@@ -28,7 +29,7 @@ struct NwbCsgIntervalPeelEntry{
 };
 
 [[vk::push_constant]]
-ConstantBuffer<NwbCsgIntervalPeelPushConstants> g_NwbCsgIntervalPeelPushConstants;
+ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
 
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_CAP_NORMAL_IMAGE_FORMAT)]]
 RWTexture2DArray<float4> g_NwbCsgBackCapNormal;
@@ -47,19 +48,33 @@ RWTexture2DArray<uint> g_NwbCsgIntervalId;
 
 
 uint nwbCsgIntervalPeelFrameWidth(){
-    return g_NwbCsgIntervalPeelPushConstants.frame[NWB_CSG_INTERVAL_PEEL_PUSH_FRAME_WIDTH];
+    return g_NwbCsgIntervalDispatchPushConstants.frame[NWB_CSG_INTERVAL_DISPATCH_PUSH_FRAME_WIDTH];
 }
 
 uint nwbCsgIntervalPeelFrameHeight(){
-    return g_NwbCsgIntervalPeelPushConstants.frame[NWB_CSG_INTERVAL_PEEL_PUSH_FRAME_HEIGHT];
+    return g_NwbCsgIntervalDispatchPushConstants.frame[NWB_CSG_INTERVAL_DISPATCH_PUSH_FRAME_HEIGHT];
 }
 
 uint nwbCsgIntervalPeelReceiverCount(){
-    return g_NwbCsgIntervalPeelPushConstants.frame[NWB_CSG_INTERVAL_PEEL_PUSH_RECEIVER_COUNT];
+    return g_NwbCsgIntervalDispatchPushConstants.frame[NWB_CSG_INTERVAL_DISPATCH_PUSH_RECEIVER_COUNT];
 }
 
 uint nwbCsgIntervalPeelLayerCount(){
-    return min(g_NwbCsgIntervalPeelPushConstants.frame[NWB_CSG_INTERVAL_PEEL_PUSH_LAYER_COUNT], NWB_CSG_PEEL_LAYER_COUNT);
+    return min(g_NwbCsgIntervalDispatchPushConstants.frame[NWB_CSG_INTERVAL_DISPATCH_PUSH_LAYER_COUNT], NWB_CSG_PEEL_LAYER_COUNT);
+}
+
+uint2 nwbCsgIntervalPeelWorkOffset(){
+    return uint2(
+        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_X],
+        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_Y]
+    );
+}
+
+uint2 nwbCsgIntervalPeelWorkExtent(){
+    return uint2(
+        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_X],
+        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_Y]
+    );
 }
 
 float nwbCsgSafeHomogeneousW(const float w){
@@ -311,10 +326,14 @@ void nwbCsgWriteIntervalPeelEntries(
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint frameWidth = nwbCsgIntervalPeelFrameWidth();
     const uint frameHeight = nwbCsgIntervalPeelFrameHeight();
-    if(dispatchThreadID.x >= frameWidth || dispatchThreadID.y >= frameHeight)
+    const uint2 workExtent = nwbCsgIntervalPeelWorkExtent();
+    if(dispatchThreadID.x >= workExtent.x || dispatchThreadID.y >= workExtent.y)
         return;
 
-    const uint2 pixel = dispatchThreadID.xy;
+    const uint2 pixel = dispatchThreadID.xy + nwbCsgIntervalPeelWorkOffset();
+    if(pixel.x >= frameWidth || pixel.y >= frameHeight)
+        return;
+
     float3 rayBegin;
     float3 rayEnd;
     nwbCsgBuildPixelRay(pixel, rayBegin, rayEnd);

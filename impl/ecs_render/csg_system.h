@@ -32,12 +32,14 @@ public:
     void dispatchCsgIntervalPeels(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     void dispatchCsgReceiverSpanBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     void dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
-    void renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    void renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
+    [[nodiscard]] bool createCsgIntervalSampleStateBuffer();
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
     [[nodiscard]] bool reserveCsgCutterBufferCapacity(usize cutterCount);
     [[nodiscard]] bool prepareCsgFrameBuffers(const CsgFrameGpuData& csgFrameData);
     [[nodiscard]] bool csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData)const;
     [[nodiscard]] bool uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
+    [[nodiscard]] bool uploadCsgIntervalSampleState(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     void setCsgClipBufferStates(Core::CommandList& commandList);
     [[nodiscard]] bool resolveCsgReceiverClipDrawInfo(
         const CsgFrameReceiverLookup& receiverLookup,
@@ -51,6 +53,8 @@ public:
         Core::ECS::EntityID entity,
         const CsgReceiverCpuBounds& receiverBounds,
         const NWB::Impl::Scene::TransformComponent* transform,
+        u32 frameWidth,
+        u32 frameHeight,
         CsgFrameGpuData& csgFrameData,
         CsgReceiverRangeGpuData& outRange
     )const;

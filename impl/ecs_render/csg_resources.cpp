@@ -32,6 +32,9 @@ struct CsgResolvedClipCutter{
     CsgShapeTypeInfo shapeType;
     const u8* parameterBytes = nullptr;
     usize parameterByteSize = 0u;
+    SIMDVector workMinBounds;
+    SIMDVector workMaxBounds;
+    bool workBoundsValid = false;
 };
 
 [[nodiscard]] static SIMDVector ComputeWorldToShapeScaleBound(const SIMDMatrix& worldToShape){
@@ -122,6 +125,69 @@ static void CopyCsgCutterInlineParameters(
     return AabbTests::Transform(*localToWorld, localMinBounds, localMaxBounds, outMinBounds, outMaxBounds);
 }
 
+[[nodiscard]] static SIMDMatrix LoadWorldToClipMatrix(const ECSRenderDetail::MeshViewGpuData& meshViewData){
+    SIMDMatrix worldToClip;
+    for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex)
+        worldToClip.v[columnIndex] = LoadFloat(meshViewData.worldToClip[columnIndex]);
+    return worldToClip;
+}
+
+static void ExpandCsgFrameWorkRegionForWorldBounds(
+    CsgFrameGpuData& csgFrameData,
+    const SIMDMatrix& worldToClip,
+    const SIMDVector minBounds,
+    const SIMDVector maxBounds,
+    const u32 frameWidth,
+    const u32 frameHeight
+){
+    if(frameWidth == 0u || frameHeight == 0u || !AabbTests::Valid(minBounds, maxBounds)){
+        csgFrameData.workRegion.expandFull();
+        return;
+    }
+
+    constexpr i32 s_WorkRegionPixelPadding = 2;
+    f32 minPixelX = static_cast<f32>(frameWidth);
+    f32 minPixelY = static_cast<f32>(frameHeight);
+    f32 maxPixelX = 0.0f;
+    f32 maxPixelY = 0.0f;
+    for(u32 corner = 0u; corner < 8u; ++corner){
+        const SIMDVector cornerSelect = VectorSelectControl(corner & 1u, (corner >> 1u) & 1u, (corner >> 2u) & 1u, 0u);
+        const SIMDVector worldPosition = VectorSetW(VectorSelect(minBounds, maxBounds, cornerSelect), 1.0f);
+        const SIMDVector clipPosition = Vector4Transform(worldPosition, worldToClip);
+        const f32 clipW = VectorGetW(clipPosition);
+        if(!IsFinite(clipW) || clipW <= 0.000001f){
+            csgFrameData.workRegion.expandFull();
+            return;
+        }
+
+        const f32 ndcX = VectorGetX(clipPosition) / clipW;
+        const f32 ndcY = VectorGetY(clipPosition) / clipW;
+        if(!IsFinite(ndcX) || !IsFinite(ndcY)){
+            csgFrameData.workRegion.expandFull();
+            return;
+        }
+
+        const f32 pixelX = (ndcX * 0.5f + 0.5f) * static_cast<f32>(frameWidth);
+        const f32 pixelY = (1.0f - (ndcY * 0.5f + 0.5f)) * static_cast<f32>(frameHeight);
+        minPixelX = Min(minPixelX, pixelX);
+        minPixelY = Min(minPixelY, pixelY);
+        maxPixelX = Max(maxPixelX, pixelX);
+        maxPixelY = Max(maxPixelY, pixelY);
+    }
+
+    if(maxPixelX < 0.0f || maxPixelY < 0.0f || minPixelX > static_cast<f32>(frameWidth) || minPixelY > static_cast<f32>(frameHeight))
+        return;
+
+    csgFrameData.workRegion.expandClamped(
+        static_cast<i32>(Floor(minPixelX)) - s_WorkRegionPixelPadding,
+        static_cast<i32>(Ceil(maxPixelX)) + s_WorkRegionPixelPadding,
+        static_cast<i32>(Floor(minPixelY)) - s_WorkRegionPixelPadding,
+        static_cast<i32>(Ceil(maxPixelY)) + s_WorkRegionPixelPadding,
+        frameWidth,
+        frameHeight
+    );
+}
+
 static void BuildResolvedClipCutterGpuData(
     const CsgResolvedClipCutter& resolvedCutter,
     const SIMDMatrix& worldToShape,
@@ -210,13 +276,20 @@ static void BuildResolvedClipCutterGpuData(
         finiteBounds
     ))
         return CsgClipCutterResolveResult::Skipped;
-    if(!finiteBounds)
+    if(!finiteBounds){
+        outCutter.workMinBounds = receiverMinBounds;
+        outCutter.workMaxBounds = receiverMaxBounds;
+        outCutter.workBoundsValid = true;
         return CsgClipCutterResolveResult::Ready;
+    }
 
-    return AabbTests::Intersects(receiverMinBounds, receiverMaxBounds, cutterMinBounds, cutterMaxBounds)
-        ? CsgClipCutterResolveResult::Ready
-        : CsgClipCutterResolveResult::Skipped
-    ;
+    if(!AabbTests::Intersects(receiverMinBounds, receiverMaxBounds, cutterMinBounds, cutterMaxBounds))
+        return CsgClipCutterResolveResult::Skipped;
+
+    outCutter.workMinBounds = VectorMax(receiverMinBounds, cutterMinBounds);
+    outCutter.workMaxBounds = VectorMin(receiverMaxBounds, cutterMaxBounds);
+    outCutter.workBoundsValid = AabbTests::Valid(outCutter.workMinBounds, outCutter.workMaxBounds);
+    return CsgClipCutterResolveResult::Ready;
 }
 
 template<typename CutterHandler>
@@ -451,6 +524,8 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
     const Core::ECS::EntityID entity,
     const CsgReceiverCpuBounds& receiverBounds,
     const Scene::TransformComponent* transform,
+    const u32 frameWidth,
+    const u32 frameHeight,
     CsgFrameGpuData& csgFrameData,
     CsgReceiverRangeGpuData& outRange
 )const{
@@ -477,6 +552,15 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
     if(!__hidden_csg_resources::BuildCsgReceiverWorldToLocal(receiverLocalToWorldPtr, worldToReceiver))
         return false;
 
+    bool meshViewReady = false;
+    SIMDMatrix worldToClip;
+    if(drawState().m_meshViewGpuDataValid){
+        ECSRenderDetail::MeshViewGpuData meshViewData;
+        NWB_MEMCPY(&meshViewData, sizeof(meshViewData), drawState().m_meshViewGpuData, sizeof(meshViewData));
+        worldToClip = __hidden_csg_resources::LoadWorldToClipMatrix(meshViewData);
+        meshViewReady = !MatrixIsNaN(worldToClip) && !MatrixIsInfinite(worldToClip);
+    }
+
     StoreFloat(worldToReceiver, &outRange.worldToReceiver);
     outRange.localBounds = receiverBounds;
     outRange.firstCutter = static_cast<u32>(csgFrameData.cutters.size());
@@ -496,6 +580,20 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
                 LoadFloat(resolvedCutter.cutter->worldToShape),
                 cutterGpuData
             );
+
+            if(meshViewReady && resolvedCutter.workBoundsValid){
+                __hidden_csg_resources::ExpandCsgFrameWorkRegionForWorldBounds(
+                    csgFrameData,
+                    worldToClip,
+                    resolvedCutter.workMinBounds,
+                    resolvedCutter.workMaxBounds,
+                    frameWidth,
+                    frameHeight
+                );
+            }
+            else{
+                csgFrameData.workRegion.expandFull();
+            }
 
             csgFrameData.cutters.push_back(cutterGpuData);
             ++outRange.cutterCount;

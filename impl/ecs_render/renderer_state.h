@@ -167,6 +167,7 @@ private:
     Core::GraphicsPipelineHandle m_intervalCapFillPipeline;
     Core::BufferHandle m_receiverRangeBuffer;
     Core::BufferHandle m_cutterBuffer;
+    Core::BufferHandle m_intervalSampleStateBuffer;
     CsgFrameStateCacheSignature m_frameStateCacheSignature;
     CsgFrameState m_frameStateCache;
     usize m_receiverRangeBufferCapacity = 0u;

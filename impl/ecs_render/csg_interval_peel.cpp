@@ -22,14 +22,63 @@ namespace __hidden_csg_interval_peel{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CsgIntervalPeelPushConstants{
+struct CsgIntervalDispatchPushConstants{
     u32 frameWidth = 0u;
     u32 frameHeight = 0u;
     u32 receiverCount = 0u;
     u32 layerCount = 0u;
+    u32 workOffsetX = 0u;
+    u32 workOffsetY = 0u;
+    u32 workExtentX = 0u;
+    u32 workExtentY = 0u;
 };
 
-static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH_CONSTANT_BYTE_SIZE, "CSG interval peel push constants must match shader layout");
+static_assert(sizeof(CsgIntervalDispatchPushConstants) == NWB_CSG_INTERVAL_DISPATCH_PUSH_CONSTANT_BYTE_SIZE, "CSG interval dispatch push constants must match shader layout");
+
+struct CsgIntervalSampleStateGpuData{
+    u32 workMinX = 0u;
+    u32 workMinY = 0u;
+    u32 workMaxX = 0u;
+    u32 workMaxY = 0u;
+};
+
+static_assert(sizeof(CsgIntervalSampleStateGpuData) == sizeof(u32) * 4u, "CSG interval sample state must match shader layout");
+
+[[nodiscard]] static Core::Rect ResolveCsgFrameWorkRect(const DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData){
+    return csgFrameData.workRegion.resolveRect(targets.width, targets.height);
+}
+
+[[nodiscard]] static CsgIntervalSampleStateGpuData BuildCsgIntervalSampleState(
+    const DeferredFrameTargets& targets,
+    const CsgFrameGpuData& csgFrameData
+){
+    const Core::Rect workRect = ResolveCsgFrameWorkRect(targets, csgFrameData);
+
+    CsgIntervalSampleStateGpuData state;
+    state.workMinX = static_cast<u32>(Max(workRect.minX, 0));
+    state.workMinY = static_cast<u32>(Max(workRect.minY, 0));
+    state.workMaxX = static_cast<u32>(Max(workRect.maxX, 0));
+    state.workMaxY = static_cast<u32>(Max(workRect.maxY, 0));
+    return state;
+}
+
+[[nodiscard]] static CsgIntervalDispatchPushConstants BuildCsgIntervalDispatchPushConstants(
+    const DeferredFrameTargets& targets,
+    const CsgFrameGpuData& csgFrameData
+){
+    const Core::Rect workRect = ResolveCsgFrameWorkRect(targets, csgFrameData);
+
+    CsgIntervalDispatchPushConstants pushConstants;
+    pushConstants.frameWidth = targets.width;
+    pushConstants.frameHeight = targets.height;
+    pushConstants.receiverCount = static_cast<u32>(csgFrameData.receiverRanges.size());
+    pushConstants.layerCount = Min(targets.csgPeelLayerCount, static_cast<u32>(NWB_CSG_PEEL_LAYER_COUNT));
+    pushConstants.workOffsetX = static_cast<u32>(Max(workRect.minX, 0));
+    pushConstants.workOffsetY = static_cast<u32>(Max(workRect.minY, 0));
+    pushConstants.workExtentX = static_cast<u32>(Max(workRect.width(), 0));
+    pushConstants.workExtentY = static_cast<u32>(Max(workRect.height(), 0));
+    return pushConstants;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -322,6 +371,9 @@ static void AddCsgRemovedIntervalBindingSetItems(
         AddCsgReceiverEventLayoutItems(bindingLayoutDesc, receiverEventAccess);
     if(removedIntervalAccess != CsgTextureAccess::None)
         AddCsgRemovedIntervalLayoutItems(bindingLayoutDesc, removedIntervalAccess);
+    const bool usesSampleState = receiverEventAccess != CsgTextureAccess::None || removedIntervalAccess != CsgTextureAccess::None;
+    if(usesSampleState)
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, 1));
 
     layout = device.createBindingLayout(bindingLayoutDesc);
@@ -333,6 +385,7 @@ static void AddCsgRemovedIntervalBindingSetItems(
     Core::Device& device,
     const DeferredFrameTargets& targets,
     Core::Buffer* meshViewBuffer,
+    Core::Buffer* sampleStateBuffer,
     Core::BindingLayout* layout,
     Core::BindingSetHandle& bindingSet,
     CsgTextureAccess intervalAccess,
@@ -341,8 +394,10 @@ static void AddCsgRemovedIntervalBindingSetItems(
 ){
     if(bindingSet)
         return true;
+    const bool usesSampleState = receiverEventAccess != CsgTextureAccess::None || removedIntervalAccess != CsgTextureAccess::None;
     if(
         !meshViewBuffer
+        || (usesSampleState && !sampleStateBuffer)
         || !layout
     )
         return false;
@@ -407,6 +462,8 @@ static void AddCsgRemovedIntervalBindingSetItems(
             removedIntervalAccess
         );
     }
+    if(usesSampleState)
+        bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, sampleStateBuffer));
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, meshViewBuffer));
 
     bindingSet = device.createBindingSet(bindingSetDesc, layout);
@@ -425,6 +482,7 @@ static void AddCsgRemovedIntervalBindingSetItems(
     bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
     AddCsgReceiverEventLayoutItems(bindingLayoutDesc, CsgTextureAccess::SRV);
     AddCsgReceiverSpanLayoutItems(bindingLayoutDesc, CsgTextureAccess::UAV);
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CsgIntervalDispatchPushConstants)));
 
     layout = device.createBindingLayout(bindingLayoutDesc);
     return layout != nullptr;
@@ -489,6 +547,7 @@ static void AddCsgRemovedIntervalBindingSetItems(
     AddCsgIntervalTargetLayoutItems(bindingLayoutDesc, CsgTextureAccess::SRV);
     AddCsgReceiverSpanLayoutItems(bindingLayoutDesc, CsgTextureAccess::SRV);
     AddCsgRemovedIntervalLayoutItems(bindingLayoutDesc, CsgTextureAccess::UAV);
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CsgIntervalDispatchPushConstants)));
 
     layout = device.createBindingLayout(bindingLayoutDesc);
     return layout != nullptr;
@@ -715,6 +774,9 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         return false;
     }
 
+    if(!createCsgIntervalSampleStateBuffer())
+        return false;
+
     if(!__hidden_csg_interval_peel::CreateCsgIntervalBindingLayout(
         arena(),
         *device,
@@ -852,6 +914,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         *device,
         targets,
         drawState().m_meshViewBuffer.get(),
+        nullptr,
         csgState().m_intervalPeelBindingLayout.get(),
         csgState().m_intervalPeelBindingSet,
         __hidden_csg_interval_peel::CsgTextureAccess::UAV,
@@ -913,6 +976,9 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         return false;
     }
 
+    if(!createCsgIntervalSampleStateBuffer())
+        return false;
+
     if(!__hidden_csg_interval_peel::CreateIntervalSampleBindingLayouts(
         arena(),
         *device,
@@ -926,6 +992,7 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         *device,
         targets,
         drawState().m_meshViewBuffer.get(),
+        csgState().m_intervalSampleStateBuffer.get(),
         csgState().m_receiverSurfaceBindingLayout.get(),
         csgState().m_receiverSurfaceBindingSet,
         __hidden_csg_interval_peel::CsgTextureAccess::None,
@@ -941,6 +1008,7 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         *device,
         targets,
         drawState().m_meshViewBuffer.get(),
+        csgState().m_intervalSampleStateBuffer.get(),
         csgState().m_intervalSampleBindingLayout.get(),
         csgState().m_intervalSampleBindingSet,
         __hidden_csg_interval_peel::CsgTextureAccess::None,
@@ -951,6 +1019,50 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         return false;
     }
 
+    return true;
+}
+
+bool RendererCsgSystem::createCsgIntervalSampleStateBuffer(){
+    if(csgState().m_intervalSampleStateBuffer)
+        return true;
+
+    Core::BufferDesc bufferDesc;
+    bufferDesc
+        .setByteSize(sizeof(__hidden_csg_interval_peel::CsgIntervalSampleStateGpuData))
+        .setIsConstantBuffer(true)
+        .setDebugName("engine/csg/interval_sample_state")
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+
+    csgState().m_intervalSampleStateBuffer = graphics().createBuffer(bufferDesc);
+    if(!csgState().m_intervalSampleStateBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval sample state buffer"));
+        return false;
+    }
+
+    csgState().m_receiverSurfaceBindingSet.reset();
+    csgState().m_intervalSampleBindingSet.reset();
+    return true;
+}
+
+bool RendererCsgSystem::uploadCsgIntervalSampleState(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const CsgFrameGpuData& csgFrameData
+){
+    if(!csgFrameData.hasWork())
+        return true;
+    if(!csgState().m_intervalSampleStateBuffer)
+        return false;
+
+    const __hidden_csg_interval_peel::CsgIntervalSampleStateGpuData state =
+        __hidden_csg_interval_peel::BuildCsgIntervalSampleState(targets, csgFrameData)
+    ;
+    commandList.setBufferState(csgState().m_intervalSampleStateBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(csgState().m_intervalSampleStateBuffer.get(), &state, sizeof(state));
+    commandList.setBufferState(csgState().m_intervalSampleStateBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    commandList.commitBarriers();
     return true;
 }
 
@@ -982,15 +1094,15 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     computeState.addBindingSet(csgState().m_clipBindingSet.get());
     commandList.setComputeState(computeState);
 
-    __hidden_csg_interval_peel::CsgIntervalPeelPushConstants pushConstants;
-    pushConstants.frameWidth = targets.width;
-    pushConstants.frameHeight = targets.height;
-    pushConstants.receiverCount = static_cast<u32>(csgFrameData.receiverRanges.size());
-    pushConstants.layerCount = Min(targets.csgPeelLayerCount, static_cast<u32>(NWB_CSG_PEEL_LAYER_COUNT));
+    const __hidden_csg_interval_peel::CsgIntervalDispatchPushConstants pushConstants =
+        __hidden_csg_interval_peel::BuildCsgIntervalDispatchPushConstants(targets, csgFrameData)
+    ;
+    if(pushConstants.workExtentX == 0u || pushConstants.workExtentY == 0u)
+        return;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(
-        DivideUp(targets.width, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)),
-        DivideUp(targets.height, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)),
+        DivideUp(pushConstants.workExtentX, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)),
+        DivideUp(pushConstants.workExtentY, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)),
         1u
     );
 }
@@ -1014,9 +1126,15 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     computeState.addBindingSet(csgState().m_receiverSpanBuildBindingSet.get());
     commandList.setComputeState(computeState);
 
+    const __hidden_csg_interval_peel::CsgIntervalDispatchPushConstants pushConstants =
+        __hidden_csg_interval_peel::BuildCsgIntervalDispatchPushConstants(targets, csgFrameData)
+    ;
+    if(pushConstants.workExtentX == 0u || pushConstants.workExtentY == 0u)
+        return;
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(
-        DivideUp(targets.width, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)),
-        DivideUp(targets.height, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)),
+        DivideUp(pushConstants.workExtentX, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)),
+        DivideUp(pushConstants.workExtentY, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)),
         1u
     );
 }
@@ -1040,14 +1158,20 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     computeState.addBindingSet(csgState().m_intervalCombineBindingSet.get());
     commandList.setComputeState(computeState);
 
+    const __hidden_csg_interval_peel::CsgIntervalDispatchPushConstants pushConstants =
+        __hidden_csg_interval_peel::BuildCsgIntervalDispatchPushConstants(targets, csgFrameData)
+    ;
+    if(pushConstants.workExtentX == 0u || pushConstants.workExtentY == 0u)
+        return;
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(
-        DivideUp(targets.width, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)),
-        DivideUp(targets.height, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)),
+        DivideUp(pushConstants.workExtentX, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)),
+        DivideUp(pushConstants.workExtentY, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)),
         1u
     );
 }
 
-void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets){
+void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData){
     NWB_ASSERT(csgState().m_intervalCapFillPipeline);
     NWB_ASSERT(csgState().m_intervalSampleBindingSet);
     NWB_ASSERT(csgState().m_clipBindingSet);
@@ -1059,7 +1183,10 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     commandList.commitBarriers();
 
     Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect(targets.framebuffer->getFramebufferInfo().getViewport());
+    viewportState
+        .addViewport(targets.framebuffer->getFramebufferInfo().getViewport())
+        .addScissorRect(__hidden_csg_interval_peel::ResolveCsgFrameWorkRect(targets, csgFrameData))
+    ;
 
     Core::GraphicsState graphicsState;
     graphicsState.setPipeline(csgState().m_intervalCapFillPipeline.get());

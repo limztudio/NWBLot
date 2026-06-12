@@ -31,8 +31,8 @@ public:
     [[nodiscard]] bool createDeferredCompositePipeline(Core::Framebuffer* presentationFramebuffer);
     void resetAvboitFrameTargets(AvboitFrameTargets& targets);
     void resetDeferredFrameTargets();
-    void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, bool clearCsgTargets);
-    void clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, bool clearCsgTargets, const Core::Rect& csgClearRect);
+    void clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect);
     [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer);
 };
 

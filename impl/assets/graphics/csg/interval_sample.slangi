@@ -22,6 +22,13 @@
 #define NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED 0
 #endif
 
+struct NwbCsgIntervalSampleState{
+    uint4 workRect;
+};
+
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+ConstantBuffer<NwbCsgIntervalSampleState> g_NwbCsgIntervalSampleState;
+
 #if NWB_CSG_RECEIVER_EVENTS_WRITABLE
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DEPTH, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_EVENT_DEPTH_IMAGE_FORMAT)]]
 RWTexture2DArray<float> g_NwbCsgReceiverEventDepth;
@@ -93,6 +100,10 @@ void nwbCsgMarkReceiverSurfaceEvent(
         return;
 
     const uint2 pixel = uint2(rasterPosition.xy);
+    const uint4 workRect = g_NwbCsgIntervalSampleState.workRect;
+    if(pixel.x < workRect.x || pixel.y < workRect.y || pixel.x >= workRect.z || pixel.y >= workRect.w)
+        return;
+
     uint eventIndex;
     InterlockedAdd(g_NwbCsgReceiverEventCount[uint3(pixel, 0u)], 1u, eventIndex);
     if(eventIndex >= layerCount){
@@ -169,6 +180,18 @@ bool nwbCsgIntervalSamplePixelInFrame(const int2 pixel){
     ;
 }
 
+bool nwbCsgIntervalSamplePixelInWorkRect(const int2 pixel){
+    if(!nwbCsgIntervalSamplePixelInFrame(pixel))
+        return false;
+
+    const uint4 workRect = g_NwbCsgIntervalSampleState.workRect;
+    return uint(pixel.x) >= workRect.x
+        && uint(pixel.y) >= workRect.y
+        && uint(pixel.x) < workRect.z
+        && uint(pixel.y) < workRect.w
+    ;
+}
+
 void nwbCsgSelectNearestIntervalCap(inout NwbCsgIntervalCapPixel result, const NwbCsgIntervalCapPixel candidate){
     if(!candidate.visible || candidate.depth >= result.depth)
         return;
@@ -183,6 +206,8 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestRemovedIntervalCapAtPixel(const uint2 
     result.depth = 1e30;
     result.normal = float3(0.0, 0.0, 1.0);
     result.worldPosition = float3(0.0, 0.0, 0.0);
+    if(!nwbCsgIntervalSamplePixelInWorkRect(int2(intervalPixel)))
+        return result;
 
     const uint removedIntervalLayerCount = nwbCsgRemovedIntervalLayerCount();
     const uint rawIntervalCount = g_NwbCsgRemovedIntervalCount.Load(int4(int2(intervalPixel), 0, 0));
@@ -220,6 +245,9 @@ bool nwbCsgReceiverRemovedIntervalPixelDiscardAtPixel(
     const float receiverLinearDepth,
     const float linearDepthTolerance
 ){
+    if(!nwbCsgIntervalSamplePixelInWorkRect(int2(intervalPixel)))
+        return false;
+
     const uint removedIntervalLayerCount = nwbCsgRemovedIntervalLayerCount();
     const uint rawIntervalCount = g_NwbCsgRemovedIntervalCount.Load(int4(int2(intervalPixel), 0, 0));
     const uint intervalCount = min(rawIntervalCount, removedIntervalLayerCount);
@@ -258,7 +286,11 @@ bool nwbCsgReceiverIntervalPixelDiscard(
     ))
         return false;
 
-    const uint2 pixel = uint2(rasterPosition.xy);
+    const int2 pixelInt = int2(rasterPosition.xy);
+    if(!nwbCsgIntervalSamplePixelInWorkRect(pixelInt))
+        return false;
+
+    const uint2 pixel = uint2(pixelInt);
     const float receiverLinearDepth = length(worldPosition - g_NwbMeshCameraPosition.xyz);
     const float linearDepthTolerance = max(
         abs(worldDistanceTolerance) * NWB_CSG_RECEIVER_INTERVAL_LINEAR_DEPTH_TOLERANCE_SCALE,
@@ -283,7 +315,7 @@ bool nwbCsgReceiverIntervalPixelDiscard(
                 continue;
 
             const int2 intervalPixel = int2(pixel) + int2(offsetX, offsetY);
-            if(!nwbCsgIntervalSamplePixelInFrame(intervalPixel))
+            if(!nwbCsgIntervalSamplePixelInWorkRect(intervalPixel))
                 continue;
 
             if(nwbCsgReceiverRemovedIntervalPixelDiscardAtPixel(
@@ -321,7 +353,7 @@ void nwbCsgSampleNearestRemovedIntervalCapNeighborhood(
                 continue;
 
             const int2 neighborPixel = int2(outputPixel) + int2(offsetX, offsetY);
-            if(!nwbCsgIntervalSamplePixelInFrame(neighborPixel))
+            if(!nwbCsgIntervalSamplePixelInWorkRect(neighborPixel))
                 continue;
 
             nwbCsgSelectNearestIntervalCap(

@@ -103,6 +103,7 @@ void RendererCsgState::invalidateResources(){
     m_intervalCapFillPipeline.reset();
     m_receiverRangeBuffer.reset();
     m_cutterBuffer.reset();
+    m_intervalSampleStateBuffer.reset();
     m_frameStateCacheSignature = CsgFrameStateCacheSignature{};
     m_frameStateCache = CsgFrameState{};
     m_receiverRangeBufferCapacity = 0u;

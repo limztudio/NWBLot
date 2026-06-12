@@ -264,7 +264,11 @@ void RendererAvboitSystem::buildTransparentCsgIntervals(
     if(drawItems.csgReceiverSurface.empty() || !csgFrameData.hasWork())
         return;
 
-    m_renderer.m_deferredSystem.clearCsgIntervalTargets(commandList, targets);
+    m_renderer.m_deferredSystem.clearCsgIntervalTargets(
+        commandList,
+        targets,
+        csgFrameData.workRegion.resolveRect(targets.width, targets.height)
+    );
 
     const bool drawBuffersReady = m_renderer.materialSystem().materialPassDrawBuffersReady(instanceData, materialTypedBytes);
     const bool csgResourcesReady = m_renderer.csgSystem().csgFrameBuffersReady(csgFrameData);
@@ -285,13 +289,18 @@ void RendererAvboitSystem::buildTransparentCsgIntervals(
         return;
     if(!m_renderer.csgSystem().uploadCsgFrameBuffers(commandList, csgFrameData))
         return;
+    if(!m_renderer.csgSystem().uploadCsgIntervalSampleState(commandList, targets, csgFrameData))
+        return;
 
     const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(targets.framebuffer->getFramebufferInfo());
     if(!m_renderer.meshSystem().updateMeshViewBuffer(commandList, meshViewAspectRatio))
         return;
 
     Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect(targets.framebuffer->getFramebufferInfo().getViewport());
+    viewportState
+        .addViewport(targets.framebuffer->getFramebufferInfo().getViewport())
+        .addScissorRect(csgFrameData.workRegion.resolveRect(targets.width, targets.height))
+    ;
 
     m_renderer.csgSystem().dispatchCsgIntervalPeels(commandList, targets, csgFrameData);
 

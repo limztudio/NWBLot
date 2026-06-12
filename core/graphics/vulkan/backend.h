@@ -2020,6 +2020,8 @@ private:
     bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode, Buffer*& outIndirectBuffer)const;
     void clearColorTexture(Texture* textureResource, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue);
     void clearColorTextureRect(Texture* textureResource, TextureSubresourceSet subresources, const Rect& rect, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue);
+    bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, const tchar* valueName);
+    bool clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
     bool prepareStagingTextureCopy(
         StagingTexture& stagingResource,
         const TextureSlice& stagingSlice,

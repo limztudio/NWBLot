@@ -16,6 +16,7 @@
 #include <core/common/command_line.h>
 #include <logger/client/logger.h>
 #include <core/common/module.h>
+#include <core/crash/module.h>
 #include <core/frame/module.h>
 #include <core/assets/registry.h>
 #include <core/assets/manager.h>
@@ -39,11 +40,9 @@ namespace __hidden_loader{
 
 
 using Path = NWB::Path;
+using CrashArena = NWB::Core::Alloc::PersistentArena;
 
-static NWB::Core::Alloc::GlobalArena& PathArena(){
-    static NWB::Core::Alloc::GlobalArena s_Arena("NWB::Loader::Path");
-    return s_Arena;
-}
+inline constexpr usize s_CrashArenaPayloadSize = 256u * 1024u;
 
 class CallbackShutdownGuard : NoCopy{
 public:
@@ -102,18 +101,18 @@ bool HasGraphicsVolumeSegment(const Path& mountDirectory){
     return FileExists(segmentPath, errorCode) && !errorCode;
 }
 
-Path ResolveResourceMountDirectory(){
+Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena){
     ErrorCode errorCode;
-    Path currentDirectory(PathArena());
+    Path currentDirectory(arena);
     if(GetCurrentPath(currentDirectory, errorCode)){
         const Path currentResDirectory = currentDirectory / "res";
         if(HasGraphicsVolumeSegment(currentResDirectory))
             return currentResDirectory;
     }
 
-    Path executableDirectory(PathArena());
+    Path executableDirectory(arena);
     if(!GetExecutableDirectory(executableDirectory))
-        return Path(PathArena(), "res");
+        return Path(arena, "res");
 
     const Path executableResDirectory = executableDirectory / "res";
     if(HasGraphicsVolumeSegment(executableResDirectory))
@@ -121,13 +120,13 @@ Path ResolveResourceMountDirectory(){
 
     const Path parentDirectory = executableDirectory.parent_path();
     if(parentDirectory.empty())
-        return Path(PathArena(), "res");
+        return Path(arena, "res");
 
     const Path parentResDirectory = parentDirectory / "res";
     if(HasGraphicsVolumeSegment(parentResDirectory))
         return parentResDirectory;
 
-    return Path(PathArena(), "res");
+    return Path(arena, "res");
 }
 
 
@@ -186,6 +185,36 @@ bool ApplyGraphicsOptions(NWB::Core::Graphics& graphics, const LoaderOptions& op
     return true;
 }
 
+void InstallCrashReporting(CrashArena& crashArena, NWB::Core::Alloc::GlobalArena& runtimeArena, const LoaderOptions& options){
+    ::Path<CrashArena> executableDirectory(crashArena);
+    if(!GetExecutableDirectory(executableDirectory))
+        executableDirectory = ::Path<CrashArena>(crashArena, ".");
+
+    ::Path<CrashArena> executableName(crashArena);
+    if(!GetExecutableName(executableName))
+        executableName = ::Path<CrashArena>(crashArena, "nwb");
+
+    AString<CrashArena> applicationName = PathToString<char>(crashArena, executableName);
+
+    NWB::Core::Crash::PersistentCrashConfig crashConfig(crashArena);
+    crashConfig.applicationName = AStringView(applicationName.data(), applicationName.size());
+    crashConfig.buildId = AStringView("unknown");
+    crashConfig.version = AStringView("unknown");
+    crashConfig.spoolDirectory = executableDirectory / "crashes";
+    crashConfig.logServerUrl = options.useStandaloneLogger
+        ? AStringView()
+        : AStringView(options.logAddress.data(), options.logAddress.size())
+    ;
+    crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
+    crashConfig.enableGpuDumps = options.enableGpuDebug;
+
+    if(NWB::Core::Crash::InstallCrashHandler(crashArena, crashConfig)){
+        static_cast<void>(NWB::Core::Crash::SetCrashMetadata("runtime", "loader"));
+        static_cast<void>(NWB::Core::Crash::SetCrashMetadata("gpu_debug", options.enableGpuDebug ? "true" : "false"));
+        static_cast<void>(NWB::Core::Crash::FlushPendingCrashReports(runtimeArena));
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -196,7 +225,7 @@ bool ApplyGraphicsOptions(NWB::Core::Graphics& graphics, const LoaderOptions& op
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int RunProjectRuntime(const __hidden_loader::LoaderOptions& options, void* inst){
+static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader::LoaderOptions& options, void* inst){
     try{
         const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
         if(frameClientSize.width == 0 || frameClientSize.height == 0){
@@ -212,7 +241,7 @@ static int RunProjectRuntime(const __hidden_loader::LoaderOptions& options, void
 
         NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
         frame.graphics().setWindowTitle(MakeNotNull(projectWindowTitle));
-        const NWB::Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory();
+        const NWB::Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory(arena);
         frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
         if(!__hidden_loader::ApplyGraphicsOptions(frame.graphics(), options))
             return -1;
@@ -313,14 +342,21 @@ static int RunProjectRuntime(const __hidden_loader::LoaderOptions& options, void
     return 0;
 }
 
-static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
+static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader::LoaderOptions& options, void* inst){
+    const usize crashArenaReserveSize = __hidden_loader::CrashArena::StructureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
+    __hidden_loader::CrashArena crashArena(
+        crashArenaReserveSize,
+        "NWB::Loader::CrashReportingArena"
+    );
+    __hidden_loader::InstallCrashReporting(crashArena, arena, options);
+
     if(options.useStandaloneLogger){
         NWB::Log::ClientStandalone logger;
         if(!logger.init())
             return -1;
         NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: using standalone log output"));
-        return RunProjectRuntime(options, inst);
+        return RunProjectRuntime(arena, options, inst);
     }
 
     NWB::Log::Client logger;
@@ -328,7 +364,7 @@ static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
         return -1;
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), StringConvert(options.logAddress.c_str()));
-    return RunProjectRuntime(options, inst);
+    return RunProjectRuntime(arena, options, inst);
 }
 
 
@@ -361,7 +397,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             options.logAddress = StringFormat(commandLineArena, "{}:{}", AStringView(address.data(), address.size()), port);
     }
 
-    return MainLogic(options, inst);
+    return MainLogic(commandLineArena, options, inst);
 }
 
 

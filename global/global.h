@@ -15,6 +15,7 @@
 #include "call_traits.h"
 #include "not_null.h"
 #include "containers.h"
+#include "fixed_buffer.h"
 #include "text_utils.h"
 #include "process.h"
 #include "compact_string.h"

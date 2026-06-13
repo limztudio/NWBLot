@@ -80,6 +80,7 @@ struct ConnectionInfo{
     u8* buffer = nullptr;
     usize size = 0u;
     usize capacity = 0u;
+    bool isCrashUpload = false;
 };
 
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept;
@@ -113,16 +114,67 @@ static void EnqueueServerMessage(Server& server, const tchar* message, const Typ
     return ret;
 }
 
+[[nodiscard]] static Path CrashInboxDirectory(Server& server){
+    Path executableDirectory(server.arena());
+    if(GetExecutableDirectory(executableDirectory))
+        return executableDirectory / "crashes" / "inbox";
+
+    return Path(server.arena(), "crashes") / "inbox";
+}
+
+[[nodiscard]] static Path MakeCrashPackagePath(Server& server){
+    static Atomic<u64> s_CrashPackageCounter{ 1u };
+
+    LocalTime localTime = {};
+    static_cast<void>(GetLocalTime(localTime));
+
+    const u64 counter = s_CrashPackageCounter.fetch_add(1u, MemoryOrder::relaxed);
+    const auto fileName = StringFormat(
+        server.arena(),
+        "crash_{:04}{:02}{:02}_{:02}{:02}{:02}_{}.nwbcrashpkg",
+        localTime.tm_year + 1900,
+        localTime.tm_mon + 1,
+        localTime.tm_mday,
+        localTime.tm_hour,
+        localTime.tm_min,
+        localTime.tm_sec,
+        counter
+    );
+
+    return CrashInboxDirectory(server) / fileName;
+}
+
+[[nodiscard]] static bool StoreCrashUpload(Server& server, const ConnectionInfo& info, Path& outPath){
+    ErrorCode error;
+    const Path inboxDirectory = CrashInboxDirectory(server);
+    static_cast<void>(EnsureDirectories(inboxDirectory, error));
+    if(error)
+        return false;
+
+    outPath = MakeCrashPackagePath(server);
+    OutputFileStream stream(outPath.c_str(), s_FileOpenBinary | s_FileOpenTruncate);
+    if(!stream.is_open())
+        return false;
+
+    if(info.size)
+        stream.write(reinterpret_cast<const char*>(info.buffer), static_cast<StreamSize>(info.size));
+
+    static_cast<void>(server);
+    return stream.good();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static ConnectionInfo* CreateConnectionInfo(){
+[[nodiscard]] static ConnectionInfo* CreateConnectionInfo(bool isCrashUpload){
     void* memory = Core::Alloc::CoreAlloc(sizeof(ConnectionInfo), "ConnectionInfo allocated at Server::requestCallback");
     if(!memory)
         return nullptr;
 
-    return new(memory) ConnectionInfo();
+    auto* info = new(memory) ConnectionInfo();
+    info->isCrashUpload = isCrashUpload;
+    return info;
 }
 
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept{
@@ -164,10 +216,9 @@ Server* g_ServerLogger = nullptr;
 
 
 MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* upload_data, size_t* upload_data_size, void** con_cls){
-    static_cast<void>(url);
     static_cast<void>(version);
 
-    if(!cls || !connection || !method || !upload_data_size || !con_cls)
+    if(!cls || !connection || !url || !method || !upload_data_size || !con_cls)
         return MHD_NO;
 
     const auto methodPtr = MakeNotNull(method);
@@ -180,8 +231,10 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     const auto conClsPtr = MakeNotNull(con_cls);
     auto& conCls = *conClsPtr;
 
+    const bool isCrashUpload = NWB_STRCMP(url, "/crash") == 0;
+
     if(!conCls){
-        auto* info = __hidden_logger_server::CreateConnectionInfo();
+        auto* info = __hidden_logger_server::CreateConnectionInfo(isCrashUpload);
         if(!info){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to allocate"), Type::Fatal);
             return MHD_NO;
@@ -218,16 +271,34 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         return MHD_YES;
     }
 
-    MessageType message = MakeMessageType(thisPtr->arena());
-    const tchar* error = nullptr;
-    if(ParseMessagePayload(thisPtr->arena(), info->buffer, info->size, message, error))
-        thisPtr->enqueue(Move(message));
+    if(info->isCrashUpload){
+        Path storedPath(thisPtr->arena());
+        if(__hidden_logger_server::StoreCrashUpload(*thisPtr, *info, storedPath)){
+            thisPtr->enqueue(
+                StringFormat(
+                    thisPtr->arena(),
+                    NWB_TEXT("Crash upload stored at '{}'; symbolication pending"),
+                    PathToString<tchar>(storedPath)
+                ),
+                Type::EssentialInfo
+            );
+        }
+        else{
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store crash upload"), Type::Error);
+        }
+    }
     else{
-        __hidden_logger_server::EnqueueServerMessage(
-            *thisPtr,
-            error ? error : NWB_TEXT("Received a malformed message"),
-            Type::Error
-        );
+        MessageType message = MakeMessageType(thisPtr->arena());
+        const tchar* error = nullptr;
+        if(ParseMessagePayload(thisPtr->arena(), info->buffer, info->size, message, error))
+            thisPtr->enqueue(Move(message));
+        else{
+            __hidden_logger_server::EnqueueServerMessage(
+                *thisPtr,
+                error ? error : NWB_TEXT("Received a malformed message"),
+                Type::Error
+            );
+        }
     }
 
     return __hidden_logger_server::FinishConnectionUpload(*thisPtr, *connection, info, conCls);

@@ -171,8 +171,8 @@ static void TestModelBunchLocalReferencesAndWrapperExpansion(TestContext& contex
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(PathArena());
-    Path outputDirectory(PathArena());
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
     const AString meta = BuildValidModelBunchFixture();
     const bool cooked = CookSingleGraphicsMeta(
         AStringView(meta.data(), meta.size()),
@@ -265,8 +265,8 @@ static void TestModelBunchStaticMeshAttachmentToNamedJoint(TestContext& context)
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(PathArena());
-    Path outputDirectory(PathArena());
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
     const AString meta = BuildStaticAttachmentModelBunchFixture();
     const bool cooked = CookSingleGraphicsMeta(
         AStringView(meta.data(), meta.size()),
@@ -313,6 +313,7 @@ static void TestModelBunchStaticMeshAttachmentToNamedJoint(TestContext& context)
 
 #if defined(NWB_FINAL)
 static bool ExpandModelBunchFixture(
+    TestArena& testArena,
     const AStringView meta,
     const AStringView caseName,
     NWB::Core::Metascript::Document& doc,
@@ -322,7 +323,7 @@ static bool ExpandModelBunchFixture(
     if(!doc.parse(meta))
         return false;
 
-    const Path assetRoot = AssetsGraphicsTestCaseRoot(caseName) / "assets";
+    const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, caseName) / "assets";
     const Path nwbFilePath = assetRoot / "characters" / "model_fixture.nwb";
     return NWB::Impl::AssetsBunchCook::ExpandAssetBunch(
         assetRoot,
@@ -361,6 +362,7 @@ asset_bunch bunch = [
     NWB::Core::Alloc::ScratchArena scratchArena;
     NWB::Impl::AssetsBunchCook::ExpandedAssetVector expandedAssets(scratchArena);
     const bool expanded = ExpandModelBunchFixture(
+        testArena,
         AStringView(meta.data(), meta.size()),
         "model_bunch_duplicate_local_reference",
         doc,
@@ -399,6 +401,7 @@ asset_bunch bunch = [
     NWB::Core::Alloc::ScratchArena scratchArena;
     NWB::Impl::AssetsBunchCook::ExpandedAssetVector expandedAssets(scratchArena);
     const bool expanded = ExpandModelBunchFixture(
+        testArena,
         AStringView(meta.data(), meta.size()),
         "model_bunch_missing_local_reference",
         doc,

@@ -61,11 +61,6 @@ struct AssetsGraphicsTestArenaTag{};
 using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestArenaTag>;
 using Path = NWB::Path;
 
-static Path::Arena& PathArena(){
-    static Path::Arena s_Arena("NWB::Tests::AssetsGraphicsPath");
-    return s_Arena;
-}
-
 template<typename T>
 static NWB::Core::Assets::AssetVector<T> MakeAssetVector(TestArena& testArena){
     return NWB::Core::Assets::AssetVector<T>(testArena.arena);
@@ -995,25 +990,26 @@ static const char* AssetsGraphicsTestConfigurationName(){
 #endif
 }
 
-static Path AssetsGraphicsTestRepoRoot(){
-    return Path(PathArena(), __FILE__).parent_path().parent_path().parent_path().lexically_normal();
+static Path AssetsGraphicsTestRepoRoot(TestArena& testArena){
+    return Path(testArena.arena, __FILE__).parent_path().parent_path().parent_path().lexically_normal();
 }
 
-static Path AssetsGraphicsTestCaseRoot(const AStringView caseName){
-    return AssetsGraphicsTestRepoRoot() / "__build_obj" / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / AString(caseName);
+static Path AssetsGraphicsTestCaseRoot(TestArena& testArena, const AStringView caseName){
+    return AssetsGraphicsTestRepoRoot(testArena) / "__build_obj" / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / AString(caseName);
 }
 
-static bool PrepareAssetsGraphicsCaseRoot(const AStringView caseName, Path& outRoot){
-    outRoot = AssetsGraphicsTestCaseRoot(caseName);
+static bool PrepareAssetsGraphicsCaseRoot(TestArena& testArena, const AStringView caseName, Path& outRoot){
+    outRoot = AssetsGraphicsTestCaseRoot(testArena, caseName);
     return PrepareCleanDirectory(outRoot);
 }
 
 static bool PrepareAssetsGraphicsCookCase(
+    TestArena& testArena,
     const AStringView caseName,
     Path& outRoot,
     Path& outOutputDirectory
 ){
-    if(!PrepareAssetsGraphicsCaseRoot(caseName, outRoot))
+    if(!PrepareAssetsGraphicsCaseRoot(testArena, caseName, outRoot))
         return false;
 
     outOutputDirectory = outRoot / "cooked";
@@ -1028,7 +1024,7 @@ static bool CookPreparedGraphicsAssetRoots(
 ){
     NWB::Core::Alloc::ThreadPool cookThreadPool(0u, NWB::Core::Alloc::CoreAffinity::Any);
     NWB::Core::Assets::AssetCookOptions options(testArena.arena, cookThreadPool);
-    options.repoRoot = PathToString(testArena.arena, AssetsGraphicsTestRepoRoot());
+    options.repoRoot = PathToString(testArena.arena, AssetsGraphicsTestRepoRoot(testArena));
     options.assetRoots.reserve(assetRoots.size());
     for(const Path& assetRoot : assetRoots)
         options.assetRoots.push_back(PathToString(testArena.arena, assetRoot));
@@ -1050,7 +1046,7 @@ static bool CookSingleGraphicsMeta(
     Path& outRoot,
     Path& outOutputDirectory
 ){
-    if(!PrepareAssetsGraphicsCookCase(caseName, outRoot, outOutputDirectory))
+    if(!PrepareAssetsGraphicsCookCase(testArena, caseName, outRoot, outOutputDirectory))
         return false;
 
     const Path assetRoot = outRoot / "assets";
@@ -1096,9 +1092,14 @@ static bool CookSingleMeshMeta(
     return CookSingleMinimalAssetMeta(metaText, caseName, s_CookInfo, testArena, outRoot, outOutputDirectory);
 }
 
-static bool ReadSmokeAssetMeta(const char* assetDirectory, const char* assetFilename, AString& outMetaText){
+static bool ReadSmokeAssetMeta(
+    TestArena& testArena,
+    const char* assetDirectory,
+    const char* assetFilename,
+    AString& outMetaText
+){
     return ReadTextFile(
-        AssetsGraphicsTestRepoRoot() / "tests" / "smoke" / "assets" / assetDirectory / assetFilename,
+        AssetsGraphicsTestRepoRoot(testArena) / "tests" / "smoke" / "assets" / assetDirectory / assetFilename,
         outMetaText
     );
 }
@@ -1112,7 +1113,7 @@ static bool CookSmokeAssetMeta(
     Path& outOutputDirectory
 ){
     AString metaText;
-    if(!ReadSmokeAssetMeta(assetDirectory, assetFilename, metaText))
+    if(!ReadSmokeAssetMeta(testArena, assetDirectory, assetFilename, metaText))
         return false;
 
     return CookSingleGraphicsMeta(
@@ -1143,7 +1144,7 @@ static bool CookMinimalMeshWithMaterialBind(
     Path& outRoot,
     Path& outOutputDirectory
 ){
-    if(!PrepareAssetsGraphicsCookCase(caseName, outRoot, outOutputDirectory))
+    if(!PrepareAssetsGraphicsCookCase(testArena, caseName, outRoot, outOutputDirectory))
         return false;
 
     const Path assetRoot = outRoot / "assets";
@@ -1156,13 +1157,14 @@ static bool CookMinimalMeshWithMaterialBind(
 }
 
 static bool ParseMaterialBindFromText(
+    TestArena& testArena,
     const AStringView bindText,
     const AStringView caseName,
     NWB::Impl::MaterialBindEntry& outEntry,
     Path& outRoot,
     NWB::Core::Alloc::ScratchArena& scratchArena
 ){
-    if(!PrepareAssetsGraphicsCaseRoot(caseName, outRoot))
+    if(!PrepareAssetsGraphicsCaseRoot(testArena, caseName, outRoot))
         return false;
 
     const Path bindPath = outRoot / "assets" / "material_interfaces" / "test_surface.bind";
@@ -1179,7 +1181,7 @@ static bool CookDuplicateGeneratedMaterialBindIncludePath(
     Path& outRoot,
     Path& outOutputDirectory
 ){
-    if(!PrepareAssetsGraphicsCookCase(caseName, outRoot, outOutputDirectory))
+    if(!PrepareAssetsGraphicsCookCase(testArena, caseName, outRoot, outOutputDirectory))
         return false;
 
     const Path firstAssetRoot = outRoot / "first" / "assets";
@@ -1202,7 +1204,7 @@ static bool WriteMaterialBindMeshShaderProbeSource(
     const char* sourceFilename,
     const AStringView sourceText
 ){
-    const Path engineGraphicsIncludeRoot = AssetsGraphicsTestRepoRoot() / "impl" / "assets" / "graphics";
+    const Path engineGraphicsIncludeRoot = AssetsGraphicsTestRepoRoot(testArena) / "impl" / "assets" / "graphics";
     const NWB::Impl::ShaderCook::CookString engineGraphicsIncludeRootText = PathToString(
         testArena.arena,
         engineGraphicsIncludeRoot
@@ -1248,7 +1250,7 @@ static bool CookMaterialBindShaderProbe(
     Path& outRoot,
     Path& outOutputDirectory
 ){
-    if(!PrepareAssetsGraphicsCookCase(caseName, outRoot, outOutputDirectory))
+    if(!PrepareAssetsGraphicsCookCase(testArena, caseName, outRoot, outOutputDirectory))
         return false;
 
     const Path assetRoot = outRoot / "assets";
@@ -1314,7 +1316,7 @@ static bool CookMaterialBindMaterialIntegrationWithMeshSource(
     Path& outRoot,
     Path& outOutputDirectory
 ){
-    if(!PrepareAssetsGraphicsCookCase(caseName, outRoot, outOutputDirectory))
+    if(!PrepareAssetsGraphicsCookCase(testArena, caseName, outRoot, outOutputDirectory))
         return false;
 
     const Path assetRoot = outRoot / "assets";

@@ -12,7 +12,7 @@ static bool CookAndLoadMinimalAsset(
     CookSingleMetaFn cookSingleMeta,
     LoadCookedAssetFn loadCookedAsset
 ){
-    Path outputDirectory(PathArena());
+    Path outputDirectory(testArena.arena);
     const bool cooked = cookSingleMeta(metaText, caseName, testArena, outRoot, outputDirectory);
 
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
@@ -109,7 +109,7 @@ static void CookAndCheckMinimalTypedAsset(
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(PathArena());
+    Path root(testArena.arena);
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     if(!CookAndLoadMinimalAssetByKind(
         context,
@@ -132,7 +132,7 @@ static void CookAndCheckMinimalTypedAsset(
 
 static void TestVolumeSessionAcceptsScratchBytes(TestContext& context){
     TestArena testArena;
-    const Path root = AssetsGraphicsTestCaseRoot("volume_scratch_bytes");
+    const Path root = AssetsGraphicsTestCaseRoot(testArena, "volume_scratch_bytes");
     const bool prepared = PrepareCleanDirectory(root);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, prepared);
 

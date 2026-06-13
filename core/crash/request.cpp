@@ -113,6 +113,23 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
     }
 }
 
+bool RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options){
+#if defined(NWB_PLATFORM_ANDROID)
+    if(options.writePackageInProcess){
+        CrashRequest request;
+        SnapshotCrashState(request, reasonKind, reasonCode);
+        if(!WriteCrashPackage(request))
+            return false;
+
+        if(options.uploadImmediately)
+            static_cast<void>(UploadCrashPackage(request));
+        return true;
+    }
+#endif
+
+    return RequestCrashHandler(reasonKind, reasonCode, options.waitMilliseconds);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

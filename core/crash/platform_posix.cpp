@@ -139,7 +139,8 @@ bool RequestCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reaso
 }
 
 void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode)noexcept{
-    static_cast<void>(RequestCrashHandler(reasonKind, reasonCode, 0u));
+    CrashDumpRequestOptions options;
+    static_cast<void>(RequestCrashDump(reasonKind, reasonCode, options));
 }
 
 template<typename ArenaT>

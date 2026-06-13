@@ -200,17 +200,14 @@ bool CaptureCrashDump(const AStringView category, const AStringView message){
             __hidden_crash_module::__hidden_store_breadcrumb(category.empty() ? AStringView("manual_dump") : category, message);
     }
 
+    Detail::CrashDumpRequestOptions options;
+    options.waitMilliseconds = 10000u;
 #if defined(NWB_PLATFORM_ANDROID)
-    Detail::CrashRequest request;
-    Detail::SnapshotCrashState(request, Detail::CrashReasonKind::ManualDump, 0u);
-    if(!Detail::WriteCrashPackage(request))
-        return false;
-
-    static_cast<void>(Detail::UploadCrashPackage(request));
-    return true;
-#else
-    return Detail::RequestCrashHandler(Detail::CrashReasonKind::ManualDump, 0u, 10000u);
+    options.writePackageInProcess = true;
+    options.uploadImmediately = true;
 #endif
+
+    return Detail::RequestCrashDump(Detail::CrashReasonKind::ManualDump, 0u, options);
 }
 
 bool FlushPendingCrashReports(Alloc::GlobalArena& arena){

@@ -107,6 +107,12 @@ struct CrashRequest{
     FixedBreadcrumb breadcrumbs[s_MaxBreadcrumbs] = {};
 };
 
+struct CrashDumpRequestOptions{
+    u32 waitMilliseconds = 0u;
+    bool writePackageInProcess = false;
+    bool uploadImmediately = false;
+};
+
 struct CrashState{
     Futex mutex;
     bool installed = false;
@@ -153,6 +159,7 @@ extern CrashState g_State;
 [[nodiscard]] const char* ReasonKindName(u32 reasonKind)noexcept;
 
 void SnapshotCrashState(CrashRequest& outRequest, CrashReasonKind::Enum reasonKind, u32 reasonCode)noexcept;
+[[nodiscard]] bool RequestCrashDump(CrashReasonKind::Enum reasonKind, u32 reasonCode, const CrashDumpRequestOptions& options);
 [[nodiscard]] bool RequestCrashHandler(CrashReasonKind::Enum reasonKind, u32 reasonCode, u32 waitMilliseconds)noexcept;
 void NotifyCrashHandler(CrashReasonKind::Enum reasonKind, u32 reasonCode)noexcept;
 

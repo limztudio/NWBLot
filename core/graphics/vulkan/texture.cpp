@@ -288,6 +288,17 @@ inline bool TextureClearSubresourcesContainedBy(const TextureSubresourceSet& req
     ;
 }
 
+inline void BuildArrayLayerImageSubresourceRanges(
+    const TextureSubresourceSet& subresources,
+    const VkImageAspectFlags aspectMask,
+    Vector<VkImageSubresourceRange, Alloc::ScratchArena>& ranges
+){
+    const ArraySlice arrayEnd = subresources.baseArraySlice + subresources.numArraySlices;
+    u32 rangeIndex = 0u;
+    for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice)
+        ranges[rangeIndex++] = VulkanDetail::BuildImageSubresourceRange(TextureSubresourceSet(subresources.baseMipLevel, subresources.numMipLevels, arraySlice, 1u), aspectMask);
+}
+
 inline VkClearRect BuildTextureAttachmentClearRect(const TextureSubresourceSet& requested, const TextureSubresourceSet& attachment, const Rect& rect){
     VkClearRect clearRect{};
     clearRect.rect.offset = { rect.minX, rect.minY };
@@ -1510,11 +1521,10 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
 
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
     if(texture.m_desc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
-        const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
-        for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
-            const VkImageSubresourceRange range = VulkanDetail::BuildImageSubresourceRange(TextureSubresourceSet(resolvedSubresources.baseMipLevel, resolvedSubresources.numMipLevels, arraySlice, 1u), aspectMask);
-            vkCmdClearDepthStencilImage(m_currentCmdBuf->m_cmdBuf, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1u, &range);
-        }
+        Alloc::ScratchArena scratchArena;
+        Vector<VkImageSubresourceRange, Alloc::ScratchArena> ranges(resolvedSubresources.numArraySlices, scratchArena);
+        __hidden_vulkan_texture::BuildArrayLayerImageSubresourceRanges(resolvedSubresources, aspectMask, ranges);
+        vkCmdClearDepthStencilImage(m_currentCmdBuf->m_cmdBuf, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, static_cast<u32>(ranges.size()), ranges.data());
     }
     else{
         const VkImageSubresourceRange range = VulkanDetail::BuildImageSubresourceRange(resolvedSubresources, aspectMask);
@@ -2168,11 +2178,10 @@ void CommandList::clearColorTexture(
 
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
     if(texture.m_desc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
-        const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
-        for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
-            const VkImageSubresourceRange range = VulkanDetail::BuildImageSubresourceRange(TextureSubresourceSet(resolvedSubresources.baseMipLevel, resolvedSubresources.numMipLevels, arraySlice, 1u), VK_IMAGE_ASPECT_COLOR_BIT);
-            vkCmdClearColorImage(m_currentCmdBuf->m_cmdBuf, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1u, &range);
-        }
+        Alloc::ScratchArena scratchArena;
+        Vector<VkImageSubresourceRange, Alloc::ScratchArena> ranges(resolvedSubresources.numArraySlices, scratchArena);
+        __hidden_vulkan_texture::BuildArrayLayerImageSubresourceRanges(resolvedSubresources, VK_IMAGE_ASPECT_COLOR_BIT, ranges);
+        vkCmdClearColorImage(m_currentCmdBuf->m_cmdBuf, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, static_cast<u32>(ranges.size()), ranges.data());
     }
     else{
         const VkImageSubresourceRange range = VulkanDetail::BuildImageSubresourceRange(resolvedSubresources, VK_IMAGE_ASPECT_COLOR_BIT);

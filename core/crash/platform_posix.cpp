@@ -121,21 +121,24 @@ namespace Detail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RequestCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const u32 waitMilliseconds)noexcept{
+CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, const u32 waitMilliseconds)noexcept{
     static_cast<void>(waitMilliseconds);
-
-    CrashRequest request;
-    SnapshotCrashState(request, reasonKind, reasonCode);
 
 #if defined(NWB_PLATFORM_ANDROID)
     if(g_State.emergencyWriteFd >= 0)
-        return __hidden_crash_posix::__hidden_write_all_fd(g_State.emergencyWriteFd, &request, sizeof(request));
+        return __hidden_crash_posix::__hidden_write_all_fd(g_State.emergencyWriteFd, &request, sizeof(request))
+            ? CrashDumpTransportStatus::Sent
+            : CrashDumpTransportStatus::Failed
+        ;
 #elif defined(NWB_PLATFORM_LINUX)
     if(g_State.requestWriteFd >= 0)
-        return __hidden_crash_posix::__hidden_write_all_fd(g_State.requestWriteFd, &request, sizeof(request));
+        return __hidden_crash_posix::__hidden_write_all_fd(g_State.requestWriteFd, &request, sizeof(request))
+            ? CrashDumpTransportStatus::Sent
+            : CrashDumpTransportStatus::Failed
+        ;
 #endif
 
-    return false;
+    return CrashDumpTransportStatus::Failed;
 }
 
 void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode)noexcept{

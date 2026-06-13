@@ -483,6 +483,33 @@ static void MovePackage(const Path& from, const Path& toDirectory){
     static_cast<void>(RenamePath(from, destination, error));
 }
 
+static Path RequestBucketDirectory(Alloc::GlobalArena& arena, const CrashRequest& request, const char* bucketName){
+    return Path(arena, request.spoolDirectory) / bucketName / request.crashId;
+}
+
+static bool DirectoryExists(const Path& path){
+    ErrorCode error;
+    const bool exists = IsDirectory(path, error);
+    return exists && !error;
+}
+
+CrashDumpResult CrashPackageResult(const CrashRequest& request){
+    if(request.magic != s_RequestMagic || request.version != s_RequestVersion)
+        return CrashDumpResult{ CrashDumpStatus::RequestQueued };
+    if(request.spoolDirectory[0] == 0 || request.crashId[0] == 0)
+        return CrashDumpResult{ CrashDumpStatus::RequestQueued };
+
+    Alloc::GlobalArena arena("NWB::Core::Crash::PackageStatus");
+    if(DirectoryExists(RequestBucketDirectory(arena, request, "uploaded")))
+        return CrashDumpResult{ CrashDumpStatus::Uploaded };
+    if(DirectoryExists(RequestBucketDirectory(arena, request, "failed")))
+        return CrashDumpResult{ CrashDumpStatus::UploadFailed };
+    if(DirectoryExists(RequestBucketDirectory(arena, request, "pending")))
+        return CrashDumpResult{ CrashDumpStatus::PackageWritten };
+
+    return CrashDumpResult{ CrashDumpStatus::RequestQueued };
+}
+
 static bool UploadPackageDirectory(Alloc::GlobalArena& arena, const Path& spoolDirectory, const Path& packageDirectory, const CrashString& url){
     if(url.empty())
         return false;

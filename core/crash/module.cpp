@@ -191,11 +191,11 @@ template ::Path<Alloc::PersistentArena> DefaultCrashHandlerExecutablePath(Alloc:
 template bool InstallCrashHandler(Alloc::PersistentArena& arena, const CrashConfigT<Alloc::PersistentArena>& config);
 template bool AddCrashBreadcrumb(Alloc::PersistentArena& arena, AStringView category, AStringView message);
 
-bool CaptureCrashDump(const AStringView category, const AStringView message){
+CrashDumpResult CaptureCrashDump(const AStringView category, const AStringView message){
     {
         ScopedLock lock(Detail::g_State.mutex);
         if(!Detail::g_State.installed)
-            return false;
+            return CrashDumpResult{ CrashDumpStatus::NotInstalled };
         if(!category.empty() || !message.empty())
             __hidden_crash_module::__hidden_store_breadcrumb(category.empty() ? AStringView("manual_dump") : category, message);
     }
@@ -204,7 +204,6 @@ bool CaptureCrashDump(const AStringView category, const AStringView message){
     options.waitMilliseconds = 10000u;
 #if defined(NWB_PLATFORM_ANDROID)
     options.writePackageInProcess = true;
-    options.uploadImmediately = true;
 #endif
 
     return Detail::RequestCrashDump(Detail::CrashReasonKind::ManualDump, 0u, options);

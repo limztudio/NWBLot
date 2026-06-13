@@ -70,6 +70,22 @@ namespace CrashReasonKind{
     };
 };
 
+namespace CrashUploadPolicy{
+    enum Enum : u32{
+        None,
+        ImmediateAfterWrite,
+    };
+};
+
+namespace CrashDumpTransportStatus{
+    enum Enum : u8{
+        Failed,
+        Sent,
+        Acknowledged,
+        TimedOut,
+    };
+};
+
 
 struct FixedMetadata{
     char key[s_MaxShortText] = {};
@@ -93,6 +109,7 @@ struct CrashRequest{
     u32 processId = 0u;
     u32 threadId = 0u;
     u32 dumpDetailMode = DumpDetailMode::Small;
+    u32 uploadPolicy = CrashUploadPolicy::ImmediateAfterWrite;
     u8 enableGpuDumps = 0u;
     char crashId[s_MaxShortText] = {};
     char applicationName[s_MaxShortText] = {};
@@ -110,7 +127,7 @@ struct CrashRequest{
 struct CrashDumpRequestOptions{
     u32 waitMilliseconds = 0u;
     bool writePackageInProcess = false;
-    bool uploadImmediately = false;
+    bool uploadAfterWrite = true;
 };
 
 struct CrashState{
@@ -159,8 +176,8 @@ extern CrashState g_State;
 [[nodiscard]] const char* ReasonKindName(u32 reasonKind)noexcept;
 
 void SnapshotCrashState(CrashRequest& outRequest, CrashReasonKind::Enum reasonKind, u32 reasonCode)noexcept;
-[[nodiscard]] bool RequestCrashDump(CrashReasonKind::Enum reasonKind, u32 reasonCode, const CrashDumpRequestOptions& options);
-[[nodiscard]] bool RequestCrashHandler(CrashReasonKind::Enum reasonKind, u32 reasonCode, u32 waitMilliseconds)noexcept;
+[[nodiscard]] CrashDumpResult RequestCrashDump(CrashReasonKind::Enum reasonKind, u32 reasonCode, const CrashDumpRequestOptions& options);
+[[nodiscard]] CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, u32 waitMilliseconds)noexcept;
 void NotifyCrashHandler(CrashReasonKind::Enum reasonKind, u32 reasonCode)noexcept;
 
 template<typename ArenaT>
@@ -168,6 +185,7 @@ template<typename ArenaT>
 [[nodiscard]] Alloc::PersistentArena& DumpArena();
 [[nodiscard]] bool WriteCrashPackage(const CrashRequest& request);
 [[nodiscard]] bool UploadCrashPackage(const CrashRequest& request);
+[[nodiscard]] CrashDumpResult CrashPackageResult(const CrashRequest& request);
 [[nodiscard]] bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena);
 
 template<typename ArenaT>

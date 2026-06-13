@@ -79,23 +79,26 @@ namespace Detail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RequestCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const u32 waitMilliseconds)noexcept{
+CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, const u32 waitMilliseconds)noexcept{
     if(g_State.requestWriteHandle == INVALID_HANDLE_VALUE)
-        return false;
-
-    CrashRequest request;
-    SnapshotCrashState(request, reasonKind, reasonCode);
+        return CrashDumpTransportStatus::Failed;
 
     if(g_State.crashHandledEvent)
         ResetEvent(g_State.crashHandledEvent);
 
     if(!__hidden_crash_win32::__hidden_write_all(g_State.requestWriteHandle, &request, sizeof(request)))
-        return false;
+        return CrashDumpTransportStatus::Failed;
 
-    if(g_State.crashHandledEvent && waitMilliseconds > 0u)
-        return WaitForSingleObject(g_State.crashHandledEvent, waitMilliseconds) == WAIT_OBJECT_0;
+    if(!g_State.crashHandledEvent || waitMilliseconds == 0u)
+        return CrashDumpTransportStatus::Sent;
 
-    return true;
+    const DWORD waitResult = WaitForSingleObject(g_State.crashHandledEvent, waitMilliseconds);
+    if(waitResult == WAIT_OBJECT_0)
+        return CrashDumpTransportStatus::Acknowledged;
+    if(waitResult == WAIT_TIMEOUT)
+        return CrashDumpTransportStatus::TimedOut;
+
+    return CrashDumpTransportStatus::Failed;
 }
 
 void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode)noexcept{

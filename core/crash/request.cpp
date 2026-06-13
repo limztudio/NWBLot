@@ -113,21 +113,40 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
     }
 }
 
-bool RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options){
+CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options){
+    CrashRequest request;
+    SnapshotCrashState(request, reasonKind, reasonCode);
+    request.uploadPolicy = options.uploadAfterWrite ? CrashUploadPolicy::ImmediateAfterWrite : CrashUploadPolicy::None;
+
 #if defined(NWB_PLATFORM_ANDROID)
     if(options.writePackageInProcess){
-        CrashRequest request;
-        SnapshotCrashState(request, reasonKind, reasonCode);
         if(!WriteCrashPackage(request))
-            return false;
+            return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
 
-        if(options.uploadImmediately)
-            static_cast<void>(UploadCrashPackage(request));
-        return true;
+        if(!options.uploadAfterWrite)
+            return CrashDumpResult{ CrashDumpStatus::PackageWritten };
+
+        return UploadCrashPackage(request)
+            ? CrashDumpResult{ CrashDumpStatus::Uploaded }
+            : CrashDumpResult{ CrashDumpStatus::UploadFailed }
+        ;
     }
 #endif
 
-    return RequestCrashHandler(reasonKind, reasonCode, options.waitMilliseconds);
+    const CrashDumpTransportStatus::Enum transportStatus = RequestCrashHandler(request, options.waitMilliseconds);
+    if(transportStatus == CrashDumpTransportStatus::Failed)
+        return CrashDumpResult{ CrashDumpStatus::RequestFailed };
+    if(transportStatus == CrashDumpTransportStatus::Sent)
+        return CrashDumpResult{ CrashDumpStatus::RequestQueued };
+
+    const CrashDumpResult packageResult = CrashPackageResult(request);
+    if(packageResult.status != CrashDumpStatus::RequestQueued)
+        return packageResult;
+
+    return transportStatus == CrashDumpTransportStatus::TimedOut
+        ? CrashDumpResult{ CrashDumpStatus::RequestTimedOut }
+        : CrashDumpResult{ CrashDumpStatus::PackageWriteFailed }
+    ;
 }
 
 

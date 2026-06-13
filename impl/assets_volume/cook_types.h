@@ -46,7 +46,7 @@ template<typename T>
 using CookVector = Core::Assets::CookVector<T>;
 using ScratchArena = Core::Assets::ScratchArena;
 using ScratchString = Core::Assets::ScratchString;
-using StagedVolumePaths = StagedDirectoryPaths;
+using StagedVolumePaths = Core::Filesystem::StagedDirectoryPaths;
 using VirtualPathHashSet = Core::Assets::CookEntryPathHashSet;
 using ParsedAssetMetadata = Core::Assets::ParsedAssetMetadata;
 using ResolvedCookPaths = Core::Assets::ResolvedCookPaths;

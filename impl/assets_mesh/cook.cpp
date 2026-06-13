@@ -148,7 +148,7 @@ bool ParseMeshCookMetadata(
     Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    __hidden_cook::DiscoveredNwbFile discoveredFile;
+    __hidden_cook::DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
     if(!__hidden_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
         return false;
     return __hidden_cook::ParseMeshMeta(discoveredFile, doc, outEntry, threadPool, scratchArena);
@@ -162,7 +162,7 @@ bool ParseMeshCookMetadata(
     Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    __hidden_cook::DiscoveredNwbFile discoveredFile;
+    __hidden_cook::DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
     discoveredFile.filePath = nwbFilePath;
     return __hidden_cook::ParseMeshMeta(discoveredFile, asset, virtualPath, outEntry, threadPool, scratchArena);
 }

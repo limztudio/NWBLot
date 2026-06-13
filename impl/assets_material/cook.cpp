@@ -133,7 +133,7 @@ static bool ResolveMaterialBindDependencyInterface(
     outInterfacePath.clear();
     outInterfaceName = NAME_NONE;
 
-    Path normalizedMaterialBindIncludeRoot;
+    Path normalizedMaterialBindIncludeRoot(materialBindIncludeRoot.arena());
     if(!materialBindIncludeRoot.empty()){
         ErrorCode errorCode;
         normalizedMaterialBindIncludeRoot = AbsolutePath(materialBindIncludeRoot, errorCode).lexically_normal();
@@ -1504,7 +1504,7 @@ static bool EmitMaterialBindIncludes(
         if(!BuildMaterialBindIncludeSourceImpl(arena, bindEntry, generatedSource, scratchArena))
             return false;
 
-        const Path outputPath = outIncludeRoot / Path(includePath.c_str());
+        const Path outputPath = outIncludeRoot / includePath.c_str();
         ErrorCode errorCode;
         if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to create generated include parent '{}': {}")

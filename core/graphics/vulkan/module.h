@@ -85,6 +85,7 @@ struct DeviceDesc{
         : allocator(allocatorRef)
         , threadPool(threadPoolRef)
         , vulkanLibraryName(allocatorRef.getObjectArena())
+        , pipelineCacheDirectory(allocatorRef.getObjectArena())
     {}
 };
 

@@ -160,7 +160,7 @@ static constexpr AStringView s_EvalShapeIdDefineName = "NWB_CSG_EVAL_SHAPE_ID";
         return false;
     }
 
-    const Path includePathValue(includePath);
+    const Path includePathValue(nwbFilePath.arena(), includePath);
     if(includePathValue.is_absolute() || includePathValue.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must be a relative include path")
             , PathToString<tchar>(nwbFilePath)
@@ -185,7 +185,7 @@ static constexpr AStringView s_EvalShapeIdDefineName = "NWB_CSG_EVAL_SHAPE_ID";
 }
 
 [[nodiscard]] static bool HasSlangIncludeExtension(const AStringView includePath, ScratchArena& scratchArena){
-    const Path includePathValue(includePath);
+    const ::Path<ScratchArena> includePathValue(scratchArena, includePath);
     ScratchString extension = PathToString(scratchArena, includePathValue.extension());
     CanonicalizeTextInPlace(extension);
     return extension == s_SlangIncludeExtension;
@@ -275,7 +275,7 @@ static constexpr AStringView s_EvalShapeIdDefineName = "NWB_CSG_EVAL_SHAPE_ID";
         scratchSource += "\n\n";
     }
 
-    const Path outputPath = includeRoot / Path(moduleInclude.c_str());
+    const Path outputPath = includeRoot / moduleInclude.c_str();
     ErrorCode errorCode;
     if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: failed to create generated include parent '{}': {}")

@@ -171,8 +171,8 @@ static void TestModelBunchLocalReferencesAndWrapperExpansion(TestContext& contex
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root;
-    Path outputDirectory;
+    Path root(PathArena());
+    Path outputDirectory(PathArena());
     const AString meta = BuildValidModelBunchFixture();
     const bool cooked = CookSingleGraphicsMeta(
         AStringView(meta.data(), meta.size()),
@@ -265,8 +265,8 @@ static void TestModelBunchStaticMeshAttachmentToNamedJoint(TestContext& context)
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root;
-    Path outputDirectory;
+    Path root(PathArena());
+    Path outputDirectory(PathArena());
     const AString meta = BuildStaticAttachmentModelBunchFixture();
     const bool cooked = CookSingleGraphicsMeta(
         AStringView(meta.data(), meta.size()),

@@ -137,10 +137,12 @@ template<typename ArenaT>
 
 template<typename CharT = char, typename ArenaT, typename PathT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> PathToString(ArenaT& arena, const PathT& path){
-    if constexpr(SameAs<CharT, char>)
-        return BasicString<CharT, ArenaT>(path.generic_string(), arena);
+    if constexpr(SameAs<CharT, typename PathT::value_type>){
+        const auto native = path.native();
+        return BasicString<CharT, ArenaT>(native.data(), native.size(), arena);
+    }
     else
-        return BasicString<CharT, ArenaT>(path.generic_wstring(), arena);
+        return StringConvert(arena, path.native());
 }
 
 

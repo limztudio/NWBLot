@@ -122,7 +122,7 @@ static Core::Assets::AssetMetadataParseResult ParseGraphicsDocumentMetadata(
         if(!Core::Assets::BuildDerivedAssetVirtualPath(
             context.discoveredNwbFile.assetRoot,
             context.discoveredNwbFile.virtualRoot.view(),
-            Path(shaderEntry.source),
+            Path(context.cookArena, shaderEntry.source),
             shaderEntry.name
         ))
             return AssetMetadataParseResult::Error;
@@ -140,7 +140,8 @@ static Core::Assets::AssetMetadataParseResult ParseGraphicsDocumentMetadata(
 
         if(!includeEntry.source.empty() && !includeEntry.defineValues.empty()){
             ErrorCode errorCode;
-            const Path absSource = AbsolutePath(Path(includeEntry.source), errorCode).lexically_normal();
+            const Path sourcePath(context.cookArena, includeEntry.source);
+            const Path absSource = AbsolutePath(sourcePath, errorCode).lexically_normal();
             if(errorCode){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to resolve include metadata source '{}' from '{}': {}")
                     , StringConvert(includeEntry.source)
@@ -229,7 +230,7 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     if(!ValidateMaterialCookInterfaces(graphicsMetadata.materialBindEntries, materialEntries, context.scratchArena))
         return false;
 
-    Path materialBindIncludeRoot;
+    Path materialBindIncludeRoot(context.arena);
     if(!EmitMaterialBindIncludes(
         context.arena,
         context.resolvedPaths.cacheDirectory,
@@ -240,7 +241,7 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     ))
         return false;
 
-    Path csgShapeIncludeRoot;
+    Path csgShapeIncludeRoot(context.arena);
     if(!AssetsCsgCook::EmitCsgShapeModuleIncludes(
         context.resolvedPaths.cacheDirectory,
         context.configurationSafeName,

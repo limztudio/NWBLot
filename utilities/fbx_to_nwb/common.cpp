@@ -270,9 +270,9 @@ bool Normalize(Vec3& value){
 
 Path PathFromUtf8(const AString& value){
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_UNICODE)
-    return Path(StringConvert(UtilityDetail::Arena(), AStringView(value.data(), value.size())));
+    return Path(UtilityDetail::Arena(), StringConvert(UtilityDetail::Arena(), AStringView(value.data(), value.size())));
 #else
-    return Path(value);
+    return Path(UtilityDetail::Arena(), value);
 #endif
 }
 

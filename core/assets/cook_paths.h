@@ -34,7 +34,10 @@ struct ResolvedCookPaths{
     Path cacheDirectory;
 
     explicit ResolvedCookPaths(CookArena& arena)
-        : assetRoots(arena)
+        : repoRoot(arena)
+        , assetRoots(arena)
+        , outputDirectory(arena)
+        , cacheDirectory(arena)
     {}
 };
 

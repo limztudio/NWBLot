@@ -694,7 +694,7 @@ static bool MoveStagedVolumeSegments(const Path& fromDirectory, const Path& toDi
     }
 
     for(usize segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex){
-        const Path fileName = Path(MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str());
+        const Path fileName(fromDirectory.arena(), MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str());
         const Path sourcePath = fromDirectory / fileName;
         const Path destinationPath = toDirectory / fileName;
         if(!RenamePath(sourcePath, destinationPath, errorCode)){
@@ -889,7 +889,8 @@ bool RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeN
 
 
 VolumeFileSystem::VolumeFileSystem(Alloc::GlobalArena& arena)
-    : m_arena(arena)
+    : m_mountDirectory(arena)
+    , m_arena(arena)
     , m_segmentPaths(m_arena)
     , m_files(0, Hasher<Name>(), EqualTo<Name>(), m_arena)
 {}
@@ -911,7 +912,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
     }
 
     m_volumeName = desc.volumeName;
-    m_mountDirectory = desc.mountDirectory.empty() ? Path(".") : desc.mountDirectory;
+    m_mountDirectory = desc.mountDirectory.empty() ? Path(m_mountDirectory.arena(), ".") : desc.mountDirectory;
     m_usage = desc.usage;
     m_writable = (desc.usage != VolumeUsage::RuntimeReadOnly);
     m_maxSegments = desc.maxSegments;
@@ -1998,7 +1999,7 @@ bool VolumeSession::create(const Path& outputDirectory, const VolumeBuildConfig&
     if(!__hidden_filesystem::RemoveExistingVolumeSegments(outputDirectory, config.volumeName.view()))
         return false;
 
-    VolumeMountDesc desc;
+    VolumeMountDesc desc(outputDirectory.arena());
     desc.volumeName = config.volumeName;
     desc.mountDirectory = outputDirectory;
     desc.segmentSize = config.segmentSize;
@@ -2015,7 +2016,7 @@ bool VolumeSession::create(const Path& outputDirectory, const VolumeBuildConfig&
 
 
 bool VolumeSession::load(const AStringView volumeName, const Path& mountDirectory){
-    VolumeMountDesc desc;
+    VolumeMountDesc desc(mountDirectory.arena());
     if(!desc.volumeName.assign(volumeName))
         return false;
     desc.mountDirectory = mountDirectory;

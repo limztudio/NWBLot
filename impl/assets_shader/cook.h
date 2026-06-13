@@ -146,6 +146,7 @@ private:
 
         explicit SortedDependencyItem(CookArena& arena)
             : canonicalPath(arena)
+            , path(arena)
         {}
     };
 

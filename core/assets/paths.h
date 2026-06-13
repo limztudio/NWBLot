@@ -90,7 +90,7 @@ template<typename StringT>
 ){
     outVirtualRoot.clear();
 
-    const Path virtualPathPath(virtualPath);
+    const ::Path<Alloc::ScratchArena> virtualPathPath(scratchArena, virtualPath);
     const auto componentIt = virtualPathPath.begin();
     if(componentIt == virtualPathPath.end())
         return false;
@@ -234,7 +234,7 @@ template<typename AssetRootVector>
 ){
     outResolvedPath.clear();
 
-    const Path virtualPathPath(virtualPath);
+    const ::Path<Alloc::ScratchArena> virtualPathPath(scratchArena, virtualPath);
     auto componentIt = virtualPathPath.begin();
     if(componentIt == virtualPathPath.end())
         return false;
@@ -298,7 +298,7 @@ template<typename StringT>
     }
 
     ErrorCode errorCode;
-    Path matchedSourcePath;
+    Path matchedSourcePath(arena);
     usize matchCount = 0;
     const auto logDirectoryScanError = [&](){
         NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to scan metadata directory '{}': {}")

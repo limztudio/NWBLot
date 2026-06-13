@@ -104,7 +104,8 @@ static bool ValidatePairedSourceExtension(
     const CookString& sourcePath,
     ScratchArena& scratchArena
 ){
-    ScratchString extension = PathToString(scratchArena, Path(sourcePath).extension());
+    const Path sourcePathValue(bindFilePath.arena(), sourcePath);
+    ScratchString extension = PathToString(scratchArena, sourcePathValue.extension());
     CanonicalizeTextInPlace(extension);
     if(AStringView(extension) == MaterialBindNames::SourceExtensionText())
         return true;

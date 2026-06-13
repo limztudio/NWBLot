@@ -825,7 +825,7 @@ static bool BuildMaterialFromBindAndMeta(
         return false;
 
     NWB::Impl::MaterialBindEntry bindEntry(testArena.arena);
-    Path bindRoot;
+    Path bindRoot(PathArena());
     bool built = false;
     if(ParseMaterialBindFromText(bindText, caseName, bindEntry, bindRoot, scratchArena)){
         bindEntry.virtualPath = "project/material_interfaces/test_surface";
@@ -904,7 +904,7 @@ static void TestMaterialBindHalfTypedLayoutValues(TestContext& context){
     if(builtMixed)
         CheckMixedHalfMaterialTypedLayoutAndBlockBytes(context, mixedMaterial);
 
-    Path bindRoot;
+    Path bindRoot(PathArena());
     NWB::Impl::MaterialBindEntry bindEntry(testArena.arena);
     const bool parsed = ParseMaterialBindFromText(
         s_HalfMaterialBindSource,
@@ -927,7 +927,7 @@ static void TestMaterialBindHalfTypedLayoutValues(TestContext& context){
         CheckGeneratedHalfMaterialBindSource(context, AStringView(generatedSource.data(), generatedSource.size()));
     }
 
-    Path mixedBindRoot;
+    Path mixedBindRoot(PathArena());
     NWB::Impl::MaterialBindEntry mixedBindEntry(testArena.arena);
     const bool parsedMixed = ParseMaterialBindFromText(
         s_MixedHalfMaterialBindSource,
@@ -976,7 +976,7 @@ static void TestMaterialBindCompactIntegerTypedLayoutValues(TestContext& context
     if(built)
         CheckCompactIntegerMaterialTypedLayoutAndBlockBytes(context, material);
 
-    Path bindRoot;
+    Path bindRoot(PathArena());
     NWB::Impl::MaterialBindEntry bindEntry(testArena.arena);
     const bool parsed = ParseMaterialBindFromText(
         s_CompactIntegerMaterialBindSource,
@@ -1021,7 +1021,7 @@ static void TestMaterialMetadataInterfaceAndBlockParameters(TestContext& context
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, materialEntry.parameters.size() == 3u);
 
     NWB::Impl::MaterialBindEntry bindEntry(testArena.arena);
-    Path bindRoot;
+    Path bindRoot(PathArena());
     const bool parsedBind = ParseMaterialBindFromText(
         s_MinimalMaterialBindSource,
         "material_meta_bind_validation",
@@ -1207,7 +1207,7 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
 
     TestArena testArena;
     NWB::Core::Alloc::ScratchArena scratchArena;
-    Path root;
+    Path root(PathArena());
     NWB::Impl::MaterialBindEntry entry(testArena.arena);
     const bool parsed = ParseMaterialBindFromText(
         s_MinimalMaterialBindSource,
@@ -1267,7 +1267,7 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, AStringView(runtimeInstance->type) == "NwbTestRuntimeMaterial");
     }
 
-    Path halfRoot;
+    Path halfRoot(PathArena());
     NWB::Impl::MaterialBindEntry halfEntry(testArena.arena);
     const bool parsedHalf = ParseMaterialBindFromText(
         s_HalfMaterialBindSource,
@@ -1300,7 +1300,7 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
         const AStringView caseName,
         const tchar* expectedError
     ){
-        Path invalidRoot;
+        Path invalidRoot(PathArena());
         NWB::Impl::MaterialBindEntry invalidEntry(testArena.arena);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !ParseMaterialBindFromText(
             bindText,
@@ -1346,7 +1346,7 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
         NWB_TEXT("unsupported asset field 'instance_override'")
     );
 
-    Path float1DefaultRoot;
+    Path float1DefaultRoot(PathArena());
     NWB::Impl::MaterialBindEntry float1DefaultEntry(testArena.arena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ParseMaterialBindFromText(
         s_Float1DefaultMaterialBindSource,
@@ -1376,7 +1376,7 @@ static void TestMaterialBindGeneratedSlangText(TestContext& context){
 
     TestArena testArena;
     NWB::Core::Alloc::ScratchArena scratchArena;
-    Path root;
+    Path root(PathArena());
     NWB::Impl::MaterialBindEntry entry(testArena.arena);
     const bool parsed = ParseMaterialBindFromText(
         s_MinimalMaterialBindSource,

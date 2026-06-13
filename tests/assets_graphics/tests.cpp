@@ -59,6 +59,12 @@ using AString = NWB::Tests::TestAString;
 
 struct AssetsGraphicsTestArenaTag{};
 using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestArenaTag>;
+using Path = NWB::Path;
+
+static Path::Arena& PathArena(){
+    static Path::Arena s_Arena("NWB::Tests::AssetsGraphicsPath");
+    return s_Arena;
+}
 
 template<typename T>
 static NWB::Core::Assets::AssetVector<T> MakeAssetVector(TestArena& testArena){
@@ -990,7 +996,7 @@ static const char* AssetsGraphicsTestConfigurationName(){
 }
 
 static Path AssetsGraphicsTestRepoRoot(){
-    return Path(__FILE__).parent_path().parent_path().parent_path().lexically_normal();
+    return Path(PathArena(), __FILE__).parent_path().parent_path().parent_path().lexically_normal();
 }
 
 static Path AssetsGraphicsTestCaseRoot(const AStringView caseName){

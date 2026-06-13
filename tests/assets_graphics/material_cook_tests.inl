@@ -7,8 +7,8 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root;
-    Path outputDirectory;
+    Path root(PathArena());
+    Path outputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, CookMaterialBindMaterialIntegration(
         s_MinimalMaterialBindSource,
         s_BlockScopedMaterialMeta,
@@ -67,8 +67,8 @@ static void TestMaterialBindCookIntegration(TestContext& context){
         );
     }
 
-    Path halfRoot;
-    Path halfOutputDirectory;
+    Path halfRoot(PathArena());
+    Path halfOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, CookMaterialBindMaterialIntegrationWithMeshSource(
         s_HalfMaterialBindSource,
         s_HalfMaterialMeta,
@@ -107,8 +107,8 @@ static void TestMaterialBindCookIntegration(TestContext& context){
         CheckGeneratedMaterialBindBinaryConstants(context, halfGeneratedSourceView, halfMaterial);
     }
 
-    Path compactRoot;
-    Path compactOutputDirectory;
+    Path compactRoot(PathArena());
+    Path compactOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, CookMaterialBindMaterialIntegrationWithMeshSource(
         s_CompactIntegerMaterialBindSource,
         s_CompactIntegerMaterialMeta,
@@ -157,8 +157,8 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     static_cast<void>(RemoveAllIfExists(compactRoot, errorCode));
 
 #if defined(NWB_FINAL)
-    Path invalidRoot;
-    Path invalidOutputDirectory;
+    Path invalidRoot(PathArena());
+    Path invalidOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookMaterialBindMaterialIntegration(
         s_MinimalMaterialBindSource,
         s_UnknownInterfaceParameterMaterialMeta,
@@ -174,8 +174,8 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(invalidRoot, errorCode));
 
-    Path flatRoot;
-    Path flatOutputDirectory;
+    Path flatRoot(PathArena());
+    Path flatOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookMaterialBindMaterialIntegration(
         s_MinimalMaterialBindSource,
         s_FlatInterfaceParameterMaterialMeta,
@@ -191,8 +191,8 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(flatRoot, errorCode));
 
-    Path untypedParameterRoot;
-    Path untypedParameterOutputDirectory;
+    Path untypedParameterRoot(PathArena());
+    Path untypedParameterOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookMaterialBindMaterialIntegration(
         s_MinimalMaterialBindSource,
         s_UntypedMaterialParameterMeta,
@@ -208,8 +208,8 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(untypedParameterRoot, errorCode));
 
-    Path vectorAliasParameterRoot;
-    Path vectorAliasParameterOutputDirectory;
+    Path vectorAliasParameterRoot(PathArena());
+    Path vectorAliasParameterOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookMaterialBindMaterialIntegration(
         s_MinimalMaterialBindSource,
         s_VectorAliasMaterialParameterMeta,
@@ -225,8 +225,8 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(vectorAliasParameterRoot, errorCode));
 
-    Path unsupportedFieldRoot;
-    Path unsupportedFieldOutputDirectory;
+    Path unsupportedFieldRoot(PathArena());
+    Path unsupportedFieldOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookMaterialBindMaterialIntegration(
         s_MinimalMaterialBindSource,
         s_UnsupportedMaterialFieldMeta,
@@ -240,8 +240,8 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(unsupportedFieldRoot, errorCode));
 
-    Path missingShaderVariantRoot;
-    Path missingShaderVariantOutputDirectory;
+    Path missingShaderVariantRoot(PathArena());
+    Path missingShaderVariantOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookMaterialBindMaterialIntegration(
         s_MinimalMaterialBindSource,
         s_MissingShaderVariantMaterialMeta,
@@ -255,8 +255,8 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(missingShaderVariantRoot, errorCode));
 
-    Path incompleteBindRoot;
-    Path incompleteBindOutputDirectory;
+    Path incompleteBindRoot(PathArena());
+    Path incompleteBindOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookMaterialBindMaterialIntegration(
         s_SurfaceOnlyMaterialBindSource,
         s_BlockScopedMaterialMeta,
@@ -272,8 +272,8 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(incompleteBindRoot, errorCode));
 
-    Path interfaceShaderMismatchRoot;
-    Path interfaceShaderMismatchOutputDirectory;
+    Path interfaceShaderMismatchRoot(PathArena());
+    Path interfaceShaderMismatchOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCookCase(
         "material_bind_interface_without_bind_shader",
         interfaceShaderMismatchRoot,
@@ -298,8 +298,8 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(interfaceShaderMismatchRoot, errorCode));
 
-    Path interfaceIdentityMismatchRoot;
-    Path interfaceIdentityMismatchOutputDirectory;
+    Path interfaceIdentityMismatchRoot(PathArena());
+    Path interfaceIdentityMismatchOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCookCase(
         "material_bind_interface_identity_mismatch",
         interfaceIdentityMismatchRoot,
@@ -339,8 +339,8 @@ static void TestMaterialRejectsMissingInterfaceCookIntegration(TestContext& cont
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root;
-    Path outputDirectory;
+    Path root(PathArena());
+    Path outputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCookCase(
         "material_missing_interface_rejection",
         root,
@@ -374,8 +374,8 @@ static void TestMaterialBindDependencyInvalidation(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root;
-    Path outputDirectory;
+    Path root(PathArena());
+    Path outputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCookCase(
         "material_bind_dependency_invalidation",
         root,
@@ -474,8 +474,8 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root;
-    Path outputDirectory;
+    Path root(PathArena());
+    Path outputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, CookMinimalMeshWithMaterialBind(
         s_MinimalMaterialBindSource,
         "material_bind_valid",
@@ -512,8 +512,8 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
     ErrorCode errorCode;
     static_cast<void>(RemoveAllIfExists(root, errorCode));
 
-    Path shaderProbeRoot;
-    Path shaderProbeOutputDirectory;
+    Path shaderProbeRoot(PathArena());
+    Path shaderProbeOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, CookMaterialBindShaderProbe(
         s_MinimalMaterialBindSource,
         "material_bind_shader_probe",
@@ -527,8 +527,8 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
     static_cast<void>(RemoveAllIfExists(shaderProbeRoot, errorCode));
 
 #if defined(NWB_FINAL)
-    Path duplicateIncludeRoot;
-    Path duplicateIncludeOutputDirectory;
+    Path duplicateIncludeRoot(PathArena());
+    Path duplicateIncludeOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookDuplicateGeneratedMaterialBindIncludePath(
         "material_bind_duplicate_include_path",
         testArena,
@@ -542,8 +542,8 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(duplicateIncludeRoot, errorCode));
 
-    Path invalidRoot;
-    Path invalidOutputDirectory;
+    Path invalidRoot(PathArena());
+    Path invalidOutputDirectory(PathArena());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookMinimalMeshWithMaterialBind(
         s_DuplicateFieldMaterialBindSource,
         "material_bind_duplicate_field",

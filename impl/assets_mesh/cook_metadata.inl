@@ -7,6 +7,11 @@ using ScratchVector = Vector<T, Core::Alloc::ScratchArena>;
 using ScratchString = AString<Core::Alloc::ScratchArena>;
 
 struct DiscoveredNwbFile{
+    explicit DiscoveredNwbFile(Path::Arena& arena)
+        : assetRoot(arena)
+        , filePath(arena)
+    {}
+
     Path assetRoot;
     ACompactString virtualRoot;
     Path filePath;

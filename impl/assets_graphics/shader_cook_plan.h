@@ -66,6 +66,7 @@ struct PreparedShaderEntry{
 
     explicit PreparedShaderEntry(ShaderCook::CookArena& arena)
         : entry(arena)
+        , sourcePath(arena)
         , includeDirectories(arena)
         , dependencies(arena)
         , materialTypedBindingInterfacePath(arena)

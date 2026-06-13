@@ -43,7 +43,7 @@ bool ResolveCookPaths(
         return false;
     }
 
-    outPaths.repoRoot = options.repoRoot.empty() ? Path(".") : Path(options.repoRoot.c_str());
+    outPaths.repoRoot = options.repoRoot.empty() ? Path(outPaths.repoRoot.arena(), ".") : Path(outPaths.repoRoot.arena(), options.repoRoot.c_str());
     outPaths.repoRoot = AbsolutePath(outPaths.repoRoot, errorCode).lexically_normal();
     if(errorCode){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to resolve repo root: {}"), StringConvert(errorCode.message()));
@@ -52,7 +52,7 @@ bool ResolveCookPaths(
 
     outPaths.assetRoots.reserve(options.assetRoots.size());
     for(const AssetString& assetRoot : options.assetRoots){
-        Path resolvedAssetRoot;
+        Path resolvedAssetRoot(outPaths.repoRoot.arena());
         const ScratchString assetRootText(assetRoot, scratchArena);
         errorCode.clear();
         if(!ResolveAbsolutePath(outPaths.repoRoot, assetRootText, resolvedAssetRoot, errorCode)){

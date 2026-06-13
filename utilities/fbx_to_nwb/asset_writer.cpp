@@ -624,7 +624,7 @@ AString BuildVirtualBasePath(const Path& outputPath, AString virtualRoot){
     Path noExtension = outputPath;
     noExtension.replace_extension();
 
-    Path relativePath;
+    Path relativePath(outputPath.arena());
     bool foundAssets = false;
     for(const Path& part : noExtension){
         const AString partText = ToLower(PathToUtf8(part));

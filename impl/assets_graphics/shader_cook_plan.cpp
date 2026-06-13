@@ -108,7 +108,7 @@ static bool BuildIncludeDirectories(
     }
 
     for(const CookString& includeRoot : entry.includeRoots){
-        Path includeDirectory;
+        Path includeDirectory(outIncludeDirectories.get_allocator().arena());
         if(!Core::Assets::ResolveVirtualAssetPath(assetRoots, includeRoot, includeDirectory, scratchArena)){
             if(Core::Assets::HasReservedAssetVirtualRoot(includeRoot, scratchArena)){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to resolve virtual include root '{}' for entry '{}'")
@@ -232,7 +232,7 @@ static bool ResolveProjectEvaluatorModuleIncludePath(
 
     ErrorCode errorCode;
     ScratchString includeText(includeName, scratchArena);
-    const Path includePath(includeText.c_str());
+    const Path includePath(outPath.arena(), includeText.c_str());
     if(includePath.is_absolute()){
         errorCode.clear();
         if(IsRegularFile(includePath, errorCode)){
@@ -330,7 +330,7 @@ static bool AppendCsgProjectEvaluatorModuleDependencies(
             return false;
         }
 
-        Path modulePath;
+        Path modulePath(cookArena);
         if(!ResolveProjectEvaluatorModuleIncludePath(includeName, includeDirectories, modulePath, scratchArena))
             return false;
 

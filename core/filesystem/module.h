@@ -42,6 +42,10 @@ struct VolumeMountDesc{
 
     bool createIfMissing = false;
     VolumeUsage::Enum usage = VolumeUsage::RuntimeReadOnly;
+
+    explicit VolumeMountDesc(VolumeArena& arena)
+        : mountDirectory(arena)
+    {}
 };
 
 

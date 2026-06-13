@@ -38,6 +38,13 @@ namespace __hidden_loader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using Path = NWB::Path;
+
+static NWB::Core::Alloc::GlobalArena& PathArena(){
+    static NWB::Core::Alloc::GlobalArena s_Arena("NWB::Loader::Path");
+    return s_Arena;
+}
+
 class CallbackShutdownGuard : NoCopy{
 public:
     explicit CallbackShutdownGuard(NWB::IProjectEntryCallbacks& callbacks)
@@ -97,16 +104,16 @@ bool HasGraphicsVolumeSegment(const Path& mountDirectory){
 
 Path ResolveResourceMountDirectory(){
     ErrorCode errorCode;
-    Path currentDirectory;
+    Path currentDirectory(PathArena());
     if(GetCurrentPath(currentDirectory, errorCode)){
         const Path currentResDirectory = currentDirectory / "res";
         if(HasGraphicsVolumeSegment(currentResDirectory))
             return currentResDirectory;
     }
 
-    Path executableDirectory;
+    Path executableDirectory(PathArena());
     if(!GetExecutableDirectory(executableDirectory))
-        return Path("res");
+        return Path(PathArena(), "res");
 
     const Path executableResDirectory = executableDirectory / "res";
     if(HasGraphicsVolumeSegment(executableResDirectory))
@@ -114,13 +121,13 @@ Path ResolveResourceMountDirectory(){
 
     const Path parentDirectory = executableDirectory.parent_path();
     if(parentDirectory.empty())
-        return Path("res");
+        return Path(PathArena(), "res");
 
     const Path parentResDirectory = parentDirectory / "res";
     if(HasGraphicsVolumeSegment(parentResDirectory))
         return parentResDirectory;
 
-    return Path("res");
+    return Path(PathArena(), "res");
 }
 
 
@@ -205,7 +212,7 @@ static int RunProjectRuntime(const __hidden_loader::LoaderOptions& options, void
 
         NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
         frame.graphics().setWindowTitle(MakeNotNull(projectWindowTitle));
-        const Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory();
+        const NWB::Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory();
         frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
         if(!__hidden_loader::ApplyGraphicsOptions(frame.graphics(), options))
             return -1;

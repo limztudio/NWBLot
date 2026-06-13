@@ -75,7 +75,7 @@ static bool MountPipelineCacheVolume(
     Filesystem::VolumeUsage::Enum usage,
     Filesystem::VolumeFileSystem& outVolume
 ){
-    Filesystem::VolumeMountDesc mountDesc;
+    Filesystem::VolumeMountDesc mountDesc(directory.arena());
     if(!mountDesc.volumeName.assign(volumeName))
         return false;
     mountDesc.mountDirectory = directory;
@@ -176,7 +176,7 @@ Device::Device(const DeviceDesc& desc)
     , m_context(desc.allocator, desc.threadPool, desc.instance, desc.physicalDevice, desc.device, desc.allocationCallbacks)
     , m_allocator(m_context)
     , m_descriptorHeapManager(m_context, m_allocator)
-    , m_pipelineCacheDirectory(desc.pipelineCacheDirectory)
+    , m_pipelineCacheDirectory(m_context.objectArena, desc.pipelineCacheDirectory)
     , m_pipelineCacheVolumeName(m_context.objectArena)
     , m_uploadManager(*this, s_DefaultUploadChunkSize, 0, false)
     , m_scratchManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, true)

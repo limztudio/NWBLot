@@ -3186,6 +3186,7 @@ struct DeviceCreationParameters : public InstanceParameters{
         , requiredBackendDeviceExtensions(arena)
         , optionalBackendDeviceExtensions(arena)
         , ignoredValidationMessageLocations(arena)
+        , pipelineCacheDirectory(arena)
     {}
 };
 

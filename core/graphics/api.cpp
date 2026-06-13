@@ -510,7 +510,7 @@ static constexpr usize s_NumDestroyedMarkerTrackers = 2;
 
 AftermathMarkerTracker::AftermathMarkerTracker(GraphicsArena& arena)
     : m_arena(arena)
-    , m_eventStack()
+    , m_eventStack(arena)
     , m_eventHashes()
     , m_oldestHashIndex(0)
     , m_eventStrings(0, Hasher<usize>(), EqualTo<usize>(), arena)
@@ -518,7 +518,7 @@ AftermathMarkerTracker::AftermathMarkerTracker(GraphicsArena& arena)
 
 usize AftermathMarkerTracker::pushEvent(const char* name){
     m_eventStack.append(name);
-    GraphicsString eventString(m_eventStack.generic_string<char>(), m_arena);
+    GraphicsString eventString = PathToString(m_arena, m_eventStack);
     usize hash = Hasher<GraphicsString>{}(eventString);
 
     if(m_eventStrings.try_emplace(hash, Move(eventString)).second){

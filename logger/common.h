@@ -193,6 +193,7 @@ public:
 public:
     explicit ProcessedMessageFile(LogArena& arena)
         : m_arena(arena)
+        , m_filePath(arena)
     {}
     ~ProcessedMessageFile(){ close(); }
 
@@ -207,7 +208,7 @@ public:
         if(!GetLocalTime(localTime))
             return false;
 
-        Path executableDirectory;
+        Path executableDirectory(m_arena);
         if(!GetExecutableDirectory(executableDirectory))
             return false;
 
@@ -228,7 +229,7 @@ public:
         return m_stream.is_open();
     }
     bool openByExecutableName(){
-        Path executableName;
+        Path executableName(m_arena);
         if(!GetExecutableName(executableName))
             return false;
 

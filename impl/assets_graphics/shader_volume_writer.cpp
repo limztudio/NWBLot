@@ -37,6 +37,11 @@ using namespace AssetsGraphicsCookDetail;
 struct VariantCachePaths{
     Path bytecodePath;
     Path sourceChecksumPath;
+
+    explicit VariantCachePaths(Path::Arena& arena)
+        : bytecodePath(arena)
+        , sourceChecksumPath(arena)
+    {}
 };
 
 namespace CacheReadStatus{
@@ -68,7 +73,7 @@ static VariantCachePaths BuildVariantCachePaths(
     AppendHexU64(ComputeFnv64Text(variantName), bytecodeFileName);
     bytecodeFileName += ".spv";
 
-    VariantCachePaths cachePaths;
+    VariantCachePaths cachePaths(cacheDirectory.arena());
     cachePaths.bytecodePath = cacheDirectory / configurationSafeName / bytecodeFileName;
     cachePaths.sourceChecksumPath = cachePaths.bytecodePath;
     cachePaths.sourceChecksumPath += ".source";

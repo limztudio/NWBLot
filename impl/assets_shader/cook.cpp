@@ -73,7 +73,8 @@ struct NormalizedDependencyRootAlias{
     usize depth = 0u;
 
     explicit NormalizedDependencyRootAlias(ShaderCook::CookArena& arena)
-        : key(arena)
+        : root(arena)
+        , key(arena)
     {}
 };
 
@@ -387,7 +388,7 @@ static bool ResolveIncludeFile(const AStringView includeName, const IncludeDirec
     ErrorCode errorCode;
 
     if(kind == IncludeDirectiveKind::Relative){
-        const Path localCandidate = (sourceDirectory / Path(includeName)).lexically_normal();
+        const Path localCandidate = (sourceDirectory / includeName).lexically_normal();
         errorCode.clear();
         if(IsRegularFile(localCandidate, errorCode)){
             outPath = localCandidate;
@@ -403,7 +404,7 @@ static bool ResolveIncludeFile(const AStringView includeName, const IncludeDirec
     }
 
     for(const Path& includeDirectory : includeDirectories){
-        const Path includeCandidate = (includeDirectory / Path(includeName)).lexically_normal();
+        const Path includeCandidate = (includeDirectory / includeName).lexically_normal();
         errorCode.clear();
         if(IsRegularFile(includeCandidate, errorCode)){
             outPath = includeCandidate;
@@ -433,7 +434,7 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
     Deque<Path, Alloc::ScratchArena> pending{scratchArena};
     pending.push_back(startPath);
     ScratchString sourceText{scratchArena};
-    Path includePath;
+    Path includePath(inOutDependencies.get_allocator().arena());
 
     while(!pending.empty()){
         Path dependencyPath = Move(pending.back());
@@ -667,7 +668,8 @@ static bool ValidatePairedSourceExtension(
     const AStringView metaKind,
     Alloc::ScratchArena& scratchArena
 ){
-    ScratchString extension = PathToString(scratchArena, Path(sourcePath).extension());
+    const Path sourcePathValue(nwbFilePath.arena(), sourcePath);
+    ScratchString extension = PathToString(scratchArena, sourcePathValue.extension());
     CanonicalizeTextInPlace(extension);
     if(AStringView(extension) == expectedExtension)
         return true;

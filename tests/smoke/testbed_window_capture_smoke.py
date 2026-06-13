@@ -1046,7 +1046,12 @@ class WinBitmapInfo(ctypes.Structure):
 class WindowsCapture:
     SRCCOPY = 0x00CC0020
     DIB_RGB_COLORS = 0
+    HWND_TOPMOST = ctypes.c_void_p(-1)
     MK_LBUTTON = 0x0001
+    SW_RESTORE = 9
+    SWP_NOSIZE = 0x0001
+    SWP_NOMOVE = 0x0002
+    SWP_SHOWWINDOW = 0x0040
     VK_RETURN = 0x0D
     VIRTUAL_KEYS = {
         **{str(index): 0x30 + index for index in range(0, 10)},
@@ -1083,6 +1088,10 @@ class WindowsCapture:
         self.user32.PostMessageW.restype = ctypes.c_int
         self.user32.SetForegroundWindow.argtypes = [ctypes.c_void_p]
         self.user32.SetForegroundWindow.restype = ctypes.c_int
+        self.user32.SetWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_uint]
+        self.user32.SetWindowPos.restype = ctypes.c_int
+        self.user32.ShowWindow.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        self.user32.ShowWindow.restype = ctypes.c_int
         self.user32.GetDC.argtypes = [ctypes.c_void_p]
         self.user32.GetDC.restype = ctypes.c_void_p
         self.user32.ReleaseDC.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
@@ -1207,6 +1216,12 @@ class WindowsCapture:
         rect = self._window_rect(hwnd)
         if not rect:
             raise SmokeFailure(f"HWND 0x{hwnd:x} rect is unavailable")
+
+        hwnd_ptr = ctypes.c_void_p(hwnd)
+        self.user32.ShowWindow(hwnd_ptr, self.SW_RESTORE)
+        self.user32.SetWindowPos(hwnd_ptr, self.HWND_TOPMOST, 0, 0, 0, 0, self.SWP_NOMOVE | self.SWP_NOSIZE | self.SWP_SHOWWINDOW)
+        self.user32.SetForegroundWindow(hwnd_ptr)
+        time.sleep(0.1)
 
         width = rect.right - rect.left
         height = rect.bottom - rect.top

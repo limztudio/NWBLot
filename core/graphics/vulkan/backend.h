@@ -2043,6 +2043,7 @@ private:
         const tchar* singleSampleRequirement,
         VkBufferImageCopy& outRegion
     )const;
+    bool prepareUploadStaging(usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset, void*& outCpuVA);
     bool prepareUploadStaging(const void* data, usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset);
     bool buildTopLevelAccelStructFromInstanceData(
         RayTracingAccelStruct& as,

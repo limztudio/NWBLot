@@ -937,9 +937,10 @@ inline bool BuildTextureStencilClearPattern(const Format::Enum format, const u8 
     }
 }
 
-inline void FillTextureClearBytes(Vector<u8, Alloc::ScratchArena>& bytes, const u8* pattern, const u32 patternSize){
-    for(usize offset = 0; offset < bytes.size(); offset += patternSize)
-        NWB_MEMCPY(bytes.data() + offset, bytes.size() - offset, pattern, patternSize);
+inline void FillTextureClearBytes(void* bytes, const usize byteCount, const u8* pattern, const u32 patternSize){
+    u8* outBytes = static_cast<u8*>(bytes);
+    for(usize offset = 0; offset < byteCount; offset += patternSize)
+        NWB_MEMCPY(outBytes + offset, byteCount - offset, pattern, patternSize);
 }
 
 
@@ -1765,13 +1766,13 @@ void CommandList::clearDepthStencilTextureBox(
                 return false;
             }
 
-            Vector<u8, Alloc::ScratchArena> clearBytes(static_cast<usize>(clearByteSize64), scratchArena);
-            __hidden_vulkan_texture::FillTextureClearBytes(clearBytes, clearPattern, clearPatternSize);
-
+            const usize clearByteCount = static_cast<usize>(clearByteSize64);
             Buffer* stagingBuffer = nullptr;
             u64 stagingOffset = 0;
-            if(!prepareUploadStaging(clearBytes.data(), clearBytes.size(), NWB_TEXT("clearDepthStencilTextureBox"), stagingBuffer, stagingOffset))
+            void* stagingBytes = nullptr;
+            if(!prepareUploadStaging(clearByteCount, NWB_TEXT("clearDepthStencilTextureBox"), stagingBuffer, stagingOffset, stagingBytes))
                 return false;
+            __hidden_vulkan_texture::FillTextureClearBytes(stagingBytes, clearByteCount, clearPattern, clearPatternSize);
 
             if(mergeArrayLayerCopies){
                 Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
@@ -1790,15 +1791,20 @@ void CommandList::clearDepthStencilTextureBox(
                     vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
             }
             else{
+                Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
                 const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+                u32 regionIndex = 0u;
                 for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
                     VkBufferImageCopy region{};
                     region.bufferOffset = stagingOffset;
                     region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspect, mipLevel, arraySlice, 1u);
                     region.imageOffset = { resolvedBox.minX, resolvedBox.minY, 0 };
                     region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
-                    vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
+                    regions[regionIndex++] = region;
                 }
+
+                if(!regions.empty())
+                    vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
             }
 
             retainStagingBuffer(*stagingBuffer);
@@ -2306,13 +2312,13 @@ void CommandList::clearColorTextureBox(
         ;
         const u64 clearByteSize64 = mergeArrayLayerCopies ? uploadSize64 * arrayLayerCount : uploadSize64;
 
-        Vector<u8, Alloc::ScratchArena> clearBytes(static_cast<usize>(clearByteSize64), scratchArena);
-        __hidden_vulkan_texture::FillTextureClearBytes(clearBytes, clearPattern, clearPatternSize);
-
+        const usize clearByteCount = static_cast<usize>(clearByteSize64);
         Buffer* stagingBuffer = nullptr;
         u64 stagingOffset = 0;
-        if(!prepareUploadStaging(clearBytes.data(), clearBytes.size(), NWB_TEXT("clearTextureBox"), stagingBuffer, stagingOffset))
+        void* stagingBytes = nullptr;
+        if(!prepareUploadStaging(clearByteCount, NWB_TEXT("clearTextureBox"), stagingBuffer, stagingOffset, stagingBytes))
             return;
+        __hidden_vulkan_texture::FillTextureClearBytes(stagingBytes, clearByteCount, clearPattern, clearPatternSize);
 
         if(desc.dimension == TextureDimension::Texture3D){
             VkBufferImageCopy region{};
@@ -2339,15 +2345,20 @@ void CommandList::clearColorTextureBox(
                 vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
         }
         else{
+            Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
             const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+            u32 regionIndex = 0u;
             for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
                 VkBufferImageCopy region{};
                 region.bufferOffset = stagingOffset;
                 region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, arraySlice, 1u);
                 region.imageOffset = { resolvedBox.minX, resolvedBox.minY, 0 };
                 region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
-                vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
+                regions[regionIndex++] = region;
             }
+
+            if(!regions.empty())
+                vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<u32>(regions.size()), regions.data());
         }
 
         retainStagingBuffer(*stagingBuffer);

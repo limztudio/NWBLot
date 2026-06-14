@@ -156,6 +156,8 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendUnsignedText(manifest, request.processId);
     manifest += ",\n  \"thread_id\": ";
     AppendUnsignedText(manifest, request.threadId);
+    manifest += ",\n  \"has_exception_context\": ";
+    manifest += request.exceptionPointers ? "true" : "false";
     manifest += ",\n  \"dump_detail_mode\": ";
     AppendJsonEscaped(manifest, request.dumpDetailMode == DumpDetailMode::Full ? "full" : "small");
     manifest += ",\n  \"gpu_dumps_enabled\": ";
@@ -201,6 +203,8 @@ static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest
     AppendUnsignedText(text, request.processId);
     text += "\ntid=";
     AppendUnsignedText(text, request.threadId);
+    text += "\nexception_context=";
+    AppendUnsignedText(text, request.exceptionPointers);
     text += "\n";
     return text;
 }
@@ -271,7 +275,16 @@ static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
         : static_cast<MINIDUMP_TYPE>(MiniDumpNormal | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules)
     ;
 
-    const BOOL ok = MiniDumpWriteDump(process, request.processId, dumpFile, dumpType, nullptr, nullptr, nullptr);
+    MINIDUMP_EXCEPTION_INFORMATION exceptionInformation = {};
+    MINIDUMP_EXCEPTION_INFORMATION* exceptionInformationPointer = nullptr;
+    if(request.exceptionPointers != 0u){
+        exceptionInformation.ThreadId = static_cast<DWORD>(request.threadId);
+        exceptionInformation.ExceptionPointers = reinterpret_cast<EXCEPTION_POINTERS*>(static_cast<usize>(request.exceptionPointers));
+        exceptionInformation.ClientPointers = TRUE;
+        exceptionInformationPointer = &exceptionInformation;
+    }
+
+    const BOOL ok = MiniDumpWriteDump(process, request.processId, dumpFile, dumpType, exceptionInformationPointer, nullptr, nullptr);
 
     CloseHandle(dumpFile);
     CloseHandle(process);

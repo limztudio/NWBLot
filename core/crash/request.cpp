@@ -117,6 +117,7 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     CrashRequest request;
     SnapshotCrashState(request, reasonKind, reasonCode);
     request.uploadPolicy = options.uploadAfterWrite ? CrashUploadPolicy::ImmediateAfterWrite : CrashUploadPolicy::None;
+    request.exceptionPointers = options.exceptionPointers;
 
 #if defined(NWB_PLATFORM_ANDROID)
     if(options.writePackageInProcess){

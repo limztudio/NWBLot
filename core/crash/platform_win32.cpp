@@ -50,7 +50,11 @@ static LONG WINAPI __hidden_unhandled_exception_filter(EXCEPTION_POINTERS* excep
         : 0u
     ;
 
-    Detail::NotifyCrashHandler(Detail::CrashReasonKind::WindowsException, exceptionCode);
+    Detail::NotifyCrashHandler(
+        Detail::CrashReasonKind::WindowsException,
+        exceptionCode,
+        static_cast<u64>(reinterpret_cast<usize>(exceptionInfo))
+    );
 
     if(Detail::g_State.previousExceptionFilter)
         return Detail::g_State.previousExceptionFilter(exceptionInfo);
@@ -101,9 +105,10 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     return CrashDumpTransportStatus::Failed;
 }
 
-void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode)noexcept{
+void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const u64 exceptionPointers)noexcept{
     CrashDumpRequestOptions options;
     options.waitMilliseconds = 3000u;
+    options.exceptionPointers = exceptionPointers;
     static_cast<void>(RequestCrashDump(reasonKind, reasonCode, options));
 }
 

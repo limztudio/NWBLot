@@ -33,7 +33,7 @@ namespace Detail{
 
 
 inline constexpr u32 s_RequestMagic = 0x4E574243u; // NWBC
-inline constexpr u32 s_RequestVersion = 2u;
+inline constexpr u32 s_RequestVersion = 3u;
 inline constexpr usize s_MaxMetadata = 32u;
 inline constexpr usize s_MaxBreadcrumbs = 128u;
 inline constexpr usize s_MaxGpuCrashProviders = 8u;
@@ -110,6 +110,7 @@ struct CrashRequest{
     u32 threadId = 0u;
     u32 dumpDetailMode = DumpDetailMode::Small;
     u32 uploadPolicy = CrashUploadPolicy::ImmediateAfterWrite;
+    u64 exceptionPointers = 0u;
     u8 enableGpuDumps = 0u;
     char crashId[s_MaxShortText] = {};
     char applicationName[s_MaxShortText] = {};
@@ -126,6 +127,7 @@ struct CrashRequest{
 
 struct CrashDumpRequestOptions{
     u32 waitMilliseconds = 0u;
+    u64 exceptionPointers = 0u;
     bool writePackageInProcess = false;
     bool uploadAfterWrite = true;
 };
@@ -178,7 +180,7 @@ extern CrashState g_State;
 void SnapshotCrashState(CrashRequest& outRequest, CrashReasonKind::Enum reasonKind, u32 reasonCode)noexcept;
 [[nodiscard]] CrashDumpResult RequestCrashDump(CrashReasonKind::Enum reasonKind, u32 reasonCode, const CrashDumpRequestOptions& options);
 [[nodiscard]] CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, u32 waitMilliseconds)noexcept;
-void NotifyCrashHandler(CrashReasonKind::Enum reasonKind, u32 reasonCode)noexcept;
+void NotifyCrashHandler(CrashReasonKind::Enum reasonKind, u32 reasonCode, u64 exceptionPointers = 0u)noexcept;
 
 template<typename ArenaT>
 [[nodiscard]] bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory);

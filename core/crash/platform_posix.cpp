@@ -141,7 +141,9 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     return CrashDumpTransportStatus::Failed;
 }
 
-void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode)noexcept{
+void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const u64 exceptionPointers)noexcept{
+    static_cast<void>(exceptionPointers);
+
     CrashDumpRequestOptions options;
     static_cast<void>(RequestCrashDump(reasonKind, reasonCode, options));
 }

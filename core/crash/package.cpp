@@ -166,6 +166,14 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendUnsignedText(manifest, request.stackPointer);
     manifest += ",\n  \"frame_pointer\": ";
     AppendUnsignedText(manifest, request.framePointer);
+    manifest += ",\n  \"trigger_category\": ";
+    AppendJsonEscaped(manifest, request.triggerCategory);
+    manifest += ",\n  \"trigger_message\": ";
+    AppendJsonEscaped(manifest, request.triggerMessage);
+    manifest += ",\n  \"trigger_file\": ";
+    AppendJsonEscaped(manifest, request.triggerFile);
+    manifest += ",\n  \"trigger_line\": ";
+    AppendUnsignedText(manifest, request.triggerLine);
     manifest += ",\n  \"dump_detail_mode\": ";
     AppendJsonEscaped(manifest, request.dumpDetailMode == DumpDetailMode::Full ? "full" : "small");
     manifest += ",\n  \"gpu_dumps_enabled\": ";
@@ -221,6 +229,14 @@ static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest
     AppendUnsignedText(text, request.stackPointer);
     text += "\nframe_pointer=";
     AppendUnsignedText(text, request.framePointer);
+    text += "\ntrigger_category=";
+    text += request.triggerCategory;
+    text += "\ntrigger_message=";
+    text += request.triggerMessage;
+    text += "\ntrigger_file=";
+    text += request.triggerFile;
+    text += "\ntrigger_line=";
+    AppendUnsignedText(text, request.triggerLine);
     text += "\n";
     return text;
 }
@@ -231,6 +247,10 @@ static bool HasCpuContext(const CrashRequest& request){
         || request.stackPointer != 0u
         || request.framePointer != 0u
     ;
+}
+
+static bool HasTriggerContext(const CrashRequest& request){
+    return request.triggerCategory[0] != 0 || request.triggerMessage[0] != 0 || request.triggerFile[0] != 0 || request.triggerLine != 0u;
 }
 
 template<typename ArenaT>
@@ -249,6 +269,21 @@ static CrashStringT<ArenaT> BuildCpuContextText(ArenaT& arena, const CrashReques
 }
 
 template<typename ArenaT>
+static CrashStringT<ArenaT> BuildTriggerText(ArenaT& arena, const CrashRequest& request){
+    CrashStringT<ArenaT> text{arena};
+    text += "category=";
+    text += request.triggerCategory;
+    text += "\nmessage=";
+    text += request.triggerMessage;
+    text += "\nfile=";
+    text += request.triggerFile;
+    text += "\nline=";
+    AppendUnsignedText(text, request.triggerLine);
+    text += "\n";
+    return text;
+}
+
+template<typename ArenaT>
 static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
     const ::Path<ArenaT> packageDirectory = RequestPendingDirectory(arena, request);
     ErrorCode error;
@@ -262,6 +297,8 @@ static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
     WriteCrashTextFile(packageDirectory / "emergency.txt", BuildEmergencyText(arena, request));
     if(HasCpuContext(request))
         WriteCrashTextFile(packageDirectory / "cpu_context.txt", BuildCpuContextText(arena, request));
+    if(HasTriggerContext(request))
+        WriteCrashTextFile(packageDirectory / "trigger.txt", BuildTriggerText(arena, request));
     return true;
 }
 

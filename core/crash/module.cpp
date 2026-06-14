@@ -73,12 +73,40 @@ static void __hidden_store_breadcrumb(const AStringView category, const AStringV
     ++Detail::g_State.nextBreadcrumb;
 }
 
-static void __hidden_capture_diagnostic_crash(const char* category, const char* message)noexcept{
+static CrashDumpResult __hidden_capture_crash_dump(const AStringView category, const AStringView message, Detail::CrashDumpRequestOptions& options){
+    const AStringView breadcrumbCategory = category.empty() ? AStringView("manual_dump") : category;
+
+    {
+        ScopedLock lock(Detail::g_State.mutex);
+        if(!Detail::g_State.installed)
+            return CrashDumpResult{ CrashDumpStatus::NotInstalled };
+        if(!category.empty() || !message.empty())
+            __hidden_store_breadcrumb(breadcrumbCategory, message);
+    }
+
+    if(options.triggerCategory.empty())
+        options.triggerCategory = breadcrumbCategory;
+    if(options.triggerMessage.empty())
+        options.triggerMessage = message;
+
+    options.waitMilliseconds = 10000u;
+    Detail::ManualDumpContextStorage contextStorage;
+    Detail::CaptureManualDumpContext(options, contextStorage);
+#if defined(NWB_PLATFORM_ANDROID)
+    options.writePackageInProcess = true;
+#endif
+
+    return Detail::RequestCrashDump(Detail::CrashReasonKind::ManualDump, 0u, options);
+}
+
+static void __hidden_capture_diagnostic_crash(const DiagnosticCrashRecord& record)noexcept{
     try{
-        static_cast<void>(CaptureCrashDump(
-            category ? AStringView(category) : AStringView(),
-            message ? AStringView(message) : AStringView()
-        ));
+        Detail::CrashDumpRequestOptions options;
+        options.triggerCategory = record.category ? AStringView(record.category) : AStringView();
+        options.triggerMessage = record.message ? AStringView(record.message) : AStringView();
+        options.triggerFile = record.file ? AStringView(record.file) : AStringView();
+        options.triggerLine = record.line;
+        static_cast<void>(__hidden_capture_crash_dump(options.triggerCategory, options.triggerMessage, options));
     }
     catch(...){
     }
@@ -207,23 +235,8 @@ template bool InstallCrashHandler(Alloc::PersistentArena& arena, const CrashConf
 template bool AddCrashBreadcrumb(Alloc::PersistentArena& arena, AStringView category, AStringView message);
 
 CrashDumpResult CaptureCrashDump(const AStringView category, const AStringView message){
-    {
-        ScopedLock lock(Detail::g_State.mutex);
-        if(!Detail::g_State.installed)
-            return CrashDumpResult{ CrashDumpStatus::NotInstalled };
-        if(!category.empty() || !message.empty())
-            __hidden_crash_module::__hidden_store_breadcrumb(category.empty() ? AStringView("manual_dump") : category, message);
-    }
-
     Detail::CrashDumpRequestOptions options;
-    options.waitMilliseconds = 10000u;
-    Detail::ManualDumpContextStorage contextStorage;
-    Detail::CaptureManualDumpContext(options, contextStorage);
-#if defined(NWB_PLATFORM_ANDROID)
-    options.writePackageInProcess = true;
-#endif
-
-    return Detail::RequestCrashDump(Detail::CrashReasonKind::ManualDump, 0u, options);
+    return __hidden_crash_module::__hidden_capture_crash_dump(category, message, options);
 }
 
 bool FlushPendingCrashReports(Alloc::GlobalArena& arena){

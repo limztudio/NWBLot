@@ -33,7 +33,7 @@ namespace Detail{
 
 
 inline constexpr u32 s_RequestMagic = 0x4E574243u; // NWBC
-inline constexpr u32 s_RequestVersion = 4u;
+inline constexpr u32 s_RequestVersion = 1u;
 inline constexpr usize s_MaxMetadata = 32u;
 inline constexpr usize s_MaxBreadcrumbs = 128u;
 inline constexpr usize s_MaxGpuCrashProviders = 8u;
@@ -115,6 +115,7 @@ struct CrashRequest{
     u64 instructionPointer = 0u;
     u64 stackPointer = 0u;
     u64 framePointer = 0u;
+    u32 triggerLine = 0u;
     u8 enableGpuDumps = 0u;
     char crashId[s_MaxShortText] = {};
     char applicationName[s_MaxShortText] = {};
@@ -123,6 +124,9 @@ struct CrashRequest{
     char abi[s_MaxShortText] = {};
     char spoolDirectory[s_MaxPathText] = {};
     char logServerUrl[s_MaxUrlText] = {};
+    char triggerCategory[s_MaxShortText] = {};
+    char triggerMessage[s_MaxMediumText] = {};
+    char triggerFile[s_MaxPathText] = {};
     u32 metadataCount = 0u;
     u32 breadcrumbCount = 0u;
     FixedMetadata metadata[s_MaxMetadata] = {};
@@ -136,6 +140,10 @@ struct CrashDumpRequestOptions{
     u64 instructionPointer = 0u;
     u64 stackPointer = 0u;
     u64 framePointer = 0u;
+    AStringView triggerCategory;
+    AStringView triggerMessage;
+    AStringView triggerFile;
+    u32 triggerLine = 0u;
     bool writePackageInProcess = false;
     bool uploadAfterWrite = true;
 };

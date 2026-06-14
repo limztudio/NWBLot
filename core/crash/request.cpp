@@ -122,6 +122,10 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     request.instructionPointer = options.instructionPointer;
     request.stackPointer = options.stackPointer;
     request.framePointer = options.framePointer;
+    request.triggerLine = options.triggerLine;
+    CopyFixedBuffer(request.triggerCategory, options.triggerCategory);
+    CopyFixedBuffer(request.triggerMessage, options.triggerMessage);
+    CopyFixedBuffer(request.triggerFile, options.triggerFile);
 
 #if defined(NWB_PLATFORM_ANDROID)
     if(options.writePackageInProcess){

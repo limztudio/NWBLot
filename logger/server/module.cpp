@@ -4,7 +4,6 @@
 
 #include "module.h"
 
-#include "crash_ingest.h"
 #include "frame.h"
 
 #include <core/alloc/standalone_runtime.h>
@@ -325,7 +324,7 @@ Server::Server()
     : UpdateBaseType("NWB::Log::Server")
     , m_daemon(nullptr)
     , m_processedMsgFile(BaseType::arena())
-    , m_crashSymbolicationConfig(BaseType::arena())
+    , m_crashIngestConfig(BaseType::arena())
     , m_crashUploads(BaseType::arena())
 {}
 Server::~Server(){
@@ -338,10 +337,16 @@ Server::~Server(){
     m_processedMsgFile.close();
 }
 
-bool Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStringView crashSymbolStoreDirectory){
-    m_crashSymbolicationConfig.symbolStoreDirectory.clear();
+bool Server::internalInit(
+    u16 port,
+    BasicStringView<tchar> logFileNameBase,
+    AStringView crashSymbolStoreDirectory,
+    CrashRetentionConfig crashRetentionConfig
+){
+    m_crashIngestConfig.symbolication.symbolStoreDirectory.clear();
     if(!crashSymbolStoreDirectory.empty())
-        m_crashSymbolicationConfig.symbolStoreDirectory = crashSymbolStoreDirectory;
+        m_crashIngestConfig.symbolication.symbolStoreDirectory = crashSymbolStoreDirectory;
+    m_crashIngestConfig.retention = crashRetentionConfig;
 
     if(logFileNameBase.empty()){
         if(!m_processedMsgFile.openByExecutableName())
@@ -377,7 +382,7 @@ bool Server::internalUpdate(){
     PendingCrashUpload crashUpload;
     while(tryDequeueCrashUpload(crashUpload)){
         const Path archivePath(BaseType::arena(), AStringView(crashUpload.path));
-        CrashIngestResult ingestResult = ProcessCrashUpload(BaseType::arena(), archivePath, m_crashSymbolicationConfig);
+        CrashIngestResult ingestResult = ProcessCrashUpload(BaseType::arena(), archivePath, m_crashIngestConfig);
         enqueue(Move(ingestResult.message), ingestResult.type);
     }
 

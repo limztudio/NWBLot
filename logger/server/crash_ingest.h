@@ -7,6 +7,8 @@
 
 #include <logger/common.h>
 
+#include "crash_symbolicate.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,7 +19,22 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CrashSymbolicationConfig;
+struct CrashRetentionConfig{
+    usize maxExtractedPackages = 256u;
+    usize maxRawArchives = 256u;
+    usize maxInvalidArchives = 64u;
+};
+
+struct CrashIngestConfig{
+    Path storageDirectory;
+    CrashSymbolicationConfig symbolication;
+    CrashRetentionConfig retention;
+
+    explicit CrashIngestConfig(LogArena& arena)
+        : storageDirectory(arena)
+        , symbolication(arena)
+    {}
+};
 
 struct CrashIngestResult{
     LogString message;
@@ -30,7 +47,7 @@ struct CrashIngestResult{
 };
 
 
-[[nodiscard]] CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, const CrashSymbolicationConfig& symbolicationConfig);
+[[nodiscard]] CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, const CrashIngestConfig& config);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

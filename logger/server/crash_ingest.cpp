@@ -4,7 +4,7 @@
 
 #include "crash_ingest.h"
 
-#include "crash_symbolicate.h"
+#include <global/filesystem/directory_iterator.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,20 +44,27 @@ struct ByteView{
     return Path(arena, "crashes");
 }
 
-[[nodiscard]] static Path RawCrashDirectory(LogArena& arena){
-    return CrashRootDirectory(arena) / "raw";
+[[nodiscard]] static Path CrashStorageDirectory(LogArena& arena, const CrashIngestConfig& config){
+    if(!config.storageDirectory.empty())
+        return Path(arena, config.storageDirectory);
+
+    return CrashRootDirectory(arena);
 }
 
-[[nodiscard]] static Path InvalidCrashDirectory(LogArena& arena){
-    return CrashRootDirectory(arena) / "invalid";
+[[nodiscard]] static Path RawCrashDirectory(LogArena& arena, const CrashIngestConfig& config){
+    return CrashStorageDirectory(arena, config) / "raw";
 }
 
-[[nodiscard]] static Path ExtractedCrashDirectory(LogArena& arena){
-    return CrashRootDirectory(arena) / "packages";
+[[nodiscard]] static Path InvalidCrashDirectory(LogArena& arena, const CrashIngestConfig& config){
+    return CrashStorageDirectory(arena, config) / "invalid";
 }
 
-[[nodiscard]] static Path ExtractedPackageDirectory(LogArena& arena, const Path& archivePath){
-    return ExtractedCrashDirectory(arena) / archivePath.stem();
+[[nodiscard]] static Path ExtractedCrashDirectory(LogArena& arena, const CrashIngestConfig& config){
+    return CrashStorageDirectory(arena, config) / "packages";
+}
+
+[[nodiscard]] static Path ExtractedPackageDirectory(LogArena& arena, const CrashIngestConfig& config, const Path& archivePath){
+    return ExtractedCrashDirectory(arena, config) / archivePath.stem();
 }
 
 [[nodiscard]] static bool MovePathToDirectory(const Path& sourcePath, const Path& destinationDirectory, Path& outPath){
@@ -75,6 +82,41 @@ struct ByteView{
     error.clear();
     static_cast<void>(RenamePath(sourcePath, outPath, error));
     return !error;
+}
+
+static void ApplyRetentionToDirectory(LogArena& arena, const Path& directory, const usize maxEntries){
+    if(maxEntries == 0u)
+        return;
+
+    ErrorCode error;
+    const bool exists = IsDirectory(directory, error);
+    if(error || !exists)
+        return;
+
+    Vector<Path, LogArena> entries{arena};
+    DirectoryIterator directoryIt(directory, error);
+    if(error)
+        return;
+
+    for(const auto& entry : directoryIt)
+        entries.emplace_back(arena, entry.path());
+
+    if(entries.size() <= maxEntries)
+        return;
+
+    Sort(entries.begin(), entries.end());
+
+    const usize removeCount = entries.size() - maxEntries;
+    for(usize i = 0u; i < removeCount; ++i){
+        error.clear();
+        static_cast<void>(RemoveAllIfExists(entries[i], error));
+    }
+}
+
+static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
+    ApplyRetentionToDirectory(arena, ExtractedCrashDirectory(arena, config), config.retention.maxExtractedPackages);
+    ApplyRetentionToDirectory(arena, RawCrashDirectory(arena, config), config.retention.maxRawArchives);
+    ApplyRetentionToDirectory(arena, InvalidCrashDirectory(arena, config), config.retention.maxInvalidArchives);
 }
 
 
@@ -367,19 +409,20 @@ struct ByteView{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, const CrashSymbolicationConfig& symbolicationConfig){
+CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, const CrashIngestConfig& config){
     namespace Ingest = __hidden_logger_crash_ingest;
 
     CrashIngestResult result(arena);
     Ingest::CrashText error(arena);
-    const Path packageDirectory = Ingest::ExtractedPackageDirectory(arena, archivePath);
+    const Path packageDirectory = Ingest::ExtractedPackageDirectory(arena, config, archivePath);
 
     if(!Ingest::ExtractCrashArchive(arena, archivePath, packageDirectory, error)){
         ErrorCode removeError;
         static_cast<void>(RemoveAllIfExists(packageDirectory, removeError));
 
         Path invalidPath(arena);
-        static_cast<void>(Ingest::MovePathToDirectory(archivePath, Ingest::InvalidCrashDirectory(arena), invalidPath));
+        static_cast<void>(Ingest::MovePathToDirectory(archivePath, Ingest::InvalidCrashDirectory(arena, config), invalidPath));
+        Ingest::ApplyRetention(arena, config);
         result.type = Type::Error;
         result.message = StringFormat(
             arena,
@@ -396,7 +439,8 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
         static_cast<void>(RemoveAllIfExists(packageDirectory, removeError));
 
         Path invalidPath(arena);
-        static_cast<void>(Ingest::MovePathToDirectory(archivePath, Ingest::InvalidCrashDirectory(arena), invalidPath));
+        static_cast<void>(Ingest::MovePathToDirectory(archivePath, Ingest::InvalidCrashDirectory(arena, config), invalidPath));
+        Ingest::ApplyRetention(arena, config);
         result.type = Type::Error;
         result.message = StringFormat(
             arena,
@@ -407,11 +451,12 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
         return result;
     }
 
-    const CrashReportText symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary, symbolicationConfig);
+    const CrashReportText symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary, config.symbolication);
     static_cast<void>(WriteTextFile(packageDirectory / "server_symbolication.txt", AStringView(symbolicationReport.data(), symbolicationReport.size())));
 
     Path rawPath(arena);
-    static_cast<void>(Ingest::MovePathToDirectory(archivePath, Ingest::RawCrashDirectory(arena), rawPath));
+    static_cast<void>(Ingest::MovePathToDirectory(archivePath, Ingest::RawCrashDirectory(arena, config), rawPath));
+    Ingest::ApplyRetention(arena, config);
 
     result.accepted = true;
     result.type = Type::EssentialInfo;

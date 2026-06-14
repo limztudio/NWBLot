@@ -56,6 +56,11 @@ static ::Path<ArenaT> UploadedDirectory(const ::Path<ArenaT>& spoolDirectory){
 }
 
 template<typename ArenaT>
+static ::Path<ArenaT> UploadingDirectory(const ::Path<ArenaT>& spoolDirectory){
+    return spoolDirectory / "uploading";
+}
+
+template<typename ArenaT>
 static ::Path<ArenaT> FailedDirectory(const ::Path<ArenaT>& spoolDirectory){
     return spoolDirectory / "failed";
 }
@@ -74,6 +79,11 @@ bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory){
 
     error.clear();
     static_cast<void>(EnsureDirectories(UploadedDirectory(spoolDirectory), error));
+    if(error)
+        return false;
+
+    error.clear();
+    static_cast<void>(EnsureDirectories(UploadingDirectory(spoolDirectory), error));
     if(error)
         return false;
 
@@ -615,17 +625,29 @@ static bool UploadPackage(const CrashString& url, const CrashBytes& archiveBytes
     return ok;
 }
 
-static void MovePackage(const Path& from, const Path& toDirectory){
+static bool MovePackage(const Path& from, const Path& toDirectory){
     ErrorCode error;
     static_cast<void>(EnsureDirectories(toDirectory, error));
     if(error)
-        return;
+        return false;
 
     error.clear();
     const Path destination = toDirectory / from.filename();
     static_cast<void>(RemoveAllIfExists(destination, error));
+    if(error)
+        return false;
+
     error.clear();
     static_cast<void>(RenamePath(from, destination, error));
+    return !error;
+}
+
+static void WriteUploadAttemptText(Alloc::GlobalArena& arena, const Path& packageDirectory, const char* state){
+    CrashString text{arena};
+    text += "state=";
+    text += state ? state : "unknown";
+    text += "\n";
+    static_cast<void>(WriteTextFile(packageDirectory / "upload_attempt.txt", AStringView(text.data(), text.size())));
 }
 
 static Path RequestBucketDirectory(Alloc::GlobalArena& arena, const CrashRequest& request, const char* bucketName){
@@ -649,6 +671,8 @@ CrashDumpResult CrashPackageResult(const CrashRequest& request){
         return CrashDumpResult{ CrashDumpStatus::Uploaded };
     if(DirectoryExists(RequestBucketDirectory(arena, request, "failed")))
         return CrashDumpResult{ CrashDumpStatus::UploadFailed };
+    if(DirectoryExists(RequestBucketDirectory(arena, request, "uploading")))
+        return CrashDumpResult{ CrashDumpStatus::PackageWritten };
     if(DirectoryExists(RequestBucketDirectory(arena, request, "pending")))
         return CrashDumpResult{ CrashDumpStatus::PackageWritten };
 
@@ -659,18 +683,46 @@ static bool UploadPackageDirectory(Alloc::GlobalArena& arena, const Path& spoolD
     if(url.empty())
         return false;
 
+    const Path uploadingPackageDirectory = UploadingDirectory(spoolDirectory) / packageDirectory.filename();
+    if(!MovePackage(packageDirectory, UploadingDirectory(spoolDirectory)))
+        return false;
+
+    WriteUploadAttemptText(arena, uploadingPackageDirectory, "uploading");
+
     CrashBytes archiveBytes{arena};
-    if(!BuildPackageArchive(arena, packageDirectory, archiveBytes)){
-        MovePackage(packageDirectory, FailedDirectory(spoolDirectory));
+    if(!BuildPackageArchive(arena, uploadingPackageDirectory, archiveBytes)){
+        static_cast<void>(MovePackage(uploadingPackageDirectory, FailedDirectory(spoolDirectory)));
         return false;
     }
 
     if(UploadPackage(url, archiveBytes)){
-        MovePackage(packageDirectory, UploadedDirectory(spoolDirectory));
-        return true;
+        WriteUploadAttemptText(arena, uploadingPackageDirectory, "uploaded");
+        return MovePackage(uploadingPackageDirectory, UploadedDirectory(spoolDirectory));
     }
 
+    WriteUploadAttemptText(arena, uploadingPackageDirectory, "retry_pending");
+    static_cast<void>(MovePackage(uploadingPackageDirectory, PendingDirectory(spoolDirectory)));
     return false;
+}
+
+static void RecoverUploadingPackageDirectories(Alloc::GlobalArena& arena, const Path& spoolDirectory){
+    const Path uploadingDirectory = UploadingDirectory(spoolDirectory);
+    ErrorCode error;
+    if(!IsDirectory(uploadingDirectory, error) || error)
+        return;
+
+    DirectoryIterator directory(uploadingDirectory, error);
+    if(error)
+        return;
+
+    for(const auto& entry : directory){
+        ErrorCode entryError;
+        if(!IsDirectory(entry.path(), entryError) || entryError || !IsSafePackageName(arena, entry.path()))
+            continue;
+
+        WriteUploadAttemptText(arena, entry.path(), "retry_pending_after_interrupted_upload");
+        static_cast<void>(MovePackage(entry.path(), PendingDirectory(spoolDirectory)));
+    }
 }
 
 bool UploadCrashPackage(const CrashRequest& request){
@@ -687,11 +739,19 @@ bool UploadCrashPackage(const CrashRequest& request){
     curl_global_init(CURL_GLOBAL_ALL);
 
     const Path spoolDirectory(arena, request.spoolDirectory);
+    RecoverUploadingPackageDirectories(arena, spoolDirectory);
     const Path packageDirectory = RequestPendingDirectory(arena, request);
     return UploadPackageDirectory(arena, spoolDirectory, packageDirectory, url);
 }
 
 #if defined(NWB_PLATFORM_ANDROID)
+static void WriteAndroidCollectionNote(Alloc::PersistentArena& arena, const CrashRequest& request){
+    CrashStringT<Alloc::PersistentArena> text{arena};
+    text += "application_exit_info=not_collected_by_native_layer\n";
+    text += "detail=Java/Kotlin host should attach ApplicationExitInfo tombstone data on next launch\n";
+    WriteCrashTextFile(RequestPendingDirectory(arena, request) / "android_collection.txt", text);
+}
+
 static void CollectAndroidEmergencyRecord(){
     Alloc::PersistentArena& dumpArena = DumpArena();
     const ::Path<Alloc::PersistentArena> recordPath =
@@ -706,8 +766,10 @@ static void CollectAndroidEmergencyRecord(){
     CrashRequest request;
     const usize offset = bytes.size() - sizeof(CrashRequest);
     NWB_MEMCPY(&request, sizeof(request), bytes.data() + offset, sizeof(request));
-    if(request.magic == s_RequestMagic && request.version == s_RequestVersion)
-        static_cast<void>(WriteCrashPackage(request));
+    if(request.magic == s_RequestMagic && request.version == s_RequestVersion){
+        if(WriteCrashPackage(request))
+            WriteAndroidCollectionNote(dumpArena, request);
+    }
 
     CrashBytesT<Alloc::PersistentArena> empty{dumpArena};
     static_cast<void>(WriteBinaryFile(recordPath, empty));
@@ -728,6 +790,7 @@ bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena){
 
     bool allUploaded = true;
     const Path spoolDirectory(arena, g_State.spoolDirectoryText);
+    RecoverUploadingPackageDirectories(arena, spoolDirectory);
     const Path pendingDirectory = PendingDirectory(spoolDirectory);
     ErrorCode error;
     if(!IsDirectory(pendingDirectory, error) || error)

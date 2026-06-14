@@ -1,8 +1,10 @@
 nwb_declare_executable(nwb_logserver)
 target_sources(nwb_logserver PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/crash_ingest.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/main.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/crash_ingest.h"
     "${CMAKE_CURRENT_LIST_DIR}/frame.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
 )

@@ -4,6 +4,7 @@
 
 #include "module.h"
 
+#include "crash_ingest.h"
 #include "frame.h"
 
 #include <core/alloc/standalone_runtime.h>
@@ -274,10 +275,11 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     if(info->isCrashUpload){
         Path storedPath(thisPtr->arena());
         if(__hidden_logger_server::StoreCrashUpload(*thisPtr, *info, storedPath)){
+            thisPtr->enqueueCrashUpload(storedPath);
             thisPtr->enqueue(
                 StringFormat(
                     thisPtr->arena(),
-                    NWB_TEXT("Crash upload stored at '{}'; symbolication pending"),
+                    NWB_TEXT("Crash upload queued for ingest at '{}'"),
                     PathToString<tchar>(storedPath)
                 ),
                 Type::EssentialInfo
@@ -309,6 +311,7 @@ Server::Server()
     : UpdateBaseType("NWB::Log::Server")
     , m_daemon(nullptr)
     , m_processedMsgFile(BaseType::arena())
+    , m_crashUploads(BaseType::arena())
 {}
 Server::~Server(){
     if(m_daemon){
@@ -334,7 +337,31 @@ bool Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase){
 
     return m_daemon != nullptr;
 }
+
+void Server::enqueueCrashUpload(const Path& path){
+    PendingCrashUpload upload;
+    const AString<LogArena> pathText = PathToString<char>(BaseType::arena(), path);
+    if(pathText.size() >= sizeof(upload.path)){
+        enqueue(BasicStringView<tchar>(NWB_TEXT("Crash upload path exceeds queue capacity")), Type::Error);
+        return;
+    }
+
+    CopyFixedBuffer(upload.path, AStringView(pathText.data(), pathText.size()));
+    m_crashUploads.emplace(upload);
+}
+
+bool Server::tryDequeueCrashUpload(PendingCrashUpload& outUpload){
+    return m_crashUploads.try_pop(outUpload);
+}
+
 bool Server::internalUpdate(){
+    PendingCrashUpload crashUpload;
+    while(tryDequeueCrashUpload(crashUpload)){
+        const Path archivePath(BaseType::arena(), AStringView(crashUpload.path));
+        CrashIngestResult ingestResult = ProcessCrashUpload(BaseType::arena(), archivePath);
+        enqueue(Move(ingestResult.message), ingestResult.type);
+    }
+
     MessageType msg = MakeMessageType(BaseType::arena());
     while(tryDequeue(msg)){
         const auto type = Get<1>(msg);

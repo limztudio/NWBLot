@@ -20,6 +20,13 @@ NWB_LOG_BEGIN
 
 
 inline constexpr tchar SERVER_NAME[] = NWB_TEXT("Server");
+
+struct PendingCrashUpload{
+    char path[1024] = {};
+};
+
+using CrashUploadQueue = ParallelQueue<PendingCrashUpload, LogArena>;
+
 class Server final : public BaseUpdateOrdinary<Server, 0.1f, SERVER_NAME>{
     template<typename, const tchar*> friend class Base;
     template<typename, f32, const tchar*> friend class BaseUpdateOrdinary;
@@ -51,8 +58,14 @@ protected:
 
 
 private:
+    void enqueueCrashUpload(const Path& path);
+    bool tryDequeueCrashUpload(PendingCrashUpload& outUpload);
+
+
+private:
     MHD_Daemon* m_daemon;
     ProcessedMessageFile m_processedMsgFile;
+    CrashUploadQueue m_crashUploads;
 };
 
 

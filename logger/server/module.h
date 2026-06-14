@@ -68,7 +68,7 @@ protected:
 
 
 private:
-    void enqueueCrashUpload(const Path& path);
+    [[nodiscard]] bool enqueueCrashUpload(const Path& path);
     void stopCrashIngestWorker();
     [[nodiscard]] bool crashUploadAuthorized(MHD_Connection& connection)const;
     bool tryDequeueCrashUpload(PendingCrashUpload& outUpload);

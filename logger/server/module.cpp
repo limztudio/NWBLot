@@ -392,15 +392,21 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     if(info->isCrashUpload){
         if(info->closeCrashUploadStream() && info->crashUploadPath[0] != 0){
             const Path storedPath(thisPtr->arena(), AStringView(info->crashUploadPath));
-            thisPtr->enqueueCrashUpload(storedPath);
-            thisPtr->enqueue(
-                StringFormat(
-                    thisPtr->arena(),
-                    NWB_TEXT("Crash upload queued for ingest at '{}'"),
-                    PathToString<tchar>(storedPath)
-                ),
-                Type::EssentialInfo
-            );
+            if(thisPtr->enqueueCrashUpload(storedPath)){
+                thisPtr->enqueue(
+                    StringFormat(
+                        thisPtr->arena(),
+                        NWB_TEXT("Crash upload queued for ingest at '{}'"),
+                        PathToString<tchar>(storedPath)
+                    ),
+                    Type::EssentialInfo
+                );
+            }
+            else{
+                ErrorCode error;
+                static_cast<void>(RemoveFile(storedPath, error));
+                __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Discarded crash upload that could not be queued"), Type::Error);
+            }
         }
         else{
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
@@ -482,17 +488,18 @@ void Server::internalDestroy(){
     stopCrashIngestWorker();
 }
 
-void Server::enqueueCrashUpload(const Path& path){
+bool Server::enqueueCrashUpload(const Path& path){
     PendingCrashUpload upload;
     const AString<LogArena> pathText = PathToString<char>(BaseType::arena(), path);
     if(pathText.size() >= sizeof(upload.path)){
         enqueue(BasicStringView<tchar>(NWB_TEXT("Crash upload path exceeds queue capacity")), Type::Error);
-        return;
+        return false;
     }
 
     CopyFixedBuffer(upload.path, AStringView(pathText.data(), pathText.size()));
     m_crashUploads.emplace(upload);
     m_crashIngestSemaphore.release();
+    return true;
 }
 
 void Server::stopCrashIngestWorker(){

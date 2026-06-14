@@ -32,6 +32,7 @@ struct ConnectionInfo{
     ConnectionInfo& operator=(ConnectionInfo&&) = delete;
     ConnectionInfo& operator=(const ConnectionInfo&) = delete;
     ~ConnectionInfo(){
+        static_cast<void>(closeCrashUploadStream());
         Core::Alloc::CoreFree(buffer, "ConnectionInfo buffer freed at Server::requestCallback");
     }
 
@@ -42,6 +43,9 @@ struct ConnectionInfo{
         if(size > Limit<usize>::s_Max - appendSize)
             return false;
 
+        if(isCrashUpload)
+            return appendCrashUpload(uploadData, appendSize);
+
         const usize requiredSize = size + appendSize;
         if(!reserve(requiredSize))
             return false;
@@ -49,6 +53,25 @@ struct ConnectionInfo{
         NWB_MEMCPY(buffer + size, appendSize, uploadData.get(), appendSize);
         size = requiredSize;
         return true;
+    }
+
+    [[nodiscard]] bool appendCrashUpload(NotNull<const char*> uploadData, const usize appendSize){
+        if(!crashUploadStream.is_open())
+            return false;
+
+        crashUploadStream.write(uploadData.get(), static_cast<StreamSize>(appendSize));
+        if(!crashUploadStream.good())
+            return false;
+
+        size += appendSize;
+        return true;
+    }
+
+    [[nodiscard]] bool closeCrashUploadStream(){
+        if(crashUploadStream.is_open())
+            crashUploadStream.close();
+
+        return crashUploadStream.good();
     }
 
     [[nodiscard]] bool reserve(const usize requiredSize){
@@ -82,6 +105,8 @@ struct ConnectionInfo{
     usize size = 0u;
     usize capacity = 0u;
     bool isCrashUpload = false;
+    char crashUploadPath[1024] = {};
+    OutputFileStream crashUploadStream;
 };
 
 inline constexpr usize s_MaxLogMessageUploadBytes = 1u * 1024u * 1024u;
@@ -155,36 +180,56 @@ static void EnqueueServerMessage(Server& server, const tchar* message, const Typ
     return CrashInboxDirectory(server) / fileName;
 }
 
-[[nodiscard]] static bool StoreCrashUpload(Server& server, const ConnectionInfo& info, Path& outPath){
+[[nodiscard]] static bool CopyCrashUploadPath(Server& server, const Path& path, char (&outPath)[1024]){
+    const AString<LogArena> pathText = PathToString<char>(server.arena(), path);
+    if(pathText.size() >= sizeof(outPath))
+        return false;
+
+    CopyFixedBuffer(outPath, AStringView(pathText.data(), pathText.size()));
+    return true;
+}
+
+[[nodiscard]] static bool OpenCrashUploadStream(Server& server, ConnectionInfo& info){
     ErrorCode error;
     const Path inboxDirectory = CrashInboxDirectory(server);
     static_cast<void>(EnsureDirectories(inboxDirectory, error));
     if(error)
         return false;
 
-    outPath = MakeCrashPackagePath(server);
-    OutputFileStream stream(outPath.c_str(), s_FileOpenBinary | s_FileOpenTruncate);
-    if(!stream.is_open())
+    const Path path = MakeCrashPackagePath(server);
+    if(!CopyCrashUploadPath(server, path, info.crashUploadPath))
         return false;
 
-    if(info.size)
-        stream.write(reinterpret_cast<const char*>(info.buffer), static_cast<StreamSize>(info.size));
+    info.crashUploadStream.open(path.c_str(), s_FileOpenBinary | s_FileOpenTruncate);
+    return info.crashUploadStream.is_open();
+}
 
-    static_cast<void>(server);
-    return stream.good();
+static void DiscardStoredCrashUpload(Server& server, ConnectionInfo& info){
+    if(!info.isCrashUpload || info.crashUploadPath[0] == 0)
+        return;
+
+    static_cast<void>(info.closeCrashUploadStream());
+
+    ErrorCode error;
+    static_cast<void>(RemoveFile(Path(server.arena(), AStringView(info.crashUploadPath)), error));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static ConnectionInfo* CreateConnectionInfo(bool isCrashUpload){
+[[nodiscard]] static ConnectionInfo* CreateConnectionInfo(Server& server, const bool isCrashUpload){
     void* memory = Core::Alloc::CoreAlloc(sizeof(ConnectionInfo), "ConnectionInfo allocated at Server::requestCallback");
     if(!memory)
         return nullptr;
 
     auto* info = new(memory) ConnectionInfo();
     info->isCrashUpload = isCrashUpload;
+    if(isCrashUpload && !OpenCrashUploadStream(server, *info)){
+        info->~ConnectionInfo();
+        Core::Alloc::CoreFree(info, "ConnectionInfo freed after crash upload stream init failure");
+        return nullptr;
+    }
     return info;
 }
 
@@ -250,9 +295,9 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
             return __hidden_logger_server::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_UNAUTHORIZED);
         }
 
-        auto* info = __hidden_logger_server::CreateConnectionInfo(isCrashUpload);
+        auto* info = __hidden_logger_server::CreateConnectionInfo(*thisPtr, isCrashUpload);
         if(!info){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to allocate"), Type::Fatal);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to initialize connection upload state"), Type::Fatal);
             return MHD_NO;
         }
 
@@ -265,6 +310,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     if(uploadDataSize){
         if(!upload_data){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received a malformed upload chunk"), Type::Error);
+            __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
             __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;
         }
@@ -276,13 +322,15 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
             || info->size > uploadSizeLimit - static_cast<usize>(uploadDataSize)
         ){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an oversized message"), Type::Error);
+            __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
             __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;
         }
 
         const usize appendSize = static_cast<usize>(uploadDataSize);
         if(!info->append(uploadDataPtr, appendSize)){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to reallocate a buffer"), Type::Fatal);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store upload chunk"), Type::Fatal);
+            __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
             __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;
         }
@@ -292,8 +340,8 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     }
 
     if(info->isCrashUpload){
-        Path storedPath(thisPtr->arena());
-        if(__hidden_logger_server::StoreCrashUpload(*thisPtr, *info, storedPath)){
+        if(info->closeCrashUploadStream() && info->crashUploadPath[0] != 0){
+            const Path storedPath(thisPtr->arena(), AStringView(info->crashUploadPath));
             thisPtr->enqueueCrashUpload(storedPath);
             thisPtr->enqueue(
                 StringFormat(
@@ -305,6 +353,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
             );
         }
         else{
+            __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store crash upload"), Type::Error);
         }
     }

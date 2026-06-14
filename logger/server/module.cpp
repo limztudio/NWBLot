@@ -271,6 +271,33 @@ Server* g_ServerLogger = nullptr;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void Server::crashIngestUpdate(Server* self){
+    for(;;){
+        self->m_crashIngestSemaphore.acquire();
+
+        PendingCrashUpload crashUpload;
+        while(self->tryDequeueCrashUpload(crashUpload)){
+            LogArena ingestArena("NWB::Log::Server::CrashIngest");
+
+            CrashIngestConfig ingestConfig(ingestArena);
+            ingestConfig.storageDirectory = self->m_crashIngestConfig.storageDirectory;
+            ingestConfig.symbolication.symbolStoreDirectory = self->m_crashIngestConfig.symbolication.symbolStoreDirectory;
+            ingestConfig.retention = self->m_crashIngestConfig.retention;
+
+            const Path archivePath(ingestArena, AStringView(crashUpload.path));
+            CrashIngestResult ingestResult = ProcessCrashUpload(ingestArena, archivePath, ingestConfig);
+            self->enqueue(Move(ingestResult.message), ingestResult.type);
+        }
+
+        if(self->m_crashIngestExit.load(MemoryOrder::acquire))
+            break;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* upload_data, size_t* upload_data_size, void** con_cls){
     static_cast<void>(version);
 
@@ -382,6 +409,8 @@ Server::Server()
     , m_crashIngestConfig(BaseType::arena())
     , m_crashUploadToken(BaseType::arena())
     , m_crashUploads(BaseType::arena())
+    , m_crashIngestSemaphore(0)
+    , m_crashIngestExit(false)
 {}
 Server::~Server(){
     if(m_daemon){
@@ -389,6 +418,7 @@ Server::~Server(){
         m_daemon = nullptr;
     }
 
+    stopCrashIngestWorker();
     stopWorker();
     m_processedMsgFile.close();
 }
@@ -417,7 +447,16 @@ bool Server::internalInit(
 
     m_daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD, port, nullptr, nullptr, &Server::requestCallback, this, MHD_OPTION_END);
 
-    return m_daemon != nullptr;
+    if(!m_daemon)
+        return false;
+
+    m_crashIngestExit.store(false, MemoryOrder::release);
+    m_crashIngestThread = Thread(Server::crashIngestUpdate, this);
+    return true;
+}
+
+void Server::internalDestroy(){
+    stopCrashIngestWorker();
 }
 
 void Server::enqueueCrashUpload(const Path& path){
@@ -430,6 +469,15 @@ void Server::enqueueCrashUpload(const Path& path){
 
     CopyFixedBuffer(upload.path, AStringView(pathText.data(), pathText.size()));
     m_crashUploads.emplace(upload);
+    m_crashIngestSemaphore.release();
+}
+
+void Server::stopCrashIngestWorker(){
+    const bool alreadyStopping = m_crashIngestExit.exchange(true, MemoryOrder::acq_rel);
+    if(!alreadyStopping)
+        m_crashIngestSemaphore.release();
+    if(m_crashIngestThread.joinable())
+        m_crashIngestThread.join();
 }
 
 bool Server::crashUploadAuthorized(MHD_Connection& connection)const{
@@ -442,13 +490,6 @@ bool Server::tryDequeueCrashUpload(PendingCrashUpload& outUpload){
 }
 
 bool Server::internalUpdate(){
-    PendingCrashUpload crashUpload;
-    while(tryDequeueCrashUpload(crashUpload)){
-        const Path archivePath(BaseType::arena(), AStringView(crashUpload.path));
-        CrashIngestResult ingestResult = ProcessCrashUpload(BaseType::arena(), archivePath, m_crashIngestConfig);
-        enqueue(Move(ingestResult.message), ingestResult.type);
-    }
-
     MessageType msg = MakeMessageType(BaseType::arena());
     while(tryDequeue(msg)){
         const auto type = Get<1>(msg);

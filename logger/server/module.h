@@ -39,6 +39,7 @@ class Server final : public BaseUpdateOrdinary<Server, 0.1f, SERVER_NAME>{
 
 private:
     static MHD_Result requestCallback(void* cls, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* upload_data, size_t* upload_data_size, void** con_cls);
+    static void crashIngestUpdate(Server* self);
 
 
 public:
@@ -58,6 +59,7 @@ protected:
         CrashRetentionConfig crashRetentionConfig = CrashRetentionConfig{},
         AStringView crashUploadToken = AStringView()
     );
+    void internalDestroy();
     bool internalUpdate();
 
 protected:
@@ -67,6 +69,7 @@ protected:
 
 private:
     void enqueueCrashUpload(const Path& path);
+    void stopCrashIngestWorker();
     [[nodiscard]] bool crashUploadAuthorized(MHD_Connection& connection)const;
     bool tryDequeueCrashUpload(PendingCrashUpload& outUpload);
 
@@ -77,6 +80,9 @@ private:
     CrashIngestConfig m_crashIngestConfig;
     AString<LogArena> m_crashUploadToken;
     CrashUploadQueue m_crashUploads;
+    Semaphore<> m_crashIngestSemaphore;
+    Thread m_crashIngestThread;
+    Atomic<bool> m_crashIngestExit;
 };
 
 

@@ -300,6 +300,34 @@ static void TestCrashRetentionPrunesOldestAcceptedUploads(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 }
 
+static void TestAcceptedCrashWarnsWhenRawArchiveCannotBeRetained(TestContext& context){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("logger_server_raw_archive_failed_test");
+    constexpr AStringView s_Stem("raw_blocked_001");
+    RemoveTestArtifacts(arena, s_Group);
+
+    CrashTestText archive(arena);
+    BuildLinuxCrashArchive(arena, archive, s_Stem);
+    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
+
+    ErrorCode error;
+    static_cast<void>(EnsureDirectories(StorageDirectory(arena, s_Group), error));
+    NWB_LOGSERVER_TEST_CHECK(context, !error);
+    NWB_LOGSERVER_TEST_CHECK(context, WriteTextFile(StorageDirectory(arena, s_Group) / "raw", AStringView("blocked")));
+
+    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
+    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+
+    NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
+    NWB_LOGSERVER_TEST_CHECK(context, result.type == NWB::Log::Type::Warning);
+    NWB_LOGSERVER_TEST_CHECK(context, ContainsMessage(result.message, NWB_TEXT("raw upload archive could not be retained")));
+    NWB_LOGSERVER_TEST_CHECK(context, DirectoryExists(ExtractedPackageDirectory(arena, s_Group, s_Stem)));
+    NWB_LOGSERVER_TEST_CHECK(context, PathIsMissing(ArchivePath(arena, s_Group, s_Stem)));
+
+    RemoveTestArtifacts(arena, s_Group);
+}
+
 static void TestCrashRetentionPrunesOldestInvalidUploads(TestContext& context){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -365,6 +393,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("logserver crash", [](NWB::Tests::TestContext& conte
     __hidden_logger_server_tests::TestAndroidCrashPackageCopiesTombstoneFrames(context);
     __hidden_logger_server_tests::TestInvalidCrashPackageIsRejected(context);
     __hidden_logger_server_tests::TestCrashRetentionPrunesOldestAcceptedUploads(context);
+    __hidden_logger_server_tests::TestAcceptedCrashWarnsWhenRawArchiveCannotBeRetained(context);
     __hidden_logger_server_tests::TestCrashRetentionPrunesOldestInvalidUploads(context);
     __hidden_logger_server_tests::TestCrashUploadAuthorizationMatchesBearerToken(context);
 })

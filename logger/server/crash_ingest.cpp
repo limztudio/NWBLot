@@ -68,20 +68,26 @@ struct ByteView{
 }
 
 [[nodiscard]] static bool MovePathToDirectory(const Path& sourcePath, const Path& destinationDirectory, Path& outPath){
+    outPath.clear();
+
     ErrorCode error;
     static_cast<void>(EnsureDirectories(destinationDirectory, error));
     if(error)
         return false;
 
-    outPath = destinationDirectory / sourcePath.filename();
+    const Path destination = destinationDirectory / sourcePath.filename();
     error.clear();
-    static_cast<void>(RemoveAllIfExists(outPath, error));
+    static_cast<void>(RemoveAllIfExists(destination, error));
     if(error)
         return false;
 
     error.clear();
-    static_cast<void>(RenamePath(sourcePath, outPath, error));
-    return !error;
+    static_cast<void>(RenamePath(sourcePath, destination, error));
+    if(error)
+        return false;
+
+    outPath = destination;
+    return true;
 }
 
 static void ApplyRetentionToDirectory(LogArena& arena, const Path& directory, const usize maxEntries){

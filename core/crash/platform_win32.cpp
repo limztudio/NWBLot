@@ -50,11 +50,12 @@ static LONG WINAPI __hidden_unhandled_exception_filter(EXCEPTION_POINTERS* excep
         : 0u
     ;
 
-    Detail::NotifyCrashHandler(
-        Detail::CrashReasonKind::WindowsException,
-        exceptionCode,
-        static_cast<u64>(reinterpret_cast<usize>(exceptionInfo))
-    );
+    Detail::CrashDumpRequestOptions options;
+    options.exceptionPointers = static_cast<u64>(reinterpret_cast<usize>(exceptionInfo));
+    if(exceptionInfo && exceptionInfo->ExceptionRecord)
+        options.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(exceptionInfo->ExceptionRecord->ExceptionAddress));
+
+    Detail::NotifyCrashHandler(Detail::CrashReasonKind::WindowsException, exceptionCode, options);
 
     if(Detail::g_State.previousExceptionFilter)
         return Detail::g_State.previousExceptionFilter(exceptionInfo);
@@ -105,11 +106,10 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     return CrashDumpTransportStatus::Failed;
 }
 
-void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const u64 exceptionPointers)noexcept{
-    CrashDumpRequestOptions options;
-    options.waitMilliseconds = 3000u;
-    options.exceptionPointers = exceptionPointers;
-    static_cast<void>(RequestCrashDump(reasonKind, reasonCode, options));
+void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options)noexcept{
+    CrashDumpRequestOptions requestOptions = options;
+    requestOptions.waitMilliseconds = 3000u;
+    static_cast<void>(RequestCrashDump(reasonKind, reasonCode, requestOptions));
 }
 
 template<typename ArenaT>

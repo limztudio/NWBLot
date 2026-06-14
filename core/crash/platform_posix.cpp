@@ -11,6 +11,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ucontext.h>
 #include <unistd.h>
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
@@ -52,8 +53,30 @@ namespace __hidden_crash_posix{
     return true;
 }
 
-static void __hidden_signal_handler(const int signalNumber, siginfo_t*, void*)noexcept{
-    Detail::NotifyCrashHandler(Detail::CrashReasonKind::PosixSignal, static_cast<u32>(signalNumber));
+static void __hidden_capture_signal_context(Detail::CrashDumpRequestOptions& options, const siginfo_t* signalInfo, const void* signalContext)noexcept{
+    if(signalInfo)
+        options.faultAddress = static_cast<u64>(reinterpret_cast<usize>(signalInfo->si_addr));
+
+    const ucontext_t* context = static_cast<const ucontext_t*>(signalContext);
+    if(!context)
+        return;
+
+#if defined(__x86_64__) && defined(REG_RIP) && defined(REG_RSP) && defined(REG_RBP)
+    options.instructionPointer = static_cast<u64>(context->uc_mcontext.gregs[REG_RIP]);
+    options.stackPointer = static_cast<u64>(context->uc_mcontext.gregs[REG_RSP]);
+    options.framePointer = static_cast<u64>(context->uc_mcontext.gregs[REG_RBP]);
+#elif defined(__aarch64__)
+    options.instructionPointer = static_cast<u64>(context->uc_mcontext.pc);
+    options.stackPointer = static_cast<u64>(context->uc_mcontext.sp);
+    options.framePointer = static_cast<u64>(context->uc_mcontext.regs[29]);
+#endif
+}
+
+static void __hidden_signal_handler(const int signalNumber, siginfo_t* signalInfo, void* signalContext)noexcept{
+    Detail::CrashDumpRequestOptions options;
+    __hidden_capture_signal_context(options, signalInfo, signalContext);
+
+    Detail::NotifyCrashHandler(Detail::CrashReasonKind::PosixSignal, static_cast<u32>(signalNumber), options);
 
     struct sigaction action = {};
     action.sa_handler = SIG_DFL;
@@ -141,10 +164,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     return CrashDumpTransportStatus::Failed;
 }
 
-void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const u64 exceptionPointers)noexcept{
-    static_cast<void>(exceptionPointers);
-
-    CrashDumpRequestOptions options;
+void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options)noexcept{
     static_cast<void>(RequestCrashDump(reasonKind, reasonCode, options));
 }
 

@@ -158,6 +158,14 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendUnsignedText(manifest, request.threadId);
     manifest += ",\n  \"has_exception_context\": ";
     manifest += request.exceptionPointers ? "true" : "false";
+    manifest += ",\n  \"fault_address\": ";
+    AppendUnsignedText(manifest, request.faultAddress);
+    manifest += ",\n  \"instruction_pointer\": ";
+    AppendUnsignedText(manifest, request.instructionPointer);
+    manifest += ",\n  \"stack_pointer\": ";
+    AppendUnsignedText(manifest, request.stackPointer);
+    manifest += ",\n  \"frame_pointer\": ";
+    AppendUnsignedText(manifest, request.framePointer);
     manifest += ",\n  \"dump_detail_mode\": ";
     AppendJsonEscaped(manifest, request.dumpDetailMode == DumpDetailMode::Full ? "full" : "small");
     manifest += ",\n  \"gpu_dumps_enabled\": ";
@@ -205,6 +213,37 @@ static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest
     AppendUnsignedText(text, request.threadId);
     text += "\nexception_context=";
     AppendUnsignedText(text, request.exceptionPointers);
+    text += "\nfault_address=";
+    AppendUnsignedText(text, request.faultAddress);
+    text += "\ninstruction_pointer=";
+    AppendUnsignedText(text, request.instructionPointer);
+    text += "\nstack_pointer=";
+    AppendUnsignedText(text, request.stackPointer);
+    text += "\nframe_pointer=";
+    AppendUnsignedText(text, request.framePointer);
+    text += "\n";
+    return text;
+}
+
+static bool HasCpuContext(const CrashRequest& request){
+    return request.faultAddress != 0u
+        || request.instructionPointer != 0u
+        || request.stackPointer != 0u
+        || request.framePointer != 0u
+    ;
+}
+
+template<typename ArenaT>
+static CrashStringT<ArenaT> BuildCpuContextText(ArenaT& arena, const CrashRequest& request){
+    CrashStringT<ArenaT> text{arena};
+    text += "fault_address=";
+    AppendUnsignedText(text, request.faultAddress);
+    text += "\ninstruction_pointer=";
+    AppendUnsignedText(text, request.instructionPointer);
+    text += "\nstack_pointer=";
+    AppendUnsignedText(text, request.stackPointer);
+    text += "\nframe_pointer=";
+    AppendUnsignedText(text, request.framePointer);
     text += "\n";
     return text;
 }
@@ -221,6 +260,8 @@ static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
     WriteCrashTextFile(packageDirectory / "metadata.txt", BuildMetadataText(arena, request));
     WriteCrashTextFile(packageDirectory / "breadcrumbs.txt", BuildBreadcrumbText(arena, request));
     WriteCrashTextFile(packageDirectory / "emergency.txt", BuildEmergencyText(arena, request));
+    if(HasCpuContext(request))
+        WriteCrashTextFile(packageDirectory / "cpu_context.txt", BuildCpuContextText(arena, request));
     return true;
 }
 
@@ -335,7 +376,13 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
     }
 #elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     if(request.platform == PlatformKind::Linux){
+        CopyProcFile(arena, request, "auxv", "proc_auxv.bin");
+        CopyProcFile(arena, request, "cmdline", "proc_cmdline.bin");
+        CopyProcFile(arena, request, "coredump_filter", "proc_coredump_filter.txt");
+        CopyProcFile(arena, request, "environ", "proc_environ.bin");
+        CopyProcFile(arena, request, "limits", "proc_limits.txt");
         CopyProcFile(arena, request, "maps", "proc_maps.txt");
+        CopyProcFile(arena, request, "stat", "proc_stat.txt");
         CopyProcFile(arena, request, "status", "proc_status.txt");
         WriteCrashTextFile(
             RequestPendingDirectory(arena, request) / "symbolication.txt",

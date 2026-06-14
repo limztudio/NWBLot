@@ -350,6 +350,27 @@ static void TestCrashSpoolRetentionProtectsActivePendingPackage(TestContext& con
     RemoveTestArtifacts(arena, s_Group);
 }
 
+static void TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(TestContext& context){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("crash_uploading_recovery_blocked_test");
+    constexpr AStringView s_CrashId("crash-recovery-blocked");
+    RemoveTestArtifacts(arena, s_Group);
+
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "uploading", s_CrashId));
+    NWB_CRASH_TEST_CHECK(context, WriteTextFile(BucketDirectory(arena, s_Group, "pending"), AStringView("blocked")));
+
+    NWB::Core::Crash::Detail::CrashUploadSnapshot snapshot;
+    CopyPathText(arena, snapshot.spoolDirectory, SpoolDirectory(arena, s_Group));
+    CopyFixedBuffer(snapshot.logServerUrl, AStringView("http://127.0.0.1:1"));
+
+    NWB_CRASH_TEST_CHECK(context, !NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(arena, snapshot));
+    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, "uploading", s_CrashId)));
+    NWB_CRASH_TEST_CHECK(context, PathIsFile(BucketDirectory(arena, s_Group, "pending")));
+
+    RemoveTestArtifacts(arena, s_Group);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -374,6 +395,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("crash", [](NWB::Tests::TestContext& context){
     __hidden_crash_tests::TestCrashSpoolRetentionPrunesOldestPackages(context);
     __hidden_crash_tests::TestCrashSpoolRetentionZeroDisablesPruning(context);
     __hidden_crash_tests::TestCrashSpoolRetentionProtectsActivePendingPackage(context);
+    __hidden_crash_tests::TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(context);
 })
 
 

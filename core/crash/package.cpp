@@ -813,24 +813,28 @@ static bool UploadPackageDirectory(
     return false;
 }
 
-static void RecoverUploadingPackageDirectories(Alloc::GlobalArena& arena, const Path& spoolDirectory){
+static bool RecoverUploadingPackageDirectories(Alloc::GlobalArena& arena, const Path& spoolDirectory){
     const Path uploadingDirectory = UploadingDirectory(spoolDirectory);
     ErrorCode error;
     if(!IsDirectory(uploadingDirectory, error) || error)
-        return;
+        return !error;
 
     DirectoryIterator directory(uploadingDirectory, error);
     if(error)
-        return;
+        return false;
 
+    bool ok = true;
     for(const auto& entry : directory){
         ErrorCode entryError;
         if(!IsDirectory(entry.path(), entryError) || entryError || !IsSafePackageName(arena, entry.path()))
             continue;
 
         WriteUploadAttemptText(arena, entry.path(), "retry_pending_after_interrupted_upload");
-        static_cast<void>(MovePackage(entry.path(), PendingDirectory(spoolDirectory)));
+        if(!MovePackage(entry.path(), PendingDirectory(spoolDirectory)))
+            ok = false;
     }
+
+    return ok;
 }
 
 bool UploadCrashPackage(const CrashRequest& request){
@@ -841,7 +845,7 @@ bool UploadCrashPackage(const CrashRequest& request){
 
     Alloc::GlobalArena arena("NWB::Core::Crash::PackageUpload");
     const Path spoolDirectory(arena, request.spoolDirectory);
-    RecoverUploadingPackageDirectories(arena, spoolDirectory);
+    const bool recoveryOk = RecoverUploadingPackageDirectories(arena, spoolDirectory);
 
     const CrashString url = CrashUploadUrl(arena, request.logServerUrl);
     if(url.empty())
@@ -859,7 +863,7 @@ bool UploadCrashPackage(const CrashRequest& request){
         request.spoolRetention,
         AStringView(packageName.data(), packageName.size())
     ));
-    return uploaded;
+    return uploaded && recoveryOk;
 }
 
 #if defined(NWB_PLATFORM_ANDROID)
@@ -905,7 +909,7 @@ bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena, const CrashUploadSn
         return false;
 
     const Path spoolDirectory(arena, snapshot.spoolDirectory);
-    RecoverUploadingPackageDirectories(arena, spoolDirectory);
+    const bool recoveryOk = RecoverUploadingPackageDirectories(arena, spoolDirectory);
     bool retentionOk = ApplyCrashSpoolRetention(arena, spoolDirectory, snapshot.spoolRetention);
 
     const CrashString url = CrashUploadUrl(arena, snapshot.logServerUrl);
@@ -919,7 +923,7 @@ bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena, const CrashUploadSn
     const Path pendingDirectory = PendingDirectory(spoolDirectory);
     ErrorCode error;
     if(!IsDirectory(pendingDirectory, error) || error)
-        return !error && retentionOk;
+        return !error && recoveryOk && retentionOk;
 
     DirectoryIterator directory(pendingDirectory, error);
     if(error)
@@ -935,7 +939,7 @@ bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena, const CrashUploadSn
     }
 
     retentionOk = ApplyCrashSpoolRetention(arena, spoolDirectory, snapshot.spoolRetention) && retentionOk;
-    return allUploaded && retentionOk;
+    return allUploaded && recoveryOk && retentionOk;
 }
 
 

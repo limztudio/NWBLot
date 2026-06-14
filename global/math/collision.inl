@@ -35,6 +35,17 @@ inline constexpr f32 s_PlaneEpsilon = 1.192092896e-7f;
     return VectorMax(VectorSplatX(value), VectorMax(VectorSplatY(value), VectorSplatZ(value)));
 }
 
+[[nodiscard]] inline SIMDVector Vector3SignedUnitMask(const SIMDVector position, const SIMDVector componentMask)noexcept{
+    const SIMDVector sign = VectorSelect(s_SIMDNegativeOne, s_SIMDOne, VectorGreaterOrEqual(position, VectorZero()));
+    return VectorAndInt(sign, componentMask);
+}
+
+[[nodiscard]] inline SIMDVector CapsuleYSegmentPoint(const SIMDVector position, const SIMDVector radiusHalfHeight)noexcept{
+    const SIMDVector halfHeight = VectorSplatY(radiusHalfHeight);
+    const SIMDVector clampedY = VectorClamp(VectorSplatY(position), VectorNegate(halfHeight), halfHeight);
+    return VectorAndInt(clampedY, s_SIMDMaskY);
+}
+
 [[nodiscard]] inline const Float3U* StrideFloat3Pointer(const Float3U* points, const usize stride, const usize index)noexcept{
     return reinterpret_cast<const Float3U*>(reinterpret_cast<const u8*>(points) + stride * index);
 }
@@ -712,8 +723,8 @@ inline void FrustumPlanes(
 )noexcept{
     const SIMDVector q = VectorSubtract(VectorAbs(position), halfExtents);
     const SIMDVector outside = VectorMax(q, VectorZero());
-    const f32 insideDistance = Min(Max(VectorGetX(q), Max(VectorGetY(q), VectorGetZ(q))), 0.0f);
-    return VectorAdd(Vector3Length(outside), VectorReplicate(insideDistance));
+    const SIMDVector insideDistance = VectorMin(CollisionDetail::Vector3MaxComponent(q), VectorZero());
+    return VectorAdd(Vector3Length(outside), insideDistance);
 }
 
 [[nodiscard]] inline SIMDVector SIMDCALL SdfTests::Sphere(
@@ -727,9 +738,7 @@ inline void FrustumPlanes(
     const SIMDVector position,
     const SIMDVector radiusHalfHeight
 )noexcept{
-    const f32 halfHeight = VectorGetY(radiusHalfHeight);
-    const f32 clampedY = Max(-halfHeight, Min(halfHeight, VectorGetY(position)));
-    const SIMDVector segmentPoint = VectorSet(0.0f, clampedY, 0.0f, 0.0f);
+    const SIMDVector segmentPoint = CollisionDetail::CapsuleYSegmentPoint(position, radiusHalfHeight);
     return VectorSubtract(Vector3Length(VectorSubtract(position, segmentPoint)), VectorSplatX(radiusHalfHeight));
 }
 
@@ -748,29 +757,22 @@ inline void FrustumPlanes(
     const f32 minLengthSquared
 )noexcept{
     const SIMDVector q = VectorSubtract(VectorAbs(position), halfExtents);
-    const f32 x = VectorGetX(position);
-    const f32 y = VectorGetY(position);
-    const f32 z = VectorGetZ(position);
-    const f32 ox = Max(VectorGetX(q), 0.0f);
-    const f32 oy = Max(VectorGetY(q), 0.0f);
-    const f32 oz = Max(VectorGetZ(q), 0.0f);
-    if(ox * ox + oy * oy + oz * oz > minLengthSquared){
-        return Vector3NormalizeOr(
-            VectorSet(x < 0.0f ? -ox : ox, y < 0.0f ? -oy : oy, z < 0.0f ? -oz : oz, 0.0f),
-            fallback,
-            minLengthSquared
-        );
-    }
+    const SIMDVector outside = VectorMax(q, VectorZero());
+    const SIMDVector signedOutside = VectorSelect(VectorNegate(outside), outside, VectorGreaterOrEqual(position, VectorZero()));
+    const SIMDVector outsideNormal = Vector3NormalizeOr(signedOutside, fallback, minLengthSquared);
+    const SIMDVector useOutside = VectorGreater(Vector3LengthSq(outside), VectorReplicate(minLengthSquared));
 
-    const f32 dx = VectorGetX(q);
-    const f32 dy = VectorGetY(q);
-    const f32 dz = VectorGetZ(q);
-    if(dx >= dy && dx >= dz)
-        return VectorSet(x < 0.0f ? -1.0f : 1.0f, 0.0f, 0.0f, 0.0f);
-    if(dy >= dz)
-        return VectorSet(0.0f, y < 0.0f ? -1.0f : 1.0f, 0.0f, 0.0f);
-
-    return VectorSet(0.0f, 0.0f, z < 0.0f ? -1.0f : 1.0f, 0.0f);
+    const SIMDVector qX = VectorSplatX(q);
+    const SIMDVector qY = VectorSplatY(q);
+    const SIMDVector qZ = VectorSplatZ(q);
+    const SIMDVector xIsMax = VectorAndInt(VectorGreaterOrEqual(qX, qY), VectorGreaterOrEqual(qX, qZ));
+    const SIMDVector yIsMax = VectorGreaterOrEqual(qY, qZ);
+    const SIMDVector xNormal = CollisionDetail::Vector3SignedUnitMask(position, s_SIMDMaskX);
+    const SIMDVector yNormal = CollisionDetail::Vector3SignedUnitMask(position, s_SIMDMaskY);
+    const SIMDVector zNormal = CollisionDetail::Vector3SignedUnitMask(position, s_SIMDMaskZ);
+    SIMDVector faceNormal = VectorSelect(zNormal, yNormal, yIsMax);
+    faceNormal = VectorSelect(faceNormal, xNormal, xIsMax);
+    return VectorSelect(faceNormal, outsideNormal, useOutside);
 }
 
 [[nodiscard]] inline SIMDVector SIMDCALL SdfTests::SphereNormal(
@@ -786,11 +788,15 @@ inline void FrustumPlanes(
     const SIMDVector radiusHalfHeight,
     const f32 minLengthSquared
 )noexcept{
-    const f32 halfHeight = VectorGetY(radiusHalfHeight);
-    const f32 clampedY = Max(-halfHeight, Min(halfHeight, VectorGetY(position)));
+    const SIMDVector segmentPoint = CollisionDetail::CapsuleYSegmentPoint(position, radiusHalfHeight);
+    const SIMDVector fallback = VectorSelect(
+        VectorSet(0.0f, -1.0f, 0.0f, 0.0f),
+        VectorSet(0.0f, 1.0f, 0.0f, 0.0f),
+        VectorGreaterOrEqual(VectorSplatY(position), VectorZero())
+    );
     return Vector3NormalizeOr(
-        VectorSubtract(position, VectorSet(0.0f, clampedY, 0.0f, 0.0f)),
-        VectorSet(0.0f, VectorGetY(position) < 0.0f ? -1.0f : 1.0f, 0.0f, 0.0f),
+        VectorSubtract(position, segmentPoint),
+        fallback,
         minLengthSquared
     );
 }

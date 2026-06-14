@@ -19,6 +19,14 @@ NWB_LOG_BEGIN
 
 using CrashReportText = AString<LogArena>;
 
+struct CrashSymbolicationConfig{
+    Path symbolStoreDirectory;
+
+    explicit CrashSymbolicationConfig(LogArena& arena)
+        : symbolStoreDirectory(arena)
+    {}
+};
+
 struct CrashPackageSummary{
     CrashReportText format;
     CrashReportText crashId;
@@ -37,7 +45,7 @@ struct CrashPackageSummary{
 };
 
 
-[[nodiscard]] CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary);
+[[nodiscard]] CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

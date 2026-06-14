@@ -19,10 +19,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int MainLogic(u16 logPort, void* inst){
+static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, void* inst){
     {
         NWB::Log::Server logger;
-        if(!logger.init(logPort, NWB_TEXT("logserver")))
+        if(!logger.init(logPort, NWB_TEXT("logserver"), crashSymbolStoreDirectory))
             return -1;
         NWB::Log::ServerLoggerRegistrationGuard loggerRegistrationGuard(logger);
         logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Log server: listening on port {}"), logPort), NWB::Log::Type::EssentialInfo);
@@ -58,11 +58,14 @@ static int MainLogic(u16 logPort, void* inst){
 
 
 static int EntryPoint(isize argc, tchar** argv, void* inst){
+    NWB::Core::Alloc::GlobalArena commandLineArena("NWB::LogServer::CommandLine");
     u16 logPort = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
+    AString<NWB::Core::Alloc::GlobalArena> crashSymbolStoreDirectory(commandLineArena);
     {
         CLI::App app{ "logserver" };
 
         NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, logPort);
+        app.add_option("--crash-symbol-store", crashSymbolStoreDirectory, "Directory containing crash symbol files");
 
         try{
             NWB::Core::Common::ArgParseApp(app, argc, argv);
@@ -73,7 +76,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
         }
     }
 
-    return MainLogic(logPort, inst);
+    return MainLogic(logPort, AStringView(crashSymbolStoreDirectory.data(), crashSymbolStoreDirectory.size()), inst);
 }
 
 

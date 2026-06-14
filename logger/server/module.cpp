@@ -311,6 +311,7 @@ Server::Server()
     : UpdateBaseType("NWB::Log::Server")
     , m_daemon(nullptr)
     , m_processedMsgFile(BaseType::arena())
+    , m_crashSymbolicationConfig(BaseType::arena())
     , m_crashUploads(BaseType::arena())
 {}
 Server::~Server(){
@@ -323,7 +324,11 @@ Server::~Server(){
     m_processedMsgFile.close();
 }
 
-bool Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase){
+bool Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStringView crashSymbolStoreDirectory){
+    m_crashSymbolicationConfig.symbolStoreDirectory.clear();
+    if(!crashSymbolStoreDirectory.empty())
+        m_crashSymbolicationConfig.symbolStoreDirectory = crashSymbolStoreDirectory;
+
     if(logFileNameBase.empty()){
         if(!m_processedMsgFile.openByExecutableName())
             return false;
@@ -358,7 +363,7 @@ bool Server::internalUpdate(){
     PendingCrashUpload crashUpload;
     while(tryDequeueCrashUpload(crashUpload)){
         const Path archivePath(BaseType::arena(), AStringView(crashUpload.path));
-        CrashIngestResult ingestResult = ProcessCrashUpload(BaseType::arena(), archivePath);
+        CrashIngestResult ingestResult = ProcessCrashUpload(BaseType::arena(), archivePath, m_crashSymbolicationConfig);
         enqueue(Move(ingestResult.message), ingestResult.type);
     }
 

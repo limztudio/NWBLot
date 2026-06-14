@@ -367,7 +367,7 @@ struct ByteView{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath){
+CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, const CrashSymbolicationConfig& symbolicationConfig){
     namespace Ingest = __hidden_logger_crash_ingest;
 
     CrashIngestResult result(arena);
@@ -407,7 +407,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath){
         return result;
     }
 
-    const CrashReportText symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary);
+    const CrashReportText symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary, symbolicationConfig);
     static_cast<void>(WriteTextFile(packageDirectory / "server_symbolication.txt", AStringView(symbolicationReport.data(), symbolicationReport.size())));
 
     Path rawPath(arena);
@@ -417,12 +417,13 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath){
     result.type = Type::EssentialInfo;
     result.message = StringFormat(
         arena,
-        NWB_TEXT("Crash package '{}' ingested: platform='{}' reason='{}' package='{}' raw='{}'"),
+        NWB_TEXT("Crash package '{}' ingested: platform='{}' reason='{}' package='{}' raw='{}'\n{}"),
         StringConvert(summary.crashId),
         StringConvert(summary.platform),
         StringConvert(summary.reasonKind),
         PathToString<tchar>(packageDirectory),
-        PathToString<tchar>(rawPath.empty() ? archivePath : rawPath)
+        PathToString<tchar>(rawPath.empty() ? archivePath : rawPath),
+        StringConvert(symbolicationReport)
     );
     return result;
 }

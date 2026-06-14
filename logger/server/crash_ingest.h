@@ -17,6 +17,8 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct CrashSymbolicationConfig;
+
 struct CrashIngestResult{
     LogString message;
     Type::Enum type = Type::EssentialInfo;
@@ -28,7 +30,7 @@ struct CrashIngestResult{
 };
 
 
-[[nodiscard]] CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath);
+[[nodiscard]] CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, const CrashSymbolicationConfig& symbolicationConfig);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

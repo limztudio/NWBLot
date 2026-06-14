@@ -9,6 +9,8 @@
 
 #include <logger/common.h>
 
+#include "crash_symbolicate.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,7 +51,7 @@ public:
 
 
 protected:
-    bool internalInit(u16 port, BasicStringView<tchar> logFileNameBase = {});
+    bool internalInit(u16 port, BasicStringView<tchar> logFileNameBase = {}, AStringView crashSymbolStoreDirectory = {});
     bool internalUpdate();
 
 protected:
@@ -65,6 +67,7 @@ private:
 private:
     MHD_Daemon* m_daemon;
     ProcessedMessageFile m_processedMsgFile;
+    CrashSymbolicationConfig m_crashSymbolicationConfig;
     CrashUploadQueue m_crashUploads;
 };
 

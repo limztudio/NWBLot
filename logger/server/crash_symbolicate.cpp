@@ -95,6 +95,233 @@ static void AppendHexAddress(LogArena& arena, CrashReportText& outReport, const 
     outReport += FormatHex64A(arena, address);
 }
 
+[[nodiscard]] static Path DefaultSymbolStoreDirectory(LogArena& arena){
+    return CrashRootDirectory(arena) / "symbols";
+}
+
+[[nodiscard]] static Path EffectiveSymbolStoreDirectory(LogArena& arena, const CrashSymbolicationConfig& config){
+    if(!config.symbolStoreDirectory.empty())
+        return Path(arena, config.symbolStoreDirectory);
+
+    return DefaultSymbolStoreDirectory(arena);
+}
+
+static void AppendSymbolStoreLine(LogArena& arena, CrashReportText& outReport, const CrashSymbolicationConfig& config){
+    const Path symbolStoreDirectory = EffectiveSymbolStoreDirectory(arena, config);
+    outReport += "symbol_store=";
+    outReport += PathToString<char>(arena, symbolStoreDirectory);
+    outReport += "\n";
+}
+
+[[nodiscard]] static AStringView TrimLeft(AStringView text)noexcept{
+    while(!text.empty() && (text.front() == ' ' || text.front() == '\t'))
+        text.remove_prefix(1u);
+    return text;
+}
+
+[[nodiscard]] static bool StartsWith(const AStringView text, const AStringView prefix)noexcept{
+    return text.size() >= prefix.size() && AStringView(text.data(), prefix.size()) == prefix;
+}
+
+[[nodiscard]] static bool ContainsText(const AStringView text, const AStringView needle)noexcept{
+    return text.find(needle) != AStringView::npos;
+}
+
+[[nodiscard]] static bool ParseVariableHexU64(AStringView text, u64& outValue){
+    outValue = 0u;
+    if(StartsWith(text, "0x") || StartsWith(text, "0X"))
+        text.remove_prefix(2u);
+    if(text.empty() || text.size() > 16u)
+        return false;
+
+    for(const char ch : text){
+        u8 nibble = 0u;
+        if(!ParseHexDigit(ch, nibble))
+            return false;
+
+        outValue = (outValue << 4u) | static_cast<u64>(nibble);
+    }
+    return true;
+}
+
+[[nodiscard]] static bool FindKeyValueU64(const AStringView text, const AStringView key, u64& outValue){
+    usize cursor = 0u;
+    while(cursor < text.size()){
+        const usize begin = cursor;
+        while(cursor < text.size() && text[cursor] != '\n' && text[cursor] != '\r')
+            ++cursor;
+
+        const AStringView line(text.data() + begin, cursor - begin);
+        while(cursor < text.size() && (text[cursor] == '\n' || text[cursor] == '\r'))
+            ++cursor;
+
+        if(line.size() <= key.size() || !StartsWith(line, key) || line[key.size()] != '=')
+            continue;
+
+        return ParseU64(AStringView(line.data() + key.size() + 1u, line.size() - key.size() - 1u), outValue);
+    }
+
+    return false;
+}
+
+[[nodiscard]] static bool ParseProcMapAddressRange(const AStringView line, u64& outBegin, u64& outEnd){
+    const usize split = line.find('-');
+    if(split == AStringView::npos)
+        return false;
+
+    usize rangeEnd = split + 1u;
+    while(rangeEnd < line.size() && line[rangeEnd] != ' ' && line[rangeEnd] != '\t')
+        ++rangeEnd;
+
+    return ParseVariableHexU64(AStringView(line.data(), split), outBegin)
+        && ParseVariableHexU64(AStringView(line.data() + split + 1u, rangeEnd - split - 1u), outEnd)
+        && outBegin < outEnd
+    ;
+}
+
+[[nodiscard]] static AStringView ProcMapPathField(AStringView line)noexcept{
+    line = TrimLeft(line);
+    for(u32 fieldIndex = 0u; fieldIndex < 5u; ++fieldIndex){
+        while(!line.empty() && line.front() != ' ' && line.front() != '\t')
+            line.remove_prefix(1u);
+        line = TrimLeft(line);
+        if(line.empty())
+            return AStringView();
+    }
+
+    return line;
+}
+
+[[nodiscard]] static bool FindProcMapForAddress(
+    const AStringView mapsText,
+    const u64 address,
+    u64& outModuleBegin,
+    CrashReportText& outModulePath
+){
+    outModuleBegin = 0u;
+    outModulePath.clear();
+
+    usize cursor = 0u;
+    while(cursor < mapsText.size()){
+        const usize begin = cursor;
+        while(cursor < mapsText.size() && mapsText[cursor] != '\n' && mapsText[cursor] != '\r')
+            ++cursor;
+
+        const AStringView line(mapsText.data() + begin, cursor - begin);
+        while(cursor < mapsText.size() && (mapsText[cursor] == '\n' || mapsText[cursor] == '\r'))
+            ++cursor;
+
+        u64 mapBegin = 0u;
+        u64 mapEnd = 0u;
+        if(!ParseProcMapAddressRange(line, mapBegin, mapEnd) || address < mapBegin || address >= mapEnd)
+            continue;
+
+        outModuleBegin = mapBegin;
+        const AStringView path = ProcMapPathField(line);
+        outModulePath.assign(path.data(), path.size());
+        if(outModulePath.empty())
+            outModulePath = "<anonymous>";
+        return true;
+    }
+
+    return false;
+}
+
+static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
+    outReport += "status=not_decoded\nresolver=elf_dwarf_core\n";
+    AppendSymbolStoreLine(arena, outReport, config);
+
+    const bool corePresent = RegularFileExists(packageDirectory / "core") || RegularFileExists(packageDirectory / "core.dmp") || RegularFileExists(packageDirectory / "process.core");
+    outReport += corePresent
+        ? "core_artifact=present\n"
+        : "core_artifact=missing\n"
+    ;
+
+    CrashReportText cpuContext{arena};
+    CrashReportText procMaps{arena};
+    const bool cpuContextPresent = ReadTextFile(packageDirectory / "cpu_context.txt", cpuContext) && !cpuContext.empty();
+    const bool procMapsPresent = ReadTextFile(packageDirectory / "proc_maps.txt", procMaps) && !procMaps.empty();
+    outReport += procMapsPresent
+        ? "proc_maps=present\n"
+        : "proc_maps=missing\n"
+    ;
+
+    u64 instructionPointer = 0u;
+    if(!cpuContextPresent || !FindKeyValueU64(AStringView(cpuContext.data(), cpuContext.size()), "instruction_pointer", instructionPointer) || instructionPointer == 0u){
+        outReport += "detail=ELF/DWARF stack resolver requires a core-compatible artifact; instruction pointer mapping unavailable\n";
+        return;
+    }
+
+    outReport += "instruction_pointer=";
+    AppendHexAddress(arena, outReport, instructionPointer);
+    outReport += "\n";
+
+    if(!procMapsPresent){
+        outReport += "detail=ELF/DWARF stack resolver requires a core-compatible artifact; proc maps missing for module lookup\n";
+        return;
+    }
+
+    u64 moduleBegin = 0u;
+    CrashReportText modulePath{arena};
+    if(!FindProcMapForAddress(AStringView(procMaps.data(), procMaps.size()), instructionPointer, moduleBegin, modulePath)){
+        outReport += "detail=ELF/DWARF stack resolver requires a core-compatible artifact; instruction pointer was not found in proc maps\n";
+        return;
+    }
+
+    outReport += "instruction_pointer_module=";
+    outReport += modulePath;
+    outReport += "\nmodule_relative_ip=";
+    AppendHexAddress(arena, outReport, instructionPointer - moduleBegin);
+    outReport += "\ndetail=module-relative crash address captured; full Linux callstack requires a core-compatible artifact and DWARF resolver\n";
+}
+
+static void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
+    CrashReportText tombstone{arena};
+    const bool tombstonePresent = ReadTextFile(packageDirectory / "android_tombstone.txt", tombstone) && !tombstone.empty();
+    if(!tombstonePresent){
+        outReport += "status=not_decoded\nresolver=android_tombstone_native_symbols\n";
+        AppendSymbolStoreLine(arena, outReport, config);
+        outReport += "android_tombstone=missing\ndetail=Android resolver requires Java/ApplicationExitInfo tombstone attachment and native symbol store\n";
+        return;
+    }
+
+    CrashReportText frames{arena};
+    usize cursor = 0u;
+    while(cursor < tombstone.size()){
+        const usize begin = cursor;
+        while(cursor < tombstone.size() && tombstone[cursor] != '\n' && tombstone[cursor] != '\r')
+            ++cursor;
+
+        const AStringView line(tombstone.data() + begin, cursor - begin);
+        while(cursor < tombstone.size() && (tombstone[cursor] == '\n' || tombstone[cursor] == '\r'))
+            ++cursor;
+
+        const AStringView trimmed = TrimLeft(line);
+        if(trimmed.size() < 4u || trimmed.front() != '#' || !ContainsText(trimmed, " pc "))
+            continue;
+
+        frames.append(trimmed.data(), trimmed.size());
+        frames += '\n';
+    }
+
+    outReport += frames.empty()
+        ? "status=not_decoded\n"
+        : "status=tombstone_parsed\n"
+    ;
+    outReport += "resolver=android_tombstone_native_symbols\n";
+    AppendSymbolStoreLine(arena, outReport, config);
+    outReport += "android_tombstone=present\n";
+    outReport += frames.empty()
+        ? "detail=tombstone attached, but no native frame lines were recognized; native symbols are required for full decoding\n"
+        : "detail=tombstone native frame lines copied; native symbol store is required for offline address resolution\n"
+    ;
+
+    if(!frames.empty()){
+        outReport += "\n[tombstone_callstack]\n";
+        outReport += frames;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -267,11 +494,11 @@ static void InitializeStackFrameFromContext(STACKFRAME64& outFrame, const CONTEX
     outFrame.AddrStack.Mode = AddrModeFlat;
 }
 
-[[nodiscard]] static WString<LogArena> BuildSymbolSearchPath(LogArena& arena, const Path& packageDirectory){
+[[nodiscard]] static WString<LogArena> BuildSymbolSearchPath(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config){
     WString<LogArena> path{arena};
     path += packageDirectory.native();
     path += L";";
-    path += (CrashRootDirectory(arena) / "symbols").native();
+    path += EffectiveSymbolStoreDirectory(arena, config).native();
     return path;
 }
 
@@ -353,7 +580,7 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
     outReport += "\n";
 }
 
-[[nodiscard]] static bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, CrashReportText& outReport){
+[[nodiscard]] static bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport){
     const Path dumpPath = packageDirectory / "process.dmp";
     CrashBytes dumpBytes{arena};
     ErrorCode readError;
@@ -371,7 +598,7 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
     }
 
     const HANDLE symbolProcess = GetCurrentProcess();
-    const WString<LogArena> symbolPath = BuildSymbolSearchPath(arena, packageDirectory);
+    const WString<LogArena> symbolPath = BuildSymbolSearchPath(arena, packageDirectory, config);
     SymCleanup(symbolProcess);
     SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
     if(!SymInitializeW(symbolProcess, symbolPath.c_str(), FALSE)){
@@ -438,7 +665,7 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary){
+CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config){
     namespace Symbolicate = __hidden_logger_crash_symbolicate;
 
     CrashReportText report{arena};
@@ -456,24 +683,16 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
 
     if(summary.platform == "windows"){
 #if defined(NWB_PLATFORM_WINDOWS)
-        static_cast<void>(Symbolicate::AppendWindowsMinidumpStack(arena, packageDirectory, summary, report));
+        static_cast<void>(Symbolicate::AppendWindowsMinidumpStack(arena, packageDirectory, summary, config, report));
 #else
         report += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=Windows minidump resolver is only available on Windows logserver builds\n";
 #endif
     }
     else if(summary.platform == "linux"){
-        report += "status=not_decoded\nresolver=elf_dwarf_core\ndetail=ELF/DWARF stack resolver requires server symbol store and core artifact configuration\n";
-        report += Symbolicate::RegularFileExists(packageDirectory / "proc_maps.txt")
-            ? "proc_maps=present\n"
-            : "proc_maps=missing\n"
-        ;
+        Symbolicate::AppendLinuxArtifactSummary(arena, packageDirectory, config, report);
     }
     else if(summary.platform == "android"){
-        report += "status=not_decoded\nresolver=android_tombstone_native_symbols\ndetail=Android resolver requires Java/ApplicationExitInfo tombstone attachment and native symbol store\n";
-        report += Symbolicate::RegularFileExists(packageDirectory / "android_tombstone.txt")
-            ? "android_tombstone=present\n"
-            : "android_tombstone=missing\n"
-        ;
+        Symbolicate::AppendAndroidTombstoneSummary(arena, packageDirectory, config, report);
     }
     else{
         report += "status=not_decoded\nresolver=unknown\ndetail=unknown crash platform\n";
@@ -494,3 +713,4 @@ NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

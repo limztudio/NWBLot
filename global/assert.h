@@ -30,7 +30,7 @@
 {                                                                                                                                               \
     if(!(condition)){                                                                                                                           \
         const auto msg = ::std::format(__VA_ARGS__);                                                                                            \
-        ::CaptureDiagnosticCrash("assert", #condition, __FILE__, __LINE__);                                                                      \
+        ::CaptureDiagnosticCrash("assert", #__VA_ARGS__, __FILE__, __LINE__);                                                                   \
         NWB_TCERR << NWB_TEXT("ASSERT ") << NWB_TEXT(__FILE__) << NWB_TEXT(":") << __LINE__ << NWB_TEXT("\n") << msg.c_str() << NWB_TEXT("\n"); \
         ::std::abort();                                                                                                                         \
     }                                                                                                                                           \
@@ -57,7 +57,7 @@
 {                                                                                                                                                     \
     if(!(condition)){                                                                                                                                 \
         const auto msg = ::std::format(__VA_ARGS__);                                                                                                  \
-        ::CaptureDiagnosticCrash("fatal_assert", #condition, __FILE__, __LINE__);                                                                      \
+        ::CaptureDiagnosticCrash("fatal_assert", #__VA_ARGS__, __FILE__, __LINE__);                                                                   \
         NWB_TCERR << NWB_TEXT("FATAL ASSERT ") << NWB_TEXT(__FILE__) << NWB_TEXT(":") << __LINE__ << NWB_TEXT("\n") << msg.c_str() << NWB_TEXT("\n"); \
         ::std::abort();                                                                                                                               \
     }                                                                                                                                                 \

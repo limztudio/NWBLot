@@ -229,6 +229,127 @@ static void TestAndroidCrashPackageCopiesTombstoneFrames(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 }
 
+static void TestLinuxCrashPackageReportsMissingProcMaps(TestContext& context){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("logger_server_linux_missing_maps_test");
+    constexpr AStringView s_Stem("linux_missing_maps_001");
+    RemoveTestArtifacts(arena, s_Group);
+
+    CrashTestText archive(arena);
+    archive += "NWBCRASHPKG 1\n";
+    const CrashTestText manifest = BuildManifest(arena, "linux-missing-maps-test", "linux");
+    AppendArchiveFile(archive, "manifest.json", AStringView(manifest.data(), manifest.size()));
+    AppendArchiveFile(archive, "cpu_context.txt", "instruction_pointer=4198964\n");
+
+    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
+
+    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
+    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+
+    NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
+
+    CrashTestText report(arena);
+    NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=linux"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "proc_maps=missing"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "proc maps missing for module lookup"));
+
+    RemoveTestArtifacts(arena, s_Group);
+}
+
+static void TestLinuxCrashPackageReportsUnmappedInstructionPointer(TestContext& context){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("logger_server_linux_unmapped_ip_test");
+    constexpr AStringView s_Stem("linux_unmapped_ip_001");
+    RemoveTestArtifacts(arena, s_Group);
+
+    CrashTestText archive(arena);
+    archive += "NWBCRASHPKG 1\n";
+    const CrashTestText manifest = BuildManifest(arena, "linux-unmapped-ip-test", "linux");
+    AppendArchiveFile(archive, "manifest.json", AStringView(manifest.data(), manifest.size()));
+    AppendArchiveFile(archive, "cpu_context.txt", "instruction_pointer=7340032\n");
+    AppendArchiveFile(archive, "proc_maps.txt", "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
+
+    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
+
+    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
+    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+
+    NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
+
+    CrashTestText report(arena);
+    NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=linux"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "proc_maps=present"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "instruction pointer was not found in proc maps"));
+
+    RemoveTestArtifacts(arena, s_Group);
+}
+
+static void TestAndroidCrashPackageReportsTombstoneWithoutFrames(TestContext& context){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("logger_server_android_no_frames_test");
+    constexpr AStringView s_Stem("android_no_frames_001");
+    RemoveTestArtifacts(arena, s_Group);
+
+    CrashTestText archive(arena);
+    archive += "NWBCRASHPKG 1\n";
+    const CrashTestText manifest = BuildManifest(arena, "android-no-frames-test", "android");
+    AppendArchiveFile(archive, "manifest.json", AStringView(manifest.data(), manifest.size()));
+    AppendArchiveFile(archive, "android_tombstone.txt", "pid: 7, tid: 7, name: nwb\nbacktrace:\n");
+
+    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
+
+    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
+    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+
+    NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
+
+    CrashTestText report(arena);
+    NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=android"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "status=not_decoded"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "android_tombstone=present"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "no native frame lines were recognized"));
+
+    RemoveTestArtifacts(arena, s_Group);
+}
+
+static void TestWindowsCrashPackageReportsMissingMinidump(TestContext& context){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("logger_server_windows_missing_dump_test");
+    constexpr AStringView s_Stem("windows_missing_dump_001");
+    RemoveTestArtifacts(arena, s_Group);
+
+    CrashTestText archive(arena);
+    archive += "NWBCRASHPKG 1\n";
+    const CrashTestText manifest = BuildManifest(arena, "windows-missing-dump-test", "windows");
+    AppendArchiveFile(archive, "manifest.json", AStringView(manifest.data(), manifest.size()));
+
+    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
+
+    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
+    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+
+    NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
+
+    CrashTestText report(arena);
+    NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=windows"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "resolver=windows_pdb_minidump"));
+#if defined(NWB_PLATFORM_WINDOWS)
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "process.dmp is missing or unreadable"));
+#else
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "only available on Windows logserver builds"));
+#endif
+
+    RemoveTestArtifacts(arena, s_Group);
+}
+
 static void TestInvalidCrashPackageIsRejected(TestContext& context){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -391,6 +512,10 @@ static void TestCrashUploadAuthorizationMatchesBearerToken(TestContext& context)
 NWB_DEFINE_TEST_ENTRY_POINT("logserver crash", [](NWB::Tests::TestContext& context){
     __hidden_logger_server_tests::TestLinuxCrashPackageMapsInstructionPointer(context);
     __hidden_logger_server_tests::TestAndroidCrashPackageCopiesTombstoneFrames(context);
+    __hidden_logger_server_tests::TestLinuxCrashPackageReportsMissingProcMaps(context);
+    __hidden_logger_server_tests::TestLinuxCrashPackageReportsUnmappedInstructionPointer(context);
+    __hidden_logger_server_tests::TestAndroidCrashPackageReportsTombstoneWithoutFrames(context);
+    __hidden_logger_server_tests::TestWindowsCrashPackageReportsMissingMinidump(context);
     __hidden_logger_server_tests::TestInvalidCrashPackageIsRejected(context);
     __hidden_logger_server_tests::TestCrashRetentionPrunesOldestAcceptedUploads(context);
     __hidden_logger_server_tests::TestAcceptedCrashWarnsWhenRawArchiveCannotBeRetained(context);

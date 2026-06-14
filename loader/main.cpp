@@ -165,7 +165,11 @@ bool LoadShaderArchiveRecords(
 void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options, std::string& crashTest){
 #if !defined(NWB_FINAL)
     app.add_flag("--gpudbg", options.enableGpuDebug, "Enable graphics backend validation layer");
-    app.add_option("--crash-test", crashTest, "Run crash reporting test: manual-dump, access-violation, assert, logger-error");
+    app.add_option(
+        "--crash-test",
+        crashTest,
+        "Run crash reporting test: manual-dump, access-violation, assert, fatal-assert, logger-error, logger-fatal"
+    );
 #else
     static_cast<void>(app);
     static_cast<void>(options);
@@ -257,8 +261,20 @@ bool RunCrashTestIfRequested(const LoaderOptions& options, const bool crashRepor
         return true;
     }
 
+    if(crashTest == "fatal-assert"){
+        NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Loader crash-test fatal assert"));
+        outExitCode = -1;
+        return true;
+    }
+
     if(crashTest == "logger-error"){
         NWB_LOGGER_ERROR(NWB_TEXT("Loader crash-test logger error"));
+        outExitCode = -1;
+        return true;
+    }
+
+    if(crashTest == "logger-fatal"){
+        NWB_LOGGER_FATAL(NWB_TEXT("Loader crash-test logger fatal"));
         outExitCode = -1;
         return true;
     }

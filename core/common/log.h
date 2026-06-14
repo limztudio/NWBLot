@@ -151,7 +151,7 @@ NWB_COMMON_END
         NWB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_logger != nullptr);                                               \
         auto& logger = *::NWB::Core::Common::LoggerDetail::g_logger;                                                           \
         ::NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, ::NWB::Core::Common::LogType::Type, __VA_ARGS__);            \
-        ::CaptureDiagnosticCrash("logger_" #Type, #Type, __FILE__, __LINE__);                                                  \
+        ::CaptureDiagnosticCrash("logger_" #Type, #__VA_ARGS__, __FILE__, __LINE__);                                           \
         BreakMacro;                                                                                                            \
     }while(false)
 

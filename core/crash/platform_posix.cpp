@@ -231,6 +231,8 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
         return true;
     if(handlerExecutablePath.empty())
         return false;
+    if(access(handlerExecutablePath.c_str(), X_OK) != 0)
+        return false;
 
     int pipeFds[2] = { -1, -1 };
     if(pipe(pipeFds) != 0)

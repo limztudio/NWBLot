@@ -56,6 +56,13 @@ struct MaterialTypedByteRangeKeyHasher{
     }
 };
 
+struct MaterialTypedByteRangeCache{
+    ECSRenderDetail::MaterialTypedByteRange constantRange;
+    ECSRenderDetail::MaterialTypedByteRange defaultMutableRange;
+    bool constantRangeCached = false;
+    bool defaultMutableRangeCached = false;
+};
+
 [[nodiscard]] static bool CsgFrameHasReceiverPassWork(
     const CsgFrameState& csgFrameState,
     const CsgReceiverPass::Enum receiverPass
@@ -259,18 +266,18 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
     using MaterialTypedByteRangeMap = HashMap<
         __hidden_material_pass::MaterialTypedByteRangeKey,
-        ECSRenderDetail::MaterialTypedByteRange,
+        __hidden_material_pass::MaterialTypedByteRangeCache,
         __hidden_material_pass::MaterialTypedByteRangeKeyHasher,
         EqualTo<__hidden_material_pass::MaterialTypedByteRangeKey>,
         Core::Alloc::ScratchArena
     >;
-    MaterialTypedByteRangeMap constantMaterialTypedRanges(
+    MaterialTypedByteRangeMap materialTypedRangeCache(
         0,
         __hidden_material_pass::MaterialTypedByteRangeKeyHasher(),
         EqualTo<__hidden_material_pass::MaterialTypedByteRangeKey>(),
         materialTypedBytes.get_allocator().arena()
     );
-    constantMaterialTypedRanges.reserve(rendererCapacity);
+    materialTypedRangeCache.reserve(rendererCapacity);
 
     using MaterialTypedByteContentRangeMap = HashMap<
         ECSRenderDetail::MaterialTypedByteContentKey,
@@ -311,16 +318,46 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             materialInfo.materialName,
             materialInfo.typedLayoutHash
         };
-        const auto foundRange = constantMaterialTypedRanges.find(rangeKey);
-        if(foundRange != constantMaterialTypedRanges.end()){
-            outRange = foundRange.value();
+        auto cacheIt = materialTypedRangeCache.try_emplace(rangeKey).first;
+        __hidden_material_pass::MaterialTypedByteRangeCache& cache = cacheIt.value();
+        if(cache.constantRangeCached){
+            outRange = cache.constantRange;
             return true;
         }
 
         if(!ECSRenderDetail::AppendMaterialTypedByteRange(materialTypedBytes, materialInfo.constantTypedBytes, outRange))
             return false;
 
-        constantMaterialTypedRanges.emplace(rangeKey, outRange);
+        cache.constantRange = outRange;
+        cache.constantRangeCached = true;
+        return true;
+    };
+
+    auto appendDefaultMutableMaterialTypedBytes = [&](
+        const MaterialSurfaceInfo& materialInfo,
+        ECSRenderDetail::MaterialTypedByteRange& outRange
+    ) -> bool{
+        const __hidden_material_pass::MaterialTypedByteRangeKey rangeKey{
+            materialInfo.materialName,
+            materialInfo.typedLayoutHash
+        };
+        auto cacheIt = materialTypedRangeCache.try_emplace(rangeKey).first;
+        __hidden_material_pass::MaterialTypedByteRangeCache& cache = cacheIt.value();
+        if(cache.defaultMutableRangeCached){
+            outRange = cache.defaultMutableRange;
+            return true;
+        }
+
+        if(!ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
+            materialTypedBytes,
+            mutableMaterialTypedRanges,
+            materialInfo.mutableDefaultTypedBytes,
+            outRange
+        ))
+            return false;
+
+        cache.defaultMutableRange = outRange;
+        cache.defaultMutableRangeCached = true;
         return true;
     };
 
@@ -330,6 +367,9 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         ECSRenderDetail::MaterialTypedByteRange& outRange
     ) -> bool{
         const MaterialInstanceComponent* materialInstance = world().tryGetComponent<MaterialInstanceComponent>(entity);
+        if(!materialInstance || materialInstance->overrides.empty())
+            return appendDefaultMutableMaterialTypedBytes(materialInfo, outRange);
+
         const MaterialTypedByteVector* mutableTypedBytes = nullptr;
         if(!resolveMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes))
             return false;

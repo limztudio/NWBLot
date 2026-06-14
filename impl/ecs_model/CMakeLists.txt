@@ -7,9 +7,10 @@ target_sources(nwb_ecs_model PRIVATE
 )
 target_link_libraries(nwb_ecs_model PUBLIC
     nwb_ecs
+)
+target_link_libraries(nwb_ecs_model PRIVATE
     nwb_assets_model
     nwb_ecs_mesh
-    nwb_ecs_render_components
     nwb_ecs_scene
     nwb_ecs_skeleton
 )

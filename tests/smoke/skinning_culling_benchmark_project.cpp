@@ -15,6 +15,7 @@
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>
+#include <impl/ecs_render/model_renderer.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/timing_names.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
@@ -413,7 +414,8 @@ private:
         );
         auto& modelSystem = world->addSystem<NWB::Impl::ModelSystem>(
             *world,
-            context.assetManager
+            context.assetManager,
+            NWB::Impl::CreateModelObjectRendererHooks()
         );
         static_cast<void>(modelSystem);
         auto& meshSkinningSystem = world->addSystem<NWB::Impl::MeshSkinningSystem>(

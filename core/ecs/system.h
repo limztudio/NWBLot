@@ -73,11 +73,9 @@ protected:
     inline void writeAccess(){
         registerAccess(ComponentType<T>(), AccessMode::Write);
     }
-
-
-private:
     void registerAccess(ComponentTypeId typeId, AccessMode::Enum mode);
 
+private:
     Vector<ComponentAccess, Alloc::GlobalArena> m_access;
 };
 

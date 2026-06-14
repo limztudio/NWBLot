@@ -98,7 +98,6 @@ struct CrashConfigT{
 };
 
 using CrashConfig = CrashConfigT<Alloc::PersistentArena>;
-using PersistentCrashConfig = CrashConfig;
 
 
 using CrashPackagePath = ::Path<Alloc::PersistentArena>;

@@ -201,7 +201,7 @@ bool InstallCrashReporting(CrashArena& crashArena, NWB::Core::Alloc::GlobalArena
 
     AString<CrashArena> applicationName = PathToString<char>(crashArena, executableName);
 
-    NWB::Core::Crash::PersistentCrashConfig crashConfig(crashArena);
+    NWB::Core::Crash::CrashConfig crashConfig(crashArena);
     crashConfig.applicationName = AStringView(applicationName.data(), applicationName.size());
     crashConfig.buildId = AStringView("unknown");
     crashConfig.version = AStringView("unknown");

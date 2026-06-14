@@ -16,6 +16,7 @@
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 #include <sys/types.h>
+#include <sys/wait.h>
 #endif
 
 
@@ -33,7 +34,8 @@ namespace __hidden_crash_posix{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-inline constexpr usize s_SignalStackMultiplier = 4u;
+// CrashRequest is fixed-size and large; keep the alternate stack comfortably above the request snapshot size.
+inline constexpr usize s_SignalStackSize = 256u * 1024u;
 inline constexpr int s_AndroidEmergencyFileMode = 0644;
 inline constexpr int s_FirstNonStdioFileDescriptor = STDERR_FILENO + 1;
 inline constexpr int s_HandlerExecFailureExitCode = 127;
@@ -100,7 +102,7 @@ static void __hidden_signal_handler(const int signalNumber, siginfo_t* signalInf
 }
 
 static void __hidden_install_signal_handlers(){
-    static u8 s_signalStack[SIGSTKSZ * s_SignalStackMultiplier] = {};
+    static u8 s_signalStack[s_SignalStackSize] = {};
 
     stack_t stack = {};
     stack.ss_sp = s_signalStack;
@@ -170,6 +172,18 @@ static void __hidden_silence_child_process(int& requestReadFd)noexcept{
 
     static_cast<void>(setsid());
     __hidden_redirect_stdio_to_null();
+}
+
+static void __hidden_wait_for_child_process(const pid_t pid)noexcept{
+    if(pid <= 0)
+        return;
+
+    int status = 0;
+    while(waitpid(pid, &status, 0) < 0){
+        if(errno == EINTR)
+            continue;
+        break;
+    }
 }
 #endif
 
@@ -244,30 +258,30 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
     if(access(handlerExecutablePath.c_str(), X_OK) != 0)
         return false;
 
-    int pipeFds[s_PipeFileDescriptorCount] = { -1, -1 };
+    int pipeFds[__hidden_crash_posix::s_PipeFileDescriptorCount] = { -1, -1 };
     if(pipe(pipeFds) != 0)
         return false;
 
     const pid_t pid = fork();
     if(pid < 0){
-        close(pipeFds[s_PipeReadEndIndex]);
-        close(pipeFds[s_PipeWriteEndIndex]);
+        close(pipeFds[__hidden_crash_posix::s_PipeReadEndIndex]);
+        close(pipeFds[__hidden_crash_posix::s_PipeWriteEndIndex]);
         return false;
     }
 
     if(pid == 0){
-        close(pipeFds[s_PipeWriteEndIndex]);
+        close(pipeFds[__hidden_crash_posix::s_PipeWriteEndIndex]);
 
-        __hidden_crash_posix::__hidden_silence_child_process(pipeFds[s_PipeReadEndIndex]);
+        __hidden_crash_posix::__hidden_silence_child_process(pipeFds[__hidden_crash_posix::s_PipeReadEndIndex]);
 
         char fdText[s_HandlerArgumentTextCapacity] = {};
-        AppendUnsignedToFixedBuffer(fdText, static_cast<u64>(pipeFds[s_PipeReadEndIndex]));
+        AppendUnsignedToFixedBuffer(fdText, static_cast<u64>(pipeFds[__hidden_crash_posix::s_PipeReadEndIndex]));
         execl(handlerExecutablePath.c_str(), handlerExecutablePath.c_str(), s_RequestFdArgument, fdText, nullptr);
         _exit(__hidden_crash_posix::s_HandlerExecFailureExitCode);
     }
 
-    close(pipeFds[s_PipeReadEndIndex]);
-    g_State.requestWriteFd = pipeFds[s_PipeWriteEndIndex];
+    close(pipeFds[__hidden_crash_posix::s_PipeReadEndIndex]);
+    g_State.requestWriteFd = pipeFds[__hidden_crash_posix::s_PipeWriteEndIndex];
     g_State.handlerPid = pid;
     g_State.handlerStarted = true;
     return true;
@@ -294,10 +308,12 @@ void UninstallPlatformResources(){
         g_State.emergencyWriteFd = -1;
     }
 #elif defined(NWB_PLATFORM_LINUX)
+    const pid_t handlerPid = g_State.handlerPid;
     if(g_State.requestWriteFd >= 0){
         close(g_State.requestWriteFd);
         g_State.requestWriteFd = -1;
     }
+    __hidden_crash_posix::__hidden_wait_for_child_process(handlerPid);
     g_State.handlerPid = -1;
 #endif
 

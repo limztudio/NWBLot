@@ -6,6 +6,15 @@
 
 #include <core/crash/internal.h>
 
+#include <global/thread.h>
+
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#include <errno.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -103,10 +112,28 @@ static void RemoveTestArtifacts(NWB::Core::Alloc::GlobalArena& arena, const AStr
     return AStringView(text.data(), text.size()).find(needle) != AStringView::npos;
 }
 
+[[nodiscard]] static bool WaitForDirectory(const CrashTestPath& path, const u32 timeoutMilliseconds){
+    constexpr u32 s_PollMilliseconds = 10u;
+    for(u32 elapsedMilliseconds = 0u; elapsedMilliseconds <= timeoutMilliseconds; elapsedMilliseconds += s_PollMilliseconds){
+        if(DirectoryExists(path))
+            return true;
+        SleepMS(s_PollMilliseconds);
+    }
+    return false;
+}
+
 template<usize N>
 static void CopyPathText(NWB::Core::Alloc::GlobalArena& arena, char (&outText)[N], const CrashTestPath& path){
     const AString<NWB::Core::Alloc::GlobalArena> text = PathToString<char>(arena, path);
     CopyFixedBuffer(outText, AStringView(text.data(), text.size()));
+}
+
+template<usize N>
+static void BuildCrashIdForProcess(char (&outCrashId)[N], const u32 processId, const u64 sequence){
+    CopyFixedBuffer(outCrashId, AStringView(CrashNames::s_CrashIdPrefix));
+    AppendUnsignedToFixedBuffer(outCrashId, static_cast<u64>(processId));
+    AppendFixedBuffer(outCrashId, "-");
+    AppendUnsignedToFixedBuffer(outCrashId, sequence);
 }
 
 [[nodiscard]] static NWB::Core::Crash::Detail::PlatformKind::Enum CurrentCrashPlatformKind()noexcept{
@@ -427,6 +454,113 @@ static void TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(TestContext& con
     RemoveTestArtifacts(arena, s_Group);
 }
 
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+static void TestLinuxInstalledHandlerWritesManualDumpPackage(TestContext& context){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    NWB::Core::Alloc::PersistentArena installArena(
+        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u),
+        "NWB::Tests::Crash::InstallArena"
+    );
+    constexpr AStringView s_Group("crash_linux_handler_runtime_test");
+    RemoveTestArtifacts(arena, s_Group);
+
+    NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
+    config.applicationName = AStringView("crash_tests");
+    config.version = AStringView("1");
+    config.buildId = AStringView("linux-handler-runtime-test");
+    config.spoolDirectory = SpoolDirectory(arena, s_Group);
+
+    {
+        ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
+        NWB::Core::Crash::Detail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
+    }
+
+    const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, config);
+    NWB_CRASH_TEST_CHECK(context, installed);
+
+    if(installed){
+        NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
+        options.uploadAfterWrite = false;
+        options.triggerCategory = AStringView("test");
+        options.triggerMessage = AStringView("linux handler runtime");
+        options.triggerFile = AStringView("tests/crash/tests.cpp");
+        const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::Detail::RequestCrashDump(
+            NWB::Core::Crash::Detail::CrashReasonKind::ManualDump,
+            0u,
+            options
+        );
+        NWB_CRASH_TEST_CHECK(context, result.status == NWB::Core::Crash::CrashDumpStatus::RequestQueued);
+
+        char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
+        BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
+
+        const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
+        NWB_CRASH_TEST_CHECK(context, WaitForDirectory(packageDirectory, 1000u));
+        NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / CrashNames::s_ManifestFileName));
+        NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_TriggerFileName, AStringView("linux handler runtime")));
+        NWB::Core::Crash::UninstallCrashHandler();
+    }
+
+    RemoveTestArtifacts(arena, s_Group);
+}
+
+static void TestLinuxSignalHandlerWritesCrashPackage(TestContext& context){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("crash_linux_signal_runtime_test");
+    RemoveTestArtifacts(arena, s_Group);
+
+    const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
+    const pid_t childPid = fork();
+    NWB_CRASH_TEST_CHECK(context, childPid >= 0);
+    if(childPid == 0){
+        NWB::Core::Alloc::PersistentArena installArena(
+            NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u),
+            "NWB::Tests::Crash::SignalChildInstallArena"
+        );
+        NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
+        config.applicationName = AStringView("crash_tests");
+        config.version = AStringView("1");
+        config.buildId = AStringView("linux-signal-runtime-test");
+        config.spoolDirectory = spoolDirectory;
+
+        {
+            ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
+            NWB::Core::Crash::Detail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
+        }
+
+        if(!NWB::Core::Crash::InstallCrashHandler(installArena, config))
+            _exit(111);
+
+        raise(SIGSEGV);
+        _exit(112);
+    }
+
+    if(childPid > 0){
+        int status = 0;
+        while(waitpid(childPid, &status, 0) < 0){
+            if(errno == EINTR)
+                continue;
+            break;
+        }
+
+        NWB_CRASH_TEST_CHECK(context, WIFSIGNALED(status));
+        NWB_CRASH_TEST_CHECK(context, WTERMSIG(status) == SIGSEGV);
+
+        char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
+        BuildCrashIdForProcess(crashId, static_cast<u32>(childPid), 1u);
+
+        const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
+        NWB_CRASH_TEST_CHECK(context, WaitForDirectory(packageDirectory, 1000u));
+        NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / CrashNames::s_ManifestFileName));
+        NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"reason_kind\": \"signal\"")));
+    }
+
+    RemoveTestArtifacts(arena, s_Group);
+}
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -453,6 +587,10 @@ NWB_DEFINE_TEST_ENTRY_POINT("crash", [](NWB::Tests::TestContext& context){
     __hidden_crash_tests::TestCrashSpoolRetentionZeroDisablesPruning(context);
     __hidden_crash_tests::TestCrashSpoolRetentionProtectsActivePendingPackage(context);
     __hidden_crash_tests::TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(context);
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+    __hidden_crash_tests::TestLinuxInstalledHandlerWritesManualDumpPackage(context);
+    __hidden_crash_tests::TestLinuxSignalHandlerWritesCrashPackage(context);
+#endif
 })
 
 

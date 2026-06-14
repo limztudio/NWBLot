@@ -11,6 +11,10 @@
 #include <dbghelp.h>
 #include <windows.h>
 #endif
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#include <cstdio>
+#include <cstring>
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,6 +40,10 @@ inline constexpr usize s_AndroidTombstoneFrameMinimumTextLength = 4u;
 inline constexpr usize s_DecimalTextBufferCapacity = 32u;
 inline constexpr u32 s_MaxWindowsStackFrames = 128u;
 inline constexpr usize s_CrashReportReserveBytes = 4096u;
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+inline constexpr usize s_SymbolizerOutputMaxBytes = 8192u;
+inline constexpr usize s_SymbolizerReadBufferBytes = 256u;
+#endif
 
 struct DumpMemoryRange{
     u64 begin = 0u;
@@ -158,6 +166,37 @@ static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport,
     ;
 }
 
+static void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept{
+    while(cursor < line.size() && (line[cursor] == ' ' || line[cursor] == '\t'))
+        ++cursor;
+}
+
+[[nodiscard]] static bool SkipProcMapField(const AStringView line, usize& cursor)noexcept{
+    const usize begin = cursor;
+    while(cursor < line.size() && line[cursor] != ' ' && line[cursor] != '\t')
+        ++cursor;
+    return cursor > begin;
+}
+
+[[nodiscard]] static bool ParseProcMapFileOffset(const AStringView line, u64& outOffset){
+    outOffset = 0u;
+
+    usize cursor = 0u;
+    if(!SkipProcMapField(line, cursor))
+        return false;
+
+    SkipProcMapWhitespace(line, cursor);
+    if(!SkipProcMapField(line, cursor))
+        return false;
+
+    SkipProcMapWhitespace(line, cursor);
+    const usize offsetBegin = cursor;
+    if(!SkipProcMapField(line, cursor))
+        return false;
+
+    return ::ParseVariableHexU64(AStringView(line.data() + offsetBegin, cursor - offsetBegin), outOffset);
+}
+
 [[nodiscard]] static AStringView ProcMapPathField(AStringView line)noexcept{
     line = TrimLeftView(line);
     for(u32 fieldIndex = 0u; fieldIndex < s_ProcMapPathFieldSkipCount; ++fieldIndex){
@@ -175,9 +214,11 @@ static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport,
     const AStringView mapsText,
     const u64 address,
     u64& outModuleBegin,
+    u64& outModuleFileOffset,
     CrashReportText& outModulePath
 ){
     outModuleBegin = 0u;
+    outModuleFileOffset = 0u;
     outModulePath.clear();
 
     usize cursor = 0u;
@@ -196,6 +237,7 @@ static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport,
             continue;
 
         outModuleBegin = mapBegin;
+        static_cast<void>(ParseProcMapFileOffset(line, outModuleFileOffset));
         const AStringView path = ProcMapPathField(line);
         outModulePath.assign(path.data(), path.size());
         if(outModulePath.empty())
@@ -220,13 +262,177 @@ static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport,
     return ::ParseVariableHexU64(AStringView(line.data() + prefix + 2u, end - prefix - 2u), outAddress);
 }
 
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+static void AppendShellQuoted(CrashReportText& outText, const AStringView text){
+    outText += '\'';
+    for(const char ch : text){
+        if(ch == '\'')
+            outText += "'\\''";
+        else
+            outText += ch;
+    }
+    outText += '\'';
+}
+
+[[nodiscard]] static bool CaptureShellCommandOutput(CrashReportText& outOutput, const CrashReportText& command){
+    outOutput.clear();
+
+    FILE* pipe = ::popen(command.c_str(), "r");
+    if(!pipe)
+        return false;
+
+    char buffer[s_SymbolizerReadBufferBytes] = {};
+    while(std::fgets(buffer, sizeof(buffer), pipe)){
+        const usize length = static_cast<usize>(std::strlen(buffer));
+        if(outOutput.size() + length > s_SymbolizerOutputMaxBytes)
+            break;
+        outOutput.append(buffer, length);
+    }
+
+    const int status = ::pclose(pipe);
+    return status == 0 && !outOutput.empty();
+}
+
+[[nodiscard]] static bool NextTextLine(const AStringView text, usize& cursor, AStringView& outLine){
+    if(cursor >= text.size())
+        return false;
+
+    const usize begin = cursor;
+    while(cursor < text.size() && text[cursor] != '\n' && text[cursor] != '\r')
+        ++cursor;
+
+    outLine = TrimView(AStringView(text.data() + begin, cursor - begin));
+    while(cursor < text.size() && (text[cursor] == '\n' || text[cursor] == '\r'))
+        ++cursor;
+    return true;
+}
+
+[[nodiscard]] static bool IsUnknownSymbolLine(const AStringView line){
+    const AStringView trimmed = TrimView(line);
+    return trimmed.empty() || trimmed == "??" || StartsWith(trimmed, "??:");
+}
+
+[[nodiscard]] static bool ExtractSymbolizerResult(
+    CrashReportText& outSymbol,
+    const AStringView outputText
+){
+    usize cursor = 0u;
+    AStringView function;
+    AStringView location;
+    if(!NextTextLine(outputText, cursor, function))
+        return false;
+    static_cast<void>(NextTextLine(outputText, cursor, location));
+
+    const bool hasFunction = !IsUnknownSymbolLine(function);
+    const bool hasLocation = !IsUnknownSymbolLine(location);
+    if(!hasFunction && !hasLocation)
+        return false;
+
+    outSymbol.clear();
+    if(hasFunction)
+        outSymbol.append(function.data(), function.size());
+    if(hasLocation){
+        if(!outSymbol.empty())
+            outSymbol += " at ";
+        else
+            outSymbol += "at ";
+        outSymbol.append(location.data(), location.size());
+    }
+
+    return true;
+}
+
+[[nodiscard]] static bool TryRunLinuxSymbolizer(
+    LogArena& arena,
+    const AStringView toolName,
+    const AStringView modulePathText,
+    const u64 moduleOffset,
+    CrashReportText& outSymbol
+){
+    CrashReportText command{arena};
+    if(toolName == "llvm-symbolizer"){
+        command += "llvm-symbolizer --demangle --functions --inlining=false --obj=";
+        AppendShellQuoted(command, modulePathText);
+        command += " ";
+        AppendHexAddress(arena, command, moduleOffset);
+        command += " 2>/dev/null";
+    }
+    else{
+        command += "addr2line -f -C -e ";
+        AppendShellQuoted(command, modulePathText);
+        command += " ";
+        AppendHexAddress(arena, command, moduleOffset);
+        command += " 2>/dev/null";
+    }
+
+    CrashReportText output{arena};
+    if(!CaptureShellCommandOutput(output, command))
+        return false;
+
+    return ExtractSymbolizerResult(outSymbol, AStringView(output.data(), output.size()));
+}
+
+[[nodiscard]] static bool FindLinuxSymbolFile(
+    LogArena& arena,
+    const AStringView modulePathText,
+    const CrashSymbolicationConfig& config,
+    Path& outPath
+){
+    if(modulePathText.empty() || modulePathText == "<anonymous>")
+        return false;
+
+    const Path modulePath(arena, modulePathText);
+    if(RegularFileExists(modulePath)){
+        outPath = modulePath;
+        return true;
+    }
+
+    const Path symbolStoreDirectory = EffectiveSymbolStoreDirectory(arena, config);
+    if(symbolStoreDirectory.empty())
+        return false;
+
+    const Path moduleFileName = modulePath.filename();
+    if(moduleFileName.empty())
+        return false;
+
+    const Path symbolStoreCandidate = symbolStoreDirectory / moduleFileName;
+    if(RegularFileExists(symbolStoreCandidate)){
+        outPath = symbolStoreCandidate;
+        return true;
+    }
+
+    return false;
+}
+
+[[nodiscard]] static bool ResolveLinuxFrameSymbol(
+    LogArena& arena,
+    const AStringView modulePathText,
+    const u64 moduleOffset,
+    const CrashSymbolicationConfig& config,
+    CrashReportText& outSymbol
+){
+    Path symbolPath(arena);
+    if(!FindLinuxSymbolFile(arena, modulePathText, config, symbolPath))
+        return false;
+
+    const CrashReportText symbolPathText = PathToString<char>(arena, symbolPath);
+    const AStringView symbolPathView(symbolPathText.data(), symbolPathText.size());
+    return TryRunLinuxSymbolizer(arena, "llvm-symbolizer", symbolPathView, moduleOffset, outSymbol)
+        || TryRunLinuxSymbolizer(arena, "addr2line", symbolPathView, moduleOffset, outSymbol)
+    ;
+}
+#endif
+
 static void AppendLinuxClientCallstack(
     LogArena& arena,
     const AStringView callstackText,
     const AStringView procMapsText,
     const bool procMapsPresent,
+    const CrashSymbolicationConfig& config,
     CrashReportText& outReport
 ){
+    static_cast<void>(config);
+
     outReport += "\n[callstack]\n";
 
     usize cursor = 0u;
@@ -248,12 +454,24 @@ static void AppendLinuxClientCallstack(
         u64 address = 0u;
         if(procMapsPresent && ParseCallstackFrameAddress(trimmed, address)){
             u64 moduleBegin = 0u;
+            u64 moduleFileOffset = 0u;
             CrashReportText modulePath{arena};
-            if(FindProcMapForAddress(procMapsText, address, moduleBegin, modulePath)){
+            if(FindProcMapForAddress(procMapsText, address, moduleBegin, moduleFileOffset, modulePath)){
+                const u64 moduleOffset = address - moduleBegin;
+                const u64 symbolOffset = moduleOffset + moduleFileOffset;
                 outReport += " ";
                 outReport += modulePath;
                 outReport += "+";
-                AppendHexAddress(arena, outReport, address - moduleBegin);
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+                AppendHexAddress(arena, outReport, moduleOffset);
+                CrashReportText symbol{arena};
+                if(ResolveLinuxFrameSymbol(arena, AStringView(modulePath.data(), modulePath.size()), symbolOffset, config, symbol)){
+                    outReport += " ";
+                    outReport += symbol;
+                }
+#else
+                AppendHexAddress(arena, outReport, moduleOffset);
+#endif
             }
         }
 
@@ -261,7 +479,7 @@ static void AppendLinuxClientCallstack(
     }
 }
 
-static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, CrashReportText& outReport){
+static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
     CrashReportText clientCallstack{arena};
     const bool clientCallstackPresent = ReadTextFile(packageDirectory / CrashNames::s_CallstackFileName, clientCallstack) && !clientCallstack.empty();
 
@@ -293,7 +511,7 @@ static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirec
     if(!cpuContextPresent || !FindKeyValueU64(AStringView(cpuContext.data(), cpuContext.size()), "instruction_pointer", instructionPointer) || instructionPointer == 0u){
         outReport += "detail=ELF/DWARF stack resolver requires a core-compatible artifact; instruction pointer mapping unavailable\n";
         if(clientCallstackPresent)
-            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), procMapsPresent, outReport);
+            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), procMapsPresent, config, outReport);
         return;
     }
 
@@ -302,18 +520,19 @@ static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirec
     outReport += "\n";
 
     if(!procMapsPresent){
-        outReport += "detail=ELF/DWARF stack resolver requires a core-compatible artifact; proc maps missing for module lookup\n";
+        outReport += "detail=proc maps missing for module lookup; symbolic frame resolution unavailable\n";
         if(clientCallstackPresent)
-            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(), false, outReport);
+            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(), false, config, outReport);
         return;
     }
 
     u64 moduleBegin = 0u;
+    u64 moduleFileOffset = 0u;
     CrashReportText modulePath{arena};
-    if(!FindProcMapForAddress(AStringView(procMaps.data(), procMaps.size()), instructionPointer, moduleBegin, modulePath)){
-        outReport += "detail=ELF/DWARF stack resolver requires a core-compatible artifact; instruction pointer was not found in proc maps\n";
+    if(!FindProcMapForAddress(AStringView(procMaps.data(), procMaps.size()), instructionPointer, moduleBegin, moduleFileOffset, modulePath)){
+        outReport += "detail=instruction pointer was not found in proc maps\n";
         if(clientCallstackPresent)
-            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), true, outReport);
+            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), true, config, outReport);
         return;
     }
 
@@ -321,12 +540,16 @@ static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirec
     outReport += modulePath;
     outReport += "\nmodule_relative_ip=";
     AppendHexAddress(arena, outReport, instructionPointer - moduleBegin);
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+    outReport += "\nsymbolication_relative_ip=";
+    AppendHexAddress(arena, outReport, instructionPointer - moduleBegin + moduleFileOffset);
+#endif
     outReport += clientCallstackPresent
-        ? "\ndetail=client frame-pointer callstack captured; full symbolic names require DWARF resolver\n"
+        ? "\ndetail=client frame-pointer callstack captured; module frames are symbolized with DWARF when symbols are reachable\n"
         : "\ndetail=module-relative crash address captured; full Linux callstack requires a core-compatible artifact and DWARF resolver\n"
     ;
     if(clientCallstackPresent)
-        AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), true, outReport);
+        AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), true, config, outReport);
 }
 
 static void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDirectory, CrashReportText& outReport){
@@ -744,7 +967,7 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
 #endif
     }
     else if(summary.platform == "linux"){
-        Symbolicate::AppendLinuxArtifactSummary(arena, packageDirectory, report);
+        Symbolicate::AppendLinuxArtifactSummary(arena, packageDirectory, config, report);
     }
     else if(summary.platform == "android"){
         Symbolicate::AppendAndroidTombstoneSummary(arena, packageDirectory, report);

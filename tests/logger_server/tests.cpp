@@ -9,6 +9,11 @@
 #include <logger/server/crash_ingest.h>
 #include <logger/server/crash_paths.h>
 
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#include <cstdlib>
+#include <dlfcn.h>
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -175,6 +180,62 @@ static void PreserveObservedReport(TestContext& context, NWB::Core::Alloc::Globa
     NWB_LOGSERVER_TEST_CHECK(context, WriteTextFile(outputPath, AStringView(report.data(), report.size())));
 }
 
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+[[gnu::noinline]] static u64 LinuxCrashSymbolicationProbe(){
+    return 0x4E57424352415348ull;
+}
+
+static void AppendDecimalText(CrashTestText& outText, const u64 value){
+    char buffer[32] = {};
+    outText += FormatDecimal(static_cast<usize>(value), buffer);
+}
+
+static void AppendHexAddressText(NWB::Core::Alloc::GlobalArena& arena, CrashTestText& outText, const u64 value){
+    outText += "0x";
+    outText += FormatHex64A(arena, value);
+}
+
+[[nodiscard]] static bool BuildSelfProcMapLineForAddress(
+    NWB::Core::Alloc::GlobalArena& arena,
+    const u64 address,
+    CrashTestText& outMapLine,
+    u64& outSymbolicationOffset
+){
+    outSymbolicationOffset = 0u;
+
+    Dl_info info = {};
+    if(dladdr(reinterpret_cast<const void*>(static_cast<usize>(address)), &info) == 0 || !info.dli_fname || !info.dli_fbase)
+        return false;
+
+    const u64 imageBegin = static_cast<u64>(reinterpret_cast<usize>(info.dli_fbase));
+    if(address < imageBegin)
+        return false;
+
+    constexpr u64 s_FrameOffsetWithinSyntheticMap = 0x20u;
+    outSymbolicationOffset = address - imageBegin;
+    if(outSymbolicationOffset < s_FrameOffsetWithinSyntheticMap)
+        return false;
+
+    const u64 mapBegin = address - s_FrameOffsetWithinSyntheticMap;
+    const u64 mapFileOffset = outSymbolicationOffset - s_FrameOffsetWithinSyntheticMap;
+
+    outMapLine.clear();
+    outMapLine += FormatHex64A(arena, mapBegin);
+    outMapLine += "-";
+    outMapLine += FormatHex64A(arena, address + 1u);
+    outMapLine += " r-xp ";
+    outMapLine += FormatHex64A(arena, mapFileOffset);
+    outMapLine += " 00:00 0 ";
+    outMapLine += info.dli_fname;
+    outMapLine += "\n";
+    return true;
+}
+
+[[nodiscard]] static bool LinuxExternalSymbolizerAvailable(){
+    return std::system("command -v llvm-symbolizer >/dev/null 2>&1 || command -v addr2line >/dev/null 2>&1") == 0;
+}
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -215,6 +276,66 @@ static void TestLinuxCrashPackageMapsInstructionPointer(TestContext& context){
     PreserveObservedReport(context, arena, report);
 
     RemoveTestArtifacts(arena, s_Group);
+}
+
+static void TestLinuxCrashPackageSymbolicatesSelfFrame(TestContext& context){
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+    if(!LinuxExternalSymbolizerAvailable())
+        return;
+
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("logger_server_linux_symbolized_crash_test");
+    constexpr AStringView s_Stem("linux_symbolized_001");
+    RemoveTestArtifacts(arena, s_Group);
+
+    const u64 frameAddress = static_cast<u64>(reinterpret_cast<usize>(&LinuxCrashSymbolicationProbe));
+
+    CrashTestText procMapLine(arena);
+    u64 expectedSymbolicationOffset = 0u;
+    NWB_LOGSERVER_TEST_CHECK(context, BuildSelfProcMapLineForAddress(arena, frameAddress, procMapLine, expectedSymbolicationOffset));
+
+    CrashTestText archive(arena);
+    archive += CrashNames::s_ArchiveHeaderText;
+    const CrashTestText manifest = BuildManifest(arena, "linux-symbolized-test", "linux");
+    AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
+
+    CrashTestText cpuContext(arena);
+    cpuContext += "fault_address=0\ninstruction_pointer=";
+    AppendDecimalText(cpuContext, frameAddress);
+    cpuContext += "\nstack_pointer=0\nframe_pointer=0\n";
+    AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, AStringView(cpuContext.data(), cpuContext.size()));
+
+    CrashTestText callstack(arena);
+    callstack += "#0 ";
+    AppendHexAddressText(arena, callstack, frameAddress);
+    callstack += "\n";
+    AppendArchiveFile(archive, CrashNames::s_CallstackFileName, AStringView(callstack.data(), callstack.size()));
+    AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, AStringView(procMapLine.data(), procMapLine.size()));
+
+    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
+
+    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
+    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+
+    NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
+
+    CrashTestText report(arena);
+    NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=linux"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "module frames are symbolized with DWARF"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "LinuxCrashSymbolicationProbe") || Contains(report, "tests/logger_server/tests.cpp"));
+    CrashTestText expectedSymbolicationIp(arena);
+    expectedSymbolicationIp += "symbolication_relative_ip=";
+    AppendHexAddressText(arena, expectedSymbolicationIp, expectedSymbolicationOffset);
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, AStringView(expectedSymbolicationIp.data(), expectedSymbolicationIp.size())));
+
+    PreserveObservedReport(context, arena, report);
+
+    RemoveTestArtifacts(arena, s_Group);
+#else
+    static_cast<void>(context);
+#endif
 }
 
 static void TestAndroidCrashPackageCopiesTombstoneFrames(TestContext& context){
@@ -538,6 +659,7 @@ static void TestCrashUploadAuthorizationMatchesBearerToken(TestContext& context)
 
 NWB_DEFINE_TEST_ENTRY_POINT("logserver crash", [](NWB::Tests::TestContext& context){
     __hidden_logger_server_tests::TestLinuxCrashPackageMapsInstructionPointer(context);
+    __hidden_logger_server_tests::TestLinuxCrashPackageSymbolicatesSelfFrame(context);
     __hidden_logger_server_tests::TestAndroidCrashPackageCopiesTombstoneFrames(context);
     __hidden_logger_server_tests::TestLinuxCrashPackageReportsMissingProcMaps(context);
     __hidden_logger_server_tests::TestLinuxCrashPackageReportsUnmappedInstructionPointer(context);

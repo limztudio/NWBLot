@@ -535,7 +535,7 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
         CopyFileToPackage(arena, request, PackageNames::s_LinuxCoreUsesPidPath, PackageNames::s_LinuxCoreUsesPidFileName);
         if(!WriteCrashTextFile(
             RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName,
-            CrashStringT<ArenaT>("linux crash package captured; OS core policy remains authoritative and DWARF symbolication pending\n", arena)
+            CrashStringT<ArenaT>("linux crash package captured; OS core policy remains authoritative; server-side DWARF symbolication uses reachable module symbols\n", arena)
         ))
             return false;
     }

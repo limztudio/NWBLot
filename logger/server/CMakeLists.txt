@@ -1,10 +1,12 @@
 nwb_declare_executable(nwb_logserver)
 target_sources(nwb_logserver PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/crash_ingest.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/main.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_ingest.h"
+    "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate.h"
     "${CMAKE_CURRENT_LIST_DIR}/frame.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
 )
@@ -14,6 +16,7 @@ if(WIN32)
         "${CMAKE_CURRENT_LIST_DIR}/frame_win.cpp"
     )
     set_target_properties(nwb_logserver PROPERTIES WIN32_EXECUTABLE ON)
+    target_link_libraries(nwb_logserver PRIVATE dbghelp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(nwb_logserver PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/frame_linux.cpp"

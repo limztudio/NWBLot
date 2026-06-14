@@ -4,6 +4,8 @@
 
 #include "crash_ingest.h"
 
+#include "crash_symbolicate.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,7 +22,7 @@ namespace __hidden_logger_crash_ingest{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CrashText = AString<LogArena>;
+using CrashText = CrashReportText;
 using CrashBytes = Vector<u8, LogArena>;
 
 struct ByteView{
@@ -33,26 +35,6 @@ struct ByteView{
     [[nodiscard]] usize size()const{ return byteCount; }
     [[nodiscard]] const u8* data()const{ return bytes; }
 };
-
-struct CrashManifestSummary{
-    CrashText format;
-    CrashText crashId;
-    CrashText platform;
-    CrashText reasonKind;
-    CrashText artifactStrategy;
-
-    explicit CrashManifestSummary(LogArena& arena)
-        : format(arena)
-        , crashId(arena)
-        , platform(arena)
-        , reasonKind(arena)
-        , artifactStrategy(arena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] static Path CrashRootDirectory(LogArena& arena){
     Path executableDirectory(arena);
@@ -320,7 +302,30 @@ struct CrashManifestSummary{
     return false;
 }
 
-[[nodiscard]] static bool ValidateManifest(LogArena& arena, const Path& packageDirectory, CrashManifestSummary& outSummary, CrashText& outError){
+[[nodiscard]] static bool FindGeneratedJsonUnsignedValue(LogArena& arena, const AStringView manifest, const AStringView key, u64& outValue){
+    outValue = 0u;
+
+    CrashText needle{arena};
+    needle.reserve(key.size() + 4u);
+    needle += '"';
+    needle += key;
+    needle += "\": ";
+
+    usize cursor = manifest.find(AStringView(needle.data(), needle.size()));
+    if(cursor == AStringView::npos)
+        return false;
+    cursor += needle.size();
+
+    const usize begin = cursor;
+    while(cursor < manifest.size() && manifest[cursor] >= '0' && manifest[cursor] <= '9')
+        ++cursor;
+    if(cursor == begin)
+        return false;
+
+    return ParseU64(AStringView(manifest.data() + begin, cursor - begin), outValue);
+}
+
+[[nodiscard]] static bool ValidateManifest(LogArena& arena, const Path& packageDirectory, CrashPackageSummary& outSummary, CrashText& outError){
     CrashText manifest{arena};
     if(!ReadTextFile(packageDirectory / "manifest.json", manifest)){
         outError = "missing manifest.json";
@@ -334,6 +339,7 @@ struct CrashManifestSummary{
         || !FindGeneratedJsonStringValue(arena, manifestText, "platform", outSummary.platform)
         || !FindGeneratedJsonStringValue(arena, manifestText, "reason_kind", outSummary.reasonKind)
         || !FindGeneratedJsonStringValue(arena, manifestText, "artifact_strategy", outSummary.artifactStrategy)
+        || !FindGeneratedJsonUnsignedValue(arena, manifestText, "thread_id", outSummary.threadId)
     ){
         outError = "manifest.json is missing required v1 fields";
         return false;
@@ -349,80 +355,6 @@ struct CrashManifestSummary{
     }
 
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static bool RegularFileExists(const Path& path){
-    ErrorCode error;
-    const bool exists = IsRegularFile(path, error);
-    return exists && !error;
-}
-
-static void AppendOptionalTextFile(LogArena& arena, CrashText& outReport, const Path& packageDirectory, const char* fileName, const char* label){
-    CrashText text{arena};
-    if(!ReadTextFile(packageDirectory / fileName, text) || text.empty())
-        return;
-
-    outReport += "\n[";
-    outReport += label;
-    outReport += "]\n";
-    outReport += text;
-    if(outReport.back() != '\n')
-        outReport += '\n';
-}
-
-[[nodiscard]] static CrashText BuildSymbolicationReport(LogArena& arena, const Path& packageDirectory, const CrashManifestSummary& summary){
-    CrashText report{arena};
-    report.reserve(2048u);
-    report += "status=not_decoded\n";
-    report += "crash_id=";
-    report += summary.crashId;
-    report += "\nplatform=";
-    report += summary.platform;
-    report += "\nreason=";
-    report += summary.reasonKind;
-    report += "\nartifact_strategy=";
-    report += summary.artifactStrategy;
-    report += "\n";
-
-    if(summary.platform == "windows"){
-        report += "resolver=windows_pdb_minidump\n";
-        report += RegularFileExists(packageDirectory / "process.dmp")
-            ? "detail=process.dmp is present; DbgHelp/PDB stack resolver is not configured in nwb_logserver yet\n"
-            : "detail=process.dmp is missing; metadata-only package\n"
-        ;
-    }
-    else if(summary.platform == "linux"){
-        report += "resolver=elf_dwarf_core\n";
-        report += RegularFileExists(packageDirectory / "proc_maps.txt")
-            ? "detail=proc maps are present; ELF/DWARF stack resolver is not configured in nwb_logserver yet\n"
-            : "detail=proc maps are missing; OS core policy may still hold the authoritative artifact\n"
-        ;
-    }
-    else if(summary.platform == "android"){
-        report += "resolver=android_tombstone_native_symbols\n";
-        report += RegularFileExists(packageDirectory / "android_tombstone.txt")
-            ? "detail=android tombstone is present; native symbol resolver is not configured in nwb_logserver yet\n"
-            : "detail=android tombstone is missing; Java/ApplicationExitInfo collection is required on next launch\n"
-        ;
-    }
-    else{
-        report += "resolver=unknown\n";
-        report += "detail=unknown crash platform\n";
-    }
-
-    AppendOptionalTextFile(arena, report, packageDirectory, "trigger.txt", "trigger");
-    AppendOptionalTextFile(arena, report, packageDirectory, "cpu_context.txt", "cpu_context");
-    AppendOptionalTextFile(arena, report, packageDirectory, "symbolication.txt", "client_symbolication_note");
-    return report;
-}
-
-[[nodiscard]] static bool WriteSymbolicationReport(LogArena& arena, const Path& packageDirectory, const CrashManifestSummary& summary){
-    const CrashText report = BuildSymbolicationReport(arena, packageDirectory, summary);
-    return WriteTextFile(packageDirectory / "server_symbolication.txt", AStringView(report.data(), report.size()));
 }
 
 
@@ -458,7 +390,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath){
         return result;
     }
 
-    Ingest::CrashManifestSummary summary(arena);
+    CrashPackageSummary summary(arena);
     if(!Ingest::ValidateManifest(arena, packageDirectory, summary, error)){
         ErrorCode removeError;
         static_cast<void>(RemoveAllIfExists(packageDirectory, removeError));
@@ -475,7 +407,8 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath){
         return result;
     }
 
-    static_cast<void>(Ingest::WriteSymbolicationReport(arena, packageDirectory, summary));
+    const CrashReportText symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary);
+    static_cast<void>(WriteTextFile(packageDirectory / "server_symbolication.txt", AStringView(symbolicationReport.data(), symbolicationReport.size())));
 
     Path rawPath(arena);
     static_cast<void>(Ingest::MovePathToDirectory(archivePath, Ingest::RawCrashDirectory(arena), rawPath));
@@ -484,7 +417,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath){
     result.type = Type::EssentialInfo;
     result.message = StringFormat(
         arena,
-        NWB_TEXT("Crash package '{}' ingested: platform='{}' reason='{}' symbolication='not_decoded' package='{}' raw='{}'"),
+        NWB_TEXT("Crash package '{}' ingested: platform='{}' reason='{}' package='{}' raw='{}'"),
         StringConvert(summary.crashId),
         StringConvert(summary.platform),
         StringConvert(summary.reasonKind),

@@ -403,6 +403,35 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] static CrashIngestResult RejectCrashUpload(
+    LogArena& arena,
+    const Path& archivePath,
+    const Path& packageDirectory,
+    const CrashIngestConfig& config,
+    const AStringView reason
+){
+    ErrorCode removeError;
+    static_cast<void>(RemoveAllIfExists(packageDirectory, removeError));
+
+    Path invalidPath(arena);
+    static_cast<void>(MovePathToDirectory(archivePath, InvalidCrashDirectory(arena, config), invalidPath));
+    ApplyRetention(arena, config);
+
+    CrashIngestResult result(arena);
+    result.type = Type::Error;
+    result.message = StringFormat(
+        arena,
+        NWB_TEXT("Crash upload rejected: {}; raw='{}'"),
+        StringConvert(reason),
+        PathToString<tchar>(invalidPath.empty() ? archivePath : invalidPath)
+    );
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -417,42 +446,25 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     const Path packageDirectory = Ingest::ExtractedPackageDirectory(arena, config, archivePath);
 
     if(!Ingest::ExtractCrashArchive(arena, archivePath, packageDirectory, error)){
-        ErrorCode removeError;
-        static_cast<void>(RemoveAllIfExists(packageDirectory, removeError));
-
-        Path invalidPath(arena);
-        static_cast<void>(Ingest::MovePathToDirectory(archivePath, Ingest::InvalidCrashDirectory(arena, config), invalidPath));
-        Ingest::ApplyRetention(arena, config);
-        result.type = Type::Error;
-        result.message = StringFormat(
-            arena,
-            NWB_TEXT("Crash upload rejected: {}; raw='{}'"),
-            StringConvert(error),
-            PathToString<tchar>(invalidPath.empty() ? archivePath : invalidPath)
-        );
-        return result;
+        return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, AStringView(error.data(), error.size()));
     }
 
     CrashPackageSummary summary(arena);
     if(!Ingest::ValidateManifest(arena, packageDirectory, summary, error)){
-        ErrorCode removeError;
-        static_cast<void>(RemoveAllIfExists(packageDirectory, removeError));
-
-        Path invalidPath(arena);
-        static_cast<void>(Ingest::MovePathToDirectory(archivePath, Ingest::InvalidCrashDirectory(arena, config), invalidPath));
-        Ingest::ApplyRetention(arena, config);
-        result.type = Type::Error;
-        result.message = StringFormat(
-            arena,
-            NWB_TEXT("Crash upload rejected: {}; raw='{}'"),
-            StringConvert(error),
-            PathToString<tchar>(invalidPath.empty() ? archivePath : invalidPath)
-        );
-        return result;
+        return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, AStringView(error.data(), error.size()));
     }
 
-    const CrashReportText symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary, config.symbolication);
-    static_cast<void>(WriteTextFile(packageDirectory / "server_symbolication.txt", AStringView(symbolicationReport.data(), symbolicationReport.size())));
+    CrashReportText symbolicationReport(arena);
+    try{
+        symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary, config.symbolication);
+        static_cast<void>(WriteTextFile(packageDirectory / "server_symbolication.txt", AStringView(symbolicationReport.data(), symbolicationReport.size())));
+    }
+    catch(const GeneralException& e){
+        return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, AStringView(e.what()));
+    }
+    catch(...){
+        return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, AStringView("unknown ingest exception"));
+    }
 
     Path rawPath(arena);
     static_cast<void>(Ingest::MovePathToDirectory(archivePath, Ingest::RawCrashDirectory(arena, config), rawPath));

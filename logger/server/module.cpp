@@ -279,14 +279,37 @@ void Server::crashIngestUpdate(Server* self){
         while(self->tryDequeueCrashUpload(crashUpload)){
             LogArena ingestArena("NWB::Log::Server::CrashIngest");
 
-            CrashIngestConfig ingestConfig(ingestArena);
-            ingestConfig.storageDirectory = self->m_crashIngestConfig.storageDirectory;
-            ingestConfig.symbolication.symbolStoreDirectory = self->m_crashIngestConfig.symbolication.symbolStoreDirectory;
-            ingestConfig.retention = self->m_crashIngestConfig.retention;
+            try{
+                CrashIngestConfig ingestConfig(ingestArena);
+                ingestConfig.storageDirectory = self->m_crashIngestConfig.storageDirectory;
+                ingestConfig.symbolication.symbolStoreDirectory = self->m_crashIngestConfig.symbolication.symbolStoreDirectory;
+                ingestConfig.retention = self->m_crashIngestConfig.retention;
 
-            const Path archivePath(ingestArena, AStringView(crashUpload.path));
-            CrashIngestResult ingestResult = ProcessCrashUpload(ingestArena, archivePath, ingestConfig);
-            self->enqueue(Move(ingestResult.message), ingestResult.type);
+                const Path archivePath(ingestArena, AStringView(crashUpload.path));
+                CrashIngestResult ingestResult = ProcessCrashUpload(ingestArena, archivePath, ingestConfig);
+                self->enqueue(Move(ingestResult.message), ingestResult.type);
+            }
+            catch(const GeneralException& e){
+                self->enqueue(
+                    StringFormat(
+                        ingestArena,
+                        NWB_TEXT("Crash upload ingest failed for '{}': {}"),
+                        StringConvert(ingestArena, AStringView(crashUpload.path)),
+                        StringConvert(ingestArena, AStringView(e.what()))
+                    ),
+                    Type::Error
+                );
+            }
+            catch(...){
+                self->enqueue(
+                    StringFormat(
+                        ingestArena,
+                        NWB_TEXT("Crash upload ingest failed for '{}': unknown exception"),
+                        StringConvert(ingestArena, AStringView(crashUpload.path))
+                    ),
+                    Type::Error
+                );
+            }
         }
 
         if(self->m_crashIngestExit.load(MemoryOrder::acquire))

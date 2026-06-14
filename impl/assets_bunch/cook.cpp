@@ -311,7 +311,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
     return true;
 }
 
-static Core::Assets::AssetBunchExpandResult ExpandAssetBunchForAssetCook(Core::Assets::AssetBunchExpandContext& context){
+static Core::Assets::AssetBunchExpandResult::Enum ExpandAssetBunchForAssetCook(Core::Assets::AssetBunchExpandContext& context){
     if(!HasAssetBunchDeclaration(context.doc))
         return Core::Assets::AssetBunchExpandResult::Unsupported;
 

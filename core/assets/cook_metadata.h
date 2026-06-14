@@ -89,10 +89,12 @@ template<typename T, typename... Args>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum class AssetMetadataParseResult : u8{
+namespace AssetMetadataParseResult{
+enum Enum : u8{
     Unsupported,
     Parsed,
     Error
+};
 };
 
 struct AssetDocumentMetadataParseContext{
@@ -114,8 +116,8 @@ struct AssetValueMetadataParseContext{
     ScratchArena& scratchArena;
 };
 
-using AssetDocumentMetadataParseFunction = AssetMetadataParseResult (*)(AssetDocumentMetadataParseContext& context);
-using AssetValueMetadataParseFunction = AssetMetadataParseResult (*)(AssetValueMetadataParseContext& context);
+using AssetDocumentMetadataParseFunction = AssetMetadataParseResult::Enum (*)(AssetDocumentMetadataParseContext& context);
+using AssetValueMetadataParseFunction = AssetMetadataParseResult::Enum (*)(AssetValueMetadataParseContext& context);
 
 class AssetMetadataParserAutoRegistrar final{
 public:
@@ -137,10 +139,12 @@ struct ExpandedAssetMetadata{
 
 using ExpandedAssetMetadataVector = Vector<ExpandedAssetMetadata, ScratchArena>;
 
-enum class AssetBunchExpandResult : u8{
+namespace AssetBunchExpandResult{
+enum Enum : u8{
     Unsupported,
     Parsed,
     Error
+};
 };
 
 struct AssetBunchExpandContext{
@@ -152,7 +156,7 @@ struct AssetBunchExpandContext{
     ScratchArena& scratchArena;
 };
 
-using AssetBunchExpandFunction = AssetBunchExpandResult (*)(AssetBunchExpandContext& context);
+using AssetBunchExpandFunction = AssetBunchExpandResult::Enum (*)(AssetBunchExpandContext& context);
 
 class AssetBunchExpanderAutoRegistrar final{
 public:
@@ -170,9 +174,9 @@ public:
     ScratchArena& scratchArena
 );
 [[nodiscard]] bool AddPlannedFileCount(u64 additionalFileCount, u64& inOutPlannedFileCount);
-[[nodiscard]] AssetMetadataParseResult TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context);
-[[nodiscard]] AssetMetadataParseResult TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context);
-[[nodiscard]] AssetBunchExpandResult TryAutoCollectedAssetBunchExpanders(AssetBunchExpandContext& context);
+[[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context);
+[[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context);
+[[nodiscard]] AssetBunchExpandResult::Enum TryAutoCollectedAssetBunchExpanders(AssetBunchExpandContext& context);
 [[nodiscard]] bool ParseAssetMetadata(
     CookArena& cookArena,
     const DiscoveredNwbFileVector& nwbFiles,

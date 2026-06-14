@@ -108,7 +108,7 @@ static bool AppendUniqueShaderEntry(
     return true;
 }
 
-static Core::Assets::AssetMetadataParseResult ParseGraphicsDocumentMetadata(
+static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadata(
     Core::Assets::AssetDocumentMetadataParseContext& context
 ){
     using namespace Core::Assets;

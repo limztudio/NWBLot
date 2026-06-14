@@ -80,6 +80,34 @@ static_assert(sizeof(CsgIntervalSampleStateGpuData) == sizeof(u32) * 4u, "CSG in
     return pushConstants;
 }
 
+static void DispatchCsgIntervalCompute(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const CsgFrameGpuData& csgFrameData,
+    Core::ComputePipeline* pipeline,
+    Core::BindingSet* bindingSet,
+    Core::BindingSet* extraBindingSet = nullptr
+){
+    Core::ComputeState computeState;
+    computeState.setPipeline(pipeline);
+    computeState.addBindingSet(bindingSet);
+    if(extraBindingSet)
+        computeState.addBindingSet(extraBindingSet);
+    commandList.setComputeState(computeState);
+
+    const CsgIntervalDispatchPushConstants pushConstants =
+        BuildCsgIntervalDispatchPushConstants(targets, csgFrameData)
+    ;
+    if(pushConstants.workExtentX == 0u || pushConstants.workExtentY == 0u)
+        return;
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+    commandList.dispatch(
+        DivideUp(pushConstants.workExtentX, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)),
+        DivideUp(pushConstants.workExtentY, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)),
+        1u
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1092,22 +1120,13 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     setCsgClipBufferStates(commandList);
     commandList.commitBarriers();
 
-    Core::ComputeState computeState;
-    computeState.setPipeline(csgState().m_intervalPeelPipeline.get());
-    computeState.addBindingSet(csgState().m_intervalPeelBindingSet.get());
-    computeState.addBindingSet(csgState().m_clipBindingSet.get());
-    commandList.setComputeState(computeState);
-
-    const __hidden_csg_interval_peel::CsgIntervalDispatchPushConstants pushConstants =
-        __hidden_csg_interval_peel::BuildCsgIntervalDispatchPushConstants(targets, csgFrameData)
-    ;
-    if(pushConstants.workExtentX == 0u || pushConstants.workExtentY == 0u)
-        return;
-    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    commandList.dispatch(
-        DivideUp(pushConstants.workExtentX, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)),
-        DivideUp(pushConstants.workExtentY, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)),
-        1u
+    __hidden_csg_interval_peel::DispatchCsgIntervalCompute(
+        commandList,
+        targets,
+        csgFrameData,
+        csgState().m_intervalPeelPipeline.get(),
+        csgState().m_intervalPeelBindingSet.get(),
+        csgState().m_clipBindingSet.get()
     );
 }
 
@@ -1127,21 +1146,12 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     commandList.setResourceStatesForBindingSet(csgState().m_receiverSpanBuildBindingSet.get());
     commandList.commitBarriers();
 
-    Core::ComputeState computeState;
-    computeState.setPipeline(csgState().m_receiverSpanBuildPipeline.get());
-    computeState.addBindingSet(csgState().m_receiverSpanBuildBindingSet.get());
-    commandList.setComputeState(computeState);
-
-    const __hidden_csg_interval_peel::CsgIntervalDispatchPushConstants pushConstants =
-        __hidden_csg_interval_peel::BuildCsgIntervalDispatchPushConstants(targets, csgFrameData)
-    ;
-    if(pushConstants.workExtentX == 0u || pushConstants.workExtentY == 0u)
-        return;
-    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    commandList.dispatch(
-        DivideUp(pushConstants.workExtentX, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)),
-        DivideUp(pushConstants.workExtentY, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)),
-        1u
+    __hidden_csg_interval_peel::DispatchCsgIntervalCompute(
+        commandList,
+        targets,
+        csgFrameData,
+        csgState().m_receiverSpanBuildPipeline.get(),
+        csgState().m_receiverSpanBuildBindingSet.get()
     );
 }
 
@@ -1161,21 +1171,12 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     commandList.setResourceStatesForBindingSet(csgState().m_intervalCombineBindingSet.get());
     commandList.commitBarriers();
 
-    Core::ComputeState computeState;
-    computeState.setPipeline(csgState().m_intervalCombinePipeline.get());
-    computeState.addBindingSet(csgState().m_intervalCombineBindingSet.get());
-    commandList.setComputeState(computeState);
-
-    const __hidden_csg_interval_peel::CsgIntervalDispatchPushConstants pushConstants =
-        __hidden_csg_interval_peel::BuildCsgIntervalDispatchPushConstants(targets, csgFrameData)
-    ;
-    if(pushConstants.workExtentX == 0u || pushConstants.workExtentY == 0u)
-        return;
-    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    commandList.dispatch(
-        DivideUp(pushConstants.workExtentX, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)),
-        DivideUp(pushConstants.workExtentY, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)),
-        1u
+    __hidden_csg_interval_peel::DispatchCsgIntervalCompute(
+        commandList,
+        targets,
+        csgFrameData,
+        csgState().m_intervalCombinePipeline.get(),
+        csgState().m_intervalCombineBindingSet.get()
     );
 }
 

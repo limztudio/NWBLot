@@ -84,6 +84,12 @@ template<typename ArenaT>
 
 template<typename T>
 using BasicOutputFileStream = std::basic_ofstream<T>;
+using InputFileStream = GlobalFilesystemDetail::InputFileStream;
+using OutputFileStream = GlobalFilesystemDetail::OutputFileStream;
+using FileStream = GlobalFilesystemDetail::FileStream;
+using StreamOffset = GlobalFilesystemDetail::StreamOffset;
+using StreamSize = GlobalFilesystemDetail::StreamSize;
+
 using FileOpenMode = std::ios_base::openmode;
 
 inline constexpr FileOpenMode s_FileOpenWrite = std::ios::out;

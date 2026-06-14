@@ -10,8 +10,8 @@ static void ExpectCookFailure(
     const AStringView metaText,
     const AStringView caseName
 ){
-    Path root(PathArena());
-    Path outputDirectory(PathArena());
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !cookSingleMeta(
         metaText,
         caseName,

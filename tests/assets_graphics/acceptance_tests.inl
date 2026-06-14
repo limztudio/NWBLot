@@ -11,7 +11,7 @@ static bool CookAndLoadSmokeMesh(
     Path& outRoot,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
 ){
-    Path outputDirectory(PathArena());
+    Path outputDirectory(testArena.arena);
     const bool cooked = CookSmokeMeshMeta(
         assetFilename,
         caseName,
@@ -321,7 +321,7 @@ static void RunSmokeMeshAcceptance(
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(PathArena());
+    Path root(testArena.arena);
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     if(CookAndLoadSmokeMesh(context, testArena, assetFilename, caseName, assetName, root, loadedAsset)){
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedAsset->assetType() == NWB::Impl::Mesh::AssetTypeName());
@@ -425,8 +425,8 @@ static void TestMeshAcceptanceQualityBuilderChecks(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(PathArena());
-    Path outputDirectory(PathArena());
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
     const AString meta = BuildMeshletAcceptanceAlternatingConeMeshMeta();
     const bool cooked = CookSingleMeshMeta(
         AStringView(meta.data(), meta.size()),

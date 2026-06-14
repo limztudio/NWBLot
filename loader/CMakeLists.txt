@@ -11,6 +11,7 @@ target_link_libraries(nwb_loader PUBLIC
 target_link_libraries(nwb_loader PRIVATE
     nwb_assets
     nwb_common
+    nwb_crash
     nwb_alloc
     nwb_filesystem
     nwb_frame

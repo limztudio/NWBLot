@@ -141,8 +141,12 @@ template<typename CharT = char, typename ArenaT, typename PathT>
         const auto native = path.native();
         return BasicString<CharT, ArenaT>(native.data(), native.size(), arena);
     }
-    else
-        return StringConvert(arena, path.native());
+    else{
+        BasicString<CharT, ArenaT> output{arena};
+        auto out = std::back_inserter(output);
+        BasicStringDetail::WriteConvertedText<CharT>(out, path.native());
+        return output;
+    }
 }
 
 

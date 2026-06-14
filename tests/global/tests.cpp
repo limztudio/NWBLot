@@ -8,6 +8,7 @@
 #include <global/binary.h>
 #include <global/compile.h>
 #include <global/containers.h>
+#include <global/diagnostics.h>
 #include <global/limit.h>
 
 
@@ -25,6 +26,12 @@ using CapturingLogger = NWB::Tests::CapturingLogger;
 using AString = NWB::Tests::TestAString;
 template<typename T>
 using Vector = NWB::Tests::TestVector<T>;
+
+static u32 s_DiagnosticCrashCaptureCount = 0u;
+static const char* s_DiagnosticCrashCategory = nullptr;
+static const char* s_DiagnosticCrashMessage = nullptr;
+static const char* s_DiagnosticCrashFile = nullptr;
+static u32 s_DiagnosticCrashLine = 0u;
 
 
 #define NWB_GLOBAL_TEST_CHECK NWB_TEST_CHECK
@@ -376,6 +383,34 @@ static void TestLoggerMacrosBehaveAsSingleStatements(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, logger.sawMessageContaining(NWB_TEXT("raw converted warning")));
 }
 
+static void TestDiagnosticCrashHook(TestContext& context){
+    s_DiagnosticCrashCaptureCount = 0u;
+    s_DiagnosticCrashCategory = nullptr;
+    s_DiagnosticCrashMessage = nullptr;
+    s_DiagnosticCrashFile = nullptr;
+    s_DiagnosticCrashLine = 0u;
+
+    const DiagnosticCrashCaptureCallback callback = [](const DiagnosticCrashRecord& record)noexcept{
+        ++s_DiagnosticCrashCaptureCount;
+        s_DiagnosticCrashCategory = record.category;
+        s_DiagnosticCrashMessage = record.message;
+        s_DiagnosticCrashFile = record.file;
+        s_DiagnosticCrashLine = record.line;
+        CaptureDiagnosticCrash("recursive", "ignored");
+    };
+
+    SetDiagnosticCrashCaptureCallback(callback);
+    CaptureDiagnosticCrash("unit", "message", "diagnostics_test.cpp", 42u);
+    ClearDiagnosticCrashCaptureCallback(callback);
+    CaptureDiagnosticCrash("unit", "ignored");
+
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticCrashCaptureCount == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticCrashCategory && NWB_STRCMP(s_DiagnosticCrashCategory, "unit") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticCrashMessage && NWB_STRCMP(s_DiagnosticCrashMessage, "message") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticCrashFile && NWB_STRCMP(s_DiagnosticCrashFile, "diagnostics_test.cpp") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticCrashLine == 42u);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -408,6 +443,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("global", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestTriviallyCopyableVectorAlias(context);
     __hidden_tests::TestBoundedRuntimeWrappers(context);
     __hidden_tests::TestLoggerMacrosBehaveAsSingleStatements(context);
+    __hidden_tests::TestDiagnosticCrashHook(context);
 })
 
 

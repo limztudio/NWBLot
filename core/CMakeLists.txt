@@ -1,5 +1,6 @@
 add_subdirectory(alloc)
 add_subdirectory(common)
+add_subdirectory(crash)
 add_subdirectory(perf)
 add_subdirectory(mesh)
 add_subdirectory(metascript)

@@ -149,8 +149,8 @@ static void TestProjectCookEntryDocumentCook(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(PathArena());
-    Path outputDirectory(PathArena());
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
     const bool cooked = CookSingleGraphicsMeta(
         "project_probe asset;\n\n"
         "asset.label = \"document\";\n",
@@ -180,8 +180,8 @@ static void TestProjectCookEntryAssetBunchCook(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(PathArena());
-    Path outputDirectory(PathArena());
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
     const bool cooked = CookSingleGraphicsMeta(
         "project_probe probe;\n"
         "probe.label = \"bunch\";\n\n"

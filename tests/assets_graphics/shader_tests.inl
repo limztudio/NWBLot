@@ -128,8 +128,8 @@ static void TestShaderMetadataRejectsDefaultVariantAlias(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(PathArena());
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCaseRoot("shader_default_variant_alias", root));
+    Path root(testArena.arena);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCaseRoot(testArena, "shader_default_variant_alias", root));
 
     const Path assetRoot = root / "assets";
     const Path includeMetaPath = assetRoot / "shaders" / "default_variant_include.nwb";
@@ -160,10 +160,10 @@ static void TestShaderMetadataRejectsDefaultVariantAlias(TestContext& context){
 
 static void TestShaderDependencyChecksumAliasesGeneratedRoot(TestContext& context){
     TestArena testArena;
-    Path root(PathArena());
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCaseRoot("shader_dependency_checksum_alias", root));
+    Path root(testArena.arena);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_checksum_alias", root));
 
-    const Path relativeIncludePath = Path(PathArena(), "project") / "material_interfaces" / "test_surface.bind";
+    const Path relativeIncludePath = Path(testArena.arena, "project") / "material_interfaces" / "test_surface.bind";
     const Path firstGeneratedRoot = root / "first" / "material_bind_includes";
     const Path secondGeneratedRoot = root / "second" / "material_bind_includes";
     const Path firstGeneratedInclude = firstGeneratedRoot / relativeIncludePath;
@@ -242,9 +242,10 @@ static void TestShaderCookWithoutMaterialBindIncludes(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(PathArena());
-    Path outputDirectory(PathArena());
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCookCase(
+        testArena,
         "shader_cook_without_material_bind_includes",
         root,
         outputDirectory

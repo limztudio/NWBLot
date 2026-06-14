@@ -8,3 +8,6 @@ target_link_libraries(nwb_crash_tests PRIVATE
     nwb_alloc
 )
 add_test(NAME nwb_crash_tests COMMAND nwb_crash_tests)
+set_tests_properties(nwb_crash_tests PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)

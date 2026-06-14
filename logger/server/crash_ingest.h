@@ -18,11 +18,15 @@ NWB_LOG_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+inline constexpr usize s_DefaultMaxExtractedCrashPackages = 256u;
+inline constexpr usize s_DefaultMaxRawCrashArchives = 256u;
+inline constexpr usize s_DefaultMaxInvalidCrashArchives = 64u;
+
 
 struct CrashRetentionConfig{
-    usize maxExtractedPackages = 256u;
-    usize maxRawArchives = 256u;
-    usize maxInvalidArchives = 64u;
+    usize maxExtractedPackages = s_DefaultMaxExtractedCrashPackages;
+    usize maxRawArchives = s_DefaultMaxRawCrashArchives;
+    usize maxInvalidArchives = s_DefaultMaxInvalidCrashArchives;
 };
 
 struct CrashIngestConfig{

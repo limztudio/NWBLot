@@ -4,8 +4,10 @@
 
 #include <tests/test_context.h>
 
+#include <core/crash/package_names.h>
 #include <logger/server/crash_auth.h>
 #include <logger/server/crash_ingest.h>
+#include <logger/server/crash_paths.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,6 +23,7 @@ using TestContext = NWB::Tests::TestContext;
 using TestArena = NWB::Tests::TestArena<struct LoggerServerCrashTestsTag>;
 using CrashTestText = AString<NWB::Core::Alloc::GlobalArena>;
 using CrashTestPath = Path<NWB::Core::Alloc::GlobalArena>;
+namespace CrashNames = NWB::Core::Crash::PackageNames;
 
 #define NWB_LOGSERVER_TEST_CHECK NWB_TEST_CHECK
 
@@ -31,9 +34,9 @@ using CrashTestPath = Path<NWB::Core::Alloc::GlobalArena>;
 [[nodiscard]] static CrashTestPath CrashRootDirectory(NWB::Core::Alloc::GlobalArena& arena){
     CrashTestPath executableDirectory(arena);
     if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / "crashes";
+        return executableDirectory / CrashNames::s_DefaultRootDirectoryName;
 
-    return CrashTestPath(arena, "crashes");
+    return CrashTestPath(arena, CrashNames::s_DefaultRootDirectoryName);
 }
 
 [[nodiscard]] static CrashTestPath TestRootDirectory(NWB::Core::Alloc::GlobalArena& arena){
@@ -54,7 +57,7 @@ using CrashTestPath = Path<NWB::Core::Alloc::GlobalArena>;
 
 [[nodiscard]] static CrashTestPath ArchiveFileName(NWB::Core::Alloc::GlobalArena& arena, const AStringView stem){
     CrashTestPath fileName(arena, stem);
-    fileName.replace_extension("nwbcrashpkg");
+    fileName.replace_extension(NWB::Log::s_CrashUploadArchiveFileExtension);
     return fileName;
 }
 
@@ -63,15 +66,15 @@ using CrashTestPath = Path<NWB::Core::Alloc::GlobalArena>;
 }
 
 [[nodiscard]] static CrashTestPath ExtractedPackageDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
-    return StorageDirectory(arena, testGroup) / "packages" / stem;
+    return StorageDirectory(arena, testGroup) / NWB::Log::s_CrashExtractedDirectoryName / stem;
 }
 
 [[nodiscard]] static CrashTestPath RawArchivePath(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
-    return StorageDirectory(arena, testGroup) / "raw" / ArchiveFileName(arena, stem);
+    return StorageDirectory(arena, testGroup) / NWB::Log::s_CrashRawDirectoryName / ArchiveFileName(arena, stem);
 }
 
 [[nodiscard]] static CrashTestPath InvalidArchivePath(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
-    return StorageDirectory(arena, testGroup) / "invalid" / ArchiveFileName(arena, stem);
+    return StorageDirectory(arena, testGroup) / NWB::Log::s_CrashInvalidDirectoryName / ArchiveFileName(arena, stem);
 }
 
 static void RemoveTestArtifacts(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
@@ -81,19 +84,21 @@ static void RemoveTestArtifacts(NWB::Core::Alloc::GlobalArena& arena, const AStr
 
 static void AppendArchiveFile(CrashTestText& archive, const AStringView relativePath, const AStringView content){
     char sizeBuffer[32] = {};
-    archive += "FILE ";
+    archive += CrashNames::s_ArchiveFileHeaderPrefix;
     archive += relativePath;
     archive += " ";
     archive += FormatDecimal(content.size(), sizeBuffer);
     archive += "\n";
     archive += content;
-    archive += "\nEND\n";
+    archive += CrashNames::s_ArchiveEntryEndText;
 }
 
 [[nodiscard]] static CrashTestText BuildManifest(NWB::Core::Alloc::GlobalArena& arena, const AStringView crashId, const AStringView platform){
     CrashTestText manifest(arena);
     manifest += "{\n";
-    manifest += "  \"format\": \"nwb-crash-package-v1\",\n";
+    manifest += "  \"format\": \"";
+    manifest += CrashNames::s_ManifestFormatValue;
+    manifest += "\",\n";
     manifest += "  \"crash_id\": \"";
     manifest += crashId;
     manifest += "\",\n";
@@ -117,7 +122,7 @@ static void AppendArchiveFile(CrashTestText& archive, const AStringView relative
 }
 
 [[nodiscard]] static bool ReadServerSymbolication(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, CrashTestText& outReport){
-    return ReadTextFile(ExtractedPackageDirectory(arena, testGroup, stem) / "server_symbolication.txt", outReport);
+    return ReadTextFile(ExtractedPackageDirectory(arena, testGroup, stem) / NWB::Log::s_ServerSymbolicationFileName, outReport);
 }
 
 [[nodiscard]] static NWB::Log::CrashIngestConfig MakeIngestConfig(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
@@ -142,11 +147,11 @@ static void AppendArchiveFile(CrashTestText& archive, const AStringView relative
 }
 
 static void BuildLinuxCrashArchive(NWB::Core::Alloc::GlobalArena& arena, CrashTestText& archive, const AStringView crashId){
-    archive += "NWBCRASHPKG 1\n";
+    archive += CrashNames::s_ArchiveHeaderText;
     const CrashTestText manifest = BuildManifest(arena, crashId, "linux");
-    AppendArchiveFile(archive, "manifest.json", AStringView(manifest.data(), manifest.size()));
-    AppendArchiveFile(archive, "cpu_context.txt", "fault_address=0\ninstruction_pointer=4198964\nstack_pointer=0\nframe_pointer=0\n");
-    AppendArchiveFile(archive, "proc_maps.txt", "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
+    AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
+    AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "fault_address=0\ninstruction_pointer=4198964\nstack_pointer=0\nframe_pointer=0\n");
+    AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
 }
 
 [[nodiscard]] static bool Contains(const CrashTestText& text, const AStringView needle){
@@ -201,12 +206,12 @@ static void TestAndroidCrashPackageCopiesTombstoneFrames(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    archive += "NWBCRASHPKG 1\n";
+    archive += CrashNames::s_ArchiveHeaderText;
     const CrashTestText manifest = BuildManifest(arena, "android-test", "android");
-    AppendArchiveFile(archive, "manifest.json", AStringView(manifest.data(), manifest.size()));
+    AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
     AppendArchiveFile(
         archive,
-        "android_tombstone.txt",
+        CrashNames::s_AndroidTombstoneFileName,
         "backtrace:\n      #00 pc 0000000000012344  /data/app/lib/arm64/libnwb.so (CrashHere+16)\n      #01 pc 0000000000012450  /data/app/lib/arm64/libnwb.so (Caller+12)\n"
     );
 
@@ -237,10 +242,10 @@ static void TestLinuxCrashPackageReportsMissingProcMaps(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    archive += "NWBCRASHPKG 1\n";
+    archive += CrashNames::s_ArchiveHeaderText;
     const CrashTestText manifest = BuildManifest(arena, "linux-missing-maps-test", "linux");
-    AppendArchiveFile(archive, "manifest.json", AStringView(manifest.data(), manifest.size()));
-    AppendArchiveFile(archive, "cpu_context.txt", "instruction_pointer=4198964\n");
+    AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
+    AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "instruction_pointer=4198964\n");
 
     NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
 
@@ -266,11 +271,11 @@ static void TestLinuxCrashPackageReportsUnmappedInstructionPointer(TestContext& 
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    archive += "NWBCRASHPKG 1\n";
+    archive += CrashNames::s_ArchiveHeaderText;
     const CrashTestText manifest = BuildManifest(arena, "linux-unmapped-ip-test", "linux");
-    AppendArchiveFile(archive, "manifest.json", AStringView(manifest.data(), manifest.size()));
-    AppendArchiveFile(archive, "cpu_context.txt", "instruction_pointer=7340032\n");
-    AppendArchiveFile(archive, "proc_maps.txt", "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
+    AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
+    AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "instruction_pointer=7340032\n");
+    AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
 
     NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
 
@@ -296,10 +301,10 @@ static void TestAndroidCrashPackageReportsTombstoneWithoutFrames(TestContext& co
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    archive += "NWBCRASHPKG 1\n";
+    archive += CrashNames::s_ArchiveHeaderText;
     const CrashTestText manifest = BuildManifest(arena, "android-no-frames-test", "android");
-    AppendArchiveFile(archive, "manifest.json", AStringView(manifest.data(), manifest.size()));
-    AppendArchiveFile(archive, "android_tombstone.txt", "pid: 7, tid: 7, name: nwb\nbacktrace:\n");
+    AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
+    AppendArchiveFile(archive, CrashNames::s_AndroidTombstoneFileName, "pid: 7, tid: 7, name: nwb\nbacktrace:\n");
 
     NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
 
@@ -326,9 +331,9 @@ static void TestWindowsCrashPackageReportsMissingMinidump(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    archive += "NWBCRASHPKG 1\n";
+    archive += CrashNames::s_ArchiveHeaderText;
     const CrashTestText manifest = BuildManifest(arena, "windows-missing-dump-test", "windows");
-    AppendArchiveFile(archive, "manifest.json", AStringView(manifest.data(), manifest.size()));
+    AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
 
     NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
 
@@ -342,7 +347,10 @@ static void TestWindowsCrashPackageReportsMissingMinidump(TestContext& context){
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=windows"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "resolver=windows_pdb_minidump"));
 #if defined(NWB_PLATFORM_WINDOWS)
-    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "process.dmp is missing or unreadable"));
+    CrashTestText missingDumpMessage(arena);
+    missingDumpMessage += CrashNames::s_ProcessDumpFileName;
+    missingDumpMessage += " is missing or unreadable";
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, AStringView(missingDumpMessage.data(), missingDumpMessage.size())));
 #else
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "only available on Windows logserver builds"));
 #endif
@@ -435,7 +443,7 @@ static void TestAcceptedCrashWarnsWhenRawArchiveCannotBeRetained(TestContext& co
     ErrorCode error;
     static_cast<void>(EnsureDirectories(StorageDirectory(arena, s_Group), error));
     NWB_LOGSERVER_TEST_CHECK(context, !error);
-    NWB_LOGSERVER_TEST_CHECK(context, WriteTextFile(StorageDirectory(arena, s_Group) / "raw", AStringView("blocked")));
+    NWB_LOGSERVER_TEST_CHECK(context, WriteTextFile(StorageDirectory(arena, s_Group) / NWB::Log::s_CrashRawDirectoryName, AStringView("blocked")));
 
     NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
     const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);

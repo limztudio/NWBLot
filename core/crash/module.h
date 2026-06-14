@@ -41,20 +41,27 @@ namespace CrashDumpStatus{
     };
 };
 
+inline constexpr u32 s_DefaultMaxDiagnosticDumpsPerProcess = 8u;
+inline constexpr u32 s_DefaultMaxDiagnosticDumpsPerSite = 1u;
+inline constexpr usize s_DefaultMaxPendingCrashPackages = 128u;
+inline constexpr usize s_DefaultMaxUploadedCrashPackages = 256u;
+inline constexpr usize s_DefaultMaxFailedCrashPackages = 64u;
+inline constexpr usize s_DefaultMaxUploadingCrashPackages = 64u;
+
 struct CrashCapturePolicy{
     bool captureAssertions = true;
     bool captureFatalAssertions = true;
     bool captureLoggerErrors = true;
     bool captureLoggerFatals = true;
-    u32 maxDiagnosticDumpsPerProcess = 8u;
-    u32 maxDiagnosticDumpsPerSite = 1u;
+    u32 maxDiagnosticDumpsPerProcess = s_DefaultMaxDiagnosticDumpsPerProcess;
+    u32 maxDiagnosticDumpsPerSite = s_DefaultMaxDiagnosticDumpsPerSite;
 };
 
 struct CrashSpoolRetentionConfig{
-    usize maxPendingPackages = 128u;
-    usize maxUploadedPackages = 256u;
-    usize maxFailedPackages = 64u;
-    usize maxUploadingPackages = 64u;
+    usize maxPendingPackages = s_DefaultMaxPendingCrashPackages;
+    usize maxUploadedPackages = s_DefaultMaxUploadedCrashPackages;
+    usize maxFailedPackages = s_DefaultMaxFailedCrashPackages;
+    usize maxUploadingPackages = s_DefaultMaxUploadingCrashPackages;
 };
 
 struct CrashDumpResult{

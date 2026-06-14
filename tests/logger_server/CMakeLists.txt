@@ -3,6 +3,7 @@ target_sources(nwb_logserver_crash_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/tests.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_auth.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_ingest.cpp"
+    "${PROJECT_SOURCE_DIR}/logger/server/crash_paths.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate.cpp"
 )
 target_link_libraries(nwb_logserver_crash_tests PRIVATE

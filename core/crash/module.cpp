@@ -36,14 +36,14 @@ template<typename ArenaT>
 [[nodiscard]] static ::Path<ArenaT> __hidden_default_crash_root_directory(ArenaT& arena){
     ::Path<ArenaT> executableDirectory(arena);
     if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / "crashes";
+        return executableDirectory / PackageNames::s_DefaultRootDirectoryName;
 
     ErrorCode error;
     ::Path<ArenaT> currentDirectory(arena);
     if(GetCurrentPath(currentDirectory, error) && !currentDirectory.empty())
-        return currentDirectory / "crashes";
+        return currentDirectory / PackageNames::s_DefaultRootDirectoryName;
 
-    return ::Path<ArenaT>(arena, "crashes");
+    return ::Path<ArenaT>(arena, PackageNames::s_DefaultRootDirectoryName);
 }
 
 template<typename ArenaT>
@@ -51,7 +51,7 @@ static void __hidden_store_current_breadcrumbs(ArenaT& arena, const BreadcrumbSn
     if(snapshot.spoolDirectoryText[0] == 0 || snapshot.breadcrumbCount == 0u)
         return;
 
-    const ::Path<ArenaT> breadcrumbPath = ::Path<ArenaT>(arena, snapshot.spoolDirectoryText) / "breadcrumbs_current.txt";
+    const ::Path<ArenaT> breadcrumbPath = ::Path<ArenaT>(arena, snapshot.spoolDirectoryText) / PackageNames::s_CurrentBreadcrumbsFileName;
     OutputFileStream stream(breadcrumbPath.c_str(), s_FileOpenBinary | s_FileOpenTruncate);
     if(!stream.is_open())
         return;
@@ -96,25 +96,25 @@ static void __hidden_store_breadcrumb(const AStringView category, const AStringV
     Detail::FixedBreadcrumb& breadcrumb = Detail::g_State.breadcrumbs[Detail::g_State.nextBreadcrumb % Detail::s_MaxBreadcrumbs];
     breadcrumb.used = 1u;
     breadcrumb.order = Detail::g_State.breadcrumbOrder.fetch_add(1u, MemoryOrder::relaxed);
-    CopyFixedBuffer(breadcrumb.category, category.empty() ? AStringView("general") : category);
+    CopyFixedBuffer(breadcrumb.category, category.empty() ? AStringView(Detail::s_DefaultBreadcrumbCategory) : category);
     CopyFixedBuffer(breadcrumb.message, message);
     ++Detail::g_State.nextBreadcrumb;
 }
 
 static bool __hidden_capture_policy_allows(const CrashCapturePolicy& policy, const AStringView category){
-    if(category == "assert")
+    if(category == DiagnosticEventCategory::s_Assert)
         return policy.captureAssertions;
-    if(category == "fatal_assert")
+    if(category == DiagnosticEventCategory::s_FatalAssert)
         return policy.captureFatalAssertions;
-    if(category == "logger_Error")
+    if(category == DiagnosticEventCategory::s_LoggerError)
         return policy.captureLoggerErrors;
-    if(category == "logger_Fatal")
+    if(category == DiagnosticEventCategory::s_LoggerFatal)
         return policy.captureLoggerFatals;
 
     return true;
 }
 
-static u64 __hidden_diagnostic_site_hash(const DiagnosticCrashRecord& record)noexcept{
+static u64 __hidden_diagnostic_site_hash(const DiagnosticEventRecord& record)noexcept{
     u64 hash = FNV64_OFFSET_BASIS;
     if(record.category)
         hash = UpdateFnv64TextExact(hash, AStringView(record.category));
@@ -126,7 +126,7 @@ static u64 __hidden_diagnostic_site_hash(const DiagnosticCrashRecord& record)noe
     return hash;
 }
 
-static bool __hidden_reserve_diagnostic_capture(const DiagnosticCrashRecord& record, const AStringView category){
+static bool __hidden_reserve_diagnostic_capture(const DiagnosticEventRecord& record, const AStringView category){
     ScopedLock lock(Detail::g_State.mutex);
     if(!Detail::g_State.installed)
         return false;
@@ -171,7 +171,7 @@ static bool __hidden_reserve_diagnostic_capture(const DiagnosticCrashRecord& rec
 }
 
 static CrashDumpResult __hidden_capture_crash_dump(const AStringView category, const AStringView message, Detail::CrashDumpRequestOptions& options){
-    const AStringView breadcrumbCategory = category.empty() ? AStringView("manual_dump") : category;
+    const AStringView breadcrumbCategory = category.empty() ? AStringView(Detail::s_ManualDumpCategory) : category;
 
     {
         ScopedLock lock(Detail::g_State.mutex);
@@ -186,7 +186,7 @@ static CrashDumpResult __hidden_capture_crash_dump(const AStringView category, c
     if(options.triggerMessage.empty())
         options.triggerMessage = message;
 
-    options.waitMilliseconds = 10000u;
+    options.waitMilliseconds = Detail::s_ManualCrashDumpWaitMilliseconds;
     Detail::ManualDumpContextStorage contextStorage;
     Detail::CaptureManualDumpContext(options, contextStorage);
 #if defined(NWB_PLATFORM_ANDROID)
@@ -196,7 +196,7 @@ static CrashDumpResult __hidden_capture_crash_dump(const AStringView category, c
     return Detail::RequestCrashDump(Detail::CrashReasonKind::ManualDump, 0u, options);
 }
 
-static void __hidden_capture_diagnostic_crash(const DiagnosticCrashRecord& record)noexcept{
+static void __hidden_capture_diagnostic_crash(const DiagnosticEventRecord& record)noexcept{
     try{
         Detail::CrashDumpRequestOptions options;
         options.triggerCategory = record.category ? AStringView(record.category) : AStringView();
@@ -232,11 +232,7 @@ template<typename ArenaT>
     if(!GetExecutableDirectory(executableDirectory))
         return ::Path<ArenaT>(arena);
 
-#if defined(NWB_PLATFORM_WINDOWS)
-    return executableDirectory / "crash_handler.exe";
-#else
-    return executableDirectory / "crash_handler";
-#endif
+    return executableDirectory / Detail::s_HandlerExecutableFileName;
 }
 
 template<typename ArenaT>
@@ -281,7 +277,7 @@ bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config){
 
     Detail::InstallPlatformHandlers();
     Detail::g_State.installed = true;
-    SetDiagnosticCrashCaptureCallback(__hidden_crash_module::__hidden_capture_diagnostic_crash);
+    SetDiagnosticEventCallback(__hidden_crash_module::__hidden_capture_diagnostic_crash);
     return true;
 }
 
@@ -290,7 +286,7 @@ void UninstallCrashHandler(){
     if(!Detail::g_State.installed)
         return;
 
-    ClearDiagnosticCrashCaptureCallback(__hidden_crash_module::__hidden_capture_diagnostic_crash);
+    ClearDiagnosticEventCallback(__hidden_crash_module::__hidden_capture_diagnostic_crash);
     Detail::UninstallPlatformResources();
     Detail::g_State.installed = false;
     Detail::g_State.handlerStarted = false;

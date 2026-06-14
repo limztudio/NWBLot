@@ -6,6 +6,7 @@
 
 
 #include "module.h"
+#include "package_names.h"
 
 #include <global/sync.h>
 
@@ -42,6 +43,26 @@ inline constexpr usize s_MaxShortText = 64u;
 inline constexpr usize s_MaxMediumText = 256u;
 inline constexpr usize s_MaxPathText = 1024u;
 inline constexpr usize s_MaxUrlText = 1024u;
+inline constexpr u32 s_ManualDumpExceptionCode = 0xE0425742u;
+inline constexpr u32 s_PlatformCrashHandlerWaitMilliseconds = 3000u;
+inline constexpr u32 s_ManualCrashDumpWaitMilliseconds = 10000u;
+inline constexpr usize s_HandlerArgumentTextCapacity = 32u;
+
+#ifndef NWB_CRASH_HANDLER_EXECUTABLE_NAME
+#define NWB_CRASH_HANDLER_EXECUTABLE_NAME "crash_handler"
+#endif
+
+#if defined(NWB_PLATFORM_WINDOWS)
+inline constexpr tchar s_HandlerExecutableFileName[] = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME) NWB_TEXT(".exe");
+#else
+inline constexpr tchar s_HandlerExecutableFileName[] = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME);
+#endif
+
+inline constexpr tchar s_RequestHandleArgument[] = NWB_TEXT("--request-handle");
+inline constexpr tchar s_AckEventArgument[] = NWB_TEXT("--ack-event");
+inline constexpr const char* s_RequestFdArgument = "--request-fd";
+inline constexpr const char* s_DefaultBreadcrumbCategory = "general";
+inline constexpr const char* s_ManualDumpCategory = "manual_dump";
 
 
 template<typename ArenaT>

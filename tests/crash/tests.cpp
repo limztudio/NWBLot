@@ -19,6 +19,7 @@ namespace __hidden_crash_tests{
 using TestContext = NWB::Tests::TestContext;
 using TestArena = NWB::Tests::TestArena<struct CrashTestsTag>;
 using CrashTestPath = Path<NWB::Core::Alloc::GlobalArena>;
+namespace CrashNames = NWB::Core::Crash::PackageNames;
 
 #define NWB_CRASH_TEST_CHECK NWB_TEST_CHECK
 
@@ -29,9 +30,9 @@ using CrashTestPath = Path<NWB::Core::Alloc::GlobalArena>;
 [[nodiscard]] static CrashTestPath CrashRootDirectory(NWB::Core::Alloc::GlobalArena& arena){
     CrashTestPath executableDirectory(arena);
     if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / "crashes";
+        return executableDirectory / CrashNames::s_DefaultRootDirectoryName;
 
-    return CrashTestPath(arena, "crashes");
+    return CrashTestPath(arena, CrashNames::s_DefaultRootDirectoryName);
 }
 
 [[nodiscard]] static CrashTestPath TestRootDirectory(NWB::Core::Alloc::GlobalArena& arena){
@@ -160,15 +161,15 @@ static void TestWriteCrashPackageCreatesRequiredFiles(TestContext& context){
 
     NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::Detail::WriteCrashPackage(request));
 
-    const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, "pending", s_CrashId);
-    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / "manifest.json"));
-    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / "metadata.txt"));
-    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / "breadcrumbs.txt"));
-    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / "emergency.txt"));
-    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / "artifact_strategy.txt"));
-    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / "cpu_context.txt"));
-    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / "trigger.txt"));
-    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / "symbolication.txt"));
+    const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CrashId);
+    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / CrashNames::s_ManifestFileName));
+    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / CrashNames::s_MetadataFileName));
+    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / CrashNames::s_BreadcrumbsFileName));
+    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / CrashNames::s_EmergencyFileName));
+    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / CrashNames::s_ArtifactStrategyFileName));
+    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / CrashNames::s_CpuContextFileName));
+    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / CrashNames::s_TriggerFileName));
+    NWB_CRASH_TEST_CHECK(context, PathIsFile(packageDirectory / CrashNames::s_SymbolicationFileName));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -213,25 +214,25 @@ static void TestCrashPackageResultReportsSpoolBucketStatus(TestContext& context)
         NWB::Core::Crash::Detail::CrashPackageResult(request).status == NWB::Core::Crash::CrashDumpStatus::RequestQueued
     );
 
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "pending", s_CrashId));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CrashId));
     NWB_CRASH_TEST_CHECK(
         context,
         NWB::Core::Crash::Detail::CrashPackageResult(request).status == NWB::Core::Crash::CrashDumpStatus::PackageWritten
     );
 
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "uploading", s_CrashId));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId));
     NWB_CRASH_TEST_CHECK(
         context,
         NWB::Core::Crash::Detail::CrashPackageResult(request).status == NWB::Core::Crash::CrashDumpStatus::PackageWritten
     );
 
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "failed", s_CrashId));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_CrashId));
     NWB_CRASH_TEST_CHECK(
         context,
         NWB::Core::Crash::Detail::CrashPackageResult(request).status == NWB::Core::Crash::CrashDumpStatus::UploadFailed
     );
 
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "uploaded", s_CrashId));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_CrashId));
     NWB_CRASH_TEST_CHECK(
         context,
         NWB::Core::Crash::Detail::CrashPackageResult(request).status == NWB::Core::Crash::CrashDumpStatus::Uploaded
@@ -295,7 +296,7 @@ static void TestCrashBreadcrumbPersistsCurrentRing(TestContext& context){
     }
 
     NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::AddCrashBreadcrumb(breadcrumbArena, AStringView("test"), AStringView("persisted breadcrumb")));
-    NWB_CRASH_TEST_CHECK(context, TextFileContains(spoolDirectory / "breadcrumbs_current.txt", AStringView("[test] persisted breadcrumb")));
+    NWB_CRASH_TEST_CHECK(context, TextFileContains(spoolDirectory / CrashNames::s_CurrentBreadcrumbsFileName, AStringView("[test] persisted breadcrumb")));
 
     {
         ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
@@ -315,16 +316,16 @@ static void TestCrashSpoolRetentionPrunesOldestPackages(TestContext& context){
     constexpr AStringView s_Group("crash_spool_retention_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "pending", "crash-001"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "pending", "crash-002"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "pending", "crash-003"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "pending", "bad package name"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "uploaded", "crash-001"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "uploaded", "crash-002"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "failed", "crash-001"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "failed", "crash-002"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "uploading", "crash-001"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "uploading", "crash-002"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "bad package name"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-001"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-002"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-001"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-002"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-001"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-002"));
 
     NWB::Core::Crash::CrashSpoolRetentionConfig retention;
     retention.maxPendingPackages = 2u;
@@ -333,16 +334,16 @@ static void TestCrashSpoolRetentionPrunesOldestPackages(TestContext& context){
     retention.maxUploadingPackages = 1u;
     NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention));
 
-    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, "pending", "crash-001")));
-    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, "pending", "crash-002")));
-    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, "pending", "crash-003")));
-    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, "pending", "bad package name")));
-    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, "uploaded", "crash-001")));
-    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, "uploaded", "crash-002")));
-    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, "failed", "crash-001")));
-    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, "failed", "crash-002")));
-    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, "uploading", "crash-001")));
-    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, "uploading", "crash-002")));
+    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
+    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
+    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003")));
+    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "bad package name")));
+    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-001")));
+    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-002")));
+    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-001")));
+    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-002")));
+    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-001")));
+    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-002")));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -353,8 +354,8 @@ static void TestCrashSpoolRetentionZeroDisablesPruning(TestContext& context){
     constexpr AStringView s_Group("crash_spool_retention_zero_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "pending", "crash-001"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "pending", "crash-002"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"));
 
     NWB::Core::Crash::CrashSpoolRetentionConfig retention;
     retention.maxPendingPackages = 0u;
@@ -363,8 +364,8 @@ static void TestCrashSpoolRetentionZeroDisablesPruning(TestContext& context){
     retention.maxUploadingPackages = 0u;
     NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention));
 
-    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, "pending", "crash-001")));
-    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, "pending", "crash-002")));
+    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
+    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -375,9 +376,9 @@ static void TestCrashSpoolRetentionProtectsActivePendingPackage(TestContext& con
     constexpr AStringView s_Group("crash_spool_retention_protect_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "pending", "crash-001"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "pending", "crash-002"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "pending", "crash-003"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003"));
 
     NWB::Core::Crash::CrashSpoolRetentionConfig retention;
     retention.maxPendingPackages = 1u;
@@ -391,9 +392,9 @@ static void TestCrashSpoolRetentionProtectsActivePendingPackage(TestContext& con
         AStringView("crash-001")
     ));
 
-    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, "pending", "crash-001")));
-    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, "pending", "crash-002")));
-    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, "pending", "crash-003")));
+    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
+    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
+    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003")));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -405,21 +406,21 @@ static void TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(TestContext& con
     constexpr AStringView s_CrashId("crash-recovery-blocked");
     RemoveTestArtifacts(arena, s_Group);
 
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, "uploading", s_CrashId));
-    NWB_CRASH_TEST_CHECK(context, WriteTextFile(BucketDirectory(arena, s_Group, "pending"), AStringView("blocked")));
+    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId));
+    NWB_CRASH_TEST_CHECK(context, WriteTextFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName), AStringView("blocked")));
 
     NWB::Core::Crash::Detail::CrashUploadSnapshot snapshot;
     CopyPathText(arena, snapshot.spoolDirectory, SpoolDirectory(arena, s_Group));
     CopyFixedBuffer(snapshot.logServerUrl, AStringView("http://127.0.0.1:1"));
 
     NWB_CRASH_TEST_CHECK(context, !NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(arena, snapshot));
-    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, "uploading", s_CrashId)));
-    NWB_CRASH_TEST_CHECK(context, PathIsFile(BucketDirectory(arena, s_Group, "pending")));
+    NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId)));
+    NWB_CRASH_TEST_CHECK(context, PathIsFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName)));
     NWB_CRASH_TEST_CHECK(
         context,
         TextFileContains(
-            PackageDirectory(arena, s_Group, "uploading", s_CrashId) / "upload_attempt.txt",
-            AStringView("retry_pending_after_interrupted_upload")
+            PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId) / CrashNames::s_UploadAttemptFileName,
+            AStringView(CrashNames::s_UploadAttemptRetryInterruptedState)
         )
     );
 

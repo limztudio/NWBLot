@@ -3,6 +3,9 @@
 
 
 #include "crash_ingest.h"
+#include "crash_paths.h"
+
+#include <core/crash/package_names.h>
 
 #include <global/filesystem/directory_iterator.h>
 
@@ -24,6 +27,11 @@ namespace __hidden_logger_crash_ingest{
 
 using CrashText = CrashReportText;
 using CrashBytes = Vector<u8, LogArena>;
+namespace CrashNames = ::NWB::Core::Crash::PackageNames;
+
+inline constexpr u8 s_MinSafeArchivePathCharacter = 0x20u;
+inline constexpr usize s_GeneratedJsonStringNeedleReserveSlack = 5u;
+inline constexpr usize s_GeneratedJsonUnsignedNeedleReserveSlack = 4u;
 
 struct ByteView{
     using value_type = u8;
@@ -35,60 +43,6 @@ struct ByteView{
     [[nodiscard]] usize size()const{ return byteCount; }
     [[nodiscard]] const u8* data()const{ return bytes; }
 };
-
-[[nodiscard]] static Path CrashRootDirectory(LogArena& arena){
-    Path executableDirectory(arena);
-    if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / "crashes";
-
-    return Path(arena, "crashes");
-}
-
-[[nodiscard]] static Path CrashStorageDirectory(LogArena& arena, const CrashIngestConfig& config){
-    if(!config.storageDirectory.empty())
-        return Path(arena, config.storageDirectory);
-
-    return CrashRootDirectory(arena);
-}
-
-[[nodiscard]] static Path RawCrashDirectory(LogArena& arena, const CrashIngestConfig& config){
-    return CrashStorageDirectory(arena, config) / "raw";
-}
-
-[[nodiscard]] static Path InvalidCrashDirectory(LogArena& arena, const CrashIngestConfig& config){
-    return CrashStorageDirectory(arena, config) / "invalid";
-}
-
-[[nodiscard]] static Path ExtractedCrashDirectory(LogArena& arena, const CrashIngestConfig& config){
-    return CrashStorageDirectory(arena, config) / "packages";
-}
-
-[[nodiscard]] static Path ExtractedPackageDirectory(LogArena& arena, const CrashIngestConfig& config, const Path& archivePath){
-    return ExtractedCrashDirectory(arena, config) / archivePath.stem();
-}
-
-[[nodiscard]] static bool MovePathToDirectory(const Path& sourcePath, const Path& destinationDirectory, Path& outPath){
-    outPath.clear();
-
-    ErrorCode error;
-    static_cast<void>(EnsureDirectories(destinationDirectory, error));
-    if(error)
-        return false;
-
-    const Path destination = destinationDirectory / sourcePath.filename();
-    error.clear();
-    static_cast<void>(RemoveAllIfExists(destination, error));
-    if(error)
-        return false;
-
-    error.clear();
-    static_cast<void>(RenamePath(sourcePath, destination, error));
-    if(error)
-        return false;
-
-    outPath = destination;
-    return true;
-}
 
 static void ApplyRetentionToDirectory(LogArena& arena, const Path& directory, const usize maxEntries){
     if(maxEntries == 0u)
@@ -120,9 +74,9 @@ static void ApplyRetentionToDirectory(LogArena& arena, const Path& directory, co
 }
 
 static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
-    ApplyRetentionToDirectory(arena, ExtractedCrashDirectory(arena, config), config.retention.maxExtractedPackages);
-    ApplyRetentionToDirectory(arena, RawCrashDirectory(arena, config), config.retention.maxRawArchives);
-    ApplyRetentionToDirectory(arena, InvalidCrashDirectory(arena, config), config.retention.maxInvalidArchives);
+    ApplyRetentionToDirectory(arena, CrashExtractedDirectory(arena, config.storageDirectory), config.retention.maxExtractedPackages);
+    ApplyRetentionToDirectory(arena, CrashRawDirectory(arena, config.storageDirectory), config.retention.maxRawArchives);
+    ApplyRetentionToDirectory(arena, CrashInvalidDirectory(arena, config.storageDirectory), config.retention.maxInvalidArchives);
 }
 
 
@@ -161,7 +115,7 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
     for(usize i = 0u; i <= pathText.size(); ++i){
         const bool atEnd = i == pathText.size();
         const char ch = atEnd ? '/' : pathText[i];
-        if(!atEnd && (static_cast<unsigned char>(ch) < 0x20u || ch == ':'))
+        if(!atEnd && (static_cast<unsigned char>(ch) < s_MinSafeArchivePathCharacter || ch == ':'))
             return false;
 
         if(!atEnd && !IsPathSeparator(ch))
@@ -185,7 +139,7 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
     outRelativePath = AStringView();
     outFileSize = 0u;
 
-    constexpr AStringView prefix("FILE ");
+    constexpr AStringView prefix(CrashNames::s_ArchiveFileHeaderPrefix);
     if(line.size() <= prefix.size() || AStringView(line.data(), prefix.size()) != prefix)
         return false;
 
@@ -234,7 +188,7 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 
     usize cursor = 0u;
     AStringView line;
-    if(!ReadArchiveLine(archiveBytes, cursor, line) || line != "NWBCRASHPKG 1"){
+    if(!ReadArchiveLine(archiveBytes, cursor, line) || line != CrashNames::s_ArchiveHeaderLine){
         outError = "invalid crash archive header";
         return false;
     }
@@ -274,7 +228,7 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 
         AStringView separator;
         AStringView endMarker;
-        if(!ReadArchiveLine(archiveBytes, cursor, separator) || !separator.empty() || !ReadArchiveLine(archiveBytes, cursor, endMarker) || endMarker != "END"){
+        if(!ReadArchiveLine(archiveBytes, cursor, separator) || !separator.empty() || !ReadArchiveLine(archiveBytes, cursor, endMarker) || endMarker != CrashNames::s_ArchiveEntryEndLine){
             outError = "malformed crash archive file footer";
             return false;
         }
@@ -298,7 +252,7 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
     outValue.clear();
 
     CrashText needle{arena};
-    needle.reserve(key.size() + 5u);
+    needle.reserve(key.size() + s_GeneratedJsonStringNeedleReserveSlack);
     needle += '"';
     needle += key;
     needle += "\": ";
@@ -354,7 +308,7 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
     outValue = 0u;
 
     CrashText needle{arena};
-    needle.reserve(key.size() + 4u);
+    needle.reserve(key.size() + s_GeneratedJsonUnsignedNeedleReserveSlack);
     needle += '"';
     needle += key;
     needle += "\": ";
@@ -375,30 +329,34 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 
 [[nodiscard]] static bool ValidateManifest(LogArena& arena, const Path& packageDirectory, CrashPackageSummary& outSummary, CrashText& outError){
     CrashText manifest{arena};
-    if(!ReadTextFile(packageDirectory / "manifest.json", manifest)){
-        outError = "missing manifest.json";
+    if(!ReadTextFile(packageDirectory / CrashNames::s_ManifestFileName, manifest)){
+        outError = "missing ";
+        outError += CrashNames::s_ManifestFileName;
         return false;
     }
 
     const AStringView manifestText(manifest.data(), manifest.size());
     if(
-        !FindGeneratedJsonStringValue(arena, manifestText, "format", outSummary.format)
-        || !FindGeneratedJsonStringValue(arena, manifestText, "crash_id", outSummary.crashId)
-        || !FindGeneratedJsonStringValue(arena, manifestText, "platform", outSummary.platform)
-        || !FindGeneratedJsonStringValue(arena, manifestText, "reason_kind", outSummary.reasonKind)
-        || !FindGeneratedJsonStringValue(arena, manifestText, "artifact_strategy", outSummary.artifactStrategy)
-        || !FindGeneratedJsonUnsignedValue(arena, manifestText, "thread_id", outSummary.threadId)
+        !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestFormatKey, outSummary.format)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestCrashIdKey, outSummary.crashId)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestPlatformKey, outSummary.platform)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestReasonKindKey, outSummary.reasonKind)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestArtifactStrategyKey, outSummary.artifactStrategy)
+        || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestThreadIdKey, outSummary.threadId)
     ){
-        outError = "manifest.json is missing required v1 fields";
+        outError = CrashNames::s_ManifestFileName;
+        outError += " is missing required v1 fields";
         return false;
     }
 
-    if(outSummary.format != "nwb-crash-package-v1"){
-        outError = "manifest.json has unsupported crash package format";
+    if(outSummary.format != CrashNames::s_ManifestFormatValue){
+        outError = CrashNames::s_ManifestFileName;
+        outError += " has unsupported crash package format";
         return false;
     }
     if(outSummary.crashId.empty() || outSummary.platform.empty() || outSummary.reasonKind.empty() || outSummary.artifactStrategy.empty()){
-        outError = "manifest.json contains empty required v1 fields";
+        outError = CrashNames::s_ManifestFileName;
+        outError += " contains empty required v1 fields";
         return false;
     }
 
@@ -420,7 +378,7 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
     static_cast<void>(RemoveAllIfExists(packageDirectory, removeError));
 
     Path invalidPath(arena);
-    static_cast<void>(MovePathToDirectory(archivePath, InvalidCrashDirectory(arena, config), invalidPath));
+    static_cast<void>(::MovePathToDirectory(archivePath, CrashInvalidDirectory(arena, config.storageDirectory), invalidPath));
     ApplyRetention(arena, config);
 
     CrashIngestResult result(arena);
@@ -449,7 +407,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
 
     CrashIngestResult result(arena);
     Ingest::CrashText error(arena);
-    const Path packageDirectory = Ingest::ExtractedPackageDirectory(arena, config, archivePath);
+    const Path packageDirectory = CrashExtractedPackageDirectory(arena, config.storageDirectory, archivePath);
 
     if(!Ingest::ExtractCrashArchive(arena, archivePath, packageDirectory, error)){
         return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, AStringView(error.data(), error.size()));
@@ -463,7 +421,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     CrashReportText symbolicationReport(arena);
     try{
         symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary, config.symbolication);
-        if(!WriteTextFile(packageDirectory / "server_symbolication.txt", AStringView(symbolicationReport.data(), symbolicationReport.size())))
+        if(!WriteTextFile(packageDirectory / s_ServerSymbolicationFileName, AStringView(symbolicationReport.data(), symbolicationReport.size())))
             return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, AStringView("failed to write server symbolication report"));
     }
     catch(const GeneralException& e){
@@ -474,7 +432,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     }
 
     Path rawPath(arena);
-    const bool rawArchived = Ingest::MovePathToDirectory(archivePath, Ingest::RawCrashDirectory(arena, config), rawPath);
+    const bool rawArchived = ::MovePathToDirectory(archivePath, CrashRawDirectory(arena, config.storageDirectory), rawPath);
     if(!rawArchived){
         ErrorCode removeError;
         static_cast<void>(RemoveFile(archivePath, removeError));

@@ -3,6 +3,9 @@
 
 
 #include "crash_symbolicate.h"
+#include "crash_paths.h"
+
+#include <core/crash/package_names.h>
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <dbghelp.h>
@@ -26,6 +29,13 @@ namespace __hidden_logger_crash_symbolicate{
 
 
 using CrashBytes = Vector<u8, LogArena>;
+namespace CrashNames = ::NWB::Core::Crash::PackageNames;
+
+inline constexpr u32 s_ProcMapPathFieldSkipCount = 5u;
+inline constexpr usize s_AndroidTombstoneFrameMinimumTextLength = 4u;
+inline constexpr usize s_DecimalTextBufferCapacity = 32u;
+inline constexpr u32 s_MaxWindowsStackFrames = 128u;
+inline constexpr usize s_CrashReportReserveBytes = 4096u;
 
 struct DumpMemoryRange{
     u64 begin = 0u;
@@ -69,14 +79,6 @@ static DumpMemoryReader* s_CurrentDumpMemoryReader = nullptr;
     return exists && !error;
 }
 
-[[nodiscard]] static Path CrashRootDirectory(LogArena& arena){
-    Path executableDirectory(arena);
-    if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / "crashes";
-
-    return Path(arena, "crashes");
-}
-
 static void AppendOptionalTextFile(LogArena& arena, CrashReportText& outReport, const Path& packageDirectory, const char* fileName, const char* label){
     CrashReportText text{arena};
     if(!ReadTextFile(packageDirectory / fileName, text) || text.empty())
@@ -96,7 +98,7 @@ static void AppendHexAddress(LogArena& arena, CrashReportText& outReport, const 
 }
 
 [[nodiscard]] static Path DefaultSymbolStoreDirectory(LogArena& arena){
-    return CrashRootDirectory(arena) / "symbols";
+    return CrashDefaultRootDirectory(arena) / s_CrashSymbolStoreDirectoryName;
 }
 
 [[nodiscard]] static Path EffectiveSymbolStoreDirectory(LogArena& arena, const CrashSymbolicationConfig& config){
@@ -119,37 +121,6 @@ static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport,
     else
         outReport += exists ? "present" : "missing";
     outReport += "\n";
-}
-
-[[nodiscard]] static AStringView TrimLeft(AStringView text)noexcept{
-    while(!text.empty() && (text.front() == ' ' || text.front() == '\t'))
-        text.remove_prefix(1u);
-    return text;
-}
-
-[[nodiscard]] static bool StartsWith(const AStringView text, const AStringView prefix)noexcept{
-    return text.size() >= prefix.size() && AStringView(text.data(), prefix.size()) == prefix;
-}
-
-[[nodiscard]] static bool ContainsText(const AStringView text, const AStringView needle)noexcept{
-    return text.find(needle) != AStringView::npos;
-}
-
-[[nodiscard]] static bool ParseVariableHexU64(AStringView text, u64& outValue){
-    outValue = 0u;
-    if(StartsWith(text, "0x") || StartsWith(text, "0X"))
-        text.remove_prefix(2u);
-    if(text.empty() || text.size() > 16u)
-        return false;
-
-    for(const char ch : text){
-        u8 nibble = 0u;
-        if(!ParseHexDigit(ch, nibble))
-            return false;
-
-        outValue = (outValue << 4u) | static_cast<u64>(nibble);
-    }
-    return true;
 }
 
 [[nodiscard]] static bool FindKeyValueU64(const AStringView text, const AStringView key, u64& outValue){
@@ -181,18 +152,18 @@ static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport,
     while(rangeEnd < line.size() && line[rangeEnd] != ' ' && line[rangeEnd] != '\t')
         ++rangeEnd;
 
-    return ParseVariableHexU64(AStringView(line.data(), split), outBegin)
-        && ParseVariableHexU64(AStringView(line.data() + split + 1u, rangeEnd - split - 1u), outEnd)
+    return ::ParseVariableHexU64(AStringView(line.data(), split), outBegin)
+        && ::ParseVariableHexU64(AStringView(line.data() + split + 1u, rangeEnd - split - 1u), outEnd)
         && outBegin < outEnd
     ;
 }
 
 [[nodiscard]] static AStringView ProcMapPathField(AStringView line)noexcept{
-    line = TrimLeft(line);
-    for(u32 fieldIndex = 0u; fieldIndex < 5u; ++fieldIndex){
+    line = TrimLeftView(line);
+    for(u32 fieldIndex = 0u; fieldIndex < s_ProcMapPathFieldSkipCount; ++fieldIndex){
         while(!line.empty() && line.front() != ' ' && line.front() != '\t')
             line.remove_prefix(1u);
-        line = TrimLeft(line);
+        line = TrimLeftView(line);
         if(line.empty())
             return AStringView();
     }
@@ -238,7 +209,11 @@ static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport,
 static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, CrashReportText& outReport){
     outReport += "status=not_decoded\nresolver=elf_dwarf_core\n";
 
-    const bool corePresent = RegularFileExists(packageDirectory / "core") || RegularFileExists(packageDirectory / "core.dmp") || RegularFileExists(packageDirectory / "process.core");
+    const bool corePresent =
+        RegularFileExists(packageDirectory / CrashNames::s_LinuxCoreFileName)
+        || RegularFileExists(packageDirectory / CrashNames::s_LinuxCoreDumpFileName)
+        || RegularFileExists(packageDirectory / CrashNames::s_LinuxProcessCoreFileName)
+    ;
     outReport += corePresent
         ? "core_artifact=present\n"
         : "core_artifact=missing\n"
@@ -246,8 +221,8 @@ static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirec
 
     CrashReportText cpuContext{arena};
     CrashReportText procMaps{arena};
-    const bool cpuContextPresent = ReadTextFile(packageDirectory / "cpu_context.txt", cpuContext) && !cpuContext.empty();
-    const bool procMapsPresent = ReadTextFile(packageDirectory / "proc_maps.txt", procMaps) && !procMaps.empty();
+    const bool cpuContextPresent = ReadTextFile(packageDirectory / CrashNames::s_CpuContextFileName, cpuContext) && !cpuContext.empty();
+    const bool procMapsPresent = ReadTextFile(packageDirectory / CrashNames::s_ProcMapsFileName, procMaps) && !procMaps.empty();
     outReport += procMapsPresent
         ? "proc_maps=present\n"
         : "proc_maps=missing\n"
@@ -284,7 +259,7 @@ static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirec
 
 static void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDirectory, CrashReportText& outReport){
     CrashReportText tombstone{arena};
-    const bool tombstonePresent = ReadTextFile(packageDirectory / "android_tombstone.txt", tombstone) && !tombstone.empty();
+    const bool tombstonePresent = ReadTextFile(packageDirectory / CrashNames::s_AndroidTombstoneFileName, tombstone) && !tombstone.empty();
     if(!tombstonePresent){
         outReport += "status=not_decoded\nresolver=android_tombstone_native_symbols\n";
         outReport += "android_tombstone=missing\ndetail=Android resolver requires Java/ApplicationExitInfo tombstone attachment and native symbol store\n";
@@ -302,8 +277,8 @@ static void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDi
         while(cursor < tombstone.size() && (tombstone[cursor] == '\n' || tombstone[cursor] == '\r'))
             ++cursor;
 
-        const AStringView trimmed = TrimLeft(line);
-        if(trimmed.size() < 4u || trimmed.front() != '#' || !ContainsText(trimmed, " pc "))
+        const AStringView trimmed = TrimLeftView(line);
+        if(trimmed.size() < s_AndroidTombstoneFrameMinimumTextLength || trimmed.front() != '#' || trimmed.find(" pc ") == AStringView::npos)
             continue;
 
         frames.append(trimmed.data(), trimmed.size());
@@ -539,7 +514,7 @@ static void LoadDumpModules(LogArena& arena, const HANDLE symbolProcess, const D
     }
 
     outReport += "modules_loaded=";
-    char countBuffer[32] = {};
+    char countBuffer[s_DecimalTextBufferCapacity] = {};
     outReport += FormatDecimal(static_cast<usize>(loadedCount), countBuffer);
     outReport += "\n";
     static_cast<void>(arena);
@@ -547,7 +522,7 @@ static void LoadDumpModules(LogArena& arena, const HANDLE symbolProcess, const D
 
 static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, CrashReportText& outReport, const DWORD frameIndex, const DWORD64 address){
     outReport += "#";
-    char frameBuffer[32] = {};
+    char frameBuffer[s_DecimalTextBufferCapacity] = {};
     outReport += FormatDecimal(static_cast<usize>(frameIndex), frameBuffer);
     outReport += " ";
     AppendHexAddress(arena, outReport, address);
@@ -578,7 +553,7 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
         outReport += " at ";
         outReport += file;
         outReport += ":";
-        char lineBuffer[32] = {};
+        char lineBuffer[s_DecimalTextBufferCapacity] = {};
         outReport += FormatDecimal(static_cast<usize>(line.LineNumber), lineBuffer);
     }
 
@@ -586,11 +561,13 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
 }
 
 [[nodiscard]] static bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport){
-    const Path dumpPath = packageDirectory / "process.dmp";
+    const Path dumpPath = packageDirectory / CrashNames::s_ProcessDumpFileName;
     CrashBytes dumpBytes{arena};
     ErrorCode readError;
     if(!ReadBinaryFile(dumpPath, dumpBytes, readError) || dumpBytes.empty()){
-        outReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=process.dmp is missing or unreadable\n";
+        outReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=";
+        outReport += CrashNames::s_ProcessDumpFileName;
+        outReport += " is missing or unreadable\n";
         return false;
     }
 
@@ -618,7 +595,7 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
     outReport += "status=decoded\nresolver=windows_pdb_minidump\nsymbol_path=";
     outReport += BasicStringDetail::WideToUtf8(arena, WStringView(symbolPath));
     outReport += "\nthread_id=";
-    char threadBuffer[32] = {};
+    char threadBuffer[s_DecimalTextBufferCapacity] = {};
     outReport += FormatDecimal(static_cast<usize>(threadId), threadBuffer);
     outReport += "\n";
     LoadDumpModules(arena, symbolProcess, dumpImage, outReport);
@@ -630,7 +607,7 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
 
     const DWORD machineType = MachineTypeFromContext(walkContext);
     bool decodedAnyFrame = false;
-    for(DWORD frameIndex = 0u; frameIndex < 128u; ++frameIndex){
+    for(DWORD frameIndex = 0u; frameIndex < s_MaxWindowsStackFrames; ++frameIndex){
         if(frame.AddrPC.Offset == 0u)
             break;
 
@@ -674,7 +651,7 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
     namespace Symbolicate = __hidden_logger_crash_symbolicate;
 
     CrashReportText report{arena};
-    report.reserve(4096u);
+    report.reserve(Symbolicate::s_CrashReportReserveBytes);
 
     report += "crash_id=";
     report += summary.crashId;
@@ -704,10 +681,10 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
         report += "status=not_decoded\nresolver=unknown\ndetail=unknown crash platform\n";
     }
 
-    Symbolicate::AppendOptionalTextFile(arena, report, packageDirectory, "trigger.txt", "trigger");
-    Symbolicate::AppendOptionalTextFile(arena, report, packageDirectory, "cpu_context.txt", "cpu_context");
-    Symbolicate::AppendOptionalTextFile(arena, report, packageDirectory, "symbolication.txt", "client_symbolication_note");
-    Symbolicate::AppendOptionalTextFile(arena, report, packageDirectory, "android_collection.txt", "android_collection");
+    Symbolicate::AppendOptionalTextFile(arena, report, packageDirectory, Core::Crash::PackageNames::s_TriggerFileName, "trigger");
+    Symbolicate::AppendOptionalTextFile(arena, report, packageDirectory, Core::Crash::PackageNames::s_CpuContextFileName, "cpu_context");
+    Symbolicate::AppendOptionalTextFile(arena, report, packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note");
+    Symbolicate::AppendOptionalTextFile(arena, report, packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection");
     return report;
 }
 

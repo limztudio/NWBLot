@@ -9,7 +9,11 @@
 #include <global/compile.h>
 #include <global/containers.h>
 #include <global/diagnostics.h>
+#include <global/filesystem/operations.h>
+#include <global/filesystem/path.h>
+#include <global/hash_utils.h>
 #include <global/limit.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,11 +31,11 @@ using AString = NWB::Tests::TestAString;
 template<typename T>
 using Vector = NWB::Tests::TestVector<T>;
 
-static u32 s_DiagnosticCrashCaptureCount = 0u;
-static const char* s_DiagnosticCrashCategory = nullptr;
-static const char* s_DiagnosticCrashMessage = nullptr;
-static const char* s_DiagnosticCrashFile = nullptr;
-static u32 s_DiagnosticCrashLine = 0u;
+static u32 s_DiagnosticEventCaptureCount = 0u;
+static const char* s_DiagnosticEventCategory = nullptr;
+static const char* s_DiagnosticEventMessage = nullptr;
+static const char* s_DiagnosticEventFile = nullptr;
+static u32 s_DiagnosticEventLine = 0u;
 
 
 #define NWB_GLOBAL_TEST_CHECK NWB_TEST_CHECK
@@ -142,6 +146,58 @@ static void TestBasicCompactStringTypes(TestContext& context){
     WCompactString rejected(L"unchanged");
     NWB_GLOBAL_TEST_CHECK(context, !rejected.assign(WStringView(oversized, WCompactString::s_MaxLength + 1u)));
     NWB_GLOBAL_TEST_CHECK(context, rejected.empty());
+}
+
+static void TestTextUtilityHelpers(TestContext& context){
+    NWB::Tests::TestArena<> testArena;
+    const Path<NWB::Core::Alloc::GlobalArena> genericPath(testArena.arena, "alpha\\beta/file.txt");
+    const auto genericPathText = PathToGenericString<char>(testArena.arena, genericPath);
+
+    NWB_GLOBAL_TEST_CHECK(context, AStringView(genericPathText.data(), genericPathText.size()) == AStringView("alpha/beta/file.txt"));
+    NWB_GLOBAL_TEST_CHECK(context, TrimLeftView(AStringView(" \talpha ")) == AStringView("alpha "));
+    NWB_GLOBAL_TEST_CHECK(context, TrimView(AStringView(" \talpha \r\n")) == AStringView("alpha"));
+    NWB_GLOBAL_TEST_CHECK(context, StartsWith(AStringView("alpha"), AStringView("alp")));
+    NWB_GLOBAL_TEST_CHECK(context, StartsWith(AStringView("alpha"), "al"));
+    NWB_GLOBAL_TEST_CHECK(context, !StartsWith(AStringView("alpha"), AStringView("beta")));
+    NWB_GLOBAL_TEST_CHECK(context, !StartsWith(AStringView("al"), AStringView("alpha")));
+
+    u64 value = 0u;
+    NWB_GLOBAL_TEST_CHECK(context, ParseVariableHexU64(AStringView("0x10"), value));
+    NWB_GLOBAL_TEST_CHECK(context, value == 16u);
+    NWB_GLOBAL_TEST_CHECK(context, ParseVariableHexU64(AStringView("FFFFFFFFFFFFFFFF"), value));
+    NWB_GLOBAL_TEST_CHECK(context, value == Limit<u64>::s_Max);
+    NWB_GLOBAL_TEST_CHECK(context, !ParseVariableHexU64(AStringView(), value));
+    NWB_GLOBAL_TEST_CHECK(context, !ParseVariableHexU64(AStringView("0x"), value));
+    NWB_GLOBAL_TEST_CHECK(context, !ParseVariableHexU64(AStringView("10000000000000000"), value));
+    NWB_GLOBAL_TEST_CHECK(context, !ParseVariableHexU64(AStringView("xyz"), value));
+}
+
+static void TestFilesystemMovePathToDirectory(TestContext& context){
+    NWB::Tests::TestArena<> testArena;
+    const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/move_path_to_directory");
+    const Path<NWB::Core::Alloc::GlobalArena> source = root / "source.txt";
+    const Path<NWB::Core::Alloc::GlobalArena> destinationDirectory = root / "moved";
+    const Path<NWB::Core::Alloc::GlobalArena> destination = destinationDirectory / "source.txt";
+
+    ErrorCode error;
+    static_cast<void>(EnsureEmptyDirectory(root, error));
+    NWB_GLOBAL_TEST_CHECK(context, !error);
+    NWB_GLOBAL_TEST_CHECK(context, WriteTextFile(source, AStringView("fresh")));
+    NWB_GLOBAL_TEST_CHECK(context, EnsureDirectories(destinationDirectory, error));
+    NWB_GLOBAL_TEST_CHECK(context, !error);
+    NWB_GLOBAL_TEST_CHECK(context, WriteTextFile(destination, AStringView("stale")));
+
+    Path<NWB::Core::Alloc::GlobalArena> movedPath(testArena.arena);
+    NWB_GLOBAL_TEST_CHECK(context, MovePathToDirectory(source, destinationDirectory, movedPath));
+    NWB_GLOBAL_TEST_CHECK(context, movedPath == destination);
+
+    BasicString<char, NWB::Core::Alloc::GlobalArena> movedText{testArena.arena};
+    NWB_GLOBAL_TEST_CHECK(context, ReadTextFile(destination, movedText));
+    NWB_GLOBAL_TEST_CHECK(context, AStringView(movedText.data(), movedText.size()) == AStringView("fresh"));
+    NWB_GLOBAL_TEST_CHECK(context, !FileExists(source, error));
+    NWB_GLOBAL_TEST_CHECK(context, !error);
+
+    static_cast<void>(RemoveAllIfExists(root, error));
 }
 
 static void TestStringTableText(TestContext& context){
@@ -383,32 +439,32 @@ static void TestLoggerMacrosBehaveAsSingleStatements(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, logger.sawMessageContaining(NWB_TEXT("raw converted warning")));
 }
 
-static void TestDiagnosticCrashHook(TestContext& context){
-    s_DiagnosticCrashCaptureCount = 0u;
-    s_DiagnosticCrashCategory = nullptr;
-    s_DiagnosticCrashMessage = nullptr;
-    s_DiagnosticCrashFile = nullptr;
-    s_DiagnosticCrashLine = 0u;
+static void TestDiagnosticEventHook(TestContext& context){
+    s_DiagnosticEventCaptureCount = 0u;
+    s_DiagnosticEventCategory = nullptr;
+    s_DiagnosticEventMessage = nullptr;
+    s_DiagnosticEventFile = nullptr;
+    s_DiagnosticEventLine = 0u;
 
-    const DiagnosticCrashCaptureCallback callback = [](const DiagnosticCrashRecord& record)noexcept{
-        ++s_DiagnosticCrashCaptureCount;
-        s_DiagnosticCrashCategory = record.category;
-        s_DiagnosticCrashMessage = record.message;
-        s_DiagnosticCrashFile = record.file;
-        s_DiagnosticCrashLine = record.line;
-        CaptureDiagnosticCrash("recursive", "ignored");
+    const DiagnosticEventCallback callback = [](const DiagnosticEventRecord& record)noexcept{
+        ++s_DiagnosticEventCaptureCount;
+        s_DiagnosticEventCategory = record.category;
+        s_DiagnosticEventMessage = record.message;
+        s_DiagnosticEventFile = record.file;
+        s_DiagnosticEventLine = record.line;
+        CaptureDiagnosticEvent("recursive", "ignored");
     };
 
-    SetDiagnosticCrashCaptureCallback(callback);
-    CaptureDiagnosticCrash("unit", "message", "diagnostics_test.cpp", 42u);
-    ClearDiagnosticCrashCaptureCallback(callback);
-    CaptureDiagnosticCrash("unit", "ignored");
+    SetDiagnosticEventCallback(callback);
+    CaptureDiagnosticEvent("unit", "message", "diagnostics_test.cpp", 42u);
+    ClearDiagnosticEventCallback(callback);
+    CaptureDiagnosticEvent("unit", "ignored");
 
-    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticCrashCaptureCount == 1u);
-    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticCrashCategory && NWB_STRCMP(s_DiagnosticCrashCategory, "unit") == 0);
-    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticCrashMessage && NWB_STRCMP(s_DiagnosticCrashMessage, "message") == 0);
-    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticCrashFile && NWB_STRCMP(s_DiagnosticCrashFile, "diagnostics_test.cpp") == 0);
-    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticCrashLine == 42u);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventCaptureCount == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventCategory && NWB_STRCMP(s_DiagnosticEventCategory, "unit") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventMessage && NWB_STRCMP(s_DiagnosticEventMessage, "message") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventFile && NWB_STRCMP(s_DiagnosticEventFile, "diagnostics_test.cpp") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventLine == 42u);
 }
 
 
@@ -433,6 +489,8 @@ NWB_DEFINE_TEST_ENTRY_POINT("global", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestRejectedStringReadsDoNotAdvanceCursor(context);
     __hidden_tests::TestRejectedACompactStringAssignResetsText(context);
     __hidden_tests::TestBasicCompactStringTypes(context);
+    __hidden_tests::TestTextUtilityHelpers(context);
+    __hidden_tests::TestFilesystemMovePathToDirectory(context);
     __hidden_tests::TestStringTableText(context);
     __hidden_tests::TestInvalidStringTableReads(context);
     __hidden_tests::TestBinaryVectorPayloadRoundTrip(context);
@@ -443,7 +501,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("global", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestTriviallyCopyableVectorAlias(context);
     __hidden_tests::TestBoundedRuntimeWrappers(context);
     __hidden_tests::TestLoggerMacrosBehaveAsSingleStatements(context);
-    __hidden_tests::TestDiagnosticCrashHook(context);
+    __hidden_tests::TestDiagnosticEventHook(context);
 })
 
 

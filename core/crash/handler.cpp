@@ -28,6 +28,10 @@ namespace __hidden_crash_handler{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+inline constexpr u64 s_DecimalRadix = 10u;
+inline constexpr int s_ProcessSuccessExitCode = 0;
+inline constexpr int s_ProcessFailureExitCode = -1;
+
 
 template<typename CharT>
 [[nodiscard]] static bool __hidden_arg_equals(const CharT* lhs, const CharT* rhs)noexcept{
@@ -50,7 +54,7 @@ template<typename CharT>
         return value;
 
     while(*text >= static_cast<CharT>('0') && *text <= static_cast<CharT>('9')){
-        value = (value * 10u) + static_cast<u64>(*text - static_cast<CharT>('0'));
+        value = (value * s_DecimalRadix) + static_cast<u64>(*text - static_cast<CharT>('0'));
         ++text;
     }
     return value;
@@ -122,14 +126,14 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
     HANDLE ackEvent = nullptr;
 
     for(isize i = 1; i + 1 < argc; ++i){
-        if(__hidden_crash_handler::__hidden_arg_equals(argv[i], NWB_TEXT("--request-handle")))
+        if(__hidden_crash_handler::__hidden_arg_equals(argv[i], Detail::s_RequestHandleArgument))
             requestReadHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::__hidden_parse_u64(argv[++i])));
-        else if(__hidden_crash_handler::__hidden_arg_equals(argv[i], NWB_TEXT("--ack-event")))
+        else if(__hidden_crash_handler::__hidden_arg_equals(argv[i], Detail::s_AckEventArgument))
             ackEvent = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::__hidden_parse_u64(argv[++i])));
     }
 
     if(requestReadHandle == INVALID_HANDLE_VALUE)
-        return -1;
+        return __hidden_crash_handler::s_ProcessFailureExitCode;
 
     for(;;){
         Detail::CrashRequest request;
@@ -143,16 +147,16 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
             static_cast<void>(Detail::UploadCrashPackage(request));
     }
 
-    return 0;
+    return __hidden_crash_handler::s_ProcessSuccessExitCode;
 #elif defined(NWB_PLATFORM_LINUX)
     int requestReadFd = -1;
     for(isize i = 1; i + 1 < argc; ++i){
-        if(__hidden_crash_handler::__hidden_arg_equals(argv[i], "--request-fd"))
+        if(__hidden_crash_handler::__hidden_arg_equals(argv[i], Detail::s_RequestFdArgument))
             requestReadFd = static_cast<int>(__hidden_crash_handler::__hidden_parse_u64(argv[++i]));
     }
 
     if(requestReadFd < 0)
-        return -1;
+        return __hidden_crash_handler::s_ProcessFailureExitCode;
 
     for(;;){
         Detail::CrashRequest request;
@@ -164,11 +168,11 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
             static_cast<void>(Detail::UploadCrashPackage(request));
     }
 
-    return 0;
+    return __hidden_crash_handler::s_ProcessSuccessExitCode;
 #else
     static_cast<void>(argc);
     static_cast<void>(argv);
-    return -1;
+    return __hidden_crash_handler::s_ProcessFailureExitCode;
 #endif
 }
 

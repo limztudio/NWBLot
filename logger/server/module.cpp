@@ -5,8 +5,10 @@
 #include "module.h"
 
 #include "crash_auth.h"
+#include "crash_paths.h"
 #include "frame.h"
 
+#include <core/crash/package_names.h>
 #include <core/alloc/standalone_runtime.h>
 
 
@@ -23,6 +25,13 @@ namespace __hidden_logger_server{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+inline constexpr usize s_ConnectionInitialBufferCapacity = 256u;
+inline constexpr usize s_BytesPerMebibyte = 1024u * 1024u;
+inline constexpr usize s_MaxLogMessageUploadMebibytes = 1u;
+inline constexpr usize s_MaxCrashPackageUploadMebibytes = 128u;
+inline constexpr int s_LocalTimeYearBase = 1900;
+inline constexpr int s_LocalTimeMonthBase = 1;
 
 
 struct ConnectionInfo{
@@ -78,8 +87,7 @@ struct ConnectionInfo{
         if(requiredSize <= capacity)
             return true;
 
-        constexpr usize s_InitialBufferCapacity = 256u;
-        usize newCapacity = capacity > 0u ? capacity : s_InitialBufferCapacity;
+        usize newCapacity = capacity > 0u ? capacity : s_ConnectionInitialBufferCapacity;
         while(newCapacity < requiredSize){
             if(newCapacity > Limit<usize>::s_Max / 2u){
                 newCapacity = requiredSize;
@@ -105,12 +113,13 @@ struct ConnectionInfo{
     usize size = 0u;
     usize capacity = 0u;
     bool isCrashUpload = false;
-    char crashUploadPath[1024] = {};
+    char crashUploadPath[s_MaxPendingCrashUploadPathText] = {};
     OutputFileStream crashUploadStream;
 };
 
-inline constexpr usize s_MaxLogMessageUploadBytes = 1u * 1024u * 1024u;
-inline constexpr usize s_MaxCrashPackageUploadBytes = 128u * 1024u * 1024u;
+inline constexpr usize s_MaxLogMessageUploadBytes = s_MaxLogMessageUploadMebibytes * s_BytesPerMebibyte;
+inline constexpr usize s_MaxCrashPackageUploadBytes = s_MaxCrashPackageUploadMebibytes * s_BytesPerMebibyte;
+namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept;
 
@@ -151,11 +160,7 @@ static void EnqueueServerMessage(Server& server, const tchar* message, const Typ
 }
 
 [[nodiscard]] static Path CrashInboxDirectory(Server& server){
-    Path executableDirectory(server.arena());
-    if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / "crashes" / "inbox";
-
-    return Path(server.arena(), "crashes") / "inbox";
+    return CrashDefaultRootDirectory(server.arena()) / s_CrashInboxDirectoryName;
 }
 
 [[nodiscard]] static Path MakeCrashPackagePath(Server& server){
@@ -167,20 +172,22 @@ static void EnqueueServerMessage(Server& server, const tchar* message, const Typ
     const u64 counter = s_CrashPackageCounter.fetch_add(1u, MemoryOrder::relaxed);
     const auto fileName = StringFormat(
         server.arena(),
-        "crash_{:04}{:02}{:02}_{:02}{:02}{:02}_{}.nwbcrashpkg",
-        localTime.tm_year + 1900,
-        localTime.tm_mon + 1,
+        "{}{:04}{:02}{:02}_{:02}{:02}{:02}_{}{}",
+        s_CrashUploadArchiveFilePrefix,
+        localTime.tm_year + s_LocalTimeYearBase,
+        localTime.tm_mon + s_LocalTimeMonthBase,
         localTime.tm_mday,
         localTime.tm_hour,
         localTime.tm_min,
         localTime.tm_sec,
-        counter
+        counter,
+        s_CrashUploadArchiveFileExtension
     );
 
     return CrashInboxDirectory(server) / fileName;
 }
 
-[[nodiscard]] static bool CopyCrashUploadPath(Server& server, const Path& path, char (&outPath)[1024]){
+[[nodiscard]] static bool CopyCrashUploadPath(Server& server, const Path& path, char (&outPath)[s_MaxPendingCrashUploadPathText]){
     const AString<LogArena> pathText = PathToString<char>(server.arena(), path);
     if(pathText.size() >= sizeof(outPath))
         return false;
@@ -337,7 +344,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     const auto conClsPtr = MakeNotNull(con_cls);
     auto& conCls = *conClsPtr;
 
-    const bool isCrashUpload = NWB_STRCMP(url, "/crash") == 0;
+    const bool isCrashUpload = NWB_STRCMP(url, Core::Crash::PackageNames::s_CrashUploadEndpoint) == 0;
 
     if(!conCls){
         if(isCrashUpload && !thisPtr->crashUploadAuthorized(*connection)){

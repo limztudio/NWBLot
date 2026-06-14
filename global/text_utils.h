@@ -45,6 +45,39 @@ template<typename CharT, typename ArenaT>
 BasicStringView<CharT> TrimView(const BasicString<CharT, ArenaT>&&) = delete;
 
 
+template<typename CharT>
+[[nodiscard]] inline BasicStringView<CharT> TrimLeftView(BasicStringView<CharT> text){
+    while(!text.empty() && IsAsciiSpace(text.front()))
+        text.remove_prefix(1u);
+    return text;
+}
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline BasicStringView<CharT> TrimLeftView(const BasicString<CharT, ArenaT>& text){
+    return TrimLeftView<CharT>(BasicStringView<CharT>{text});
+}
+template<typename StringT> requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
+[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimLeftView(const StringT& text){
+    using CharT = typename StringT::value_type;
+    return TrimLeftView<CharT>(BasicStringView<CharT>{text.data(), text.size()});
+}
+template<typename CharT, typename ArenaT>
+BasicStringView<CharT> TrimLeftView(const BasicString<CharT, ArenaT>&&) = delete;
+
+
+template<typename CharT>
+[[nodiscard]] inline constexpr bool StartsWith(const BasicStringView<CharT> text, const BasicStringView<CharT> prefix){
+    return text.size() >= prefix.size() && BasicStringView<CharT>(text.data(), prefix.size()) == prefix;
+}
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline constexpr bool StartsWith(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> prefix){
+    return StartsWith<CharT>(BasicStringView<CharT>{text}, prefix);
+}
+template<typename CharT, usize N>
+[[nodiscard]] inline constexpr bool StartsWith(const BasicStringView<CharT> text, const CharT (&prefix)[N]){
+    return StartsWith<CharT>(text, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
+}
+
+
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> Trim(ArenaT& arena, const BasicStringView<CharT> text){
     return BasicString<CharT, ArenaT>(TrimView(text), arena);
@@ -147,6 +180,16 @@ template<typename CharT = char, typename ArenaT, typename PathT>
         BasicStringDetail::WriteConvertedText<CharT>(out, path.native());
         return output;
     }
+}
+
+template<typename CharT = char, typename ArenaT, typename PathT>
+[[nodiscard]] inline BasicString<CharT, ArenaT> PathToGenericString(ArenaT& arena, const PathT& path){
+    BasicString<CharT, ArenaT> output = PathToString<CharT>(arena, path);
+    for(CharT& ch : output){
+        if(ch == static_cast<CharT>('\\'))
+            ch = static_cast<CharT>('/');
+    }
+    return output;
 }
 
 

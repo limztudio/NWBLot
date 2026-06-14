@@ -22,9 +22,10 @@ NWB_LOG_BEGIN
 
 
 inline constexpr tchar SERVER_NAME[] = NWB_TEXT("Server");
+inline constexpr usize s_MaxPendingCrashUploadPathText = 1024u;
 
 struct PendingCrashUpload{
-    char path[1024] = {};
+    char path[s_MaxPendingCrashUploadPathText] = {};
 };
 
 using CrashUploadQueue = ParallelQueue<PendingCrashUpload, LogArena>;

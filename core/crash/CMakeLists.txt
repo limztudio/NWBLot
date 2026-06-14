@@ -1,4 +1,6 @@
 nwb_declare_static_library(nwb_crash)
+set(NWB_CRASH_HANDLER_OUTPUT_NAME "crash_handler")
+target_compile_definitions(nwb_crash PRIVATE NWB_CRASH_HANDLER_EXECUTABLE_NAME="${NWB_CRASH_HANDLER_OUTPUT_NAME}")
 target_sources(nwb_crash PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/handler.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
@@ -7,6 +9,7 @@ target_sources(nwb_crash PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/global.h"
     "${CMAKE_CURRENT_LIST_DIR}/internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
+    "${CMAKE_CURRENT_LIST_DIR}/package_names.h"
 )
 if(WIN32)
     target_sources(nwb_crash PRIVATE
@@ -30,6 +33,7 @@ if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
     )
     nwb_target_sources_standalone_runtime(nwb_crash_handler)
     target_link_libraries(nwb_crash_handler PRIVATE nwb_crash nwb_common)
+    set_target_properties(nwb_crash_handler PROPERTIES OUTPUT_NAME "${NWB_CRASH_HANDLER_OUTPUT_NAME}")
     if(WIN32)
         set_target_properties(nwb_crash_handler PROPERTIES WIN32_EXECUTABLE ON)
     endif()

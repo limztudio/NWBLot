@@ -25,6 +25,8 @@ namespace __hidden_crash_win32{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+inline constexpr usize s_HandlerCommandLineReserveSlack = 96u;
+
 
 [[nodiscard]] static bool __hidden_write_all(const HANDLE handle, const void* const data, const usize byteCount)noexcept{
     const u8* cursor = static_cast<const u8*>(data);
@@ -124,7 +126,7 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
     RtlCaptureContext(&storage.context);
 
     storage.exceptionRecord = EXCEPTION_RECORD{};
-    storage.exceptionRecord.ExceptionCode = 0xE0425742u;
+    storage.exceptionRecord.ExceptionCode = s_ManualDumpExceptionCode;
     storage.exceptionRecord.ExceptionAddress = reinterpret_cast<void*>(static_cast<usize>(
         __hidden_crash_win32::__hidden_context_instruction_pointer(storage.context)
     ));
@@ -161,7 +163,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 
 void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options)noexcept{
     CrashDumpRequestOptions requestOptions = options;
-    requestOptions.waitMilliseconds = 3000u;
+    requestOptions.waitMilliseconds = s_PlatformCrashHandlerWaitMilliseconds;
     static_cast<void>(RequestCrashDump(reasonKind, reasonCode, requestOptions));
 }
 
@@ -190,18 +192,22 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
         return false;
     }
 
-    char requestHandleText[32] = {};
-    char ackEventText[32] = {};
+    char requestHandleText[s_HandlerArgumentTextCapacity] = {};
+    char ackEventText[s_HandlerArgumentTextCapacity] = {};
     AppendUnsignedToFixedBuffer(requestHandleText, reinterpret_cast<uintptr_t>(requestReadHandle));
     AppendUnsignedToFixedBuffer(ackEventText, reinterpret_cast<uintptr_t>(ackEvent));
 
     TString<ArenaT> commandLine(handlerExecutablePath.arena());
-    commandLine.reserve(handlerExecutablePath.size() + 96u);
+    commandLine.reserve(handlerExecutablePath.size() + __hidden_crash_win32::s_HandlerCommandLineReserveSlack);
     commandLine += NWB_TEXT("\"");
     commandLine += handlerExecutablePath.native();
-    commandLine += NWB_TEXT("\" --request-handle ");
+    commandLine += NWB_TEXT("\" ");
+    commandLine += s_RequestHandleArgument;
+    commandLine += NWB_TEXT(" ");
     commandLine += StringConvert(handlerExecutablePath.arena(), AStringView(requestHandleText));
-    commandLine += NWB_TEXT(" --ack-event ");
+    commandLine += NWB_TEXT(" ");
+    commandLine += s_AckEventArgument;
+    commandLine += NWB_TEXT(" ");
     commandLine += StringConvert(handlerExecutablePath.arena(), AStringView(ackEventText));
 
     STARTUPINFO startupInfo = {};

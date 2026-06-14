@@ -158,6 +158,25 @@ template<typename CharT>
 }
 
 
+template<typename CharT>
+[[nodiscard]] inline bool ParseVariableHexU64(BasicStringView<CharT> text, u64& outValue){
+    outValue = 0u;
+    if(text.size() >= 2u && text[0u] == static_cast<CharT>('0') && (text[1u] == static_cast<CharT>('x') || text[1u] == static_cast<CharT>('X')))
+        text.remove_prefix(2u);
+    if(text.empty() || text.size() > 16u)
+        return false;
+
+    for(const CharT ch : text){
+        u8 nibble = 0u;
+        if(!ParseHexDigit(ch, nibble))
+            return false;
+
+        outValue = (outValue << 4u) | static_cast<u64>(nibble);
+    }
+    return true;
+}
+
+
 namespace HashUtilsDetail{
 
 

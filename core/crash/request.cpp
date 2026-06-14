@@ -56,7 +56,7 @@ const char* ReasonKindName(const u32 reasonKind)noexcept{
     case CrashReasonKind::Terminate:
         return "terminate";
     case CrashReasonKind::ManualDump:
-        return "manual_dump";
+        return s_ManualDumpCategory;
     default:
         return "unknown";
     }
@@ -67,7 +67,7 @@ const char* ReasonKindName(const u32 reasonKind)noexcept{
 
 
 static void BuildCrashId(CrashRequest& outRequest, const u64 sequence)noexcept{
-    CopyFixedBuffer(outRequest.crashId, "crash-");
+    CopyFixedBuffer(outRequest.crashId, PackageNames::s_CrashIdPrefix);
     AppendUnsignedToFixedBuffer(outRequest.crashId, outRequest.processId);
     AppendFixedBuffer(outRequest.crashId, "-");
     AppendUnsignedToFixedBuffer(outRequest.crashId, sequence);

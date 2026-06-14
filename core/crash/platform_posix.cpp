@@ -33,6 +33,15 @@ namespace __hidden_crash_posix{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+inline constexpr usize s_SignalStackMultiplier = 4u;
+inline constexpr int s_AndroidEmergencyFileMode = 0644;
+inline constexpr int s_FirstNonStdioFileDescriptor = STDERR_FILENO + 1;
+inline constexpr int s_HandlerExecFailureExitCode = 127;
+inline constexpr usize s_AArch64FramePointerRegisterIndex = 29u;
+inline constexpr usize s_PipeFileDescriptorCount = 2u;
+inline constexpr usize s_PipeReadEndIndex = 0u;
+inline constexpr usize s_PipeWriteEndIndex = 1u;
+
 
 [[nodiscard]] static bool __hidden_write_all_fd(const int fd, const void* const data, const usize byteCount)noexcept{
     const u8* cursor = static_cast<const u8*>(data);
@@ -68,7 +77,7 @@ static void __hidden_capture_signal_context(Detail::CrashDumpRequestOptions& opt
 #elif defined(__aarch64__)
     options.instructionPointer = static_cast<u64>(context->uc_mcontext.pc);
     options.stackPointer = static_cast<u64>(context->uc_mcontext.sp);
-    options.framePointer = static_cast<u64>(context->uc_mcontext.regs[29]);
+    options.framePointer = static_cast<u64>(context->uc_mcontext.regs[s_AArch64FramePointerRegisterIndex]);
 #endif
 }
 
@@ -91,7 +100,7 @@ static void __hidden_signal_handler(const int signalNumber, siginfo_t* signalInf
 }
 
 static void __hidden_install_signal_handlers(){
-    static u8 s_signalStack[SIGSTKSZ * 4u] = {};
+    static u8 s_signalStack[SIGSTKSZ * s_SignalStackMultiplier] = {};
 
     stack_t stack = {};
     stack.ss_sp = s_signalStack;
@@ -123,8 +132,9 @@ static void __hidden_open_android_emergency_file(){
 
     char emergencyPath[Detail::s_MaxPathText] = {};
     CopyFixedBuffer(emergencyPath, Detail::g_State.spoolDirectoryText);
-    AppendFixedBuffer(emergencyPath, "/last_android_native_crash_request.bin");
-    Detail::g_State.emergencyWriteFd = open(emergencyPath, O_CREAT | O_APPEND | O_WRONLY, 0644);
+    AppendFixedBuffer(emergencyPath, "/");
+    AppendFixedBuffer(emergencyPath, PackageNames::s_AndroidEmergencyRequestFileName);
+    Detail::g_State.emergencyWriteFd = open(emergencyPath, O_CREAT | O_APPEND | O_WRONLY, s_AndroidEmergencyFileMode);
 }
 #endif
 
@@ -133,7 +143,7 @@ static void __hidden_open_android_emergency_file(){
     if(inOutFd > STDERR_FILENO)
         return true;
 
-    const int duplicatedFd = fcntl(inOutFd, F_DUPFD, STDERR_FILENO + 1);
+    const int duplicatedFd = fcntl(inOutFd, F_DUPFD, s_FirstNonStdioFileDescriptor);
     if(duplicatedFd < 0)
         return false;
 
@@ -234,30 +244,30 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
     if(access(handlerExecutablePath.c_str(), X_OK) != 0)
         return false;
 
-    int pipeFds[2] = { -1, -1 };
+    int pipeFds[s_PipeFileDescriptorCount] = { -1, -1 };
     if(pipe(pipeFds) != 0)
         return false;
 
     const pid_t pid = fork();
     if(pid < 0){
-        close(pipeFds[0]);
-        close(pipeFds[1]);
+        close(pipeFds[s_PipeReadEndIndex]);
+        close(pipeFds[s_PipeWriteEndIndex]);
         return false;
     }
 
     if(pid == 0){
-        close(pipeFds[1]);
+        close(pipeFds[s_PipeWriteEndIndex]);
 
-        __hidden_crash_posix::__hidden_silence_child_process(pipeFds[0]);
+        __hidden_crash_posix::__hidden_silence_child_process(pipeFds[s_PipeReadEndIndex]);
 
-        char fdText[32] = {};
-        AppendUnsignedToFixedBuffer(fdText, static_cast<u64>(pipeFds[0]));
-        execl(handlerExecutablePath.c_str(), handlerExecutablePath.c_str(), "--request-fd", fdText, nullptr);
-        _exit(127);
+        char fdText[s_HandlerArgumentTextCapacity] = {};
+        AppendUnsignedToFixedBuffer(fdText, static_cast<u64>(pipeFds[s_PipeReadEndIndex]));
+        execl(handlerExecutablePath.c_str(), handlerExecutablePath.c_str(), s_RequestFdArgument, fdText, nullptr);
+        _exit(__hidden_crash_posix::s_HandlerExecFailureExitCode);
     }
 
-    close(pipeFds[0]);
-    g_State.requestWriteFd = pipeFds[1];
+    close(pipeFds[s_PipeReadEndIndex]);
+    g_State.requestWriteFd = pipeFds[s_PipeWriteEndIndex];
     g_State.handlerPid = pid;
     g_State.handlerStarted = true;
     return true;

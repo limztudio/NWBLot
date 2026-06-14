@@ -631,6 +631,36 @@ template<typename ArenaT>
     return EnsureDirectories(path, outError);
 }
 
+template<typename ArenaT>
+[[nodiscard]] inline bool MovePathToDirectory(const Path<ArenaT>& sourcePath, const Path<ArenaT>& destinationDirectory, Path<ArenaT>& outPath){
+    outPath.clear();
+
+    ErrorCode error;
+    static_cast<void>(EnsureDirectories(destinationDirectory, error));
+    if(error)
+        return false;
+
+    const Path<ArenaT> destination = destinationDirectory / sourcePath.filename();
+    error.clear();
+    static_cast<void>(RemoveAllIfExists(destination, error));
+    if(error)
+        return false;
+
+    error.clear();
+    static_cast<void>(RenamePath(sourcePath, destination, error));
+    if(error)
+        return false;
+
+    outPath = destination;
+    return true;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline bool MovePathToDirectory(const Path<ArenaT>& sourcePath, const Path<ArenaT>& destinationDirectory){
+    Path<ArenaT> movedPath(sourcePath.arena());
+    return MovePathToDirectory(sourcePath, destinationDirectory, movedPath);
+}
+
 template<typename TempArenaT, typename PathArenaT>
 [[nodiscard]] inline StagedDirectoryPaths<PathArenaT> BuildStagedDirectoryPaths(TempArenaT& tempArena, const Path<PathArenaT>& outputDirectory, const AStringView stageToken){
     PathArenaT& pathArena = outputDirectory.arena();

@@ -677,12 +677,12 @@ static bool MovePackage(const Path& from, const Path& toDirectory){
     return !error;
 }
 
-static void WriteUploadAttemptText(Alloc::GlobalArena& arena, const Path& packageDirectory, const char* state){
+static bool WriteUploadAttemptText(Alloc::GlobalArena& arena, const Path& packageDirectory, const char* state){
     CrashString text{arena};
     text += "state=";
     text += state ? state : "unknown";
     text += "\n";
-    static_cast<void>(WriteTextFile(packageDirectory / "upload_attempt.txt", AStringView(text.data(), text.size())));
+    return WriteTextFile(packageDirectory / "upload_attempt.txt", AStringView(text.data(), text.size()));
 }
 
 static Path RequestBucketDirectory(Alloc::GlobalArena& arena, const CrashRequest& request, const char* bucketName){
@@ -795,7 +795,7 @@ static bool UploadPackageDirectory(
     if(!MovePackage(packageDirectory, UploadingDirectory(spoolDirectory)))
         return false;
 
-    WriteUploadAttemptText(arena, uploadingPackageDirectory, "uploading");
+    static_cast<void>(WriteUploadAttemptText(arena, uploadingPackageDirectory, "uploading"));
 
     CrashBytes archiveBytes{arena};
     if(!BuildPackageArchive(arena, uploadingPackageDirectory, archiveBytes)){
@@ -804,11 +804,11 @@ static bool UploadPackageDirectory(
     }
 
     if(UploadPackage(arena, url, archiveBytes, crashUploadToken)){
-        WriteUploadAttemptText(arena, uploadingPackageDirectory, "uploaded");
+        static_cast<void>(WriteUploadAttemptText(arena, uploadingPackageDirectory, "uploaded"));
         return MovePackage(uploadingPackageDirectory, UploadedDirectory(spoolDirectory));
     }
 
-    WriteUploadAttemptText(arena, uploadingPackageDirectory, "retry_pending");
+    static_cast<void>(WriteUploadAttemptText(arena, uploadingPackageDirectory, "retry_pending"));
     static_cast<void>(MovePackage(uploadingPackageDirectory, PendingDirectory(spoolDirectory)));
     return false;
 }
@@ -829,7 +829,8 @@ static bool RecoverUploadingPackageDirectories(Alloc::GlobalArena& arena, const 
         if(!IsDirectory(entry.path(), entryError) || entryError || !IsSafePackageName(arena, entry.path()))
             continue;
 
-        WriteUploadAttemptText(arena, entry.path(), "retry_pending_after_interrupted_upload");
+        if(!WriteUploadAttemptText(arena, entry.path(), "retry_pending_after_interrupted_upload"))
+            ok = false;
         if(!MovePackage(entry.path(), PendingDirectory(spoolDirectory)))
             ok = false;
     }

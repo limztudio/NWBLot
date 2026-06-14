@@ -415,6 +415,13 @@ static void TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(TestContext& con
     NWB_CRASH_TEST_CHECK(context, !NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(arena, snapshot));
     NWB_CRASH_TEST_CHECK(context, DirectoryExists(PackageDirectory(arena, s_Group, "uploading", s_CrashId)));
     NWB_CRASH_TEST_CHECK(context, PathIsFile(BucketDirectory(arena, s_Group, "pending")));
+    NWB_CRASH_TEST_CHECK(
+        context,
+        TextFileContains(
+            PackageDirectory(arena, s_Group, "uploading", s_CrashId) / "upload_attempt.txt",
+            AStringView("retry_pending_after_interrupted_upload")
+        )
+    );
 
     RemoveTestArtifacts(arena, s_Group);
 }

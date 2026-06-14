@@ -223,6 +223,7 @@ struct DeferredFrameTargets{
             && csgReceiverEventLayerCount > 0u
             && csgReceiverSpanLayerCount > 0u
             && csgRemovedIntervalLayerCount > 0u
+            && csgIntervalTargetsValid()
             && albedo != nullptr
             && normal != nullptr
             && worldPosition != nullptr

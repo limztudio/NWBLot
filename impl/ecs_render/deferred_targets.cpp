@@ -418,6 +418,9 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     ))
         return false;
 
+    if(!m_renderer.csgSystem().createCsgPeelTargets(createdTargets))
+        return false;
+
     Core::BindingSetDesc lightingBindingSetDesc(arena());
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR,
@@ -490,7 +493,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, lazy CSG peel {} layers: cap back normal {}, interval depth {}, interval linear depth {}, interval id {}, lazy receiver events {} layers: event depth {}, event data {}, event count {}, event flags {}, lazy receiver spans {} layers: span depth {}, span data {}, span count {}, span flags {}, lazy removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, interval flags {}, AVBOIT color {}, extinction {}, transmittance {})")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval linear depth {}, interval id {}, receiver events {} layers: event depth {}, event data {}, event count {}, event flags {}, receiver spans {} layers: span depth {}, span data {}, span count {}, span flags {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, interval flags {}, AVBOIT color {}, extinction {}, transmittance {})")
         , deferredState().m_targets.width
         , deferredState().m_targets.height
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.albedoFormat).name)

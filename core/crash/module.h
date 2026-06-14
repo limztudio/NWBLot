@@ -92,9 +92,11 @@ using CrashConfig = CrashConfigT<Alloc::PersistentArena>;
 using PersistentCrashConfig = CrashConfig;
 
 
+using CrashPackagePath = ::Path<Alloc::PersistentArena>;
+
 struct GpuCrashProvider{
     void* userData = nullptr;
-    bool (*writeAttachment)(void* userData, const Path& packageDirectory, AStringView crashId) = nullptr;
+    bool (*writeAttachment)(void* userData, const CrashPackagePath& packageDirectory, AStringView crashId) = nullptr;
 };
 
 

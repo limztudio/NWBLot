@@ -371,7 +371,21 @@ static void WriteGpuCrashAttachments(ArenaT& arena, const CrashRequest& request)
         if(!provider.writeAttachment)
             continue;
 
-        status += "provider=unavailable_in_external_handler\n";
+        status += "provider_index=";
+        AppendUnsignedText(status, i);
+        status += " status=";
+        bool written = false;
+        try{
+            written = provider.writeAttachment(provider.userData, packageDirectory, AStringView(request.crashId));
+        }
+        catch(...){
+            status += "exception\n";
+            continue;
+        }
+        status += written
+            ? "written\n"
+            : "failed\n"
+        ;
     }
 
     if(status.empty())
@@ -826,3 +840,4 @@ NWB_CRASH_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

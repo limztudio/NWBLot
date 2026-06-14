@@ -128,6 +128,41 @@ static void __hidden_open_android_emergency_file(){
 }
 #endif
 
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+[[nodiscard]] static bool __hidden_move_fd_above_stdio(int& inOutFd)noexcept{
+    if(inOutFd > STDERR_FILENO)
+        return true;
+
+    const int duplicatedFd = fcntl(inOutFd, F_DUPFD, STDERR_FILENO + 1);
+    if(duplicatedFd < 0)
+        return false;
+
+    close(inOutFd);
+    inOutFd = duplicatedFd;
+    return true;
+}
+
+static void __hidden_redirect_stdio_to_null()noexcept{
+    const int nullFd = open("/dev/null", O_RDWR);
+    if(nullFd < 0)
+        return;
+
+    static_cast<void>(dup2(nullFd, STDIN_FILENO));
+    static_cast<void>(dup2(nullFd, STDOUT_FILENO));
+    static_cast<void>(dup2(nullFd, STDERR_FILENO));
+    if(nullFd > STDERR_FILENO)
+        close(nullFd);
+}
+
+static void __hidden_silence_child_process(int& requestReadFd)noexcept{
+    if(!__hidden_move_fd_above_stdio(requestReadFd))
+        return;
+
+    static_cast<void>(setsid());
+    __hidden_redirect_stdio_to_null();
+}
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -210,6 +245,8 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
 
     if(pid == 0){
         close(pipeFds[1]);
+
+        __hidden_crash_posix::__hidden_silence_child_process(pipeFds[0]);
 
         char fdText[32] = {};
         AppendUnsignedToFixedBuffer(fdText, static_cast<u64>(pipeFds[0]));

@@ -95,6 +95,14 @@ template<typename CharT>
 }
 #endif
 
+static void __hidden_silence_process()noexcept{
+#if defined(NWB_PLATFORM_WINDOWS)
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+    if(HWND consoleWindow = GetConsoleWindow())
+        ShowWindow(consoleWindow, SW_HIDE);
+#endif
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -106,6 +114,7 @@ template<typename CharT>
 
 
 int RunCrashHandlerProcess(const isize argc, tchar** argv){
+    __hidden_crash_handler::__hidden_silence_process();
     static_cast<void>(Detail::DumpArena());
 
 #if defined(NWB_PLATFORM_WINDOWS)

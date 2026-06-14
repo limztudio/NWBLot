@@ -206,15 +206,18 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
 
     STARTUPINFO startupInfo = {};
     startupInfo.cb = sizeof(startupInfo);
+    startupInfo.dwFlags = STARTF_USESHOWWINDOW;
+    startupInfo.wShowWindow = SW_HIDE;
 
     PROCESS_INFORMATION processInfo = {};
+    const DWORD creationFlags = CREATE_NO_WINDOW | DETACHED_PROCESS;
     const BOOL created = CreateProcess(
         handlerExecutablePath.c_str(),
         commandLine.data(),
         nullptr,
         nullptr,
         TRUE,
-        CREATE_NO_WINDOW,
+        creationFlags,
         nullptr,
         nullptr,
         &startupInfo,

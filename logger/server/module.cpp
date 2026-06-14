@@ -84,7 +84,17 @@ struct ConnectionInfo{
     bool isCrashUpload = false;
 };
 
+inline constexpr usize s_MaxLogMessageUploadBytes = 1u * 1024u * 1024u;
+inline constexpr usize s_MaxCrashPackageUploadBytes = 128u * 1024u * 1024u;
+
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept;
+
+[[nodiscard]] static usize UploadSizeLimit(const bool isCrashUpload)noexcept{
+    return isCrashUpload
+        ? s_MaxCrashPackageUploadBytes
+        : s_MaxLogMessageUploadBytes
+    ;
+}
 
 static void EnqueueServerMessage(Server& server, const tchar* message, const Type::Enum type){
     server.enqueue(StringFormat(server.arena(), NWB_TEXT("{} on {}"), message, SERVER_NAME), type);
@@ -255,7 +265,11 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         }
 
         const auto uploadDataPtr = MakeNotNull(upload_data);
-        if(uploadDataSize > static_cast<size_t>(Limit<usize>::s_Max) || info->size > Limit<usize>::s_Max - static_cast<usize>(uploadDataSize)){
+        const usize uploadSizeLimit = __hidden_logger_server::UploadSizeLimit(info->isCrashUpload);
+        if(
+            uploadDataSize > static_cast<size_t>(uploadSizeLimit)
+            || info->size > uploadSizeLimit - static_cast<usize>(uploadDataSize)
+        ){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an oversized message"), Type::Error);
             __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;

@@ -6,6 +6,7 @@
 
 
 #include "assert.h"
+#include "diagnostics.h"
 #include "compile.h"
 #include "platform.h"
 #include "type.h"

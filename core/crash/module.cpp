@@ -4,6 +4,8 @@
 
 #include "internal.h"
 
+#include <global/diagnostics.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -71,6 +73,17 @@ static void __hidden_store_breadcrumb(const AStringView category, const AStringV
     ++Detail::g_State.nextBreadcrumb;
 }
 
+static void __hidden_capture_diagnostic_crash(const char* category, const char* message)noexcept{
+    try{
+        static_cast<void>(CaptureCrashDump(
+            category ? AStringView(category) : AStringView(),
+            message ? AStringView(message) : AStringView()
+        ));
+    }
+    catch(...){
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -134,6 +147,7 @@ bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config){
 
     Detail::InstallPlatformHandlers();
     Detail::g_State.installed = true;
+    SetDiagnosticCrashCaptureCallback(__hidden_crash_module::__hidden_capture_diagnostic_crash);
     return true;
 }
 
@@ -142,6 +156,7 @@ void UninstallCrashHandler(){
     if(!Detail::g_State.installed)
         return;
 
+    ClearDiagnosticCrashCaptureCallback(__hidden_crash_module::__hidden_capture_diagnostic_crash);
     Detail::UninstallPlatformResources();
     Detail::g_State.installed = false;
     Detail::g_State.handlerStarted = false;
@@ -202,6 +217,8 @@ CrashDumpResult CaptureCrashDump(const AStringView category, const AStringView m
 
     Detail::CrashDumpRequestOptions options;
     options.waitMilliseconds = 10000u;
+    Detail::ManualDumpContextStorage contextStorage;
+    Detail::CaptureManualDumpContext(options, contextStorage);
 #if defined(NWB_PLATFORM_ANDROID)
     options.writePackageInProcess = true;
 #endif

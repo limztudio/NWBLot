@@ -144,6 +144,24 @@ namespace Detail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpContextStorage& storage)noexcept{
+    static_cast<void>(storage);
+
+#if defined(__x86_64__)
+    void* stackPointer = nullptr;
+    __asm__ volatile("mov %%rsp, %0" : "=r"(stackPointer));
+    outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
+    outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_frame_address(0)));
+    outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_return_address(0)));
+#elif defined(__aarch64__)
+    void* stackPointer = nullptr;
+    __asm__ volatile("mov %0, sp" : "=r"(stackPointer));
+    outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
+    outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_frame_address(0)));
+    outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_return_address(0)));
+#endif
+}
+
 CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, const u32 waitMilliseconds)noexcept{
     static_cast<void>(waitMilliseconds);
 

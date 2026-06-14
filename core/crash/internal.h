@@ -140,6 +140,16 @@ struct CrashDumpRequestOptions{
     bool uploadAfterWrite = true;
 };
 
+struct ManualDumpContextStorage{
+#if defined(NWB_PLATFORM_WINDOWS)
+    CONTEXT context = {};
+    EXCEPTION_RECORD exceptionRecord = {};
+    EXCEPTION_POINTERS exceptionPointers = {};
+#else
+    u8 unused = 0u;
+#endif
+};
+
 struct CrashState{
     Futex mutex;
     bool installed = false;
@@ -186,6 +196,7 @@ extern CrashState g_State;
 [[nodiscard]] const char* ReasonKindName(u32 reasonKind)noexcept;
 
 void SnapshotCrashState(CrashRequest& outRequest, CrashReasonKind::Enum reasonKind, u32 reasonCode)noexcept;
+void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpContextStorage& storage)noexcept;
 [[nodiscard]] CrashDumpResult RequestCrashDump(CrashReasonKind::Enum reasonKind, u32 reasonCode, const CrashDumpRequestOptions& options);
 [[nodiscard]] CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, u32 waitMilliseconds)noexcept;
 void NotifyCrashHandler(CrashReasonKind::Enum reasonKind, u32 reasonCode, const CrashDumpRequestOptions& options = CrashDumpRequestOptions{})noexcept;

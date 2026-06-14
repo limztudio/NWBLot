@@ -68,6 +68,42 @@ static LONG WINAPI __hidden_unhandled_exception_filter(EXCEPTION_POINTERS* excep
     std::abort();
 }
 
+static u64 __hidden_context_instruction_pointer(const CONTEXT& context)noexcept{
+#if defined(_M_X64) || defined(__x86_64__)
+    return static_cast<u64>(context.Rip);
+#elif defined(_M_IX86) || defined(__i386__)
+    return static_cast<u64>(context.Eip);
+#elif defined(_M_ARM64) || defined(__aarch64__)
+    return static_cast<u64>(context.Pc);
+#else
+    return 0u;
+#endif
+}
+
+static u64 __hidden_context_stack_pointer(const CONTEXT& context)noexcept{
+#if defined(_M_X64) || defined(__x86_64__)
+    return static_cast<u64>(context.Rsp);
+#elif defined(_M_IX86) || defined(__i386__)
+    return static_cast<u64>(context.Esp);
+#elif defined(_M_ARM64) || defined(__aarch64__)
+    return static_cast<u64>(context.Sp);
+#else
+    return 0u;
+#endif
+}
+
+static u64 __hidden_context_frame_pointer(const CONTEXT& context)noexcept{
+#if defined(_M_X64) || defined(__x86_64__)
+    return static_cast<u64>(context.Rbp);
+#elif defined(_M_IX86) || defined(__i386__)
+    return static_cast<u64>(context.Ebp);
+#elif defined(_M_ARM64) || defined(__aarch64__)
+    return static_cast<u64>(context.Fp);
+#else
+    return 0u;
+#endif
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -83,6 +119,23 @@ namespace Detail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpContextStorage& storage)noexcept{
+    RtlCaptureContext(&storage.context);
+
+    storage.exceptionRecord = EXCEPTION_RECORD{};
+    storage.exceptionRecord.ExceptionCode = 0xE0425742u;
+    storage.exceptionRecord.ExceptionAddress = reinterpret_cast<void*>(static_cast<usize>(
+        __hidden_crash_win32::__hidden_context_instruction_pointer(storage.context)
+    ));
+    storage.exceptionPointers.ExceptionRecord = &storage.exceptionRecord;
+    storage.exceptionPointers.ContextRecord = &storage.context;
+
+    outOptions.exceptionPointers = static_cast<u64>(reinterpret_cast<usize>(&storage.exceptionPointers));
+    outOptions.instructionPointer = __hidden_crash_win32::__hidden_context_instruction_pointer(storage.context);
+    outOptions.stackPointer = __hidden_crash_win32::__hidden_context_stack_pointer(storage.context);
+    outOptions.framePointer = __hidden_crash_win32::__hidden_context_frame_pointer(storage.context);
+}
 
 CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, const u32 waitMilliseconds)noexcept{
     if(g_State.requestWriteHandle == INVALID_HANDLE_VALUE)

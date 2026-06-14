@@ -1,0 +1,62 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "atomic.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using DiagnosticCrashCaptureCallback = void (*)(const char* category, const char* message)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace DiagnosticDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline Atomic<DiagnosticCrashCaptureCallback> g_CrashCaptureCallback{ nullptr };
+inline AtomicFlag g_CrashCaptureActive;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline void SetDiagnosticCrashCaptureCallback(const DiagnosticCrashCaptureCallback callback)noexcept{
+    DiagnosticDetail::g_CrashCaptureCallback.store(callback, MemoryOrder::release);
+}
+
+inline void ClearDiagnosticCrashCaptureCallback(const DiagnosticCrashCaptureCallback callback)noexcept{
+    DiagnosticCrashCaptureCallback expected = callback;
+    static_cast<void>(DiagnosticDetail::g_CrashCaptureCallback.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel));
+}
+
+inline void CaptureDiagnosticCrash(const char* category, const char* message)noexcept{
+    const DiagnosticCrashCaptureCallback callback = DiagnosticDetail::g_CrashCaptureCallback.load(MemoryOrder::acquire);
+    if(!callback)
+        return;
+    if(DiagnosticDetail::g_CrashCaptureActive.test_and_set(MemoryOrder::acquire))
+        return;
+
+    callback(category ? category : "", message ? message : "");
+
+    DiagnosticDetail::g_CrashCaptureActive.clear(MemoryOrder::release);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

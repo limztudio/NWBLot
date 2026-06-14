@@ -131,15 +131,6 @@ template<typename PayloadT, typename PayloadVector>
     return true;
 }
 
-static void StoreReceiverCpuBounds(
-    const SIMDVector minBounds,
-    const SIMDVector maxBounds,
-    CsgReceiverCpuBounds& outBounds
-){
-    StoreFloatInt(VectorSetW(minBounds, 0.0f), s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag, &outBounds.minBounds);
-    StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, &outBounds.maxBounds);
-}
-
 template<typename PositionVector>
 [[nodiscard]] static bool BuildPositionStreamBounds(const PositionVector& positions, CsgReceiverCpuBounds& outBounds){
     outBounds = CsgReceiverCpuBounds{};
@@ -155,7 +146,8 @@ template<typename PositionVector>
     if(!AabbTests::Valid(minBounds, maxBounds))
         return false;
 
-    StoreReceiverCpuBounds(minBounds, maxBounds, outBounds);
+    StoreFloatInt(VectorSetW(minBounds, 0.0f), s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag, &outBounds.minBounds);
+    StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, &outBounds.maxBounds);
     return true;
 }
 

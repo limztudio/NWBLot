@@ -86,6 +86,80 @@ template<typename ParameterT>
     return AabbTests::Valid(minBounds, maxBounds);
 }
 
+[[nodiscard]] bool ValidPlaneParameters(const SIMDVector normalDistance){
+    return !Vector4IsNaN(normalDistance) && !Vector4IsInfinite(normalDistance);
+}
+
+[[nodiscard]] bool BuildBoxBounds(
+    const SIMDMatrix& shapeToWorld,
+    const SIMDVector halfExtents,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds
+){
+    if(
+        Vector3IsNaN(halfExtents)
+        || Vector3IsInfinite(halfExtents)
+        || !Vector3Greater(halfExtents, VectorZero())
+    )
+        return false;
+
+    return AabbTests::Transform(
+        shapeToWorld,
+        VectorSetW(VectorNegate(halfExtents), 0.0f),
+        halfExtents,
+        outMinBounds,
+        outMaxBounds
+    );
+}
+
+[[nodiscard]] bool BuildSphereBounds(
+    const SIMDMatrix& shapeToWorld,
+    const SIMDVector radius,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds
+){
+    if(Vector3IsNaN(radius) || Vector3IsInfinite(radius) || !Vector3Greater(radius, VectorZero()))
+        return false;
+
+    const SIMDVector localMax = VectorSetW(radius, 0.0f);
+    return AabbTests::Transform(
+        shapeToWorld,
+        VectorSetW(VectorNegate(localMax), 0.0f),
+        localMax,
+        outMinBounds,
+        outMaxBounds
+    );
+}
+
+[[nodiscard]] bool BuildCapsuleBounds(
+    const SIMDMatrix& shapeToWorld,
+    const SIMDVector radiusHalfHeight,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds
+){
+    const SIMDVector radius = VectorSplatX(radiusHalfHeight);
+    const SIMDVector halfHeight = VectorSplatY(radiusHalfHeight);
+    if(
+        Vector3IsNaN(radius)
+        || Vector3IsInfinite(radius)
+        || Vector3IsNaN(halfHeight)
+        || Vector3IsInfinite(halfHeight)
+        || !Vector3Greater(radius, VectorZero())
+        || !Vector3GreaterOrEqual(halfHeight, VectorZero())
+    )
+        return false;
+
+    const SIMDVector yExtent = VectorAdd(halfHeight, radius);
+    const SIMDVector localMax = VectorSetW(VectorSelect(radius, yExtent, VectorSelectControl(0u, 1u, 0u, 0u)), 0.0f);
+    return AabbTests::Transform(
+        shapeToWorld,
+        VectorSetW(VectorNegate(localMax), 0.0f),
+        localMax,
+        outMinBounds,
+        outMaxBounds
+    );
+}
+
 [[nodiscard]] bool BuildShapeBoundsForShapeType(
     const CsgShapeTypeInfo& shapeType,
     const SIMDMatrix& shapeToWorld,
@@ -135,7 +209,7 @@ template<typename ParameterT>
         return false;
 
     const SIMDVector normalDistance = LoadFloat(parameters.normalDistance);
-    return !Vector4IsNaN(normalDistance) && !Vector4IsInfinite(normalDistance);
+    return ValidPlaneParameters(normalDistance);
 }
 
 [[nodiscard]] bool BoxBounds(
@@ -154,20 +228,7 @@ template<typename ParameterT>
     if(!LoadShapeParameters(parameterBytes, parameterByteSize, parameters))
         return false;
     const SIMDVector halfExtents = VectorSetW(LoadFloat(parameters.halfExtents), 0.0f);
-    if(
-        Vector3IsNaN(halfExtents)
-        || Vector3IsInfinite(halfExtents)
-        || !Vector3Greater(halfExtents, VectorZero())
-    )
-        return false;
-
-    if(!AabbTests::Transform(
-        shapeToWorld,
-        VectorSetW(VectorNegate(halfExtents), 0.0f),
-        halfExtents,
-        outMinBounds,
-        outMaxBounds
-    ))
+    if(!BuildBoxBounds(shapeToWorld, halfExtents, outMinBounds, outMaxBounds))
         return false;
 
     outFiniteBounds = true;
@@ -190,18 +251,7 @@ template<typename ParameterT>
     if(!LoadShapeParameters(parameterBytes, parameterByteSize, parameters))
         return false;
     const SIMDVector radius = VectorSplatX(LoadFloat(parameters.radius));
-    if(Vector3IsNaN(radius) || Vector3IsInfinite(radius) || !Vector3Greater(radius, VectorZero()))
-        return false;
-
-    const SIMDVector localMax = VectorSetW(radius, 0.0f);
-
-    if(!AabbTests::Transform(
-        shapeToWorld,
-        VectorSetW(VectorNegate(localMax), 0.0f),
-        localMax,
-        outMinBounds,
-        outMaxBounds
-    ))
+    if(!BuildSphereBounds(shapeToWorld, radius, outMinBounds, outMaxBounds))
         return false;
 
     outFiniteBounds = true;
@@ -224,28 +274,7 @@ template<typename ParameterT>
     if(!LoadShapeParameters(parameterBytes, parameterByteSize, parameters))
         return false;
     const SIMDVector radiusHalfHeight = LoadFloat(parameters.radiusHalfHeight);
-    const SIMDVector radius = VectorSplatX(radiusHalfHeight);
-    const SIMDVector halfHeight = VectorSplatY(radiusHalfHeight);
-    if(
-        Vector3IsNaN(radius)
-        || Vector3IsInfinite(radius)
-        || Vector3IsNaN(halfHeight)
-        || Vector3IsInfinite(halfHeight)
-        || !Vector3Greater(radius, VectorZero())
-        || !Vector3GreaterOrEqual(halfHeight, VectorZero())
-    )
-        return false;
-
-    const SIMDVector yExtent = VectorAdd(halfHeight, radius);
-    const SIMDVector localMax = VectorSetW(VectorSelect(radius, yExtent, VectorSelectControl(0u, 1u, 0u, 0u)), 0.0f);
-
-    if(!AabbTests::Transform(
-        shapeToWorld,
-        VectorSetW(VectorNegate(localMax), 0.0f),
-        localMax,
-        outMinBounds,
-        outMaxBounds
-    ))
+    if(!BuildCapsuleBounds(shapeToWorld, radiusHalfHeight, outMinBounds, outMaxBounds))
         return false;
 
     outFiniteBounds = true;

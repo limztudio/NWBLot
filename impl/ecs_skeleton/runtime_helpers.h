@@ -90,6 +90,23 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return IsInvertibleAffineJointMatrix(outMatrix);
 }
 
+[[nodiscard]] inline bool ResolveSkeletonPoseJointMatrix(
+    const SIMDMatrix& localJoint,
+    const SIMDMatrix* parentJoint,
+    SIMDMatrix& outMatrix
+){
+    outMatrix = localJoint;
+    if(!IsInvertibleAffineJointMatrix(outMatrix))
+        return false;
+
+    if(parentJoint){
+        outMatrix = MultiplyJointMatrices(*parentJoint, outMatrix);
+        if(!IsInvertibleAffineJointMatrix(outMatrix))
+            return false;
+    }
+    return true;
+}
+
 template<typename JointMatrixVector>
 [[nodiscard]] inline bool BuildStoredJointPaletteFromSkeletonPose(
     const SkeletonPoseComponent& pose,
@@ -114,19 +131,19 @@ template<typename JointMatrixVector>
     outJointPalette.reserve(jointCount);
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
         const u32 parentJoint = pose.parentJoints[jointIndex];
-        SIMDMatrix jointMatrix = LoadFloat(pose.localJoints[jointIndex]);
-        if(!IsInvertibleAffineJointMatrix(jointMatrix))
-            return false;
-
+        SIMDMatrix parentJointMatrix;
+        const SIMDMatrix* parentJointMatrixPtr = nullptr;
         if(parentJoint != s_SkeletonRootParent){
             if(parentJoint >= jointIndex)
                 return false;
 
-            const SIMDMatrix parentJointMatrix = LoadFloat(outJointPalette[parentJoint]);
-            jointMatrix = MultiplyJointMatrices(parentJointMatrix, jointMatrix);
-            if(!IsInvertibleAffineJointMatrix(jointMatrix))
-                return false;
+            parentJointMatrix = LoadFloat(outJointPalette[parentJoint]);
+            parentJointMatrixPtr = &parentJointMatrix;
         }
+
+        SIMDMatrix jointMatrix;
+        if(!ResolveSkeletonPoseJointMatrix(LoadFloat(pose.localJoints[jointIndex]), parentJointMatrixPtr, jointMatrix))
+            return false;
 
         SkeletonJointMatrix storedJointMatrix{};
         StoreFloat(jointMatrix, &storedJointMatrix);

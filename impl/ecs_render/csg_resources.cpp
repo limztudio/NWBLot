@@ -103,16 +103,12 @@ static void CopyCsgCutterInlineParameters(
 }
 
 [[nodiscard]] static bool BuildCsgReceiverWorldBounds(
-    const CsgReceiverCpuBounds& receiverBounds,
+    const SIMDVector localMinBounds,
+    const SIMDVector localMaxBounds,
     const SIMDMatrix* localToWorld,
     SIMDVector& outMinBounds,
     SIMDVector& outMaxBounds
 ){
-    if(!receiverBounds.valid())
-        return false;
-
-    const SIMDVector localMinBounds = LoadFloatInt(receiverBounds.minBounds);
-    const SIMDVector localMaxBounds = LoadFloatInt(receiverBounds.maxBounds);
     if(!AabbTests::Valid(localMinBounds, localMaxBounds))
         return false;
 
@@ -123,13 +119,6 @@ static void CopyCsgCutterInlineParameters(
     }
 
     return AabbTests::Transform(*localToWorld, localMinBounds, localMaxBounds, outMinBounds, outMaxBounds);
-}
-
-[[nodiscard]] static SIMDMatrix LoadWorldToClipMatrix(const ECSRenderDetail::MeshViewGpuData& meshViewData){
-    SIMDMatrix worldToClip;
-    for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex)
-        worldToClip.v[columnIndex] = LoadFloat(meshViewData.worldToClip[columnIndex]);
-    return worldToClip;
 }
 
 static void ExpandCsgFrameWorkRegionForWorldBounds(
@@ -190,16 +179,13 @@ static void ExpandCsgFrameWorkRegionForWorldBounds(
 
 static void BuildResolvedClipCutterGpuData(
     const CsgResolvedClipCutter& resolvedCutter,
-    const SIMDMatrix& worldToShape,
+    const f32 worldToShapeScaleBound,
     CsgCutterGpuData& outCutter
 ){
     NWB_ASSERT(resolvedCutter.cutter);
     NWB_ASSERT(resolvedCutter.parameterByteSize == static_cast<usize>(resolvedCutter.shapeType.desc.parameterByteSize));
     NWB_ASSERT(resolvedCutter.parameterByteSize == 0u || resolvedCutter.parameterBytes);
 
-    outCutter = CsgCutterGpuData{};
-    StoreFloat(worldToShape, &outCutter.worldToShape);
-    const f32 worldToShapeScaleBound = VectorGetX(ComputeWorldToShapeScaleBound(worldToShape));
     if(IsFinite(worldToShapeScaleBound) && worldToShapeScaleBound > 0.0f)
         outCutter.worldToShapeScaleBound = worldToShapeScaleBound;
 
@@ -260,7 +246,17 @@ static void BuildResolvedClipCutterGpuData(
 
     SIMDVector receiverMinBounds;
     SIMDVector receiverMaxBounds;
-    if(!BuildCsgReceiverWorldBounds(receiverBounds, receiverLocalToWorld, receiverMinBounds, receiverMaxBounds))
+    if(!receiverBounds.valid())
+        return CsgClipCutterResolveResult::Ready;
+    const SIMDVector receiverLocalMinBounds = LoadFloatInt(receiverBounds.minBounds);
+    const SIMDVector receiverLocalMaxBounds = LoadFloatInt(receiverBounds.maxBounds);
+    if(!BuildCsgReceiverWorldBounds(
+        receiverLocalMinBounds,
+        receiverLocalMaxBounds,
+        receiverLocalToWorld,
+        receiverMinBounds,
+        receiverMaxBounds
+    ))
         return CsgClipCutterResolveResult::Ready;
 
     SIMDVector cutterMinBounds;
@@ -559,7 +555,8 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
     if(drawState().m_meshViewGpuDataValid){
         ECSRenderDetail::MeshViewGpuData meshViewData;
         NWB_MEMCPY(&meshViewData, sizeof(meshViewData), drawState().m_meshViewGpuData, sizeof(meshViewData));
-        worldToClip = __hidden_csg_resources::LoadWorldToClipMatrix(meshViewData);
+        for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex)
+            worldToClip.v[columnIndex] = LoadFloat(meshViewData.worldToClip[columnIndex]);
         meshViewReady = !MatrixIsNaN(worldToClip) && !MatrixIsInfinite(worldToClip);
     }
 
@@ -577,9 +574,12 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
             if(csgFrameData.cutters.size() >= static_cast<usize>(Limit<u32>::s_Max)){
                 return false;
             }
+            const SIMDMatrix worldToShape = LoadFloat(resolvedCutter.cutter->worldToShape);
+            cutterGpuData = CsgCutterGpuData{};
+            StoreFloat(worldToShape, &cutterGpuData.worldToShape);
             __hidden_csg_resources::BuildResolvedClipCutterGpuData(
                 resolvedCutter,
-                LoadFloat(resolvedCutter.cutter->worldToShape),
+                VectorGetX(__hidden_csg_resources::ComputeWorldToShapeScaleBound(worldToShape)),
                 cutterGpuData
             );
 

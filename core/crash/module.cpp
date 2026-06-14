@@ -22,6 +22,16 @@ namespace __hidden_crash_module{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct BreadcrumbSnapshot{
+    char spoolDirectoryText[Detail::s_MaxPathText] = {};
+    Detail::FixedBreadcrumb breadcrumbs[Detail::s_MaxBreadcrumbs] = {};
+    usize breadcrumbCount = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename ArenaT>
 [[nodiscard]] static ::Path<ArenaT> __hidden_default_crash_root_directory(ArenaT& arena){
     ::Path<ArenaT> executableDirectory(arena);
@@ -37,10 +47,32 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-static void __hidden_store_current_breadcrumbs(ArenaT& arena){
-    const ::Path<ArenaT> breadcrumbPath = ::Path<ArenaT>(arena, Detail::g_State.spoolDirectoryText) / "breadcrumbs_current.txt";
+static void __hidden_store_current_breadcrumbs(ArenaT& arena, const BreadcrumbSnapshot& snapshot){
+    if(snapshot.spoolDirectoryText[0] == 0 || snapshot.breadcrumbCount == 0u)
+        return;
+
+    const ::Path<ArenaT> breadcrumbPath = ::Path<ArenaT>(arena, snapshot.spoolDirectoryText) / "breadcrumbs_current.txt";
     OutputFileStream stream(breadcrumbPath.c_str(), s_FileOpenBinary | s_FileOpenTruncate);
     if(!stream.is_open())
+        return;
+
+    for(usize i = 0u; i < snapshot.breadcrumbCount; ++i){
+        const Detail::FixedBreadcrumb& breadcrumb = snapshot.breadcrumbs[i];
+        stream
+            << breadcrumb.order
+            << " ["
+            << breadcrumb.category
+            << "] "
+            << breadcrumb.message
+            << '\n'
+        ;
+    }
+}
+
+static void __hidden_snapshot_current_breadcrumbs(BreadcrumbSnapshot& outSnapshot){
+    outSnapshot = BreadcrumbSnapshot{};
+    CopyFixedBuffer(outSnapshot.spoolDirectoryText, Detail::g_State.spoolDirectoryText);
+    if(outSnapshot.spoolDirectoryText[0] == 0)
         return;
 
     const usize begin = Detail::g_State.nextBreadcrumb >= Detail::s_MaxBreadcrumbs
@@ -53,14 +85,10 @@ static void __hidden_store_current_breadcrumbs(ArenaT& arena){
         if(!breadcrumb.used)
             continue;
 
-        stream
-            << breadcrumb.order
-            << " ["
-            << breadcrumb.category
-            << "] "
-            << breadcrumb.message
-            << '\n'
-        ;
+        if(outSnapshot.breadcrumbCount >= Detail::s_MaxBreadcrumbs)
+            break;
+
+        outSnapshot.breadcrumbs[outSnapshot.breadcrumbCount++] = breadcrumb;
     }
 }
 
@@ -297,12 +325,16 @@ bool SetCrashMetadata(const AStringView key, const AStringView value){
 
 template<typename ArenaT>
 bool AddCrashBreadcrumb(ArenaT& arena, const AStringView category, const AStringView message){
-    ScopedLock lock(Detail::g_State.mutex);
+    __hidden_crash_module::BreadcrumbSnapshot snapshot;
 
-    __hidden_crash_module::__hidden_store_breadcrumb(category, message);
+    {
+        ScopedLock lock(Detail::g_State.mutex);
 
-    if(Detail::g_State.spoolDirectoryText[0] != 0)
-        __hidden_crash_module::__hidden_store_current_breadcrumbs(arena);
+        __hidden_crash_module::__hidden_store_breadcrumb(category, message);
+        __hidden_crash_module::__hidden_snapshot_current_breadcrumbs(snapshot);
+    }
+
+    __hidden_crash_module::__hidden_store_current_breadcrumbs(arena, snapshot);
 
     return true;
 }

@@ -614,10 +614,23 @@ static CrashString CrashUploadUrl(Alloc::GlobalArena& arena){
     return CrashUploadUrl(arena, g_State.logServerUrl);
 }
 
-static bool UploadPackage(const CrashString& url, const CrashBytes& archiveBytes){
+static bool UploadPackage(Alloc::GlobalArena& arena, const CrashString& url, const CrashBytes& archiveBytes, const AStringView crashUploadToken){
     CURL* curl = curl_easy_init();
     if(!curl)
         return false;
+
+    curl_slist* headers = nullptr;
+    CrashString authorizationHeader{arena};
+    if(!crashUploadToken.empty()){
+        authorizationHeader.reserve(crashUploadToken.size() + 23u);
+        authorizationHeader += "Authorization: Bearer ";
+        authorizationHeader += crashUploadToken;
+        headers = curl_slist_append(headers, authorizationHeader.c_str());
+        if(!headers){
+            curl_easy_cleanup(curl);
+            return false;
+        }
+    }
 
     bool ok = true;
     ok = ok && curl_easy_setopt(curl, CURLOPT_URL, url.c_str()) == CURLE_OK;
@@ -627,6 +640,8 @@ static bool UploadPackage(const CrashString& url, const CrashBytes& archiveBytes
     ok = ok && curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 5000L) == CURLE_OK;
     ok = ok && curl_easy_setopt(curl, CURLOPT_POSTFIELDS, reinterpret_cast<const char*>(archiveBytes.data())) == CURLE_OK;
     ok = ok && curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(archiveBytes.size())) == CURLE_OK;
+    if(headers)
+        ok = ok && curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers) == CURLE_OK;
 
     if(ok)
         ok = curl_easy_perform(curl) == CURLE_OK;
@@ -635,6 +650,8 @@ static bool UploadPackage(const CrashString& url, const CrashBytes& archiveBytes
     if(ok)
         ok = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode) == CURLE_OK && responseCode >= 200 && responseCode < 300;
 
+    if(headers)
+        curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
     return ok;
 }
@@ -760,7 +777,13 @@ CrashDumpResult CrashPackageResult(const CrashRequest& request){
     return CrashDumpResult{ CrashDumpStatus::RequestQueued };
 }
 
-static bool UploadPackageDirectory(Alloc::GlobalArena& arena, const Path& spoolDirectory, const Path& packageDirectory, const CrashString& url){
+static bool UploadPackageDirectory(
+    Alloc::GlobalArena& arena,
+    const Path& spoolDirectory,
+    const Path& packageDirectory,
+    const CrashString& url,
+    const AStringView crashUploadToken
+){
     if(url.empty())
         return false;
 
@@ -776,7 +799,7 @@ static bool UploadPackageDirectory(Alloc::GlobalArena& arena, const Path& spoolD
         return false;
     }
 
-    if(UploadPackage(url, archiveBytes)){
+    if(UploadPackage(arena, url, archiveBytes, crashUploadToken)){
         WriteUploadAttemptText(arena, uploadingPackageDirectory, "uploaded");
         return MovePackage(uploadingPackageDirectory, UploadedDirectory(spoolDirectory));
     }
@@ -824,7 +847,7 @@ bool UploadCrashPackage(const CrashRequest& request){
 
     const Path packageDirectory = RequestPendingDirectory(arena, request);
     const CrashString packageName = PathToString<char>(arena, packageDirectory.filename());
-    const bool uploaded = UploadPackageDirectory(arena, spoolDirectory, packageDirectory, url);
+    const bool uploaded = UploadPackageDirectory(arena, spoolDirectory, packageDirectory, url, AStringView(request.crashUploadToken));
     static_cast<void>(ApplyCrashSpoolRetention(
         arena,
         spoolDirectory,
@@ -900,7 +923,7 @@ bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena){
         if(!IsDirectory(entry.path(), entryError) || entryError || !IsSafePackageName(arena, entry.path()))
             continue;
 
-        if(!UploadPackageDirectory(arena, spoolDirectory, entry.path(), url))
+        if(!UploadPackageDirectory(arena, spoolDirectory, entry.path(), url, AStringView(g_State.crashUploadToken)))
             allUploaded = false;
     }
 

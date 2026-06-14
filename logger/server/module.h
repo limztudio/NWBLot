@@ -55,7 +55,8 @@ protected:
         u16 port,
         BasicStringView<tchar> logFileNameBase = {},
         AStringView crashSymbolStoreDirectory = {},
-        CrashRetentionConfig crashRetentionConfig = CrashRetentionConfig{}
+        CrashRetentionConfig crashRetentionConfig = CrashRetentionConfig{},
+        AStringView crashUploadToken = AStringView()
     );
     bool internalUpdate();
 
@@ -66,6 +67,7 @@ protected:
 
 private:
     void enqueueCrashUpload(const Path& path);
+    [[nodiscard]] bool crashUploadAuthorized(MHD_Connection& connection)const;
     bool tryDequeueCrashUpload(PendingCrashUpload& outUpload);
 
 
@@ -73,6 +75,7 @@ private:
     MHD_Daemon* m_daemon;
     ProcessedMessageFile m_processedMsgFile;
     CrashIngestConfig m_crashIngestConfig;
+    AString<LogArena> m_crashUploadToken;
     CrashUploadQueue m_crashUploads;
 };
 

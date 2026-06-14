@@ -77,12 +77,14 @@ struct UpdateCallbackContext{
 
 struct LoaderOptions{
     AString<NWB::Core::Alloc::GlobalArena> logAddress;
+    AString<NWB::Core::Alloc::GlobalArena> crashUploadToken;
     ACompactString crashTest;
     bool enableGpuDebug = false;
     bool useStandaloneLogger = false;
 
     explicit LoaderOptions(NWB::Core::Alloc::GlobalArena& arena)
         : logAddress(arena)
+        , crashUploadToken(arena)
     {}
 };
 
@@ -208,6 +210,7 @@ bool InstallCrashReporting(CrashArena& crashArena, NWB::Core::Alloc::GlobalArena
         ? AStringView()
         : AStringView(options.logAddress.data(), options.logAddress.size())
     ;
+    crashConfig.crashUploadToken = AStringView(options.crashUploadToken.data(), options.crashUploadToken.size());
     crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
     crashConfig.enableGpuDumps = options.enableGpuDebug;
 
@@ -447,6 +450,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
         u16 port = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
         NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogAddress>(app, address);
         NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, port);
+        app.add_option("--crash-upload-token", options.crashUploadToken, "Bearer token sent with crash uploads");
         __hidden_loader::AddDebugCommandLineOptions(app, options, crashTest);
 
         try{

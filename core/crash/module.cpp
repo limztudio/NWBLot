@@ -221,6 +221,7 @@ bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config){
     CopyFixedBuffer(Detail::g_State.versionText, config.version);
     CopyFixedBuffer(Detail::g_State.buildId, config.buildId);
     CopyFixedBuffer(Detail::g_State.logServerUrl, config.logServerUrl);
+    CopyFixedBuffer(Detail::g_State.crashUploadToken, config.crashUploadToken);
 
     const ::Path<ArenaT> spoolDirectory = config.spoolDirectory.empty()
         ? DefaultCrashSpoolDirectory(arena)

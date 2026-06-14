@@ -85,6 +85,7 @@ struct CrashConfigT{
     AStringView version;
     ::Path<ArenaT> spoolDirectory;
     AStringView logServerUrl;
+    AStringView crashUploadToken;
     AStringView handlerExecutablePath;
     CrashCapturePolicy capturePolicy;
     CrashSpoolRetentionConfig spoolRetention;

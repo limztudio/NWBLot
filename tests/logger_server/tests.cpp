@@ -4,6 +4,7 @@
 
 #include <tests/test_context.h>
 
+#include <logger/server/crash_auth.h>
 #include <logger/server/crash_ingest.h>
 
 
@@ -333,6 +334,16 @@ static void TestCrashRetentionPrunesOldestInvalidUploads(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 }
 
+static void TestCrashUploadAuthorizationMatchesBearerToken(TestContext& context){
+    NWB_LOGSERVER_TEST_CHECK(context, NWB::Log::CrashUploadAuthorizationMatches(AStringView(), nullptr));
+    NWB_LOGSERVER_TEST_CHECK(context, NWB::Log::CrashUploadAuthorizationMatches(AStringView(), "bad"));
+    NWB_LOGSERVER_TEST_CHECK(context, NWB::Log::CrashUploadAuthorizationMatches("secret-token", "Bearer secret-token"));
+    NWB_LOGSERVER_TEST_CHECK(context, !NWB::Log::CrashUploadAuthorizationMatches("secret-token", nullptr));
+    NWB_LOGSERVER_TEST_CHECK(context, !NWB::Log::CrashUploadAuthorizationMatches("secret-token", "secret-token"));
+    NWB_LOGSERVER_TEST_CHECK(context, !NWB::Log::CrashUploadAuthorizationMatches("secret-token", "Bearer wrong"));
+    NWB_LOGSERVER_TEST_CHECK(context, !NWB::Log::CrashUploadAuthorizationMatches("secret-token", "Bearer secret-token "));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -355,6 +366,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("logserver crash", [](NWB::Tests::TestContext& conte
     __hidden_logger_server_tests::TestInvalidCrashPackageIsRejected(context);
     __hidden_logger_server_tests::TestCrashRetentionPrunesOldestAcceptedUploads(context);
     __hidden_logger_server_tests::TestCrashRetentionPrunesOldestInvalidUploads(context);
+    __hidden_logger_server_tests::TestCrashUploadAuthorizationMatchesBearerToken(context);
 })
 
 

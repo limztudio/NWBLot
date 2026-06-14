@@ -131,6 +131,7 @@ struct CrashRequest{
     char abi[s_MaxShortText] = {};
     char spoolDirectory[s_MaxPathText] = {};
     char logServerUrl[s_MaxUrlText] = {};
+    char crashUploadToken[s_MaxMediumText] = {};
     char triggerCategory[s_MaxShortText] = {};
     char triggerMessage[s_MaxMediumText] = {};
     char triggerFile[s_MaxPathText] = {};
@@ -177,6 +178,7 @@ struct CrashState{
     char versionText[s_MaxShortText] = {};
     char buildId[s_MaxMediumText] = {};
     char logServerUrl[s_MaxUrlText] = {};
+    char crashUploadToken[s_MaxMediumText] = {};
     char spoolDirectoryText[s_MaxPathText] = {};
     char handlerExecutablePathText[s_MaxPathText] = {};
     FixedMetadata metadata[s_MaxMetadata] = {};

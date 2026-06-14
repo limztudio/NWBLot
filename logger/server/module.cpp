@@ -4,6 +4,7 @@
 
 #include "module.h"
 
+#include "crash_auth.h"
 #include "frame.h"
 
 #include <core/alloc/standalone_runtime.h>
@@ -99,7 +100,7 @@ static void EnqueueServerMessage(Server& server, const tchar* message, const Typ
     server.enqueue(StringFormat(server.arena(), NWB_TEXT("{} on {}"), message, SERVER_NAME), type);
 }
 
-[[nodiscard]] MHD_Result QueueEmptyResponse(Server& server, MHD_Connection& connection){
+[[nodiscard]] MHD_Result QueueEmptyResponse(Server& server, MHD_Connection& connection, const unsigned int statusCode = MHD_HTTP_OK){
     static char s_EmptyResponse[] = "";
 
     auto* response = MHD_create_response_from_buffer(0, s_EmptyResponse, MHD_RESPMEM_PERSISTENT);
@@ -108,7 +109,7 @@ static void EnqueueServerMessage(Server& server, const tchar* message, const Typ
         return MHD_NO;
     }
 
-    const auto ret = MHD_queue_response(&connection, MHD_HTTP_OK, response);
+    const auto ret = MHD_queue_response(&connection, statusCode, response);
     MHD_destroy_response(response);
     return ret;
 }
@@ -244,6 +245,11 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     const bool isCrashUpload = NWB_STRCMP(url, "/crash") == 0;
 
     if(!conCls){
+        if(isCrashUpload && !thisPtr->crashUploadAuthorized(*connection)){
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Rejected unauthorized crash upload"), Type::Warning);
+            return __hidden_logger_server::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_UNAUTHORIZED);
+        }
+
         auto* info = __hidden_logger_server::CreateConnectionInfo(isCrashUpload);
         if(!info){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to allocate"), Type::Fatal);
@@ -325,6 +331,7 @@ Server::Server()
     , m_daemon(nullptr)
     , m_processedMsgFile(BaseType::arena())
     , m_crashIngestConfig(BaseType::arena())
+    , m_crashUploadToken(BaseType::arena())
     , m_crashUploads(BaseType::arena())
 {}
 Server::~Server(){
@@ -341,12 +348,14 @@ bool Server::internalInit(
     u16 port,
     BasicStringView<tchar> logFileNameBase,
     AStringView crashSymbolStoreDirectory,
-    CrashRetentionConfig crashRetentionConfig
+    CrashRetentionConfig crashRetentionConfig,
+    AStringView crashUploadToken
 ){
     m_crashIngestConfig.symbolication.symbolStoreDirectory.clear();
     if(!crashSymbolStoreDirectory.empty())
         m_crashIngestConfig.symbolication.symbolStoreDirectory = crashSymbolStoreDirectory;
     m_crashIngestConfig.retention = crashRetentionConfig;
+    m_crashUploadToken.assign(crashUploadToken.data(), crashUploadToken.size());
 
     if(logFileNameBase.empty()){
         if(!m_processedMsgFile.openByExecutableName())
@@ -372,6 +381,11 @@ void Server::enqueueCrashUpload(const Path& path){
 
     CopyFixedBuffer(upload.path, AStringView(pathText.data(), pathText.size()));
     m_crashUploads.emplace(upload);
+}
+
+bool Server::crashUploadAuthorized(MHD_Connection& connection)const{
+    const char* authorizationHeader = MHD_lookup_connection_value(&connection, MHD_HEADER_KIND, "Authorization");
+    return CrashUploadAuthorizationMatches(AStringView(m_crashUploadToken.data(), m_crashUploadToken.size()), authorizationHeader);
 }
 
 bool Server::tryDequeueCrashUpload(PendingCrashUpload& outUpload){

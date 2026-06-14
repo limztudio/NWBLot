@@ -23,11 +23,12 @@ static int MainLogic(
     u16 logPort,
     AStringView crashSymbolStoreDirectory,
     NWB::Log::CrashRetentionConfig crashRetentionConfig,
+    AStringView crashUploadToken,
     void* inst
 ){
     {
         NWB::Log::Server logger;
-        if(!logger.init(logPort, NWB_TEXT("logserver"), crashSymbolStoreDirectory, crashRetentionConfig))
+        if(!logger.init(logPort, NWB_TEXT("logserver"), crashSymbolStoreDirectory, crashRetentionConfig, crashUploadToken))
             return -1;
         NWB::Log::ServerLoggerRegistrationGuard loggerRegistrationGuard(logger);
         logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Log server: listening on port {}"), logPort), NWB::Log::Type::EssentialInfo);
@@ -66,12 +67,14 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
     NWB::Core::Alloc::GlobalArena commandLineArena("NWB::LogServer::CommandLine");
     u16 logPort = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
     AString<NWB::Core::Alloc::GlobalArena> crashSymbolStoreDirectory(commandLineArena);
+    AString<NWB::Core::Alloc::GlobalArena> crashUploadToken(commandLineArena);
     NWB::Log::CrashRetentionConfig crashRetentionConfig;
     {
         CLI::App app{ "logserver" };
 
         NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, logPort);
         app.add_option("--crash-symbol-store", crashSymbolStoreDirectory, "Directory containing crash symbol files");
+        app.add_option("--crash-upload-token", crashUploadToken, "Bearer token required for crash uploads; empty disables upload auth");
         app.add_option("--crash-retain-packages", crashRetentionConfig.maxExtractedPackages, "Maximum extracted crash packages to keep; zero disables pruning");
         app.add_option("--crash-retain-raw", crashRetentionConfig.maxRawArchives, "Maximum raw crash uploads to keep; zero disables pruning");
         app.add_option("--crash-retain-invalid", crashRetentionConfig.maxInvalidArchives, "Maximum invalid crash uploads to keep; zero disables pruning");
@@ -85,7 +88,13 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
         }
     }
 
-    return MainLogic(logPort, AStringView(crashSymbolStoreDirectory.data(), crashSymbolStoreDirectory.size()), crashRetentionConfig, inst);
+    return MainLogic(
+        logPort,
+        AStringView(crashSymbolStoreDirectory.data(), crashSymbolStoreDirectory.size()),
+        crashRetentionConfig,
+        AStringView(crashUploadToken.data(), crashUploadToken.size()),
+        inst
+    );
 }
 
 

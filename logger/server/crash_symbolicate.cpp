@@ -12,8 +12,12 @@
 #include <windows.h>
 #endif
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#include <cerrno>
+#include <fcntl.h>
 #include <cstdio>
 #include <cstring>
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
 
 
@@ -263,34 +267,83 @@ static void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept
 }
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-static void AppendShellQuoted(CrashReportText& outText, const AStringView text){
-    outText += '\'';
-    for(const char ch : text){
-        if(ch == '\'')
-            outText += "'\\''";
-        else
-            outText += ch;
-    }
-    outText += '\'';
+static void CloseFd(int& fd)noexcept{
+    if(fd < 0)
+        return;
+
+    static_cast<void>(::close(fd));
+    fd = -1;
 }
 
-[[nodiscard]] static bool CaptureShellCommandOutput(CrashReportText& outOutput, const CrashReportText& command){
+[[nodiscard]] static bool WaitForProcessSuccess(const pid_t childPid)noexcept{
+    int status = 0;
+    pid_t waitedPid = -1;
+    do{
+        waitedPid = ::waitpid(childPid, &status, 0);
+    }while(waitedPid < 0 && errno == EINTR);
+
+    return waitedPid == childPid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+[[nodiscard]] static bool CaptureProcessOutput(CrashReportText& outOutput, const char* const* argv){
     outOutput.clear();
 
-    FILE* pipe = ::popen(command.c_str(), "r");
-    if(!pipe)
+    if(!argv || !argv[0])
         return false;
 
-    char buffer[s_SymbolizerReadBufferBytes] = {};
-    while(std::fgets(buffer, sizeof(buffer), pipe)){
-        const usize length = static_cast<usize>(std::strlen(buffer));
-        if(outOutput.size() + length > s_SymbolizerOutputMaxBytes)
-            break;
-        outOutput.append(buffer, length);
+    int pipeFds[2] = { -1, -1 };
+    if(::pipe(pipeFds) != 0)
+        return false;
+
+    const pid_t childPid = ::fork();
+    if(childPid < 0){
+        CloseFd(pipeFds[0]);
+        CloseFd(pipeFds[1]);
+        return false;
     }
 
-    const int status = ::pclose(pipe);
-    return status == 0 && !outOutput.empty();
+    if(childPid == 0){
+        const int devNull = ::open("/dev/null", O_WRONLY);
+        if(devNull >= 0){
+            static_cast<void>(::dup2(devNull, STDERR_FILENO));
+            if(devNull != STDERR_FILENO)
+                static_cast<void>(::close(devNull));
+        }
+
+        static_cast<void>(::dup2(pipeFds[1], STDOUT_FILENO));
+        static_cast<void>(::close(pipeFds[0]));
+        static_cast<void>(::close(pipeFds[1]));
+        ::execvp(argv[0], const_cast<char* const*>(argv));
+        _exit(127);
+    }
+
+    CloseFd(pipeFds[1]);
+
+    char buffer[s_SymbolizerReadBufferBytes] = {};
+    bool readSucceeded = true;
+    for(;;){
+        const ssize_t readBytes = ::read(pipeFds[0], buffer, sizeof(buffer));
+        if(readBytes > 0){
+            const usize length = static_cast<usize>(readBytes);
+            if(outOutput.size() + length > s_SymbolizerOutputMaxBytes)
+                break;
+            outOutput.append(buffer, length);
+            continue;
+        }
+
+        if(readBytes == 0)
+            break;
+
+        if(errno == EINTR)
+            continue;
+
+        readSucceeded = false;
+        break;
+    }
+
+    CloseFd(pipeFds[0]);
+    const bool exitedSuccessfully = WaitForProcessSuccess(childPid);
+    return readSucceeded && exitedSuccessfully && !outOutput.empty();
 }
 
 [[nodiscard]] static bool NextTextLine(const AStringView text, usize& cursor, AStringView& outLine){
@@ -349,24 +402,46 @@ static void AppendShellQuoted(CrashReportText& outText, const AStringView text){
     const u64 moduleOffset,
     CrashReportText& outSymbol
 ){
-    CrashReportText command{arena};
+    CrashReportText addressArgument{arena};
+    AppendHexAddress(arena, addressArgument, moduleOffset);
+
     if(toolName == "llvm-symbolizer"){
-        command += "llvm-symbolizer --demangle --functions --inlining=false --obj=";
-        AppendShellQuoted(command, modulePathText);
-        command += " ";
-        AppendHexAddress(arena, command, moduleOffset);
-        command += " 2>/dev/null";
-    }
-    else{
-        command += "addr2line -f -C -e ";
-        AppendShellQuoted(command, modulePathText);
-        command += " ";
-        AppendHexAddress(arena, command, moduleOffset);
-        command += " 2>/dev/null";
+        CrashReportText objectArgument{arena};
+        objectArgument += "--obj=";
+        objectArgument.append(modulePathText.data(), modulePathText.size());
+
+        const char* const argv[] = {
+            "llvm-symbolizer",
+            "--demangle",
+            "--functions",
+            "--inlining=false",
+            objectArgument.c_str(),
+            addressArgument.c_str(),
+            nullptr
+        };
+
+        CrashReportText output{arena};
+        if(!CaptureProcessOutput(output, argv))
+            return false;
+
+        return ExtractSymbolizerResult(outSymbol, AStringView(output.data(), output.size()));
     }
 
+    CrashReportText modulePathArgument{arena};
+    modulePathArgument.append(modulePathText.data(), modulePathText.size());
+
+    const char* const argv[] = {
+        "addr2line",
+        "-f",
+        "-C",
+        "-e",
+        modulePathArgument.c_str(),
+        addressArgument.c_str(),
+        nullptr
+    };
+
     CrashReportText output{arena};
-    if(!CaptureShellCommandOutput(output, command))
+    if(!CaptureProcessOutput(output, argv))
         return false;
 
     return ExtractSymbolizerResult(outSymbol, AStringView(output.data(), output.size()));

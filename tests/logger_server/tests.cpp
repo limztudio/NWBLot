@@ -12,6 +12,7 @@
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 #include <cstdlib>
 #include <dlfcn.h>
+#include <unistd.h>
 #endif
 
 
@@ -231,8 +232,52 @@ static void AppendHexAddressText(NWB::Core::Alloc::GlobalArena& arena, CrashTest
     return true;
 }
 
-[[nodiscard]] static bool LinuxExternalSymbolizerAvailable(){
-    return std::system("command -v llvm-symbolizer >/dev/null 2>&1 || command -v addr2line >/dev/null 2>&1") == 0;
+[[nodiscard]] static bool ExecutableAvailableInPath(
+    NWB::Core::Alloc::GlobalArena& arena,
+    const AStringView searchPath,
+    const AStringView executableName
+){
+    usize cursor = 0u;
+    while(cursor <= searchPath.size()){
+        const usize begin = cursor;
+        while(cursor < searchPath.size() && searchPath[cursor] != ':')
+            ++cursor;
+
+        const AStringView directoryText(searchPath.data() + begin, cursor - begin);
+        CrashTestPath candidate(arena);
+        if(directoryText.empty())
+            candidate = ".";
+        else{
+            CrashTestText directory(arena);
+            directory.assign(directoryText.data(), directoryText.size());
+            candidate = CrashTestPath(arena, AStringView(directory.data(), directory.size()));
+        }
+
+        CrashTestText executable(arena);
+        executable.assign(executableName.data(), executableName.size());
+        candidate /= executable.c_str();
+
+        const CrashTestText candidateText = PathToString<char>(arena, candidate);
+        if(::access(candidateText.c_str(), X_OK) == 0)
+            return true;
+
+        if(cursor >= searchPath.size())
+            break;
+        ++cursor;
+    }
+
+    return false;
+}
+
+[[nodiscard]] static bool LinuxExternalSymbolizerAvailable(NWB::Core::Alloc::GlobalArena& arena){
+    const char* const pathText = std::getenv("PATH");
+    if(!pathText || pathText[0] == 0)
+        return false;
+
+    const AStringView searchPath(pathText);
+    return ExecutableAvailableInPath(arena, searchPath, "llvm-symbolizer")
+        || ExecutableAvailableInPath(arena, searchPath, "addr2line")
+    ;
 }
 #endif
 
@@ -280,11 +325,11 @@ static void TestLinuxCrashPackageMapsInstructionPointer(TestContext& context){
 
 static void TestLinuxCrashPackageSymbolicatesSelfFrame(TestContext& context){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    if(!LinuxExternalSymbolizerAvailable())
-        return;
-
     TestArena testArena;
     auto& arena = testArena.arena;
+    if(!LinuxExternalSymbolizerAvailable(arena))
+        return;
+
     constexpr AStringView s_Group("logger_server_linux_symbolized_crash_test");
     constexpr AStringView s_Stem("linux_symbolized_001");
     RemoveTestArtifacts(arena, s_Group);

@@ -38,6 +38,7 @@ inline constexpr const char* s_BreadcrumbsFileName = "breadcrumbs.txt";
 inline constexpr const char* s_EmergencyFileName = "emergency.txt";
 inline constexpr const char* s_ArtifactStrategyFileName = "artifact_strategy.txt";
 inline constexpr const char* s_CpuContextFileName = "cpu_context.txt";
+inline constexpr const char* s_CallstackFileName = "callstack.txt";
 inline constexpr const char* s_TriggerFileName = "trigger.txt";
 inline constexpr const char* s_SymbolicationFileName = "symbolication.txt";
 inline constexpr const char* s_GpuAttachmentsFileName = "gpu_attachments.txt";

@@ -39,6 +39,7 @@ inline constexpr usize s_MaxMetadata = 32u;
 inline constexpr usize s_MaxBreadcrumbs = 128u;
 inline constexpr usize s_MaxGpuCrashProviders = 8u;
 inline constexpr usize s_MaxDiagnosticSites = 64u;
+inline constexpr usize s_MaxCallstackFrames = 64u;
 inline constexpr usize s_MaxShortText = 64u;
 inline constexpr usize s_MaxMediumText = 256u;
 inline constexpr usize s_MaxPathText = 1024u;
@@ -145,6 +146,7 @@ struct CrashRequest{
     u64 stackPointer = 0u;
     u64 framePointer = 0u;
     u32 triggerLine = 0u;
+    u32 callstackFrameCount = 0u;
     u8 enableGpuDumps = 0u;
     char crashId[s_MaxShortText] = {};
     char applicationName[s_MaxShortText] = {};
@@ -161,6 +163,7 @@ struct CrashRequest{
     u32 breadcrumbCount = 0u;
     FixedMetadata metadata[s_MaxMetadata] = {};
     FixedBreadcrumb breadcrumbs[s_MaxBreadcrumbs] = {};
+    u64 callstackFrames[s_MaxCallstackFrames] = {};
 };
 
 struct CrashUploadSnapshot{
@@ -177,6 +180,8 @@ struct CrashDumpRequestOptions{
     u64 instructionPointer = 0u;
     u64 stackPointer = 0u;
     u64 framePointer = 0u;
+    u32 callstackFrameCount = 0u;
+    u64 callstackFrames[s_MaxCallstackFrames] = {};
     AStringView triggerCategory;
     AStringView triggerMessage;
     AStringView triggerFile;

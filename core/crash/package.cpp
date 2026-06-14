@@ -287,6 +287,10 @@ static bool HasCpuContext(const CrashRequest& request){
     ;
 }
 
+static bool HasCallstack(const CrashRequest& request){
+    return request.callstackFrameCount != 0u;
+}
+
 static bool HasTriggerContext(const CrashRequest& request){
     return request.triggerCategory[0] != 0 || request.triggerMessage[0] != 0 || request.triggerFile[0] != 0 || request.triggerLine != 0u;
 }
@@ -303,6 +307,23 @@ static CrashStringT<ArenaT> BuildCpuContextText(ArenaT& arena, const CrashReques
     text += "\nframe_pointer=";
     AppendUnsignedText(text, request.framePointer);
     text += "\n";
+    return text;
+}
+
+template<typename ArenaT>
+static CrashStringT<ArenaT> BuildCallstackText(ArenaT& arena, const CrashRequest& request){
+    CrashStringT<ArenaT> text{arena};
+    const u32 frameCount = request.callstackFrameCount > s_MaxCallstackFrames
+        ? static_cast<u32>(s_MaxCallstackFrames)
+        : request.callstackFrameCount
+    ;
+    for(u32 i = 0u; i < frameCount; ++i){
+        text += '#';
+        AppendUnsignedText(text, i);
+        text += " 0x";
+        text += FormatHex64A(arena, request.callstackFrames[i]);
+        text += '\n';
+    }
     return text;
 }
 
@@ -363,6 +384,8 @@ static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
     if(!WriteCrashTextFile(packageDirectory / PackageNames::s_ArtifactStrategyFileName, BuildArtifactStrategyText(arena, request)))
         return false;
     if(HasCpuContext(request) && !WriteCrashTextFile(packageDirectory / PackageNames::s_CpuContextFileName, BuildCpuContextText(arena, request)))
+        return false;
+    if(HasCallstack(request) && !WriteCrashTextFile(packageDirectory / PackageNames::s_CallstackFileName, BuildCallstackText(arena, request)))
         return false;
     if(HasTriggerContext(request) && !WriteCrashTextFile(packageDirectory / PackageNames::s_TriggerFileName, BuildTriggerText(arena, request)))
         return false;

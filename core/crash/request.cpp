@@ -125,6 +125,12 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     request.stackPointer = options.stackPointer;
     request.framePointer = options.framePointer;
     request.triggerLine = options.triggerLine;
+    request.callstackFrameCount = options.callstackFrameCount > s_MaxCallstackFrames
+        ? static_cast<u32>(s_MaxCallstackFrames)
+        : options.callstackFrameCount
+    ;
+    for(u32 i = 0u; i < request.callstackFrameCount; ++i)
+        request.callstackFrames[i] = options.callstackFrames[i];
     CopyFixedBuffer(request.triggerCategory, options.triggerCategory);
     CopyFixedBuffer(request.triggerMessage, options.triggerMessage);
     CopyFixedBuffer(request.triggerFile, options.triggerFile);

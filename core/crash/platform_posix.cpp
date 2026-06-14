@@ -43,6 +43,12 @@ inline constexpr usize s_AArch64FramePointerRegisterIndex = 29u;
 inline constexpr usize s_PipeFileDescriptorCount = 2u;
 inline constexpr usize s_PipeReadEndIndex = 0u;
 inline constexpr usize s_PipeWriteEndIndex = 1u;
+inline constexpr usize s_MaxFramePointerWalkBytes = 8u * 1024u * 1024u;
+
+struct FramePointerRecord{
+    const FramePointerRecord* previous = nullptr;
+    const void* returnAddress = nullptr;
+};
 
 
 [[nodiscard]] static bool __hidden_write_all_fd(const int fd, const void* const data, const usize byteCount)noexcept{
@@ -64,6 +70,48 @@ inline constexpr usize s_PipeWriteEndIndex = 1u;
     return true;
 }
 
+[[nodiscard]] static bool __hidden_is_aligned_pointer(const u64 address)noexcept{
+    return (address & (sizeof(void*) - 1u)) == 0u;
+}
+
+static void __hidden_append_callstack_frame(Detail::CrashDumpRequestOptions& options, const u64 address)noexcept{
+    if(address == 0u || options.callstackFrameCount >= Detail::s_MaxCallstackFrames)
+        return;
+    if(options.callstackFrameCount != 0u && options.callstackFrames[options.callstackFrameCount - 1u] == address)
+        return;
+
+    options.callstackFrames[options.callstackFrameCount++] = address;
+}
+
+static void __hidden_capture_frame_pointer_callstack(
+    Detail::CrashDumpRequestOptions& options,
+    const u64 instructionPointer,
+    const u64 stackPointer,
+    const u64 framePointer
+)noexcept{
+    __hidden_append_callstack_frame(options, instructionPointer);
+
+    if(stackPointer == 0u || framePointer == 0u || !__hidden_is_aligned_pointer(framePointer))
+        return;
+    if(framePointer < stackPointer || framePointer - stackPointer > s_MaxFramePointerWalkBytes)
+        return;
+
+    u64 currentFrame = framePointer;
+    while(options.callstackFrameCount < Detail::s_MaxCallstackFrames){
+        const auto* const frame = reinterpret_cast<const FramePointerRecord*>(static_cast<usize>(currentFrame));
+        const u64 nextFrame = static_cast<u64>(reinterpret_cast<usize>(frame->previous));
+        const u64 returnAddress = static_cast<u64>(reinterpret_cast<usize>(frame->returnAddress));
+        __hidden_append_callstack_frame(options, returnAddress);
+
+        if(nextFrame <= currentFrame || !__hidden_is_aligned_pointer(nextFrame))
+            break;
+        if(nextFrame < stackPointer || nextFrame - stackPointer > s_MaxFramePointerWalkBytes)
+            break;
+
+        currentFrame = nextFrame;
+    }
+}
+
 static void __hidden_capture_signal_context(Detail::CrashDumpRequestOptions& options, const siginfo_t* signalInfo, const void* signalContext)noexcept{
     if(signalInfo)
         options.faultAddress = static_cast<u64>(reinterpret_cast<usize>(signalInfo->si_addr));
@@ -81,6 +129,8 @@ static void __hidden_capture_signal_context(Detail::CrashDumpRequestOptions& opt
     options.stackPointer = static_cast<u64>(context->uc_mcontext.sp);
     options.framePointer = static_cast<u64>(context->uc_mcontext.regs[s_AArch64FramePointerRegisterIndex]);
 #endif
+
+    __hidden_capture_frame_pointer_callstack(options, options.instructionPointer, options.stackPointer, options.framePointer);
 }
 
 static void __hidden_signal_handler(const int signalNumber, siginfo_t* signalInfo, void* signalContext)noexcept{
@@ -212,12 +262,24 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
     outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
     outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_frame_address(0)));
     outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_return_address(0)));
+    __hidden_crash_posix::__hidden_capture_frame_pointer_callstack(
+        outOptions,
+        outOptions.instructionPointer,
+        outOptions.stackPointer,
+        outOptions.framePointer
+    );
 #elif defined(__aarch64__)
     void* stackPointer = nullptr;
     __asm__ volatile("mov %0, sp" : "=r"(stackPointer));
     outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
     outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_frame_address(0)));
     outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_return_address(0)));
+    __hidden_crash_posix::__hidden_capture_frame_pointer_callstack(
+        outOptions,
+        outOptions.instructionPointer,
+        outOptions.stackPointer,
+        outOptions.framePointer
+    );
 #endif
 }
 

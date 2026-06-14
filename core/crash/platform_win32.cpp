@@ -26,6 +26,7 @@ namespace __hidden_crash_win32{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 inline constexpr usize s_HandlerCommandLineReserveSlack = 96u;
+inline constexpr DWORD s_HandlerExitWaitMilliseconds = 3000u;
 
 
 [[nodiscard]] static bool __hidden_write_all(const HANDLE handle, const void* const data, const usize byteCount)noexcept{
@@ -257,6 +258,9 @@ void UninstallPlatformResources(){
         CloseHandle(g_State.requestWriteHandle);
         g_State.requestWriteHandle = INVALID_HANDLE_VALUE;
     }
+
+    if(g_State.handlerProcessInfo.hProcess)
+        WaitForSingleObject(g_State.handlerProcessInfo.hProcess, __hidden_crash_win32::s_HandlerExitWaitMilliseconds);
 
     if(g_State.crashHandledEvent){
         CloseHandle(g_State.crashHandledEvent);

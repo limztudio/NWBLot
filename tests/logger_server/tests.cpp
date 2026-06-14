@@ -151,6 +151,7 @@ static void BuildLinuxCrashArchive(NWB::Core::Alloc::GlobalArena& arena, CrashTe
     const CrashTestText manifest = BuildManifest(arena, crashId, "linux");
     AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
     AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "fault_address=0\ninstruction_pointer=4198964\nstack_pointer=0\nframe_pointer=0\n");
+    AppendArchiveFile(archive, CrashNames::s_CallstackFileName, "#0 0x0000000000401234\n#1 0x0000000000401240\n");
     AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
 }
 
@@ -160,6 +161,18 @@ static void BuildLinuxCrashArchive(NWB::Core::Alloc::GlobalArena& arena, CrashTe
 
 [[nodiscard]] static bool ContainsMessage(const NWB::Log::LogString& text, const TStringView needle){
     return TStringView(text.data(), text.size()).find(needle) != TStringView::npos;
+}
+
+static void PreserveObservedReport(TestContext& context, NWB::Core::Alloc::GlobalArena& arena, const CrashTestText& report){
+    const char* const outputPathText = NWB_GETENV("NWB_LOGSERVER_CRASH_TEST_OBSERVE_PATH");
+    if(!outputPathText || outputPathText[0] == 0)
+        return;
+
+    const CrashTestPath outputPath(arena, AStringView(outputPathText));
+    ErrorCode error;
+    static_cast<void>(EnsureDirectories(outputPath.parent_path(), error));
+    NWB_LOGSERVER_TEST_CHECK(context, !error);
+    NWB_LOGSERVER_TEST_CHECK(context, WriteTextFile(outputPath, AStringView(report.data(), report.size())));
 }
 
 
@@ -189,11 +202,17 @@ static void TestLinuxCrashPackageMapsInstructionPointer(TestContext& context){
     CrashTestText report(arena);
     NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=linux"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "status=callstack_captured"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "symbol_store="));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "symbol_store_status=missing"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "instruction_pointer_module=/tmp/nwb_loader"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "module_relative_ip=0x0000000000001234"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[callstack]"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "#0 0x0000000000401234 /tmp/nwb_loader+0x0000000000001234"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "#1 0x0000000000401240 /tmp/nwb_loader+0x0000000000001240"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "core_artifact=missing"));
+
+    PreserveObservedReport(context, arena, report);
 
     RemoveTestArtifacts(arena, s_Group);
 }

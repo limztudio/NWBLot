@@ -206,8 +206,69 @@ static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport,
     return false;
 }
 
+[[nodiscard]] static bool ParseCallstackFrameAddress(const AStringView line, u64& outAddress){
+    const usize prefix = line.find("0x");
+    if(prefix == AStringView::npos)
+        return false;
+
+    usize end = prefix + 2u;
+    while(end < line.size() && line[end] != ' ' && line[end] != '\t' && line[end] != '\r' && line[end] != '\n')
+        ++end;
+    if(end == prefix + 2u)
+        return false;
+
+    return ::ParseVariableHexU64(AStringView(line.data() + prefix + 2u, end - prefix - 2u), outAddress);
+}
+
+static void AppendLinuxClientCallstack(
+    LogArena& arena,
+    const AStringView callstackText,
+    const AStringView procMapsText,
+    const bool procMapsPresent,
+    CrashReportText& outReport
+){
+    outReport += "\n[callstack]\n";
+
+    usize cursor = 0u;
+    while(cursor < callstackText.size()){
+        const usize begin = cursor;
+        while(cursor < callstackText.size() && callstackText[cursor] != '\n' && callstackText[cursor] != '\r')
+            ++cursor;
+
+        const AStringView line(callstackText.data() + begin, cursor - begin);
+        while(cursor < callstackText.size() && (callstackText[cursor] == '\n' || callstackText[cursor] == '\r'))
+            ++cursor;
+
+        const AStringView trimmed = TrimLeftView(line);
+        if(trimmed.empty())
+            continue;
+
+        outReport.append(trimmed.data(), trimmed.size());
+
+        u64 address = 0u;
+        if(procMapsPresent && ParseCallstackFrameAddress(trimmed, address)){
+            u64 moduleBegin = 0u;
+            CrashReportText modulePath{arena};
+            if(FindProcMapForAddress(procMapsText, address, moduleBegin, modulePath)){
+                outReport += " ";
+                outReport += modulePath;
+                outReport += "+";
+                AppendHexAddress(arena, outReport, address - moduleBegin);
+            }
+        }
+
+        outReport += "\n";
+    }
+}
+
 static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, CrashReportText& outReport){
-    outReport += "status=not_decoded\nresolver=elf_dwarf_core\n";
+    CrashReportText clientCallstack{arena};
+    const bool clientCallstackPresent = ReadTextFile(packageDirectory / CrashNames::s_CallstackFileName, clientCallstack) && !clientCallstack.empty();
+
+    outReport += clientCallstackPresent
+        ? "status=callstack_captured\nresolver=linux_client_frame_pointer\n"
+        : "status=not_decoded\nresolver=elf_dwarf_core\n"
+    ;
 
     const bool corePresent =
         RegularFileExists(packageDirectory / CrashNames::s_LinuxCoreFileName)
@@ -231,6 +292,8 @@ static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirec
     u64 instructionPointer = 0u;
     if(!cpuContextPresent || !FindKeyValueU64(AStringView(cpuContext.data(), cpuContext.size()), "instruction_pointer", instructionPointer) || instructionPointer == 0u){
         outReport += "detail=ELF/DWARF stack resolver requires a core-compatible artifact; instruction pointer mapping unavailable\n";
+        if(clientCallstackPresent)
+            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), procMapsPresent, outReport);
         return;
     }
 
@@ -240,6 +303,8 @@ static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirec
 
     if(!procMapsPresent){
         outReport += "detail=ELF/DWARF stack resolver requires a core-compatible artifact; proc maps missing for module lookup\n";
+        if(clientCallstackPresent)
+            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(), false, outReport);
         return;
     }
 
@@ -247,6 +312,8 @@ static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirec
     CrashReportText modulePath{arena};
     if(!FindProcMapForAddress(AStringView(procMaps.data(), procMaps.size()), instructionPointer, moduleBegin, modulePath)){
         outReport += "detail=ELF/DWARF stack resolver requires a core-compatible artifact; instruction pointer was not found in proc maps\n";
+        if(clientCallstackPresent)
+            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), true, outReport);
         return;
     }
 
@@ -254,7 +321,12 @@ static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirec
     outReport += modulePath;
     outReport += "\nmodule_relative_ip=";
     AppendHexAddress(arena, outReport, instructionPointer - moduleBegin);
-    outReport += "\ndetail=module-relative crash address captured; full Linux callstack requires a core-compatible artifact and DWARF resolver\n";
+    outReport += clientCallstackPresent
+        ? "\ndetail=client frame-pointer callstack captured; full symbolic names require DWARF resolver\n"
+        : "\ndetail=module-relative crash address captured; full Linux callstack requires a core-compatible artifact and DWARF resolver\n"
+    ;
+    if(clientCallstackPresent)
+        AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), true, outReport);
 }
 
 static void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDirectory, CrashReportText& outReport){

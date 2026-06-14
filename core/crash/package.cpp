@@ -106,8 +106,8 @@ static void AppendUnsignedText(CrashStringT<ArenaT>& out, const u64 value){
 }
 
 template<typename ArenaT>
-static void WriteCrashTextFile(const ::Path<ArenaT>& path, const CrashStringT<ArenaT>& text){
-    static_cast<void>(WriteTextFile(path, AStringView(text.data(), text.size())));
+static bool WriteCrashTextFile(const ::Path<ArenaT>& path, const CrashStringT<ArenaT>& text){
+    return WriteTextFile(path, AStringView(text.data(), text.size()));
 }
 
 template<typename ArenaT>
@@ -341,15 +341,20 @@ static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
     if(error)
         return false;
 
-    WriteCrashTextFile(packageDirectory / "manifest.json", BuildManifest(arena, request));
-    WriteCrashTextFile(packageDirectory / "metadata.txt", BuildMetadataText(arena, request));
-    WriteCrashTextFile(packageDirectory / "breadcrumbs.txt", BuildBreadcrumbText(arena, request));
-    WriteCrashTextFile(packageDirectory / "emergency.txt", BuildEmergencyText(arena, request));
-    WriteCrashTextFile(packageDirectory / "artifact_strategy.txt", BuildArtifactStrategyText(arena, request));
-    if(HasCpuContext(request))
-        WriteCrashTextFile(packageDirectory / "cpu_context.txt", BuildCpuContextText(arena, request));
-    if(HasTriggerContext(request))
-        WriteCrashTextFile(packageDirectory / "trigger.txt", BuildTriggerText(arena, request));
+    if(!WriteCrashTextFile(packageDirectory / "manifest.json", BuildManifest(arena, request)))
+        return false;
+    if(!WriteCrashTextFile(packageDirectory / "metadata.txt", BuildMetadataText(arena, request)))
+        return false;
+    if(!WriteCrashTextFile(packageDirectory / "breadcrumbs.txt", BuildBreadcrumbText(arena, request)))
+        return false;
+    if(!WriteCrashTextFile(packageDirectory / "emergency.txt", BuildEmergencyText(arena, request)))
+        return false;
+    if(!WriteCrashTextFile(packageDirectory / "artifact_strategy.txt", BuildArtifactStrategyText(arena, request)))
+        return false;
+    if(HasCpuContext(request) && !WriteCrashTextFile(packageDirectory / "cpu_context.txt", BuildCpuContextText(arena, request)))
+        return false;
+    if(HasTriggerContext(request) && !WriteCrashTextFile(packageDirectory / "trigger.txt", BuildTriggerText(arena, request)))
+        return false;
     return true;
 }
 
@@ -391,7 +396,7 @@ static void WriteGpuCrashAttachments(ArenaT& arena, const CrashRequest& request)
     if(status.empty())
         status = "no gpu crash providers registered in this process\n";
 
-    WriteCrashTextFile(packageDirectory / "gpu_attachments.txt", status);
+    static_cast<void>(WriteCrashTextFile(packageDirectory / "gpu_attachments.txt", status));
 }
 
 
@@ -471,7 +476,7 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
 #if defined(NWB_PLATFORM_WINDOWS)
     if(request.platform == PlatformKind::Windows){
         const bool dumpWritten = WriteWindowsMinidump(arena, request);
-        WriteCrashTextFile(
+        if(!WriteCrashTextFile(
             RequestPendingDirectory(arena, request) / "symbolication.txt",
             CrashStringT<ArenaT>(
                 dumpWritten
@@ -479,7 +484,8 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
                     : "minidump capture failed; metadata package only\n",
                 arena
             )
-        );
+        ))
+            return false;
     }
 #elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     if(request.platform == PlatformKind::Linux){
@@ -493,16 +499,18 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
         CopyProcFile(arena, request, "status", "proc_status.txt");
         CopyFileToPackage(arena, request, "/proc/sys/kernel/core_pattern", "linux_core_pattern.txt");
         CopyFileToPackage(arena, request, "/proc/sys/kernel/core_uses_pid", "linux_core_uses_pid.txt");
-        WriteCrashTextFile(
+        if(!WriteCrashTextFile(
             RequestPendingDirectory(arena, request) / "symbolication.txt",
             CrashStringT<ArenaT>("linux crash package captured; OS core policy remains authoritative and DWARF symbolication pending\n", arena)
-        );
+        ))
+            return false;
     }
 #else
-    WriteCrashTextFile(
+    if(!WriteCrashTextFile(
         RequestPendingDirectory(arena, request) / "symbolication.txt",
         CrashStringT<ArenaT>("native platform crash artifact expected; server-side symbolication pending\n", arena)
-    );
+    ))
+        return false;
 #endif
 
     return true;
@@ -608,10 +616,6 @@ static CrashString CrashUploadUrl(Alloc::GlobalArena& arena, const char* logServ
     else
         url += "/crash";
     return url;
-}
-
-static CrashString CrashUploadUrl(Alloc::GlobalArena& arena){
-    return CrashUploadUrl(arena, g_State.logServerUrl);
 }
 
 static bool UploadPackage(Alloc::GlobalArena& arena, const CrashString& url, const CrashBytes& archiveBytes, const AStringView crashUploadToken){
@@ -843,7 +847,8 @@ bool UploadCrashPackage(const CrashRequest& request){
     if(url.empty())
         return false;
 
-    curl_global_init(CURL_GLOBAL_ALL);
+    if(curl_global_init(CURL_GLOBAL_ALL) != CURLE_OK)
+        return false;
 
     const Path packageDirectory = RequestPendingDirectory(arena, request);
     const CrashString packageName = PathToString<char>(arena, packageDirectory.filename());
@@ -851,7 +856,7 @@ bool UploadCrashPackage(const CrashRequest& request){
     static_cast<void>(ApplyCrashSpoolRetention(
         arena,
         spoolDirectory,
-        g_State.spoolRetention,
+        request.spoolRetention,
         AStringView(packageName.data(), packageName.size())
     ));
     return uploaded;
@@ -862,13 +867,13 @@ static void WriteAndroidCollectionNote(Alloc::PersistentArena& arena, const Cras
     CrashStringT<Alloc::PersistentArena> text{arena};
     text += "application_exit_info=not_collected_by_native_layer\n";
     text += "detail=Java/Kotlin host should attach ApplicationExitInfo tombstone data on next launch\n";
-    WriteCrashTextFile(RequestPendingDirectory(arena, request) / "android_collection.txt", text);
+    static_cast<void>(WriteCrashTextFile(RequestPendingDirectory(arena, request) / "android_collection.txt", text));
 }
 
-static void CollectAndroidEmergencyRecord(){
+static void CollectAndroidEmergencyRecord(const CrashUploadSnapshot& snapshot){
     Alloc::PersistentArena& dumpArena = DumpArena();
     const ::Path<Alloc::PersistentArena> recordPath =
-        ::Path<Alloc::PersistentArena>(dumpArena, g_State.spoolDirectoryText) / "last_android_native_crash_request.bin"
+        ::Path<Alloc::PersistentArena>(dumpArena, snapshot.spoolDirectory) / "last_android_native_crash_request.bin"
     ;
 
     CrashBytesT<Alloc::PersistentArena> bytes{dumpArena};
@@ -888,25 +893,27 @@ static void CollectAndroidEmergencyRecord(){
     static_cast<void>(WriteBinaryFile(recordPath, empty));
 }
 #else
-static void CollectAndroidEmergencyRecord(){
+static void CollectAndroidEmergencyRecord(const CrashUploadSnapshot& snapshot){
+    static_cast<void>(snapshot);
 }
 #endif
 
-bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena){
-    CollectAndroidEmergencyRecord();
+bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena, const CrashUploadSnapshot& snapshot){
+    CollectAndroidEmergencyRecord(snapshot);
 
-    if(g_State.spoolDirectoryText[0] == 0)
+    if(snapshot.spoolDirectory[0] == 0)
         return false;
 
-    const Path spoolDirectory(arena, g_State.spoolDirectoryText);
+    const Path spoolDirectory(arena, snapshot.spoolDirectory);
     RecoverUploadingPackageDirectories(arena, spoolDirectory);
-    bool retentionOk = ApplyCrashSpoolRetention(arena, spoolDirectory, g_State.spoolRetention);
+    bool retentionOk = ApplyCrashSpoolRetention(arena, spoolDirectory, snapshot.spoolRetention);
 
-    const CrashString url = CrashUploadUrl(arena);
+    const CrashString url = CrashUploadUrl(arena, snapshot.logServerUrl);
     if(url.empty())
         return false;
 
-    curl_global_init(CURL_GLOBAL_ALL);
+    if(curl_global_init(CURL_GLOBAL_ALL) != CURLE_OK)
+        return false;
 
     bool allUploaded = true;
     const Path pendingDirectory = PendingDirectory(spoolDirectory);
@@ -923,11 +930,11 @@ bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena){
         if(!IsDirectory(entry.path(), entryError) || entryError || !IsSafePackageName(arena, entry.path()))
             continue;
 
-        if(!UploadPackageDirectory(arena, spoolDirectory, entry.path(), url, AStringView(g_State.crashUploadToken)))
+        if(!UploadPackageDirectory(arena, spoolDirectory, entry.path(), url, AStringView(snapshot.crashUploadToken)))
             allUploaded = false;
     }
 
-    retentionOk = ApplyCrashSpoolRetention(arena, spoolDirectory, g_State.spoolRetention) && retentionOk;
+    retentionOk = ApplyCrashSpoolRetention(arena, spoolDirectory, snapshot.spoolRetention) && retentionOk;
     return allUploaded && retentionOk;
 }
 

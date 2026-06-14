@@ -318,8 +318,16 @@ CrashDumpResult CaptureCrashDump(const AStringView category, const AStringView m
 }
 
 bool FlushPendingCrashReports(Alloc::GlobalArena& arena){
-    ScopedLock lock(Detail::g_State.mutex);
-    return Detail::FlushPendingCrashReportsImpl(arena);
+    Detail::CrashUploadSnapshot snapshot;
+    {
+        ScopedLock lock(Detail::g_State.mutex);
+        snapshot.spoolRetention = Detail::g_State.spoolRetention;
+        CopyFixedBuffer(snapshot.spoolDirectory, Detail::g_State.spoolDirectoryText);
+        CopyFixedBuffer(snapshot.logServerUrl, Detail::g_State.logServerUrl);
+        CopyFixedBuffer(snapshot.crashUploadToken, Detail::g_State.crashUploadToken);
+    }
+
+    return Detail::FlushPendingCrashReportsImpl(arena, snapshot);
 }
 
 bool RegisterGpuCrashProvider(const GpuCrashProvider& provider){

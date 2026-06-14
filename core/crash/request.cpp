@@ -82,6 +82,7 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
     outRequest.threadId = CurrentThreadId();
     outRequest.dumpDetailMode = static_cast<u32>(g_State.dumpDetailMode);
     outRequest.enableGpuDumps = g_State.enableGpuDumps ? 1u : 0u;
+    outRequest.spoolRetention = g_State.spoolRetention;
 
     const u64 sequence = g_State.crashSequence.fetch_add(1u, MemoryOrder::relaxed);
     BuildCrashId(outRequest, sequence);

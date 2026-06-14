@@ -117,6 +117,7 @@ struct CrashRequest{
     u32 threadId = 0u;
     u32 dumpDetailMode = DumpDetailMode::Small;
     u32 uploadPolicy = CrashUploadPolicy::ImmediateAfterWrite;
+    CrashSpoolRetentionConfig spoolRetention;
     u64 exceptionPointers = 0u;
     u64 faultAddress = 0u;
     u64 instructionPointer = 0u;
@@ -139,6 +140,13 @@ struct CrashRequest{
     u32 breadcrumbCount = 0u;
     FixedMetadata metadata[s_MaxMetadata] = {};
     FixedBreadcrumb breadcrumbs[s_MaxBreadcrumbs] = {};
+};
+
+struct CrashUploadSnapshot{
+    CrashSpoolRetentionConfig spoolRetention;
+    char spoolDirectory[s_MaxPathText] = {};
+    char logServerUrl[s_MaxUrlText] = {};
+    char crashUploadToken[s_MaxMediumText] = {};
 };
 
 struct CrashDumpRequestOptions{
@@ -234,7 +242,7 @@ template<typename ArenaT>
     const CrashSpoolRetentionConfig& retention,
     AStringView protectedPendingPackageName = AStringView()
 );
-[[nodiscard]] bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena);
+[[nodiscard]] bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena, const CrashUploadSnapshot& snapshot);
 
 template<typename ArenaT>
 [[nodiscard]] bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath);

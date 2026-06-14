@@ -457,7 +457,8 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     CrashReportText symbolicationReport(arena);
     try{
         symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary, config.symbolication);
-        static_cast<void>(WriteTextFile(packageDirectory / "server_symbolication.txt", AStringView(symbolicationReport.data(), symbolicationReport.size())));
+        if(!WriteTextFile(packageDirectory / "server_symbolication.txt", AStringView(symbolicationReport.data(), symbolicationReport.size())))
+            return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, AStringView("failed to write server symbolication report"));
     }
     catch(const GeneralException& e){
         return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, AStringView(e.what()));
@@ -467,21 +468,42 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     }
 
     Path rawPath(arena);
-    static_cast<void>(Ingest::MovePathToDirectory(archivePath, Ingest::RawCrashDirectory(arena, config), rawPath));
+    const bool rawArchived = Ingest::MovePathToDirectory(archivePath, Ingest::RawCrashDirectory(arena, config), rawPath);
+    if(!rawArchived){
+        ErrorCode removeError;
+        static_cast<void>(RemoveFile(archivePath, removeError));
+    }
     Ingest::ApplyRetention(arena, config);
 
     result.accepted = true;
-    result.type = Type::EssentialInfo;
-    result.message = StringFormat(
-        arena,
-        NWB_TEXT("Crash package '{}' ingested: platform='{}' reason='{}' package='{}' raw='{}'\n{}"),
-        StringConvert(summary.crashId),
-        StringConvert(summary.platform),
-        StringConvert(summary.reasonKind),
-        PathToString<tchar>(packageDirectory),
-        PathToString<tchar>(rawPath.empty() ? archivePath : rawPath),
-        StringConvert(symbolicationReport)
-    );
+    result.type = rawArchived
+        ? Type::EssentialInfo
+        : Type::Warning
+    ;
+    if(rawArchived){
+        result.message = StringFormat(
+            arena,
+            NWB_TEXT("Crash package '{}' ingested: platform='{}' reason='{}' package='{}' raw='{}'\n{}"),
+            StringConvert(summary.crashId),
+            StringConvert(summary.platform),
+            StringConvert(summary.reasonKind),
+            PathToString<tchar>(packageDirectory),
+            PathToString<tchar>(rawPath),
+            StringConvert(symbolicationReport)
+        );
+    }
+    else{
+        result.message = StringFormat(
+            arena,
+            NWB_TEXT("Crash package '{}' ingested but raw upload archive could not be retained: platform='{}' reason='{}' package='{}' raw='{}'\n{}"),
+            StringConvert(summary.crashId),
+            StringConvert(summary.platform),
+            StringConvert(summary.reasonKind),
+            PathToString<tchar>(packageDirectory),
+            PathToString<tchar>(archivePath),
+            StringConvert(symbolicationReport)
+        );
+    }
     return result;
 }
 

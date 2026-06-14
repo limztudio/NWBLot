@@ -73,6 +73,75 @@ static void __hidden_store_breadcrumb(const AStringView category, const AStringV
     ++Detail::g_State.nextBreadcrumb;
 }
 
+static bool __hidden_capture_policy_allows(const CrashCapturePolicy& policy, const AStringView category){
+    if(category == "assert")
+        return policy.captureAssertions;
+    if(category == "fatal_assert")
+        return policy.captureFatalAssertions;
+    if(category == "logger_Error")
+        return policy.captureLoggerErrors;
+    if(category == "logger_Fatal")
+        return policy.captureLoggerFatals;
+
+    return true;
+}
+
+static u64 __hidden_diagnostic_site_hash(const DiagnosticCrashRecord& record)noexcept{
+    u64 hash = FNV64_OFFSET_BASIS;
+    if(record.category)
+        hash = UpdateFnv64TextExact(hash, AStringView(record.category));
+    if(record.message)
+        hash = UpdateFnv64TextExact(hash, AStringView(record.message));
+    if(record.file)
+        hash = UpdateFnv64TextExact(hash, AStringView(record.file));
+    hash = UpdateFnv64(hash, reinterpret_cast<const u8*>(&record.line), sizeof(record.line));
+    return hash;
+}
+
+static bool __hidden_reserve_diagnostic_capture(const DiagnosticCrashRecord& record, const AStringView category){
+    ScopedLock lock(Detail::g_State.mutex);
+    if(!Detail::g_State.installed)
+        return false;
+    if(!__hidden_capture_policy_allows(Detail::g_State.capturePolicy, category))
+        return false;
+
+    const CrashCapturePolicy& policy = Detail::g_State.capturePolicy;
+    if(policy.maxDiagnosticDumpsPerProcess != 0u && Detail::g_State.diagnosticCaptureCount >= policy.maxDiagnosticDumpsPerProcess)
+        return false;
+
+    Detail::FixedDiagnosticSite* freeSite = nullptr;
+    Detail::FixedDiagnosticSite* matchingSite = nullptr;
+    const u64 siteHash = __hidden_diagnostic_site_hash(record);
+    for(usize i = 0u; i < Detail::s_MaxDiagnosticSites; ++i){
+        Detail::FixedDiagnosticSite& site = Detail::g_State.diagnosticSites[i];
+        if(site.used && site.hash == siteHash){
+            matchingSite = &site;
+            break;
+        }
+
+        if(!site.used && !freeSite)
+            freeSite = &site;
+    }
+
+    if(policy.maxDiagnosticDumpsPerSite != 0u){
+        if(matchingSite && matchingSite->captureCount >= policy.maxDiagnosticDumpsPerSite)
+            return false;
+        if(!matchingSite && !freeSite)
+            return false;
+    }
+
+    if(!matchingSite && freeSite){
+        freeSite->used = 1u;
+        freeSite->hash = siteHash;
+        matchingSite = freeSite;
+    }
+
+    ++Detail::g_State.diagnosticCaptureCount;
+    if(matchingSite)
+        ++matchingSite->captureCount;
+    return true;
+}
+
 static CrashDumpResult __hidden_capture_crash_dump(const AStringView category, const AStringView message, Detail::CrashDumpRequestOptions& options){
     const AStringView breadcrumbCategory = category.empty() ? AStringView("manual_dump") : category;
 
@@ -106,6 +175,8 @@ static void __hidden_capture_diagnostic_crash(const DiagnosticCrashRecord& recor
         options.triggerMessage = record.message ? AStringView(record.message) : AStringView();
         options.triggerFile = record.file ? AStringView(record.file) : AStringView();
         options.triggerLine = record.line;
+        if(!__hidden_reserve_diagnostic_capture(record, options.triggerCategory))
+            return;
         static_cast<void>(__hidden_capture_crash_dump(options.triggerCategory, options.triggerMessage, options));
     }
     catch(...){
@@ -161,6 +232,10 @@ bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config){
     ;
     Detail::g_State.dumpDetailMode = config.dumpDetailMode;
     Detail::g_State.enableGpuDumps = config.enableGpuDumps;
+    Detail::g_State.capturePolicy = config.capturePolicy;
+    Detail::g_State.diagnosticCaptureCount = 0u;
+    for(Detail::FixedDiagnosticSite& site : Detail::g_State.diagnosticSites)
+        site = Detail::FixedDiagnosticSite{};
     const AString<ArenaT> spoolDirectoryText = PathToString<char>(arena, spoolDirectory);
     CopyFixedBuffer(Detail::g_State.spoolDirectoryText, AStringView(spoolDirectoryText.data(), spoolDirectoryText.size()));
     const AString<ArenaT> handlerExecutablePathText = PathToString<char>(arena, handlerExecutablePath);
@@ -170,7 +245,8 @@ bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config){
         return false;
 
 #if !defined(NWB_PLATFORM_ANDROID)
-    static_cast<void>(Detail::StartDesktopHandler(handlerExecutablePath));
+    if(!Detail::StartDesktopHandler(handlerExecutablePath))
+        return false;
 #endif
 
     Detail::InstallPlatformHandlers();

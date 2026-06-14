@@ -37,6 +37,7 @@ inline constexpr u32 s_RequestVersion = 1u;
 inline constexpr usize s_MaxMetadata = 32u;
 inline constexpr usize s_MaxBreadcrumbs = 128u;
 inline constexpr usize s_MaxGpuCrashProviders = 8u;
+inline constexpr usize s_MaxDiagnosticSites = 64u;
 inline constexpr usize s_MaxShortText = 64u;
 inline constexpr usize s_MaxMediumText = 256u;
 inline constexpr usize s_MaxPathText = 1024u;
@@ -97,6 +98,12 @@ struct FixedBreadcrumb{
     u64 order = 0u;
     char category[s_MaxShortText] = {};
     char message[s_MaxMediumText] = {};
+    u8 used = 0u;
+};
+
+struct FixedDiagnosticSite{
+    u64 hash = 0u;
+    u32 captureCount = 0u;
     u8 used = 0u;
 };
 
@@ -163,6 +170,7 @@ struct CrashState{
     bool installed = false;
     bool handlerStarted = false;
     bool enableGpuDumps = false;
+    CrashCapturePolicy capturePolicy;
     DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
     char applicationName[s_MaxShortText] = {};
     char versionText[s_MaxShortText] = {};
@@ -172,9 +180,11 @@ struct CrashState{
     char handlerExecutablePathText[s_MaxPathText] = {};
     FixedMetadata metadata[s_MaxMetadata] = {};
     FixedBreadcrumb breadcrumbs[s_MaxBreadcrumbs] = {};
+    FixedDiagnosticSite diagnosticSites[s_MaxDiagnosticSites] = {};
     GpuCrashProvider gpuProviders[s_MaxGpuCrashProviders] = {};
     usize nextBreadcrumb = 0u;
     usize gpuProviderCount = 0u;
+    u32 diagnosticCaptureCount = 0u;
     Atomic<u64> breadcrumbOrder{ 1u };
     Atomic<u64> crashSequence{ 1u };
 

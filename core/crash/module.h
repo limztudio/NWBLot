@@ -41,6 +41,15 @@ namespace CrashDumpStatus{
     };
 };
 
+struct CrashCapturePolicy{
+    bool captureAssertions = true;
+    bool captureFatalAssertions = true;
+    bool captureLoggerErrors = true;
+    bool captureLoggerFatals = true;
+    u32 maxDiagnosticDumpsPerProcess = 8u;
+    u32 maxDiagnosticDumpsPerSite = 1u;
+};
+
 struct CrashDumpResult{
     CrashDumpStatus::Enum status = CrashDumpStatus::NotInstalled;
 
@@ -70,6 +79,7 @@ struct CrashConfigT{
     ::Path<ArenaT> spoolDirectory;
     AStringView logServerUrl;
     AStringView handlerExecutablePath;
+    CrashCapturePolicy capturePolicy;
     DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
     bool enableGpuDumps = false;
 

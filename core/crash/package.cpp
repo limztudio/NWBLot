@@ -130,6 +130,19 @@ static void AppendJsonEscaped(CrashStringT<ArenaT>& out, const char* text){
     out.push_back('"');
 }
 
+static const char* ArtifactStrategyName(const CrashRequest& request){
+    switch(request.platform){
+    case PlatformKind::Windows:
+        return "windows_minidump_external_handler";
+    case PlatformKind::Linux:
+        return "linux_os_core_policy_plus_proc_snapshot";
+    case PlatformKind::Android:
+        return "android_tombstone_next_launch";
+    default:
+        return "native_platform_artifact";
+    }
+}
+
 template<typename ArenaT>
 static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> manifest{arena};
@@ -178,6 +191,10 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendJsonEscaped(manifest, request.dumpDetailMode == DumpDetailMode::Full ? "full" : "small");
     manifest += ",\n  \"gpu_dumps_enabled\": ";
     manifest += request.enableGpuDumps ? "true" : "false";
+    manifest += ",\n  \"artifact_strategy\": ";
+    AppendJsonEscaped(manifest, ArtifactStrategyName(request));
+    manifest += ",\n  \"handler_lifetime\": ";
+    AppendJsonEscaped(manifest, "client_ipc_lifetime");
     manifest += "\n}\n";
     return manifest;
 }
@@ -284,6 +301,29 @@ static CrashStringT<ArenaT> BuildTriggerText(ArenaT& arena, const CrashRequest& 
 }
 
 template<typename ArenaT>
+static CrashStringT<ArenaT> BuildArtifactStrategyText(ArenaT& arena, const CrashRequest& request){
+    CrashStringT<ArenaT> text{arena};
+    text += "strategy=";
+    text += ArtifactStrategyName(request);
+    text += "\nhandler_lifetime=client_ipc_lifetime\n";
+    switch(request.platform){
+    case PlatformKind::Windows:
+        text += "detail=external handler writes a Windows minidump from outside the crashing process\n";
+        break;
+    case PlatformKind::Linux:
+        text += "detail=external handler captures metadata/proc files, then fatal signals are re-raised so OS core policy can produce the core artifact\n";
+        break;
+    case PlatformKind::Android:
+        text += "detail=next launch collects native tombstone information through Android system crash reporting\n";
+        break;
+    default:
+        text += "detail=native platform artifact is expected outside the generic package writer\n";
+        break;
+    }
+    return text;
+}
+
+template<typename ArenaT>
 static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
     const ::Path<ArenaT> packageDirectory = RequestPendingDirectory(arena, request);
     ErrorCode error;
@@ -295,6 +335,7 @@ static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
     WriteCrashTextFile(packageDirectory / "metadata.txt", BuildMetadataText(arena, request));
     WriteCrashTextFile(packageDirectory / "breadcrumbs.txt", BuildBreadcrumbText(arena, request));
     WriteCrashTextFile(packageDirectory / "emergency.txt", BuildEmergencyText(arena, request));
+    WriteCrashTextFile(packageDirectory / "artifact_strategy.txt", BuildArtifactStrategyText(arena, request));
     if(HasCpuContext(request))
         WriteCrashTextFile(packageDirectory / "cpu_context.txt", BuildCpuContextText(arena, request));
     if(HasTriggerContext(request))
@@ -372,6 +413,17 @@ static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 template<typename ArenaT>
+static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const char* sourcePath, const char* outputName){
+    InputFileStream input(sourcePath, s_FileOpenBinary);
+    if(!input.is_open())
+        return;
+
+    OutputFileStream output((RequestPendingDirectory(arena, request) / outputName).c_str(), s_FileOpenBinary | s_FileOpenTruncate);
+    if(output.is_open())
+        output << input.rdbuf();
+}
+
+template<typename ArenaT>
 static void CopyProcFile(ArenaT& arena, const CrashRequest& request, const char* procName, const char* outputName){
     char procPath[128] = {};
     CopyFixedBuffer(procPath, "/proc/");
@@ -379,13 +431,7 @@ static void CopyProcFile(ArenaT& arena, const CrashRequest& request, const char*
     AppendFixedBuffer(procPath, "/");
     AppendFixedBuffer(procPath, procName);
 
-    InputFileStream input(procPath, s_FileOpenBinary);
-    if(!input.is_open())
-        return;
-
-    OutputFileStream output((RequestPendingDirectory(arena, request) / outputName).c_str(), s_FileOpenBinary | s_FileOpenTruncate);
-    if(output.is_open())
-        output << input.rdbuf();
+    CopyFileToPackage(arena, request, procPath, outputName);
 }
 #endif
 
@@ -421,9 +467,11 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
         CopyProcFile(arena, request, "maps", "proc_maps.txt");
         CopyProcFile(arena, request, "stat", "proc_stat.txt");
         CopyProcFile(arena, request, "status", "proc_status.txt");
+        CopyFileToPackage(arena, request, "/proc/sys/kernel/core_pattern", "linux_core_pattern.txt");
+        CopyFileToPackage(arena, request, "/proc/sys/kernel/core_uses_pid", "linux_core_uses_pid.txt");
         WriteCrashTextFile(
             RequestPendingDirectory(arena, request) / "symbolication.txt",
-            CrashStringT<ArenaT>("linux crash package captured; OS core/tombstone equivalent and DWARF symbolication pending\n", arena)
+            CrashStringT<ArenaT>("linux crash package captured; OS core policy remains authoritative and DWARF symbolication pending\n", arena)
         );
     }
 #else

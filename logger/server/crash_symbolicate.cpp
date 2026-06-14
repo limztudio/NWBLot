@@ -106,10 +106,18 @@ static void AppendHexAddress(LogArena& arena, CrashReportText& outReport, const 
     return DefaultSymbolStoreDirectory(arena);
 }
 
-static void AppendSymbolStoreLine(LogArena& arena, CrashReportText& outReport, const CrashSymbolicationConfig& config){
+static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport, const CrashSymbolicationConfig& config){
     const Path symbolStoreDirectory = EffectiveSymbolStoreDirectory(arena, config);
     outReport += "symbol_store=";
     outReport += PathToString<char>(arena, symbolStoreDirectory);
+    outReport += "\nsymbol_store_status=";
+
+    ErrorCode error;
+    const bool exists = IsDirectory(symbolStoreDirectory, error);
+    if(error)
+        outReport += "error";
+    else
+        outReport += exists ? "present" : "missing";
     outReport += "\n";
 }
 
@@ -227,9 +235,8 @@ static void AppendSymbolStoreLine(LogArena& arena, CrashReportText& outReport, c
     return false;
 }
 
-static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
+static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, CrashReportText& outReport){
     outReport += "status=not_decoded\nresolver=elf_dwarf_core\n";
-    AppendSymbolStoreLine(arena, outReport, config);
 
     const bool corePresent = RegularFileExists(packageDirectory / "core") || RegularFileExists(packageDirectory / "core.dmp") || RegularFileExists(packageDirectory / "process.core");
     outReport += corePresent
@@ -275,12 +282,11 @@ static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirec
     outReport += "\ndetail=module-relative crash address captured; full Linux callstack requires a core-compatible artifact and DWARF resolver\n";
 }
 
-static void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
+static void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDirectory, CrashReportText& outReport){
     CrashReportText tombstone{arena};
     const bool tombstonePresent = ReadTextFile(packageDirectory / "android_tombstone.txt", tombstone) && !tombstone.empty();
     if(!tombstonePresent){
         outReport += "status=not_decoded\nresolver=android_tombstone_native_symbols\n";
-        AppendSymbolStoreLine(arena, outReport, config);
         outReport += "android_tombstone=missing\ndetail=Android resolver requires Java/ApplicationExitInfo tombstone attachment and native symbol store\n";
         return;
     }
@@ -309,7 +315,6 @@ static void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDi
         : "status=tombstone_parsed\n"
     ;
     outReport += "resolver=android_tombstone_native_symbols\n";
-    AppendSymbolStoreLine(arena, outReport, config);
     outReport += "android_tombstone=present\n";
     outReport += frames.empty()
         ? "detail=tombstone attached, but no native frame lines were recognized; native symbols are required for full decoding\n"
@@ -680,6 +685,7 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
     report += "\nartifact_strategy=";
     report += summary.artifactStrategy;
     report += "\n";
+    Symbolicate::AppendSymbolStoreStatus(arena, report, config);
 
     if(summary.platform == "windows"){
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -689,10 +695,10 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
 #endif
     }
     else if(summary.platform == "linux"){
-        Symbolicate::AppendLinuxArtifactSummary(arena, packageDirectory, config, report);
+        Symbolicate::AppendLinuxArtifactSummary(arena, packageDirectory, report);
     }
     else if(summary.platform == "android"){
-        Symbolicate::AppendAndroidTombstoneSummary(arena, packageDirectory, config, report);
+        Symbolicate::AppendAndroidTombstoneSummary(arena, packageDirectory, report);
     }
     else{
         report += "status=not_decoded\nresolver=unknown\ndetail=unknown crash platform\n";

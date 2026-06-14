@@ -149,6 +149,7 @@ static void TestLinuxCrashPackageMapsInstructionPointer(TestContext& context){
     NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Stem, report));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=linux"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "symbol_store="));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "symbol_store_status=missing"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "instruction_pointer_module=/tmp/nwb_loader"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "module_relative_ip=0x0000000000001234"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "core_artifact=missing"));

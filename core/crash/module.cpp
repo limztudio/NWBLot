@@ -233,6 +233,7 @@ bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config){
     Detail::g_State.dumpDetailMode = config.dumpDetailMode;
     Detail::g_State.enableGpuDumps = config.enableGpuDumps;
     Detail::g_State.capturePolicy = config.capturePolicy;
+    Detail::g_State.spoolRetention = config.spoolRetention;
     Detail::g_State.diagnosticCaptureCount = 0u;
     for(Detail::FixedDiagnosticSite& site : Detail::g_State.diagnosticSites)
         site = Detail::FixedDiagnosticSite{};

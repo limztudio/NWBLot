@@ -1,4 +1,7 @@
 add_subdirectory(global)
+if(TARGET nwb_crash)
+    add_subdirectory(crash)
+endif()
 add_subdirectory(math)
 add_subdirectory(metascript)
 add_subdirectory(mesh)

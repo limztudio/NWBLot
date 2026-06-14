@@ -50,6 +50,13 @@ struct CrashCapturePolicy{
     u32 maxDiagnosticDumpsPerSite = 1u;
 };
 
+struct CrashSpoolRetentionConfig{
+    usize maxPendingPackages = 128u;
+    usize maxUploadedPackages = 256u;
+    usize maxFailedPackages = 64u;
+    usize maxUploadingPackages = 64u;
+};
+
 struct CrashDumpResult{
     CrashDumpStatus::Enum status = CrashDumpStatus::NotInstalled;
 
@@ -80,6 +87,7 @@ struct CrashConfigT{
     AStringView logServerUrl;
     AStringView handlerExecutablePath;
     CrashCapturePolicy capturePolicy;
+    CrashSpoolRetentionConfig spoolRetention;
     DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
     bool enableGpuDumps = false;
 

@@ -171,6 +171,7 @@ struct CrashState{
     bool handlerStarted = false;
     bool enableGpuDumps = false;
     CrashCapturePolicy capturePolicy;
+    CrashSpoolRetentionConfig spoolRetention;
     DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
     char applicationName[s_MaxShortText] = {};
     char versionText[s_MaxShortText] = {};
@@ -225,6 +226,12 @@ template<typename ArenaT>
 [[nodiscard]] bool WriteCrashPackage(const CrashRequest& request);
 [[nodiscard]] bool UploadCrashPackage(const CrashRequest& request);
 [[nodiscard]] CrashDumpResult CrashPackageResult(const CrashRequest& request);
+[[nodiscard]] bool ApplyCrashSpoolRetention(
+    Alloc::GlobalArena& arena,
+    const ::Path<Alloc::GlobalArena>& spoolDirectory,
+    const CrashSpoolRetentionConfig& retention,
+    AStringView protectedPendingPackageName = AStringView()
+);
 [[nodiscard]] bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena);
 
 template<typename ArenaT>

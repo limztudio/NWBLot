@@ -674,6 +674,73 @@ static bool DirectoryExists(const Path& path){
     return exists && !error;
 }
 
+static bool ApplyRetentionToDirectory(
+    Alloc::GlobalArena& arena,
+    const Path& directory,
+    const usize maxEntries,
+    const AStringView protectedPackageName = AStringView()
+){
+    if(maxEntries == 0u)
+        return true;
+
+    ErrorCode error;
+    const bool exists = IsDirectory(directory, error);
+    if(error)
+        return false;
+    if(!exists)
+        return true;
+
+    Vector<Path, Alloc::GlobalArena> entries{arena};
+    DirectoryIterator directoryIt(directory, error);
+    if(error)
+        return false;
+
+    for(const auto& entry : directoryIt){
+        ErrorCode entryError;
+        if(!IsDirectory(entry.path(), entryError) || entryError || !IsSafePackageName(arena, entry.path()))
+            continue;
+
+        const CrashString packageName = PathToString<char>(arena, entry.path().filename());
+        if(!protectedPackageName.empty() && AStringView(packageName.data(), packageName.size()) == protectedPackageName)
+            continue;
+
+        entries.emplace_back(arena, entry.path());
+    }
+
+    if(entries.size() <= maxEntries)
+        return true;
+
+    Sort(entries.begin(), entries.end());
+
+    bool ok = true;
+    const usize removeCount = entries.size() - maxEntries;
+    for(usize i = 0u; i < removeCount; ++i){
+        error.clear();
+        if(!RemoveAllIfExists(entries[i], error))
+            ok = false;
+    }
+    return ok;
+}
+
+bool ApplyCrashSpoolRetention(
+    Alloc::GlobalArena& arena,
+    const Path& spoolDirectory,
+    const CrashSpoolRetentionConfig& retention,
+    const AStringView protectedPendingPackageName
+){
+    bool ok = true;
+    ok = ApplyRetentionToDirectory(
+        arena,
+        PendingDirectory(spoolDirectory),
+        retention.maxPendingPackages,
+        protectedPendingPackageName
+    ) && ok;
+    ok = ApplyRetentionToDirectory(arena, UploadedDirectory(spoolDirectory), retention.maxUploadedPackages) && ok;
+    ok = ApplyRetentionToDirectory(arena, FailedDirectory(spoolDirectory), retention.maxFailedPackages) && ok;
+    ok = ApplyRetentionToDirectory(arena, UploadingDirectory(spoolDirectory), retention.maxUploadingPackages) && ok;
+    return ok;
+}
+
 CrashDumpResult CrashPackageResult(const CrashRequest& request){
     if(request.magic != s_RequestMagic || request.version != s_RequestVersion)
         return CrashDumpResult{ CrashDumpStatus::RequestQueued };
@@ -746,16 +813,25 @@ bool UploadCrashPackage(const CrashRequest& request){
         return false;
 
     Alloc::GlobalArena arena("NWB::Core::Crash::PackageUpload");
+    const Path spoolDirectory(arena, request.spoolDirectory);
+    RecoverUploadingPackageDirectories(arena, spoolDirectory);
+
     const CrashString url = CrashUploadUrl(arena, request.logServerUrl);
     if(url.empty())
         return false;
 
     curl_global_init(CURL_GLOBAL_ALL);
 
-    const Path spoolDirectory(arena, request.spoolDirectory);
-    RecoverUploadingPackageDirectories(arena, spoolDirectory);
     const Path packageDirectory = RequestPendingDirectory(arena, request);
-    return UploadPackageDirectory(arena, spoolDirectory, packageDirectory, url);
+    const CrashString packageName = PathToString<char>(arena, packageDirectory.filename());
+    const bool uploaded = UploadPackageDirectory(arena, spoolDirectory, packageDirectory, url);
+    static_cast<void>(ApplyCrashSpoolRetention(
+        arena,
+        spoolDirectory,
+        g_State.spoolRetention,
+        AStringView(packageName.data(), packageName.size())
+    ));
+    return uploaded;
 }
 
 #if defined(NWB_PLATFORM_ANDROID)
@@ -796,6 +872,13 @@ static void CollectAndroidEmergencyRecord(){
 bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena){
     CollectAndroidEmergencyRecord();
 
+    if(g_State.spoolDirectoryText[0] == 0)
+        return false;
+
+    const Path spoolDirectory(arena, g_State.spoolDirectoryText);
+    RecoverUploadingPackageDirectories(arena, spoolDirectory);
+    bool retentionOk = ApplyCrashSpoolRetention(arena, spoolDirectory, g_State.spoolRetention);
+
     const CrashString url = CrashUploadUrl(arena);
     if(url.empty())
         return false;
@@ -803,12 +886,10 @@ bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena){
     curl_global_init(CURL_GLOBAL_ALL);
 
     bool allUploaded = true;
-    const Path spoolDirectory(arena, g_State.spoolDirectoryText);
-    RecoverUploadingPackageDirectories(arena, spoolDirectory);
     const Path pendingDirectory = PendingDirectory(spoolDirectory);
     ErrorCode error;
     if(!IsDirectory(pendingDirectory, error) || error)
-        return true;
+        return !error && retentionOk;
 
     DirectoryIterator directory(pendingDirectory, error);
     if(error)
@@ -823,7 +904,8 @@ bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena){
             allUploaded = false;
     }
 
-    return allUploaded;
+    retentionOk = ApplyCrashSpoolRetention(arena, spoolDirectory, g_State.spoolRetention) && retentionOk;
+    return allUploaded && retentionOk;
 }
 
 

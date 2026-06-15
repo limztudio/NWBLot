@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <fstream>
 
+#include "../platform.h"
+
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
 #else

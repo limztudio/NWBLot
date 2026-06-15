@@ -327,12 +327,12 @@ static void AppendLinuxClientCallstack(
             LinuxProcessMemoryMapEntry mapEntry;
             if(FindLinuxProcessMemoryMapForAddress(*procMaps, address, mapEntry)){
                 const u64 moduleOffset = address - mapEntry.begin;
-                const u64 symbolOffset = moduleOffset + mapEntry.fileOffset;
                 const AStringView modulePath = mapEntry.path.empty() ? AStringView("<anonymous>") : mapEntry.path;
                 outReport += " ";
                 outReport.append(modulePath.data(), modulePath.size());
                 outReport += "+";
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+                const u64 symbolOffset = moduleOffset + mapEntry.fileOffset;
                 AppendHexAddress(arena, outReport, moduleOffset);
                 CrashReportText symbol{arena};
                 if(ResolveLinuxFrameSymbol(arena, symbolFileCache, modulePath, symbolOffset, config, symbol)){

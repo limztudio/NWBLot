@@ -202,8 +202,6 @@ struct ManualDumpContextStorage{
     CONTEXT context = {};
     EXCEPTION_RECORD exceptionRecord = {};
     EXCEPTION_POINTERS exceptionPointers = {};
-#else
-    u8 unused = 0u;
 #endif
 };
 

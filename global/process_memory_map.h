@@ -114,24 +114,5 @@ inline void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept
     return true;
 }
 
-[[nodiscard]] inline bool FindLinuxProcessMemoryMapForAddress(const AStringView mapsText, const u64 address, LinuxProcessMemoryMapEntry& outEntry){
-    usize cursor = 0u;
-    AStringView line;
-    while(NextTextLine(mapsText, cursor, line)){
-        LinuxProcessMemoryMapEntry entry;
-        if(!ParseLinuxProcessMemoryMapLine(line, entry))
-            continue;
-        if(address < entry.begin || address >= entry.end)
-            continue;
-
-        outEntry = entry;
-        return true;
-    }
-
-    outEntry = LinuxProcessMemoryMapEntry{};
-    return false;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

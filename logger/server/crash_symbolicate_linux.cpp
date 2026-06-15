@@ -354,11 +354,7 @@ void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, c
         : "status=not_decoded\nresolver=elf_dwarf_core\n"
     ;
 
-    const bool corePresent =
-        PathIsRegularFile(packageDirectory / CrashNames::s_LinuxCoreFileName)
-        || PathIsRegularFile(packageDirectory / CrashNames::s_LinuxCoreDumpFileName)
-        || PathIsRegularFile(packageDirectory / CrashNames::s_LinuxProcessCoreFileName)
-    ;
+    const bool corePresent = PathIsRegularFile(packageDirectory / CrashNames::s_LinuxCoreFileName);
     outReport += corePresent
         ? "core_artifact=present\n"
         : "core_artifact=missing\n"

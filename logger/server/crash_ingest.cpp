@@ -205,9 +205,6 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
             outError = "truncated crash archive file header";
             return false;
         }
-        if(line.empty())
-            continue;
-
         AStringView relativePath;
         usize fileSize = 0u;
         if(!ParseFileHeader(line, relativePath, fileSize)){

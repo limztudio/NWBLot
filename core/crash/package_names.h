@@ -72,8 +72,6 @@ inline constexpr const char* s_LinuxCorePatternPath = "/proc/sys/kernel/core_pat
 inline constexpr const char* s_LinuxCoreUsesPidPath = "/proc/sys/kernel/core_uses_pid";
 
 inline constexpr const char* s_LinuxCoreFileName = "core";
-inline constexpr const char* s_LinuxCoreDumpFileName = "core.dmp";
-inline constexpr const char* s_LinuxProcessCoreFileName = "process.core";
 
 inline constexpr const char* s_ArchiveHeaderLine = "NWBCRASHPKG 1";
 inline constexpr const char* s_ArchiveHeaderText = "NWBCRASHPKG 1\n";

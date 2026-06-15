@@ -22,10 +22,6 @@ namespace __hidden_camera{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool SceneFloat3FiniteVector(const SIMDVector value){
-    return !Vector3IsNaN(value) && !Vector3IsInfinite(value);
-}
-
 [[nodiscard]] bool SceneCameraTransformValid(
     const SIMDVector position,
     const SIMDVector rotation,
@@ -35,10 +31,10 @@ namespace __hidden_camera{
     const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
 
     return
-        SceneFloat3FiniteVector(position)
+        Vector3IsFinite(position)
         && !QuaternionIsNaN(rotation)
         && !QuaternionIsInfinite(rotation)
-        && SceneFloat3FiniteVector(scale)
+        && Vector3IsFinite(scale)
         && IsFinite(rotationLengthSquared)
         && rotationLengthSquared >= 1.0f - s_CameraRotationUnitLengthSquaredTolerance
         && rotationLengthSquared <= 1.0f + s_CameraRotationUnitLengthSquaredTolerance

@@ -48,6 +48,22 @@ inline constexpr u64 FNV1a64(const CharT* str, u64 seed){
     return hash;
 }
 
+template<typename T>
+inline void Fnv64AppendValue(u64& inOutHash, const T& value){
+    static_assert(IsTriviallyCopyable_V<T>, "Fnv64AppendValue requires a trivially copyable value");
+    inOutHash = UpdateFnv64(inOutHash, reinterpret_cast<const u8*>(&value), sizeof(value));
+}
+
+inline void Fnv64AppendBuffer(u64& inOutHash, const u8* bytes, const usize byteCount){
+    Fnv64AppendValue(inOutHash, byteCount);
+    inOutHash = UpdateFnv64(inOutHash, bytes, byteCount);
+}
+
+inline void Fnv64AppendBool(u64& inOutHash, const bool value){
+    const u8 byteValue = value ? 1u : 0u;
+    Fnv64AppendValue(inOutHash, byteValue);
+}
+
 template<typename CharT>
 [[nodiscard]] inline constexpr u64 UpdateFnv64TextCanonical(u64 hash, const BasicStringView<CharT> text){
     for(const CharT ch : text){

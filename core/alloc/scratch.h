@@ -62,8 +62,7 @@ private:
         inline bool deallocate(void* p, usize size){
             const usize available = reinterpret_cast<usize>(m_available);
             const usize allocationBegin = reinterpret_cast<usize>(p);
-            const bool canComputeEnd = allocationBegin <= Limit<usize>::s_Max - size;
-            if(!canComputeEnd)
+            if(AddOverflows<usize>(allocationBegin, size))
                 return false;
 
             const usize allocationEnd = allocationBegin + size;

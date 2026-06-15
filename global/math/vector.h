@@ -1553,6 +1553,11 @@ NWB_INLINE SIMDVector SIMDCALL VectorIsInfinite(SIMDVector value)noexcept{
     return VectorEqualInt(VectorAndInt(value, s_SIMDAbsMask), s_SIMDInfinity);
 }
 
+[[nodiscard]] NWB_INLINE bool SIMDCALL VectorIsFinite(SIMDVector value, u32 activeMask)noexcept{
+    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
+    return (VectorMoveMask(invalid) & activeMask) == 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // arithmetic
@@ -2909,6 +2914,7 @@ NWB_INLINE bool SIMDCALL Vector3LessOrEqual(SIMDVector v0, SIMDVector v1)noexcep
 NWB_INLINE bool SIMDCALL Vector3InBounds(SIMDVector value, SIMDVector bounds)noexcept{ return (VectorMoveMask(VectorInBounds(value, bounds)) & 0x7u) == 0x7u; }
 NWB_INLINE bool SIMDCALL Vector3IsNaN(SIMDVector value)noexcept{ return (VectorMoveMask(VectorIsNaN(value)) & 0x7u) != 0; }
 NWB_INLINE bool SIMDCALL Vector3IsInfinite(SIMDVector value)noexcept{ return (VectorMoveMask(VectorIsInfinite(value)) & 0x7u) != 0; }
+NWB_INLINE bool SIMDCALL Vector3IsFinite(SIMDVector value)noexcept{ return !Vector3IsNaN(value) && !Vector3IsInfinite(value); }
 
 NWB_INLINE u32 SIMDCALL Vector3EqualR(SIMDVector v0, SIMDVector v1)noexcept{ return SIMDVectorDetail::ComparisonMaskR(VectorMoveMask(VectorEqual(v0, v1)), 0x7u); }
 NWB_INLINE u32 SIMDCALL Vector3EqualIntR(SIMDVector v0, SIMDVector v1)noexcept{ return SIMDVectorDetail::ComparisonMaskR(VectorMoveMask(VectorEqualInt(v0, v1)), 0x7u); }

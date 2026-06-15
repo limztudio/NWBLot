@@ -33,11 +33,9 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MeshPayloadValidation::FiniteVector;
-
 [[nodiscard]] inline bool ValidSkinInfluenceWeights(const SIMDVector weights){
     const f32 weightSum = VectorGetX(Vector4Dot(weights, s_SIMDOne));
-    if(!FiniteVector(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero()))
+    if(!VectorIsFinite(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero()))
         return false;
 
     return Abs(weightSum - 1.0f) <= s_SkinWeightSumEpsilon;
@@ -65,10 +63,10 @@ using MeshPayloadValidation::FiniteVector;
     const SIMDVector row2 = matrix.v[2];
     const SIMDVector row3 = matrix.v[3];
     if(
-        !FiniteVector(row0, 0xFu)
-        || !FiniteVector(row1, 0xFu)
-        || !FiniteVector(row2, 0xFu)
-        || !FiniteVector(row3, 0xFu)
+        !VectorIsFinite(row0, 0xFu)
+        || !VectorIsFinite(row1, 0xFu)
+        || !VectorIsFinite(row2, 0xFu)
+        || !VectorIsFinite(row3, 0xFu)
         || !Vector4NearEqual(row3, s_SIMDIdentityR3, VectorReplicate(s_Epsilon))
     )
         return false;

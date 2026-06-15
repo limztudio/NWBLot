@@ -3,7 +3,6 @@
 
 
 #include "parser.h"
-#include "integer_overflow.h"
 
 #include <core/alloc/scratch.h>
 
@@ -23,35 +22,25 @@ namespace __hidden_metascript_parser{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace MetascriptDetail;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] bool BinaryI64Overflows(const TokenType::Enum op, const i64 lhs, const i64 rhs){
     switch(op){
     case TokenType::Plus:
     case TokenType::PlusEqual:
-        return AddI64Overflows(lhs, rhs);
+        return AddOverflows<i64>(lhs, rhs);
     case TokenType::Minus:
     case TokenType::MinusEqual:
-        return SubtractI64Overflows(lhs, rhs);
+        return SubtractOverflows<i64>(lhs, rhs);
     case TokenType::Star:
     case TokenType::StarEqual:
-        return MultiplyI64Overflows(lhs, rhs);
+        return MultiplyOverflows<i64>(lhs, rhs);
     case TokenType::Slash:
     case TokenType::SlashEqual:
-        return DivideI64Overflows(lhs, rhs);
+        return DivideOverflows<i64>(lhs, rhs);
     default:
         break;
     }
 
     return false;
-}
-
-[[nodiscard]] bool AddUsizeOverflows(const usize lhs, const usize rhs){
-    return lhs > Limit<usize>::s_Max - rhs;
 }
 
 template<usize N>
@@ -551,7 +540,7 @@ private:
                 return Value(m_arena);
 
             if(val.isInteger()){
-                if(NegateI64Overflows(val.asInteger())){
+                if(NegateOverflows<i64>(val.asInteger())){
                     error("integer overflow");
                     return Value(m_arena);
                 }
@@ -1014,14 +1003,14 @@ private:
             if(lhs.isNumeric() && rhs.isNumeric())
                 return validateNumericOperands(op, lhs, rhs, line, column, nullptr);
             if(lhs.isString() && rhs.isString()){
-                if(AddUsizeOverflows(lhs.asString().size(), rhs.asString().size())){
+                if(AddOverflows<usize>(lhs.asString().size(), rhs.asString().size())){
                     error(line, column, "string concatenation size overflow");
                     return false;
                 }
                 return true;
             }
             if(lhs.isList() && rhs.isList()){
-                if(AddUsizeOverflows(lhs.asList().size(), rhs.asList().size())){
+                if(AddOverflows<usize>(lhs.asList().size(), rhs.asList().size())){
                     error(line, column, "list concatenation size overflow");
                     return false;
                 }
@@ -1051,7 +1040,7 @@ private:
             if(target.isNumeric() && rhs.isNumeric())
                 return validateNumericOperands(op, target, rhs, line, column, nullptr);
             if(target.isString() && rhs.isString()){
-                if(AddUsizeOverflows(target.asString().size(), rhs.asString().size())){
+                if(AddOverflows<usize>(target.asString().size(), rhs.asString().size())){
                     error(line, column, "string append size overflow");
                     return false;
                 }
@@ -1059,7 +1048,7 @@ private:
             }
             if(target.isList()){
                 const usize addedElements = rhs.isList() ? rhs.asList().size() : 1u;
-                if(AddUsizeOverflows(target.asList().size(), addedElements)){
+                if(AddOverflows<usize>(target.asList().size(), addedElements)){
                     error(line, column, "list append size overflow");
                     return false;
                 }

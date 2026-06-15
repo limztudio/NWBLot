@@ -13,6 +13,7 @@
 #include "limit.h"
 #include "bit.h"
 #include "algorithm.h"
+#include "overflow.h"
 #include "arena_c_allocator.h"
 #include "call_traits.h"
 #include "not_null.h"

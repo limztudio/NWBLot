@@ -201,7 +201,7 @@
 
         const MeshletBounds& bounds = meshletBounds[meshletIndex];
         const SIMDVector sphere = LoadFloat(bounds.sphere);
-        if(!FiniteVector(sphere, 0xFu) || VectorGetW(sphere) < 0.0f){
+        if(!VectorIsFinite(sphere, 0xFu) || VectorGetW(sphere) < 0.0f){
             return FailMeshletPayloadValidation(
                 contextText,
                 meshPathText,

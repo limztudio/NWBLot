@@ -277,7 +277,7 @@ template<usize ComponentCount>
         influence.weight[2u],
         influence.weight[3u]
     );
-    if(!SkinValidation::FiniteVector(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero())){
+    if(!VectorIsFinite(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero())){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must be finite and non-negative")
             , PathToString<tchar>(nwbFilePath)
             , influenceIndex

@@ -109,6 +109,78 @@ inline void StripUtf8Bom(StringT& inOutText){
 }
 
 
+[[nodiscard]] inline bool IsUtf8Continuation(const u8 value){
+    return (value & 0xc0u) == 0x80u;
+}
+
+[[nodiscard]] inline i32 DecodeUtf8CodePoint(const char* bytes, const i32 length, u32& unicode){
+    if(length <= 0)
+        return 0;
+
+    const u8 c0 = static_cast<u8>(bytes[0]);
+    if(c0 < 0x80u){
+        unicode = c0;
+        return 1;
+    }
+
+    if((c0 & 0xe0u) == 0xc0u){
+        if(length < 2)
+            return 0;
+
+        const u8 c1 = static_cast<u8>(bytes[1]);
+        if(!IsUtf8Continuation(c1))
+            return 0;
+
+        unicode = (static_cast<u32>(c0 & 0x1fu) << 6) | static_cast<u32>(c1 & 0x3fu);
+        return unicode >= 0x80u ? 2 : 0;
+    }
+
+    if((c0 & 0xf0u) == 0xe0u){
+        if(length < 3)
+            return 0;
+
+        const u8 c1 = static_cast<u8>(bytes[1]);
+        const u8 c2 = static_cast<u8>(bytes[2]);
+        if(!IsUtf8Continuation(c1) || !IsUtf8Continuation(c2))
+            return 0;
+
+        unicode = (static_cast<u32>(c0 & 0x0fu) << 12) | (static_cast<u32>(c1 & 0x3fu) << 6) | static_cast<u32>(c2 & 0x3fu);
+        return unicode >= 0x800u ? 3 : 0;
+    }
+
+    if((c0 & 0xf8u) == 0xf0u){
+        if(length < 4)
+            return 0;
+
+        const u8 c1 = static_cast<u8>(bytes[1]);
+        const u8 c2 = static_cast<u8>(bytes[2]);
+        const u8 c3 = static_cast<u8>(bytes[3]);
+        if(!IsUtf8Continuation(c1) || !IsUtf8Continuation(c2) || !IsUtf8Continuation(c3))
+            return 0;
+
+        unicode =
+            (static_cast<u32>(c0 & 0x07u) << 18)
+            | (static_cast<u32>(c1 & 0x3fu) << 12)
+            | (static_cast<u32>(c2 & 0x3fu) << 6)
+            | static_cast<u32>(c3 & 0x3fu)
+        ;
+        return unicode >= 0x10000u && unicode <= 0x10ffffu ? 4 : 0;
+    }
+
+    return 0;
+}
+
+[[nodiscard]] inline bool IsTextInputCodePoint(const u32 unicode){
+    if(unicode < 32u || unicode == 127u)
+        return false;
+    if(unicode > 0x10ffffu)
+        return false;
+    if(unicode >= 0xd800u && unicode <= 0xdfffu)
+        return false;
+    return true;
+}
+
+
 inline std::ios_base& StreamHex(std::ios_base& stream){ return std::hex(stream); }
 inline std::ios_base& StreamDec(std::ios_base& stream){ return std::dec(stream); }
 

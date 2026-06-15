@@ -24,10 +24,6 @@ namespace __hidden_frame_state{
     return cutter.active && cutter.shapeType != NAME_NONE;
 }
 
-void AddSaturating(u32& inOutValue, const u32 value){
-    inOutValue = inOutValue <= Limit<u32>::s_Max - value ? inOutValue + value : Limit<u32>::s_Max;
-}
-
 [[nodiscard]] bool ReceiverVisible(
     Core::ECS::World& world,
     const Core::ECS::EntityID entity,
@@ -123,7 +119,7 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
                 return;
 
             auto result = m_cutterRanges.try_emplace(cutter.receiverGroup, CsgFrameCutterRange{});
-            __hidden_frame_state::AddSaturating(result.first.value().cutterCount, 1u);
+            result.first.value().cutterCount = AddSaturating<u32>(result.first.value().cutterCount, 1u);
         }
     );
 
@@ -131,7 +127,7 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
     for(auto it = m_cutterRanges.begin(); it != m_cutterRanges.end(); ++it){
         CsgFrameCutterRange& range = it.value();
         range.firstCutter = firstCutter;
-        __hidden_frame_state::AddSaturating(firstCutter, range.cutterCount);
+        firstCutter = AddSaturating<u32>(firstCutter, range.cutterCount);
     }
 
     if(firstCutter == 0u)
@@ -249,8 +245,8 @@ void AddCsgFrameReceiverWork(
     const bool transparentWork,
     const u32 cutterCount
 ){
-    __hidden_frame_state::AddSaturating(inOutState.receiverCount, 1u);
-    __hidden_frame_state::AddSaturating(inOutState.cutterCount, cutterCount);
+    inOutState.receiverCount = AddSaturating<u32>(inOutState.receiverCount, 1u);
+    inOutState.cutterCount = AddSaturating<u32>(inOutState.cutterCount, cutterCount);
 
     if(receiverKind == CsgReceiverKind::Static){
         inOutState.hasOpaqueStaticWork = inOutState.hasOpaqueStaticWork || opaqueWork;

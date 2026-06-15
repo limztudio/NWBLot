@@ -152,6 +152,14 @@ template<class T>
 inline constexpr bool IsArithmetic_V = std::is_arithmetic_v<T>;
 
 template<class T>
+using IsSigned = std::is_signed<T>;
+template<class T>
+inline constexpr bool IsSigned_V = std::is_signed_v<T>;
+
+template<class T>
+using TypeIdentity = std::type_identity_t<T>;
+
+template<class T>
 using IsEmpty = std::is_empty<T>;
 template<class T>
 inline constexpr bool IsEmpty_V = std::is_empty_v<T>;

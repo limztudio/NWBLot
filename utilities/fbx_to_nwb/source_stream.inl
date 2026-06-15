@@ -65,11 +65,6 @@ struct PositionKeyEqual{
     }
 };
 
-[[nodiscard]] bool IsFiniteSimdVector(const SIMDVector value, const u32 activeMask){
-    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
-    return (VectorMoveMask(invalid) & activeMask) == 0u;
-}
-
 using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, PositionKeyEqual>;
 
 struct MeshSkinInfluenceHasher{
@@ -367,13 +362,13 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
 [[nodiscard]] bool IsFiniteSourceTriangleCorner(const SourceTriangleCorner& corner, const bool wantsSkinning){
     if(
-        !IsFiniteSimdVector(LoadFloat(corner.position), 0x7u)
-        || !IsFiniteSimdVector(LoadFloat(corner.normal), 0x7u)
-        || !IsFiniteSimdVector(LoadFloat(corner.uv0), 0x3u)
-        || !IsFiniteSimdVector(LoadFloat(corner.color), 0xFu)
+        !VectorIsFinite(LoadFloat(corner.position), 0x7u)
+        || !VectorIsFinite(LoadFloat(corner.normal), 0x7u)
+        || !VectorIsFinite(LoadFloat(corner.uv0), 0x3u)
+        || !VectorIsFinite(LoadFloat(corner.color), 0xFu)
     )
         return false;
-    if(corner.hasTangent && !IsFiniteSimdVector(LoadFloat(corner.tangent), 0xFu))
+    if(corner.hasTangent && !VectorIsFinite(LoadFloat(corner.tangent), 0xFu))
         return false;
     return !wantsSkinning || IsFiniteSkinInfluence(corner.skin);
 }

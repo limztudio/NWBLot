@@ -36,18 +36,16 @@ inline constexpr long s_HttpSuccessStatusEnd = 300L;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace{
+static Futex s_CurlAllocatorMutex;
+static Futex s_CurlGlobalInitMutex;
+static bool s_CurlGlobalInitialized = false;
 
-Futex s_CurlAllocatorMutex;
-Futex s_CurlGlobalInitMutex;
-bool s_CurlGlobalInitialized = false;
-
-void* CrashCurlAllocate(const usize size)noexcept{
+static void* CrashCurlAllocate(const usize size)noexcept{
     ScopedLock lock(s_CurlAllocatorMutex);
     return DumpArena().allocate(alignof(std::max_align_t), size == 0u ? 1u : size);
 }
 
-void CrashCurlDeallocate(void* const ptr)noexcept{
+static void CrashCurlDeallocate(void* const ptr)noexcept{
     if(!ptr)
         return;
 
@@ -55,15 +53,15 @@ void CrashCurlDeallocate(void* const ptr)noexcept{
     DumpArena().deallocate(ptr, alignof(std::max_align_t), 0u);
 }
 
-void* CrashCurlMalloc(const size_t size)noexcept{
+static void* CrashCurlMalloc(const size_t size)noexcept{
     return CrashCurlAllocate(static_cast<usize>(size));
 }
 
-void CrashCurlFree(void* const ptr)noexcept{
+static void CrashCurlFree(void* const ptr)noexcept{
     CrashCurlDeallocate(ptr);
 }
 
-void* CrashCurlRealloc(void* const ptr, const size_t size)noexcept{
+static void* CrashCurlRealloc(void* const ptr, const size_t size)noexcept{
     if(!ptr)
         return CrashCurlAllocate(static_cast<usize>(size));
     if(size == 0u){
@@ -75,7 +73,7 @@ void* CrashCurlRealloc(void* const ptr, const size_t size)noexcept{
     return DumpArena().reallocate(ptr, alignof(std::max_align_t), static_cast<usize>(size));
 }
 
-char* CrashCurlStrdup(const char* const text)noexcept{
+static char* CrashCurlStrdup(const char* const text)noexcept{
     if(!text)
         return nullptr;
 
@@ -88,7 +86,7 @@ char* CrashCurlStrdup(const char* const text)noexcept{
     return copy;
 }
 
-void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
+static void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
     if(count != 0u && size > static_cast<size_t>(Limit<usize>::s_Max) / count)
         return nullptr;
 
@@ -99,7 +97,7 @@ void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
     return ptr;
 }
 
-[[nodiscard]] bool EnsureCrashCurlGlobalInit(){
+[[nodiscard]] static bool EnsureCrashCurlGlobalInit(){
     ScopedLock lock(s_CurlGlobalInitMutex);
     if(s_CurlGlobalInitialized)
         return true;
@@ -119,12 +117,6 @@ void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
     s_CurlGlobalInitialized = true;
     return true;
 }
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 template<typename ArenaT>
 static bool IsSafePackageName(ArenaT& arena, const ::Path<ArenaT>& path){

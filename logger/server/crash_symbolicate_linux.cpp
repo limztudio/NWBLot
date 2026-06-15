@@ -376,7 +376,7 @@ void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, c
 
     u64 instructionPointer = 0u;
     if(!cpuContextPresent || !FindLineKeyValueU64(AStringView(cpuContext.data(), cpuContext.size()), "instruction_pointer", instructionPointer) || instructionPointer == 0u){
-        outReport += "detail=ELF/DWARF stack resolver requires a core-compatible artifact; instruction pointer mapping unavailable\n";
+        outReport += "detail=ELF/DWARF stack resolver requires a Linux core artifact; instruction pointer mapping unavailable\n";
         if(clientCallstackPresent)
             AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, outReport);
         return;
@@ -412,7 +412,7 @@ void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, c
 #endif
     outReport += clientCallstackPresent
         ? "\ndetail=client callstack captured; module frames are symbolized with DWARF when symbols are reachable\n"
-        : "\ndetail=module-relative crash address captured; full Linux callstack requires a core-compatible artifact and DWARF resolver\n"
+        : "\ndetail=module-relative crash address captured; full Linux callstack requires a Linux core artifact and DWARF resolver\n"
     ;
     if(clientCallstackPresent)
         AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, outReport);

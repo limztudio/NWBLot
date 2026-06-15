@@ -299,16 +299,6 @@ static bool HasCallstack(const CrashRequest& request){
     return request.callstackFrameCount != 0u;
 }
 
-static bool HasTriggerContext(const CrashRequest& request){
-    return
-        request.triggerCategory[0] != 0
-        || request.triggerExpression[0] != 0
-        || request.triggerMessage[0] != 0
-        || request.triggerFile[0] != 0
-        || request.triggerLine != 0u
-    ;
-}
-
 template<typename ArenaT>
 static CrashStringT<ArenaT> BuildCpuContextText(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> text{arena};
@@ -338,23 +328,6 @@ static CrashStringT<ArenaT> BuildCallstackText(ArenaT& arena, const CrashRequest
         text += FormatHex64A(arena, request.callstackFrames[i]);
         text += '\n';
     }
-    return text;
-}
-
-template<typename ArenaT>
-static CrashStringT<ArenaT> BuildTriggerText(ArenaT& arena, const CrashRequest& request){
-    CrashStringT<ArenaT> text{arena};
-    text += "category=";
-    text += request.triggerCategory;
-    text += "\nexpression=";
-    text += request.triggerExpression;
-    text += "\nmessage=";
-    text += request.triggerMessage;
-    text += "\nfile=";
-    text += request.triggerFile;
-    text += "\nline=";
-    AppendUnsignedText(text, request.triggerLine);
-    text += "\n";
     return text;
 }
 
@@ -402,8 +375,6 @@ static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
     if(HasCpuContext(request) && !WriteCrashTextFile(packageDirectory / PackageNames::s_CpuContextFileName, BuildCpuContextText(arena, request)))
         return false;
     if(HasCallstack(request) && !WriteCrashTextFile(packageDirectory / PackageNames::s_CallstackFileName, BuildCallstackText(arena, request)))
-        return false;
-    if(HasTriggerContext(request) && !WriteCrashTextFile(packageDirectory / PackageNames::s_TriggerFileName, BuildTriggerText(arena, request)))
         return false;
     return true;
 }

@@ -7,8 +7,6 @@
 
 #include <core/crash/package_names.h>
 #include <core/crash/reason_names.h>
-#include <global/diagnostics.h>
-#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,12 +19,6 @@ NWB_LOG_BEGIN
 
 
 namespace __hidden_logger_crash_symbolicate{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -108,21 +100,15 @@ static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, 
     outReport += "\n";
 }
 
-struct TriggerSummary{
-    CrashReportText category;
-    CrashReportText expression;
-    CrashReportText message;
-    CrashReportText file;
-    u64 line = 0u;
-    bool present = false;
-
-    explicit TriggerSummary(LogArena& arena)
-        : category(arena)
-        , expression(arena)
-        , message(arena)
-        , file(arena)
-    {}
-};
+static bool HasTriggerSummary(const CrashPackageSummary& summary){
+    return
+        !summary.triggerCategory.empty()
+        || !summary.triggerExpression.empty()
+        || !summary.triggerMessage.empty()
+        || !summary.triggerFile.empty()
+        || summary.triggerLine != 0u
+    ;
+}
 
 static void AppendOptionalTriggerField(CrashReportText& outReport, const char* key, const CrashReportText& value){
     if(value.empty())
@@ -134,45 +120,29 @@ static void AppendOptionalTriggerField(CrashReportText& outReport, const char* k
     outReport += "\n";
 }
 
-static TriggerSummary ReadTriggerSummary(LogArena& arena, const Path& packageDirectory){
-    TriggerSummary trigger(arena);
-    CrashReportText triggerText{arena};
-    trigger.present = ReadTextFile(packageDirectory / CrashNames::s_TriggerFileName, triggerText) && !triggerText.empty();
-    if(!trigger.present)
-        return trigger;
-
-    const AStringView triggerView(triggerText.data(), triggerText.size());
-    static_cast<void>(FindLineKeyValue(triggerView, "category", trigger.category));
-    static_cast<void>(FindLineKeyValue(triggerView, "expression", trigger.expression));
-    static_cast<void>(FindLineKeyValue(triggerView, "message", trigger.message));
-    static_cast<void>(FindLineKeyValue(triggerView, "file", trigger.file));
-    static_cast<void>(FindLineKeyValueU64(triggerView, "line", trigger.line));
-    return trigger;
-}
-
-static void AppendEventSummary(LogArena& arena, const CrashPackageSummary& summary, const TriggerSummary& trigger, CrashReportText& outReport){
+static void AppendEventSummary(LogArena& arena, const CrashPackageSummary& summary, CrashReportText& outReport){
     outReport += "\n[event]\n";
     outReport += "event=";
     outReport += summary.event;
     outReport += "\n";
 
-    if(!trigger.present)
+    if(!HasTriggerSummary(summary))
         AppendExceptionSummary(arena, outReport, summary);
 }
 
-static void AppendTriggerSummary(CrashReportText& outReport, const TriggerSummary& trigger){
-    if(!trigger.present)
+static void AppendTriggerSummary(CrashReportText& outReport, const CrashPackageSummary& summary){
+    if(!HasTriggerSummary(summary))
         return;
 
     outReport += "\n[trigger]\n";
-    AppendOptionalTriggerField(outReport, "category", trigger.category);
-    AppendOptionalTriggerField(outReport, "expression", trigger.expression);
-    AppendOptionalTriggerField(outReport, "message", trigger.message);
-    AppendOptionalTriggerField(outReport, "file", trigger.file);
-    if(trigger.line != 0u){
+    AppendOptionalTriggerField(outReport, "category", summary.triggerCategory);
+    AppendOptionalTriggerField(outReport, "expression", summary.triggerExpression);
+    AppendOptionalTriggerField(outReport, "message", summary.triggerMessage);
+    AppendOptionalTriggerField(outReport, "file", summary.triggerFile);
+    if(summary.triggerLine != 0u){
         outReport += "line=";
         char buffer[s_DecimalTextBufferCapacity] = {};
-        outReport += FormatDecimal(static_cast<usize>(trigger.line), buffer);
+        outReport += FormatDecimal(static_cast<usize>(summary.triggerLine), buffer);
         outReport += "\n";
     }
 }
@@ -205,9 +175,8 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
     report += summary.artifactStrategy;
     report += "\n";
     Symbolicate::AppendSymbolStoreStatus(arena, report, config);
-    const Symbolicate::TriggerSummary trigger = Symbolicate::ReadTriggerSummary(arena, packageDirectory);
-    Symbolicate::AppendEventSummary(arena, summary, trigger, report);
-    Symbolicate::AppendTriggerSummary(report, trigger);
+    Symbolicate::AppendEventSummary(arena, summary, report);
+    Symbolicate::AppendTriggerSummary(report, summary);
 
     if(summary.platform == "windows"){
 #if defined(NWB_PLATFORM_WINDOWS)

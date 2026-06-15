@@ -170,8 +170,8 @@ static void TestWriteCrashPackageCreatesRequiredFiles(TestContext& context){
     NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_ArtifactStrategyFileName));
     NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_CpuContextFileName));
     NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
-    NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_TriggerFileName));
     NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName));
+    NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"required-files\"")));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -484,7 +484,7 @@ static void TestDesktopInstalledHandlerWritesManualDumpPackage(TestContext& cont
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
         NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
 #endif
-        NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_TriggerFileName, AStringView("desktop handler runtime")));
+        NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"desktop handler runtime\"")));
         NWB::Core::Crash::UninstallCrashHandler();
     }
 

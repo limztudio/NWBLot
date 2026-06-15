@@ -201,32 +201,38 @@ Log::CrashIngestConfig MakeIngestConfig(Core::Alloc::GlobalArena& arena, const A
     return config;
 }
 
-static bool TriggerFileContainsKeyValue(const CrashTestPath& triggerPath, const AStringView key, const AStringView value){
+static bool ManifestContainsStringValue(Core::Alloc::GlobalArena& arena, const CrashTestText& manifest, const AStringView key, const AStringView value){
     if(value.empty())
         return true;
 
-    CrashTestText needle(triggerPath.arena());
+    CrashTestText needle(arena);
+    needle += "\"";
     needle += key;
-    needle += "=";
+    needle += "\": \"";
     needle += value;
-    return TextFileContains(triggerPath, AStringView(needle.data(), needle.size()));
+    needle += "\"";
+    return Contains(manifest, AStringView(needle.data(), needle.size()));
 }
 
 static bool TriggerPackageContains(
+    Core::Alloc::GlobalArena& arena,
     const CrashTestPath& packageDirectory,
     const AStringView category,
     const AStringView expression,
     const AStringView message,
     const AStringView file
 ){
-    const CrashTestPath triggerPath = packageDirectory / CrashNames::s_TriggerFileName;
-    if(!TriggerFileContainsKeyValue(triggerPath, "category", category))
+    CrashTestText manifest(arena);
+    if(!ReadTextFile(packageDirectory / CrashNames::s_ManifestFileName, manifest))
         return false;
-    if(!TriggerFileContainsKeyValue(triggerPath, "expression", expression))
+
+    if(!ManifestContainsStringValue(arena, manifest, CrashNames::s_ManifestTriggerCategoryKey, category))
         return false;
-    if(!TriggerFileContainsKeyValue(triggerPath, "message", message))
+    if(!ManifestContainsStringValue(arena, manifest, CrashNames::s_ManifestTriggerExpressionKey, expression))
         return false;
-    if(!file.empty() && !TextFileContains(triggerPath, file))
+    if(!ManifestContainsStringValue(arena, manifest, CrashNames::s_ManifestTriggerMessageKey, message))
+        return false;
+    if(!file.empty() && !Contains(manifest, file))
         return false;
 
     return true;
@@ -250,7 +256,7 @@ static bool FindTriggerPackage(
         ErrorCode entryError;
         if(!IsDirectory(entry.path(), entryError) || entryError)
             continue;
-        if(!TriggerPackageContains(entry.path(), category, expression, message, file))
+        if(!TriggerPackageContains(arena, entry.path(), category, expression, message, file))
             continue;
 
         outPackageDirectory = entry.path();

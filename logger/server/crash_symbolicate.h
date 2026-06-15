@@ -34,8 +34,13 @@ struct CrashPackageSummary{
     CrashReportText reasonKind;
     CrashReportText artifactStrategy;
     CrashReportText event;
+    CrashReportText triggerCategory;
+    CrashReportText triggerExpression;
+    CrashReportText triggerMessage;
+    CrashReportText triggerFile;
     u64 reasonCode = 0u;
     u64 threadId = 0u;
+    u64 triggerLine = 0u;
 
     explicit CrashPackageSummary(LogArena& arena)
         : format(arena)
@@ -44,6 +49,10 @@ struct CrashPackageSummary{
         , reasonKind(arena)
         , artifactStrategy(arena)
         , event(arena)
+        , triggerCategory(arena)
+        , triggerExpression(arena)
+        , triggerMessage(arena)
+        , triggerFile(arena)
     {}
 };
 

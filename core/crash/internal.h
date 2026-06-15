@@ -157,7 +157,7 @@ struct CrashRequest{
     char spoolDirectory[s_MaxPathText] = {};
     char logServerUrl[s_MaxUrlText] = {};
     char crashUploadToken[s_MaxMediumText] = {};
-    char triggerEvent[s_MaxShortText] = {};
+    char event[s_MaxShortText] = {};
     char triggerCategory[s_MaxShortText] = {};
     char triggerExpression[s_MaxMediumText] = {};
     char triggerMessage[s_MaxMediumText] = {};
@@ -185,11 +185,12 @@ struct CrashDumpRequestOptions{
     u64 framePointer = 0u;
     u32 callstackFrameCount = 0u;
     u64 callstackFrames[s_MaxCallstackFrames] = {};
+    AStringView event;
     AStringView triggerCategory;
-    AStringView triggerEvent;
     AStringView triggerExpression;
     AStringView triggerMessage;
     AStringView triggerFile;
+    u64 triggerInstructionPointer = 0u;
     u32 triggerLine = 0u;
     u32 callstackFramesToSkip = 0u;
     bool writePackageInProcess = false;

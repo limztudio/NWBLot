@@ -289,7 +289,6 @@ static void TestLinuxAssertCrashProducesObservableLoggerReport(TestContext& cont
         WaitForTriggerPackage(
             arena,
             pendingDirectory,
-            "assert",
             expectedAssertCategory,
             "false",
             AStringView(),
@@ -322,10 +321,7 @@ static void TestLinuxAssertCrashProducesObservableLoggerReport(TestContext& cont
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, AStringView(expectedCategoryLine.data(), expectedCategoryLine.size())));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "tests/logger_server/tests.cpp"));
     if(LinuxExternalSymbolizerAvailable(arena)){
-        NWB_LOGSERVER_TEST_CHECK(
-            context,
-            Contains(report, "LinuxForceAssertFalseForCrashObservation") || Contains(report, "tests/logger_server/tests.cpp")
-        );
+        NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "LinuxForceAssertFalseForCrashObservation"));
     }
 
     PreserveObservedReport(context, arena, report, "linux_assert");
@@ -378,7 +374,6 @@ NWB_LOGSERVER_TEST_NOINLINE static void TestRecoverableErrorDiagnosticProducesOb
         WaitForTriggerPackage(
             arena,
             pendingDirectory,
-            "error",
             NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,
             AStringView(),
             s_ErrorMessage,
@@ -408,6 +403,8 @@ NWB_LOGSERVER_TEST_NOINLINE static void TestRecoverableErrorDiagnosticProducesOb
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=linux"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "status=callstack_captured"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[callstack]"));
+    if(LinuxExternalSymbolizerAvailable(arena))
+        NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "TestRecoverableErrorDiagnosticProducesObservableLoggerReport"));
 #elif defined(NWB_PLATFORM_WINDOWS)
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=windows"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "resolver=windows_pdb_minidump"));

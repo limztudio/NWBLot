@@ -63,7 +63,6 @@ void AppendArchiveFile(CrashTestText& archive, AStringView relativePath, AString
 [[nodiscard]] bool WaitForTriggerPackage(
     Core::Alloc::GlobalArena& arena,
     const CrashTestPath& pendingDirectory,
-    AStringView event,
     AStringView category,
     AStringView expression,
     AStringView message,

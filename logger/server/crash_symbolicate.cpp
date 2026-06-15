@@ -108,15 +108,33 @@ static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, 
     outReport += "\n";
 }
 
-[[nodiscard]] static const char* EventNameFromCategory(const CrashReportText& category, const CrashReportText& reasonKind)noexcept{
+[[nodiscard]] static const char* EventNameFromSummary(const CrashPackageSummary& summary, const CrashReportText& category)noexcept{
+    if(!summary.event.empty())
+        return summary.event.c_str();
     if(const char* const diagnosticEventName = DiagnosticEventNameFromCategory(category.c_str()))
         return diagnosticEventName;
-    if(reasonKind == "manual")
+    if(summary.reasonKind == "manual" || summary.reasonKind == "manual_dump")
         return DiagnosticEventName::s_ManualDump;
     return DiagnosticEventName::s_Crash;
 }
 
-static void AppendOptionalEventField(CrashReportText& outReport, const char* key, const CrashReportText& value){
+struct TriggerSummary{
+    CrashReportText category;
+    CrashReportText expression;
+    CrashReportText message;
+    CrashReportText file;
+    u64 line = 0u;
+    bool present = false;
+
+    explicit TriggerSummary(LogArena& arena)
+        : category(arena)
+        , expression(arena)
+        , message(arena)
+        , file(arena)
+    {}
+};
+
+static void AppendOptionalTriggerField(CrashReportText& outReport, const char* key, const CrashReportText& value){
     if(value.empty())
         return;
 
@@ -126,47 +144,48 @@ static void AppendOptionalEventField(CrashReportText& outReport, const char* key
     outReport += "\n";
 }
 
-static void AppendEventSummary(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, CrashReportText& outReport){
+static TriggerSummary ReadTriggerSummary(LogArena& arena, const Path& packageDirectory){
+    TriggerSummary trigger(arena);
     CrashReportText triggerText{arena};
-    const bool triggerPresent = ReadTextFile(packageDirectory / CrashNames::s_TriggerFileName, triggerText) && !triggerText.empty();
+    trigger.present = ReadTextFile(packageDirectory / CrashNames::s_TriggerFileName, triggerText) && !triggerText.empty();
+    if(!trigger.present)
+        return trigger;
 
-    CrashReportText event{arena};
-    CrashReportText category{arena};
-    CrashReportText expression{arena};
-    CrashReportText message{arena};
-    CrashReportText file{arena};
-    u64 line = 0u;
+    const AStringView triggerView(triggerText.data(), triggerText.size());
+    static_cast<void>(FindLineKeyValue(triggerView, "category", trigger.category));
+    static_cast<void>(FindLineKeyValue(triggerView, "expression", trigger.expression));
+    static_cast<void>(FindLineKeyValue(triggerView, "message", trigger.message));
+    static_cast<void>(FindLineKeyValue(triggerView, "file", trigger.file));
+    static_cast<void>(FindLineKeyValueU64(triggerView, "line", trigger.line));
+    return trigger;
+}
 
-    if(triggerPresent){
-        const AStringView triggerView(triggerText.data(), triggerText.size());
-        static_cast<void>(FindLineKeyValue(triggerView, "event", event));
-        static_cast<void>(FindLineKeyValue(triggerView, "category", category));
-        static_cast<void>(FindLineKeyValue(triggerView, "expression", expression));
-        static_cast<void>(FindLineKeyValue(triggerView, "message", message));
-        static_cast<void>(FindLineKeyValue(triggerView, "file", file));
-        static_cast<void>(FindLineKeyValueU64(triggerView, "line", line));
-    }
-
-    if(event.empty())
-        event = EventNameFromCategory(category, summary.reasonKind);
+static void AppendEventSummary(LogArena& arena, const CrashPackageSummary& summary, const TriggerSummary& trigger, CrashReportText& outReport){
+    const char* const event = EventNameFromSummary(summary, trigger.category);
 
     outReport += "\n[event]\n";
     outReport += "event=";
     outReport += event;
     outReport += "\n";
-    if(category.empty() && !triggerPresent)
+
+    if(!trigger.present)
         AppendExceptionSummary(arena, outReport, summary);
-    else{
-        AppendOptionalEventField(outReport, "category", category);
-        AppendOptionalEventField(outReport, "expression", expression);
-        AppendOptionalEventField(outReport, "message", message);
-        AppendOptionalEventField(outReport, "file", file);
-        if(line != 0u){
-            outReport += "line=";
-            char buffer[s_DecimalTextBufferCapacity] = {};
-            outReport += FormatDecimal(static_cast<usize>(line), buffer);
-            outReport += "\n";
-        }
+}
+
+static void AppendTriggerSummary(CrashReportText& outReport, const TriggerSummary& trigger){
+    if(!trigger.present)
+        return;
+
+    outReport += "\n[trigger]\n";
+    AppendOptionalTriggerField(outReport, "category", trigger.category);
+    AppendOptionalTriggerField(outReport, "expression", trigger.expression);
+    AppendOptionalTriggerField(outReport, "message", trigger.message);
+    AppendOptionalTriggerField(outReport, "file", trigger.file);
+    if(trigger.line != 0u){
+        outReport += "line=";
+        char buffer[s_DecimalTextBufferCapacity] = {};
+        outReport += FormatDecimal(static_cast<usize>(trigger.line), buffer);
+        outReport += "\n";
     }
 }
 
@@ -198,7 +217,9 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
     report += summary.artifactStrategy;
     report += "\n";
     Symbolicate::AppendSymbolStoreStatus(arena, report, config);
-    Symbolicate::AppendEventSummary(arena, packageDirectory, summary, report);
+    const Symbolicate::TriggerSummary trigger = Symbolicate::ReadTriggerSummary(arena, packageDirectory);
+    Symbolicate::AppendEventSummary(arena, summary, trigger, report);
+    Symbolicate::AppendTriggerSummary(report, trigger);
 
     if(summary.platform == "windows"){
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -217,7 +238,6 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
         report += "status=not_decoded\nresolver=unknown\ndetail=unknown crash platform\n";
     }
 
-    Symbolicate::AppendOptionalTextFile(arena, report, packageDirectory, Core::Crash::PackageNames::s_TriggerFileName, "trigger");
     Symbolicate::AppendOptionalTextFile(arena, report, packageDirectory, Core::Crash::PackageNames::s_CpuContextFileName, "cpu_context");
     Symbolicate::AppendOptionalTextFile(arena, report, packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note");
     Symbolicate::AppendOptionalTextFile(arena, report, packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection");

@@ -81,6 +81,14 @@
 #endif
 #endif
 
+#if NWB_COMPILER_FRONTEND_MSVC
+#define NWB_NOINLINE __declspec(noinline)
+#elif __has_attribute(noinline) || defined(__GNUC__)
+#define NWB_NOINLINE __attribute__((noinline))
+#else
+#define NWB_NOINLINE
+#endif
+
 #if __has_attribute(vectorcall)
 #define NWB_VECTORCALL __attribute__((vectorcall))
 #elif NWB_COMPILER_FRONTEND_MSVC

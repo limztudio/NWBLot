@@ -164,9 +164,9 @@ static const char* ArtifactStrategyName(const CrashRequest& request){
     }
 }
 
-static const char* TriggerEventName(const CrashRequest& request){
-    if(request.triggerEvent[0] != 0)
-        return request.triggerEvent;
+static const char* EventName(const CrashRequest& request){
+    if(request.event[0] != 0)
+        return request.event;
     if(const char* const diagnosticEventName = DiagnosticEventNameFromCategory(request.triggerCategory))
         return diagnosticEventName;
     if(request.reasonKind == CrashReasonKind::ManualDump)
@@ -212,8 +212,8 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendUnsignedText(manifest, request.stackPointer);
     manifest += ",\n  \"frame_pointer\": ";
     AppendUnsignedText(manifest, request.framePointer);
-    manifest += ",\n  \"trigger_event\": ";
-    AppendJsonEscaped(manifest, TriggerEventName(request));
+    manifest += ",\n  \"event\": ";
+    AppendJsonEscaped(manifest, EventName(request));
     manifest += ",\n  \"trigger_category\": ";
     AppendJsonEscaped(manifest, request.triggerCategory);
     manifest += ",\n  \"trigger_expression\": ";
@@ -283,8 +283,8 @@ static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest
     AppendUnsignedText(text, request.stackPointer);
     text += "\nframe_pointer=";
     AppendUnsignedText(text, request.framePointer);
-    text += "\ntrigger_event=";
-    text += request.triggerEvent;
+    text += "\nevent=";
+    text += EventName(request);
     text += "\ntrigger_category=";
     text += request.triggerCategory;
     text += "\ntrigger_expression=";
@@ -313,8 +313,7 @@ static bool HasCallstack(const CrashRequest& request){
 
 static bool HasTriggerContext(const CrashRequest& request){
     return
-        request.triggerEvent[0] != 0
-        || request.triggerCategory[0] != 0
+        request.triggerCategory[0] != 0
         || request.triggerExpression[0] != 0
         || request.triggerMessage[0] != 0
         || request.triggerFile[0] != 0
@@ -357,9 +356,7 @@ static CrashStringT<ArenaT> BuildCallstackText(ArenaT& arena, const CrashRequest
 template<typename ArenaT>
 static CrashStringT<ArenaT> BuildTriggerText(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> text{arena};
-    text += "event=";
-    text += TriggerEventName(request);
-    text += "\ncategory=";
+    text += "category=";
     text += request.triggerCategory;
     text += "\nexpression=";
     text += request.triggerExpression;

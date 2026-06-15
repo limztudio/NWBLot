@@ -174,7 +174,7 @@ static bool __hidden_reserve_diagnostic_capture(const DiagnosticEventRecord& rec
     return true;
 }
 
-static CrashDumpResult __hidden_capture_crash_dump(const AStringView category, const AStringView message, Detail::CrashDumpRequestOptions& options){
+NWB_NOINLINE static CrashDumpResult __hidden_capture_crash_dump(const AStringView category, const AStringView message, Detail::CrashDumpRequestOptions& options){
     const AStringView breadcrumbCategory = category.empty() ? AStringView(Detail::s_ManualDumpCategory) : category;
 
     {
@@ -202,18 +202,19 @@ static CrashDumpResult __hidden_capture_crash_dump(const AStringView category, c
     return Detail::RequestCrashDump(Detail::CrashReasonKind::ManualDump, 0u, options);
 }
 
-static void __hidden_capture_diagnostic_crash(const DiagnosticEventRecord& record)noexcept{
+NWB_NOINLINE static void __hidden_capture_diagnostic_crash(const DiagnosticEventRecord& record)noexcept{
     try{
         Detail::CrashDumpRequestOptions options;
         const char* const diagnosticEventName = DiagnosticEventNameFromRecord(record);
-        options.triggerEvent = diagnosticEventName ? AStringView(diagnosticEventName) : AStringView();
+        options.event = diagnosticEventName ? AStringView(diagnosticEventName) : AStringView();
         options.triggerCategory = record.category ? AStringView(record.category) : AStringView();
         options.triggerExpression = record.expression ? AStringView(record.expression) : AStringView();
         options.triggerMessage = record.message ? AStringView(record.message) : AStringView();
         options.triggerFile = record.file ? AStringView(record.file) : AStringView();
+        options.triggerInstructionPointer = record.instructionPointer;
         options.triggerLine = record.line;
-        options.callstackFramesToSkip = 3u;
-        if(!__hidden_reserve_diagnostic_capture(record, options.triggerEvent, options.triggerCategory))
+        options.callstackFramesToSkip = 5u;
+        if(!__hidden_reserve_diagnostic_capture(record, options.event, options.triggerCategory))
             return;
         static_cast<void>(__hidden_capture_crash_dump(options.triggerCategory, options.triggerMessage, options));
     }

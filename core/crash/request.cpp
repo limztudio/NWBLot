@@ -121,7 +121,10 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     request.uploadPolicy = options.uploadAfterWrite ? CrashUploadPolicy::ImmediateAfterWrite : CrashUploadPolicy::None;
     request.exceptionPointers = options.exceptionPointers;
     request.faultAddress = options.faultAddress;
-    request.instructionPointer = options.instructionPointer;
+    request.instructionPointer = options.triggerInstructionPointer != 0u
+        ? options.triggerInstructionPointer
+        : options.instructionPointer
+    ;
     request.stackPointer = options.stackPointer;
     request.framePointer = options.framePointer;
     request.triggerLine = options.triggerLine;
@@ -134,10 +137,27 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
         : options.callstackFramesToSkip
     ;
     request.callstackFramesToSkip = callstackFramesToSkip;
-    request.callstackFrameCount = availableCallstackFrameCount - callstackFramesToSkip;
-    for(u32 i = 0u; i < request.callstackFrameCount; ++i)
-        request.callstackFrames[i] = options.callstackFrames[i + callstackFramesToSkip];
-    CopyFixedBuffer(request.triggerEvent, options.triggerEvent);
+    u32 outputCallstackFrameCount = 0u;
+    if(options.triggerInstructionPointer != 0u)
+        request.callstackFrames[outputCallstackFrameCount++] = options.triggerInstructionPointer;
+
+    for(u32 i = callstackFramesToSkip; i < availableCallstackFrameCount && outputCallstackFrameCount < s_MaxCallstackFrames; ++i){
+        const u64 frame = options.callstackFrames[i];
+        if(frame == 0u)
+            continue;
+
+        bool duplicate = false;
+        for(u32 existing = 0u; existing < outputCallstackFrameCount; ++existing){
+            if(request.callstackFrames[existing] == frame){
+                duplicate = true;
+                break;
+            }
+        }
+        if(!duplicate)
+            request.callstackFrames[outputCallstackFrameCount++] = frame;
+    }
+    request.callstackFrameCount = outputCallstackFrameCount;
+    CopyFixedBuffer(request.event, options.event);
     CopyFixedBuffer(request.triggerCategory, options.triggerCategory);
     CopyFixedBuffer(request.triggerExpression, options.triggerExpression);
     CopyFixedBuffer(request.triggerMessage, options.triggerMessage);

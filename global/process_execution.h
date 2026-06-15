@@ -11,9 +11,13 @@
 #include "type.h"
 
 #include <cerrno>
+#include <climits>
+#include <ctime>
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 #include <fcntl.h>
+#include <poll.h>
+#include <signal.h>
 #include <sys/wait.h>
 #endif
 #if !defined(NWB_PLATFORM_WINDOWS)
@@ -31,6 +35,8 @@ namespace ProcessExecutionDetail{
 
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+inline constexpr usize s_DefaultCaptureProcessOutputTimeoutMilliseconds = 3000u;
+
 inline void CloseFileDescriptor(int& fd)noexcept{
     if(fd < 0)
         return;
@@ -39,14 +45,58 @@ inline void CloseFileDescriptor(int& fd)noexcept{
     fd = -1;
 }
 
-[[nodiscard]] inline bool WaitForProcessSuccess(const pid_t childPid)noexcept{
-    int status = 0;
-    pid_t waitedPid = -1;
-    do{
-        waitedPid = ::waitpid(childPid, &status, 0);
-    }while(waitedPid < 0 && errno == EINTR);
+[[nodiscard]] inline u64 MonotonicMilliseconds()noexcept{
+    timespec time = {};
+    if(::clock_gettime(CLOCK_MONOTONIC, &time) != 0)
+        return 0u;
 
-    return waitedPid == childPid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    return static_cast<u64>(time.tv_sec) * 1000u + static_cast<u64>(time.tv_nsec / 1000000L);
+}
+
+[[nodiscard]] inline bool TimeoutExpired(const u64 deadlineMilliseconds)noexcept{
+    return deadlineMilliseconds != 0u && MonotonicMilliseconds() >= deadlineMilliseconds;
+}
+
+[[nodiscard]] inline int RemainingTimeoutMilliseconds(const u64 deadlineMilliseconds)noexcept{
+    if(deadlineMilliseconds == 0u)
+        return -1;
+
+    const u64 now = MonotonicMilliseconds();
+    if(now >= deadlineMilliseconds)
+        return 0;
+
+    const u64 remaining = deadlineMilliseconds - now;
+    return remaining > static_cast<u64>(INT_MAX)
+        ? INT_MAX
+        : static_cast<int>(remaining)
+    ;
+}
+
+inline void KillAndReapProcess(const pid_t childPid)noexcept{
+    if(childPid <= 0)
+        return;
+
+    static_cast<void>(::kill(childPid, SIGKILL));
+    int status = 0;
+    while(::waitpid(childPid, &status, 0) < 0 && errno == EINTR){
+    }
+}
+
+[[nodiscard]] inline bool WaitForProcessSuccess(const pid_t childPid, const u64 deadlineMilliseconds)noexcept{
+    int status = 0;
+    for(;;){
+        const pid_t waitedPid = ::waitpid(childPid, &status, WNOHANG);
+        if(waitedPid == childPid)
+            return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+        if(waitedPid < 0 && errno != EINTR)
+            return false;
+        if(TimeoutExpired(deadlineMilliseconds)){
+            KillAndReapProcess(childPid);
+            return false;
+        }
+
+        static_cast<void>(::poll(nullptr, 0, 1));
+    }
 }
 #endif
 
@@ -109,7 +159,13 @@ template<typename ArenaT>
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 template<typename StringT>
-[[nodiscard]] inline bool CaptureProcessOutput(StringT& outOutput, const char* const* argv, const usize maxOutputBytes = 8192u, const usize readBufferBytes = 256u){
+[[nodiscard]] inline bool CaptureProcessOutput(
+    StringT& outOutput,
+    const char* const* argv,
+    const usize maxOutputBytes = 8192u,
+    const usize readBufferBytes = 256u,
+    const usize timeoutMilliseconds = ProcessExecutionDetail::s_DefaultCaptureProcessOutputTimeoutMilliseconds
+){
     outOutput.clear();
 
     if(!argv || !argv[0] || readBufferBytes == 0u)
@@ -142,6 +198,15 @@ template<typename StringT>
     }
 
     ProcessExecutionDetail::CloseFileDescriptor(pipeFds[1]);
+    const u64 timeoutStartMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
+    const u64 deadlineMilliseconds = timeoutMilliseconds == 0u || timeoutStartMilliseconds == 0u
+        ? 0u
+        : timeoutStartMilliseconds + static_cast<u64>(timeoutMilliseconds)
+    ;
+
+    const int flags = ::fcntl(pipeFds[0], F_GETFL, 0);
+    if(flags >= 0)
+        static_cast<void>(::fcntl(pipeFds[0], F_SETFL, flags | O_NONBLOCK));
 
     char buffer[256] = {};
     const usize effectiveReadBufferBytes = readBufferBytes < sizeof(buffer)
@@ -150,7 +215,24 @@ template<typename StringT>
     ;
     bool readSucceeded = true;
     bool outputTruncated = false;
+    bool timedOut = false;
     for(;;){
+        pollfd pipePoll = {};
+        pipePoll.fd = pipeFds[0];
+        pipePoll.events = POLLIN | POLLHUP | POLLERR;
+
+        const int pollResult = ::poll(&pipePoll, 1, ProcessExecutionDetail::RemainingTimeoutMilliseconds(deadlineMilliseconds));
+        if(pollResult == 0){
+            timedOut = true;
+            break;
+        }
+        if(pollResult < 0){
+            if(errno == EINTR)
+                continue;
+            readSucceeded = false;
+            break;
+        }
+
         const ssize_t readBytes = ::read(pipeFds[0], buffer, effectiveReadBufferBytes);
         if(readBytes > 0){
             const usize length = static_cast<usize>(readBytes);
@@ -173,13 +255,27 @@ template<typename StringT>
 
         if(errno == EINTR)
             continue;
+        if(errno == EAGAIN || errno == EWOULDBLOCK){
+            if((pipePoll.revents & (POLLHUP | POLLERR)) != 0)
+                break;
+            continue;
+        }
 
         readSucceeded = false;
         break;
     }
 
     ProcessExecutionDetail::CloseFileDescriptor(pipeFds[0]);
-    return readSucceeded && !outputTruncated && ProcessExecutionDetail::WaitForProcessSuccess(childPid) && !outOutput.empty();
+    if(timedOut){
+        ProcessExecutionDetail::KillAndReapProcess(childPid);
+        return false;
+    }
+
+    return readSucceeded
+        && !outputTruncated
+        && ProcessExecutionDetail::WaitForProcessSuccess(childPid, deadlineMilliseconds)
+        && !outOutput.empty()
+    ;
 }
 #endif
 

@@ -20,6 +20,7 @@ struct DiagnosticEventRecord{
     const char* expression = nullptr;
     const char* message = nullptr;
     const char* file = nullptr;
+    u64 instructionPointer = 0u;
     u32 line = 0u;
 };
 
@@ -190,7 +191,7 @@ inline void ClearDiagnosticEventCallback(const DiagnosticEventCallback callback)
     static_cast<void>(DiagnosticDetail::g_EventCallback.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel));
 }
 
-inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
+NWB_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
     const DiagnosticEventCallback callback = DiagnosticDetail::g_EventCallback.load(MemoryOrder::acquire);
     if(!callback)
         return;
@@ -208,6 +209,10 @@ inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
         normalizedRecord.message = "";
     if(!normalizedRecord.file)
         normalizedRecord.file = "";
+#if __has_builtin(__builtin_return_address) || defined(__GNUC__)
+    if(normalizedRecord.instructionPointer == 0u)
+        normalizedRecord.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_return_address(0)));
+#endif
 
     callback(normalizedRecord);
 

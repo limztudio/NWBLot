@@ -361,6 +361,7 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
     }
 
     static_cast<void>(FindGeneratedJsonUnsignedValue(arena, manifestText, "reason_code", outSummary.reasonCode));
+    static_cast<void>(FindGeneratedJsonStringValue(arena, manifestText, "event", outSummary.event));
 
     return true;
 }

@@ -213,20 +213,12 @@ Log::CrashIngestConfig MakeIngestConfig(Core::Alloc::GlobalArena& arena, const A
 
 static bool TriggerPackageContains(
     const CrashTestPath& packageDirectory,
-    const AStringView event,
     const AStringView category,
     const AStringView expression,
     const AStringView message,
     const AStringView file
 ){
     const CrashTestPath triggerPath = packageDirectory / CrashNames::s_TriggerFileName;
-    if(!event.empty()){
-        CrashTestText needle(triggerPath.arena());
-        needle += "event=";
-        needle += event;
-        if(!TextFileContains(triggerPath, AStringView(needle.data(), needle.size())))
-            return false;
-    }
     if(!category.empty()){
         CrashTestText needle(triggerPath.arena());
         needle += "category=";
@@ -257,7 +249,6 @@ static bool TriggerPackageContains(
 static bool FindTriggerPackage(
     Core::Alloc::GlobalArena& arena,
     const CrashTestPath& pendingDirectory,
-    const AStringView event,
     const AStringView category,
     const AStringView expression,
     const AStringView message,
@@ -273,7 +264,7 @@ static bool FindTriggerPackage(
         ErrorCode entryError;
         if(!IsDirectory(entry.path(), entryError) || entryError)
             continue;
-        if(!TriggerPackageContains(entry.path(), event, category, expression, message, file))
+        if(!TriggerPackageContains(entry.path(), category, expression, message, file))
             continue;
 
         outPackageDirectory = entry.path();
@@ -287,7 +278,6 @@ static bool FindTriggerPackage(
 bool WaitForTriggerPackage(
     Core::Alloc::GlobalArena& arena,
     const CrashTestPath& pendingDirectory,
-    const AStringView event,
     const AStringView category,
     const AStringView expression,
     const AStringView message,
@@ -299,7 +289,7 @@ bool WaitForTriggerPackage(
     for(u32 elapsedMilliseconds = 0u; elapsedMilliseconds <= s_TimeoutMilliseconds; elapsedMilliseconds += s_PollMilliseconds){
         if(
             PathIsDirectory(pendingDirectory)
-            && FindTriggerPackage(arena, pendingDirectory, event, category, expression, message, file, outPackageDirectory)
+            && FindTriggerPackage(arena, pendingDirectory, category, expression, message, file, outPackageDirectory)
         )
             return true;
         SleepMS(s_PollMilliseconds);

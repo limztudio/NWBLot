@@ -86,10 +86,6 @@ CrashTestPath InvalidArchivePath(Core::Alloc::GlobalArena& arena, const AStringV
     return StorageDirectory(arena, testGroup) / Log::s_CrashInvalidDirectoryName / ArchiveFileName(arena, stem);
 }
 
-CrashPersistentPath ToCrashPersistentPath(Core::Alloc::PersistentArena& arena, const CrashTestPath& path){
-    return CrashPersistentPath(arena, path);
-}
-
 void RemoveTestArtifacts(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
     ErrorCode error;
     static_cast<void>(RemoveAllIfExists(TestCaseDirectory(arena, testGroup), error));
@@ -190,19 +186,8 @@ bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, const AStringView testGr
     return WriteBinaryFile(ArchivePath(arena, testGroup, stem), archive);
 }
 
-bool BuildArchiveFromPackageDirectory(const CrashTestPath& packageDirectory, CrashTestBytes& outArchive){
-    Core::Alloc::PersistentArena packageArena(
-        Core::Alloc::PersistentArena::StructureAlignedSize(512u * 1024u),
-        "NWB::Tests::LoggerServer::CrashPackageArchiveArena"
-    );
-    const CrashPersistentPath persistentPackageDirectory = ToCrashPersistentPath(packageArena, packageDirectory);
-    Core::Crash::Detail::CrashBytes persistentArchive{packageArena};
-    if(!Core::Crash::Detail::BuildPackageArchive(packageArena, persistentPackageDirectory, persistentArchive))
-        return false;
-
-    outArchive.clear();
-    outArchive.insert(outArchive.end(), persistentArchive.begin(), persistentArchive.end());
-    return true;
+bool BuildArchiveFromPackageDirectory(Core::Alloc::GlobalArena& arena, const CrashTestPath& packageDirectory, CrashTestBytes& outArchive){
+    return Core::Crash::Detail::BuildPackageArchive(arena, packageDirectory, outArchive);
 }
 
 bool ReadServerSymbolication(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, CrashTestText& outReport){
@@ -277,6 +262,7 @@ static bool FindTriggerPackage(
         return true;
     }
 
+    static_cast<void>(arena);
     return false;
 }
 

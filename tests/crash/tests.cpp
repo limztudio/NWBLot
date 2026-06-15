@@ -30,16 +30,11 @@ namespace __hidden_crash_tests{
 using TestContext = NWB::Tests::TestContext;
 using TestArena = NWB::Tests::TestArena<struct CrashTestsTag>;
 using CrashTestPath = Path<NWB::Core::Alloc::GlobalArena>;
-using CrashPersistentArena = NWB::Core::Alloc::PersistentArena;
-using CrashPersistentPath = Path<CrashPersistentArena>;
 using NWB::Tests::TextFileContains;
 using NWB::Tests::WaitForDirectory;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
 
 #define NWB_CRASH_TEST_CHECK NWB_TEST_CHECK
-
-inline constexpr usize s_CrashPersistentArenaPayloadSize = 512u * 1024u;
-inline constexpr usize s_CrashInstallArenaPayloadSize = 64u * 1024u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -141,18 +136,6 @@ static void FillPackageRequest(
     CopyFixedBuffer(request.buildId, AStringView("test"));
     CopyFixedBuffer(request.abi, CurrentAbiName());
     CopyPathText(arena, request.spoolDirectory, spoolDirectory);
-}
-
-[[nodiscard]] static CrashPersistentPath ToPersistentPath(CrashPersistentArena& arena, const CrashTestPath& path){
-    return CrashPersistentPath(arena, path);
-}
-
-[[nodiscard]] static usize CrashPersistentArenaStorageSize()noexcept{
-    return CrashPersistentArena::StructureAlignedSize(s_CrashPersistentArenaPayloadSize);
-}
-
-[[nodiscard]] static usize CrashInstallArenaStorageSize()noexcept{
-    return CrashPersistentArena::StructureAlignedSize(s_CrashInstallArenaPayloadSize);
 }
 
 
@@ -284,18 +267,7 @@ static void TestCrashSpoolRetentionPrunesOldestPackages(TestContext& context){
     retention.maxUploadedPackages = 1u;
     retention.maxFailedPackages = 1u;
     retention.maxUploadingPackages = 1u;
-    CrashPersistentArena crashArena(
-        CrashPersistentArenaStorageSize(),
-        "NWB::Tests::Crash::RetentionArena"
-    );
-    NWB_CRASH_TEST_CHECK(
-        context,
-        NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(
-            crashArena,
-            ToPersistentPath(crashArena, SpoolDirectory(arena, s_Group)),
-            retention
-        )
-    );
+    NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention));
 
     NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
     NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
@@ -325,18 +297,7 @@ static void TestCrashSpoolRetentionZeroDisablesPruning(TestContext& context){
     retention.maxUploadedPackages = 0u;
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
-    CrashPersistentArena crashArena(
-        CrashPersistentArenaStorageSize(),
-        "NWB::Tests::Crash::RetentionZeroArena"
-    );
-    NWB_CRASH_TEST_CHECK(
-        context,
-        NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(
-            crashArena,
-            ToPersistentPath(crashArena, SpoolDirectory(arena, s_Group)),
-            retention
-        )
-    );
+    NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention));
 
     NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
     NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
@@ -359,13 +320,9 @@ static void TestCrashSpoolRetentionProtectsActivePendingPackage(TestContext& con
     retention.maxUploadedPackages = 0u;
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
-    CrashPersistentArena crashArena(
-        CrashPersistentArenaStorageSize(),
-        "NWB::Tests::Crash::RetentionProtectArena"
-    );
     NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(
-        crashArena,
-        ToPersistentPath(crashArena, SpoolDirectory(arena, s_Group)),
+        arena,
+        SpoolDirectory(arena, s_Group),
         retention,
         AStringView("crash-001")
     ));
@@ -391,11 +348,7 @@ static void TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(TestContext& con
     CopyPathText(arena, snapshot.spoolDirectory, SpoolDirectory(arena, s_Group));
     CopyFixedBuffer(snapshot.logServerUrl, AStringView("http://127.0.0.1:1"));
 
-    CrashPersistentArena crashArena(
-        CrashPersistentArenaStorageSize(),
-        "NWB::Tests::Crash::FlushArena"
-    );
-    NWB_CRASH_TEST_CHECK(context, !NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(crashArena, snapshot));
+    NWB_CRASH_TEST_CHECK(context, !NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(arena, snapshot));
     NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId)));
     NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName)));
     NWB_CRASH_TEST_CHECK(
@@ -414,17 +367,17 @@ static void TestDesktopInstalledHandlerWritesManualDumpPackage(TestContext& cont
     TestArena testArena;
     auto& arena = testArena.arena;
     NWB::Core::Alloc::PersistentArena installArena(
-        CrashInstallArenaStorageSize(),
+        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u),
         "NWB::Tests::Crash::InstallArena"
     );
     constexpr AStringView s_Group("crash_desktop_handler_runtime_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    NWB::Core::Crash::CrashConfig config(installArena);
+    NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
     config.applicationName = AStringView("crash_tests");
     config.version = AStringView("1");
     config.buildId = AStringView("desktop-handler-runtime-test");
-    config.spoolDirectory = ToPersistentPath(installArena, SpoolDirectory(arena, s_Group));
+    config.spoolDirectory = SpoolDirectory(arena, s_Group);
 
     {
         ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
@@ -482,14 +435,14 @@ static void TestLinuxSignalHandlerWritesCrashPackage(TestContext& context){
     NWB_CRASH_TEST_CHECK(context, childPid >= 0);
     if(childPid == 0){
         NWB::Core::Alloc::PersistentArena installArena(
-            CrashInstallArenaStorageSize(),
+            NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u),
             "NWB::Tests::Crash::SignalChildInstallArena"
         );
-        NWB::Core::Crash::CrashConfig config(installArena);
+        NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
         config.applicationName = AStringView("crash_tests");
         config.version = AStringView("1");
         config.buildId = AStringView("linux-signal-runtime-test");
-        config.spoolDirectory = ToPersistentPath(installArena, spoolDirectory);
+        config.spoolDirectory = spoolDirectory;
 
         {
             ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);

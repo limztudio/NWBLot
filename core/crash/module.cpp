@@ -22,17 +22,18 @@ namespace __hidden_crash_module{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Detail::CrashPath __hidden_default_crash_root_directory(Detail::CrashArena& arena){
-    Detail::CrashPath executableDirectory(arena);
+template<typename ArenaT>
+[[nodiscard]] static ::Path<ArenaT> __hidden_default_crash_root_directory(ArenaT& arena){
+    ::Path<ArenaT> executableDirectory(arena);
     if(GetExecutableDirectory(executableDirectory))
         return executableDirectory / PackageNames::s_DefaultRootDirectoryName;
 
     ErrorCode error;
-    Detail::CrashPath currentDirectory(arena);
+    ::Path<ArenaT> currentDirectory(arena);
     if(GetCurrentPath(currentDirectory, error) && !currentDirectory.empty())
         return currentDirectory / PackageNames::s_DefaultRootDirectoryName;
 
-    return Detail::CrashPath(arena, PackageNames::s_DefaultRootDirectoryName);
+    return ::Path<ArenaT>(arena, PackageNames::s_DefaultRootDirectoryName);
 }
 
 static void __hidden_store_breadcrumb(const AStringView category, const AStringView message){
@@ -181,19 +182,22 @@ NWB_NOINLINE static void __hidden_capture_diagnostic_crash(const DiagnosticEvent
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-::Path<Alloc::PersistentArena> DefaultCrashSpoolDirectory(Alloc::PersistentArena& arena){
+template<typename ArenaT>
+::Path<ArenaT> DefaultCrashSpoolDirectory(ArenaT& arena){
     return __hidden_crash_module::__hidden_default_crash_root_directory(arena);
 }
 
-::Path<Alloc::PersistentArena> DefaultCrashHandlerExecutablePath(Alloc::PersistentArena& arena){
-    ::Path<Alloc::PersistentArena> executableDirectory(arena);
+template<typename ArenaT>
+::Path<ArenaT> DefaultCrashHandlerExecutablePath(ArenaT& arena){
+    ::Path<ArenaT> executableDirectory(arena);
     if(!GetExecutableDirectory(executableDirectory))
-        return ::Path<Alloc::PersistentArena>(arena);
+        return ::Path<ArenaT>(arena);
 
     return executableDirectory / Detail::s_HandlerExecutableFileName;
 }
 
-bool InstallCrashHandler(Alloc::PersistentArena& arena, const CrashConfig& config){
+template<typename ArenaT>
+bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config){
     ScopedLock lock(Detail::g_State.mutex);
     if(Detail::g_State.installed)
         return true;
@@ -204,13 +208,13 @@ bool InstallCrashHandler(Alloc::PersistentArena& arena, const CrashConfig& confi
     CopyFixedBuffer(Detail::g_State.logServerUrl, config.logServerUrl);
     CopyFixedBuffer(Detail::g_State.crashUploadToken, config.crashUploadToken);
 
-    const ::Path<Alloc::PersistentArena> spoolDirectory = config.spoolDirectory.empty()
+    const ::Path<ArenaT> spoolDirectory = config.spoolDirectory.empty()
         ? DefaultCrashSpoolDirectory(arena)
         : config.spoolDirectory
     ;
-    const ::Path<Alloc::PersistentArena> handlerExecutablePath = config.handlerExecutablePath.empty()
+    const ::Path<ArenaT> handlerExecutablePath = config.handlerExecutablePath.empty()
         ? DefaultCrashHandlerExecutablePath(arena)
-        : ::Path<Alloc::PersistentArena>(arena, config.handlerExecutablePath)
+        : ::Path<ArenaT>(arena, config.handlerExecutablePath)
     ;
     Detail::g_State.dumpDetailMode = config.dumpDetailMode;
     Detail::g_State.capturePolicy = config.capturePolicy;
@@ -219,9 +223,9 @@ bool InstallCrashHandler(Alloc::PersistentArena& arena, const CrashConfig& confi
     for(Detail::FixedDiagnosticSite& site : Detail::g_State.diagnosticSites)
         site = Detail::FixedDiagnosticSite{};
     static_cast<void>(Detail::DumpArena());
-    const AString<Alloc::PersistentArena> spoolDirectoryText = PathToString<char>(arena, spoolDirectory);
+    const AString<ArenaT> spoolDirectoryText = PathToString<char>(arena, spoolDirectory);
     CopyFixedBuffer(Detail::g_State.spoolDirectoryText, AStringView(spoolDirectoryText.data(), spoolDirectoryText.size()));
-    const AString<Alloc::PersistentArena> handlerExecutablePathText = PathToString<char>(arena, handlerExecutablePath);
+    const AString<ArenaT> handlerExecutablePathText = PathToString<char>(arena, handlerExecutablePath);
     CopyFixedBuffer(Detail::g_State.handlerExecutablePathText, AStringView(handlerExecutablePathText.data(), handlerExecutablePathText.size()));
 
     if(!Detail::EnsureCrashSpoolDirectories(spoolDirectory))
@@ -281,6 +285,10 @@ bool AddCrashBreadcrumb(const AStringView category, const AStringView message){
     __hidden_crash_module::__hidden_store_breadcrumb(category, message);
     return true;
 }
+
+template ::Path<Alloc::PersistentArena> DefaultCrashSpoolDirectory(Alloc::PersistentArena& arena);
+template ::Path<Alloc::PersistentArena> DefaultCrashHandlerExecutablePath(Alloc::PersistentArena& arena);
+template bool InstallCrashHandler(Alloc::PersistentArena& arena, const CrashConfigT<Alloc::PersistentArena>& config);
 
 CrashDumpResult CaptureCrashDump(const AStringView category, const AStringView message){
     Detail::CrashDumpRequestOptions options;

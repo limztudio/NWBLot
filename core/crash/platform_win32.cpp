@@ -225,7 +225,8 @@ void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reason
     static_cast<void>(RequestCrashDump(reasonKind, reasonCode, requestOptions));
 }
 
-bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerExecutablePath){
+template<typename ArenaT>
+bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
     if(g_State.handlerStarted)
         return true;
     if(handlerExecutablePath.empty())
@@ -278,7 +279,7 @@ bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerExecutable
     AppendUnsignedToFixedBuffer(ackHandleText, reinterpret_cast<uintptr_t>(ackWriteHandle));
     AppendUnsignedToFixedBuffer(ackEventText, reinterpret_cast<uintptr_t>(ackEvent));
 
-    TString<Alloc::PersistentArena> commandLine(handlerExecutablePath.arena());
+    TString<ArenaT> commandLine(handlerExecutablePath.arena());
     commandLine.reserve(handlerExecutablePath.size() + __hidden_crash_win32::s_HandlerCommandLineReserveSlack);
     commandLine += NWB_TEXT("\"");
     commandLine += handlerExecutablePath.native();
@@ -333,6 +334,8 @@ bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerExecutable
     g_State.handlerStarted = true;
     return true;
 }
+
+template bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerExecutablePath);
 
 void InstallPlatformHandlers(){
     g_State.previousExceptionFilter = SetUnhandledExceptionFilter(__hidden_crash_win32::__hidden_unhandled_exception_filter);

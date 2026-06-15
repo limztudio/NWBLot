@@ -68,10 +68,10 @@ inline constexpr const char* s_DefaultBreadcrumbCategory = "general";
 inline constexpr const char* s_ManualDumpCategory = "manual_dump";
 
 
-using CrashArena = Alloc::PersistentArena;
-using CrashPath = ::Path<CrashArena>;
-using CrashString = AString<CrashArena>;
-using CrashBytes = Vector<u8, CrashArena>;
+template<typename ArenaT>
+using CrashStringT = AString<ArenaT>;
+template<typename ArenaT>
+using CrashBytesT = Vector<u8, ArenaT>;
 
 
 namespace PlatformKind{
@@ -242,24 +242,34 @@ extern CrashState g_State;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline CrashPath PendingDirectory(const CrashPath& spoolDirectory){
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> PendingDirectory(const ::Path<ArenaT>& spoolDirectory){
     return spoolDirectory / PackageNames::s_PendingDirectoryName;
 }
 
-[[nodiscard]] inline CrashPath UploadedDirectory(const CrashPath& spoolDirectory){
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> UploadedDirectory(const ::Path<ArenaT>& spoolDirectory){
     return spoolDirectory / PackageNames::s_UploadedDirectoryName;
 }
 
-[[nodiscard]] inline CrashPath UploadingDirectory(const CrashPath& spoolDirectory){
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> UploadingDirectory(const ::Path<ArenaT>& spoolDirectory){
     return spoolDirectory / PackageNames::s_UploadingDirectoryName;
 }
 
-[[nodiscard]] inline CrashPath FailedDirectory(const CrashPath& spoolDirectory){
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> FailedDirectory(const ::Path<ArenaT>& spoolDirectory){
     return spoolDirectory / PackageNames::s_FailedDirectoryName;
 }
 
-[[nodiscard]] inline CrashPath RequestPendingDirectory(CrashArena& arena, const CrashRequest& request){
-    return CrashPath(arena, request.spoolDirectory) / PackageNames::s_PendingDirectoryName / request.crashId;
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> RequestPendingDirectory(ArenaT& arena, const CrashRequest& request){
+    return ::Path<ArenaT>(arena, request.spoolDirectory) / PackageNames::s_PendingDirectoryName / request.crashId;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> RequestBucketDirectory(ArenaT& arena, const CrashRequest& request, const char* bucketName){
+    return ::Path<ArenaT>(arena, request.spoolDirectory) / bucketName / request.crashId;
 }
 
 
@@ -277,10 +287,12 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
 [[nodiscard]] CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, u32 waitMilliseconds)noexcept;
 void NotifyCrashHandler(CrashReasonKind::Enum reasonKind, u32 reasonCode, const CrashDumpRequestOptions& options = CrashDumpRequestOptions{})noexcept;
 
-[[nodiscard]] bool EnsureCrashSpoolDirectories(const ::Path<Alloc::PersistentArena>& spoolDirectory);
+template<typename ArenaT>
+[[nodiscard]] bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory);
 [[nodiscard]] Alloc::PersistentArena& DumpArena();
 
-[[nodiscard]] bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerExecutablePath);
+template<typename ArenaT>
+[[nodiscard]] bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath);
 void InstallPlatformHandlers();
 void UninstallPlatformResources();
 

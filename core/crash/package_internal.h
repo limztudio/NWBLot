@@ -37,18 +37,21 @@ struct CrashUploadSnapshot{
 
 [[nodiscard]] bool WriteCrashPackage(const CrashRequest& request);
 [[nodiscard]] bool FlushCrashReportsForRequest(const CrashRequest& request);
+template<typename ArenaT>
 [[nodiscard]] bool BuildPackageArchive(
-    Alloc::PersistentArena& arena,
-    const ::Path<Alloc::PersistentArena>& packageDirectory,
-    CrashBytes& outArchive
+    ArenaT& arena,
+    const ::Path<ArenaT>& packageDirectory,
+    CrashBytesT<ArenaT>& outArchive
 );
+template<typename ArenaT>
 [[nodiscard]] bool ApplyCrashSpoolRetention(
-    Alloc::PersistentArena& arena,
-    const ::Path<Alloc::PersistentArena>& spoolDirectory,
+    ArenaT& arena,
+    const ::Path<ArenaT>& spoolDirectory,
     const CrashSpoolRetentionConfig& retention,
     AStringView protectedPendingPackageName = AStringView()
 );
-[[nodiscard]] bool FlushPendingCrashReportsImpl(Alloc::PersistentArena& arena, const CrashUploadSnapshot& snapshot);
+template<typename ArenaT>
+[[nodiscard]] bool FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snapshot);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

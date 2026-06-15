@@ -126,8 +126,9 @@ void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool IsSafePackageName(CrashArena& arena, const CrashPath& path){
-    const CrashString name = PathToString<char>(arena, path.filename());
+template<typename ArenaT>
+static bool IsSafePackageName(ArenaT& arena, const ::Path<ArenaT>& path){
+    const CrashStringT<ArenaT> name = PathToString<char>(arena, path.filename());
     if(name.empty() || name == "." || name == "..")
         return false;
 
@@ -146,8 +147,9 @@ static bool IsSafePackageName(CrashArena& arena, const CrashPath& path){
     return true;
 }
 
-static CrashString CrashUploadUrl(CrashArena& arena, const char* logServerUrl){
-    CrashString url{arena};
+template<typename ArenaT>
+static CrashStringT<ArenaT> CrashUploadUrl(ArenaT& arena, const char* logServerUrl){
+    CrashStringT<ArenaT> url{arena};
     if(logServerUrl)
         url += logServerUrl;
     if(url.empty())
@@ -163,10 +165,11 @@ static CrashString CrashUploadUrl(CrashArena& arena, const char* logServerUrl){
     return url;
 }
 
+template<typename ArenaT>
 static bool UploadPackage(
-    CrashArena& arena,
-    const CrashString& url,
-    const CrashBytes& archiveBytes,
+    ArenaT& arena,
+    const CrashStringT<ArenaT>& url,
+    const CrashBytesT<ArenaT>& archiveBytes,
     const AStringView crashUploadToken
 ){
     CURL* curl = curl_easy_init();
@@ -174,7 +177,7 @@ static bool UploadPackage(
         return false;
 
     curl_slist* headers = nullptr;
-    CrashString authorizationHeader{arena};
+    CrashStringT<ArenaT> authorizationHeader{arena};
     if(!crashUploadToken.empty()){
         authorizationHeader.reserve(crashUploadToken.size() + s_AuthorizationBearerPrefixLength);
         authorizationHeader += "Authorization: Bearer ";
@@ -213,17 +216,19 @@ static bool UploadPackage(
     return ok;
 }
 
-static bool WriteUploadAttemptText(CrashArena& arena, const CrashPath& packageDirectory, const char* state){
-    CrashString text{arena};
+template<typename ArenaT>
+static bool WriteUploadAttemptText(ArenaT& arena, const ::Path<ArenaT>& packageDirectory, const char* state){
+    CrashStringT<ArenaT> text{arena};
     text += "state=";
     text += state ? state : PackageNames::s_UploadAttemptUnknownState;
     text += "\n";
     return WriteTextFile(packageDirectory / PackageNames::s_UploadAttemptFileName, AStringView(text.data(), text.size()));
 }
 
+template<typename ArenaT>
 static bool ApplyRetentionToDirectory(
-    CrashArena& arena,
-    const CrashPath& directory,
+    ArenaT& arena,
+    const ::Path<ArenaT>& directory,
     const usize maxEntries,
     const AStringView protectedPackageName = AStringView()
 ){
@@ -237,7 +242,7 @@ static bool ApplyRetentionToDirectory(
     if(!exists)
         return true;
 
-    Vector<CrashPath, CrashArena> entries{arena};
+    Vector<::Path<ArenaT>, ArenaT> entries{arena};
     DirectoryIterator directoryIt(directory, error);
     if(error)
         return false;
@@ -247,7 +252,7 @@ static bool ApplyRetentionToDirectory(
         if(!IsDirectory(entry.path(), entryError) || entryError || !IsSafePackageName(arena, entry.path()))
             continue;
 
-        const CrashString packageName = PathToString<char>(arena, entry.path().filename());
+        const CrashStringT<ArenaT> packageName = PathToString<char>(arena, entry.path().filename());
         if(!protectedPackageName.empty() && AStringView(packageName.data(), packageName.size()) == protectedPackageName)
             continue;
 
@@ -269,9 +274,10 @@ static bool ApplyRetentionToDirectory(
     return ok;
 }
 
+template<typename ArenaT>
 bool ApplyCrashSpoolRetention(
-    CrashArena& arena,
-    const CrashPath& spoolDirectory,
+    ArenaT& arena,
+    const ::Path<ArenaT>& spoolDirectory,
     const CrashSpoolRetentionConfig& retention,
     const AStringView protectedPendingPackageName
 ){
@@ -288,23 +294,24 @@ bool ApplyCrashSpoolRetention(
     return ok;
 }
 
+template<typename ArenaT>
 static bool UploadPackageDirectory(
-    CrashArena& arena,
-    const CrashPath& spoolDirectory,
-    const CrashPath& packageDirectory,
-    const CrashString& url,
+    ArenaT& arena,
+    const ::Path<ArenaT>& spoolDirectory,
+    const ::Path<ArenaT>& packageDirectory,
+    const CrashStringT<ArenaT>& url,
     const AStringView crashUploadToken
 ){
     if(url.empty())
         return false;
 
-    const CrashPath uploadingPackageDirectory = UploadingDirectory(spoolDirectory) / packageDirectory.filename();
+    const ::Path<ArenaT> uploadingPackageDirectory = UploadingDirectory(spoolDirectory) / packageDirectory.filename();
     if(!::MovePathToDirectory(packageDirectory, UploadingDirectory(spoolDirectory)))
         return false;
 
     static_cast<void>(WriteUploadAttemptText(arena, uploadingPackageDirectory, PackageNames::s_UploadAttemptUploadingState));
 
-    CrashBytes archiveBytes{arena};
+    CrashBytesT<ArenaT> archiveBytes{arena};
     if(!BuildPackageArchive(arena, uploadingPackageDirectory, archiveBytes)){
         static_cast<void>(::MovePathToDirectory(uploadingPackageDirectory, FailedDirectory(spoolDirectory)));
         return false;
@@ -320,8 +327,9 @@ static bool UploadPackageDirectory(
     return false;
 }
 
-static bool RecoverUploadingPackageDirectories(CrashArena& arena, const CrashPath& spoolDirectory){
-    const CrashPath uploadingDirectory = UploadingDirectory(spoolDirectory);
+template<typename ArenaT>
+static bool RecoverUploadingPackageDirectories(ArenaT& arena, const ::Path<ArenaT>& spoolDirectory){
+    const ::Path<ArenaT> uploadingDirectory = UploadingDirectory(spoolDirectory);
     ErrorCode error;
     if(!IsDirectory(uploadingDirectory, error) || error)
         return !error;
@@ -347,7 +355,7 @@ static bool RecoverUploadingPackageDirectories(CrashArena& arena, const CrashPat
 
 #if defined(NWB_PLATFORM_ANDROID)
 static void WriteAndroidCollectionNote(Alloc::PersistentArena& arena, const CrashRequest& request){
-    CrashString text{arena};
+    CrashStringT<Alloc::PersistentArena> text{arena};
     text += "application_exit_info=not_collected_by_native_layer\n";
     text += "detail=Java/Kotlin host should attach ApplicationExitInfo tombstone data on next launch\n";
     static_cast<void>(WriteTextFile(
@@ -358,11 +366,11 @@ static void WriteAndroidCollectionNote(Alloc::PersistentArena& arena, const Cras
 
 static void CollectAndroidEmergencyRecord(const CrashUploadSnapshot& snapshot){
     Alloc::PersistentArena& dumpArena = DumpArena();
-    const CrashPath recordPath =
-        CrashPath(dumpArena, snapshot.spoolDirectory) / PackageNames::s_AndroidEmergencyRequestFileName
+    const ::Path<Alloc::PersistentArena> recordPath =
+        ::Path<Alloc::PersistentArena>(dumpArena, snapshot.spoolDirectory) / PackageNames::s_AndroidEmergencyRequestFileName
     ;
 
-    CrashBytes bytes{dumpArena};
+    CrashBytesT<Alloc::PersistentArena> bytes{dumpArena};
     ErrorCode readError;
     if(!ReadBinaryFile(recordPath, bytes, readError) || bytes.size() < sizeof(CrashRequest))
         return;
@@ -375,7 +383,7 @@ static void CollectAndroidEmergencyRecord(const CrashUploadSnapshot& snapshot){
             WriteAndroidCollectionNote(dumpArena, request);
     }
 
-    CrashBytes empty{dumpArena};
+    CrashBytesT<Alloc::PersistentArena> empty{dumpArena};
     static_cast<void>(WriteBinaryFile(recordPath, empty));
 }
 #else
@@ -384,13 +392,14 @@ static void CollectAndroidEmergencyRecord(const CrashUploadSnapshot& snapshot){
 }
 #endif
 
-bool FlushPendingCrashReportsImpl(Alloc::PersistentArena& arena, const CrashUploadSnapshot& snapshot){
+template<typename ArenaT>
+bool FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snapshot){
     CollectAndroidEmergencyRecord(snapshot);
 
     if(snapshot.spoolDirectory[0] == 0)
         return false;
 
-    const CrashPath spoolDirectory(arena, snapshot.spoolDirectory);
+    const ::Path<ArenaT> spoolDirectory(arena, snapshot.spoolDirectory);
     const bool recoveryOk = RecoverUploadingPackageDirectories(arena, spoolDirectory);
     bool retentionOk = ApplyCrashSpoolRetention(
         arena,
@@ -399,7 +408,7 @@ bool FlushPendingCrashReportsImpl(Alloc::PersistentArena& arena, const CrashUplo
         AStringView(snapshot.protectedPendingPackageName)
     );
 
-    const CrashString url = CrashUploadUrl(arena, snapshot.logServerUrl);
+    const CrashStringT<ArenaT> url = CrashUploadUrl(arena, snapshot.logServerUrl);
     if(url.empty())
         return false;
 
@@ -407,7 +416,7 @@ bool FlushPendingCrashReportsImpl(Alloc::PersistentArena& arena, const CrashUplo
         return false;
 
     bool allUploaded = true;
-    const CrashPath pendingDirectory = PendingDirectory(spoolDirectory);
+    const ::Path<ArenaT> pendingDirectory = PendingDirectory(spoolDirectory);
     ErrorCode error;
     if(!IsDirectory(pendingDirectory, error) || error)
         return !error && recoveryOk && retentionOk;
@@ -442,6 +451,22 @@ bool FlushCrashReportsForRequest(const CrashRequest& request){
 
     return FlushPendingCrashReportsImpl(DumpArena(), snapshot);
 }
+
+template bool ApplyCrashSpoolRetention(
+    Alloc::GlobalArena& arena,
+    const ::Path<Alloc::GlobalArena>& spoolDirectory,
+    const CrashSpoolRetentionConfig& retention,
+    AStringView protectedPendingPackageName
+);
+template bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena, const CrashUploadSnapshot& snapshot);
+
+template bool ApplyCrashSpoolRetention(
+    Alloc::PersistentArena& arena,
+    const ::Path<Alloc::PersistentArena>& spoolDirectory,
+    const CrashSpoolRetentionConfig& retention,
+    AStringView protectedPendingPackageName
+);
+template bool FlushPendingCrashReportsImpl(Alloc::PersistentArena& arena, const CrashUploadSnapshot& snapshot);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

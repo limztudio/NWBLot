@@ -90,12 +90,30 @@ inline constexpr const char* s_UploadAttemptRetryInterruptedState = "retry_pendi
 
 inline constexpr const char* s_ManifestFormatKey = "format";
 inline constexpr const char* s_ManifestCrashIdKey = "crash_id";
+inline constexpr const char* s_ManifestApplicationKey = "application";
+inline constexpr const char* s_ManifestVersionKey = "version";
+inline constexpr const char* s_ManifestBuildIdKey = "build_id";
+inline constexpr const char* s_ManifestAbiKey = "abi";
 inline constexpr const char* s_ManifestPlatformKey = "platform";
 inline constexpr const char* s_ManifestReasonKindKey = "reason_kind";
 inline constexpr const char* s_ManifestReasonCodeKey = "reason_code";
-inline constexpr const char* s_ManifestArtifactStrategyKey = "artifact_strategy";
+inline constexpr const char* s_ManifestProcessIdKey = "process_id";
 inline constexpr const char* s_ManifestThreadIdKey = "thread_id";
+inline constexpr const char* s_ManifestHasExceptionContextKey = "has_exception_context";
+inline constexpr const char* s_ManifestFaultAddressKey = "fault_address";
+inline constexpr const char* s_ManifestInstructionPointerKey = "instruction_pointer";
+inline constexpr const char* s_ManifestStackPointerKey = "stack_pointer";
+inline constexpr const char* s_ManifestFramePointerKey = "frame_pointer";
 inline constexpr const char* s_ManifestEventKey = "event";
+inline constexpr const char* s_ManifestTriggerCategoryKey = "trigger_category";
+inline constexpr const char* s_ManifestTriggerExpressionKey = "trigger_expression";
+inline constexpr const char* s_ManifestTriggerMessageKey = "trigger_message";
+inline constexpr const char* s_ManifestTriggerFileKey = "trigger_file";
+inline constexpr const char* s_ManifestTriggerLineKey = "trigger_line";
+inline constexpr const char* s_ManifestDumpDetailModeKey = "dump_detail_mode";
+inline constexpr const char* s_ManifestGpuDumpsEnabledKey = "gpu_dumps_enabled";
+inline constexpr const char* s_ManifestArtifactStrategyKey = "artifact_strategy";
+inline constexpr const char* s_ManifestHandlerLifetimeKey = "handler_lifetime";
 inline constexpr const char* s_ManifestFormatValue = "nwb-crash-package-v1";
 
 

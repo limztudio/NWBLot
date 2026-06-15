@@ -606,11 +606,11 @@ static void TestInvalidCrashPackageIsRejected(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestOldCrashManifestWithoutEventIsRejected(TestContext& context){
+static void TestCrashManifestWithoutEventIsRejected(TestContext& context){
     TestArena testArena;
     auto& arena = testArena.arena;
-    constexpr AStringView s_Group("logger_server_old_manifest_crash_test");
-    constexpr AStringView s_Stem("old_manifest_001");
+    constexpr AStringView s_Group("logger_server_missing_event_manifest_crash_test");
+    constexpr AStringView s_Stem("missing_event_manifest_001");
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText manifest(arena);
@@ -618,12 +618,30 @@ static void TestOldCrashManifestWithoutEventIsRejected(TestContext& context){
     manifest += "  \"format\": \"";
     manifest += CrashNames::s_ManifestFormatValue;
     manifest += "\",\n";
-    manifest += "  \"crash_id\": \"old-manifest-test\",\n";
+    manifest += "  \"crash_id\": \"missing-event-manifest-test\",\n";
+    manifest += "  \"application\": \"logger_server_test\",\n";
+    manifest += "  \"version\": \"1\",\n";
+    manifest += "  \"build_id\": \"unit-test\",\n";
+    manifest += "  \"abi\": \"test-abi\",\n";
     manifest += "  \"platform\": \"linux\",\n";
     manifest += "  \"reason_kind\": \"signal\",\n";
     manifest += "  \"reason_code\": 11,\n";
+    manifest += "  \"process_id\": 1,\n";
+    manifest += "  \"thread_id\": 7,\n";
+    manifest += "  \"has_exception_context\": false,\n";
+    manifest += "  \"fault_address\": 0,\n";
+    manifest += "  \"instruction_pointer\": 0,\n";
+    manifest += "  \"stack_pointer\": 0,\n";
+    manifest += "  \"frame_pointer\": 0,\n";
+    manifest += "  \"trigger_category\": \"\",\n";
+    manifest += "  \"trigger_expression\": \"\",\n";
+    manifest += "  \"trigger_message\": \"\",\n";
+    manifest += "  \"trigger_file\": \"\",\n";
+    manifest += "  \"trigger_line\": 0,\n";
+    manifest += "  \"dump_detail_mode\": \"small\",\n";
+    manifest += "  \"gpu_dumps_enabled\": false,\n";
     manifest += "  \"artifact_strategy\": \"unit_test\",\n";
-    manifest += "  \"thread_id\": 7\n";
+    manifest += "  \"handler_lifetime\": \"unit_test\"\n";
     manifest += "}\n";
 
     CrashTestText archive(arena);
@@ -788,7 +806,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("logserver crash", [](NWB::Tests::TestContext& conte
     __hidden_logger_server_tests::TestAndroidCrashPackageReportsTombstoneWithoutFrames(context);
     __hidden_logger_server_tests::TestWindowsCrashPackageReportsMissingMinidump(context);
     __hidden_logger_server_tests::TestInvalidCrashPackageIsRejected(context);
-    __hidden_logger_server_tests::TestOldCrashManifestWithoutEventIsRejected(context);
+    __hidden_logger_server_tests::TestCrashManifestWithoutEventIsRejected(context);
     __hidden_logger_server_tests::TestCrashRetentionPrunesOldestAcceptedUploads(context);
     __hidden_logger_server_tests::TestAcceptedCrashWarnsWhenRawArchiveCannotBeRetained(context);
     __hidden_logger_server_tests::TestCrashRetentionPrunesOldestInvalidUploads(context);

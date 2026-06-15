@@ -327,6 +327,33 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
     return ParseU64(AStringView(manifest.data() + begin, cursor - begin), outValue);
 }
 
+[[nodiscard]] static bool FindGeneratedJsonBoolValue(LogArena& arena, const AStringView manifest, const AStringView key, bool& outValue){
+    outValue = false;
+
+    CrashText needle{arena};
+    needle.reserve(key.size() + s_GeneratedJsonUnsignedNeedleReserveSlack);
+    needle += '"';
+    needle += key;
+    needle += "\": ";
+
+    usize cursor = manifest.find(AStringView(needle.data(), needle.size()));
+    if(cursor == AStringView::npos)
+        return false;
+    cursor += needle.size();
+
+    constexpr AStringView s_TrueText("true");
+    constexpr AStringView s_FalseText("false");
+    if(cursor + s_TrueText.size() <= manifest.size() && AStringView(manifest.data() + cursor, s_TrueText.size()) == s_TrueText){
+        outValue = true;
+        return true;
+    }
+    if(cursor + s_FalseText.size() <= manifest.size() && AStringView(manifest.data() + cursor, s_FalseText.size()) == s_FalseText){
+        outValue = false;
+        return true;
+    }
+    return false;
+}
+
 [[nodiscard]] static bool ValidateManifest(LogArena& arena, const Path& packageDirectory, CrashPackageSummary& outSummary, CrashText& outError){
     CrashText manifest{arena};
     if(!ReadTextFile(packageDirectory / CrashNames::s_ManifestFileName, manifest)){
@@ -336,15 +363,36 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
     }
 
     const AStringView manifestText(manifest.data(), manifest.size());
+    CrashText requiredText{arena};
+    u64 requiredUnsigned = 0u;
+    bool requiredBool = false;
     if(
         !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestFormatKey, outSummary.format)
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestCrashIdKey, outSummary.crashId)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestApplicationKey, requiredText)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestVersionKey, requiredText)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestBuildIdKey, requiredText)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestAbiKey, requiredText)
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestPlatformKey, outSummary.platform)
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestReasonKindKey, outSummary.reasonKind)
         || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestReasonCodeKey, outSummary.reasonCode)
-        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestArtifactStrategyKey, outSummary.artifactStrategy)
+        || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestProcessIdKey, requiredUnsigned)
         || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestThreadIdKey, outSummary.threadId)
+        || !FindGeneratedJsonBoolValue(arena, manifestText, CrashNames::s_ManifestHasExceptionContextKey, requiredBool)
+        || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestFaultAddressKey, requiredUnsigned)
+        || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestInstructionPointerKey, requiredUnsigned)
+        || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestStackPointerKey, requiredUnsigned)
+        || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestFramePointerKey, requiredUnsigned)
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestEventKey, outSummary.event)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerCategoryKey, requiredText)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerExpressionKey, requiredText)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerMessageKey, requiredText)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerFileKey, requiredText)
+        || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestTriggerLineKey, requiredUnsigned)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestDumpDetailModeKey, requiredText)
+        || !FindGeneratedJsonBoolValue(arena, manifestText, CrashNames::s_ManifestGpuDumpsEnabledKey, requiredBool)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestArtifactStrategyKey, outSummary.artifactStrategy)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestHandlerLifetimeKey, requiredText)
     ){
         outError = CrashNames::s_ManifestFileName;
         outError += " is missing required fields";

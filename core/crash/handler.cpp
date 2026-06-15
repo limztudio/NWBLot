@@ -140,9 +140,11 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         if(!__hidden_crash_handler::__hidden_read_all(requestReadHandle, &request, sizeof(request)))
             break;
 
-        static_cast<void>(Detail::WriteCrashPackage(request));
+        const bool packageWritten = Detail::WriteCrashPackage(request);
         if(ackEvent)
             SetEvent(ackEvent);
+        if(packageWritten)
+            static_cast<void>(Detail::FlushCrashReportsForRequest(request));
     }
 
     return __hidden_crash_handler::s_ProcessSuccessExitCode;
@@ -161,7 +163,8 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         if(!__hidden_crash_handler::__hidden_read_all(requestReadFd, &request, sizeof(request)))
             break;
 
-        static_cast<void>(Detail::WriteCrashPackage(request));
+        if(Detail::WriteCrashPackage(request))
+            static_cast<void>(Detail::FlushCrashReportsForRequest(request));
     }
 
     return __hidden_crash_handler::s_ProcessSuccessExitCode;

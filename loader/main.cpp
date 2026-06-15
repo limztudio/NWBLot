@@ -194,7 +194,7 @@ bool ApplyGraphicsOptions(NWB::Core::Graphics& graphics, const LoaderOptions& op
     return true;
 }
 
-bool InstallCrashReporting(CrashArena& crashArena, NWB::Core::Alloc::GlobalArena& runtimeArena, const LoaderOptions& options){
+bool InstallCrashReporting(CrashArena& crashArena, const LoaderOptions& options){
     ::Path<CrashArena> executableDirectory(crashArena);
     if(!GetExecutableDirectory(executableDirectory))
         executableDirectory = ::Path<CrashArena>(crashArena, ".");
@@ -221,7 +221,6 @@ bool InstallCrashReporting(CrashArena& crashArena, NWB::Core::Alloc::GlobalArena
     if(NWB::Core::Crash::InstallCrashHandler(crashArena, crashConfig)){
         static_cast<void>(NWB::Core::Crash::SetCrashMetadata("runtime", "loader"));
         static_cast<void>(NWB::Core::Crash::SetCrashMetadata("gpu_debug", options.enableGpuDebug ? "true" : "false"));
-        static_cast<void>(NWB::Core::Crash::FlushPendingCrashReports(runtimeArena));
         return true;
     }
 
@@ -417,7 +416,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
         crashArenaReserveSize,
         "NWB::Loader::CrashReportingArena"
     );
-    const bool crashReportingInstalled = __hidden_loader::InstallCrashReporting(crashArena, arena, options);
+    const bool crashReportingInstalled = __hidden_loader::InstallCrashReporting(crashArena, options);
 
     if(options.useStandaloneLogger){
         NWB::Log::ClientStandalone logger;

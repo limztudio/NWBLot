@@ -123,7 +123,6 @@ void UninstallCrashHandler();
 template<typename ArenaT>
 [[nodiscard]] bool AddCrashBreadcrumb(ArenaT& arena, AStringView category, AStringView message);
 [[nodiscard]] CrashDumpResult CaptureCrashDump(AStringView category = AStringView(), AStringView message = AStringView());
-[[nodiscard]] bool FlushPendingCrashReports(Alloc::GlobalArena& arena);
 [[nodiscard]] bool RegisterGpuCrashProvider(const GpuCrashProvider& provider);
 
 template<typename ArenaT>

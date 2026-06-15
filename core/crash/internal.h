@@ -70,8 +70,6 @@ template<typename ArenaT>
 using CrashStringT = AString<ArenaT>;
 template<typename ArenaT>
 using CrashBytesT = Vector<u8, ArenaT>;
-using CrashString = CrashStringT<Alloc::GlobalArena>;
-using CrashBytes = CrashBytesT<Alloc::GlobalArena>;
 
 
 namespace PlatformKind{
@@ -140,12 +138,15 @@ struct CrashRequest{
     u32 callstackFrameCount = 0u;
     u32 callstackFramesToSkip = 0u;
     u8 enableGpuDumps = 0u;
+    CrashSpoolRetentionConfig spoolRetention;
     char crashId[s_MaxShortText] = {};
     char applicationName[s_MaxShortText] = {};
     char versionText[s_MaxShortText] = {};
     char buildId[s_MaxMediumText] = {};
     char abi[s_MaxShortText] = {};
     char spoolDirectory[s_MaxPathText] = {};
+    char logServerUrl[s_MaxUrlText] = {};
+    char crashUploadToken[s_MaxMediumText] = {};
     char event[s_MaxShortText] = {};
     char triggerCategory[s_MaxShortText] = {};
     char triggerExpression[s_MaxMediumText] = {};
@@ -163,6 +164,7 @@ struct CrashUploadSnapshot{
     char spoolDirectory[s_MaxPathText] = {};
     char logServerUrl[s_MaxUrlText] = {};
     char crashUploadToken[s_MaxMediumText] = {};
+    char protectedPendingPackageName[s_MaxShortText] = {};
 };
 
 struct CrashDumpRequestOptions{
@@ -253,19 +255,23 @@ template<typename ArenaT>
 [[nodiscard]] bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory);
 [[nodiscard]] Alloc::PersistentArena& DumpArena();
 [[nodiscard]] bool WriteCrashPackage(const CrashRequest& request);
+[[nodiscard]] bool FlushCrashReportsForRequest(const CrashRequest& request);
+template<typename ArenaT>
 [[nodiscard]] bool BuildPackageArchive(
-    Alloc::GlobalArena& arena,
-    const ::Path<Alloc::GlobalArena>& packageDirectory,
-    CrashBytes& outArchive
+    ArenaT& arena,
+    const ::Path<ArenaT>& packageDirectory,
+    CrashBytesT<ArenaT>& outArchive
 );
 [[nodiscard]] CrashDumpResult CrashPackageResult(const CrashRequest& request);
+template<typename ArenaT>
 [[nodiscard]] bool ApplyCrashSpoolRetention(
-    Alloc::GlobalArena& arena,
-    const ::Path<Alloc::GlobalArena>& spoolDirectory,
+    ArenaT& arena,
+    const ::Path<ArenaT>& spoolDirectory,
     const CrashSpoolRetentionConfig& retention,
     AStringView protectedPendingPackageName = AStringView()
 );
-[[nodiscard]] bool FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena, const CrashUploadSnapshot& snapshot);
+template<typename ArenaT>
+[[nodiscard]] bool FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snapshot);
 
 template<typename ArenaT>
 [[nodiscard]] bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath);

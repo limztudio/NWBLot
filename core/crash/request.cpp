@@ -96,6 +96,7 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
     outRequest.threadId = CurrentThreadId();
     outRequest.dumpDetailMode = static_cast<u32>(g_State.dumpDetailMode);
     outRequest.enableGpuDumps = g_State.enableGpuDumps ? 1u : 0u;
+    outRequest.spoolRetention = g_State.spoolRetention;
 
     const u64 sequence = g_State.crashSequence.fetch_add(1u, MemoryOrder::relaxed);
     BuildCrashId(outRequest, sequence);
@@ -105,6 +106,8 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
     CopyFixedBuffer(outRequest.buildId, g_State.buildId);
     CopyFixedBuffer(outRequest.abi, CurrentAbiName());
     CopyFixedBuffer(outRequest.spoolDirectory, g_State.spoolDirectoryText);
+    CopyFixedBuffer(outRequest.logServerUrl, g_State.logServerUrl);
+    CopyFixedBuffer(outRequest.crashUploadToken, g_State.crashUploadToken);
 
     for(usize i = 0u; i < s_MaxMetadata; ++i){
         if(!g_State.metadata[i].used)

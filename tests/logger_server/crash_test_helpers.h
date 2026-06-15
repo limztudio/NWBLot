@@ -57,6 +57,16 @@ enum class ManifestEventField{
 
 void RemoveTestArtifacts(Core::Alloc::GlobalArena& arena, AStringView testGroup);
 void AppendArchiveFile(CrashTestText& archive, AStringView relativePath, AStringView content);
+void BeginArchiveWithManifest(
+    Core::Alloc::GlobalArena& arena,
+    CrashTestText& archive,
+    AStringView crashId,
+    AStringView platform,
+    AStringView event,
+    AStringView reasonKind,
+    u64 reasonCode,
+    ManifestEventField eventField = ManifestEventField::Include
+);
 [[nodiscard]] CrashTestText BuildManifest(
     Core::Alloc::GlobalArena& arena,
     AStringView crashId,

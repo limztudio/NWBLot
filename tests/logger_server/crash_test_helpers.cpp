@@ -6,6 +6,7 @@
 
 #include <tests/filesystem_helpers.h>
 
+#include <core/crash/internal.h>
 #include <core/crash/package_names.h>
 #include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
@@ -101,6 +102,21 @@ void AppendArchiveFile(CrashTestText& archive, const AStringView relativePath, c
     archive += CrashNames::s_ArchiveEntryEndText;
 }
 
+void BeginArchiveWithManifest(
+    Core::Alloc::GlobalArena& arena,
+    CrashTestText& archive,
+    const AStringView crashId,
+    const AStringView platform,
+    const AStringView event,
+    const AStringView reasonKind,
+    const u64 reasonCode,
+    const ManifestEventField eventField
+){
+    archive += CrashNames::s_ArchiveHeaderText;
+    const CrashTestText manifest = BuildManifest(arena, crashId, platform, event, reasonKind, reasonCode, eventField);
+    AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
+}
+
 CrashTestText BuildManifest(
     Core::Alloc::GlobalArena& arena,
     const AStringView crashId,
@@ -162,25 +178,6 @@ bool WriteArchive(Core::Alloc::GlobalArena& arena, const AStringView testGroup, 
     return WriteTextFile(ArchivePath(arena, testGroup, stem), AStringView(archive.data(), archive.size()));
 }
 
-static void AppendArchiveBytes(CrashTestBytes& archive, const void* const bytes, const usize byteCount){
-    const auto* const begin = static_cast<const u8*>(bytes);
-    archive.insert(archive.end(), begin, begin + byteCount);
-}
-
-static void AppendArchiveText(CrashTestBytes& archive, const AStringView text){
-    AppendArchiveBytes(archive, text.data(), text.size());
-}
-
-static void AppendArchiveText(CrashTestBytes& archive, const char* const text){
-    if(text)
-        AppendArchiveText(archive, AStringView(text));
-}
-
-static void AppendArchiveUnsigned(CrashTestBytes& archive, const u64 value){
-    char buffer[32] = {};
-    AppendArchiveText(archive, FormatDecimal(static_cast<usize>(value), buffer));
-}
-
 bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestBytes& archive){
     ErrorCode error;
     static_cast<void>(EnsureDirectories(ArchiveInputDirectory(arena, testGroup), error));
@@ -191,37 +188,7 @@ bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, const AStringView testGr
 }
 
 bool BuildArchiveFromPackageDirectory(Core::Alloc::GlobalArena& arena, const CrashTestPath& packageDirectory, CrashTestBytes& outArchive){
-    outArchive.clear();
-    AppendArchiveText(outArchive, CrashNames::s_ArchiveHeaderText);
-
-    ErrorCode error;
-    RecursiveDirectoryIterator directory(packageDirectory, error);
-    if(error)
-        return false;
-
-    bool wroteFile = false;
-    for(const auto& entry : directory){
-        ErrorCode entryError;
-        if(!entry.is_regular_file(entryError) || entryError)
-            continue;
-
-        CrashTestBytes fileBytes(arena);
-        if(!ReadBinaryFile(entry.path(), fileBytes, entryError))
-            return false;
-
-        const CrashTestText relativePath = PathToGenericString<char>(arena, entry.path().lexically_relative(packageDirectory));
-        AppendArchiveText(outArchive, CrashNames::s_ArchiveFileHeaderPrefix);
-        AppendArchiveText(outArchive, AStringView(relativePath.data(), relativePath.size()));
-        AppendArchiveText(outArchive, " ");
-        AppendArchiveUnsigned(outArchive, fileBytes.size());
-        AppendArchiveText(outArchive, "\n");
-        if(!fileBytes.empty())
-            AppendArchiveBytes(outArchive, fileBytes.data(), fileBytes.size());
-        AppendArchiveText(outArchive, CrashNames::s_ArchiveEntryEndText);
-        wroteFile = true;
-    }
-
-    return wroteFile;
+    return Core::Crash::Detail::BuildPackageArchive(arena, packageDirectory, outArchive);
 }
 
 bool ReadServerSymbolication(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, CrashTestText& outReport){
@@ -317,9 +284,7 @@ bool WaitForTriggerPackage(
 }
 
 void BuildLinuxCrashArchive(Core::Alloc::GlobalArena& arena, CrashTestText& archive, const AStringView crashId){
-    archive += CrashNames::s_ArchiveHeaderText;
-    const CrashTestText manifest = BuildManifest(arena, crashId, "linux", "crash", "signal", 11u);
-    AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
+    BeginArchiveWithManifest(arena, archive, crashId, "linux", "crash", "signal", 11u);
     AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "fault_address=0\ninstruction_pointer=4198964\nstack_pointer=0\nframe_pointer=0\n");
     AppendArchiveFile(archive, CrashNames::s_CallstackFileName, "#0 0x0000000000401234\n#1 0x0000000000401240\n");
     AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");

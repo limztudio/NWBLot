@@ -265,6 +265,11 @@ template<typename ArenaT>
 [[nodiscard]] bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory);
 [[nodiscard]] Alloc::PersistentArena& DumpArena();
 [[nodiscard]] bool WriteCrashPackage(const CrashRequest& request);
+[[nodiscard]] bool BuildPackageArchive(
+    Alloc::GlobalArena& arena,
+    const ::Path<Alloc::GlobalArena>& packageDirectory,
+    CrashBytes& outArchive
+);
 [[nodiscard]] bool UploadCrashPackage(const CrashRequest& request);
 [[nodiscard]] CrashDumpResult CrashPackageResult(const CrashRequest& request);
 [[nodiscard]] bool ApplyCrashSpoolRetention(

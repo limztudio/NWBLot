@@ -610,7 +610,7 @@ static void AppendArchiveUnsigned(CrashBytes& out, const u64 value){
     AppendArchiveText(out, buffer);
 }
 
-static bool BuildPackageArchive(Alloc::GlobalArena& arena, const Path& packageDirectory, CrashBytes& outArchive){
+bool BuildPackageArchive(Alloc::GlobalArena& arena, const Path& packageDirectory, CrashBytes& outArchive){
     outArchive.clear();
     AppendArchiveText(outArchive, PackageNames::s_ArchiveHeaderText);
 
@@ -619,6 +619,7 @@ static bool BuildPackageArchive(Alloc::GlobalArena& arena, const Path& packageDi
     if(error)
         return false;
 
+    bool wroteFile = false;
     for(const auto& entry : directory){
         ErrorCode entryError;
         if(!entry.is_regular_file(entryError) || entryError)
@@ -637,9 +638,10 @@ static bool BuildPackageArchive(Alloc::GlobalArena& arena, const Path& packageDi
         AppendArchiveText(outArchive, "\n");
         outArchive.insert(outArchive.end(), fileBytes.begin(), fileBytes.end());
         AppendArchiveText(outArchive, PackageNames::s_ArchiveEntryEndText);
+        wroteFile = true;
     }
 
-    return true;
+    return wroteFile;
 }
 
 static CrashString CrashUploadUrl(Alloc::GlobalArena& arena, const char* logServerUrl){

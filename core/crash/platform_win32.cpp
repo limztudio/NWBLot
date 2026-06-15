@@ -103,7 +103,8 @@ static LONG WINAPI __hidden_unhandled_exception_filter(EXCEPTION_POINTERS* excep
     if(exceptionInfo && exceptionInfo->ExceptionRecord)
         options.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(exceptionInfo->ExceptionRecord->ExceptionAddress));
 
-    Detail::NotifyCrashHandler(Detail::CrashReasonKind::WindowsException, exceptionCode, options);
+    if(!Detail::TryConsumeSuppressedPlatformCrashCapture())
+        Detail::NotifyCrashHandler(Detail::CrashReasonKind::WindowsException, exceptionCode, options);
 
     if(Detail::g_State.previousExceptionFilter)
         return Detail::g_State.previousExceptionFilter(exceptionInfo);

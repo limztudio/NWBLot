@@ -158,10 +158,11 @@ static void __hidden_capture_signal_context(Detail::CrashDumpRequestOptions& opt
 }
 
 static void __hidden_signal_handler(const int signalNumber, siginfo_t* signalInfo, void* signalContext)noexcept{
-    Detail::CrashDumpRequestOptions options;
-    __hidden_capture_signal_context(options, signalInfo, signalContext);
-
-    Detail::NotifyCrashHandler(Detail::CrashReasonKind::PosixSignal, static_cast<u32>(signalNumber), options);
+    if(!Detail::TryConsumeSuppressedPlatformCrashCapture()){
+        Detail::CrashDumpRequestOptions options;
+        __hidden_capture_signal_context(options, signalInfo, signalContext);
+        Detail::NotifyCrashHandler(Detail::CrashReasonKind::PosixSignal, static_cast<u32>(signalNumber), options);
+    }
 
     struct sigaction action = {};
     action.sa_handler = SIG_DFL;

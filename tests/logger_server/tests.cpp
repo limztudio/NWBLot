@@ -11,6 +11,7 @@
 #include <core/crash/package_names.h>
 #include <core/common/log.h>
 #include <global/assert.h>
+#include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
 #include <global/process_execution.h>
 #include <logger/server/crash_auth.h>
@@ -116,6 +117,32 @@ static void AppendHexAddressText(NWB::Core::Alloc::GlobalArena& arena, CrashTest
     return ExecutableAvailableInPath(arena, searchPath, "llvm-symbolizer")
         || ExecutableAvailableInPath(arena, searchPath, "addr2line")
     ;
+}
+
+[[nodiscard]] static bool PendingDirectoryContainsManifestTexts(
+    NWB::Core::Alloc::GlobalArena& arena,
+    const CrashTestPath& pendingDirectory,
+    const AStringView firstNeedle,
+    const AStringView secondNeedle
+){
+    ErrorCode error;
+    DirectoryIterator directory(pendingDirectory, error);
+    if(error)
+        return false;
+
+    for(const auto& entry : directory){
+        ErrorCode entryError;
+        if(!IsDirectory(entry.path(), entryError) || entryError)
+            continue;
+
+        CrashTestText manifest(arena);
+        if(!ReadTextFile(entry.path() / CrashNames::s_ManifestFileName, manifest))
+            continue;
+        if(Contains(manifest, firstNeedle) && Contains(manifest, secondNeedle))
+            return true;
+    }
+
+    return false;
 }
 
 [[nodiscard]] static const char* LinuxObservableAssertCategory(){
@@ -326,6 +353,19 @@ static void TestLinuxAssertCrashProducesObservableLoggerReport(TestContext& cont
 
     const CrashTestPath pendingDirectory = spoolDirectory / CrashNames::s_PendingDirectoryName;
     NWB_LOGSERVER_TEST_CHECK(context, WaitForDirectory(pendingDirectory, 3000u));
+
+    CrashTestText expectedAbortCode(arena);
+    expectedAbortCode += "\"reason_code\": ";
+    AppendDecimalText(expectedAbortCode, static_cast<u64>(SIGABRT));
+    NWB_LOGSERVER_TEST_CHECK(
+        context,
+        !PendingDirectoryContainsManifestTexts(
+            arena,
+            pendingDirectory,
+            AStringView("\"reason_kind\": \"signal\""),
+            AStringView(expectedAbortCode.data(), expectedAbortCode.size())
+        )
+    );
 
     CrashTestPath assertPackageDirectory(arena);
     NWB_LOGSERVER_TEST_CHECK(

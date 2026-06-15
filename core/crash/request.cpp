@@ -128,6 +128,19 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
     }
 }
 
+void SuppressNextPlatformCrashCapture()noexcept{
+    g_State.suppressedPlatformCrashCaptures.fetch_add(1u, MemoryOrder::release);
+}
+
+bool TryConsumeSuppressedPlatformCrashCapture()noexcept{
+    u32 count = g_State.suppressedPlatformCrashCaptures.load(MemoryOrder::acquire);
+    while(count != 0u){
+        if(g_State.suppressedPlatformCrashCaptures.compare_exchange_weak(count, count - 1u, MemoryOrder::acq_rel, MemoryOrder::acquire))
+            return true;
+    }
+    return false;
+}
+
 CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options){
     CrashRequest request;
     SnapshotCrashState(request, reasonKind, reasonCode);

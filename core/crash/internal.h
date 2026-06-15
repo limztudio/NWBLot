@@ -216,6 +216,7 @@ struct CrashState{
     u32 diagnosticCaptureCount = 0u;
     Atomic<u64> breadcrumbOrder{ 1u };
     Atomic<u64> crashSequence{ 1u };
+    Atomic<u32> suppressedPlatformCrashCaptures{ 0u };
 
 #if defined(NWB_PLATFORM_WINDOWS)
     HANDLE requestWriteHandle = INVALID_HANDLE_VALUE;
@@ -279,6 +280,8 @@ template<typename ArenaT>
 [[nodiscard]] const char* ReasonKindName(u32 reasonKind)noexcept;
 
 void SnapshotCrashState(CrashRequest& outRequest, CrashReasonKind::Enum reasonKind, u32 reasonCode)noexcept;
+void SuppressNextPlatformCrashCapture()noexcept;
+[[nodiscard]] bool TryConsumeSuppressedPlatformCrashCapture()noexcept;
 void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpContextStorage& storage)noexcept;
 [[nodiscard]] CrashDumpResult RequestCrashDump(CrashReasonKind::Enum reasonKind, u32 reasonCode, const CrashDumpRequestOptions& options);
 [[nodiscard]] CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, u32 waitMilliseconds)noexcept;

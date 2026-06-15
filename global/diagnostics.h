@@ -25,6 +25,7 @@ struct DiagnosticEventRecord{
     const char* file = nullptr;
     u64 instructionPointer = 0u;
     u32 line = 0u;
+    bool terminatesProcess = false;
 };
 
 using DiagnosticEventCallback = void (*)(const DiagnosticEventRecord& record)noexcept;

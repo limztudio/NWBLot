@@ -24,6 +24,7 @@
         .message = messageTextValue,                                                     \
         .file = __FILE__,                                                                \
         .line = __LINE__,                                                                \
+        .terminatesProcess = true,                                                       \
     })
 
 #define NWB_DETAIL_ASSERT_ABORT(label)                                                   \

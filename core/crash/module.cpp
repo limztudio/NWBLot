@@ -74,6 +74,13 @@ static u64 __hidden_diagnostic_site_hash(const DiagnosticEventRecord& record)noe
     return hash;
 }
 
+static bool __hidden_diagnostic_result_can_suppress_duplicate_platform_crash(const CrashDumpResult& result)noexcept{
+    return result.status != CrashDumpStatus::NotInstalled
+        && result.status != CrashDumpStatus::RequestFailed
+        && result.status != CrashDumpStatus::PackageWriteFailed
+    ;
+}
+
 static bool __hidden_reserve_diagnostic_capture(const DiagnosticEventRecord& record, const AStringView event, const AStringView category){
     ScopedLock lock(Detail::g_State.mutex);
     if(!Detail::g_State.installed)
@@ -157,7 +164,9 @@ NWB_NOINLINE static void __hidden_capture_diagnostic_crash(const DiagnosticEvent
         options.callstackFramesToSkip = 5u;
         if(!__hidden_reserve_diagnostic_capture(record, options.event, options.triggerCategory))
             return;
-        static_cast<void>(__hidden_capture_crash_dump(options.triggerCategory, options.triggerMessage, options));
+        const CrashDumpResult result = __hidden_capture_crash_dump(options.triggerCategory, options.triggerMessage, options);
+        if(record.terminatesProcess && __hidden_diagnostic_result_can_suppress_duplicate_platform_crash(result))
+            Detail::SuppressNextPlatformCrashCapture();
     }
     catch(...){
     }

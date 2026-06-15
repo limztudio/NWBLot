@@ -33,6 +33,7 @@ struct CrashPackageSummary{
     CrashReportText platform;
     CrashReportText reasonKind;
     CrashReportText artifactStrategy;
+    u64 reasonCode = 0u;
     u64 threadId = 0u;
 
     explicit CrashPackageSummary(LogArena& arena)

@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#include <execinfo.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #endif
@@ -111,6 +112,19 @@ static void __hidden_capture_frame_pointer_callstack(
         currentFrame = nextFrame;
     }
 }
+
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+static void __hidden_capture_backtrace_callstack(Detail::CrashDumpRequestOptions& options)noexcept{
+    void* frames[Detail::s_MaxCallstackFrames] = {};
+    const int frameCount = ::backtrace(frames, static_cast<int>(Detail::s_MaxCallstackFrames));
+    if(frameCount <= 0)
+        return;
+
+    options.callstackFrameCount = 0u;
+    for(int i = 0; i < frameCount; ++i)
+        __hidden_append_callstack_frame(options, static_cast<u64>(reinterpret_cast<usize>(frames[i])));
+}
+#endif
 
 static void __hidden_capture_signal_context(Detail::CrashDumpRequestOptions& options, const siginfo_t* signalInfo, const void* signalContext)noexcept{
     if(signalInfo)
@@ -262,6 +276,10 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
     outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
     outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_frame_address(0)));
     outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_return_address(0)));
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+    __hidden_crash_posix::__hidden_capture_backtrace_callstack(outOptions);
+    if(outOptions.callstackFrameCount == 0u)
+#endif
     __hidden_crash_posix::__hidden_capture_frame_pointer_callstack(
         outOptions,
         outOptions.instructionPointer,
@@ -274,6 +292,10 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
     outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
     outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_frame_address(0)));
     outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_return_address(0)));
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+    __hidden_crash_posix::__hidden_capture_backtrace_callstack(outOptions);
+    if(outOptions.callstackFrameCount == 0u)
+#endif
     __hidden_crash_posix::__hidden_capture_frame_pointer_callstack(
         outOptions,
         outOptions.instructionPointer,

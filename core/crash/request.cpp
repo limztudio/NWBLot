@@ -125,13 +125,21 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     request.stackPointer = options.stackPointer;
     request.framePointer = options.framePointer;
     request.triggerLine = options.triggerLine;
-    request.callstackFrameCount = options.callstackFrameCount > s_MaxCallstackFrames
+    const u32 availableCallstackFrameCount = options.callstackFrameCount > s_MaxCallstackFrames
         ? static_cast<u32>(s_MaxCallstackFrames)
         : options.callstackFrameCount
     ;
+    const u32 callstackFramesToSkip = options.callstackFramesToSkip > availableCallstackFrameCount
+        ? availableCallstackFrameCount
+        : options.callstackFramesToSkip
+    ;
+    request.callstackFramesToSkip = callstackFramesToSkip;
+    request.callstackFrameCount = availableCallstackFrameCount - callstackFramesToSkip;
     for(u32 i = 0u; i < request.callstackFrameCount; ++i)
-        request.callstackFrames[i] = options.callstackFrames[i];
+        request.callstackFrames[i] = options.callstackFrames[i + callstackFramesToSkip];
+    CopyFixedBuffer(request.triggerEvent, options.triggerEvent);
     CopyFixedBuffer(request.triggerCategory, options.triggerCategory);
+    CopyFixedBuffer(request.triggerExpression, options.triggerExpression);
     CopyFixedBuffer(request.triggerMessage, options.triggerMessage);
     CopyFixedBuffer(request.triggerFile, options.triggerFile);
 

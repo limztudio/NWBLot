@@ -101,14 +101,14 @@ static void __hidden_store_breadcrumb(const AStringView category, const AStringV
     ++Detail::g_State.nextBreadcrumb;
 }
 
-static bool __hidden_capture_policy_allows(const CrashCapturePolicy& policy, const AStringView category){
+static bool __hidden_capture_policy_allows(const CrashCapturePolicy& policy, const AStringView event, const AStringView category){
     if(category == DiagnosticEventCategory::s_Assert)
         return policy.captureAssertions;
     if(category == DiagnosticEventCategory::s_FatalAssert)
         return policy.captureFatalAssertions;
-    if(category == DiagnosticEventCategory::s_LoggerError)
+    if(event == DiagnosticEventName::s_Error)
         return policy.captureLoggerErrors;
-    if(category == DiagnosticEventCategory::s_LoggerFatal)
+    if(event == DiagnosticEventName::s_FatalError)
         return policy.captureLoggerFatals;
 
     return true;
@@ -116,8 +116,12 @@ static bool __hidden_capture_policy_allows(const CrashCapturePolicy& policy, con
 
 static u64 __hidden_diagnostic_site_hash(const DiagnosticEventRecord& record)noexcept{
     u64 hash = FNV64_OFFSET_BASIS;
+    if(record.event)
+        hash = UpdateFnv64TextExact(hash, AStringView(record.event));
     if(record.category)
         hash = UpdateFnv64TextExact(hash, AStringView(record.category));
+    if(record.expression)
+        hash = UpdateFnv64TextExact(hash, AStringView(record.expression));
     if(record.message)
         hash = UpdateFnv64TextExact(hash, AStringView(record.message));
     if(record.file)
@@ -126,11 +130,11 @@ static u64 __hidden_diagnostic_site_hash(const DiagnosticEventRecord& record)noe
     return hash;
 }
 
-static bool __hidden_reserve_diagnostic_capture(const DiagnosticEventRecord& record, const AStringView category){
+static bool __hidden_reserve_diagnostic_capture(const DiagnosticEventRecord& record, const AStringView event, const AStringView category){
     ScopedLock lock(Detail::g_State.mutex);
     if(!Detail::g_State.installed)
         return false;
-    if(!__hidden_capture_policy_allows(Detail::g_State.capturePolicy, category))
+    if(!__hidden_capture_policy_allows(Detail::g_State.capturePolicy, event, category))
         return false;
 
     const CrashCapturePolicy& policy = Detail::g_State.capturePolicy;
@@ -187,6 +191,8 @@ static CrashDumpResult __hidden_capture_crash_dump(const AStringView category, c
         options.triggerMessage = message;
 
     options.waitMilliseconds = Detail::s_ManualCrashDumpWaitMilliseconds;
+    if(options.callstackFramesToSkip == 0u)
+        options.callstackFramesToSkip = 1u;
     Detail::ManualDumpContextStorage contextStorage;
     Detail::CaptureManualDumpContext(options, contextStorage);
 #if defined(NWB_PLATFORM_ANDROID)
@@ -199,11 +205,15 @@ static CrashDumpResult __hidden_capture_crash_dump(const AStringView category, c
 static void __hidden_capture_diagnostic_crash(const DiagnosticEventRecord& record)noexcept{
     try{
         Detail::CrashDumpRequestOptions options;
+        const char* const diagnosticEventName = DiagnosticEventNameFromRecord(record);
+        options.triggerEvent = diagnosticEventName ? AStringView(diagnosticEventName) : AStringView();
         options.triggerCategory = record.category ? AStringView(record.category) : AStringView();
+        options.triggerExpression = record.expression ? AStringView(record.expression) : AStringView();
         options.triggerMessage = record.message ? AStringView(record.message) : AStringView();
         options.triggerFile = record.file ? AStringView(record.file) : AStringView();
         options.triggerLine = record.line;
-        if(!__hidden_reserve_diagnostic_capture(record, options.triggerCategory))
+        options.callstackFramesToSkip = 3u;
+        if(!__hidden_reserve_diagnostic_capture(record, options.triggerEvent, options.triggerCategory))
             return;
         static_cast<void>(__hidden_capture_crash_dump(options.triggerCategory, options.triggerMessage, options));
     }

@@ -4,6 +4,8 @@
 
 #include "internal.h"
 
+#include <global/diagnostics.h>
+
 #include <curl/curl.h>
 
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -162,6 +164,16 @@ static const char* ArtifactStrategyName(const CrashRequest& request){
     }
 }
 
+static const char* TriggerEventName(const CrashRequest& request){
+    if(request.triggerEvent[0] != 0)
+        return request.triggerEvent;
+    if(const char* const diagnosticEventName = DiagnosticEventNameFromCategory(request.triggerCategory))
+        return diagnosticEventName;
+    if(request.reasonKind == CrashReasonKind::ManualDump)
+        return DiagnosticEventName::s_ManualDump;
+    return DiagnosticEventName::s_Crash;
+}
+
 template<typename ArenaT>
 static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> manifest{arena};
@@ -200,8 +212,12 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendUnsignedText(manifest, request.stackPointer);
     manifest += ",\n  \"frame_pointer\": ";
     AppendUnsignedText(manifest, request.framePointer);
+    manifest += ",\n  \"trigger_event\": ";
+    AppendJsonEscaped(manifest, TriggerEventName(request));
     manifest += ",\n  \"trigger_category\": ";
     AppendJsonEscaped(manifest, request.triggerCategory);
+    manifest += ",\n  \"trigger_expression\": ";
+    AppendJsonEscaped(manifest, request.triggerExpression);
     manifest += ",\n  \"trigger_message\": ";
     AppendJsonEscaped(manifest, request.triggerMessage);
     manifest += ",\n  \"trigger_file\": ";
@@ -267,8 +283,12 @@ static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest
     AppendUnsignedText(text, request.stackPointer);
     text += "\nframe_pointer=";
     AppendUnsignedText(text, request.framePointer);
+    text += "\ntrigger_event=";
+    text += request.triggerEvent;
     text += "\ntrigger_category=";
     text += request.triggerCategory;
+    text += "\ntrigger_expression=";
+    text += request.triggerExpression;
     text += "\ntrigger_message=";
     text += request.triggerMessage;
     text += "\ntrigger_file=";
@@ -292,7 +312,14 @@ static bool HasCallstack(const CrashRequest& request){
 }
 
 static bool HasTriggerContext(const CrashRequest& request){
-    return request.triggerCategory[0] != 0 || request.triggerMessage[0] != 0 || request.triggerFile[0] != 0 || request.triggerLine != 0u;
+    return
+        request.triggerEvent[0] != 0
+        || request.triggerCategory[0] != 0
+        || request.triggerExpression[0] != 0
+        || request.triggerMessage[0] != 0
+        || request.triggerFile[0] != 0
+        || request.triggerLine != 0u
+    ;
 }
 
 template<typename ArenaT>
@@ -330,8 +357,12 @@ static CrashStringT<ArenaT> BuildCallstackText(ArenaT& arena, const CrashRequest
 template<typename ArenaT>
 static CrashStringT<ArenaT> BuildTriggerText(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> text{arena};
-    text += "category=";
+    text += "event=";
+    text += TriggerEventName(request);
+    text += "\ncategory=";
     text += request.triggerCategory;
+    text += "\nexpression=";
+    text += request.triggerExpression;
     text += "\nmessage=";
     text += request.triggerMessage;
     text += "\nfile=";
@@ -700,12 +731,6 @@ static Path RequestBucketDirectory(Alloc::GlobalArena& arena, const CrashRequest
     return Path(arena, request.spoolDirectory) / bucketName / request.crashId;
 }
 
-static bool DirectoryExists(const Path& path){
-    ErrorCode error;
-    const bool exists = IsDirectory(path, error);
-    return exists && !error;
-}
-
 static bool ApplyRetentionToDirectory(
     Alloc::GlobalArena& arena,
     const Path& directory,
@@ -780,13 +805,13 @@ CrashDumpResult CrashPackageResult(const CrashRequest& request){
         return CrashDumpResult{ CrashDumpStatus::RequestQueued };
 
     Alloc::GlobalArena arena("NWB::Core::Crash::PackageStatus");
-    if(DirectoryExists(RequestBucketDirectory(arena, request, PackageNames::s_UploadedDirectoryName)))
+    if(PathIsDirectory(RequestBucketDirectory(arena, request, PackageNames::s_UploadedDirectoryName)))
         return CrashDumpResult{ CrashDumpStatus::Uploaded };
-    if(DirectoryExists(RequestBucketDirectory(arena, request, PackageNames::s_FailedDirectoryName)))
+    if(PathIsDirectory(RequestBucketDirectory(arena, request, PackageNames::s_FailedDirectoryName)))
         return CrashDumpResult{ CrashDumpStatus::UploadFailed };
-    if(DirectoryExists(RequestBucketDirectory(arena, request, PackageNames::s_UploadingDirectoryName)))
+    if(PathIsDirectory(RequestBucketDirectory(arena, request, PackageNames::s_UploadingDirectoryName)))
         return CrashDumpResult{ CrashDumpStatus::PackageWritten };
-    if(DirectoryExists(RequestBucketDirectory(arena, request, PackageNames::s_PendingDirectoryName)))
+    if(PathIsDirectory(RequestBucketDirectory(arena, request, PackageNames::s_PendingDirectoryName)))
         return CrashDumpResult{ CrashDumpStatus::PackageWritten };
 
     return CrashDumpResult{ CrashDumpStatus::RequestQueued };

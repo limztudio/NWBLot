@@ -8,6 +8,8 @@
 #include "platform.h"
 #include "type.h"
 #include "basic_string.h"
+#include "process_execution.h"
+#include "process_memory_map.h"
 
 #include <cstdlib>
 

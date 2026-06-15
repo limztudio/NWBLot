@@ -360,6 +360,8 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
         return false;
     }
 
+    static_cast<void>(FindGeneratedJsonUnsignedValue(arena, manifestText, "reason_code", outSummary.reasonCode));
+
     return true;
 }
 

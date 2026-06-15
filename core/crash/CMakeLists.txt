@@ -10,6 +10,7 @@ target_sources(nwb_crash PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/package_names.h"
+    "${CMAKE_CURRENT_LIST_DIR}/reason_names.h"
 )
 if(WIN32)
     target_sources(nwb_crash PRIVATE

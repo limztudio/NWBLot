@@ -63,8 +63,22 @@ namespace LoggerDetail{
 
 extern ILogger* g_logger;
 
+inline constexpr const char* s_DiagnosticEventCategoryError = "logger_Error";
+inline constexpr const char* s_DiagnosticEventCategoryFatal = "logger_Fatal";
+
 template<typename... ARGS>
 constexpr void IgnoreMessage(ARGS&&...){}
+
+[[nodiscard]] inline const char* DiagnosticEventNameFromLogType(const LogType::Enum type)noexcept{
+    switch(type){
+    case LogType::Error:
+        return DiagnosticEventName::s_Error;
+    case LogType::Fatal:
+        return DiagnosticEventName::s_FatalError;
+    default:
+        return "";
+    }
+}
 
 inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, LogString&& message){
     logger.enqueue(Move(message), type);
@@ -99,6 +113,107 @@ inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, AFormatStr
 template<typename... ARGS>
 inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, WFormatString<ARGS...> fmt, ARGS&&... args){
     logger.enqueue(StringFormat(logger.arena(), fmt, Forward<ARGS>(args)...), type);
+}
+
+inline LogString MakeLogMessage(LogArena& arena, LogString&& message){
+    static_cast<void>(arena);
+    return Move(message);
+}
+inline LogString MakeLogMessage(LogArena& arena, const LogString& message){
+    static_cast<void>(arena);
+    return message;
+}
+inline LogString MakeLogMessage(LogArena& arena, const char* message){
+    return StringConvert(arena, AStringView(message));
+}
+inline LogString MakeLogMessage(LogArena& arena, const wchar* message){
+    return StringConvert(arena, WStringView(message));
+}
+inline LogString MakeLogMessage(LogArena& arena, const AStringView message){
+    return StringConvert(arena, message);
+}
+inline LogString MakeLogMessage(LogArena& arena, const WStringView message){
+    return StringConvert(arena, message);
+}
+template<typename ArenaT>
+inline LogString MakeLogMessage(LogArena& arena, const TString<ArenaT>& message){
+    return LogString(TStringView(message.data(), message.size()), arena);
+}
+template<typename In>
+inline LogString MakeLogMessage(LogArena& arena, const BasicStringDetail::StringConvertArg<In>& message){
+    return StringConvert(arena, message.value);
+}
+inline void EnqueuePreparedMessageAndCapture(
+    ILogger& logger,
+    const LogType::Enum type,
+    const char* diagnosticCategory,
+    const char* file,
+    const u32 line,
+    LogString&& message
+){
+    const DiagnosticEventText diagnosticMessage = MakeDiagnosticEventText(message);
+    logger.enqueue(Move(message), type);
+    CaptureDiagnosticEvent(DiagnosticEventRecord{
+        .event = DiagnosticEventNameFromLogType(type),
+        .category = diagnosticCategory,
+        .message = diagnosticMessage.c_str(),
+        .file = file,
+        .line = line,
+    });
+}
+
+inline void EnqueuePreparedMessageAndCapture(
+    ILogger& logger,
+    const LogType::Enum type,
+    const char* diagnosticCategory,
+    const char* file,
+    const u32 line,
+    const LogString& message
+){
+    const DiagnosticEventText diagnosticMessage = MakeDiagnosticEventText(message);
+    logger.enqueue(message, type);
+    CaptureDiagnosticEvent(DiagnosticEventRecord{
+        .event = DiagnosticEventNameFromLogType(type),
+        .category = diagnosticCategory,
+        .message = diagnosticMessage.c_str(),
+        .file = file,
+        .line = line,
+    });
+}
+
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, LogString&& message){
+    EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, Move(message));
+}
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const LogString& message){
+    EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, message);
+}
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const char* message){
+    EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, MakeLogMessage(logger.arena(), message));
+}
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const wchar* message){
+    EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, MakeLogMessage(logger.arena(), message));
+}
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const AStringView message){
+    EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, MakeLogMessage(logger.arena(), message));
+}
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const WStringView message){
+    EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, MakeLogMessage(logger.arena(), message));
+}
+template<typename ArenaT>
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const TString<ArenaT>& message){
+    EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, MakeLogMessage(logger.arena(), message));
+}
+template<typename In>
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const BasicStringDetail::StringConvertArg<In>& message){
+    EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, MakeLogMessage(logger.arena(), message));
+}
+template<typename... ARGS>
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, AFormatString<ARGS...> fmt, ARGS&&... args){
+    EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, StringFormat(logger.arena(), fmt, Forward<ARGS>(args)...));
+}
+template<typename... ARGS>
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, WFormatString<ARGS...> fmt, ARGS&&... args){
+    EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, StringFormat(logger.arena(), fmt, Forward<ARGS>(args)...));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,6 +253,7 @@ NWB_COMMON_END
 
 
 #define NWB_LOGGER_IGNORE_MESSAGE(...) static_cast<void>(sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0)))
+#define NWB_DIAGNOSTIC_LOGGER_CATEGORY(Type) ::NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategory ## Type
 
 #define NWB_LOGGER_ENQUEUE_MESSAGE(Type, ...)                                                                                  \
     do{                                                                                                                        \
@@ -150,8 +266,14 @@ NWB_COMMON_END
     do{                                                                                                                        \
         NWB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_logger != nullptr);                                               \
         auto& logger = *::NWB::Core::Common::LoggerDetail::g_logger;                                                           \
-        ::NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, ::NWB::Core::Common::LogType::Type, __VA_ARGS__);            \
-        ::CaptureDiagnosticEvent(NWB_DIAGNOSTIC_LOGGER_CATEGORY(Type), #__VA_ARGS__, __FILE__, __LINE__);                       \
+        ::NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(                                                           \
+            logger,                                                                                                            \
+            ::NWB::Core::Common::LogType::Type,                                                                                \
+            NWB_DIAGNOSTIC_LOGGER_CATEGORY(Type),                                                                              \
+            __FILE__,                                                                                                          \
+            __LINE__,                                                                                                          \
+            __VA_ARGS__                                                                                                        \
+        );                                                                                                                     \
         BreakMacro;                                                                                                            \
     }while(false)
 

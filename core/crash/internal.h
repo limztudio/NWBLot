@@ -147,6 +147,7 @@ struct CrashRequest{
     u64 framePointer = 0u;
     u32 triggerLine = 0u;
     u32 callstackFrameCount = 0u;
+    u32 callstackFramesToSkip = 0u;
     u8 enableGpuDumps = 0u;
     char crashId[s_MaxShortText] = {};
     char applicationName[s_MaxShortText] = {};
@@ -156,7 +157,9 @@ struct CrashRequest{
     char spoolDirectory[s_MaxPathText] = {};
     char logServerUrl[s_MaxUrlText] = {};
     char crashUploadToken[s_MaxMediumText] = {};
+    char triggerEvent[s_MaxShortText] = {};
     char triggerCategory[s_MaxShortText] = {};
+    char triggerExpression[s_MaxMediumText] = {};
     char triggerMessage[s_MaxMediumText] = {};
     char triggerFile[s_MaxPathText] = {};
     u32 metadataCount = 0u;
@@ -183,9 +186,12 @@ struct CrashDumpRequestOptions{
     u32 callstackFrameCount = 0u;
     u64 callstackFrames[s_MaxCallstackFrames] = {};
     AStringView triggerCategory;
+    AStringView triggerEvent;
+    AStringView triggerExpression;
     AStringView triggerMessage;
     AStringView triggerFile;
     u32 triggerLine = 0u;
+    u32 callstackFramesToSkip = 0u;
     bool writePackageInProcess = false;
     bool uploadAfterWrite = true;
 };

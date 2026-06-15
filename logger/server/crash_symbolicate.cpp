@@ -2,23 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "crash_symbolicate.h"
+#include "crash_symbolicate_internal.h"
 #include "crash_paths.h"
 
 #include <core/crash/package_names.h>
-
-#if defined(NWB_PLATFORM_WINDOWS)
-#include <dbghelp.h>
-#include <windows.h>
-#endif
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-#include <cerrno>
-#include <fcntl.h>
-#include <cstdio>
-#include <cstring>
-#include <sys/wait.h>
-#include <unistd.h>
-#endif
+#include <core/crash/reason_names.h>
+#include <global/diagnostics.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,60 +26,11 @@ namespace __hidden_logger_crash_symbolicate{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CrashBytes = Vector<u8, LogArena>;
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
-
-inline constexpr u32 s_ProcMapPathFieldSkipCount = 5u;
-inline constexpr usize s_AndroidTombstoneFrameMinimumTextLength = 4u;
-inline constexpr usize s_DecimalTextBufferCapacity = 32u;
-inline constexpr u32 s_MaxWindowsStackFrames = 128u;
-inline constexpr usize s_CrashReportReserveBytes = 4096u;
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-inline constexpr usize s_SymbolizerOutputMaxBytes = 8192u;
-inline constexpr usize s_SymbolizerReadBufferBytes = 256u;
-#endif
-
-struct DumpMemoryRange{
-    u64 begin = 0u;
-    u64 size = 0u;
-    const u8* bytes = nullptr;
-};
-
-#if defined(NWB_PLATFORM_WINDOWS)
-struct DumpImage{
-    const u8* bytes = nullptr;
-    usize byteCount = 0u;
-
-    [[nodiscard]] const void* rva(const RVA rvaValue, const u32 byteCountValue)const{
-        const u64 offset = static_cast<u64>(rvaValue);
-        const u64 size = static_cast<u64>(byteCountValue);
-        if(offset > static_cast<u64>(byteCount) || size > static_cast<u64>(byteCount) - offset)
-            return nullptr;
-
-        return bytes + static_cast<usize>(offset);
-    }
-};
-
-struct DumpMemoryReader{
-    Vector<DumpMemoryRange, LogArena> ranges;
-
-    explicit DumpMemoryReader(LogArena& arena)
-        : ranges(arena)
-    {}
-};
-
-static DumpMemoryReader* s_CurrentDumpMemoryReader = nullptr;
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static bool RegularFileExists(const Path& path){
-    ErrorCode error;
-    const bool exists = IsRegularFile(path, error);
-    return exists && !error;
-}
 
 static void AppendOptionalTextFile(LogArena& arena, CrashReportText& outReport, const Path& packageDirectory, const char* fileName, const char* label){
     CrashReportText text{arena};
@@ -104,7 +45,7 @@ static void AppendOptionalTextFile(LogArena& arena, CrashReportText& outReport, 
         outReport += '\n';
 }
 
-static void AppendHexAddress(LogArena& arena, CrashReportText& outReport, const u64 address){
+void AppendHexAddress(LogArena& arena, CrashReportText& outReport, const u64 address){
     outReport += "0x";
     outReport += FormatHex64A(arena, address);
 }
@@ -113,7 +54,7 @@ static void AppendHexAddress(LogArena& arena, CrashReportText& outReport, const 
     return CrashDefaultRootDirectory(arena) / s_CrashSymbolStoreDirectoryName;
 }
 
-[[nodiscard]] static Path EffectiveSymbolStoreDirectory(LogArena& arena, const CrashSymbolicationConfig& config){
+Path EffectiveSymbolStoreDirectory(LogArena& arena, const CrashSymbolicationConfig& config){
     if(!config.symbolStoreDirectory.empty())
         return Path(arena, config.symbolStoreDirectory);
 
@@ -135,877 +76,101 @@ static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport,
     outReport += "\n";
 }
 
-[[nodiscard]] static bool FindKeyValueU64(const AStringView text, const AStringView key, u64& outValue){
-    usize cursor = 0u;
-    while(cursor < text.size()){
-        const usize begin = cursor;
-        while(cursor < text.size() && text[cursor] != '\n' && text[cursor] != '\r')
-            ++cursor;
-
-        const AStringView line(text.data() + begin, cursor - begin);
-        while(cursor < text.size() && (text[cursor] == '\n' || text[cursor] == '\r'))
-            ++cursor;
-
-        if(line.size() <= key.size() || !StartsWith(line, key) || line[key.size()] != '=')
-            continue;
-
-        return ParseU64(AStringView(line.data() + key.size() + 1u, line.size() - key.size() - 1u), outValue);
-    }
-
-    return false;
-}
-
-[[nodiscard]] static bool ParseProcMapAddressRange(const AStringView line, u64& outBegin, u64& outEnd){
-    const usize split = line.find('-');
-    if(split == AStringView::npos)
-        return false;
-
-    usize rangeEnd = split + 1u;
-    while(rangeEnd < line.size() && line[rangeEnd] != ' ' && line[rangeEnd] != '\t')
-        ++rangeEnd;
-
-    return ::ParseVariableHexU64(AStringView(line.data(), split), outBegin)
-        && ::ParseVariableHexU64(AStringView(line.data() + split + 1u, rangeEnd - split - 1u), outEnd)
-        && outBegin < outEnd
-    ;
-}
-
-static void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept{
-    while(cursor < line.size() && (line[cursor] == ' ' || line[cursor] == '\t'))
-        ++cursor;
-}
-
-[[nodiscard]] static bool SkipProcMapField(const AStringView line, usize& cursor)noexcept{
-    const usize begin = cursor;
-    while(cursor < line.size() && line[cursor] != ' ' && line[cursor] != '\t')
-        ++cursor;
-    return cursor > begin;
-}
-
-[[nodiscard]] static bool ParseProcMapFileOffset(const AStringView line, u64& outOffset){
-    outOffset = 0u;
-
-    usize cursor = 0u;
-    if(!SkipProcMapField(line, cursor))
-        return false;
-
-    SkipProcMapWhitespace(line, cursor);
-    if(!SkipProcMapField(line, cursor))
-        return false;
-
-    SkipProcMapWhitespace(line, cursor);
-    const usize offsetBegin = cursor;
-    if(!SkipProcMapField(line, cursor))
-        return false;
-
-    return ::ParseVariableHexU64(AStringView(line.data() + offsetBegin, cursor - offsetBegin), outOffset);
-}
-
-[[nodiscard]] static AStringView ProcMapPathField(AStringView line)noexcept{
-    line = TrimLeftView(line);
-    for(u32 fieldIndex = 0u; fieldIndex < s_ProcMapPathFieldSkipCount; ++fieldIndex){
-        while(!line.empty() && line.front() != ' ' && line.front() != '\t')
-            line.remove_prefix(1u);
-        line = TrimLeftView(line);
-        if(line.empty())
-            return AStringView();
-    }
-
-    return line;
-}
-
-[[nodiscard]] static bool FindProcMapForAddress(
-    const AStringView mapsText,
-    const u64 address,
-    u64& outModuleBegin,
-    u64& outModuleFileOffset,
-    CrashReportText& outModulePath
-){
-    outModuleBegin = 0u;
-    outModuleFileOffset = 0u;
-    outModulePath.clear();
-
-    usize cursor = 0u;
-    while(cursor < mapsText.size()){
-        const usize begin = cursor;
-        while(cursor < mapsText.size() && mapsText[cursor] != '\n' && mapsText[cursor] != '\r')
-            ++cursor;
-
-        const AStringView line(mapsText.data() + begin, cursor - begin);
-        while(cursor < mapsText.size() && (mapsText[cursor] == '\n' || mapsText[cursor] == '\r'))
-            ++cursor;
-
-        u64 mapBegin = 0u;
-        u64 mapEnd = 0u;
-        if(!ParseProcMapAddressRange(line, mapBegin, mapEnd) || address < mapBegin || address >= mapEnd)
-            continue;
-
-        outModuleBegin = mapBegin;
-        static_cast<void>(ParseProcMapFileOffset(line, outModuleFileOffset));
-        const AStringView path = ProcMapPathField(line);
-        outModulePath.assign(path.data(), path.size());
-        if(outModulePath.empty())
-            outModulePath = "<anonymous>";
-        return true;
-    }
-
-    return false;
-}
-
-[[nodiscard]] static bool ParseCallstackFrameAddress(const AStringView line, u64& outAddress){
-    const usize prefix = line.find("0x");
-    if(prefix == AStringView::npos)
-        return false;
-
-    usize end = prefix + 2u;
-    while(end < line.size() && line[end] != ' ' && line[end] != '\t' && line[end] != '\r' && line[end] != '\n')
-        ++end;
-    if(end == prefix + 2u)
-        return false;
-
-    return ::ParseVariableHexU64(AStringView(line.data() + prefix + 2u, end - prefix - 2u), outAddress);
-}
-
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-static void CloseFd(int& fd)noexcept{
-    if(fd < 0)
-        return;
-
-    static_cast<void>(::close(fd));
-    fd = -1;
-}
-
-[[nodiscard]] static bool WaitForProcessSuccess(const pid_t childPid)noexcept{
-    int status = 0;
-    pid_t waitedPid = -1;
-    do{
-        waitedPid = ::waitpid(childPid, &status, 0);
-    }while(waitedPid < 0 && errno == EINTR);
-
-    return waitedPid == childPid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
-}
-
-[[nodiscard]] static bool CaptureProcessOutput(CrashReportText& outOutput, const char* const* argv){
-    outOutput.clear();
-
-    if(!argv || !argv[0])
-        return false;
-
-    int pipeFds[2] = { -1, -1 };
-    if(::pipe(pipeFds) != 0)
-        return false;
-
-    const pid_t childPid = ::fork();
-    if(childPid < 0){
-        CloseFd(pipeFds[0]);
-        CloseFd(pipeFds[1]);
-        return false;
-    }
-
-    if(childPid == 0){
-        const int devNull = ::open("/dev/null", O_WRONLY);
-        if(devNull >= 0){
-            static_cast<void>(::dup2(devNull, STDERR_FILENO));
-            if(devNull != STDERR_FILENO)
-                static_cast<void>(::close(devNull));
-        }
-
-        static_cast<void>(::dup2(pipeFds[1], STDOUT_FILENO));
-        static_cast<void>(::close(pipeFds[0]));
-        static_cast<void>(::close(pipeFds[1]));
-        ::execvp(argv[0], const_cast<char* const*>(argv));
-        _exit(127);
-    }
-
-    CloseFd(pipeFds[1]);
-
-    char buffer[s_SymbolizerReadBufferBytes] = {};
-    bool readSucceeded = true;
-    for(;;){
-        const ssize_t readBytes = ::read(pipeFds[0], buffer, sizeof(buffer));
-        if(readBytes > 0){
-            const usize length = static_cast<usize>(readBytes);
-            if(outOutput.size() + length > s_SymbolizerOutputMaxBytes)
-                break;
-            outOutput.append(buffer, length);
-            continue;
-        }
-
-        if(readBytes == 0)
-            break;
-
-        if(errno == EINTR)
-            continue;
-
-        readSucceeded = false;
-        break;
-    }
-
-    CloseFd(pipeFds[0]);
-    const bool exitedSuccessfully = WaitForProcessSuccess(childPid);
-    return readSucceeded && exitedSuccessfully && !outOutput.empty();
-}
-
-[[nodiscard]] static bool NextTextLine(const AStringView text, usize& cursor, AStringView& outLine){
-    if(cursor >= text.size())
-        return false;
-
-    const usize begin = cursor;
-    while(cursor < text.size() && text[cursor] != '\n' && text[cursor] != '\r')
-        ++cursor;
-
-    outLine = TrimView(AStringView(text.data() + begin, cursor - begin));
-    while(cursor < text.size() && (text[cursor] == '\n' || text[cursor] == '\r'))
-        ++cursor;
-    return true;
-}
-
-[[nodiscard]] static bool IsUnknownSymbolLine(const AStringView line){
-    const AStringView trimmed = TrimView(line);
-    return trimmed.empty() || trimmed == "??" || StartsWith(trimmed, "??:");
-}
-
-[[nodiscard]] static bool ExtractSymbolizerResult(
-    CrashReportText& outSymbol,
-    const AStringView outputText
-){
-    usize cursor = 0u;
-    AStringView function;
-    AStringView location;
-    if(!NextTextLine(outputText, cursor, function))
-        return false;
-    static_cast<void>(NextTextLine(outputText, cursor, location));
-
-    const bool hasFunction = !IsUnknownSymbolLine(function);
-    const bool hasLocation = !IsUnknownSymbolLine(location);
-    if(!hasFunction && !hasLocation)
-        return false;
-
-    outSymbol.clear();
-    if(hasFunction)
-        outSymbol.append(function.data(), function.size());
-    if(hasLocation){
-        if(!outSymbol.empty())
-            outSymbol += " at ";
-        else
-            outSymbol += "at ";
-        outSymbol.append(location.data(), location.size());
-    }
-
-    return true;
-}
-
-[[nodiscard]] static bool TryRunLinuxSymbolizer(
-    LogArena& arena,
-    const AStringView toolName,
-    const AStringView modulePathText,
-    const u64 moduleOffset,
-    CrashReportText& outSymbol
-){
-    CrashReportText addressArgument{arena};
-    AppendHexAddress(arena, addressArgument, moduleOffset);
-
-    if(toolName == "llvm-symbolizer"){
-        CrashReportText objectArgument{arena};
-        objectArgument += "--obj=";
-        objectArgument.append(modulePathText.data(), modulePathText.size());
-
-        const char* const argv[] = {
-            "llvm-symbolizer",
-            "--demangle",
-            "--functions",
-            "--inlining=false",
-            objectArgument.c_str(),
-            addressArgument.c_str(),
-            nullptr
-        };
-
-        CrashReportText output{arena};
-        if(!CaptureProcessOutput(output, argv))
-            return false;
-
-        return ExtractSymbolizerResult(outSymbol, AStringView(output.data(), output.size()));
-    }
-
-    CrashReportText modulePathArgument{arena};
-    modulePathArgument.append(modulePathText.data(), modulePathText.size());
-
-    const char* const argv[] = {
-        "addr2line",
-        "-f",
-        "-C",
-        "-e",
-        modulePathArgument.c_str(),
-        addressArgument.c_str(),
-        nullptr
-    };
-
-    CrashReportText output{arena};
-    if(!CaptureProcessOutput(output, argv))
-        return false;
-
-    return ExtractSymbolizerResult(outSymbol, AStringView(output.data(), output.size()));
-}
-
-[[nodiscard]] static bool FindLinuxSymbolFile(
-    LogArena& arena,
-    const AStringView modulePathText,
-    const CrashSymbolicationConfig& config,
-    Path& outPath
-){
-    if(modulePathText.empty() || modulePathText == "<anonymous>")
-        return false;
-
-    const Path modulePath(arena, modulePathText);
-    if(RegularFileExists(modulePath)){
-        outPath = modulePath;
-        return true;
-    }
-
-    const Path symbolStoreDirectory = EffectiveSymbolStoreDirectory(arena, config);
-    if(symbolStoreDirectory.empty())
-        return false;
-
-    const Path moduleFileName = modulePath.filename();
-    if(moduleFileName.empty())
-        return false;
-
-    const Path symbolStoreCandidate = symbolStoreDirectory / moduleFileName;
-    if(RegularFileExists(symbolStoreCandidate)){
-        outPath = symbolStoreCandidate;
-        return true;
-    }
-
-    return false;
-}
-
-[[nodiscard]] static bool ResolveLinuxFrameSymbol(
-    LogArena& arena,
-    const AStringView modulePathText,
-    const u64 moduleOffset,
-    const CrashSymbolicationConfig& config,
-    CrashReportText& outSymbol
-){
-    Path symbolPath(arena);
-    if(!FindLinuxSymbolFile(arena, modulePathText, config, symbolPath))
-        return false;
-
-    const CrashReportText symbolPathText = PathToString<char>(arena, symbolPath);
-    const AStringView symbolPathView(symbolPathText.data(), symbolPathText.size());
-    return TryRunLinuxSymbolizer(arena, "llvm-symbolizer", symbolPathView, moduleOffset, outSymbol)
-        || TryRunLinuxSymbolizer(arena, "addr2line", symbolPathView, moduleOffset, outSymbol)
-    ;
-}
-#endif
-
-static void AppendLinuxClientCallstack(
-    LogArena& arena,
-    const AStringView callstackText,
-    const AStringView procMapsText,
-    const bool procMapsPresent,
-    const CrashSymbolicationConfig& config,
-    CrashReportText& outReport
-){
-    static_cast<void>(config);
-
-    outReport += "\n[callstack]\n";
-
-    usize cursor = 0u;
-    while(cursor < callstackText.size()){
-        const usize begin = cursor;
-        while(cursor < callstackText.size() && callstackText[cursor] != '\n' && callstackText[cursor] != '\r')
-            ++cursor;
-
-        const AStringView line(callstackText.data() + begin, cursor - begin);
-        while(cursor < callstackText.size() && (callstackText[cursor] == '\n' || callstackText[cursor] == '\r'))
-            ++cursor;
-
-        const AStringView trimmed = TrimLeftView(line);
-        if(trimmed.empty())
-            continue;
-
-        outReport.append(trimmed.data(), trimmed.size());
-
-        u64 address = 0u;
-        if(procMapsPresent && ParseCallstackFrameAddress(trimmed, address)){
-            u64 moduleBegin = 0u;
-            u64 moduleFileOffset = 0u;
-            CrashReportText modulePath{arena};
-            if(FindProcMapForAddress(procMapsText, address, moduleBegin, moduleFileOffset, modulePath)){
-                const u64 moduleOffset = address - moduleBegin;
-                const u64 symbolOffset = moduleOffset + moduleFileOffset;
-                outReport += " ";
-                outReport += modulePath;
-                outReport += "+";
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-                AppendHexAddress(arena, outReport, moduleOffset);
-                CrashReportText symbol{arena};
-                if(ResolveLinuxFrameSymbol(arena, AStringView(modulePath.data(), modulePath.size()), symbolOffset, config, symbol)){
-                    outReport += " ";
-                    outReport += symbol;
-                }
-#else
-                AppendHexAddress(arena, outReport, moduleOffset);
-#endif
-            }
-        }
-
-        outReport += "\n";
-    }
-}
-
-static void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
-    CrashReportText clientCallstack{arena};
-    const bool clientCallstackPresent = ReadTextFile(packageDirectory / CrashNames::s_CallstackFileName, clientCallstack) && !clientCallstack.empty();
-
-    outReport += clientCallstackPresent
-        ? "status=callstack_captured\nresolver=linux_client_frame_pointer\n"
-        : "status=not_decoded\nresolver=elf_dwarf_core\n"
-    ;
-
-    const bool corePresent =
-        RegularFileExists(packageDirectory / CrashNames::s_LinuxCoreFileName)
-        || RegularFileExists(packageDirectory / CrashNames::s_LinuxCoreDumpFileName)
-        || RegularFileExists(packageDirectory / CrashNames::s_LinuxProcessCoreFileName)
-    ;
-    outReport += corePresent
-        ? "core_artifact=present\n"
-        : "core_artifact=missing\n"
-    ;
-
-    CrashReportText cpuContext{arena};
-    CrashReportText procMaps{arena};
-    const bool cpuContextPresent = ReadTextFile(packageDirectory / CrashNames::s_CpuContextFileName, cpuContext) && !cpuContext.empty();
-    const bool procMapsPresent = ReadTextFile(packageDirectory / CrashNames::s_ProcMapsFileName, procMaps) && !procMaps.empty();
-    outReport += procMapsPresent
-        ? "proc_maps=present\n"
-        : "proc_maps=missing\n"
-    ;
-
-    u64 instructionPointer = 0u;
-    if(!cpuContextPresent || !FindKeyValueU64(AStringView(cpuContext.data(), cpuContext.size()), "instruction_pointer", instructionPointer) || instructionPointer == 0u){
-        outReport += "detail=ELF/DWARF stack resolver requires a core-compatible artifact; instruction pointer mapping unavailable\n";
-        if(clientCallstackPresent)
-            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), procMapsPresent, config, outReport);
+static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, const CrashPackageSummary& summary){
+    if(summary.reasonKind == "signal"){
+        outReport += "exception=";
+        outReport += Core::Crash::PosixSignalName(summary.reasonCode);
+        outReport += " (";
+        char buffer[s_DecimalTextBufferCapacity] = {};
+        outReport += FormatDecimal(static_cast<usize>(summary.reasonCode), buffer);
+        outReport += ")\n";
         return;
     }
-
-    outReport += "instruction_pointer=";
-    AppendHexAddress(arena, outReport, instructionPointer);
-    outReport += "\n";
-
-    if(!procMapsPresent){
-        outReport += "detail=proc maps missing for module lookup; symbolic frame resolution unavailable\n";
-        if(clientCallstackPresent)
-            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(), false, config, outReport);
-        return;
-    }
-
-    u64 moduleBegin = 0u;
-    u64 moduleFileOffset = 0u;
-    CrashReportText modulePath{arena};
-    if(!FindProcMapForAddress(AStringView(procMaps.data(), procMaps.size()), instructionPointer, moduleBegin, moduleFileOffset, modulePath)){
-        outReport += "detail=instruction pointer was not found in proc maps\n";
-        if(clientCallstackPresent)
-            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), true, config, outReport);
-        return;
-    }
-
-    outReport += "instruction_pointer_module=";
-    outReport += modulePath;
-    outReport += "\nmodule_relative_ip=";
-    AppendHexAddress(arena, outReport, instructionPointer - moduleBegin);
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    outReport += "\nsymbolication_relative_ip=";
-    AppendHexAddress(arena, outReport, instructionPointer - moduleBegin + moduleFileOffset);
-#endif
-    outReport += clientCallstackPresent
-        ? "\ndetail=client frame-pointer callstack captured; module frames are symbolized with DWARF when symbols are reachable\n"
-        : "\ndetail=module-relative crash address captured; full Linux callstack requires a core-compatible artifact and DWARF resolver\n"
-    ;
-    if(clientCallstackPresent)
-        AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), true, config, outReport);
-}
-
-static void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDirectory, CrashReportText& outReport){
-    CrashReportText tombstone{arena};
-    const bool tombstonePresent = ReadTextFile(packageDirectory / CrashNames::s_AndroidTombstoneFileName, tombstone) && !tombstone.empty();
-    if(!tombstonePresent){
-        outReport += "status=not_decoded\nresolver=android_tombstone_native_symbols\n";
-        outReport += "android_tombstone=missing\ndetail=Android resolver requires Java/ApplicationExitInfo tombstone attachment and native symbol store\n";
-        return;
-    }
-
-    CrashReportText frames{arena};
-    usize cursor = 0u;
-    while(cursor < tombstone.size()){
-        const usize begin = cursor;
-        while(cursor < tombstone.size() && tombstone[cursor] != '\n' && tombstone[cursor] != '\r')
-            ++cursor;
-
-        const AStringView line(tombstone.data() + begin, cursor - begin);
-        while(cursor < tombstone.size() && (tombstone[cursor] == '\n' || tombstone[cursor] == '\r'))
-            ++cursor;
-
-        const AStringView trimmed = TrimLeftView(line);
-        if(trimmed.size() < s_AndroidTombstoneFrameMinimumTextLength || trimmed.front() != '#' || trimmed.find(" pc ") == AStringView::npos)
-            continue;
-
-        frames.append(trimmed.data(), trimmed.size());
-        frames += '\n';
-    }
-
-    outReport += frames.empty()
-        ? "status=not_decoded\n"
-        : "status=tombstone_parsed\n"
-    ;
-    outReport += "resolver=android_tombstone_native_symbols\n";
-    outReport += "android_tombstone=present\n";
-    outReport += frames.empty()
-        ? "detail=tombstone attached, but no native frame lines were recognized; native symbols are required for full decoding\n"
-        : "detail=tombstone native frame lines copied; native symbol store is required for offline address resolution\n"
-    ;
-
-    if(!frames.empty()){
-        outReport += "\n[tombstone_callstack]\n";
-        outReport += frames;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_PLATFORM_WINDOWS)
-[[nodiscard]] static const MINIDUMP_STRING* DumpStringAtRva(const DumpImage& dumpImage, const RVA rvaValue){
-    return static_cast<const MINIDUMP_STRING*>(dumpImage.rva(rvaValue, sizeof(MINIDUMP_STRING)));
-}
-
-[[nodiscard]] static WStringView DumpStringView(const DumpImage& dumpImage, const RVA rvaValue){
-    const MINIDUMP_STRING* dumpString = DumpStringAtRva(dumpImage, rvaValue);
-    if(!dumpString || dumpString->Length == 0u || (dumpString->Length % sizeof(wchar)) != 0u)
-        return WStringView();
-
-    const u32 byteCount = dumpString->Length;
-    const u32 charCount = byteCount / sizeof(wchar);
-    const void* fullString = dumpImage.rva(rvaValue, sizeof(MINIDUMP_STRING) + byteCount);
-    if(!fullString)
-        return WStringView();
-
-    return WStringView(dumpString->Buffer, static_cast<usize>(charCount));
-}
-
-[[nodiscard]] static bool ReadMinidumpStream(const DumpImage& dumpImage, const MINIDUMP_STREAM_TYPE streamType, void*& outStream, ULONG& outStreamBytes){
-    outStream = nullptr;
-    outStreamBytes = 0u;
-
-    PMINIDUMP_DIRECTORY directory = nullptr;
-    PVOID stream = nullptr;
-    ULONG streamBytes = 0u;
-    if(!MiniDumpReadDumpStream(const_cast<u8*>(dumpImage.bytes), streamType, &directory, &stream, &streamBytes))
-        return false;
-
-    static_cast<void>(directory);
-    outStream = stream;
-    outStreamBytes = streamBytes;
-    return stream != nullptr && streamBytes > 0u;
-}
-
-static void AddMemoryRange(DumpMemoryReader& reader, const u64 begin, const u64 size, const u8* bytes){
-    if(size == 0u || !bytes)
-        return;
-
-    reader.ranges.push_back(DumpMemoryRange{ begin, size, bytes });
-}
-
-static void AddLocationMemoryRange(const DumpImage& dumpImage, DumpMemoryReader& reader, const u64 begin, const MINIDUMP_LOCATION_DESCRIPTOR& location){
-    const void* bytes = dumpImage.rva(location.Rva, location.DataSize);
-    AddMemoryRange(reader, begin, location.DataSize, static_cast<const u8*>(bytes));
-}
-
-static void BuildDumpMemoryReader(LogArena& arena, const DumpImage& dumpImage, DumpMemoryReader& outReader){
-    void* threadStream = nullptr;
-    ULONG threadStreamBytes = 0u;
-    if(ReadMinidumpStream(dumpImage, ThreadListStream, threadStream, threadStreamBytes)){
-        const auto* threadList = static_cast<const MINIDUMP_THREAD_LIST*>(threadStream);
-        for(u32 i = 0u; i < threadList->NumberOfThreads; ++i)
-            AddLocationMemoryRange(dumpImage, outReader, threadList->Threads[i].Stack.StartOfMemoryRange, threadList->Threads[i].Stack.Memory);
-    }
-
-    void* memoryStream = nullptr;
-    ULONG memoryStreamBytes = 0u;
-    if(ReadMinidumpStream(dumpImage, MemoryListStream, memoryStream, memoryStreamBytes)){
-        const auto* memoryList = static_cast<const MINIDUMP_MEMORY_LIST*>(memoryStream);
-        for(u32 i = 0u; i < memoryList->NumberOfMemoryRanges; ++i)
-            AddLocationMemoryRange(dumpImage, outReader, memoryList->MemoryRanges[i].StartOfMemoryRange, memoryList->MemoryRanges[i].Memory);
-    }
-
-    void* memory64Stream = nullptr;
-    ULONG memory64StreamBytes = 0u;
-    if(ReadMinidumpStream(dumpImage, Memory64ListStream, memory64Stream, memory64StreamBytes)){
-        const auto* memoryList = static_cast<const MINIDUMP_MEMORY64_LIST*>(memory64Stream);
-        u64 cursor = memoryList->BaseRva;
-        for(u64 i = 0u; i < memoryList->NumberOfMemoryRanges; ++i){
-            const MINIDUMP_MEMORY_DESCRIPTOR64& descriptor = memoryList->MemoryRanges[i];
-            const void* bytes = dumpImage.rva(static_cast<RVA>(cursor), static_cast<u32>(descriptor.DataSize));
-            AddMemoryRange(outReader, descriptor.StartOfMemoryRange, descriptor.DataSize, static_cast<const u8*>(bytes));
-            cursor += descriptor.DataSize;
-        }
-    }
-
-    static_cast<void>(arena);
-}
-
-static BOOL CALLBACK ReadProcessMemoryFromDump(HANDLE process, DWORD64 baseAddress, PVOID buffer, DWORD size, LPDWORD bytesRead){
-    static_cast<void>(process);
-
-    if(bytesRead)
-        *bytesRead = 0u;
-    if(!s_CurrentDumpMemoryReader || !buffer)
-        return FALSE;
-
-    for(const DumpMemoryRange& range : s_CurrentDumpMemoryReader->ranges){
-        if(baseAddress < range.begin)
-            continue;
-        const u64 offset = baseAddress - range.begin;
-        if(offset >= range.size)
-            continue;
-        if(static_cast<u64>(size) > range.size - offset)
-            return FALSE;
-
-        NWB_MEMCPY(buffer, static_cast<usize>(size), range.bytes + static_cast<usize>(offset), static_cast<usize>(size));
-        if(bytesRead)
-            *bytesRead = size;
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-[[nodiscard]] static const CONTEXT* FindCrashContext(const DumpImage& dumpImage, const CrashPackageSummary& summary, DWORD& outThreadId){
-    outThreadId = static_cast<DWORD>(summary.threadId);
-
-    void* exceptionStream = nullptr;
-    ULONG exceptionStreamBytes = 0u;
-    if(ReadMinidumpStream(dumpImage, ExceptionStream, exceptionStream, exceptionStreamBytes)){
-        const auto* exceptionInfo = static_cast<const MINIDUMP_EXCEPTION_STREAM*>(exceptionStream);
-        outThreadId = exceptionInfo->ThreadId;
-        return static_cast<const CONTEXT*>(dumpImage.rva(exceptionInfo->ThreadContext.Rva, exceptionInfo->ThreadContext.DataSize));
-    }
-
-    void* threadStream = nullptr;
-    ULONG threadStreamBytes = 0u;
-    if(!ReadMinidumpStream(dumpImage, ThreadListStream, threadStream, threadStreamBytes))
-        return nullptr;
-
-    const auto* threadList = static_cast<const MINIDUMP_THREAD_LIST*>(threadStream);
-    for(u32 i = 0u; i < threadList->NumberOfThreads; ++i){
-        const MINIDUMP_THREAD& thread = threadList->Threads[i];
-        if(outThreadId != 0u && thread.ThreadId != outThreadId)
-            continue;
-
-        outThreadId = thread.ThreadId;
-        return static_cast<const CONTEXT*>(dumpImage.rva(thread.ThreadContext.Rva, thread.ThreadContext.DataSize));
-    }
-
-    return nullptr;
-}
-
-[[nodiscard]] static DWORD MachineTypeFromContext(const CONTEXT& context)noexcept{
-    static_cast<void>(context);
-#if defined(_M_X64) || defined(__x86_64__)
-    return IMAGE_FILE_MACHINE_AMD64;
-#elif defined(_M_IX86) || defined(__i386__)
-    return IMAGE_FILE_MACHINE_I386;
-#elif defined(_M_ARM64) || defined(__aarch64__)
-    return IMAGE_FILE_MACHINE_ARM64;
-#else
-    return 0u;
-#endif
-}
-
-static void InitializeStackFrameFromContext(STACKFRAME64& outFrame, const CONTEXT& context)noexcept{
-    outFrame = STACKFRAME64{};
-#if defined(_M_X64) || defined(__x86_64__)
-    outFrame.AddrPC.Offset = context.Rip;
-    outFrame.AddrFrame.Offset = context.Rbp;
-    outFrame.AddrStack.Offset = context.Rsp;
-#elif defined(_M_IX86) || defined(__i386__)
-    outFrame.AddrPC.Offset = context.Eip;
-    outFrame.AddrFrame.Offset = context.Ebp;
-    outFrame.AddrStack.Offset = context.Esp;
-#elif defined(_M_ARM64) || defined(__aarch64__)
-    outFrame.AddrPC.Offset = context.Pc;
-    outFrame.AddrFrame.Offset = context.Fp;
-    outFrame.AddrStack.Offset = context.Sp;
-#endif
-    outFrame.AddrPC.Mode = AddrModeFlat;
-    outFrame.AddrFrame.Mode = AddrModeFlat;
-    outFrame.AddrStack.Mode = AddrModeFlat;
-}
-
-[[nodiscard]] static WString<LogArena> BuildSymbolSearchPath(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config){
-    WString<LogArena> path{arena};
-    path += packageDirectory.native();
-    path += L";";
-    path += EffectiveSymbolStoreDirectory(arena, config).native();
-    return path;
-}
-
-static void LoadDumpModules(LogArena& arena, const HANDLE symbolProcess, const DumpImage& dumpImage, CrashReportText& outReport){
-    void* moduleStream = nullptr;
-    ULONG moduleStreamBytes = 0u;
-    if(!ReadMinidumpStream(dumpImage, ModuleListStream, moduleStream, moduleStreamBytes)){
-        outReport += "module_load=missing_module_list\n";
-        return;
-    }
-
-    const auto* moduleList = static_cast<const MINIDUMP_MODULE_LIST*>(moduleStream);
-    u32 loadedCount = 0u;
-    for(u32 i = 0u; i < moduleList->NumberOfModules; ++i){
-        const MINIDUMP_MODULE& module = moduleList->Modules[i];
-        const WStringView moduleName = DumpStringView(dumpImage, module.ModuleNameRva);
-        WString<LogArena> moduleNameText{arena};
-        if(!moduleName.empty())
-            moduleNameText.assign(moduleName.data(), moduleName.size());
-        const wchar* imageName = moduleNameText.empty() ? nullptr : moduleNameText.c_str();
-        const DWORD64 loadedBase = SymLoadModuleExW(
-            symbolProcess,
-            nullptr,
-            imageName,
-            nullptr,
-            module.BaseOfImage,
-            module.SizeOfImage,
-            nullptr,
-            0u
-        );
-        if(loadedBase != 0u)
-            ++loadedCount;
-    }
-
-    outReport += "modules_loaded=";
-    char countBuffer[s_DecimalTextBufferCapacity] = {};
-    outReport += FormatDecimal(static_cast<usize>(loadedCount), countBuffer);
-    outReport += "\n";
-    static_cast<void>(arena);
-}
-
-static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, CrashReportText& outReport, const DWORD frameIndex, const DWORD64 address){
-    outReport += "#";
-    char frameBuffer[s_DecimalTextBufferCapacity] = {};
-    outReport += FormatDecimal(static_cast<usize>(frameIndex), frameBuffer);
-    outReport += " ";
-    AppendHexAddress(arena, outReport, address);
-
-    alignas(SYMBOL_INFOW) u8 symbolBuffer[sizeof(SYMBOL_INFOW) + (MAX_SYM_NAME * sizeof(wchar))] = {};
-    auto* symbol = reinterpret_cast<SYMBOL_INFOW*>(symbolBuffer);
-    symbol->SizeOfStruct = sizeof(SYMBOL_INFOW);
-    symbol->MaxNameLen = MAX_SYM_NAME;
-
-    DWORD64 displacement = 0u;
-    if(SymFromAddrW(symbolProcess, address, &displacement, symbol)){
-        const AString<LogArena> name = BasicStringDetail::WideToUtf8(arena, WStringView(symbol->Name, symbol->NameLen));
+    if(summary.reasonKind == "windows_exception"){
+        outReport += "exception=";
+        outReport += Core::Crash::WindowsExceptionName(summary.reasonCode);
         outReport += " ";
-        outReport += name;
-        if(displacement != 0u){
-            outReport += "+0x";
-            outReport += FormatHex64A(arena, displacement);
+        AppendHexAddress(arena, outReport, summary.reasonCode);
+        outReport += "\n";
+        return;
+    }
+    if(summary.reasonKind == "terminate"){
+        outReport += "exception=std::terminate\n";
+        return;
+    }
+    if(summary.reasonKind == "manual"){
+        outReport += "exception=manual diagnostic dump\n";
+        return;
+    }
+
+    outReport += "exception=";
+    outReport += summary.reasonKind;
+    outReport += "\n";
+}
+
+[[nodiscard]] static const char* EventNameFromCategory(const CrashReportText& category, const CrashReportText& reasonKind)noexcept{
+    if(const char* const diagnosticEventName = DiagnosticEventNameFromCategory(category.c_str()))
+        return diagnosticEventName;
+    if(reasonKind == "manual")
+        return DiagnosticEventName::s_ManualDump;
+    return DiagnosticEventName::s_Crash;
+}
+
+static void AppendOptionalEventField(CrashReportText& outReport, const char* key, const CrashReportText& value){
+    if(value.empty())
+        return;
+
+    outReport += key;
+    outReport += "=";
+    outReport += value;
+    outReport += "\n";
+}
+
+static void AppendEventSummary(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, CrashReportText& outReport){
+    CrashReportText triggerText{arena};
+    const bool triggerPresent = ReadTextFile(packageDirectory / CrashNames::s_TriggerFileName, triggerText) && !triggerText.empty();
+
+    CrashReportText event{arena};
+    CrashReportText category{arena};
+    CrashReportText expression{arena};
+    CrashReportText message{arena};
+    CrashReportText file{arena};
+    u64 line = 0u;
+
+    if(triggerPresent){
+        const AStringView triggerView(triggerText.data(), triggerText.size());
+        static_cast<void>(FindLineKeyValue(triggerView, "event", event));
+        static_cast<void>(FindLineKeyValue(triggerView, "category", category));
+        static_cast<void>(FindLineKeyValue(triggerView, "expression", expression));
+        static_cast<void>(FindLineKeyValue(triggerView, "message", message));
+        static_cast<void>(FindLineKeyValue(triggerView, "file", file));
+        static_cast<void>(FindLineKeyValueU64(triggerView, "line", line));
+    }
+
+    if(event.empty())
+        event = EventNameFromCategory(category, summary.reasonKind);
+
+    outReport += "\n[event]\n";
+    outReport += "event=";
+    outReport += event;
+    outReport += "\n";
+    if(category.empty() && !triggerPresent)
+        AppendExceptionSummary(arena, outReport, summary);
+    else{
+        AppendOptionalEventField(outReport, "category", category);
+        AppendOptionalEventField(outReport, "expression", expression);
+        AppendOptionalEventField(outReport, "message", message);
+        AppendOptionalEventField(outReport, "file", file);
+        if(line != 0u){
+            outReport += "line=";
+            char buffer[s_DecimalTextBufferCapacity] = {};
+            outReport += FormatDecimal(static_cast<usize>(line), buffer);
+            outReport += "\n";
         }
     }
-    else
-        outReport += " <unknown>";
-
-    IMAGEHLP_LINEW64 line = {};
-    line.SizeOfStruct = sizeof(line);
-    DWORD lineDisplacement = 0u;
-    if(SymGetLineFromAddrW64(symbolProcess, address, &lineDisplacement, &line)){
-        const AString<LogArena> file = BasicStringDetail::WideToUtf8(arena, WStringView(line.FileName));
-        outReport += " at ";
-        outReport += file;
-        outReport += ":";
-        char lineBuffer[s_DecimalTextBufferCapacity] = {};
-        outReport += FormatDecimal(static_cast<usize>(line.LineNumber), lineBuffer);
-    }
-
-    outReport += "\n";
 }
 
-[[nodiscard]] static bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport){
-    const Path dumpPath = packageDirectory / CrashNames::s_ProcessDumpFileName;
-    CrashBytes dumpBytes{arena};
-    ErrorCode readError;
-    if(!ReadBinaryFile(dumpPath, dumpBytes, readError) || dumpBytes.empty()){
-        outReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=";
-        outReport += CrashNames::s_ProcessDumpFileName;
-        outReport += " is missing or unreadable\n";
-        return false;
-    }
 
-    const DumpImage dumpImage{ dumpBytes.data(), dumpBytes.size() };
-    DWORD threadId = 0u;
-    const CONTEXT* context = FindCrashContext(dumpImage, summary, threadId);
-    if(!context){
-        outReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=minidump has no usable thread context\n";
-        return false;
-    }
-
-    const HANDLE symbolProcess = GetCurrentProcess();
-    const WString<LogArena> symbolPath = BuildSymbolSearchPath(arena, packageDirectory, config);
-    SymCleanup(symbolProcess);
-    SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
-    if(!SymInitializeW(symbolProcess, symbolPath.c_str(), FALSE)){
-        outReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=SymInitializeW failed\n";
-        return false;
-    }
-
-    DumpMemoryReader memoryReader(arena);
-    BuildDumpMemoryReader(arena, dumpImage, memoryReader);
-    s_CurrentDumpMemoryReader = &memoryReader;
-
-    outReport += "status=decoded\nresolver=windows_pdb_minidump\nsymbol_path=";
-    outReport += BasicStringDetail::WideToUtf8(arena, WStringView(symbolPath));
-    outReport += "\nthread_id=";
-    char threadBuffer[s_DecimalTextBufferCapacity] = {};
-    outReport += FormatDecimal(static_cast<usize>(threadId), threadBuffer);
-    outReport += "\n";
-    LoadDumpModules(arena, symbolProcess, dumpImage, outReport);
-    outReport += "\n[callstack]\n";
-
-    CONTEXT walkContext = *context;
-    STACKFRAME64 frame;
-    InitializeStackFrameFromContext(frame, walkContext);
-
-    const DWORD machineType = MachineTypeFromContext(walkContext);
-    bool decodedAnyFrame = false;
-    for(DWORD frameIndex = 0u; frameIndex < s_MaxWindowsStackFrames; ++frameIndex){
-        if(frame.AddrPC.Offset == 0u)
-            break;
-
-        AppendResolvedSymbol(arena, symbolProcess, outReport, frameIndex, frame.AddrPC.Offset);
-        decodedAnyFrame = true;
-
-        if(!StackWalk64(
-            machineType,
-            symbolProcess,
-            nullptr,
-            &frame,
-            &walkContext,
-            ReadProcessMemoryFromDump,
-            SymFunctionTableAccess64,
-            SymGetModuleBase64,
-            nullptr
-        ))
-            break;
-    }
-
-    s_CurrentDumpMemoryReader = nullptr;
-    SymCleanup(symbolProcess);
-
-    if(!decodedAnyFrame)
-        outReport += "<no frames decoded>\n";
-    return decodedAnyFrame;
-}
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1033,6 +198,7 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
     report += summary.artifactStrategy;
     report += "\n";
     Symbolicate::AppendSymbolStoreStatus(arena, report, config);
+    Symbolicate::AppendEventSummary(arena, packageDirectory, summary, report);
 
     if(summary.platform == "windows"){
 #if defined(NWB_PLATFORM_WINDOWS)

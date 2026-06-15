@@ -155,6 +155,63 @@ template<usize N>
     return ParseU64FromChars(begin, end, outValue);
 }
 
+template<typename CharT>
+[[nodiscard]] inline bool NextTextLine(const BasicStringView<CharT> text, usize& inOutCursor, BasicStringView<CharT>& outLine){
+    if(inOutCursor >= text.size())
+        return false;
+
+    const usize begin = inOutCursor;
+    while(inOutCursor < text.size() && text[inOutCursor] != CharT('\n') && text[inOutCursor] != CharT('\r'))
+        ++inOutCursor;
+
+    outLine = BasicStringView<CharT>(text.data() + begin, inOutCursor - begin);
+    while(inOutCursor < text.size() && (text[inOutCursor] == CharT('\n') || text[inOutCursor] == CharT('\r')))
+        ++inOutCursor;
+    return true;
+}
+
+template<typename CharT>
+[[nodiscard]] inline bool NextTrimmedTextLine(const BasicStringView<CharT> text, usize& inOutCursor, BasicStringView<CharT>& outLine){
+    if(!NextTextLine(text, inOutCursor, outLine))
+        return false;
+
+    outLine = TrimView(outLine);
+    return true;
+}
+
+[[nodiscard]] inline bool FindLineKeyValue(const AStringView text, const AStringView key, AStringView& outValue){
+    outValue = AStringView();
+
+    usize cursor = 0u;
+    AStringView line;
+    while(NextTextLine(text, cursor, line)){
+        if(line.size() <= key.size() || !StartsWith(line, key) || line[key.size()] != '=')
+            continue;
+
+        outValue = AStringView(line.data() + key.size() + 1u, line.size() - key.size() - 1u);
+        return true;
+    }
+
+    return false;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline bool FindLineKeyValue(const AStringView text, const AStringView key, AString<ArenaT>& outValue){
+    AStringView value;
+    if(!FindLineKeyValue(text, key, value)){
+        outValue.clear();
+        return false;
+    }
+
+    outValue.assign(value.data(), value.size());
+    return true;
+}
+
+[[nodiscard]] inline bool FindLineKeyValueU64(const AStringView text, const AStringView key, u64& outValue){
+    AStringView value;
+    return FindLineKeyValue(text, key, value) && ParseU64(value, outValue);
+}
+
 
 template<typename ArenaT>
 [[nodiscard]] inline i32 Stoi(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = 10){ return std::stoi(str, pos, base); }

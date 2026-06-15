@@ -146,7 +146,7 @@ function(nwb_apply_codegen target)
             $<$<CONFIG:opt>:-fno-omit-frame-pointer>
             $<$<CONFIG:fin>:-O3>
             $<$<CONFIG:fin>:-g>
-            $<$<CONFIG:fin>:-fomit-frame-pointer>
+            $<$<CONFIG:fin>:-fno-omit-frame-pointer>
         )
     else()
         message(FATAL_ERROR "NWBLot now requires a Clang-based toolchain.")

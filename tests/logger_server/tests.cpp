@@ -2,14 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "crash_test_helpers.h"
+
+#include <tests/filesystem_helpers.h>
 #include <tests/test_context.h>
 
+#include <core/crash/module.h>
 #include <core/crash/package_names.h>
+#include <core/common/log.h>
+#include <global/assert.h>
+#include <global/filesystem/operations.h>
+#include <global/process_execution.h>
 #include <logger/server/crash_auth.h>
 #include <logger/server/crash_ingest.h>
 #include <logger/server/crash_paths.h>
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#include <errno.h>
+#include <signal.h>
+#include <sys/wait.h>
 #include <cstdlib>
 #include <dlfcn.h>
 #include <unistd.h>
@@ -27,162 +38,25 @@ namespace __hidden_logger_server_tests{
 
 using TestContext = NWB::Tests::TestContext;
 using TestArena = NWB::Tests::TestArena<struct LoggerServerCrashTestsTag>;
-using CrashTestText = AString<NWB::Core::Alloc::GlobalArena>;
-using CrashTestPath = Path<NWB::Core::Alloc::GlobalArena>;
+using NWB::Tests::WaitForDirectory;
+using namespace NWB::Tests::LoggerServerCrash;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
 
 #define NWB_LOGSERVER_TEST_CHECK NWB_TEST_CHECK
+#if defined(_MSC_VER)
+#define NWB_LOGSERVER_TEST_NOINLINE __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#define NWB_LOGSERVER_TEST_NOINLINE [[gnu::noinline]]
+#else
+#define NWB_LOGSERVER_TEST_NOINLINE
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static CrashTestPath CrashRootDirectory(NWB::Core::Alloc::GlobalArena& arena){
-    CrashTestPath executableDirectory(arena);
-    if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / CrashNames::s_DefaultRootDirectoryName;
-
-    return CrashTestPath(arena, CrashNames::s_DefaultRootDirectoryName);
-}
-
-[[nodiscard]] static CrashTestPath TestRootDirectory(NWB::Core::Alloc::GlobalArena& arena){
-    return CrashRootDirectory(arena) / "test_storage";
-}
-
-[[nodiscard]] static CrashTestPath TestCaseDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    return TestRootDirectory(arena) / testGroup;
-}
-
-[[nodiscard]] static CrashTestPath StorageDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    return TestCaseDirectory(arena, testGroup) / "storage";
-}
-
-[[nodiscard]] static CrashTestPath ArchiveInputDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    return TestCaseDirectory(arena, testGroup) / "input";
-}
-
-[[nodiscard]] static CrashTestPath ArchiveFileName(NWB::Core::Alloc::GlobalArena& arena, const AStringView stem){
-    CrashTestPath fileName(arena, stem);
-    fileName.replace_extension(NWB::Log::s_CrashUploadArchiveFileExtension);
-    return fileName;
-}
-
-[[nodiscard]] static CrashTestPath ArchivePath(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
-    return ArchiveInputDirectory(arena, testGroup) / ArchiveFileName(arena, stem);
-}
-
-[[nodiscard]] static CrashTestPath ExtractedPackageDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
-    return StorageDirectory(arena, testGroup) / NWB::Log::s_CrashExtractedDirectoryName / stem;
-}
-
-[[nodiscard]] static CrashTestPath RawArchivePath(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
-    return StorageDirectory(arena, testGroup) / NWB::Log::s_CrashRawDirectoryName / ArchiveFileName(arena, stem);
-}
-
-[[nodiscard]] static CrashTestPath InvalidArchivePath(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
-    return StorageDirectory(arena, testGroup) / NWB::Log::s_CrashInvalidDirectoryName / ArchiveFileName(arena, stem);
-}
-
-static void RemoveTestArtifacts(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    ErrorCode error;
-    static_cast<void>(RemoveAllIfExists(TestCaseDirectory(arena, testGroup), error));
-}
-
-static void AppendArchiveFile(CrashTestText& archive, const AStringView relativePath, const AStringView content){
-    char sizeBuffer[32] = {};
-    archive += CrashNames::s_ArchiveFileHeaderPrefix;
-    archive += relativePath;
-    archive += " ";
-    archive += FormatDecimal(content.size(), sizeBuffer);
-    archive += "\n";
-    archive += content;
-    archive += CrashNames::s_ArchiveEntryEndText;
-}
-
-[[nodiscard]] static CrashTestText BuildManifest(NWB::Core::Alloc::GlobalArena& arena, const AStringView crashId, const AStringView platform){
-    CrashTestText manifest(arena);
-    manifest += "{\n";
-    manifest += "  \"format\": \"";
-    manifest += CrashNames::s_ManifestFormatValue;
-    manifest += "\",\n";
-    manifest += "  \"crash_id\": \"";
-    manifest += crashId;
-    manifest += "\",\n";
-    manifest += "  \"platform\": \"";
-    manifest += platform;
-    manifest += "\",\n";
-    manifest += "  \"reason_kind\": \"manual\",\n";
-    manifest += "  \"artifact_strategy\": \"unit_test\",\n";
-    manifest += "  \"thread_id\": 7\n";
-    manifest += "}\n";
-    return manifest;
-}
-
-[[nodiscard]] static bool WriteArchive(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestText& archive){
-    ErrorCode error;
-    static_cast<void>(EnsureDirectories(ArchiveInputDirectory(arena, testGroup), error));
-    if(error)
-        return false;
-
-    return WriteTextFile(ArchivePath(arena, testGroup, stem), AStringView(archive.data(), archive.size()));
-}
-
-[[nodiscard]] static bool ReadServerSymbolication(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, CrashTestText& outReport){
-    return ReadTextFile(ExtractedPackageDirectory(arena, testGroup, stem) / NWB::Log::s_ServerSymbolicationFileName, outReport);
-}
-
-[[nodiscard]] static NWB::Log::CrashIngestConfig MakeIngestConfig(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    NWB::Log::CrashIngestConfig config(arena);
-    config.storageDirectory = StorageDirectory(arena, testGroup);
-    return config;
-}
-
-[[nodiscard]] static bool DirectoryExists(const CrashTestPath& path){
-    ErrorCode error;
-    return IsDirectory(path, error) && !error;
-}
-
-[[nodiscard]] static bool RegularFileExists(const CrashTestPath& path){
-    ErrorCode error;
-    return IsRegularFile(path, error) && !error;
-}
-
-[[nodiscard]] static bool PathIsMissing(const CrashTestPath& path){
-    ErrorCode error;
-    return !FileExists(path, error) && !error;
-}
-
-static void BuildLinuxCrashArchive(NWB::Core::Alloc::GlobalArena& arena, CrashTestText& archive, const AStringView crashId){
-    archive += CrashNames::s_ArchiveHeaderText;
-    const CrashTestText manifest = BuildManifest(arena, crashId, "linux");
-    AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
-    AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "fault_address=0\ninstruction_pointer=4198964\nstack_pointer=0\nframe_pointer=0\n");
-    AppendArchiveFile(archive, CrashNames::s_CallstackFileName, "#0 0x0000000000401234\n#1 0x0000000000401240\n");
-    AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
-}
-
-[[nodiscard]] static bool Contains(const CrashTestText& text, const AStringView needle){
-    return AStringView(text.data(), text.size()).find(needle) != AStringView::npos;
-}
-
-[[nodiscard]] static bool ContainsMessage(const NWB::Log::LogString& text, const TStringView needle){
-    return TStringView(text.data(), text.size()).find(needle) != TStringView::npos;
-}
-
-static void PreserveObservedReport(TestContext& context, NWB::Core::Alloc::GlobalArena& arena, const CrashTestText& report){
-    const char* const outputPathText = NWB_GETENV("NWB_LOGSERVER_CRASH_TEST_OBSERVE_PATH");
-    if(!outputPathText || outputPathText[0] == 0)
-        return;
-
-    const CrashTestPath outputPath(arena, AStringView(outputPathText));
-    ErrorCode error;
-    static_cast<void>(EnsureDirectories(outputPath.parent_path(), error));
-    NWB_LOGSERVER_TEST_CHECK(context, !error);
-    NWB_LOGSERVER_TEST_CHECK(context, WriteTextFile(outputPath, AStringView(report.data(), report.size())));
-}
-
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-[[gnu::noinline]] static u64 LinuxCrashSymbolicationProbe(){
+NWB_LOGSERVER_TEST_NOINLINE static u64 LinuxCrashSymbolicationProbe(){
     return 0x4E57424352415348ull;
 }
 
@@ -232,43 +106,6 @@ static void AppendHexAddressText(NWB::Core::Alloc::GlobalArena& arena, CrashTest
     return true;
 }
 
-[[nodiscard]] static bool ExecutableAvailableInPath(
-    NWB::Core::Alloc::GlobalArena& arena,
-    const AStringView searchPath,
-    const AStringView executableName
-){
-    usize cursor = 0u;
-    while(cursor <= searchPath.size()){
-        const usize begin = cursor;
-        while(cursor < searchPath.size() && searchPath[cursor] != ':')
-            ++cursor;
-
-        const AStringView directoryText(searchPath.data() + begin, cursor - begin);
-        CrashTestPath candidate(arena);
-        if(directoryText.empty())
-            candidate = ".";
-        else{
-            CrashTestText directory(arena);
-            directory.assign(directoryText.data(), directoryText.size());
-            candidate = CrashTestPath(arena, AStringView(directory.data(), directory.size()));
-        }
-
-        CrashTestText executable(arena);
-        executable.assign(executableName.data(), executableName.size());
-        candidate /= executable.c_str();
-
-        const CrashTestText candidateText = PathToString<char>(arena, candidate);
-        if(::access(candidateText.c_str(), X_OK) == 0)
-            return true;
-
-        if(cursor >= searchPath.size())
-            break;
-        ++cursor;
-    }
-
-    return false;
-}
-
 [[nodiscard]] static bool LinuxExternalSymbolizerAvailable(NWB::Core::Alloc::GlobalArena& arena){
     const char* const pathText = std::getenv("PATH");
     if(!pathText || pathText[0] == 0)
@@ -278,6 +115,23 @@ static void AppendHexAddressText(NWB::Core::Alloc::GlobalArena& arena, CrashTest
     return ExecutableAvailableInPath(arena, searchPath, "llvm-symbolizer")
         || ExecutableAvailableInPath(arena, searchPath, "addr2line")
     ;
+}
+
+[[nodiscard]] static const char* LinuxObservableAssertCategory(){
+#if NWB_OCCUR_ASSERT
+    return DiagnosticEventCategory::s_Assert;
+#else
+    return DiagnosticEventCategory::s_FatalAssert;
+#endif
+}
+
+NWB_LOGSERVER_TEST_NOINLINE static void LinuxForceAssertFalseForCrashObservation(){
+#if NWB_OCCUR_ASSERT
+    NWB_ASSERT(false);
+#else
+    NWB_FATAL_ASSERT(false);
+#endif
+    _exit(120);
 }
 #endif
 
@@ -308,6 +162,9 @@ static void TestLinuxCrashPackageMapsInstructionPointer(TestContext& context){
     CrashTestText report(arena);
     NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=linux"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[event]"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "event=crash"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "exception=SIGSEGV (11)"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "status=callstack_captured"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "symbol_store="));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "symbol_store_status=missing"));
@@ -318,7 +175,7 @@ static void TestLinuxCrashPackageMapsInstructionPointer(TestContext& context){
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "#1 0x0000000000401240 /tmp/nwb_loader+0x0000000000001240"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "core_artifact=missing"));
 
-    PreserveObservedReport(context, arena, report);
+    PreserveObservedReport(context, arena, report, "linux_maps");
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -375,7 +232,188 @@ static void TestLinuxCrashPackageSymbolicatesSelfFrame(TestContext& context){
     AppendHexAddressText(arena, expectedSymbolicationIp, expectedSymbolicationOffset);
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, AStringView(expectedSymbolicationIp.data(), expectedSymbolicationIp.size())));
 
-    PreserveObservedReport(context, arena, report);
+    PreserveObservedReport(context, arena, report, "linux_symbolicated");
+
+    RemoveTestArtifacts(arena, s_Group);
+#else
+    static_cast<void>(context);
+#endif
+}
+
+static void TestLinuxAssertCrashProducesObservableLoggerReport(TestContext& context){
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("logger_server_linux_assert_observe_test");
+    constexpr AStringView s_Stem("linux_assert_observe_001");
+    RemoveTestArtifacts(arena, s_Group);
+    const AStringView expectedAssertCategory(LinuxObservableAssertCategory());
+
+    const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
+    const pid_t childPid = fork();
+    NWB_LOGSERVER_TEST_CHECK(context, childPid >= 0);
+    if(childPid == 0){
+        NWB::Core::Alloc::PersistentArena installArena(
+            NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u),
+            "NWB::Tests::LoggerServer::AssertChildInstallArena"
+        );
+        NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
+        config.applicationName = AStringView("logserver_crash_tests");
+        config.version = AStringView("1");
+        config.buildId = AStringView("linux-assert-observe-test");
+        config.spoolDirectory = spoolDirectory;
+
+        if(!NWB::Core::Crash::InstallCrashHandler(installArena, config))
+            _exit(121);
+
+        LinuxForceAssertFalseForCrashObservation();
+        _exit(122);
+    }
+
+    int status = 0;
+    while(waitpid(childPid, &status, 0) < 0){
+        if(errno == EINTR)
+            continue;
+        break;
+    }
+
+    NWB_LOGSERVER_TEST_CHECK(context, WIFSIGNALED(status));
+    NWB_LOGSERVER_TEST_CHECK(context, WTERMSIG(status) == SIGABRT);
+
+    const CrashTestPath pendingDirectory = spoolDirectory / CrashNames::s_PendingDirectoryName;
+    NWB_LOGSERVER_TEST_CHECK(context, WaitForDirectory(pendingDirectory, 3000u));
+
+    CrashTestPath assertPackageDirectory(arena);
+    NWB_LOGSERVER_TEST_CHECK(
+        context,
+        WaitForTriggerPackage(
+            arena,
+            pendingDirectory,
+            "assert",
+            expectedAssertCategory,
+            "false",
+            AStringView(),
+            "tests/logger_server/tests.cpp",
+            assertPackageDirectory
+        )
+    );
+
+    CrashTestBytes archive(arena);
+    NWB_LOGSERVER_TEST_CHECK(context, BuildArchiveFromPackageDirectory(arena, assertPackageDirectory, archive));
+    NWB_LOGSERVER_TEST_CHECK(context, WriteArchiveBytes(arena, s_Group, s_Stem, archive));
+
+    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
+    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+    NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
+
+    CrashTestText report(arena);
+    NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=linux"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "reason=manual"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[event]"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "event=assert"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "expression=false"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "status=callstack_captured"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[callstack]"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[trigger]"));
+    CrashTestText expectedCategoryLine(arena);
+    expectedCategoryLine += "category=";
+    expectedCategoryLine += expectedAssertCategory;
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, AStringView(expectedCategoryLine.data(), expectedCategoryLine.size())));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "tests/logger_server/tests.cpp"));
+    if(LinuxExternalSymbolizerAvailable(arena)){
+        NWB_LOGSERVER_TEST_CHECK(
+            context,
+            Contains(report, "LinuxForceAssertFalseForCrashObservation") || Contains(report, "tests/logger_server/tests.cpp")
+        );
+    }
+
+    PreserveObservedReport(context, arena, report, "linux_assert");
+
+    RemoveTestArtifacts(arena, s_Group);
+#else
+    static_cast<void>(context);
+#endif
+}
+
+NWB_LOGSERVER_TEST_NOINLINE static void TestRecoverableErrorDiagnosticProducesObservableLoggerReport(TestContext& context){
+#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    NWB::Core::Alloc::PersistentArena installArena(
+        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u),
+        "NWB::Tests::LoggerServer::RecoverableErrorInstallArena"
+    );
+    constexpr AStringView s_Group("logger_server_recoverable_error_observe_test");
+    constexpr AStringView s_Stem("recoverable_error_observe_001");
+    constexpr AStringView s_ErrorMessage("recoverable logger error observation");
+    RemoveTestArtifacts(arena, s_Group);
+
+    const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
+    NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> crashConfig(installArena);
+    crashConfig.applicationName = AStringView("logserver_crash_tests");
+    crashConfig.version = AStringView("1");
+    crashConfig.buildId = AStringView("recoverable-error-observe-test");
+    crashConfig.spoolDirectory = spoolDirectory;
+
+    const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, crashConfig);
+    NWB_LOGSERVER_TEST_CHECK(context, installed);
+
+    bool continuedAfterError = false;
+    if(installed){
+        CaptureDiagnosticEvent(DiagnosticEventRecord{
+            .event = DiagnosticEventName::s_Error,
+            .category = NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,
+            .message = s_ErrorMessage.data(),
+            .file = "tests/logger_server/tests.cpp",
+            .line = __LINE__,
+        });
+        continuedAfterError = true;
+    }
+
+    const CrashTestPath pendingDirectory = spoolDirectory / CrashNames::s_PendingDirectoryName;
+    CrashTestPath errorPackageDirectory(arena);
+    NWB_LOGSERVER_TEST_CHECK(
+        context,
+        WaitForTriggerPackage(
+            arena,
+            pendingDirectory,
+            "error",
+            NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,
+            AStringView(),
+            s_ErrorMessage,
+            "tests/logger_server/tests.cpp",
+            errorPackageDirectory
+        )
+    );
+    NWB_LOGSERVER_TEST_CHECK(context, continuedAfterError);
+    NWB::Core::Crash::UninstallCrashHandler();
+
+    CrashTestBytes archive(arena);
+    NWB_LOGSERVER_TEST_CHECK(context, BuildArchiveFromPackageDirectory(arena, errorPackageDirectory, archive));
+    NWB_LOGSERVER_TEST_CHECK(context, WriteArchiveBytes(arena, s_Group, s_Stem, archive));
+
+    NWB::Log::CrashIngestConfig ingestConfig = MakeIngestConfig(arena, s_Group);
+    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), ingestConfig);
+    NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
+
+    CrashTestText report(arena);
+    NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[event]"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "event=error"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "category=logger_Error"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, s_ErrorMessage));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "tests/logger_server/tests.cpp"));
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=linux"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "status=callstack_captured"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[callstack]"));
+#elif defined(NWB_PLATFORM_WINDOWS)
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=windows"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "resolver=windows_pdb_minidump"));
+#endif
+
+    PreserveObservedReport(context, arena, report, "recoverable_error");
 
     RemoveTestArtifacts(arena, s_Group);
 #else
@@ -517,7 +555,7 @@ static void TestWindowsCrashPackageReportsMissingMinidump(TestContext& context){
 
     CrashTestText archive(arena);
     archive += CrashNames::s_ArchiveHeaderText;
-    const CrashTestText manifest = BuildManifest(arena, "windows-missing-dump-test", "windows");
+    const CrashTestText manifest = BuildManifest(arena, "windows-missing-dump-test", "windows", "windows_exception", 0xC0000005u);
     AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
 
     NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
@@ -530,6 +568,9 @@ static void TestWindowsCrashPackageReportsMissingMinidump(TestContext& context){
     CrashTestText report(arena);
     NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=windows"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[event]"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "event=crash"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "exception=access_violation 0x00000000c0000005"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "resolver=windows_pdb_minidump"));
 #if defined(NWB_PLATFORM_WINDOWS)
     CrashTestText missingDumpMessage(arena);
@@ -606,10 +647,10 @@ static void TestCrashRetentionPrunesOldestAcceptedUploads(TestContext& context){
 
     NWB_LOGSERVER_TEST_CHECK(context, PathIsMissing(ExtractedPackageDirectory(arena, s_Group, s_Stem0)));
     NWB_LOGSERVER_TEST_CHECK(context, PathIsMissing(RawArchivePath(arena, s_Group, s_Stem0)));
-    NWB_LOGSERVER_TEST_CHECK(context, DirectoryExists(ExtractedPackageDirectory(arena, s_Group, s_Stem1)));
-    NWB_LOGSERVER_TEST_CHECK(context, RegularFileExists(RawArchivePath(arena, s_Group, s_Stem1)));
-    NWB_LOGSERVER_TEST_CHECK(context, DirectoryExists(ExtractedPackageDirectory(arena, s_Group, s_Stem2)));
-    NWB_LOGSERVER_TEST_CHECK(context, RegularFileExists(RawArchivePath(arena, s_Group, s_Stem2)));
+    NWB_LOGSERVER_TEST_CHECK(context, PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem1)));
+    NWB_LOGSERVER_TEST_CHECK(context, PathIsRegularFile(RawArchivePath(arena, s_Group, s_Stem1)));
+    NWB_LOGSERVER_TEST_CHECK(context, PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem2)));
+    NWB_LOGSERVER_TEST_CHECK(context, PathIsRegularFile(RawArchivePath(arena, s_Group, s_Stem2)));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -636,7 +677,7 @@ static void TestAcceptedCrashWarnsWhenRawArchiveCannotBeRetained(TestContext& co
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
     NWB_LOGSERVER_TEST_CHECK(context, result.type == NWB::Log::Type::Warning);
     NWB_LOGSERVER_TEST_CHECK(context, ContainsMessage(result.message, NWB_TEXT("raw upload archive could not be retained")));
-    NWB_LOGSERVER_TEST_CHECK(context, DirectoryExists(ExtractedPackageDirectory(arena, s_Group, s_Stem)));
+    NWB_LOGSERVER_TEST_CHECK(context, PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem)));
     NWB_LOGSERVER_TEST_CHECK(context, PathIsMissing(ArchivePath(arena, s_Group, s_Stem)));
 
     RemoveTestArtifacts(arena, s_Group);
@@ -671,7 +712,7 @@ static void TestCrashRetentionPrunesOldestInvalidUploads(TestContext& context){
     }
 
     NWB_LOGSERVER_TEST_CHECK(context, PathIsMissing(InvalidArchivePath(arena, s_Group, s_Stem0)));
-    NWB_LOGSERVER_TEST_CHECK(context, RegularFileExists(InvalidArchivePath(arena, s_Group, s_Stem1)));
+    NWB_LOGSERVER_TEST_CHECK(context, PathIsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem1)));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -691,6 +732,7 @@ static void TestCrashUploadAuthorizationMatchesBearerToken(TestContext& context)
 
 
 #undef NWB_LOGSERVER_TEST_CHECK
+#undef NWB_LOGSERVER_TEST_NOINLINE
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -705,6 +747,8 @@ static void TestCrashUploadAuthorizationMatchesBearerToken(TestContext& context)
 NWB_DEFINE_TEST_ENTRY_POINT("logserver crash", [](NWB::Tests::TestContext& context){
     __hidden_logger_server_tests::TestLinuxCrashPackageMapsInstructionPointer(context);
     __hidden_logger_server_tests::TestLinuxCrashPackageSymbolicatesSelfFrame(context);
+    __hidden_logger_server_tests::TestLinuxAssertCrashProducesObservableLoggerReport(context);
+    __hidden_logger_server_tests::TestRecoverableErrorDiagnosticProducesObservableLoggerReport(context);
     __hidden_logger_server_tests::TestAndroidCrashPackageCopiesTombstoneFrames(context);
     __hidden_logger_server_tests::TestLinuxCrashPackageReportsMissingProcMaps(context);
     __hidden_logger_server_tests::TestLinuxCrashPackageReportsUnmappedInstructionPointer(context);

@@ -107,7 +107,8 @@ CrashTestText BuildManifest(
     const AStringView platform,
     const AStringView event,
     const AStringView reasonKind,
-    const u64 reasonCode
+    const u64 reasonCode,
+    const ManifestEventField eventField
 ){
     CrashTestText manifest(arena);
     char reasonCodeBuffer[32] = {};
@@ -134,9 +135,11 @@ CrashTestText BuildManifest(
     manifest += "  \"instruction_pointer\": 0,\n";
     manifest += "  \"stack_pointer\": 0,\n";
     manifest += "  \"frame_pointer\": 0,\n";
-    manifest += "  \"event\": \"";
-    manifest += event;
-    manifest += "\",\n";
+    if(eventField == ManifestEventField::Include){
+        manifest += "  \"event\": \"";
+        manifest += event;
+        manifest += "\",\n";
+    }
     manifest += "  \"trigger_category\": \"\",\n";
     manifest += "  \"trigger_expression\": \"\",\n";
     manifest += "  \"trigger_message\": \"\",\n";
@@ -231,6 +234,17 @@ Log::CrashIngestConfig MakeIngestConfig(Core::Alloc::GlobalArena& arena, const A
     return config;
 }
 
+static bool TriggerFileContainsKeyValue(const CrashTestPath& triggerPath, const AStringView key, const AStringView value){
+    if(value.empty())
+        return true;
+
+    CrashTestText needle(triggerPath.arena());
+    needle += key;
+    needle += "=";
+    needle += value;
+    return TextFileContains(triggerPath, AStringView(needle.data(), needle.size()));
+}
+
 static bool TriggerPackageContains(
     const CrashTestPath& packageDirectory,
     const AStringView category,
@@ -239,27 +253,12 @@ static bool TriggerPackageContains(
     const AStringView file
 ){
     const CrashTestPath triggerPath = packageDirectory / CrashNames::s_TriggerFileName;
-    if(!category.empty()){
-        CrashTestText needle(triggerPath.arena());
-        needle += "category=";
-        needle += category;
-        if(!TextFileContains(triggerPath, AStringView(needle.data(), needle.size())))
-            return false;
-    }
-    if(!expression.empty()){
-        CrashTestText needle(triggerPath.arena());
-        needle += "expression=";
-        needle += expression;
-        if(!TextFileContains(triggerPath, AStringView(needle.data(), needle.size())))
-            return false;
-    }
-    if(!message.empty()){
-        CrashTestText needle(triggerPath.arena());
-        needle += "message=";
-        needle += message;
-        if(!TextFileContains(triggerPath, AStringView(needle.data(), needle.size())))
-            return false;
-    }
+    if(!TriggerFileContainsKeyValue(triggerPath, "category", category))
+        return false;
+    if(!TriggerFileContainsKeyValue(triggerPath, "expression", expression))
+        return false;
+    if(!TriggerFileContainsKeyValue(triggerPath, "message", message))
+        return false;
     if(!file.empty() && !TextFileContains(triggerPath, file))
         return false;
 

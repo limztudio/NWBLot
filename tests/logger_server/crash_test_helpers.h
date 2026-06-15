@@ -34,6 +34,15 @@ using CrashTestPath = ::Path<Core::Alloc::GlobalArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum class ManifestEventField{
+    Include,
+    Omit,
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] CrashTestPath CrashRootDirectory(Core::Alloc::GlobalArena& arena);
 [[nodiscard]] CrashTestPath TestRootDirectory(Core::Alloc::GlobalArena& arena);
 [[nodiscard]] CrashTestPath TestCaseDirectory(Core::Alloc::GlobalArena& arena, AStringView testGroup);
@@ -54,7 +63,8 @@ void AppendArchiveFile(CrashTestText& archive, AStringView relativePath, AString
     AStringView platform,
     AStringView event,
     AStringView reasonKind,
-    u64 reasonCode
+    u64 reasonCode,
+    ManifestEventField eventField = ManifestEventField::Include
 );
 [[nodiscard]] bool WriteArchive(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, const CrashTestText& archive);
 [[nodiscard]] bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, const CrashTestBytes& archive);

@@ -30,8 +30,7 @@ using CrashBytes = Vector<u8, LogArena>;
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
 inline constexpr u8 s_MinSafeArchivePathCharacter = 0x20u;
-inline constexpr usize s_GeneratedJsonStringNeedleReserveSlack = 5u;
-inline constexpr usize s_GeneratedJsonUnsignedNeedleReserveSlack = 4u;
+inline constexpr usize s_GeneratedJsonNeedleReserveSlack = 4u;
 
 struct ByteView{
     using value_type = u8;
@@ -248,19 +247,26 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool FindGeneratedJsonStringValue(LogArena& arena, const AStringView manifest, const AStringView key, CrashText& outValue){
-    outValue.clear();
-
+[[nodiscard]] static bool FindGeneratedJsonValueCursor(LogArena& arena, const AStringView manifest, const AStringView key, usize& outCursor){
     CrashText needle{arena};
-    needle.reserve(key.size() + s_GeneratedJsonStringNeedleReserveSlack);
+    needle.reserve(key.size() + s_GeneratedJsonNeedleReserveSlack);
     needle += '"';
     needle += key;
     needle += "\": ";
 
-    usize cursor = manifest.find(AStringView(needle.data(), needle.size()));
+    const usize cursor = manifest.find(AStringView(needle.data(), needle.size()));
     if(cursor == AStringView::npos)
         return false;
-    cursor += needle.size();
+    outCursor = cursor + needle.size();
+    return true;
+}
+
+[[nodiscard]] static bool FindGeneratedJsonStringValue(LogArena& arena, const AStringView manifest, const AStringView key, CrashText& outValue){
+    outValue.clear();
+
+    usize cursor = 0u;
+    if(!FindGeneratedJsonValueCursor(arena, manifest, key, cursor))
+        return false;
     if(cursor >= manifest.size() || manifest[cursor] != '"')
         return false;
     ++cursor;
@@ -307,16 +313,9 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 [[nodiscard]] static bool FindGeneratedJsonUnsignedValue(LogArena& arena, const AStringView manifest, const AStringView key, u64& outValue){
     outValue = 0u;
 
-    CrashText needle{arena};
-    needle.reserve(key.size() + s_GeneratedJsonUnsignedNeedleReserveSlack);
-    needle += '"';
-    needle += key;
-    needle += "\": ";
-
-    usize cursor = manifest.find(AStringView(needle.data(), needle.size()));
-    if(cursor == AStringView::npos)
+    usize cursor = 0u;
+    if(!FindGeneratedJsonValueCursor(arena, manifest, key, cursor))
         return false;
-    cursor += needle.size();
 
     const usize begin = cursor;
     while(cursor < manifest.size() && manifest[cursor] >= '0' && manifest[cursor] <= '9')
@@ -330,16 +329,9 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 [[nodiscard]] static bool FindGeneratedJsonBoolValue(LogArena& arena, const AStringView manifest, const AStringView key, bool& outValue){
     outValue = false;
 
-    CrashText needle{arena};
-    needle.reserve(key.size() + s_GeneratedJsonUnsignedNeedleReserveSlack);
-    needle += '"';
-    needle += key;
-    needle += "\": ";
-
-    usize cursor = manifest.find(AStringView(needle.data(), needle.size()));
-    if(cursor == AStringView::npos)
+    usize cursor = 0u;
+    if(!FindGeneratedJsonValueCursor(arena, manifest, key, cursor))
         return false;
-    cursor += needle.size();
 
     constexpr AStringView s_TrueText("true");
     constexpr AStringView s_FalseText("false");

@@ -613,36 +613,15 @@ static void TestCrashManifestWithoutEventIsRejected(TestContext& context){
     constexpr AStringView s_Stem("missing_event_manifest_001");
     RemoveTestArtifacts(arena, s_Group);
 
-    CrashTestText manifest(arena);
-    manifest += "{\n";
-    manifest += "  \"format\": \"";
-    manifest += CrashNames::s_ManifestFormatValue;
-    manifest += "\",\n";
-    manifest += "  \"crash_id\": \"missing-event-manifest-test\",\n";
-    manifest += "  \"application\": \"logger_server_test\",\n";
-    manifest += "  \"version\": \"1\",\n";
-    manifest += "  \"build_id\": \"unit-test\",\n";
-    manifest += "  \"abi\": \"test-abi\",\n";
-    manifest += "  \"platform\": \"linux\",\n";
-    manifest += "  \"reason_kind\": \"signal\",\n";
-    manifest += "  \"reason_code\": 11,\n";
-    manifest += "  \"process_id\": 1,\n";
-    manifest += "  \"thread_id\": 7,\n";
-    manifest += "  \"has_exception_context\": false,\n";
-    manifest += "  \"fault_address\": 0,\n";
-    manifest += "  \"instruction_pointer\": 0,\n";
-    manifest += "  \"stack_pointer\": 0,\n";
-    manifest += "  \"frame_pointer\": 0,\n";
-    manifest += "  \"trigger_category\": \"\",\n";
-    manifest += "  \"trigger_expression\": \"\",\n";
-    manifest += "  \"trigger_message\": \"\",\n";
-    manifest += "  \"trigger_file\": \"\",\n";
-    manifest += "  \"trigger_line\": 0,\n";
-    manifest += "  \"dump_detail_mode\": \"small\",\n";
-    manifest += "  \"gpu_dumps_enabled\": false,\n";
-    manifest += "  \"artifact_strategy\": \"unit_test\",\n";
-    manifest += "  \"handler_lifetime\": \"unit_test\"\n";
-    manifest += "}\n";
+    const CrashTestText manifest = BuildManifest(
+        arena,
+        "missing-event-manifest-test",
+        "linux",
+        "crash",
+        "signal",
+        11u,
+        ManifestEventField::Omit
+    );
 
     CrashTestText archive(arena);
     archive += CrashNames::s_ArchiveHeaderText;

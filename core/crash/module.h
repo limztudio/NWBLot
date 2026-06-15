@@ -97,7 +97,6 @@ struct CrashConfigT{
     CrashCapturePolicy capturePolicy;
     CrashSpoolRetentionConfig spoolRetention;
     DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
-    bool enableGpuDumps = false;
 
     explicit CrashConfigT(ArenaT& arena)
         : spoolDirectory(arena)
@@ -105,14 +104,6 @@ struct CrashConfigT{
 };
 
 using CrashConfig = CrashConfigT<Alloc::PersistentArena>;
-
-
-using CrashPackagePath = ::Path<Alloc::PersistentArena>;
-
-struct GpuCrashProvider{
-    void* userData = nullptr;
-    bool (*writeAttachment)(void* userData, const CrashPackagePath& packageDirectory, AStringView crashId) = nullptr;
-};
 
 
 template<typename ArenaT>
@@ -123,14 +114,11 @@ void UninstallCrashHandler();
 template<typename ArenaT>
 [[nodiscard]] bool AddCrashBreadcrumb(ArenaT& arena, AStringView category, AStringView message);
 [[nodiscard]] CrashDumpResult CaptureCrashDump(AStringView category = AStringView(), AStringView message = AStringView());
-[[nodiscard]] bool RegisterGpuCrashProvider(const GpuCrashProvider& provider);
 
 template<typename ArenaT>
 [[nodiscard]] ::Path<ArenaT> DefaultCrashSpoolDirectory(ArenaT& arena);
 template<typename ArenaT>
 [[nodiscard]] ::Path<ArenaT> DefaultCrashHandlerExecutablePath(ArenaT& arena);
-
-int RunCrashHandlerProcess(isize argc, tchar** argv);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

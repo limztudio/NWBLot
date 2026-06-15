@@ -37,7 +37,6 @@ inline constexpr u32 s_RequestMagic = 0x4E574243u; // NWBC
 inline constexpr u32 s_RequestVersion = 1u;
 inline constexpr usize s_MaxMetadata = 32u;
 inline constexpr usize s_MaxBreadcrumbs = 128u;
-inline constexpr usize s_MaxGpuCrashProviders = 8u;
 inline constexpr usize s_MaxDiagnosticSites = 64u;
 inline constexpr usize s_MaxCallstackFrames = 64u;
 inline constexpr usize s_MaxShortText = 64u;
@@ -137,7 +136,6 @@ struct CrashRequest{
     u32 triggerLine = 0u;
     u32 callstackFrameCount = 0u;
     u32 callstackFramesToSkip = 0u;
-    u8 enableGpuDumps = 0u;
     CrashSpoolRetentionConfig spoolRetention;
     char crashId[s_MaxShortText] = {};
     char applicationName[s_MaxShortText] = {};
@@ -159,14 +157,6 @@ struct CrashRequest{
     u64 callstackFrames[s_MaxCallstackFrames] = {};
 };
 
-struct CrashUploadSnapshot{
-    CrashSpoolRetentionConfig spoolRetention;
-    char spoolDirectory[s_MaxPathText] = {};
-    char logServerUrl[s_MaxUrlText] = {};
-    char crashUploadToken[s_MaxMediumText] = {};
-    char protectedPendingPackageName[s_MaxShortText] = {};
-};
-
 struct CrashDumpRequestOptions{
     u32 waitMilliseconds = 0u;
     u64 exceptionPointers = 0u;
@@ -184,7 +174,6 @@ struct CrashDumpRequestOptions{
     u64 triggerInstructionPointer = 0u;
     u32 triggerLine = 0u;
     u32 callstackFramesToSkip = 0u;
-    bool writePackageInProcess = false;
 };
 
 struct ManualDumpContextStorage{
@@ -199,7 +188,6 @@ struct CrashState{
     Futex mutex;
     bool installed = false;
     bool handlerStarted = false;
-    bool enableGpuDumps = false;
     CrashCapturePolicy capturePolicy;
     CrashSpoolRetentionConfig spoolRetention;
     DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
@@ -213,9 +201,7 @@ struct CrashState{
     FixedMetadata metadata[s_MaxMetadata] = {};
     FixedBreadcrumb breadcrumbs[s_MaxBreadcrumbs] = {};
     FixedDiagnosticSite diagnosticSites[s_MaxDiagnosticSites] = {};
-    GpuCrashProvider gpuProviders[s_MaxGpuCrashProviders] = {};
     usize nextBreadcrumb = 0u;
-    usize gpuProviderCount = 0u;
     u32 diagnosticCaptureCount = 0u;
     Atomic<u64> breadcrumbOrder{ 1u };
     Atomic<u64> crashSequence{ 1u };
@@ -242,6 +228,40 @@ extern CrashState g_State;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> PendingDirectory(const ::Path<ArenaT>& spoolDirectory){
+    return spoolDirectory / PackageNames::s_PendingDirectoryName;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> UploadedDirectory(const ::Path<ArenaT>& spoolDirectory){
+    return spoolDirectory / PackageNames::s_UploadedDirectoryName;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> UploadingDirectory(const ::Path<ArenaT>& spoolDirectory){
+    return spoolDirectory / PackageNames::s_UploadingDirectoryName;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> FailedDirectory(const ::Path<ArenaT>& spoolDirectory){
+    return spoolDirectory / PackageNames::s_FailedDirectoryName;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> RequestPendingDirectory(ArenaT& arena, const CrashRequest& request){
+    return ::Path<ArenaT>(arena, request.spoolDirectory) / PackageNames::s_PendingDirectoryName / request.crashId;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> RequestBucketDirectory(ArenaT& arena, const CrashRequest& request, const char* bucketName){
+    return ::Path<ArenaT>(arena, request.spoolDirectory) / bucketName / request.crashId;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] const char* PlatformKindName(u32 platform)noexcept;
 [[nodiscard]] const char* ReasonKindName(u32 reasonKind)noexcept;
 
@@ -254,24 +274,7 @@ void NotifyCrashHandler(CrashReasonKind::Enum reasonKind, u32 reasonCode, const 
 template<typename ArenaT>
 [[nodiscard]] bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory);
 [[nodiscard]] Alloc::PersistentArena& DumpArena();
-[[nodiscard]] bool WriteCrashPackage(const CrashRequest& request);
-[[nodiscard]] bool FlushCrashReportsForRequest(const CrashRequest& request);
-template<typename ArenaT>
-[[nodiscard]] bool BuildPackageArchive(
-    ArenaT& arena,
-    const ::Path<ArenaT>& packageDirectory,
-    CrashBytesT<ArenaT>& outArchive
-);
 [[nodiscard]] CrashDumpResult CrashPackageResult(const CrashRequest& request);
-template<typename ArenaT>
-[[nodiscard]] bool ApplyCrashSpoolRetention(
-    ArenaT& arena,
-    const ::Path<ArenaT>& spoolDirectory,
-    const CrashSpoolRetentionConfig& retention,
-    AStringView protectedPendingPackageName = AStringView()
-);
-template<typename ArenaT>
-[[nodiscard]] bool FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snapshot);
 
 template<typename ArenaT>
 [[nodiscard]] bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath);

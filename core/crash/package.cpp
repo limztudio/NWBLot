@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "internal.h"
+#include "package_internal.h"
 
 #include <cstddef>
 #include <cstring>
@@ -30,7 +30,6 @@ namespace Detail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_DumpArenaPayloadSize = 512u * 1024u;
 inline constexpr usize s_UnsignedTextBufferCapacity = 32u;
 inline constexpr usize s_ManifestReserveBytes = 2048u;
 inline constexpr usize s_LinuxProcPathTextCapacity = 128u;
@@ -44,14 +43,6 @@ inline constexpr long s_HttpSuccessStatusEnd = 300L;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-Alloc::PersistentArena& DumpArena(){
-    static Alloc::PersistentArena s_Arena(
-        Alloc::PersistentArena::StructureAlignedSize(s_DumpArenaPayloadSize),
-        "NWB::Core::Crash::DumpArena"
-    );
-    return s_Arena;
-}
 
 namespace{
 
@@ -138,59 +129,6 @@ void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
 }
 
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ArenaT>
-static ::Path<ArenaT> PendingDirectory(const ::Path<ArenaT>& spoolDirectory){
-    return spoolDirectory / PackageNames::s_PendingDirectoryName;
-}
-
-template<typename ArenaT>
-static ::Path<ArenaT> UploadedDirectory(const ::Path<ArenaT>& spoolDirectory){
-    return spoolDirectory / PackageNames::s_UploadedDirectoryName;
-}
-
-template<typename ArenaT>
-static ::Path<ArenaT> UploadingDirectory(const ::Path<ArenaT>& spoolDirectory){
-    return spoolDirectory / PackageNames::s_UploadingDirectoryName;
-}
-
-template<typename ArenaT>
-static ::Path<ArenaT> FailedDirectory(const ::Path<ArenaT>& spoolDirectory){
-    return spoolDirectory / PackageNames::s_FailedDirectoryName;
-}
-
-template<typename ArenaT>
-static ::Path<ArenaT> RequestPendingDirectory(ArenaT& arena, const CrashRequest& request){
-    return ::Path<ArenaT>(arena, request.spoolDirectory) / PackageNames::s_PendingDirectoryName / request.crashId;
-}
-
-template<typename ArenaT>
-bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory){
-    ErrorCode error;
-    static_cast<void>(EnsureDirectories(PendingDirectory(spoolDirectory), error));
-    if(error)
-        return false;
-
-    error.clear();
-    static_cast<void>(EnsureDirectories(UploadedDirectory(spoolDirectory), error));
-    if(error)
-        return false;
-
-    error.clear();
-    static_cast<void>(EnsureDirectories(UploadingDirectory(spoolDirectory), error));
-    if(error)
-        return false;
-
-    error.clear();
-    static_cast<void>(EnsureDirectories(FailedDirectory(spoolDirectory), error));
-    return !error;
-}
-
-template bool EnsureCrashSpoolDirectories(const ::Path<Alloc::PersistentArena>& spoolDirectory);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -303,8 +241,6 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendUnsignedText(manifest, request.triggerLine);
     manifest += ",\n  \"dump_detail_mode\": ";
     AppendJsonEscaped(manifest, request.dumpDetailMode == DumpDetailMode::Full ? "full" : "small");
-    manifest += ",\n  \"gpu_dumps_enabled\": ";
-    manifest += request.enableGpuDumps ? "true" : "false";
     manifest += ",\n  \"artifact_strategy\": ";
     AppendJsonEscaped(manifest, ArtifactStrategyName(request));
     manifest += ",\n  \"handler_lifetime\": ";
@@ -468,47 +404,6 @@ static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
     return true;
 }
 
-template<typename ArenaT>
-static void WriteGpuCrashAttachments(ArenaT& arena, const CrashRequest& request){
-    if(!request.enableGpuDumps)
-        return;
-
-    const ::Path<ArenaT> packageDirectory = RequestPendingDirectory(arena, request);
-    const ::Path<ArenaT> gpuDirectory = packageDirectory / PackageNames::s_GpuDirectoryName;
-    ErrorCode error;
-    static_cast<void>(EnsureDirectories(gpuDirectory, error));
-    if(error)
-        return;
-
-    CrashStringT<ArenaT> status{arena};
-    for(usize i = 0u; i < g_State.gpuProviderCount; ++i){
-        const GpuCrashProvider& provider = g_State.gpuProviders[i];
-        if(!provider.writeAttachment)
-            continue;
-
-        status += "provider_index=";
-        AppendUnsignedText(status, i);
-        status += " status=";
-        bool written = false;
-        try{
-            written = provider.writeAttachment(provider.userData, packageDirectory, AStringView(request.crashId));
-        }
-        catch(...){
-            status += "exception\n";
-            continue;
-        }
-        status += written
-            ? "written\n"
-            : "failed\n"
-        ;
-    }
-
-    if(status.empty())
-        status = "no gpu crash providers registered in this process\n";
-
-    static_cast<void>(WriteCrashTextFile(packageDirectory / PackageNames::s_GpuAttachmentsFileName, status));
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -580,8 +475,6 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
         return false;
     if(!WriteCrashPackageBasics(arena, request))
         return false;
-
-    WriteGpuCrashAttachments(arena, request);
 
 #if defined(NWB_PLATFORM_WINDOWS)
     if(request.platform == PlatformKind::Windows){
@@ -788,11 +681,6 @@ static bool WriteUploadAttemptText(ArenaT& arena, const ::Path<ArenaT>& packageD
 }
 
 template<typename ArenaT>
-static ::Path<ArenaT> RequestBucketDirectory(ArenaT& arena, const CrashRequest& request, const char* bucketName){
-    return ::Path<ArenaT>(arena, request.spoolDirectory) / bucketName / request.crashId;
-}
-
-template<typename ArenaT>
 static bool ApplyRetentionToDirectory(
     ArenaT& arena,
     const ::Path<ArenaT>& directory,
@@ -859,25 +747,6 @@ bool ApplyCrashSpoolRetention(
     ok = ApplyRetentionToDirectory(arena, FailedDirectory(spoolDirectory), retention.maxFailedPackages) && ok;
     ok = ApplyRetentionToDirectory(arena, UploadingDirectory(spoolDirectory), retention.maxUploadingPackages) && ok;
     return ok;
-}
-
-CrashDumpResult CrashPackageResult(const CrashRequest& request){
-    if(request.magic != s_RequestMagic || request.version != s_RequestVersion)
-        return CrashDumpResult{ CrashDumpStatus::RequestQueued };
-    if(request.spoolDirectory[0] == 0 || request.crashId[0] == 0)
-        return CrashDumpResult{ CrashDumpStatus::RequestQueued };
-
-    Alloc::PersistentArena& arena = DumpArena();
-    if(PathIsDirectory(RequestBucketDirectory(arena, request, PackageNames::s_UploadedDirectoryName)))
-        return CrashDumpResult{ CrashDumpStatus::Uploaded };
-    if(PathIsDirectory(RequestBucketDirectory(arena, request, PackageNames::s_FailedDirectoryName)))
-        return CrashDumpResult{ CrashDumpStatus::UploadFailed };
-    if(PathIsDirectory(RequestBucketDirectory(arena, request, PackageNames::s_UploadingDirectoryName)))
-        return CrashDumpResult{ CrashDumpStatus::PackageWritten };
-    if(PathIsDirectory(RequestBucketDirectory(arena, request, PackageNames::s_PendingDirectoryName)))
-        return CrashDumpResult{ CrashDumpStatus::PackageWritten };
-
-    return CrashDumpResult{ CrashDumpStatus::RequestQueued };
 }
 
 template<typename ArenaT>

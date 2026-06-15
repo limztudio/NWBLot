@@ -95,7 +95,6 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
     outRequest.processId = CurrentProcessId();
     outRequest.threadId = CurrentThreadId();
     outRequest.dumpDetailMode = static_cast<u32>(g_State.dumpDetailMode);
-    outRequest.enableGpuDumps = g_State.enableGpuDumps ? 1u : 0u;
     outRequest.spoolRetention = g_State.spoolRetention;
 
     const u64 sequence = g_State.crashSequence.fetch_add(1u, MemoryOrder::relaxed);
@@ -175,15 +174,6 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     CopyFixedBuffer(request.triggerExpression, options.triggerExpression);
     CopyFixedBuffer(request.triggerMessage, options.triggerMessage);
     CopyFixedBuffer(request.triggerFile, options.triggerFile);
-
-#if defined(NWB_PLATFORM_ANDROID)
-    if(options.writePackageInProcess){
-        if(!WriteCrashPackage(request))
-            return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
-
-        return CrashDumpResult{ CrashDumpStatus::PackageWritten };
-    }
-#endif
 
     const CrashDumpTransportStatus::Enum transportStatus = RequestCrashHandler(request, options.waitMilliseconds);
     if(transportStatus == CrashDumpTransportStatus::Failed)

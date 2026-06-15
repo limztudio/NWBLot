@@ -195,9 +195,6 @@ NWB_NOINLINE static CrashDumpResult __hidden_capture_crash_dump(const AStringVie
         options.callstackFramesToSkip = 1u;
     Detail::ManualDumpContextStorage contextStorage;
     Detail::CaptureManualDumpContext(options, contextStorage);
-#if defined(NWB_PLATFORM_ANDROID)
-    options.writePackageInProcess = true;
-#endif
 
     return Detail::RequestCrashDump(Detail::CrashReasonKind::ManualDump, 0u, options);
 }
@@ -267,7 +264,6 @@ bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config){
         : ::Path<ArenaT>(arena, config.handlerExecutablePath)
     ;
     Detail::g_State.dumpDetailMode = config.dumpDetailMode;
-    Detail::g_State.enableGpuDumps = config.enableGpuDumps;
     Detail::g_State.capturePolicy = config.capturePolicy;
     Detail::g_State.spoolRetention = config.spoolRetention;
     Detail::g_State.diagnosticCaptureCount = 0u;
@@ -355,18 +351,6 @@ template bool AddCrashBreadcrumb(Alloc::PersistentArena& arena, AStringView cate
 CrashDumpResult CaptureCrashDump(const AStringView category, const AStringView message){
     Detail::CrashDumpRequestOptions options;
     return __hidden_crash_module::__hidden_capture_crash_dump(category, message, options);
-}
-
-bool RegisterGpuCrashProvider(const GpuCrashProvider& provider){
-    if(!provider.writeAttachment)
-        return false;
-
-    ScopedLock lock(Detail::g_State.mutex);
-    if(Detail::g_State.gpuProviderCount >= Detail::s_MaxGpuCrashProviders)
-        return false;
-
-    Detail::g_State.gpuProviders[Detail::g_State.gpuProviderCount++] = provider;
-    return true;
 }
 
 

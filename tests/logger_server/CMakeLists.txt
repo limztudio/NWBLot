@@ -12,7 +12,7 @@ target_sources(nwb_logserver_crash_tests PRIVATE
 )
 target_link_libraries(nwb_logserver_crash_tests PRIVATE
     nwb_common
-    nwb_crash
+    nwb_crash_package
     nwb_alloc
 )
 if(WIN32)

@@ -379,7 +379,6 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerFileKey, outSummary.triggerFile)
         || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestTriggerLineKey, outSummary.triggerLine)
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestDumpDetailModeKey, requiredText)
-        || !FindGeneratedJsonBoolValue(arena, manifestText, CrashNames::s_ManifestGpuDumpsEnabledKey, requiredBool)
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestArtifactStrategyKey, outSummary.artifactStrategy)
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestHandlerLifetimeKey, requiredText)
     ){

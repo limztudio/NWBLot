@@ -6,7 +6,7 @@
 
 #include <tests/filesystem_helpers.h>
 
-#include <core/crash/internal.h>
+#include <core/crash/package_internal.h>
 #include <core/crash/package_names.h>
 #include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
@@ -162,7 +162,6 @@ CrashTestText BuildManifest(
     manifest += "  \"trigger_file\": \"\",\n";
     manifest += "  \"trigger_line\": 0,\n";
     manifest += "  \"dump_detail_mode\": \"small\",\n";
-    manifest += "  \"gpu_dumps_enabled\": false,\n";
     manifest += "  \"artifact_strategy\": \"unit_test\",\n";
     manifest += "  \"handler_lifetime\": \"unit_test\"\n";
     manifest += "}\n";

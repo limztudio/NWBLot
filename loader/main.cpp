@@ -216,7 +216,6 @@ bool InstallCrashReporting(CrashArena& crashArena, const LoaderOptions& options)
     ;
     crashConfig.crashUploadToken = AStringView(options.crashUploadToken.data(), options.crashUploadToken.size());
     crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
-    crashConfig.enableGpuDumps = options.enableGpuDebug;
 
     if(NWB::Core::Crash::InstallCrashHandler(crashArena, crashConfig)){
         static_cast<void>(NWB::Core::Crash::SetCrashMetadata("runtime", "loader"));

@@ -5,7 +5,7 @@
 #include <tests/filesystem_helpers.h>
 #include <tests/test_context.h>
 
-#include <core/crash/internal.h>
+#include <core/crash/package_internal.h>
 
 #include <global/filesystem/operations.h>
 #include <global/thread.h>

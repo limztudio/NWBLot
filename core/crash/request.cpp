@@ -96,7 +96,6 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
     outRequest.threadId = CurrentThreadId();
     outRequest.dumpDetailMode = static_cast<u32>(g_State.dumpDetailMode);
     outRequest.enableGpuDumps = g_State.enableGpuDumps ? 1u : 0u;
-    outRequest.spoolRetention = g_State.spoolRetention;
 
     const u64 sequence = g_State.crashSequence.fetch_add(1u, MemoryOrder::relaxed);
     BuildCrashId(outRequest, sequence);
@@ -106,8 +105,6 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
     CopyFixedBuffer(outRequest.buildId, g_State.buildId);
     CopyFixedBuffer(outRequest.abi, CurrentAbiName());
     CopyFixedBuffer(outRequest.spoolDirectory, g_State.spoolDirectoryText);
-    CopyFixedBuffer(outRequest.logServerUrl, g_State.logServerUrl);
-    CopyFixedBuffer(outRequest.crashUploadToken, g_State.crashUploadToken);
 
     for(usize i = 0u; i < s_MaxMetadata; ++i){
         if(!g_State.metadata[i].used)
@@ -132,7 +129,6 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
 CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options){
     CrashRequest request;
     SnapshotCrashState(request, reasonKind, reasonCode);
-    request.uploadPolicy = options.uploadAfterWrite ? CrashUploadPolicy::ImmediateAfterWrite : CrashUploadPolicy::None;
     request.exceptionPointers = options.exceptionPointers;
     request.faultAddress = options.faultAddress;
     request.instructionPointer = options.triggerInstructionPointer != 0u
@@ -182,13 +178,7 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
         if(!WriteCrashPackage(request))
             return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
 
-        if(!options.uploadAfterWrite)
-            return CrashDumpResult{ CrashDumpStatus::PackageWritten };
-
-        return UploadCrashPackage(request)
-            ? CrashDumpResult{ CrashDumpStatus::Uploaded }
-            : CrashDumpResult{ CrashDumpStatus::UploadFailed }
-        ;
+        return CrashDumpResult{ CrashDumpStatus::PackageWritten };
     }
 #endif
 

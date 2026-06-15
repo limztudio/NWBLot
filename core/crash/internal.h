@@ -93,13 +93,6 @@ namespace CrashReasonKind{
     };
 };
 
-namespace CrashUploadPolicy{
-    enum Enum : u32{
-        None,
-        ImmediateAfterWrite,
-    };
-};
-
 namespace CrashDumpTransportStatus{
     enum Enum : u8{
         Failed,
@@ -138,8 +131,6 @@ struct CrashRequest{
     u32 processId = 0u;
     u32 threadId = 0u;
     u32 dumpDetailMode = DumpDetailMode::Small;
-    u32 uploadPolicy = CrashUploadPolicy::ImmediateAfterWrite;
-    CrashSpoolRetentionConfig spoolRetention;
     u64 exceptionPointers = 0u;
     u64 faultAddress = 0u;
     u64 instructionPointer = 0u;
@@ -155,8 +146,6 @@ struct CrashRequest{
     char buildId[s_MaxMediumText] = {};
     char abi[s_MaxShortText] = {};
     char spoolDirectory[s_MaxPathText] = {};
-    char logServerUrl[s_MaxUrlText] = {};
-    char crashUploadToken[s_MaxMediumText] = {};
     char event[s_MaxShortText] = {};
     char triggerCategory[s_MaxShortText] = {};
     char triggerExpression[s_MaxMediumText] = {};
@@ -194,7 +183,6 @@ struct CrashDumpRequestOptions{
     u32 triggerLine = 0u;
     u32 callstackFramesToSkip = 0u;
     bool writePackageInProcess = false;
-    bool uploadAfterWrite = true;
 };
 
 struct ManualDumpContextStorage{
@@ -270,7 +258,6 @@ template<typename ArenaT>
     const ::Path<Alloc::GlobalArena>& packageDirectory,
     CrashBytes& outArchive
 );
-[[nodiscard]] bool UploadCrashPackage(const CrashRequest& request);
 [[nodiscard]] CrashDumpResult CrashPackageResult(const CrashRequest& request);
 [[nodiscard]] bool ApplyCrashSpoolRetention(
     Alloc::GlobalArena& arena,

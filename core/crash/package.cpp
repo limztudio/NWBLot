@@ -685,8 +685,9 @@ static bool WriteUploadAttemptText(Alloc::GlobalArena& arena, const Path& packag
     return WriteTextFile(packageDirectory / PackageNames::s_UploadAttemptFileName, AStringView(text.data(), text.size()));
 }
 
-static Path RequestBucketDirectory(Alloc::GlobalArena& arena, const CrashRequest& request, const char* bucketName){
-    return Path(arena, request.spoolDirectory) / bucketName / request.crashId;
+template<typename ArenaT>
+static ::Path<ArenaT> RequestBucketDirectory(ArenaT& arena, const CrashRequest& request, const char* bucketName){
+    return ::Path<ArenaT>(arena, request.spoolDirectory) / bucketName / request.crashId;
 }
 
 static bool ApplyRetentionToDirectory(
@@ -762,7 +763,7 @@ CrashDumpResult CrashPackageResult(const CrashRequest& request){
     if(request.spoolDirectory[0] == 0 || request.crashId[0] == 0)
         return CrashDumpResult{ CrashDumpStatus::RequestQueued };
 
-    Alloc::GlobalArena arena("NWB::Core::Crash::PackageStatus");
+    Alloc::PersistentArena& arena = DumpArena();
     if(PathIsDirectory(RequestBucketDirectory(arena, request, PackageNames::s_UploadedDirectoryName)))
         return CrashDumpResult{ CrashDumpStatus::Uploaded };
     if(PathIsDirectory(RequestBucketDirectory(arena, request, PackageNames::s_FailedDirectoryName)))
@@ -830,35 +831,6 @@ static bool RecoverUploadingPackageDirectories(Alloc::GlobalArena& arena, const 
     }
 
     return ok;
-}
-
-bool UploadCrashPackage(const CrashRequest& request){
-    if(request.magic != s_RequestMagic || request.version != s_RequestVersion)
-        return false;
-    if(request.spoolDirectory[0] == 0)
-        return false;
-
-    Alloc::GlobalArena arena("NWB::Core::Crash::PackageUpload");
-    const Path spoolDirectory(arena, request.spoolDirectory);
-    const bool recoveryOk = RecoverUploadingPackageDirectories(arena, spoolDirectory);
-
-    const CrashString url = CrashUploadUrl(arena, request.logServerUrl);
-    if(url.empty())
-        return false;
-
-    if(curl_global_init(CURL_GLOBAL_ALL) != CURLE_OK)
-        return false;
-
-    const Path packageDirectory = RequestPendingDirectory(arena, request);
-    const CrashString packageName = PathToString<char>(arena, packageDirectory.filename());
-    const bool uploaded = UploadPackageDirectory(arena, spoolDirectory, packageDirectory, url, AStringView(request.crashUploadToken));
-    static_cast<void>(ApplyCrashSpoolRetention(
-        arena,
-        spoolDirectory,
-        request.spoolRetention,
-        AStringView(packageName.data(), packageName.size())
-    ));
-    return uploaded && recoveryOk;
 }
 
 #if defined(NWB_PLATFORM_ANDROID)

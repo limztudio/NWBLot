@@ -150,6 +150,18 @@ static void ParseLinuxProcessMemoryMaps(const AStringView mapsText, LinuxProcess
     return !outSymbol.empty();
 }
 
+[[nodiscard]] static bool RunLinuxSymbolizerCommand(
+    LogArena& arena,
+    const char* const* argv,
+    CrashReportText& outSymbol
+){
+    CrashReportText output{arena};
+    if(!CaptureProcessOutput(output, argv))
+        return false;
+
+    return ExtractSymbolizerResult(outSymbol, AStringView(output.data(), output.size()));
+}
+
 [[nodiscard]] static bool TryRunLinuxSymbolizer(
     LogArena& arena,
     const AStringView toolName,
@@ -175,11 +187,7 @@ static void ParseLinuxProcessMemoryMaps(const AStringView mapsText, LinuxProcess
             nullptr
         };
 
-        CrashReportText output{arena};
-        if(!CaptureProcessOutput(output, argv))
-            return false;
-
-        return ExtractSymbolizerResult(outSymbol, AStringView(output.data(), output.size()));
+        return RunLinuxSymbolizerCommand(arena, argv, outSymbol);
     }
 
     CrashReportText modulePathArgument{arena};
@@ -196,11 +204,7 @@ static void ParseLinuxProcessMemoryMaps(const AStringView mapsText, LinuxProcess
         nullptr
     };
 
-    CrashReportText output{arena};
-    if(!CaptureProcessOutput(output, argv))
-        return false;
-
-    return ExtractSymbolizerResult(outSymbol, AStringView(output.data(), output.size()));
+    return RunLinuxSymbolizerCommand(arena, argv, outSymbol);
 }
 
 [[nodiscard]] static bool FindLinuxSymbolFile(

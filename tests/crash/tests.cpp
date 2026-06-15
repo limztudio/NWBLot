@@ -243,26 +243,6 @@ static void TestCrashPackageResultReportsSpoolBucketStatus(TestContext& context)
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestCrashRequestCarriesSpoolRetention(TestContext& context){
-    NWB::Core::Crash::Detail::CrashRequest request;
-    {
-        ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
-        const NWB::Core::Crash::CrashSpoolRetentionConfig previousRetention = NWB::Core::Crash::Detail::g_State.spoolRetention;
-
-        NWB::Core::Crash::Detail::g_State.spoolRetention.maxPendingPackages = 7u;
-        NWB::Core::Crash::Detail::g_State.spoolRetention.maxUploadedPackages = 8u;
-        NWB::Core::Crash::Detail::g_State.spoolRetention.maxFailedPackages = 9u;
-        NWB::Core::Crash::Detail::g_State.spoolRetention.maxUploadingPackages = 10u;
-        NWB::Core::Crash::Detail::SnapshotCrashState(request, NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u);
-        NWB::Core::Crash::Detail::g_State.spoolRetention = previousRetention;
-    }
-
-    NWB_CRASH_TEST_CHECK(context, request.spoolRetention.maxPendingPackages == 7u);
-    NWB_CRASH_TEST_CHECK(context, request.spoolRetention.maxUploadedPackages == 8u);
-    NWB_CRASH_TEST_CHECK(context, request.spoolRetention.maxFailedPackages == 9u);
-    NWB_CRASH_TEST_CHECK(context, request.spoolRetention.maxUploadingPackages == 10u);
-}
-
 static void TestCrashBreadcrumbPersistsCurrentRing(TestContext& context){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -457,7 +437,6 @@ static void TestDesktopInstalledHandlerWritesManualDumpPackage(TestContext& cont
     if(installed){
         NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
         options.waitMilliseconds = NWB::Core::Crash::Detail::s_PlatformCrashHandlerWaitMilliseconds;
-        options.uploadAfterWrite = false;
         options.triggerCategory = AStringView("test");
         options.triggerMessage = AStringView("desktop handler runtime");
         options.triggerFile = AStringView("tests/crash/tests.cpp");
@@ -570,7 +549,6 @@ NWB_DEFINE_TEST_ENTRY_POINT("crash", [](NWB::Tests::TestContext& context){
     __hidden_crash_tests::TestWriteCrashPackageCreatesRequiredFiles(context);
     __hidden_crash_tests::TestWriteCrashPackageFailsWhenSpoolPathIsFile(context);
     __hidden_crash_tests::TestCrashPackageResultReportsSpoolBucketStatus(context);
-    __hidden_crash_tests::TestCrashRequestCarriesSpoolRetention(context);
     __hidden_crash_tests::TestCrashBreadcrumbPersistsCurrentRing(context);
     __hidden_crash_tests::TestCrashSpoolRetentionPrunesOldestPackages(context);
     __hidden_crash_tests::TestCrashSpoolRetentionZeroDisablesPruning(context);

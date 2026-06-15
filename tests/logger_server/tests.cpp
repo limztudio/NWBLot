@@ -41,6 +41,7 @@ using TestArena = NWB::Tests::TestArena<struct LoggerServerCrashTestsTag>;
 using NWB::Tests::WaitForDirectory;
 using namespace NWB::Tests::LoggerServerCrash;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
+inline constexpr AStringView s_InvalidArchiveHeader("NWBCRASHPKG 0\n");
 
 #define NWB_LOGSERVER_TEST_CHECK NWB_TEST_CHECK
 #if defined(_MSC_VER)
@@ -139,6 +140,56 @@ NWB_LOGSERVER_TEST_NOINLINE static void LinuxForceAssertFalseForCrashObservation
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static NWB::Log::CrashIngestResult ProcessCrashArchive(
+    TestContext& context,
+    NWB::Core::Alloc::GlobalArena& arena,
+    const AStringView testGroup,
+    const AStringView stem,
+    const CrashTestText& archive,
+    const NWB::Log::CrashIngestConfig& config
+){
+    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, testGroup, stem, archive));
+    return NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, testGroup, stem), config);
+}
+
+static NWB::Log::CrashIngestResult ProcessCrashArchive(
+    TestContext& context,
+    NWB::Core::Alloc::GlobalArena& arena,
+    const AStringView testGroup,
+    const AStringView stem,
+    const CrashTestText& archive
+){
+    const NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, testGroup);
+    return ProcessCrashArchive(context, arena, testGroup, stem, archive, config);
+}
+
+static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(
+    TestContext& context,
+    NWB::Core::Alloc::GlobalArena& arena,
+    const AStringView testGroup,
+    const AStringView stem,
+    const CrashTestBytes& archive,
+    const NWB::Log::CrashIngestConfig& config
+){
+    NWB_LOGSERVER_TEST_CHECK(context, WriteArchiveBytes(arena, testGroup, stem, archive));
+    return NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, testGroup, stem), config);
+}
+
+static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(
+    TestContext& context,
+    NWB::Core::Alloc::GlobalArena& arena,
+    const AStringView testGroup,
+    const AStringView stem,
+    const CrashTestBytes& archive
+){
+    const NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, testGroup);
+    return ProcessCrashArchiveBytes(context, arena, testGroup, stem, archive, config);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static void TestLinuxCrashPackageMapsInstructionPointer(TestContext& context){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -149,11 +200,9 @@ static void TestLinuxCrashPackageMapsInstructionPointer(TestContext& context){
     CrashTestText archive(arena);
     BuildLinuxCrashArchive(arena, archive, "linux-test");
 
-    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
-
     NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
     config.symbolication.symbolStoreDirectory = StorageDirectory(arena, s_Group) / "test_symbols";
-    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem, archive, config);
 
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
     NWB_LOGSERVER_TEST_CHECK(context, result.type == NWB::Log::Type::EssentialInfo);
@@ -213,10 +262,7 @@ static void TestLinuxCrashPackageSymbolicatesSelfFrame(TestContext& context){
     AppendArchiveFile(archive, CrashNames::s_CallstackFileName, AStringView(callstack.data(), callstack.size()));
     AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, AStringView(procMapLine.data(), procMapLine.size()));
 
-    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
-
-    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
-    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem, archive);
 
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
 
@@ -297,10 +343,7 @@ static void TestLinuxAssertCrashProducesObservableLoggerReport(TestContext& cont
 
     CrashTestBytes archive(arena);
     NWB_LOGSERVER_TEST_CHECK(context, BuildArchiveFromPackageDirectory(arena, assertPackageDirectory, archive));
-    NWB_LOGSERVER_TEST_CHECK(context, WriteArchiveBytes(arena, s_Group, s_Stem, archive));
-
-    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
-    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(context, arena, s_Group, s_Stem, archive);
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
 
     CrashTestText report(arena);
@@ -384,10 +427,7 @@ NWB_LOGSERVER_TEST_NOINLINE static void TestRecoverableErrorDiagnosticProducesOb
 
     CrashTestBytes archive(arena);
     NWB_LOGSERVER_TEST_CHECK(context, BuildArchiveFromPackageDirectory(arena, errorPackageDirectory, archive));
-    NWB_LOGSERVER_TEST_CHECK(context, WriteArchiveBytes(arena, s_Group, s_Stem, archive));
-
-    NWB::Log::CrashIngestConfig ingestConfig = MakeIngestConfig(arena, s_Group);
-    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), ingestConfig);
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(context, arena, s_Group, s_Stem, archive);
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
 
     CrashTestText report(arena);
@@ -431,10 +471,7 @@ static void TestAndroidCrashPackageCopiesTombstoneFrames(TestContext& context){
         "backtrace:\n      #00 pc 0000000000012344  /data/app/lib/arm64/libnwb.so (CrashHere+16)\n      #01 pc 0000000000012450  /data/app/lib/arm64/libnwb.so (Caller+12)\n"
     );
 
-    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
-
-    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
-    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem, archive);
 
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
     NWB_LOGSERVER_TEST_CHECK(context, ContainsMessage(result.message, NWB_TEXT("status=tombstone_parsed")));
@@ -461,10 +498,7 @@ static void TestLinuxCrashPackageReportsMissingProcMaps(TestContext& context){
     BeginArchiveWithManifest(arena, archive, "linux-missing-maps-test", "linux", "crash", "signal", 11u);
     AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "instruction_pointer=4198964\n");
 
-    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
-
-    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
-    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem, archive);
 
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
 
@@ -489,10 +523,7 @@ static void TestLinuxCrashPackageReportsUnmappedInstructionPointer(TestContext& 
     AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "instruction_pointer=7340032\n");
     AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
 
-    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
-
-    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
-    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem, archive);
 
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
 
@@ -516,10 +547,7 @@ static void TestAndroidCrashPackageReportsTombstoneWithoutFrames(TestContext& co
     BeginArchiveWithManifest(arena, archive, "android-no-frames-test", "android", "crash", "manual_dump", 0u);
     AppendArchiveFile(archive, CrashNames::s_AndroidTombstoneFileName, "pid: 7, tid: 7, name: nwb\nbacktrace:\n");
 
-    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
-
-    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
-    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem, archive);
 
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
 
@@ -543,10 +571,7 @@ static void TestWindowsCrashPackageReportsMissingMinidump(TestContext& context){
     CrashTestText archive(arena);
     BeginArchiveWithManifest(arena, archive, "windows-missing-dump-test", "windows", "crash", "windows_exception", 0xC0000005u);
 
-    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
-
-    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
-    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem, archive);
 
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
 
@@ -577,11 +602,8 @@ static void TestInvalidCrashPackageIsRejected(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    archive += "NWBCRASHPKG 0\n";
-    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
-
-    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
-    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+    archive += s_InvalidArchiveHeader;
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem, archive);
 
     NWB_LOGSERVER_TEST_CHECK(context, !result.accepted);
     NWB_LOGSERVER_TEST_CHECK(context, result.type == NWB::Log::Type::Error);
@@ -612,10 +634,7 @@ static void TestCrashManifestWithoutEventIsRejected(TestContext& context){
         11u,
         ManifestEventField::Omit
     );
-    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
-
-    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
-    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem, archive);
 
     NWB_LOGSERVER_TEST_CHECK(context, !result.accepted);
     NWB_LOGSERVER_TEST_CHECK(context, result.type == NWB::Log::Type::Error);
@@ -642,22 +661,19 @@ static void TestCrashRetentionPrunesOldestAcceptedUploads(TestContext& context){
     {
         CrashTestText archive(arena);
         BuildLinuxCrashArchive(arena, archive, s_Stem0);
-        NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem0, archive));
-        const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem0), config);
+        const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem0, archive, config);
         NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
     }
     {
         CrashTestText archive(arena);
         BuildLinuxCrashArchive(arena, archive, s_Stem1);
-        NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem1, archive));
-        const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem1), config);
+        const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem1, archive, config);
         NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
     }
     {
         CrashTestText archive(arena);
         BuildLinuxCrashArchive(arena, archive, s_Stem2);
-        NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem2, archive));
-        const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem2), config);
+        const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem2, archive, config);
         NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
     }
 
@@ -680,7 +696,6 @@ static void TestAcceptedCrashWarnsWhenRawArchiveCannotBeRetained(TestContext& co
 
     CrashTestText archive(arena);
     BuildLinuxCrashArchive(arena, archive, s_Stem);
-    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
 
     ErrorCode error;
     static_cast<void>(EnsureDirectories(StorageDirectory(arena, s_Group), error));
@@ -688,7 +703,7 @@ static void TestAcceptedCrashWarnsWhenRawArchiveCannotBeRetained(TestContext& co
     NWB_LOGSERVER_TEST_CHECK(context, WriteTextFile(StorageDirectory(arena, s_Group) / NWB::Log::s_CrashRawDirectoryName, AStringView("blocked")));
 
     NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
-    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem, archive, config);
 
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
     NWB_LOGSERVER_TEST_CHECK(context, result.type == NWB::Log::Type::Warning);
@@ -714,16 +729,14 @@ static void TestCrashRetentionPrunesOldestInvalidUploads(TestContext& context){
 
     {
         CrashTestText archive(arena);
-        archive += "NWBCRASHPKG 0\n";
-        NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem0, archive));
-        const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem0), config);
+        archive += s_InvalidArchiveHeader;
+        const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem0, archive, config);
         NWB_LOGSERVER_TEST_CHECK(context, !result.accepted);
     }
     {
         CrashTestText archive(arena);
-        archive += "NWBCRASHPKG 0\n";
-        NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem1, archive));
-        const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem1), config);
+        archive += s_InvalidArchiveHeader;
+        const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem1, archive, config);
         NWB_LOGSERVER_TEST_CHECK(context, !result.accepted);
     }
 

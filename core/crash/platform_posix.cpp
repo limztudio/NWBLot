@@ -15,7 +15,6 @@
 #include <unistd.h>
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-#include <execinfo.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #endif
@@ -113,29 +112,22 @@ static void __hidden_capture_frame_pointer_callstack(
     }
 }
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-static void __hidden_capture_backtrace_callstack(
-    Detail::CrashDumpRequestOptions& options,
-    const u32 framesToSkip = 0u,
-    const bool replaceExistingFrames = true
+static void __hidden_capture_current_callstack(
+    Detail::CrashDumpRequestOptions& outOptions,
+    const void* const stackPointer,
+    const void* const framePointer,
+    const void* const instructionPointer
 )noexcept{
-    void* frames[Detail::s_MaxCallstackFrames] = {};
-    const int frameCount = ::backtrace(frames, static_cast<int>(Detail::s_MaxCallstackFrames));
-    if(frameCount <= 0)
-        return;
-
-    if(replaceExistingFrames)
-        options.callstackFrameCount = 0u;
-
-    for(int i = static_cast<int>(framesToSkip); i < frameCount; ++i)
-        __hidden_append_callstack_frame(options, static_cast<u64>(reinterpret_cast<usize>(frames[i])));
+    outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
+    outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(framePointer));
+    outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(instructionPointer));
+    __hidden_capture_frame_pointer_callstack(
+        outOptions,
+        outOptions.instructionPointer,
+        outOptions.stackPointer,
+        outOptions.framePointer
+    );
 }
-
-static void __hidden_prewarm_backtrace()noexcept{
-    void* frame = nullptr;
-    static_cast<void>(::backtrace(&frame, 1));
-}
-#endif
 
 static void __hidden_capture_signal_context(Detail::CrashDumpRequestOptions& options, const siginfo_t* signalInfo, const void* signalContext)noexcept{
     if(signalInfo)
@@ -156,10 +148,6 @@ static void __hidden_capture_signal_context(Detail::CrashDumpRequestOptions& opt
 #endif
 
     __hidden_capture_frame_pointer_callstack(options, options.instructionPointer, options.stackPointer, options.framePointer);
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    if(options.callstackFrameCount <= 1u)
-        __hidden_capture_backtrace_callstack(options, 2u, false);
-#endif
 }
 
 static void __hidden_signal_handler(const int signalNumber, siginfo_t* signalInfo, void* signalContext)noexcept{
@@ -285,37 +273,18 @@ namespace Detail{
 void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpContextStorage& storage)noexcept{
     static_cast<void>(storage);
 
+#if defined(__x86_64__) || defined(__aarch64__)
+    void* stackPointer = nullptr;
 #if defined(__x86_64__)
-    void* stackPointer = nullptr;
     __asm__ volatile("mov %%rsp, %0" : "=r"(stackPointer));
-    outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
-    outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_frame_address(0)));
-    outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_return_address(0)));
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    __hidden_crash_posix::__hidden_capture_backtrace_callstack(outOptions);
-    if(outOptions.callstackFrameCount == 0u)
-#endif
-    __hidden_crash_posix::__hidden_capture_frame_pointer_callstack(
-        outOptions,
-        outOptions.instructionPointer,
-        outOptions.stackPointer,
-        outOptions.framePointer
-    );
-#elif defined(__aarch64__)
-    void* stackPointer = nullptr;
+#else
     __asm__ volatile("mov %0, sp" : "=r"(stackPointer));
-    outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
-    outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_frame_address(0)));
-    outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_return_address(0)));
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    __hidden_crash_posix::__hidden_capture_backtrace_callstack(outOptions);
-    if(outOptions.callstackFrameCount == 0u)
 #endif
-    __hidden_crash_posix::__hidden_capture_frame_pointer_callstack(
+    __hidden_crash_posix::__hidden_capture_current_callstack(
         outOptions,
-        outOptions.instructionPointer,
-        outOptions.stackPointer,
-        outOptions.framePointer
+        stackPointer,
+        __builtin_frame_address(0),
+        __builtin_return_address(0)
     );
 #endif
 }
@@ -392,9 +361,6 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
 template bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerExecutablePath);
 
 void InstallPlatformHandlers(){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    __hidden_crash_posix::__hidden_prewarm_backtrace();
-#endif
 #if defined(NWB_PLATFORM_ANDROID)
     __hidden_crash_posix::__hidden_open_android_emergency_file();
 #endif

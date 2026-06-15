@@ -474,6 +474,7 @@ static void TestLinuxSignalHandlerWritesCrashPackage(TestContext& context){
         NWB_CRASH_TEST_CHECK(context, WaitForDirectory(packageDirectory, 1000u));
         NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
         NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
+        NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_ProcMapsFileName));
         NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"reason_kind\": \"signal\"")));
     }
 

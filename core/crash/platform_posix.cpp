@@ -444,7 +444,9 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 }
 
 void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options)noexcept{
-    static_cast<void>(RequestCrashDump(reasonKind, reasonCode, options));
+    CrashDumpRequestOptions requestOptions = options;
+    requestOptions.waitMilliseconds = s_PlatformCrashHandlerWaitMilliseconds;
+    static_cast<void>(RequestCrashDump(reasonKind, reasonCode, requestOptions));
 }
 
 template<typename ArenaT>

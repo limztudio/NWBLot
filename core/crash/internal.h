@@ -34,6 +34,7 @@ namespace Detail{
 
 
 inline constexpr u32 s_RequestMagic = 0x4E574243u; // NWBC
+inline constexpr u32 s_AckMagic = 0x4E574241u; // NWBA
 inline constexpr u32 s_RequestVersion = 1u;
 inline constexpr usize s_MaxMetadata = 32u;
 inline constexpr usize s_MaxBreadcrumbs = 128u;
@@ -59,8 +60,10 @@ inline constexpr tchar s_HandlerExecutableFileName[] = NWB_TEXT(NWB_CRASH_HANDLE
 #endif
 
 inline constexpr tchar s_RequestHandleArgument[] = NWB_TEXT("--request-handle");
+inline constexpr tchar s_AckHandleArgument[] = NWB_TEXT("--ack-handle");
 inline constexpr tchar s_AckEventArgument[] = NWB_TEXT("--ack-event");
 inline constexpr const char* s_RequestFdArgument = "--request-fd";
+inline constexpr const char* s_AckFdArgument = "--ack-fd";
 inline constexpr const char* s_DefaultBreadcrumbCategory = "general";
 inline constexpr const char* s_ManualDumpCategory = "manual_dump";
 
@@ -94,8 +97,9 @@ namespace CrashDumpTransportStatus{
     enum Enum : u8{
         Failed,
         Sent,
-        Acknowledged,
+        PackageWritten,
         TimedOut,
+        PackageWriteFailed,
     };
 };
 
@@ -157,6 +161,13 @@ struct CrashRequest{
     u64 callstackFrames[s_MaxCallstackFrames] = {};
 };
 
+struct CrashAck{
+    u32 magic = s_AckMagic;
+    u32 version = s_RequestVersion;
+    u8 packageWritten = 0u;
+    char crashId[s_MaxShortText] = {};
+};
+
 struct CrashDumpRequestOptions{
     u32 waitMilliseconds = 0u;
     u64 exceptionPointers = 0u;
@@ -208,11 +219,13 @@ struct CrashState{
 
 #if defined(NWB_PLATFORM_WINDOWS)
     HANDLE requestWriteHandle = INVALID_HANDLE_VALUE;
+    HANDLE ackReadHandle = INVALID_HANDLE_VALUE;
     HANDLE crashHandledEvent = nullptr;
     PROCESS_INFORMATION handlerProcessInfo = {};
     LPTOP_LEVEL_EXCEPTION_FILTER previousExceptionFilter = nullptr;
 #elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     int requestWriteFd = -1;
+    int ackReadFd = -1;
     pid_t handlerPid = -1;
     stack_t previousSignalStack = {};
 #elif defined(NWB_PLATFORM_ANDROID)
@@ -274,7 +287,6 @@ void NotifyCrashHandler(CrashReasonKind::Enum reasonKind, u32 reasonCode, const 
 template<typename ArenaT>
 [[nodiscard]] bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory);
 [[nodiscard]] Alloc::PersistentArena& DumpArena();
-[[nodiscard]] CrashDumpResult CrashPackageResult(const CrashRequest& request);
 
 template<typename ArenaT>
 [[nodiscard]] bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath);

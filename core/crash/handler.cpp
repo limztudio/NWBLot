@@ -10,6 +10,7 @@
 #include <windows.h>
 #elif defined(NWB_PLATFORM_LINUX)
 #include <errno.h>
+#include <signal.h>
 #include <unistd.h>
 #endif
 
@@ -60,6 +61,13 @@ template<typename CharT>
     return value;
 }
 
+static Detail::CrashAck __hidden_make_ack(const Detail::CrashRequest& request, const bool packageWritten)noexcept{
+    Detail::CrashAck ack;
+    ack.packageWritten = packageWritten ? 1u : 0u;
+    CopyFixedBuffer(ack.crashId, request.crashId);
+    return ack;
+}
+
 #if defined(NWB_PLATFORM_WINDOWS)
 [[nodiscard]] static bool __hidden_read_all(const HANDLE handle, void* const data, const usize byteCount)noexcept{
     u8* cursor = static_cast<u8*>(data);
@@ -75,6 +83,24 @@ template<typename CharT>
 
         cursor += bytesRead;
         remaining -= bytesRead;
+    }
+    return true;
+}
+
+[[nodiscard]] static bool __hidden_write_all(const HANDLE handle, const void* const data, const usize byteCount)noexcept{
+    const u8* cursor = static_cast<const u8*>(data);
+    usize remaining = byteCount;
+    while(remaining > 0u){
+        DWORD bytesWritten = 0u;
+        const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max)
+            ? Limit<DWORD>::s_Max
+            : static_cast<DWORD>(remaining)
+        ;
+        if(!WriteFile(handle, cursor, requestSize, &bytesWritten, nullptr) || bytesWritten == 0u)
+            return false;
+
+        cursor += bytesWritten;
+        remaining -= bytesWritten;
     }
     return true;
 }
@@ -97,6 +123,25 @@ template<typename CharT>
     }
     return true;
 }
+
+[[nodiscard]] static bool __hidden_write_all(const int fd, const void* const data, const usize byteCount)noexcept{
+    const u8* cursor = static_cast<const u8*>(data);
+    usize remaining = byteCount;
+    while(remaining > 0u){
+        const ssize_t bytesWritten = write(fd, cursor, remaining);
+        if(bytesWritten < 0){
+            if(errno == EINTR)
+                continue;
+            return false;
+        }
+        if(bytesWritten == 0)
+            return false;
+
+        cursor += static_cast<usize>(bytesWritten);
+        remaining -= static_cast<usize>(bytesWritten);
+    }
+    return true;
+}
 #endif
 
 static void __hidden_silence_process()noexcept{
@@ -104,6 +149,8 @@ static void __hidden_silence_process()noexcept{
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
     if(HWND consoleWindow = GetConsoleWindow())
         ShowWindow(consoleWindow, SW_HIDE);
+#elif defined(NWB_PLATFORM_LINUX)
+    signal(SIGPIPE, SIG_IGN);
 #endif
 }
 
@@ -123,11 +170,14 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
 
 #if defined(NWB_PLATFORM_WINDOWS)
     HANDLE requestReadHandle = INVALID_HANDLE_VALUE;
+    HANDLE ackWriteHandle = INVALID_HANDLE_VALUE;
     HANDLE ackEvent = nullptr;
 
     for(isize i = 1; i + 1 < argc; ++i){
         if(__hidden_crash_handler::__hidden_arg_equals(argv[i], Detail::s_RequestHandleArgument))
             requestReadHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::__hidden_parse_u64(argv[++i])));
+        else if(__hidden_crash_handler::__hidden_arg_equals(argv[i], Detail::s_AckHandleArgument))
+            ackWriteHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::__hidden_parse_u64(argv[++i])));
         else if(__hidden_crash_handler::__hidden_arg_equals(argv[i], Detail::s_AckEventArgument))
             ackEvent = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::__hidden_parse_u64(argv[++i])));
     }
@@ -141,6 +191,10 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
             break;
 
         const bool packageWritten = Detail::WriteCrashPackage(request);
+        if(ackWriteHandle != INVALID_HANDLE_VALUE){
+            const Detail::CrashAck ack = __hidden_crash_handler::__hidden_make_ack(request, packageWritten);
+            static_cast<void>(__hidden_crash_handler::__hidden_write_all(ackWriteHandle, &ack, sizeof(ack)));
+        }
         if(ackEvent)
             SetEvent(ackEvent);
         if(packageWritten)
@@ -150,9 +204,12 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
     return __hidden_crash_handler::s_ProcessSuccessExitCode;
 #elif defined(NWB_PLATFORM_LINUX)
     int requestReadFd = -1;
+    int ackWriteFd = -1;
     for(isize i = 1; i + 1 < argc; ++i){
         if(__hidden_crash_handler::__hidden_arg_equals(argv[i], Detail::s_RequestFdArgument))
             requestReadFd = static_cast<int>(__hidden_crash_handler::__hidden_parse_u64(argv[++i]));
+        else if(__hidden_crash_handler::__hidden_arg_equals(argv[i], Detail::s_AckFdArgument))
+            ackWriteFd = static_cast<int>(__hidden_crash_handler::__hidden_parse_u64(argv[++i]));
     }
 
     if(requestReadFd < 0)
@@ -163,7 +220,12 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         if(!__hidden_crash_handler::__hidden_read_all(requestReadFd, &request, sizeof(request)))
             break;
 
-        if(Detail::WriteCrashPackage(request))
+        const bool packageWritten = Detail::WriteCrashPackage(request);
+        if(ackWriteFd >= 0){
+            const Detail::CrashAck ack = __hidden_crash_handler::__hidden_make_ack(request, packageWritten);
+            static_cast<void>(__hidden_crash_handler::__hidden_write_all(ackWriteFd, &ack, sizeof(ack)));
+        }
+        if(packageWritten)
             static_cast<void>(Detail::FlushCrashReportsForRequest(request));
     }
 

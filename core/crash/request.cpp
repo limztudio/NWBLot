@@ -180,15 +180,12 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
         return CrashDumpResult{ CrashDumpStatus::RequestFailed };
     if(transportStatus == CrashDumpTransportStatus::Sent)
         return CrashDumpResult{ CrashDumpStatus::RequestQueued };
+    if(transportStatus == CrashDumpTransportStatus::TimedOut)
+        return CrashDumpResult{ CrashDumpStatus::RequestTimedOut };
+    if(transportStatus == CrashDumpTransportStatus::PackageWriteFailed)
+        return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
 
-    const CrashDumpResult packageResult = CrashPackageResult(request);
-    if(packageResult.status != CrashDumpStatus::RequestQueued)
-        return packageResult;
-
-    return transportStatus == CrashDumpTransportStatus::TimedOut
-        ? CrashDumpResult{ CrashDumpStatus::RequestTimedOut }
-        : CrashDumpResult{ CrashDumpStatus::PackageWriteFailed }
-    ;
+    return CrashDumpResult{ CrashDumpStatus::PackageWritten };
 }
 
 

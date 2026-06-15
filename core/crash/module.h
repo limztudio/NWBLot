@@ -36,8 +36,6 @@ namespace CrashDumpStatus{
         RequestTimedOut,
         PackageWriteFailed,
         PackageWritten,
-        UploadFailed,
-        Uploaded,
     };
 };
 
@@ -72,15 +70,7 @@ struct CrashDumpResult{
     }
 
     [[nodiscard]] bool packageWritten()const{
-        return status == CrashDumpStatus::PackageWritten || status == CrashDumpStatus::UploadFailed || status == CrashDumpStatus::Uploaded;
-    }
-
-    [[nodiscard]] bool uploadAttempted()const{
-        return status == CrashDumpStatus::UploadFailed || status == CrashDumpStatus::Uploaded;
-    }
-
-    [[nodiscard]] bool uploadSucceeded()const{
-        return status == CrashDumpStatus::Uploaded;
+        return status == CrashDumpStatus::PackageWritten;
     }
 };
 

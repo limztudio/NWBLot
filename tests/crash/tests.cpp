@@ -195,54 +195,6 @@ static void TestWriteCrashPackageFailsWhenSpoolPathIsFile(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestCrashPackageResultReportsSpoolBucketStatus(TestContext& context){
-    TestArena testArena;
-    auto& arena = testArena.arena;
-    constexpr AStringView s_Group("crash_package_result_status_test");
-    constexpr AStringView s_CrashId("crash-package-result-status");
-    RemoveTestArtifacts(arena, s_Group);
-
-    NWB::Core::Crash::Detail::CrashRequest request;
-    FillPackageRequest(arena, request, SpoolDirectory(arena, s_Group), s_CrashId);
-
-    NWB::Core::Crash::Detail::CrashRequest invalidRequest;
-    invalidRequest.version = 0u;
-    NWB_CRASH_TEST_CHECK(
-        context,
-        NWB::Core::Crash::Detail::CrashPackageResult(invalidRequest).status == NWB::Core::Crash::CrashDumpStatus::RequestQueued
-    );
-    NWB_CRASH_TEST_CHECK(
-        context,
-        NWB::Core::Crash::Detail::CrashPackageResult(request).status == NWB::Core::Crash::CrashDumpStatus::RequestQueued
-    );
-
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CrashId));
-    NWB_CRASH_TEST_CHECK(
-        context,
-        NWB::Core::Crash::Detail::CrashPackageResult(request).status == NWB::Core::Crash::CrashDumpStatus::PackageWritten
-    );
-
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId));
-    NWB_CRASH_TEST_CHECK(
-        context,
-        NWB::Core::Crash::Detail::CrashPackageResult(request).status == NWB::Core::Crash::CrashDumpStatus::PackageWritten
-    );
-
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, s_CrashId));
-    NWB_CRASH_TEST_CHECK(
-        context,
-        NWB::Core::Crash::Detail::CrashPackageResult(request).status == NWB::Core::Crash::CrashDumpStatus::UploadFailed
-    );
-
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, s_CrashId));
-    NWB_CRASH_TEST_CHECK(
-        context,
-        NWB::Core::Crash::Detail::CrashPackageResult(request).status == NWB::Core::Crash::CrashDumpStatus::Uploaded
-    );
-
-    RemoveTestArtifacts(arena, s_Group);
-}
-
 static void TestCrashBreadcrumbPersistsCurrentRing(TestContext& context){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -449,8 +401,7 @@ static void TestDesktopInstalledHandlerWritesManualDumpPackage(TestContext& cont
         );
         NWB_CRASH_TEST_CHECK(
             context,
-            result.status == NWB::Core::Crash::CrashDumpStatus::RequestQueued
-            || result.status == NWB::Core::Crash::CrashDumpStatus::PackageWritten
+            result.status == NWB::Core::Crash::CrashDumpStatus::PackageWritten
         );
 
         char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
@@ -548,7 +499,6 @@ static void TestLinuxSignalHandlerWritesCrashPackage(TestContext& context){
 NWB_DEFINE_TEST_ENTRY_POINT("crash", [](NWB::Tests::TestContext& context){
     __hidden_crash_tests::TestWriteCrashPackageCreatesRequiredFiles(context);
     __hidden_crash_tests::TestWriteCrashPackageFailsWhenSpoolPathIsFile(context);
-    __hidden_crash_tests::TestCrashPackageResultReportsSpoolBucketStatus(context);
     __hidden_crash_tests::TestCrashBreadcrumbPersistsCurrentRing(context);
     __hidden_crash_tests::TestCrashSpoolRetentionPrunesOldestPackages(context);
     __hidden_crash_tests::TestCrashSpoolRetentionZeroDisablesPruning(context);

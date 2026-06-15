@@ -4,10 +4,13 @@
 
 #include "internal.h"
 
+#include <global/process_execution.h>
+
 #include <exception>
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +18,7 @@
 #include <unistd.h>
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #endif
@@ -39,10 +43,11 @@ inline constexpr usize s_SignalStackSize = 256u * 1024u;
 inline constexpr int s_AndroidEmergencyFileMode = 0644;
 inline constexpr int s_FirstNonStdioFileDescriptor = STDERR_FILENO + 1;
 inline constexpr int s_HandlerExecFailureExitCode = 127;
+inline constexpr u64 s_HandlerExitWaitMilliseconds = 3000u;
 inline constexpr usize s_AArch64FramePointerRegisterIndex = 29u;
-inline constexpr usize s_PipeFileDescriptorCount = 2u;
-inline constexpr usize s_PipeReadEndIndex = 0u;
-inline constexpr usize s_PipeWriteEndIndex = 1u;
+inline constexpr usize s_FileDescriptorPairCount = 2u;
+inline constexpr usize s_ParentEndIndex = 0u;
+inline constexpr usize s_ChildEndIndex = 1u;
 inline constexpr usize s_MaxFramePointerWalkBytes = 8u * 1024u * 1024u;
 
 struct FramePointerRecord{
@@ -51,6 +56,7 @@ struct FramePointerRecord{
 };
 
 
+#if defined(NWB_PLATFORM_ANDROID)
 [[nodiscard]] static bool __hidden_write_all_fd(const int fd, const void* const data, const usize byteCount)noexcept{
     const u8* cursor = static_cast<const u8*>(data);
     usize remaining = byteCount;
@@ -69,6 +75,7 @@ struct FramePointerRecord{
     }
     return true;
 }
+#endif
 
 [[nodiscard]] static bool __hidden_is_aligned_pointer(const u64 address)noexcept{
     return (address & (sizeof(void*) - 1u)) == 0u;
@@ -221,6 +228,32 @@ static void __hidden_open_android_emergency_file(){
     return true;
 }
 
+[[nodiscard]] static bool __hidden_set_close_on_exec(const int fd)noexcept{
+    const int flags = fcntl(fd, F_GETFD, 0);
+    if(flags < 0)
+        return false;
+    return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
+}
+
+[[nodiscard]] static bool __hidden_send_all_socket_no_sigpipe(const int fd, const void* const data, const usize byteCount)noexcept{
+    const u8* cursor = static_cast<const u8*>(data);
+    usize remaining = byteCount;
+    while(remaining > 0u){
+        const ssize_t bytesSent = send(fd, cursor, remaining, MSG_NOSIGNAL);
+        if(bytesSent < 0){
+            if(errno == EINTR)
+                continue;
+            return false;
+        }
+        if(bytesSent == 0)
+            return false;
+
+        cursor += static_cast<usize>(bytesSent);
+        remaining -= static_cast<usize>(bytesSent);
+    }
+    return true;
+}
+
 static void __hidden_redirect_stdio_to_null()noexcept{
     const int nullFd = open("/dev/null", O_RDWR);
     if(nullFd < 0)
@@ -233,24 +266,123 @@ static void __hidden_redirect_stdio_to_null()noexcept{
         close(nullFd);
 }
 
-static void __hidden_silence_child_process(int& requestReadFd)noexcept{
+static void __hidden_silence_child_process(int& requestReadFd, int& ackWriteFd)noexcept{
     if(!__hidden_move_fd_above_stdio(requestReadFd))
+        return;
+    if(!__hidden_move_fd_above_stdio(ackWriteFd))
         return;
 
     static_cast<void>(setsid());
     __hidden_redirect_stdio_to_null();
 }
 
+[[nodiscard]] static bool __hidden_read_all_fd(const int fd, void* const data, const usize byteCount)noexcept{
+    u8* cursor = static_cast<u8*>(data);
+    usize remaining = byteCount;
+    while(remaining > 0u){
+        const ssize_t bytesRead = read(fd, cursor, remaining);
+        if(bytesRead < 0){
+            if(errno == EINTR)
+                continue;
+            return false;
+        }
+        if(bytesRead == 0)
+            return false;
+
+        cursor += static_cast<usize>(bytesRead);
+        remaining -= static_cast<usize>(bytesRead);
+    }
+    return true;
+}
+
+[[nodiscard]] static bool __hidden_ack_matches_request(
+    const Detail::CrashAck& ack,
+    const Detail::CrashRequest& request
+)noexcept{
+    return ack.magic == Detail::s_AckMagic
+        && ack.version == Detail::s_RequestVersion
+        && AStringView(ack.crashId) == AStringView(request.crashId)
+    ;
+}
+
+static void __hidden_drain_pending_acks(const int ackReadFd)noexcept{
+    if(ackReadFd < 0)
+        return;
+
+    for(;;){
+        pollfd pollFd = {};
+        pollFd.fd = ackReadFd;
+        pollFd.events = POLLIN;
+
+        const int pollResult = poll(&pollFd, 1u, 0);
+        if(pollResult <= 0)
+            return;
+        if((pollFd.revents & POLLIN) == 0)
+            return;
+
+        Detail::CrashAck ignoredAck;
+        if(!__hidden_read_all_fd(ackReadFd, &ignoredAck, sizeof(ignoredAck)))
+            return;
+    }
+}
+
+[[nodiscard]] static Detail::CrashDumpTransportStatus::Enum __hidden_wait_for_ack(
+    const int ackReadFd,
+    const Detail::CrashRequest& request,
+    const u32 waitMilliseconds
+)noexcept{
+    if(ackReadFd < 0 || waitMilliseconds == 0u)
+        return Detail::CrashDumpTransportStatus::Sent;
+
+    const u64 now = ProcessExecutionDetail::MonotonicMilliseconds();
+    const u64 deadline = now == 0u
+        ? 0u
+        : now + waitMilliseconds
+    ;
+
+    for(;;){
+        pollfd pollFd = {};
+        pollFd.fd = ackReadFd;
+        pollFd.events = POLLIN;
+
+        const int pollResult = poll(&pollFd, 1u, ProcessExecutionDetail::RemainingTimeoutMilliseconds(deadline));
+        if(pollResult == 0)
+            return Detail::CrashDumpTransportStatus::TimedOut;
+        if(pollResult < 0){
+            if(errno == EINTR)
+                continue;
+            return Detail::CrashDumpTransportStatus::Failed;
+        }
+
+        if((pollFd.revents & POLLIN) == 0){
+            if((pollFd.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0)
+                return Detail::CrashDumpTransportStatus::Failed;
+            continue;
+        }
+
+        Detail::CrashAck ack;
+        if(!__hidden_read_all_fd(ackReadFd, &ack, sizeof(ack)))
+            return Detail::CrashDumpTransportStatus::Failed;
+        if(__hidden_ack_matches_request(ack, request))
+            return ack.packageWritten
+                ? Detail::CrashDumpTransportStatus::PackageWritten
+                : Detail::CrashDumpTransportStatus::PackageWriteFailed
+            ;
+        if(ProcessExecutionDetail::TimeoutExpired(deadline))
+            return Detail::CrashDumpTransportStatus::TimedOut;
+    }
+}
+
 static void __hidden_wait_for_child_process(const pid_t pid)noexcept{
     if(pid <= 0)
         return;
 
-    int status = 0;
-    while(waitpid(pid, &status, 0) < 0){
-        if(errno == EINTR)
-            continue;
-        break;
-    }
+    const u64 now = ProcessExecutionDetail::MonotonicMilliseconds();
+    const u64 deadline = now == 0u
+        ? 0u
+        : now + s_HandlerExitWaitMilliseconds
+    ;
+    static_cast<void>(ProcessExecutionDetail::WaitForProcessSuccess(pid, deadline));
 }
 #endif
 
@@ -299,11 +431,12 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
             : CrashDumpTransportStatus::Failed
         ;
 #elif defined(NWB_PLATFORM_LINUX)
-    if(g_State.requestWriteFd >= 0)
-        return __hidden_crash_posix::__hidden_write_all_fd(g_State.requestWriteFd, &request, sizeof(request))
-            ? CrashDumpTransportStatus::Sent
-            : CrashDumpTransportStatus::Failed
-        ;
+    if(g_State.requestWriteFd >= 0){
+        __hidden_crash_posix::__hidden_drain_pending_acks(g_State.ackReadFd);
+        if(!__hidden_crash_posix::__hidden_send_all_socket_no_sigpipe(g_State.requestWriteFd, &request, sizeof(request)))
+            return CrashDumpTransportStatus::Failed;
+        return __hidden_crash_posix::__hidden_wait_for_ack(g_State.ackReadFd, request, waitMilliseconds);
+    }
 #endif
 
     return CrashDumpTransportStatus::Failed;
@@ -326,30 +459,56 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
     if(access(handlerExecutablePath.c_str(), X_OK) != 0)
         return false;
 
-    int pipeFds[__hidden_crash_posix::s_PipeFileDescriptorCount] = { -1, -1 };
-    if(pipe(pipeFds) != 0)
+    int requestChannelFds[__hidden_crash_posix::s_FileDescriptorPairCount] = { -1, -1 };
+    int ackPipeFds[__hidden_crash_posix::s_FileDescriptorPairCount] = { -1, -1 };
+    if(socketpair(AF_UNIX, SOCK_STREAM, 0, requestChannelFds) != 0)
         return false;
+    if(pipe(ackPipeFds) != 0){
+        close(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]);
+        close(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]);
+        return false;
+    }
+    if(
+        !__hidden_crash_posix::__hidden_set_close_on_exec(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex])
+        || !__hidden_crash_posix::__hidden_set_close_on_exec(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex])
+    ){
+        close(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]);
+        close(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]);
+        close(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex]);
+        close(ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]);
+        return false;
+    }
 
     const pid_t pid = fork();
     if(pid < 0){
-        close(pipeFds[__hidden_crash_posix::s_PipeReadEndIndex]);
-        close(pipeFds[__hidden_crash_posix::s_PipeWriteEndIndex]);
+        close(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]);
+        close(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]);
+        close(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex]);
+        close(ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]);
         return false;
     }
 
     if(pid == 0){
-        close(pipeFds[__hidden_crash_posix::s_PipeWriteEndIndex]);
+        close(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]);
+        close(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex]);
 
-        __hidden_crash_posix::__hidden_silence_child_process(pipeFds[__hidden_crash_posix::s_PipeReadEndIndex]);
+        __hidden_crash_posix::__hidden_silence_child_process(
+            requestChannelFds[__hidden_crash_posix::s_ChildEndIndex],
+            ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]
+        );
 
         char fdText[s_HandlerArgumentTextCapacity] = {};
-        AppendUnsignedToFixedBuffer(fdText, static_cast<u64>(pipeFds[__hidden_crash_posix::s_PipeReadEndIndex]));
-        execl(handlerExecutablePath.c_str(), handlerExecutablePath.c_str(), s_RequestFdArgument, fdText, nullptr);
+        char ackFdText[s_HandlerArgumentTextCapacity] = {};
+        AppendUnsignedToFixedBuffer(fdText, static_cast<u64>(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]));
+        AppendUnsignedToFixedBuffer(ackFdText, static_cast<u64>(ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]));
+        execl(handlerExecutablePath.c_str(), handlerExecutablePath.c_str(), s_RequestFdArgument, fdText, s_AckFdArgument, ackFdText, nullptr);
         _exit(__hidden_crash_posix::s_HandlerExecFailureExitCode);
     }
 
-    close(pipeFds[__hidden_crash_posix::s_PipeReadEndIndex]);
-    g_State.requestWriteFd = pipeFds[__hidden_crash_posix::s_PipeWriteEndIndex];
+    close(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]);
+    close(ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]);
+    g_State.requestWriteFd = requestChannelFds[__hidden_crash_posix::s_ParentEndIndex];
+    g_State.ackReadFd = ackPipeFds[__hidden_crash_posix::s_ParentEndIndex];
     g_State.handlerPid = pid;
     g_State.handlerStarted = true;
     return true;
@@ -382,6 +541,10 @@ void UninstallPlatformResources(){
         g_State.requestWriteFd = -1;
     }
     __hidden_crash_posix::__hidden_wait_for_child_process(handlerPid);
+    if(g_State.ackReadFd >= 0){
+        close(g_State.ackReadFd);
+        g_State.ackReadFd = -1;
+    }
     g_State.handlerPid = -1;
 #endif
 

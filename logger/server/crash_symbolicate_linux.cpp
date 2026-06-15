@@ -31,6 +31,39 @@ namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct LinuxProcessMemoryMapTable{
+    Vector<LinuxProcessMemoryMapEntry, LogArena> entries;
+
+    explicit LinuxProcessMemoryMapTable(LogArena& arena)
+        : entries(arena)
+    {}
+};
+
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+struct LinuxSymbolFileCacheEntry{
+    CrashReportText modulePath;
+    CrashReportText symbolPath;
+    bool found = false;
+
+    explicit LinuxSymbolFileCacheEntry(LogArena& arena)
+        : modulePath(arena)
+        , symbolPath(arena)
+    {}
+};
+
+struct LinuxSymbolFileCache{
+    Vector<LinuxSymbolFileCacheEntry, LogArena> entries;
+
+    explicit LinuxSymbolFileCache(LogArena& arena)
+        : entries(arena)
+    {}
+};
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static bool ParseCallstackFrameAddress(const AStringView line, u64& outAddress){
     const usize prefix = line.find("0x");
     if(prefix == AStringView::npos)
@@ -43,6 +76,35 @@ namespace CrashNames = ::NWB::Core::Crash::PackageNames;
         return false;
 
     return ::ParseVariableHexU64(AStringView(line.data() + prefix + 2u, end - prefix - 2u), outAddress);
+}
+
+static void ParseLinuxProcessMemoryMaps(const AStringView mapsText, LinuxProcessMemoryMapTable& outTable){
+    outTable.entries.clear();
+
+    usize cursor = 0u;
+    AStringView line;
+    while(NextTextLine(mapsText, cursor, line)){
+        LinuxProcessMemoryMapEntry entry;
+        if(ParseLinuxProcessMemoryMapLine(line, entry))
+            outTable.entries.push_back(entry);
+    }
+}
+
+[[nodiscard]] static bool FindLinuxProcessMemoryMapForAddress(
+    const LinuxProcessMemoryMapTable& table,
+    const u64 address,
+    LinuxProcessMemoryMapEntry& outEntry
+){
+    for(const LinuxProcessMemoryMapEntry& entry : table.entries){
+        if(address < entry.begin || address >= entry.end)
+            continue;
+
+        outEntry = entry;
+        return true;
+    }
+
+    outEntry = LinuxProcessMemoryMapEntry{};
+    return false;
 }
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
@@ -173,21 +235,54 @@ namespace CrashNames = ::NWB::Core::Crash::PackageNames;
     return false;
 }
 
+[[nodiscard]] static bool FindLinuxSymbolFileText(
+    LogArena& arena,
+    LinuxSymbolFileCache& cache,
+    const AStringView modulePathText,
+    const CrashSymbolicationConfig& config,
+    AStringView& outSymbolPathText
+){
+    outSymbolPathText = AStringView();
+
+    for(const LinuxSymbolFileCacheEntry& entry : cache.entries){
+        if(AStringView(entry.modulePath.data(), entry.modulePath.size()) != modulePathText)
+            continue;
+
+        if(!entry.found)
+            return false;
+
+        outSymbolPathText = AStringView(entry.symbolPath.data(), entry.symbolPath.size());
+        return true;
+    }
+
+    LinuxSymbolFileCacheEntry& entry = cache.entries.emplace_back(arena);
+    entry.modulePath.assign(modulePathText.data(), modulePathText.size());
+
+    Path symbolPath(arena);
+    entry.found = FindLinuxSymbolFile(arena, modulePathText, config, symbolPath);
+    if(!entry.found)
+        return false;
+
+    const CrashReportText symbolPathText = PathToString<char>(arena, symbolPath);
+    entry.symbolPath.assign(symbolPathText.data(), symbolPathText.size());
+    outSymbolPathText = AStringView(entry.symbolPath.data(), entry.symbolPath.size());
+    return true;
+}
+
 [[nodiscard]] static bool ResolveLinuxFrameSymbol(
     LogArena& arena,
+    LinuxSymbolFileCache& cache,
     const AStringView modulePathText,
     const u64 moduleOffset,
     const CrashSymbolicationConfig& config,
     CrashReportText& outSymbol
 ){
-    Path symbolPath(arena);
-    if(!FindLinuxSymbolFile(arena, modulePathText, config, symbolPath))
+    AStringView symbolPathText;
+    if(!FindLinuxSymbolFileText(arena, cache, modulePathText, config, symbolPathText))
         return false;
 
-    const CrashReportText symbolPathText = PathToString<char>(arena, symbolPath);
-    const AStringView symbolPathView(symbolPathText.data(), symbolPathText.size());
-    return TryRunLinuxSymbolizer(arena, "llvm-symbolizer", symbolPathView, moduleOffset, outSymbol)
-        || TryRunLinuxSymbolizer(arena, "addr2line", symbolPathView, moduleOffset, outSymbol)
+    return TryRunLinuxSymbolizer(arena, "llvm-symbolizer", symbolPathText, moduleOffset, outSymbol)
+        || TryRunLinuxSymbolizer(arena, "addr2line", symbolPathText, moduleOffset, outSymbol)
     ;
 }
 #endif
@@ -195,14 +290,17 @@ namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 static void AppendLinuxClientCallstack(
     LogArena& arena,
     const AStringView callstackText,
-    const AStringView procMapsText,
-    const bool procMapsPresent,
+    const LinuxProcessMemoryMapTable* const procMaps,
     const CrashSymbolicationConfig& config,
     CrashReportText& outReport
 ){
     static_cast<void>(config);
 
     outReport += "\n[callstack]\n";
+
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+    LinuxSymbolFileCache symbolFileCache(arena);
+#endif
 
     usize cursor = 0u;
     while(cursor < callstackText.size()){
@@ -221,9 +319,9 @@ static void AppendLinuxClientCallstack(
         outReport.append(trimmed.data(), trimmed.size());
 
         u64 address = 0u;
-        if(procMapsPresent && ParseCallstackFrameAddress(trimmed, address)){
+        if(procMaps && ParseCallstackFrameAddress(trimmed, address)){
             LinuxProcessMemoryMapEntry mapEntry;
-            if(FindLinuxProcessMemoryMapForAddress(procMapsText, address, mapEntry)){
+            if(FindLinuxProcessMemoryMapForAddress(*procMaps, address, mapEntry)){
                 const u64 moduleOffset = address - mapEntry.begin;
                 const u64 symbolOffset = moduleOffset + mapEntry.fileOffset;
                 const AStringView modulePath = mapEntry.path.empty() ? AStringView("<anonymous>") : mapEntry.path;
@@ -233,7 +331,7 @@ static void AppendLinuxClientCallstack(
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
                 AppendHexAddress(arena, outReport, moduleOffset);
                 CrashReportText symbol{arena};
-                if(ResolveLinuxFrameSymbol(arena, modulePath, symbolOffset, config, symbol)){
+                if(ResolveLinuxFrameSymbol(arena, symbolFileCache, modulePath, symbolOffset, config, symbol)){
                     outReport += " ";
                     outReport += symbol;
                 }
@@ -275,11 +373,16 @@ void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, c
         : "proc_maps=missing\n"
     ;
 
+    LinuxProcessMemoryMapTable procMapTable(arena);
+    if(procMapsPresent)
+        ParseLinuxProcessMemoryMaps(AStringView(procMaps.data(), procMaps.size()), procMapTable);
+    const LinuxProcessMemoryMapTable* const procMapTablePtr = procMapsPresent ? &procMapTable : nullptr;
+
     u64 instructionPointer = 0u;
     if(!cpuContextPresent || !FindLineKeyValueU64(AStringView(cpuContext.data(), cpuContext.size()), "instruction_pointer", instructionPointer) || instructionPointer == 0u){
         outReport += "detail=ELF/DWARF stack resolver requires a core-compatible artifact; instruction pointer mapping unavailable\n";
         if(clientCallstackPresent)
-            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), procMapsPresent, config, outReport);
+            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, outReport);
         return;
     }
 
@@ -290,15 +393,15 @@ void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, c
     if(!procMapsPresent){
         outReport += "detail=proc maps missing for module lookup; symbolic frame resolution unavailable\n";
         if(clientCallstackPresent)
-            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(), false, config, outReport);
+            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), nullptr, config, outReport);
         return;
     }
 
     LinuxProcessMemoryMapEntry instructionMapEntry;
-    if(!FindLinuxProcessMemoryMapForAddress(AStringView(procMaps.data(), procMaps.size()), instructionPointer, instructionMapEntry)){
+    if(!FindLinuxProcessMemoryMapForAddress(procMapTable, instructionPointer, instructionMapEntry)){
         outReport += "detail=instruction pointer was not found in proc maps\n";
         if(clientCallstackPresent)
-            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), true, config, outReport);
+            AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, outReport);
         return;
     }
 
@@ -316,7 +419,7 @@ void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, c
         : "\ndetail=module-relative crash address captured; full Linux callstack requires a core-compatible artifact and DWARF resolver\n"
     ;
     if(clientCallstackPresent)
-        AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), AStringView(procMaps.data(), procMaps.size()), true, config, outReport);
+        AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, outReport);
 }
 
 

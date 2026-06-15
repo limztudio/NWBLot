@@ -7,7 +7,9 @@
 
 #include <core/crash/package_names.h>
 
-#include <global/filesystem/directory_iterator.h>
+#include <global/filesystem/archive.h>
+#include <global/filesystem/retention.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,7 +31,6 @@ using CrashText = CrashReportText;
 using CrashBytes = Vector<u8, LogArena>;
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
-inline constexpr u8 s_MinSafeArchivePathCharacter = 0x20u;
 inline constexpr usize s_GeneratedJsonNeedleReserveSlack = 4u;
 
 struct ByteView{
@@ -43,96 +44,27 @@ struct ByteView{
     [[nodiscard]] const u8* data()const{ return bytes; }
 };
 
-static void ApplyRetentionToDirectory(LogArena& arena, const Path& directory, const usize maxEntries){
-    if(maxEntries == 0u)
-        return;
-
-    ErrorCode error;
-    const bool exists = IsDirectory(directory, error);
-    if(error || !exists)
-        return;
-
-    Vector<Path, LogArena> entries{arena};
-    DirectoryIterator directoryIt(directory, error);
-    if(error)
-        return;
-
-    for(const auto& entry : directoryIt)
-        entries.emplace_back(arena, entry.path());
-
-    if(entries.size() <= maxEntries)
-        return;
-
-    Sort(entries.begin(), entries.end());
-
-    const usize removeCount = entries.size() - maxEntries;
-    for(usize i = 0u; i < removeCount; ++i){
-        error.clear();
-        static_cast<void>(RemoveAllIfExists(entries[i], error));
-    }
-}
-
 static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
-    ApplyRetentionToDirectory(arena, CrashExtractedDirectory(arena, config.storageDirectory), config.retention.maxExtractedPackages);
-    ApplyRetentionToDirectory(arena, CrashRawDirectory(arena, config.storageDirectory), config.retention.maxRawArchives);
-    ApplyRetentionToDirectory(arena, CrashInvalidDirectory(arena, config.storageDirectory), config.retention.maxInvalidArchives);
+    static_cast<void>(ApplyDirectoryRetention(
+        arena,
+        CrashExtractedDirectory(arena, config.storageDirectory),
+        config.retention.maxExtractedPackages
+    ));
+    static_cast<void>(ApplyDirectoryRetention(
+        arena,
+        CrashRawDirectory(arena, config.storageDirectory),
+        config.retention.maxRawArchives
+    ));
+    static_cast<void>(ApplyDirectoryRetention(
+        arena,
+        CrashInvalidDirectory(arena, config.storageDirectory),
+        config.retention.maxInvalidArchives
+    ));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static bool ReadArchiveLine(const CrashBytes& archiveBytes, usize& inOutCursor, AStringView& outLine){
-    outLine = AStringView();
-    if(inOutCursor >= archiveBytes.size())
-        return false;
-
-    const usize begin = inOutCursor;
-    while(inOutCursor < archiveBytes.size() && archiveBytes[inOutCursor] != static_cast<u8>('\n'))
-        ++inOutCursor;
-    if(inOutCursor >= archiveBytes.size())
-        return false;
-
-    usize end = inOutCursor;
-    ++inOutCursor;
-    if(end > begin && archiveBytes[end - 1u] == static_cast<u8>('\r'))
-        --end;
-
-    outLine = AStringView(reinterpret_cast<const char*>(archiveBytes.data() + begin), end - begin);
-    return true;
-}
-
-[[nodiscard]] static bool IsPathSeparator(const char ch)noexcept{
-    return ch == '/' || ch == '\\';
-}
-
-[[nodiscard]] static bool IsSafeArchiveRelativePath(const AStringView pathText)noexcept{
-    if(pathText.empty() || IsPathSeparator(pathText.front()))
-        return false;
-
-    usize segmentBegin = 0u;
-    for(usize i = 0u; i <= pathText.size(); ++i){
-        const bool atEnd = i == pathText.size();
-        const char ch = atEnd ? '/' : pathText[i];
-        if(!atEnd && (static_cast<unsigned char>(ch) < s_MinSafeArchivePathCharacter || ch == ':'))
-            return false;
-
-        if(!atEnd && !IsPathSeparator(ch))
-            continue;
-
-        const usize segmentLength = i - segmentBegin;
-        if(segmentLength == 0u)
-            return false;
-
-        const AStringView segment(pathText.data() + segmentBegin, segmentLength);
-        if(segment == "." || segment == "..")
-            return false;
-
-        segmentBegin = i + 1u;
-    }
-
-    return true;
-}
 
 [[nodiscard]] static bool ParseFileHeader(const AStringView line, AStringView& outRelativePath, usize& outFileSize){
     outRelativePath = AStringView();
@@ -187,7 +119,7 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 
     usize cursor = 0u;
     AStringView line;
-    if(!ReadArchiveLine(archiveBytes, cursor, line) || line != CrashNames::s_ArchiveHeaderLine){
+    if(!NextLfByteLine(archiveBytes, cursor, line) || line != CrashNames::s_ArchiveHeaderLine){
         outError = "invalid crash archive header";
         return false;
     }
@@ -201,7 +133,7 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 
     usize fileCount = 0u;
     while(cursor < archiveBytes.size()){
-        if(!ReadArchiveLine(archiveBytes, cursor, line)){
+        if(!NextLfByteLine(archiveBytes, cursor, line)){
             outError = "truncated crash archive file header";
             return false;
         }
@@ -224,7 +156,12 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 
         AStringView separator;
         AStringView endMarker;
-        if(!ReadArchiveLine(archiveBytes, cursor, separator) || !separator.empty() || !ReadArchiveLine(archiveBytes, cursor, endMarker) || endMarker != CrashNames::s_ArchiveEntryEndLine){
+        if(
+            !NextLfByteLine(archiveBytes, cursor, separator)
+            || !separator.empty()
+            || !NextLfByteLine(archiveBytes, cursor, endMarker)
+            || endMarker != CrashNames::s_ArchiveEntryEndLine
+        ){
             outError = "malformed crash archive file footer";
             return false;
         }

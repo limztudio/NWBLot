@@ -4,8 +4,9 @@
 
 #include "package_internal.h"
 
+#include <global/filesystem/retention.h>
+
 #include <cstddef>
-#include <cstring>
 
 #include <curl/curl.h>
 
@@ -42,15 +43,14 @@ static bool s_CurlGlobalInitialized = false;
 
 static void* CrashCurlAllocate(const usize size)noexcept{
     ScopedLock lock(s_CurlAllocatorMutex);
-    return DumpArena().allocate(alignof(std::max_align_t), size == 0u ? 1u : size);
+
+    return AllocateArenaCMemory(DumpArena(), size);
 }
 
 static void CrashCurlDeallocate(void* const ptr)noexcept{
-    if(!ptr)
-        return;
-
     ScopedLock lock(s_CurlAllocatorMutex);
-    DumpArena().deallocate(ptr, alignof(std::max_align_t), 0u);
+
+    DeallocateArenaCMemory(DumpArena(), ptr);
 }
 
 static void* CrashCurlMalloc(const size_t size)noexcept{
@@ -62,39 +62,21 @@ static void CrashCurlFree(void* const ptr)noexcept{
 }
 
 static void* CrashCurlRealloc(void* const ptr, const size_t size)noexcept{
-    if(!ptr)
-        return CrashCurlAllocate(static_cast<usize>(size));
-    if(size == 0u){
-        CrashCurlDeallocate(ptr);
-        return nullptr;
-    }
-
     ScopedLock lock(s_CurlAllocatorMutex);
-    return DumpArena().reallocate(ptr, alignof(std::max_align_t), static_cast<usize>(size));
+
+    return ReallocateArenaCMemory(DumpArena(), ptr, static_cast<usize>(size));
 }
 
 static char* CrashCurlStrdup(const char* const text)noexcept{
-    if(!text)
-        return nullptr;
+    ScopedLock lock(s_CurlAllocatorMutex);
 
-    const usize byteCount = static_cast<usize>(std::strlen(text)) + 1u;
-    char* const copy = static_cast<char*>(CrashCurlAllocate(byteCount));
-    if(!copy)
-        return nullptr;
-
-    std::memcpy(copy, text, byteCount);
-    return copy;
+    return DuplicateArenaCString(DumpArena(), text);
 }
 
 static void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
-    if(count != 0u && size > static_cast<size_t>(Limit<usize>::s_Max) / count)
-        return nullptr;
+    ScopedLock lock(s_CurlAllocatorMutex);
 
-    const usize byteCount = static_cast<usize>(count * size);
-    void* const ptr = CrashCurlAllocate(byteCount);
-    if(ptr)
-        std::memset(ptr, 0, byteCount);
-    return ptr;
+    return ZeroAllocateArenaCMemory(DumpArena(), static_cast<usize>(count), static_cast<usize>(size));
 }
 
 [[nodiscard]] static bool EnsureCrashCurlGlobalInit(){
@@ -218,71 +200,53 @@ static bool WriteUploadAttemptText(ArenaT& arena, const ::Path<ArenaT>& packageD
 }
 
 template<typename ArenaT>
-static bool ApplyRetentionToDirectory(
-    ArenaT& arena,
-    const ::Path<ArenaT>& directory,
-    const usize maxEntries,
-    const AStringView protectedPackageName = AStringView()
-){
-    if(maxEntries == 0u)
-        return true;
-
-    ErrorCode error;
-    const bool exists = IsDirectory(directory, error);
-    if(error)
-        return false;
-    if(!exists)
-        return true;
-
-    Vector<::Path<ArenaT>, ArenaT> entries{arena};
-    DirectoryIterator directoryIt(directory, error);
-    if(error)
-        return false;
-
-    for(const auto& entry : directoryIt){
-        ErrorCode entryError;
-        if(!IsDirectory(entry.path(), entryError) || entryError || !IsSafePackageName(arena, entry.path()))
-            continue;
-
-        const CrashStringT<ArenaT> packageName = PathToString<char>(arena, entry.path().filename());
-        if(!protectedPackageName.empty() && AStringView(packageName.data(), packageName.size()) == protectedPackageName)
-            continue;
-
-        entries.emplace_back(arena, entry.path());
-    }
-
-    if(entries.size() <= maxEntries)
-        return true;
-
-    Sort(entries.begin(), entries.end());
-
-    bool ok = true;
-    const usize removeCount = entries.size() - maxEntries;
-    for(usize i = 0u; i < removeCount; ++i){
-        error.clear();
-        if(!RemoveAllIfExists(entries[i], error))
-            ok = false;
-    }
-    return ok;
-}
-
-template<typename ArenaT>
 bool ApplyCrashSpoolRetention(
     ArenaT& arena,
     const ::Path<ArenaT>& spoolDirectory,
     const CrashSpoolRetentionConfig& retention,
     const AStringView protectedPendingPackageName
 ){
+    const auto isSafePackageDirectory = [&](const ::Path<ArenaT>& path){
+        ErrorCode entryError;
+        return IsDirectory(path, entryError) && !entryError && IsSafePackageName(arena, path);
+    };
+
+    const auto shouldRetainPendingPackageDirectory = [&](const ::Path<ArenaT>& path){
+        if(!isSafePackageDirectory(path))
+            return false;
+
+        if(protectedPendingPackageName.empty())
+            return true;
+
+        const CrashStringT<ArenaT> packageName = PathToString<char>(arena, path.filename());
+        return AStringView(packageName.data(), packageName.size()) != protectedPendingPackageName;
+    };
+
     bool ok = true;
-    ok = ApplyRetentionToDirectory(
+    ok = ApplyDirectoryRetention(
         arena,
         PendingDirectory(spoolDirectory),
         retention.maxPendingPackages,
-        protectedPendingPackageName
+        shouldRetainPendingPackageDirectory
     ) && ok;
-    ok = ApplyRetentionToDirectory(arena, UploadedDirectory(spoolDirectory), retention.maxUploadedPackages) && ok;
-    ok = ApplyRetentionToDirectory(arena, FailedDirectory(spoolDirectory), retention.maxFailedPackages) && ok;
-    ok = ApplyRetentionToDirectory(arena, UploadingDirectory(spoolDirectory), retention.maxUploadingPackages) && ok;
+    ok = ApplyDirectoryRetention(
+        arena,
+        UploadedDirectory(spoolDirectory),
+        retention.maxUploadedPackages,
+        isSafePackageDirectory
+    ) && ok;
+    ok = ApplyDirectoryRetention(
+        arena,
+        FailedDirectory(spoolDirectory),
+        retention.maxFailedPackages,
+        isSafePackageDirectory
+    ) && ok;
+    ok = ApplyDirectoryRetention(
+        arena,
+        UploadingDirectory(spoolDirectory),
+        retention.maxUploadingPackages,
+        isSafePackageDirectory
+    ) && ok;
     return ok;
 }
 

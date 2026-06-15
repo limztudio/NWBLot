@@ -170,6 +170,30 @@ template<typename CharT>
     return true;
 }
 
+template<typename ByteContainer>
+[[nodiscard]] inline bool NextLfByteLine(const ByteContainer& bytes, usize& inOutCursor, AStringView& outLine){
+    using ByteType = typename ByteContainer::value_type;
+    static_assert(sizeof(ByteType) == 1u, "NextLfByteLine requires a byte-sized container");
+
+    outLine = AStringView();
+    if(inOutCursor >= bytes.size())
+        return false;
+
+    const usize begin = inOutCursor;
+    while(inOutCursor < bytes.size() && bytes[inOutCursor] != static_cast<ByteType>('\n'))
+        ++inOutCursor;
+    if(inOutCursor >= bytes.size())
+        return false;
+
+    usize end = inOutCursor;
+    ++inOutCursor;
+    if(end > begin && bytes[end - 1u] == static_cast<ByteType>('\r'))
+        --end;
+
+    outLine = AStringView(reinterpret_cast<const char*>(bytes.data() + begin), end - begin);
+    return true;
+}
+
 template<typename CharT>
 [[nodiscard]] inline bool NextTrimmedTextLine(const BasicStringView<CharT> text, usize& inOutCursor, BasicStringView<CharT>& outLine){
     if(!NextTextLine(text, inOutCursor, outLine))

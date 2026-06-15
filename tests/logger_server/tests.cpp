@@ -199,7 +199,7 @@ static void TestLinuxCrashPackageSymbolicatesSelfFrame(TestContext& context){
 
     CrashTestText archive(arena);
     archive += CrashNames::s_ArchiveHeaderText;
-    const CrashTestText manifest = BuildManifest(arena, "linux-symbolized-test", "linux");
+    const CrashTestText manifest = BuildManifest(arena, "linux-symbolized-test", "linux", "crash", "signal", 11u);
     AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
 
     CrashTestText cpuContext(arena);
@@ -308,7 +308,7 @@ static void TestLinuxAssertCrashProducesObservableLoggerReport(TestContext& cont
     CrashTestText report(arena);
     NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=linux"));
-    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "reason=manual"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "reason=manual_dump"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[event]"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "event=assert"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "expression=false"));
@@ -427,7 +427,7 @@ static void TestAndroidCrashPackageCopiesTombstoneFrames(TestContext& context){
 
     CrashTestText archive(arena);
     archive += CrashNames::s_ArchiveHeaderText;
-    const CrashTestText manifest = BuildManifest(arena, "android-test", "android");
+    const CrashTestText manifest = BuildManifest(arena, "android-test", "android", "crash", "manual_dump", 0u);
     AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
     AppendArchiveFile(
         archive,
@@ -463,7 +463,7 @@ static void TestLinuxCrashPackageReportsMissingProcMaps(TestContext& context){
 
     CrashTestText archive(arena);
     archive += CrashNames::s_ArchiveHeaderText;
-    const CrashTestText manifest = BuildManifest(arena, "linux-missing-maps-test", "linux");
+    const CrashTestText manifest = BuildManifest(arena, "linux-missing-maps-test", "linux", "crash", "signal", 11u);
     AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
     AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "instruction_pointer=4198964\n");
 
@@ -492,7 +492,7 @@ static void TestLinuxCrashPackageReportsUnmappedInstructionPointer(TestContext& 
 
     CrashTestText archive(arena);
     archive += CrashNames::s_ArchiveHeaderText;
-    const CrashTestText manifest = BuildManifest(arena, "linux-unmapped-ip-test", "linux");
+    const CrashTestText manifest = BuildManifest(arena, "linux-unmapped-ip-test", "linux", "crash", "signal", 11u);
     AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
     AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "instruction_pointer=7340032\n");
     AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
@@ -522,7 +522,7 @@ static void TestAndroidCrashPackageReportsTombstoneWithoutFrames(TestContext& co
 
     CrashTestText archive(arena);
     archive += CrashNames::s_ArchiveHeaderText;
-    const CrashTestText manifest = BuildManifest(arena, "android-no-frames-test", "android");
+    const CrashTestText manifest = BuildManifest(arena, "android-no-frames-test", "android", "crash", "manual_dump", 0u);
     AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
     AppendArchiveFile(archive, CrashNames::s_AndroidTombstoneFileName, "pid: 7, tid: 7, name: nwb\nbacktrace:\n");
 
@@ -552,7 +552,7 @@ static void TestWindowsCrashPackageReportsMissingMinidump(TestContext& context){
 
     CrashTestText archive(arena);
     archive += CrashNames::s_ArchiveHeaderText;
-    const CrashTestText manifest = BuildManifest(arena, "windows-missing-dump-test", "windows", "windows_exception", 0xC0000005u);
+    const CrashTestText manifest = BuildManifest(arena, "windows-missing-dump-test", "windows", "crash", "windows_exception", 0xC0000005u);
     AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
 
     NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
@@ -602,6 +602,42 @@ static void TestInvalidCrashPackageIsRejected(TestContext& context){
 
     ErrorCode error;
     NWB_LOGSERVER_TEST_CHECK(context, IsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem), error) && !error);
+
+    RemoveTestArtifacts(arena, s_Group);
+}
+
+static void TestOldCrashManifestWithoutEventIsRejected(TestContext& context){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("logger_server_old_manifest_crash_test");
+    constexpr AStringView s_Stem("old_manifest_001");
+    RemoveTestArtifacts(arena, s_Group);
+
+    CrashTestText manifest(arena);
+    manifest += "{\n";
+    manifest += "  \"format\": \"";
+    manifest += CrashNames::s_ManifestFormatValue;
+    manifest += "\",\n";
+    manifest += "  \"crash_id\": \"old-manifest-test\",\n";
+    manifest += "  \"platform\": \"linux\",\n";
+    manifest += "  \"reason_kind\": \"signal\",\n";
+    manifest += "  \"reason_code\": 11,\n";
+    manifest += "  \"artifact_strategy\": \"unit_test\",\n";
+    manifest += "  \"thread_id\": 7\n";
+    manifest += "}\n";
+
+    CrashTestText archive(arena);
+    archive += CrashNames::s_ArchiveHeaderText;
+    AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
+    NWB_LOGSERVER_TEST_CHECK(context, WriteArchive(arena, s_Group, s_Stem, archive));
+
+    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
+    const NWB::Log::CrashIngestResult result = NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, s_Group, s_Stem), config);
+
+    NWB_LOGSERVER_TEST_CHECK(context, !result.accepted);
+    NWB_LOGSERVER_TEST_CHECK(context, result.type == NWB::Log::Type::Error);
+    NWB_LOGSERVER_TEST_CHECK(context, ContainsMessage(result.message, NWB_TEXT("manifest.json is missing required fields")));
+    NWB_LOGSERVER_TEST_CHECK(context, PathIsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem)));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -752,6 +788,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("logserver crash", [](NWB::Tests::TestContext& conte
     __hidden_logger_server_tests::TestAndroidCrashPackageReportsTombstoneWithoutFrames(context);
     __hidden_logger_server_tests::TestWindowsCrashPackageReportsMissingMinidump(context);
     __hidden_logger_server_tests::TestInvalidCrashPackageIsRejected(context);
+    __hidden_logger_server_tests::TestOldCrashManifestWithoutEventIsRejected(context);
     __hidden_logger_server_tests::TestCrashRetentionPrunesOldestAcceptedUploads(context);
     __hidden_logger_server_tests::TestAcceptedCrashWarnsWhenRawArchiveCannotBeRetained(context);
     __hidden_logger_server_tests::TestCrashRetentionPrunesOldestInvalidUploads(context);

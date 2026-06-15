@@ -4,8 +4,6 @@
 
 #include "internal.h"
 
-#include <global/diagnostics.h>
-
 #include <curl/curl.h>
 
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -164,16 +162,6 @@ static const char* ArtifactStrategyName(const CrashRequest& request){
     }
 }
 
-static const char* EventName(const CrashRequest& request){
-    if(request.event[0] != 0)
-        return request.event;
-    if(const char* const diagnosticEventName = DiagnosticEventNameFromCategory(request.triggerCategory))
-        return diagnosticEventName;
-    if(request.reasonKind == CrashReasonKind::ManualDump)
-        return DiagnosticEventName::s_ManualDump;
-    return DiagnosticEventName::s_Crash;
-}
-
 template<typename ArenaT>
 static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> manifest{arena};
@@ -213,7 +201,7 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     manifest += ",\n  \"frame_pointer\": ";
     AppendUnsignedText(manifest, request.framePointer);
     manifest += ",\n  \"event\": ";
-    AppendJsonEscaped(manifest, EventName(request));
+    AppendJsonEscaped(manifest, request.event);
     manifest += ",\n  \"trigger_category\": ";
     AppendJsonEscaped(manifest, request.triggerCategory);
     manifest += ",\n  \"trigger_expression\": ";
@@ -284,7 +272,7 @@ static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest
     text += "\nframe_pointer=";
     AppendUnsignedText(text, request.framePointer);
     text += "\nevent=";
-    text += EventName(request);
+    text += request.event;
     text += "\ntrigger_category=";
     text += request.triggerCategory;
     text += "\ntrigger_expression=";

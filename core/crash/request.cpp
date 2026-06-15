@@ -4,6 +4,8 @@
 
 #include "internal.h"
 
+#include <global/diagnostics.h>
+
 NWB_CRASH_BEGIN
 
 
@@ -71,6 +73,18 @@ static void BuildCrashId(CrashRequest& outRequest, const u64 sequence)noexcept{
     AppendUnsignedToFixedBuffer(outRequest.crashId, outRequest.processId);
     AppendFixedBuffer(outRequest.crashId, "-");
     AppendUnsignedToFixedBuffer(outRequest.crashId, sequence);
+}
+
+static AStringView EventNameForRequest(const CrashReasonKind::Enum reasonKind, const CrashDumpRequestOptions& options)noexcept{
+    if(!options.event.empty())
+        return options.event;
+    if(options.triggerCategory == DiagnosticEventCategory::s_Assert)
+        return AStringView(DiagnosticEventName::s_Assert);
+    if(options.triggerCategory == DiagnosticEventCategory::s_FatalAssert)
+        return AStringView(DiagnosticEventName::s_Assert);
+    if(reasonKind == CrashReasonKind::ManualDump)
+        return AStringView(DiagnosticEventName::s_ManualDump);
+    return AStringView(DiagnosticEventName::s_Crash);
 }
 
 void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum reasonKind, const u32 reasonCode)noexcept{
@@ -157,7 +171,7 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
             request.callstackFrames[outputCallstackFrameCount++] = frame;
     }
     request.callstackFrameCount = outputCallstackFrameCount;
-    CopyFixedBuffer(request.event, options.event);
+    CopyFixedBuffer(request.event, EventNameForRequest(reasonKind, options));
     CopyFixedBuffer(request.triggerCategory, options.triggerCategory);
     CopyFixedBuffer(request.triggerExpression, options.triggerExpression);
     CopyFixedBuffer(request.triggerMessage, options.triggerMessage);

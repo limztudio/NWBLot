@@ -105,6 +105,7 @@ CrashTestText BuildManifest(
     Core::Alloc::GlobalArena& arena,
     const AStringView crashId,
     const AStringView platform,
+    const AStringView event,
     const AStringView reasonKind,
     const u64 reasonCode
 ){
@@ -124,6 +125,9 @@ CrashTestText BuildManifest(
     manifest += "\",\n  \"reason_code\": ";
     manifest += FormatDecimal(static_cast<usize>(reasonCode), reasonCodeBuffer);
     manifest += ",\n";
+    manifest += "  \"event\": \"";
+    manifest += event;
+    manifest += "\",\n";
     manifest += "  \"artifact_strategy\": \"unit_test\",\n";
     manifest += "  \"thread_id\": 7\n";
     manifest += "}\n";
@@ -299,7 +303,7 @@ bool WaitForTriggerPackage(
 
 void BuildLinuxCrashArchive(Core::Alloc::GlobalArena& arena, CrashTestText& archive, const AStringView crashId){
     archive += CrashNames::s_ArchiveHeaderText;
-    const CrashTestText manifest = BuildManifest(arena, crashId, "linux", "signal", 11u);
+    const CrashTestText manifest = BuildManifest(arena, crashId, "linux", "crash", "signal", 11u);
     AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
     AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "fault_address=0\ninstruction_pointer=4198964\nstack_pointer=0\nframe_pointer=0\n");
     AppendArchiveFile(archive, CrashNames::s_CallstackFileName, "#0 0x0000000000401234\n#1 0x0000000000401240\n");

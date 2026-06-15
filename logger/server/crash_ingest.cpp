@@ -341,11 +341,13 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestCrashIdKey, outSummary.crashId)
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestPlatformKey, outSummary.platform)
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestReasonKindKey, outSummary.reasonKind)
+        || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestReasonCodeKey, outSummary.reasonCode)
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestArtifactStrategyKey, outSummary.artifactStrategy)
         || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestThreadIdKey, outSummary.threadId)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestEventKey, outSummary.event)
     ){
         outError = CrashNames::s_ManifestFileName;
-        outError += " is missing required v1 fields";
+        outError += " is missing required fields";
         return false;
     }
 
@@ -354,14 +356,11 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
         outError += " has unsupported crash package format";
         return false;
     }
-    if(outSummary.crashId.empty() || outSummary.platform.empty() || outSummary.reasonKind.empty() || outSummary.artifactStrategy.empty()){
+    if(outSummary.crashId.empty() || outSummary.platform.empty() || outSummary.reasonKind.empty() || outSummary.artifactStrategy.empty() || outSummary.event.empty()){
         outError = CrashNames::s_ManifestFileName;
-        outError += " contains empty required v1 fields";
+        outError += " contains empty required fields";
         return false;
     }
-
-    static_cast<void>(FindGeneratedJsonUnsignedValue(arena, manifestText, "reason_code", outSummary.reasonCode));
-    static_cast<void>(FindGeneratedJsonStringValue(arena, manifestText, "event", outSummary.event));
 
     return true;
 }

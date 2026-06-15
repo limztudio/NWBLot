@@ -98,7 +98,7 @@ static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, 
         outReport += "exception=std::terminate\n";
         return;
     }
-    if(summary.reasonKind == "manual"){
+    if(summary.reasonKind == "manual_dump"){
         outReport += "exception=manual diagnostic dump\n";
         return;
     }
@@ -106,16 +106,6 @@ static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, 
     outReport += "exception=";
     outReport += summary.reasonKind;
     outReport += "\n";
-}
-
-[[nodiscard]] static const char* EventNameFromSummary(const CrashPackageSummary& summary, const CrashReportText& category)noexcept{
-    if(!summary.event.empty())
-        return summary.event.c_str();
-    if(const char* const diagnosticEventName = DiagnosticEventNameFromCategory(category.c_str()))
-        return diagnosticEventName;
-    if(summary.reasonKind == "manual" || summary.reasonKind == "manual_dump")
-        return DiagnosticEventName::s_ManualDump;
-    return DiagnosticEventName::s_Crash;
 }
 
 struct TriggerSummary{
@@ -161,11 +151,9 @@ static TriggerSummary ReadTriggerSummary(LogArena& arena, const Path& packageDir
 }
 
 static void AppendEventSummary(LogArena& arena, const CrashPackageSummary& summary, const TriggerSummary& trigger, CrashReportText& outReport){
-    const char* const event = EventNameFromSummary(summary, trigger.category);
-
     outReport += "\n[event]\n";
     outReport += "event=";
-    outReport += event;
+    outReport += summary.event;
     outReport += "\n";
 
     if(!trigger.present)

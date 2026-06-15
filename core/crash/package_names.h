@@ -92,8 +92,10 @@ inline constexpr const char* s_ManifestFormatKey = "format";
 inline constexpr const char* s_ManifestCrashIdKey = "crash_id";
 inline constexpr const char* s_ManifestPlatformKey = "platform";
 inline constexpr const char* s_ManifestReasonKindKey = "reason_kind";
+inline constexpr const char* s_ManifestReasonCodeKey = "reason_code";
 inline constexpr const char* s_ManifestArtifactStrategyKey = "artifact_strategy";
 inline constexpr const char* s_ManifestThreadIdKey = "thread_id";
+inline constexpr const char* s_ManifestEventKey = "event";
 inline constexpr const char* s_ManifestFormatValue = "nwb-crash-package-v1";
 
 

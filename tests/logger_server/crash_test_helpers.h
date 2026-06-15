@@ -52,8 +52,9 @@ void AppendArchiveFile(CrashTestText& archive, AStringView relativePath, AString
     Core::Alloc::GlobalArena& arena,
     AStringView crashId,
     AStringView platform,
-    AStringView reasonKind = AStringView("manual"),
-    u64 reasonCode = 0u
+    AStringView event,
+    AStringView reasonKind,
+    u64 reasonCode
 );
 [[nodiscard]] bool WriteArchive(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, const CrashTestText& archive);
 [[nodiscard]] bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, const CrashTestBytes& archive);

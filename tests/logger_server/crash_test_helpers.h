@@ -29,6 +29,7 @@ namespace LoggerServerCrash{
 using CrashTestText = AString<Core::Alloc::GlobalArena>;
 using CrashTestBytes = Vector<u8, Core::Alloc::GlobalArena>;
 using CrashTestPath = ::Path<Core::Alloc::GlobalArena>;
+using CrashPersistentPath = ::Path<Core::Alloc::PersistentArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,6 +55,7 @@ enum class ManifestEventField{
 [[nodiscard]] CrashTestPath ExtractedPackageDirectory(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem);
 [[nodiscard]] CrashTestPath RawArchivePath(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem);
 [[nodiscard]] CrashTestPath InvalidArchivePath(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem);
+[[nodiscard]] CrashPersistentPath ToCrashPersistentPath(Core::Alloc::PersistentArena& arena, const CrashTestPath& path);
 
 void RemoveTestArtifacts(Core::Alloc::GlobalArena& arena, AStringView testGroup);
 void AppendArchiveFile(CrashTestText& archive, AStringView relativePath, AStringView content);
@@ -78,7 +80,7 @@ void BeginArchiveWithManifest(
 );
 [[nodiscard]] bool WriteArchive(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, const CrashTestText& archive);
 [[nodiscard]] bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, const CrashTestBytes& archive);
-[[nodiscard]] bool BuildArchiveFromPackageDirectory(Core::Alloc::GlobalArena& arena, const CrashTestPath& packageDirectory, CrashTestBytes& outArchive);
+[[nodiscard]] bool BuildArchiveFromPackageDirectory(const CrashTestPath& packageDirectory, CrashTestBytes& outArchive);
 [[nodiscard]] bool ReadServerSymbolication(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, CrashTestText& outReport);
 [[nodiscard]] Log::CrashIngestConfig MakeIngestConfig(Core::Alloc::GlobalArena& arena, AStringView testGroup);
 [[nodiscard]] bool WaitForTriggerPackage(

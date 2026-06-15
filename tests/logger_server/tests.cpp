@@ -43,6 +43,7 @@ using NWB::Tests::WaitForDirectory;
 using namespace NWB::Tests::LoggerServerCrash;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
 inline constexpr AStringView s_InvalidArchiveHeader("NWBCRASHPKG 0\n");
+inline constexpr usize s_CrashInstallArenaPayloadSize = 64u * 1024u;
 
 #define NWB_LOGSERVER_TEST_CHECK NWB_TEST_CHECK
 #if defined(_MSC_VER)
@@ -52,6 +53,14 @@ inline constexpr AStringView s_InvalidArchiveHeader("NWBCRASHPKG 0\n");
 #else
 #define NWB_LOGSERVER_TEST_NOINLINE
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static usize CrashInstallArenaStorageSize()noexcept{
+    return NWB::Core::Alloc::PersistentArena::StructureAlignedSize(s_CrashInstallArenaPayloadSize);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -325,14 +334,14 @@ static void TestLinuxAssertCrashProducesObservableLoggerReport(TestContext& cont
     NWB_LOGSERVER_TEST_CHECK(context, childPid >= 0);
     if(childPid == 0){
         NWB::Core::Alloc::PersistentArena installArena(
-            NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u),
+            CrashInstallArenaStorageSize(),
             "NWB::Tests::LoggerServer::AssertChildInstallArena"
         );
-        NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
+        NWB::Core::Crash::CrashConfig config(installArena);
         config.applicationName = AStringView("logserver_crash_tests");
         config.version = AStringView("1");
         config.buildId = AStringView("linux-assert-observe-test");
-        config.spoolDirectory = spoolDirectory;
+        config.spoolDirectory = ToCrashPersistentPath(installArena, spoolDirectory);
 
         if(!NWB::Core::Crash::InstallCrashHandler(installArena, config))
             _exit(121);
@@ -382,7 +391,7 @@ static void TestLinuxAssertCrashProducesObservableLoggerReport(TestContext& cont
     );
 
     CrashTestBytes archive(arena);
-    NWB_LOGSERVER_TEST_CHECK(context, BuildArchiveFromPackageDirectory(arena, assertPackageDirectory, archive));
+    NWB_LOGSERVER_TEST_CHECK(context, BuildArchiveFromPackageDirectory(assertPackageDirectory, archive));
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(context, arena, s_Group, s_Stem, archive);
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
 
@@ -418,7 +427,7 @@ NWB_LOGSERVER_TEST_NOINLINE static void TestRecoverableErrorDiagnosticProducesOb
     TestArena testArena;
     auto& arena = testArena.arena;
     NWB::Core::Alloc::PersistentArena installArena(
-        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u),
+        CrashInstallArenaStorageSize(),
         "NWB::Tests::LoggerServer::RecoverableErrorInstallArena"
     );
     constexpr AStringView s_Group("logger_server_recoverable_error_observe_test");
@@ -427,11 +436,11 @@ NWB_LOGSERVER_TEST_NOINLINE static void TestRecoverableErrorDiagnosticProducesOb
     RemoveTestArtifacts(arena, s_Group);
 
     const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
-    NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> crashConfig(installArena);
+    NWB::Core::Crash::CrashConfig crashConfig(installArena);
     crashConfig.applicationName = AStringView("logserver_crash_tests");
     crashConfig.version = AStringView("1");
     crashConfig.buildId = AStringView("recoverable-error-observe-test");
-    crashConfig.spoolDirectory = spoolDirectory;
+    crashConfig.spoolDirectory = ToCrashPersistentPath(installArena, spoolDirectory);
 
     const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, crashConfig);
     NWB_LOGSERVER_TEST_CHECK(context, installed);
@@ -466,7 +475,7 @@ NWB_LOGSERVER_TEST_NOINLINE static void TestRecoverableErrorDiagnosticProducesOb
     NWB::Core::Crash::UninstallCrashHandler();
 
     CrashTestBytes archive(arena);
-    NWB_LOGSERVER_TEST_CHECK(context, BuildArchiveFromPackageDirectory(arena, errorPackageDirectory, archive));
+    NWB_LOGSERVER_TEST_CHECK(context, BuildArchiveFromPackageDirectory(errorPackageDirectory, archive));
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(context, arena, s_Group, s_Stem, archive);
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
 

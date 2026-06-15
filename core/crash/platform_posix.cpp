@@ -449,8 +449,7 @@ void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reason
     static_cast<void>(RequestCrashDump(reasonKind, reasonCode, requestOptions));
 }
 
-template<typename ArenaT>
-bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
+bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerExecutablePath){
 #if defined(NWB_PLATFORM_ANDROID)
     static_cast<void>(handlerExecutablePath);
     return true;
@@ -519,8 +518,6 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
     return false;
 #endif
 }
-
-template bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerExecutablePath);
 
 void InstallPlatformHandlers(){
 #if defined(NWB_PLATFORM_ANDROID)

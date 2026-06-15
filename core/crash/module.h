@@ -75,12 +75,11 @@ struct CrashDumpResult{
 };
 
 
-template<typename ArenaT>
-struct CrashConfigT{
+struct CrashConfig{
     AStringView applicationName;
     AStringView buildId;
     AStringView version;
-    ::Path<ArenaT> spoolDirectory;
+    ::Path<Alloc::PersistentArena> spoolDirectory;
     AStringView logServerUrl;
     AStringView crashUploadToken;
     AStringView handlerExecutablePath;
@@ -88,26 +87,21 @@ struct CrashConfigT{
     CrashSpoolRetentionConfig spoolRetention;
     DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
 
-    explicit CrashConfigT(ArenaT& arena)
+    explicit CrashConfig(Alloc::PersistentArena& arena)
         : spoolDirectory(arena)
     {}
 };
 
-using CrashConfig = CrashConfigT<Alloc::PersistentArena>;
 
-
-template<typename ArenaT>
-[[nodiscard]] bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config);
+[[nodiscard]] bool InstallCrashHandler(Alloc::PersistentArena& arena, const CrashConfig& config);
 void UninstallCrashHandler();
 
 [[nodiscard]] bool SetCrashMetadata(AStringView key, AStringView value);
 [[nodiscard]] bool AddCrashBreadcrumb(AStringView category, AStringView message);
 [[nodiscard]] CrashDumpResult CaptureCrashDump(AStringView category = AStringView(), AStringView message = AStringView());
 
-template<typename ArenaT>
-[[nodiscard]] ::Path<ArenaT> DefaultCrashSpoolDirectory(ArenaT& arena);
-template<typename ArenaT>
-[[nodiscard]] ::Path<ArenaT> DefaultCrashHandlerExecutablePath(ArenaT& arena);
+[[nodiscard]] ::Path<Alloc::PersistentArena> DefaultCrashSpoolDirectory(Alloc::PersistentArena& arena);
+[[nodiscard]] ::Path<Alloc::PersistentArena> DefaultCrashHandlerExecutablePath(Alloc::PersistentArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

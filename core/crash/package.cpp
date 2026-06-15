@@ -33,20 +33,17 @@ inline constexpr usize s_LinuxProcPathTextCapacity = 128u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename ArenaT>
-static void AppendUnsignedText(CrashStringT<ArenaT>& out, const u64 value){
+static void AppendUnsignedText(CrashString& out, const u64 value){
     char buffer[s_UnsignedTextBufferCapacity] = {};
     AppendUnsignedToFixedBuffer(buffer, value);
     out += buffer;
 }
 
-template<typename ArenaT>
-static bool WriteCrashTextFile(const ::Path<ArenaT>& path, const CrashStringT<ArenaT>& text){
+static bool WriteCrashTextFile(const CrashPath& path, const CrashString& text){
     return WriteTextFile(path, AStringView(text.data(), text.size()));
 }
 
-template<typename ArenaT>
-static void AppendJsonEscaped(CrashStringT<ArenaT>& out, const char* text){
+static void AppendJsonEscaped(CrashString& out, const char* text){
     out.push_back('"');
     if(text){
         for(const char* p = text; *p; ++p){
@@ -88,9 +85,8 @@ static const char* ArtifactStrategyName(const CrashRequest& request){
     }
 }
 
-template<typename ArenaT>
-static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& request){
-    CrashStringT<ArenaT> manifest{arena};
+static CrashString BuildManifest(CrashArena& arena, const CrashRequest& request){
+    CrashString manifest{arena};
     manifest.reserve(s_ManifestReserveBytes);
     manifest += "{\n";
     manifest += "  \"format\": \"";
@@ -148,9 +144,8 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     return manifest;
 }
 
-template<typename ArenaT>
-static CrashStringT<ArenaT> BuildMetadataText(ArenaT& arena, const CrashRequest& request){
-    CrashStringT<ArenaT> text{arena};
+static CrashString BuildMetadataText(CrashArena& arena, const CrashRequest& request){
+    CrashString text{arena};
     for(u32 i = 0u; i < request.metadataCount; ++i){
         text += request.metadata[i].key;
         text += '=';
@@ -160,9 +155,8 @@ static CrashStringT<ArenaT> BuildMetadataText(ArenaT& arena, const CrashRequest&
     return text;
 }
 
-template<typename ArenaT>
-static CrashStringT<ArenaT> BuildBreadcrumbText(ArenaT& arena, const CrashRequest& request){
-    CrashStringT<ArenaT> text{arena};
+static CrashString BuildBreadcrumbText(CrashArena& arena, const CrashRequest& request){
+    CrashString text{arena};
     for(u32 i = 0u; i < request.breadcrumbCount; ++i){
         AppendUnsignedText(text, request.breadcrumbs[i].order);
         text += " [";
@@ -174,9 +168,8 @@ static CrashStringT<ArenaT> BuildBreadcrumbText(ArenaT& arena, const CrashReques
     return text;
 }
 
-template<typename ArenaT>
-static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest& request){
-    CrashStringT<ArenaT> text{arena};
+static CrashString BuildEmergencyText(CrashArena& arena, const CrashRequest& request){
+    CrashString text{arena};
     text += "reason=";
     text += ReasonKindName(request.reasonKind);
     text += "\ncode=";
@@ -223,9 +216,8 @@ static bool HasCallstack(const CrashRequest& request){
     return request.callstackFrameCount != 0u;
 }
 
-template<typename ArenaT>
-static CrashStringT<ArenaT> BuildCpuContextText(ArenaT& arena, const CrashRequest& request){
-    CrashStringT<ArenaT> text{arena};
+static CrashString BuildCpuContextText(CrashArena& arena, const CrashRequest& request){
+    CrashString text{arena};
     text += "fault_address=";
     AppendUnsignedText(text, request.faultAddress);
     text += "\ninstruction_pointer=";
@@ -238,9 +230,8 @@ static CrashStringT<ArenaT> BuildCpuContextText(ArenaT& arena, const CrashReques
     return text;
 }
 
-template<typename ArenaT>
-static CrashStringT<ArenaT> BuildCallstackText(ArenaT& arena, const CrashRequest& request){
-    CrashStringT<ArenaT> text{arena};
+static CrashString BuildCallstackText(CrashArena& arena, const CrashRequest& request){
+    CrashString text{arena};
     const u32 frameCount = request.callstackFrameCount > s_MaxCallstackFrames
         ? static_cast<u32>(s_MaxCallstackFrames)
         : request.callstackFrameCount
@@ -255,9 +246,8 @@ static CrashStringT<ArenaT> BuildCallstackText(ArenaT& arena, const CrashRequest
     return text;
 }
 
-template<typename ArenaT>
-static CrashStringT<ArenaT> BuildArtifactStrategyText(ArenaT& arena, const CrashRequest& request){
-    CrashStringT<ArenaT> text{arena};
+static CrashString BuildArtifactStrategyText(CrashArena& arena, const CrashRequest& request){
+    CrashString text{arena};
     text += "strategy=";
     text += ArtifactStrategyName(request);
     text += "\nhandler_lifetime=client_ipc_lifetime\n";
@@ -278,9 +268,8 @@ static CrashStringT<ArenaT> BuildArtifactStrategyText(ArenaT& arena, const Crash
     return text;
 }
 
-template<typename ArenaT>
-static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
-    const ::Path<ArenaT> packageDirectory = RequestPendingDirectory(arena, request);
+static bool WriteCrashPackageBasics(CrashArena& arena, const CrashRequest& request){
+    const CrashPath packageDirectory = RequestPendingDirectory(arena, request);
     ErrorCode error;
     static_cast<void>(EnsureDirectories(packageDirectory, error));
     if(error)
@@ -308,9 +297,8 @@ static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
 
 
 #if defined(NWB_PLATFORM_WINDOWS)
-template<typename ArenaT>
-static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
-    const ::Path<ArenaT> dumpPath = RequestPendingDirectory(arena, request) / PackageNames::s_ProcessDumpFileName;
+static bool WriteWindowsMinidump(CrashArena& arena, const CrashRequest& request){
+    const CrashPath dumpPath = RequestPendingDirectory(arena, request) / PackageNames::s_ProcessDumpFileName;
 
     HANDLE process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_DUP_HANDLE, FALSE, request.processId);
     if(!process)
@@ -345,8 +333,7 @@ static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
 #endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-template<typename ArenaT>
-static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const char* sourcePath, const char* outputName){
+static void CopyFileToPackage(CrashArena& arena, const CrashRequest& request, const char* sourcePath, const char* outputName){
     InputFileStream input(sourcePath, s_FileOpenBinary);
     if(!input.is_open())
         return;
@@ -356,8 +343,7 @@ static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const 
         output << input.rdbuf();
 }
 
-template<typename ArenaT>
-static void CopyProcFile(ArenaT& arena, const CrashRequest& request, const char* procName, const char* outputName){
+static void CopyProcFile(CrashArena& arena, const CrashRequest& request, const char* procName, const char* outputName){
     char procPath[s_LinuxProcPathTextCapacity] = {};
     CopyFixedBuffer(procPath, PackageNames::s_LinuxProcRootPath);
     AppendUnsignedToFixedBuffer(procPath, request.processId);
@@ -368,8 +354,9 @@ static void CopyProcFile(ArenaT& arena, const CrashRequest& request, const char*
 }
 #endif
 
-template<typename ArenaT>
-static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& request){
+bool WriteCrashPackage(const CrashRequest& request){
+    CrashArena& arena = DumpArena();
+
     if(request.magic != s_RequestMagic || request.version != s_RequestVersion)
         return false;
     if(!WriteCrashPackageBasics(arena, request))
@@ -380,7 +367,7 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
         const bool dumpWritten = WriteWindowsMinidump(arena, request);
         if(!WriteCrashTextFile(
             RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName,
-            CrashStringT<ArenaT>(
+            CrashString(
                 dumpWritten
                     ? "minidump captured; server-side PDB symbolication pending\n"
                     : "minidump capture failed; metadata package only\n",
@@ -403,14 +390,14 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
         CopyFileToPackage(arena, request, PackageNames::s_LinuxCoreUsesPidPath, PackageNames::s_LinuxCoreUsesPidFileName);
         if(!WriteCrashTextFile(
             RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName,
-            CrashStringT<ArenaT>("linux crash package captured; OS core policy remains authoritative; server-side DWARF symbolication uses reachable module symbols\n", arena)
+            CrashString("linux crash package captured; OS core policy remains authoritative; server-side DWARF symbolication uses reachable module symbols\n", arena)
         ))
             return false;
     }
 #else
     if(!WriteCrashTextFile(
         RequestPendingDirectory(arena, request) / PackageNames::s_SymbolicationFileName,
-        CrashStringT<ArenaT>("native platform crash artifact expected; server-side symbolication pending\n", arena)
+        CrashString("native platform crash artifact expected; server-side symbolication pending\n", arena)
     ))
         return false;
 #endif
@@ -418,35 +405,31 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
     return true;
 }
 
-bool WriteCrashPackage(const CrashRequest& request){
-    return WriteCrashPackageWithArena(DumpArena(), request);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename ArenaT>
-static void AppendArchiveText(CrashBytesT<ArenaT>& out, const AStringView text){
+static void AppendArchiveText(CrashBytes& out, const AStringView text){
     for(const char ch : text)
         out.push_back(static_cast<u8>(ch));
 }
 
-template<typename ArenaT>
-static void AppendArchiveText(CrashBytesT<ArenaT>& out, const char* text){
+static void AppendArchiveText(CrashBytes& out, const char* text){
     if(text)
         AppendArchiveText(out, AStringView(text));
 }
 
-template<typename ArenaT>
-static void AppendArchiveUnsigned(CrashBytesT<ArenaT>& out, const u64 value){
+static void AppendArchiveUnsigned(CrashBytes& out, const u64 value){
     char buffer[s_UnsignedTextBufferCapacity] = {};
     AppendUnsignedToFixedBuffer(buffer, value);
     AppendArchiveText(out, buffer);
 }
 
-template<typename ArenaT>
-bool BuildPackageArchive(ArenaT& arena, const ::Path<ArenaT>& packageDirectory, CrashBytesT<ArenaT>& outArchive){
+bool BuildPackageArchive(
+    Alloc::PersistentArena& arena,
+    const ::Path<Alloc::PersistentArena>& packageDirectory,
+    CrashBytes& outArchive
+){
     outArchive.clear();
     AppendArchiveText(outArchive, PackageNames::s_ArchiveHeaderText);
 
@@ -461,12 +444,12 @@ bool BuildPackageArchive(ArenaT& arena, const ::Path<ArenaT>& packageDirectory, 
         if(!entry.is_regular_file(entryError) || entryError)
             continue;
 
-        CrashBytesT<ArenaT> fileBytes{arena};
+        CrashBytes fileBytes{arena};
         ErrorCode readError;
         if(!ReadBinaryFile(entry.path(), fileBytes, readError))
             return false;
 
-        const CrashStringT<ArenaT> pathText = PathToGenericString<char>(arena, entry.path().lexically_relative(packageDirectory));
+        const CrashString pathText = PathToGenericString<char>(arena, entry.path().lexically_relative(packageDirectory));
         AppendArchiveText(outArchive, PackageNames::s_ArchiveFileHeaderPrefix);
         AppendArchiveText(outArchive, AStringView(pathText.data(), pathText.size()));
         AppendArchiveText(outArchive, " ");
@@ -479,18 +462,6 @@ bool BuildPackageArchive(ArenaT& arena, const ::Path<ArenaT>& packageDirectory, 
 
     return wroteFile;
 }
-
-template bool BuildPackageArchive(
-    Alloc::GlobalArena& arena,
-    const ::Path<Alloc::GlobalArena>& packageDirectory,
-    CrashBytesT<Alloc::GlobalArena>& outArchive
-);
-
-template bool BuildPackageArchive(
-    Alloc::PersistentArena& arena,
-    const ::Path<Alloc::PersistentArena>& packageDirectory,
-    CrashBytesT<Alloc::PersistentArena>& outArchive
-);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

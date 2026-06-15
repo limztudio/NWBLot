@@ -32,10 +32,10 @@ target_sources(nwb_crash_package PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/package_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/package_names.h"
 )
-target_link_libraries(nwb_crash_package PUBLIC nwb_crash)
+target_link_libraries(nwb_crash_package PRIVATE nwb_crash)
 target_link_libraries(nwb_crash_package PRIVATE nwb::curl)
 if(WIN32)
-    target_link_libraries(nwb_crash_package PUBLIC dbghelp)
+    target_link_libraries(nwb_crash_package PRIVATE dbghelp)
 endif()
 
 if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")

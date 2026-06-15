@@ -101,8 +101,7 @@ template<typename ArenaT>
 void UninstallCrashHandler();
 
 [[nodiscard]] bool SetCrashMetadata(AStringView key, AStringView value);
-template<typename ArenaT>
-[[nodiscard]] bool AddCrashBreadcrumb(ArenaT& arena, AStringView category, AStringView message);
+[[nodiscard]] bool AddCrashBreadcrumb(AStringView category, AStringView message);
 [[nodiscard]] CrashDumpResult CaptureCrashDump(AStringView category = AStringView(), AStringView message = AStringView());
 
 template<typename ArenaT>

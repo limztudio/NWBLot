@@ -26,6 +26,7 @@ nwb_declare_static_library(nwb_crash_package)
 target_sources(nwb_crash_package PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/handler.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/package.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/package_upload.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/handler.h"
     "${CMAKE_CURRENT_LIST_DIR}/internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/package_internal.h"

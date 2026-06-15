@@ -195,13 +195,9 @@ static void TestWriteCrashPackageFailsWhenSpoolPathIsFile(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestCrashBreadcrumbPersistsCurrentRing(TestContext& context){
+static void TestCrashBreadcrumbCapturedInRequest(TestContext& context){
     TestArena testArena;
     auto& arena = testArena.arena;
-    NWB::Core::Alloc::PersistentArena breadcrumbArena(
-        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u),
-        "NWB::Tests::Crash::BreadcrumbArena"
-    );
     constexpr AStringView s_Group("crash_breadcrumb_persist_test");
     RemoveTestArtifacts(arena, s_Group);
 
@@ -229,8 +225,13 @@ static void TestCrashBreadcrumbPersistsCurrentRing(TestContext& context){
         NWB::Core::Crash::Detail::g_State.breadcrumbOrder.store(1u, MemoryOrder::relaxed);
     }
 
-    NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::AddCrashBreadcrumb(breadcrumbArena, AStringView("test"), AStringView("persisted breadcrumb")));
-    NWB_CRASH_TEST_CHECK(context, TextFileContains(spoolDirectory / CrashNames::s_CurrentBreadcrumbsFileName, AStringView("[test] persisted breadcrumb")));
+    NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::AddCrashBreadcrumb(AStringView("test"), AStringView("persisted breadcrumb")));
+
+    NWB::Core::Crash::Detail::CrashRequest request;
+    NWB::Core::Crash::Detail::SnapshotCrashState(request, NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u);
+    NWB_CRASH_TEST_CHECK(context, request.breadcrumbCount == 1u);
+    NWB_CRASH_TEST_CHECK(context, AStringView(request.breadcrumbs[0].category) == AStringView("test"));
+    NWB_CRASH_TEST_CHECK(context, AStringView(request.breadcrumbs[0].message) == AStringView("persisted breadcrumb"));
 
     {
         ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
@@ -499,7 +500,7 @@ static void TestLinuxSignalHandlerWritesCrashPackage(TestContext& context){
 NWB_DEFINE_TEST_ENTRY_POINT("crash", [](NWB::Tests::TestContext& context){
     __hidden_crash_tests::TestWriteCrashPackageCreatesRequiredFiles(context);
     __hidden_crash_tests::TestWriteCrashPackageFailsWhenSpoolPathIsFile(context);
-    __hidden_crash_tests::TestCrashBreadcrumbPersistsCurrentRing(context);
+    __hidden_crash_tests::TestCrashBreadcrumbCapturedInRequest(context);
     __hidden_crash_tests::TestCrashSpoolRetentionPrunesOldestPackages(context);
     __hidden_crash_tests::TestCrashSpoolRetentionZeroDisablesPruning(context);
     __hidden_crash_tests::TestCrashSpoolRetentionProtectsActivePendingPackage(context);

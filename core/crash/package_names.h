@@ -30,7 +30,6 @@ inline constexpr const char* s_UploadingDirectoryName = "uploading";
 inline constexpr const char* s_FailedDirectoryName = "failed";
 inline constexpr const char* s_CrashIdPrefix = "crash-";
 
-inline constexpr const char* s_CurrentBreadcrumbsFileName = "breadcrumbs_current.txt";
 inline constexpr const char* s_ManifestFileName = "manifest.json";
 inline constexpr const char* s_MetadataFileName = "metadata.txt";
 inline constexpr const char* s_BreadcrumbsFileName = "breadcrumbs.txt";

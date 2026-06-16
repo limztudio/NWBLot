@@ -113,24 +113,32 @@ private:
 class CaptureSessionLogRegistrationGuard final : NoCopy{
 public:
     explicit CaptureSessionLogRegistrationGuard(CaptureSession& session)
-        : CaptureSessionLogRegistrationGuard(session, DefaultForwardLogger(session))
-    {}
-    CaptureSessionLogRegistrationGuard(CaptureSession& session, Common::ILogger* const forwardLogger)
-        : m_forwardLogger(session, forwardLogger)
+        : m_session(session)
+        , m_previousForwardLogger(session.textLogCaptureLogger().forwardLogger())
         , m_registration(session.textLogCaptureLogger())
-    {}
+    {
+        Common::ILogger* const forwardLogger = m_registration.previousLogger() == &m_session.textLogCaptureLogger()
+            ? m_previousForwardLogger
+            : m_registration.previousLogger()
+        ;
+        m_session.setForwardLogger(forwardLogger);
+    }
+    CaptureSessionLogRegistrationGuard(CaptureSession& session, Common::ILogger* const forwardLogger)
+        : m_session(session)
+        , m_previousForwardLogger(session.textLogCaptureLogger().forwardLogger())
+        , m_registration(session.textLogCaptureLogger())
+    {
+        m_session.setForwardLogger(forwardLogger);
+    }
     CaptureSessionLogRegistrationGuard(CaptureSessionLogRegistrationGuard&&) = delete;
-
-
-private:
-    [[nodiscard]] static Common::ILogger* DefaultForwardLogger(CaptureSession& session){
-        Common::ILogger* const logger = Common::CurrentLogger();
-        return logger == &session.textLogCaptureLogger() ? session.textLogCaptureLogger().forwardLogger() : logger;
+    ~CaptureSessionLogRegistrationGuard(){
+        m_session.setForwardLogger(m_previousForwardLogger);
     }
 
 
 private:
-    CaptureSessionForwardLoggerGuard m_forwardLogger;
+    CaptureSession& m_session;
+    Common::ILogger* m_previousForwardLogger = nullptr;
     Common::LoggerRegistrationGuard m_registration;
 };
 

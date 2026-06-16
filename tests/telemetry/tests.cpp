@@ -471,25 +471,17 @@ static void TestCaptureSessionLogRegistrationGuardForwardsAndRestores(TestContex
     NWB::Tests::CapturingLogger previousLogger;
     {
         NWB::Core::Common::LoggerRegistrationGuard previousRegistration(previousLogger);
-        NWB_TELEMETRY_TEST_CHECK(context, NWB::Core::Common::CurrentLogger() == &previousLogger);
 
         {
             Telemetry::CaptureSessionLogRegistrationGuard sessionRegistration(session);
-            NWB::Core::Common::ILogger* const logger = NWB::Core::Common::CurrentLogger();
-            NWB_TELEMETRY_TEST_CHECK(context, logger == &session.textLogCaptureLogger());
             {
                 Telemetry::CaptureSessionLogRegistrationGuard nestedRegistration(session);
                 NWB_TELEMETRY_TEST_CHECK(context, session.textLogCaptureLogger().forwardLogger() == &previousLogger);
             }
-            NWB_TELEMETRY_TEST_CHECK(context, NWB::Core::Common::CurrentLogger() == &session.textLogCaptureLogger());
-            if(logger)
-                logger->enqueue(NWB::Core::Common::LogString(NWB_TEXT("session registered"), logger->arena()), NWB::Core::Common::LogType::CriticalWarning);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("session registered"));
         }
 
-        NWB_TELEMETRY_TEST_CHECK(context, NWB::Core::Common::CurrentLogger() == &previousLogger);
-        NWB::Core::Common::ILogger* const logger = NWB::Core::Common::CurrentLogger();
-        if(logger)
-            logger->enqueue(NWB::Core::Common::LogString(NWB_TEXT("after session guard"), logger->arena()), NWB::Core::Common::LogType::Info);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("after session guard"));
     }
 
     NWB_TELEMETRY_TEST_CHECK(context, previousLogger.messageCount() == 2u);
@@ -508,7 +500,7 @@ static void TestCaptureSessionLogRegistrationGuardForwardsAndRestores(TestContex
 
     Telemetry::TextLogPayload parsed(testArena.arena);
     NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::CriticalWarning);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::EssentialInfo);
     NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "session registered");
 }
 

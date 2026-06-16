@@ -53,8 +53,10 @@ static void TestCaptureFlags(TestContext& context){
     static_assert(all.customEnabled());
 
     NWB_TELEMETRY_TEST_CHECK(context, Telemetry::CaptureAllowsEventKind(all, Telemetry::EventKind::TextLog));
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::CaptureAllowsEventKind(perf, Telemetry::EventKind::MemoryFrame));
     NWB_TELEMETRY_TEST_CHECK(context, Telemetry::CaptureAllowsEventKind(all, Telemetry::EventKind::FrameGraphFrame));
     NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::PerfFrame));
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::MemoryFrame));
     NWB_TELEMETRY_TEST_CHECK(context, Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::FrameGraphFrame));
 }
 
@@ -770,6 +772,151 @@ static void TestRecordPerfTimingUsesTelemetryEvent(TestContext& context){
     NWB_TELEMETRY_TEST_CHECK(context, parsed.stats.sampleCount == stats.sampleCount);
 }
 
+static NWB::Core::Perf::MemorySnapshot MakeTestMemorySnapshot(const Name& scopeName){
+    NWB::Core::Perf::MemorySnapshot snapshot;
+    snapshot.scopeName = scopeName;
+    snapshot.frameIndex = 88u;
+    snapshot.reservedBytes = 4096u;
+    snapshot.usedBytes = 1536u;
+    snapshot.peakUsedBytes = 2048u;
+    snapshot.allocationCount = 7u;
+    snapshot.reallocationCount = 2u;
+    snapshot.deallocationCount = 1u;
+    return snapshot;
+}
+
+static NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(){
+    NWB::Core::Perf::MemoryDelta delta;
+    delta.previousFrameIndex = 87u;
+    delta.currentFrameIndex = 88u;
+    delta.reservedBytes = 512;
+    delta.usedBytes = -128;
+    delta.peakUsedBytes = 256;
+    delta.allocationCount = 2;
+    delta.reallocationCount = 1;
+    delta.deallocationCount = 0;
+    delta.hasSamples = true;
+    return delta;
+}
+
+static void TestPerfMemoryPayloadRoundTrip(TestContext& context){
+    TestArena testArena;
+    const Name scopeName("memory/project_arena");
+    const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
+    const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::BuildPerfMemoryPayload(
+        testArena.arena,
+        scopeName,
+        "Project Arena",
+        snapshot,
+        delta,
+        payload
+    ));
+    NWB_TELEMETRY_TEST_CHECK(context, payload.size() == sizeof(Telemetry::EncodedPerfMemoryPayloadHeader) + sizeof("Project Arena") - 1u);
+
+    Telemetry::PerfMemoryPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.scopeName == scopeName);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.scopeText == "Project Arena");
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.scopeName == scopeName);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.frameIndex == snapshot.frameIndex);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.reservedBytes == snapshot.reservedBytes);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.usedBytes == snapshot.usedBytes);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.peakUsedBytes == snapshot.peakUsedBytes);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.allocationCount == snapshot.allocationCount);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.reallocationCount == snapshot.reallocationCount);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.deallocationCount == snapshot.deallocationCount);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.hasSamples);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.previousFrameIndex == delta.previousFrameIndex);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.currentFrameIndex == snapshot.frameIndex);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.reservedBytes == delta.reservedBytes);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.usedBytes == delta.usedBytes);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.peakUsedBytes == delta.peakUsedBytes);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.allocationCount == delta.allocationCount);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.reallocationCount == delta.reallocationCount);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.deallocationCount == delta.deallocationCount);
+
+    payload[0u] = 0u;
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size(), parsed));
+}
+
+static void TestPerfMemoryPayloadRejectsInvalidInput(TestContext& context){
+    TestArena testArena;
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    const Name scopeName("memory/project_arena");
+    NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
+    NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
+
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildPerfMemoryPayload(
+        testArena.arena,
+        NAME_NONE,
+        "Project Arena",
+        snapshot,
+        delta,
+        payload
+    ));
+
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildPerfMemoryPayload(
+        testArena.arena,
+        scopeName,
+        AStringView(),
+        snapshot,
+        delta,
+        payload
+    ));
+
+    snapshot.scopeName = Name("memory/other_arena");
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildPerfMemoryPayload(
+        testArena.arena,
+        scopeName,
+        "Project Arena",
+        snapshot,
+        delta,
+        payload
+    ));
+
+    snapshot = MakeTestMemorySnapshot(scopeName);
+    delta.currentFrameIndex = 99u;
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildPerfMemoryPayload(
+        testArena.arena,
+        scopeName,
+        "Project Arena",
+        snapshot,
+        delta,
+        payload
+    ));
+}
+
+static void TestRecordPerfMemoryUsesTelemetryEvent(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    const Name scopeName("memory/project_arena");
+    const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
+    const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordPerfMemory(recorder, scopeName, snapshot, delta, 12u));
+
+    const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(!event)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::MemoryFrame);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.payloadFormat == Telemetry::PayloadFormat::Binary);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == snapshot.frameIndex);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 12u);
+
+    Telemetry::PerfMemoryPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfMemoryPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.scopeName == scopeName);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.usedBytes == snapshot.usedBytes);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.hasSamples);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.usedBytes == delta.usedBytes);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -804,6 +951,9 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestPerfTimingPayloadRoundTrip(context);
     __hidden_tests::TestPerfTimingPayloadRejectsInvalidInput(context);
     __hidden_tests::TestRecordPerfTimingUsesTelemetryEvent(context);
+    __hidden_tests::TestPerfMemoryPayloadRoundTrip(context);
+    __hidden_tests::TestPerfMemoryPayloadRejectsInvalidInput(context);
+    __hidden_tests::TestRecordPerfMemoryUsesTelemetryEvent(context);
 })
 
 

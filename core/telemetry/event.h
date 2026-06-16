@@ -33,6 +33,7 @@ namespace EventKind{
         PerfFrame,
         FrameGraphFrame,
         Custom,
+        MemoryFrame,
     };
 };
 
@@ -159,6 +160,7 @@ struct EventHeader{
     case EventKind::PerfFrame:
     case EventKind::FrameGraphFrame:
     case EventKind::Custom:
+    case EventKind::MemoryFrame:
         return true;
     }
     return false;
@@ -185,6 +187,7 @@ struct EventHeader{
     case EventKind::CrashUpload:
         return CaptureFlag::Crash;
     case EventKind::PerfFrame:
+    case EventKind::MemoryFrame:
         return CaptureFlag::Perf;
     case EventKind::FrameGraphFrame:
         return CaptureFlag::FrameGraph;

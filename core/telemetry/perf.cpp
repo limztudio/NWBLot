@@ -43,6 +43,16 @@ struct ByteView{
     ;
 }
 
+[[nodiscard]] static bool ValidateHeader(const EncodedPerfMemoryPayloadHeader& header)noexcept{
+    constexpr u16 s_KnownFlags = PerfMemoryPayloadFlag::HasDelta;
+    return header.magic == s_PerfMemoryPayloadMagic
+        && header.version == s_PerfMemoryPayloadVersion
+        && (header.flags & ~s_KnownFlags) == 0u
+        && header.reserved == 0u
+        && !NameDetail::IsZeroHash(header.scopeHash)
+    ;
+}
+
 [[nodiscard]] static bool ValidateTimingInput(
     const PerfTimingSource::Enum source,
     const Name& scopeName,
@@ -55,6 +65,24 @@ struct ByteView{
         && scopeText.size() <= Limit<u32>::s_Max
         && stats.valid()
     ;
+}
+
+[[nodiscard]] static bool ValidateMemoryInput(
+    const Name& scopeName,
+    const AStringView scopeText,
+    const Perf::MemorySnapshot& snapshot,
+    const Perf::MemoryDelta& delta
+)noexcept{
+    if(
+        !scopeName
+        || snapshot.scopeName != scopeName
+        || !snapshot.valid()
+        || scopeText.empty()
+        || scopeText.size() > Limit<u32>::s_Max
+    )
+        return false;
+
+    return !delta.hasSamples || delta.currentFrameIndex == snapshot.frameIndex;
 }
 
 template<typename Container>
@@ -176,6 +204,128 @@ bool RecordPerfTiming(
         return false;
 
     return recorder.record(EventKind::PerfFrame, PayloadFormat::Binary, stats.publishFrameIndex, payload.data(), payload.size(), streamId);
+}
+
+bool BuildPerfMemoryPayload(
+    TelemetryArena&,
+    const Name& scopeName,
+    const AStringView scopeText,
+    const Perf::MemorySnapshot& snapshot,
+    const Perf::MemoryDelta& delta,
+    TelemetryBytes& outPayload
+){
+    outPayload.clear();
+
+    if(!__hidden_telemetry_perf::ValidateMemoryInput(scopeName, scopeText, snapshot, delta))
+        return false;
+
+    usize payloadBytes = sizeof(EncodedPerfMemoryPayloadHeader);
+    if(!AddBinaryReserveBytes(payloadBytes, scopeText.size()))
+        return false;
+
+    EncodedPerfMemoryPayloadHeader header;
+    header.flags = delta.hasSamples ? PerfMemoryPayloadFlag::HasDelta : PerfMemoryPayloadFlag::None;
+    header.scopeHash = scopeName.hash();
+    header.frameIndex = snapshot.frameIndex;
+    header.reservedBytes = snapshot.reservedBytes;
+    header.usedBytes = snapshot.usedBytes;
+    header.peakUsedBytes = snapshot.peakUsedBytes;
+    header.allocationCount = snapshot.allocationCount;
+    header.reallocationCount = snapshot.reallocationCount;
+    header.deallocationCount = snapshot.deallocationCount;
+    header.scopeNameBytes = static_cast<u32>(scopeText.size());
+
+    if(delta.hasSamples){
+        header.previousFrameIndex = delta.previousFrameIndex;
+        header.deltaReservedBytes = delta.reservedBytes;
+        header.deltaUsedBytes = delta.usedBytes;
+        header.deltaPeakUsedBytes = delta.peakUsedBytes;
+        header.deltaAllocationCount = delta.allocationCount;
+        header.deltaReallocationCount = delta.reallocationCount;
+        header.deltaDeallocationCount = delta.deallocationCount;
+    }
+
+    outPayload.reserve(payloadBytes);
+    AppendPOD(outPayload, header);
+    __hidden_telemetry_perf::AppendScopeText(outPayload, scopeText);
+    return outPayload.size() == payloadBytes;
+}
+
+bool BuildPerfMemoryPayload(
+    TelemetryArena& arena,
+    const Name& scopeName,
+    const Perf::MemorySnapshot& snapshot,
+    const Perf::MemoryDelta& delta,
+    TelemetryBytes& outPayload
+){
+    return BuildPerfMemoryPayload(arena, scopeName, AStringView(scopeName.c_str()), snapshot, delta, outPayload);
+}
+
+bool ParsePerfMemoryPayload(
+    TelemetryArena& arena,
+    const void* const payload,
+    const usize payloadBytes,
+    PerfMemoryPayload& outPayload
+){
+    outPayload = PerfMemoryPayload(arena);
+
+    if(payloadBytes < sizeof(EncodedPerfMemoryPayloadHeader) || !payload)
+        return false;
+
+    const __hidden_telemetry_perf::ByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
+    usize cursor = 0u;
+
+    EncodedPerfMemoryPayloadHeader header;
+    if(!ReadPOD(encoded, cursor, header))
+        return false;
+    if(!__hidden_telemetry_perf::ValidateHeader(header))
+        return false;
+    if(!BinaryDetail::CanReadBytes(encoded, cursor, header.scopeNameBytes))
+        return false;
+    if(payloadBytes - cursor != header.scopeNameBytes)
+        return false;
+
+    outPayload.scopeName = Name(header.scopeHash);
+    outPayload.scopeText.assign(reinterpret_cast<const char*>(encoded.data() + cursor), header.scopeNameBytes);
+    outPayload.snapshot.scopeName = outPayload.scopeName;
+    outPayload.snapshot.frameIndex = header.frameIndex;
+    outPayload.snapshot.reservedBytes = header.reservedBytes;
+    outPayload.snapshot.usedBytes = header.usedBytes;
+    outPayload.snapshot.peakUsedBytes = header.peakUsedBytes;
+    outPayload.snapshot.allocationCount = header.allocationCount;
+    outPayload.snapshot.reallocationCount = header.reallocationCount;
+    outPayload.snapshot.deallocationCount = header.deallocationCount;
+
+    if((header.flags & PerfMemoryPayloadFlag::HasDelta) != 0u){
+        outPayload.delta.previousFrameIndex = header.previousFrameIndex;
+        outPayload.delta.currentFrameIndex = header.frameIndex;
+        outPayload.delta.reservedBytes = header.deltaReservedBytes;
+        outPayload.delta.usedBytes = header.deltaUsedBytes;
+        outPayload.delta.peakUsedBytes = header.deltaPeakUsedBytes;
+        outPayload.delta.allocationCount = header.deltaAllocationCount;
+        outPayload.delta.reallocationCount = header.deltaReallocationCount;
+        outPayload.delta.deallocationCount = header.deltaDeallocationCount;
+        outPayload.delta.hasSamples = true;
+    }
+
+    return true;
+}
+
+bool RecordPerfMemory(
+    Recorder& recorder,
+    const Name& scopeName,
+    const Perf::MemorySnapshot& snapshot,
+    const Perf::MemoryDelta& delta,
+    const u32 streamId
+){
+    if(!recorder.enabled(EventKind::MemoryFrame))
+        return false;
+
+    TelemetryBytes payload(recorder.arena());
+    if(!BuildPerfMemoryPayload(recorder.arena(), scopeName, snapshot, delta, payload))
+        return false;
+
+    return recorder.record(EventKind::MemoryFrame, PayloadFormat::Binary, snapshot.frameIndex, payload.data(), payload.size(), streamId);
 }
 
 

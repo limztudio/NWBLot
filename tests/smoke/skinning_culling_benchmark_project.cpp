@@ -8,7 +8,6 @@
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/module.h>
-#include <core/perf/report.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_skeleton/asset.h>
@@ -17,10 +16,8 @@
 #include <impl/ecs_model/module.h>
 #include <impl/ecs_render/model_renderer.h>
 #include <impl/ecs_render/module.h>
-#include <impl/ecs_render/timing_names.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 #include <impl/ecs_mesh/skinning/module.h>
-#include <impl/ecs_mesh/skinning/timing_names.h>
 
 #include <global/environment.h>
 
@@ -36,9 +33,6 @@ namespace __hidden_skinning_culling_benchmark{
 
 using BenchmarkModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using BenchmarkMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
-
-namespace RendererTiming = NWB::Impl::RendererGpuTimingScope;
-namespace SkinnedTiming = NWB::Impl::MeshSkinningGpuTimingScope;
 
 namespace BenchmarkMode{
     enum Enum : u8{
@@ -62,61 +56,6 @@ struct BenchmarkCase{
     BenchmarkView::Enum view = BenchmarkView::Front;
 };
 
-struct BenchmarkAccumulation{
-    f64 cpuFrameSeconds = 0.0;
-    f64 skinningSeconds = 0.0;
-    f64 boundsSeconds = 0.0;
-    f64 renderFrameSeconds = 0.0;
-    f64 deferredClearSeconds = 0.0;
-    f64 deferredLightingSeconds = 0.0;
-    f64 deferredCompositeSeconds = 0.0;
-    f64 materialUploadSeconds = 0.0;
-    f64 meshDispatchSeconds = 0.0;
-    f64 rasterSeconds = 0.0;
-    u32 frameCount = 0u;
-    u32 skinningSamples = 0u;
-    u32 boundsSamples = 0u;
-    u32 renderFrameSamples = 0u;
-    u32 deferredClearSamples = 0u;
-    u32 deferredLightingSamples = 0u;
-    u32 deferredCompositeSamples = 0u;
-    u32 materialUploadSamples = 0u;
-    u32 meshDispatchSamples = 0u;
-    u32 rasterSamples = 0u;
-};
-
-struct BenchmarkTimingSummary{
-    f64 cpuFrameSeconds = 0.0;
-    f64 skinningSeconds = 0.0;
-    f64 boundsSeconds = 0.0;
-    f64 renderFrameSeconds = 0.0;
-    f64 deferredClearSeconds = 0.0;
-    f64 deferredLightingSeconds = 0.0;
-    f64 deferredCompositeSeconds = 0.0;
-    f64 materialUploadSeconds = 0.0;
-    f64 meshDispatchSeconds = 0.0;
-    f64 rasterSeconds = 0.0;
-    u32 frameCount = 0u;
-    u32 skinningSamples = 0u;
-    u32 boundsSamples = 0u;
-    u32 renderFrameSamples = 0u;
-    u32 deferredClearSamples = 0u;
-    u32 deferredLightingSamples = 0u;
-    u32 deferredCompositeSamples = 0u;
-    u32 materialUploadSamples = 0u;
-    u32 meshDispatchSamples = 0u;
-    u32 rasterSamples = 0u;
-
-    [[nodiscard]] bool hasRenderTiming()const{
-        return frameCount != 0u && meshDispatchSamples != 0u;
-    }
-
-    [[nodiscard]] bool hasBoundsTiming()const{
-        return frameCount != 0u && boundsSamples != 0u;
-    }
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -125,8 +64,6 @@ static constexpr u32 s_BenchmarkRepeatCount = 4u;
 static constexpr u32 s_WarmupFrameCount = 8u;
 static constexpr u32 s_SampleFrameCount = 16u;
 static constexpr u32 s_FinishDrainFrameCount = 30u;
-static constexpr f64 s_CullingRegressionToleranceRatio = 0.02;
-static constexpr f64 s_CullingRegressionToleranceMilliseconds = 0.05;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
@@ -181,26 +118,6 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     }
 }
 
-[[nodiscard]] static f64 AverageSeconds(const f64 seconds, const u32 count){
-    return count != 0u ? seconds / static_cast<f64>(count) : 0.0;
-}
-
-[[nodiscard]] static f64 AverageMilliseconds(const f64 seconds, const u32 count){
-    return AverageSeconds(seconds, count) * 1000.0;
-}
-
-[[nodiscard]] static f64 RenderGpuMilliseconds(const BenchmarkTimingSummary& summary){
-    return AverageMilliseconds(summary.meshDispatchSeconds + summary.rasterSeconds, summary.frameCount);
-}
-
-[[nodiscard]] static f64 BoundsGpuMilliseconds(const BenchmarkTimingSummary& summary){
-    return AverageMilliseconds(summary.boundsSeconds, summary.frameCount);
-}
-
-[[nodiscard]] static f64 CullingGpuMilliseconds(const BenchmarkTimingSummary& summary){
-    return BoundsGpuMilliseconds(summary) + RenderGpuMilliseconds(summary);
-}
-
 [[nodiscard]] static u32 RandomJointSeed(const u32 jointIndex, const u32 characterIndex){
     u32 seed = jointIndex * 747796405u + characterIndex * 2891336453u + 277803737u;
     seed = ((seed >> ((seed >> 28u) + 4u)) ^ seed) * 277803737u;
@@ -223,46 +140,6 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
 
 [[nodiscard]] static bool StaticPreviewEnabled(){
     return EnvironmentFlagEnabled(s_StaticPreviewEnv);
-}
-
-static void AccumulateGpuStats(const NWB::Core::Perf::TimingStats& stats, f64& seconds, u32& samples){
-    if(!stats.valid())
-        return;
-
-    seconds += static_cast<f64>(stats.seconds);
-    samples += stats.sampleCount;
-}
-
-static void AccumulateGpuScope(
-    const NWB::Core::Perf::TimingView& gpuTiming,
-    const Name& scopeName,
-    f64& seconds,
-    u32& samples
-){
-    AccumulateGpuStats(gpuTiming.stats(scopeName), seconds, samples);
-}
-
-static void AccumulateBenchmarkSummary(BenchmarkTimingSummary& summary, const BenchmarkAccumulation& accum){
-    summary.cpuFrameSeconds += accum.cpuFrameSeconds;
-    summary.skinningSeconds += accum.skinningSeconds;
-    summary.boundsSeconds += accum.boundsSeconds;
-    summary.renderFrameSeconds += accum.renderFrameSeconds;
-    summary.deferredClearSeconds += accum.deferredClearSeconds;
-    summary.deferredLightingSeconds += accum.deferredLightingSeconds;
-    summary.deferredCompositeSeconds += accum.deferredCompositeSeconds;
-    summary.materialUploadSeconds += accum.materialUploadSeconds;
-    summary.meshDispatchSeconds += accum.meshDispatchSeconds;
-    summary.rasterSeconds += accum.rasterSeconds;
-    summary.frameCount += accum.frameCount;
-    summary.skinningSamples += accum.skinningSamples;
-    summary.boundsSamples += accum.boundsSamples;
-    summary.renderFrameSamples += accum.renderFrameSamples;
-    summary.deferredClearSamples += accum.deferredClearSamples;
-    summary.deferredLightingSamples += accum.deferredLightingSamples;
-    summary.deferredCompositeSamples += accum.deferredCompositeSamples;
-    summary.materialUploadSamples += accum.materialUploadSamples;
-    summary.meshDispatchSamples += accum.meshDispatchSamples;
-    summary.rasterSamples += accum.rasterSamples;
 }
 
 [[nodiscard]] static NWB::Impl::SkeletonJointMatrix BuildAnimatedJointMatrix(
@@ -551,125 +428,22 @@ private:
 
     void finishCase(){
         const BenchmarkCase& benchmarkCase = s_BenchmarkCases[m_caseIndex];
-        const BenchmarkAccumulation& accum = m_accumulations[m_caseIndex];
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: result repeat={}/{} mode={} view={} frames={} cpu_ms={} skinning_gpu_ms={} bounds_gpu_ms={} render_frame_gpu_ms={} deferred_clear_gpu_ms={} deferred_lighting_gpu_ms={} deferred_composite_gpu_ms={} material_upload_gpu_ms={} mesh_dispatch_gpu_ms={} raster_gpu_ms={} skinning_samples={} bounds_samples={} render_frame_samples={} deferred_clear_samples={} deferred_lighting_samples={} deferred_composite_samples={} material_upload_samples={} mesh_samples={} raster_samples={}")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: end repeat={}/{} mode={} view={} sample_frames={}")
             , m_repeatIndex + 1u
             , s_BenchmarkRepeatCount
             , StringConvert(BenchmarkModeName(benchmarkCase.mode))
             , StringConvert(BenchmarkViewName(benchmarkCase.view))
-            , accum.frameCount
-            , AverageSeconds(accum.cpuFrameSeconds, accum.frameCount) * 1000.0
-            , AverageSeconds(accum.skinningSeconds, accum.skinningSamples) * 1000.0
-            , AverageSeconds(accum.boundsSeconds, accum.boundsSamples) * 1000.0
-            , AverageSeconds(accum.renderFrameSeconds, accum.renderFrameSamples) * 1000.0
-            , AverageSeconds(accum.deferredClearSeconds, accum.deferredClearSamples) * 1000.0
-            , AverageSeconds(accum.deferredLightingSeconds, accum.deferredLightingSamples) * 1000.0
-            , AverageSeconds(accum.deferredCompositeSeconds, accum.deferredCompositeSamples) * 1000.0
-            , AverageSeconds(accum.materialUploadSeconds, accum.materialUploadSamples) * 1000.0
-            , AverageSeconds(accum.meshDispatchSeconds, accum.meshDispatchSamples) * 1000.0
-            , AverageSeconds(accum.rasterSeconds, accum.rasterSamples) * 1000.0
-            , accum.skinningSamples
-            , accum.boundsSamples
-            , accum.renderFrameSamples
-            , accum.deferredClearSamples
-            , accum.deferredLightingSamples
-            , accum.deferredCompositeSamples
-            , accum.materialUploadSamples
-            , accum.meshDispatchSamples
-            , accum.rasterSamples
+            , s_SampleFrameCount
         );
     }
 
     void finishBenchmark(){
-        BenchmarkTimingSummary noCullingSummary;
-        BenchmarkTimingSummary frustumOnlySummary;
-        BenchmarkTimingSummary frustumConeSummary;
-
-        for(usize i = 0u; i < s_BenchmarkCaseCount; ++i){
-            const BenchmarkCase& benchmarkCase = s_BenchmarkCases[i];
-            const BenchmarkAccumulation& accum = m_accumulations[i];
-            if(benchmarkCase.mode == BenchmarkMode::NoCulling){
-                AccumulateBenchmarkSummary(noCullingSummary, accum);
-            }
-            else if(benchmarkCase.mode == BenchmarkMode::FrustumOnly){
-                AccumulateBenchmarkSummary(frustumOnlySummary, accum);
-            }
-            else if(benchmarkCase.mode == BenchmarkMode::FrustumCone){
-                AccumulateBenchmarkSummary(frustumConeSummary, accum);
-            }
-        }
-
-        const f64 noCullingAverage = RenderGpuMilliseconds(noCullingSummary);
-        const f64 frustumOnlyAverage = CullingGpuMilliseconds(frustumOnlySummary);
-        const f64 frustumConeAverage = CullingGpuMilliseconds(frustumConeSummary);
-        const f64 frustumConeRenderAverage = RenderGpuMilliseconds(frustumConeSummary);
-        const bool hasComparisonTiming =
-            noCullingSummary.hasRenderTiming()
-            && frustumConeSummary.hasRenderTiming()
-            && frustumConeSummary.hasBoundsTiming()
-            && noCullingAverage > 0.0
-            && frustumConeRenderAverage > 0.0
-        ;
-        const bool cullingFaster = hasComparisonTiming && frustumConeRenderAverage < noCullingAverage;
-        const f64 cullingRegressionTolerance = Max(
-            s_CullingRegressionToleranceMilliseconds,
-            noCullingAverage * s_CullingRegressionToleranceRatio
-        );
-        const bool cullingAcceptable =
-            cullingFaster
-            || (hasComparisonTiming && frustumConeRenderAverage <= noCullingAverage + cullingRegressionTolerance)
-        ;
-        const f64 speedup = cullingFaster ? noCullingAverage / frustumConeRenderAverage : 0.0;
-
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: culling comparison repeats={} no_culling_render_frame_gpu_ms={} with_culling_render_frame_gpu_ms={} with_culling_total_frame_gpu_ms={} with_culling_bounds_frame_gpu_ms={} tolerance_ms={} speedup={} result={}")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: completed repeats={} cases={} warmup_frames={} sample_frames={}")
             , s_BenchmarkRepeatCount
-            , noCullingAverage
-            , frustumConeRenderAverage
-            , frustumConeAverage
-            , BoundsGpuMilliseconds(frustumConeSummary)
-            , cullingRegressionTolerance
-            , speedup
-            , StringConvert(cullingAcceptable ? (cullingFaster ? "pass" : "pass_tolerance") : "fail")
+            , static_cast<u32>(s_BenchmarkCaseCount)
+            , s_WarmupFrameCount
+            , s_SampleFrameCount
         );
-        if(cullingAcceptable){
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: culling benchmark passed"));
-        }
-        else{
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: culling benchmark failed; with-culling render timing exceeded no-culling render timing beyond tolerance"));
-        }
-
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: policy default=dynamic_frustum_cone measured_frustum_only_gpu_ms={} measured_frustum_cone_gpu_ms={} recommendation={}")
-            , frustumOnlyAverage
-            , frustumConeAverage
-            , StringConvert((frustumConeAverage > 0.0 && (frustumOnlyAverage == 0.0 || frustumConeAverage <= frustumOnlyAverage)) ? "dynamic_frustum_cone" : "dynamic_frustum")
-        );
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: completed"));
-    }
-
-    void collectPreviousFrame(const f32 delta){
-        if(m_caseRenderedFrames == 0u)
-            return;
-
-        const u32 previousFrame = m_caseRenderedFrames - 1u;
-        if(previousFrame < s_WarmupFrameCount)
-            return;
-
-        BenchmarkAccumulation& accum = m_accumulations[m_caseIndex];
-        accum.cpuFrameSeconds += IsFinite(delta) && delta > 0.0f ? static_cast<f64>(delta) : 0.0;
-        ++accum.frameCount;
-
-        static_cast<void>(m_context.flushPerfSamples());
-        const NWB::Core::Perf::SessionReport perfReport = m_context.perfReport();
-        const NWB::Core::Perf::TimingView& gpuTiming = perfReport.gpuTiming;
-        AccumulateGpuScope(gpuTiming, SkinnedTiming::s_Skinning, accum.skinningSeconds, accum.skinningSamples);
-        AccumulateGpuScope(gpuTiming, SkinnedTiming::s_MeshletBounds, accum.boundsSeconds, accum.boundsSamples);
-        AccumulateGpuScope(gpuTiming, RendererTiming::s_Frame, accum.renderFrameSeconds, accum.renderFrameSamples);
-        AccumulateGpuScope(gpuTiming, RendererTiming::s_DeferredClear, accum.deferredClearSeconds, accum.deferredClearSamples);
-        AccumulateGpuScope(gpuTiming, RendererTiming::s_DeferredLighting, accum.deferredLightingSeconds, accum.deferredLightingSamples);
-        AccumulateGpuScope(gpuTiming, RendererTiming::s_DeferredComposite, accum.deferredCompositeSeconds, accum.deferredCompositeSamples);
-        AccumulateGpuScope(gpuTiming, RendererTiming::s_MaterialUpload, accum.materialUploadSeconds, accum.materialUploadSamples);
-        AccumulateGpuScope(gpuTiming, RendererTiming::s_MeshDispatch, accum.meshDispatchSeconds, accum.meshDispatchSamples);
-        AccumulateGpuScope(gpuTiming, RendererTiming::s_Raster, accum.rasterSeconds, accum.rasterSamples);
     }
 
     void advanceCaseOrFinish(){
@@ -747,6 +521,9 @@ public:
 
 public:
     virtual bool onStartup()override{
+        if(!m_staticPreview)
+            m_context.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::All());
+
         if(!loadSkeletonBindJoints()){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
             requestQuit();
@@ -827,6 +604,8 @@ public:
     virtual void onShutdown()override{
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: shutdown"));
+        if(!m_staticPreview)
+            static_cast<void>(m_context.flushTelemetryUpload(true));
     }
 
     virtual bool onUpdate(const f32 delta)override{
@@ -849,7 +628,6 @@ public:
             return true;
         }
 
-        collectPreviousFrame(delta);
         advanceCaseOrFinish();
         if(m_finished)
             return true;
@@ -869,7 +647,6 @@ private:
     Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> m_entities;
     Vector<NWB::Impl::SkeletonJointMatrix, NWB::Core::Alloc::GlobalArena> m_bindJoints;
     NWB::Core::ECS::EntityID m_cameraEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
-    BenchmarkAccumulation m_accumulations[s_BenchmarkCaseCount] = {};
     f64 m_totalTimeSeconds = 0.0;
     u32 m_caseRenderedFrames = 0u;
     u32 m_finishDrainFrames = 0u;

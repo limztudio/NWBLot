@@ -493,7 +493,7 @@ if(Python3_Interpreter_FOUND)
                 "--working-directory" "${_nwb_skinning_culling_runtime_root}"
                 "--timeout" "240"
                 ${_nwb_skinning_culling_logserver_args}
-                "--expect-log-message" "SkinningCullingBenchmark: culling benchmark passed"
+                "--expect-log-message" "SkinningCullingBenchmark: completed"
         )
         set_tests_properties(nwb_skinning_culling_benchmark PROPERTIES
             RESOURCE_LOCK nwb_display

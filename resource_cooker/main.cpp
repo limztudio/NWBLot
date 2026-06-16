@@ -24,9 +24,11 @@ static int RunResourceCooker(const int argc, char** argv){
     return ret;
 }
 
-[[maybe_unused]] static int EntryPoint(const isize argc, char** argv, void*){
+#if !defined(NWB_PLATFORM_WINDOWS) || !defined(NWB_UNICODE)
+static int EntryPoint(const isize argc, char** argv, void*){
     return RunResourceCooker(static_cast<int>(argc), argv);
 }
+#endif
 
 #if defined(NWB_UNICODE)
 static int EntryPoint(const isize argc, wchar** argv, void*){

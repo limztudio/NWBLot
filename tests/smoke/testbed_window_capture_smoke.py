@@ -1462,7 +1462,7 @@ def parse_args(argv):
     parser.add_argument("--settle-seconds", type=float, default=2.0, help="Seconds to wait after the window becomes visible.")
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver; launch with standalone log output.")
-    parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an unused localhost port.")
+    parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an available localhost port.")
     parser.add_argument("--expect-log-message", action="append", default=[], help="Required substring in the logserver output.")
     parser.add_argument("--reject-log-message", action="append", default=[], help="Forbidden substring in the logserver output.")
     parser.add_argument(

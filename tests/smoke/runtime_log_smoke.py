@@ -39,7 +39,7 @@ def parse_args(argv):
     parser.add_argument("--timeout", type=float, default=180.0, help="Seconds to wait for the executable to finish.")
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver; launch with standalone log output.")
-    parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an unused localhost port.")
+    parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an available localhost port.")
     parser.add_argument("--expect-log-message", action="append", default=[], help="Required substring in the logserver output.")
     parser.add_argument("--application-arg", action="append", default=[], help="Extra argument to pass to the launched application.")
     parser.add_argument("--software-vulkan", choices=("auto", "on", "off"), default="off", help="Linux Vulkan ICD selection.")

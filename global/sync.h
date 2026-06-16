@@ -41,7 +41,7 @@ inline void YieldThread(){ std::this_thread::yield(); }
 #endif
 
 
-inline void MachinePause([[maybe_unused]] i32 delay){
+inline void MachinePause(i32 delay){
 #if defined(__ARM_ARCH_7A__) || defined(__aarch64__)
     while(delay > 0){
         __asm__ __volatile__("isb sy" ::: "memory");
@@ -53,6 +53,7 @@ inline void MachinePause([[maybe_unused]] i32 delay){
         --delay;
     }
 #else /* Generic */
+    static_cast<void>(delay);
     YieldThread();
 #endif
 }

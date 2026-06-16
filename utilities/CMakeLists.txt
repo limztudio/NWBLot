@@ -1,1 +1,2 @@
 add_subdirectory(fbx_to_nwb)
+add_subdirectory(telemetry_dump)

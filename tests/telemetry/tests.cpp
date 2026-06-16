@@ -1460,6 +1460,63 @@ static void TestCaptureSessionRecordsPerfReport(TestContext& context){
     NWB_TELEMETRY_TEST_CHECK(context, memoryEvent->header.streamId == 23u);
 }
 
+static bool ContainsText(const AStringView text, const AStringView needle){
+    return text.find(needle) != AStringView::npos;
+}
+
+static void TestArchiveReportSummarizesBenchmarkEvents(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordTextLog(
+        recorder,
+        NWB::Core::Common::LogType::Info,
+        NWB_TEXT("benchmark report"),
+        4u,
+        1u
+    ));
+
+    const Name cpuScopeName("cpu/update");
+    const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, stats, 2u));
+
+    const Name memoryScopeName("memory/project_arena");
+    const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(memoryScopeName);
+    const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordPerfMemory(recorder, memoryScopeName, snapshot, delta, 3u));
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 4u));
+
+    Telemetry::ArchiveReport report(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::BuildArchiveReport(testArena.arena, recorder.view(), report));
+
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventCount == 4u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::TextLog)] == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::PerfFrame)] == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::MemoryFrame)] == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::FrameGraphFrame)] == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.parseFailureCount == 0u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.hasFrameRange);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.minFrameIndex == 4u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.maxFrameIndex == 909u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.cpuTimingEventCount == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.cpuTimingSampleCount == stats.sampleCount);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.cpuTimingSeconds == stats.seconds);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.memoryEventCount == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.maxMemoryUsedBytes == snapshot.usedBytes);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.totalMemoryUsedDeltaBytes == delta.usedBytes);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.frameGraphFrameCount == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.frameGraphNodeCount == 3u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.summary.frameGraphEdgeCount == 2u);
+    NWB_TELEMETRY_TEST_CHECK(context, ContainsText(AStringView(report.json.data(), report.json.size()), "\"eventCount\": 4"));
+    NWB_TELEMETRY_TEST_CHECK(context, ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "source,scope,publish_frame"));
+    NWB_TELEMETRY_TEST_CHECK(context, ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "cpu,cpu/update"));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1509,6 +1566,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestPerfViewsExposeScopes(context);
     __hidden_tests::TestRecordPerfSessionReportUsesTelemetryEvents(context);
     __hidden_tests::TestCaptureSessionRecordsPerfReport(context);
+    __hidden_tests::TestArchiveReportSummarizesBenchmarkEvents(context);
 })
 
 

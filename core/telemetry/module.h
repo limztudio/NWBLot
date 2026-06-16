@@ -10,6 +10,7 @@
 #include "codec.h"
 #include "diagnostic.h"
 #include "event.h"
+#include "export.h"
 #include "frame_graph.h"
 #include "perf.h"
 #include "recorder.h"

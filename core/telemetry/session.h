@@ -103,13 +103,6 @@ public:
         ;
         m_session.setForwardLogger(forwardLogger);
     }
-    CaptureSessionLogRegistrationGuard(CaptureSession& session, Common::ILogger* const forwardLogger)
-        : m_session(session)
-        , m_previousForwardLogger(session.textLogCaptureLogger().forwardLogger())
-        , m_registration(session.textLogCaptureLogger())
-    {
-        m_session.setForwardLogger(forwardLogger);
-    }
     CaptureSessionLogRegistrationGuard(CaptureSessionLogRegistrationGuard&&) = delete;
     ~CaptureSessionLogRegistrationGuard(){
         m_session.setForwardLogger(m_previousForwardLogger);
@@ -154,10 +147,6 @@ class CaptureSessionCaptureScope final : NoCopy{
 public:
     explicit CaptureSessionCaptureScope(CaptureSession& session)
         : m_logRegistration(session)
-        , m_diagnostic(session)
-    {}
-    CaptureSessionCaptureScope(CaptureSession& session, Common::ILogger* const forwardLogger)
-        : m_logRegistration(session, forwardLogger)
         , m_diagnostic(session)
     {}
     CaptureSessionCaptureScope(CaptureSessionCaptureScope&&) = delete;

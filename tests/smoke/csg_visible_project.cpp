@@ -17,6 +17,7 @@
 #include <impl/ecs_render/material_instance.h>
 
 #include "csg_smoke_helpers.h"
+#include "fps_probe.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,6 +76,14 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     Name("project/smoke/csg_visible/sphere_receiver"),
     Name("project/smoke/csg_visible/capsule_receiver"),
 };
+
+[[nodiscard]] static const tchar* CsgVisibleFpsLabel(){
+#if defined(NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION)
+    return NWB_TEXT("CsgVisibleSmokeProject[compute-emulation]");
+#else
+    return NWB_TEXT("CsgVisibleSmokeProject[mesh-shader]");
+#endif
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -380,6 +389,7 @@ public:
 
     virtual bool onUpdate(const f32 delta)override{
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+        m_fpsProbe.recordFrame(safeDelta);
         m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_CubeRotationSpeed;
         for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
             const f32 rotationPhase = static_cast<f32>(shapeSlot) * 0.18f;
@@ -405,6 +415,7 @@ private:
     NWB::Core::ECS::EntityID m_receivers[s_CsgVisibleShapeCount] = {};
     NWB::Core::ECS::EntityID m_cutters[s_CsgVisibleShapeCount] = {};
     Float4 m_receiverCenters[s_CsgVisibleShapeCount] = {};
+    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ CsgVisibleFpsLabel() };
     f32 m_animationTime = 0.0f;
 };
 

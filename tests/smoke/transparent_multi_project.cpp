@@ -18,6 +18,7 @@
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material_instance.h>
 
+#include "fps_probe.h"
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 #include "csg_smoke_helpers.h"
 #endif
@@ -53,6 +54,14 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
 static constexpr f32 s_TransparentCsgRotationSpeed = 0.55f;
 static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_multi/center_receiver");
 #endif
+
+[[nodiscard]] static const tchar* TransparentMultiFpsLabel(){
+#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
+    return NWB_TEXT("TransparentCsgSmokeProject");
+#else
+    return NWB_TEXT("TransparentMultiSmokeProject");
+#endif
+}
 
 
 [[nodiscard]] static Name TransparentCenterCsgReceiverGroup(){
@@ -284,6 +293,7 @@ public:
 
     virtual bool onUpdate(const f32 delta)override{
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+        m_fpsProbe.recordFrame(safeDelta);
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
         m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_TransparentCsgRotationSpeed;
         ApplyTransparentCsgRotation(*m_world, m_csgReceiver, m_csgCutter, BuildTransparentCsgRotation(m_animationTime));
@@ -296,6 +306,7 @@ public:
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ TransparentMultiFpsLabel() };
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     NWB::Core::ECS::EntityID m_csgReceiver = {};
     NWB::Core::ECS::EntityID m_csgCutter = {};

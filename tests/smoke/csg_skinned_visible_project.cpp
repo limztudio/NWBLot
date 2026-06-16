@@ -21,6 +21,7 @@
 #include <impl/ecs_mesh/skinning/module.h>
 
 #include "csg_smoke_helpers.h"
+#include "fps_probe.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,6 +60,22 @@ static constexpr f32 s_CutterAnimationSpeed = 0.18f;
 static constexpr f32 s_ReceiverYawSpeed = 0.92f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 static constexpr f32 s_InitialAnimationTime = s_PIDIV2 / s_ReceiverYawSpeed;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static const tchar* CsgSkinnedVisibleFpsLabel(){
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+    return NWB_TEXT("CsgSkinnedTransparentSphereVisibleSmokeProject");
+#elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+    return NWB_TEXT("CsgSkinnedTransparentVisibleSmokeProject");
+#elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+    return NWB_TEXT("CsgSkinnedSphereVisibleSmokeProject");
+#else
+    return NWB_TEXT("CsgSkinnedVisibleSmokeProject");
+#endif
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -366,6 +383,7 @@ public:
 
     virtual bool onUpdate(const f32 delta)override{
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+        m_fpsProbe.recordFrame(safeDelta);
         m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_CutterAnimationSpeed;
         const SIMDVector receiverRotation = BuildReceiverRotation(m_animationTime);
         updateReceiverTransforms(receiverRotation);
@@ -383,6 +401,7 @@ private:
     NWB::Core::ECS::EntityID m_receiver = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_receiverObject = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_cutter = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ CsgSkinnedVisibleFpsLabel() };
     f32 m_animationTime = s_InitialAnimationTime;
 };
 

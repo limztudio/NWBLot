@@ -7,6 +7,9 @@
 #include <cstdlib>
 
 #if defined(NWB_PLATFORM_WINDOWS)
+#if defined(_MSC_VER) && !defined(NDEBUG)
+#include <crtdbg.h>
+#endif
 #include <windows.h>
 #elif defined(NWB_PLATFORM_LINUX)
 #include <errno.h>
@@ -147,6 +150,12 @@ static Detail::CrashAck __hidden_make_ack(const Detail::CrashRequest& request, c
 static void __hidden_silence_process()noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+#if defined(_MSC_VER) && !defined(NDEBUG)
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    _CrtSetReportMode(_CRT_WARN, 0);
+    _CrtSetReportMode(_CRT_ERROR, 0);
+    _CrtSetReportMode(_CRT_ASSERT, 0);
+#endif
     if(HWND consoleWindow = GetConsoleWindow())
         ShowWindow(consoleWindow, SW_HIDE);
 #elif defined(NWB_PLATFORM_LINUX)

@@ -360,6 +360,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
     const bool isCrashUpload = NWB_STRCMP(url, Core::Crash::PackageNames::s_CrashUploadEndpoint) == 0;
     const bool isTelemetryUpload = NWB_STRCMP(url, s_TelemetryUploadEndpoint) == 0;
+    using ConnectionInfo = __hidden_logger_server::ConnectionInfo;
     const ConnectionInfo::UploadKind uploadKind = isCrashUpload
         ? ConnectionInfo::UploadKind::Crash
         : (isTelemetryUpload ? ConnectionInfo::UploadKind::Telemetry : ConnectionInfo::UploadKind::LogMessage)

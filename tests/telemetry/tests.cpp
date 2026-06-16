@@ -309,48 +309,6 @@ static ::Path<NWB::Core::Alloc::GlobalArena> TelemetryTestStorageDirectory(NWB::
     return ::Path<NWB::Core::Alloc::GlobalArena>(arena, "telemetry_test_storage");
 }
 
-static void TestCaptureSessionLogRegistrationGuardForwardsAndRestores(TestContext& context){
-    TestArena testArena;
-    Telemetry::CaptureSession session(testArena.arena);
-    session.setCaptureOptions(Telemetry::CaptureOptions::All());
-    session.setFrameIndex(609u);
-    session.setStreamId(27u);
-
-    NWB::Tests::CapturingLogger previousLogger;
-    {
-        NWB::Core::Common::LoggerRegistrationGuard previousRegistration(previousLogger);
-
-        {
-            Telemetry::CaptureSessionLogRegistrationGuard sessionRegistration(session);
-            {
-                Telemetry::CaptureSessionLogRegistrationGuard nestedRegistration(session);
-            }
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("session registered"));
-        }
-
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("after session guard"));
-    }
-
-    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.messageCount() == 2u);
-    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.sawMessageContaining(NWB_TEXT("session registered")));
-    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.sawMessageContaining(NWB_TEXT("after session guard")));
-    NWB_TELEMETRY_TEST_CHECK(context, session.eventCount() == 1u);
-
-    const Telemetry::EventRecord* event = session.view().eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
-    if(!event)
-        return;
-
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 609u);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 27u);
-
-    Telemetry::TextLogPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::EssentialInfo);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "session registered");
-}
-
 static void TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(TestContext& context){
     TestArena testArena;
     Telemetry::CaptureSession session(testArena.arena);
@@ -361,16 +319,20 @@ static void TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(TestContext& c
     NWB::Tests::CapturingLogger previousLogger;
     {
         NWB::Core::Common::LoggerRegistrationGuard previousRegistration(previousLogger);
-        Telemetry::CaptureSessionCaptureScope captureScope(session);
+        {
+            Telemetry::CaptureSessionCaptureScope captureScope(session);
 
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("scope text"));
-        CaptureDiagnosticEvent(DiagnosticEventRecord{
-            .event = DiagnosticEventName::s_Error,
-            .category = "scope_diagnostic",
-            .message = "scope diagnostic",
-            .file = "scope.cpp",
-            .line = 67u,
-        });
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("scope text"));
+            CaptureDiagnosticEvent(DiagnosticEventRecord{
+                .event = DiagnosticEventName::s_Error,
+                .category = "scope_diagnostic",
+                .message = "scope diagnostic",
+                .file = "scope.cpp",
+                .line = 67u,
+            });
+        }
+
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("after scope"));
     }
 
     CaptureDiagnosticEvent(DiagnosticEventRecord{
@@ -379,8 +341,9 @@ static void TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(TestContext& c
         .message = "ignored after scope",
     });
 
-    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.messageCount() == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.messageCount() == 2u);
     NWB_TELEMETRY_TEST_CHECK(context, previousLogger.sawMessageContaining(NWB_TEXT("scope text")));
+    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.sawMessageContaining(NWB_TEXT("after scope")));
     NWB_TELEMETRY_TEST_CHECK(context, session.eventCount() == 2u);
 
     const Telemetry::EventRecord* logEvent = session.view().eventAt(0u);
@@ -1373,7 +1336,6 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestEventStreamCodecRoundTrip(context);
     __hidden_tests::TestEventStreamCodecHandlesEmptyStreams(context);
     __hidden_tests::TestEventStreamCodecRejectsInvalidInput(context);
-    __hidden_tests::TestCaptureSessionLogRegistrationGuardForwardsAndRestores(context);
     __hidden_tests::TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(context);
     __hidden_tests::TestTextLogPayloadRoundTrip(context);
     __hidden_tests::TestRecordTextLogUsesTelemetryEvent(context);

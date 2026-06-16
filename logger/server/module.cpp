@@ -440,17 +440,13 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         }
     }
     else if(info->uploadKind == ConnectionInfo::UploadKind::Telemetry){
-        PendingTelemetryUpload upload;
-        upload.byteCount = info->size;
-        thisPtr->m_telemetryUploads.emplace(upload);
-        thisPtr->enqueue(
-            StringFormat(
-                thisPtr->arena(),
-                NWB_TEXT("Telemetry upload received: {} bytes"),
-                upload.byteCount
-            ),
-            Type::EssentialInfo
+        TelemetryIngestResult result = ProcessTelemetryUpload(
+            thisPtr->arena(),
+            info->buffer,
+            info->size,
+            thisPtr->m_telemetryIngestConfig
         );
+        thisPtr->enqueue(Move(result.message), result.type);
     }
     else{
         MessageType message = MakeMessageType(thisPtr->arena());
@@ -475,9 +471,9 @@ Server::Server()
     , m_daemon(nullptr)
     , m_processedMsgFile(BaseType::arena())
     , m_crashIngestConfig(BaseType::arena())
+    , m_telemetryIngestConfig(BaseType::arena())
     , m_crashUploadToken(BaseType::arena())
     , m_crashUploads(BaseType::arena())
-    , m_telemetryUploads(BaseType::arena())
     , m_crashIngestSemaphore(0)
     , m_crashIngestExit(false)
 {}

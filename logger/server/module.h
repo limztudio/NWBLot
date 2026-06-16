@@ -8,6 +8,7 @@
 #include <microhttpd.h>
 
 #include <logger/common.h>
+#include <logger/telemetry/ingest.h>
 
 #include "crash_ingest.h"
 
@@ -28,12 +29,7 @@ struct PendingCrashUpload{
     char path[s_MaxPendingCrashUploadPathText] = {};
 };
 
-struct PendingTelemetryUpload{
-    usize byteCount = 0u;
-};
-
 using CrashUploadQueue = ParallelQueue<PendingCrashUpload, LogArena>;
-using TelemetryUploadQueue = ParallelQueue<PendingTelemetryUpload, LogArena>;
 
 class Server final : public BaseUpdateOrdinary<Server, 0.1f, SERVER_NAME>{
     template<typename, const tchar*> friend class Base;
@@ -84,9 +80,9 @@ private:
     MHD_Daemon* m_daemon;
     ProcessedMessageFile m_processedMsgFile;
     CrashIngestConfig m_crashIngestConfig;
+    TelemetryIngestConfig m_telemetryIngestConfig;
     AString<LogArena> m_crashUploadToken;
     CrashUploadQueue m_crashUploads;
-    TelemetryUploadQueue m_telemetryUploads;
     Semaphore<> m_crashIngestSemaphore;
     Thread m_crashIngestThread;
     Atomic<bool> m_crashIngestExit;

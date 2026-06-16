@@ -6,6 +6,7 @@
 #include <tests/capturing_logger.h>
 
 #include <core/telemetry/module.h>
+#include <logger/telemetry/ingest.h>
 #include <logger/telemetry/report.h>
 
 #include <global/filesystem/operations.h>
@@ -1549,6 +1550,56 @@ static void TestArchiveReportSummarizesBenchmarkEvents(TestContext& context){
     NWB_TELEMETRY_TEST_CHECK(context, ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "cpu,cpu/update"));
 }
 
+static void TestTelemetryIngestStoresRawAndReports(TestContext& context){
+    TestArena testArena;
+    const ::Path<NWB::Core::Alloc::GlobalArena> storageDirectory = TelemetryTestStorageDirectory(testArena.arena) / "ingest";
+
+    ErrorCode error;
+    static_cast<void>(RemoveAllIfExists(storageDirectory, error));
+    NWB_TELEMETRY_TEST_CHECK(context, !error);
+
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordTextLog(
+        recorder,
+        NWB::Core::Common::LogType::Info,
+        NWB_TEXT("ingest log"),
+        10u,
+        1u
+    ));
+
+    const Name cpuScopeName("ingest/cpu");
+    const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, stats, 2u));
+
+    Telemetry::TelemetryBytes encoded(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEventStream(recorder.view(), encoded));
+
+    Log::TelemetryIngestConfig config(testArena.arena);
+    config.storageDirectory = storageDirectory;
+    const Log::TelemetryIngestResult result = Log::ProcessTelemetryUpload(testArena.arena, encoded.data(), encoded.size(), config);
+
+    NWB_TELEMETRY_TEST_CHECK(context, result.ok());
+    NWB_TELEMETRY_TEST_CHECK(context, result.decode.ok());
+    NWB_TELEMETRY_TEST_CHECK(context, result.decode.bytesRead == encoded.size());
+    NWB_TELEMETRY_TEST_CHECK(context, result.summary.eventCount == 2u);
+    NWB_TELEMETRY_TEST_CHECK(context, result.summary.cpuTimingEventCount == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, FileExists(result.rawPath, error));
+    NWB_TELEMETRY_TEST_CHECK(context, !error);
+    error.clear();
+    NWB_TELEMETRY_TEST_CHECK(context, FileExists(result.jsonPath, error));
+    NWB_TELEMETRY_TEST_CHECK(context, !error);
+    error.clear();
+    NWB_TELEMETRY_TEST_CHECK(context, FileExists(result.perfCsvPath, error));
+    NWB_TELEMETRY_TEST_CHECK(context, !error);
+
+    AString<NWB::Core::Alloc::GlobalArena> perfCsv(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, ReadTextFile(result.perfCsvPath, perfCsv));
+    NWB_TELEMETRY_TEST_CHECK(context, ContainsText(AStringView(perfCsv.data(), perfCsv.size()), "cpu,ingest/cpu"));
+
+    static_cast<void>(RemoveAllIfExists(storageDirectory, error));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1600,6 +1651,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestRecordPerfSessionReportUsesTelemetryEvents(context);
     __hidden_tests::TestCaptureSessionRecordsPerfReport(context);
     __hidden_tests::TestArchiveReportSummarizesBenchmarkEvents(context);
+    __hidden_tests::TestTelemetryIngestStoresRawAndReports(context);
 })
 
 

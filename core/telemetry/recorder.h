@@ -78,6 +78,8 @@ public:
 public:
     void setCaptureOptions(const CaptureOptions& options);
     void clear();
+    [[nodiscard]] TelemetryArena& arena(){ return m_arena; }
+    [[nodiscard]] const TelemetryArena& arena()const{ return m_arena; }
     [[nodiscard]] CaptureOptions captureOptions()const{ return m_capture; }
     [[nodiscard]] bool enabled()const{ return m_capture.enabled(); }
     [[nodiscard]] bool enabled(EventKind::Enum kind)const{ return CaptureAllowsEventKind(m_capture, kind); }

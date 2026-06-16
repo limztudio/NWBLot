@@ -3,6 +3,7 @@
 
 
 #include <tests/test_context.h>
+#include <tests/capturing_logger.h>
 
 #include <core/telemetry/module.h>
 
@@ -285,6 +286,88 @@ static void TestEventStreamCodecRejectsInvalidInput(TestContext& context){
     NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::InvalidHeader);
 }
 
+static void TestTextLogPayloadRoundTrip(TestContext& context){
+    TestArena testArena;
+    Telemetry::TelemetryBytes payload(testArena.arena);
+
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::BuildTextLogPayload(
+        testArena.arena,
+        NWB::Core::Common::LogType::Warning,
+        NWB_TEXT("telemetry text log"),
+        payload
+    ));
+    NWB_TELEMETRY_TEST_CHECK(context, payload.size() == sizeof(Telemetry::EncodedTextLogPayloadHeader) + sizeof("telemetry text log") - 1u);
+
+    Telemetry::TextLogPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::Warning);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "telemetry text log");
+
+    payload[0u] = 0u;
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
+}
+
+static void TestRecordTextLogUsesTelemetryEvent(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordTextLog(
+        recorder,
+        NWB::Core::Common::LogType::EssentialInfo,
+        NWB_TEXT("captured text"),
+        123u,
+        9u
+    ));
+
+    const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(!event)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.payloadFormat == Telemetry::PayloadFormat::Binary);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 123u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 9u);
+
+    Telemetry::TextLogPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::EssentialInfo);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "captured text");
+}
+
+static void TestTextLogCaptureLoggerForwardsAndRecords(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    NWB::Tests::CapturingLogger forwardLogger;
+    Telemetry::TextLogCaptureLogger logger(recorder, &forwardLogger);
+    logger.setFrameIndex(321u);
+    logger.setStreamId(4u);
+
+    logger.enqueue(NWB::Core::Common::LogString(NWB_TEXT("bridged warning"), logger.arena()), NWB::Core::Common::LogType::Warning);
+
+    NWB_TELEMETRY_TEST_CHECK(context, forwardLogger.messageCount() == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, forwardLogger.lastType() == NWB::Core::Common::LogType::Warning);
+    NWB_TELEMETRY_TEST_CHECK(context, forwardLogger.sawMessageContaining(NWB_TEXT("bridged warning")));
+    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 1u);
+
+    const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(!event)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 321u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 4u);
+
+    Telemetry::TextLogPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::Warning);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "bridged warning");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -305,6 +388,9 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestEventStreamCodecRoundTrip(context);
     __hidden_tests::TestEventStreamCodecHandlesEmptyStreams(context);
     __hidden_tests::TestEventStreamCodecRejectsInvalidInput(context);
+    __hidden_tests::TestTextLogPayloadRoundTrip(context);
+    __hidden_tests::TestRecordTextLogUsesTelemetryEvent(context);
+    __hidden_tests::TestTextLogCaptureLoggerForwardsAndRecords(context);
 })
 
 

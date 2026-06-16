@@ -24,6 +24,12 @@ namespace __hidden_log_telemetry_ingest{
 
 inline constexpr int s_LocalTimeYearBase = 1900;
 inline constexpr int s_LocalTimeMonthBase = 1;
+inline constexpr const char* s_TelemetryStorageDirectoryName = "telemetry";
+inline constexpr const char* s_TelemetryRawDirectoryName = "raw";
+inline constexpr const char* s_TelemetryReportDirectoryName = "reports";
+inline constexpr const char* s_TelemetryRawStreamFileExtension = ".nwbs";
+inline constexpr const char* s_TelemetryJsonFileExtension = ".json";
+inline constexpr const char* s_TelemetryPerfCsvFileExtension = ".perf.csv";
 static Atomic<u64> s_TelemetryUploadCounter{ 1u };
 
 struct ByteView{
@@ -71,6 +77,29 @@ void SetResultMessage(TelemetryIngestResult& result, AStringView message, const 
     return WriteBinaryFile(rawPath, view);
 }
 
+[[nodiscard]] Path TelemetryDefaultRootDirectory(LogArena& arena){
+    Path executableDirectory(arena);
+    if(GetExecutableDirectory(executableDirectory))
+        return executableDirectory / s_TelemetryStorageDirectoryName;
+
+    return Path(arena, s_TelemetryStorageDirectoryName);
+}
+
+[[nodiscard]] Path TelemetryStorageDirectory(LogArena& arena, const Path& configuredStorageDirectory){
+    if(!configuredStorageDirectory.empty())
+        return Path(arena, configuredStorageDirectory);
+
+    return TelemetryDefaultRootDirectory(arena);
+}
+
+[[nodiscard]] Path TelemetryRawDirectory(LogArena& arena, const Path& configuredStorageDirectory){
+    return TelemetryStorageDirectory(arena, configuredStorageDirectory) / s_TelemetryRawDirectoryName;
+}
+
+[[nodiscard]] Path TelemetryReportDirectory(LogArena& arena, const Path& configuredStorageDirectory){
+    return TelemetryStorageDirectory(arena, configuredStorageDirectory) / s_TelemetryReportDirectoryName;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -80,29 +109,6 @@ void SetResultMessage(TelemetryIngestResult& result, AStringView message, const 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-Path TelemetryDefaultRootDirectory(LogArena& arena){
-    Path executableDirectory(arena);
-    if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / s_TelemetryStorageDirectoryName;
-
-    return Path(arena, s_TelemetryStorageDirectoryName);
-}
-
-Path TelemetryStorageDirectory(LogArena& arena, const Path& configuredStorageDirectory){
-    if(!configuredStorageDirectory.empty())
-        return Path(arena, configuredStorageDirectory);
-
-    return TelemetryDefaultRootDirectory(arena);
-}
-
-Path TelemetryRawDirectory(LogArena& arena, const Path& configuredStorageDirectory){
-    return TelemetryStorageDirectory(arena, configuredStorageDirectory) / s_TelemetryRawDirectoryName;
-}
-
-Path TelemetryReportDirectory(LogArena& arena, const Path& configuredStorageDirectory){
-    return TelemetryStorageDirectory(arena, configuredStorageDirectory) / s_TelemetryReportDirectoryName;
-}
 
 TelemetryIngestResult ProcessTelemetryUpload(
     LogArena& arena,
@@ -116,8 +122,8 @@ TelemetryIngestResult ProcessTelemetryUpload(
         return result;
     }
 
-    const Path rawDirectory = TelemetryRawDirectory(arena, config.storageDirectory);
-    const Path reportDirectory = TelemetryReportDirectory(arena, config.storageDirectory);
+    const Path rawDirectory = __hidden_log_telemetry_ingest::TelemetryRawDirectory(arena, config.storageDirectory);
+    const Path reportDirectory = __hidden_log_telemetry_ingest::TelemetryReportDirectory(arena, config.storageDirectory);
     if(!__hidden_log_telemetry_ingest::EnsureDirectory(rawDirectory) || !__hidden_log_telemetry_ingest::EnsureDirectory(reportDirectory)){
         __hidden_log_telemetry_ingest::SetResultMessage(result, "Telemetry upload could not create storage directories", Type::Error);
         return result;
@@ -125,11 +131,11 @@ TelemetryIngestResult ProcessTelemetryUpload(
 
     const Path uploadStem = __hidden_log_telemetry_ingest::MakeTelemetryUploadStem(arena);
     result.rawPath = rawDirectory / uploadStem;
-    result.rawPath.replace_extension(s_TelemetryRawStreamFileExtension);
+    result.rawPath.replace_extension(__hidden_log_telemetry_ingest::s_TelemetryRawStreamFileExtension);
     result.jsonPath = reportDirectory / uploadStem;
-    result.jsonPath.replace_extension(s_TelemetryJsonFileExtension);
+    result.jsonPath.replace_extension(__hidden_log_telemetry_ingest::s_TelemetryJsonFileExtension);
     result.perfCsvPath = reportDirectory / uploadStem;
-    result.perfCsvPath.replace_extension(s_TelemetryPerfCsvFileExtension);
+    result.perfCsvPath.replace_extension(__hidden_log_telemetry_ingest::s_TelemetryPerfCsvFileExtension);
 
     result.storedRaw = __hidden_log_telemetry_ingest::StoreRawTelemetry(result.rawPath, bytes, byteCount);
     if(!result.storedRaw){

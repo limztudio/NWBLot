@@ -20,13 +20,6 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr const char* s_TelemetryStorageDirectoryName = "telemetry";
-inline constexpr const char* s_TelemetryRawDirectoryName = "raw";
-inline constexpr const char* s_TelemetryReportDirectoryName = "reports";
-inline constexpr const char* s_TelemetryRawStreamFileExtension = ".nwbs";
-inline constexpr const char* s_TelemetryJsonFileExtension = ".json";
-inline constexpr const char* s_TelemetryPerfCsvFileExtension = ".perf.csv";
-
 struct TelemetryIngestConfig{
     explicit TelemetryIngestConfig(LogArena& arena)
         : storageDirectory(arena)
@@ -63,10 +56,6 @@ struct TelemetryIngestResult{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Path TelemetryDefaultRootDirectory(LogArena& arena);
-[[nodiscard]] Path TelemetryStorageDirectory(LogArena& arena, const Path& configuredStorageDirectory);
-[[nodiscard]] Path TelemetryRawDirectory(LogArena& arena, const Path& configuredStorageDirectory);
-[[nodiscard]] Path TelemetryReportDirectory(LogArena& arena, const Path& configuredStorageDirectory);
 [[nodiscard]] TelemetryIngestResult ProcessTelemetryUpload(
     LogArena& arena,
     const void* bytes,

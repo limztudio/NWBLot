@@ -21,9 +21,7 @@ NWB_TELEMETRY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_session{
-    class CaptureSessionLogRegistrationGuard;
-};
+class CaptureSessionCaptureScope;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,7 +29,7 @@ namespace __hidden_session{
 
 class CaptureSession final : NoCopy{
 private:
-    friend class __hidden_session::CaptureSessionLogRegistrationGuard;
+    friend class CaptureSessionCaptureScope;
 
 
 public:
@@ -84,76 +82,32 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_session{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CaptureSessionLogRegistrationGuard final : NoCopy{
+class CaptureSessionCaptureScope final : NoCopy{
 public:
-    explicit CaptureSessionLogRegistrationGuard(CaptureSession& session)
+    explicit CaptureSessionCaptureScope(CaptureSession& session)
         : m_session(session)
         , m_previousForwardLogger(session.textLogCaptureLogger().forwardLogger())
-        , m_registration(session.textLogCaptureLogger())
+        , m_logRegistration(session.textLogCaptureLogger())
+        , m_diagnostic(session.recorder())
     {
-        Common::ILogger* const forwardLogger = m_registration.previousLogger() == &m_session.textLogCaptureLogger()
+        Common::ILogger* const forwardLogger = m_logRegistration.previousLogger() == &m_session.textLogCaptureLogger()
             ? m_previousForwardLogger
-            : m_registration.previousLogger()
+            : m_logRegistration.previousLogger()
         ;
         m_session.setForwardLogger(forwardLogger);
+        m_diagnostic.setFrameIndex(session.frameIndex());
+        m_diagnostic.setStreamId(session.streamId());
     }
-    CaptureSessionLogRegistrationGuard(CaptureSessionLogRegistrationGuard&&) = delete;
-    ~CaptureSessionLogRegistrationGuard(){
+    CaptureSessionCaptureScope(CaptureSessionCaptureScope&&) = delete;
+    ~CaptureSessionCaptureScope(){
         m_session.setForwardLogger(m_previousForwardLogger);
     }
-
 
 private:
     CaptureSession& m_session;
     Common::ILogger* m_previousForwardLogger = nullptr;
-    Common::LoggerRegistrationGuard m_registration;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CaptureSessionDiagnosticGuard final : NoCopy{
-public:
-    explicit CaptureSessionDiagnosticGuard(CaptureSession& session)
-        : m_guard(session.recorder())
-    {
-        m_guard.setFrameIndex(session.frameIndex());
-        m_guard.setStreamId(session.streamId());
-    }
-    CaptureSessionDiagnosticGuard(CaptureSessionDiagnosticGuard&&) = delete;
-
-private:
-    DiagnosticCaptureGuard m_guard;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CaptureSessionCaptureScope final : NoCopy{
-public:
-    explicit CaptureSessionCaptureScope(CaptureSession& session)
-        : m_logRegistration(session)
-        , m_diagnostic(session)
-    {}
-    CaptureSessionCaptureScope(CaptureSessionCaptureScope&&) = delete;
-
-private:
-    __hidden_session::CaptureSessionLogRegistrationGuard m_logRegistration;
-    __hidden_session::CaptureSessionDiagnosticGuard m_diagnostic;
+    Common::LoggerRegistrationGuard m_logRegistration;
+    DiagnosticCaptureGuard m_diagnostic;
 };
 
 

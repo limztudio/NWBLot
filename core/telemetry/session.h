@@ -22,6 +22,10 @@ NWB_TELEMETRY_BEGIN
 
 
 class CaptureSession final : NoCopy{
+private:
+    friend class CaptureSessionLogRegistrationGuard;
+
+
 public:
     explicit CaptureSession(TelemetryArena& arena)
         : m_recorder(arena)
@@ -39,13 +43,10 @@ public:
         m_streamId = streamId;
         m_textLogCapture.setStreamId(streamId);
     }
-    void setForwardLogger(Common::ILogger* const forwardLogger){ m_textLogCapture.setForwardLogger(forwardLogger); }
     void clear(){ m_recorder.clear(); }
 
     [[nodiscard]] Recorder& recorder(){ return m_recorder; }
     [[nodiscard]] const Recorder& recorder()const{ return m_recorder; }
-    [[nodiscard]] TextLogCaptureLogger& textLogCaptureLogger(){ return m_textLogCapture; }
-    [[nodiscard]] const TextLogCaptureLogger& textLogCaptureLogger()const{ return m_textLogCapture; }
     [[nodiscard]] CaptureOptions captureOptions()const{ return m_recorder.captureOptions(); }
     [[nodiscard]] bool enabled()const{ return m_recorder.enabled(); }
     [[nodiscard]] u64 frameIndex()const{ return m_frameIndex; }
@@ -59,6 +60,10 @@ public:
     [[nodiscard]] PerfSessionRecordResult recordPerfReport(const Perf::SessionReport& report, const u32 streamId = 0u){
         return RecordPerfSessionReport(m_recorder, report, streamId);
     }
+
+private:
+    void setForwardLogger(Common::ILogger* const forwardLogger){ m_textLogCapture.setForwardLogger(forwardLogger); }
+    [[nodiscard]] TextLogCaptureLogger& textLogCaptureLogger(){ return m_textLogCapture; }
 
 private:
     Recorder m_recorder;

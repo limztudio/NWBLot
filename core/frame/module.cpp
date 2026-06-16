@@ -68,6 +68,7 @@ Frame::Frame(void* inst, u16 width, u16 height)
     , m_projectObjectArena("NWB::Core::Frame::ProjectObjectArena")
     , m_perfSession(m_projectObjectArena)
     , m_telemetrySession(m_projectObjectArena)
+    , m_telemetryArchiveSink(m_telemetrySession)
     , m_projectThreadPool(queryProjectWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_projectJobSystem(m_projectThreadPool)
     , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem, m_perfSession.gpuTimingSink())
@@ -95,6 +96,7 @@ bool Frame::startup(){
     return true;
 }
 void Frame::cleanup(){
+    static_cast<void>(m_telemetryArchiveSink.flushIfEnabled());
     m_graphics.destroy();
 }
 void Frame::requestQuit(){
@@ -111,6 +113,15 @@ void Frame::setTelemetryCapture(const Telemetry::CaptureOptions& options){
     m_telemetrySession.setCaptureOptions(options);
     if(options.perfEnabled())
         setPerfCapture(Perf::CaptureOptions::All());
+}
+void Frame::setTelemetryArchivePath(const Telemetry::TelemetryPath& path){
+    m_telemetryArchiveSink.setPath(path);
+}
+void Frame::setTelemetryArchiveOptions(const Telemetry::ArchiveSinkOptions& options){
+    m_telemetryArchiveSink.setOptions(options);
+}
+Telemetry::ArchiveResult Frame::flushTelemetryArchive(const bool clearAfterWrite){
+    return m_telemetryArchiveSink.flush(clearAfterWrite);
 }
 bool Frame::flushPerfSamples(){
     auto* device = m_graphics.getDevice();

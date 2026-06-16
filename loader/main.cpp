@@ -290,6 +290,9 @@ static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidde
             {},
             {},
             {},
+            {},
+            {},
+            {},
         };
         context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
             return NWB::Core::ShaderArchive::findVirtualPath(
@@ -311,6 +314,15 @@ static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidde
         };
         context.telemetryCapture = [&frame](const NWB::Core::Telemetry::CaptureOptions& options){
             frame.setTelemetryCapture(options);
+        };
+        context.telemetryArchivePath = [&frame](const NWB::Core::Telemetry::TelemetryPath& path){
+            frame.setTelemetryArchivePath(path);
+        };
+        context.telemetryArchiveOptions = [&frame](const NWB::Core::Telemetry::ArchiveSinkOptions& options){
+            frame.setTelemetryArchiveOptions(options);
+        };
+        context.telemetryArchiveFlush = [&frame](const bool clearAfterWrite){
+            return frame.flushTelemetryArchive(clearAfterWrite);
         };
         context.requestQuit = [&frame](){
             frame.requestQuit();

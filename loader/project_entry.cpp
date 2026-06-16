@@ -38,6 +38,25 @@ void ProjectRuntimeContext::setTelemetryCapture(const Core::Telemetry::CaptureOp
         telemetryCapture(options);
 }
 
+void ProjectRuntimeContext::setTelemetryArchivePath(const Core::Telemetry::TelemetryPath& path){
+    if(telemetryArchivePath)
+        telemetryArchivePath(path);
+}
+
+void ProjectRuntimeContext::setTelemetryArchiveOptions(const Core::Telemetry::ArchiveSinkOptions& options){
+    if(telemetryArchiveOptions)
+        telemetryArchiveOptions(options);
+}
+
+Core::Telemetry::ArchiveResult ProjectRuntimeContext::flushTelemetryArchive(const bool clearAfterWrite){
+    if(telemetryArchiveFlush)
+        return telemetryArchiveFlush(clearAfterWrite);
+
+    Core::Telemetry::ArchiveResult result;
+    result.status = Core::Telemetry::ArchiveStatus::Disabled;
+    return result;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

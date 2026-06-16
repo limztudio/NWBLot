@@ -11,7 +11,7 @@
 #include <core/input/module.h>
 #include <core/graphics/module.h>
 #include <core/perf/session.h>
-#include <core/telemetry/session.h>
+#include <core/telemetry/archive_sink.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,7 +88,12 @@ public:
     [[nodiscard]] bool flushPerfSamples();
     [[nodiscard]] inline Telemetry::CaptureSession& telemetrySession(){ return m_telemetrySession; }
     [[nodiscard]] inline const Telemetry::CaptureSession& telemetrySession()const{ return m_telemetrySession; }
+    [[nodiscard]] inline Telemetry::ArchiveSink& telemetryArchiveSink(){ return m_telemetryArchiveSink; }
+    [[nodiscard]] inline const Telemetry::ArchiveSink& telemetryArchiveSink()const{ return m_telemetryArchiveSink; }
     void setTelemetryCapture(const Telemetry::CaptureOptions& options);
+    void setTelemetryArchivePath(const Telemetry::TelemetryPath& path);
+    void setTelemetryArchiveOptions(const Telemetry::ArchiveSinkOptions& options);
+    [[nodiscard]] Telemetry::ArchiveResult flushTelemetryArchive(bool clearAfterWrite = false);
 
     [[nodiscard]] inline FrameString& appliedWindowTitle(){ return m_appliedWindowTitle; }
     [[nodiscard]] inline const FrameString& appliedWindowTitle()const{ return m_appliedWindowTitle; }
@@ -117,6 +122,7 @@ private:
     Alloc::GlobalArena m_projectObjectArena;
     Perf::Session m_perfSession;
     Telemetry::CaptureSession m_telemetrySession;
+    Telemetry::ArchiveSink m_telemetryArchiveSink;
     Perf::MemoryScopeId m_graphicsObjectArenaMemoryScope;
     Perf::MemoryScopeId m_projectObjectArenaMemoryScope;
     Alloc::ThreadPool m_projectThreadPool;

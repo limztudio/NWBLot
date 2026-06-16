@@ -22,6 +22,8 @@ NWB_TELEMETRY_BEGIN
 namespace ArchiveStatus{
     enum Enum : u8{
         Ok,
+        Disabled,
+        NotConfigured,
         EncodeFailed,
         WriteFailed,
         ReadFailed,
@@ -95,5 +97,4 @@ NWB_TELEMETRY_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

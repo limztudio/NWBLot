@@ -397,6 +397,61 @@ static void TestCaptureSessionFlushArchiveClearsOnSuccess(TestContext& context){
     static_cast<void>(RemoveAllIfExists(storageDirectory, error));
 }
 
+static void TestArchiveSinkPolicyAndConfiguredFlush(TestContext& context){
+    TestArena testArena;
+    const ::Path<NWB::Core::Alloc::GlobalArena> storageDirectory = TelemetryTestStorageDirectory(testArena.arena);
+    const ::Path<NWB::Core::Alloc::GlobalArena> archivePath = storageDirectory / "sink.nwbs";
+
+    ErrorCode error;
+    static_cast<void>(RemoveAllIfExists(storageDirectory, error));
+    error.clear();
+    static_cast<void>(EnsureDirectories(storageDirectory, error));
+    NWB_TELEMETRY_TEST_CHECK(context, !error);
+
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::All());
+    session.setFrameIndex(606u);
+    session.setStreamId(23u);
+    NWB_TELEMETRY_TEST_CHECK(context, session.recordTextLog(NWB::Core::Common::LogType::Info, NWB_TEXT("sink archive")));
+    NWB_TELEMETRY_TEST_CHECK(context, session.eventCount() == 1u);
+
+    Telemetry::ArchiveSink sink(session);
+    Telemetry::ArchiveResult result = sink.flushIfEnabled();
+    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::ArchiveStatus::Disabled);
+
+    Telemetry::ArchiveSinkOptions options;
+    options.enabled = true;
+    sink.setOptions(options);
+    result = sink.flushIfEnabled();
+    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::ArchiveStatus::NotConfigured);
+
+    sink.setPath(archivePath);
+    result = sink.flushIfEnabled();
+    NWB_TELEMETRY_TEST_CHECK(context, result.ok());
+    NWB_TELEMETRY_TEST_CHECK(context, session.eventCount() == 1u);
+
+    options.clearAfterFlush = true;
+    sink.setOptions(options);
+    result = sink.flushIfEnabled();
+    NWB_TELEMETRY_TEST_CHECK(context, result.ok());
+    NWB_TELEMETRY_TEST_CHECK(context, session.eventCount() == 0u);
+
+    Telemetry::Recorder decoded(testArena.arena);
+    const Telemetry::ArchiveResult readResult = Telemetry::ReadEventStreamArchive(testArena.arena, archivePath, decoded);
+    NWB_TELEMETRY_TEST_CHECK(context, readResult.ok());
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.eventCount() == 1u);
+
+    const Telemetry::EventRecord* event = decoded.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(event){
+        NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);
+        NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 606u);
+        NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 23u);
+    }
+
+    static_cast<void>(RemoveAllIfExists(storageDirectory, error));
+}
+
 static void TestCaptureSessionRecordsTextLogWithContext(TestContext& context){
     TestArena testArena;
     Telemetry::CaptureSession session(testArena.arena);
@@ -1427,6 +1482,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestEventStreamCodecRejectsInvalidInput(context);
     __hidden_tests::TestEventStreamArchiveRoundTrip(context);
     __hidden_tests::TestCaptureSessionFlushArchiveClearsOnSuccess(context);
+    __hidden_tests::TestArchiveSinkPolicyAndConfiguredFlush(context);
     __hidden_tests::TestCaptureSessionRecordsTextLogWithContext(context);
     __hidden_tests::TestCaptureSessionTextLoggerForwardsAndRecords(context);
     __hidden_tests::TestCaptureSessionLogRegistrationGuardForwardsAndRestores(context);

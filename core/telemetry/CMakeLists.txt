@@ -15,6 +15,7 @@ target_sources(nwb_telemetry PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/perf.h"
     "${CMAKE_CURRENT_LIST_DIR}/recorder.h"
+    "${CMAKE_CURRENT_LIST_DIR}/session.h"
     "${CMAKE_CURRENT_LIST_DIR}/text_log.h"
 )
 target_link_libraries(nwb_telemetry PUBLIC nwb_common nwb_alloc nwb_perf)

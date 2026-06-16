@@ -12,6 +12,7 @@
 #include "frame_graph.h"
 #include "perf.h"
 #include "recorder.h"
+#include "session.h"
 #include "text_log.h"
 
 

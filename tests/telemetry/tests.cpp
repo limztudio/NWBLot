@@ -354,6 +354,49 @@ static void TestEventStreamArchiveRoundTrip(TestContext& context){
     static_cast<void>(RemoveAllIfExists(storageDirectory, error));
 }
 
+static void TestCaptureSessionFlushArchiveClearsOnSuccess(TestContext& context){
+    TestArena testArena;
+    const ::Path<NWB::Core::Alloc::GlobalArena> storageDirectory = TelemetryTestStorageDirectory(testArena.arena);
+    const ::Path<NWB::Core::Alloc::GlobalArena> archivePath = storageDirectory / "session.nwbs";
+
+    ErrorCode error;
+    static_cast<void>(RemoveAllIfExists(storageDirectory, error));
+    error.clear();
+    static_cast<void>(EnsureDirectories(storageDirectory, error));
+    NWB_TELEMETRY_TEST_CHECK(context, !error);
+
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::All());
+    NWB_TELEMETRY_TEST_CHECK(context, session.enabled());
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordTextLog(
+        session.recorder(),
+        NWB::Core::Common::LogType::Info,
+        NWB_TEXT("session archive"),
+        505u,
+        21u
+    ));
+    NWB_TELEMETRY_TEST_CHECK(context, session.eventCount() == 1u);
+
+    const Telemetry::ArchiveResult writeResult = session.flushArchive(archivePath, true);
+    NWB_TELEMETRY_TEST_CHECK(context, writeResult.ok());
+    NWB_TELEMETRY_TEST_CHECK(context, session.eventCount() == 0u);
+
+    Telemetry::Recorder decoded(testArena.arena);
+    const Telemetry::ArchiveResult readResult = Telemetry::ReadEventStreamArchive(testArena.arena, archivePath, decoded);
+    NWB_TELEMETRY_TEST_CHECK(context, readResult.ok());
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.eventCount() == 1u);
+
+    const Telemetry::EventRecord* event = decoded.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(event){
+        NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);
+        NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 505u);
+        NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 21u);
+    }
+
+    static_cast<void>(RemoveAllIfExists(storageDirectory, error));
+}
+
 static void TestTextLogPayloadRoundTrip(TestContext& context){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
@@ -1101,6 +1144,38 @@ static void TestRecordPerfSessionReportUsesTelemetryEvents(TestContext& context)
     NWB_TELEMETRY_TEST_CHECK(context, memoryPayload.delta.hasSamples);
 }
 
+static void TestCaptureSessionRecordsPerfReport(TestContext& context){
+    TestArena testArena;
+    NWB::Core::Perf::TimingRecorder cpuTiming(testArena.arena);
+    NWB::Core::Perf::TimingRecorder gpuTiming(testArena.arena);
+    NWB::Core::Perf::MemoryRecorder memory(testArena.arena);
+    NWB::Core::Perf::SessionReport report;
+    BuildTestPerfReport(cpuTiming, gpuTiming, memory, report);
+
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
+
+    const Telemetry::PerfSessionRecordResult result = session.recordPerfReport(report, 23u);
+    NWB_TELEMETRY_TEST_CHECK(context, result.eventCount() == 3u);
+    NWB_TELEMETRY_TEST_CHECK(context, session.eventCount() == 3u);
+
+    const Telemetry::EventRecord* cpuEvent = session.view().eventAt(0u);
+    const Telemetry::EventRecord* gpuEvent = session.view().eventAt(1u);
+    const Telemetry::EventRecord* memoryEvent = session.view().eventAt(2u);
+    NWB_TELEMETRY_TEST_CHECK(context, cpuEvent != nullptr);
+    NWB_TELEMETRY_TEST_CHECK(context, gpuEvent != nullptr);
+    NWB_TELEMETRY_TEST_CHECK(context, memoryEvent != nullptr);
+    if(!cpuEvent || !gpuEvent || !memoryEvent)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, cpuEvent->header.kind == Telemetry::EventKind::PerfFrame);
+    NWB_TELEMETRY_TEST_CHECK(context, gpuEvent->header.kind == Telemetry::EventKind::PerfFrame);
+    NWB_TELEMETRY_TEST_CHECK(context, memoryEvent->header.kind == Telemetry::EventKind::MemoryFrame);
+    NWB_TELEMETRY_TEST_CHECK(context, cpuEvent->header.streamId == 23u);
+    NWB_TELEMETRY_TEST_CHECK(context, gpuEvent->header.streamId == 23u);
+    NWB_TELEMETRY_TEST_CHECK(context, memoryEvent->header.streamId == 23u);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1122,6 +1197,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestEventStreamCodecHandlesEmptyStreams(context);
     __hidden_tests::TestEventStreamCodecRejectsInvalidInput(context);
     __hidden_tests::TestEventStreamArchiveRoundTrip(context);
+    __hidden_tests::TestCaptureSessionFlushArchiveClearsOnSuccess(context);
     __hidden_tests::TestTextLogPayloadRoundTrip(context);
     __hidden_tests::TestRecordTextLogUsesTelemetryEvent(context);
     __hidden_tests::TestTextLogCaptureLoggerForwardsAndRecords(context);
@@ -1141,6 +1217,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestRecordPerfMemoryUsesTelemetryEvent(context);
     __hidden_tests::TestPerfViewsExposeScopes(context);
     __hidden_tests::TestRecordPerfSessionReportUsesTelemetryEvents(context);
+    __hidden_tests::TestCaptureSessionRecordsPerfReport(context);
 })
 
 

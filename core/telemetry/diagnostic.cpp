@@ -82,7 +82,7 @@ static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
         return;
 
     try{
-        [[maybe_unused]] const bool captured = guard->capture(record);
+        static_cast<void>(guard->capture(record));
     }
     catch(...){}
 }

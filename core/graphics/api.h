@@ -1781,7 +1781,7 @@ struct RayTracingGeometryTriangles{
 
 struct RayTracingGeometryAABBs{
     Buffer* buffer = nullptr;
-    Buffer* unused = nullptr;
+    Buffer* reserved = nullptr;
     u64 offset = 0;
     u32 count = 0;
     u32 stride = 0;
@@ -2154,7 +2154,7 @@ struct BindingLayoutItem{
     u32 slot;
 
     ResourceType::Enum type : 8;
-    u8 unused : 8;
+    u8 reserved : 8;
     // Push constant byte size when (type == PushConstants)
     // Descriptor array size (1 or more) for all other resource types
     // Must be 1 for VolatileConstantBuffer
@@ -2302,9 +2302,9 @@ struct BindingSetItem{
     ResourceType::Enum type          : 8;
     TextureDimension::Enum dimension : 8; // valid for Texture_SRV, Texture_UAV
     Format::Enum format              : 8; // valid for Texture_SRV, Texture_UAV, Buffer_SRV, Buffer_UAV
-    u8 unused                        : 8;
+    u8 reserved                      : 8;
 
-    u32 unused2;
+    u32 reserved2;
 
     union{
         TextureSubresourceSet subresources; // valid for Texture_SRV, Texture_UAV
@@ -2334,8 +2334,8 @@ struct BindingSetItem{
         result.dimension = dimension;
         result.rawData[0] = 0;
         result.rawData[1] = 0;
-        result.unused = 0;
-        result.unused2 = 0;
+        result.reserved = 0;
+        result.reserved2 = 0;
         return result;
     }
 

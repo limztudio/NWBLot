@@ -78,7 +78,6 @@ struct UpdateCallbackContext{
 struct LoaderOptions{
     AString<NWB::Core::Alloc::GlobalArena> logAddress;
     AString<NWB::Core::Alloc::GlobalArena> crashUploadToken;
-    ACompactString crashTest;
     bool enableGpuDebug = false;
     bool useStandaloneLogger = false;
 
@@ -162,18 +161,12 @@ bool LoadShaderArchiveRecords(
     return NWB::Core::ShaderArchive::deserializeIndex(indexBinary, outRecords);
 }
 
-void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options, std::string& crashTest){
+void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
 #if !defined(NWB_FINAL)
     app.add_flag("--gpudbg", options.enableGpuDebug, "Enable graphics backend validation layer");
-    app.add_option(
-        "--crash-test",
-        crashTest,
-        "Run crash reporting test: manual-dump, access-violation, assert, fatal-assert, logger-error, logger-fatal"
-    );
 #else
     static_cast<void>(app);
     static_cast<void>(options);
-    static_cast<void>(crashTest);
 #endif
 }
 
@@ -194,7 +187,7 @@ bool ApplyGraphicsOptions(NWB::Core::Graphics& graphics, const LoaderOptions& op
     return true;
 }
 
-bool InstallCrashReporting(CrashArena& crashArena, NWB::Core::Alloc::GlobalArena& runtimeArena, const LoaderOptions& options){
+bool InstallCrashReporting(CrashArena& crashArena, const LoaderOptions& options){
     ::Path<CrashArena> executableDirectory(crashArena);
     if(!GetExecutableDirectory(executableDirectory))
         executableDirectory = ::Path<CrashArena>(crashArena, ".");
@@ -216,72 +209,14 @@ bool InstallCrashReporting(CrashArena& crashArena, NWB::Core::Alloc::GlobalArena
     ;
     crashConfig.crashUploadToken = AStringView(options.crashUploadToken.data(), options.crashUploadToken.size());
     crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
-    crashConfig.enableGpuDumps = options.enableGpuDebug;
 
     if(NWB::Core::Crash::InstallCrashHandler(crashArena, crashConfig)){
         static_cast<void>(NWB::Core::Crash::SetCrashMetadata("runtime", "loader"));
         static_cast<void>(NWB::Core::Crash::SetCrashMetadata("gpu_debug", options.enableGpuDebug ? "true" : "false"));
-        static_cast<void>(NWB::Core::Crash::FlushPendingCrashReports(runtimeArena));
         return true;
     }
 
     return false;
-}
-
-[[noreturn]] void TriggerAccessViolationCrashTest(){
-    volatile u8* crashAddress = reinterpret_cast<volatile u8*>(static_cast<usize>(0));
-    *crashAddress = 0xFFu;
-    ::std::abort();
-}
-
-bool RunCrashTestIfRequested(const LoaderOptions& options, const bool crashReportingInstalled, int& outExitCode){
-    if(options.crashTest.empty())
-        return false;
-
-    const AStringView crashTest = options.crashTest.view();
-
-    if(!crashReportingInstalled){
-        NWB_LOGGER_FATAL(NWB_TEXT("Crash test '{}' requested but crash reporting is unavailable"), StringConvert(crashTest));
-        outExitCode = -1;
-        return true;
-    }
-
-    if(crashTest == "manual-dump"){
-        const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::CaptureCrashDump("loader_crash_test", "manual_dump");
-        outExitCode = result.packageWritten() ? 0 : -1;
-        return true;
-    }
-
-    if(crashTest == "access-violation")
-        TriggerAccessViolationCrashTest();
-
-    if(crashTest == "assert"){
-        NWB_ASSERT_MSG(false, NWB_TEXT("Loader crash-test assert"));
-        outExitCode = -1;
-        return true;
-    }
-
-    if(crashTest == "fatal-assert"){
-        NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Loader crash-test fatal assert"));
-        outExitCode = -1;
-        return true;
-    }
-
-    if(crashTest == "logger-error"){
-        NWB_LOGGER_ERROR(NWB_TEXT("Loader crash-test logger error"));
-        outExitCode = -1;
-        return true;
-    }
-
-    if(crashTest == "logger-fatal"){
-        NWB_LOGGER_FATAL(NWB_TEXT("Loader crash-test logger fatal"));
-        outExitCode = -1;
-        return true;
-    }
-
-    NWB_LOGGER_FATAL(NWB_TEXT("Unknown crash test mode '{}'"), StringConvert(crashTest));
-    outExitCode = -1;
-    return true;
 }
 
 
@@ -417,7 +352,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
         crashArenaReserveSize,
         "NWB::Loader::CrashReportingArena"
     );
-    const bool crashReportingInstalled = __hidden_loader::InstallCrashReporting(crashArena, arena, options);
+    const bool crashReportingInstalled = __hidden_loader::InstallCrashReporting(crashArena, options);
 
     if(options.useStandaloneLogger){
         NWB::Log::ClientStandalone logger;
@@ -427,10 +362,6 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: using standalone log output"));
         if(!crashReportingInstalled)
             NWB_LOGGER_WARNING(NWB_TEXT("Loader: crash reporting unavailable"));
-
-        int crashTestExitCode = 0;
-        if(__hidden_loader::RunCrashTestIfRequested(options, crashReportingInstalled, crashTestExitCode))
-            return crashTestExitCode;
 
         return RunProjectRuntime(arena, options, inst);
     }
@@ -442,10 +373,6 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), StringConvert(options.logAddress.c_str()));
     if(!crashReportingInstalled)
         NWB_LOGGER_WARNING(NWB_TEXT("Loader: crash reporting unavailable"));
-
-    int crashTestExitCode = 0;
-    if(__hidden_loader::RunCrashTestIfRequested(options, crashReportingInstalled, crashTestExitCode))
-        return crashTestExitCode;
 
     return RunProjectRuntime(arena, options, inst);
 }
@@ -462,12 +389,11 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
         CLI::App app{ "loader" };
 
         std::string address = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogAddress)>(NWB::Core::Common::g_ArgDefault);
-        std::string crashTest;
         u16 port = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
         NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogAddress>(app, address);
         NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, port);
         app.add_option("--crash-upload-token", options.crashUploadToken, "Bearer token sent with crash uploads");
-        __hidden_loader::AddDebugCommandLineOptions(app, options, crashTest);
+        __hidden_loader::AddDebugCommandLineOptions(app, options);
 
         try{
             NWB::Core::Common::ArgParseApp(app, argc, argv);
@@ -480,10 +406,6 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
         options.useStandaloneLogger = address.empty() || port == 0u;
         if(!options.useStandaloneLogger)
             options.logAddress = StringFormat(commandLineArena, "{}:{}", AStringView(address.data(), address.size()), port);
-        if(!options.crashTest.assign(AStringView(crashTest.data(), crashTest.size()))){
-            NWB_CERR << "--crash-test exceeds ACompactString capacity\n";
-            return -1;
-        }
     }
 
     return MainLogic(commandLineArena, options, inst);

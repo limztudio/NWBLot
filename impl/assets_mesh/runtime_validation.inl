@@ -3,7 +3,6 @@
 
 
 using MeshPayloadValidation::CountFitsU32;
-using MeshPayloadValidation::FiniteVector;
 
 #include "meshlet_ref_validation.inl"
 #include "runtime_validation_diagnostics.inl"

@@ -70,15 +70,6 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
     );
 }
 
-static void StoreRuntimeLocalBounds(
-    const SIMDVector minBounds,
-    const SIMDVector maxBounds,
-    RuntimeMeshLocalBounds& outBounds
-){
-    StoreFloatInt(VectorSetW(minBounds, 0.0f), s_RuntimeMeshBoundsValidFlag, &outBounds.minBounds);
-    StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, &outBounds.maxBounds);
-}
-
 [[nodiscard]] bool BuildRuntimeLocalBounds(MeshSkinningRuntimeInstance& instance){
     instance.localBounds = RuntimeMeshLocalBounds{};
     if(instance.restPositions.empty()){
@@ -101,7 +92,8 @@ static void StoreRuntimeLocalBounds(
         return false;
     }
 
-    StoreRuntimeLocalBounds(minBounds, maxBounds, instance.localBounds);
+    StoreFloatInt(VectorSetW(minBounds, 0.0f), s_RuntimeMeshBoundsValidFlag, &instance.localBounds.minBounds);
+    StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, &instance.localBounds.maxBounds);
     return true;
 }
 

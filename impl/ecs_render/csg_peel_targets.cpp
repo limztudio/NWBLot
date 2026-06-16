@@ -63,19 +63,43 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
     NWB_ASSERT(targets.csgReceiverSpanLayerCount == ECSRenderDetail::s_CsgReceiverSpanLayerCount);
     NWB_ASSERT(targets.csgRemovedIntervalLayerCount == ECSRenderDetail::s_CsgRemovedIntervalLayerCount);
 
-    auto createPeelTexture = [&](const Core::Format::Enum format, const Name& name){
+    auto createCsgTexture = [&](const Core::Format::Enum format, const Name& name, const u32 layerCount, const bool renderTarget){
         Core::TextureDesc desc;
         desc
             .setWidth(targets.width)
             .setHeight(targets.height)
-            .setArraySize(targets.csgPeelLayerCount)
+            .setArraySize(layerCount)
             .setFormat(format)
             .setDimension(Core::TextureDimension::Texture2DArray)
-            .setInRenderTarget(true)
-            .setInUAV(true)
-            .setName(name)
         ;
+        if(renderTarget)
+            desc.setInRenderTarget(true);
+        desc.setInUAV(true).setName(name);
         return graphics().createTexture(desc);
+    };
+    auto createPeelTexture = [&](const Core::Format::Enum format, const Name& name){
+        return createCsgTexture(format, name, targets.csgPeelLayerCount, true);
+    };
+    auto createPeelComputeTexture = [&](const Core::Format::Enum format, const Name& name){
+        return createCsgTexture(format, name, targets.csgPeelLayerCount, false);
+    };
+    auto createReceiverEventTexture = [&](const Core::Format::Enum format, const Name& name){
+        return createCsgTexture(format, name, targets.csgReceiverEventLayerCount, false);
+    };
+    auto createReceiverEventCounterTexture = [&](const Core::Format::Enum format, const Name& name){
+        return createCsgTexture(format, name, 1u, false);
+    };
+    auto createReceiverSpanTexture = [&](const Core::Format::Enum format, const Name& name){
+        return createCsgTexture(format, name, targets.csgReceiverSpanLayerCount, false);
+    };
+    auto createReceiverSpanCounterTexture = [&](const Core::Format::Enum format, const Name& name){
+        return createCsgTexture(format, name, 1u, false);
+    };
+    auto createRemovedIntervalTexture = [&](const Core::Format::Enum format, const Name& name){
+        return createCsgTexture(format, name, targets.csgRemovedIntervalLayerCount, false);
+    };
+    auto createRemovedIntervalCounterTexture = [&](const Core::Format::Enum format, const Name& name){
+        return createCsgTexture(format, name, 1u, false);
     };
 
     targets.csgCapBackNormal = createPeelTexture(targets.csgCapNormalFormat, Name("engine/deferred/csg_cap_back_normal"));
@@ -89,20 +113,6 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG interval depth peel target"));
         return false;
     }
-
-    auto createPeelComputeTexture = [&](const Core::Format::Enum format, const Name& name){
-        Core::TextureDesc desc;
-        desc
-            .setWidth(targets.width)
-            .setHeight(targets.height)
-            .setArraySize(targets.csgPeelLayerCount)
-            .setFormat(format)
-            .setDimension(Core::TextureDimension::Texture2DArray)
-            .setInUAV(true)
-            .setName(name)
-        ;
-        return graphics().createTexture(desc);
-    };
 
     targets.csgIntervalLinearDepth = createPeelComputeTexture(
         targets.csgIntervalLinearDepthFormat,
@@ -118,20 +128,6 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG interval id peel target"));
         return false;
     }
-
-    auto createReceiverEventTexture = [&](const Core::Format::Enum format, const Name& name){
-        Core::TextureDesc desc;
-        desc
-            .setWidth(targets.width)
-            .setHeight(targets.height)
-            .setArraySize(targets.csgReceiverEventLayerCount)
-            .setFormat(format)
-            .setDimension(Core::TextureDimension::Texture2DArray)
-            .setInUAV(true)
-            .setName(name)
-        ;
-        return graphics().createTexture(desc);
-    };
 
     targets.csgReceiverEventDepth = createReceiverEventTexture(
         targets.csgReceiverEventDepthFormat,
@@ -151,20 +147,6 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         return false;
     }
 
-    auto createReceiverEventCounterTexture = [&](const Core::Format::Enum format, const Name& name){
-        Core::TextureDesc desc;
-        desc
-            .setWidth(targets.width)
-            .setHeight(targets.height)
-            .setArraySize(1u)
-            .setFormat(format)
-            .setDimension(Core::TextureDimension::Texture2DArray)
-            .setInUAV(true)
-            .setName(name)
-        ;
-        return graphics().createTexture(desc);
-    };
-
     targets.csgReceiverEventCount = createReceiverEventCounterTexture(
         targets.csgReceiverEventCountFormat,
         Name("engine/deferred/csg_receiver_event_count")
@@ -182,20 +164,6 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG receiver event flags target"));
         return false;
     }
-
-    auto createReceiverSpanTexture = [&](const Core::Format::Enum format, const Name& name){
-        Core::TextureDesc desc;
-        desc
-            .setWidth(targets.width)
-            .setHeight(targets.height)
-            .setArraySize(targets.csgReceiverSpanLayerCount)
-            .setFormat(format)
-            .setDimension(Core::TextureDimension::Texture2DArray)
-            .setInUAV(true)
-            .setName(name)
-        ;
-        return graphics().createTexture(desc);
-    };
 
     targets.csgReceiverSpanDepth = createReceiverSpanTexture(
         targets.csgReceiverSpanDepthFormat,
@@ -215,20 +183,6 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         return false;
     }
 
-    auto createReceiverSpanCounterTexture = [&](const Core::Format::Enum format, const Name& name){
-        Core::TextureDesc desc;
-        desc
-            .setWidth(targets.width)
-            .setHeight(targets.height)
-            .setArraySize(1u)
-            .setFormat(format)
-            .setDimension(Core::TextureDimension::Texture2DArray)
-            .setInUAV(true)
-            .setName(name)
-        ;
-        return graphics().createTexture(desc);
-    };
-
     targets.csgReceiverSpanCount = createReceiverSpanCounterTexture(
         targets.csgReceiverSpanCountFormat,
         Name("engine/deferred/csg_receiver_span_count")
@@ -246,20 +200,6 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG receiver span flags target"));
         return false;
     }
-
-    auto createRemovedIntervalTexture = [&](const Core::Format::Enum format, const Name& name){
-        Core::TextureDesc desc;
-        desc
-            .setWidth(targets.width)
-            .setHeight(targets.height)
-            .setArraySize(targets.csgRemovedIntervalLayerCount)
-            .setFormat(format)
-            .setDimension(Core::TextureDimension::Texture2DArray)
-            .setInUAV(true)
-            .setName(name)
-        ;
-        return graphics().createTexture(desc);
-    };
 
     targets.csgRemovedIntervalDepth = createRemovedIntervalTexture(
         targets.csgRemovedIntervalDepthFormat,
@@ -287,20 +227,6 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG removed interval data target"));
         return false;
     }
-
-    auto createRemovedIntervalCounterTexture = [&](const Core::Format::Enum format, const Name& name){
-        Core::TextureDesc desc;
-        desc
-            .setWidth(targets.width)
-            .setHeight(targets.height)
-            .setArraySize(1u)
-            .setFormat(format)
-            .setDimension(Core::TextureDimension::Texture2DArray)
-            .setInUAV(true)
-            .setName(name)
-        ;
-        return graphics().createTexture(desc);
-    };
 
     targets.csgRemovedIntervalCount = createRemovedIntervalCounterTexture(
         targets.csgRemovedIntervalCountFormat,

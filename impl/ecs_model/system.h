@@ -7,8 +7,8 @@
 
 #include "components.h"
 
+#include <core/assets/ref.h>
 #include <core/ecs/system.h>
-#include <impl/assets_model/asset.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,7 +32,53 @@ NWB_ASSETS_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_ECS_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Entity;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ECS_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Material;
+class Model;
+struct ModelSkeletonObject;
+struct ModelStaticMeshObject;
+struct ModelSkinnedMeshObject;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using ModelObjectRendererCallback = Function<void(
+    Core::ECS::World& world,
+    Core::Alloc::GlobalArena& arena,
+    Core::ECS::Entity& entity,
+    Core::ECS::EntityID owner,
+    const Core::Assets::AssetRef<Material>& material
+)>;
+
+struct ModelObjectRendererHooks{
+    ModelObjectRendererCallback apply;
+    const Core::ECS::ComponentAccess* accesses = nullptr;
+    usize accessCount = 0u;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +86,12 @@ NWB_IMPL_BEGIN
 
 class ModelSystem final : public Core::ECS::ISystem{
 public:
-    ModelSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::Assets::AssetManager& assetManager);
+    ModelSystem(
+        Core::Alloc::GlobalArena& arena,
+        Core::ECS::World& world,
+        Core::Assets::AssetManager& assetManager,
+        ModelObjectRendererHooks rendererHooks = {}
+    );
     virtual ~ModelSystem()override = default;
 
 
@@ -66,6 +117,7 @@ private:
     Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
     Core::Assets::AssetManager& m_assetManager;
+    ModelObjectRendererCallback m_applyRenderer;
     Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena> m_scratchEntities;
     Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena> m_scratchJoints;
 };

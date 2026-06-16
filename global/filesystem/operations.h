@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <fstream>
 
+#include "../platform.h"
+
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
 #else
@@ -339,7 +341,41 @@ template<typename ArenaT>
 }
 
 [[nodiscard]] inline bool IsMissingPathError(const ErrorCode& error)noexcept{
+#if defined(NWB_PLATFORM_WINDOWS)
+    return error.category() == std::system_category()
+        && (
+            error.value() == ERROR_FILE_NOT_FOUND
+            || error.value() == ERROR_PATH_NOT_FOUND
+            || error.value() == ERROR_DIRECTORY
+        )
+    ;
+#else
     return error == std::errc::no_such_file_or_directory || error == std::errc::not_a_directory;
+#endif
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline bool PathExists(const Path<ArenaT>& path)noexcept{
+    ErrorCode error;
+    return FileExists(path, error) && !error;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline bool PathIsDirectory(const Path<ArenaT>& path)noexcept{
+    ErrorCode error;
+    return IsDirectory(path, error) && !error;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline bool PathIsRegularFile(const Path<ArenaT>& path)noexcept{
+    ErrorCode error;
+    return IsRegularFile(path, error) && !error;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline bool PathIsMissing(const Path<ArenaT>& path)noexcept{
+    ErrorCode error;
+    return !FileExists(path, error) && !error;
 }
 
 

@@ -4,6 +4,8 @@
 
 #include "internal.h"
 
+#include <global/diagnostics.h>
+
 NWB_CRASH_BEGIN
 
 
@@ -73,6 +75,18 @@ static void BuildCrashId(CrashRequest& outRequest, const u64 sequence)noexcept{
     AppendUnsignedToFixedBuffer(outRequest.crashId, sequence);
 }
 
+static AStringView EventNameForRequest(const CrashReasonKind::Enum reasonKind, const CrashDumpRequestOptions& options)noexcept{
+    if(!options.event.empty())
+        return options.event;
+    if(options.triggerCategory == DiagnosticEventCategory::s_Assert)
+        return AStringView(DiagnosticEventName::s_Assert);
+    if(options.triggerCategory == DiagnosticEventCategory::s_FatalAssert)
+        return AStringView(DiagnosticEventName::s_Assert);
+    if(reasonKind == CrashReasonKind::ManualDump)
+        return AStringView(DiagnosticEventName::s_ManualDump);
+    return AStringView(DiagnosticEventName::s_Crash);
+}
+
 void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum reasonKind, const u32 reasonCode)noexcept{
     outRequest = CrashRequest{};
     outRequest.platform = CurrentPlatformKind();
@@ -81,7 +95,6 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
     outRequest.processId = CurrentProcessId();
     outRequest.threadId = CurrentThreadId();
     outRequest.dumpDetailMode = static_cast<u32>(g_State.dumpDetailMode);
-    outRequest.enableGpuDumps = g_State.enableGpuDumps ? 1u : 0u;
     outRequest.spoolRetention = g_State.spoolRetention;
 
     const u64 sequence = g_State.crashSequence.fetch_add(1u, MemoryOrder::relaxed);
@@ -115,49 +128,77 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
     }
 }
 
+void SuppressNextPlatformCrashCapture()noexcept{
+    g_State.suppressedPlatformCrashCaptures.fetch_add(1u, MemoryOrder::release);
+}
+
+bool TryConsumeSuppressedPlatformCrashCapture()noexcept{
+    u32 count = g_State.suppressedPlatformCrashCaptures.load(MemoryOrder::acquire);
+    while(count != 0u){
+        if(g_State.suppressedPlatformCrashCaptures.compare_exchange_weak(count, count - 1u, MemoryOrder::acq_rel, MemoryOrder::acquire))
+            return true;
+    }
+    return false;
+}
+
 CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options){
     CrashRequest request;
     SnapshotCrashState(request, reasonKind, reasonCode);
-    request.uploadPolicy = options.uploadAfterWrite ? CrashUploadPolicy::ImmediateAfterWrite : CrashUploadPolicy::None;
     request.exceptionPointers = options.exceptionPointers;
     request.faultAddress = options.faultAddress;
-    request.instructionPointer = options.instructionPointer;
+    request.instructionPointer = options.triggerInstructionPointer != 0u
+        ? options.triggerInstructionPointer
+        : options.instructionPointer
+    ;
     request.stackPointer = options.stackPointer;
     request.framePointer = options.framePointer;
     request.triggerLine = options.triggerLine;
+    const u32 availableCallstackFrameCount = options.callstackFrameCount > s_MaxCallstackFrames
+        ? static_cast<u32>(s_MaxCallstackFrames)
+        : options.callstackFrameCount
+    ;
+    const u32 callstackFramesToSkip = options.callstackFramesToSkip > availableCallstackFrameCount
+        ? availableCallstackFrameCount
+        : options.callstackFramesToSkip
+    ;
+    request.callstackFramesToSkip = callstackFramesToSkip;
+    u32 outputCallstackFrameCount = 0u;
+    if(options.triggerInstructionPointer != 0u)
+        request.callstackFrames[outputCallstackFrameCount++] = options.triggerInstructionPointer;
+
+    for(u32 i = callstackFramesToSkip; i < availableCallstackFrameCount && outputCallstackFrameCount < s_MaxCallstackFrames; ++i){
+        const u64 frame = options.callstackFrames[i];
+        if(frame == 0u)
+            continue;
+
+        bool duplicate = false;
+        for(u32 existing = 0u; existing < outputCallstackFrameCount; ++existing){
+            if(request.callstackFrames[existing] == frame){
+                duplicate = true;
+                break;
+            }
+        }
+        if(!duplicate)
+            request.callstackFrames[outputCallstackFrameCount++] = frame;
+    }
+    request.callstackFrameCount = outputCallstackFrameCount;
+    CopyFixedBuffer(request.event, EventNameForRequest(reasonKind, options));
     CopyFixedBuffer(request.triggerCategory, options.triggerCategory);
+    CopyFixedBuffer(request.triggerExpression, options.triggerExpression);
     CopyFixedBuffer(request.triggerMessage, options.triggerMessage);
     CopyFixedBuffer(request.triggerFile, options.triggerFile);
-
-#if defined(NWB_PLATFORM_ANDROID)
-    if(options.writePackageInProcess){
-        if(!WriteCrashPackage(request))
-            return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
-
-        if(!options.uploadAfterWrite)
-            return CrashDumpResult{ CrashDumpStatus::PackageWritten };
-
-        return UploadCrashPackage(request)
-            ? CrashDumpResult{ CrashDumpStatus::Uploaded }
-            : CrashDumpResult{ CrashDumpStatus::UploadFailed }
-        ;
-    }
-#endif
 
     const CrashDumpTransportStatus::Enum transportStatus = RequestCrashHandler(request, options.waitMilliseconds);
     if(transportStatus == CrashDumpTransportStatus::Failed)
         return CrashDumpResult{ CrashDumpStatus::RequestFailed };
     if(transportStatus == CrashDumpTransportStatus::Sent)
         return CrashDumpResult{ CrashDumpStatus::RequestQueued };
+    if(transportStatus == CrashDumpTransportStatus::TimedOut)
+        return CrashDumpResult{ CrashDumpStatus::RequestTimedOut };
+    if(transportStatus == CrashDumpTransportStatus::PackageWriteFailed)
+        return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
 
-    const CrashDumpResult packageResult = CrashPackageResult(request);
-    if(packageResult.status != CrashDumpStatus::RequestQueued)
-        return packageResult;
-
-    return transportStatus == CrashDumpTransportStatus::TimedOut
-        ? CrashDumpResult{ CrashDumpStatus::RequestTimedOut }
-        : CrashDumpResult{ CrashDumpStatus::PackageWriteFailed }
-    ;
+    return CrashDumpResult{ CrashDumpStatus::PackageWritten };
 }
 
 

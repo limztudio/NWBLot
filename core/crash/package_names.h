@@ -28,19 +28,16 @@ inline constexpr const char* s_PendingDirectoryName = "pending";
 inline constexpr const char* s_UploadedDirectoryName = "uploaded";
 inline constexpr const char* s_UploadingDirectoryName = "uploading";
 inline constexpr const char* s_FailedDirectoryName = "failed";
-inline constexpr const char* s_GpuDirectoryName = "gpu";
 inline constexpr const char* s_CrashIdPrefix = "crash-";
 
-inline constexpr const char* s_CurrentBreadcrumbsFileName = "breadcrumbs_current.txt";
 inline constexpr const char* s_ManifestFileName = "manifest.json";
 inline constexpr const char* s_MetadataFileName = "metadata.txt";
 inline constexpr const char* s_BreadcrumbsFileName = "breadcrumbs.txt";
 inline constexpr const char* s_EmergencyFileName = "emergency.txt";
 inline constexpr const char* s_ArtifactStrategyFileName = "artifact_strategy.txt";
 inline constexpr const char* s_CpuContextFileName = "cpu_context.txt";
-inline constexpr const char* s_TriggerFileName = "trigger.txt";
+inline constexpr const char* s_CallstackFileName = "callstack.txt";
 inline constexpr const char* s_SymbolicationFileName = "symbolication.txt";
-inline constexpr const char* s_GpuAttachmentsFileName = "gpu_attachments.txt";
 inline constexpr const char* s_ProcessDumpFileName = "process.dmp";
 inline constexpr const char* s_UploadAttemptFileName = "upload_attempt.txt";
 inline constexpr const char* s_AndroidCollectionFileName = "android_collection.txt";
@@ -71,8 +68,6 @@ inline constexpr const char* s_LinuxCorePatternPath = "/proc/sys/kernel/core_pat
 inline constexpr const char* s_LinuxCoreUsesPidPath = "/proc/sys/kernel/core_uses_pid";
 
 inline constexpr const char* s_LinuxCoreFileName = "core";
-inline constexpr const char* s_LinuxCoreDumpFileName = "core.dmp";
-inline constexpr const char* s_LinuxProcessCoreFileName = "process.core";
 
 inline constexpr const char* s_ArchiveHeaderLine = "NWBCRASHPKG 1";
 inline constexpr const char* s_ArchiveHeaderText = "NWBCRASHPKG 1\n";
@@ -89,10 +84,29 @@ inline constexpr const char* s_UploadAttemptRetryInterruptedState = "retry_pendi
 
 inline constexpr const char* s_ManifestFormatKey = "format";
 inline constexpr const char* s_ManifestCrashIdKey = "crash_id";
+inline constexpr const char* s_ManifestApplicationKey = "application";
+inline constexpr const char* s_ManifestVersionKey = "version";
+inline constexpr const char* s_ManifestBuildIdKey = "build_id";
+inline constexpr const char* s_ManifestAbiKey = "abi";
 inline constexpr const char* s_ManifestPlatformKey = "platform";
 inline constexpr const char* s_ManifestReasonKindKey = "reason_kind";
-inline constexpr const char* s_ManifestArtifactStrategyKey = "artifact_strategy";
+inline constexpr const char* s_ManifestReasonCodeKey = "reason_code";
+inline constexpr const char* s_ManifestProcessIdKey = "process_id";
 inline constexpr const char* s_ManifestThreadIdKey = "thread_id";
+inline constexpr const char* s_ManifestHasExceptionContextKey = "has_exception_context";
+inline constexpr const char* s_ManifestFaultAddressKey = "fault_address";
+inline constexpr const char* s_ManifestInstructionPointerKey = "instruction_pointer";
+inline constexpr const char* s_ManifestStackPointerKey = "stack_pointer";
+inline constexpr const char* s_ManifestFramePointerKey = "frame_pointer";
+inline constexpr const char* s_ManifestEventKey = "event";
+inline constexpr const char* s_ManifestTriggerCategoryKey = "trigger_category";
+inline constexpr const char* s_ManifestTriggerExpressionKey = "trigger_expression";
+inline constexpr const char* s_ManifestTriggerMessageKey = "trigger_message";
+inline constexpr const char* s_ManifestTriggerFileKey = "trigger_file";
+inline constexpr const char* s_ManifestTriggerLineKey = "trigger_line";
+inline constexpr const char* s_ManifestDumpDetailModeKey = "dump_detail_mode";
+inline constexpr const char* s_ManifestArtifactStrategyKey = "artifact_strategy";
+inline constexpr const char* s_ManifestHandlerLifetimeKey = "handler_lifetime";
 inline constexpr const char* s_ManifestFormatValue = "nwb-crash-package-v1";
 
 
@@ -109,3 +123,4 @@ NWB_CRASH_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

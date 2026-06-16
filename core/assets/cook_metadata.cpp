@@ -132,7 +132,7 @@ static bool ContainsAssetBunchExpander(
         outMetadata,
         scratchArena
     };
-    const AssetMetadataParseResult metadataParseResult = TryAutoCollectedValueMetadataParsers(metadataParseContext);
+    const AssetMetadataParseResult::Enum metadataParseResult = TryAutoCollectedValueMetadataParsers(metadataParseContext);
     if(metadataParseResult == AssetMetadataParseResult::Parsed)
         return true;
     if(metadataParseResult == AssetMetadataParseResult::Error)
@@ -172,7 +172,7 @@ static bool ContainsAssetBunchExpander(
         outMetadata,
         scratchArena
     };
-    const AssetMetadataParseResult metadataParseResult = TryAutoCollectedDocumentMetadataParsers(metadataParseContext);
+    const AssetMetadataParseResult::Enum metadataParseResult = TryAutoCollectedDocumentMetadataParsers(metadataParseContext);
     if(metadataParseResult == AssetMetadataParseResult::Parsed)
         return true;
     if(metadataParseResult == AssetMetadataParseResult::Error)
@@ -335,7 +335,7 @@ bool AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlannedFileCou
     return true;
 }
 
-AssetMetadataParseResult TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context){
+AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context){
     Core::Alloc::ScratchArena scratchArena;
     Vector<__hidden_cook_metadata::AutoMetadataParser, Core::Alloc::ScratchArena> parsers{scratchArena};
     {
@@ -348,7 +348,7 @@ AssetMetadataParseResult TryAutoCollectedDocumentMetadataParsers(AssetDocumentMe
         if(parser.documentFunction == nullptr)
             continue;
 
-        const AssetMetadataParseResult result = parser.documentFunction(context);
+        const AssetMetadataParseResult::Enum result = parser.documentFunction(context);
         if(result == AssetMetadataParseResult::Unsupported)
             continue;
         return result;
@@ -357,7 +357,7 @@ AssetMetadataParseResult TryAutoCollectedDocumentMetadataParsers(AssetDocumentMe
     return AssetMetadataParseResult::Unsupported;
 }
 
-AssetMetadataParseResult TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context){
+AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context){
     Core::Alloc::ScratchArena scratchArena;
     Vector<__hidden_cook_metadata::AutoMetadataParser, Core::Alloc::ScratchArena> parsers{scratchArena};
     {
@@ -370,7 +370,7 @@ AssetMetadataParseResult TryAutoCollectedValueMetadataParsers(AssetValueMetadata
         if(parser.valueFunction == nullptr)
             continue;
 
-        const AssetMetadataParseResult result = parser.valueFunction(context);
+        const AssetMetadataParseResult::Enum result = parser.valueFunction(context);
         if(result == AssetMetadataParseResult::Unsupported)
             continue;
         return result;
@@ -379,7 +379,7 @@ AssetMetadataParseResult TryAutoCollectedValueMetadataParsers(AssetValueMetadata
     return AssetMetadataParseResult::Unsupported;
 }
 
-AssetBunchExpandResult TryAutoCollectedAssetBunchExpanders(AssetBunchExpandContext& context){
+AssetBunchExpandResult::Enum TryAutoCollectedAssetBunchExpanders(AssetBunchExpandContext& context){
     Core::Alloc::ScratchArena scratchArena;
     Vector<AssetBunchExpandFunction, Core::Alloc::ScratchArena> functions{scratchArena};
     {
@@ -392,7 +392,7 @@ AssetBunchExpandResult TryAutoCollectedAssetBunchExpanders(AssetBunchExpandConte
         if(function == nullptr)
             continue;
 
-        const AssetBunchExpandResult result = function(context);
+        const AssetBunchExpandResult::Enum result = function(context);
         if(result == AssetBunchExpandResult::Unsupported)
             continue;
         return result;
@@ -433,7 +433,7 @@ bool ParseAssetMetadata(
             expandedAssets,
             scratchArena
         };
-        const AssetBunchExpandResult assetBunchResult = TryAutoCollectedAssetBunchExpanders(assetBunchExpandContext);
+        const AssetBunchExpandResult::Enum assetBunchResult = TryAutoCollectedAssetBunchExpanders(assetBunchExpandContext);
         if(assetBunchResult == AssetBunchExpandResult::Error)
             return false;
         if(assetBunchResult == AssetBunchExpandResult::Parsed){

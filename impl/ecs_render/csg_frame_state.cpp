@@ -20,26 +20,6 @@ namespace __hidden_csg_frame_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T>
-static void UpdateCacheHashValue(u64& inOutHash, const T& value){
-    static_assert(IsTriviallyCopyable_V<T>, "CSG frame-state cache signature values must be trivially copyable");
-    inOutHash = UpdateFnv64(inOutHash, reinterpret_cast<const u8*>(&value), sizeof(value));
-}
-
-static void UpdateCacheHashName(u64& inOutHash, const Name& name){
-    UpdateCacheHashValue(inOutHash, name.hash());
-}
-
-static void UpdateCacheHashBytes(u64& inOutHash, const u8* bytes, const usize byteCount){
-    UpdateCacheHashValue(inOutHash, byteCount);
-    inOutHash = UpdateFnv64(inOutHash, bytes, byteCount);
-}
-
-static void UpdateCacheHashBool(u64& inOutHash, const bool value){
-    const u8 byteValue = value ? 1u : 0u;
-    UpdateCacheHashValue(inOutHash, byteValue);
-}
-
 [[nodiscard]] static bool BuildCsgFrameStateCacheSignature(
     Core::ECS::World& world,
     CsgFrameStateCacheSignature& outSignature
@@ -53,13 +33,13 @@ static void UpdateCacheHashBool(u64& inOutHash, const bool value){
     auto cutterView = world.view<CsgCutterComponent>();
     cutterView.each(
         [&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
-            UpdateCacheHashValue(contentHash, entity.id);
-            UpdateCacheHashBool(contentHash, cutter.active);
-            UpdateCacheHashName(contentHash, cutter.receiverGroup);
-            UpdateCacheHashName(contentHash, cutter.shapeType);
-            UpdateCacheHashValue(contentHash, cutter.worldToShape);
-            UpdateCacheHashValue(contentHash, cutter.shapeToWorld);
-            UpdateCacheHashBytes(contentHash, cutter.parameterBytes.data(), cutter.parameterBytes.size());
+            Fnv64AppendValue(contentHash, entity.id);
+            Fnv64AppendBool(contentHash, cutter.active);
+            Fnv64AppendValue(contentHash, cutter.receiverGroup.hash());
+            Fnv64AppendValue(contentHash, cutter.shapeType.hash());
+            Fnv64AppendValue(contentHash, cutter.worldToShape);
+            Fnv64AppendValue(contentHash, cutter.shapeToWorld);
+            Fnv64AppendBuffer(contentHash, cutter.parameterBytes.data(), cutter.parameterBytes.size());
         }
     );
 
@@ -68,34 +48,34 @@ static void UpdateCacheHashBool(u64& inOutHash, const bool value){
     receiverView.each(
         [&](const Core::ECS::EntityID entity, StaticCsgMeshComponent& typedReceiver){
             const CsgReceiverComponent& receiver = typedReceiver;
-            UpdateCacheHashValue(contentHash, entity.id);
-            UpdateCacheHashBool(contentHash, receiver.enabled);
-            UpdateCacheHashBool(contentHash, receiver.affectOpaquePass);
-            UpdateCacheHashBool(contentHash, receiver.affectTransparentPass);
-            UpdateCacheHashName(contentHash, receiver.receiverGroup);
+            Fnv64AppendValue(contentHash, entity.id);
+            Fnv64AppendBool(contentHash, receiver.enabled);
+            Fnv64AppendBool(contentHash, receiver.affectOpaquePass);
+            Fnv64AppendBool(contentHash, receiver.affectTransparentPass);
+            Fnv64AppendValue(contentHash, receiver.receiverGroup.hash());
 
             const RendererComponent* renderer = world.tryGetComponent<RendererComponent>(entity);
-            UpdateCacheHashBool(contentHash, renderer != nullptr);
+            Fnv64AppendBool(contentHash, renderer != nullptr);
             if(renderer){
-                UpdateCacheHashBool(contentHash, renderer->visible);
-                UpdateCacheHashName(contentHash, renderer->material.name());
+                Fnv64AppendBool(contentHash, renderer->visible);
+                Fnv64AppendValue(contentHash, renderer->material.name().hash());
             }
 
             const MeshComponent* mesh = world.tryGetComponent<MeshComponent>(entity);
-            UpdateCacheHashBool(contentHash, mesh != nullptr);
+            Fnv64AppendBool(contentHash, mesh != nullptr);
             if(mesh){
-                UpdateCacheHashName(contentHash, mesh->mesh.name());
+                Fnv64AppendValue(contentHash, mesh->mesh.name().hash());
             }
             else if(receiver.enabled && renderer){
                 cacheable = false;
             }
 
             const Scene::TransformComponent* transform = world.tryGetComponent<Scene::TransformComponent>(entity);
-            UpdateCacheHashBool(contentHash, transform != nullptr);
+            Fnv64AppendBool(contentHash, transform != nullptr);
             if(transform){
-                UpdateCacheHashValue(contentHash, transform->position);
-                UpdateCacheHashValue(contentHash, transform->rotation);
-                UpdateCacheHashValue(contentHash, transform->scale);
+                Fnv64AppendValue(contentHash, transform->position);
+                Fnv64AppendValue(contentHash, transform->rotation);
+                Fnv64AppendValue(contentHash, transform->scale);
             }
         }
     );

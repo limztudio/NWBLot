@@ -158,6 +158,48 @@ static void TestRefractCriticalAngle(TestContext& context){
     NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector3Refract(totalInternalIncident, normal, 2.0f), 0.0f, 0.0f, 0.0f, 0.0f));
 }
 
+static void TestNormalizeOrHelpers(TestContext& context){
+    const SIMDVector fallback = VectorSet(0.0f, 1.0f, 0.0f, 1.0f);
+    const f32 infinity = Limit<f32>::s_Infinity;
+
+    NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector2NormalizeOr(VectorSet(3.0f, 4.0f, 7.0f, 9.0f), fallback, 0.0f), 0.6f, 0.8f, 0.0f, 0.0f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual3(Vector3NormalizeOr(VectorSet(0.0f, 0.0f, 0.0f, 5.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector4NormalizeOr(VectorSet(infinity, 0.0f, 0.0f, 0.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f, 1.0f));
+}
+
+static void TestSdfHelpers(TestContext& context){
+    const SIMDVector boxHalfExtents = VectorSet(1.0f, 1.0f, 1.0f, 0.0f);
+
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetX(SdfTests::Box(VectorSet(2.0f, 0.5f, -0.25f, 0.0f), boxHalfExtents)), 1.0f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetX(SdfTests::Box(VectorSet(0.25f, 0.5f, 0.1f, 0.0f), boxHalfExtents)), -0.5f));
+
+    NWB_MATH_TEST_CHECK(context, NearlyEqual3(
+        SdfTests::BoxNormal(VectorSet(2.0f, 2.0f, 1.0f, 0.0f), boxHalfExtents, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.000001f),
+        0.70710677f,
+        0.70710677f,
+        0.0f,
+        0.00001f
+    ));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual3(
+        SdfTests::BoxNormal(VectorSet(0.2f, -0.9f, 0.1f, 0.0f), boxHalfExtents, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.000001f),
+        0.0f,
+        -1.0f,
+        0.0f
+    ));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual3(
+        SdfTests::BoxNormal(VectorSet(0.9f, 0.9f, 0.2f, 0.0f), boxHalfExtents, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.000001f),
+        1.0f,
+        0.0f,
+        0.0f
+    ));
+
+    const SIMDVector capsuleRadiusHalfHeight = VectorSet(0.5f, 1.5f, 0.0f, 0.0f);
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetX(SdfTests::CapsuleY(VectorSet(0.0f, 2.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight)), 0.5f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetX(SdfTests::CapsuleY(VectorSet(0.25f, 0.0f, 0.0f, 0.0f), capsuleRadiusHalfHeight)), -0.25f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual3(SdfTests::CapsuleYNormal(VectorSet(0.0f, 2.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight, 0.000001f), 0.0f, 1.0f, 0.0f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual3(SdfTests::CapsuleYNormal(VectorSet(1.0f, 0.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight, 0.000001f), 1.0f, 0.0f, 0.0f));
+}
+
 static void TestHalfFloatScalarConversion(TestContext& context){
     NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(0.0f) == static_cast<Half>(0x0000u));
     NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(-0.0f) == static_cast<Half>(0x8000u));
@@ -389,6 +431,8 @@ NWB_DEFINE_TEST_ENTRY_POINT("math", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestVector4CrossBasisOrientation(context);
     __hidden_tests::TestVectorNamedScalarFunctions(context);
     __hidden_tests::TestRefractCriticalAngle(context);
+    __hidden_tests::TestNormalizeOrHelpers(context);
+    __hidden_tests::TestSdfHelpers(context);
     __hidden_tests::TestHalfFloatScalarConversion(context);
     __hidden_tests::TestHalfFloatBufferConversion(context);
     __hidden_tests::TestFloatIntStorageConversion(context);

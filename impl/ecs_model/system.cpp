@@ -11,7 +11,6 @@
 #include <impl/assets_model/asset.h>
 #include <impl/assets_skeleton/asset.h>
 #include <impl/ecs_mesh/components.h>
-#include <impl/ecs_render/components.h>
 #include <impl/ecs_scene/components.h>
 #include <impl/ecs_skeleton/components.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
@@ -96,36 +95,6 @@ void TagObject(
     objectComponent.kind = kind;
 }
 
-template<typename MaterialRefT>
-void ApplyRenderer(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, Core::ECS::Entity& entity, const Core::ECS::EntityID owner, const MaterialRefT& material){
-    Core::Assets::AssetRef<Material> resolvedMaterial = material;
-    bool visible = true;
-    if(const RendererComponent* ownerRenderer = world.tryGetComponent<RendererComponent>(owner)){
-        visible = ownerRenderer->visible;
-        if(!resolvedMaterial.valid())
-            resolvedMaterial = ownerRenderer->material;
-    }
-    if(!resolvedMaterial.valid())
-        return;
-
-    auto& renderer = entity.addComponent<RendererComponent>();
-    renderer.material = resolvedMaterial;
-    renderer.visible = visible;
-
-    const MaterialInstanceComponent* ownerMaterialInstance = world.tryGetComponent<MaterialInstanceComponent>(owner);
-    if(!ownerMaterialInstance)
-        return;
-
-    const Name materialInterface = ownerMaterialInstance->materialInterface;
-    const u64 revision = ownerMaterialInstance->revision;
-    MaterialInstanceComponent::ParameterVector overrides(arena);
-    overrides.assign(ownerMaterialInstance->overrides.begin(), ownerMaterialInstance->overrides.end());
-
-    auto& materialInstance = entity.addComponent<MaterialInstanceComponent>(arena, materialInterface);
-    materialInstance.revision = revision;
-    materialInstance.overrides = Move(overrides);
-}
-
 bool LoadSkeleton(
     Core::Assets::AssetManager& assetManager,
     const Core::Assets::AssetRef<Skeleton>& skeletonRef,
@@ -162,11 +131,13 @@ bool LoadSkeleton(
 ModelSystem::ModelSystem(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
-    Core::Assets::AssetManager& assetManager)
+    Core::Assets::AssetManager& assetManager,
+    ModelObjectRendererHooks rendererHooks)
     : Core::ECS::ISystem(arena)
     , m_arena(arena)
     , m_world(world)
     , m_assetManager(assetManager)
+    , m_applyRenderer(Move(rendererHooks.apply))
     , m_scratchEntities(arena)
     , m_scratchJoints(arena)
 {
@@ -177,12 +148,13 @@ ModelSystem::ModelSystem(
     writeAccess<ModelStaticMeshAttachmentComponent>();
     writeAccess<MeshComponent>();
     writeAccess<SkinnedMeshBindingComponent>();
-    readAccess<RendererComponent>();
-    writeAccess<RendererComponent>();
-    readAccess<MaterialInstanceComponent>();
-    writeAccess<MaterialInstanceComponent>();
     writeAccess<Scene::TransformComponent>();
     writeAccess<SkeletonPoseComponent>();
+
+    if(rendererHooks.accesses){
+        for(usize i = 0u; i < rendererHooks.accessCount; ++i)
+            registerAccess(rendererHooks.accesses[i].typeId, rendererHooks.accesses[i].mode);
+    }
 }
 
 void ModelSystem::update(Core::ECS::World& world, const f32 delta){
@@ -379,7 +351,8 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
         entity,
         __hidden_model_system::MakeWorldTransform(ownerMatrix, localMatrix)
     );
-    __hidden_model_system::ApplyRenderer(m_world, m_arena, entity, owner, object.material);
+    if(m_applyRenderer)
+        m_applyRenderer(m_world, m_arena, entity, owner, object.material);
 
     auto& mesh = entity.addComponent<MeshComponent>();
     mesh.mesh = object.mesh;
@@ -469,7 +442,8 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
         entity,
         __hidden_model_system::MakeWorldTransform(ownerMatrix, localMatrix)
     );
-    __hidden_model_system::ApplyRenderer(m_world, m_arena, entity, owner, object.material);
+    if(m_applyRenderer)
+        m_applyRenderer(m_world, m_arena, entity, owner, object.material);
 
     auto& binding = entity.addComponent<SkinnedMeshBindingComponent>();
     binding.mesh = object.mesh;
@@ -518,14 +492,16 @@ void ModelSystem::updateStaticMeshAttachments(){
                     LoadFloat(ownerTransform->rotation),
                     LoadFloat(ownerTransform->position)
                 )
-                : MatrixIdentity();
+                : MatrixIdentity()
+            ;
             const SIMDMatrix parentMatrix = parentTransform
                 ? __hidden_model_system::MakeTransformMatrix(
                     LoadFloat(parentTransform->scale),
                     LoadFloat(parentTransform->rotation),
                     LoadFloat(parentTransform->position)
                 )
-                : ownerMatrix;
+                : ownerMatrix
+            ;
             const SIMDMatrix localMatrix = LoadFloat(attachment.localTransform);
 
             if(!attachment.parentEntity.valid() || attachment.parentJointIndex == Limit<u32>::s_Max){

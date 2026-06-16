@@ -85,6 +85,9 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     if(!m_meshSystem.createMeshViewBuffer())
         return false;
 
+    if(!m_csgSystem.createCsgIntervalPeelResources(deferredTargets, true))
+        return false;
+
     return true;
 }
 
@@ -107,13 +110,8 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     ;
     m_preparedCsgFrameStateValid = true;
     const bool hasCsgFrameWork = !m_preparedCsgFrameState.empty();
-    const bool hasOpaqueCsgFrameWork = m_preparedCsgFrameState.hasOpaqueStaticWork || m_preparedCsgFrameState.hasOpaqueSkinnedWork;
-    if(hasCsgFrameWork){
-        if(!m_csgSystem.createCsgPeelTargets(deferredTargets))
-            return false;
-        if(!m_csgSystem.createCsgIntervalPeelResources(deferredTargets, hasOpaqueCsgFrameWork))
-            return false;
-    }
+    if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
+        return false;
 
     if(!m_materialSystem.prepareMaterialPassResources(
         deferredTargets.framebuffer.get(),
@@ -124,7 +122,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     ))
         return false;
 
-    if(m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::CreateMissing))
+    if(m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly))
         return m_avboitSystem.prepareAvboitPassResources(deferredTargets, m_preparedCsgFrameState);
 
     return true;

@@ -28,10 +28,12 @@ namespace ShaderBinaryPayload{
 inline constexpr u32 s_SpvMagic = 0x07230203u;
 inline constexpr usize s_SpvWordBytes = sizeof(u32);
 
-enum class BytecodeValidationFailure : u8{
+namespace BytecodeValidationFailure{
+enum Enum : u8{
     None,
     InvalidSize,
     InvalidMagic,
+};
 };
 
 [[nodiscard]] inline bool IsValidBytecodeSize(const usize byteSize){
@@ -39,7 +41,7 @@ enum class BytecodeValidationFailure : u8{
 }
 
 template<typename BinaryContainer>
-[[nodiscard]] inline BytecodeValidationFailure ValidateBytecode(const BinaryContainer& binary){
+[[nodiscard]] inline BytecodeValidationFailure::Enum ValidateBytecode(const BinaryContainer& binary){
     if(!IsValidBytecodeSize(binary.size()))
         return BytecodeValidationFailure::InvalidSize;
 

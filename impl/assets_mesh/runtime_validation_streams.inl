@@ -4,14 +4,14 @@
 
 [[nodiscard]] static bool ValidDirectionVector(const SIMDVector direction){
     const f32 lengthSquared = VectorGetX(Vector3LengthSq(direction));
-    return FiniteVector(direction, 0x7u) && IsFinite(lengthSquared) && Abs(lengthSquared - 1.0f) <= 0.01f;
+    return VectorIsFinite(direction, 0x7u) && IsFinite(lengthSquared) && Abs(lengthSquared - 1.0f) <= 0.01f;
 }
 
 [[nodiscard]] static bool ValidTangentVector(const SIMDVector tangent){
     const SIMDVector direction = VectorSetW(tangent, 0.0f);
     const f32 lengthSquared = VectorGetX(Vector3LengthSq(direction));
     const f32 handedness = Abs(VectorGetW(tangent));
-    return FiniteVector(tangent, 0xFu) && IsFinite(lengthSquared) && Abs(lengthSquared - 1.0f) <= 0.01f && Abs(handedness - 1.0f) <= 0.001f;
+    return VectorIsFinite(tangent, 0xFu) && IsFinite(lengthSquared) && Abs(lengthSquared - 1.0f) <= 0.01f && Abs(handedness - 1.0f) <= 0.001f;
 }
 
 [[nodiscard]] static bool ValidateMeshStreams(
@@ -38,7 +38,7 @@
     }
 
     for(usize i = 0u; i < positions.size(); ++i){
-        if(FiniteVector(VectorSetW(LoadFloat(positions[i]), 0.0f), 0x7u))
+        if(VectorIsFinite(VectorSetW(LoadFloat(positions[i]), 0.0f), 0x7u))
             continue;
 
         return FailMeshPayloadIndexedValidation(
@@ -74,7 +74,7 @@
         );
     }
     for(usize i = 0u; i < uv0.size(); ++i){
-        if(FiniteVector(VectorSetW(VectorSetZ(LoadFloat(uv0[i]), 0.0f), 0.0f), 0x3u))
+        if(VectorIsFinite(VectorSetW(VectorSetZ(LoadFloat(uv0[i]), 0.0f), 0.0f), 0x3u))
             continue;
 
         return FailMeshPayloadIndexedValidation(
@@ -86,7 +86,7 @@
         );
     }
     for(usize i = 0u; i < colors.size(); ++i){
-        if(FiniteVector(LoadFloat(LoadHalf4U(colors[i])), 0xFu))
+        if(VectorIsFinite(LoadFloat(LoadHalf4U(colors[i])), 0xFu))
             continue;
 
         return FailMeshPayloadIndexedValidation(

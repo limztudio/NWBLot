@@ -20,13 +20,8 @@ NWB_MESH_BEGIN
 static constexpr f32 s_FrameDirectionEpsilon = 0.00000001f;
 static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
 
-[[nodiscard]] inline bool FrameFiniteVector(const SIMDVector value, const u32 activeMask){
-    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
-    return (VectorMoveMask(invalid) & activeMask) == 0u;
-}
-
 [[nodiscard]] inline bool FrameValidDirection(const SIMDVector value){
-    return FrameFiniteVector(value, 0x7u) && VectorGetX(Vector3LengthSq(value)) > s_FrameDirectionEpsilon;
+    return VectorIsFinite(value, 0x7u) && VectorGetX(Vector3LengthSq(value)) > s_FrameDirectionEpsilon;
 }
 
 [[nodiscard]] inline SIMDVector FrameNormalizeDirection(const SIMDVector value, const SIMDVector fallback){
@@ -58,12 +53,12 @@ static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
 [[nodiscard]] inline SIMDVector FrameResolveTangent(const SIMDVector normal, const SIMDVector tangent, const SIMDVector fallbackTangent){
     const SIMDVector safeFallbackTangent = FrameFallbackTangent(normal);
 
-    SIMDVector projectedTangent = FrameFiniteVector(tangent, 0x7u)
+    SIMDVector projectedTangent = VectorIsFinite(tangent, 0x7u)
         ? FrameProjectOntoPlane(tangent, normal)
         : safeFallbackTangent
     ;
     if(!FrameValidDirection(projectedTangent)){
-        projectedTangent = FrameFiniteVector(fallbackTangent, 0x7u)
+        projectedTangent = VectorIsFinite(fallbackTangent, 0x7u)
             ? FrameProjectOntoPlane(fallbackTangent, normal)
             : safeFallbackTangent
         ;
@@ -76,7 +71,7 @@ static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
 
 [[nodiscard]] inline SIMDVector FrameResolveBitangent(const SIMDVector normal, const SIMDVector tangent, const SIMDVector fallbackBitangent){
     const SIMDVector safeFallbackBitangent = FrameNormalizeDirection(
-        FrameFiniteVector(fallbackBitangent, 0x7u)
+        VectorIsFinite(fallbackBitangent, 0x7u)
             ? FrameProjectOntoPlane(fallbackBitangent, normal)
             : Vector3Cross(normal, FrameFallbackTangent(normal)),
         VectorSet(0.0f, 1.0f, 0.0f, 0.0f)

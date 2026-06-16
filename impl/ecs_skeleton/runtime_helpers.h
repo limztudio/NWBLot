@@ -31,15 +31,6 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool FiniteVector(const SIMDVector value, const u32 activeMask){
-    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
-    return (VectorMoveMask(invalid) & activeMask) == 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] inline bool HasSkeletonPose(const SkeletonPoseComponent* pose){
     return pose && (!pose->localJoints.empty() || !pose->parentJoints.empty());
 }
@@ -50,10 +41,10 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 
 [[nodiscard]] inline bool IsAffineJointMatrix(const SIMDMatrix& matrix){
     return
-        FiniteVector(matrix.v[0], 0xFu)
-        && FiniteVector(matrix.v[1], 0xFu)
-        && FiniteVector(matrix.v[2], 0xFu)
-        && FiniteVector(matrix.v[3], 0xFu)
+        VectorIsFinite(matrix.v[0], 0xFu)
+        && VectorIsFinite(matrix.v[1], 0xFu)
+        && VectorIsFinite(matrix.v[2], 0xFu)
+        && VectorIsFinite(matrix.v[3], 0xFu)
         && Vector4NearEqual(matrix.v[3], s_SIMDIdentityR3, VectorReplicate(s_Epsilon))
     ;
 }
@@ -90,6 +81,23 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return IsInvertibleAffineJointMatrix(outMatrix);
 }
 
+[[nodiscard]] inline bool ResolveSkeletonPoseJointMatrix(
+    const SIMDMatrix& localJoint,
+    const SIMDMatrix* parentJoint,
+    SIMDMatrix& outMatrix
+){
+    outMatrix = localJoint;
+    if(!IsInvertibleAffineJointMatrix(outMatrix))
+        return false;
+
+    if(parentJoint){
+        outMatrix = MultiplyJointMatrices(*parentJoint, outMatrix);
+        if(!IsInvertibleAffineJointMatrix(outMatrix))
+            return false;
+    }
+    return true;
+}
+
 template<typename JointMatrixVector>
 [[nodiscard]] inline bool BuildStoredJointPaletteFromSkeletonPose(
     const SkeletonPoseComponent& pose,
@@ -114,19 +122,19 @@ template<typename JointMatrixVector>
     outJointPalette.reserve(jointCount);
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
         const u32 parentJoint = pose.parentJoints[jointIndex];
-        SIMDMatrix jointMatrix = LoadFloat(pose.localJoints[jointIndex]);
-        if(!IsInvertibleAffineJointMatrix(jointMatrix))
-            return false;
-
+        SIMDMatrix parentJointMatrix;
+        const SIMDMatrix* parentJointMatrixPtr = nullptr;
         if(parentJoint != s_SkeletonRootParent){
             if(parentJoint >= jointIndex)
                 return false;
 
-            const SIMDMatrix parentJointMatrix = LoadFloat(outJointPalette[parentJoint]);
-            jointMatrix = MultiplyJointMatrices(parentJointMatrix, jointMatrix);
-            if(!IsInvertibleAffineJointMatrix(jointMatrix))
-                return false;
+            parentJointMatrix = LoadFloat(outJointPalette[parentJoint]);
+            parentJointMatrixPtr = &parentJointMatrix;
         }
+
+        SIMDMatrix jointMatrix;
+        if(!ResolveSkeletonPoseJointMatrix(LoadFloat(pose.localJoints[jointIndex]), parentJointMatrixPtr, jointMatrix))
+            return false;
 
         SkeletonJointMatrix storedJointMatrix{};
         StoreFloat(jointMatrix, &storedJointMatrix);
@@ -191,7 +199,7 @@ template<typename JointMatrixVector>
         0.0f
     );
     outDual = VectorScale(QuaternionMultiply(translation, outReal), 0.5f);
-    return FiniteVector(outDual, 0xFu);
+    return VectorIsFinite(outDual, 0xFu);
 }
 
 };

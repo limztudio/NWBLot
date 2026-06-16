@@ -98,8 +98,21 @@ if(WIN32)
     )
     nwb_apply_debug_symbols(nwb_vendor_tbbmalloc)
 else()
+    function(nwb_normalize_tbb_imported_config target_name)
+        if(NOT TARGET ${target_name})
+            return()
+        endif()
+
+        set_target_properties(${target_name} PROPERTIES
+            MAP_IMPORTED_CONFIG_DBG "DBG;Debug;DEBUG;RelWithDebInfo;RELWITHDEBINFO;Release;RELEASE;MinSizeRel;MINSIZEREL;None;NONE;NOCONFIG"
+            MAP_IMPORTED_CONFIG_OPT "OPT;Release;RELEASE;RelWithDebInfo;RELWITHDEBINFO;MinSizeRel;MINSIZEREL;None;NONE;NOCONFIG"
+            MAP_IMPORTED_CONFIG_FIN "FIN;Release;RELEASE;RelWithDebInfo;RELWITHDEBINFO;MinSizeRel;MINSIZEREL;None;NONE;NOCONFIG"
+        )
+    endfunction()
+
     find_package(TBB CONFIG QUIET)
     if(TARGET TBB::tbb)
+        nwb_normalize_tbb_imported_config(TBB::tbb)
         if(NOT TARGET TBB::tbbmalloc)
             find_library(_tbbmalloc_library NAMES tbbmalloc libtbbmalloc.so.2 libtbbmalloc)
             if(NOT _tbbmalloc_library)
@@ -107,11 +120,12 @@ else()
             endif()
             add_library(TBB::tbbmalloc UNKNOWN IMPORTED GLOBAL)
             get_target_property(_tbb_include_dirs TBB::tbb INTERFACE_INCLUDE_DIRECTORIES)
+            nwb_set_imported_library_locations(TBB::tbbmalloc DEFAULT "${_tbbmalloc_library}")
             set_target_properties(TBB::tbbmalloc PROPERTIES
-                IMPORTED_LOCATION "${_tbbmalloc_library}"
                 INTERFACE_INCLUDE_DIRECTORIES "${_tbb_include_dirs}"
             )
         endif()
+        nwb_normalize_tbb_imported_config(TBB::tbbmalloc)
     else()
         find_path(_nwb_tbb_include_dir
             NAMES tbb/tbb.h

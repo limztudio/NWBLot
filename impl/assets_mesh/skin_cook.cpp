@@ -99,10 +99,6 @@ static constexpr AStringView s_SkinMetaKind = "Skin";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] const Value* FindField(const Value& map, const AStringView fieldName){
-    return map.findField(MStringView(fieldName.data(), fieldName.size()));
-}
-
 [[nodiscard]] bool ReadNameField(
     const Path& nwbFilePath,
     const Value& object,
@@ -178,17 +174,19 @@ template<typename AssetT>
 }
 
 template<usize ComponentCount>
-[[nodiscard]] bool ParseU16Tuple(
+[[nodiscard]] bool ReadNumericTuple(
     const Path& nwbFilePath,
     const Value& value,
     const AStringView label,
-    u16 (&outValues)[ComponentCount]
+    const AStringView listValueKind,
+    f64 (&outValues)[ComponentCount]
 ){
     if(!value.isList() || value.asList().size() != ComponentCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must be a {}-component integer list")
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must be a {}-component {} list")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
             , ComponentCount
+            , StringConvert(listValueKind)
         );
         return false;
     }
@@ -205,7 +203,24 @@ template<usize ComponentCount>
             return false;
         }
 
-        const f64 numericValue = component.toDouble();
+        outValues[componentIndex] = component.toDouble();
+    }
+    return true;
+}
+
+template<usize ComponentCount>
+[[nodiscard]] bool ParseU16Tuple(
+    const Path& nwbFilePath,
+    const Value& value,
+    const AStringView label,
+    u16 (&outValues)[ComponentCount]
+){
+    f64 numericValues[ComponentCount] = {};
+    if(!ReadNumericTuple(nwbFilePath, value, label, "integer", numericValues))
+        return false;
+
+    for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
+        const f64 numericValue = numericValues[componentIndex];
         if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue) || numericValue > static_cast<f64>(Limit<u16>::s_Max)){
             NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be a u16 integer")
                 , PathToString<tchar>(nwbFilePath)
@@ -227,28 +242,12 @@ template<usize ComponentCount>
     const AStringView label,
     f32 (&outValues)[ComponentCount]
 ){
-    if(!value.isList() || value.asList().size() != ComponentCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must be a {}-component numeric list")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-            , ComponentCount
-        );
+    f64 numericValues[ComponentCount] = {};
+    if(!ReadNumericTuple(nwbFilePath, value, label, "numeric", numericValues))
         return false;
-    }
 
-    const auto& list = value.asList();
     for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
-        const Value& component = list[componentIndex];
-        if(!component.isNumeric()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be numeric")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(label)
-                , componentIndex
-            );
-            return false;
-        }
-
-        const f64 numericValue = component.toDouble();
+        const f64 numericValue = numericValues[componentIndex];
         if(!IsFinite(numericValue) || numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max)){
             NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' is non-finite or outside f32 range")
                 , PathToString<tchar>(nwbFilePath)
@@ -274,7 +273,7 @@ template<usize ComponentCount>
         influence.weight[2u],
         influence.weight[3u]
     );
-    if(!SkinValidation::FiniteVector(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero())){
+    if(!VectorIsFinite(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero())){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must be finite and non-negative")
             , PathToString<tchar>(nwbFilePath)
             , influenceIndex

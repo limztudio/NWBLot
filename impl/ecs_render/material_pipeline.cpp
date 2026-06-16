@@ -165,8 +165,7 @@ bool RendererMaterialSystem::createRendererPipeline(
 ){
     outResources = nullptr;
 
-    if(!framebuffer)
-        return false;
+    NWB_ASSERT(framebuffer);
 
     const Name& materialKey = materialInfo.materialName;
     const MaterialPipelinePass::Enum pass = pipelineKey.pass;

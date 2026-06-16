@@ -81,6 +81,14 @@
 #endif
 #endif
 
+#if NWB_COMPILER_FRONTEND_MSVC
+#define NWB_NOINLINE __declspec(noinline)
+#elif __has_attribute(noinline) || defined(__GNUC__)
+#define NWB_NOINLINE __attribute__((noinline))
+#else
+#define NWB_NOINLINE
+#endif
+
 #if __has_attribute(vectorcall)
 #define NWB_VECTORCALL __attribute__((vectorcall))
 #elif NWB_COMPILER_FRONTEND_MSVC
@@ -156,7 +164,6 @@
 #define NWB_WCIN ::std::wcin
 #define NWB_CERR ::std::cerr
 #define NWB_WCERR ::std::wcerr
-#define NWB_GETENV(name) ::std::getenv(name)
 #define NWB_STRLEN(src) strlen(src)
 #define NWB_WSTRLEN(src) wcslen(src)
 #define NWB_MEMCMP(lhs, rhs, size) memcmp(lhs, rhs, size)

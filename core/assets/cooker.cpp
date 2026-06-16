@@ -43,12 +43,12 @@ static AssetString DescribeAvailableCookers(
     usize outputSize = 0;
     for(const ACompactString& type : types){
         const usize typeSize = type.view().size();
-        if(typeSize > Limit<usize>::s_Max - outputSize){
+        if(AddOverflows<usize>(typeSize, outputSize)){
             outputSize = 0;
             break;
         }
         outputSize += typeSize;
-        if(outputSize > Limit<usize>::s_Max - 2u){
+        if(AddOverflows<usize>(outputSize, 2u)){
             outputSize = 0;
             break;
         }

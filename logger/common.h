@@ -42,6 +42,8 @@ using MessageQueue = ParallelQueue<MessageType, LogArena>;
         return NWB_TEXT("WARNING");
     case Type::CriticalWarning:
         return NWB_TEXT("CRITICAL WARNING");
+    case Type::Assert:
+        return NWB_TEXT("ASSERT");
     case Type::Error:
         return NWB_TEXT("ERROR");
     case Type::Fatal:
@@ -53,6 +55,7 @@ using MessageQueue = ParallelQueue<MessageType, LogArena>;
 [[nodiscard]] inline bool MessageTypeWritesToErrorStream(Type::Enum type){
     switch(type){
     case Type::CriticalWarning:
+    case Type::Assert:
     case Type::Error:
     case Type::Fatal:
         return true;
@@ -67,6 +70,7 @@ using MessageQueue = ParallelQueue<MessageType, LogArena>;
     case Type::EssentialInfo:
     case Type::Warning:
     case Type::CriticalWarning:
+    case Type::Assert:
     case Type::Error:
     case Type::Fatal:
         return true;

@@ -7,7 +7,9 @@
 
 #include <core/crash/package_names.h>
 
-#include <global/filesystem/directory_iterator.h>
+#include <global/filesystem/archive.h>
+#include <global/filesystem/retention.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,9 +31,7 @@ using CrashText = CrashReportText;
 using CrashBytes = Vector<u8, LogArena>;
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
-inline constexpr u8 s_MinSafeArchivePathCharacter = 0x20u;
-inline constexpr usize s_GeneratedJsonStringNeedleReserveSlack = 5u;
-inline constexpr usize s_GeneratedJsonUnsignedNeedleReserveSlack = 4u;
+inline constexpr usize s_GeneratedJsonNeedleReserveSlack = 4u;
 
 struct ByteView{
     using value_type = u8;
@@ -44,96 +44,50 @@ struct ByteView{
     [[nodiscard]] const u8* data()const{ return bytes; }
 };
 
-static void ApplyRetentionToDirectory(LogArena& arena, const Path& directory, const usize maxEntries){
-    if(maxEntries == 0u)
-        return;
-
-    ErrorCode error;
-    const bool exists = IsDirectory(directory, error);
-    if(error || !exists)
-        return;
-
-    Vector<Path, LogArena> entries{arena};
-    DirectoryIterator directoryIt(directory, error);
-    if(error)
-        return;
-
-    for(const auto& entry : directoryIt)
-        entries.emplace_back(arena, entry.path());
-
-    if(entries.size() <= maxEntries)
-        return;
-
-    Sort(entries.begin(), entries.end());
-
-    const usize removeCount = entries.size() - maxEntries;
-    for(usize i = 0u; i < removeCount; ++i){
-        error.clear();
-        static_cast<void>(RemoveAllIfExists(entries[i], error));
-    }
+static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
+    static_cast<void>(ApplyDirectoryRetention(
+        arena,
+        CrashExtractedDirectory(arena, config.storageDirectory),
+        config.retention.maxExtractedPackages
+    ));
+    static_cast<void>(ApplyDirectoryRetention(
+        arena,
+        CrashRawDirectory(arena, config.storageDirectory),
+        config.retention.maxRawArchives
+    ));
+    static_cast<void>(ApplyDirectoryRetention(
+        arena,
+        CrashInvalidDirectory(arena, config.storageDirectory),
+        config.retention.maxInvalidArchives
+    ));
 }
 
-static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
-    ApplyRetentionToDirectory(arena, CrashExtractedDirectory(arena, config.storageDirectory), config.retention.maxExtractedPackages);
-    ApplyRetentionToDirectory(arena, CrashRawDirectory(arena, config.storageDirectory), config.retention.maxRawArchives);
-    ApplyRetentionToDirectory(arena, CrashInvalidDirectory(arena, config.storageDirectory), config.retention.maxInvalidArchives);
+[[nodiscard]] static Type::Enum AcceptedCrashLogType(const CrashPackageSummary& summary){
+    if(summary.event == DiagnosticEventName::s_Assert)
+        return Type::Assert;
+    if(summary.event == DiagnosticEventName::s_Error)
+        return Type::Error;
+    if(summary.event == DiagnosticEventName::s_Fatal)
+        return Type::Fatal;
+
+    return Type::EssentialInfo;
+}
+
+static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, const Path& rawPath, const bool rawArchived){
+    if(!outReport.empty() && outReport.back() != '\n')
+        outReport += "\n";
+
+    outReport += "\ningest:\n";
+    outReport += "ingest_status=accepted\nraw_archive=";
+    outReport += PathToString<char>(arena, rawPath);
+    outReport += "\n";
+    if(!rawArchived)
+        outReport += "warning=raw upload archive could not be retained\n";
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static bool ReadArchiveLine(const CrashBytes& archiveBytes, usize& inOutCursor, AStringView& outLine){
-    outLine = AStringView();
-    if(inOutCursor >= archiveBytes.size())
-        return false;
-
-    const usize begin = inOutCursor;
-    while(inOutCursor < archiveBytes.size() && archiveBytes[inOutCursor] != static_cast<u8>('\n'))
-        ++inOutCursor;
-    if(inOutCursor >= archiveBytes.size())
-        return false;
-
-    usize end = inOutCursor;
-    ++inOutCursor;
-    if(end > begin && archiveBytes[end - 1u] == static_cast<u8>('\r'))
-        --end;
-
-    outLine = AStringView(reinterpret_cast<const char*>(archiveBytes.data() + begin), end - begin);
-    return true;
-}
-
-[[nodiscard]] static bool IsPathSeparator(const char ch)noexcept{
-    return ch == '/' || ch == '\\';
-}
-
-[[nodiscard]] static bool IsSafeArchiveRelativePath(const AStringView pathText)noexcept{
-    if(pathText.empty() || IsPathSeparator(pathText.front()))
-        return false;
-
-    usize segmentBegin = 0u;
-    for(usize i = 0u; i <= pathText.size(); ++i){
-        const bool atEnd = i == pathText.size();
-        const char ch = atEnd ? '/' : pathText[i];
-        if(!atEnd && (static_cast<unsigned char>(ch) < s_MinSafeArchivePathCharacter || ch == ':'))
-            return false;
-
-        if(!atEnd && !IsPathSeparator(ch))
-            continue;
-
-        const usize segmentLength = i - segmentBegin;
-        if(segmentLength == 0u)
-            return false;
-
-        const AStringView segment(pathText.data() + segmentBegin, segmentLength);
-        if(segment == "." || segment == "..")
-            return false;
-
-        segmentBegin = i + 1u;
-    }
-
-    return true;
-}
 
 [[nodiscard]] static bool ParseFileHeader(const AStringView line, AStringView& outRelativePath, usize& outFileSize){
     outRelativePath = AStringView();
@@ -188,7 +142,7 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 
     usize cursor = 0u;
     AStringView line;
-    if(!ReadArchiveLine(archiveBytes, cursor, line) || line != CrashNames::s_ArchiveHeaderLine){
+    if(!NextLfByteLine(archiveBytes, cursor, line) || line != CrashNames::s_ArchiveHeaderLine){
         outError = "invalid crash archive header";
         return false;
     }
@@ -202,13 +156,10 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 
     usize fileCount = 0u;
     while(cursor < archiveBytes.size()){
-        if(!ReadArchiveLine(archiveBytes, cursor, line)){
+        if(!NextLfByteLine(archiveBytes, cursor, line)){
             outError = "truncated crash archive file header";
             return false;
         }
-        if(line.empty())
-            continue;
-
         AStringView relativePath;
         usize fileSize = 0u;
         if(!ParseFileHeader(line, relativePath, fileSize)){
@@ -228,7 +179,12 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 
         AStringView separator;
         AStringView endMarker;
-        if(!ReadArchiveLine(archiveBytes, cursor, separator) || !separator.empty() || !ReadArchiveLine(archiveBytes, cursor, endMarker) || endMarker != CrashNames::s_ArchiveEntryEndLine){
+        if(
+            !NextLfByteLine(archiveBytes, cursor, separator)
+            || !separator.empty()
+            || !NextLfByteLine(archiveBytes, cursor, endMarker)
+            || endMarker != CrashNames::s_ArchiveEntryEndLine
+        ){
             outError = "malformed crash archive file footer";
             return false;
         }
@@ -248,19 +204,26 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool FindGeneratedJsonStringValue(LogArena& arena, const AStringView manifest, const AStringView key, CrashText& outValue){
-    outValue.clear();
-
+[[nodiscard]] static bool FindGeneratedJsonValueCursor(LogArena& arena, const AStringView manifest, const AStringView key, usize& outCursor){
     CrashText needle{arena};
-    needle.reserve(key.size() + s_GeneratedJsonStringNeedleReserveSlack);
+    needle.reserve(key.size() + s_GeneratedJsonNeedleReserveSlack);
     needle += '"';
     needle += key;
     needle += "\": ";
 
-    usize cursor = manifest.find(AStringView(needle.data(), needle.size()));
+    const usize cursor = manifest.find(AStringView(needle.data(), needle.size()));
     if(cursor == AStringView::npos)
         return false;
-    cursor += needle.size();
+    outCursor = cursor + needle.size();
+    return true;
+}
+
+[[nodiscard]] static bool FindGeneratedJsonStringValue(LogArena& arena, const AStringView manifest, const AStringView key, CrashText& outValue){
+    outValue.clear();
+
+    usize cursor = 0u;
+    if(!FindGeneratedJsonValueCursor(arena, manifest, key, cursor))
+        return false;
     if(cursor >= manifest.size() || manifest[cursor] != '"')
         return false;
     ++cursor;
@@ -307,16 +270,9 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
 [[nodiscard]] static bool FindGeneratedJsonUnsignedValue(LogArena& arena, const AStringView manifest, const AStringView key, u64& outValue){
     outValue = 0u;
 
-    CrashText needle{arena};
-    needle.reserve(key.size() + s_GeneratedJsonUnsignedNeedleReserveSlack);
-    needle += '"';
-    needle += key;
-    needle += "\": ";
-
-    usize cursor = manifest.find(AStringView(needle.data(), needle.size()));
-    if(cursor == AStringView::npos)
+    usize cursor = 0u;
+    if(!FindGeneratedJsonValueCursor(arena, manifest, key, cursor))
         return false;
-    cursor += needle.size();
 
     const usize begin = cursor;
     while(cursor < manifest.size() && manifest[cursor] >= '0' && manifest[cursor] <= '9')
@@ -325,6 +281,26 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
         return false;
 
     return ParseU64(AStringView(manifest.data() + begin, cursor - begin), outValue);
+}
+
+[[nodiscard]] static bool FindGeneratedJsonBoolValue(LogArena& arena, const AStringView manifest, const AStringView key, bool& outValue){
+    outValue = false;
+
+    usize cursor = 0u;
+    if(!FindGeneratedJsonValueCursor(arena, manifest, key, cursor))
+        return false;
+
+    constexpr AStringView s_TrueText("true");
+    constexpr AStringView s_FalseText("false");
+    if(cursor + s_TrueText.size() <= manifest.size() && AStringView(manifest.data() + cursor, s_TrueText.size()) == s_TrueText){
+        outValue = true;
+        return true;
+    }
+    if(cursor + s_FalseText.size() <= manifest.size() && AStringView(manifest.data() + cursor, s_FalseText.size()) == s_FalseText){
+        outValue = false;
+        return true;
+    }
+    return false;
 }
 
 [[nodiscard]] static bool ValidateManifest(LogArena& arena, const Path& packageDirectory, CrashPackageSummary& outSummary, CrashText& outError){
@@ -336,27 +312,59 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
     }
 
     const AStringView manifestText(manifest.data(), manifest.size());
+    CrashText manifestFormat{arena};
+    const auto requireString = [&arena, manifestText](const AStringView key){
+        CrashText value{arena};
+        return FindGeneratedJsonStringValue(arena, manifestText, key, value);
+    };
+    const auto requireUnsigned = [&arena, manifestText](const AStringView key){
+        u64 value = 0u;
+        return FindGeneratedJsonUnsignedValue(arena, manifestText, key, value);
+    };
+    const auto requireBool = [&arena, manifestText](const AStringView key){
+        bool value = false;
+        return FindGeneratedJsonBoolValue(arena, manifestText, key, value);
+    };
     if(
-        !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestFormatKey, outSummary.format)
+        !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestFormatKey, manifestFormat)
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestCrashIdKey, outSummary.crashId)
+        || !requireString(CrashNames::s_ManifestApplicationKey)
+        || !requireString(CrashNames::s_ManifestVersionKey)
+        || !requireString(CrashNames::s_ManifestBuildIdKey)
+        || !requireString(CrashNames::s_ManifestAbiKey)
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestPlatformKey, outSummary.platform)
         || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestReasonKindKey, outSummary.reasonKind)
-        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestArtifactStrategyKey, outSummary.artifactStrategy)
+        || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestReasonCodeKey, outSummary.reasonCode)
+        || !requireUnsigned(CrashNames::s_ManifestProcessIdKey)
         || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestThreadIdKey, outSummary.threadId)
+        || !requireBool(CrashNames::s_ManifestHasExceptionContextKey)
+        || !requireUnsigned(CrashNames::s_ManifestFaultAddressKey)
+        || !requireUnsigned(CrashNames::s_ManifestInstructionPointerKey)
+        || !requireUnsigned(CrashNames::s_ManifestStackPointerKey)
+        || !requireUnsigned(CrashNames::s_ManifestFramePointerKey)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestEventKey, outSummary.event)
+        || !requireString(CrashNames::s_ManifestTriggerCategoryKey)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerExpressionKey, outSummary.triggerExpression)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerMessageKey, outSummary.triggerMessage)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerFileKey, outSummary.triggerFile)
+        || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestTriggerLineKey, outSummary.triggerLine)
+        || !requireString(CrashNames::s_ManifestDumpDetailModeKey)
+        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestArtifactStrategyKey, outSummary.artifactStrategy)
+        || !requireString(CrashNames::s_ManifestHandlerLifetimeKey)
     ){
         outError = CrashNames::s_ManifestFileName;
-        outError += " is missing required v1 fields";
+        outError += " is missing required fields";
         return false;
     }
 
-    if(outSummary.format != CrashNames::s_ManifestFormatValue){
+    if(manifestFormat != CrashNames::s_ManifestFormatValue){
         outError = CrashNames::s_ManifestFileName;
         outError += " has unsupported crash package format";
         return false;
     }
-    if(outSummary.crashId.empty() || outSummary.platform.empty() || outSummary.reasonKind.empty() || outSummary.artifactStrategy.empty()){
+    if(outSummary.crashId.empty() || outSummary.platform.empty() || outSummary.reasonKind.empty() || outSummary.artifactStrategy.empty() || outSummary.event.empty()){
         outError = CrashNames::s_ManifestFileName;
-        outError += " contains empty required v1 fields";
+        outError += " contains empty required fields";
         return false;
     }
 
@@ -441,33 +449,11 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
 
     result.accepted = true;
     result.type = rawArchived
-        ? Type::EssentialInfo
+        ? Ingest::AcceptedCrashLogType(summary)
         : Type::Warning
     ;
-    if(rawArchived){
-        result.message = StringFormat(
-            arena,
-            NWB_TEXT("Crash package '{}' ingested: platform='{}' reason='{}' package='{}' raw='{}'\n{}"),
-            StringConvert(summary.crashId),
-            StringConvert(summary.platform),
-            StringConvert(summary.reasonKind),
-            PathToString<tchar>(packageDirectory),
-            PathToString<tchar>(rawPath),
-            StringConvert(symbolicationReport)
-        );
-    }
-    else{
-        result.message = StringFormat(
-            arena,
-            NWB_TEXT("Crash package '{}' ingested but raw upload archive could not be retained: platform='{}' reason='{}' package='{}' raw='{}'\n{}"),
-            StringConvert(summary.crashId),
-            StringConvert(summary.platform),
-            StringConvert(summary.reasonKind),
-            PathToString<tchar>(packageDirectory),
-            PathToString<tchar>(archivePath),
-            StringConvert(symbolicationReport)
-        );
-    }
+    Ingest::AppendAcceptedIngestDetails(arena, symbolicationReport, rawArchived ? rawPath : archivePath, rawArchived);
+    result.message = StringConvert(arena, AStringView(symbolicationReport.data(), symbolicationReport.size()));
     return result;
 }
 

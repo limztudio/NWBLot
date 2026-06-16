@@ -9,6 +9,7 @@
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>
+#include <impl/ecs_render/model_renderer.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_ui/module.h>
 #include <core/common/log.h>
@@ -69,7 +70,8 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
     }
     auto& modelSystem = world->addSystem<NWB::Impl::ModelSystem>(
         *world,
-        context.assetManager
+        context.assetManager,
+        NWB::Impl::CreateModelObjectRendererHooks()
     );
     static_cast<void>(modelSystem);
     if(!world->getSystem<NWB::Impl::ModelSystem>()){

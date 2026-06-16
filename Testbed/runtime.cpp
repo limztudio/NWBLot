@@ -62,10 +62,6 @@ static constexpr AStringView s_ModelMaterialPath = "project/materials/mat_skinne
     return true;
 }
 
-[[nodiscard]] static bool FiniteVector3(SIMDVector value){
-    return !Vector3IsNaN(value) && !Vector3IsInfinite(value);
-}
-
 [[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world){
     auto* uiSystem = world.getSystem<NWB::Impl::UiSystem>();
     return uiSystem && uiSystem->wantsKeyboardCapture();
@@ -126,7 +122,7 @@ static void ApplyFlyCameraInput(
 
     const SIMDVector rotation = QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f);
     StoreFloat(rotation, &transform.rotation);
-    if(!FiniteVector3(LoadFloat(transform.position)))
+    if(!Vector3IsFinite(LoadFloat(transform.position)))
         transform.position = Float4(0.0f, 0.0f, 0.0f);
 
     const SIMDVector moveAxis = VectorSet(safeRightAxis, safeForwardAxis, 0.0f, 0.0f);
@@ -144,11 +140,11 @@ static void ApplyFlyCameraInput(
             VectorReplicate(moveScale)
         );
         const SIMDVector worldMove = Vector3Rotate(localMove, rotation);
-        if(!FiniteVector3(worldMove))
+        if(!Vector3IsFinite(worldMove))
             return;
 
         const SIMDVector newPosition = VectorAdd(LoadFloat(transform.position), worldMove);
-        if(FiniteVector3(newPosition))
+        if(Vector3IsFinite(newPosition))
             StoreFloat(newPosition, &transform.position);
     }
 }

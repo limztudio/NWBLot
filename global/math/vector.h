@@ -1553,6 +1553,11 @@ NWB_INLINE SIMDVector SIMDCALL VectorIsInfinite(SIMDVector value)noexcept{
     return VectorEqualInt(VectorAndInt(value, s_SIMDAbsMask), s_SIMDInfinity);
 }
 
+[[nodiscard]] NWB_INLINE bool SIMDCALL VectorIsFinite(SIMDVector value, u32 activeMask)noexcept{
+    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
+    return (VectorMoveMask(invalid) & activeMask) == 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // arithmetic
@@ -2746,17 +2751,33 @@ NWB_INLINE SIMDVector SIMDCALL Vector2Normalize(SIMDVector value)noexcept{
 #endif
 }
 
+namespace SIMDVectorDetail{
+
+NWB_INLINE SIMDVector SIMDCALL NormalizeOrV(
+    SIMDVector value,
+    SIMDVector fallback,
+    SIMDVector lengthSquared,
+    const f32 minLengthSquared,
+    SIMDVector componentMask
+)noexcept{
+    const SIMDVector validLength = VectorAndInt(
+        VectorGreater(lengthSquared, VectorReplicate(Max(0.0f, minLengthSquared))),
+        VectorEqualInt(VectorOrInt(VectorIsNaN(lengthSquared), VectorIsInfinite(lengthSquared)), VectorFalseInt())
+    );
+    SIMDVector normalized = VectorAndInt(VectorMultiply(value, VectorReciprocalSqrt(lengthSquared)), componentMask);
+    fallback = VectorAndInt(fallback, componentMask);
+    const SIMDVector validNormalized = VectorEqualInt(
+        VectorOrInt(VectorIsNaN(normalized), VectorIsInfinite(normalized)),
+        VectorFalseInt()
+    );
+    return VectorSelect(fallback, normalized, VectorAndInt(validLength, validNormalized));
+}
+
+}
+
 [[nodiscard]] NWB_INLINE SIMDVector SIMDCALL Vector2NormalizeOr(SIMDVector value, SIMDVector fallback, const f32 minLengthSquared)noexcept{
     const SIMDVector lengthSquared = Vector2LengthSq(value);
-    const f32 scalarLengthSquared = VectorGetX(lengthSquared);
-    if(!IsFinite(scalarLengthSquared) || scalarLengthSquared <= Max(0.0f, minLengthSquared))
-        return VectorAndInt(fallback, s_SIMDMaskXY);
-
-    const SIMDVector normalized = VectorAndInt(VectorMultiply(value, VectorReciprocalSqrt(lengthSquared)), s_SIMDMaskXY);
-    if(Vector2IsNaN(normalized) || Vector2IsInfinite(normalized))
-        return VectorAndInt(fallback, s_SIMDMaskXY);
-
-    return normalized;
+    return SIMDVectorDetail::NormalizeOrV(value, fallback, lengthSquared, minLengthSquared, s_SIMDMaskXY);
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector2NormalizeEst(SIMDVector value)noexcept{
@@ -2893,6 +2914,7 @@ NWB_INLINE bool SIMDCALL Vector3LessOrEqual(SIMDVector v0, SIMDVector v1)noexcep
 NWB_INLINE bool SIMDCALL Vector3InBounds(SIMDVector value, SIMDVector bounds)noexcept{ return (VectorMoveMask(VectorInBounds(value, bounds)) & 0x7u) == 0x7u; }
 NWB_INLINE bool SIMDCALL Vector3IsNaN(SIMDVector value)noexcept{ return (VectorMoveMask(VectorIsNaN(value)) & 0x7u) != 0; }
 NWB_INLINE bool SIMDCALL Vector3IsInfinite(SIMDVector value)noexcept{ return (VectorMoveMask(VectorIsInfinite(value)) & 0x7u) != 0; }
+NWB_INLINE bool SIMDCALL Vector3IsFinite(SIMDVector value)noexcept{ return !Vector3IsNaN(value) && !Vector3IsInfinite(value); }
 
 NWB_INLINE u32 SIMDCALL Vector3EqualR(SIMDVector v0, SIMDVector v1)noexcept{ return SIMDVectorDetail::ComparisonMaskR(VectorMoveMask(VectorEqual(v0, v1)), 0x7u); }
 NWB_INLINE u32 SIMDCALL Vector3EqualIntR(SIMDVector v0, SIMDVector v1)noexcept{ return SIMDVectorDetail::ComparisonMaskR(VectorMoveMask(VectorEqualInt(v0, v1)), 0x7u); }
@@ -2987,15 +3009,7 @@ NWB_INLINE SIMDVector SIMDCALL Vector3Normalize(SIMDVector value)noexcept{
 
 [[nodiscard]] NWB_INLINE SIMDVector SIMDCALL Vector3NormalizeOr(SIMDVector value, SIMDVector fallback, const f32 minLengthSquared)noexcept{
     const SIMDVector lengthSquared = Vector3LengthSq(value);
-    const f32 scalarLengthSquared = VectorGetX(lengthSquared);
-    if(!IsFinite(scalarLengthSquared) || scalarLengthSquared <= Max(0.0f, minLengthSquared))
-        return VectorSetW(fallback, 0.0f);
-
-    const SIMDVector normalized = VectorSetW(VectorMultiply(value, VectorReciprocalSqrt(lengthSquared)), 0.0f);
-    if(Vector3IsNaN(normalized) || Vector3IsInfinite(normalized))
-        return VectorSetW(fallback, 0.0f);
-
-    return normalized;
+    return SIMDVectorDetail::NormalizeOrV(value, fallback, lengthSquared, minLengthSquared, s_SIMDMask3);
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector3NormalizeEst(SIMDVector value)noexcept{
@@ -3187,15 +3201,7 @@ NWB_INLINE SIMDVector SIMDCALL Vector4Normalize(SIMDVector value)noexcept{
 
 [[nodiscard]] NWB_INLINE SIMDVector SIMDCALL Vector4NormalizeOr(SIMDVector value, SIMDVector fallback, const f32 minLengthSquared)noexcept{
     const SIMDVector lengthSquared = Vector4LengthSq(value);
-    const f32 scalarLengthSquared = VectorGetX(lengthSquared);
-    if(!IsFinite(scalarLengthSquared) || scalarLengthSquared <= Max(0.0f, minLengthSquared))
-        return fallback;
-
-    const SIMDVector normalized = VectorMultiply(value, VectorReciprocalSqrt(lengthSquared));
-    if(Vector4IsNaN(normalized) || Vector4IsInfinite(normalized))
-        return fallback;
-
-    return normalized;
+    return SIMDVectorDetail::NormalizeOrV(value, fallback, lengthSquared, minLengthSquared, VectorTrueInt());
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector4NormalizeEst(SIMDVector value)noexcept{

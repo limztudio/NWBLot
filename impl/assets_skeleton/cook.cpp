@@ -50,7 +50,7 @@ bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     jointBinaries.reserve(skeleton.joints().size());
     for(usize jointIndex = 0u; jointIndex < skeleton.joints().size(); ++jointIndex){
         const SkeletonJoint& joint = skeleton.joints()[jointIndex];
-        SkeletonBinaryPayload::JointBinary jointBinary;
+        SkeletonBinaryPayload::JointBinary jointBinary = {};
         jointBinary.nameHash = jointNameHashes[jointIndex];
         jointBinary.parentIndex = joint.parentIndex;
         jointBinary.localBindPose = joint.localBindPose;
@@ -92,10 +92,6 @@ static constexpr AStringView s_SkeletonMetaKind = "Skeleton";
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] const Value* FindField(const Value& map, const AStringView fieldName){
-    return map.findField(MStringView(fieldName.data(), fieldName.size()));
-}
 
 [[nodiscard]] bool ReadNameField(
     const Path& nwbFilePath,

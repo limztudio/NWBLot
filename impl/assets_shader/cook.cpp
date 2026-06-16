@@ -16,6 +16,15 @@
 #include <core/common/log.h>
 #include <global/hash_utils.h>
 
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <windows.h>
+#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+#include <cerrno>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -125,35 +134,53 @@ static bool TryMapStageToSlangStage(const AStringView stage, AStringView& outSta
     return false;
 }
 
-static void AppendShellQuoted(CookString& inOutCommand, const AStringView value){
 #if defined(NWB_PLATFORM_WINDOWS)
-    inOutCommand += '"';
+static void AppendWindowsCommandLineArgument(CookString& inOutCommand, const AStringView value){
+    if(!inOutCommand.empty())
+        inOutCommand += ' ';
+
+    bool needsQuotes = value.empty();
     for(const char ch : value){
-        if(ch == '"' || ch == '\\')
+        if(ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '"'){
+            needsQuotes = true;
+            break;
+        }
+    }
+
+    if(!needsQuotes){
+        inOutCommand.append(value.data(), value.size());
+        return;
+    }
+
+    inOutCommand += '"';
+    usize backslashCount = 0u;
+    for(const char ch : value){
+        if(ch == '\\'){
+            ++backslashCount;
+            continue;
+        }
+
+        if(ch == '"'){
+            for(usize i = 0u; i < backslashCount * 2u + 1u; ++i)
+                inOutCommand += '\\';
+            inOutCommand += '"';
+            backslashCount = 0u;
+            continue;
+        }
+
+        for(usize i = 0u; i < backslashCount; ++i)
             inOutCommand += '\\';
         inOutCommand += ch;
+        backslashCount = 0u;
     }
+    for(usize i = 0u; i < backslashCount * 2u; ++i)
+        inOutCommand += '\\';
     inOutCommand += '"';
-#else
-    inOutCommand += '\'';
-    for(const char ch : value){
-        if(ch == '\'')
-            inOutCommand += "'\\''";
-        else
-            inOutCommand += ch;
-    }
-    inOutCommand += '\'';
+}
 #endif
-}
 
-static void AppendCommandArgument(CookString& inOutCommand, const AStringView value){
-    inOutCommand += ' ';
-    AppendShellQuoted(inOutCommand, value);
-}
-
-static void AppendCommandPathArgument(ShaderCook::CookArena& arena, CookString& inOutCommand, const Path& path){
-    const CookString pathText = PathToString(arena, path);
-    AppendCommandArgument(inOutCommand, pathText);
+static void PushCompilerArgument(ShaderCook::CookArena& arena, CookVector<CookString>& inOutArguments, const AStringView value){
+    inOutArguments.push_back(CookString(value, arena));
 }
 
 static bool ReadDiagnostics(const Path& diagnosticsPath, CookString& outDiagnostics){
@@ -170,6 +197,118 @@ static void RemoveFileBestEffort(const Path& path){
     ErrorCode errorCode;
     if(FileExists(path, errorCode) && !errorCode)
         static_cast<void>(RemoveFile(path, errorCode));
+}
+
+#if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+static int WaitForCompilerProcess(const pid_t childPid)noexcept{
+    int status = 0;
+    pid_t waitedPid = -1;
+    do{
+        waitedPid = ::waitpid(childPid, &status, 0);
+    }while(waitedPid < 0 && errno == EINTR);
+
+    if(waitedPid != childPid)
+        return -1;
+    if(WIFEXITED(status))
+        return WEXITSTATUS(status);
+    if(WIFSIGNALED(status))
+        return 128 + WTERMSIG(status);
+    return -1;
+}
+#endif
+
+static int RunCompilerProcessRedirected(
+    ShaderCook::CookArena& arena,
+    const CookVector<CookString>& arguments,
+    const Path& diagnosticsPath
+){
+    if(arguments.empty())
+        return -1;
+
+    CookVector<const char*> argv(arena);
+    argv.reserve(arguments.size() + 1u);
+    for(const CookString& argument : arguments)
+        argv.push_back(argument.c_str());
+    argv.push_back(nullptr);
+
+#if defined(NWB_PLATFORM_WINDOWS)
+    const CookString diagnosticsPathText = PathToString<char>(arena, diagnosticsPath);
+    SECURITY_ATTRIBUTES securityAttributes = {};
+    securityAttributes.nLength = sizeof(securityAttributes);
+    securityAttributes.bInheritHandle = TRUE;
+
+    HANDLE diagnosticsHandle = CreateFileA(
+        diagnosticsPathText.c_str(),
+        GENERIC_WRITE,
+        FILE_SHARE_READ,
+        &securityAttributes,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr
+    );
+    if(diagnosticsHandle == INVALID_HANDLE_VALUE)
+        return -1;
+
+    CookString commandLine{arena};
+    for(const CookString& argument : arguments)
+        AppendWindowsCommandLineArgument(commandLine, AStringView(argument));
+
+    STARTUPINFOA startupInfo = {};
+    startupInfo.cb = sizeof(startupInfo);
+    startupInfo.dwFlags = STARTF_USESTDHANDLES;
+    startupInfo.hStdOutput = diagnosticsHandle;
+    startupInfo.hStdError = diagnosticsHandle;
+    startupInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+
+    PROCESS_INFORMATION processInfo = {};
+    const BOOL created = CreateProcessA(
+        arguments.front().c_str(),
+        commandLine.data(),
+        nullptr,
+        nullptr,
+        TRUE,
+        CREATE_NO_WINDOW,
+        nullptr,
+        nullptr,
+        &startupInfo,
+        &processInfo
+    );
+    CloseHandle(diagnosticsHandle);
+    if(!created)
+        return -1;
+
+    WaitForSingleObject(processInfo.hProcess, INFINITE);
+    DWORD exitCode = 1u;
+    static_cast<void>(GetExitCodeProcess(processInfo.hProcess, &exitCode));
+    CloseHandle(processInfo.hThread);
+    CloseHandle(processInfo.hProcess);
+    return static_cast<int>(exitCode);
+#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+    const CookString diagnosticsPathText = PathToString<char>(arena, diagnosticsPath);
+    const int diagnosticsFd = ::open(diagnosticsPathText.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0666);
+    if(diagnosticsFd < 0)
+        return -1;
+
+    const pid_t childPid = ::fork();
+    if(childPid < 0){
+        static_cast<void>(::close(diagnosticsFd));
+        return -1;
+    }
+
+    if(childPid == 0){
+        static_cast<void>(::dup2(diagnosticsFd, STDOUT_FILENO));
+        static_cast<void>(::dup2(diagnosticsFd, STDERR_FILENO));
+        static_cast<void>(::close(diagnosticsFd));
+        ::execvp(argv.front(), const_cast<char* const*>(argv.data()));
+        _exit(127);
+    }
+
+    static_cast<void>(::close(diagnosticsFd));
+    return WaitForCompilerProcess(childPid);
+#else
+    static_cast<void>(diagnosticsPath);
+    return -1;
+#endif
 }
 
 class SlangShaderCompiler final : public ShaderCook::IShaderCompiler{
@@ -214,21 +353,26 @@ public:
         RemoveFileBestEffort(request.outputPath);
         RemoveFileBestEffort(diagnosticsPath);
 
-        CookString command{m_memoryArena};
-        AppendShellQuoted(command, AStringView(NWB_SLANGC_EXECUTABLE));
-        AppendCommandPathArgument(m_memoryArena, command, request.sourcePath);
-        command += " -target spirv";
-        command += " -emit-spirv-directly";
-        command += " -profile";
-        AppendCommandArgument(command, request.targetProfile);
-        command += " -entry";
-        AppendCommandArgument(command, request.entryPoint);
-        command += " -stage";
-        AppendCommandArgument(command, slangStage);
+        CookVector<CookString> arguments(m_memoryArena);
+        arguments.reserve(15u + static_cast<usize>(request.includeDirectories.size()) * 2u + static_cast<usize>(request.defineCount));
+        PushCompilerArgument(m_memoryArena, arguments, AStringView(NWB_SLANGC_EXECUTABLE));
+
+        CookString sourcePathText = PathToString<char>(m_memoryArena, request.sourcePath);
+        arguments.push_back(Move(sourcePathText));
+        PushCompilerArgument(m_memoryArena, arguments, "-target");
+        PushCompilerArgument(m_memoryArena, arguments, "spirv");
+        PushCompilerArgument(m_memoryArena, arguments, "-emit-spirv-directly");
+        PushCompilerArgument(m_memoryArena, arguments, "-profile");
+        PushCompilerArgument(m_memoryArena, arguments, request.targetProfile);
+        PushCompilerArgument(m_memoryArena, arguments, "-entry");
+        PushCompilerArgument(m_memoryArena, arguments, request.entryPoint);
+        PushCompilerArgument(m_memoryArena, arguments, "-stage");
+        PushCompilerArgument(m_memoryArena, arguments, slangStage);
 
         for(const Path& includeDirectory : request.includeDirectories){
-            command += " -I";
-            AppendCommandPathArgument(m_memoryArena, command, includeDirectory);
+            PushCompilerArgument(m_memoryArena, arguments, "-I");
+            CookString includeDirectoryText = PathToString<char>(m_memoryArena, includeDirectory);
+            arguments.push_back(Move(includeDirectoryText));
         }
 
         for(u32 i = 0; i < request.defineCount; ++i){
@@ -239,16 +383,14 @@ public:
                 defineArgument += '=';
                 defineArgument += define.value;
             }
-            AppendCommandArgument(command, defineArgument);
+            arguments.push_back(Move(defineArgument));
         }
 
-        command += " -o";
-        AppendCommandPathArgument(m_memoryArena, command, request.outputPath);
-        command += " >";
-        AppendCommandPathArgument(m_memoryArena, command, diagnosticsPath);
-        command += " 2>&1";
+        PushCompilerArgument(m_memoryArena, arguments, "-o");
+        CookString outputPathText = PathToString<char>(m_memoryArena, request.outputPath);
+        arguments.push_back(Move(outputPathText));
 
-        const int exitCode = RunSystemCommand(command);
+        const int exitCode = RunCompilerProcessRedirected(m_memoryArena, arguments, diagnosticsPath);
         if(exitCode != 0){
             CookString diagnostics{m_memoryArena};
             if(ReadDiagnostics(diagnosticsPath, diagnostics) && !diagnostics.empty()){

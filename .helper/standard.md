@@ -26,6 +26,8 @@ Updated: 2026-05-31
 ## 2. Namespace style
 - Use namespace wrapper macros (`NWB_BEGIN`, `NWB_CORE_BEGIN`, `NWB_VULKAN_BEGIN`, etc.) instead of raw namespace blocks in module public files.
 - End wrapped namespaces with corresponding `*_END` macros.
+- Do not use unnamed/anonymous namespace blocks (`namespace { ... }`) or nameless namespace variants.
+  - Use `__hidden_<module>` namespaces for translation-unit-local implementation details instead.
 - Exception: the global math headers (`global/simplemath.h`, `global/simdmath.h`, and headers under `global/math/`) intentionally live at global scope.
   - Do not wrap those headers with `NWB_BEGIN`/`NWB_END`.
   - Keep their public math entry points in global scope.

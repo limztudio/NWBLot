@@ -32,7 +32,9 @@ template<typename T>
 using Vector = NWB::Tests::TestVector<T>;
 
 static u32 s_DiagnosticEventCaptureCount = 0u;
+static const char* s_DiagnosticEventName = nullptr;
 static const char* s_DiagnosticEventCategory = nullptr;
+static const char* s_DiagnosticEventExpression = nullptr;
 static const char* s_DiagnosticEventMessage = nullptr;
 static const char* s_DiagnosticEventFile = nullptr;
 static u32 s_DiagnosticEventLine = 0u;
@@ -170,6 +172,16 @@ static void TestTextUtilityHelpers(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, !ParseVariableHexU64(AStringView("0x"), value));
     NWB_GLOBAL_TEST_CHECK(context, !ParseVariableHexU64(AStringView("10000000000000000"), value));
     NWB_GLOBAL_TEST_CHECK(context, !ParseVariableHexU64(AStringView("xyz"), value));
+
+    constexpr AStringView s_KeyValueText("alpha=one\r\nbeta=42\nempty=\n");
+    AStringView textValue;
+    NWB_GLOBAL_TEST_CHECK(context, FindLineKeyValue(s_KeyValueText, "alpha", textValue));
+    NWB_GLOBAL_TEST_CHECK(context, textValue == AStringView("one"));
+    NWB_GLOBAL_TEST_CHECK(context, FindLineKeyValue(s_KeyValueText, "empty", textValue));
+    NWB_GLOBAL_TEST_CHECK(context, textValue.empty());
+    NWB_GLOBAL_TEST_CHECK(context, !FindLineKeyValue(s_KeyValueText, "missing", textValue));
+    NWB_GLOBAL_TEST_CHECK(context, FindLineKeyValueU64(s_KeyValueText, "beta", value));
+    NWB_GLOBAL_TEST_CHECK(context, value == 42u);
 }
 
 static void TestFilesystemMovePathToDirectory(TestContext& context){
@@ -434,21 +446,118 @@ static void TestLoggerMacrosBehaveAsSingleStatements(TestContext& context){
     const AString rawMessage("raw converted warning");
     NWB_LOGGER_WARNING(StringConvert(rawMessage));
 
+#if NWB_OCCUR_WARNING
     NWB_GLOBAL_TEST_CHECK(context, logger.messageCount() == 2u);
     NWB_GLOBAL_TEST_CHECK(context, logger.lastType() == NWB::Core::Common::LogType::Warning);
     NWB_GLOBAL_TEST_CHECK(context, logger.sawMessageContaining(NWB_TEXT("raw converted warning")));
+#else
+    NWB_GLOBAL_TEST_CHECK(context, logger.messageCount() == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, logger.lastType() == NWB::Core::Common::LogType::EssentialInfo);
+    NWB_GLOBAL_TEST_CHECK(context, !logger.sawMessageContaining(NWB_TEXT("raw converted warning")));
+#endif
 }
 
-static void TestDiagnosticEventHook(TestContext& context){
+static void TestLoggerDiagnosticCaptureUsesFormattedMessage(TestContext& context){
     s_DiagnosticEventCaptureCount = 0u;
+    s_DiagnosticEventName = nullptr;
     s_DiagnosticEventCategory = nullptr;
+    s_DiagnosticEventExpression = nullptr;
     s_DiagnosticEventMessage = nullptr;
     s_DiagnosticEventFile = nullptr;
     s_DiagnosticEventLine = 0u;
 
     const DiagnosticEventCallback callback = [](const DiagnosticEventRecord& record)noexcept{
         ++s_DiagnosticEventCaptureCount;
+        s_DiagnosticEventName = record.event;
         s_DiagnosticEventCategory = record.category;
+        s_DiagnosticEventExpression = record.expression;
+        s_DiagnosticEventMessage = record.message;
+        s_DiagnosticEventFile = record.file;
+        s_DiagnosticEventLine = record.line;
+    };
+
+    CapturingLogger logger;
+    SetDiagnosticEventCallback(callback);
+    NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(
+        logger,
+        NWB::Core::Common::LogType::Error,
+        NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,
+        "logger_diagnostic_test.cpp",
+        77u,
+        NWB_TEXT("recoverable error {}"),
+        13
+    );
+    ClearDiagnosticEventCallback(callback);
+
+    NWB_GLOBAL_TEST_CHECK(context, logger.messageCount() == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, logger.lastType() == NWB::Core::Common::LogType::Error);
+    NWB_GLOBAL_TEST_CHECK(context, logger.sawMessageContaining(NWB_TEXT("recoverable error 13")));
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventCaptureCount == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventName && NWB_STRCMP(s_DiagnosticEventName, DiagnosticEventName::s_Error) == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventCategory && NWB_STRCMP(s_DiagnosticEventCategory, NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError) == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventExpression && NWB_STRCMP(s_DiagnosticEventExpression, "") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventMessage && NWB_STRCMP(s_DiagnosticEventMessage, "recoverable error 13") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventFile && NWB_STRCMP(s_DiagnosticEventFile, "logger_diagnostic_test.cpp") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventLine == 77u);
+}
+
+static void TestLoggerAssertTypeCapturesAssertDiagnostic(TestContext& context){
+    s_DiagnosticEventCaptureCount = 0u;
+    s_DiagnosticEventName = nullptr;
+    s_DiagnosticEventCategory = nullptr;
+    s_DiagnosticEventExpression = nullptr;
+    s_DiagnosticEventMessage = nullptr;
+    s_DiagnosticEventFile = nullptr;
+    s_DiagnosticEventLine = 0u;
+
+    const DiagnosticEventCallback callback = [](const DiagnosticEventRecord& record)noexcept{
+        ++s_DiagnosticEventCaptureCount;
+        s_DiagnosticEventName = record.event;
+        s_DiagnosticEventCategory = record.category;
+        s_DiagnosticEventExpression = record.expression;
+        s_DiagnosticEventMessage = record.message;
+        s_DiagnosticEventFile = record.file;
+        s_DiagnosticEventLine = record.line;
+    };
+
+    CapturingLogger logger;
+    SetDiagnosticEventCallback(callback);
+    NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(
+        logger,
+        NWB::Core::Common::LogType::Assert,
+        NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryAssert,
+        "logger_assert_test.cpp",
+        91u,
+        NWB_TEXT("assert log {}"),
+        21
+    );
+    ClearDiagnosticEventCallback(callback);
+
+    NWB_GLOBAL_TEST_CHECK(context, logger.messageCount() == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, logger.lastType() == NWB::Core::Common::LogType::Assert);
+    NWB_GLOBAL_TEST_CHECK(context, logger.sawMessageContaining(NWB_TEXT("assert log 21")));
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventCaptureCount == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventName && NWB_STRCMP(s_DiagnosticEventName, DiagnosticEventName::s_Assert) == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventCategory && NWB_STRCMP(s_DiagnosticEventCategory, NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryAssert) == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventMessage && NWB_STRCMP(s_DiagnosticEventMessage, "assert log 21") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventFile && NWB_STRCMP(s_DiagnosticEventFile, "logger_assert_test.cpp") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventLine == 91u);
+}
+
+static void TestDiagnosticEventHook(TestContext& context){
+    s_DiagnosticEventCaptureCount = 0u;
+    s_DiagnosticEventName = nullptr;
+    s_DiagnosticEventCategory = nullptr;
+    s_DiagnosticEventExpression = nullptr;
+    s_DiagnosticEventMessage = nullptr;
+    s_DiagnosticEventFile = nullptr;
+    s_DiagnosticEventLine = 0u;
+
+    const DiagnosticEventCallback callback = [](const DiagnosticEventRecord& record)noexcept{
+        ++s_DiagnosticEventCaptureCount;
+        s_DiagnosticEventName = record.event;
+        s_DiagnosticEventCategory = record.category;
+        s_DiagnosticEventExpression = record.expression;
         s_DiagnosticEventMessage = record.message;
         s_DiagnosticEventFile = record.file;
         s_DiagnosticEventLine = record.line;
@@ -461,10 +570,16 @@ static void TestDiagnosticEventHook(TestContext& context){
     CaptureDiagnosticEvent("unit", "ignored");
 
     NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventCaptureCount == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventName && NWB_STRCMP(s_DiagnosticEventName, "") == 0);
     NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventCategory && NWB_STRCMP(s_DiagnosticEventCategory, "unit") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventExpression && NWB_STRCMP(s_DiagnosticEventExpression, "") == 0);
     NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventMessage && NWB_STRCMP(s_DiagnosticEventMessage, "message") == 0);
     NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventFile && NWB_STRCMP(s_DiagnosticEventFile, "diagnostics_test.cpp") == 0);
     NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventLine == 42u);
+    NWB_GLOBAL_TEST_CHECK(context, DiagnosticEventNameFromCategory(DiagnosticEventCategory::s_Assert) == DiagnosticEventName::s_Assert);
+    NWB_GLOBAL_TEST_CHECK(context, DiagnosticEventNameFromCategory(DiagnosticEventCategory::s_FatalAssert) == DiagnosticEventName::s_Assert);
+    NWB_GLOBAL_TEST_CHECK(context, DiagnosticEventNameFromCategory("unknown") == nullptr);
+    NWB_GLOBAL_TEST_CHECK(context, DiagnosticEventNameFromRecord(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error }) == DiagnosticEventName::s_Error);
 }
 
 
@@ -501,6 +616,8 @@ NWB_DEFINE_TEST_ENTRY_POINT("global", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestTriviallyCopyableVectorAlias(context);
     __hidden_tests::TestBoundedRuntimeWrappers(context);
     __hidden_tests::TestLoggerMacrosBehaveAsSingleStatements(context);
+    __hidden_tests::TestLoggerDiagnosticCaptureUsesFormattedMessage(context);
+    __hidden_tests::TestLoggerAssertTypeCapturesAssertDiagnostic(context);
     __hidden_tests::TestDiagnosticEventHook(context);
 })
 

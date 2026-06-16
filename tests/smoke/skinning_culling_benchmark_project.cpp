@@ -15,13 +15,14 @@
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>
+#include <impl/ecs_render/model_renderer.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/timing_names.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_mesh/skinning/timing_names.h>
 
-#include <cstdlib>
+#include <global/environment.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -212,19 +213,12 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
 }
 
 [[nodiscard]] static bool EnvironmentFlagEnabled(const char* name){
-#if defined(_MSC_VER)
-    char* value = nullptr;
-    size_t valueSize = 0;
-    if(::_dupenv_s(&value, &valueSize, name) != 0 || !value)
+    NWB::Core::Alloc::GlobalArena arena("NWB::Tests::Smoke::EnvironmentFlag");
+    AString<NWB::Core::Alloc::GlobalArena> value(arena);
+    if(!ReadEnvironmentVariable(name, value))
         return false;
 
-    const bool enabled = value[0] != '\0' && value[0] != '0';
-    ::free(value);
-    return enabled;
-#else
-    const char* value = NWB_GETENV(name);
-    return value && value[0] != '\0' && value[0] != '0';
-#endif
+    return !value.empty() && value[0] != '\0' && value[0] != '0';
 }
 
 [[nodiscard]] static bool StaticPreviewEnabled(){
@@ -413,7 +407,8 @@ private:
         );
         auto& modelSystem = world->addSystem<NWB::Impl::ModelSystem>(
             *world,
-            context.assetManager
+            context.assetManager,
+            NWB::Impl::CreateModelObjectRendererHooks()
         );
         static_cast<void>(modelSystem);
         auto& meshSkinningSystem = world->addSystem<NWB::Impl::MeshSkinningSystem>(

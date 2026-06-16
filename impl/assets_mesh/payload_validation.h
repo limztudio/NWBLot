@@ -23,11 +23,6 @@ namespace MeshPayloadValidation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool FiniteVector(const SIMDVector value, const u32 activeMask){
-    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
-    return (VectorMoveMask(invalid) & activeMask) == 0u;
-}
-
 [[nodiscard]] inline bool CountFitsU32(const usize count){
     return count <= static_cast<usize>(Limit<u32>::s_Max);
 }

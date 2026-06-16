@@ -268,16 +268,6 @@ static i32 TranslateMouseButton(UINT message, WPARAM wParam){
     }
 }
 
-static bool IsTextInputCodePoint(u32 unicode){
-    if(unicode < 32u || unicode == 127u)
-        return false;
-    if(unicode > 0x10ffffu)
-        return false;
-    if(unicode >= 0xd800u && unicode <= 0xdfffu)
-        return false;
-    return true;
-}
-
 static void DispatchUnicodeInput(Frame& frame, u32 unicode){
     if(IsTextInputCodePoint(unicode))
         frame.input().keyboardCharInput(unicode, TranslateModifiers());

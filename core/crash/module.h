@@ -36,8 +36,6 @@ namespace CrashDumpStatus{
         RequestTimedOut,
         PackageWriteFailed,
         PackageWritten,
-        UploadFailed,
-        Uploaded,
     };
 };
 
@@ -72,15 +70,7 @@ struct CrashDumpResult{
     }
 
     [[nodiscard]] bool packageWritten()const{
-        return status == CrashDumpStatus::PackageWritten || status == CrashDumpStatus::UploadFailed || status == CrashDumpStatus::Uploaded;
-    }
-
-    [[nodiscard]] bool uploadAttempted()const{
-        return status == CrashDumpStatus::UploadFailed || status == CrashDumpStatus::Uploaded;
-    }
-
-    [[nodiscard]] bool uploadSucceeded()const{
-        return status == CrashDumpStatus::Uploaded;
+        return status == CrashDumpStatus::PackageWritten;
     }
 };
 
@@ -97,7 +87,6 @@ struct CrashConfigT{
     CrashCapturePolicy capturePolicy;
     CrashSpoolRetentionConfig spoolRetention;
     DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
-    bool enableGpuDumps = false;
 
     explicit CrashConfigT(ArenaT& arena)
         : spoolDirectory(arena)
@@ -107,31 +96,18 @@ struct CrashConfigT{
 using CrashConfig = CrashConfigT<Alloc::PersistentArena>;
 
 
-using CrashPackagePath = ::Path<Alloc::PersistentArena>;
-
-struct GpuCrashProvider{
-    void* userData = nullptr;
-    bool (*writeAttachment)(void* userData, const CrashPackagePath& packageDirectory, AStringView crashId) = nullptr;
-};
-
-
 template<typename ArenaT>
 [[nodiscard]] bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config);
 void UninstallCrashHandler();
 
 [[nodiscard]] bool SetCrashMetadata(AStringView key, AStringView value);
-template<typename ArenaT>
-[[nodiscard]] bool AddCrashBreadcrumb(ArenaT& arena, AStringView category, AStringView message);
+[[nodiscard]] bool AddCrashBreadcrumb(AStringView category, AStringView message);
 [[nodiscard]] CrashDumpResult CaptureCrashDump(AStringView category = AStringView(), AStringView message = AStringView());
-[[nodiscard]] bool FlushPendingCrashReports(Alloc::GlobalArena& arena);
-[[nodiscard]] bool RegisterGpuCrashProvider(const GpuCrashProvider& provider);
 
 template<typename ArenaT>
 [[nodiscard]] ::Path<ArenaT> DefaultCrashSpoolDirectory(ArenaT& arena);
 template<typename ArenaT>
 [[nodiscard]] ::Path<ArenaT> DefaultCrashHandlerExecutablePath(ArenaT& arena);
-
-int RunCrashHandlerProcess(isize argc, tchar** argv);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

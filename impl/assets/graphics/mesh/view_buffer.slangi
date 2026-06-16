@@ -13,8 +13,8 @@
 
 
 struct NwbMeshViewBuffer{
-    float4x4 g_NwbMeshWorldToClip;
-    float4x4 g_NwbMeshClipToWorld;
+    row_major float4x4 g_NwbMeshWorldToClip;
+    row_major float4x4 g_NwbMeshClipToWorld;
     float4 g_NwbMeshCameraPosition;
     float4 g_NwbMeshFrustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
 };

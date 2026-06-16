@@ -555,14 +555,7 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
     if(drawState().m_meshViewGpuDataValid){
         ECSRenderDetail::MeshViewGpuData meshViewData;
         NWB_MEMCPY(&meshViewData, sizeof(meshViewData), drawState().m_meshViewGpuData, sizeof(meshViewData));
-        SIMDMatrix worldToClipColumns;
-        for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex)
-            worldToClipColumns.v[columnIndex] = LoadFloat(meshViewData.worldToClip[columnIndex]);
-        // MeshViewGpuData stores world-to-clip as column vectors for the shader's mul(M, v); the CPU
-        // Vector4Transform path treats SIMDMatrix rows as the transform, so transpose before projecting
-        // work-region corners. Without this, clipW collapses toward the translation term and the CSG
-        // work region falls back to full-frame on every frame.
-        worldToClip = MatrixTranspose(worldToClipColumns);
+        worldToClip = LoadFloat(meshViewData.worldToClip);
         meshViewReady = !MatrixIsNaN(worldToClip) && !MatrixIsInfinite(worldToClip);
     }
 

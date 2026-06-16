@@ -28,18 +28,8 @@ namespace ECSRenderDetail{
 
 
 struct MeshViewGpuData{
-    Float4 worldToClip[4] = {
-        Float4(1.f, 0.f, 0.f, 0.f),
-        Float4(0.f, 1.f, 0.f, 0.f),
-        Float4(0.f, 0.f, 1.f, 0.f),
-        Float4(0.f, 0.f, 0.f, 1.f),
-    };
-    Float4 clipToWorld[4] = {
-        Float4(1.f, 0.f, 0.f, 0.f),
-        Float4(0.f, 1.f, 0.f, 0.f),
-        Float4(0.f, 0.f, 1.f, 0.f),
-        Float4(0.f, 0.f, 0.f, 1.f),
-    };
+    Float44 worldToClip = {};
+    Float44 clipToWorld = {};
     Float4 cameraPosition = Float4(0.f, 0.f, 0.f, 1.f);
     Float4 frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT] = {
         Float4(1.f, 0.f, 0.f, 0.f),
@@ -64,13 +54,6 @@ inline constexpr Name s_MeshViewBufferName("ecs_render/mesh_view_data");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline SIMDVector BuildProjectedViewColumnVector(const SIMDVector viewColumn, const SIMDVector projection){
-    const f32 viewZ = VectorGetZ(viewColumn);
-    SIMDVector column = VectorMultiply(VectorSetW(viewColumn, viewZ), projection);
-    column = VectorMultiplyAdd(VectorSet(0.0f, 0.0f, VectorGetW(viewColumn), 0.0f), VectorSplatW(projection), column);
-    return VectorSetW(column, viewZ);
-}
-
 inline SIMDMatrix BuildWorldToClipMatrix(
     const SIMDVector positionDepthBias,
     const SIMDVector right,
@@ -82,19 +65,21 @@ inline SIMDMatrix BuildWorldToClipMatrix(
     const f32 translationY = -VectorGetX(Vector3Dot(positionDepthBias, up));
     const f32 translationZ = -VectorGetX(Vector3Dot(positionDepthBias, forward)) + VectorGetW(positionDepthBias);
 
-    SIMDMatrix viewBasis{};
-    viewBasis.v[0] = right;
-    viewBasis.v[1] = up;
-    viewBasis.v[2] = forward;
-    viewBasis.v[3] = s_SIMDIdentityR3;
+    // World-to-view: basis vectors as rows, view-space translation in the fourth column (M*v form).
+    SIMDMatrix worldToView{};
+    worldToView.v[0] = VectorSetW(right, translationX);
+    worldToView.v[1] = VectorSetW(up, translationY);
+    worldToView.v[2] = VectorSetW(forward, translationZ);
+    worldToView.v[3] = s_SIMDIdentityR3;
 
-    const SIMDMatrix viewColumns = MatrixTranspose(viewBasis);
-    SIMDMatrix worldToClip{};
-    worldToClip.v[0] = BuildProjectedViewColumnVector(viewColumns.v[0], projection);
-    worldToClip.v[1] = BuildProjectedViewColumnVector(viewColumns.v[1], projection);
-    worldToClip.v[2] = BuildProjectedViewColumnVector(viewColumns.v[2], projection);
-    worldToClip.v[3] = BuildProjectedViewColumnVector(VectorSet(translationX, translationY, translationZ, 1.0f), projection);
-    return worldToClip;
+    // View-to-clip: projection lanes are x/y scale, z scale, and z bias; clip.w carries view-space z.
+    SIMDMatrix viewToClip{};
+    viewToClip.v[0] = VectorSet(VectorGetX(projection), 0.0f, 0.0f, 0.0f);
+    viewToClip.v[1] = VectorSet(0.0f, VectorGetY(projection), 0.0f, 0.0f);
+    viewToClip.v[2] = VectorSet(0.0f, 0.0f, VectorGetZ(projection), VectorGetW(projection));
+    viewToClip.v[3] = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+
+    return MatrixMultiply(viewToClip, worldToView);
 }
 
 inline SIMDVector BuildViewFrustumPlaneVector(const SIMDVector normal, const SIMDVector point){
@@ -176,15 +161,14 @@ inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 f
     const SIMDVector projection = LoadFloat(projectionData.projectionParams);
 
     const SIMDMatrix worldToClip = BuildWorldToClipMatrix(positionDepthBias, right, up, forward, projection);
-    for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex)
-        StoreFloat(worldToClip.v[columnIndex], &state.worldToClip[columnIndex]);
+    StoreFloat(worldToClip, &state.worldToClip);
 
     SIMDVector determinant;
     const SIMDMatrix clipToWorld = MatrixInverse(&determinant, worldToClip);
-    if(IsFinite(VectorGetX(determinant)) && Abs(VectorGetX(determinant)) > 0.0f){
-        for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex)
-            StoreFloat(clipToWorld.v[columnIndex], &state.clipToWorld[columnIndex]);
-    }
+    if(IsFinite(VectorGetX(determinant)) && Abs(VectorGetX(determinant)) > 0.0f)
+        StoreFloat(clipToWorld, &state.clipToWorld);
+    else
+        StoreFloat(MatrixIdentity(), &state.clipToWorld);
 
     SIMDVector cameraPosition;
     SIMDVector frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];

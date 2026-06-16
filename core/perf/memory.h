@@ -147,6 +147,11 @@ public:
     [[nodiscard]] const MemorySnapshot& snapshot(MemoryScopeId scope)const;
     [[nodiscard]] const MemoryDelta& delta(const Name& scopeName)const;
     [[nodiscard]] const MemoryDelta& delta(MemoryScopeId scope)const;
+    [[nodiscard]] usize scopeCount()const{ return m_scopes.size(); }
+    [[nodiscard]] MemoryScopeId scopeAt(usize index)const;
+    [[nodiscard]] Name scopeNameAt(usize index)const;
+    [[nodiscard]] const MemorySnapshot& snapshotAt(usize index)const;
+    [[nodiscard]] const MemoryDelta& deltaAt(usize index)const;
 
 
 private:
@@ -181,6 +186,11 @@ public:
     [[nodiscard]] const MemorySnapshot& snapshot(MemoryScopeId scope)const;
     [[nodiscard]] const MemoryDelta& delta(const Name& scopeName)const;
     [[nodiscard]] const MemoryDelta& delta(MemoryScopeId scope)const;
+    [[nodiscard]] usize scopeCount()const;
+    [[nodiscard]] MemoryScopeId scopeAt(usize index)const;
+    [[nodiscard]] Name scopeNameAt(usize index)const;
+    [[nodiscard]] const MemorySnapshot& snapshotAt(usize index)const;
+    [[nodiscard]] const MemoryDelta& deltaAt(usize index)const;
 
 
 private:

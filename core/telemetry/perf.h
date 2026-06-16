@@ -8,6 +8,7 @@
 #include "recorder.h"
 
 #include <core/perf/memory.h>
+#include <core/perf/report.h>
 #include <core/perf/timing.h>
 
 
@@ -109,6 +110,15 @@ struct PerfMemoryPayload{
     {}
 };
 
+struct PerfSessionRecordResult{
+    u32 cpuTimingEvents = 0u;
+    u32 gpuTimingEvents = 0u;
+    u32 memoryEvents = 0u;
+
+    [[nodiscard]] u32 eventCount()const{ return cpuTimingEvents + gpuTimingEvents + memoryEvents; }
+    [[nodiscard]] bool recordedAny()const{ return eventCount() != 0u; }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -158,6 +168,11 @@ struct PerfMemoryPayload{
     const Name& scopeName,
     const Perf::MemorySnapshot& snapshot,
     const Perf::MemoryDelta& delta,
+    u32 streamId = 0u
+);
+[[nodiscard]] PerfSessionRecordResult RecordPerfSessionReport(
+    Recorder& recorder,
+    const Perf::SessionReport& report,
     u32 streamId = 0u
 );
 

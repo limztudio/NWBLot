@@ -91,6 +91,47 @@ static void AppendScopeText(Container& outPayload, const AStringView text){
         BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, text.data(), text.size());
 }
 
+[[nodiscard]] static u32 RecordTimingView(
+    Recorder& recorder,
+    const PerfTimingSource::Enum source,
+    const Perf::TimingView& timing,
+    const u32 streamId
+){
+    if(!recorder.enabled(EventKind::PerfFrame))
+        return 0u;
+
+    u32 recorded = 0u;
+    for(usize i = 0u; i < timing.scopeCount(); ++i){
+        const Name scopeName = timing.scopeNameAt(i);
+        const Perf::TimingStats& stats = timing.statsAt(i);
+        if(!stats.valid())
+            continue;
+        if(RecordPerfTiming(recorder, source, scopeName, stats, streamId))
+            ++recorded;
+    }
+    return recorded;
+}
+
+[[nodiscard]] static u32 RecordMemoryView(
+    Recorder& recorder,
+    const Perf::MemoryView& memory,
+    const u32 streamId
+){
+    if(!recorder.enabled(EventKind::MemoryFrame))
+        return 0u;
+
+    u32 recorded = 0u;
+    for(usize i = 0u; i < memory.scopeCount(); ++i){
+        const Name scopeName = memory.scopeNameAt(i);
+        const Perf::MemorySnapshot& snapshot = memory.snapshotAt(i);
+        if(!snapshot.valid())
+            continue;
+        if(RecordPerfMemory(recorder, scopeName, snapshot, memory.deltaAt(i), streamId))
+            ++recorded;
+    }
+    return recorded;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -326,6 +367,21 @@ bool RecordPerfMemory(
         return false;
 
     return recorder.record(EventKind::MemoryFrame, PayloadFormat::Binary, snapshot.frameIndex, payload.data(), payload.size(), streamId);
+}
+
+PerfSessionRecordResult RecordPerfSessionReport(
+    Recorder& recorder,
+    const Perf::SessionReport& report,
+    const u32 streamId
+){
+    PerfSessionRecordResult result;
+    if(report.capture.cpuTimingActive())
+        result.cpuTimingEvents = __hidden_telemetry_perf::RecordTimingView(recorder, PerfTimingSource::Cpu, report.cpuTiming, streamId);
+    if(report.capture.gpuTimingActive())
+        result.gpuTimingEvents = __hidden_telemetry_perf::RecordTimingView(recorder, PerfTimingSource::Gpu, report.gpuTiming, streamId);
+    if(report.capture.memoryActive())
+        result.memoryEvents = __hidden_telemetry_perf::RecordMemoryView(recorder, report.memory, streamId);
+    return result;
 }
 
 

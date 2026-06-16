@@ -917,6 +917,130 @@ static void TestRecordPerfMemoryUsesTelemetryEvent(TestContext& context){
     NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.usedBytes == delta.usedBytes);
 }
 
+static NWB::Core::Alloc::ArenaMemoryStats MakeTestArenaStats(
+    const u64 reservedBytes,
+    const u64 usedBytes,
+    const u64 peakUsedBytes,
+    const u64 allocationCount,
+    const u64 reallocationCount,
+    const u64 deallocationCount
+){
+    NWB::Core::Alloc::ArenaMemoryStats stats;
+    stats.reservedBytes = reservedBytes;
+    stats.usedBytes = usedBytes;
+    stats.peakUsedBytes = peakUsedBytes;
+    stats.allocationCount = allocationCount;
+    stats.reallocationCount = reallocationCount;
+    stats.deallocationCount = deallocationCount;
+    return stats;
+}
+
+static void BuildTestPerfReport(
+    NWB::Core::Perf::TimingRecorder& cpuTiming,
+    NWB::Core::Perf::TimingRecorder& gpuTiming,
+    NWB::Core::Perf::MemoryRecorder& memory,
+    NWB::Core::Perf::SessionReport& report
+){
+    cpuTiming.setEnabled(true);
+    gpuTiming.setEnabled(true);
+    memory.setEnabled(true);
+
+    const Name cpuScopeName("perf/cpu/update");
+    const Name gpuScopeName("perf/gpu/frame");
+    const Name memoryScopeName("perf/memory/project");
+    const NWB::Core::Perf::TimingScopeId cpuScope = cpuTiming.registerScope(cpuScopeName);
+    const NWB::Core::Perf::TimingScopeId gpuScope = gpuTiming.registerScope(gpuScopeName);
+    const NWB::Core::Perf::MemoryScopeId memoryScope = memory.registerScope(memoryScopeName);
+
+    cpuTiming.recordSample(cpuScope, 0.010, 100u);
+    cpuTiming.recordSample(cpuScope, 0.015, 101u);
+    cpuTiming.publishFrame(102u);
+
+    gpuTiming.recordSample(gpuScope, 0.020, 100u);
+    gpuTiming.publishFrame(102u);
+
+    memory.recordSnapshot(memoryScope, MakeTestArenaStats(4096u, 1024u, 1536u, 4u, 1u, 0u), 101u);
+    memory.recordSnapshot(memoryScope, MakeTestArenaStats(8192u, 2048u, 3072u, 7u, 2u, 1u), 102u);
+
+    report.capture = NWB::Core::Perf::CaptureOptions::All();
+    report.frameIndex = 102u;
+    report.cpuTiming = NWB::Core::Perf::TimingView(cpuTiming);
+    report.gpuTiming = NWB::Core::Perf::TimingView(gpuTiming);
+    report.memory = NWB::Core::Perf::MemoryView(memory);
+}
+
+static void TestPerfViewsExposeScopes(TestContext& context){
+    TestArena testArena;
+    NWB::Core::Perf::TimingRecorder cpuTiming(testArena.arena);
+    NWB::Core::Perf::TimingRecorder gpuTiming(testArena.arena);
+    NWB::Core::Perf::MemoryRecorder memory(testArena.arena);
+    NWB::Core::Perf::SessionReport report;
+    BuildTestPerfReport(cpuTiming, gpuTiming, memory, report);
+
+    NWB_TELEMETRY_TEST_CHECK(context, report.cpuTiming.scopeCount() == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.gpuTiming.scopeCount() == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.memory.scopeCount() == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.cpuTiming.scopeNameAt(0u) == Name("perf/cpu/update"));
+    NWB_TELEMETRY_TEST_CHECK(context, report.gpuTiming.scopeNameAt(0u) == Name("perf/gpu/frame"));
+    NWB_TELEMETRY_TEST_CHECK(context, report.memory.scopeNameAt(0u) == Name("perf/memory/project"));
+    NWB_TELEMETRY_TEST_CHECK(context, report.cpuTiming.scopeAt(0u).valid());
+    NWB_TELEMETRY_TEST_CHECK(context, !report.cpuTiming.scopeAt(1u).valid());
+    NWB_TELEMETRY_TEST_CHECK(context, report.cpuTiming.statsAt(0u).sampleCount == 2u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.gpuTiming.statsAt(0u).sampleCount == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.memory.snapshotAt(0u).usedBytes == 2048u);
+    NWB_TELEMETRY_TEST_CHECK(context, report.memory.deltaAt(0u).usedBytes == 1024);
+}
+
+static void TestRecordPerfSessionReportUsesTelemetryEvents(TestContext& context){
+    TestArena testArena;
+    NWB::Core::Perf::TimingRecorder cpuTiming(testArena.arena);
+    NWB::Core::Perf::TimingRecorder gpuTiming(testArena.arena);
+    NWB::Core::Perf::MemoryRecorder memory(testArena.arena);
+    NWB::Core::Perf::SessionReport report;
+    BuildTestPerfReport(cpuTiming, gpuTiming, memory, report);
+
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    const Telemetry::PerfSessionRecordResult result = Telemetry::RecordPerfSessionReport(recorder, report, 17u);
+    NWB_TELEMETRY_TEST_CHECK(context, result.recordedAny());
+    NWB_TELEMETRY_TEST_CHECK(context, result.cpuTimingEvents == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, result.gpuTimingEvents == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, result.memoryEvents == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, result.eventCount() == 3u);
+    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 3u);
+
+    const Telemetry::EventRecord* cpuEvent = recorder.view().eventAt(0u);
+    const Telemetry::EventRecord* gpuEvent = recorder.view().eventAt(1u);
+    const Telemetry::EventRecord* memoryEvent = recorder.view().eventAt(2u);
+    NWB_TELEMETRY_TEST_CHECK(context, cpuEvent != nullptr);
+    NWB_TELEMETRY_TEST_CHECK(context, gpuEvent != nullptr);
+    NWB_TELEMETRY_TEST_CHECK(context, memoryEvent != nullptr);
+    if(!cpuEvent || !gpuEvent || !memoryEvent)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, cpuEvent->header.kind == Telemetry::EventKind::PerfFrame);
+    NWB_TELEMETRY_TEST_CHECK(context, gpuEvent->header.kind == Telemetry::EventKind::PerfFrame);
+    NWB_TELEMETRY_TEST_CHECK(context, memoryEvent->header.kind == Telemetry::EventKind::MemoryFrame);
+    NWB_TELEMETRY_TEST_CHECK(context, cpuEvent->header.streamId == 17u);
+    NWB_TELEMETRY_TEST_CHECK(context, gpuEvent->header.streamId == 17u);
+    NWB_TELEMETRY_TEST_CHECK(context, memoryEvent->header.streamId == 17u);
+
+    Telemetry::PerfTimingPayload cpuPayload(testArena.arena);
+    Telemetry::PerfTimingPayload gpuPayload(testArena.arena);
+    Telemetry::PerfMemoryPayload memoryPayload(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfTimingPayload(testArena.arena, cpuEvent->payload.data(), cpuEvent->payload.size(), cpuPayload));
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfTimingPayload(testArena.arena, gpuEvent->payload.data(), gpuEvent->payload.size(), gpuPayload));
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfMemoryPayload(testArena.arena, memoryEvent->payload.data(), memoryEvent->payload.size(), memoryPayload));
+    NWB_TELEMETRY_TEST_CHECK(context, cpuPayload.source == Telemetry::PerfTimingSource::Cpu);
+    NWB_TELEMETRY_TEST_CHECK(context, gpuPayload.source == Telemetry::PerfTimingSource::Gpu);
+    NWB_TELEMETRY_TEST_CHECK(context, cpuPayload.scopeName == Name("perf/cpu/update"));
+    NWB_TELEMETRY_TEST_CHECK(context, gpuPayload.scopeName == Name("perf/gpu/frame"));
+    NWB_TELEMETRY_TEST_CHECK(context, memoryPayload.scopeName == Name("perf/memory/project"));
+    NWB_TELEMETRY_TEST_CHECK(context, memoryPayload.snapshot.frameIndex == 102u);
+    NWB_TELEMETRY_TEST_CHECK(context, memoryPayload.delta.hasSamples);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -954,6 +1078,8 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestPerfMemoryPayloadRoundTrip(context);
     __hidden_tests::TestPerfMemoryPayloadRejectsInvalidInput(context);
     __hidden_tests::TestRecordPerfMemoryUsesTelemetryEvent(context);
+    __hidden_tests::TestPerfViewsExposeScopes(context);
+    __hidden_tests::TestRecordPerfSessionReportUsesTelemetryEvents(context);
 })
 
 

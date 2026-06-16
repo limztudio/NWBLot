@@ -120,6 +120,10 @@ public:
 
     [[nodiscard]] const TimingStats& stats(const Name& scopeName)const;
     [[nodiscard]] const TimingStats& stats(TimingScopeId scope)const;
+    [[nodiscard]] usize scopeCount()const{ return m_scopes.size(); }
+    [[nodiscard]] TimingScopeId scopeAt(usize index)const;
+    [[nodiscard]] Name scopeNameAt(usize index)const;
+    [[nodiscard]] const TimingStats& statsAt(usize index)const;
 
 
 private:
@@ -152,6 +156,10 @@ public:
     [[nodiscard]] bool valid()const{ return m_recorder != nullptr; }
     [[nodiscard]] const TimingStats& stats(const Name& scopeName)const;
     [[nodiscard]] const TimingStats& stats(TimingScopeId scope)const;
+    [[nodiscard]] usize scopeCount()const;
+    [[nodiscard]] TimingScopeId scopeAt(usize index)const;
+    [[nodiscard]] Name scopeNameAt(usize index)const;
+    [[nodiscard]] const TimingStats& statsAt(usize index)const;
 
 
 private:

@@ -127,6 +127,34 @@ const TimingStats& TimingRecorder::stats(const TimingScopeId scope)const{
     return record->accumulator.lastStats();
 }
 
+TimingScopeId TimingRecorder::scopeAt(const usize index)const{
+    if(index >= m_scopes.size())
+        return {};
+
+    const ScopeRecord* record = m_scopes[index].get();
+    if(!record)
+        return {};
+
+    TimingScopeId scope;
+    scope.index = static_cast<u32>(index);
+    scope.generation = record->generation;
+    return scope;
+}
+
+Name TimingRecorder::scopeNameAt(const usize index)const{
+    if(index >= m_scopes.size() || !m_scopes[index])
+        return NAME_NONE;
+
+    return m_scopes[index]->name;
+}
+
+const TimingStats& TimingRecorder::statsAt(const usize index)const{
+    if(index >= m_scopes.size() || !m_scopes[index])
+        return m_emptyStats;
+
+    return m_scopes[index]->accumulator.lastStats();
+}
+
 void TimingRecorder::recordSample(const Name& scopeName, const f64 seconds){
     recordSample(scopeName, seconds, m_nextPublishFrameIndex);
 }
@@ -161,6 +189,23 @@ const TimingStats& TimingView::stats(const Name& scopeName)const{
 const TimingStats& TimingView::stats(const TimingScopeId scope)const{
     static const TimingStats s_EmptyStats;
     return m_recorder ? m_recorder->stats(scope) : s_EmptyStats;
+}
+
+usize TimingView::scopeCount()const{
+    return m_recorder ? m_recorder->scopeCount() : 0u;
+}
+
+TimingScopeId TimingView::scopeAt(const usize index)const{
+    return m_recorder ? m_recorder->scopeAt(index) : TimingScopeId{};
+}
+
+Name TimingView::scopeNameAt(const usize index)const{
+    return m_recorder ? m_recorder->scopeNameAt(index) : NAME_NONE;
+}
+
+const TimingStats& TimingView::statsAt(const usize index)const{
+    static const TimingStats s_EmptyStats;
+    return m_recorder ? m_recorder->statsAt(index) : s_EmptyStats;
 }
 
 

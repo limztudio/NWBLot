@@ -18,17 +18,24 @@ NWB_TELEMETRY_BEGIN
 
 
 inline constexpr u16 s_CodecVersion = 1u;
-inline constexpr usize s_EncodedEventHeaderBytes =
-    sizeof(u32) // magic
-    + sizeof(u16) // version
-    + sizeof(u16) // kind
-    + sizeof(u8) // payload format
-    + sizeof(u8) // reserved
-    + sizeof(u32) // stream id
-    + sizeof(u64) // frame index
-    + sizeof(u64) // timestamp nanoseconds
-    + sizeof(u64) // payload bytes
-;
+
+#pragma pack(push, 1)
+struct EncodedEventHeader{
+    u32 magic = s_EventMagic;
+    u16 version = s_CodecVersion;
+    u16 kind = EventKind::Unknown;
+    u8 payloadFormat = PayloadFormat::None;
+    u8 reserved = 0u;
+    u32 streamId = 0u;
+    u64 frameIndex = 0u;
+    u64 timestampNanoseconds = 0u;
+    u64 payloadBytes = 0u;
+};
+#pragma pack(pop)
+static_assert(sizeof(EncodedEventHeader) == 38u, "EncodedEventHeader wire layout drifted");
+static_assert(alignof(EncodedEventHeader) == 1u, "EncodedEventHeader must stay packed");
+static_assert(IsStandardLayout_V<EncodedEventHeader>, "EncodedEventHeader must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<EncodedEventHeader>, "EncodedEventHeader must stay binary-serializable");
 
 namespace DecodeStatus{
     enum Enum : u8{
@@ -63,4 +70,3 @@ NWB_TELEMETRY_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

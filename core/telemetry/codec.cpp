@@ -44,17 +44,32 @@ struct ByteView{
     ;
 }
 
-template<typename Container>
-static void AppendHeader(Container& outBytes, const EventHeader& header){
-    AppendPOD(outBytes, header.magic);
-    AppendPOD(outBytes, header.version);
-    AppendPOD(outBytes, header.kind);
-    AppendPOD(outBytes, header.payloadFormat);
-    AppendPOD(outBytes, header.reserved);
-    AppendPOD(outBytes, header.streamId);
-    AppendPOD(outBytes, header.frameIndex);
-    AppendPOD(outBytes, header.timestampNanoseconds);
-    AppendPOD(outBytes, header.payloadBytes);
+[[nodiscard]] static EncodedEventHeader EncodeHeader(const EventHeader& header)noexcept{
+    EncodedEventHeader encoded;
+    encoded.magic = header.magic;
+    encoded.version = header.version;
+    encoded.kind = static_cast<u16>(header.kind);
+    encoded.payloadFormat = static_cast<u8>(header.payloadFormat);
+    encoded.reserved = header.reserved;
+    encoded.streamId = header.streamId;
+    encoded.frameIndex = header.frameIndex;
+    encoded.timestampNanoseconds = header.timestampNanoseconds;
+    encoded.payloadBytes = header.payloadBytes;
+    return encoded;
+}
+
+[[nodiscard]] static EventHeader DecodeHeader(const EncodedEventHeader& encoded)noexcept{
+    EventHeader header;
+    header.magic = encoded.magic;
+    header.version = encoded.version;
+    header.kind = static_cast<EventKind::Enum>(encoded.kind);
+    header.payloadFormat = static_cast<PayloadFormat::Enum>(encoded.payloadFormat);
+    header.reserved = encoded.reserved;
+    header.streamId = encoded.streamId;
+    header.frameIndex = encoded.frameIndex;
+    header.timestampNanoseconds = encoded.timestampNanoseconds;
+    header.payloadBytes = encoded.payloadBytes;
+    return header;
 }
 
 [[nodiscard]] static DecodeResult ReadHeader(const ByteView& encoded, EventHeader& outHeader){
@@ -62,21 +77,13 @@ static void AppendHeader(Container& outBytes, const EventHeader& header){
     result.status = DecodeStatus::TruncatedHeader;
 
     usize cursor = 0u;
-    if(
-        !ReadPOD(encoded, cursor, outHeader.magic)
-        || !ReadPOD(encoded, cursor, outHeader.version)
-        || !ReadPOD(encoded, cursor, outHeader.kind)
-        || !ReadPOD(encoded, cursor, outHeader.payloadFormat)
-        || !ReadPOD(encoded, cursor, outHeader.reserved)
-        || !ReadPOD(encoded, cursor, outHeader.streamId)
-        || !ReadPOD(encoded, cursor, outHeader.frameIndex)
-        || !ReadPOD(encoded, cursor, outHeader.timestampNanoseconds)
-        || !ReadPOD(encoded, cursor, outHeader.payloadBytes)
-    ){
+    EncodedEventHeader encodedHeader;
+    if(!ReadPOD(encoded, cursor, encodedHeader)){
         result.bytesRead = cursor;
         return result;
     }
 
+    outHeader = DecodeHeader(encodedHeader);
     result.status = DecodeStatus::Ok;
     result.bytesRead = cursor;
     return result;
@@ -103,23 +110,24 @@ bool EncodeEvent(const EventHeader& header, const void* payload, const usize pay
         return false;
     if(!__hidden_telemetry_codec::ValidateHeaderPayload(header))
         return false;
-    if(payloadBytes > Limit<usize>::s_Max - s_EncodedEventHeaderBytes)
+    if(payloadBytes > Limit<usize>::s_Max - sizeof(EncodedEventHeader))
         return false;
 
     outBytes.clear();
-    outBytes.reserve(s_EncodedEventHeaderBytes + payloadBytes);
-    __hidden_telemetry_codec::AppendHeader(outBytes, header);
+    outBytes.reserve(sizeof(EncodedEventHeader) + payloadBytes);
+    const EncodedEventHeader encodedHeader = __hidden_telemetry_codec::EncodeHeader(header);
+    AppendPOD(outBytes, encodedHeader);
     if(payloadBytes != 0u)
         BinaryDetail::AppendBytesNoReserveUnchecked(outBytes, payload, payloadBytes);
 
-    return outBytes.size() == s_EncodedEventHeaderBytes + payloadBytes;
+    return outBytes.size() == sizeof(EncodedEventHeader) + payloadBytes;
 }
 
 DecodeResult DecodeEvent(TelemetryArena& arena, const void* const bytes, const usize byteCount, EventRecord& outEvent){
     DecodeResult result;
     outEvent = EventRecord(arena);
 
-    if(byteCount < s_EncodedEventHeaderBytes || !bytes){
+    if(byteCount < sizeof(EncodedEventHeader) || !bytes){
         result.status = DecodeStatus::TruncatedHeader;
         return result;
     }
@@ -161,4 +169,3 @@ NWB_TELEMETRY_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

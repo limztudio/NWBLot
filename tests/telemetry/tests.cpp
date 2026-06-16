@@ -116,7 +116,7 @@ static void TestEventCodecRoundTrip(TestContext& context){
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
     NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEvent(*source, encoded));
-    NWB_TELEMETRY_TEST_CHECK(context, encoded.size() == Telemetry::s_EncodedEventHeaderBytes + sizeof(payload));
+    NWB_TELEMETRY_TEST_CHECK(context, encoded.size() == sizeof(Telemetry::EncodedEventHeader) + sizeof(payload));
 
     Telemetry::EventRecord decoded(testArena.arena);
     const Telemetry::DecodeResult result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size(), decoded);
@@ -164,7 +164,7 @@ static void TestEventCodecRejectsInvalidInput(TestContext& context){
     Telemetry::DecodeResult result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size(), decoded);
     NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::InvalidHeader);
 
-    result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), Telemetry::s_EncodedEventHeaderBytes - 1u, decoded);
+    result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), sizeof(Telemetry::EncodedEventHeader) - 1u, decoded);
     NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::TruncatedHeader);
 }
 

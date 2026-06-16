@@ -7,6 +7,7 @@ target_sources(nwb_loader PRIVATE
 nwb_target_sources_standalone_runtime(nwb_loader)
 target_link_libraries(nwb_loader PUBLIC
     nwb_perf
+    nwb_telemetry
 )
 target_link_libraries(nwb_loader PRIVATE
     nwb_assets

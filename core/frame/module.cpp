@@ -67,6 +67,7 @@ Frame::Frame(void* inst, u16 width, u16 height)
     , m_graphicsJobSystem(m_graphicsThreadPool)
     , m_projectObjectArena("NWB::Core::Frame::ProjectObjectArena")
     , m_perfSession(m_projectObjectArena)
+    , m_telemetrySession(m_projectObjectArena)
     , m_projectThreadPool(queryProjectWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_projectJobSystem(m_projectThreadPool)
     , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem, m_perfSession.gpuTimingSink())
@@ -106,6 +107,11 @@ void Frame::setPerfCapture(const Perf::CaptureOptions& options){
     m_perfSession.setCaptureOptions(options);
     m_graphics.gpuTiming().setQueryCollectionEnabled(options.gpuTimingActive());
 }
+void Frame::setTelemetryCapture(const Telemetry::CaptureOptions& options){
+    m_telemetrySession.setCaptureOptions(options);
+    if(options.perfEnabled())
+        setPerfCapture(Perf::CaptureOptions::All());
+}
 bool Frame::flushPerfSamples(){
     auto* device = m_graphics.getDevice();
     if(!device)
@@ -116,7 +122,18 @@ bool Frame::flushPerfSamples(){
     return true;
 }
 bool Frame::update(f32 delta){
-    m_perfSession.beginFrame(m_graphics.getFrameIndex());
+    const u64 frameIndex = m_graphics.getFrameIndex();
+    m_perfSession.beginFrame(frameIndex);
+    m_telemetrySession.setFrameIndex(frameIndex);
+
+    if(m_telemetrySession.enabled()){
+        Telemetry::CaptureSessionCaptureScope telemetryScope(m_telemetrySession);
+        return updateFrame(delta);
+    }
+
+    return updateFrame(delta);
+}
+bool Frame::updateFrame(f32 delta){
     if(m_projectUpdateCallback){
         if(!m_projectUpdateCallback(m_projectUpdateUserData, delta)){
             NWB_LOGGER_ERROR(NWB_TEXT("Frame: project update callback returned false"));
@@ -135,6 +152,8 @@ bool Frame::update(f32 delta){
     m_perfSession.recordMemorySnapshot(m_graphicsObjectArenaMemoryScope, m_graphicsObjectArena);
     m_perfSession.recordMemorySnapshot(m_projectObjectArenaMemoryScope, m_projectObjectArena);
     m_perfSession.publishFrame();
+    if(m_telemetrySession.captureOptions().perfEnabled())
+        static_cast<void>(m_telemetrySession.recordPerfReport(m_perfSession.report()));
     return true;
 }
 bool Frame::render(){

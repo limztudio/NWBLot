@@ -33,4 +33,5 @@ target_link_libraries(nwb_frame PUBLIC
     nwb_graphics
     nwb_input
     nwb_perf
+    nwb_telemetry
 )

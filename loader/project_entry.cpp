@@ -33,6 +33,11 @@ Core::Perf::SessionReport ProjectRuntimeContext::perfReport()const{
     return perfReportReader ? perfReportReader() : Core::Perf::SessionReport{};
 }
 
+void ProjectRuntimeContext::setTelemetryCapture(const Core::Telemetry::CaptureOptions& options){
+    if(telemetryCapture)
+        telemetryCapture(options);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

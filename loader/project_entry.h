@@ -7,6 +7,7 @@
 
 #include <core/global.h>
 #include <core/perf/report.h>
+#include <core/telemetry/event.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,6 +62,7 @@ struct ProjectRuntimeContext{
     using PerfCaptureCallback = Function<void(const Core::Perf::CaptureOptions& options)>;
     using PerfSampleFlushCallback = Function<bool()>;
     using PerfReportCallback = Function<Core::Perf::SessionReport()>;
+    using TelemetryCaptureCallback = Function<void(const Core::Telemetry::CaptureOptions& options)>;
     using RequestQuitCallback = Function<void()>;
 
     Core::Graphics& graphics;
@@ -73,12 +75,14 @@ struct ProjectRuntimeContext{
     PerfCaptureCallback perfCapture;
     PerfSampleFlushCallback perfSampleFlush;
     PerfReportCallback perfReportReader;
+    TelemetryCaptureCallback telemetryCapture;
     RequestQuitCallback requestQuit;
 
     void setPerfCapture(const Core::Perf::CaptureOptions& options);
     void setGpuTimingEnabled(bool enabled);
     [[nodiscard]] bool flushPerfSamples();
     [[nodiscard]] Core::Perf::SessionReport perfReport()const;
+    void setTelemetryCapture(const Core::Telemetry::CaptureOptions& options);
 };
 
 

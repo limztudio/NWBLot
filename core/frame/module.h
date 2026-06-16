@@ -11,6 +11,7 @@
 #include <core/input/module.h>
 #include <core/graphics/module.h>
 #include <core/perf/session.h>
+#include <core/telemetry/session.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,6 +86,9 @@ public:
     [[nodiscard]] Perf::SessionReport perfReport()const;
     void setPerfCapture(const Perf::CaptureOptions& options);
     [[nodiscard]] bool flushPerfSamples();
+    [[nodiscard]] inline Telemetry::CaptureSession& telemetrySession(){ return m_telemetrySession; }
+    [[nodiscard]] inline const Telemetry::CaptureSession& telemetrySession()const{ return m_telemetrySession; }
+    void setTelemetryCapture(const Telemetry::CaptureOptions& options);
 
     [[nodiscard]] inline FrameString& appliedWindowTitle(){ return m_appliedWindowTitle; }
     [[nodiscard]] inline const FrameString& appliedWindowTitle()const{ return m_appliedWindowTitle; }
@@ -97,6 +101,7 @@ public:
 private:
     void setupPlatform(void* inst);
     void cleanupPlatform();
+    bool updateFrame(f32 delta);
 
 
 private:
@@ -111,6 +116,7 @@ private:
 
     Alloc::GlobalArena m_projectObjectArena;
     Perf::Session m_perfSession;
+    Telemetry::CaptureSession m_telemetrySession;
     Perf::MemoryScopeId m_graphicsObjectArenaMemoryScope;
     Perf::MemoryScopeId m_projectObjectArenaMemoryScope;
     Alloc::ThreadPool m_projectThreadPool;

@@ -9,6 +9,8 @@
 
 #include <global/filesystem/operations.h>
 
+#include <thread>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -904,6 +906,34 @@ static void TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(TestContext
     NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 0u);
 }
 
+static void TestRecorderAcceptsConcurrentRecords(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    constexpr u32 threadCount = 4u;
+    constexpr u32 eventsPerThread = 64u;
+    std::thread threads[threadCount];
+    for(u32 threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
+        threads[threadIndex] = std::thread([&recorder, threadIndex](){
+            for(u32 eventIndex = 0u; eventIndex < eventsPerThread; ++eventIndex){
+                static_cast<void>(Telemetry::RecordTextLog(
+                    recorder,
+                    NWB::Core::Common::LogType::Info,
+                    NWB_TEXT("concurrent telemetry record"),
+                    eventIndex,
+                    threadIndex
+                ));
+            }
+        });
+    }
+
+    for(std::thread& thread : threads)
+        thread.join();
+
+    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == threadCount * eventsPerThread);
+}
+
 static void BuildTestFrameGraph(
     Telemetry::TelemetryArena& arena,
     Telemetry::FrameGraphNodeDescs& nodes,
@@ -1531,6 +1561,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestCaptureFlags(context);
     __hidden_tests::TestRecorderFiltersAndCopiesPayload(context);
     __hidden_tests::TestRecorderClearAndDisabledState(context);
+    __hidden_tests::TestRecorderAcceptsConcurrentRecords(context);
     __hidden_tests::TestEventCodecRoundTrip(context);
     __hidden_tests::TestEventCodecRejectsInvalidInput(context);
     __hidden_tests::TestEventCodecReportsTruncatedPayload(context);

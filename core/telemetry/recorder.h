@@ -8,6 +8,7 @@
 #include "event.h"
 
 #include <core/alloc/module.h>
+#include <global/sync.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,6 +49,8 @@ public:
 
 public:
     [[nodiscard]] bool valid()const{ return m_recorder != nullptr; }
+    // Views are intended for quiescent export/readback points. Individual reads are serialized,
+    // but callers should not clear the recorder while iterating a view.
     [[nodiscard]] usize eventCount()const;
     [[nodiscard]] const EventRecord* eventAt(usize index)const;
 
@@ -80,10 +83,10 @@ public:
     void clear();
     [[nodiscard]] TelemetryArena& arena(){ return m_arena; }
     [[nodiscard]] const TelemetryArena& arena()const{ return m_arena; }
-    [[nodiscard]] CaptureOptions captureOptions()const{ return m_capture; }
-    [[nodiscard]] bool enabled()const{ return m_capture.enabled(); }
-    [[nodiscard]] bool enabled(EventKind::Enum kind)const{ return CaptureAllowsEventKind(m_capture, kind); }
-    [[nodiscard]] usize eventCount()const{ return m_events.size(); }
+    [[nodiscard]] CaptureOptions captureOptions()const;
+    [[nodiscard]] bool enabled()const;
+    [[nodiscard]] bool enabled(EventKind::Enum kind)const;
+    [[nodiscard]] usize eventCount()const;
     [[nodiscard]] EventView view()const{ return EventView(*this); }
 
     [[nodiscard]] bool record(
@@ -105,6 +108,9 @@ public:
 
 
 private:
+    [[nodiscard]] bool enabledUnlocked()const{ return m_capture.enabled(); }
+    [[nodiscard]] bool enabledUnlocked(EventKind::Enum kind)const{ return CaptureAllowsEventKind(m_capture, kind); }
+    [[nodiscard]] bool appendUnlocked(const EventHeader& header, const void* payload, usize payloadBytes);
     [[nodiscard]] const EventRecord* eventAt(usize index)const;
 
 
@@ -112,6 +118,7 @@ private:
     TelemetryArena& m_arena;
     EventVector m_events;
     CaptureOptions m_capture;
+    mutable Futex m_mutex;
 };
 
 

@@ -46,13 +46,35 @@ const EventRecord* EventView::eventAt(const usize index)const{
 
 
 void Recorder::setCaptureOptions(const CaptureOptions& options){
+    ScopedLock lock(m_mutex);
     m_capture = options;
     if(!m_capture.enabled())
-        clear();
+        m_events.clear();
 }
 
 void Recorder::clear(){
+    ScopedLock lock(m_mutex);
     m_events.clear();
+}
+
+CaptureOptions Recorder::captureOptions()const{
+    ScopedLock lock(m_mutex);
+    return m_capture;
+}
+
+bool Recorder::enabled()const{
+    ScopedLock lock(m_mutex);
+    return enabledUnlocked();
+}
+
+bool Recorder::enabled(const EventKind::Enum kind)const{
+    ScopedLock lock(m_mutex);
+    return enabledUnlocked(kind);
+}
+
+usize Recorder::eventCount()const{
+    ScopedLock lock(m_mutex);
+    return m_events.size();
 }
 
 bool Recorder::record(
@@ -63,7 +85,8 @@ bool Recorder::record(
     const usize payloadBytes,
     const u32 streamId
 ){
-    if(!enabled(kind))
+    ScopedLock lock(m_mutex);
+    if(!enabledUnlocked(kind))
         return false;
 
     EventHeader header;
@@ -74,10 +97,15 @@ bool Recorder::record(
     header.timestampNanoseconds = __hidden_telemetry_recorder::TimestampNanoseconds();
     header.payloadBytes = payloadBytes;
 
-    return append(header, payload, payloadBytes);
+    return appendUnlocked(header, payload, payloadBytes);
 }
 
 bool Recorder::append(const EventHeader& header, const void* payload, const usize payloadBytes){
+    ScopedLock lock(m_mutex);
+    return appendUnlocked(header, payload, payloadBytes);
+}
+
+bool Recorder::appendUnlocked(const EventHeader& header, const void* payload, const usize payloadBytes){
     if(!header.valid())
         return false;
     if(header.payloadBytes != payloadBytes)
@@ -111,6 +139,7 @@ bool Recorder::recordBinary(
 }
 
 const EventRecord* Recorder::eventAt(const usize index)const{
+    ScopedLock lock(m_mutex);
     if(index >= m_events.size())
         return nullptr;
 

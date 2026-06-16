@@ -6,6 +6,7 @@
 #include <tests/capturing_logger.h>
 
 #include <core/telemetry/module.h>
+#include <logger/telemetry/report.h>
 
 #include <global/filesystem/operations.h>
 
@@ -24,6 +25,7 @@ namespace __hidden_tests{
 using TestContext = NWB::Tests::TestContext;
 using TestArena = NWB::Tests::TestArena<struct TelemetryTestsTag>;
 namespace Telemetry = NWB::Core::Telemetry;
+namespace Log = NWB::Log;
 
 
 #define NWB_TELEMETRY_TEST_CHECK NWB_TEST_CHECK
@@ -1521,8 +1523,8 @@ static void TestArchiveReportSummarizesBenchmarkEvents(TestContext& context){
     BuildTestFrameGraph(testArena.arena, nodes, edges);
     NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 4u));
 
-    Telemetry::ArchiveReport report(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::BuildArchiveReport(testArena.arena, recorder.view(), report));
+    Log::ArchiveReport report(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Log::BuildArchiveReport(testArena.arena, recorder.view(), report));
 
     NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventCount == 4u);
     NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::TextLog)] == 1u);

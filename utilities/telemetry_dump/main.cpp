@@ -5,6 +5,7 @@
 #include <core/common/application_entry.h>
 #include <core/common/module.h>
 #include <core/telemetry/module.h>
+#include <logger/telemetry/report.h>
 
 #include <global/filesystem/operations.h>
 
@@ -109,7 +110,7 @@ void PrintUsage(){
     return true;
 }
 
-void PrintSummary(const Telemetry::ArchiveReportSummary& summary){
+void PrintSummary(const NWB::Log::ArchiveReportSummary& summary){
     NWB_COUT << "telemetry archive\n";
     NWB_COUT << "  events: " << summary.eventCount << "\n";
     if(summary.hasFrameRange)
@@ -161,8 +162,8 @@ int Run(const int argc, char** argv){
         return -1;
     }
 
-    Telemetry::ArchiveReport report(arena);
-    if(!Telemetry::BuildArchiveReport(arena, recorder.view(), report)){
+    NWB::Log::ArchiveReport report(arena);
+    if(!NWB::Log::BuildArchiveReport(arena, recorder.view(), report)){
         NWB_CERR << "Failed to build telemetry report.\n";
         return -1;
     }

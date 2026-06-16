@@ -4,6 +4,7 @@ target_sources(nwb_telemetry_tests PRIVATE
 )
 target_link_libraries(nwb_telemetry_tests PRIVATE
     nwb_telemetry
+    nwb_logtelemetry
     nwb_common
     nwb_alloc
 )

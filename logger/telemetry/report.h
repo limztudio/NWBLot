@@ -5,22 +5,30 @@
 #pragma once
 
 
-#include "diagnostic.h"
-#include "frame_graph.h"
-#include "perf.h"
-#include "text_log.h"
+#include <logger/global.h>
+
+#include <core/telemetry/diagnostic.h>
+#include <core/telemetry/frame_graph.h>
+#include <core/telemetry/perf.h>
+#include <core/telemetry/text_log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_TELEMETRY_BEGIN
+NWB_LOG_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_ArchiveReportEventKindCount = static_cast<usize>(EventKind::MemoryFrame) + 1u;
+namespace Telemetry = Core::Telemetry;
+using TelemetryArena = Telemetry::TelemetryArena;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr usize s_ArchiveReportEventKindCount = static_cast<usize>(Telemetry::EventKind::MemoryFrame) + 1u;
 
 struct ArchiveReportSummary{
     u64 eventCount = 0u;
@@ -68,15 +76,15 @@ struct ArchiveReport{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] const char* EventKindText(EventKind::Enum kind)noexcept;
-[[nodiscard]] const char* PerfTimingSourceText(PerfTimingSource::Enum source)noexcept;
-[[nodiscard]] bool BuildArchiveReport(TelemetryArena& arena, const EventView& events, ArchiveReport& outReport);
+[[nodiscard]] const char* EventKindText(Telemetry::EventKind::Enum kind)noexcept;
+[[nodiscard]] const char* PerfTimingSourceText(Telemetry::PerfTimingSource::Enum source)noexcept;
+[[nodiscard]] bool BuildArchiveReport(TelemetryArena& arena, const Telemetry::EventView& events, ArchiveReport& outReport);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_TELEMETRY_END
+NWB_LOG_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

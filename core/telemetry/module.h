@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "archive.h"
 #include "codec.h"
 #include "diagnostic.h"
 #include "event.h"

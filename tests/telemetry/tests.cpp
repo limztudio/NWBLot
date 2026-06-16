@@ -7,6 +7,8 @@
 
 #include <core/telemetry/module.h>
 
+#include <global/filesystem/operations.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -292,6 +294,64 @@ static void TestEventStreamCodecRejectsInvalidInput(TestContext& context){
     NWB_MEMCPY(corrupted.data(), corrupted.size(), &streamHeader, sizeof(streamHeader));
     result = Telemetry::DecodeEventStream(testArena.arena, corrupted.data(), corrupted.size(), decoded);
     NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::InvalidHeader);
+}
+
+static ::Path<NWB::Core::Alloc::GlobalArena> TelemetryTestStorageDirectory(NWB::Core::Alloc::GlobalArena& arena){
+    ::Path<NWB::Core::Alloc::GlobalArena> executableDirectory(arena);
+    if(GetExecutableDirectory(executableDirectory))
+        return executableDirectory / "telemetry_test_storage";
+
+    return ::Path<NWB::Core::Alloc::GlobalArena>(arena, "telemetry_test_storage");
+}
+
+static void TestEventStreamArchiveRoundTrip(TestContext& context){
+    TestArena testArena;
+    const ::Path<NWB::Core::Alloc::GlobalArena> storageDirectory = TelemetryTestStorageDirectory(testArena.arena);
+    const ::Path<NWB::Core::Alloc::GlobalArena> archivePath = storageDirectory / "stream.nwbs";
+
+    ErrorCode error;
+    static_cast<void>(RemoveAllIfExists(storageDirectory, error));
+    error.clear();
+    static_cast<void>(EnsureDirectories(storageDirectory, error));
+    NWB_TELEMETRY_TEST_CHECK(context, !error);
+
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordTextLog(
+        recorder,
+        NWB::Core::Common::LogType::Info,
+        NWB_TEXT("archive text"),
+        404u,
+        19u
+    ));
+
+    const Telemetry::ArchiveResult writeResult = Telemetry::WriteEventStreamArchive(testArena.arena, recorder.view(), archivePath);
+    NWB_TELEMETRY_TEST_CHECK(context, writeResult.ok());
+    NWB_TELEMETRY_TEST_CHECK(context, writeResult.byteCount == sizeof(Telemetry::EncodedStreamHeader) + sizeof(Telemetry::EncodedEventHeader) + recorder.view().eventAt(0u)->payload.size());
+    NWB_TELEMETRY_TEST_CHECK(context, FileExists(archivePath, error));
+    NWB_TELEMETRY_TEST_CHECK(context, !error);
+
+    Telemetry::Recorder decoded(testArena.arena);
+    const Telemetry::ArchiveResult readResult = Telemetry::ReadEventStreamArchive(testArena.arena, archivePath, decoded);
+    NWB_TELEMETRY_TEST_CHECK(context, readResult.ok());
+    NWB_TELEMETRY_TEST_CHECK(context, readResult.status == Telemetry::ArchiveStatus::Ok);
+    NWB_TELEMETRY_TEST_CHECK(context, readResult.decode.ok());
+    NWB_TELEMETRY_TEST_CHECK(context, readResult.byteCount == writeResult.byteCount);
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.eventCount() == 1u);
+
+    const Telemetry::EventRecord* event = decoded.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(event){
+        NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);
+        NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 404u);
+        NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 19u);
+
+        Telemetry::TextLogPayload parsed(testArena.arena);
+        NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "archive text");
+    }
+
+    static_cast<void>(RemoveAllIfExists(storageDirectory, error));
 }
 
 static void TestTextLogPayloadRoundTrip(TestContext& context){
@@ -1061,6 +1121,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestEventStreamCodecRoundTrip(context);
     __hidden_tests::TestEventStreamCodecHandlesEmptyStreams(context);
     __hidden_tests::TestEventStreamCodecRejectsInvalidInput(context);
+    __hidden_tests::TestEventStreamArchiveRoundTrip(context);
     __hidden_tests::TestTextLogPayloadRoundTrip(context);
     __hidden_tests::TestRecordTextLogUsesTelemetryEvent(context);
     __hidden_tests::TestTextLogCaptureLoggerForwardsAndRecords(context);

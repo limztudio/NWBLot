@@ -24,6 +24,12 @@ namespace Telemetry = NWB::Core::Telemetry;
 
 #define NWB_TELEMETRY_TEST_CHECK NWB_TEST_CHECK
 
+static u32 s_ExistingDiagnosticCallbackCount = 0u;
+
+static void ExistingDiagnosticCallback(const DiagnosticEventRecord&)noexcept{
+    ++s_ExistingDiagnosticCallbackCount;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -368,6 +374,177 @@ static void TestTextLogCaptureLoggerForwardsAndRecords(TestContext& context){
     NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "bridged warning");
 }
 
+static void TestDiagnosticPayloadRoundTrip(TestContext& context){
+    TestArena testArena;
+    Telemetry::TelemetryBytes payload(testArena.arena);
+
+    const DiagnosticEventRecord source{
+        .event = DiagnosticEventName::s_Error,
+        .category = "unit_category",
+        .expression = "value != nullptr",
+        .message = "diagnostic message",
+        .file = "diagnostic_test.cpp",
+        .instructionPointer = 0x1234u,
+        .line = 77u,
+        .terminatesProcess = true,
+    };
+
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::BuildDiagnosticPayload(testArena.arena, source, payload));
+    NWB_TELEMETRY_TEST_CHECK(context, payload.size() > sizeof(Telemetry::EncodedDiagnosticPayloadHeader));
+
+    Telemetry::DiagnosticPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.event == DiagnosticEventName::s_Error);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.category == "unit_category");
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.expression == "value != nullptr");
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.message == "diagnostic message");
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.file == "diagnostic_test.cpp");
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.instructionPointer == 0x1234u);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.line == 77u);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.terminatesProcess);
+
+    payload[0u] = 0u;
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed));
+}
+
+static void TestRecordDiagnosticUsesTelemetryEvent(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    const DiagnosticEventRecord source{
+        .event = DiagnosticEventName::s_Assert,
+        .category = DiagnosticEventCategory::s_Assert,
+        .expression = "condition",
+        .message = "assert payload",
+        .file = "assert.cpp",
+        .instructionPointer = 42u,
+        .line = 12u,
+    };
+
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordDiagnostic(recorder, source, 222u, 6u));
+
+    const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(!event)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::Diagnostic);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.payloadFormat == Telemetry::PayloadFormat::Binary);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 222u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 6u);
+
+    Telemetry::DiagnosticPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.event == DiagnosticEventName::s_Assert);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.category == DiagnosticEventCategory::s_Assert);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.message == "assert payload");
+}
+
+static void TestDiagnosticCaptureGuardRecordsGlobalDiagnostic(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    {
+        Telemetry::DiagnosticCaptureGuard guard(recorder);
+        NWB_TELEMETRY_TEST_CHECK(context, guard.installed());
+        guard.setFrameIndex(333u);
+        guard.setStreamId(8u);
+        CaptureDiagnosticEvent(DiagnosticEventRecord{
+            .event = DiagnosticEventName::s_Error,
+            .category = "telemetry_guard",
+            .message = "captured diagnostic",
+            .file = "guard.cpp",
+            .line = 44u,
+        });
+    }
+
+    CaptureDiagnosticEvent(DiagnosticEventRecord{
+        .event = DiagnosticEventName::s_Error,
+        .category = "telemetry_guard",
+        .message = "ignored after guard",
+    });
+
+    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 1u);
+
+    const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(!event)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::Diagnostic);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 333u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 8u);
+
+    Telemetry::DiagnosticPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.event == DiagnosticEventName::s_Error);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.category == "telemetry_guard");
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.message == "captured diagnostic");
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.file == "guard.cpp");
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.line == 44u);
+}
+
+static void TestDiagnosticCaptureGuardManualCaptureReturnsStatus(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder disabledRecorder(testArena.arena);
+    Telemetry::DiagnosticCaptureGuard disabledGuard(disabledRecorder);
+    NWB_TELEMETRY_TEST_CHECK(context, !disabledGuard.capture(DiagnosticEventRecord{
+        .event = DiagnosticEventName::s_Error,
+        .message = "disabled diagnostic",
+    }));
+
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    Telemetry::DiagnosticCaptureGuard guard(recorder);
+    guard.setFrameIndex(444u);
+    guard.setStreamId(5u);
+
+    NWB_TELEMETRY_TEST_CHECK(context, guard.capture(DiagnosticEventRecord{
+        .event = DiagnosticEventName::s_Error,
+        .category = "manual_capture",
+        .message = "manual diagnostic",
+        .file = "manual.cpp",
+        .line = 55u,
+    }));
+    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 1u);
+
+    const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(!event)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 444u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 5u);
+
+    Telemetry::DiagnosticPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.category == "manual_capture");
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.message == "manual diagnostic");
+}
+
+static void TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    s_ExistingDiagnosticCallbackCount = 0u;
+    SetDiagnosticEventCallback(ExistingDiagnosticCallback);
+    {
+        Telemetry::DiagnosticCaptureGuard guard(recorder);
+        NWB_TELEMETRY_TEST_CHECK(context, !guard.installed());
+        CaptureDiagnosticEvent(DiagnosticEventRecord{
+            .event = DiagnosticEventName::s_Error,
+            .message = "existing callback should keep ownership",
+        });
+    }
+    ClearDiagnosticEventCallback(ExistingDiagnosticCallback);
+
+    NWB_TELEMETRY_TEST_CHECK(context, s_ExistingDiagnosticCallbackCount == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 0u);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -391,6 +568,11 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestTextLogPayloadRoundTrip(context);
     __hidden_tests::TestRecordTextLogUsesTelemetryEvent(context);
     __hidden_tests::TestTextLogCaptureLoggerForwardsAndRecords(context);
+    __hidden_tests::TestDiagnosticPayloadRoundTrip(context);
+    __hidden_tests::TestRecordDiagnosticUsesTelemetryEvent(context);
+    __hidden_tests::TestDiagnosticCaptureGuardRecordsGlobalDiagnostic(context);
+    __hidden_tests::TestDiagnosticCaptureGuardManualCaptureReturnsStatus(context);
+    __hidden_tests::TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(context);
 })
 
 

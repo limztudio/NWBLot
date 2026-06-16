@@ -6,6 +6,7 @@
 
 
 #include "codec.h"
+#include "diagnostic.h"
 #include "event.h"
 #include "recorder.h"
 #include "text_log.h"

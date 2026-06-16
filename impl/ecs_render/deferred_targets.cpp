@@ -96,24 +96,17 @@ static void ClearCsgIntervalTargets(
     const CsgIntervalSubresources& subresources,
     const Core::Rect& csgClearRect
 ){
-    const Core::Color clearColor(0.f, 0.f, 0.f, 0.f);
-    commandList.clearTextureRectFloat(targets.csgCapBackNormal.get(), subresources.peel, csgClearRect, clearColor);
-    commandList.clearTextureRectFloat(targets.csgIntervalDepth.get(), subresources.peel, csgClearRect, clearColor);
-    commandList.clearTextureRectFloat(targets.csgIntervalLinearDepth.get(), subresources.peel, csgClearRect, clearColor);
+    // The CSG interval targets are per-pixel append buffers. Every consumer bounds its reads by a
+    // per-pixel counter (receiver-event / span / removed-interval counts) or by the cutter-interval
+    // id, and the span/removed-interval counts and flags are rewritten for every work-region pixel by
+    // their producing compute pass. Only state that accumulates across a frame needs resetting:
+    //  - receiver event count/flags are atomically incremented/or-ed from zero by the surface pass,
+    //  - interval id is written sparsely by the peel pass (unwritten layers must read back as empty).
+    // The bulk depth/normal/data layers and the span/removed counters are written before they are
+    // read, so clearing them is wasted bandwidth (this clear dominated the CSG frame cost).
     commandList.clearTextureRectUInt(targets.csgIntervalId.get(), subresources.peel, csgClearRect, 0u);
-    commandList.clearTextureRectFloat(targets.csgReceiverEventDepth.get(), subresources.receiverEvent, csgClearRect, clearColor);
-    commandList.clearTextureRectUInt(targets.csgReceiverEventData.get(), subresources.receiverEvent, csgClearRect, 0u);
     commandList.clearTextureRectUInt(targets.csgReceiverEventCount.get(), subresources.receiverEventCounter, csgClearRect, 0u);
     commandList.clearTextureRectUInt(targets.csgReceiverEventFlags.get(), subresources.receiverEventCounter, csgClearRect, 0u);
-    commandList.clearTextureRectFloat(targets.csgReceiverSpanDepth.get(), subresources.receiverSpan, csgClearRect, clearColor);
-    commandList.clearTextureRectUInt(targets.csgReceiverSpanData.get(), subresources.receiverSpan, csgClearRect, 0u);
-    commandList.clearTextureRectUInt(targets.csgReceiverSpanCount.get(), subresources.receiverSpanCounter, csgClearRect, 0u);
-    commandList.clearTextureRectUInt(targets.csgReceiverSpanFlags.get(), subresources.receiverSpanCounter, csgClearRect, 0u);
-    commandList.clearTextureRectFloat(targets.csgRemovedIntervalDepth.get(), subresources.removedInterval, csgClearRect, clearColor);
-    commandList.clearTextureRectFloat(targets.csgRemovedIntervalCapNormal.get(), subresources.removedInterval, csgClearRect, clearColor);
-    commandList.clearTextureRectUInt(targets.csgRemovedIntervalData.get(), subresources.removedInterval, csgClearRect, 0u);
-    commandList.clearTextureRectUInt(targets.csgRemovedIntervalCount.get(), subresources.removedIntervalCounter, csgClearRect, 0u);
-    commandList.clearTextureRectUInt(targets.csgRemovedIntervalFlags.get(), subresources.removedIntervalCounter, csgClearRect, 0u);
 }
 
 
@@ -560,8 +553,11 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     commandList.clearTextureFloat(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.5f, 0.5f, 1.f, 1.f));
     commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
 
-    if(clearCsgTargets)
+    if(clearCsgTargets){
+        Core::GpuTimingMeasure csgClearTiming(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, graphics().getDevice(), commandList);
+
         __hidden_deferred_targets::ClearCsgIntervalTargets(commandList, targets, csgSubresources, csgClearRect);
+    }
 
     commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
 

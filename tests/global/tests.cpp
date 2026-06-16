@@ -197,7 +197,7 @@ static void TestFilesystemMovePathToDirectory(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, WriteTextFile(source, AStringView("fresh")));
     NWB_GLOBAL_TEST_CHECK(context, EnsureDirectories(destinationDirectory, error));
     NWB_GLOBAL_TEST_CHECK(context, !error);
-    NWB_GLOBAL_TEST_CHECK(context, WriteTextFile(destination, AStringView("stale")));
+    NWB_GLOBAL_TEST_CHECK(context, WriteTextFile(destination, AStringView("old")));
 
     Path<NWB::Core::Alloc::GlobalArena> movedPath(testArena.arena);
     NWB_GLOBAL_TEST_CHECK(context, MovePathToDirectory(source, destinationDirectory, movedPath));

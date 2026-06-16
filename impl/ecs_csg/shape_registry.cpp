@@ -329,7 +329,7 @@ bool CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, CsgShapeT
         const CsgShapeTypeId existingId = found.value();
         const usize existingIndex = static_cast<usize>(existingId - 1u);
         if(!__hidden_shape_registry::ValidShapeTypeId(existingId) || existingIndex >= m_shapeTypes.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: shape type '{}' has a stale registry index"), StringConvert(desc.name.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: shape type '{}' has an outdated registry index"), StringConvert(desc.name.c_str()));
             return false;
         }
     }

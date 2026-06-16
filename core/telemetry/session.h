@@ -7,6 +7,7 @@
 
 #include "archive.h"
 #include "diagnostic.h"
+#include "frame_graph.h"
 #include "perf.h"
 #include "recorder.h"
 #include "text_log.h"
@@ -59,6 +60,9 @@ public:
     [[nodiscard]] bool recordDiagnostic(const DiagnosticEventRecord& record){
         return RecordDiagnostic(m_recorder, record, m_frameIndex, m_streamId);
     }
+    [[nodiscard]] bool recordFrameGraph(const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges){
+        return RecordFrameGraph(m_recorder, m_frameIndex, nodes, edges, m_streamId);
+    }
     [[nodiscard]] PerfSessionRecordResult recordPerfReport(const Perf::SessionReport& report, const u32 streamId = 0u){
         return RecordPerfSessionReport(m_recorder, report, streamId);
     }
@@ -83,8 +87,58 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_TELEMETRY_END
+class CaptureSessionForwardLoggerGuard final : NoCopy{
+public:
+    CaptureSessionForwardLoggerGuard(CaptureSession& session, Common::ILogger* const forwardLogger)
+        : m_session(session)
+        , m_previousForwardLogger(session.textLogCaptureLogger().forwardLogger())
+    {
+        m_session.setForwardLogger(forwardLogger);
+    }
+    CaptureSessionForwardLoggerGuard(CaptureSessionForwardLoggerGuard&&) = delete;
+    ~CaptureSessionForwardLoggerGuard(){
+        m_session.setForwardLogger(m_previousForwardLogger);
+    }
+
+
+private:
+    CaptureSession& m_session;
+    Common::ILogger* m_previousForwardLogger = nullptr;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+class CaptureSessionLogRegistrationGuard final : NoCopy{
+public:
+    explicit CaptureSessionLogRegistrationGuard(CaptureSession& session)
+        : CaptureSessionLogRegistrationGuard(session, DefaultForwardLogger(session))
+    {}
+    CaptureSessionLogRegistrationGuard(CaptureSession& session, Common::ILogger* const forwardLogger)
+        : m_forwardLogger(session, forwardLogger)
+        , m_registration(session.textLogCaptureLogger())
+    {}
+    CaptureSessionLogRegistrationGuard(CaptureSessionLogRegistrationGuard&&) = delete;
+
+
+private:
+    [[nodiscard]] static Common::ILogger* DefaultForwardLogger(CaptureSession& session){
+        Common::ILogger* const logger = Common::CurrentLogger();
+        return logger == &session.textLogCaptureLogger() ? session.textLogCaptureLogger().forwardLogger() : logger;
+    }
+
+
+private:
+    CaptureSessionForwardLoggerGuard m_forwardLogger;
+    Common::LoggerRegistrationGuard m_registration;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_TELEMETRY_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

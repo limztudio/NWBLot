@@ -461,6 +461,57 @@ static void TestCaptureSessionTextLoggerForwardsAndRecords(TestContext& context)
     NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "session bridged");
 }
 
+static void TestCaptureSessionLogRegistrationGuardForwardsAndRestores(TestContext& context){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::All());
+    session.setFrameIndex(609u);
+    session.setStreamId(27u);
+
+    NWB::Tests::CapturingLogger previousLogger;
+    {
+        NWB::Core::Common::LoggerRegistrationGuard previousRegistration(previousLogger);
+        NWB_TELEMETRY_TEST_CHECK(context, NWB::Core::Common::CurrentLogger() == &previousLogger);
+
+        {
+            Telemetry::CaptureSessionLogRegistrationGuard sessionRegistration(session);
+            NWB::Core::Common::ILogger* const logger = NWB::Core::Common::CurrentLogger();
+            NWB_TELEMETRY_TEST_CHECK(context, logger == &session.textLogCaptureLogger());
+            {
+                Telemetry::CaptureSessionLogRegistrationGuard nestedRegistration(session);
+                NWB_TELEMETRY_TEST_CHECK(context, session.textLogCaptureLogger().forwardLogger() == &previousLogger);
+            }
+            NWB_TELEMETRY_TEST_CHECK(context, NWB::Core::Common::CurrentLogger() == &session.textLogCaptureLogger());
+            if(logger)
+                logger->enqueue(NWB::Core::Common::LogString(NWB_TEXT("session registered"), logger->arena()), NWB::Core::Common::LogType::CriticalWarning);
+        }
+
+        NWB_TELEMETRY_TEST_CHECK(context, NWB::Core::Common::CurrentLogger() == &previousLogger);
+        NWB::Core::Common::ILogger* const logger = NWB::Core::Common::CurrentLogger();
+        if(logger)
+            logger->enqueue(NWB::Core::Common::LogString(NWB_TEXT("after session guard"), logger->arena()), NWB::Core::Common::LogType::Info);
+    }
+
+    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.messageCount() == 2u);
+    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.sawMessageContaining(NWB_TEXT("session registered")));
+    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.sawMessageContaining(NWB_TEXT("after session guard")));
+    NWB_TELEMETRY_TEST_CHECK(context, session.eventCount() == 1u);
+
+    const Telemetry::EventRecord* event = session.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(!event)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 609u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 27u);
+
+    Telemetry::TextLogPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::CriticalWarning);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "session registered");
+}
+
 static void TestCaptureSessionRecordsDiagnosticWithContext(TestContext& context){
     TestArena testArena;
     Telemetry::CaptureSession session(testArena.arena);
@@ -877,6 +928,36 @@ static void TestRecordFrameGraphUsesTelemetryEvent(TestContext& context){
     Telemetry::FrameGraphPayload parsed(testArena.arena);
     NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     NWB_TELEMETRY_TEST_CHECK(context, parsed.frameIndex == 909u);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes.size() == 3u);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.edges.size() == 2u);
+}
+
+static void TestCaptureSessionRecordsFrameGraphWithContext(TestContext& context){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::All());
+    session.setFrameIndex(910u);
+    session.setStreamId(15u);
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+
+    NWB_TELEMETRY_TEST_CHECK(context, session.recordFrameGraph(nodes, edges));
+
+    const Telemetry::EventRecord* event = session.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(!event)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::FrameGraphFrame);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.payloadFormat == Telemetry::PayloadFormat::Binary);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 910u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 15u);
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.frameIndex == 910u);
     NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes.size() == 3u);
     NWB_TELEMETRY_TEST_CHECK(context, parsed.edges.size() == 2u);
 }
@@ -1298,6 +1379,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestCaptureSessionFlushArchiveClearsOnSuccess(context);
     __hidden_tests::TestCaptureSessionRecordsTextLogWithContext(context);
     __hidden_tests::TestCaptureSessionTextLoggerForwardsAndRecords(context);
+    __hidden_tests::TestCaptureSessionLogRegistrationGuardForwardsAndRestores(context);
     __hidden_tests::TestCaptureSessionRecordsDiagnosticWithContext(context);
     __hidden_tests::TestTextLogPayloadRoundTrip(context);
     __hidden_tests::TestRecordTextLogUsesTelemetryEvent(context);
@@ -1310,6 +1392,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestFrameGraphPayloadRoundTrip(context);
     __hidden_tests::TestFrameGraphPayloadRejectsInvalidInput(context);
     __hidden_tests::TestRecordFrameGraphUsesTelemetryEvent(context);
+    __hidden_tests::TestCaptureSessionRecordsFrameGraphWithContext(context);
     __hidden_tests::TestPerfTimingPayloadRoundTrip(context);
     __hidden_tests::TestPerfTimingPayloadRejectsInvalidInput(context);
     __hidden_tests::TestRecordPerfTimingUsesTelemetryEvent(context);

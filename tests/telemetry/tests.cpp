@@ -184,6 +184,107 @@ static void TestEventCodecReportsTruncatedPayload(TestContext& context){
     NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::TruncatedPayload);
 }
 
+static void TestEventStreamCodecRoundTrip(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    const u32 perfPayload = 99u;
+    const char frameGraphPayload[] = "{frame:1}";
+    NWB_TELEMETRY_TEST_CHECK(context, recorder.recordBinary(Telemetry::EventKind::PerfFrame, 101u, &perfPayload, sizeof(perfPayload), 2u));
+    NWB_TELEMETRY_TEST_CHECK(context, recorder.record(
+        Telemetry::EventKind::FrameGraphFrame,
+        Telemetry::PayloadFormat::Json,
+        102u,
+        frameGraphPayload,
+        sizeof(frameGraphPayload) - 1u,
+        3u
+    ));
+
+    Telemetry::TelemetryBytes encoded(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEventStream(recorder.view(), encoded));
+    NWB_TELEMETRY_TEST_CHECK(
+        context,
+        encoded.size() == sizeof(Telemetry::EncodedStreamHeader)
+            + (sizeof(Telemetry::EncodedEventHeader) * 2u)
+            + sizeof(perfPayload)
+            + sizeof(frameGraphPayload) - 1u
+    );
+
+    Telemetry::Recorder decoded(testArena.arena);
+    const Telemetry::DecodeResult result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded);
+    NWB_TELEMETRY_TEST_CHECK(context, result.ok());
+    NWB_TELEMETRY_TEST_CHECK(context, result.bytesRead == encoded.size());
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.eventCount() == recorder.eventCount());
+
+    for(usize i = 0u; i < recorder.eventCount(); ++i){
+        const Telemetry::EventRecord* source = recorder.view().eventAt(i);
+        const Telemetry::EventRecord* parsed = decoded.view().eventAt(i);
+        NWB_TELEMETRY_TEST_CHECK(context, source != nullptr);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed != nullptr);
+        if(!source || !parsed)
+            continue;
+
+        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.kind == source->header.kind);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.payloadFormat == source->header.payloadFormat);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.streamId == source->header.streamId);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.frameIndex == source->header.frameIndex);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.timestampNanoseconds == source->header.timestampNanoseconds);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.payloadBytes == source->header.payloadBytes);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed->payload.size() == source->payload.size());
+        if(!source->payload.empty())
+            NWB_TELEMETRY_TEST_CHECK(context, NWB_MEMCMP(parsed->payload.data(), source->payload.data(), source->payload.size()) == 0);
+    }
+}
+
+static void TestEventStreamCodecHandlesEmptyStreams(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+
+    Telemetry::TelemetryBytes encoded(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEventStream(recorder.view(), encoded));
+    NWB_TELEMETRY_TEST_CHECK(context, encoded.size() == sizeof(Telemetry::EncodedStreamHeader));
+
+    Telemetry::Recorder decoded(testArena.arena);
+    const Telemetry::DecodeResult result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded);
+    NWB_TELEMETRY_TEST_CHECK(context, result.ok());
+    NWB_TELEMETRY_TEST_CHECK(context, result.bytesRead == encoded.size());
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.eventCount() == 0u);
+}
+
+static void TestEventStreamCodecRejectsInvalidInput(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
+
+    const u8 payload[] = { 7u, 8u };
+    NWB_TELEMETRY_TEST_CHECK(context, recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, payload, sizeof(payload)));
+
+    Telemetry::TelemetryBytes encoded(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEventStream(recorder.view(), encoded));
+
+    Telemetry::Recorder decoded(testArena.arena);
+    Telemetry::DecodeResult result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), sizeof(Telemetry::EncodedStreamHeader) - 1u, decoded);
+    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::TruncatedHeader);
+
+    Telemetry::TelemetryBytes corrupted(testArena.arena);
+    corrupted = encoded;
+    corrupted[0u] = 0u;
+    result = Telemetry::DecodeEventStream(testArena.arena, corrupted.data(), corrupted.size(), decoded);
+    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::InvalidHeader);
+
+    result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size() - 1u, decoded);
+    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::TruncatedPayload);
+
+    corrupted = encoded;
+    Telemetry::EncodedStreamHeader streamHeader;
+    NWB_MEMCPY(&streamHeader, sizeof(streamHeader), corrupted.data(), sizeof(streamHeader));
+    streamHeader.eventCount = 0u;
+    NWB_MEMCPY(corrupted.data(), corrupted.size(), &streamHeader, sizeof(streamHeader));
+    result = Telemetry::DecodeEventStream(testArena.arena, corrupted.data(), corrupted.size(), decoded);
+    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::InvalidHeader);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -201,6 +302,9 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestEventCodecRoundTrip(context);
     __hidden_tests::TestEventCodecRejectsInvalidInput(context);
     __hidden_tests::TestEventCodecReportsTruncatedPayload(context);
+    __hidden_tests::TestEventStreamCodecRoundTrip(context);
+    __hidden_tests::TestEventStreamCodecHandlesEmptyStreams(context);
+    __hidden_tests::TestEventStreamCodecRejectsInvalidInput(context);
 })
 
 

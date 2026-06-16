@@ -99,6 +99,7 @@ public:
         usize payloadBytes,
         u32 streamId = 0u
     );
+    [[nodiscard]] bool append(const EventHeader& header, const void* payload, usize payloadBytes);
 
 
 private:
@@ -119,4 +120,3 @@ NWB_TELEMETRY_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

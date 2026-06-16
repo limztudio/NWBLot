@@ -65,7 +65,22 @@ bool Recorder::record(
 ){
     if(!enabled(kind))
         return false;
-    if(!IsValidPayloadFormat(payloadFormat) || (payloadFormat == PayloadFormat::None && payloadBytes != 0u))
+
+    EventHeader header;
+    header.kind = kind;
+    header.payloadFormat = payloadFormat;
+    header.streamId = streamId;
+    header.frameIndex = frameIndex;
+    header.timestampNanoseconds = __hidden_telemetry_recorder::TimestampNanoseconds();
+    header.payloadBytes = payloadBytes;
+
+    return append(header, payload, payloadBytes);
+}
+
+bool Recorder::append(const EventHeader& header, const void* payload, const usize payloadBytes){
+    if(!header.valid())
+        return false;
+    if(header.payloadBytes != payloadBytes)
         return false;
     if(payloadBytes != 0u && !payload)
         return false;
@@ -74,12 +89,7 @@ bool Recorder::record(
     if(!record)
         return false;
 
-    record->header.kind = kind;
-    record->header.payloadFormat = payloadFormat;
-    record->header.streamId = streamId;
-    record->header.frameIndex = frameIndex;
-    record->header.timestampNanoseconds = __hidden_telemetry_recorder::TimestampNanoseconds();
-    record->header.payloadBytes = payloadBytes;
+    record->header = header;
 
     if(payloadBytes != 0u){
         record->payload.resize(payloadBytes);

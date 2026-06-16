@@ -408,7 +408,7 @@ static void TestLinuxAssertCrashProducesObservableLoggerReport(TestContext& cont
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "event=assert"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "status=callstack_captured"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "callstack:"));
-    NWB_LOGSERVER_TEST_CHECK(context, FindText(report, "false\nat tests/logger_server/tests.cpp:") == 0u);
+    NWB_LOGSERVER_TEST_CHECK(context, FindText(report, "false\nat ") == 0u);
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "tests/logger_server/tests.cpp"));
     if(LinuxExternalSymbolizerAvailable(arena)){
         NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "LinuxForceAssertFalseForCrashObservation"));

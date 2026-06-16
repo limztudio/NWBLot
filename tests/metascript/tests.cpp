@@ -52,7 +52,7 @@ template<usize N>
     return document.parseWithImplicitAsset(ViewOf(source), LiteralView("material_bind"), LiteralView("asset"));
 }
 
-[[nodiscard]] static const Value* FindField(const Value& value, MStringView name){
+[[nodiscard]] static const Value* FindTestField(const Value& value, MStringView name){
     if(!value.isMap())
         return nullptr;
     return value.findField(name);
@@ -81,7 +81,7 @@ static void CheckStringListElement(TestContext& context, const Value& value, con
 }
 
 static void CheckStringField(TestContext& context, const Value& value, MStringView fieldName, MStringView expected){
-    CheckStringValue(context, FindField(value, fieldName), expected);
+    CheckStringValue(context, FindTestField(value, fieldName), expected);
 }
 
 static void CheckImplicitMaterialBindParseFailsWithMessage(TestContext& context, const AString& source, MStringView expectedMessage){
@@ -314,7 +314,7 @@ static void TestBindStyleStructDeclarations(TestContext& context){
     NWB_METASCRIPT_TEST_CHECK(context, document.assetVariable() == LiteralView("asset"));
 
     const Value& asset = document.asset();
-    const Value* structs = FindField(asset, LiteralView("structs"));
+    const Value* structs = FindTestField(asset, LiteralView("structs"));
     NWB_METASCRIPT_TEST_CHECK(context, structs != nullptr);
     NWB_METASCRIPT_TEST_CHECK(context, structs && structs->isMap());
     if(!structs || !structs->isMap())
@@ -327,14 +327,14 @@ static void TestBindStyleStructDeclarations(TestContext& context){
     if(!surfaceStruct || !runtimeStruct)
         return;
 
-    const Value* surfaceAttributes = FindField(*surfaceStruct, LiteralView("attributes"));
+    const Value* surfaceAttributes = FindTestField(*surfaceStruct, LiteralView("attributes"));
     NWB_METASCRIPT_TEST_CHECK(context, surfaceAttributes != nullptr);
     NWB_METASCRIPT_TEST_CHECK(context, surfaceAttributes && surfaceAttributes->isList());
     NWB_METASCRIPT_TEST_CHECK(context, surfaceAttributes && surfaceAttributes->isList() && surfaceAttributes->asList().size() == 1u);
     if(surfaceAttributes && surfaceAttributes->isList() && surfaceAttributes->asList().size() == 1u)
         CheckStringField(context, surfaceAttributes->asList()[0u], LiteralView("name"), LiteralView("material_constant"));
 
-    const Value* surfaceFields = FindField(*surfaceStruct, LiteralView("fields"));
+    const Value* surfaceFields = FindTestField(*surfaceStruct, LiteralView("fields"));
     NWB_METASCRIPT_TEST_CHECK(context, surfaceFields != nullptr);
     NWB_METASCRIPT_TEST_CHECK(context, surfaceFields && surfaceFields->isList());
     NWB_METASCRIPT_TEST_CHECK(context, surfaceFields && surfaceFields->isList() && surfaceFields->asList().size() == 2u);
@@ -345,7 +345,7 @@ static void TestBindStyleStructDeclarations(TestContext& context){
     CheckStringField(context, baseColorField, LiteralView("type"), LiteralView("float4"));
     CheckStringField(context, baseColorField, LiteralView("name"), LiteralView("base_color"));
 
-    const Value* baseColorAttributes = FindField(baseColorField, LiteralView("attributes"));
+    const Value* baseColorAttributes = FindTestField(baseColorField, LiteralView("attributes"));
     NWB_METASCRIPT_TEST_CHECK(context, baseColorAttributes != nullptr);
     NWB_METASCRIPT_TEST_CHECK(context, baseColorAttributes && baseColorAttributes->isList());
     NWB_METASCRIPT_TEST_CHECK(context, baseColorAttributes && baseColorAttributes->isList() && baseColorAttributes->asList().size() == 1u);
@@ -353,7 +353,7 @@ static void TestBindStyleStructDeclarations(TestContext& context){
         const Value& defaultAttribute = baseColorAttributes->asList()[0u];
         CheckStringField(context, defaultAttribute, LiteralView("name"), LiteralView("default"));
 
-        const Value* arguments = FindField(defaultAttribute, LiteralView("arguments"));
+        const Value* arguments = FindTestField(defaultAttribute, LiteralView("arguments"));
         NWB_METASCRIPT_TEST_CHECK(context, arguments != nullptr);
         NWB_METASCRIPT_TEST_CHECK(context, arguments && arguments->isList());
         NWB_METASCRIPT_TEST_CHECK(context, arguments && arguments->isList() && arguments->asList().size() == 1u);
@@ -361,7 +361,7 @@ static void TestBindStyleStructDeclarations(TestContext& context){
             CheckStringValue(context, &arguments->asList()[0u], LiteralView("float4(1.0, 1.0, 1.0, 1.0)"));
     }
 
-    const Value* instances = FindField(asset, LiteralView("instances"));
+    const Value* instances = FindTestField(asset, LiteralView("instances"));
     NWB_METASCRIPT_TEST_CHECK(context, instances != nullptr);
     NWB_METASCRIPT_TEST_CHECK(context, instances && instances->isList());
     NWB_METASCRIPT_TEST_CHECK(context, instances && instances->isList() && instances->asList().size() == 2u);
@@ -453,7 +453,7 @@ static void TestGenericDeclarationsAndReferences(TestContext& context){
     if(!meshValue)
         return;
 
-    const Value* indices = FindField(*meshValue, LiteralView("indices"));
+    const Value* indices = FindTestField(*meshValue, LiteralView("indices"));
     NWB_METASCRIPT_TEST_CHECK(context, indices != nullptr);
     NWB_METASCRIPT_TEST_CHECK(context, indices && indices->isList());
     NWB_METASCRIPT_TEST_CHECK(context, indices && indices->isList() && indices->asList().size() == 3u);

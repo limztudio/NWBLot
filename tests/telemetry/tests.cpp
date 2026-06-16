@@ -545,6 +545,98 @@ static void TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(TestContext
     NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 0u);
 }
 
+static NWB::Core::Perf::TimingStats MakeTestTimingStats(){
+    NWB::Core::Perf::TimingStats stats;
+    stats.seconds = 0.125;
+    stats.sampleCount = 3u;
+    stats.publishFrameIndex = 77u;
+    stats.firstSampleFrameIndex = 70u;
+    stats.lastSampleFrameIndex = 76u;
+    return stats;
+}
+
+static void TestPerfTimingPayloadRoundTrip(TestContext& context){
+    TestArena testArena;
+    const Name scopeName("renderer/frame");
+    const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::BuildPerfTimingPayload(
+        testArena.arena,
+        Telemetry::PerfTimingSource::Gpu,
+        scopeName,
+        "Renderer Frame",
+        stats,
+        payload
+    ));
+    NWB_TELEMETRY_TEST_CHECK(context, payload.size() == sizeof(Telemetry::EncodedPerfTimingPayloadHeader) + sizeof("Renderer Frame") - 1u);
+
+    Telemetry::PerfTimingPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.source == Telemetry::PerfTimingSource::Gpu);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.scopeName == scopeName);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.scopeText == "Renderer Frame");
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.stats.seconds == stats.seconds);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.stats.sampleCount == stats.sampleCount);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.stats.publishFrameIndex == stats.publishFrameIndex);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.stats.firstSampleFrameIndex == stats.firstSampleFrameIndex);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.stats.lastSampleFrameIndex == stats.lastSampleFrameIndex);
+
+    payload[0u] = 0u;
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed));
+}
+
+static void TestPerfTimingPayloadRejectsInvalidInput(TestContext& context){
+    TestArena testArena;
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
+
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildPerfTimingPayload(
+        testArena.arena,
+        Telemetry::PerfTimingSource::Unknown,
+        Name("renderer/frame"),
+        "Renderer Frame",
+        stats,
+        payload
+    ));
+
+    stats.sampleCount = 0u;
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildPerfTimingPayload(
+        testArena.arena,
+        Telemetry::PerfTimingSource::Cpu,
+        Name("renderer/frame"),
+        "Renderer Frame",
+        stats,
+        payload
+    ));
+}
+
+static void TestRecordPerfTimingUsesTelemetryEvent(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    const Name scopeName("cpu/update");
+    const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, scopeName, stats, 11u));
+
+    const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(!event)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::PerfFrame);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.payloadFormat == Telemetry::PayloadFormat::Binary);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == stats.publishFrameIndex);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 11u);
+
+    Telemetry::PerfTimingPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfTimingPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.source == Telemetry::PerfTimingSource::Cpu);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.scopeName == scopeName);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.stats.sampleCount == stats.sampleCount);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -573,6 +665,9 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestDiagnosticCaptureGuardRecordsGlobalDiagnostic(context);
     __hidden_tests::TestDiagnosticCaptureGuardManualCaptureReturnsStatus(context);
     __hidden_tests::TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(context);
+    __hidden_tests::TestPerfTimingPayloadRoundTrip(context);
+    __hidden_tests::TestPerfTimingPayloadRejectsInvalidInput(context);
+    __hidden_tests::TestRecordPerfTimingUsesTelemetryEvent(context);
 })
 
 

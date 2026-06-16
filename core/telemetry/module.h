@@ -8,6 +8,7 @@
 #include "codec.h"
 #include "diagnostic.h"
 #include "event.h"
+#include "perf.h"
 #include "recorder.h"
 #include "text_log.h"
 

@@ -11,6 +11,7 @@
 #include <core/crash/package_names.h>
 #include <core/common/log.h>
 #include <global/assert.h>
+#include <global/environment.h>
 #include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
 #include <global/process_execution.h>
@@ -22,7 +23,6 @@
 #include <errno.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include <cstdlib>
 #include <dlfcn.h>
 #include <unistd.h>
 #endif
@@ -109,11 +109,11 @@ static void AppendHexAddressText(NWB::Core::Alloc::GlobalArena& arena, CrashTest
 }
 
 [[nodiscard]] static bool LinuxExternalSymbolizerAvailable(NWB::Core::Alloc::GlobalArena& arena){
-    const char* const pathText = std::getenv("PATH");
-    if(!pathText || pathText[0] == 0)
+    CrashTestText pathText(arena);
+    if(!ReadEnvironmentVariable("PATH", pathText) || pathText.empty())
         return false;
 
-    const AStringView searchPath(pathText);
+    const AStringView searchPath(pathText.data(), pathText.size());
     return ExecutableAvailableInPath(arena, searchPath, "llvm-symbolizer")
         || ExecutableAvailableInPath(arena, searchPath, "addr2line")
     ;
@@ -213,6 +213,17 @@ static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(
     return ProcessCrashArchiveBytes(context, arena, testGroup, stem, archive, config);
 }
 
+[[nodiscard]] static usize FindText(const CrashTestText& text, const AStringView needle){
+    return AStringView(text.data(), text.size()).find(needle);
+}
+
+[[nodiscard]] static bool TextAppearsBefore(const CrashTestText& text, const AStringView first, const AStringView second){
+    const AStringView view(text.data(), text.size());
+    const usize firstPosition = view.find(first);
+    const usize secondPosition = view.find(second);
+    return firstPosition != AStringView::npos && secondPosition != AStringView::npos && firstPosition < secondPosition;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -246,10 +257,12 @@ static void TestLinuxCrashPackageMapsInstructionPointer(TestContext& context){
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "symbol_store_status=missing"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "instruction_pointer_module=/tmp/nwb_loader"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "module_relative_ip=0x0000000000001234"));
-    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[callstack]"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "callstack:"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "#0 0x0000000000401234 /tmp/nwb_loader+0x0000000000001234"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "#1 0x0000000000401240 /tmp/nwb_loader+0x0000000000001240"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "core_artifact=missing"));
+    NWB_LOGSERVER_TEST_CHECK(context, TextAppearsBefore(report, "callstack:", "details:"));
+    NWB_LOGSERVER_TEST_CHECK(context, TextAppearsBefore(report, "details:", "[event]"));
 
     PreserveObservedReport(context, arena, report, "linux_maps");
 
@@ -385,6 +398,7 @@ static void TestLinuxAssertCrashProducesObservableLoggerReport(TestContext& cont
     NWB_LOGSERVER_TEST_CHECK(context, BuildArchiveFromPackageDirectory(arena, assertPackageDirectory, archive));
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(context, arena, s_Group, s_Stem, archive);
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
+    NWB_LOGSERVER_TEST_CHECK(context, result.type == NWB::Log::Type::Assert);
 
     CrashTestText report(arena);
     NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
@@ -394,8 +408,9 @@ static void TestLinuxAssertCrashProducesObservableLoggerReport(TestContext& cont
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "event=assert"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "expression=false"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "status=callstack_captured"));
-    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[callstack]"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "callstack:"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[trigger]"));
+    NWB_LOGSERVER_TEST_CHECK(context, FindText(report, "false\nat tests/logger_server/tests.cpp:") == 0u);
     CrashTestText expectedCategoryLine(arena);
     expectedCategoryLine += "category=";
     expectedCategoryLine += expectedAssertCategory;
@@ -480,7 +495,7 @@ NWB_LOGSERVER_TEST_NOINLINE static void TestRecoverableErrorDiagnosticProducesOb
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "platform=linux"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "status=callstack_captured"));
-    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[callstack]"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "callstack:"));
     if(LinuxExternalSymbolizerAvailable(arena))
         NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "TestRecoverableErrorDiagnosticProducesObservableLoggerReport"));
 #elif defined(NWB_PLATFORM_WINDOWS)
@@ -515,7 +530,7 @@ static void TestAndroidCrashPackageCopiesTombstoneFrames(TestContext& context){
 
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
     NWB_LOGSERVER_TEST_CHECK(context, ContainsMessage(result.message, NWB_TEXT("status=tombstone_parsed")));
-    NWB_LOGSERVER_TEST_CHECK(context, ContainsMessage(result.message, NWB_TEXT("[tombstone_callstack]")));
+    NWB_LOGSERVER_TEST_CHECK(context, ContainsMessage(result.message, NWB_TEXT("callstack:")));
     NWB_LOGSERVER_TEST_CHECK(context, ContainsMessage(result.message, NWB_TEXT("#00 pc 0000000000012344")));
 
     CrashTestText report(arena);
@@ -630,6 +645,50 @@ static void TestWindowsCrashPackageReportsMissingMinidump(TestContext& context){
 #else
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "only available on Windows logserver builds"));
 #endif
+
+    RemoveTestArtifacts(arena, s_Group);
+}
+
+static void TestAssertCrashPackageUsesAssertLogType(TestContext& context){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("logger_server_assert_log_type_test");
+    constexpr AStringView s_Stem("assert_log_type_001");
+    RemoveTestArtifacts(arena, s_Group);
+
+    CrashTestText archive(arena);
+    const ManifestTriggerFields trigger{
+        .category = DiagnosticEventCategory::s_Assert,
+        .expression = "value != nullptr",
+        .message = "missing pointer",
+        .file = "tests/logger_server/tests.cpp",
+        .line = 123u,
+    };
+    BeginArchiveWithManifest(
+        arena,
+        archive,
+        "assert-log-type-test",
+        "windows",
+        DiagnosticEventName::s_Assert,
+        "manual_dump",
+        0u,
+        ManifestEventField::Include,
+        trigger
+    );
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem, archive);
+
+    NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
+    NWB_LOGSERVER_TEST_CHECK(context, result.type == NWB::Log::Type::Assert);
+    NWB_LOGSERVER_TEST_CHECK(context, ContainsMessage(result.message, NWB_TEXT("event=assert")));
+    NWB_LOGSERVER_TEST_CHECK(
+        context,
+        result.message.find(NWB_TEXT("value != nullptr\nmissing pointer\nat tests/logger_server/tests.cpp:123\n\ncallstack:\n")) == 0u
+    );
+    NWB_LOGSERVER_TEST_CHECK(context, ContainsMessage(result.message, NWB_TEXT("\ndetails:\n")));
+
+    CrashTestText report(arena);
+    NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    NWB_LOGSERVER_TEST_CHECK(context, FindText(report, "value != nullptr\nmissing pointer\nat tests/logger_server/tests.cpp:123\n\ncallstack:\n") == 0u);
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -823,6 +882,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("logserver crash", [](NWB::Tests::TestContext& conte
     __hidden_logger_server_tests::TestLinuxCrashPackageReportsUnmappedInstructionPointer(context);
     __hidden_logger_server_tests::TestAndroidCrashPackageReportsTombstoneWithoutFrames(context);
     __hidden_logger_server_tests::TestWindowsCrashPackageReportsMissingMinidump(context);
+    __hidden_logger_server_tests::TestAssertCrashPackageUsesAssertLogType(context);
     __hidden_logger_server_tests::TestInvalidCrashPackageIsRejected(context);
     __hidden_logger_server_tests::TestCrashManifestWithoutEventIsRejected(context);
     __hidden_logger_server_tests::TestCrashRetentionPrunesOldestAcceptedUploads(context);

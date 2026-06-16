@@ -36,6 +36,7 @@ namespace LogType{
         CriticalWarning,
         Error,
         Fatal,
+        Assert,
     };
 };
 
@@ -63,6 +64,7 @@ namespace LoggerDetail{
 
 extern ILogger* g_logger;
 
+inline constexpr const char* s_DiagnosticEventCategoryAssert = "logger_Assert";
 inline constexpr const char* s_DiagnosticEventCategoryError = "logger_Error";
 inline constexpr const char* s_DiagnosticEventCategoryFatal = "logger_Fatal";
 
@@ -71,6 +73,8 @@ constexpr void IgnoreMessage(ARGS&&...){}
 
 [[nodiscard]] inline const char* DiagnosticEventNameFromLogType(const LogType::Enum type)noexcept{
     switch(type){
+    case LogType::Assert:
+        return DiagnosticEventName::s_Assert;
     case LogType::Error:
         return DiagnosticEventName::s_Error;
     case LogType::Fatal:

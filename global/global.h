@@ -20,6 +20,7 @@
 #include "containers.h"
 #include "fixed_buffer.h"
 #include "text_utils.h"
+#include "environment.h"
 #include "process.h"
 #include "compact_string.h"
 #include "binary.h"

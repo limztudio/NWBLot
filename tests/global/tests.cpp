@@ -501,6 +501,49 @@ static void TestLoggerDiagnosticCaptureUsesFormattedMessage(TestContext& context
     NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventLine == 77u);
 }
 
+static void TestLoggerAssertTypeCapturesAssertDiagnostic(TestContext& context){
+    s_DiagnosticEventCaptureCount = 0u;
+    s_DiagnosticEventName = nullptr;
+    s_DiagnosticEventCategory = nullptr;
+    s_DiagnosticEventExpression = nullptr;
+    s_DiagnosticEventMessage = nullptr;
+    s_DiagnosticEventFile = nullptr;
+    s_DiagnosticEventLine = 0u;
+
+    const DiagnosticEventCallback callback = [](const DiagnosticEventRecord& record)noexcept{
+        ++s_DiagnosticEventCaptureCount;
+        s_DiagnosticEventName = record.event;
+        s_DiagnosticEventCategory = record.category;
+        s_DiagnosticEventExpression = record.expression;
+        s_DiagnosticEventMessage = record.message;
+        s_DiagnosticEventFile = record.file;
+        s_DiagnosticEventLine = record.line;
+    };
+
+    CapturingLogger logger;
+    SetDiagnosticEventCallback(callback);
+    NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(
+        logger,
+        NWB::Core::Common::LogType::Assert,
+        NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryAssert,
+        "logger_assert_test.cpp",
+        91u,
+        NWB_TEXT("assert log {}"),
+        21
+    );
+    ClearDiagnosticEventCallback(callback);
+
+    NWB_GLOBAL_TEST_CHECK(context, logger.messageCount() == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, logger.lastType() == NWB::Core::Common::LogType::Assert);
+    NWB_GLOBAL_TEST_CHECK(context, logger.sawMessageContaining(NWB_TEXT("assert log 21")));
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventCaptureCount == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventName && NWB_STRCMP(s_DiagnosticEventName, DiagnosticEventName::s_Assert) == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventCategory && NWB_STRCMP(s_DiagnosticEventCategory, NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryAssert) == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventMessage && NWB_STRCMP(s_DiagnosticEventMessage, "assert log 21") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventFile && NWB_STRCMP(s_DiagnosticEventFile, "logger_assert_test.cpp") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, s_DiagnosticEventLine == 91u);
+}
+
 static void TestDiagnosticEventHook(TestContext& context){
     s_DiagnosticEventCaptureCount = 0u;
     s_DiagnosticEventName = nullptr;
@@ -574,6 +617,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("global", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestBoundedRuntimeWrappers(context);
     __hidden_tests::TestLoggerMacrosBehaveAsSingleStatements(context);
     __hidden_tests::TestLoggerDiagnosticCaptureUsesFormattedMessage(context);
+    __hidden_tests::TestLoggerAssertTypeCapturesAssertDiagnostic(context);
     __hidden_tests::TestDiagnosticEventHook(context);
 })
 

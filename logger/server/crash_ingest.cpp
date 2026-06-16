@@ -62,6 +62,25 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
     ));
 }
 
+[[nodiscard]] static Type::Enum AcceptedCrashLogType(const CrashPackageSummary& summary){
+    if(summary.event == DiagnosticEventName::s_Assert)
+        return Type::Assert;
+
+    return Type::EssentialInfo;
+}
+
+static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, const Path& rawPath, const bool rawArchived){
+    if(!outReport.empty() && outReport.back() != '\n')
+        outReport += "\n";
+
+    outReport += "\ningest:\n";
+    outReport += "ingest_status=accepted\nraw_archive=";
+    outReport += PathToString<char>(arena, rawPath);
+    outReport += "\n";
+    if(!rawArchived)
+        outReport += "warning=raw upload archive could not be retained\n";
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -416,33 +435,11 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
 
     result.accepted = true;
     result.type = rawArchived
-        ? Type::EssentialInfo
+        ? Ingest::AcceptedCrashLogType(summary)
         : Type::Warning
     ;
-    if(rawArchived){
-        result.message = StringFormat(
-            arena,
-            NWB_TEXT("Crash package '{}' ingested: platform='{}' reason='{}' package='{}' raw='{}'\n{}"),
-            StringConvert(summary.crashId),
-            StringConvert(summary.platform),
-            StringConvert(summary.reasonKind),
-            PathToString<tchar>(packageDirectory),
-            PathToString<tchar>(rawPath),
-            StringConvert(symbolicationReport)
-        );
-    }
-    else{
-        result.message = StringFormat(
-            arena,
-            NWB_TEXT("Crash package '{}' ingested but raw upload archive could not be retained: platform='{}' reason='{}' package='{}' raw='{}'\n{}"),
-            StringConvert(summary.crashId),
-            StringConvert(summary.platform),
-            StringConvert(summary.reasonKind),
-            PathToString<tchar>(packageDirectory),
-            PathToString<tchar>(archivePath),
-            StringConvert(symbolicationReport)
-        );
-    }
+    Ingest::AppendAcceptedIngestDetails(arena, symbolicationReport, rawArchived ? rawPath : archivePath, rawArchived);
+    result.message = StringConvert(arena, AStringView(symbolicationReport.data(), symbolicationReport.size()));
     return result;
 }
 

@@ -8,6 +8,7 @@
 
 #include <core/crash/package_internal.h>
 #include <core/crash/package_names.h>
+#include <global/environment.h>
 #include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
 #include <global/thread.h>
@@ -110,10 +111,11 @@ void BeginArchiveWithManifest(
     const AStringView event,
     const AStringView reasonKind,
     const u64 reasonCode,
-    const ManifestEventField eventField
+    const ManifestEventField eventField,
+    const ManifestTriggerFields& trigger
 ){
     archive += CrashNames::s_ArchiveHeaderText;
-    const CrashTestText manifest = BuildManifest(arena, crashId, platform, event, reasonKind, reasonCode, eventField);
+    const CrashTestText manifest = BuildManifest(arena, crashId, platform, event, reasonKind, reasonCode, eventField, trigger);
     AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
 }
 
@@ -124,10 +126,12 @@ CrashTestText BuildManifest(
     const AStringView event,
     const AStringView reasonKind,
     const u64 reasonCode,
-    const ManifestEventField eventField
+    const ManifestEventField eventField,
+    const ManifestTriggerFields& trigger
 ){
     CrashTestText manifest(arena);
     char reasonCodeBuffer[32] = {};
+    char triggerLineBuffer[32] = {};
     manifest += "{\n";
     manifest += "  \"format\": \"";
     manifest += CrashNames::s_ManifestFormatValue;
@@ -156,11 +160,21 @@ CrashTestText BuildManifest(
         manifest += event;
         manifest += "\",\n";
     }
-    manifest += "  \"trigger_category\": \"\",\n";
-    manifest += "  \"trigger_expression\": \"\",\n";
-    manifest += "  \"trigger_message\": \"\",\n";
-    manifest += "  \"trigger_file\": \"\",\n";
-    manifest += "  \"trigger_line\": 0,\n";
+    manifest += "  \"trigger_category\": \"";
+    manifest += trigger.category;
+    manifest += "\",\n";
+    manifest += "  \"trigger_expression\": \"";
+    manifest += trigger.expression;
+    manifest += "\",\n";
+    manifest += "  \"trigger_message\": \"";
+    manifest += trigger.message;
+    manifest += "\",\n";
+    manifest += "  \"trigger_file\": \"";
+    manifest += trigger.file;
+    manifest += "\",\n";
+    manifest += "  \"trigger_line\": ";
+    manifest += FormatDecimal(static_cast<usize>(trigger.line), triggerLineBuffer);
+    manifest += ",\n";
     manifest += "  \"dump_detail_mode\": \"small\",\n";
     manifest += "  \"artifact_strategy\": \"unit_test\",\n";
     manifest += "  \"handler_lifetime\": \"unit_test\"\n";
@@ -318,11 +332,11 @@ static CrashTestPath ObservedReportPath(Core::Alloc::GlobalArena& arena, const C
 }
 
 void PreserveObservedReport(TestContext& context, Core::Alloc::GlobalArena& arena, const CrashTestText& report, const AStringView suffix){
-    const char* const outputPathText = NWB_GETENV("NWB_LOGSERVER_CRASH_TEST_OBSERVE_PATH");
-    if(!outputPathText || outputPathText[0] == 0)
+    CrashTestText outputPathText(arena);
+    if(!ReadEnvironmentVariable("NWB_LOGSERVER_CRASH_TEST_OBSERVE_PATH", outputPathText) || outputPathText.empty())
         return;
 
-    const CrashTestPath baseOutputPath(arena, AStringView(outputPathText));
+    const CrashTestPath baseOutputPath(arena, AStringView(outputPathText.data(), outputPathText.size()));
     const CrashTestPath outputPath = ObservedReportPath(arena, baseOutputPath, suffix);
     ErrorCode error;
     static_cast<void>(EnsureDirectories(outputPath.parent_path(), error));

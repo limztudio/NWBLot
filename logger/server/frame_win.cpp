@@ -91,6 +91,12 @@ static LogRowColors ResolveLogRowColors(const Log::Type::Enum type, const bool a
             LogRowColors{ RGB(240, 240, 240), RGB(170, 80, 0) },
             LogRowColors{ RGB(255, 255, 255), RGB(200, 100, 0) }
         );
+    case Log::Type::Assert:
+        return SelectLogRowColors(
+            alternate,
+            LogRowColors{ RGB(200, 200, 200), RGB(120, 0, 160) },
+            LogRowColors{ RGB(255, 255, 255), RGB(145, 20, 190) }
+        );
     case Log::Type::Error:
         return SelectLogRowColors(
             alternate,

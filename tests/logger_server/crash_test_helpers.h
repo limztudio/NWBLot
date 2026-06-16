@@ -39,6 +39,14 @@ enum class ManifestEventField{
     Omit,
 };
 
+struct ManifestTriggerFields{
+    AStringView category;
+    AStringView expression;
+    AStringView message;
+    AStringView file;
+    u64 line = 0u;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,7 +73,8 @@ void BeginArchiveWithManifest(
     AStringView event,
     AStringView reasonKind,
     u64 reasonCode,
-    ManifestEventField eventField = ManifestEventField::Include
+    ManifestEventField eventField = ManifestEventField::Include,
+    const ManifestTriggerFields& trigger = ManifestTriggerFields{}
 );
 [[nodiscard]] CrashTestText BuildManifest(
     Core::Alloc::GlobalArena& arena,
@@ -74,7 +83,8 @@ void BeginArchiveWithManifest(
     AStringView event,
     AStringView reasonKind,
     u64 reasonCode,
-    ManifestEventField eventField = ManifestEventField::Include
+    ManifestEventField eventField = ManifestEventField::Include,
+    const ManifestTriggerFields& trigger = ManifestTriggerFields{}
 );
 [[nodiscard]] bool WriteArchive(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, const CrashTestText& archive);
 [[nodiscard]] bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, const CrashTestBytes& archive);

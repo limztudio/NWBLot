@@ -243,11 +243,6 @@ bool ClientStandalone::internalInit(BasicStringView<tchar> logFileNameBase){
 
     return m_processedMsgFile.open(logFileNameBase);
 }
-bool ClientStandalone::enqueueTelemetry(const void* const bytes, const usize byteCount){
-    static_cast<void>(bytes);
-    static_cast<void>(byteCount);
-    return false;
-}
 bool ClientStandalone::internalUpdate(){
     MessageType msg = MakeMessageType(BaseType::arena());
     while(tryDequeue(msg)){

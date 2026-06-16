@@ -20,10 +20,6 @@ NWB_LOG_BEGIN
 class IClient : public ILogger{
 public:
     virtual ~IClient()override = default;
-
-
-public:
-    [[nodiscard]] virtual bool enqueueTelemetry(const void* bytes, usize byteCount) = 0;
 };
 
 
@@ -53,7 +49,7 @@ public:
     virtual LogArena& arena()override{ return BaseType::arena(); }
     virtual void enqueue(LogString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
     virtual void enqueue(const LogString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
-    [[nodiscard]] virtual bool enqueueTelemetry(const void* bytes, usize byteCount)override;
+    [[nodiscard]] bool enqueueTelemetry(const void* bytes, usize byteCount);
 
 
 protected:
@@ -121,7 +117,6 @@ public:
     virtual LogArena& arena()override{ return BaseType::arena(); }
     virtual void enqueue(LogString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
     virtual void enqueue(const LogString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
-    [[nodiscard]] virtual bool enqueueTelemetry(const void* bytes, usize byteCount)override;
 
 
 protected:

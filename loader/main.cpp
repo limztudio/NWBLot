@@ -220,7 +220,7 @@ bool InstallCrashReporting(CrashArena& crashArena, const LoaderOptions& options)
 }
 
 bool UploadTelemetry(void* userData, const void* bytes, const usize byteCount){
-    auto* logger = static_cast<NWB::Log::IClient*>(userData);
+    auto* logger = static_cast<NWB::Log::Client*>(userData);
     return logger && logger->enqueueTelemetry(bytes, byteCount);
 }
 
@@ -238,7 +238,7 @@ static int RunProjectRuntime(
     NWB::Core::Alloc::GlobalArena& arena,
     const __hidden_loader::LoaderOptions& options,
     void* inst,
-    NWB::Log::IClient* telemetryClient
+    NWB::Log::Client* telemetryClient
 ){
     try{
         const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();

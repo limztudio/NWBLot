@@ -545,6 +545,139 @@ static void TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(TestContext
     NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 0u);
 }
 
+static void BuildTestFrameGraph(
+    Telemetry::TelemetryArena& arena,
+    Telemetry::FrameGraphNodeDescs& nodes,
+    Telemetry::FrameGraphEdgeDescs& edges
+){
+    nodes = Telemetry::FrameGraphNodeDescs(arena);
+    edges = Telemetry::FrameGraphEdgeDescs(arena);
+
+    nodes.push_back(Telemetry::FrameGraphNodeDesc{
+        .name = Name("gbuffer"),
+        .label = AStringView("GBuffer Pass"),
+        .kind = Telemetry::FrameGraphNodeKind::Pass,
+        .flags = 1u,
+    });
+    nodes.push_back(Telemetry::FrameGraphNodeDesc{
+        .name = Name("albedo"),
+        .label = AStringView("Albedo Texture"),
+        .kind = Telemetry::FrameGraphNodeKind::Resource,
+    });
+    nodes.push_back(Telemetry::FrameGraphNodeDesc{
+        .name = Name("lighting"),
+        .label = AStringView("Lighting Pass"),
+        .kind = Telemetry::FrameGraphNodeKind::Pass,
+    });
+
+    edges.push_back(Telemetry::FrameGraphEdgeDesc{
+        .fromNodeIndex = 0u,
+        .toNodeIndex = 1u,
+        .kind = Telemetry::FrameGraphEdgeKind::Writes,
+    });
+    edges.push_back(Telemetry::FrameGraphEdgeDesc{
+        .fromNodeIndex = 1u,
+        .toNodeIndex = 2u,
+        .kind = Telemetry::FrameGraphEdgeKind::Reads,
+        .flags = 2u,
+    });
+}
+
+static void TestFrameGraphPayloadRoundTrip(TestContext& context){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::BuildFrameGraphPayload(testArena.arena, 905u, nodes, edges, payload));
+    NWB_TELEMETRY_TEST_CHECK(
+        context,
+        payload.size() == sizeof(Telemetry::EncodedFrameGraphPayloadHeader)
+            + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
+            + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
+            + sizeof("GBuffer Pass")
+            + sizeof("Albedo Texture")
+            + sizeof("Lighting Pass")
+    );
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.frameIndex == 905u);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes.size() == 3u);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.edges.size() == 2u);
+    if(parsed.nodes.size() == 3u){
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[0u].name == Name("gbuffer"));
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[0u].label == "GBuffer Pass");
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[0u].kind == Telemetry::FrameGraphNodeKind::Pass);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[0u].flags == 1u);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[1u].name == Name("albedo"));
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[1u].label == "Albedo Texture");
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[1u].kind == Telemetry::FrameGraphNodeKind::Resource);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[2u].name == Name("lighting"));
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[2u].label == "Lighting Pass");
+    }
+    if(parsed.edges.size() == 2u){
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[0u].fromNodeIndex == 0u);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[0u].toNodeIndex == 1u);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[0u].kind == Telemetry::FrameGraphEdgeKind::Writes);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[1u].fromNodeIndex == 1u);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[1u].toNodeIndex == 2u);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[1u].kind == Telemetry::FrameGraphEdgeKind::Reads);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[1u].flags == 2u);
+    }
+
+    payload[0u] = 0u;
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+}
+
+static void TestFrameGraphPayloadRejectsInvalidInput(TestContext& context){
+    TestArena testArena;
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+
+    nodes[0u].kind = Telemetry::FrameGraphNodeKind::Unknown;
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    nodes[0u].label = AStringView("bad\0label", 9u);
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    edges[0u].toNodeIndex = 99u;
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+}
+
+static void TestRecordFrameGraphUsesTelemetryEvent(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 14u));
+
+    const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(!event)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::FrameGraphFrame);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.payloadFormat == Telemetry::PayloadFormat::Binary);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 909u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 14u);
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.frameIndex == 909u);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes.size() == 3u);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.edges.size() == 2u);
+}
+
 static NWB::Core::Perf::TimingStats MakeTestTimingStats(){
     NWB::Core::Perf::TimingStats stats;
     stats.seconds = 0.125;
@@ -665,6 +798,9 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestDiagnosticCaptureGuardRecordsGlobalDiagnostic(context);
     __hidden_tests::TestDiagnosticCaptureGuardManualCaptureReturnsStatus(context);
     __hidden_tests::TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(context);
+    __hidden_tests::TestFrameGraphPayloadRoundTrip(context);
+    __hidden_tests::TestFrameGraphPayloadRejectsInvalidInput(context);
+    __hidden_tests::TestRecordFrameGraphUsesTelemetryEvent(context);
     __hidden_tests::TestPerfTimingPayloadRoundTrip(context);
     __hidden_tests::TestPerfTimingPayloadRejectsInvalidInput(context);
     __hidden_tests::TestRecordPerfTimingUsesTelemetryEvent(context);

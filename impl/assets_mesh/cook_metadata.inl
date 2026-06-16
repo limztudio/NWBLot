@@ -60,10 +60,6 @@ static bool CountFlattenedValueLeaves(const Core::Metascript::Value& value, usiz
     return AccumulateFlattenedValueLeafCount(value, outCount);
 }
 
-static const Core::Metascript::Value* FindField(const Core::Metascript::Value& map, const AStringView fieldName){
-    return map.findField(Core::Metascript::MStringView(fieldName.data(), fieldName.size()));
-}
-
 static ScratchString MakeIndexedLabel(Core::Alloc::ScratchArena& arena, const AStringView baseLabel, const usize index){
     char indexBuffer[32] = {};
     const AStringView indexText = FormatDecimal(index, indexBuffer);

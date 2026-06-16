@@ -93,10 +93,6 @@ static constexpr AStringView s_SkeletonMetaKind = "Skeleton";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] const Value* FindField(const Value& map, const AStringView fieldName){
-    return map.findField(MStringView(fieldName.data(), fieldName.size()));
-}
-
 [[nodiscard]] bool ReadNameField(
     const Path& nwbFilePath,
     const Value& object,

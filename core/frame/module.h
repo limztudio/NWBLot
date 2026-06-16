@@ -85,8 +85,6 @@ public:
     [[nodiscard]] inline Alloc::JobSystem& projectJobSystem(){ return m_projectJobSystem; }
     [[nodiscard]] inline const Alloc::JobSystem& projectJobSystem()const{ return m_projectJobSystem; }
 
-    [[nodiscard]] inline Telemetry::CaptureSession& telemetrySession(){ return m_telemetrySession; }
-    [[nodiscard]] inline const Telemetry::CaptureSession& telemetrySession()const{ return m_telemetrySession; }
     void setTelemetryCapture(const Telemetry::CaptureOptions& options);
     void setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData);
     [[nodiscard]] bool flushTelemetryUpload(bool clearAfterUpload = false);

@@ -61,7 +61,7 @@ namespace DiagnosticEventName{
 
 inline constexpr const char* s_Assert = "assert";
 inline constexpr const char* s_Error = "error";
-inline constexpr const char* s_FatalError = "fatal_error";
+inline constexpr const char* s_Fatal = "fatal";
 inline constexpr const char* s_ManualDump = "manual_dump";
 inline constexpr const char* s_Crash = "crash";
 

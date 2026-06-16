@@ -52,7 +52,7 @@ static bool __hidden_capture_policy_allows(const CrashCapturePolicy& policy, con
         return policy.captureFatalAssertions;
     if(event == DiagnosticEventName::s_Error)
         return policy.captureLoggerErrors;
-    if(event == DiagnosticEventName::s_FatalError)
+    if(event == DiagnosticEventName::s_Fatal)
         return policy.captureLoggerFatals;
 
     return true;

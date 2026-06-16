@@ -78,7 +78,7 @@ constexpr void IgnoreMessage(ARGS&&...){}
     case LogType::Error:
         return DiagnosticEventName::s_Error;
     case LogType::Fatal:
-        return DiagnosticEventName::s_FatalError;
+        return DiagnosticEventName::s_Fatal;
     default:
         return "";
     }

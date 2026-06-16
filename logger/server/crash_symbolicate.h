@@ -28,13 +28,11 @@ struct CrashSymbolicationConfig{
 };
 
 struct CrashPackageSummary{
-    CrashReportText format;
     CrashReportText crashId;
     CrashReportText platform;
     CrashReportText reasonKind;
     CrashReportText artifactStrategy;
     CrashReportText event;
-    CrashReportText triggerCategory;
     CrashReportText triggerExpression;
     CrashReportText triggerMessage;
     CrashReportText triggerFile;
@@ -43,13 +41,11 @@ struct CrashPackageSummary{
     u64 triggerLine = 0u;
 
     explicit CrashPackageSummary(LogArena& arena)
-        : format(arena)
-        , crashId(arena)
+        : crashId(arena)
         , platform(arena)
         , reasonKind(arena)
         , artifactStrategy(arena)
         , event(arena)
-        , triggerCategory(arena)
         , triggerExpression(arena)
         , triggerMessage(arena)
         , triggerFile(arena)

@@ -406,15 +406,9 @@ static void TestLinuxAssertCrashProducesObservableLoggerReport(TestContext& cont
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "reason=manual_dump"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[event]"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "event=assert"));
-    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "expression=false"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "status=callstack_captured"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "callstack:"));
-    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[trigger]"));
     NWB_LOGSERVER_TEST_CHECK(context, FindText(report, "false\nat tests/logger_server/tests.cpp:") == 0u);
-    CrashTestText expectedCategoryLine(arena);
-    expectedCategoryLine += "category=";
-    expectedCategoryLine += expectedAssertCategory;
-    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, AStringView(expectedCategoryLine.data(), expectedCategoryLine.size())));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "tests/logger_server/tests.cpp"));
     if(LinuxExternalSymbolizerAvailable(arena)){
         NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "LinuxForceAssertFalseForCrashObservation"));
@@ -484,12 +478,12 @@ NWB_LOGSERVER_TEST_NOINLINE static void TestRecoverableErrorDiagnosticProducesOb
     NWB_LOGSERVER_TEST_CHECK(context, BuildArchiveFromPackageDirectory(arena, errorPackageDirectory, archive));
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(context, arena, s_Group, s_Stem, archive);
     NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
+    NWB_LOGSERVER_TEST_CHECK(context, result.type == NWB::Log::Type::Error);
 
     CrashTestText report(arena);
     NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[event]"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "event=error"));
-    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "category=logger_Error"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, s_ErrorMessage));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "tests/logger_server/tests.cpp"));
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
@@ -693,6 +687,49 @@ static void TestAssertCrashPackageUsesAssertLogType(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 }
 
+static void TestFatalCrashPackageUsesFatalLogType(TestContext& context){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("logger_server_fatal_log_type_test");
+    constexpr AStringView s_Stem("fatal_log_type_001");
+    RemoveTestArtifacts(arena, s_Group);
+
+    CrashTestText archive(arena);
+    const ManifestTriggerFields trigger{
+        .category = NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryFatal,
+        .expression = "",
+        .message = "fatal logger observation",
+        .file = "tests/logger_server/tests.cpp",
+        .line = 321u,
+    };
+    BeginArchiveWithManifest(
+        arena,
+        archive,
+        "fatal-log-type-test",
+        "windows",
+        DiagnosticEventName::s_Fatal,
+        "manual_dump",
+        0u,
+        ManifestEventField::Include,
+        trigger
+    );
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem, archive);
+
+    NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
+    NWB_LOGSERVER_TEST_CHECK(context, result.type == NWB::Log::Type::Fatal);
+    NWB_LOGSERVER_TEST_CHECK(context, TStringView(NWB::Log::MessageTypeToString(NWB::Log::Type::Fatal)) == TStringView(NWB_TEXT("FATAL")));
+    NWB_LOGSERVER_TEST_CHECK(context, ContainsMessage(result.message, NWB_TEXT("event=fatal")));
+    NWB_LOGSERVER_TEST_CHECK(context, !ContainsMessage(result.message, NWB_TEXT("category=logger_Fatal")));
+    NWB_LOGSERVER_TEST_CHECK(context, !ContainsMessage(result.message, NWB_TEXT("message=fatal logger observation")));
+    NWB_LOGSERVER_TEST_CHECK(context, !ContainsMessage(result.message, NWB_TEXT("file=tests/logger_server/tests.cpp")));
+
+    CrashTestText report(arena);
+    NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    NWB_LOGSERVER_TEST_CHECK(context, FindText(report, "fatal logger observation\nat tests/logger_server/tests.cpp:321\n\ncallstack:\n") == 0u);
+
+    RemoveTestArtifacts(arena, s_Group);
+}
+
 static void TestInvalidCrashPackageIsRejected(TestContext& context){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -883,6 +920,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("logserver crash", [](NWB::Tests::TestContext& conte
     __hidden_logger_server_tests::TestAndroidCrashPackageReportsTombstoneWithoutFrames(context);
     __hidden_logger_server_tests::TestWindowsCrashPackageReportsMissingMinidump(context);
     __hidden_logger_server_tests::TestAssertCrashPackageUsesAssertLogType(context);
+    __hidden_logger_server_tests::TestFatalCrashPackageUsesFatalLogType(context);
     __hidden_logger_server_tests::TestInvalidCrashPackageIsRejected(context);
     __hidden_logger_server_tests::TestCrashManifestWithoutEventIsRejected(context);
     __hidden_logger_server_tests::TestCrashRetentionPrunesOldestAcceptedUploads(context);

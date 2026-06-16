@@ -43,15 +43,11 @@ void AppendHexAddress(LogArena& arena, CrashReportText& outReport, const u64 add
     outReport += FormatHex64A(arena, address);
 }
 
-[[nodiscard]] static Path DefaultSymbolStoreDirectory(LogArena& arena){
-    return CrashDefaultRootDirectory(arena) / s_CrashSymbolStoreDirectoryName;
-}
-
 Path EffectiveSymbolStoreDirectory(LogArena& arena, const CrashSymbolicationConfig& config){
     if(!config.symbolStoreDirectory.empty())
         return Path(arena, config.symbolStoreDirectory);
 
-    return DefaultSymbolStoreDirectory(arena);
+    return CrashDefaultRootDirectory(arena) / s_CrashSymbolStoreDirectoryName;
 }
 
 static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport, const CrashSymbolicationConfig& config){
@@ -101,51 +97,19 @@ static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, 
     outReport += "\n";
 }
 
-static bool HasTriggerSummary(const CrashPackageSummary& summary){
-    return
-        !summary.triggerCategory.empty()
-        || !summary.triggerExpression.empty()
-        || !summary.triggerMessage.empty()
-        || !summary.triggerFile.empty()
-        || summary.triggerLine != 0u
-    ;
-}
-
-static void AppendOptionalTriggerField(CrashReportText& outReport, const char* key, const CrashReportText& value){
-    if(value.empty())
-        return;
-
-    outReport += key;
-    outReport += "=";
-    outReport += value;
-    outReport += "\n";
-}
-
 static void AppendEventSummary(LogArena& arena, const CrashPackageSummary& summary, CrashReportText& outReport){
     outReport += "\n[event]\n";
     outReport += "event=";
     outReport += summary.event;
     outReport += "\n";
 
-    if(!HasTriggerSummary(summary))
+    if(
+        summary.triggerExpression.empty()
+        && summary.triggerMessage.empty()
+        && summary.triggerFile.empty()
+        && summary.triggerLine == 0u
+    )
         AppendExceptionSummary(arena, outReport, summary);
-}
-
-static void AppendTriggerSummary(CrashReportText& outReport, const CrashPackageSummary& summary){
-    if(!HasTriggerSummary(summary))
-        return;
-
-    outReport += "\n[trigger]\n";
-    AppendOptionalTriggerField(outReport, "category", summary.triggerCategory);
-    AppendOptionalTriggerField(outReport, "expression", summary.triggerExpression);
-    AppendOptionalTriggerField(outReport, "message", summary.triggerMessage);
-    AppendOptionalTriggerField(outReport, "file", summary.triggerFile);
-    if(summary.triggerLine != 0u){
-        outReport += "line=";
-        char buffer[s_DecimalTextBufferCapacity] = {};
-        outReport += FormatDecimal(static_cast<usize>(summary.triggerLine), buffer);
-        outReport += "\n";
-    }
 }
 
 struct ReportSectionRange{
@@ -310,7 +274,6 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
     detailReport += "\n";
     Symbolicate::AppendSymbolStoreStatus(arena, detailReport, config);
     Symbolicate::AppendEventSummary(arena, summary, detailReport);
-    Symbolicate::AppendTriggerSummary(detailReport, summary);
 
     if(summary.platform == "windows"){
 #if defined(NWB_PLATFORM_WINDOWS)

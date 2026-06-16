@@ -55,6 +55,7 @@ public:
 
 public:
     using ProjectUpdateCallback = bool(*)(void* userData, f32 delta);
+    using TelemetryUploadCallback = bool(*)(void* userData, const void* bytes, usize byteCount);
 
 public:
     bool startup();
@@ -94,6 +95,8 @@ public:
     void setTelemetryArchivePath(const Telemetry::TelemetryPath& path);
     void setTelemetryArchiveOptions(const Telemetry::ArchiveSinkOptions& options);
     [[nodiscard]] Telemetry::ArchiveResult flushTelemetryArchive(bool clearAfterWrite = false);
+    void setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData);
+    [[nodiscard]] bool flushTelemetryUpload(bool clearAfterUpload = false);
 
     [[nodiscard]] inline FrameString& appliedWindowTitle(){ return m_appliedWindowTitle; }
     [[nodiscard]] inline const FrameString& appliedWindowTitle()const{ return m_appliedWindowTitle; }
@@ -123,6 +126,7 @@ private:
     Perf::Session m_perfSession;
     Telemetry::CaptureSession m_telemetrySession;
     Telemetry::ArchiveSink m_telemetryArchiveSink;
+    Telemetry::TelemetryBytes m_telemetryUploadBytes;
     Perf::MemoryScopeId m_graphicsObjectArenaMemoryScope;
     Perf::MemoryScopeId m_projectObjectArenaMemoryScope;
     Alloc::ThreadPool m_projectThreadPool;
@@ -132,6 +136,8 @@ private:
 
     ProjectUpdateCallback m_projectUpdateCallback = nullptr;
     void* m_projectUpdateUserData = nullptr;
+    TelemetryUploadCallback m_telemetryUploadCallback = nullptr;
+    void* m_telemetryUploadUserData = nullptr;
     bool m_quitRequested = false;
 };
 

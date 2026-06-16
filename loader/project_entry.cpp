@@ -57,6 +57,10 @@ Core::Telemetry::ArchiveResult ProjectRuntimeContext::flushTelemetryArchive(cons
     return result;
 }
 
+bool ProjectRuntimeContext::flushTelemetryUpload(const bool clearAfterUpload){
+    return telemetryUploadFlush ? telemetryUploadFlush(clearAfterUpload) : false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

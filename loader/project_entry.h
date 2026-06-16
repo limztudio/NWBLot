@@ -66,6 +66,7 @@ struct ProjectRuntimeContext{
     using TelemetryArchivePathCallback = Function<void(const Core::Telemetry::TelemetryPath& path)>;
     using TelemetryArchiveOptionsCallback = Function<void(const Core::Telemetry::ArchiveSinkOptions& options)>;
     using TelemetryArchiveFlushCallback = Function<Core::Telemetry::ArchiveResult(bool clearAfterWrite)>;
+    using TelemetryUploadFlushCallback = Function<bool(bool clearAfterUpload)>;
     using RequestQuitCallback = Function<void()>;
 
     Core::Graphics& graphics;
@@ -82,6 +83,7 @@ struct ProjectRuntimeContext{
     TelemetryArchivePathCallback telemetryArchivePath;
     TelemetryArchiveOptionsCallback telemetryArchiveOptions;
     TelemetryArchiveFlushCallback telemetryArchiveFlush;
+    TelemetryUploadFlushCallback telemetryUploadFlush;
     RequestQuitCallback requestQuit;
 
     void setPerfCapture(const Core::Perf::CaptureOptions& options);
@@ -92,6 +94,7 @@ struct ProjectRuntimeContext{
     void setTelemetryArchivePath(const Core::Telemetry::TelemetryPath& path);
     void setTelemetryArchiveOptions(const Core::Telemetry::ArchiveSinkOptions& options);
     [[nodiscard]] Core::Telemetry::ArchiveResult flushTelemetryArchive(bool clearAfterWrite = false);
+    [[nodiscard]] bool flushTelemetryUpload(bool clearAfterUpload = false);
 };
 
 

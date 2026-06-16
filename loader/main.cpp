@@ -219,6 +219,11 @@ bool InstallCrashReporting(CrashArena& crashArena, const LoaderOptions& options)
     return false;
 }
 
+bool UploadTelemetry(void* userData, const void* bytes, const usize byteCount){
+    auto* logger = static_cast<NWB::Log::IClient*>(userData);
+    return logger && logger->enqueueTelemetry(bytes, byteCount);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -229,7 +234,12 @@ bool InstallCrashReporting(CrashArena& crashArena, const LoaderOptions& options)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader::LoaderOptions& options, void* inst){
+static int RunProjectRuntime(
+    NWB::Core::Alloc::GlobalArena& arena,
+    const __hidden_loader::LoaderOptions& options,
+    void* inst,
+    NWB::Log::IClient* telemetryClient
+){
     try{
         const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
         if(frameClientSize.width == 0 || frameClientSize.height == 0){
@@ -244,6 +254,8 @@ static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidde
         }
 
         NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
+        if(telemetryClient)
+            frame.setTelemetryUploadCallback(&__hidden_loader::UploadTelemetry, telemetryClient);
         frame.graphics().setWindowTitle(MakeNotNull(projectWindowTitle));
         const NWB::Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory(arena);
         frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
@@ -293,6 +305,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidde
             {},
             {},
             {},
+            {},
         };
         context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
             return NWB::Core::ShaderArchive::findVirtualPath(
@@ -323,6 +336,9 @@ static int RunProjectRuntime(NWB::Core::Alloc::GlobalArena& arena, const __hidde
         };
         context.telemetryArchiveFlush = [&frame](const bool clearAfterWrite){
             return frame.flushTelemetryArchive(clearAfterWrite);
+        };
+        context.telemetryUploadFlush = [&frame](const bool clearAfterUpload){
+            return frame.flushTelemetryUpload(clearAfterUpload);
         };
         context.requestQuit = [&frame](){
             frame.requestQuit();
@@ -379,7 +395,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
         if(!crashReportingInstalled)
             NWB_LOGGER_WARNING(NWB_TEXT("Loader: crash reporting unavailable"));
 
-        return RunProjectRuntime(arena, options, inst);
+        return RunProjectRuntime(arena, options, inst, nullptr);
     }
 
     NWB::Log::Client logger;
@@ -390,7 +406,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
     if(!crashReportingInstalled)
         NWB_LOGGER_WARNING(NWB_TEXT("Loader: crash reporting unavailable"));
 
-    return RunProjectRuntime(arena, options, inst);
+    return RunProjectRuntime(arena, options, inst, &logger);
 }
 
 

@@ -69,6 +69,7 @@ Frame::Frame(void* inst, u16 width, u16 height)
     , m_perfSession(m_projectObjectArena)
     , m_telemetrySession(m_projectObjectArena)
     , m_telemetryArchiveSink(m_telemetrySession)
+    , m_telemetryUploadBytes(m_projectObjectArena)
     , m_projectThreadPool(queryProjectWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_projectJobSystem(m_projectThreadPool)
     , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem, m_perfSession.gpuTimingSink())
@@ -96,6 +97,8 @@ bool Frame::startup(){
     return true;
 }
 void Frame::cleanup(){
+    if(m_telemetryUploadCallback)
+        static_cast<void>(flushTelemetryUpload(!m_telemetryArchiveSink.enabled()));
     static_cast<void>(m_telemetryArchiveSink.flushIfEnabled());
     m_graphics.destroy();
 }
@@ -122,6 +125,24 @@ void Frame::setTelemetryArchiveOptions(const Telemetry::ArchiveSinkOptions& opti
 }
 Telemetry::ArchiveResult Frame::flushTelemetryArchive(const bool clearAfterWrite){
     return m_telemetryArchiveSink.flush(clearAfterWrite);
+}
+void Frame::setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData){
+    m_telemetryUploadCallback = callback;
+    m_telemetryUploadUserData = userData;
+}
+bool Frame::flushTelemetryUpload(const bool clearAfterUpload){
+    if(!m_telemetryUploadCallback || m_telemetrySession.eventCount() == 0u)
+        return false;
+
+    if(!Telemetry::EncodeEventStream(m_telemetrySession.view(), m_telemetryUploadBytes))
+        return false;
+
+    if(!m_telemetryUploadCallback(m_telemetryUploadUserData, m_telemetryUploadBytes.data(), m_telemetryUploadBytes.size()))
+        return false;
+
+    if(clearAfterUpload)
+        m_telemetrySession.clear();
+    return true;
 }
 bool Frame::flushPerfSamples(){
     auto* device = m_graphics.getDevice();

@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include "archive.h"
 #include "diagnostic.h"
 #include "frame_graph.h"
 #include "perf.h"
@@ -66,15 +65,6 @@ public:
     [[nodiscard]] PerfSessionRecordResult recordPerfReport(const Perf::SessionReport& report, const u32 streamId = 0u){
         return RecordPerfSessionReport(m_recorder, report, streamId);
     }
-
-    template<typename PathArenaT>
-    [[nodiscard]] ArchiveResult flushArchive(const ::Path<PathArenaT>& path, const bool clearAfterWrite = false){
-        ArchiveResult result = WriteEventStreamArchive(m_recorder.arena(), m_recorder.view(), path);
-        if(result.ok() && clearAfterWrite)
-            clear();
-        return result;
-    }
-
 
 private:
     Recorder m_recorder;
@@ -195,4 +185,3 @@ NWB_TELEMETRY_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

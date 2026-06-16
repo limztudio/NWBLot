@@ -1,14 +1,11 @@
 nwb_declare_static_library(nwb_telemetry)
 target_sources(nwb_telemetry PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/archive_sink.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/codec.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/diagnostic.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/perf.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/recorder.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_log.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/archive.h"
-    "${CMAKE_CURRENT_LIST_DIR}/archive_sink.h"
     "${CMAKE_CURRENT_LIST_DIR}/codec.h"
     "${CMAKE_CURRENT_LIST_DIR}/diagnostic.h"
     "${CMAKE_CURRENT_LIST_DIR}/event.h"

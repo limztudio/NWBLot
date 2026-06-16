@@ -68,7 +68,6 @@ Frame::Frame(void* inst, u16 width, u16 height)
     , m_projectObjectArena("NWB::Core::Frame::ProjectObjectArena")
     , m_perfSession(m_projectObjectArena)
     , m_telemetrySession(m_projectObjectArena)
-    , m_telemetryArchiveSink(m_telemetrySession)
     , m_telemetryUploadBytes(m_projectObjectArena)
     , m_projectThreadPool(queryProjectWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_projectJobSystem(m_projectThreadPool)
@@ -98,8 +97,7 @@ bool Frame::startup(){
 }
 void Frame::cleanup(){
     if(m_telemetryUploadCallback)
-        static_cast<void>(flushTelemetryUpload(!m_telemetryArchiveSink.enabled()));
-    static_cast<void>(m_telemetryArchiveSink.flushIfEnabled());
+        static_cast<void>(flushTelemetryUpload(true));
     m_graphics.destroy();
 }
 void Frame::requestQuit(){
@@ -116,15 +114,6 @@ void Frame::setTelemetryCapture(const Telemetry::CaptureOptions& options){
     m_telemetrySession.setCaptureOptions(options);
     if(options.perfEnabled())
         setPerfCapture(Perf::CaptureOptions::All());
-}
-void Frame::setTelemetryArchivePath(const Telemetry::TelemetryPath& path){
-    m_telemetryArchiveSink.setPath(path);
-}
-void Frame::setTelemetryArchiveOptions(const Telemetry::ArchiveSinkOptions& options){
-    m_telemetryArchiveSink.setOptions(options);
-}
-Telemetry::ArchiveResult Frame::flushTelemetryArchive(const bool clearAfterWrite){
-    return m_telemetryArchiveSink.flush(clearAfterWrite);
 }
 void Frame::setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData){
     m_telemetryUploadCallback = callback;

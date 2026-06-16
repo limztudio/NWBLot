@@ -7,7 +7,7 @@
 
 #include <core/global.h>
 #include <core/perf/report.h>
-#include <core/telemetry/archive_sink.h>
+#include <core/telemetry/session.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,9 +63,6 @@ struct ProjectRuntimeContext{
     using PerfSampleFlushCallback = Function<bool()>;
     using PerfReportCallback = Function<Core::Perf::SessionReport()>;
     using TelemetryCaptureCallback = Function<void(const Core::Telemetry::CaptureOptions& options)>;
-    using TelemetryArchivePathCallback = Function<void(const Core::Telemetry::TelemetryPath& path)>;
-    using TelemetryArchiveOptionsCallback = Function<void(const Core::Telemetry::ArchiveSinkOptions& options)>;
-    using TelemetryArchiveFlushCallback = Function<Core::Telemetry::ArchiveResult(bool clearAfterWrite)>;
     using TelemetryUploadFlushCallback = Function<bool(bool clearAfterUpload)>;
     using RequestQuitCallback = Function<void()>;
 
@@ -80,9 +77,6 @@ struct ProjectRuntimeContext{
     PerfSampleFlushCallback perfSampleFlush;
     PerfReportCallback perfReportReader;
     TelemetryCaptureCallback telemetryCapture;
-    TelemetryArchivePathCallback telemetryArchivePath;
-    TelemetryArchiveOptionsCallback telemetryArchiveOptions;
-    TelemetryArchiveFlushCallback telemetryArchiveFlush;
     TelemetryUploadFlushCallback telemetryUploadFlush;
     RequestQuitCallback requestQuit;
 
@@ -91,9 +85,6 @@ struct ProjectRuntimeContext{
     [[nodiscard]] bool flushPerfSamples();
     [[nodiscard]] Core::Perf::SessionReport perfReport()const;
     void setTelemetryCapture(const Core::Telemetry::CaptureOptions& options);
-    void setTelemetryArchivePath(const Core::Telemetry::TelemetryPath& path);
-    void setTelemetryArchiveOptions(const Core::Telemetry::ArchiveSinkOptions& options);
-    [[nodiscard]] Core::Telemetry::ArchiveResult flushTelemetryArchive(bool clearAfterWrite = false);
     [[nodiscard]] bool flushTelemetryUpload(bool clearAfterUpload = false);
 };
 

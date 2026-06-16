@@ -125,7 +125,7 @@ TelemetryIngestResult ProcessTelemetryUpload(
 
     const Path uploadStem = __hidden_log_telemetry_ingest::MakeTelemetryUploadStem(arena);
     result.rawPath = rawDirectory / uploadStem;
-    result.rawPath.replace_extension(s_TelemetryArchiveFileExtension);
+    result.rawPath.replace_extension(s_TelemetryRawStreamFileExtension);
     result.jsonPath = reportDirectory / uploadStem;
     result.jsonPath.replace_extension(s_TelemetryJsonFileExtension);
     result.perfCsvPath = reportDirectory / uploadStem;

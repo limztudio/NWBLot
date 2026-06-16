@@ -53,12 +53,6 @@ public:
     [[nodiscard]] usize eventCount()const{ return m_recorder.eventCount(); }
     [[nodiscard]] EventView view()const{ return m_recorder.view(); }
 
-    [[nodiscard]] bool recordTextLog(const Common::LogType::Enum type, const TStringView message){
-        return RecordTextLog(m_recorder, type, message, m_frameIndex, m_streamId);
-    }
-    [[nodiscard]] bool recordDiagnostic(const DiagnosticEventRecord& record){
-        return RecordDiagnostic(m_recorder, record, m_frameIndex, m_streamId);
-    }
     [[nodiscard]] bool recordFrameGraph(const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges){
         return RecordFrameGraph(m_recorder, m_frameIndex, nodes, edges, m_streamId);
     }

@@ -309,37 +309,6 @@ static ::Path<NWB::Core::Alloc::GlobalArena> TelemetryTestStorageDirectory(NWB::
     return ::Path<NWB::Core::Alloc::GlobalArena>(arena, "telemetry_test_storage");
 }
 
-static void TestCaptureSessionRecordsTextLogWithContext(TestContext& context){
-    TestArena testArena;
-    Telemetry::CaptureSession session(testArena.arena);
-    session.setCaptureOptions(Telemetry::CaptureOptions::All());
-    session.setFrameIndex(606u);
-    session.setStreamId(24u);
-
-    NWB_TELEMETRY_TEST_CHECK(context, session.frameIndex() == 606u);
-    NWB_TELEMETRY_TEST_CHECK(context, session.streamId() == 24u);
-    NWB_TELEMETRY_TEST_CHECK(context, session.textLogCaptureLogger().frameIndex() == 606u);
-    NWB_TELEMETRY_TEST_CHECK(context, session.textLogCaptureLogger().streamId() == 24u);
-    NWB_TELEMETRY_TEST_CHECK(context, session.recordTextLog(
-        NWB::Core::Common::LogType::Warning,
-        NWB_TEXT("session text")
-    ));
-
-    const Telemetry::EventRecord* event = session.view().eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
-    if(!event)
-        return;
-
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 606u);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 24u);
-
-    Telemetry::TextLogPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::Warning);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "session text");
-}
-
 static void TestCaptureSessionTextLoggerForwardsAndRecords(TestContext& context){
     TestArena testArena;
     Telemetry::CaptureSession session(testArena.arena);
@@ -414,40 +383,6 @@ static void TestCaptureSessionLogRegistrationGuardForwardsAndRestores(TestContex
     NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::EssentialInfo);
     NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "session registered");
-}
-
-static void TestCaptureSessionRecordsDiagnosticWithContext(TestContext& context){
-    TestArena testArena;
-    Telemetry::CaptureSession session(testArena.arena);
-    session.setCaptureOptions(Telemetry::CaptureOptions::All());
-    session.setFrameIndex(608u);
-    session.setStreamId(26u);
-
-    const DiagnosticEventRecord source{
-        .event = DiagnosticEventName::s_Error,
-        .category = "session_diagnostic",
-        .message = "session diagnostic",
-        .file = "session.cpp",
-        .line = 66u,
-    };
-
-    NWB_TELEMETRY_TEST_CHECK(context, session.recordDiagnostic(source));
-
-    const Telemetry::EventRecord* event = session.view().eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
-    if(!event)
-        return;
-
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::Diagnostic);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 608u);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 26u);
-
-    Telemetry::DiagnosticPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.category == "session_diagnostic");
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.message == "session diagnostic");
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.file == "session.cpp");
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.line == 66u);
 }
 
 static void TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(TestContext& context){
@@ -1472,10 +1407,8 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestEventStreamCodecRoundTrip(context);
     __hidden_tests::TestEventStreamCodecHandlesEmptyStreams(context);
     __hidden_tests::TestEventStreamCodecRejectsInvalidInput(context);
-    __hidden_tests::TestCaptureSessionRecordsTextLogWithContext(context);
     __hidden_tests::TestCaptureSessionTextLoggerForwardsAndRecords(context);
     __hidden_tests::TestCaptureSessionLogRegistrationGuardForwardsAndRestores(context);
-    __hidden_tests::TestCaptureSessionRecordsDiagnosticWithContext(context);
     __hidden_tests::TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(context);
     __hidden_tests::TestTextLogPayloadRoundTrip(context);
     __hidden_tests::TestRecordTextLogUsesTelemetryEvent(context);

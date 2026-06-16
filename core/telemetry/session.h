@@ -77,29 +77,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class CaptureSessionForwardLoggerGuard final : NoCopy{
-public:
-    CaptureSessionForwardLoggerGuard(CaptureSession& session, Common::ILogger* const forwardLogger)
-        : m_session(session)
-        , m_previousForwardLogger(session.textLogCaptureLogger().forwardLogger())
-    {
-        m_session.setForwardLogger(forwardLogger);
-    }
-    CaptureSessionForwardLoggerGuard(CaptureSessionForwardLoggerGuard&&) = delete;
-    ~CaptureSessionForwardLoggerGuard(){
-        m_session.setForwardLogger(m_previousForwardLogger);
-    }
-
-
-private:
-    CaptureSession& m_session;
-    Common::ILogger* m_previousForwardLogger = nullptr;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class CaptureSessionLogRegistrationGuard final : NoCopy{
 public:
     explicit CaptureSessionLogRegistrationGuard(CaptureSession& session)

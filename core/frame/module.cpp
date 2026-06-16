@@ -149,6 +149,9 @@ bool Frame::updateFrame(f32 delta){
         return false;
     }
 
+    if(m_telemetrySession.captureOptions().frameGraphEnabled())
+        static_cast<void>(m_graphics.recordFrameGraph(m_telemetrySession));
+
     m_perfSession.recordMemorySnapshot(m_graphicsObjectArenaMemoryScope, m_graphicsObjectArena);
     m_perfSession.recordMemorySnapshot(m_projectObjectArenaMemoryScope, m_projectObjectArena);
     m_perfSession.publishFrame();

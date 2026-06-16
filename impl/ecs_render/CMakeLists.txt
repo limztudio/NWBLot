@@ -23,6 +23,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/deferred_composite.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred_targets.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred_lighting.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/frame_graph_export.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material_pipeline.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material_pass_draw.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material_pass_resources.cpp"

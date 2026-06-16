@@ -95,6 +95,12 @@ public:
     virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
     virtual void invalidateResources()override;
     virtual void render(Core::Framebuffer* framebuffer)override;
+    virtual bool appendFrameGraph(
+        Core::Telemetry::FrameGraphNodeDescs& nodes,
+        Core::Telemetry::FrameGraphEdgeDescs& edges,
+        u32& outEntryNodeIndex,
+        u32& outExitNodeIndex
+    )override;
     [[nodiscard]] CsgShapeRegistry& csgShapeRegistry(){ return m_csgShapeRegistry; }
     [[nodiscard]] const CsgShapeRegistry& csgShapeRegistry()const{ return m_csgShapeRegistry; }
 

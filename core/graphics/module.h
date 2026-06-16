@@ -11,6 +11,8 @@
 #include "gpu_timing.h"
 #include "render_pass.h"
 
+#include <core/telemetry/session.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -173,6 +175,7 @@ public:
 
     void animate(f64 elapsedTime);
     void render();
+    [[nodiscard]] bool recordFrameGraph(Telemetry::CaptureSession& session);
     void updateAverageFrameTime(f64 elapsedTime);
     void notifyPointerScaleChanged()const;
     [[nodiscard]] bool shouldRenderUnfocused()const;

@@ -1349,7 +1349,7 @@ static bool ContainsText(const AStringView text, const AStringView needle){
     return text.find(needle) != AStringView::npos;
 }
 
-static void TestArchiveReportSummarizesBenchmarkEvents(TestContext& context){
+static void TestTelemetryReportSummarizesBenchmarkEvents(TestContext& context){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -1376,8 +1376,8 @@ static void TestArchiveReportSummarizesBenchmarkEvents(TestContext& context){
     BuildTestFrameGraph(testArena.arena, nodes, edges);
     NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 4u));
 
-    Log::ArchiveReport report(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Log::BuildArchiveReport(testArena.arena, recorder.view(), report));
+    Log::TelemetryReport report(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
 
     NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventCount == 4u);
     NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::TextLog)] == 1u);
@@ -1499,7 +1499,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestPerfViewsExposeScopes(context);
     __hidden_tests::TestRecordPerfSessionReportUsesTelemetryEvents(context);
     __hidden_tests::TestCaptureSessionRecordsPerfReport(context);
-    __hidden_tests::TestArchiveReportSummarizesBenchmarkEvents(context);
+    __hidden_tests::TestTelemetryReportSummarizesBenchmarkEvents(context);
     __hidden_tests::TestTelemetryIngestStoresRawAndReports(context);
 })
 

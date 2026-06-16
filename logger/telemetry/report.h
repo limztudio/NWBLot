@@ -28,11 +28,11 @@ using TelemetryArena = Telemetry::TelemetryArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_ArchiveReportEventKindCount = static_cast<usize>(Telemetry::EventKind::MemoryFrame) + 1u;
+inline constexpr usize s_TelemetryReportEventKindCount = static_cast<usize>(Telemetry::EventKind::MemoryFrame) + 1u;
 
-struct ArchiveReportSummary{
+struct TelemetryReportSummary{
     u64 eventCount = 0u;
-    u64 eventKindCounts[s_ArchiveReportEventKindCount] = {};
+    u64 eventKindCounts[s_TelemetryReportEventKindCount] = {};
     u64 parseFailureCount = 0u;
 
     bool hasFrameRange = false;
@@ -61,12 +61,12 @@ struct ArchiveReportSummary{
     u32 maxFrameGraphEdgeCount = 0u;
 };
 
-struct ArchiveReport{
-    ArchiveReportSummary summary;
+struct TelemetryReport{
+    TelemetryReportSummary summary;
     AString<TelemetryArena> json;
     AString<TelemetryArena> perfCsv;
 
-    explicit ArchiveReport(TelemetryArena& arena)
+    explicit TelemetryReport(TelemetryArena& arena)
         : json(arena)
         , perfCsv(arena)
     {}
@@ -78,7 +78,7 @@ struct ArchiveReport{
 
 [[nodiscard]] const char* EventKindText(Telemetry::EventKind::Enum kind)noexcept;
 [[nodiscard]] const char* PerfTimingSourceText(Telemetry::PerfTimingSource::Enum source)noexcept;
-[[nodiscard]] bool BuildArchiveReport(TelemetryArena& arena, const Telemetry::EventView& events, ArchiveReport& outReport);
+[[nodiscard]] bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& events, TelemetryReport& outReport);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

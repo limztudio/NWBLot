@@ -133,7 +133,7 @@ TelemetryIngestResult ProcessTelemetryUpload(
 
     result.storedRaw = __hidden_log_telemetry_ingest::StoreRawTelemetry(result.rawPath, bytes, byteCount);
     if(!result.storedRaw){
-        __hidden_log_telemetry_ingest::SetResultMessage(result, "Telemetry upload could not store raw archive", Type::Error);
+        __hidden_log_telemetry_ingest::SetResultMessage(result, "Telemetry upload could not store raw stream", Type::Error);
         return result;
     }
 
@@ -151,8 +151,8 @@ TelemetryIngestResult ProcessTelemetryUpload(
         return result;
     }
 
-    ArchiveReport report(arena);
-    if(!BuildArchiveReport(arena, recorder.view(), report)){
+    TelemetryReport report(arena);
+    if(!BuildTelemetryReport(arena, recorder.view(), report)){
         result.message = StringFormat(arena, NWB_TEXT("Telemetry upload stored but report build failed: raw='{}'"), PathToString<tchar>(result.rawPath));
         result.type = Type::Error;
         return result;

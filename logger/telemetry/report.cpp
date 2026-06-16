@@ -17,7 +17,7 @@ NWB_LOG_BEGIN
 namespace Telemetry = Core::Telemetry;
 
 
-namespace __hidden_telemetry_export{
+namespace __hidden_telemetry_report{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,10 +90,10 @@ void AppendFormat(TelemetryArena& arena, AString<TelemetryArena>& out, AFormatSt
 
 [[nodiscard]] usize EventKindBucket(const Telemetry::EventKind::Enum kind)noexcept{
     const usize index = static_cast<usize>(kind);
-    return index < s_ArchiveReportEventKindCount ? index : static_cast<usize>(Telemetry::EventKind::Unknown);
+    return index < s_TelemetryReportEventKindCount ? index : static_cast<usize>(Telemetry::EventKind::Unknown);
 }
 
-void RecordFrameRange(ArchiveReportSummary& summary, const u64 frameIndex){
+void RecordFrameRange(TelemetryReportSummary& summary, const u64 frameIndex){
     if(!summary.hasFrameRange){
         summary.hasFrameRange = true;
         summary.minFrameIndex = frameIndex;
@@ -132,7 +132,7 @@ void AppendPerfCsvRow(
     );
 }
 
-void AddTiming(ArchiveReportSummary& summary, const Telemetry::PerfTimingPayload& payload){
+void AddTiming(TelemetryReportSummary& summary, const Telemetry::PerfTimingPayload& payload){
     if(payload.source == Telemetry::PerfTimingSource::Cpu){
         ++summary.cpuTimingEventCount;
         summary.cpuTimingSampleCount += payload.stats.sampleCount;
@@ -149,7 +149,7 @@ void AddTiming(ArchiveReportSummary& summary, const Telemetry::PerfTimingPayload
     }
 }
 
-void AddMemory(ArchiveReportSummary& summary, const Telemetry::PerfMemoryPayload& payload){
+void AddMemory(TelemetryReportSummary& summary, const Telemetry::PerfMemoryPayload& payload){
     ++summary.memoryEventCount;
     if(payload.snapshot.usedBytes > summary.maxMemoryUsedBytes)
         summary.maxMemoryUsedBytes = payload.snapshot.usedBytes;
@@ -159,7 +159,7 @@ void AddMemory(ArchiveReportSummary& summary, const Telemetry::PerfMemoryPayload
         summary.totalMemoryUsedDeltaBytes += payload.delta.usedBytes;
 }
 
-void AddFrameGraph(ArchiveReportSummary& summary, const Telemetry::FrameGraphPayload& payload){
+void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphPayload& payload){
     ++summary.frameGraphFrameCount;
     summary.frameGraphNodeCount += payload.nodes.size();
     summary.frameGraphEdgeCount += payload.edges.size();
@@ -171,7 +171,7 @@ void AddFrameGraph(ArchiveReportSummary& summary, const Telemetry::FrameGraphPay
         summary.maxFrameGraphEdgeCount = edgeCount;
 }
 
-void BuildJson(TelemetryArena& arena, const ArchiveReportSummary& summary, AString<TelemetryArena>& out){
+void BuildJson(TelemetryArena& arena, const TelemetryReportSummary& summary, AString<TelemetryArena>& out){
     out.clear();
     out += "{\n";
     AppendFormat(arena, out, "  \"eventCount\": {},\n", summary.eventCount);
@@ -182,10 +182,10 @@ void BuildJson(TelemetryArena& arena, const ArchiveReportSummary& summary, AStri
     out += "},\n";
 
     out += "  \"events\": {\n";
-    for(usize i = 0u; i < s_ArchiveReportEventKindCount; ++i){
+    for(usize i = 0u; i < s_TelemetryReportEventKindCount; ++i){
         out += "    ";
         AppendJsonString(out, EventKindText(static_cast<Telemetry::EventKind::Enum>(i)));
-        AppendFormat(arena, out, ": {}{}", summary.eventKindCounts[i], i + 1u == s_ArchiveReportEventKindCount ? "\n" : ",\n");
+        AppendFormat(arena, out, ": {}{}", summary.eventKindCounts[i], i + 1u == s_TelemetryReportEventKindCount ? "\n" : ",\n");
     }
     out += "  },\n";
 
@@ -259,9 +259,9 @@ const char* PerfTimingSourceText(const Telemetry::PerfTimingSource::Enum source)
     }
 }
 
-bool BuildArchiveReport(TelemetryArena& arena, const Telemetry::EventView& events, ArchiveReport& outReport){
-    outReport = ArchiveReport(arena);
-    __hidden_telemetry_export::AppendPerfCsvHeader(outReport.perfCsv);
+bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& events, TelemetryReport& outReport){
+    outReport = TelemetryReport(arena);
+    __hidden_telemetry_report::AppendPerfCsvHeader(outReport.perfCsv);
 
     if(!events.valid())
         return false;
@@ -274,8 +274,8 @@ bool BuildArchiveReport(TelemetryArena& arena, const Telemetry::EventView& event
             continue;
         }
 
-        ++outReport.summary.eventKindCounts[__hidden_telemetry_export::EventKindBucket(event->header.kind)];
-        __hidden_telemetry_export::RecordFrameRange(outReport.summary, event->header.frameIndex);
+        ++outReport.summary.eventKindCounts[__hidden_telemetry_report::EventKindBucket(event->header.kind)];
+        __hidden_telemetry_report::RecordFrameRange(outReport.summary, event->header.frameIndex);
 
         switch(event->header.kind){
         case Telemetry::EventKind::TextLog: {
@@ -296,8 +296,8 @@ bool BuildArchiveReport(TelemetryArena& arena, const Telemetry::EventView& event
                 ++outReport.summary.parseFailureCount;
                 break;
             }
-            __hidden_telemetry_export::AddTiming(outReport.summary, payload);
-            __hidden_telemetry_export::AppendPerfCsvRow(arena, outReport.perfCsv, payload.source, payload);
+            __hidden_telemetry_report::AddTiming(outReport.summary, payload);
+            __hidden_telemetry_report::AppendPerfCsvRow(arena, outReport.perfCsv, payload.source, payload);
             break;
         }
         case Telemetry::EventKind::MemoryFrame: {
@@ -306,7 +306,7 @@ bool BuildArchiveReport(TelemetryArena& arena, const Telemetry::EventView& event
                 ++outReport.summary.parseFailureCount;
                 break;
             }
-            __hidden_telemetry_export::AddMemory(outReport.summary, payload);
+            __hidden_telemetry_report::AddMemory(outReport.summary, payload);
             break;
         }
         case Telemetry::EventKind::FrameGraphFrame: {
@@ -315,7 +315,7 @@ bool BuildArchiveReport(TelemetryArena& arena, const Telemetry::EventView& event
                 ++outReport.summary.parseFailureCount;
                 break;
             }
-            __hidden_telemetry_export::AddFrameGraph(outReport.summary, payload);
+            __hidden_telemetry_report::AddFrameGraph(outReport.summary, payload);
             break;
         }
         default:
@@ -323,7 +323,7 @@ bool BuildArchiveReport(TelemetryArena& arena, const Telemetry::EventView& event
         }
     }
 
-    __hidden_telemetry_export::BuildJson(arena, outReport.summary, outReport.json);
+    __hidden_telemetry_report::BuildJson(arena, outReport.summary, outReport.json);
     return true;
 }
 

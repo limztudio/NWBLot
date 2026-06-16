@@ -49,7 +49,7 @@ struct TelemetryIngestResult{
     Path perfCsvPath;
     Type::Enum type = Type::Info;
     Telemetry::DecodeResult decode;
-    ArchiveReportSummary summary;
+    TelemetryReportSummary summary;
     bool storedRaw = false;
     bool wroteJson = false;
     bool wrotePerfCsv = false;

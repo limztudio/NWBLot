@@ -15,24 +15,6 @@ NWB_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-void ProjectRuntimeContext::setGpuTimingEnabled(const bool enabled){
-    setPerfCapture(enabled ? Core::Perf::CaptureOptions::GpuTimingOnly() : Core::Perf::CaptureOptions::Disabled());
-}
-
-void ProjectRuntimeContext::setPerfCapture(const Core::Perf::CaptureOptions& options){
-    if(perfCapture)
-        perfCapture(options);
-}
-
-bool ProjectRuntimeContext::flushPerfSamples(){
-    return perfSampleFlush ? perfSampleFlush() : false;
-}
-
-Core::Perf::SessionReport ProjectRuntimeContext::perfReport()const{
-    return perfReportReader ? perfReportReader() : Core::Perf::SessionReport{};
-}
-
 void ProjectRuntimeContext::setTelemetryCapture(const Core::Telemetry::CaptureOptions& options){
     if(telemetryCapture)
         telemetryCapture(options);

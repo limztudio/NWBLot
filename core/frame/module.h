@@ -85,9 +85,6 @@ public:
     [[nodiscard]] inline Alloc::JobSystem& projectJobSystem(){ return m_projectJobSystem; }
     [[nodiscard]] inline const Alloc::JobSystem& projectJobSystem()const{ return m_projectJobSystem; }
 
-    [[nodiscard]] Perf::SessionReport perfReport()const;
-    void setPerfCapture(const Perf::CaptureOptions& options);
-    [[nodiscard]] bool flushPerfSamples();
     [[nodiscard]] inline Telemetry::CaptureSession& telemetrySession(){ return m_telemetrySession; }
     [[nodiscard]] inline const Telemetry::CaptureSession& telemetrySession()const{ return m_telemetrySession; }
     void setTelemetryCapture(const Telemetry::CaptureOptions& options);
@@ -105,6 +102,7 @@ public:
 private:
     void setupPlatform(void* inst);
     void cleanupPlatform();
+    void setPerfCapture(const Perf::CaptureOptions& options);
     bool updateFrame(f32 delta);
 
 

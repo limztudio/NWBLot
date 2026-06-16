@@ -103,9 +103,6 @@ void Frame::cleanup(){
 void Frame::requestQuit(){
     m_quitRequested = true;
 }
-Perf::SessionReport Frame::perfReport()const{
-    return m_perfSession.report();
-}
 void Frame::setPerfCapture(const Perf::CaptureOptions& options){
     m_perfSession.setCaptureOptions(options);
     m_graphics.gpuTiming().setQueryCollectionEnabled(options.gpuTimingActive());
@@ -131,15 +128,6 @@ bool Frame::flushTelemetryUpload(const bool clearAfterUpload){
 
     if(clearAfterUpload)
         m_telemetrySession.clear();
-    return true;
-}
-bool Frame::flushPerfSamples(){
-    auto* device = m_graphics.getDevice();
-    if(!device)
-        return false;
-
-    device->waitForIdle();
-    m_graphics.gpuTiming().collect(*device);
     return true;
 }
 bool Frame::update(f32 delta){

@@ -6,7 +6,6 @@
 
 
 #include <core/global.h>
-#include <core/perf/report.h>
 #include <core/telemetry/session.h>
 
 
@@ -59,9 +58,6 @@ struct ProjectFrameClientSize{
 
 struct ProjectRuntimeContext{
     using ShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
-    using PerfCaptureCallback = Function<void(const Core::Perf::CaptureOptions& options)>;
-    using PerfSampleFlushCallback = Function<bool()>;
-    using PerfReportCallback = Function<Core::Perf::SessionReport()>;
     using TelemetryCaptureCallback = Function<void(const Core::Telemetry::CaptureOptions& options)>;
     using TelemetryUploadFlushCallback = Function<bool(bool clearAfterUpload)>;
     using RequestQuitCallback = Function<void()>;
@@ -73,17 +69,10 @@ struct ProjectRuntimeContext{
     Core::Alloc::JobSystem& jobSystem;
     Core::Assets::AssetManager& assetManager;
     ShaderPathResolveCallback shaderPathResolver;
-    PerfCaptureCallback perfCapture;
-    PerfSampleFlushCallback perfSampleFlush;
-    PerfReportCallback perfReportReader;
     TelemetryCaptureCallback telemetryCapture;
     TelemetryUploadFlushCallback telemetryUploadFlush;
     RequestQuitCallback requestQuit;
 
-    void setPerfCapture(const Core::Perf::CaptureOptions& options);
-    void setGpuTimingEnabled(bool enabled);
-    [[nodiscard]] bool flushPerfSamples();
-    [[nodiscard]] Core::Perf::SessionReport perfReport()const;
     void setTelemetryCapture(const Core::Telemetry::CaptureOptions& options);
     [[nodiscard]] bool flushTelemetryUpload(bool clearAfterUpload = false);
 };

@@ -300,9 +300,6 @@ static int RunProjectRuntime(
             {},
             {},
             {},
-            {},
-            {},
-            {},
         };
         context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
             return NWB::Core::ShaderArchive::findVirtualPath(
@@ -312,15 +309,6 @@ static int RunProjectRuntime(
                 stageName,
                 outVirtualPath
             );
-        };
-        context.perfCapture = [&frame](const NWB::Core::Perf::CaptureOptions& options){
-            frame.setPerfCapture(options);
-        };
-        context.perfSampleFlush = [&frame](){
-            return frame.flushPerfSamples();
-        };
-        context.perfReportReader = [&frame](){
-            return frame.perfReport();
         };
         context.telemetryCapture = [&frame](const NWB::Core::Telemetry::CaptureOptions& options){
             frame.setTelemetryCapture(options);

@@ -295,7 +295,6 @@ private:
             meshSystem,
             context.shaderPathResolver
         );
-        context.setGpuTimingEnabled(true);
 
         context.graphics.addRenderPassToBack(meshSkinningSystem);
         context.graphics.addRenderPassToBack(rendererSystem);

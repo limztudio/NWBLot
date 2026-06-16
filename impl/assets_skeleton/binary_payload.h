@@ -39,6 +39,7 @@ struct JointBinary{
     NameHash nameHash = {};
     u32 parentIndex = 0u;
     u32 padding0 = 0u;
+    u32 padding1[2u] = {};
     SkeletonJointMatrix localBindPose = {};
 };
 static_assert(IsStandardLayout_V<JointBinary>, "Skeleton joint must stay binary-serializable");

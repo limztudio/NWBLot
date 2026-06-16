@@ -50,7 +50,7 @@ bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     jointBinaries.reserve(skeleton.joints().size());
     for(usize jointIndex = 0u; jointIndex < skeleton.joints().size(); ++jointIndex){
         const SkeletonJoint& joint = skeleton.joints()[jointIndex];
-        SkeletonBinaryPayload::JointBinary jointBinary;
+        SkeletonBinaryPayload::JointBinary jointBinary = {};
         jointBinary.nameHash = jointNameHashes[jointIndex];
         jointBinary.parentIndex = joint.parentIndex;
         jointBinary.localBindPose = joint.localBindPose;

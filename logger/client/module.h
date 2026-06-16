@@ -20,6 +20,10 @@ NWB_LOG_BEGIN
 class IClient : public ILogger{
 public:
     virtual ~IClient()override = default;
+
+
+public:
+    [[nodiscard]] virtual bool enqueueTelemetry(const void* bytes, usize byteCount) = 0;
 };
 
 
@@ -49,6 +53,7 @@ public:
     virtual LogArena& arena()override{ return BaseType::arena(); }
     virtual void enqueue(LogString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
     virtual void enqueue(const LogString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
+    [[nodiscard]] virtual bool enqueueTelemetry(const void* bytes, usize byteCount)override;
 
 
 protected:
@@ -78,10 +83,15 @@ protected:
 private:
     void* m_curl;
     Vector<u8, LogArena> m_pendingPayload;
+    AString<LogArena> m_messageUrl;
+    AString<LogArena> m_telemetryUrl;
     bool m_hasPendingPayload;
+    bool m_pendingPayloadIsTelemetry;
 
 private:
     Atomic<usize> m_msgCount;
+    Atomic<usize> m_telemetryCount;
+    ParallelQueue<LogBytes, LogArena> m_telemetryQueue;
 };
 
 
@@ -111,6 +121,7 @@ public:
     virtual LogArena& arena()override{ return BaseType::arena(); }
     virtual void enqueue(LogString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
     virtual void enqueue(const LogString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
+    [[nodiscard]] virtual bool enqueueTelemetry(const void* bytes, usize byteCount)override;
 
 
 protected:

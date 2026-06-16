@@ -23,6 +23,9 @@ NWB_LOG_BEGIN
 
 using MessageType = Tuple<Timer, Type::Enum, LogString>;
 using MessageQueue = ParallelQueue<MessageType, LogArena>;
+using LogBytes = Vector<u8, LogArena>;
+
+inline constexpr const char* s_TelemetryUploadEndpoint = "/telemetry";
 
 [[nodiscard]] inline MessageType MakeMessageType(LogArena& arena){
     return MakeTuple(Timer{}, Type::Info, LogString(arena));

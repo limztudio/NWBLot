@@ -16,6 +16,38 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_log_client{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static AString<LogArena> UrlWithEndpoint(LogArena& arena, const AStringView baseUrl, const AStringView endpoint){
+    AString<LogArena> output(baseUrl, arena);
+    if(output.empty() || endpoint.empty())
+        return output;
+
+    const bool baseHasSlash = output.back() == '/';
+    const bool endpointHasSlash = endpoint.front() == '/';
+    if(baseHasSlash && endpointHasSlash)
+        output.pop_back();
+    else if(!baseHasSlash && !endpointHasSlash)
+        output += '/';
+
+    output += endpoint;
+    return output;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool Client::globalInit(){
     CURLcode ret;
 
@@ -31,8 +63,13 @@ Client::Client()
     : UpdateBaseType("NWB::Log::Client")
     , m_curl(nullptr)
     , m_pendingPayload(BaseType::arena())
+    , m_messageUrl(BaseType::arena())
+    , m_telemetryUrl(BaseType::arena())
     , m_hasPendingPayload(false)
+    , m_pendingPayloadIsTelemetry(false)
     , m_msgCount(0)
+    , m_telemetryCount(0)
+    , m_telemetryQueue(BaseType::arena())
 {}
 Client::~Client(){
     stopWorker();
@@ -44,6 +81,9 @@ Client::~Client(){
 }
 
 bool Client::internalInit(NotNull<const char*> url){
+    m_messageUrl = AStringView(url.get());
+    m_telemetryUrl = __hidden_log_client::UrlWithEndpoint(BaseType::arena(), AStringView(url.get()), AStringView(s_TelemetryUploadEndpoint));
+
     m_curl = curl_easy_init();
     if(!m_curl){
         enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to initialize CURL on {}"), CLIENT_NAME), Type::Fatal);
@@ -52,12 +92,6 @@ bool Client::internalInit(NotNull<const char*> url){
 
     CURL* const curlHandle = static_cast<CURL*>(m_curl);
     CURLcode ret;
-
-    ret = curl_easy_setopt(curlHandle, CURLOPT_URL, url.get());
-    if(ret != CURLE_OK){
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set URL on {}: {}"), CLIENT_NAME, StringConvert(BaseType::arena(), curl_easy_strerror(ret))), Type::Fatal);
-        return false;
-    }
 
     ret = curl_easy_setopt(curlHandle, CURLOPT_POST, 1);
     if(ret != CURLE_OK){
@@ -85,25 +119,50 @@ bool Client::internalInit(NotNull<const char*> url){
 
     return true;
 }
+bool Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
+    if(!bytes || byteCount == 0u)
+        return false;
+
+    LogBytes upload(BaseType::arena());
+    upload.resize(byteCount);
+    NWB_MEMCPY(upload.data(), upload.size(), bytes, byteCount);
+    m_telemetryQueue.emplace(Move(upload));
+    m_telemetryCount.fetch_add(1u, MemoryOrder::relaxed);
+    this->m_semaphore.release();
+    return true;
+}
 bool Client::internalUpdate(){
     if(!m_hasPendingPayload){
-        if(!m_msgCount.load(MemoryOrder::relaxed))
-            return true;
-
-        MessageType msg = MakeMessageType(BaseType::arena());
-        if(!try_dequeue(msg))
-            return true;
-
-        if(!BuildMessagePayload(msg, m_pendingPayload)){
-            const MessageType fallbackMsg = MakeTuple(
-                Timer{},
-                Type::Error,
-                LogString(NWB_TEXT("Logger client dropped an oversized message"), BaseType::arena())
-            );
-            if(!BuildMessagePayload(fallbackMsg, m_pendingPayload))
-                return true;
+        if(m_telemetryCount.load(MemoryOrder::relaxed)){
+            LogBytes upload(BaseType::arena());
+            if(m_telemetryQueue.try_pop(upload)){
+                m_telemetryCount.fetch_sub(1u, MemoryOrder::relaxed);
+                m_pendingPayload = Move(upload);
+                m_pendingPayloadIsTelemetry = true;
+                m_hasPendingPayload = true;
+            }
         }
-        m_hasPendingPayload = true;
+
+        if(!m_hasPendingPayload){
+            if(!m_msgCount.load(MemoryOrder::relaxed))
+                return true;
+
+            MessageType msg = MakeMessageType(BaseType::arena());
+            if(!try_dequeue(msg))
+                return true;
+
+            if(!BuildMessagePayload(msg, m_pendingPayload)){
+                const MessageType fallbackMsg = MakeTuple(
+                    Timer{},
+                    Type::Error,
+                    LogString(NWB_TEXT("Logger client dropped an oversized message"), BaseType::arena())
+                );
+                if(!BuildMessagePayload(fallbackMsg, m_pendingPayload))
+                    return true;
+            }
+            m_pendingPayloadIsTelemetry = false;
+            m_hasPendingPayload = true;
+        }
     }
 
     auto scheduleRetry = [this](){
@@ -122,6 +181,16 @@ bool Client::internalUpdate(){
     if(m_pendingPayload.size() > static_cast<usize>(Limit<curl_off_t>::s_Max)){
         m_pendingPayload.clear();
         m_hasPendingPayload = false;
+        return true;
+    }
+
+    ret = curl_easy_setopt(
+        curlHandle,
+        CURLOPT_URL,
+        m_pendingPayloadIsTelemetry ? m_telemetryUrl.c_str() : m_messageUrl.c_str()
+    );
+    if(ret != CURLE_OK){
+        scheduleRetry();
         return true;
     }
 
@@ -145,6 +214,7 @@ bool Client::internalUpdate(){
 
     m_pendingPayload.clear();
     m_hasPendingPayload = false;
+    m_pendingPayloadIsTelemetry = false;
     return true;
 }
 
@@ -172,6 +242,11 @@ bool ClientStandalone::internalInit(BasicStringView<tchar> logFileNameBase){
         return m_processedMsgFile.openByExecutableName();
 
     return m_processedMsgFile.open(logFileNameBase);
+}
+bool ClientStandalone::enqueueTelemetry(const void* const bytes, const usize byteCount){
+    static_cast<void>(bytes);
+    static_cast<void>(byteCount);
+    return false;
 }
 bool ClientStandalone::internalUpdate(){
     MessageType msg = MakeMessageType(BaseType::arena());

@@ -28,7 +28,12 @@ struct PendingCrashUpload{
     char path[s_MaxPendingCrashUploadPathText] = {};
 };
 
+struct PendingTelemetryUpload{
+    usize byteCount = 0u;
+};
+
 using CrashUploadQueue = ParallelQueue<PendingCrashUpload, LogArena>;
+using TelemetryUploadQueue = ParallelQueue<PendingTelemetryUpload, LogArena>;
 
 class Server final : public BaseUpdateOrdinary<Server, 0.1f, SERVER_NAME>{
     template<typename, const tchar*> friend class Base;
@@ -81,6 +86,7 @@ private:
     CrashIngestConfig m_crashIngestConfig;
     AString<LogArena> m_crashUploadToken;
     CrashUploadQueue m_crashUploads;
+    TelemetryUploadQueue m_telemetryUploads;
     Semaphore<> m_crashIngestSemaphore;
     Thread m_crashIngestThread;
     Atomic<bool> m_crashIngestExit;

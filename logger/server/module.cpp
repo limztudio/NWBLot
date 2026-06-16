@@ -45,6 +45,12 @@ struct ConnectionInfo{
         Core::Alloc::CoreFree(buffer, "ConnectionInfo buffer freed at Server::requestCallback");
     }
 
+    enum class UploadKind : u8{
+        LogMessage,
+        Crash,
+        Telemetry,
+    };
+
     [[nodiscard]] bool append(NotNull<const char*> uploadData, const usize appendSize){
         if(appendSize == 0u)
             return true;
@@ -52,7 +58,7 @@ struct ConnectionInfo{
         if(size > Limit<usize>::s_Max - appendSize)
             return false;
 
-        if(isCrashUpload)
+        if(uploadKind == UploadKind::Crash)
             return appendCrashUpload(uploadData, appendSize);
 
         const usize requiredSize = size + appendSize;
@@ -112,7 +118,7 @@ struct ConnectionInfo{
     u8* buffer = nullptr;
     usize size = 0u;
     usize capacity = 0u;
-    bool isCrashUpload = false;
+    UploadKind uploadKind = UploadKind::LogMessage;
     char crashUploadPath[s_MaxPendingCrashUploadPathText] = {};
     OutputFileStream crashUploadStream;
 };
@@ -123,11 +129,19 @@ namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept;
 
-[[nodiscard]] static usize UploadSizeLimit(const bool isCrashUpload)noexcept{
-    return isCrashUpload
-        ? s_MaxCrashPackageUploadBytes
-        : s_MaxLogMessageUploadBytes
-    ;
+inline constexpr usize s_MaxTelemetryUploadMebibytes = 64u;
+inline constexpr usize s_MaxTelemetryUploadBytes = s_MaxTelemetryUploadMebibytes * s_BytesPerMebibyte;
+
+[[nodiscard]] static usize UploadSizeLimit(const ConnectionInfo::UploadKind uploadKind)noexcept{
+    switch(uploadKind){
+    case ConnectionInfo::UploadKind::Crash:
+        return s_MaxCrashPackageUploadBytes;
+    case ConnectionInfo::UploadKind::Telemetry:
+        return s_MaxTelemetryUploadBytes;
+    case ConnectionInfo::UploadKind::LogMessage:
+    default:
+        return s_MaxLogMessageUploadBytes;
+    }
 }
 
 static void EnqueueServerMessage(Server& server, const tchar* message, const Type::Enum type){
@@ -212,7 +226,7 @@ static void EnqueueServerMessage(Server& server, const tchar* message, const Typ
 }
 
 static void DiscardStoredCrashUpload(Server& server, ConnectionInfo& info){
-    if(!info.isCrashUpload || info.crashUploadPath[0] == 0)
+    if(info.uploadKind != ConnectionInfo::UploadKind::Crash || info.crashUploadPath[0] == 0)
         return;
 
     static_cast<void>(info.closeCrashUploadStream());
@@ -225,14 +239,14 @@ static void DiscardStoredCrashUpload(Server& server, ConnectionInfo& info){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static ConnectionInfo* CreateConnectionInfo(Server& server, const bool isCrashUpload){
+[[nodiscard]] static ConnectionInfo* CreateConnectionInfo(Server& server, const ConnectionInfo::UploadKind uploadKind){
     void* memory = Core::Alloc::CoreAlloc(sizeof(ConnectionInfo), "ConnectionInfo allocated at Server::requestCallback");
     if(!memory)
         return nullptr;
 
     auto* info = new(memory) ConnectionInfo();
-    info->isCrashUpload = isCrashUpload;
-    if(isCrashUpload && !OpenCrashUploadStream(server, *info)){
+    info->uploadKind = uploadKind;
+    if(uploadKind == ConnectionInfo::UploadKind::Crash && !OpenCrashUploadStream(server, *info)){
         info->~ConnectionInfo();
         Core::Alloc::CoreFree(info, "ConnectionInfo freed after crash upload stream init failure");
         return nullptr;
@@ -345,6 +359,11 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     auto& conCls = *conClsPtr;
 
     const bool isCrashUpload = NWB_STRCMP(url, Core::Crash::PackageNames::s_CrashUploadEndpoint) == 0;
+    const bool isTelemetryUpload = NWB_STRCMP(url, s_TelemetryUploadEndpoint) == 0;
+    const ConnectionInfo::UploadKind uploadKind = isCrashUpload
+        ? ConnectionInfo::UploadKind::Crash
+        : (isTelemetryUpload ? ConnectionInfo::UploadKind::Telemetry : ConnectionInfo::UploadKind::LogMessage)
+    ;
 
     if(!conCls){
         if(isCrashUpload && !thisPtr->crashUploadAuthorized(*connection)){
@@ -352,7 +371,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
             return __hidden_logger_server::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_UNAUTHORIZED);
         }
 
-        auto* info = __hidden_logger_server::CreateConnectionInfo(*thisPtr, isCrashUpload);
+        auto* info = __hidden_logger_server::CreateConnectionInfo(*thisPtr, uploadKind);
         if(!info){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to initialize connection upload state"), Type::Fatal);
             return MHD_NO;
@@ -373,7 +392,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         }
 
         const auto uploadDataPtr = MakeNotNull(upload_data);
-        const usize uploadSizeLimit = __hidden_logger_server::UploadSizeLimit(info->isCrashUpload);
+        const usize uploadSizeLimit = __hidden_logger_server::UploadSizeLimit(info->uploadKind);
         if(
             uploadDataSize > static_cast<size_t>(uploadSizeLimit)
             || info->size > uploadSizeLimit - static_cast<usize>(uploadDataSize)
@@ -396,7 +415,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         return MHD_YES;
     }
 
-    if(info->isCrashUpload){
+    if(info->uploadKind == ConnectionInfo::UploadKind::Crash){
         if(info->closeCrashUploadStream() && info->crashUploadPath[0] != 0){
             const Path storedPath(thisPtr->arena(), AStringView(info->crashUploadPath));
             if(thisPtr->enqueueCrashUpload(storedPath)){
@@ -419,6 +438,19 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store crash upload"), Type::Error);
         }
+    }
+    else if(info->uploadKind == ConnectionInfo::UploadKind::Telemetry){
+        PendingTelemetryUpload upload;
+        upload.byteCount = info->size;
+        thisPtr->m_telemetryUploads.emplace(upload);
+        thisPtr->enqueue(
+            StringFormat(
+                thisPtr->arena(),
+                NWB_TEXT("Telemetry upload received: {} bytes"),
+                upload.byteCount
+            ),
+            Type::EssentialInfo
+        );
     }
     else{
         MessageType message = MakeMessageType(thisPtr->arena());
@@ -445,6 +477,7 @@ Server::Server()
     , m_crashIngestConfig(BaseType::arena())
     , m_crashUploadToken(BaseType::arena())
     , m_crashUploads(BaseType::arena())
+    , m_telemetryUploads(BaseType::arena())
     , m_crashIngestSemaphore(0)
     , m_crashIngestExit(false)
 {}

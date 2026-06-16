@@ -146,7 +146,53 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class CaptureSessionDiagnosticGuard final : NoCopy{
+public:
+    explicit CaptureSessionDiagnosticGuard(CaptureSession& session)
+        : m_guard(session.recorder())
+    {
+        m_guard.setFrameIndex(session.frameIndex());
+        m_guard.setStreamId(session.streamId());
+    }
+    CaptureSessionDiagnosticGuard(CaptureSessionDiagnosticGuard&&) = delete;
+
+    [[nodiscard]] bool installed()const{ return m_guard.installed(); }
+
+
+private:
+    DiagnosticCaptureGuard m_guard;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CaptureSessionCaptureScope final : NoCopy{
+public:
+    explicit CaptureSessionCaptureScope(CaptureSession& session)
+        : m_logRegistration(session)
+        , m_diagnostic(session)
+    {}
+    CaptureSessionCaptureScope(CaptureSession& session, Common::ILogger* const forwardLogger)
+        : m_logRegistration(session, forwardLogger)
+        , m_diagnostic(session)
+    {}
+    CaptureSessionCaptureScope(CaptureSessionCaptureScope&&) = delete;
+
+    [[nodiscard]] bool diagnosticCaptureInstalled()const{ return m_diagnostic.installed(); }
+
+
+private:
+    CaptureSessionLogRegistrationGuard m_logRegistration;
+    CaptureSessionDiagnosticGuard m_diagnostic;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_TELEMETRY_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

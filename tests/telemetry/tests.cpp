@@ -538,6 +538,64 @@ static void TestCaptureSessionRecordsDiagnosticWithContext(TestContext& context)
     NWB_TELEMETRY_TEST_CHECK(context, parsed.line == 66u);
 }
 
+static void TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(TestContext& context){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::All());
+    session.setFrameIndex(610u);
+    session.setStreamId(28u);
+
+    NWB::Tests::CapturingLogger previousLogger;
+    {
+        NWB::Core::Common::LoggerRegistrationGuard previousRegistration(previousLogger);
+        Telemetry::CaptureSessionCaptureScope captureScope(session);
+        NWB_TELEMETRY_TEST_CHECK(context, captureScope.diagnosticCaptureInstalled());
+
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("scope text"));
+        CaptureDiagnosticEvent(DiagnosticEventRecord{
+            .event = DiagnosticEventName::s_Error,
+            .category = "scope_diagnostic",
+            .message = "scope diagnostic",
+            .file = "scope.cpp",
+            .line = 67u,
+        });
+    }
+
+    CaptureDiagnosticEvent(DiagnosticEventRecord{
+        .event = DiagnosticEventName::s_Error,
+        .category = "scope_diagnostic",
+        .message = "ignored after scope",
+    });
+
+    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.messageCount() == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.sawMessageContaining(NWB_TEXT("scope text")));
+    NWB_TELEMETRY_TEST_CHECK(context, session.eventCount() == 2u);
+
+    const Telemetry::EventRecord* logEvent = session.view().eventAt(0u);
+    const Telemetry::EventRecord* diagnosticEvent = session.view().eventAt(1u);
+    NWB_TELEMETRY_TEST_CHECK(context, logEvent != nullptr);
+    NWB_TELEMETRY_TEST_CHECK(context, diagnosticEvent != nullptr);
+    if(!logEvent || !diagnosticEvent)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, logEvent->header.kind == Telemetry::EventKind::TextLog);
+    NWB_TELEMETRY_TEST_CHECK(context, diagnosticEvent->header.kind == Telemetry::EventKind::Diagnostic);
+    NWB_TELEMETRY_TEST_CHECK(context, logEvent->header.frameIndex == 610u);
+    NWB_TELEMETRY_TEST_CHECK(context, diagnosticEvent->header.frameIndex == 610u);
+    NWB_TELEMETRY_TEST_CHECK(context, logEvent->header.streamId == 28u);
+    NWB_TELEMETRY_TEST_CHECK(context, diagnosticEvent->header.streamId == 28u);
+
+    Telemetry::TextLogPayload logPayload(testArena.arena);
+    Telemetry::DiagnosticPayload diagnosticPayload(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, logEvent->payload.data(), logEvent->payload.size(), logPayload));
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseDiagnosticPayload(testArena.arena, diagnosticEvent->payload.data(), diagnosticEvent->payload.size(), diagnosticPayload));
+    NWB_TELEMETRY_TEST_CHECK(context, logPayload.messageUtf8 == "scope text");
+    NWB_TELEMETRY_TEST_CHECK(context, diagnosticPayload.category == "scope_diagnostic");
+    NWB_TELEMETRY_TEST_CHECK(context, diagnosticPayload.message == "scope diagnostic");
+    NWB_TELEMETRY_TEST_CHECK(context, diagnosticPayload.file == "scope.cpp");
+    NWB_TELEMETRY_TEST_CHECK(context, diagnosticPayload.line == 67u);
+}
+
 static void TestTextLogPayloadRoundTrip(TestContext& context){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
@@ -1373,6 +1431,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestCaptureSessionTextLoggerForwardsAndRecords(context);
     __hidden_tests::TestCaptureSessionLogRegistrationGuardForwardsAndRestores(context);
     __hidden_tests::TestCaptureSessionRecordsDiagnosticWithContext(context);
+    __hidden_tests::TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(context);
     __hidden_tests::TestTextLogPayloadRoundTrip(context);
     __hidden_tests::TestRecordTextLogUsesTelemetryEvent(context);
     __hidden_tests::TestTextLogCaptureLoggerForwardsAndRecords(context);

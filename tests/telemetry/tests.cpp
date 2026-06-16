@@ -397,6 +397,104 @@ static void TestCaptureSessionFlushArchiveClearsOnSuccess(TestContext& context){
     static_cast<void>(RemoveAllIfExists(storageDirectory, error));
 }
 
+static void TestCaptureSessionRecordsTextLogWithContext(TestContext& context){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::All());
+    session.setFrameIndex(606u);
+    session.setStreamId(24u);
+
+    NWB_TELEMETRY_TEST_CHECK(context, session.frameIndex() == 606u);
+    NWB_TELEMETRY_TEST_CHECK(context, session.streamId() == 24u);
+    NWB_TELEMETRY_TEST_CHECK(context, session.textLogCaptureLogger().frameIndex() == 606u);
+    NWB_TELEMETRY_TEST_CHECK(context, session.textLogCaptureLogger().streamId() == 24u);
+    NWB_TELEMETRY_TEST_CHECK(context, session.recordTextLog(
+        NWB::Core::Common::LogType::Warning,
+        NWB_TEXT("session text")
+    ));
+
+    const Telemetry::EventRecord* event = session.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(!event)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 606u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 24u);
+
+    Telemetry::TextLogPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::Warning);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "session text");
+}
+
+static void TestCaptureSessionTextLoggerForwardsAndRecords(TestContext& context){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::All());
+    session.setFrameIndex(607u);
+    session.setStreamId(25u);
+
+    NWB::Tests::CapturingLogger forwardLogger;
+    session.setForwardLogger(&forwardLogger);
+
+    Telemetry::TextLogCaptureLogger& logger = session.textLogCaptureLogger();
+    logger.enqueue(NWB::Core::Common::LogString(NWB_TEXT("session bridged"), logger.arena()), NWB::Core::Common::LogType::Error);
+
+    NWB_TELEMETRY_TEST_CHECK(context, forwardLogger.messageCount() == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, forwardLogger.errorCount() == 1u);
+    NWB_TELEMETRY_TEST_CHECK(context, forwardLogger.sawMessageContaining(NWB_TEXT("session bridged")));
+    NWB_TELEMETRY_TEST_CHECK(context, session.eventCount() == 1u);
+
+    const Telemetry::EventRecord* event = session.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(!event)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 607u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 25u);
+
+    Telemetry::TextLogPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::Error);
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "session bridged");
+}
+
+static void TestCaptureSessionRecordsDiagnosticWithContext(TestContext& context){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::All());
+    session.setFrameIndex(608u);
+    session.setStreamId(26u);
+
+    const DiagnosticEventRecord source{
+        .event = DiagnosticEventName::s_Error,
+        .category = "session_diagnostic",
+        .message = "session diagnostic",
+        .file = "session.cpp",
+        .line = 66u,
+    };
+
+    NWB_TELEMETRY_TEST_CHECK(context, session.recordDiagnostic(source));
+
+    const Telemetry::EventRecord* event = session.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    if(!event)
+        return;
+
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::Diagnostic);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 608u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 26u);
+
+    Telemetry::DiagnosticPayload parsed(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.category == "session_diagnostic");
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.message == "session diagnostic");
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.file == "session.cpp");
+    NWB_TELEMETRY_TEST_CHECK(context, parsed.line == 66u);
+}
+
 static void TestTextLogPayloadRoundTrip(TestContext& context){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
@@ -1198,6 +1296,9 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestEventStreamCodecRejectsInvalidInput(context);
     __hidden_tests::TestEventStreamArchiveRoundTrip(context);
     __hidden_tests::TestCaptureSessionFlushArchiveClearsOnSuccess(context);
+    __hidden_tests::TestCaptureSessionRecordsTextLogWithContext(context);
+    __hidden_tests::TestCaptureSessionTextLoggerForwardsAndRecords(context);
+    __hidden_tests::TestCaptureSessionRecordsDiagnosticWithContext(context);
     __hidden_tests::TestTextLogPayloadRoundTrip(context);
     __hidden_tests::TestRecordTextLogUsesTelemetryEvent(context);
     __hidden_tests::TestTextLogCaptureLoggerForwardsAndRecords(context);

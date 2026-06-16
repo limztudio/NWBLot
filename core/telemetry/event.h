@@ -121,6 +121,9 @@ struct CaptureOptions{
     [[nodiscard]] constexpr bool customEnabled()const{ return HasCapture(flags, CaptureFlag::Custom); }
 };
 
+[[nodiscard]] constexpr bool IsValidEventKind(EventKind::Enum kind)noexcept;
+[[nodiscard]] constexpr bool IsValidPayloadFormat(PayloadFormat::Enum format)noexcept;
+
 struct EventHeader{
     u32 magic = s_EventMagic;
     u16 version = s_EventVersion;
@@ -136,6 +139,9 @@ struct EventHeader{
         return magic == s_EventMagic
             && version == s_EventVersion
             && kind != EventKind::Unknown
+            && IsValidEventKind(kind)
+            && IsValidPayloadFormat(payloadFormat)
+            && (payloadFormat != PayloadFormat::None || payloadBytes == 0u)
         ;
     }
 };
@@ -143,6 +149,32 @@ struct EventHeader{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] constexpr bool IsValidEventKind(const EventKind::Enum kind)noexcept{
+    switch(kind){
+    case EventKind::Unknown:
+    case EventKind::TextLog:
+    case EventKind::Diagnostic:
+    case EventKind::CrashUpload:
+    case EventKind::PerfFrame:
+    case EventKind::FrameGraphFrame:
+    case EventKind::Custom:
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] constexpr bool IsValidPayloadFormat(const PayloadFormat::Enum format)noexcept{
+    switch(format){
+    case PayloadFormat::None:
+    case PayloadFormat::Binary:
+    case PayloadFormat::Json:
+    case PayloadFormat::JsonLines:
+    case PayloadFormat::Text:
+        return true;
+    }
+    return false;
+}
 
 [[nodiscard]] constexpr CaptureFlag::Mask CaptureFlagForEventKind(const EventKind::Enum kind)noexcept{
     switch(kind){
@@ -175,4 +207,3 @@ NWB_TELEMETRY_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

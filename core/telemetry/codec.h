@@ -1,0 +1,66 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "recorder.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_TELEMETRY_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u16 s_CodecVersion = 1u;
+inline constexpr usize s_EncodedEventHeaderBytes =
+    sizeof(u32) // magic
+    + sizeof(u16) // version
+    + sizeof(u16) // kind
+    + sizeof(u8) // payload format
+    + sizeof(u8) // reserved
+    + sizeof(u32) // stream id
+    + sizeof(u64) // frame index
+    + sizeof(u64) // timestamp nanoseconds
+    + sizeof(u64) // payload bytes
+;
+
+namespace DecodeStatus{
+    enum Enum : u8{
+        Ok,
+        TruncatedHeader,
+        InvalidHeader,
+        PayloadSizeOverflow,
+        TruncatedPayload,
+    };
+};
+
+struct DecodeResult{
+    DecodeStatus::Enum status = DecodeStatus::Ok;
+    usize bytesRead = 0u;
+
+    [[nodiscard]] bool ok()const{ return status == DecodeStatus::Ok; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool EncodeEvent(const EventRecord& event, TelemetryBytes& outBytes);
+[[nodiscard]] bool EncodeEvent(const EventHeader& header, const void* payload, usize payloadBytes, TelemetryBytes& outBytes);
+[[nodiscard]] DecodeResult DecodeEvent(TelemetryArena& arena, const void* bytes, usize byteCount, EventRecord& outEvent);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_TELEMETRY_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

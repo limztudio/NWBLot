@@ -101,6 +101,89 @@ static void TestRecorderClearAndDisabledState(TestContext& context){
     NWB_TELEMETRY_TEST_CHECK(context, !recorder.recordBinary(Telemetry::EventKind::PerfFrame, 2u, &payload, sizeof(payload)));
 }
 
+static void TestEventCodecRoundTrip(TestContext& context){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+
+    const u8 payload[] = { 10u, 20u, 30u, 40u };
+    NWB_TELEMETRY_TEST_CHECK(context, recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 44u, payload, sizeof(payload), 3u));
+
+    const Telemetry::EventRecord* source = recorder.view().eventAt(0u);
+    NWB_TELEMETRY_TEST_CHECK(context, source != nullptr);
+    if(!source)
+        return;
+
+    Telemetry::TelemetryBytes encoded(testArena.arena);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEvent(*source, encoded));
+    NWB_TELEMETRY_TEST_CHECK(context, encoded.size() == Telemetry::s_EncodedEventHeaderBytes + sizeof(payload));
+
+    Telemetry::EventRecord decoded(testArena.arena);
+    const Telemetry::DecodeResult result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size(), decoded);
+    NWB_TELEMETRY_TEST_CHECK(context, result.ok());
+    NWB_TELEMETRY_TEST_CHECK(context, result.bytesRead == encoded.size());
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.valid());
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.kind == source->header.kind);
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.payloadFormat == source->header.payloadFormat);
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.streamId == source->header.streamId);
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.frameIndex == source->header.frameIndex);
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.payloadBytes == source->header.payloadBytes);
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.payload.size() == sizeof(payload));
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.payload[0u] == 10u);
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.payload[3u] == 40u);
+}
+
+static void TestEventCodecRejectsInvalidInput(TestContext& context){
+    TestArena testArena;
+    Telemetry::TelemetryBytes encoded(testArena.arena);
+
+    Telemetry::EventHeader invalidKindHeader;
+    invalidKindHeader.kind = Telemetry::EventKind::Unknown;
+    invalidKindHeader.payloadFormat = Telemetry::PayloadFormat::Binary;
+    invalidKindHeader.payloadBytes = 0u;
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::EncodeEvent(invalidKindHeader, nullptr, 0u, encoded));
+
+    Telemetry::EventHeader invalidPayloadHeader;
+    invalidPayloadHeader.kind = Telemetry::EventKind::PerfFrame;
+    invalidPayloadHeader.payloadFormat = Telemetry::PayloadFormat::None;
+    invalidPayloadHeader.payloadBytes = 1u;
+    const u8 payload = 5u;
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::EncodeEvent(invalidPayloadHeader, &payload, sizeof(payload), encoded));
+
+    Telemetry::EventHeader validHeader;
+    validHeader.kind = Telemetry::EventKind::PerfFrame;
+    validHeader.payloadFormat = Telemetry::PayloadFormat::Binary;
+    validHeader.payloadBytes = sizeof(payload);
+    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::EncodeEvent(validHeader, nullptr, sizeof(payload), encoded));
+
+    validHeader.payloadBytes = 0u;
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEvent(validHeader, nullptr, 0u, encoded));
+    encoded[0u] = 0u;
+
+    Telemetry::EventRecord decoded(testArena.arena);
+    Telemetry::DecodeResult result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size(), decoded);
+    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::InvalidHeader);
+
+    result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), Telemetry::s_EncodedEventHeaderBytes - 1u, decoded);
+    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::TruncatedHeader);
+}
+
+static void TestEventCodecReportsTruncatedPayload(TestContext& context){
+    TestArena testArena;
+    Telemetry::TelemetryBytes encoded(testArena.arena);
+
+    const u8 payload[] = { 1u, 2u, 3u };
+    Telemetry::EventHeader header;
+    header.kind = Telemetry::EventKind::PerfFrame;
+    header.payloadFormat = Telemetry::PayloadFormat::Binary;
+    header.payloadBytes = sizeof(payload);
+    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEvent(header, payload, sizeof(payload), encoded));
+
+    Telemetry::EventRecord decoded(testArena.arena);
+    const Telemetry::DecodeResult result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size() - 1u, decoded);
+    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::TruncatedPayload);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -115,8 +198,10 @@ NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestCaptureFlags(context);
     __hidden_tests::TestRecorderFiltersAndCopiesPayload(context);
     __hidden_tests::TestRecorderClearAndDisabledState(context);
+    __hidden_tests::TestEventCodecRoundTrip(context);
+    __hidden_tests::TestEventCodecRejectsInvalidInput(context);
+    __hidden_tests::TestEventCodecReportsTruncatedPayload(context);
 })
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -65,6 +65,8 @@ bool Recorder::record(
 ){
     if(!enabled(kind))
         return false;
+    if(!IsValidPayloadFormat(payloadFormat) || (payloadFormat == PayloadFormat::None && payloadBytes != 0u))
+        return false;
     if(payloadBytes != 0u && !payload)
         return false;
 
@@ -113,4 +115,3 @@ NWB_TELEMETRY_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

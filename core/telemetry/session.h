@@ -123,9 +123,6 @@ public:
     }
     CaptureSessionDiagnosticGuard(CaptureSessionDiagnosticGuard&&) = delete;
 
-    [[nodiscard]] bool installed()const{ return m_guard.installed(); }
-
-
 private:
     DiagnosticCaptureGuard m_guard;
 };
@@ -145,9 +142,6 @@ public:
         , m_diagnostic(session)
     {}
     CaptureSessionCaptureScope(CaptureSessionCaptureScope&&) = delete;
-
-    [[nodiscard]] bool diagnosticCaptureInstalled()const{ return m_diagnostic.installed(); }
-
 
 private:
     CaptureSessionLogRegistrationGuard m_logRegistration;

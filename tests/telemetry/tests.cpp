@@ -461,7 +461,6 @@ static void TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(TestContext& c
     {
         NWB::Core::Common::LoggerRegistrationGuard previousRegistration(previousLogger);
         Telemetry::CaptureSessionCaptureScope captureScope(session);
-        NWB_TELEMETRY_TEST_CHECK(context, captureScope.diagnosticCaptureInstalled());
 
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("scope text"));
         CaptureDiagnosticEvent(DiagnosticEventRecord{

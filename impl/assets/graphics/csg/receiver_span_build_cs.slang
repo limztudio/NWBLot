@@ -13,7 +13,6 @@ struct NwbCsgReceiverSurfaceEvent{
     float depth;
     uint receiverIndex;
     uint faceSign;
-    uint flags;
 };
 
 struct NwbCsgIntervalDispatchPushConstants{
@@ -24,29 +23,20 @@ struct NwbCsgIntervalDispatchPushConstants{
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
 
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DEPTH, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<float> g_NwbCsgReceiverEventDepth;
-
+// Event data layout: .x = receiverIndex, .y = faceSign, .z = asuint(linear depth), .w = unused.
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DATA, NWB_CSG_INTERVAL_SET)]]
 Texture2DArray<uint4> g_NwbCsgReceiverEventData;
 
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_COUNT, NWB_CSG_INTERVAL_SET)]]
 Texture2DArray<uint> g_NwbCsgReceiverEventCount;
 
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_FLAGS, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<uint> g_NwbCsgReceiverEventFlags;
-
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_DEPTH, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_RECEIVER_SPAN_DEPTH_IMAGE_FORMAT)]]
-RWTexture2DArray<float2> g_NwbCsgReceiverSpanDepth;
-
+// Span data layout: .x = receiverIndex, .y = asuint(enter depth), .z = asuint(exit depth), .w = unused.
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_DATA, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_RECEIVER_SPAN_DATA_IMAGE_FORMAT)]]
 RWTexture2DArray<uint4> g_NwbCsgReceiverSpanData;
 
+// Count layout: .x = span count, .y = flags.
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_COUNT, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_RECEIVER_SPAN_COUNT_IMAGE_FORMAT)]]
-RWTexture2DArray<uint> g_NwbCsgReceiverSpanCount;
-
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_FLAGS, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_RECEIVER_SPAN_FLAGS_IMAGE_FORMAT)]]
-RWTexture2DArray<uint> g_NwbCsgReceiverSpanFlags;
+RWTexture2DArray<uint2> g_NwbCsgReceiverSpanCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,7 +54,7 @@ uint nwbCsgReceiverSpanBuildEventLayerCount(){
     uint width = 1u;
     uint height = 1u;
     uint layerCount = 1u;
-    g_NwbCsgReceiverEventDepth.GetDimensions(width, height, layerCount);
+    g_NwbCsgReceiverEventData.GetDimensions(width, height, layerCount);
     return min(layerCount, NWB_CSG_RECEIVER_EVENT_LAYER_COUNT);
 }
 
@@ -72,7 +62,7 @@ uint nwbCsgReceiverSpanBuildSpanLayerCount(){
     uint width = 1u;
     uint height = 1u;
     uint layerCount = 1u;
-    g_NwbCsgReceiverSpanDepth.GetDimensions(width, height, layerCount);
+    g_NwbCsgReceiverSpanData.GetDimensions(width, height, layerCount);
     return min(layerCount, NWB_CSG_RECEIVER_SPAN_LAYER_COUNT);
 }
 
@@ -92,8 +82,9 @@ uint2 nwbCsgReceiverSpanBuildWorkExtent(){
 
 uint nwbCsgReceiverSpanBuildLoadEventCount(const uint2 pixel, const uint eventLayerCount, inout uint inOutFlags){
     const uint eventCount = g_NwbCsgReceiverEventCount.Load(int4(int2(pixel), 0, 0));
-    const uint eventFlags = g_NwbCsgReceiverEventFlags.Load(int4(int2(pixel), 0, 0));
-    if(eventCount > eventLayerCount || (eventFlags & NWB_CSG_RECEIVER_EVENT_OVERFLOW_FLAG) != 0u)
+    // The event emit pass keeps counting past the storable layer budget, so a raw count above the
+    // budget is exactly the overflow condition; no separate event-flags texture is required.
+    if(eventCount > eventLayerCount)
         inOutFlags |= NWB_CSG_RECEIVER_SPAN_EVENT_OVERFLOW_FLAG;
 
     return min(eventCount, eventLayerCount);
@@ -104,10 +95,9 @@ NwbCsgReceiverSurfaceEvent nwbCsgReceiverSpanBuildLoadEvent(const uint2 pixel, c
     const uint4 data = g_NwbCsgReceiverEventData.Load(texel);
 
     NwbCsgReceiverSurfaceEvent result;
-    result.depth = g_NwbCsgReceiverEventDepth.Load(texel);
     result.receiverIndex = data.x;
     result.faceSign = data.y;
-    result.flags = data.z;
+    result.depth = asfloat(data.z);
     return result;
 }
 
@@ -148,8 +138,7 @@ void nwbCsgReceiverSpanBuildWriteSpan(
     }
 
     const uint3 texel = uint3(pixel, spanIndex);
-    g_NwbCsgReceiverSpanDepth[texel] = float2(enterDepth, exitDepth);
-    g_NwbCsgReceiverSpanData[texel] = uint4(receiverIndex, 0u, 0u, 0u);
+    g_NwbCsgReceiverSpanData[texel] = uint4(receiverIndex, asuint(enterDepth), asuint(exitDepth), 0u);
 }
 
 void nwbCsgReceiverSpanBuildPairEvents(
@@ -253,8 +242,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     uint spanCount = 0u;
     nwbCsgReceiverSpanBuildPairEvents(pixel, spanLayerCount, events, eventCount, spanCount, flags);
 
-    g_NwbCsgReceiverSpanCount[uint3(pixel, 0u)] = spanCount;
-    g_NwbCsgReceiverSpanFlags[uint3(pixel, 0u)] = flags;
+    g_NwbCsgReceiverSpanCount[uint3(pixel, 0u)] = uint2(spanCount, flags);
 }
 
 

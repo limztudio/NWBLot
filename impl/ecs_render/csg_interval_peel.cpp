@@ -173,7 +173,6 @@ static void AddCsgIntervalTargetLayoutItems(
 ){
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_DEPTH, access);
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_LINEAR_DEPTH, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_ID, access);
 }
 
@@ -181,20 +180,16 @@ static void AddCsgReceiverEventLayoutItems(
     Core::BindingLayoutDesc& bindingLayoutDesc,
     CsgTextureAccess access
 ){
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DEPTH, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DATA, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_COUNT, access);
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_FLAGS, access);
 }
 
 static void AddCsgReceiverSpanLayoutItems(
     Core::BindingLayoutDesc& bindingLayoutDesc,
     CsgTextureAccess access
 ){
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_DEPTH, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_DATA, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_COUNT, access);
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_FLAGS, access);
 }
 
 static void AddCsgRemovedIntervalLayoutItems(
@@ -205,7 +200,6 @@ static void AddCsgRemovedIntervalLayoutItems(
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_CAP_NORMAL, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DATA, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_COUNT, access);
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_FLAGS, access);
 }
 
 static void AddCsgIntervalTargetBindingSetItems(
@@ -232,14 +226,6 @@ static void AddCsgIntervalTargetBindingSetItems(
     );
     AddCsgTextureBindingSetItem(
         bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_LINEAR_DEPTH,
-        targets.csgIntervalLinearDepth.get(),
-        targets.csgIntervalLinearDepthFormat,
-        subresources,
-        access
-    );
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
         NWB_CSG_INTERVAL_BINDING_ID,
         targets.csgIntervalId.get(),
         targets.csgIntervalIdFormat,
@@ -257,14 +243,6 @@ static void AddCsgReceiverEventBindingSetItems(
 ){
     AddCsgTextureBindingSetItem(
         bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DEPTH,
-        targets.csgReceiverEventDepth.get(),
-        targets.csgReceiverEventDepthFormat,
-        eventSubresources,
-        access
-    );
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
         NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DATA,
         targets.csgReceiverEventData.get(),
         targets.csgReceiverEventDataFormat,
@@ -279,14 +257,6 @@ static void AddCsgReceiverEventBindingSetItems(
         eventCounterSubresources,
         access
     );
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_FLAGS,
-        targets.csgReceiverEventFlags.get(),
-        targets.csgReceiverEventFlagsFormat,
-        eventCounterSubresources,
-        access
-    );
 }
 
 static void AddCsgReceiverSpanBindingSetItems(
@@ -296,14 +266,6 @@ static void AddCsgReceiverSpanBindingSetItems(
     const Core::TextureSubresourceSet& spanCounterSubresources,
     CsgTextureAccess access
 ){
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_DEPTH,
-        targets.csgReceiverSpanDepth.get(),
-        targets.csgReceiverSpanDepthFormat,
-        spanSubresources,
-        access
-    );
     AddCsgTextureBindingSetItem(
         bindingSetDesc,
         NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_DATA,
@@ -317,14 +279,6 @@ static void AddCsgReceiverSpanBindingSetItems(
         NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_COUNT,
         targets.csgReceiverSpanCount.get(),
         targets.csgReceiverSpanCountFormat,
-        spanCounterSubresources,
-        access
-    );
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_FLAGS,
-        targets.csgReceiverSpanFlags.get(),
-        targets.csgReceiverSpanFlagsFormat,
         spanCounterSubresources,
         access
     );
@@ -366,14 +320,6 @@ static void AddCsgRemovedIntervalBindingSetItems(
         NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_COUNT,
         targets.csgRemovedIntervalCount.get(),
         targets.csgRemovedIntervalCountFormat,
-        removedIntervalCounterSubresources,
-        access
-    );
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_FLAGS,
-        targets.csgRemovedIntervalFlags.get(),
-        targets.csgRemovedIntervalFlagsFormat,
         removedIntervalCounterSubresources,
         access
     );
@@ -434,7 +380,6 @@ static void AddCsgRemovedIntervalBindingSetItems(
         && (
             !targets.csgCapBackNormal
             || !targets.csgIntervalDepth
-            || !targets.csgIntervalLinearDepth
             || !targets.csgIntervalId
             || targets.csgPeelLayerCount == 0u
         )
@@ -443,10 +388,8 @@ static void AddCsgRemovedIntervalBindingSetItems(
     if(
         receiverEventAccess != CsgTextureAccess::None
         && (
-            !targets.csgReceiverEventDepth
-            || !targets.csgReceiverEventData
+            !targets.csgReceiverEventData
             || !targets.csgReceiverEventCount
-            || !targets.csgReceiverEventFlags
         )
     )
         return false;
@@ -457,7 +400,6 @@ static void AddCsgRemovedIntervalBindingSetItems(
             || !targets.csgRemovedIntervalCapNormal
             || !targets.csgRemovedIntervalData
             || !targets.csgRemovedIntervalCount
-            || !targets.csgRemovedIntervalFlags
             || targets.csgRemovedIntervalLayerCount == 0u
         )
     )
@@ -526,14 +468,10 @@ static void AddCsgRemovedIntervalBindingSetItems(
     if(bindingSet)
         return true;
     if(
-        !targets.csgReceiverEventDepth
-        || !targets.csgReceiverEventData
+        !targets.csgReceiverEventData
         || !targets.csgReceiverEventCount
-        || !targets.csgReceiverEventFlags
-        || !targets.csgReceiverSpanDepth
         || !targets.csgReceiverSpanData
         || !targets.csgReceiverSpanCount
-        || !targets.csgReceiverSpanFlags
         || !layout
     )
         return false;
@@ -593,17 +531,13 @@ static void AddCsgRemovedIntervalBindingSetItems(
     if(
         !targets.csgCapBackNormal
         || !targets.csgIntervalDepth
-        || !targets.csgIntervalLinearDepth
         || !targets.csgIntervalId
-        || !targets.csgReceiverSpanDepth
         || !targets.csgReceiverSpanData
         || !targets.csgReceiverSpanCount
-        || !targets.csgReceiverSpanFlags
         || !targets.csgRemovedIntervalDepth
         || !targets.csgRemovedIntervalCapNormal
         || !targets.csgRemovedIntervalData
         || !targets.csgRemovedIntervalCount
-        || !targets.csgRemovedIntervalFlags
         || !layout
     )
         return false;
@@ -778,21 +712,15 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     if(
         !targets.csgCapBackNormal
         || !targets.csgIntervalDepth
-        || !targets.csgIntervalLinearDepth
         || !targets.csgIntervalId
-        || !targets.csgReceiverEventDepth
         || !targets.csgReceiverEventData
         || !targets.csgReceiverEventCount
-        || !targets.csgReceiverEventFlags
-        || !targets.csgReceiverSpanDepth
         || !targets.csgReceiverSpanData
         || !targets.csgReceiverSpanCount
-        || !targets.csgReceiverSpanFlags
         || !targets.csgRemovedIntervalDepth
         || !targets.csgRemovedIntervalCapNormal
         || !targets.csgRemovedIntervalData
         || !targets.csgRemovedIntervalCount
-        || !targets.csgRemovedIntervalFlags
         || targets.csgPeelLayerCount == 0u
         || targets.csgReceiverEventLayerCount == 0u
         || targets.csgReceiverSpanLayerCount == 0u
@@ -988,15 +916,12 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         return false;
     }
     if(
-        !targets.csgReceiverEventDepth
-        || !targets.csgReceiverEventData
+        !targets.csgReceiverEventData
         || !targets.csgReceiverEventCount
-        || !targets.csgReceiverEventFlags
         || !targets.csgRemovedIntervalDepth
         || !targets.csgRemovedIntervalCapNormal
         || !targets.csgRemovedIntervalData
         || !targets.csgRemovedIntervalCount
-        || !targets.csgRemovedIntervalFlags
         || targets.csgReceiverEventLayerCount == 0u
         || targets.csgRemovedIntervalLayerCount == 0u
     ){

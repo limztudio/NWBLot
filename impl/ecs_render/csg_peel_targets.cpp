@@ -24,40 +24,28 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
 
     targets.csgCapBackNormal.reset();
     targets.csgIntervalDepth.reset();
-    targets.csgIntervalLinearDepth.reset();
     targets.csgIntervalId.reset();
-    targets.csgReceiverEventDepth.reset();
     targets.csgReceiverEventData.reset();
     targets.csgReceiverEventCount.reset();
-    targets.csgReceiverEventFlags.reset();
-    targets.csgReceiverSpanDepth.reset();
     targets.csgReceiverSpanData.reset();
     targets.csgReceiverSpanCount.reset();
-    targets.csgReceiverSpanFlags.reset();
     targets.csgRemovedIntervalDepth.reset();
     targets.csgRemovedIntervalCapNormal.reset();
     targets.csgRemovedIntervalData.reset();
     targets.csgRemovedIntervalCount.reset();
-    targets.csgRemovedIntervalFlags.reset();
 
     NWB_ASSERT(targets.width > 0u && targets.height > 0u);
     NWB_ASSERT(targets.csgCapNormalFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgIntervalDepthFormat != Core::Format::UNKNOWN);
-    NWB_ASSERT(targets.csgIntervalLinearDepthFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgIntervalIdFormat != Core::Format::UNKNOWN);
-    NWB_ASSERT(targets.csgReceiverEventDepthFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgReceiverEventDataFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgReceiverEventCountFormat != Core::Format::UNKNOWN);
-    NWB_ASSERT(targets.csgReceiverEventFlagsFormat != Core::Format::UNKNOWN);
-    NWB_ASSERT(targets.csgReceiverSpanDepthFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgReceiverSpanDataFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgReceiverSpanCountFormat != Core::Format::UNKNOWN);
-    NWB_ASSERT(targets.csgReceiverSpanFlagsFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgRemovedIntervalDepthFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgRemovedIntervalCapNormalFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgRemovedIntervalDataFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgRemovedIntervalCountFormat != Core::Format::UNKNOWN);
-    NWB_ASSERT(targets.csgRemovedIntervalFlagsFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgPeelLayerCount == ECSRenderDetail::s_CsgPeelLayerCount);
     NWB_ASSERT(targets.csgReceiverEventLayerCount == ECSRenderDetail::s_CsgReceiverEventLayerCount);
     NWB_ASSERT(targets.csgReceiverSpanLayerCount == ECSRenderDetail::s_CsgReceiverSpanLayerCount);
@@ -79,9 +67,6 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
     };
     auto createPeelTexture = [&](const Core::Format::Enum format, const Name& name){
         return createCsgTexture(format, name, targets.csgPeelLayerCount, true);
-    };
-    auto createPeelComputeTexture = [&](const Core::Format::Enum format, const Name& name){
-        return createCsgTexture(format, name, targets.csgPeelLayerCount, false);
     };
     auto createReceiverEventTexture = [&](const Core::Format::Enum format, const Name& name){
         return createCsgTexture(format, name, targets.csgReceiverEventLayerCount, false);
@@ -114,27 +99,9 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         return false;
     }
 
-    targets.csgIntervalLinearDepth = createPeelComputeTexture(
-        targets.csgIntervalLinearDepthFormat,
-        Name("engine/deferred/csg_interval_linear_depth")
-    );
-    if(!targets.csgIntervalLinearDepth){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG interval linear-depth target"));
-        return false;
-    }
-
     targets.csgIntervalId = createPeelTexture(targets.csgIntervalIdFormat, Name("engine/deferred/csg_interval_id"));
     if(!targets.csgIntervalId){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG interval id peel target"));
-        return false;
-    }
-
-    targets.csgReceiverEventDepth = createReceiverEventTexture(
-        targets.csgReceiverEventDepthFormat,
-        Name("engine/deferred/csg_receiver_event_depth")
-    );
-    if(!targets.csgReceiverEventDepth){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG receiver event depth target"));
         return false;
     }
 
@@ -156,24 +123,6 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         return false;
     }
 
-    targets.csgReceiverEventFlags = createReceiverEventCounterTexture(
-        targets.csgReceiverEventFlagsFormat,
-        Name("engine/deferred/csg_receiver_event_flags")
-    );
-    if(!targets.csgReceiverEventFlags){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG receiver event flags target"));
-        return false;
-    }
-
-    targets.csgReceiverSpanDepth = createReceiverSpanTexture(
-        targets.csgReceiverSpanDepthFormat,
-        Name("engine/deferred/csg_receiver_span_depth")
-    );
-    if(!targets.csgReceiverSpanDepth){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG receiver span depth target"));
-        return false;
-    }
-
     targets.csgReceiverSpanData = createReceiverSpanTexture(
         targets.csgReceiverSpanDataFormat,
         Name("engine/deferred/csg_receiver_span_data")
@@ -189,15 +138,6 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
     );
     if(!targets.csgReceiverSpanCount){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG receiver span count target"));
-        return false;
-    }
-
-    targets.csgReceiverSpanFlags = createReceiverSpanCounterTexture(
-        targets.csgReceiverSpanFlagsFormat,
-        Name("engine/deferred/csg_receiver_span_flags")
-    );
-    if(!targets.csgReceiverSpanFlags){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG receiver span flags target"));
         return false;
     }
 
@@ -237,14 +177,6 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         return false;
     }
 
-    targets.csgRemovedIntervalFlags = createRemovedIntervalCounterTexture(
-        targets.csgRemovedIntervalFlagsFormat,
-        Name("engine/deferred/csg_removed_interval_flags")
-    );
-    if(!targets.csgRemovedIntervalFlags){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG removed interval flags target"));
-        return false;
-    }
 
     return true;
 }

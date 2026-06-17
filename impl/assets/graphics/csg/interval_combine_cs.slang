@@ -27,26 +27,20 @@ ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPush
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL, NWB_CSG_INTERVAL_SET)]]
 Texture2DArray<float4> g_NwbCsgBackCapNormal;
 
+// .xy = front/back hardware depth, .zw = front/back linear depth.
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_DEPTH, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<float2> g_NwbCsgIntervalDepth;
-
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_LINEAR_DEPTH, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<float2> g_NwbCsgIntervalLinearDepth;
+Texture2DArray<float4> g_NwbCsgIntervalDepth;
 
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_ID, NWB_CSG_INTERVAL_SET)]]
 Texture2DArray<uint> g_NwbCsgIntervalId;
 
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_DEPTH, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<float2> g_NwbCsgReceiverSpanDepth;
-
+// Span data layout: .x = receiverIndex, .y = asuint(enter depth), .z = asuint(exit depth), .w = unused.
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_DATA, NWB_CSG_INTERVAL_SET)]]
 Texture2DArray<uint4> g_NwbCsgReceiverSpanData;
 
+// Count layout: .x = span count, .y = flags.
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_COUNT, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<uint> g_NwbCsgReceiverSpanCount;
-
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_FLAGS, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<uint> g_NwbCsgReceiverSpanFlags;
+Texture2DArray<uint2> g_NwbCsgReceiverSpanCount;
 
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DEPTH, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_REMOVED_INTERVAL_DEPTH_IMAGE_FORMAT)]]
 RWTexture2DArray<float4> g_NwbCsgRemovedIntervalDepth;
@@ -57,11 +51,9 @@ RWTexture2DArray<float4> g_NwbCsgRemovedIntervalCapNormal;
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DATA, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_REMOVED_INTERVAL_DATA_IMAGE_FORMAT)]]
 RWTexture2DArray<uint4> g_NwbCsgRemovedIntervalData;
 
+// Count layout: .x = removed-interval count, .y = flags.
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_COUNT, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_REMOVED_INTERVAL_COUNT_IMAGE_FORMAT)]]
-RWTexture2DArray<uint> g_NwbCsgRemovedIntervalCount;
-
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_FLAGS, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_REMOVED_INTERVAL_FLAGS_IMAGE_FORMAT)]]
-RWTexture2DArray<uint> g_NwbCsgRemovedIntervalFlags;
+RWTexture2DArray<uint2> g_NwbCsgRemovedIntervalCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,7 +88,7 @@ uint nwbCsgIntervalCombineReceiverSpanLayerCount(){
     uint width = 1u;
     uint height = 1u;
     uint layerCount = 1u;
-    g_NwbCsgReceiverSpanDepth.GetDimensions(width, height, layerCount);
+    g_NwbCsgReceiverSpanData.GetDimensions(width, height, layerCount);
     return min(layerCount, NWB_CSG_RECEIVER_SPAN_LAYER_COUNT);
 }
 
@@ -183,9 +175,9 @@ void nwbCsgIntervalCombineAppendCandidate(
     inout uint inOutFlags
 ){
     const int4 spanTexel = int4(int2(pixel), int(spanIndex), 0);
-    const float2 spanDepth = g_NwbCsgReceiverSpanDepth.Load(spanTexel);
     const uint4 spanData = g_NwbCsgReceiverSpanData.Load(spanTexel);
     const uint receiverIndex = spanData.x;
+    const float2 spanDepth = float2(asfloat(spanData.y), asfloat(spanData.z));
 
     const int4 intervalTexel = int4(int2(pixel), int(intervalIndex), 0);
     const uint intervalId = g_NwbCsgIntervalId.Load(intervalTexel);
@@ -194,7 +186,8 @@ void nwbCsgIntervalCombineAppendCandidate(
     if(nwbCsgIntervalCombineIdReceiverIndex(intervalId) != receiverIndex)
         return;
 
-    const float2 cutterLinearDepth = g_NwbCsgIntervalLinearDepth.Load(intervalTexel);
+    const float4 cutterDepth = g_NwbCsgIntervalDepth.Load(intervalTexel);
+    const float2 cutterLinearDepth = cutterDepth.zw;
     const float removedEnterLinearDepth = max(spanDepth.x, cutterLinearDepth.x);
     const float removedExitLinearDepth = min(spanDepth.y, cutterLinearDepth.y);
     if(removedExitLinearDepth <= removedEnterLinearDepth + 0.000001)
@@ -205,7 +198,7 @@ void nwbCsgIntervalCombineAppendCandidate(
         && cutterLinearDepth.y <= spanDepth.y + 0.000001
     ;
     const uint entryFlags = backCapVisible ? NWB_CSG_REMOVED_INTERVAL_BACK_CAP_VISIBLE_FLAG : 0u;
-    const float2 cutterHardwareDepth = g_NwbCsgIntervalDepth.Load(intervalTexel);
+    const float2 cutterHardwareDepth = cutterDepth.xy;
 
     NwbCsgRemovedIntervalEntry entry;
     entry.depth = float4(cutterHardwareDepth.x, cutterHardwareDepth.y, removedEnterLinearDepth, removedExitLinearDepth);
@@ -242,8 +235,7 @@ void nwbCsgIntervalCombineWriteEntries(
         g_NwbCsgRemovedIntervalData[texel] = entry.data;
     }
 
-    g_NwbCsgRemovedIntervalCount[uint3(pixel, 0u)] = removedIntervalCount;
-    g_NwbCsgRemovedIntervalFlags[uint3(pixel, 0u)] = flags;
+    g_NwbCsgRemovedIntervalCount[uint3(pixel, 0u)] = uint2(removedIntervalCount, flags);
 }
 
 
@@ -270,11 +262,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex)
         entries[layerIndex] = nwbCsgInvalidRemovedIntervalEntry();
 
+    const uint2 spanCounts = g_NwbCsgReceiverSpanCount.Load(int4(int2(pixel), 0, 0));
     uint flags = 0u;
-    const uint spanFlags = g_NwbCsgReceiverSpanFlags.Load(int4(int2(pixel), 0, 0));
-    flags |= nwbCsgIntervalCombineReceiverSpanFlagsToRemovedFlags(spanFlags);
+    flags |= nwbCsgIntervalCombineReceiverSpanFlagsToRemovedFlags(spanCounts.y);
 
-    const uint rawSpanCount = g_NwbCsgReceiverSpanCount.Load(int4(int2(pixel), 0, 0));
+    const uint rawSpanCount = spanCounts.x;
     if(rawSpanCount > spanLayerCount)
         flags |= NWB_CSG_REMOVED_INTERVAL_RECEIVER_SPAN_OVERFLOW_FLAG;
     const uint spanCount = min(rawSpanCount, spanLayerCount);

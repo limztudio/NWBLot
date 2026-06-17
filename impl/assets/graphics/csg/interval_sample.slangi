@@ -30,14 +30,11 @@ struct NwbCsgIntervalSampleState{
 ConstantBuffer<NwbCsgIntervalSampleState> g_NwbCsgIntervalSampleState;
 
 #if NWB_CSG_RECEIVER_EVENTS_WRITABLE
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DEPTH, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_EVENT_DEPTH_IMAGE_FORMAT)]]
-RWTexture2DArray<float> g_NwbCsgReceiverEventDepth;
+// Event data layout: .x = receiverIndex, .y = faceSign, .z = asuint(linear depth), .w = unused.
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DATA, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_EVENT_DATA_IMAGE_FORMAT)]]
 RWTexture2DArray<uint4> g_NwbCsgReceiverEventData;
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_COUNT, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_EVENT_COUNT_IMAGE_FORMAT)]]
 RWTexture2DArray<uint> g_NwbCsgReceiverEventCount;
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_FLAGS, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_EVENT_FLAGS_IMAGE_FORMAT)]]
-RWTexture2DArray<uint> g_NwbCsgReceiverEventFlags;
 #endif
 
 #if NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
@@ -47,10 +44,9 @@ Texture2DArray<float4> g_NwbCsgRemovedIntervalDepth;
 Texture2DArray<float4> g_NwbCsgRemovedIntervalCapNormal;
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DATA, NWB_CSG_INTERVAL_SAMPLE_SET)]]
 Texture2DArray<uint4> g_NwbCsgRemovedIntervalData;
+// Count layout: .x = removed-interval count, .y = flags.
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_COUNT, NWB_CSG_INTERVAL_SAMPLE_SET)]]
-Texture2DArray<uint> g_NwbCsgRemovedIntervalCount;
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_FLAGS, NWB_CSG_INTERVAL_SAMPLE_SET)]]
-Texture2DArray<uint> g_NwbCsgRemovedIntervalFlags;
+Texture2DArray<uint2> g_NwbCsgRemovedIntervalCount;
 #endif
 
 
@@ -73,7 +69,7 @@ uint nwbCsgReceiverEventLayerCount(){
     uint width = 1u;
     uint height = 1u;
     uint layerCount = 1u;
-    g_NwbCsgReceiverEventDepth.GetDimensions(width, height, layerCount);
+    g_NwbCsgReceiverEventData.GetDimensions(width, height, layerCount);
     return min(layerCount, NWB_CSG_RECEIVER_EVENT_LAYER_COUNT);
 }
 #endif
@@ -106,20 +102,15 @@ void nwbCsgMarkReceiverSurfaceEvent(
 
     uint eventIndex;
     InterlockedAdd(g_NwbCsgReceiverEventCount[uint3(pixel, 0u)], 1u, eventIndex);
-    if(eventIndex >= layerCount){
-        uint previousFlags;
-        InterlockedOr(
-            g_NwbCsgReceiverEventFlags[uint3(pixel, 0u)],
-            NWB_CSG_RECEIVER_EVENT_OVERFLOW_FLAG,
-            previousFlags
-        );
+    // Overflow is derived downstream from (count > layerCount); the running count keeps
+    // incrementing past the storable layer budget, so no separate overflow flag is needed.
+    if(eventIndex >= layerCount)
         return;
-    }
 
     const uint faceSign = frontFace ? NWB_CSG_RECEIVER_EVENT_FACE_FRONT : NWB_CSG_RECEIVER_EVENT_FACE_BACK;
+    const float eventLinearDepth = length(worldPosition - g_NwbMeshCameraPosition.xyz);
     const uint3 eventTexel = uint3(pixel, eventIndex);
-    g_NwbCsgReceiverEventDepth[eventTexel] = length(worldPosition - g_NwbMeshCameraPosition.xyz);
-    g_NwbCsgReceiverEventData[eventTexel] = uint4(receiverIndex, faceSign, 0u, 0u);
+    g_NwbCsgReceiverEventData[eventTexel] = uint4(receiverIndex, faceSign, asuint(eventLinearDepth), 0u);
 }
 #endif
 
@@ -141,7 +132,7 @@ uint2 nwbCsgIntervalSampleFrameExtent(){
 #if NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
     g_NwbCsgRemovedIntervalDepth.GetDimensions(width, height, layerCount);
 #elif NWB_CSG_RECEIVER_EVENTS_WRITABLE
-    g_NwbCsgReceiverEventDepth.GetDimensions(width, height, layerCount);
+    g_NwbCsgReceiverEventData.GetDimensions(width, height, layerCount);
 #endif
     return uint2(width, height);
 }
@@ -210,7 +201,7 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestRemovedIntervalCapAtPixel(const uint2 
         return result;
 
     const uint removedIntervalLayerCount = nwbCsgRemovedIntervalLayerCount();
-    const uint rawIntervalCount = g_NwbCsgRemovedIntervalCount.Load(int4(int2(intervalPixel), 0, 0));
+    const uint rawIntervalCount = g_NwbCsgRemovedIntervalCount.Load(int4(int2(intervalPixel), 0, 0)).x;
     const uint intervalCount = min(rawIntervalCount, removedIntervalLayerCount);
     [unroll]
     for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex){
@@ -249,7 +240,7 @@ bool nwbCsgReceiverRemovedIntervalPixelDiscardAtPixel(
         return false;
 
     const uint removedIntervalLayerCount = nwbCsgRemovedIntervalLayerCount();
-    const uint rawIntervalCount = g_NwbCsgRemovedIntervalCount.Load(int4(int2(intervalPixel), 0, 0));
+    const uint rawIntervalCount = g_NwbCsgRemovedIntervalCount.Load(int4(int2(intervalPixel), 0, 0)).x;
     const uint intervalCount = min(rawIntervalCount, removedIntervalLayerCount);
     [unroll]
     for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex){

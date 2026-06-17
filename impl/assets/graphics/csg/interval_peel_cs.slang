@@ -34,11 +34,9 @@ ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPush
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_CAP_NORMAL_IMAGE_FORMAT)]]
 RWTexture2DArray<float4> g_NwbCsgBackCapNormal;
 
+// Hardware depth (.xy = front/back) and linear depth (.zw = front/back) packed into one rgba32f layer.
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_DEPTH, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_INTERVAL_DEPTH_IMAGE_FORMAT)]]
-RWTexture2DArray<float2> g_NwbCsgIntervalDepth;
-
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_LINEAR_DEPTH, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_INTERVAL_LINEAR_DEPTH_IMAGE_FORMAT)]]
-RWTexture2DArray<float2> g_NwbCsgIntervalLinearDepth;
+RWTexture2DArray<float4> g_NwbCsgIntervalDepth;
 
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_ID, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_INTERVAL_ID_IMAGE_FORMAT)]]
 RWTexture2DArray<uint> g_NwbCsgIntervalId;
@@ -312,8 +310,7 @@ void nwbCsgWriteIntervalPeelEntries(
             continue;
 
         g_NwbCsgBackCapNormal[texel] = float4(entry.backCapNormal, 1.0);
-        g_NwbCsgIntervalDepth[texel] = float2(entry.frontDepth, entry.backDepth);
-        g_NwbCsgIntervalLinearDepth[texel] = float2(entry.frontLinearDepth, entry.backLinearDepth);
+        g_NwbCsgIntervalDepth[texel] = float4(entry.frontDepth, entry.backDepth, entry.frontLinearDepth, entry.backLinearDepth);
         g_NwbCsgIntervalId[texel] = entry.id;
     }
 }

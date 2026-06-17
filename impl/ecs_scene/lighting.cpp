@@ -30,6 +30,14 @@ static SIMDVector BuildDirectionalLightDirectionVector(const SIMDVector forward)
     );
 }
 
+static SIMDVector BuildLightEmissionVector(const SIMDVector forward){
+    return Vector3NormalizeOr(
+        forward,
+        VectorSet(0.0f, 0.0f, 1.0f, 0.0f),
+        0.0001f
+    );
+}
+
 static bool IsValidLightRotation(const SIMDVector rotation){
     const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
     return
@@ -47,6 +55,16 @@ static bool IsValidLightColorIntensity(const LightComponent& light){
         && !Vector3IsInfinite(colorIntensity)
         && IsFinite(light.intensity())
         && light.intensity() > 0.0f
+    ;
+}
+
+static bool IsValidLightCone(const f32 innerConeCos, const f32 outerConeCos){
+    return
+        IsFinite(innerConeCos)
+        && IsFinite(outerConeCos)
+        && outerConeCos >= -1.0f
+        && outerConeCos <= innerConeCos
+        && innerConeCos <= 1.0f
     ;
 }
 
@@ -157,6 +175,30 @@ bool TryBuildSceneLight(const TransformComponent& transform, const LightComponen
             return false;
 
         StoreFloat(VectorSetW(position, 1.0f), &outLight.position);
+        outLight.range = light.range;
+        return true;
+    }
+    case LightType::Spot:{
+        const SIMDVector rotation = LoadFloat(transform.rotation);
+        if(!__hidden_lighting::IsValidLightRotation(rotation))
+            return false;
+
+        const SIMDVector position = LoadFloat(transform.position);
+        if(Vector3IsNaN(position) || Vector3IsInfinite(position))
+            return false;
+        if(!IsFinite(light.range) || light.range <= 0.0f)
+            return false;
+        if(!__hidden_lighting::IsValidLightCone(light.innerConeCos, light.outerConeCos))
+            return false;
+
+        StoreFloat(VectorSetW(position, light.innerConeCos), &outLight.position);
+        StoreFloat(
+            VectorSetW(
+                __hidden_lighting::BuildLightEmissionVector(Vector3Rotate(s_SIMDIdentityR2, rotation)),
+                light.outerConeCos
+            ),
+            &outLight.direction
+        );
         outLight.range = light.range;
         return true;
     }

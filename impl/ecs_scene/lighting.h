@@ -25,6 +25,7 @@ namespace LightType{
     enum Enum : u8{
         Directional,
         Point,
+        Spot,
 
         kCount
     };
@@ -38,6 +39,9 @@ struct alignas(Float4) LightComponent{
     // x/y/z = color, w = intensity.
     Float4 colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
     f32 range = 10.0f;
+    // Spot cone cosines; outer (wider) must stay <= inner (narrower).
+    f32 innerConeCos = 0.95f;
+    f32 outerConeCos = 0.90f;
     LightType::Enum type = LightType::Directional;
 
     [[nodiscard]] Float4 color()const{
@@ -61,6 +65,8 @@ static_assert(sizeof(LightComponent) == (sizeof(Float4) * 2), "LightComponent mu
 static_assert((sizeof(LightComponent) % alignof(LightComponent)) == 0, "LightComponent array stride must keep every element SIMD-aligned");
 static_assert((offsetof(LightComponent, colorIntensity) % alignof(Float4)) == 0, "LightComponent::colorIntensity must stay aligned");
 static_assert((offsetof(LightComponent, range) % alignof(f32)) == 0, "LightComponent::range must stay aligned");
+static_assert((offsetof(LightComponent, innerConeCos) % alignof(f32)) == 0, "LightComponent::innerConeCos must stay aligned");
+static_assert((offsetof(LightComponent, outerConeCos) % alignof(f32)) == 0, "LightComponent::outerConeCos must stay aligned");
 static_assert((offsetof(LightComponent, type) % alignof(LightType::Enum)) == 0, "LightComponent::type must stay aligned");
 
 
@@ -94,15 +100,13 @@ Core::ECS::EntityID CreateDirectionalLightEntity(
 
 
 struct alignas(Float4) SceneLight{
-    // xyz = world position (point/spot lights).
+    // xyz = world position (point/spot); w = spot inner cone cosine.
     Float4 position = Float4(0.0f, 0.0f, 0.0f, 1.0f);
-    // xyz = normalized direction (directional/spot lights).
-    Float4 direction = Float4(0.0f, 0.0f, -1.0f, 0.0f);
+    // Directional: normalized direction toward the light. Spot: normalized emission axis. w = spot outer cone cosine.
+    Float4 direction = Float4(0.0f, 0.0f, -1.0f, 1.0f);
     // xyz = color, w = intensity.
     Float4 colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
     f32 range = 0.0f;
-    f32 innerConeCos = 1.0f;
-    f32 outerConeCos = 1.0f;
     LightType::Enum type = LightType::Directional;
 };
 

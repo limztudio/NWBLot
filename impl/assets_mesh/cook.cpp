@@ -10,6 +10,7 @@
 
 #include "cook.h"
 
+#include "arena_names.h"
 #include "binary_payload_io.h"
 #include "binary_payload.h"
 #include "meshlet_ref_codec.h"
@@ -35,6 +36,9 @@ NWB_IMPL_BEGIN
 
 
 namespace __hidden_cook{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "cook_metadata.inl"
@@ -105,7 +109,7 @@ static bool ParseMeshMeta(
 }
 
 static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_BuildMeshAssetArena);
     if(!ReorderMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
         return false;
     if(!EncodeMeshletRefs(meshEntry, false, s_MeshMetaKind))
@@ -129,6 +133,7 @@ static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
 }
 
 #include "cook_source.inl"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

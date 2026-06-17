@@ -4,6 +4,7 @@
 
 #include "system.h"
 
+#include "arena_names.h"
 #include "runtime_cache.h"
 #include "skin_payload.h"
 #include "timing_names.h"
@@ -149,7 +150,7 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
     const SkeletonJointPaletteComponent* jointPalette,
     const SkeletonPoseComponent* skeletonPose
 ){
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_PrepareRuntimeArena);
     __hidden_skinning::RuntimeSkinPayloadScratch payload{ scratchArena };
     if(!__hidden_skinning::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))
         return false;
@@ -193,7 +194,7 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     const SkeletonJointPaletteComponent* jointPalette,
     const SkeletonPoseComponent* skeletonPose
 ){
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_DispatchRuntimeArena);
     __hidden_skinning::RuntimeSkinPayloadScratch payload{ scratchArena };
     if(!__hidden_skinning::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))
         return false;

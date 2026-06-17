@@ -106,7 +106,7 @@ public:
 
 
 public:
-    explicit ScratchArena(usize initSize = 1024, const char* allocationLog = "NWB::Core::Alloc::ScratchArena")
+    explicit ScratchArena(const Name& allocationLog, usize initSize = 1024)
         : Base(allocationLog)
     {
         for(usize i = 0; i < LengthOf(m_bucket); ++i){

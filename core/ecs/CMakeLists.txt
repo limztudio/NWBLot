@@ -12,5 +12,6 @@ target_sources(nwb_ecs PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/message_bus.h"
     "${CMAKE_CURRENT_LIST_DIR}/world.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
 )
 target_link_libraries(nwb_ecs PUBLIC nwb_common nwb_alloc)

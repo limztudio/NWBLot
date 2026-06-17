@@ -42,7 +42,17 @@ namespace __hidden_loader{
 using Path = NWB::Path;
 using CrashArena = NWB::Core::Alloc::PersistentArena;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr usize s_CrashArenaPayloadSize = 256u * 1024u;
+inline constexpr Name s_CommandLineArena("loader/command_line");
+inline constexpr Name s_CrashReportingArena("loader/crash_reporting");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class CallbackShutdownGuard : NoCopy{
 public:
@@ -356,10 +366,7 @@ static int RunProjectRuntime(
 
 static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader::LoaderOptions& options, void* inst){
     const usize crashArenaReserveSize = __hidden_loader::CrashArena::StructureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
-    __hidden_loader::CrashArena crashArena(
-        crashArenaReserveSize,
-        "NWB::Loader::CrashReportingArena"
-    );
+    __hidden_loader::CrashArena crashArena(__hidden_loader::s_CrashReportingArena, crashArenaReserveSize);
     const bool crashReportingInstalled = __hidden_loader::InstallCrashReporting(crashArena, options);
 
     if(options.useStandaloneLogger){
@@ -391,7 +398,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
 
 template<typename CharT>
 static int EntryPoint(isize argc, CharT** argv, void* inst){
-    NWB::Core::Alloc::GlobalArena commandLineArena("NWB::Loader::CommandLine");
+    NWB::Core::Alloc::GlobalArena commandLineArena(__hidden_loader::s_CommandLineArena);
     __hidden_loader::LoaderOptions options(commandLineArena);
     {
         CLI::App app{ "loader" };

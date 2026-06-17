@@ -13,6 +13,7 @@ target_sources(nwb_ecs_mesh_skinning PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/skin_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/system.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/timing_names.h"
 )
 target_link_libraries(nwb_ecs_mesh_skinning PUBLIC

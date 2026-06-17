@@ -4,6 +4,8 @@
 
 #include "parser.h"
 
+#include "arena_names.h"
+
 #include <core/alloc/scratch.h>
 
 
@@ -63,7 +65,7 @@ public:
     )
         : m_lexer(source)
         , m_arena(arena)
-        , m_scratchArena(4096)
+        , m_scratchArena(MetascriptArenaScope::s_ParserScratch, 4096)
         , m_declaredStructs(m_scratchArena)
         , m_errors(errors)
         , m_variables(variables)
@@ -1218,7 +1220,7 @@ bool Document::parse(IMetaReader& reader){
     try{
         constexpr usize chunkSize = 4096;
 
-        Alloc::ScratchArena scratchArena(chunkSize);
+        Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_DocumentReaderScratch, chunkSize);
         BasicString<MChar, Alloc::ScratchArena> buffer{scratchArena};
         buffer.reserve(chunkSize);
         MChar chunk[chunkSize];

@@ -56,6 +56,13 @@ using AString = NWB::Tests::TestAString;
 #define NWB_ASSETS_GRAPHICS_TEST_STRINGIFY_IMPL(Value) #Value
 #define NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(Value) NWB_ASSETS_GRAPHICS_TEST_STRINGIFY_IMPL(Value)
 
+inline constexpr Name s_MaterialScratchArena("tests/assets_graphics/material");
+inline constexpr Name s_MaterialCookScratchArena("tests/assets_graphics/material_cook");
+inline constexpr Name s_ShaderScratchArena("tests/assets_graphics/shader");
+inline constexpr Name s_ModelFixtureScratchArena("tests/assets_graphics/model_fixture");
+inline constexpr Name s_CodecScratchArena("tests/assets_graphics/codec");
+inline constexpr Name s_ProjectCookEntryArena("tests/assets_graphics/project_cook_entry");
+
 
 struct AssetsGraphicsTestArenaTag{};
 using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestArenaTag>;

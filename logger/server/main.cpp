@@ -32,6 +32,7 @@ inline constexpr const char* s_CrashRetainPackagesOption = "--crash-retain-packa
 inline constexpr const char* s_CrashRetainRawOption = "--crash-retain-raw";
 inline constexpr const char* s_CrashRetainInvalidOption = "--crash-retain-invalid";
 inline constexpr tchar s_LogFileNameBase[] = NWB_TEXT("logserver");
+inline constexpr Name s_CommandLineArena("logger/server/command_line");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,7 +89,7 @@ static int MainLogic(
 
 
 static int EntryPoint(isize argc, tchar** argv, void* inst){
-    NWB::Core::Alloc::GlobalArena commandLineArena("NWB::LogServer::CommandLine");
+    NWB::Core::Alloc::GlobalArena commandLineArena(__hidden_logger_server_main::s_CommandLineArena);
     u16 logPort = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
     AString<NWB::Core::Alloc::GlobalArena> crashSymbolStoreDirectory(commandLineArena);
     AString<NWB::Core::Alloc::GlobalArena> crashUploadToken(commandLineArena);

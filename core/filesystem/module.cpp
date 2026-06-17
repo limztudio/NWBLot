@@ -3,6 +3,7 @@
 
 
 #include "module.h"
+#include "arena_names.h"
 #include "volume_naming.h"
 
 
@@ -529,7 +530,7 @@ template<typename FileNameVector>
 static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const FileNameVector& fileNames);
 
 static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName){
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_StagedVolumePathsScratch);
     AString<Core::Alloc::ScratchArena> stageKey = PathToString<char>(scratchArena, outputDirectory);
     stageKey += '|';
     stageKey += volumeName;
@@ -728,7 +729,7 @@ static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, 
 }
 
 static bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_PromoteStagedVolumeScratch);
     Vector<Path, Core::Alloc::ScratchArena> movedBackupFiles{scratchArena};
     if(!MoveExistingVolumeSegments(outputDirectory, stagedPaths.backupDirectory, volumeName, movedBackupFiles))
         return false;
@@ -837,7 +838,7 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
     if(!RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, __hidden_filesystem::s_VolumePublishLogPrefix, "backup directory"))
         return false;
 
-    Alloc::GlobalArena arena("filesystem_build_volume");
+    Alloc::GlobalArena arena(FilesystemArenaScope::s_BuildVolumeArena);
 
     {
         VolumeSession volumeSession(arena);
@@ -1331,7 +1332,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
         u64 size = 0;
     };
 
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_CompactScratch);
     Vector<FileLayout, Core::Alloc::ScratchArena> layouts{ scratchArena };
     layouts.reserve(m_files.size());
 
@@ -1620,7 +1621,7 @@ bool VolumeFileSystem::loadMetadataLocked(){
         return false;
     }
 
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_LoadMetadataScratch);
     Vector<u8, Core::Alloc::ScratchArena> indexData(
         static_cast<usize>(header.indexBytes),
         0,
@@ -1707,7 +1708,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         FileRecord file;
     };
 
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_SaveMetadataScratch);
     Vector<MetadataIndexRecord, Core::Alloc::ScratchArena> sortedRecords{ scratchArena };
     sortedRecords.reserve(m_files.size());
     for(const auto& [path, record] : m_files)
@@ -1880,7 +1881,7 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
         return false;
     }
 
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_MoveBytesScratch);
     Vector<u8, Core::Alloc::ScratchArena> moveBuffer(
         static_cast<usize>(moveChunkBytes),
         0,

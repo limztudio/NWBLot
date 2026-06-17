@@ -26,12 +26,18 @@ namespace __hidden_logger_server{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 inline constexpr usize s_ConnectionInitialBufferCapacity = 256u;
 inline constexpr usize s_BytesPerMebibyte = 1024u * 1024u;
 inline constexpr usize s_MaxLogMessageUploadMebibytes = 1u;
 inline constexpr usize s_MaxCrashPackageUploadMebibytes = 128u;
 inline constexpr int s_LocalTimeYearBase = 1900;
 inline constexpr int s_LocalTimeMonthBase = 1;
+
+inline constexpr Name s_CrashIngestArena("logger/server/crash_ingest");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct ConnectionInfo{
@@ -298,7 +304,7 @@ void Server::crashIngestUpdate(Server* self){
 
         PendingCrashUpload crashUpload;
         while(self->tryDequeueCrashUpload(crashUpload)){
-            LogArena ingestArena("NWB::Log::Server::CrashIngest");
+            LogArena ingestArena(__hidden_logger_server::s_CrashIngestArena);
 
             try{
                 CrashIngestConfig ingestConfig(ingestArena);

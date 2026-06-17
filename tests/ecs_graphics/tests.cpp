@@ -52,6 +52,8 @@ using Vector = NWB::Tests::TestVector<T>;
 
 #define NWB_ECS_GRAPHICS_TEST_CHECK NWB_TEST_CHECK
 
+inline constexpr Name s_ScratchArena("tests/ecs_graphics/scratch");
+
 
 static void TestRuntimeResourceNameBuilderMatchesFormattedSuffix(TestContext& context){
     NWB::Tests::TestArena<> arena;
@@ -226,7 +228,7 @@ static void TestMaterialInstanceComponentSetters(TestContext& context){
 }
 
 static void TestMaterialTypedByteRangeDeduplicatesContent(TestContext& context){
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     using ByteVector = ::Vector<u8, NWB::Core::Alloc::ScratchArena>;
     using MaterialTypedByteContentKey = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKey;
     using RangeMap = ::HashMap<

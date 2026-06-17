@@ -359,7 +359,7 @@ asset_bunch bunch = [
 
     TestArena testArena;
     NWB::Core::Metascript::Document doc(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ModelFixtureScratchArena);
     NWB::Impl::AssetsBunchCook::ExpandedAssetVector expandedAssets(scratchArena);
     const bool expanded = ExpandModelBunchFixture(
         testArena,
@@ -398,7 +398,7 @@ asset_bunch bunch = [
 
     TestArena testArena;
     NWB::Core::Metascript::Document doc(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ModelFixtureScratchArena);
     NWB::Impl::AssetsBunchCook::ExpandedAssetVector expandedAssets(scratchArena);
     const bool expanded = ExpandModelBunchFixture(
         testArena,

@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 
@@ -41,7 +42,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         return nullptr;
     }
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_MeshletPipelineArena);
 
     auto* pso = NewArenaObject<MeshletPipeline>(m_context.objectArena, m_context);
     pso->m_desc = desc;

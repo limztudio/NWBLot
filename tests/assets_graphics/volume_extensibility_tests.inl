@@ -136,7 +136,7 @@ static bool LoadProjectProbeAsset(
 }
 
 static void TestProjectCookEntryAutoRegistration(TestContext& context){
-    NWB::Core::Assets::CookArena arena("ProjectCookEntryAutoRegistrationTest");
+    NWB::Core::Assets::CookArena arena(s_ProjectCookEntryArena);
     NWB::Core::Assets::CookEntryRegistry registry(arena);
 
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !registry.has(ProjectProbeAsset::AssetTypeName()));

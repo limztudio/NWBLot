@@ -6,6 +6,7 @@
 
 
 #include "module.h"
+#include "arena_names.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,7 +50,7 @@ template<typename EntryPoint, typename CharT>
 template<typename Run>
 [[nodiscard]] inline int InvokeWithUtf8Args(const isize argc, wchar** argv, Run&& run){
     const usize argCount = argc > 0 ? static_cast<usize>(argc) : 0;
-    Alloc::GlobalArena arena("NWB::Core::Common::ApplicationEntryArgs");
+    Alloc::GlobalArena arena(CommonArenaScope::s_ApplicationEntryArgsArena);
     Vector<AString<Alloc::GlobalArena>, Alloc::GlobalArena> utf8Args{arena};
     Vector<char*, Alloc::GlobalArena> utf8Argv{arena};
     utf8Args.reserve(argCount);

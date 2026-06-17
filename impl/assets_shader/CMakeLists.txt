@@ -21,6 +21,7 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/codec.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
         "${CMAKE_CURRENT_LIST_DIR}/asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.h"

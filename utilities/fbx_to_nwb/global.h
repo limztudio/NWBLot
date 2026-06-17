@@ -44,8 +44,10 @@ namespace UtilityDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_UtilityArena("utilities/fbx_to_nwb/utility");
+
 inline Core::Alloc::GlobalArena& Arena(){
-    static Core::Alloc::GlobalArena s_Arena("NWB::FbxToNwb::UtilityArena");
+    static Core::Alloc::GlobalArena s_Arena(s_UtilityArena);
     return s_Arena;
 }
 

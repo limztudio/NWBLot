@@ -4,6 +4,8 @@
 
 #include "renderer_private.h"
 
+#include "arena_names.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -103,7 +105,7 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
     if(usesAvboit && (!avboitTargets || !avboitTargets->valid()))
         return false;
 
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PreparePassArena);
     MaterialPassDrawItemPartitions drawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
     CsgFrameGpuData csgFrameData{scratchArena};
@@ -164,7 +166,7 @@ void RendererMaterialSystem::renderMaterialPass(
 
     commandList.endRenderPass();
 
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderPassArena);
     MaterialPassDrawItemPartitions drawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
     CsgFrameGpuData csgFrameData{scratchArena};

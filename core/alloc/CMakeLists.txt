@@ -7,6 +7,7 @@ target_sources(nwb_alloc PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/tlsf.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/base.h"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/core.h"
     "${CMAKE_CURRENT_LIST_DIR}/general.h"
     "${CMAKE_CURRENT_LIST_DIR}/persistent.h"

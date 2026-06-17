@@ -10,6 +10,8 @@
 
 #include "volume_prepare_registry.h"
 
+#include "arena_names.h"
+
 #include <core/common/log.h>
 
 
@@ -34,7 +36,7 @@ struct AutoPrepareQueue{
     AssetsVolumeCookDetail::CookVector<AssetsVolumeCookDetail::AssetVolumePrepareFunction> functions;
 
     AutoPrepareQueue()
-        : arena("NWB::AssetsVolumeCookDetail::AssetVolumePrepareQueue")
+        : arena(AssetsVolumeArenaScope::s_PrepareQueueArena)
         , functions(arena)
     {}
 };
@@ -83,7 +85,7 @@ AssetVolumePrepareAutoRegistrar::AssetVolumePrepareAutoRegistrar(const AssetVolu
 }
 
 bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& context){
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsVolumeArenaScope::s_RegisterPreparersArena);
     Vector<AssetVolumePrepareFunction, Core::Alloc::ScratchArena> functions{scratchArena};
     {
         auto& queue = __hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue();

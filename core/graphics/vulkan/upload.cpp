@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -238,7 +239,7 @@ void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersio
         completedVersions[i] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(i));
 
     if(submittedOwnerCount > VulkanDetail::s_SubmittedOwnerLookupThreshold){
-        Alloc::ScratchArena scratchArena;
+        Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SubmitChunksArena);
         VulkanDetail::SubmittedOwnerLookup submittedOwnerLookup(
             0,
             Hasher<TrackedCommandBuffer*>(),

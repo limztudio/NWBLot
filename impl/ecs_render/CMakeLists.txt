@@ -69,6 +69,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/deferred_system.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit_system.h"
     "${CMAKE_CURRENT_LIST_DIR}/subsystems.h"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/timing_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_types.h"
 )

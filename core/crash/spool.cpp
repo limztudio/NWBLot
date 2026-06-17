@@ -3,6 +3,7 @@
 
 
 #include "internal.h"
+#include "arena_names.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,10 +28,7 @@ inline constexpr usize s_DumpArenaPayloadSize = 512u * 1024u;
 
 
 Alloc::PersistentArena& DumpArena(){
-    static Alloc::PersistentArena s_Arena(
-        Alloc::PersistentArena::StructureAlignedSize(s_DumpArenaPayloadSize),
-        "NWB::Core::Crash::DumpArena"
-    );
+    static Alloc::PersistentArena s_Arena(CrashArenaScope::s_DumpArena, Alloc::PersistentArena::StructureAlignedSize(s_DumpArenaPayloadSize));
     return s_Arena;
 }
 

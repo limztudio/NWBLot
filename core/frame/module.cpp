@@ -3,6 +3,7 @@
 
 
 #include "module.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 
@@ -11,25 +12,6 @@
 
 
 NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_frame_perf{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr Name s_GraphicsObjectArenaMemoryScope("core/frame/memory/graphics_object_arena");
-inline constexpr Name s_ProjectObjectArenaMemoryScope("core/frame/memory/project_object_arena");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,12 +42,12 @@ u32 Frame::queryProjectWorkerThreadCount(){
 
 
 Frame::Frame(void* inst, u16 width, u16 height)
-    : m_graphicsObjectArena("NWB::Core::Frame::GraphicsObjectArena")
+    : m_graphicsObjectArena(FrameArenaScope::s_GraphicsObjectArena)
     , m_appliedWindowTitle(m_graphicsObjectArena)
     , m_graphicsAllocator(m_graphicsObjectArena)
     , m_graphicsThreadPool(queryGraphicsWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_graphicsJobSystem(m_graphicsThreadPool)
-    , m_projectObjectArena("NWB::Core::Frame::ProjectObjectArena")
+    , m_projectObjectArena(FrameArenaScope::s_ProjectObjectArena)
     , m_perfSession(m_projectObjectArena)
     , m_telemetrySession(m_projectObjectArena)
     , m_telemetryUploadBytes(m_projectObjectArena)
@@ -78,8 +60,8 @@ Frame::Frame(void* inst, u16 width, u16 height)
     frameData.height() = height;
     setupPlatform(inst);
     m_graphics.setPointerScaleChangedCallback(&Frame::ApplyPointerScale, this);
-    m_graphicsObjectArenaMemoryScope = m_perfSession.registerMemoryScope(__hidden_frame_perf::s_GraphicsObjectArenaMemoryScope);
-    m_projectObjectArenaMemoryScope = m_perfSession.registerMemoryScope(__hidden_frame_perf::s_ProjectObjectArenaMemoryScope);
+    m_graphicsObjectArenaMemoryScope = m_perfSession.registerMemoryScope(FrameArenaScope::s_GraphicsObjectArena);
+    m_projectObjectArenaMemoryScope = m_perfSession.registerMemoryScope(FrameArenaScope::s_ProjectObjectArena);
 }
 Frame::~Frame(){
     cleanup();

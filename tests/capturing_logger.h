@@ -25,6 +25,8 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_CapturingLoggerArena("tests/capturing_logger");
+
 class CapturingLogger final : public Core::Common::ILogger{
     using LogArena = Core::Common::LogArena;
     using LogString = Core::Common::LogString;
@@ -32,7 +34,7 @@ class CapturingLogger final : public Core::Common::ILogger{
 
 public:
     CapturingLogger()
-        : m_arena("NWB::Tests::CapturingLogger")
+        : m_arena(s_CapturingLoggerArena)
         , m_messages(m_arena)
         , m_errors(m_arena)
     {}

@@ -4,6 +4,8 @@
 
 #include "runtime_cache.h"
 
+#include "arena_names.h"
+
 #include <core/assets/manager.h>
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -105,7 +107,7 @@ template<typename MeshT, typename SkinStreamT>
     const bool sourceHasSkinRefs,
     MeshSkinningRuntimeInstance& instance
 ){
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_ZippedPayloadArena);
     Vector<MeshletPositionStreamRef, Core::Alloc::ScratchArena> runtimePositionRefs{scratchArena};
     Vector<MeshletAttributeStreamRef, Core::Alloc::ScratchArena> runtimeAttributeRefs{scratchArena};
     usize positionRefCount = 0u;

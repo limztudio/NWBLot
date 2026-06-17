@@ -21,6 +21,7 @@ set(NWB_ASSETS_MESH_RUNTIME_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/runtime_validation_meshlets.inl"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload_io.h"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
 )
 

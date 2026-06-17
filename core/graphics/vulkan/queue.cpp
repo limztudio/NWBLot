@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 
@@ -195,7 +196,7 @@ u64 Queue::submit(CommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
     if(outSubmitted)
         *outSubmitted = false;
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_QueueSubmitArena);
 
     bool hasCommands = ppCmd && numCmd > 0;
     bool hasPendingSemaphores = !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
@@ -423,7 +424,7 @@ void Queue::updateTextureTileMappings(Texture* textureResource, const TextureTil
     const bool useParallelPool = workerPool.isParallelEnabled();
     const usize mappingCount = static_cast<usize>(numTileMappings);
 
-    Alloc::ScratchArena scratchArena(8192);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SparseTextureBindArena, 8192);
 
     Vector<VkSparseImageMemoryBind, Alloc::ScratchArena> sparseImageMemoryBinds{scratchArena};
     Vector<VkSparseMemoryBind, Alloc::ScratchArena> sparseMemoryBinds{scratchArena};

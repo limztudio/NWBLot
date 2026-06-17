@@ -3,6 +3,7 @@
 
 
 #include "linux_platform.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 #include <global/environment.h>
@@ -58,7 +59,7 @@ static void AppendBackend(Common::LinuxFrameBackend::Enum (&outOrder)[2], usize&
 }
 
 static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[2]){
-    Alloc::GlobalArena arena("NWB::Core::Frame::LinuxEnvironment");
+    Alloc::GlobalArena arena(FrameArenaScope::s_LinuxEnvironmentArena);
     usize count = 0;
 
     AString<Alloc::GlobalArena> requestedBackend(arena);

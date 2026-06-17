@@ -4,6 +4,7 @@
 
 #include "tangent_frame_rebuild.h"
 
+#include "arena_names.h"
 #include "frame_math.h"
 
 #include <core/alloc/scratch.h>
@@ -126,7 +127,7 @@ bool RebuildTangentFrames(
             return false;
     }
 
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(MeshArenaScope::s_RebuildScratch);
     Vector<TangentFrameAccumulator, Core::Alloc::ScratchArena> accumulators(
         vertexCount,
         TangentFrameAccumulator{

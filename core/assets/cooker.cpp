@@ -3,6 +3,7 @@
 
 
 #include "cooker.h"
+#include "arena_names.h"
 
 #include <core/alloc/scratch.h>
 
@@ -130,7 +131,7 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
             return onlyCooker.cook(resolvedOptions);
         }
 
-        Alloc::ScratchArena scratchArena;
+        Alloc::ScratchArena scratchArena(AssetsArenaScope::s_DescribeAvailableCookersScratch);
         NWB_LOGGER_ERROR(NWB_TEXT("Missing --asset-type. Available types: {}")
             , StringConvert(__hidden_cooker::DescribeAvailableCookers(m_arena, m_assetCookers, scratchArena))
         );
@@ -139,7 +140,7 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
 
     const auto found = m_assetCookers.find(requestedType);
     if(found == m_assetCookers.end()){
-        Alloc::ScratchArena scratchArena;
+        Alloc::ScratchArena scratchArena(AssetsArenaScope::s_DescribeAvailableCookersScratch);
         NWB_LOGGER_ERROR(NWB_TEXT("Unsupported --asset-type '{}'. Available types: {}")
             , StringConvert(options.assetType.c_str())
             , StringConvert(__hidden_cooker::DescribeAvailableCookers(m_arena, m_assetCookers, scratchArena))

@@ -39,6 +39,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shader_stage_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/spirv_entry_point.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/module.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vma.h"

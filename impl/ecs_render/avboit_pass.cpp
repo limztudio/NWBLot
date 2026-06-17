@@ -4,6 +4,8 @@
 
 #include "avboit_private.h"
 
+#include "arena_names.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -242,7 +244,7 @@ void RendererAvboitSystem::buildTransparentCsgIntervals(
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_TransparentCsgIntervals, graphics().getDevice(), commandList);
 
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TransparentCsgIntervalArena);
     MaterialPassDrawItemPartitions drawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
     CsgFrameGpuData csgFrameData{scratchArena};

@@ -36,6 +36,9 @@ namespace CrashNames = NWB::Core::Crash::PackageNames;
 
 #define NWB_CRASH_TEST_CHECK NWB_TEST_CHECK
 
+inline constexpr Name s_InstallArena("tests/crash/install");
+inline constexpr Name s_SignalChildInstallArena("tests/crash/signal_child_install");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -367,8 +370,8 @@ static void TestDesktopInstalledHandlerWritesManualDumpPackage(TestContext& cont
     TestArena testArena;
     auto& arena = testArena.arena;
     NWB::Core::Alloc::PersistentArena installArena(
-        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u),
-        "NWB::Tests::Crash::InstallArena"
+        s_InstallArena,
+        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
     );
     constexpr AStringView s_Group("crash_desktop_handler_runtime_test");
     RemoveTestArtifacts(arena, s_Group);
@@ -435,8 +438,8 @@ static void TestLinuxSignalHandlerWritesCrashPackage(TestContext& context){
     NWB_CRASH_TEST_CHECK(context, childPid >= 0);
     if(childPid == 0){
         NWB::Core::Alloc::PersistentArena installArena(
-            NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u),
-            "NWB::Tests::Crash::SignalChildInstallArena"
+            s_SignalChildInstallArena,
+            NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
         );
         NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
         config.applicationName = AStringView("crash_tests");

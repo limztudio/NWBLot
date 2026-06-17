@@ -29,13 +29,15 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_EcsTestWorldArena("tests/ecs_test_world");
+
 struct EcsTestWorld{
     Core::Alloc::GlobalArena arena;
     Core::Alloc::ThreadPool threadPool;
     Core::ECS::World world;
 
     EcsTestWorld()
-        : arena("NWB::Tests::EcsTestWorld")
+        : arena(s_EcsTestWorldArena)
         , threadPool(0)
         , world(arena, threadPool)
     {}

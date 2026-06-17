@@ -46,7 +46,7 @@ struct AffinityMasks{
         if(bufferSize == 0)
             return;
 
-        ScratchArena scratchArena(bufferSize);
+        ScratchArena scratchArena(ArenaScope::s_AffinityQuery, bufferSize);
         using Buffer = Vector<u8, ScratchArena>;
         Buffer buffer(bufferSize, Buffer::allocator_type(scratchArena));
         if(!GetSystemCpuSetInformation(

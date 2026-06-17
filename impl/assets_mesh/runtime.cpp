@@ -4,6 +4,7 @@
 
 #include "asset.h"
 
+#include "arena_names.h"
 #include "binary_payload_io.h"
 #include "binary_payload.h"
 #include "meshlet_ref_codec.h"
@@ -48,7 +49,7 @@ Core::Assets::AssetCodecAutoRegistrar s_MeshAssetCodecAutoRegistrar(&CreateMeshA
 
 
 bool Mesh::validatePayload()const{
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_ValidatePayloadArena);
     const TString<Core::Alloc::ScratchArena> meshPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
 
     if(hasIncompleteGeometryPayload()){

@@ -39,9 +39,9 @@ public:
 
 
 public:
-    PersistentArena(usize maxSize, const char* allocationLog = "NWB::Core::Alloc::PersistentArena")
+    PersistentArena(const Name& allocationLog, usize maxSize)
         : Base(allocationLog)
-        , m_bucket(CoreAlloc(maxSize, allocationLog))
+        , m_bucket(CoreAlloc(maxSize, log()))
         , m_maxSize(maxSize)
         , m_handle(tlsf_create_with_pool(m_bucket, m_maxSize))
     {

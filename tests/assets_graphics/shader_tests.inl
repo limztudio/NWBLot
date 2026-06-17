@@ -145,7 +145,7 @@ static void TestShaderMetadataRejectsDefaultVariantAlias(TestContext& context){
 
     NWB::Impl::ShaderCook shaderCook(testArena.arena);
     NWB::Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ShaderScratchArena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !shaderCook.parseIncludeMeta(includeMetaPath, includeEntry, scratchArena));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT(
         "unsupported asset field 'default_variant'"
@@ -172,7 +172,7 @@ static void TestShaderDependencyChecksumAliasesGeneratedRoot(TestContext& contex
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, WriteTextFile(secondGeneratedInclude, "generated include\n"));
 
     NWB::Impl::ShaderCook shaderCook(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ShaderScratchArena);
 
     NWB::Impl::ShaderCook::CookVector<Path> firstDependencies(testArena.arena);
     NWB::Impl::ShaderCook::CookVector<Path> secondDependencies(testArena.arena);

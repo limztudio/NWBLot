@@ -111,7 +111,7 @@ private:
 public:
     inline explicit JobSystem(ThreadPool& pool, usize arenaSize = 0)
         : m_pool(pool)
-        , m_arena(resolveArenaSize(pool.m_threadCount, arenaSize))
+        , m_arena(ArenaScope::s_JobSystem, resolveArenaSize(pool.m_threadCount, arenaSize))
         , m_nodes(JobNodeList::allocator_type(m_arena))
         , m_freeNodes(JobFreeNodeList::allocator_type(m_arena))
     {
@@ -120,7 +120,7 @@ public:
     inline explicit JobSystem(u32 threadCount, u64 affinityMask = 0, usize arenaSize = 0)
         : m_ownedPool(MakeUnique<ThreadPool>(threadCount, affinityMask, arenaSize))
         , m_pool(*m_ownedPool)
-        , m_arena(resolveArenaSize(threadCount, arenaSize))
+        , m_arena(ArenaScope::s_JobSystem, resolveArenaSize(threadCount, arenaSize))
         , m_nodes(JobNodeList::allocator_type(m_arena))
         , m_freeNodes(JobFreeNodeList::allocator_type(m_arena))
     {
@@ -129,7 +129,7 @@ public:
     inline explicit JobSystem(u32 threadCount, CoreAffinity::Enum affinity, usize arenaSize = 0)
         : m_ownedPool(MakeUnique<ThreadPool>(threadCount, affinity, arenaSize))
         , m_pool(*m_ownedPool)
-        , m_arena(resolveArenaSize(threadCount, arenaSize))
+        , m_arena(ArenaScope::s_JobSystem, resolveArenaSize(threadCount, arenaSize))
         , m_nodes(JobNodeList::allocator_type(m_arena))
         , m_freeNodes(JobFreeNodeList::allocator_type(m_arena))
     {
@@ -382,7 +382,7 @@ private:
     }
 
     inline JobHandle complete(JobHandle handle, bool allowInline){
-        ScratchArena scratchArena;
+        ScratchArena scratchArena(ArenaScope::s_JobReadyBatch);
         ReadyBatch readyJobs{ReadyBatch::allocator_type(scratchArena)};
         JobSignal* completionSignal = nullptr;
         JobHandle inlineContinuation;

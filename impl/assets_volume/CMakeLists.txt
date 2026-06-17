@@ -1,6 +1,7 @@
 if(NWB_BUILD_RESOURCE_COOKER)
     nwb_declare_static_library(nwb_assets_volume_cook)
     target_sources(nwb_assets_volume_cook PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
         "${CMAKE_CURRENT_LIST_DIR}/asset_volume_writer.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/asset_volume_writer.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook_paths.cpp"

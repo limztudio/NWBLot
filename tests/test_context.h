@@ -44,19 +44,22 @@ struct TestContext{
 
 #define NWB_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
 
+inline constexpr Name s_TestArena("tests/test_arena");
+inline constexpr Name s_DefaultTestArena("tests/default_test_arena");
+
 template<typename Tag = void>
 struct TestArena{
     Core::Alloc::GlobalArena arena;
 
     TestArena()
-        : arena("NWB::Tests::TestArena")
+        : arena(s_TestArena)
     {}
 };
 
 namespace TestDetail{
 
 inline Core::Alloc::GlobalArena& Arena(){
-    static Core::Alloc::GlobalArena s_Arena("NWB::Tests::DefaultTestArena");
+    static Core::Alloc::GlobalArena s_Arena(s_DefaultTestArena);
     return s_Arena;
 }
 

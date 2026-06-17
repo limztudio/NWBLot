@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 
@@ -139,7 +140,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         return nullptr;
     }
 
-    Alloc::ScratchArena scratchArena(s_GraphicsPipelineScratchArenaBytes);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_GraphicsPipelineArena, s_GraphicsPipelineScratchArenaBytes);
 
     auto* pso = NewArenaObject<GraphicsPipeline>(m_context.objectArena, m_context);
     pso->m_desc = desc;

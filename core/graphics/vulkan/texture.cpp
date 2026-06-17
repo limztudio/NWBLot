@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 #include <global/math/convert.h>
@@ -1521,7 +1522,7 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
 
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
     if(texture.m_desc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
-        Alloc::ScratchArena scratchArena;
+        Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
         Vector<VkImageSubresourceRange, Alloc::ScratchArena> ranges(resolvedSubresources.numArraySlices, scratchArena);
         __hidden_vulkan_texture::BuildArrayLayerImageSubresourceRanges(resolvedSubresources, aspectMask, ranges);
         vkCmdClearDepthStencilImage(m_currentCmdBuf->m_cmdBuf, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, static_cast<u32>(ranges.size()), ranges.data());
@@ -1726,7 +1727,7 @@ void CommandList::clearDepthStencilTextureBox(
 
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const auto copyAspect = [&](const VkImageAspectFlagBits aspect, const u8* clearPattern, const u32 clearPatternSize) -> bool {
         const u64 arrayLayerCount = static_cast<u64>(resolvedSubresources.numArraySlices);
@@ -2085,7 +2086,7 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
     }
 #endif
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureResolveArena);
     Vector<VkImageResolve, Alloc::ScratchArena> regions(resolvedSrc.numMipLevels, scratchArena);
 
     for(MipLevel mipOffset = 0; mipOffset < resolvedSrc.numMipLevels; ++mipOffset){
@@ -2178,7 +2179,7 @@ void CommandList::clearColorTexture(
 
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
     if(texture.m_desc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
-        Alloc::ScratchArena scratchArena;
+        Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
         Vector<VkImageSubresourceRange, Alloc::ScratchArena> ranges(resolvedSubresources.numArraySlices, scratchArena);
         __hidden_vulkan_texture::BuildArrayLayerImageSubresourceRanges(resolvedSubresources, VK_IMAGE_ASPECT_COLOR_BIT, ranges);
         vkCmdClearColorImage(m_currentCmdBuf->m_cmdBuf, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, static_cast<u32>(ranges.size()), ranges.data());
@@ -2268,7 +2269,7 @@ void CommandList::clearColorTextureBox(
 
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
         const Box resolvedBox = __hidden_vulkan_texture::ResolveTextureClearBox(desc, mipLevel, box);

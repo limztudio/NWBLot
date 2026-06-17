@@ -3,6 +3,7 @@
 
 
 #include "module.h"
+#include "arena_names.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,7 +16,7 @@ NWB_CORE_BEGIN
 
 
 InputDispatcher::InputDispatcher()
-    : m_arena("NWB::Core::Input::Dispatcher")
+    : m_arena(InputArenaScope::s_DispatcherArena)
     , m_handlers(m_arena)
     , m_pendingHandlerMutations(m_arena)
 {}

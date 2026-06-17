@@ -9,6 +9,7 @@
 
 
 #include "cook_entry_registry.h"
+#include "arena_names.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,7 +33,7 @@ struct AutoRegistrationQueue{
     CookVector<CookEntryRegistrationFunction> functions;
 
     AutoRegistrationQueue()
-        : arena("NWB::Core::Assets::CookEntryAutoRegistrationQueue")
+        : arena(AssetsArenaScope::s_AutoRegistrationQueueArena)
         , functions(arena)
     {}
 };
@@ -74,7 +75,7 @@ CookEntryAutoRegistrar::CookEntryAutoRegistrar(const CookEntryRegistrationFuncti
 }
 
 bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry){
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsArenaScope::s_RegisterAutoCollectedScratch);
     Vector<CookEntryRegistrationFunction, Core::Alloc::ScratchArena> functions{scratchArena};
     {
         auto& queue = __hidden_cook_entry_registry::QueryAutoRegistrationQueue();

@@ -3,6 +3,7 @@
 
 
 #include "manager.h"
+#include "arena_names.h"
 
 #include <core/alloc/scratch.h>
 
@@ -99,7 +100,7 @@ u64 AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
 
 
 void AssetManager::processPending(){
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(AssetsArenaScope::s_ProcessPendingScratch);
     Vector<u64, Alloc::ScratchArena> pendingRequestIds{scratchArena};
     {
         ScopedLock lock(m_mutex);

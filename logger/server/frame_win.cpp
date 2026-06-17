@@ -46,15 +46,33 @@ public:
     inline void setHwnd(HWND value){ m_data.ptr[1] = value; }
 };
 
+struct LogRowColors{
+    COLORREF text = RGB(0, 0, 0);
+    COLORREF background = RGB(230, 230, 230);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // in windows, the frame is a singleton
 using MessageItem = Pair<LogString, Log::Type::Enum>;
 using MessageDeque = Deque<MessageItem, LogArena>;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr Name s_MessageArenaName("logger/server/frame/messages");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static Frame* s_Frame = nullptr;
 static HFONT s_Font = nullptr;
 static HWND s_ListHwnd = nullptr;
-static LogArena s_MessageArena("NWB::Log::FrameDetail::Messages");
+static LogArena s_MessageArena(s_MessageArenaName);
 static MessageDeque s_Messages{s_MessageArena};
 
 static Futex s_ListMutex;
@@ -64,11 +82,6 @@ static WNDPROC s_OrigListProc = nullptr;
 static bool IsMessageIndexValid(UINT itemID){
     return static_cast<usize>(itemID) < s_Messages.size();
 }
-
-struct LogRowColors{
-    COLORREF text = RGB(0, 0, 0);
-    COLORREF background = RGB(230, 230, 230);
-};
 
 static LogRowColors SelectLogRowColors(const bool alternate, const LogRowColors& even, const LogRowColors& odd){
     return alternate ? odd : even;

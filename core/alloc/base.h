@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <global/name.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -130,36 +132,27 @@ private:
 
 class ArenaBase : NoCopy{
 protected:
-    static constexpr usize s_LogCapacity = 128;
-
-
-protected:
-    explicit ArenaBase(const char* allocationLog)
-        : m_log{}
+    explicit ArenaBase(const Name& allocationLog)
+        : m_name(allocationLog)
     {
-        NWB_ASSERT_MSG(allocationLog, NWB_TEXT("ArenaBase allocationLog must be non-null"));
-
-        const char* source = allocationLog ? allocationLog : "";
-        usize i = 0;
-        for(; i + 1 < LengthOf(m_log) && source[i] != '\0'; ++i)
-            m_log[i] = source[i];
-        m_log[i] = '\0';
+        NWB_ASSERT_MSG(static_cast<bool>(m_name), NWB_TEXT("ArenaBase allocationLog must be a valid name"));
     }
     ~ArenaBase() = default;
 
 protected:
-    [[nodiscard]] inline const char* log()const{ return m_log; }
+    [[nodiscard]] inline const Name& name()const{ return m_name; }
+    [[nodiscard]] inline const char* log()const{ return m_name.c_str(); }
 
 
 private:
-    char m_log[s_LogCapacity];
+    Name m_name;
 };
 
 
 template<typename Arena>
 class ArenaBaseT : public ArenaBase{
 protected:
-    explicit ArenaBaseT(const char* allocationLog)
+    explicit ArenaBaseT(const Name& allocationLog)
         : ArenaBase(allocationLog)
     {}
     ~ArenaBaseT() = default;

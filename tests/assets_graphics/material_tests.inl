@@ -877,7 +877,7 @@ static void TestMaterialBindHalfTypedLayoutValues(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
     NWB::Impl::Material material(testArena.arena);
     const bool built = BuildMaterialFromBindAndMeta(
         s_HalfMaterialBindSource,
@@ -964,7 +964,7 @@ static void TestMaterialBindCompactIntegerTypedLayoutValues(TestContext& context
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
     NWB::Impl::Material material(testArena.arena);
     const bool built = BuildMaterialFromBindAndMeta(
         s_CompactIntegerMaterialBindSource,
@@ -1013,7 +1013,7 @@ static void TestMaterialMetadataInterfaceAndBlockParameters(TestContext& context
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
     NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
     const bool parsed = ParseMaterialEntryFromMetaText(s_BlockScopedMaterialMeta, testArena, materialEntry, scratchArena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, parsed);
@@ -1084,7 +1084,7 @@ static void TestMaterialMetadataInterfaceAndBlockParameters(TestContext& context
 
 static void TestMaterialCodecTypedLayoutBoundary(TestContext& context){
     TestArena testArena;
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
     NWB::Impl::Material material(testArena.arena);
 
     {
@@ -1210,7 +1210,7 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
     Path root(testArena.arena);
     NWB::Impl::MaterialBindEntry entry(testArena.arena);
     const bool parsed = ParseMaterialBindFromText(
@@ -1383,7 +1383,7 @@ static void TestMaterialBindGeneratedSlangText(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
     Path root(testArena.arena);
     NWB::Impl::MaterialBindEntry entry(testArena.arena);
     const bool parsed = ParseMaterialBindFromText(

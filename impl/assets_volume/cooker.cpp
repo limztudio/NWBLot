@@ -10,6 +10,7 @@
 
 #include "cooker.h"
 
+#include "arena_names.h"
 #include "asset_volume_writer.h"
 #include "cook_paths.h"
 #include "volume_prepare_registry.h"
@@ -75,7 +76,7 @@ bool AssetVolumeCooker::cook(const Core::Assets::AssetCookOptions& options){
 bool AssetVolumeCooker::cookAssetVolume(const Core::Assets::AssetCookOptions& options, AssetVolumeCookResult& outResult){
     outResult = {};
 
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsVolumeArenaScope::s_CookArena);
 
     Core::Assets::ResolvedCookPaths resolvedPaths(m_arena);
     if(!Core::Assets::ResolveCookPaths(options, resolvedPaths, scratchArena))

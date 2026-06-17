@@ -22,6 +22,8 @@ namespace __hidden_tests{
 using TestContext = NWB::Tests::TestContext;
 using TestWorld = NWB::Tests::EcsTestWorld;
 
+inline constexpr Name s_ScratchArena("tests/csg/scratch");
+
 
 #define NWB_CSG_TEST_CHECK NWB_TEST_CHECK
 
@@ -106,7 +108,7 @@ static NWB::Impl::CsgFrameState BuildTestCsgFrameState(
     TestWorld& testWorld,
     const NWB::Impl::CsgFrameBuildDesc& desc = NWB::Impl::CsgFrameBuildDesc{}
 ){
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     return NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena, desc);
 }
 
@@ -116,7 +118,7 @@ static bool ResolveTestCsgReceiverDrawState(
     const NWB::Impl::CsgReceiverPass::Enum receiverPass,
     NWB::Impl::CsgReceiverDrawState& outState
 ){
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     const NWB::Impl::CsgFrameReceiverLookup receiverLookup(testWorld.world, scratchArena);
     return receiverLookup.resolveReceiverDrawState(entity, receiverPass, outState);
 }

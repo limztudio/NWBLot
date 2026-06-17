@@ -4,6 +4,7 @@
 
 #include "system.h"
 
+#include "arena_names.h"
 #include "renderer_private.h"
 
 
@@ -103,7 +104,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         return true;
     DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
 
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
     m_preparedCsgFrameState = HasCsgFrameCandidates(m_world)
         ? m_csgSystem.buildFrameState(scratchArena)
         : CsgFrameState{}
@@ -150,7 +151,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!m_preparedCsgFrameStateValid)
         return;
 
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
     const bool hasCsgFrameWork = !csgFrameState.empty();
     const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;

@@ -3,6 +3,7 @@
 
 
 #include "auto_registration.h"
+#include "arena_names.h"
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -30,7 +31,7 @@ struct AutoFactoryQueue{
     AssetVector<AssetCookerFactory> cookerFactories;
 
     AutoFactoryQueue()
-        : arena("NWB::Core::Assets::AutoFactoryQueue")
+        : arena(AssetsArenaScope::s_AutoFactoryQueueArena)
         , codecFactories(arena)
         , cookerFactories(arena)
     {}
@@ -117,7 +118,7 @@ bool AssetCookerAutoRegistrar::initialize(){
 
 
 void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(AssetsArenaScope::s_RegisterCodecsScratch);
     __hidden_auto_registration::ScratchFactoryVector<AssetCodecFactory> codecFactories{scratchArena};
     {
         auto& autoFactoryQueue = __hidden_auto_registration::QueryAutoFactoryQueue();
@@ -135,7 +136,7 @@ void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
 }
 
 void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, AssetArena& arena){
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(AssetsArenaScope::s_RegisterCookersScratch);
     __hidden_auto_registration::ScratchFactoryVector<AssetCookerFactory> cookerFactories{scratchArena};
     {
         auto& autoFactoryQueue = __hidden_auto_registration::QueryAutoFactoryQueue();

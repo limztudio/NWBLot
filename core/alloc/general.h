@@ -29,7 +29,7 @@ public:
 
 
 public:
-    explicit GlobalArena(const char* allocationLog = "NWB::Core::Alloc::GlobalArena")
+    explicit GlobalArena(const Name& allocationLog)
         : Base(allocationLog)
     {}
     ~GlobalArena() = default;

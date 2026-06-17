@@ -7,6 +7,7 @@
 
 #include "global.h"
 #include "persistent.h"
+#include "arena_names.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -218,7 +219,7 @@ private:
 
 public:
     inline explicit ThreadPool(u32 threadCount, u64 affinityMask = 0, usize arenaSize = 0)
-        : m_arena(arenaSize > 0 ? arenaSize : defaultArenaSize(threadCount))
+        : m_arena(ArenaScope::s_ThreadPool, arenaSize > 0 ? arenaSize : defaultArenaSize(threadCount))
         , m_tasks(TaskQueue::allocator_type(m_arena))
         , m_threadCount(threadCount)
         , m_workers(WorkerList::allocator_type(m_arena))

@@ -3,6 +3,7 @@
 
 
 #include "backend_context.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 
@@ -539,7 +540,7 @@ bool BackendContext::createVulkanInstance(){
 
     decltype(m_enabledExtensions.instance) requiredExtensions(m_enabledExtensions.instance);
 
-    Alloc::ScratchArena scratchArena(32768);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_InstanceCreateArena, 32768);
 
     uint32_t extensionCount = 0;
     res = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
@@ -722,7 +723,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_QueueFamilyQueryArena);
 
     Vector<VkQueueFamilyProperties, Alloc::ScratchArena> props(queueFamilyCount, scratchArena);
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, props.data());
@@ -823,7 +824,7 @@ bool BackendContext::pickPhysicalDevice(){
         return false;
     }
 
-    Alloc::ScratchArena scratchArena(32768);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_PhysicalDeviceSelectArena, 32768);
 
     Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
     res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
@@ -1030,7 +1031,7 @@ bool BackendContext::pickPhysicalDevice(){
 bool BackendContext::createVulkanDevice(){
     VkResult res = VK_SUCCESS;
 
-    Alloc::ScratchArena scratchArena(32768);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DeviceCreateArena, 32768);
     m_bufferDeviceAddressSupported = false;
     m_dynamicRenderingSupported = false;
     m_synchronization2Supported = false;
@@ -1550,7 +1551,7 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SwapChainPresentModeArena);
 
     Vector<VkPresentModeKHR, Alloc::ScratchArena> presentModes(presentModeCount, scratchArena);
     res = vkGetPhysicalDeviceSurfacePresentModesKHR(m_vulkanPhysicalDevice, m_windowSurface, &presentModeCount, presentModes.data());
@@ -1804,7 +1805,7 @@ bool BackendContext::createDevice(){
     if(!createVulkanDevice())
         return false;
 
-    Alloc::ScratchArena scratchArena(32768);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DeviceExtensionSetupArena, 32768);
 
     auto vecInstanceExt = VulkanDetail::StringSetToVector(m_enabledExtensions.instance, scratchArena);
     auto vecDeviceExt = VulkanDetail::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
@@ -2078,7 +2079,7 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
         return true;
     }
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_AdapterEnumerateArena);
 
     Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
     res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());

@@ -43,6 +43,8 @@ using NWB::Tests::WaitForDirectory;
 using namespace NWB::Tests::LoggerServerCrash;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
 inline constexpr AStringView s_InvalidArchiveHeader("NWBCRASHPKG 0\n");
+inline constexpr Name s_AssertChildInstallArena("tests/logger_server/assert_child_install");
+inline constexpr Name s_RecoverableErrorInstallArena("tests/logger_server/recoverable_error_install");
 
 #define NWB_LOGSERVER_TEST_CHECK NWB_TEST_CHECK
 #if defined(_MSC_VER)
@@ -338,8 +340,8 @@ static void TestLinuxAssertCrashProducesObservableLoggerReport(TestContext& cont
     NWB_LOGSERVER_TEST_CHECK(context, childPid >= 0);
     if(childPid == 0){
         NWB::Core::Alloc::PersistentArena installArena(
-            NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u),
-            "NWB::Tests::LoggerServer::AssertChildInstallArena"
+            s_AssertChildInstallArena,
+            NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
         );
         NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
         config.applicationName = AStringView("logserver_crash_tests");
@@ -427,8 +429,8 @@ NWB_LOGSERVER_TEST_NOINLINE static void TestRecoverableErrorDiagnosticProducesOb
     TestArena testArena;
     auto& arena = testArena.arena;
     NWB::Core::Alloc::PersistentArena installArena(
-        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u),
-        "NWB::Tests::LoggerServer::RecoverableErrorInstallArena"
+        s_RecoverableErrorInstallArena,
+        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
     );
     constexpr AStringView s_Group("logger_server_recoverable_error_observe_test");
     constexpr AStringView s_Stem("recoverable_error_observe_001");

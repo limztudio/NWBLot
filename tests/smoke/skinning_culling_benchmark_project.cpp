@@ -34,6 +34,8 @@ namespace __hidden_skinning_culling_benchmark{
 using BenchmarkModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using BenchmarkMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
+inline constexpr Name s_EnvironmentFlagArena("tests/smoke/skinning_culling_benchmark/environment_flag");
+
 namespace BenchmarkMode{
     enum Enum : u8{
         NoCulling,
@@ -130,7 +132,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
 }
 
 [[nodiscard]] static bool EnvironmentFlagEnabled(const char* name){
-    NWB::Core::Alloc::GlobalArena arena("NWB::Tests::Smoke::EnvironmentFlag");
+    NWB::Core::Alloc::GlobalArena arena(s_EnvironmentFlagArena);
     AString<NWB::Core::Alloc::GlobalArena> value(arena);
     if(!ReadEnvironmentVariable(name, value))
         return false;

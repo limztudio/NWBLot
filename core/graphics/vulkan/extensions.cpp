@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 
@@ -310,7 +311,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         return;
     }
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CooperativeVectorConvertArena);
 
     Vector<CooperativeVectorConvertMatrixLayoutDesc const*, Alloc::ScratchArena> validDescs{scratchArena};
     validDescs.reserve(numDescs);
@@ -424,7 +425,7 @@ void Device::getTextureTiling(Texture* textureResource, u32* numTiles, PackedMip
     u32 tileHeight = 1;
     u32 tileDepth = 1;
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureTilingQueryArena);
 
     SparseImageMemoryRequirementsVector sparseReqs{ scratchArena };
     VulkanDetail::GetImageSparseMemoryRequirements(m_context.device, texture->m_image, sparseReqs);

@@ -4,6 +4,7 @@ target_sources(nwb_assets PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/cooker.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/registry.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/manager.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/auto_registration.h"
     "${CMAKE_CURRENT_LIST_DIR}/global.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"

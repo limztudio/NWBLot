@@ -6,6 +6,7 @@
 
 
 #include "global.h"
+#include "arena_names.h"
 #include <global/frame_data.h>
 #include <core/alloc/general.h>
 
@@ -70,6 +71,8 @@ class Initializerable : public CommonDetail::BaseInitializerable{
 public:
     Initializerable();
 };
+
+
 class Initializer{
 public:
     static Initializer& instance();
@@ -93,7 +96,7 @@ private:
 
 private:
     Initializer()
-        : m_arena("NWB::Core::Common::Initializer")
+        : m_arena(CommonArenaScope::s_InitializerArena)
         , m_items(m_arena)
         , m_cursor(m_items.before_begin())
     {}

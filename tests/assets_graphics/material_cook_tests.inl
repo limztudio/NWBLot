@@ -33,7 +33,7 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     includeDirectories.push_back(generatedCsgIncludeRoot);
     includeDirectories.push_back(AssetsGraphicsTestRepoRoot(testArena) / "impl" / "assets" / "graphics");
     NWB::Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialCookScratchArena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, shaderCook.gatherShaderDependencies(
         root / "assets" / "shaders" / "material_mesh.slang",
         includeDirectories,
@@ -503,7 +503,7 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
     NWB::Impl::ShaderCook::CookVector<Path> includeDirectories(testArena.arena);
     includeDirectories.push_back(root / "cache" / "tests" / "material_bind_includes");
     NWB::Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialCookScratchArena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, shaderCook.gatherShaderDependencies(
         shaderIncludeProbePath,
         includeDirectories,

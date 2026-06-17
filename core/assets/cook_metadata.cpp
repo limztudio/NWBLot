@@ -9,6 +9,7 @@
 
 
 #include "cook_metadata.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 
@@ -39,7 +40,7 @@ struct AutoMetadataParserQueue{
     CookVector<AutoMetadataParser> parsers;
 
     AutoMetadataParserQueue()
-        : arena("NWB::Core::Assets::AssetMetadataParserQueue")
+        : arena(AssetsArenaScope::s_MetadataParserQueueArena)
         , parsers(arena)
     {}
 };
@@ -50,7 +51,7 @@ struct AutoAssetBunchExpanderQueue{
     CookVector<AssetBunchExpandFunction> functions;
 
     AutoAssetBunchExpanderQueue()
-        : arena("NWB::Core::Assets::AssetBunchExpanderQueue")
+        : arena(AssetsArenaScope::s_BunchExpanderQueueArena)
         , functions(arena)
     {}
 };
@@ -336,7 +337,7 @@ bool AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlannedFileCou
 }
 
 AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context){
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsArenaScope::s_DocumentMetadataParsersScratch);
     Vector<__hidden_cook_metadata::AutoMetadataParser, Core::Alloc::ScratchArena> parsers{scratchArena};
     {
         auto& queue = __hidden_cook_metadata::QueryAutoMetadataParserQueue();
@@ -358,7 +359,7 @@ AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocu
 }
 
 AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context){
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsArenaScope::s_ValueMetadataParsersScratch);
     Vector<__hidden_cook_metadata::AutoMetadataParser, Core::Alloc::ScratchArena> parsers{scratchArena};
     {
         auto& queue = __hidden_cook_metadata::QueryAutoMetadataParserQueue();
@@ -380,7 +381,7 @@ AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMe
 }
 
 AssetBunchExpandResult::Enum TryAutoCollectedAssetBunchExpanders(AssetBunchExpandContext& context){
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsArenaScope::s_AssetBunchExpandersScratch);
     Vector<AssetBunchExpandFunction, Core::Alloc::ScratchArena> functions{scratchArena};
     {
         auto& queue = __hidden_cook_metadata::QueryAutoAssetBunchExpanderQueue();

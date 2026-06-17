@@ -10,6 +10,8 @@
 
 #include "cook.h"
 
+#include "arena_names.h"
+
 #include <core/assets/paths.h>
 #include <core/metascript/parser.h>
 
@@ -1134,7 +1136,7 @@ bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntr
 }
 
 void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata){
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(AssetsShaderArenaScope::s_MergeInheritedDefinesArena);
     __hidden_cook::ScratchVector<const IncludeEntry*> inheritedEntries{scratchArena};
     inheritedEntries.reserve(dependencies.size());
 

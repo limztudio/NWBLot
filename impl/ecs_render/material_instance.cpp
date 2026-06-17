@@ -4,6 +4,8 @@
 
 #include "renderer_private.h"
 
+#include "arena_names.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -226,7 +228,7 @@ bool RendererMaterialSystem::resolveMaterialInstanceMutableTypedBytes(
         return true;
     }
 
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_MutableTypedBytesArena);
     MaterialTypedByteDataVector mutableTypedBytes{scratchArena};
     mutableTypedBytes.assign(materialInfo.mutableDefaultTypedBytes.begin(), materialInfo.mutableDefaultTypedBytes.end());
     if(!applyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, mutableTypedBytes)){

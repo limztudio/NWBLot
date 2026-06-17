@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 
@@ -33,7 +34,7 @@ Object ComputePipeline::getNativeHandle(ObjectType objectType){
 
 
 ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& desc){
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_ComputePipelineArena);
 
     auto* pso = NewArenaObject<ComputePipeline>(m_context.objectArena, m_context);
     pso->m_desc = desc;

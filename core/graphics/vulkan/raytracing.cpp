@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 
@@ -887,7 +888,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
             return nullptr;
         }
 
-        Alloc::ScratchArena scratchArena(s_RayTracingScratchArenaBytes);
+        Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena, s_RayTracingScratchArenaBytes);
         VulkanDetail::BlasGeometryScratch blasScratch(scratchArena);
         const usize geometryCount = desc.bottomLevelGeometries.size();
         blasScratch.resizeForSizeQuery(geometryCount);
@@ -978,7 +979,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     else if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena);
     VulkanDetail::MicromapUsageVector usageCounts{ scratchArena };
     if(!VulkanDetail::BuildOpacityMicromapUsageCounts(desc.counts, usageCounts, NWB_TEXT("create opacity micromap")))
         return nullptr;
@@ -1135,7 +1136,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     auto* pso = NewArenaObject<RayTracingPipeline>(m_context.objectArena, m_context, *this);
     pso->m_desc = desc;
 
-    Alloc::ScratchArena scratchArena(s_RayTracingScratchArenaBytes);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena, s_RayTracingScratchArenaBytes);
 
     PipelineShaderStageVector stages{ scratchArena };
     Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchArena> groups{ scratchArena };
@@ -1653,7 +1654,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
     }
 
-    Alloc::ScratchArena scratchArena(s_RayTracingScratchArenaBytes);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena, s_RayTracingScratchArenaBytes);
 
     VulkanDetail::BlasGeometryScratch blasScratch(scratchArena);
     blasScratch.resizeForBuild(numGeometries);
@@ -2217,7 +2218,7 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
     else if(ommDesc.flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena);
     VulkanDetail::MicromapUsageVector usageCounts{ scratchArena };
     if(!VulkanDetail::BuildOpacityMicromapUsageCounts(ommDesc.counts, usageCounts, NWB_TEXT("build opacity micromap")))
         return;

@@ -22,6 +22,9 @@ namespace __hidden_shader_archive{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_SerializeIndexArena("core/graphics/shader_archive_serialize");
+
+
 static constexpr char s_IndexMagic[8] = { 'N', 'W', 'B', 'S', 'D', 'X', '1', '\0' };
 
 
@@ -174,7 +177,7 @@ bool ShaderArchive::serializeIndex(const GraphicsVector<Record>& records, Graphi
         return false;
     }
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(__hidden_shader_archive::s_SerializeIndexArena);
     Vector<const Record*, Alloc::ScratchArena> sortedRecords{scratchArena};
     sortedRecords.reserve(records.size());
     for(const Record& record : records)

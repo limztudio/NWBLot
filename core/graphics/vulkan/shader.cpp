@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 #include <core/graphics/spirv_entry_point.h>
@@ -198,7 +199,7 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
         return nullptr;
     }
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_ShaderReflectionArena);
     __hidden_vulkan_shader::SpirvWordBuffer spirvWords;
     if(!__hidden_vulkan_shader::CopySpirvWords(shader->m_bytecode.data(), shader->m_bytecode.size(), scratchArena, spirvWords)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload for entry '{}'"), StringConvert(requestedEntryName));
@@ -244,7 +245,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     shader->m_desc = d;
     __hidden_vulkan_shader::AssignBytecode(binary, binarySize, shader->m_bytecode);
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_ShaderReflectionArena);
     __hidden_vulkan_shader::SpirvWordBuffer spirvWords;
     if(!__hidden_vulkan_shader::CopySpirvWords(shader->m_bytecode.data(), shader->m_bytecode.size(), scratchArena, spirvWords)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload"));
@@ -291,7 +292,7 @@ ShaderHandle Device::createShaderSpecialization(Shader* baseShader, const Shader
     shader->m_bytecode = base->m_bytecode;
     shader->m_entryPointName = base->m_entryPointName;
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_ShaderReflectionArena);
     __hidden_vulkan_shader::SpirvWordBuffer spirvWords;
     if(!__hidden_vulkan_shader::CopySpirvWords(shader->m_bytecode.data(), shader->m_bytecode.size(), scratchArena, spirvWords)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload for specialization"));
@@ -384,7 +385,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         bool isInstanced = false;
     };
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_InputLayoutArena);
     HashMap<u32, VertexBindingBuildInfo, Hasher<u32>, EqualTo<u32>, Alloc::ScratchArena> bindingInfos(
         0,
         Hasher<u32>(),

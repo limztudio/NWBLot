@@ -146,7 +146,7 @@ static void TestVolumeSessionAcceptsScratchBytes(TestContext& context){
         const bool created = volumeSession.create(root / "volume", config);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, created);
         if(created){
-            NWB::Core::Alloc::ScratchArena scratchArena;
+            NWB::Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
             ::Vector<u8, NWB::Core::Alloc::ScratchArena> payload{ scratchArena };
             payload.reserve(4u);
             payload.push_back(1u);

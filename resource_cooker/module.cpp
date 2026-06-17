@@ -18,6 +18,12 @@ namespace __hidden_resource_cooker{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_CookArena("resource_cooker/cook");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 u32 QueryCookWorkerThreadCount(){
     const u32 coreCount = NWB::Core::Alloc::QueryCoreCount(NWB::Core::Alloc::CoreAffinity::Any);
     return coreCount > 1u ? coreCount - 1u : 0u;
@@ -35,7 +41,7 @@ u32 QueryCookWorkerThreadCount(){
 
 int ResourceCookerMain(int argc, char** argv){
     try{
-        NWB::Core::Alloc::GlobalArena cookArena("resource_cook");
+        NWB::Core::Alloc::GlobalArena cookArena(__hidden_resource_cooker::s_CookArena);
         NWB::Core::Alloc::ThreadPool cookThreadPool(
             __hidden_resource_cooker::QueryCookWorkerThreadCount(),
             NWB::Core::Alloc::CoreAffinity::Any

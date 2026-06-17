@@ -5,6 +5,7 @@ target_sources(nwb_crash PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/request.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/spool.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/global.h"
     "${CMAKE_CURRENT_LIST_DIR}/internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"

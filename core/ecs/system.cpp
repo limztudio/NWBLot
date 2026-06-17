@@ -4,6 +4,7 @@
 
 #include "system.h"
 
+#include "arena_names.h"
 #include "world.h"
 
 
@@ -163,7 +164,7 @@ void SystemScheduler::rebuild(){
     //  - They do not both write the same component type
     //  - One does not write a component that the other reads
 
-    Alloc::ScratchArena scratchArena(4096);
+    Alloc::ScratchArena scratchArena(EcsArenaScope::s_SchedulerRebuildScratch, 4096);
 
     Vector<u8, Alloc::ScratchArena> assignedSystems(
         systemCount, 0,

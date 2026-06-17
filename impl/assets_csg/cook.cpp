@@ -10,6 +10,8 @@
 
 #include "cook.h"
 
+#include "arena_names.h"
+
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 #include <global/text_utils.h>
@@ -169,7 +171,7 @@ static constexpr AStringView s_EvalShapeIdDefineName = "NWB_CSG_EVAL_SHAPE_ID";
         return false;
     }
     for(const Path& component : includePathValue){
-        ScratchArena scratchArena;
+        ScratchArena scratchArena(AssetsCsgArenaScope::s_IncludePathComponentArena);
         ScratchString componentText = PathToString(scratchArena, component);
         CanonicalizeTextInPlace(componentText);
         if(componentText.empty() || componentText == "." || componentText == ".."){

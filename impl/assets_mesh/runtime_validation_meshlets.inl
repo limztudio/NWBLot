@@ -9,7 +9,7 @@
     const tchar* contextText,
     const TStringView meshPathText
 ){
-    Core::Alloc::ScratchArena scratchArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_MeshletAttributeSkinSharingArena);
     Vector<u32, Core::Alloc::ScratchArena> attributeSkins{scratchArena};
     usize attributeRefCount = 0u;
     for(const MeshletDesc& meshlet : meshlets)

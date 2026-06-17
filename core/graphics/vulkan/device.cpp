@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 
 #include <core/filesystem/module.h>
 #include <core/filesystem/volume_naming.h>
@@ -524,7 +525,7 @@ void Device::savePipelineCacheData(){
     if(m_pipelineCacheDirectory.empty() || m_pipelineCacheVolumeName.empty() || !m_context.pipelineCache)
         return;
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_PipelineCacheSaveArena);
     Vector<u8, Alloc::ScratchArena> cacheData{scratchArena};
     if(!VulkanDetail::RetrievePipelineCacheData(m_context.device, m_context.pipelineCache, cacheData))
         return;
@@ -602,7 +603,7 @@ u64 Device::executeCommandLists(CommandList* const* pCommandLists, usize numComm
         return 0;
     }
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CommandListExecuteArena);
     Vector<TrackedCommandBuffer*, Alloc::ScratchArena> submittedOwners{scratchArena};
     if(pCommandLists && numCommandLists > 0){
         submittedOwners.reserve(numCommandLists);
@@ -835,7 +836,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     if(res != VK_SUCCESS || propertyCount == 0)
         return output;
 
-    Alloc::ScratchArena scratchArena;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CooperativeVectorQueryArena);
     Vector<VkCooperativeVectorPropertiesNV, Alloc::ScratchArena> properties(propertyCount, scratchArena);
     for(u32 i = 0; i < propertyCount; ++i){
         properties[i].sType = VK_STRUCTURE_TYPE_COOPERATIVE_VECTOR_PROPERTIES_NV;

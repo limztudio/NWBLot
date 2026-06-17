@@ -23,22 +23,45 @@
 #define NWB_SCENE_SHADING_BINDING NWB_SCENE_SHADING_DEFAULT_BINDING
 #endif
 
+#ifndef NWB_SCENE_LIGHT_LIST_SET
+#define NWB_SCENE_LIGHT_LIST_SET NWB_SCENE_LIGHT_LIST_DEFAULT_SET
+#endif
+
+#ifndef NWB_SCENE_LIGHT_LIST_BINDING
+#define NWB_SCENE_LIGHT_LIST_BINDING NWB_SCENE_LIGHT_LIST_DEFAULT_BINDING
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct NwbSceneShadingBuffer{
-    float4 g_NwbSceneDirectionalLightDirection;
-    float4 g_NwbSceneDirectionalLightColorIntensity;
+    // xyz = camera world position, w = active light count.
     float4 g_NwbSceneCameraPosition;
 };
 
 [[vk::binding(NWB_SCENE_SHADING_BINDING, NWB_SCENE_SHADING_SET)]]
 ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> g_NwbSceneShadingBuffer;
 
-#define g_NwbSceneDirectionalLightDirection g_NwbSceneShadingBuffer.g_NwbSceneDirectionalLightDirection
-#define g_NwbSceneDirectionalLightColorIntensity g_NwbSceneShadingBuffer.g_NwbSceneDirectionalLightColorIntensity
 #define g_NwbSceneCameraPosition g_NwbSceneShadingBuffer.g_NwbSceneCameraPosition
+
+struct NwbSceneLight{
+    // xyz = world position (point/spot), w = spot inner cone cosine.
+    float4 position;
+    // directional: toward-light; spot: emission axis. w = spot outer cone cosine.
+    float4 direction;
+    // xyz = color, w = intensity.
+    float4 colorIntensity;
+    // x = range, y = light type, zw reserved.
+    float4 params;
+};
+
+[[vk::binding(NWB_SCENE_LIGHT_LIST_BINDING, NWB_SCENE_LIGHT_LIST_SET)]]
+StructuredBuffer<NwbSceneLight, Std430DataLayout> g_NwbSceneLights;
+
+uint nwbSceneLightCount(){
+    return uint(max(g_NwbSceneCameraPosition.w, 0.0));
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -195,6 +195,7 @@ public:
 private:
     Core::BindingLayoutHandle m_lightingBindingLayout;
     Core::BufferHandle m_sceneShadingBuffer;
+    Core::BufferHandle m_lightBuffer;
     Core::ShaderHandle m_compositeVertexShader;
     Core::ShaderHandle m_lightingPixelShader;
     Core::GraphicsPipelineHandle m_lightingPipeline;

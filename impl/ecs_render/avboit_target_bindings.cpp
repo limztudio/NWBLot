@@ -151,6 +151,7 @@ bool RendererAvboitSystem::createAvboitFrameTargetBindingSets(
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, avboitTargets.controlBuffer.get()));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER, avboitState().m_linearSampler.get()));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SCENE_SHADING_AVBOIT_ACCUMULATE_BINDING, deferredState().m_sceneShadingBuffer.get()));
+    accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SCENE_LIGHT_LIST_AVBOIT_ACCUMULATE_BINDING, deferredState().m_lightBuffer.get()));
     if(!__hidden_avboit_target_bindings::CreateBindingSet(
         *device,
         avboitTargets.accumulateBindingSet,

@@ -175,6 +175,7 @@ bool RendererAvboitSystem::createAvboitResources(){
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SCENE_SHADING_AVBOIT_ACCUMULATE_BINDING, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SCENE_LIGHT_LIST_AVBOIT_ACCUMULATE_BINDING, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
         }
     )){
@@ -184,6 +185,11 @@ bool RendererAvboitSystem::createAvboitResources(){
 
     if(!deferredState().m_sceneShadingBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT accumulation requires a scene shading buffer"));
+        return false;
+    }
+
+    if(!deferredState().m_lightBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT accumulation requires a scene light buffer"));
         return false;
     }
 

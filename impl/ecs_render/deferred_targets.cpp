@@ -409,6 +409,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     ));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, deferredState().m_sampler.get()));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SCENE_SHADING_DEFERRED_LIGHTING_BINDING, deferredState().m_sceneShadingBuffer.get()));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SCENE_LIGHT_LIST_DEFERRED_LIGHTING_BINDING, deferredState().m_lightBuffer.get()));
     createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, deferredState().m_lightingBindingLayout);
     if(!createdTargets.lightingBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding set"));

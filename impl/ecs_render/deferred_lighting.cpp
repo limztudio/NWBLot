@@ -34,6 +34,21 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         }
     }
 
+    if(!deferredState().m_lightBuffer){
+        Core::BufferDesc lightBufferDesc;
+        lightBufferDesc
+            .setByteSize(static_cast<u64>(sizeof(ECSRenderDetail::SceneLightGpuData) * NWB_SCENE_MAX_LIGHTS))
+            .setStructStride(sizeof(ECSRenderDetail::SceneLightGpuData))
+            .setDebugName(ECSRenderDetail::s_SceneLightBufferName)
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        deferredState().m_lightBuffer = graphics().createBuffer(lightBufferDesc);
+        if(!deferredState().m_lightBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene light buffer"));
+            return false;
+        }
+    }
+
     if(!deferredState().m_lightingBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
@@ -43,6 +58,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SCENE_SHADING_DEFERRED_LIGHTING_BINDING, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SCENE_LIGHT_LIST_DEFERRED_LIGHTING_BINDING, 1));
 
         deferredState().m_lightingBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!deferredState().m_lightingBindingLayout){
@@ -101,8 +117,18 @@ bool RendererDeferredSystem::createDeferredLightingPipeline(DeferredFrameTargets
 
 bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
+    NWB_ASSERT(deferredState().m_lightBuffer);
 
-    const ECSRenderDetail::SceneShadingGpuData sceneShadingState = ECSRenderDetail::ResolveSceneShadingState(world(), fallbackAspectRatio);
+    ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS];
+    const u32 lightCount = ECSRenderDetail::ResolveSceneLights(world(), lightData, NWB_SCENE_MAX_LIGHTS);
+
+    commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(deferredState().m_lightBuffer.get(), lightData, static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData));
+    commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.commitBarriers();
+
+    const ECSRenderDetail::SceneShadingGpuData sceneShadingState = ECSRenderDetail::ResolveSceneShadingState(world(), fallbackAspectRatio, lightCount);
     if(
         deferredState().m_sceneShadingGpuDataValid
         && NWB_MEMCMP(deferredState().m_sceneShadingGpuData, &sceneShadingState, sizeof(sceneShadingState)) == 0

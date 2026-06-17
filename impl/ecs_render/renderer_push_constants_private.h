@@ -52,9 +52,19 @@ struct EmulatedVertex{
 };
 
 struct SceneShadingGpuData{
-    Float4 directionalLightDirection = Float4(0.f, 0.f, -1.f, 0.f);
-    Float4 directionalLightColorIntensity = Float4(1.f, 1.f, 1.f, 1.f);
-    Float4 cameraPosition = Float4(0.f, 0.f, 0.f, 1.f);
+    // xyz = camera world position, w = active light count.
+    Float4 cameraPositionLightCount = Float4(0.f, 0.f, 0.f, 0.f);
+};
+
+struct SceneLightGpuData{
+    // xyz = world position (point/spot), w = spot inner cone cosine.
+    Float4 position = Float4(0.f, 0.f, 0.f, 1.f);
+    // directional: toward-light; spot: emission axis. w = spot outer cone cosine.
+    Float4 direction = Float4(0.f, 0.f, -1.f, 1.f);
+    // xyz = color, w = intensity.
+    Float4 colorIntensity = Float4(1.f, 1.f, 1.f, 1.f);
+    // x = range, y = light type, zw reserved.
+    Float4 params = Float4(0.f, 0.f, 0.f, 0.f);
 };
 
 static_assert(sizeof(ShaderDrivenPushConstants) == NWB_MESH_PUSH_CONSTANT_BYTE_SIZE, "ShaderDrivenPushConstants layout must stay stable");
@@ -92,6 +102,8 @@ static_assert(
 static_assert(alignof(EmulatedVertex) >= alignof(Float4), "EmulatedVertex must stay SIMD-aligned");
 static_assert(sizeof(SceneShadingGpuData) == sizeof(f32) * NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT, "SceneShadingGpuData layout must match the shading shaders");
 static_assert(alignof(SceneShadingGpuData) >= alignof(Float4), "SceneShadingGpuData must stay SIMD-aligned");
+static_assert(sizeof(SceneLightGpuData) == sizeof(f32) * NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT, "SceneLightGpuData layout must match the shading shaders");
+static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData must stay SIMD-aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

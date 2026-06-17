@@ -137,6 +137,7 @@ void RendererDrawState::invalidateResources(){
 void RendererDeferredState::invalidateResources(){
     m_lightingBindingLayout.reset();
     m_sceneShadingBuffer.reset();
+    m_lightBuffer.reset();
     m_compositeVertexShader.reset();
     m_lightingPixelShader.reset();
     m_lightingPipeline.reset();

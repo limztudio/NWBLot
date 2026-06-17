@@ -14,7 +14,11 @@
 float nwbCsgPixelWorldDistanceTolerance(const float3 worldPosition){
     const float3 worldPositionDx = ddx(worldPosition);
     const float3 worldPositionDy = ddy(worldPosition);
-    return max(length(worldPositionDx), length(worldPositionDy)) * 0.5;
+    const float footprint = max(length(worldPositionDx), length(worldPositionDy)) * 0.5;
+    // Clamp the screen-derivative footprint. At grazing angles (surface normal nearly perpendicular to
+    // the view) ddx/ddy of world position explode, inflating the discard slop and carving thin receiver
+    // slivers along silhouette/edge pixels. Capping keeps the cut crisp without over-discarding there.
+    return min(footprint, NWB_CSG_RECEIVER_DISCARD_MAX_WORLD_TOLERANCE);
 }
 
 bool nwbCsgReceiverPixelDiscard(const uint receiverIndex, const float3 worldPosition){

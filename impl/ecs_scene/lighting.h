@@ -93,6 +93,31 @@ Core::ECS::EntityID CreateDirectionalLightEntity(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct alignas(Float4) SceneLight{
+    // xyz = world position (point/spot lights).
+    Float4 position = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    // xyz = normalized direction (directional/spot lights).
+    Float4 direction = Float4(0.0f, 0.0f, -1.0f, 0.0f);
+    // xyz = color, w = intensity.
+    Float4 colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
+    f32 range = 0.0f;
+    f32 innerConeCos = 1.0f;
+    f32 outerConeCos = 1.0f;
+    LightType::Enum type = LightType::Directional;
+};
+
+static_assert(IsStandardLayout_V<SceneLight>, "SceneLight must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<SceneLight>, "SceneLight must stay cheap to copy into GPU light lists");
+static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep vectors aligned");
+
+
+[[nodiscard]] bool TryBuildSceneLight(const TransformComponent& transform, const LightComponent& light, SceneLight& outLight);
+[[nodiscard]] usize GatherSceneLights(Core::ECS::World& world, const SceneViewBasis& defaultBasis, SceneLight* outLights, usize maxLights);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_SCENE_END
 
 

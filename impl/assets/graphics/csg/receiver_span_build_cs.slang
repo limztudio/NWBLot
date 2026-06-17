@@ -160,69 +160,65 @@ void nwbCsgReceiverSpanBuildPairEvents(
     inout uint inOutSpanCount,
     inout uint inOutFlags
 ){
-    uint usedEvents[NWB_CSG_RECEIVER_EVENT_LAYER_COUNT];
-    [unroll]
-    for(uint eventIndex = 0u; eventIndex < NWB_CSG_RECEIVER_EVENT_LAYER_COUNT; ++eventIndex)
-        usedEvents[eventIndex] = 0u;
-
-    [unroll]
+    // Build receiver spans from the depth-sorted surface events with a winding/parity walk instead of
+    // pairing each front face to a back face. A receiver depth is inside the solid wherever more front
+    // faces than back faces have been crossed; a span runs from the front face that raises the winding
+    // count off zero to the back face that returns it to zero. This merges nested/overlapping layers of
+    // the same receiver into the correct enclosing span (so a cap can never be validated against a
+    // mismatched layer and protrude outside the body), while a simple convex receiver still yields the
+    // identical single [front, back] span. Events from other receivers interleaved inside an open span
+    // are skipped; an unmatched back face or a still-open winding at the end is flagged ambiguous.
+    uint winding = 0u;
+    float spanEnterDepth = 0.0;
+    uint spanReceiverIndex = 0u;
+    [loop]
     for(uint eventIndex = 0u; eventIndex < NWB_CSG_RECEIVER_EVENT_LAYER_COUNT; ++eventIndex){
         if(eventIndex >= eventCount)
-            return;
-        if(usedEvents[eventIndex] != 0u)
-            continue;
-
-        const NwbCsgReceiverSurfaceEvent enterEvent = events[eventIndex];
-        if(enterEvent.faceSign != NWB_CSG_RECEIVER_EVENT_FACE_FRONT){
-            inOutFlags |= NWB_CSG_RECEIVER_SPAN_AMBIGUOUS_FLAG;
-            usedEvents[eventIndex] = 1u;
-            continue;
-        }
-
-        bool foundExit = false;
-        uint exitIndex = eventIndex;
-        [unroll]
-        for(uint candidateIndex = eventIndex + 1u; candidateIndex < NWB_CSG_RECEIVER_EVENT_LAYER_COUNT; ++candidateIndex){
-            if(candidateIndex >= eventCount)
-                break;
-            if(usedEvents[candidateIndex] != 0u)
-                continue;
-
-            const NwbCsgReceiverSurfaceEvent exitEvent = events[candidateIndex];
-            if(exitEvent.receiverIndex != enterEvent.receiverIndex)
-                continue;
-            if(exitEvent.faceSign != NWB_CSG_RECEIVER_EVENT_FACE_BACK)
-                continue;
-
-            foundExit = true;
-            exitIndex = candidateIndex;
             break;
-        }
 
-        if(!foundExit){
-            inOutFlags |= NWB_CSG_RECEIVER_SPAN_AMBIGUOUS_FLAG;
-            usedEvents[eventIndex] = 1u;
+        const NwbCsgReceiverSurfaceEvent surfaceEvent = events[eventIndex];
+        const bool isFrontFace = surfaceEvent.faceSign == NWB_CSG_RECEIVER_EVENT_FACE_FRONT;
+
+        if(winding == 0u){
+            if(isFrontFace){
+                spanEnterDepth = surfaceEvent.depth;
+                spanReceiverIndex = surfaceEvent.receiverIndex;
+                winding = 1u;
+            }
+            else{
+                inOutFlags |= NWB_CSG_RECEIVER_SPAN_AMBIGUOUS_FLAG;
+            }
             continue;
         }
 
-        const NwbCsgReceiverSurfaceEvent exitEvent = events[exitIndex];
-        usedEvents[eventIndex] = 1u;
-        usedEvents[exitIndex] = 1u;
-        if(exitEvent.depth <= enterEvent.depth){
-            inOutFlags |= NWB_CSG_RECEIVER_SPAN_AMBIGUOUS_FLAG;
+        if(surfaceEvent.receiverIndex != spanReceiverIndex)
+            continue;
+
+        if(isFrontFace){
+            ++winding;
             continue;
         }
 
-        nwbCsgReceiverSpanBuildWriteSpan(
-            pixel,
-            spanLayerCount,
-            enterEvent.receiverIndex,
-            enterEvent.depth,
-            exitEvent.depth,
-            inOutSpanCount,
-            inOutFlags
-        );
+        --winding;
+        if(winding != 0u)
+            continue;
+
+        if(surfaceEvent.depth > spanEnterDepth)
+            nwbCsgReceiverSpanBuildWriteSpan(
+                pixel,
+                spanLayerCount,
+                spanReceiverIndex,
+                spanEnterDepth,
+                surfaceEvent.depth,
+                inOutSpanCount,
+                inOutFlags
+            );
+        else
+            inOutFlags |= NWB_CSG_RECEIVER_SPAN_AMBIGUOUS_FLAG;
     }
+
+    if(winding != 0u)
+        inOutFlags |= NWB_CSG_RECEIVER_SPAN_AMBIGUOUS_FLAG;
 }
 
 

@@ -292,10 +292,10 @@ bool nwbCsgReceiverIntervalPixelDiscard(
 
     const uint2 pixel = uint2(pixelInt);
     const float receiverLinearDepth = length(worldPosition - g_NwbMeshCameraPosition.xyz);
-    const float linearDepthTolerance = max(
-        abs(worldDistanceTolerance) * NWB_CSG_RECEIVER_INTERVAL_LINEAR_DEPTH_TOLERANCE_SCALE,
-        fwidth(receiverLinearDepth)
-    );
+    // Use only the stable world-scaled tolerance. A screen-space fwidth() term explodes at the cut rim
+    // and at grazing angles, pulsing the accept band frame-to-frame as the skinned mesh animates, which
+    // was the dominant boundary shimmer in both the opaque and transparent paths.
+    const float linearDepthTolerance = abs(worldDistanceTolerance) * NWB_CSG_RECEIVER_INTERVAL_LINEAR_DEPTH_TOLERANCE_SCALE;
     if(nwbCsgReceiverRemovedIntervalPixelDiscardAtPixel(pixel, receiverIndex, receiverLinearDepth, linearDepthTolerance))
         return true;
 

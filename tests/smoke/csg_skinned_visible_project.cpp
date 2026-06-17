@@ -11,6 +11,7 @@
 #include <core/mesh/frame_math.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
+#include <impl/assets_skeleton/asset.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
@@ -51,6 +52,7 @@ static constexpr AStringView s_ReceiverMaterialPath = "project/smoke/csg_visible
 static constexpr AStringView s_SmokeBxdfSurfaceMaterialInterface = "project/shaders/smoke_bxdf_surface";
 static constexpr Name s_ReceiverGroup("project/smoke/csg_skinned_visible/female_receiver");
 static constexpr Name s_ModelMeshObject("mesh");
+static constexpr Name s_CutterAnchorBoneName("hip");
 static constexpr f32 s_CameraDistance = 1.75f;
 static constexpr f32 s_CameraHeight = 0.92f;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.62f;
@@ -104,13 +106,8 @@ static constexpr f32 s_InitialAnimationTime = s_PIDIV2 / s_ReceiverYawSpeed;
     return QuaternionNormalize(QuaternionMultiply(horizontalCapsule, gentleRoll));
 }
 
-[[nodiscard]] static SIMDVector BuildCutterLocalCenter(const f32 animationTime){
-    const f32 offset = Sin(animationTime) * 0.035f;
-    return VectorSet(0.0f, 0.90f + offset, 0.0f, 0.0f);
-}
-
-[[nodiscard]] static SIMDVector BuildCutterWorldCenter(const f32 animationTime, const SIMDVector receiverRotation){
-    return VectorAdd(BuildCsgReceiverPosition(), Vector3Rotate(BuildCutterLocalCenter(animationTime), receiverRotation));
+[[nodiscard]] static SIMDVector BuildCutterWorldCenter(const SIMDVector cutterLocalCenter, const SIMDVector receiverRotation){
+    return VectorAdd(BuildCsgReceiverPosition(), Vector3Rotate(cutterLocalCenter, receiverRotation));
 }
 
 [[nodiscard]] static SIMDVector BuildCutterWorldRotation(const f32 animationTime, const SIMDVector receiverRotation){
@@ -267,6 +264,46 @@ private:
         );
     }
 
+    [[nodiscard]] SIMDVector resolveCutterAnchorLocalCenter()const{
+        const SIMDVector fallback = VectorSet(0.0f, 0.90f, 0.0f, 0.0f);
+
+        UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
+        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), Name(s_ModelPath), modelAsset) || !modelAsset){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load model for cutter anchor"));
+            return fallback;
+        }
+        const auto* model = checked_cast<const NWB::Impl::Model*>(modelAsset.get());
+        if(model->skeletonObjects().empty())
+            return fallback;
+
+        const Name skeletonPath = model->skeletonObjects().front().skeleton.name();
+        UniquePtr<NWB::Core::Assets::IAsset> skeletonAsset;
+        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), skeletonPath, skeletonAsset) || !skeletonAsset){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load skeleton for cutter anchor"));
+            return fallback;
+        }
+        const auto* skeleton = checked_cast<const NWB::Impl::Skeleton*>(skeletonAsset.get());
+
+        const u32 jointCount = skeleton->jointCount();
+        const u32 anchorIndex = skeleton->findJointIndex(s_CutterAnchorBoneName);
+        if(anchorIndex == NWB::Impl::s_SkeletonInvalidJointIndex || anchorIndex >= jointCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: skeleton has no '{}' bone for cutter anchor"), StringConvert(s_CutterAnchorBoneName.c_str()));
+            return fallback;
+        }
+
+        // Accumulate the anchor bone's model-space bind transform by walking up the parent chain.
+        SIMDMatrix boneToModel = LoadFloat(skeleton->joints()[anchorIndex].localBindPose);
+        for(
+            u32 parentIndex = skeleton->joints()[anchorIndex].parentIndex;
+            parentIndex != NWB::Impl::s_SkeletonInvalidJointIndex && parentIndex < jointCount;
+            parentIndex = skeleton->joints()[parentIndex].parentIndex
+        )
+            boneToModel = MatrixMultiply(LoadFloat(skeleton->joints()[parentIndex].localBindPose), boneToModel);
+
+        // The bone origin in model space is the translation column (M*v convention); receiver scale is 1.
+        return VectorSet(VectorGetW(boneToModel.v[0]), VectorGetW(boneToModel.v[1]), VectorGetW(boneToModel.v[2]), 0.0f);
+    }
+
     void createCutter(){
         auto entity = m_world->createEntity();
         auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>(m_context.objectArena);
@@ -288,7 +325,7 @@ private:
         const SIMDVector receiverRotation = BuildReceiverRotation(0.0f);
         AssignCsgCutterTransform(
             cutter,
-            BuildCutterWorldCenter(0.0f, receiverRotation),
+            BuildCutterWorldCenter(LoadFloat(m_cutterLocalCenter), receiverRotation),
             BuildCutterWorldRotation(0.0f, receiverRotation)
         );
 
@@ -315,7 +352,7 @@ private:
 
         AssignCsgCutterTransform(
             *cutter,
-            BuildCutterWorldCenter(m_animationTime, receiverRotation),
+            BuildCutterWorldCenter(LoadFloat(m_cutterLocalCenter), receiverRotation),
             BuildCutterWorldRotation(m_animationTime, receiverRotation)
         );
     }
@@ -352,6 +389,7 @@ public:
         createReceiver();
         m_world->tick(0.0f);
         const bool receiverReady = installCsgReceiverOnSpawnedModelObject();
+        StoreFloat(resolveCutterAnchorLocalCenter(), &m_cutterLocalCenter);
         createCutter();
         m_world->tick(0.0f);
         NWB_FATAL_ASSERT_MSG(
@@ -401,6 +439,7 @@ private:
     NWB::Core::ECS::EntityID m_receiver = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_receiverObject = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_cutter = NWB::Core::ECS::ENTITY_ID_INVALID;
+    Float4 m_cutterLocalCenter = Float4(0.0f, 0.90f, 0.0f, 0.0f);
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ CsgSkinnedVisibleFpsLabel() };
     f32 m_animationTime = s_InitialAnimationTime;
 };

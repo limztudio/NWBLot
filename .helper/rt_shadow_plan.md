@@ -102,7 +102,19 @@ Work:
 - **Feature gating** (notes 48/49): `Core::Feature::RayTracingAccelStruct` / `RayTracingPipeline` / `RayQuery`, backed by feature structs + Volk entry points, selects HW vs SW backend.
 - **AS serialization (pipeline-cache style) is deferred**: the serialize/deserialize + `vkGetDeviceAccelerationStructureCompatibilityKHR` path mirrors `VkPipelineCache`, but AS builds are already fast, so it is a marginal, device-local optimization only — add later if load-time BLAS builds become a measured cost. Never cache TLAS or skinned BLAS.
 
-Phase 2 units: (1) RT capability gating + `RendererRayTracingSystem`/`RendererRayTracingState` skeleton; (2) static BLAS build+compact at load; (3) skinned BLAS per-frame refit; (4) per-frame TLAS from instances; (5) bindless instance table (minimal).
+Phase 2 units: (1 ✅) RT capability gating + `RendererRayTracingSystem`/`RendererRayTracingState` skeleton; (2) static BLAS build+compact at load; (3) skinned BLAS per-frame refit; (4) per-frame TLAS from instances; (5) bindless instance table (minimal).
+
+#### Unit 2 detail (decided: reconstruct the index buffer at runtime — do NOT cook it)
+
+Key realization: a BLAS reads the vertex+index buffers only **during the build**; afterward the AS is self-contained and no longer references them. So the index buffer is **transient build scaffolding**, not persistent geometry — no reason to cook it. The meshlet data already encodes the topology; expand it to a flat u32 index buffer at build time. **No asset-format change** (the earlier MSH5→MSH6 cook plan is dropped).
+
+- **Reconstruct on CPU at mesh load**, reusing the existing C++ decode helpers (`DecodeMeshletPositionRef`, [meshlet_ref_decode.h:284]) — meshlet streams are already in CPU memory at load; no compute shader; easy to verify. Produce a flat u32 array (positionStream-space, 3 per triangle, count == `meshletPrimitiveIndexCount`) → upload to a GPU buffer with `setIsAccelStructBuildInput(true)` + device address.
+  - ⚠ OPEN: verify the exact chain `meshletPrimitiveIndex(u8) → localPositionIndex` (direct vs via `meshletLocalVertexRef.localDeformedPosition`) against `nwbMeshBuildMeshletVertex` in `impl/assets/graphics/mesh/meshlet_payload.slangi` / `runtime.slangi`. Wrong chain = malformed BLAS.
+- **Lifetime:**
+  - Static mesh: build BLAS (positionBuffer Float3U + transient index buffer; `PREFER_FAST_TRACE | ALLOW_COMPACTION`) → compact → **release the index buffer** after the build's GPU completion (tracked command buffers retain AS build inputs until done — note rules 50/53). positionBuffer just needs the AS-build-input usage flag (kept for rendering anyway).
+  - Skinned mesh (Unit 3): reconstruct the index buffer once at load, **keep it resident**; per-frame refit uses skinnedPositionBuffer (vertices) + the resident index buffer.
+- **Storage:** `RayTracingAccelStructHandle m_blas` on `MeshResources`; build/compact orchestrated by `RendererRayTracingSystem`, gated on `accelStructSupported()`. positionBuffer gains AS-build-input + device-address usage (gated on RT) in `mesh_resources.cpp`.
+- (Future NV-only fast path: `VK_NV_cluster_acceleration_structure` lets meshlets feed the AS build directly — engine has stubs — but it's not portable, so not the default.)
 
 ### Phase 3 — SDF fallback foundation (software backend)
 

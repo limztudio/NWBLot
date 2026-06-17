@@ -10,6 +10,7 @@ set(NWB_ASSETS_MESH_RUNTIME_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/payload_types.h"
     "${CMAKE_CURRENT_LIST_DIR}/meshlet_payload_packing.h"
     "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_decode.h"
+    "${CMAKE_CURRENT_LIST_DIR}/meshlet_triangle_indices.h"
     "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_encode.h"
     "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_codec.h"
     "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_range_validation.inl"

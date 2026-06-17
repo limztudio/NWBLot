@@ -72,6 +72,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend class RendererCsgSystem;
     friend class RendererDeferredSystem;
     friend class RendererAvboitSystem;
+    friend class RendererRayTracingSystem;
 
 public:
     using ShaderPathResolveCallback = RendererShaderPathResolveCallback;
@@ -116,6 +117,7 @@ private:
     [[nodiscard]] RendererCsgState& csgState()noexcept{ return m_csgState; }
     [[nodiscard]] RendererDeferredState& deferredState()noexcept{ return m_deferredState; }
     [[nodiscard]] RendererAvboitState& avboitState()noexcept{ return m_avboitState; }
+    [[nodiscard]] RendererRayTracingState& rayTracingState()noexcept{ return m_rayTracingState; }
     [[nodiscard]] RendererShaderSystem& shaderSystem()noexcept{ return m_shaderSystem; }
     [[nodiscard]] RendererMeshSystem& meshSystem()noexcept{ return m_meshSystem; }
     [[nodiscard]] RendererMaterialSystem& materialSystem()noexcept{ return m_materialSystem; }
@@ -137,6 +139,7 @@ private:
     RendererCsgState m_csgState;
     RendererDeferredState m_deferredState;
     RendererAvboitState m_avboitState;
+    RendererRayTracingState m_rayTracingState;
     CsgFrameState m_preparedCsgFrameState;
     bool m_preparedCsgFrameStateValid = false;
 
@@ -147,6 +150,7 @@ private:
     RendererCsgSystem m_csgSystem;
     RendererDeferredSystem m_deferredSystem;
     RendererAvboitSystem m_avboitSystem;
+    RendererRayTracingSystem m_raytracingSystem;
 };
 
 

@@ -204,6 +204,13 @@ static void ApplyFlyCameraInputToMainCamera(
 
 
 NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(NWB::ProjectRuntimeContext& context){
+#if defined(NWB_TESTBED_FORCE_RAYTRACING_EMULATION) && !defined(NWB_FINAL)
+    context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingAccelStruct, true);
+    context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingPipeline, true);
+    context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayQuery, true);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ProjectTestbed: forced ray tracing off for software-fallback testing"));
+#endif
+
     UniquePtr<NWB::Core::ECS::World> world;
     if(!NWB::CreateInitialProjectWorld(context, world)){
         NWB_LOGGER_FATAL(NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false"));
@@ -265,6 +272,12 @@ void ProjectTestbed::destroyWorld(){
         return;
 
     NWB::DestroyInitialProjectWorld(m_context, m_world.owner());
+
+#if defined(NWB_TESTBED_FORCE_RAYTRACING_EMULATION) && !defined(NWB_FINAL)
+    m_context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingAccelStruct, false);
+    m_context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingPipeline, false);
+    m_context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayQuery, false);
+#endif
 }
 
 bool ProjectTestbed::onStartup(){

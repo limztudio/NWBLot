@@ -31,6 +31,7 @@ class RendererMaterialSystem;
 class RendererCsgSystem;
 class RendererDeferredSystem;
 class RendererAvboitSystem;
+class RendererRayTracingSystem;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -241,6 +242,28 @@ private:
     Core::ComputePipelineHandle m_depthWarpPipeline;
     Core::ComputePipelineHandle m_integratePipeline;
     bool m_targetsNeedClear = true;
+};
+
+class RendererRayTracingState final : NoCopy{
+    friend class RendererSystem;
+    friend class RendererShaderSystem;
+    friend class RendererMeshSystem;
+    friend class RendererMaterialSystem;
+    friend class RendererCsgSystem;
+    friend class RendererDeferredSystem;
+    friend class RendererAvboitSystem;
+    friend class RendererRayTracingSystem;
+
+public:
+    RendererRayTracingState() = default;
+
+
+public:
+    void invalidateResources();
+
+
+private:
+    bool m_capabilityLogged = false;
 };
 
 

@@ -41,6 +41,7 @@ RendererSystem::RendererSystem(
     , m_csgSystem(*this)
     , m_deferredSystem(*this)
     , m_avboitSystem(*this)
+    , m_raytracingSystem(*this)
 {
     if(!RegisterBuiltInCsgShapeTypes(m_csgShapeRegistry))
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register built-in CSG shape types"));
@@ -65,6 +66,7 @@ void RendererSystem::update(Core::ECS::World& world, f32 delta){
 
 bool RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
     static_cast<void>(sampleCount);
+    m_raytracingSystem.logCapabilityOnce();
     if(width == 0 || height == 0)
         return true;
 
@@ -138,6 +140,7 @@ void RendererSystem::invalidateResources(){
     m_csgState.invalidateResources();
     m_deferredState.invalidateResources();
     m_avboitState.invalidateResources();
+    m_rayTracingState.invalidateResources();
 }
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){

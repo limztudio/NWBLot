@@ -88,11 +88,27 @@ Build/test gate after every phase (CMake + Ninja + Clang; `slangc` for shaders).
 
 ### Phase 2 — RT foundation (Layer 1, hardware backend)
 
-Mesh BLAS cache (static build + compact; skinned refit), per-frame TLAS from visible instances, instance mask bits, bindless instance table (shadow fields only for now), feature gating to select backend.
+Acceleration structures are **runtime-built, never cooked** — the `VkAccelerationStructureKHR` blob is opaque and device/driver-specific, so it cannot be shipped. The cook stage already produces geometry (vertex/index buffers); RT just needs those buffers created with the accel-struct build-input usage flag at runtime.
+
+- **BLAS** = one mesh's geometry (triangle BVH, object space); one per unique mesh, shared by instances.
+- **TLAS** = the scene's instances (BLAS pointer + world transform + instance id + mask + hit-group offset), a BVH in world space.
+
+Work:
+- **Static mesh BLAS**: build once at mesh resource creation, then **compact** (`compactBottomLevelAccelStructs`), keep resident. Flags: `PREFER_FAST_TRACE | ALLOW_COMPACTION`.
+- **Skinned mesh BLAS**: build/refit **per frame** from the skinned runtime position buffer (same buffer CSG receivers use). Flags: `PREFER_FAST_BUILD | ALLOW_UPDATE`; refit most frames, occasional full rebuild.
+- **TLAS**: rebuild **per frame** from visible instances.
+- **Instance mask bits** (shadow-caster / reflective / GI) defined up front.
+- **Bindless instance table**: shadow-needed fields now; material/texture fields when reflections land.
+- **Feature gating** (notes 48/49): `Core::Feature::RayTracingAccelStruct` / `RayTracingPipeline` / `RayQuery`, backed by feature structs + Volk entry points, selects HW vs SW backend.
+- **AS serialization (pipeline-cache style) is deferred**: the serialize/deserialize + `vkGetDeviceAccelerationStructureCompatibilityKHR` path mirrors `VkPipelineCache`, but AS builds are already fast, so it is a marginal, device-local optimization only — add later if load-time BLAS builds become a measured cost. Never cache TLAS or skinned BLAS.
+
+Phase 2 units: (1) RT capability gating + `RendererRayTracingSystem`/`RendererRayTracingState` skeleton; (2) static BLAS build+compact at load; (3) skinned BLAS per-frame refit; (4) per-frame TLAS from instances; (5) bindless instance table (minimal).
 
 ### Phase 3 — SDF fallback foundation (software backend)
 
-Offline per-mesh SDF bake in the asset pipeline; runtime global distance field assembled from instances; same instance table.
+The **mesh SDF is the one true cooked/baked artifact** (a 3D distance-field texture per mesh — deterministic and expensive, so baked offline and shipped). Runtime assembles a global distance field from instances; same instance table.
+
+Skinned caveat: SDFs are baked in bind pose, so the SW fallback handles skinned meshes only **approximately** (bind-pose SDF) or **omits** them from the software shadow field (static geometry still casts). HW RT handles skinned shadows exactly via the per-frame refit above. This asymmetry is accepted (same compromise as Lumen software tracing).
 
 ### Phase 4 — Trace abstraction + shadow effect
 

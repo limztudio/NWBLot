@@ -40,6 +40,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/csg_system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred_system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit_system.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/raytracing_system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit.h"

@@ -100,6 +100,7 @@ protected:
     [[nodiscard]] RendererCsgState& csgState()const noexcept{ return m_renderer.csgState(); }
     [[nodiscard]] RendererDeferredState& deferredState()const noexcept{ return m_renderer.deferredState(); }
     [[nodiscard]] RendererAvboitState& avboitState()const noexcept{ return m_renderer.avboitState(); }
+    [[nodiscard]] RendererRayTracingState& rayTracingState()const noexcept{ return m_renderer.rayTracingState(); }
 
 
 protected:

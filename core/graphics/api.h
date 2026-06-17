@@ -92,7 +92,7 @@ namespace GraphicsBackend{
 #undef NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS
 
     template<typename T>
-    using Handle = RefCountPtr<T, ArenaRefDeleter<T>>;
+    using Handle = RefCountPtr<T, Alloc::ArenaRefDeleter<T, Alloc::GlobalArena>>;
 };
 
 

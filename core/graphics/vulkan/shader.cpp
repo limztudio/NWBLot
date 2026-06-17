@@ -226,7 +226,7 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
 
     m_shaders.emplace(
         Move(key),
-        RefCountPtr<Shader, ArenaRefDeleter<Shader>>(shader, ArenaRefDeleter<Shader>(&m_context.objectArena), AdoptRef)
+        Handle<Shader>(shader, Handle<Shader>::deleter_type(&m_context.objectArena), AdoptRef)
     );
     return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena));
 }

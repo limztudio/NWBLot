@@ -139,10 +139,18 @@ protected:
     }
     ~ArenaBase() = default;
 
+
+public:
+    [[nodiscard]] ArenaMemoryStats memoryStats()const{ return m_memoryStats.snapshot(); }
+
+
 protected:
     [[nodiscard]] inline const Name& name()const{ return m_name; }
     [[nodiscard]] inline const char* log()const{ return m_name.c_str(); }
 
+
+protected:
+    ArenaMemoryTracker m_memoryStats;
 
 private:
     Name m_name;

@@ -47,6 +47,22 @@ public:
         return p;
     }
 
+    inline void* reallocate(void* p, usize align, usize size){
+        size = Alignment(align, size);
+
+        const u64 oldBytes = static_cast<u64>(CoreMsize(p));
+        void* next = CoreRealloc(p, size, log());
+        if(next || size == 0u){
+            const u64 newBytes = next ? static_cast<u64>(CoreMsize(next)) : 0u;
+            m_memoryStats.recordReallocation(oldBytes, newBytes);
+            if(newBytes >= oldBytes)
+                m_memoryStats.addReservedBytes(newBytes - oldBytes);
+            else
+                m_memoryStats.removeReservedBytes(oldBytes - newBytes);
+        }
+        return next;
+    }
+
     inline void deallocate(void* p, usize align, usize size){
         size = Alignment(align, size);
 
@@ -59,12 +75,6 @@ public:
         else
             CoreFreeAligned(p, log());
     }
-
-    [[nodiscard]] ArenaMemoryStats memoryStats()const{ return m_memoryStats.snapshot(); }
-
-
-private:
-    ArenaMemoryTracker m_memoryStats;
 };
 
 
@@ -98,53 +108,6 @@ inline typename EnableIf<IsUnboundedArray<T>::value, GlobalUniquePtr<T>>::type M
 template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
 MakeGlobalUnique(Args&&...) = delete;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace AllocDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename T>
-void DestroyArenaReference(NWB::Core::Alloc::GlobalArena* arena, T* p)noexcept{
-    p->~T();
-    arena->deallocate(p, alignof(T), sizeof(T));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename T>
-struct ArenaRefDeleter{
-    NWB::Core::Alloc::GlobalArena* arena = nullptr;
-
-    constexpr ArenaRefDeleter()noexcept = default;
-    constexpr explicit ArenaRefDeleter(NWB::Core::Alloc::GlobalArena* a)noexcept
-        : arena(a)
-    {}
-    template<typename U>
-    ArenaRefDeleter(const ArenaRefDeleter<U>& other, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept
-        : arena(other.arena)
-    {}
-
-    void operator()(T* p)const noexcept{
-        if(p && arena){
-            using AllocDetail::DestroyArenaReference;
-            DestroyArenaReference(arena, p);
-        }
-    }
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1321,7 +1321,7 @@ ShaderTable::~ShaderTable(){}
 
 RayTracingShaderTableHandle RayTracingPipeline::createShaderTable(){
     auto* sbt = NewArenaObject<ShaderTable>(m_context.objectArena, m_context, m_device);
-    sbt->m_pipeline = RefCountPtr<RayTracingPipeline, ArenaRefDeleter<RayTracingPipeline>>(this, ArenaRefDeleter<RayTracingPipeline>(&m_context.objectArena));
+    sbt->m_pipeline = Handle<RayTracingPipeline>(this, Handle<RayTracingPipeline>::deleter_type(&m_context.objectArena));
     return RayTracingShaderTableHandle(sbt, RayTracingShaderTableHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 

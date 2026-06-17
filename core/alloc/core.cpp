@@ -40,6 +40,10 @@ void* CoreAllocAligned(usize size, usize align, const char* log){
     return cur;
 }
 
+usize CoreMsize(void* ptr)noexcept{
+    return static_cast<usize>(scalable_msize(ptr));
+}
+
 void CoreFree(void* ptr, const char* log)noexcept{
     static_cast<void>(log);
     scalable_free(ptr);

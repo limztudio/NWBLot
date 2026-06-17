@@ -648,7 +648,7 @@ private:
     VkCommandBuffer m_cmdBuf = VK_NULL_HANDLE;
     VkCommandPool m_cmdPool = VK_NULL_HANDLE;
 
-    Vector<RefCountPtr<GraphicsResource, ArenaRefDeleter<GraphicsResource>>, Alloc::GlobalArena> m_referencedResources;
+    Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_referencedResources;
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
     Vector<VkAccelerationStructureKHR, Alloc::GlobalArena> m_referencedAccelStructHandles;
 
@@ -657,7 +657,7 @@ private:
 
     const VulkanContext& m_context;
 };
-typedef RefCountPtr<TrackedCommandBuffer, ArenaRefDeleter<TrackedCommandBuffer>> TrackedCommandBufferPtr;
+typedef Handle<TrackedCommandBuffer> TrackedCommandBufferPtr;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1197,7 +1197,7 @@ public:
 
 private:
     Vector<u8, Alloc::GlobalArena> m_bytecode;
-    HashMap<ShaderLibraryKey, RefCountPtr<Shader, ArenaRefDeleter<Shader>>, ShaderLibraryKeyHasher, EqualTo<ShaderLibraryKey>, GraphicsArena> m_shaders;
+    HashMap<ShaderLibraryKey, Handle<Shader>, ShaderLibraryKeyHasher, EqualTo<ShaderLibraryKey>, GraphicsArena> m_shaders;
 
     const VulkanContext& m_context;
 };
@@ -1611,7 +1611,7 @@ private:
 
 
 private:
-    RefCountPtr<RayTracingPipeline, ArenaRefDeleter<RayTracingPipeline>> m_pipeline;
+    Handle<RayTracingPipeline> m_pipeline;
 
     BufferHandle m_raygenBuffer;
     u64 m_raygenOffset = 0;
@@ -1697,7 +1697,7 @@ public:
 
 
 private:
-    RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> m_layout;
+    Handle<BindingLayout> m_layout;
     Vector<VkDescriptorSet, Alloc::GlobalArena> m_descriptorSets;
     Vector<BindingSetItem, Alloc::GlobalArena> m_writtenItems;
     VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
@@ -1728,8 +1728,8 @@ public:
 
 private:
     BindingSetDesc m_desc;
-    RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> m_layout;
-    RefCountPtr<DescriptorTable, ArenaRefDeleter<DescriptorTable>> m_descriptorTable;
+    Handle<BindingLayout> m_layout;
+    Handle<DescriptorTable> m_descriptorTable;
     Vector<VkDescriptorSet, Alloc::GlobalArena> m_descriptorSets;
     Vector<u32, Alloc::GlobalArena> m_descriptorHeapPushIndices;
     Vector<DescriptorHeapAllocation, Alloc::GlobalArena> m_descriptorHeapAllocations;
@@ -2076,7 +2076,7 @@ private:
     Vector<VkImageMemoryBarrier2, Alloc::GlobalArena> m_pendingImageBarriers;
     Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena> m_pendingBufferBarriers;
 
-    Vector<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>, Alloc::GlobalArena> m_pendingCompactions;
+    Vector<Handle<AccelStruct>, Alloc::GlobalArena> m_pendingCompactions;
 };
 
 

@@ -19,20 +19,28 @@ NWB_IMPL_BEGIN
 
 
 // Reconstructs a flat positionStream-space triangle index buffer (u32, 3 per triangle) from the meshlet-packed
-// geometry. Decode chain mirrors nwbMeshBuildMeshletVertex: primitive u8 -> meshletLocalVertexRef.localDeformedPosition
+// streams. Decode chain mirrors nwbMeshBuildMeshletVertex: primitive u8 -> meshletLocalVertexRef.localDeformedPosition
 // -> DecodeMeshletPositionRef -> global position index. Output count equals the meshlet primitive index count.
-template<typename IndexContainer>
-[[nodiscard]] bool BuildMeshletTriangleIndices(const MeshGeometryPayload& payload, IndexContainer& outIndices){
-    const auto& meshlets = payload.meshlets();
-    const auto& localVertexRefs = payload.meshletLocalVertexRefs();
-    const auto& positionRefDeltas = payload.meshletPositionRefDeltas();
-    const auto& primitiveIndices = payload.meshletPrimitiveIndices();
-
+// Takes the raw streams so it works for both the cooked asset payload and the runtime/skinned mesh instance.
+template<
+    typename MeshletContainer,
+    typename LocalVertexRefContainer,
+    typename DeltaContainer,
+    typename PrimitiveContainer,
+    typename IndexContainer
+>
+[[nodiscard]] bool BuildMeshletTriangleIndices(
+    const MeshletContainer& meshlets,
+    const LocalVertexRefContainer& localVertexRefs,
+    const DeltaContainer& positionRefDeltas,
+    const PrimitiveContainer& primitiveIndices,
+    const usize positionCount,
+    IndexContainer& outIndices
+){
     const u8* const deltaBytes = positionRefDeltas.data();
     const usize deltaByteCount = positionRefDeltas.size();
     const usize localVertexRefCount = localVertexRefs.size();
     const usize primitiveIndexCount = primitiveIndices.size();
-    const usize positionCount = payload.positionStream().size();
 
     for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
         const MeshletDesc& meshlet = meshlets[meshletIndex];
@@ -65,6 +73,18 @@ template<typename IndexContainer>
     }
 
     return true;
+}
+
+template<typename IndexContainer>
+[[nodiscard]] bool BuildMeshletTriangleIndices(const MeshGeometryPayload& payload, IndexContainer& outIndices){
+    return BuildMeshletTriangleIndices(
+        payload.meshlets(),
+        payload.meshletLocalVertexRefs(),
+        payload.meshletPositionRefDeltas(),
+        payload.meshletPrimitiveIndices(),
+        payload.positionStream().size(),
+        outIndices
+    );
 }
 
 

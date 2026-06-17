@@ -19,15 +19,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AllocDetail{
-    template<typename T>
-    void DestroyArenaReference(Alloc::GlobalArena* arena, T* p)noexcept;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 typedef u32 ObjectType;
 
 struct Object{
@@ -56,8 +47,8 @@ inline bool operator!=(const Object& lhs, const Object& rhs)noexcept{ return lhs
 
 
 class GraphicsResource : public Alloc::ITaskScheduler{
-    template<typename> friend struct ArenaRefDeleter;
-    template<typename T> friend void AllocDetail::DestroyArenaReference(Alloc::GlobalArena* arena, T* p)noexcept;
+    template<typename, typename> friend struct Alloc::ArenaRefDeleter;
+    template<typename Arena, typename T> friend void Alloc::AllocDetail::DestroyArenaReference(Arena* arena, T* p)noexcept;
 
 
 protected:

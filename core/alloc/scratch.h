@@ -59,7 +59,7 @@ private:
             m_remaining -= size;
             return ret;
         }
-        inline bool deallocate(void* p, usize size){
+        inline bool tryPopLifo(void* p, usize size){
             const usize available = reinterpret_cast<usize>(m_available);
             const usize allocationBegin = reinterpret_cast<usize>(p);
             if(AddOverflows<usize>(allocationBegin, size))
@@ -77,6 +77,28 @@ private:
 
             m_available = reinterpret_cast<void*>(allocationBegin);
             m_remaining += size;
+            return true;
+        }
+        inline usize lifoTopSpan(void* p)const{
+            const usize bufferBegin = reinterpret_cast<usize>(m_buffer);
+            const usize allocationBegin = reinterpret_cast<usize>(p);
+            const usize available = reinterpret_cast<usize>(m_available);
+            if(allocationBegin < bufferBegin || allocationBegin > available)
+                return 0;
+            return available - allocationBegin;
+        }
+        inline bool tryResizeLifoTop(void* p, usize newSize){
+            const usize bufferBegin = reinterpret_cast<usize>(m_buffer);
+            const usize allocationBegin = reinterpret_cast<usize>(p);
+            if(AddOverflows<usize>(allocationBegin, newSize))
+                return false;
+
+            const usize newEnd = allocationBegin + newSize;
+            if(newEnd > bufferBegin + m_size)
+                return false;
+
+            m_available = reinterpret_cast<void*>(newEnd);
+            m_remaining = m_size - (newEnd - bufferBegin);
             return true;
         }
 
@@ -163,6 +185,51 @@ public:
         return p;
     }
 
+    // LIFO reclaim only: p must be the bucket's most-recent allocation (same contract as deallocate);
+    // resizes the top in place, or relocates to a fresh block and copies when it cannot grow in place.
+    inline void* reallocate(void* p, usize align, usize size){
+        NWB_ASSERT_MSG(align != 0, NWB_TEXT("ScratchArena alignment must be non-zero"));
+        NWB_ASSERT_MSG(align <= s_MaxAlignSize, NWB_TEXT("ScratchArena alignment exceeds s_MaxAlignSize"));
+        if(align == 0 || align > s_MaxAlignSize)
+            return nullptr;
+        if(!p)
+            return allocate(align, size);
+
+        const usize bucketIndex = FloorLog2(align);
+        NWB_ASSERT_MSG(bucketIndex < LengthOf(m_bucket), NWB_TEXT("ScratchArena alignment bucket index is out of range"));
+        if(bucketIndex >= LengthOf(m_bucket))
+            return nullptr;
+
+        auto& bucket = m_bucket[bucketIndex];
+        NWB_ASSERT_MSG(bucket.last != nullptr, NWB_TEXT("Attempted to reallocate before allocating"));
+        if(!bucket.last)
+            return nullptr;
+
+        size = Alignment(align, size);
+
+        Chunk* chunk = bucket.last;
+        const usize oldSize = chunk->lifoTopSpan(p);
+        NWB_ASSERT_MSG(oldSize != 0, NWB_TEXT("ScratchArena can only reallocate its most-recent allocation"));
+        if(oldSize == 0)
+            return nullptr;
+
+        if(chunk->tryResizeLifoTop(p, size)){
+            m_memoryStats.recordReallocation(oldSize, size);
+            return p;
+        }
+
+        void* next = allocate(align, size);
+        if(!next)
+            return nullptr;
+
+        NWB_MEMCPY(next, size, p, oldSize);
+        if(chunk->tryPopLifo(p, oldSize))
+            m_memoryStats.recordDeallocation(oldSize);
+        return next;
+    }
+
+    // LIFO reclaim only: returns space when p is the bucket's most-recent allocation;
+    // any out-of-order free is a no-op and is reclaimed in bulk when the arena is destroyed.
     inline void deallocate(void* p, usize align, usize size){
         NWB_ASSERT_MSG(align != 0, NWB_TEXT("ScratchArena alignment must be non-zero"));
         NWB_ASSERT_MSG(align <= s_MaxAlignSize, NWB_TEXT("ScratchArena alignment exceeds s_MaxAlignSize"));
@@ -180,16 +247,13 @@ public:
             return;
 
         size = Alignment(align, size);
-        if(bucket.last->deallocate(p, size))
+        if(bucket.last->tryPopLifo(p, size))
             m_memoryStats.recordDeallocation(size);
     }
-
-    [[nodiscard]] ArenaMemoryStats memoryStats()const{ return m_memoryStats.snapshot(); }
 
 
 private:
     ChunkWrapper m_bucket[FloorLog2(s_MaxAlignSize) + 1];
-    ArenaMemoryTracker m_memoryStats;
 };
 
 

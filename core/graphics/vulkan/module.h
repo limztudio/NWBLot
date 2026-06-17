@@ -37,7 +37,7 @@ namespace ObjectTypes{
 
 
 class Device;
-typedef RefCountPtr<Device, ArenaRefDeleter<Device>> DeviceHandle;
+typedef Handle<Device> DeviceHandle;
 
 struct DeviceDesc{
     VkInstance instance = VK_NULL_HANDLE;

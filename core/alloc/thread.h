@@ -372,20 +372,26 @@ private:
         desc.done = &done;
         desc.activeWorkers.store(0, MemoryOrder::relaxed);
 
-        m_pfWork.store(&desc, MemoryOrder::release);
+        {
+            ScopedLock taskLock(m_taskMutex);
+            m_pfWork.store(&desc, MemoryOrder::release);
+        }
         m_taskAvailable.notify_all();
 
         processParallelFor(&desc);
 
         done.wait();
 
+        {
+            ScopedLock taskLock(m_taskMutex);
+            m_pfWork.store(nullptr, MemoryOrder::release);
+        }
+
         i32 activeWorkers = desc.activeWorkers.load(MemoryOrder::acquire);
         while(activeWorkers > 0){
             desc.activeWorkers.wait(activeWorkers, MemoryOrder::relaxed);
             activeWorkers = desc.activeWorkers.load(MemoryOrder::acquire);
         }
-
-        m_pfWork.store(nullptr, MemoryOrder::release);
     }
 
     inline void workerLoop(StopToken stopToken, u64 affinityMask){
@@ -394,6 +400,7 @@ private:
         for(;;){
             TaskItem item;
             bool hasTask = false;
+            ParallelForDesc* pf = nullptr;
 
             {
                 UniqueLock taskLock(m_taskMutex);
@@ -405,7 +412,12 @@ private:
                     break;
 
                 const bool parallelWorkAvailable = hasParallelWork();
-                if(!parallelWorkAvailable && !m_tasks.empty()){
+                if(parallelWorkAvailable){
+                    pf = m_pfWork.load(MemoryOrder::acquire);
+                    if(pf)
+                        pf->activeWorkers.fetch_add(1, MemoryOrder::acq_rel);
+                }
+                else if(!m_tasks.empty()){
                     item = Move(m_tasks.front());
                     m_tasks.pop_front();
                     hasTask = true;
@@ -418,12 +430,7 @@ private:
                 if(m_pendingCount.fetch_sub(1, MemoryOrder::acq_rel) == 1)
                     m_pendingCount.notify_all();
             }
-            else{
-                ParallelForDesc* pf = m_pfWork.load(MemoryOrder::acquire);
-                if(!pf)
-                    continue;
-
-                pf->activeWorkers.fetch_add(1, MemoryOrder::acq_rel);
+            else if(pf){
                 processParallelFor(pf);
                 if(pf->activeWorkers.fetch_sub(1, MemoryOrder::acq_rel) == 1)
                     pf->activeWorkers.notify_all();

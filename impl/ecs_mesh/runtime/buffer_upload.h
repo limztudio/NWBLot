@@ -28,6 +28,7 @@ namespace RuntimeMeshBufferUpload{
 struct BufferFlags{
     bool canHaveUAVs = false;
     bool canHaveRawViews = false;
+    bool accelStructBuildInput = false;
 };
 
 namespace BufferSetupFailure{
@@ -82,6 +83,7 @@ template<typename PayloadT>
         .setStructStride(sizeof(PayloadT))
         .setCanHaveUAVs(flags.canHaveUAVs)
         .setCanHaveRawViews(flags.canHaveRawViews)
+        .setIsAccelStructBuildInput(flags.accelStructBuildInput)
         .setDebugName(debugName)
     ;
     setup.data = payload;

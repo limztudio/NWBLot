@@ -57,6 +57,7 @@ class RendererMeshState final : NoCopy{
     friend class RendererCsgSystem;
     friend class RendererDeferredSystem;
     friend class RendererAvboitSystem;
+    friend class RendererRayTracingSystem;
 
 public:
     explicit RendererMeshState(Core::Alloc::GlobalArena& arena);

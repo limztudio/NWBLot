@@ -24,9 +24,11 @@ public:
 
 public:
     void logCapabilityOnce();
-    [[nodiscard]] bool accelStructSupported()const;
-    [[nodiscard]] bool rayTracingPipelineSupported()const;
-    [[nodiscard]] bool rayQuerySupported()const;
+    void buildPendingMeshBlas(Core::CommandList& commandList);
+
+
+private:
+    [[nodiscard]] bool buildStaticMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
 };
 
 

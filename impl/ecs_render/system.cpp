@@ -172,6 +172,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     {
         Core::GpuTimingMeasure frameTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Frame, device, *commandList);
 
+        m_raytracingSystem.buildPendingMeshBlas(*commandList);
+
         MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
         InstanceGpuDataVector instanceData{scratchArena};
         CsgFrameGpuData csgFrameData{scratchArena};

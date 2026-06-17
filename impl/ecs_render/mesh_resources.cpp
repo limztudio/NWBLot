@@ -3,7 +3,9 @@
 
 
 #include "renderer_private.h"
+#include "arena_names.h"
 
+#include <impl/assets_mesh/meshlet_triangle_indices.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 
@@ -29,7 +31,8 @@ template<typename PayloadT, typename PayloadVector>
     const AStringView suffix,
     const PayloadVector& payload,
     const tchar* label,
-    const bool canHaveRawViews = false
+    const bool canHaveRawViews = false,
+    const bool accelStructBuildInput = false
 ){
     const Name bufferName = DeriveName(meshName, suffix);
     if(!bufferName){
@@ -45,7 +48,7 @@ template<typename PayloadT, typename PayloadVector>
         graphics,
         bufferName,
         payload,
-        { false, canHaveRawViews },
+        { false, canHaveRawViews, accelStructBuildInput },
         buffer
     );
     switch(failure){
@@ -81,7 +84,8 @@ template<typename PayloadT, typename PayloadVector>
     const AStringView suffix,
     const PayloadVector& payload,
     const tchar* label,
-    const bool canHaveRawViews = false
+    const bool canHaveRawViews = false,
+    const bool accelStructBuildInput = false
 ){
     outBuffer = SetupMeshBuffer<PayloadT>(
         graphics,
@@ -89,7 +93,8 @@ template<typename PayloadT, typename PayloadVector>
         suffix,
         payload,
         label,
-        canHaveRawViews
+        canHaveRawViews,
+        accelStructBuildInput
     );
     return outBuffer != nullptr;
 }
@@ -208,6 +213,8 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         return false;
     }
 
+    const bool rtSupported = graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
+
     bool uploaded = true;
     uploaded = __hidden_mesh::AssignMeshBuffer<Float3U>(
         graphics(),
@@ -215,7 +222,9 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         createdMesh.positionBuffer,
         AStringView(":positions"),
         mesh.positionStream(),
-        NWB_TEXT("position")
+        NWB_TEXT("position"),
+        false,
+        rtSupported
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
         graphics(),
@@ -303,6 +312,52 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     ) && uploaded;
     if(!uploaded)
         return false;
+
+    if(rtSupported){
+        const usize indexCount = static_cast<usize>(createdMesh.meshletPrimitiveIndexCount);
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RayTracingBuildArena, indexCount * sizeof(u32) + 4096u);
+        Vector<u32, Core::Alloc::ScratchArena> triangleIndices{ scratchArena };
+        triangleIndices.reserve(indexCount);
+        if(!BuildMeshletTriangleIndices(mesh, triangleIndices)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct ray tracing triangle indices for mesh '{}'")
+                , StringConvert(meshPath.c_str())
+            );
+            return false;
+        }
+
+        const Name indexBufferName = DeriveName(meshPath, AStringView(":rt_triangle_indices"));
+        if(!indexBufferName){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive ray tracing index buffer name for mesh '{}'")
+                , StringConvert(meshPath.c_str())
+            );
+            return false;
+        }
+
+        RuntimeMeshBufferUpload::BufferFlags indexFlags;
+        indexFlags.accelStructBuildInput = true;
+        const RuntimeMeshBufferUpload::BufferSetupFailure::Enum indexFailure = RuntimeMeshBufferUpload::SetupRequiredBuffer<u32>(
+            graphics(),
+            indexBufferName,
+            triangleIndices,
+            indexFlags,
+            createdMesh.triangleIndexBuffer
+        );
+        if(indexFailure != RuntimeMeshBufferUpload::BufferSetupFailure::None){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create ray tracing index buffer for mesh '{}'")
+                , StringConvert(meshPath.c_str())
+            );
+            return false;
+        }
+
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: mesh '{}' ray tracing index buffer ready ({} indices, expected {})")
+            , StringConvert(meshPath.c_str())
+            , static_cast<u64>(triangleIndices.size())
+            , static_cast<u64>(createdMesh.meshletPrimitiveIndexCount)
+        );
+
+        createdMesh.blasBuildPending = true;
+    }
+
     NWB_ASSERT(createdMesh.valid());
 
     auto result = meshState().m_meshes.try_emplace(meshPath, Move(createdMesh));

@@ -29,6 +29,7 @@ inline constexpr Name s_TransparentCsgIntervalArena("impl/ecs_render/avboit_tran
 inline constexpr Name s_PreparePassArena("impl/ecs_render/material_pass_prepare");
 inline constexpr Name s_RenderPassArena("impl/ecs_render/material_pass_render");
 inline constexpr Name s_MutableTypedBytesArena("impl/ecs_render/material_instance_mutable");
+inline constexpr Name s_RayTracingBuildArena("impl/ecs_render/ray_tracing_build");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

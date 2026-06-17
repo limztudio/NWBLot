@@ -55,6 +55,8 @@ using InstanceGpuDataVector = Vector<InstanceGpuData, Core::Alloc::ScratchArena>
 struct MeshResources : public RuntimeMeshBuffers{
     Name meshName = NAME_NONE;
     Core::BufferHandle emulationVertexBuffer;
+    Core::BufferHandle triangleIndexBuffer;
+    Core::RayTracingAccelStructHandle blas;
     Core::BindingSetHandle meshBindingSet;
     Core::BindingSetHandle computeBindingSet;
     u32 meshletCount = 0;
@@ -62,6 +64,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     bool runtimeMesh = false;
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
+    bool blasBuildPending = false;
     u64 runtimeMeshVersion = 0u;
     CsgReceiverCpuBounds csgLocalBounds;
 

@@ -94,8 +94,10 @@ template<typename VisitTriangle>
     }))
         return false;
 
-    for(auto it = outNormals.begin(); it != outNormals.end(); ++it)
-        static_cast<void>(Normalize(it.value()));
+    for(auto it = outNormals.begin(); it != outNormals.end(); ++it){
+        if(!Normalize(it.value()))
+            NWB_LOGGER_WARNING(NWB_TEXT("Mesh build: degenerate accumulated vertex normal left un-normalized"));
+    }
     return true;
 }
 

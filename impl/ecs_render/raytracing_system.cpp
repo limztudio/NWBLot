@@ -62,7 +62,8 @@ bool RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandLi
         // frame, so their BLAS is rebuilt from the freshly skinned positions each
         // frame. Static meshes build a BLAS once and clear the pending flag.
         if(meshResources.runtimeMesh){
-            static_cast<void>(buildMeshBlas(commandList, meshResources));
+            if(!buildMeshBlas(commandList, meshResources))
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: runtime mesh BLAS build failed"));
             continue;
         }
 

@@ -21,7 +21,7 @@ static void ExpectCookFailure(
     ));
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
 }
 
 static void ExpectCookFailure(

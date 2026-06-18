@@ -175,7 +175,7 @@ static void __hidden_silence_process()noexcept{
 
 int RunCrashHandlerProcess(const isize argc, tchar** argv){
     __hidden_crash_handler::__hidden_silence_process();
-    static_cast<void>(Detail::DumpArena());
+    [[maybe_unused]] auto& dumpArena = Detail::DumpArena();
 
 #if defined(NWB_PLATFORM_WINDOWS)
     HANDLE requestReadHandle = INVALID_HANDLE_VALUE;
@@ -202,12 +202,13 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         const bool packageWritten = Detail::WriteCrashPackage(request);
         if(ackWriteHandle != INVALID_HANDLE_VALUE){
             const Detail::CrashAck ack = __hidden_crash_handler::__hidden_make_ack(request, packageWritten);
-            static_cast<void>(__hidden_crash_handler::__hidden_write_all(ackWriteHandle, &ack, sizeof(ack)));
+            [[maybe_unused]] const bool ackWritten = __hidden_crash_handler::__hidden_write_all(ackWriteHandle, &ack, sizeof(ack));
         }
         if(ackEvent)
             SetEvent(ackEvent);
-        if(packageWritten)
-            static_cast<void>(Detail::FlushCrashReportsForRequest(request));
+        if(packageWritten){
+            [[maybe_unused]] const bool reportsFlushed = Detail::FlushCrashReportsForRequest(request);
+        }
     }
 
     return __hidden_crash_handler::s_ProcessSuccessExitCode;
@@ -232,10 +233,11 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         const bool packageWritten = Detail::WriteCrashPackage(request);
         if(ackWriteFd >= 0){
             const Detail::CrashAck ack = __hidden_crash_handler::__hidden_make_ack(request, packageWritten);
-            static_cast<void>(__hidden_crash_handler::__hidden_write_all(ackWriteFd, &ack, sizeof(ack)));
+            [[maybe_unused]] const bool ackWritten = __hidden_crash_handler::__hidden_write_all(ackWriteFd, &ack, sizeof(ack));
         }
-        if(packageWritten)
-            static_cast<void>(Detail::FlushCrashReportsForRequest(request));
+        if(packageWritten){
+            [[maybe_unused]] const bool reportsFlushed = Detail::FlushCrashReportsForRequest(request);
+        }
     }
 
     return __hidden_crash_handler::s_ProcessSuccessExitCode;

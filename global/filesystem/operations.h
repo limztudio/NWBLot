@@ -478,7 +478,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline bool EnsureDirectories(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-    static_cast<void>(CreateDirectories(path, outError));
+    [[maybe_unused]] const bool createdAny = CreateDirectories(path, outError);
     return !outError;
 }
 
@@ -544,7 +544,7 @@ template<typename ArenaT>
                 continue;
 
             const Path<ArenaT> child = path / fileName;
-            static_cast<void>(RemoveAllImpl(child, outError));
+            [[maybe_unused]] const u64 removedChildCount = RemoveAllImpl(child, outError);
             if(outError){
                 FindClose(findHandle);
                 return 0u;
@@ -654,7 +654,7 @@ template<typename ArenaT>
         return !outError;
 
     outError.clear();
-    static_cast<void>(RemoveAll(path, outError));
+    [[maybe_unused]] const u64 removedCount = RemoveAll(path, outError);
     return !outError;
 }
 
@@ -672,19 +672,16 @@ template<typename ArenaT>
     outPath.clear();
 
     ErrorCode error;
-    static_cast<void>(EnsureDirectories(destinationDirectory, error));
-    if(error)
+    if(!EnsureDirectories(destinationDirectory, error))
         return false;
 
     const Path<ArenaT> destination = destinationDirectory / sourcePath.filename();
     error.clear();
-    static_cast<void>(RemoveAllIfExists(destination, error));
-    if(error)
+    if(!RemoveAllIfExists(destination, error))
         return false;
 
     error.clear();
-    static_cast<void>(RenamePath(sourcePath, destination, error));
-    if(error)
+    if(!RenamePath(sourcePath, destination, error))
         return false;
 
     outPath = destination;

@@ -4,6 +4,7 @@
 
 #include "diagnostic.h"
 
+#include <core/common/log.h>
 #include <global/binary.h>
 
 
@@ -82,7 +83,8 @@ static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
         return;
 
     try{
-        static_cast<void>(guard->capture(record));
+        if(!guard->capture(record))
+            NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic event record dropped"));
     }
     catch(...){}
 }
@@ -216,11 +218,11 @@ DiagnosticCaptureGuard::DiagnosticCaptureGuard(Recorder& recorder)
         }
         else{
             expectedGuard = this;
-            static_cast<void>(__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(
+            [[maybe_unused]] const bool clearedGuard = __hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(
                 expectedGuard,
                 nullptr,
                 MemoryOrder::acq_rel
-            ));
+            );
         }
     }
 }
@@ -230,18 +232,18 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
         return;
 
     DiagnosticEventCallback expectedCallback = __hidden_telemetry_diagnostic::CaptureCallback;
-    static_cast<void>(::DiagnosticDetail::g_EventCallback.compare_exchange_strong(
+    [[maybe_unused]] const bool clearedCallback = ::DiagnosticDetail::g_EventCallback.compare_exchange_strong(
         expectedCallback,
         nullptr,
         MemoryOrder::acq_rel
-    ));
+    );
 
     DiagnosticCaptureGuard* expected = this;
-    static_cast<void>(__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(
+    [[maybe_unused]] const bool clearedGuard = __hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(
         expected,
         nullptr,
         MemoryOrder::acq_rel
-    ));
+    );
 }
 
 bool DiagnosticCaptureGuard::capture(const DiagnosticEventRecord& record){

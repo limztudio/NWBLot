@@ -298,8 +298,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         commandList->endRenderPass();
 
-        if(shadowTlasReady)
-            static_cast<void>(m_raytracingSystem.renderShadowVisibility(*commandList, deferredTargets));
+        if(shadowTlasReady){
+            if(!m_raytracingSystem.renderShadowVisibility(*commandList, deferredTargets))
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
+        }
 
         commandListReady = m_deferredSystem.renderDeferredLighting(*commandList, deferredTargets);
         if(commandListReady){

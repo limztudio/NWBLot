@@ -78,8 +78,10 @@ bool Frame::startup(){
     return true;
 }
 void Frame::cleanup(){
-    if(m_telemetryUploadCallback)
-        static_cast<void>(flushTelemetryUpload(true));
+    if(m_telemetryUploadCallback){
+        if(!flushTelemetryUpload(true))
+            NWB_LOGGER_WARNING(NWB_TEXT("Frame: telemetry upload flush failed during cleanup"));
+    }
     m_graphics.destroy();
 }
 void Frame::requestQuit(){
@@ -140,14 +142,17 @@ bool Frame::updateFrame(f32 delta){
         return false;
     }
 
-    if(m_telemetrySession.captureOptions().frameGraphEnabled())
-        static_cast<void>(m_graphics.recordFrameGraph(m_telemetrySession));
+    if(m_telemetrySession.captureOptions().frameGraphEnabled()){
+        if(!m_graphics.recordFrameGraph(m_telemetrySession))
+            NWB_LOGGER_WARNING(NWB_TEXT("Frame: frame graph telemetry record failed"));
+    }
 
     m_perfSession.recordMemorySnapshot(m_graphicsObjectArenaMemoryScope, m_graphicsObjectArena);
     m_perfSession.recordMemorySnapshot(m_projectObjectArenaMemoryScope, m_projectObjectArena);
     m_perfSession.publishFrame();
-    if(m_telemetrySession.captureOptions().perfEnabled())
-        static_cast<void>(m_telemetrySession.recordPerfReport(m_perfSession.report()));
+    if(m_telemetrySession.captureOptions().perfEnabled()){
+        [[maybe_unused]] const auto perfRecordResult = m_telemetrySession.recordPerfReport(m_perfSession.report());
+    }
     return true;
 }
 bool Frame::render(){

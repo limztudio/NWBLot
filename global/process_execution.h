@@ -41,7 +41,7 @@ inline void CloseFileDescriptor(int& fd)noexcept{
     if(fd < 0)
         return;
 
-    static_cast<void>(::close(fd));
+    [[maybe_unused]] const int closeResult = ::close(fd);
     fd = -1;
 }
 
@@ -76,7 +76,7 @@ inline void KillAndReapProcess(const pid_t childPid)noexcept{
     if(childPid <= 0)
         return;
 
-    static_cast<void>(::kill(childPid, SIGKILL));
+    [[maybe_unused]] const int killResult = ::kill(childPid, SIGKILL);
     int status = 0;
     while(::waitpid(childPid, &status, 0) < 0 && errno == EINTR){
     }
@@ -95,7 +95,7 @@ inline void KillAndReapProcess(const pid_t childPid)noexcept{
             return false;
         }
 
-        static_cast<void>(::poll(nullptr, 0, 1));
+        [[maybe_unused]] const int pollResult = ::poll(nullptr, 0, 1);
     }
 }
 #endif
@@ -185,14 +185,15 @@ template<typename StringT>
     if(childPid == 0){
         const int devNull = ::open("/dev/null", O_WRONLY);
         if(devNull >= 0){
-            static_cast<void>(::dup2(devNull, STDERR_FILENO));
-            if(devNull != STDERR_FILENO)
-                static_cast<void>(::close(devNull));
+            [[maybe_unused]] const int dupStderrResult = ::dup2(devNull, STDERR_FILENO);
+            if(devNull != STDERR_FILENO){
+                [[maybe_unused]] const int closeDevNullResult = ::close(devNull);
+            }
         }
 
-        static_cast<void>(::dup2(pipeFds[1], STDOUT_FILENO));
-        static_cast<void>(::close(pipeFds[0]));
-        static_cast<void>(::close(pipeFds[1]));
+        [[maybe_unused]] const int dupStdoutResult = ::dup2(pipeFds[1], STDOUT_FILENO);
+        [[maybe_unused]] const int closeReadEndResult = ::close(pipeFds[0]);
+        [[maybe_unused]] const int closeWriteEndResult = ::close(pipeFds[1]);
         ::execvp(argv[0], const_cast<char* const*>(argv));
         _exit(127);
     }
@@ -205,8 +206,9 @@ template<typename StringT>
     ;
 
     const int flags = ::fcntl(pipeFds[0], F_GETFL, 0);
-    if(flags >= 0)
-        static_cast<void>(::fcntl(pipeFds[0], F_SETFL, flags | O_NONBLOCK));
+    if(flags >= 0){
+        [[maybe_unused]] const int setFlagsResult = ::fcntl(pipeFds[0], F_SETFL, flags | O_NONBLOCK);
+    }
 
     char buffer[256] = {};
     const usize effectiveReadBufferBytes = readBufferBytes < sizeof(buffer)

@@ -124,10 +124,10 @@ static void ParseLinuxProcessMemoryMaps(const AStringView mapsText, LinuxProcess
     AStringView location;
     while(NextTrimmedTextLine(outputText, cursor, function)){
         location = AStringView();
-        static_cast<void>(NextTrimmedTextLine(outputText, cursor, location));
+        const bool readLocation = NextTrimmedTextLine(outputText, cursor, location);
 
         const bool hasFunction = !IsUnknownSymbolLine(function);
-        const bool hasLocation = !IsUnknownSymbolLine(location);
+        const bool hasLocation = readLocation && !IsUnknownSymbolLine(location);
         if(!hasFunction && !hasLocation)
             continue;
 

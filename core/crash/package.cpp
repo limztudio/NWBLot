@@ -282,8 +282,7 @@ template<typename ArenaT>
 static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
     const ::Path<ArenaT> packageDirectory = RequestPendingDirectory(arena, request);
     ErrorCode error;
-    static_cast<void>(EnsureDirectories(packageDirectory, error));
-    if(error)
+    if(!EnsureDirectories(packageDirectory, error))
         return false;
 
     if(!WriteCrashTextFile(packageDirectory / PackageNames::s_ManifestFileName, BuildManifest(arena, request)))

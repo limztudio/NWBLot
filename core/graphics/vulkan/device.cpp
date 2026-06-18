@@ -412,7 +412,8 @@ Device::Device(const DeviceDesc& desc)
     }
 
     GraphicsBytes pipelineCacheInitialData{m_context.objectArena};
-    static_cast<void>(loadPipelineCacheData(pipelineCacheInitialData));
+    if(!loadPipelineCacheData(pipelineCacheInitialData))
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to load pipeline cache data; starting with an empty cache."));
 
     auto cacheInfo = VulkanDetail::MakeVkStruct<VkPipelineCacheCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
     if(!pipelineCacheInitialData.empty()){

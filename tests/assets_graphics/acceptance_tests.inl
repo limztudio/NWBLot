@@ -331,7 +331,7 @@ static void RunSmokeMeshAcceptance(
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
 }
 
 static void TestMeshAcceptanceHardEdgeCubeZippedRefs(TestContext& context){
@@ -458,7 +458,7 @@ static void TestMeshAcceptanceQualityBuilderChecks(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
 }
 
 static void TestMeshAcceptanceSphereSmooth(TestContext& context){

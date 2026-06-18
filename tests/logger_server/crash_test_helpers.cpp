@@ -89,7 +89,7 @@ CrashTestPath InvalidArchivePath(Core::Alloc::GlobalArena& arena, const AStringV
 
 void RemoveTestArtifacts(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
     ErrorCode error;
-    static_cast<void>(RemoveAllIfExists(TestCaseDirectory(arena, testGroup), error));
+    [[maybe_unused]] const bool removed = RemoveAllIfExists(TestCaseDirectory(arena, testGroup), error);
 }
 
 void AppendArchiveFile(CrashTestText& archive, const AStringView relativePath, const AStringView content){
@@ -184,8 +184,7 @@ CrashTestText BuildManifest(
 
 bool WriteArchive(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestText& archive){
     ErrorCode error;
-    static_cast<void>(EnsureDirectories(ArchiveInputDirectory(arena, testGroup), error));
-    if(error)
+    if(!EnsureDirectories(ArchiveInputDirectory(arena, testGroup), error))
         return false;
 
     return WriteTextFile(ArchivePath(arena, testGroup, stem), AStringView(archive.data(), archive.size()));
@@ -193,8 +192,7 @@ bool WriteArchive(Core::Alloc::GlobalArena& arena, const AStringView testGroup, 
 
 bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestBytes& archive){
     ErrorCode error;
-    static_cast<void>(EnsureDirectories(ArchiveInputDirectory(arena, testGroup), error));
-    if(error)
+    if(!EnsureDirectories(ArchiveInputDirectory(arena, testGroup), error))
         return false;
 
     return WriteBinaryFile(ArchivePath(arena, testGroup, stem), archive);
@@ -339,8 +337,7 @@ void PreserveObservedReport(TestContext& context, Core::Alloc::GlobalArena& aren
     const CrashTestPath baseOutputPath(arena, AStringView(outputPathText.data(), outputPathText.size()));
     const CrashTestPath outputPath = ObservedReportPath(arena, baseOutputPath, suffix);
     ErrorCode error;
-    static_cast<void>(EnsureDirectories(outputPath.parent_path(), error));
-    NWB_TEST_CHECK(context, !error);
+    NWB_TEST_CHECK(context, EnsureDirectories(outputPath.parent_path(), error));
     NWB_TEST_CHECK(context, WriteTextFile(outputPath, AStringView(report.data(), report.size())));
 }
 

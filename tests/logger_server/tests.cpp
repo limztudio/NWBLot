@@ -836,8 +836,7 @@ static void TestAcceptedCrashWarnsWhenRawArchiveCannotBeRetained(TestContext& co
     BuildLinuxCrashArchive(arena, archive, s_Stem);
 
     ErrorCode error;
-    static_cast<void>(EnsureDirectories(StorageDirectory(arena, s_Group), error));
-    NWB_LOGSERVER_TEST_CHECK(context, !error);
+    NWB_LOGSERVER_TEST_CHECK(context, EnsureDirectories(StorageDirectory(arena, s_Group), error));
     NWB_LOGSERVER_TEST_CHECK(context, WriteTextFile(StorageDirectory(arena, s_Group) / NWB::Log::s_CrashRawDirectoryName, AStringView("blocked")));
 
     NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);

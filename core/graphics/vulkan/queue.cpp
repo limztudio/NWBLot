@@ -114,7 +114,9 @@ Queue::~Queue(){
         waitInfo.pSemaphores = &m_trackingSemaphore;
         waitInfo.pValues = &m_lastSubmittedID;
 
-        static_cast<void>(vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX));
+        const VkResult res = vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
+        if(res != VK_SUCCESS)
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait on queue timeline semaphore during teardown: {}"), ResultToString(res));
     }
 
     m_commandBuffersInFlight.clear();

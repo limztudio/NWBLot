@@ -203,8 +203,10 @@ static bool ReadDiagnostics(const Path& diagnosticsPath, CookString& outDiagnost
 
 static void RemoveFileBestEffort(const Path& path){
     ErrorCode errorCode;
-    if(FileExists(path, errorCode) && !errorCode)
-        static_cast<void>(RemoveFile(path, errorCode));
+    if(FileExists(path, errorCode) && !errorCode){
+        if(!RemoveFile(path, errorCode))
+            NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to remove temporary file"));
+    }
 }
 
 #if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
@@ -287,7 +289,8 @@ static int RunCompilerProcessRedirected(
 
     WaitForSingleObject(processInfo.hProcess, INFINITE);
     DWORD exitCode = 1u;
-    static_cast<void>(GetExitCodeProcess(processInfo.hProcess, &exitCode));
+    if(!GetExitCodeProcess(processInfo.hProcess, &exitCode))
+        NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to query compiler process exit code"));
     CloseHandle(processInfo.hThread);
     CloseHandle(processInfo.hProcess);
     return static_cast<int>(exitCode);
@@ -299,19 +302,19 @@ static int RunCompilerProcessRedirected(
 
     const pid_t childPid = ::fork();
     if(childPid < 0){
-        static_cast<void>(::close(diagnosticsFd));
+        [[maybe_unused]] const int closeResult = ::close(diagnosticsFd);
         return -1;
     }
 
     if(childPid == 0){
-        static_cast<void>(::dup2(diagnosticsFd, STDOUT_FILENO));
-        static_cast<void>(::dup2(diagnosticsFd, STDERR_FILENO));
-        static_cast<void>(::close(diagnosticsFd));
+        [[maybe_unused]] const int dupStdoutResult = ::dup2(diagnosticsFd, STDOUT_FILENO);
+        [[maybe_unused]] const int dupStderrResult = ::dup2(diagnosticsFd, STDERR_FILENO);
+        [[maybe_unused]] const int closeChildResult = ::close(diagnosticsFd);
         ::execvp(argv.front(), const_cast<char* const*>(argv.data()));
         _exit(127);
     }
 
-    static_cast<void>(::close(diagnosticsFd));
+    [[maybe_unused]] const int closeParentResult = ::close(diagnosticsFd);
     return WaitForCompilerProcess(childPid);
 #else
     static_cast<void>(diagnosticsPath);

@@ -152,7 +152,7 @@ static void TestShaderMetadataRejectsDefaultVariantAlias(TestContext& context){
     )));
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
 #else
     static_cast<void>(context);
 #endif
@@ -234,7 +234,7 @@ static void TestShaderDependencyChecksumAliasesGeneratedRoot(TestContext& contex
 #endif
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
 }
 
 static void TestShaderCookWithoutMaterialBindIncludes(TestContext& context){
@@ -287,7 +287,7 @@ static void TestShaderCookWithoutMaterialBindIncludes(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
 }
 
 using CookSingleMetaFn = bool(*)(AStringView, AStringView, TestArena&, Path&, Path&);

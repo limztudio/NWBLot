@@ -53,7 +53,7 @@ NWB_INLINE f32 RoundToNearest(f32 value)noexcept{
         return integer + 1.0f;
 
     f32 intPart{};
-    static_cast<void>(ModF(integer * 0.5f, &intPart));
+    [[maybe_unused]] const f32 fractionalPart = ModF(integer * 0.5f, &intPart);
     if((2.0f * intPart) == integer)
         return integer;
     return integer + 1.0f;

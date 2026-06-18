@@ -84,7 +84,7 @@ static void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
     if(s_CurlGlobalInitialized)
         return true;
 
-    static_cast<void>(DumpArena());
+    [[maybe_unused]] auto& dumpArena = DumpArena();
     const CURLcode result = curl_global_init_mem(
         CURL_GLOBAL_ALL,
         CrashCurlMalloc,
@@ -265,21 +265,21 @@ static bool UploadPackageDirectory(
     if(!::MovePathToDirectory(packageDirectory, UploadingDirectory(spoolDirectory)))
         return false;
 
-    static_cast<void>(WriteUploadAttemptText(arena, uploadingPackageDirectory, PackageNames::s_UploadAttemptUploadingState));
+    [[maybe_unused]] const bool uploadingStateWritten = WriteUploadAttemptText(arena, uploadingPackageDirectory, PackageNames::s_UploadAttemptUploadingState);
 
     CrashBytesT<ArenaT> archiveBytes{arena};
     if(!BuildPackageArchive(arena, uploadingPackageDirectory, archiveBytes)){
-        static_cast<void>(::MovePathToDirectory(uploadingPackageDirectory, FailedDirectory(spoolDirectory)));
+        [[maybe_unused]] const bool movedToFailed = ::MovePathToDirectory(uploadingPackageDirectory, FailedDirectory(spoolDirectory));
         return false;
     }
 
     if(UploadPackage(arena, url, archiveBytes, crashUploadToken)){
-        static_cast<void>(WriteUploadAttemptText(arena, uploadingPackageDirectory, PackageNames::s_UploadAttemptUploadedState));
+        [[maybe_unused]] const bool uploadedStateWritten = WriteUploadAttemptText(arena, uploadingPackageDirectory, PackageNames::s_UploadAttemptUploadedState);
         return ::MovePathToDirectory(uploadingPackageDirectory, UploadedDirectory(spoolDirectory));
     }
 
-    static_cast<void>(WriteUploadAttemptText(arena, uploadingPackageDirectory, PackageNames::s_UploadAttemptRetryPendingState));
-    static_cast<void>(::MovePathToDirectory(uploadingPackageDirectory, PendingDirectory(spoolDirectory)));
+    [[maybe_unused]] const bool retryStateWritten = WriteUploadAttemptText(arena, uploadingPackageDirectory, PackageNames::s_UploadAttemptRetryPendingState);
+    [[maybe_unused]] const bool movedToPending = ::MovePathToDirectory(uploadingPackageDirectory, PendingDirectory(spoolDirectory));
     return false;
 }
 
@@ -314,10 +314,10 @@ static void WriteAndroidCollectionNote(Alloc::PersistentArena& arena, const Cras
     CrashStringT<Alloc::PersistentArena> text{arena};
     text += "application_exit_info=not_collected_by_native_layer\n";
     text += "detail=Java/Kotlin host should attach ApplicationExitInfo tombstone data on next launch\n";
-    static_cast<void>(WriteTextFile(
+    [[maybe_unused]] const bool collectionNoteWritten = WriteTextFile(
         RequestPendingDirectory(arena, request) / PackageNames::s_AndroidCollectionFileName,
         AStringView(text.data(), text.size())
-    ));
+    );
 }
 
 static void CollectAndroidEmergencyRecord(const CrashUploadSnapshot& snapshot){
@@ -340,7 +340,7 @@ static void CollectAndroidEmergencyRecord(const CrashUploadSnapshot& snapshot){
     }
 
     CrashBytesT<Alloc::PersistentArena> empty{dumpArena};
-    static_cast<void>(WriteBinaryFile(recordPath, empty));
+    [[maybe_unused]] const bool emergencyRecordCleared = WriteBinaryFile(recordPath, empty);
 }
 #else
 static void CollectAndroidEmergencyRecord(const CrashUploadSnapshot& snapshot){

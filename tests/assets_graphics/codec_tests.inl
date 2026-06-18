@@ -18,7 +18,7 @@ static bool CookAndLoadMinimalAsset(
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
     if(!cooked){
         ErrorCode errorCode;
-        static_cast<void>(RemoveAllIfExists(outRoot, errorCode));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(outRoot, errorCode));
         return false;
     }
 
@@ -26,7 +26,7 @@ static bool CookAndLoadMinimalAsset(
         return true;
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(outRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(outRoot, errorCode));
     return false;
 }
 
@@ -126,7 +126,7 @@ static void CookAndCheckMinimalTypedAsset(
     checkLoadedAsset(loadedTypedAsset);
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
@@ -182,7 +182,7 @@ static void TestVolumeSessionAcceptsScratchBytes(TestContext& context){
     }
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
 }
 
 static NWB::Impl::MeshletBounds MakeTestMeshletBounds(){

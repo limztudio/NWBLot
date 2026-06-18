@@ -635,13 +635,13 @@ static void TestRecorderAcceptsConcurrentRecords(TestContext& context){
     for(u32 threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
         threads[threadIndex] = std::thread([&recorder, threadIndex](){
             for(u32 eventIndex = 0u; eventIndex < eventsPerThread; ++eventIndex){
-                static_cast<void>(Telemetry::RecordTextLog(
+                [[maybe_unused]] const bool recorded = Telemetry::RecordTextLog(
                     recorder,
                     NWB::Core::Common::LogType::Info,
                     NWB_TEXT("concurrent telemetry record"),
                     eventIndex,
                     threadIndex
-                ));
+                );
             }
         });
     }
@@ -1270,8 +1270,7 @@ static void TestTelemetryIngestStoresRawAndReports(TestContext& context){
     const ::Path<NWB::Core::Alloc::GlobalArena> storageDirectory = TelemetryTestStorageDirectory(testArena.arena) / "ingest";
 
     ErrorCode error;
-    static_cast<void>(RemoveAllIfExists(storageDirectory, error));
-    NWB_TELEMETRY_TEST_CHECK(context, !error);
+    NWB_TELEMETRY_TEST_CHECK(context, RemoveAllIfExists(storageDirectory, error));
 
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -1312,7 +1311,7 @@ static void TestTelemetryIngestStoresRawAndReports(TestContext& context){
     NWB_TELEMETRY_TEST_CHECK(context, ReadTextFile(result.perfCsvPath, perfCsv));
     NWB_TELEMETRY_TEST_CHECK(context, ContainsText(AStringView(perfCsv.data(), perfCsv.size()), "cpu,ingest/cpu"));
 
-    static_cast<void>(RemoveAllIfExists(storageDirectory, error));
+    NWB_TELEMETRY_TEST_CHECK(context, RemoveAllIfExists(storageDirectory, error));
 }
 
 

@@ -192,8 +192,7 @@ static void TestFilesystemMovePathToDirectory(TestContext& context){
     const Path<NWB::Core::Alloc::GlobalArena> destination = destinationDirectory / "source.txt";
 
     ErrorCode error;
-    static_cast<void>(EnsureEmptyDirectory(root, error));
-    NWB_GLOBAL_TEST_CHECK(context, !error);
+    NWB_GLOBAL_TEST_CHECK(context, EnsureEmptyDirectory(root, error));
     NWB_GLOBAL_TEST_CHECK(context, WriteTextFile(source, AStringView("fresh")));
     NWB_GLOBAL_TEST_CHECK(context, EnsureDirectories(destinationDirectory, error));
     NWB_GLOBAL_TEST_CHECK(context, !error);
@@ -209,7 +208,7 @@ static void TestFilesystemMovePathToDirectory(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, !FileExists(source, error));
     NWB_GLOBAL_TEST_CHECK(context, !error);
 
-    static_cast<void>(RemoveAllIfExists(root, error));
+    NWB_GLOBAL_TEST_CHECK(context, RemoveAllIfExists(root, error));
 }
 
 static void TestStringTableText(TestContext& context){

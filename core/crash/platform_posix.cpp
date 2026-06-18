@@ -260,9 +260,9 @@ static void __hidden_redirect_stdio_to_null()noexcept{
     if(nullFd < 0)
         return;
 
-    static_cast<void>(dup2(nullFd, STDIN_FILENO));
-    static_cast<void>(dup2(nullFd, STDOUT_FILENO));
-    static_cast<void>(dup2(nullFd, STDERR_FILENO));
+    [[maybe_unused]] const int stdinRedirectFd = dup2(nullFd, STDIN_FILENO);
+    [[maybe_unused]] const int stdoutRedirectFd = dup2(nullFd, STDOUT_FILENO);
+    [[maybe_unused]] const int stderrRedirectFd = dup2(nullFd, STDERR_FILENO);
     if(nullFd > STDERR_FILENO)
         close(nullFd);
 }
@@ -273,7 +273,7 @@ static void __hidden_silence_child_process(int& requestReadFd, int& ackWriteFd)n
     if(!__hidden_move_fd_above_stdio(ackWriteFd))
         return;
 
-    static_cast<void>(setsid());
+    [[maybe_unused]] const pid_t sessionId = setsid();
     __hidden_redirect_stdio_to_null();
 }
 
@@ -383,7 +383,7 @@ static void __hidden_wait_for_child_process(const pid_t pid)noexcept{
         ? 0u
         : now + s_HandlerExitWaitMilliseconds
     ;
-    static_cast<void>(ProcessExecutionDetail::WaitForProcessSuccess(pid, deadline));
+    [[maybe_unused]] const bool childProcessSucceeded = ProcessExecutionDetail::WaitForProcessSuccess(pid, deadline);
 }
 #endif
 
@@ -446,7 +446,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options)noexcept{
     CrashDumpRequestOptions requestOptions = options;
     requestOptions.waitMilliseconds = s_PlatformCrashHandlerWaitMilliseconds;
-    static_cast<void>(RequestCrashDump(reasonKind, reasonCode, requestOptions));
+    [[maybe_unused]] const CrashDumpResult requestResult = RequestCrashDump(reasonKind, reasonCode, requestOptions);
 }
 
 template<typename ArenaT>

@@ -842,7 +842,7 @@ static bool BuildMaterialFromBindAndMeta(
 
     if(!bindRoot.empty()){
         ErrorCode errorCode;
-        static_cast<void>(RemoveAllIfExists(bindRoot, errorCode));
+        [[maybe_unused]] const bool removed = RemoveAllIfExists(bindRoot, errorCode);
     }
     return built;
 }
@@ -955,8 +955,8 @@ static void TestMaterialBindHalfTypedLayoutValues(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(bindRoot, errorCode));
-    static_cast<void>(RemoveAllIfExists(mixedBindRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(bindRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(mixedBindRoot, errorCode));
 }
 
 static void TestMaterialBindCompactIntegerTypedLayoutValues(TestContext& context){
@@ -1005,7 +1005,7 @@ static void TestMaterialBindCompactIntegerTypedLayoutValues(TestContext& context
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(bindRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(bindRoot, errorCode));
 }
 
 static void TestMaterialMetadataInterfaceAndBlockParameters(TestContext& context){
@@ -1297,8 +1297,8 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
-    static_cast<void>(RemoveAllIfExists(halfRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(halfRoot, errorCode));
 
 #if defined(NWB_FINAL)
     auto expectParseFailure = [&](
@@ -1319,7 +1319,7 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(expectedError));
 
         ErrorCode removeErrorCode;
-        static_cast<void>(RemoveAllIfExists(invalidRoot, removeErrorCode));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(invalidRoot, removeErrorCode));
     };
 
     expectParseFailure(
@@ -1374,7 +1374,7 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'")));
 
     ErrorCode removeErrorCode;
-    static_cast<void>(RemoveAllIfExists(float1DefaultRoot, removeErrorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(float1DefaultRoot, removeErrorCode));
 #endif
 }
 
@@ -1411,7 +1411,7 @@ static void TestMaterialBindGeneratedSlangText(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

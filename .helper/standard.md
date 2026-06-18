@@ -316,6 +316,9 @@ Updated: 2026-05-31
 - Check external API results immediately (for Vulkan, check `VkResult` after each call).
 - Log through logger macros (`NWB_LOGGER_INFO`, `NWB_LOGGER_WARNING`, `NWB_LOGGER_ERROR`, `NWB_LOGGER_FATAL`).
 - When a `bool` helper only used an `AString& outError` to report the immediate failure reason, prefer logging at the failure detection site and returning `false`. Keep output parameters for produced data, not for diagnostic-only strings that the caller just forwards to a logger.
+- Do not hide a `[[nodiscard]]` function return with `static_cast<void>(call())` — handle it. Check and act: `if(!call(...)){ log / propagate / early-return }`, or fold the discarded `bool` into the matching out-error check (`static_cast<void>(f(p, error)); if(error) ...` → `if(!f(p, error)) ...`).
+  - Only when a return is genuinely unactionable, make the discard explicit by binding a named local that exposes the type (`[[maybe_unused]] const bool removed = RemoveFile(...);`) — never `static_cast<void>(call())`. This is limited to: async-signal / crash-handler paths where the logger is unsafe to call; the logger sink itself (avoid re-entrancy); and non-error value returns where there is no success/failure to act on (e.g. `ModF`'s fractional result when only the integer out-param is wanted, an intentionally-irrelevant `compare_exchange_strong` result, a force-init call whose only purpose is the side effect).
+  - `static_cast<void>(param)` to silence an unused parameter is unrelated to this rule and remains fine.
 - Use assertions (`NWB_ASSERT`, `NWB_ASSERT_MSG`) for invariant checking.
 - For caches of derived/runtime-created objects, the cache key must include every input that affects the created result.
   - Example: graphics pipeline caches must include framebuffer/render-target compatibility when pipeline creation depends on framebuffer info.

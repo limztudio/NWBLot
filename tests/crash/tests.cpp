@@ -78,7 +78,7 @@ inline constexpr Name s_SignalChildInstallArena("tests/crash/signal_child_instal
 
 static void RemoveTestArtifacts(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
     ErrorCode error;
-    static_cast<void>(RemoveAllIfExists(TestCaseDirectory(arena, testGroup), error));
+    [[maybe_unused]] const bool removed = RemoveAllIfExists(TestCaseDirectory(arena, testGroup), error);
 }
 
 [[nodiscard]] static bool CreatePackageDirectory(
@@ -89,8 +89,7 @@ static void RemoveTestArtifacts(NWB::Core::Alloc::GlobalArena& arena, const AStr
 ){
     const CrashTestPath packageDirectory = PackageDirectory(arena, testGroup, bucketName, packageName);
     ErrorCode error;
-    static_cast<void>(EnsureDirectories(packageDirectory, error));
-    if(error)
+    if(!EnsureDirectories(packageDirectory, error))
         return false;
 
     return WriteTextFile(packageDirectory / "marker.txt", AStringView("package"));
@@ -186,8 +185,7 @@ static void TestWriteCrashPackageFailsWhenSpoolPathIsFile(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 
     ErrorCode error;
-    static_cast<void>(EnsureDirectories(TestCaseDirectory(arena, s_Group), error));
-    NWB_CRASH_TEST_CHECK(context, !error);
+    NWB_CRASH_TEST_CHECK(context, EnsureDirectories(TestCaseDirectory(arena, s_Group), error));
     const CrashTestPath spoolPath = SpoolDirectory(arena, s_Group);
     NWB_CRASH_TEST_CHECK(context, WriteTextFile(spoolPath, AStringView("not a directory")));
 
@@ -206,8 +204,7 @@ static void TestCrashBreadcrumbCapturedInRequest(TestContext& context){
 
     const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
     ErrorCode error;
-    static_cast<void>(EnsureDirectories(spoolDirectory, error));
-    NWB_CRASH_TEST_CHECK(context, !error);
+    NWB_CRASH_TEST_CHECK(context, EnsureDirectories(spoolDirectory, error));
 
     char previousSpoolDirectory[NWB::Core::Crash::Detail::s_MaxPathText] = {};
     NWB::Core::Crash::Detail::FixedBreadcrumb previousBreadcrumbs[NWB::Core::Crash::Detail::s_MaxBreadcrumbs] = {};

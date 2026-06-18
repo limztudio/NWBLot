@@ -47,7 +47,8 @@ struct ConnectionInfo{
     ConnectionInfo& operator=(ConnectionInfo&&) = delete;
     ConnectionInfo& operator=(const ConnectionInfo&) = delete;
     ~ConnectionInfo(){
-        static_cast<void>(closeCrashUploadStream());
+        if(!closeCrashUploadStream())
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to close crash upload stream"));
         Core::Alloc::CoreFree(buffer, "ConnectionInfo buffer freed at Server::requestCallback");
     }
 
@@ -187,7 +188,8 @@ static void EnqueueServerMessage(Server& server, const tchar* message, const Typ
     static Atomic<u64> s_CrashPackageCounter{ 1u };
 
     LocalTime localTime = {};
-    static_cast<void>(GetLocalTime(localTime));
+    if(!GetLocalTime(localTime))
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to read local time for crash package name"));
 
     const u64 counter = s_CrashPackageCounter.fetch_add(1u, MemoryOrder::relaxed);
     const auto fileName = StringFormat(
@@ -219,8 +221,7 @@ static void EnqueueServerMessage(Server& server, const tchar* message, const Typ
 [[nodiscard]] static bool OpenCrashUploadStream(Server& server, ConnectionInfo& info){
     ErrorCode error;
     const Path inboxDirectory = CrashInboxDirectory(server);
-    static_cast<void>(EnsureDirectories(inboxDirectory, error));
-    if(error)
+    if(!EnsureDirectories(inboxDirectory, error))
         return false;
 
     const Path path = MakeCrashPackagePath(server);
@@ -235,10 +236,12 @@ static void DiscardStoredCrashUpload(Server& server, ConnectionInfo& info){
     if(info.uploadKind != ConnectionInfo::UploadKind::Crash || info.crashUploadPath[0] == 0)
         return;
 
-    static_cast<void>(info.closeCrashUploadStream());
+    if(!info.closeCrashUploadStream())
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to close discarded crash upload stream"));
 
     ErrorCode error;
-    static_cast<void>(RemoveFile(Path(server.arena(), AStringView(info.crashUploadPath)), error));
+    if(!RemoveFile(Path(server.arena(), AStringView(info.crashUploadPath)), error))
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove discarded crash upload file"));
 }
 
 
@@ -437,7 +440,8 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
             }
             else{
                 ErrorCode error;
-                static_cast<void>(RemoveFile(storedPath, error));
+                if(!RemoveFile(storedPath, error))
+                    NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove unqueued crash upload file"));
                 __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Discarded crash upload that could not be queued"), Type::Error);
             }
         }

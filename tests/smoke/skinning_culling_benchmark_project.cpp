@@ -605,8 +605,10 @@ public:
     virtual void onShutdown()override{
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: shutdown"));
-        if(!m_staticPreview)
-            static_cast<void>(m_context.flushTelemetryUpload(true));
+        if(!m_staticPreview){
+            if(!m_context.flushTelemetryUpload(true))
+                NWB_LOGGER_WARNING(NWB_TEXT("SkinningCullingBenchmark: failed to flush telemetry upload during shutdown"));
+        }
     }
 
     virtual bool onUpdate(const f32 delta)override{

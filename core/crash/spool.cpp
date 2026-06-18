@@ -35,23 +35,19 @@ Alloc::PersistentArena& DumpArena(){
 template<typename ArenaT>
 bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory){
     ErrorCode error;
-    static_cast<void>(EnsureDirectories(PendingDirectory(spoolDirectory), error));
-    if(error)
+    if(!EnsureDirectories(PendingDirectory(spoolDirectory), error))
         return false;
 
     error.clear();
-    static_cast<void>(EnsureDirectories(UploadedDirectory(spoolDirectory), error));
-    if(error)
+    if(!EnsureDirectories(UploadedDirectory(spoolDirectory), error))
         return false;
 
     error.clear();
-    static_cast<void>(EnsureDirectories(UploadingDirectory(spoolDirectory), error));
-    if(error)
+    if(!EnsureDirectories(UploadingDirectory(spoolDirectory), error))
         return false;
 
     error.clear();
-    static_cast<void>(EnsureDirectories(FailedDirectory(spoolDirectory), error));
-    return !error;
+    return EnsureDirectories(FailedDirectory(spoolDirectory), error);
 }
 
 template bool EnsureCrashSpoolDirectories(const ::Path<Alloc::PersistentArena>& spoolDirectory);

@@ -43,7 +43,8 @@ struct ByteView{
 
 [[nodiscard]] Path MakeTelemetryUploadStem(LogArena& arena){
     LocalTime localTime = {};
-    static_cast<void>(GetLocalTime(localTime));
+    if(!GetLocalTime(localTime))
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to read local time for telemetry upload name"));
 
     const u64 counter = s_TelemetryUploadCounter.fetch_add(1u, MemoryOrder::relaxed);
     const auto fileName = StringFormat(
@@ -68,8 +69,7 @@ void SetResultMessage(TelemetryIngestResult& result, AStringView message, const 
 
 [[nodiscard]] bool EnsureDirectory(const Path& directory){
     ErrorCode error;
-    static_cast<void>(EnsureDirectories(directory, error));
-    return !error;
+    return EnsureDirectories(directory, error);
 }
 
 [[nodiscard]] bool StoreRawTelemetry(const Path& rawPath, const void* bytes, const usize byteCount){

@@ -45,21 +45,24 @@ struct ByteView{
 };
 
 static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
-    static_cast<void>(ApplyDirectoryRetention(
+    if(!ApplyDirectoryRetention(
         arena,
         CrashExtractedDirectory(arena, config.storageDirectory),
         config.retention.maxExtractedPackages
-    ));
-    static_cast<void>(ApplyDirectoryRetention(
+    ))
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to extracted crash packages"));
+    if(!ApplyDirectoryRetention(
         arena,
         CrashRawDirectory(arena, config.storageDirectory),
         config.retention.maxRawArchives
-    ));
-    static_cast<void>(ApplyDirectoryRetention(
+    ))
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to raw crash archives"));
+    if(!ApplyDirectoryRetention(
         arena,
         CrashInvalidDirectory(arena, config.storageDirectory),
         config.retention.maxInvalidArchives
-    ));
+    ))
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to invalid crash archives"));
 }
 
 [[nodiscard]] static Type::Enum AcceptedCrashLogType(const CrashPackageSummary& summary){
@@ -123,8 +126,7 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
     const Path outputDirectory = outputPath.parent_path();
     ErrorCode error;
     if(!outputDirectory.empty()){
-        static_cast<void>(EnsureDirectories(outputDirectory, error));
-        if(error)
+        if(!EnsureDirectories(outputDirectory, error))
             return false;
     }
 
@@ -148,8 +150,7 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
     }
 
     ErrorCode error;
-    static_cast<void>(EnsureEmptyDirectory(packageDirectory, error));
-    if(error){
+    if(!EnsureEmptyDirectory(packageDirectory, error)){
         outError = "failed to create extracted crash package directory";
         return false;
     }
@@ -383,10 +384,12 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
     const AStringView reason
 ){
     ErrorCode removeError;
-    static_cast<void>(RemoveAllIfExists(packageDirectory, removeError));
+    if(!RemoveAllIfExists(packageDirectory, removeError))
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove rejected crash package directory"));
 
     Path invalidPath(arena);
-    static_cast<void>(::MovePathToDirectory(archivePath, CrashInvalidDirectory(arena, config.storageDirectory), invalidPath));
+    if(!::MovePathToDirectory(archivePath, CrashInvalidDirectory(arena, config.storageDirectory), invalidPath))
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to move rejected crash archive to invalid directory"));
     ApplyRetention(arena, config);
 
     CrashIngestResult result(arena);
@@ -443,7 +446,8 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     const bool rawArchived = ::MovePathToDirectory(archivePath, CrashRawDirectory(arena, config.storageDirectory), rawPath);
     if(!rawArchived){
         ErrorCode removeError;
-        static_cast<void>(RemoveFile(archivePath, removeError));
+        if(!RemoveFile(archivePath, removeError))
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove crash archive that could not be retained"));
     }
     Ingest::ApplyRetention(arena, config);
 

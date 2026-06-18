@@ -150,11 +150,11 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(halfRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(halfRoot, errorCode));
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(compactRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(compactRoot, errorCode));
 
 #if defined(NWB_FINAL)
     Path invalidRoot(testArena.arena);
@@ -172,7 +172,7 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     )));
 
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(invalidRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(invalidRoot, errorCode));
 
     Path flatRoot(testArena.arena);
     Path flatOutputDirectory(testArena.arena);
@@ -189,7 +189,7 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     )));
 
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(flatRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(flatRoot, errorCode));
 
     Path untypedParameterRoot(testArena.arena);
     Path untypedParameterOutputDirectory(testArena.arena);
@@ -206,7 +206,7 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     )));
 
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(untypedParameterRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(untypedParameterRoot, errorCode));
 
     Path vectorAliasParameterRoot(testArena.arena);
     Path vectorAliasParameterOutputDirectory(testArena.arena);
@@ -223,7 +223,7 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     )));
 
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(vectorAliasParameterRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(vectorAliasParameterRoot, errorCode));
 
     Path unsupportedFieldRoot(testArena.arena);
     Path unsupportedFieldOutputDirectory(testArena.arena);
@@ -238,7 +238,7 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'compiler'")));
 
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(unsupportedFieldRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(unsupportedFieldRoot, errorCode));
 
     Path missingShaderVariantRoot(testArena.arena);
     Path missingShaderVariantOutputDirectory(testArena.arena);
@@ -253,7 +253,7 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("field 'shader_variant' is required")));
 
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(missingShaderVariantRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(missingShaderVariantRoot, errorCode));
 
     Path incompleteBindRoot(testArena.arena);
     Path incompleteBindOutputDirectory(testArena.arena);
@@ -270,7 +270,7 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     )));
 
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(incompleteBindRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(incompleteBindRoot, errorCode));
 
     Path interfaceShaderMismatchRoot(testArena.arena);
     Path interfaceShaderMismatchOutputDirectory(testArena.arena);
@@ -297,7 +297,7 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("does not include a generated material bind")));
 
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(interfaceShaderMismatchRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(interfaceShaderMismatchRoot, errorCode));
 
     Path interfaceIdentityMismatchRoot(testArena.arena);
     Path interfaceIdentityMismatchOutputDirectory(testArena.arena);
@@ -330,7 +330,7 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     )));
 
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(interfaceIdentityMismatchRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(interfaceIdentityMismatchRoot, errorCode));
 
 #endif
 }
@@ -366,7 +366,7 @@ static void TestMaterialRejectsMissingInterfaceCookIntegration(TestContext& cont
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("interface is required")));
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
 #else
     static_cast<void>(context);
 #endif
@@ -470,7 +470,7 @@ static void TestMaterialBindDependencyInvalidation(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
 }
 
 static void TestMaterialBindDiscoveryValidation(TestContext& context){
@@ -514,7 +514,7 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 
     ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
 
     Path shaderProbeRoot(testArena.arena);
     Path shaderProbeOutputDirectory(testArena.arena);
@@ -528,7 +528,7 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(shaderProbeRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(shaderProbeRoot, errorCode));
 
 #if defined(NWB_FINAL)
     Path duplicateIncludeRoot(testArena.arena);
@@ -544,7 +544,7 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
     )));
 
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(duplicateIncludeRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(duplicateIncludeRoot, errorCode));
 
     Path invalidRoot(testArena.arena);
     Path invalidOutputDirectory(testArena.arena);
@@ -558,7 +558,7 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("duplicate struct field declaration")));
 
     errorCode.clear();
-    static_cast<void>(RemoveAllIfExists(invalidRoot, errorCode));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(invalidRoot, errorCode));
 #endif
 }
 

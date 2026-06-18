@@ -62,32 +62,35 @@ float nwbSdfBox(float3 position, float3 aabbMin, float3 aabbMax){
     return length(max(q, float3(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
 }
 
-// Nearest signed distance over all occluder instances, evaluated at a world-space point.
-float nwbSdfSceneDistance(float3 worldPosition){
+float3 nwbSdfToObject(NwbSdfInstance inst, float3 worldPosition){
+    const float4 hp = float4(worldPosition, 1.0);
+    return float3(dot(inst.worldToObject0, hp), dot(inst.worldToObject1, hp), dot(inst.worldToObject2, hp));
+}
+
+// Nearest signed distance over occluders, skipping the box that contains the shading surface point so a
+// caster never shadows itself: v1 approximates each mesh as one box, so a surface always sits inside its
+// own box. (Baked per-mesh SDFs instead bias just off the true surface and need no skip.)
+float nwbSdfSceneDistance(float3 marchPosition, float3 surfacePosition){
     float nearest = 1.0e9;
     const uint count = g_NwbSdfParams.instanceCount;
     for(uint i = 0u; i < count; ++i){
         const NwbSdfInstance inst = g_NwbSdfInstances[i];
-        const float4 hp = float4(worldPosition, 1.0);
-        const float3 objectPosition = float3(
-            dot(inst.worldToObject0, hp),
-            dot(inst.worldToObject1, hp),
-            dot(inst.worldToObject2, hp)
-        );
-        nearest = min(nearest, nwbSdfBox(objectPosition, inst.objAabbMin.xyz, inst.objAabbMax.xyz));
+        if(nwbSdfBox(nwbSdfToObject(inst, surfacePosition), inst.objAabbMin.xyz, inst.objAabbMax.xyz) < 0.01)
+            continue;
+        nearest = min(nearest, nwbSdfBox(nwbSdfToObject(inst, marchPosition), inst.objAabbMin.xyz, inst.objAabbMax.xyz));
     }
     return nearest;
 }
 
 // Sphere-march the global field; returns true if an occluder lies between the origin and tMax along dir.
-bool nwbSdfTraceOcclusion(float3 origin, float3 direction, float tMax){
+bool nwbSdfTraceOcclusion(float3 surfacePosition, float3 origin, float3 direction, float tMax){
     const float hitEpsilon = 0.01;
     float t = 0.02;
     [loop]
     for(uint step = 0u; step < 64u; ++step){
         if(t >= tMax)
             break;
-        const float distance = nwbSdfSceneDistance(origin + direction * t);
+        const float distance = nwbSdfSceneDistance(origin + direction * t, surfacePosition);
         if(distance < hitEpsilon)
             return true;
         t += max(distance, 0.01);
@@ -115,7 +118,7 @@ bool nwbSdfLightVisible(float3 worldPosition, float3 normal, NwbSceneLight light
     if(tEnd <= tMin)
         return true;
 
-    return !nwbSdfTraceOcclusion(worldPosition + normal * tMin, toLight, tEnd);
+    return !nwbSdfTraceOcclusion(worldPosition, worldPosition + normal * tMin, toLight, tEnd);
 }
 
 

@@ -264,6 +264,9 @@ public:
 
 
 private:
+    Core::RayTracingAccelStructHandle m_tlas;
+    usize m_tlasMaxInstances = 0u;
+    u64 m_tlasDeviceAddress = 0u;
     bool m_capabilityLogged = false;
 };
 

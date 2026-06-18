@@ -1705,13 +1705,15 @@ typedef GraphicsBackend::Handle<RayTracingOpacityMicromap> RayTracingOpacityMicr
 // Ray Tracing AccelStruct
 
 
-using AffineTransform = Float4[3];
+using AffineTransform = Float34;
 
-inline constexpr AffineTransform s_identityTransform = {
-    Float4(1.f, 0.f, 0.f, 0.f),
-    Float4(0.f, 1.f, 0.f, 0.f),
-    Float4(0.f, 0.f, 1.f, 0.f)
-};
+inline constexpr AffineTransform s_identityTransform = []()constexpr noexcept{
+    AffineTransform value{};
+    value._11 = 1.f;
+    value._22 = 1.f;
+    value._33 = 1.f;
+    return value;
+}();
 static_assert(sizeof(AffineTransform) == sizeof(f32) * 12u, "AffineTransform GPU layout drifted");
 static_assert(alignof(AffineTransform) >= alignof(Float4), "AffineTransform must stay SIMD-aligned");
 
@@ -1913,7 +1915,7 @@ namespace RayTracingInstanceFlags{
 };
 
 struct RayTracingInstanceDesc{
-    AffineTransform transform;
+    AffineTransform transform{};
     u32 instanceID : 24;
     u32 instanceMask : 8;
     u32 instanceContributionToHitGroupIndex : 24;

@@ -6,6 +6,8 @@
 
 #include "renderer_private.h"
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,6 +23,9 @@ NWB_IMPL_BEGIN
 // traversal quality drifts as the pose moves away from the last full build; the periodic rebuild
 // restores it. This is the quality/cost knob for skinned ray-traced geometry.
 inline constexpr u32 s_BlasMaxRefitsBeforeRebuild = 8u;
+
+// Initial scene-TLAS instance capacity; grows by doubling when the live instance count exceeds it.
+inline constexpr usize s_TlasInitialInstanceCapacity = 128u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,6 +69,93 @@ void RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandLi
         if(buildMeshBlas(commandList, meshResources))
             meshResources.blasBuildPending = false;
     }
+}
+
+void RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
+    if(!graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+        return;
+
+    auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
+    if(!meshSystem)
+        return;
+
+    auto rendererView = world().view<RendererComponent>();
+    Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena> instances{ scratchArena };
+    instances.reserve(rendererView.candidateCount());
+
+    for(auto&& [entity, renderer] : rendererView){
+        if(!renderer.visible)
+            continue;
+
+        RenderableMeshDesc resolvedMesh;
+        if(!meshSystem->resolveRenderableMesh(entity, resolvedMesh))
+            continue;
+
+        MeshResources* mesh = nullptr;
+        const bool meshReady = resolvedMesh.runtime
+            ? m_renderer.meshSystem().findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
+            : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
+        ;
+        if(!meshReady || !mesh || !mesh->blas)
+            continue;
+
+        Core::RayTracingInstanceDesc instanceDesc;
+        instanceDesc.setBLAS(mesh->blas.get());
+        instanceDesc.setInstanceID(static_cast<u32>(instances.size()));
+        instanceDesc.setInstanceMask(0xFFu);
+
+        if(const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity)){
+            // Compose object->world (T * R(quat) * S) and store it as the instance's row-major 3x4 transform;
+            // the engine's column-vector SIMDMatrix rows map directly onto AffineTransform (= Float34).
+            const SIMDMatrix instanceWorld = MatrixAffineTransformation(
+                LoadFloat(transform->scale),
+                VectorZero(),
+                LoadFloat(transform->rotation),
+                LoadFloat(transform->position)
+            );
+            StoreFloat(instanceWorld, &instanceDesc.transform);
+        }
+
+        instances.push_back(instanceDesc);
+    }
+
+    if(instances.empty()){
+        rayTracingState().m_tlasDeviceAddress = 0u;
+        return;
+    }
+
+    if(!rayTracingState().m_tlas || rayTracingState().m_tlasMaxInstances < instances.size()){
+        usize capacity = rayTracingState().m_tlasMaxInstances > 0u ? rayTracingState().m_tlasMaxInstances : s_TlasInitialInstanceCapacity;
+        while(capacity < instances.size())
+            capacity *= 2u;
+
+        Core::RayTracingAccelStructDesc accelStructDesc(arena());
+        accelStructDesc.setTopLevelMaxInstances(capacity);
+        accelStructDesc.setBuildFlags(Core::RayTracingAccelStructBuildFlags::PreferFastTrace);
+        accelStructDesc.setDebugName(Name("scene_tlas"));
+
+        auto* device = graphics().getDevice();
+        Core::RayTracingAccelStructHandle tlas = device->createAccelStruct(accelStructDesc);
+        if(!tlas){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene TLAS (capacity {})")
+                , static_cast<u64>(capacity)
+            );
+            return;
+        }
+        rayTracingState().m_tlas = Move(tlas);
+        rayTracingState().m_tlasMaxInstances = capacity;
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created scene TLAS (capacity {} instances)")
+            , static_cast<u64>(capacity)
+        );
+    }
+
+    commandList.buildTopLevelAccelStruct(
+        rayTracingState().m_tlas.get(),
+        instances.data(),
+        instances.size(),
+        Core::RayTracingAccelStructBuildFlags::PreferFastTrace
+    );
+    rayTracingState().m_tlasDeviceAddress = rayTracingState().m_tlas->getDeviceAddress();
 }
 
 bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources){

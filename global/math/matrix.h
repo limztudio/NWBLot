@@ -726,64 +726,89 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationAxis(SIMDVector axis, f32 angle)noe
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixAffineTransformation(SIMDVector scaling, SIMDVector rotationOrigin, SIMDVector rotationQuaternion, SIMDVector translation)noexcept{
+    // world = T(translation) * T(origin) * R * T(-origin) * S folds to a rotation-scaled basis
+    // (R * diag(scaling)) plus a single translation column, removing the identity/translation multiplies.
     const SIMDVector origin = VectorSelect(VectorZero(), rotationOrigin, s_SIMDSelect1110);
-    const SIMDVector negOrigin = VectorNegate(origin);
+    const SIMDMatrix rotation = MatrixRotationQuaternion(rotationQuaternion);
+    const SIMDVector translationColumn = VectorAdd(translation, VectorSubtract(origin, Vector3TransformNormal(origin, rotation)));
 
-    SIMDMatrix matrix = MatrixMultiply(MatrixTranslationFromVector(translation), MatrixTranslationFromVector(origin));
-    matrix = MatrixMultiply(matrix, MatrixRotationQuaternion(rotationQuaternion));
-    matrix = MatrixMultiply(matrix, MatrixTranslationFromVector(negOrigin));
-    matrix = MatrixMultiply(matrix, MatrixScalingFromVector(scaling));
+    SIMDMatrix matrix;
+    matrix.v[0] = VectorSelect(VectorMultiply(rotation.v[0], scaling), VectorSplatX(translationColumn), s_SIMDMaskW);
+    matrix.v[1] = VectorSelect(VectorMultiply(rotation.v[1], scaling), VectorSplatY(translationColumn), s_SIMDMaskW);
+    matrix.v[2] = VectorSelect(VectorMultiply(rotation.v[2], scaling), VectorSplatZ(translationColumn), s_SIMDMaskW);
+    matrix.v[3] = s_SIMDIdentityR3;
     return matrix;
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixAffineTransformation2D(SIMDVector scaling, SIMDVector rotationOrigin, f32 rotation, SIMDVector translation)noexcept{
     const SIMDVector vScaling = VectorSelect(s_SIMDOne, scaling, s_SIMDSelect1100);
     const SIMDVector origin = VectorSelect(VectorZero(), rotationOrigin, s_SIMDSelect1100);
-    const SIMDVector negOrigin = VectorNegate(origin);
     const SIMDVector vTranslation = VectorSelect(VectorZero(), translation, s_SIMDSelect1100);
+    const SIMDMatrix rotationMatrix = MatrixRotationZ(rotation);
+    const SIMDVector translationColumn = VectorAdd(vTranslation, VectorSubtract(origin, Vector3TransformNormal(origin, rotationMatrix)));
 
-    SIMDMatrix matrix = MatrixMultiply(MatrixTranslationFromVector(vTranslation), MatrixTranslationFromVector(origin));
-    matrix = MatrixMultiply(matrix, MatrixRotationZ(rotation));
-    matrix = MatrixMultiply(matrix, MatrixTranslationFromVector(negOrigin));
-    matrix = MatrixMultiply(matrix, MatrixScalingFromVector(vScaling));
+    SIMDMatrix matrix;
+    matrix.v[0] = VectorSelect(VectorMultiply(rotationMatrix.v[0], vScaling), VectorSplatX(translationColumn), s_SIMDMaskW);
+    matrix.v[1] = VectorSelect(VectorMultiply(rotationMatrix.v[1], vScaling), VectorSplatY(translationColumn), s_SIMDMaskW);
+    matrix.v[2] = VectorSelect(VectorMultiply(rotationMatrix.v[2], vScaling), VectorSplatZ(translationColumn), s_SIMDMaskW);
+    matrix.v[3] = s_SIMDIdentityR3;
     return matrix;
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixTransformation(SIMDVector scalingOrigin, SIMDVector scalingOrientationQuaternion, SIMDVector scaling, SIMDVector rotationOrigin, SIMDVector rotationQuaternion, SIMDVector translation)noexcept{
     const SIMDVector vScalingOrigin = VectorSelect(VectorZero(), scalingOrigin, s_SIMDSelect1110);
-    const SIMDVector negScalingOrigin = VectorNegate(vScalingOrigin);
     const SIMDVector vRotationOrigin = VectorSelect(VectorZero(), rotationOrigin, s_SIMDSelect1110);
-    const SIMDVector negRotationOrigin = VectorNegate(vRotationOrigin);
 
-    SIMDMatrix matrix = MatrixTranslationFromVector(translation);
-    matrix = MatrixMultiply(matrix, MatrixTranslationFromVector(vRotationOrigin));
-    matrix = MatrixMultiply(matrix, MatrixRotationQuaternion(rotationQuaternion));
-    matrix = MatrixMultiply(matrix, MatrixTranslationFromVector(negRotationOrigin));
-    matrix = MatrixMultiply(matrix, MatrixTranslationFromVector(vScalingOrigin));
-    matrix = MatrixMultiply(matrix, MatrixRotationQuaternion(scalingOrientationQuaternion));
-    matrix = MatrixMultiply(matrix, MatrixScalingFromVector(scaling));
-    matrix = MatrixMultiply(matrix, MatrixTranspose(MatrixRotationQuaternion(scalingOrientationQuaternion)));
-    matrix = MatrixMultiply(matrix, MatrixTranslationFromVector(negScalingOrigin));
+    // Oriented scaling Sso = Rso * diag(scaling) * Rso^T, then the linear part is Rr * Sso. The five
+    // translation matrices of the original chain collapse into a single translation column.
+    const SIMDMatrix scalingOrientation = MatrixRotationQuaternion(scalingOrientationQuaternion);
+    SIMDMatrix scaledOrientation;
+    scaledOrientation.v[0] = VectorMultiply(scalingOrientation.v[0], scaling);
+    scaledOrientation.v[1] = VectorMultiply(scalingOrientation.v[1], scaling);
+    scaledOrientation.v[2] = VectorMultiply(scalingOrientation.v[2], scaling);
+    scaledOrientation.v[3] = s_SIMDIdentityR3;
+    const SIMDMatrix orientedScaling = MatrixMultiply(scaledOrientation, MatrixTranspose(scalingOrientation));
+
+    const SIMDMatrix rotation = MatrixRotationQuaternion(rotationQuaternion);
+    const SIMDMatrix linear = MatrixMultiply(rotation, orientedScaling);
+
+    const SIMDVector inner = VectorSubtract(VectorSubtract(vScalingOrigin, vRotationOrigin), Vector3TransformNormal(vScalingOrigin, orientedScaling));
+    const SIMDVector translationColumn = VectorAdd(VectorAdd(Vector3TransformNormal(inner, rotation), vRotationOrigin), translation);
+
+    SIMDMatrix matrix;
+    matrix.v[0] = VectorSelect(linear.v[0], VectorSplatX(translationColumn), s_SIMDMaskW);
+    matrix.v[1] = VectorSelect(linear.v[1], VectorSplatY(translationColumn), s_SIMDMaskW);
+    matrix.v[2] = VectorSelect(linear.v[2], VectorSplatZ(translationColumn), s_SIMDMaskW);
+    matrix.v[3] = s_SIMDIdentityR3;
     return matrix;
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixTransformation2D(SIMDVector scalingOrigin, f32 scalingOrientation, SIMDVector scaling, SIMDVector rotationOrigin, f32 rotation, SIMDVector translation)noexcept{
     const SIMDVector vScalingOrigin = VectorSelect(VectorZero(), scalingOrigin, s_SIMDSelect1100);
-    const SIMDVector negScalingOrigin = VectorNegate(vScalingOrigin);
     const SIMDVector vRotationOrigin = VectorSelect(VectorZero(), rotationOrigin, s_SIMDSelect1100);
-    const SIMDVector negRotationOrigin = VectorNegate(vRotationOrigin);
     const SIMDVector vScaling = VectorSelect(s_SIMDOne, scaling, s_SIMDSelect1100);
     const SIMDVector vTranslation = VectorSelect(VectorZero(), translation, s_SIMDSelect1100);
 
-    SIMDMatrix matrix = MatrixTranslationFromVector(vTranslation);
-    matrix = MatrixMultiply(matrix, MatrixTranslationFromVector(vRotationOrigin));
-    matrix = MatrixMultiply(matrix, MatrixRotationZ(rotation));
-    matrix = MatrixMultiply(matrix, MatrixTranslationFromVector(negRotationOrigin));
-    matrix = MatrixMultiply(matrix, MatrixTranslationFromVector(vScalingOrigin));
-    matrix = MatrixMultiply(matrix, MatrixRotationZ(scalingOrientation));
-    matrix = MatrixMultiply(matrix, MatrixScalingFromVector(vScaling));
-    matrix = MatrixMultiply(matrix, MatrixRotationZ(-scalingOrientation));
-    matrix = MatrixMultiply(matrix, MatrixTranslationFromVector(negScalingOrigin));
+    // Oriented scaling about Z (MatrixTranspose(Rz) == Rz(-angle)); the translation matrices fold into one column.
+    const SIMDMatrix scalingOrientationMatrix = MatrixRotationZ(scalingOrientation);
+    SIMDMatrix scaledOrientation;
+    scaledOrientation.v[0] = VectorMultiply(scalingOrientationMatrix.v[0], vScaling);
+    scaledOrientation.v[1] = VectorMultiply(scalingOrientationMatrix.v[1], vScaling);
+    scaledOrientation.v[2] = VectorMultiply(scalingOrientationMatrix.v[2], vScaling);
+    scaledOrientation.v[3] = s_SIMDIdentityR3;
+    const SIMDMatrix orientedScaling = MatrixMultiply(scaledOrientation, MatrixTranspose(scalingOrientationMatrix));
+
+    const SIMDMatrix rotationMatrix = MatrixRotationZ(rotation);
+    const SIMDMatrix linear = MatrixMultiply(rotationMatrix, orientedScaling);
+
+    const SIMDVector inner = VectorSubtract(VectorSubtract(vScalingOrigin, vRotationOrigin), Vector3TransformNormal(vScalingOrigin, orientedScaling));
+    const SIMDVector translationColumn = VectorAdd(VectorAdd(Vector3TransformNormal(inner, rotationMatrix), vRotationOrigin), vTranslation);
+
+    SIMDMatrix matrix;
+    matrix.v[0] = VectorSelect(linear.v[0], VectorSplatX(translationColumn), s_SIMDMaskW);
+    matrix.v[1] = VectorSelect(linear.v[1], VectorSplatY(translationColumn), s_SIMDMaskW);
+    matrix.v[2] = VectorSelect(linear.v[2], VectorSplatZ(translationColumn), s_SIMDMaskW);
+    matrix.v[3] = s_SIMDIdentityR3;
     return matrix;
 }
 

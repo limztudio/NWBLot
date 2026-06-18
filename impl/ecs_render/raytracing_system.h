@@ -7,6 +7,8 @@
 
 #include "subsystem_base.h"
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,6 +27,7 @@ public:
 public:
     void logCapabilityOnce();
     void buildPendingMeshBlas(Core::CommandList& commandList);
+    void buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
 
 
 private:

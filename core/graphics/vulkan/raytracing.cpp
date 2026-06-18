@@ -1621,6 +1621,21 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     if(!attachAccelStructBuildScratchBuffer(buildInfo, sizeInfo.buildScratchSize, "TLAS_BuildScratch", NWB_TEXT("allocate TLAS scratch buffer")))
         return false;
 
+    // The TLAS build reads the referenced BLASes and writes the TLAS storage, so it must follow any acceleration-structure writes already recorded this frame (the BLAS builds/refits) as well as the
+    // previous frame's build of this same TLAS. On a single queue this barrier covers both the BLAS->TLAS read dependency and the cross-frame TLAS write-after-write.
+    {
+        auto reuseBarrier = VulkanDetail::MakeVkStruct<VkMemoryBarrier2>(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
+        reuseBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        reuseBarrier.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+        reuseBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        reuseBarrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+        auto reuseDepInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+        reuseDepInfo.memoryBarrierCount = 1;
+        reuseDepInfo.pMemoryBarriers = &reuseBarrier;
+        vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &reuseDepInfo);
+    }
+
     VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
     rangeInfo.primitiveCount = primitiveCount;
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;

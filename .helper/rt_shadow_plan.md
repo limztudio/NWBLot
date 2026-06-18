@@ -142,9 +142,20 @@ The **mesh SDF is the one true cooked/baked artifact** (a 3D distance-field text
 
 Skinned caveat: SDFs are baked in bind pose, so the SW fallback handles skinned meshes only **approximately** (bind-pose SDF) or **omits** them from the software shadow field (static geometry still casts). HW RT handles skinned shadows exactly via the per-frame refit above. This asymmetry is accepted (same compromise as Lumen software tracing).
 
+**Detailed plan (from the 2026-06-18 survey workflow).** The deferred consumer (`scene/lighting.slangi nwbSceneApplyLighting` reading `DeferredFrameTargets::shadowVisibility`, R32_UINT 32-light bitmask) is FIXED and untouched; the SW path just writes the same image by sphere-marching a field. **Sequencing decision: PIPELINE-FIRST with analytic SDFs** — build the runtime trace/assembly/selection with a box SDF per instance (each mesh's object-space AABB + instance world→object transform), proving the plumbing + the visibility contract end-to-end (force via the existing `NWB_TESTBED_FORCE_RAYTRACING_EMULATION`), THEN swap the analytic field for real cook-baked per-mesh SDFs. Units:
+- **A (analytic, now): runtime SW shadow pipeline, no cook changes.**
+  - Per-mesh object-space AABB on `MeshResources` (compute at `createMeshResources`/`createRuntimeMeshResources` from positions).
+  - `RendererShadowDistanceFieldSystem` (peer of `RendererRayTracingSystem`): per-frame `StructuredBuffer<SdfInstanceGpu>` (worldToObject inverse transform via `MatrixInverse` of the `buildSceneTlas` `MatrixAffineTransformation`, + object AABB) from the SAME `world().view<RendererComponent>()` traversal; analytic box-SDF.
+  - `shadow_march_cs.slang` compute pass (mirror `csg_interval_peel` C++ + `interval_peel_cs.slang`): per G-buffer pixel, loop ≤32 lights, march the instance boxes, pack the visible bit into the R32_UINT visibility UAV. New SW bindings in `shadow/binding_slots.h` (reuse gbuffer/scene-shading/light-list/visibility slots; replace TLAS slot with the SDF instance buffer).
+  - `nwbTraceOcclusion(origin,dir,tMax)` front-door in `occlusion.slangi` (HW = lift the `shadow_raygen` TraceRay; SW = march). `nwbShadowLightVisible` (per-light dir/tMax/bias) moves here so HW raygen + SW compute share it.
+  - Backend selection in `system.cpp`: `if(shadowTlasReady) HW; else if(sdf.available()) SW; else clear`. `available()` = RT-pipeline unsupported OR forced.
+- **B (baked SDFs, later): replace the analytic box with cook-baked 3D SDF textures.** Cook: `cook_sdf_build.inl` (`BuildMeshSdf` — voxelize triangles from `BuildMeshletTriangleIndices`, ray-parity sign, brute-force closest-triangle distance pruned by meshlet bounds, parallel over Z-slices; 32³ R8_SNORM, gated by a `.nwb` `bake_sdf` field). Binary `MSH5→MSH6` (embed SDF in the mesh artifact). Runtime: per-mesh `Texture3D` (R8_SNORM) on `MeshResources`; a single shared **SDF atlas Texture3D** (sub-box packer) sidesteps bindless (one fixed SRV slot); the march samples the atlas instead of the box.
+- **Hardest/riskiest:** (1) cook SDF baking correctness (ray-parity sign on non-watertight meshes) + cost; (2) object-space march matching the bake encoding across instance transforms (non-uniform scale distorts distances → warn/skip); (3) the atlas packer lifetime/overflow.
+- v1 = static + skinned both as analytic boxes (current/bind-pose AABB) so the skinned character casts a visible (blocky) shadow to prove the path; baked SDFs are static-only.
+
 ### Phase 4 — Trace abstraction + shadow effect
 
-`nwbTraceOcclusion` (HW: RT-pipeline occlusion ray, terminate-on-first-hit, skip closest-hit, miss = lit; SW: sphere-march the global distance field). A screen-space visibility producer pass writing the visibility representation.
+`nwbTraceOcclusion` (HW: RT-pipeline occlusion ray, terminate-on-first-hit, skip closest-hit, miss = lit; SW: sphere-march the global distance field). A screen-space visibility producer pass writing the visibility representation. **HW side DONE** (Units 1-4 + the deferred integration); the SW visibility producer is Phase 3 Unit A above.
 
 ### Phase 5 — Deferred integration
 

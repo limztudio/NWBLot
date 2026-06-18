@@ -64,10 +64,13 @@ JointMatrix ToJointMatrix(const ufbx_matrix& matrix){
 
 bool NearlyEqualJointMatrix(const JointMatrix& lhs, const JointMatrix& rhs){
     static constexpr f32 s_Epsilon = 0.0001f;
-    const SIMDVector epsilon = VectorReplicate(s_Epsilon);
     for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
-        if(!Vector4NearEqual(LoadFloat(lhs.rows[rowIndex]), LoadFloat(rhs.rows[rowIndex]), epsilon))
-            return false;
+        const Vec4& lhsRow = lhs.rows[rowIndex];
+        const Vec4& rhsRow = rhs.rows[rowIndex];
+        for(usize componentIndex = 0u; componentIndex < 4u; ++componentIndex){
+            if(Abs(lhsRow.raw[componentIndex] - rhsRow.raw[componentIndex]) > s_Epsilon)
+                return false;
+        }
     }
     return true;
 }
@@ -255,11 +258,8 @@ bool BuildInfluence(
     }
 
     const f32 inverseWeightSum = static_cast<f32>(1.0 / weightSum);
-    const Vec4 weights(outInfluence.weight);
-    Vec4 normalizedWeights;
-    StoreFloat(VectorScale(LoadFloat(weights), inverseWeightSum), &normalizedWeights);
-    for(usize i = 0u; i < 4u; ++i)
-        outInfluence.weight[i] = normalizedWeights.raw[i];
+    for(f32& weight : outInfluence.weight)
+        weight *= inverseWeightSum;
 
     return true;
 }

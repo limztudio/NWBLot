@@ -48,13 +48,13 @@ static bool IsValidLightRotation(const SIMDVector rotation){
     ;
 }
 
-static bool IsValidLightColorIntensity(const LightComponent& light){
-    const SIMDVector colorIntensity = LoadFloat(light.colorIntensity);
+static bool IsValidLightColorIntensity(const SIMDVector colorIntensity){
+    const f32 intensity = VectorGetW(colorIntensity);
     return
         !Vector3IsNaN(colorIntensity)
         && !Vector3IsInfinite(colorIntensity)
-        && IsFinite(light.intensity())
-        && light.intensity() > 0.0f
+        && IsFinite(intensity)
+        && intensity > 0.0f
     ;
 }
 
@@ -162,7 +162,8 @@ SceneLight BuildDefaultSceneLight(const SceneViewBasis& basis){
 
 bool TryBuildSceneLight(const TransformComponent& transform, const LightComponent& light, SceneLight& outLight){
     outLight = SceneLight{};
-    if(!__hidden_lighting::IsValidLightColorIntensity(light))
+    const SIMDVector colorIntensity = LoadFloat(light.colorIntensity);
+    if(!__hidden_lighting::IsValidLightColorIntensity(colorIntensity))
         return false;
 
     outLight.colorIntensity = light.colorIntensity;

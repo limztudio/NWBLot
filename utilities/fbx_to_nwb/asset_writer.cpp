@@ -99,23 +99,6 @@ void WriteJointMatrix(Stream& out, const JointMatrix& matrix, const AStringView 
     out << indent << "]";
 }
 
-SIMDMatrix LoadJointMatrix(const JointMatrix& matrix){
-    SIMDMatrix result{};
-    result.v[0] = LoadFloat(matrix.rows[0u]);
-    result.v[1] = LoadFloat(matrix.rows[1u]);
-    result.v[2] = LoadFloat(matrix.rows[2u]);
-    result.v[3] = s_SIMDIdentityR3;
-    return result;
-}
-
-JointMatrix StoreJointMatrix(const SIMDMatrix& matrix){
-    JointMatrix result{};
-    StoreFloat(matrix.v[0u], &result.rows[0u]);
-    StoreFloat(matrix.v[1u], &result.rows[1u]);
-    StoreFloat(matrix.v[2u], &result.rows[2u]);
-    return result;
-}
-
 bool InvertJointMatrix(const SIMDMatrix& matrix, SIMDMatrix& outInverse){
     SIMDVector determinant;
     outInverse = MatrixInverse(&determinant, matrix);
@@ -138,8 +121,18 @@ bool BuildLocalBindPoseMatrix(
         return true;
     }
 
-    const SIMDMatrix globalBindPoseMatrix = LoadJointMatrix(globalBindPose);
-    const SIMDMatrix parentGlobalBindPoseMatrix = LoadJointMatrix(*parentGlobalBindPose);
+    SIMDMatrix globalBindPoseMatrix{};
+    globalBindPoseMatrix.v[0u] = LoadFloat(globalBindPose.rows[0u]);
+    globalBindPoseMatrix.v[1u] = LoadFloat(globalBindPose.rows[1u]);
+    globalBindPoseMatrix.v[2u] = LoadFloat(globalBindPose.rows[2u]);
+    globalBindPoseMatrix.v[3u] = s_SIMDIdentityR3;
+
+    SIMDMatrix parentGlobalBindPoseMatrix{};
+    parentGlobalBindPoseMatrix.v[0u] = LoadFloat(parentGlobalBindPose->rows[0u]);
+    parentGlobalBindPoseMatrix.v[1u] = LoadFloat(parentGlobalBindPose->rows[1u]);
+    parentGlobalBindPoseMatrix.v[2u] = LoadFloat(parentGlobalBindPose->rows[2u]);
+    parentGlobalBindPoseMatrix.v[3u] = s_SIMDIdentityR3;
+
     SIMDMatrix parentInverse;
     if(!InvertJointMatrix(parentGlobalBindPoseMatrix, parentInverse))
         return false;
@@ -148,7 +141,9 @@ bool BuildLocalBindPoseMatrix(
     if(MatrixIsNaN(localBindPose) || MatrixIsInfinite(localBindPose))
         return false;
 
-    outLocalBindPose = StoreJointMatrix(localBindPose);
+    StoreFloat(localBindPose.v[0u], &outLocalBindPose.rows[0u]);
+    StoreFloat(localBindPose.v[1u], &outLocalBindPose.rows[1u]);
+    StoreFloat(localBindPose.v[2u], &outLocalBindPose.rows[2u]);
     return true;
 }
 

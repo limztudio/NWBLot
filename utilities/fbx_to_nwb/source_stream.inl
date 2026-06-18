@@ -230,26 +230,6 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 }
 
 [[nodiscard]] TriangleAreaNormal64 BuildTriangleAreaNormal64(const Vec3& a, const Vec3& b, const Vec3& c){
-#if defined(NWB_HAS_AVX2)
-    const __m256d av = _mm256_set_pd(0.0, static_cast<f64>(a.z), static_cast<f64>(a.y), static_cast<f64>(a.x));
-    const __m256d bv = _mm256_set_pd(0.0, static_cast<f64>(b.z), static_cast<f64>(b.y), static_cast<f64>(b.x));
-    const __m256d cv = _mm256_set_pd(0.0, static_cast<f64>(c.z), static_cast<f64>(c.y), static_cast<f64>(c.x));
-    const __m256d ab = _mm256_sub_pd(bv, av);
-    const __m256d ac = _mm256_sub_pd(cv, av);
-    const __m256d abYzx = _mm256_permute4x64_pd(ab, _MM_SHUFFLE(3, 0, 2, 1));
-    const __m256d abZxy = _mm256_permute4x64_pd(ab, _MM_SHUFFLE(3, 1, 0, 2));
-    const __m256d acYzx = _mm256_permute4x64_pd(ac, _MM_SHUFFLE(3, 0, 2, 1));
-    const __m256d acZxy = _mm256_permute4x64_pd(ac, _MM_SHUFFLE(3, 1, 0, 2));
-    const __m256d cross = _mm256_sub_pd(_mm256_mul_pd(abYzx, acZxy), _mm256_mul_pd(abZxy, acYzx));
-
-    alignas(32) f64 areaNormal[4];
-    _mm256_store_pd(areaNormal, cross);
-    return TriangleAreaNormal64{
-        areaNormal[0],
-        areaNormal[1],
-        areaNormal[2],
-    };
-#else
     const f64 abX = static_cast<f64>(b.x) - static_cast<f64>(a.x);
     const f64 abY = static_cast<f64>(b.y) - static_cast<f64>(a.y);
     const f64 abZ = static_cast<f64>(b.z) - static_cast<f64>(a.z);
@@ -261,21 +241,10 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
         abZ * acX - abX * acZ,
         abX * acY - abY * acX,
     };
-#endif
 }
 
 [[nodiscard]] f64 TriangleAreaNormalLengthSquared(const TriangleAreaNormal64& areaNormal){
-#if defined(NWB_HAS_AVX2)
-    const __m256d normal = _mm256_set_pd(0.0, areaNormal.z, areaNormal.y, areaNormal.x);
-    const __m256d squared = _mm256_mul_pd(normal, normal);
-    const __m128d low = _mm256_castpd256_pd128(squared);
-    const __m128d high = _mm256_extractf128_pd(squared, 1);
-    __m128d sum = _mm_add_pd(low, high);
-    sum = _mm_add_sd(sum, _mm_unpackhi_pd(sum, sum));
-    return _mm_cvtsd_f64(sum);
-#else
     return areaNormal.x * areaNormal.x + areaNormal.y * areaNormal.y + areaNormal.z * areaNormal.z;
-#endif
 }
 
 [[nodiscard]] bool TriangleHasArea(
@@ -312,7 +281,9 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
     Vec3 outputPosition = ToVec3(position);
     const f32 scale = static_cast<f32>(options.scale);
-    StoreFloat(VectorScale(VectorSetW(LoadFloat(outputPosition), 0.0f), scale), &outputPosition);
+    outputPosition.x *= scale;
+    outputPosition.y *= scale;
+    outputPosition.z *= scale;
     return outputPosition;
 }
 
@@ -370,11 +341,16 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
         Vec3 outputBitangent = ToVec3(bitangent);
         if(Normalize(outputBitangent)){
-            const SIMDVector normalVector = VectorSetW(LoadFloat(normal), 0.0f);
-            const SIMDVector tangentVector = VectorSetW(LoadFloat(outputTangent), 0.0f);
-            const SIMDVector bitangentVector = VectorSetW(LoadFloat(outputBitangent), 0.0f);
-            const SIMDVector tangentSpaceBitangent = Vector3Cross(normalVector, tangentVector);
-            const f32 bitangentDot = VectorGetX(Vector3Dot(tangentSpaceBitangent, bitangentVector));
+            const Vec3 tangentSpaceBitangent{
+                normal.y * outputTangent.z - normal.z * outputTangent.y,
+                normal.z * outputTangent.x - normal.x * outputTangent.z,
+                normal.x * outputTangent.y - normal.y * outputTangent.x,
+            };
+            const f32 bitangentDot =
+                tangentSpaceBitangent.x * outputBitangent.x
+                + tangentSpaceBitangent.y * outputBitangent.y
+                + tangentSpaceBitangent.z * outputBitangent.z
+            ;
             sign = bitangentDot < 0.0f ? -1.0f : 1.0f;
         }
     }
@@ -393,13 +369,29 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
 [[nodiscard]] bool IsFiniteSourceTriangleCorner(const SourceTriangleCorner& corner, const bool wantsSkinning){
     if(
-        !VectorIsFinite(LoadFloat(corner.position), 0x7u)
-        || !VectorIsFinite(LoadFloat(corner.normal), 0x7u)
-        || !VectorIsFinite(LoadFloat(corner.uv0), 0x3u)
-        || !VectorIsFinite(LoadFloat(corner.color), 0xFu)
+        !IsFinite(corner.position.x)
+        || !IsFinite(corner.position.y)
+        || !IsFinite(corner.position.z)
+        || !IsFinite(corner.normal.x)
+        || !IsFinite(corner.normal.y)
+        || !IsFinite(corner.normal.z)
+        || !IsFinite(corner.uv0.x)
+        || !IsFinite(corner.uv0.y)
+        || !IsFinite(corner.color.x)
+        || !IsFinite(corner.color.y)
+        || !IsFinite(corner.color.z)
+        || !IsFinite(corner.color.w)
     )
         return false;
-    if(corner.hasTangent && !VectorIsFinite(LoadFloat(corner.tangent), 0xFu))
+    if(
+        corner.hasTangent
+        && (
+            !IsFinite(corner.tangent.x)
+            || !IsFinite(corner.tangent.y)
+            || !IsFinite(corner.tangent.z)
+            || !IsFinite(corner.tangent.w)
+        )
+    )
         return false;
     return !wantsSkinning || IsFiniteSkinInfluence(corner.skin);
 }
@@ -456,13 +448,9 @@ template<typename Value, typename Lookup>
 
         const Vec3& position = mesh.positions[ref.position];
         const Vec3& normal = mesh.normals[ref.normal];
-        Float4 rebuildPosition;
-        Float4 rebuildNormal;
-        StoreFloat(VectorSetW(LoadFloat(position), 0.0f), &rebuildPosition);
-        StoreFloat(VectorSetW(LoadFloat(normal), 0.0f), &rebuildNormal);
         rebuildVertices.push_back(RebuildVertex{
-            rebuildPosition,
-            rebuildNormal,
+            Float4(position.x, position.y, position.z, 0.0f),
+            Float4(normal.x, normal.y, normal.z, 0.0f),
             Float4(1.0f, 0.0f, 0.0f, 1.0f),
             mesh.uv0[ref.uv0],
         });
@@ -481,10 +469,16 @@ template<typename Value, typename Lookup>
         if(i0 == i1 || i0 == i2 || i1 == i2)
             continue;
 
-        const SIMDVector p0 = LoadFloat(rebuildVertices[i0].position);
-        const SIMDVector p1 = LoadFloat(rebuildVertices[i1].position);
-        const SIMDVector p2 = LoadFloat(rebuildVertices[i2].position);
-        if(!Core::Mesh::FrameValidDirection(TriangleTests::AreaNormal(p0, p1, p2)))
+        const Float4& p0 = rebuildVertices[i0].position;
+        const Float4& p1 = rebuildVertices[i1].position;
+        const Float4& p2 = rebuildVertices[i2].position;
+        const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(
+            Vec3(p0.x, p0.y, p0.z),
+            Vec3(p1.x, p1.y, p1.z),
+            Vec3(p2.x, p2.y, p2.z)
+        );
+        const f64 areaLengthSquared = TriangleAreaNormalLengthSquared(areaNormal);
+        if(!IsFinite(areaLengthSquared) || areaLengthSquared <= static_cast<f64>(Core::Mesh::s_FrameDirectionEpsilon))
             continue;
 
         rebuildIndices.push_back(i0);
@@ -507,13 +501,15 @@ template<typename Value, typename Lookup>
     mesh.tangents.clear();
     for(usize vertexRefIndex = 0u; vertexRefIndex < mesh.vertexRefs.size(); ++vertexRefIndex){
         SourceVertexRef& ref = mesh.vertexRefs[vertexRefIndex];
+        const Vec3& storedNormal = mesh.normals[ref.normal];
+        const Float4& storedTangent = rebuildVertices[vertexRefIndex].tangent;
         const SIMDVector normal = Core::Mesh::FrameNormalizeDirection(
-            VectorSetW(LoadFloat(mesh.normals[ref.normal]), 0.0f),
+            VectorSet(storedNormal.x, storedNormal.y, storedNormal.z, 0.0f),
             VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
         );
         const SIMDVector tangent = Core::Mesh::FrameResolveTangent(
             normal,
-            VectorSetW(LoadFloat(rebuildVertices[vertexRefIndex].tangent), 0.0f),
+            VectorSet(storedTangent.x, storedTangent.y, storedTangent.z, 0.0f),
             Core::Mesh::FrameFallbackTangent(normal)
         );
         if(!Core::Mesh::FrameValidDirection(tangent)){
@@ -522,8 +518,12 @@ template<typename Value, typename Lookup>
         }
 
         const f32 handedness = Core::Mesh::FrameTangentHandedness(rebuildVertices[vertexRefIndex].tangent.w, 1.0f);
-        Vec4 generatedTangent;
-        StoreFloat(VectorSetW(tangent, handedness), &generatedTangent);
+        const Vec4 generatedTangent(
+            VectorGetX(tangent),
+            VectorGetY(tangent),
+            VectorGetZ(tangent),
+            handedness
+        );
         if(!InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, "tangent", ref.tangent))
             return false;
     }

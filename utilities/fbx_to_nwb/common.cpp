@@ -234,16 +234,16 @@ bool ParseColorText(const AString& text, Vec4& outColor){
 }
 
 bool Normalize(Vec3& value){
-    const SIMDVector source = VectorSetW(LoadFloat(value), 0.0f);
-    const f32 lengthSquared = VectorGetX(Vector3LengthSq(source));
+    const f32 lengthSquared = value.x * value.x + value.y * value.y + value.z * value.z;
     if(!IsFinite(lengthSquared) || lengthSquared <= 0.0f)
         return false;
 
-    const SIMDVector normalized = Vector3Normalize(source);
-    if(!Vector3IsFinite(normalized))
+    const f32 inverseLength = 1.0f / Sqrt(lengthSquared);
+    value.x *= inverseLength;
+    value.y *= inverseLength;
+    value.z *= inverseLength;
+    if(!IsFinite(value.x) || !IsFinite(value.y) || !IsFinite(value.z))
         return false;
-
-    StoreFloat(VectorSetW(normalized, 0.0f), &value);
     return true;
 }
 

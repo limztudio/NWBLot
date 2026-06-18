@@ -11,6 +11,7 @@
 #include "cook.h"
 
 #include "arena_names.h"
+#include "binary_payload.h"
 
 #include <core/assets/paths.h>
 #include <core/metascript/parser.h>
@@ -209,6 +210,26 @@ static void RemoveFileBestEffort(const Path& path){
     }
 }
 
+class ScopedFileCleanupGuard final : NoCopy{
+public:
+    explicit ScopedFileCleanupGuard(const Path& path)noexcept
+        : m_path(path)
+    {}
+    ~ScopedFileCleanupGuard(){
+        if(m_active)
+            RemoveFileBestEffort(m_path);
+    }
+
+
+public:
+    void dismiss()noexcept{ m_active = false; }
+
+
+private:
+    const Path& m_path;
+    bool m_active = true;
+};
+
 #if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
 static int WaitForCompilerProcess(const pid_t childPid)noexcept{
     int status = 0;
@@ -363,6 +384,8 @@ public:
         diagnosticsPath += ".diag";
         RemoveFileBestEffort(request.outputPath);
         RemoveFileBestEffort(diagnosticsPath);
+        ScopedFileCleanupGuard outputCleanup(request.outputPath);
+        ScopedFileCleanupGuard diagnosticsCleanup(diagnosticsPath);
 
         CookVector<CookString> arguments(m_memoryArena);
         arguments.reserve(15u + static_cast<usize>(request.includeDirectories.size()) * 2u + static_cast<usize>(request.defineCount));
@@ -441,7 +464,10 @@ public:
             return false;
         }
 
-        if(outBytecode.empty() || (outBytecode.size() & 3u) != 0u){
+        switch(ShaderBinaryPayload::ValidateBytecode(outBytecode)){
+        case ShaderBinaryPayload::BytecodeValidationFailure::None:
+            break;
+        case ShaderBinaryPayload::BytecodeValidationFailure::InvalidSize:
             NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : compiled bytecode has invalid size {}")
                 , StringConvert(request.shaderName)
                 , StringConvert(request.variantName)
@@ -449,9 +475,16 @@ public:
             );
             outBytecode.clear();
             return false;
+        case ShaderBinaryPayload::BytecodeValidationFailure::InvalidMagic:
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : compiled bytecode has invalid SPIR-V magic")
+                , StringConvert(request.shaderName)
+                , StringConvert(request.variantName)
+            );
+            outBytecode.clear();
+            return false;
         }
 
-        RemoveFileBestEffort(diagnosticsPath);
+        outputCleanup.dismiss();
         return true;
     }
 };

@@ -237,6 +237,19 @@ static void TestShaderDependencyChecksumAliasesGeneratedRoot(TestContext& contex
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
 }
 
+static bool WriteStandaloneShaderProbe(const Path& assetRoot){
+    if(!WriteTextFile(
+        assetRoot / "shaders" / "standalone_ps.nwb",
+        "shader asset;\n\n"
+        "asset.stage = \"ps\";\n"
+        "asset.target_profile = \"spirv_1_5\";\n"
+        "asset.entry_point = \"main\";\n"
+    ))
+        return false;
+
+    return WriteTextFile(assetRoot / "shaders" / "standalone_ps.slang", s_MaterialBindPixelShaderProbeSource);
+}
+
 static void TestShaderCookWithoutMaterialBindIncludes(TestContext& context){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -252,17 +265,7 @@ static void TestShaderCookWithoutMaterialBindIncludes(TestContext& context){
     ));
 
     const Path assetRoot = root / "assets";
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, WriteTextFile(
-        assetRoot / "shaders" / "standalone_ps.nwb",
-        "shader asset;\n\n"
-        "asset.stage = \"ps\";\n"
-        "asset.target_profile = \"spirv_1_5\";\n"
-        "asset.entry_point = \"main\";\n"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, WriteTextFile(
-        assetRoot / "shaders" / "standalone_ps.slang",
-        s_MaterialBindPixelShaderProbeSource
-    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, WriteStandaloneShaderProbe(assetRoot));
 
     const bool cooked = CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot });
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
@@ -281,6 +284,81 @@ static void TestShaderCookWithoutMaterialBindIncludes(TestContext& context){
             Name("project/shaders/standalone_ps"),
             Name("ps"),
             sourceChecksum
+        ));
+    }
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+
+    ErrorCode errorCode;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
+}
+
+static bool FindSingleShaderBytecodeCachePath(TestContext& context, TestArena& testArena, const Path& cacheDirectory, Path& outPath){
+    outPath.clear();
+
+    ErrorCode errorCode;
+    RecursiveDirectoryIterator<Path::Arena> cacheEntries(cacheDirectory, errorCode);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !errorCode);
+    if(errorCode)
+        return false;
+
+    usize foundCount = 0u;
+    for(const auto& entry : cacheEntries){
+        errorCode.clear();
+        const bool isRegularFile = entry.is_regular_file(errorCode);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !errorCode);
+        if(errorCode)
+            return false;
+        if(!isRegularFile)
+            continue;
+
+        const auto extension = PathToString(testArena.arena, entry.path().extension());
+        if(extension != ".spv")
+            continue;
+
+        outPath = entry.path();
+        ++foundCount;
+    }
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, foundCount == 1u);
+    return foundCount == 1u;
+}
+
+static void TestShaderCookIgnoresInvalidBytecodeCache(TestContext& context){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCookCase(
+        testArena,
+        "shader_cook_invalid_bytecode_cache",
+        root,
+        outputDirectory
+    ));
+
+    const Path assetRoot = root / "assets";
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, WriteStandaloneShaderProbe(assetRoot));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+
+    Path bytecodeCachePath(testArena.arena);
+    if(FindSingleShaderBytecodeCachePath(context, testArena, root / "cache", bytecodeCachePath)){
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, WriteTextFile(bytecodeCachePath, "BAD!"));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+
+        const Name shaderVirtualPath = NWB::Core::ShaderArchive::buildVirtualPathName(
+            Name("project/shaders/standalone_ps"),
+            NWB::Core::ShaderArchive::s_DefaultVariant,
+            Name("ps")
+        );
+        UniquePtr<NWB::Core::Assets::IAsset> loadedShader;
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadCookedAsset<NWB::Impl::ShaderAssetCodec>(
+            context,
+            testArena,
+            outputDirectory,
+            shaderVirtualPath,
+            loadedShader
         ));
     }
 

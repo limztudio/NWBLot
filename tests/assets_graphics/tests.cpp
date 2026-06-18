@@ -11,6 +11,7 @@
 #include <core/assets/cook_entry_registry.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/binary_payload.h>
+#include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/cook.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 
@@ -30,6 +31,7 @@
 
 #include <global/binary.h>
 #include <global/compile.h>
+#include <global/filesystem.h>
 #include <global/hash_utils.h>
 #include <global/math/convert.h>
 
@@ -1506,6 +1508,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_tests::TestShaderMetadataRejectsDefaultVariantAlias(context);
     __hidden_tests::TestShaderDependencyChecksumAliasesGeneratedRoot(context);
     __hidden_tests::TestShaderCookWithoutMaterialBindIncludes(context);
+    __hidden_tests::TestShaderCookIgnoresInvalidBytecodeCache(context);
     __hidden_tests::TestMaterialMetadataInterfaceAndBlockParameters(context);
     __hidden_tests::TestMaterialCodecTypedLayoutBoundary(context);
     __hidden_tests::TestMaterialBindSchemaValidation(context);

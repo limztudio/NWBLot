@@ -12,6 +12,8 @@
 
 #include "csg_shader_variants.h"
 
+#include <impl/assets_shader/binary_payload.h>
+
 #include <core/graphics/shader_archive.h>
 
 #include <core/common/log.h>
@@ -107,8 +109,13 @@ static CacheReadStatus::Enum TryReadCachedBytecode(
     Core::GraphicsBytes& outBytecode
 ){
     ErrorCode errorCode;
-    if(ReadBinaryFile(bytecodePath, outBytecode, errorCode) && !outBytecode.empty() && (outBytecode.size() & 3u) == 0u)
-        return CacheReadStatus::Hit;
+    if(ReadBinaryFile(bytecodePath, outBytecode, errorCode)){
+        if(ShaderBinaryPayload::ValidateBytecode(outBytecode) == ShaderBinaryPayload::BytecodeValidationFailure::None)
+            return CacheReadStatus::Hit;
+
+        outBytecode.clear();
+        return CacheReadStatus::Miss;
+    }
 
     if(errorCode && !IsMissingPathError(errorCode)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to read bytecode cache '{}' for entry '{}': {}")

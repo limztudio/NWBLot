@@ -214,6 +214,9 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     }
 
     const bool rtSupported = graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
+    // Without hardware ray tracing the software BVH shadow fallback runs instead; it reads positions and the
+    // reconstructed triangle indices as raw byte buffers, so those buffers need raw views in that case.
+    const bool swShadow = !rtSupported;
 
     bool uploaded = true;
     uploaded = __hidden_mesh::AssignMeshBuffer<Float3U>(
@@ -223,7 +226,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         AStringView(":positions"),
         mesh.positionStream(),
         NWB_TEXT("position"),
-        false,
+        swShadow,
         rtSupported
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
@@ -313,13 +316,16 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     if(!uploaded)
         return false;
 
-    if(rtSupported){
+    // Both shadow backends trace triangles, so the reconstructed index buffer is always created. The
+    // hardware path consumes it as an accel-struct build input; the software fallback reads it as a raw
+    // byte buffer. blasBuildPending / swBvhBuildPending route the mesh to whichever backend is active.
+    {
         const usize indexCount = static_cast<usize>(createdMesh.meshletPrimitiveIndexCount);
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RayTracingBuildArena, indexCount * sizeof(u32) + 4096u);
         Vector<u32, Core::Alloc::ScratchArena> triangleIndices{ scratchArena };
         triangleIndices.reserve(indexCount);
         if(!BuildMeshletTriangleIndices(mesh, triangleIndices)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct ray tracing triangle indices for mesh '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle indices for mesh '{}'")
                 , StringConvert(meshPath.c_str())
             );
             return false;
@@ -327,14 +333,15 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
 
         const Name indexBufferName = DeriveName(meshPath, AStringView(":rt_triangle_indices"));
         if(!indexBufferName){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive ray tracing index buffer name for mesh '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace index buffer name for mesh '{}'")
                 , StringConvert(meshPath.c_str())
             );
             return false;
         }
 
         RuntimeMeshBufferUpload::BufferFlags indexFlags;
-        indexFlags.accelStructBuildInput = true;
+        indexFlags.canHaveRawViews = swShadow;
+        indexFlags.accelStructBuildInput = rtSupported;
         const RuntimeMeshBufferUpload::BufferSetupFailure::Enum indexFailure = RuntimeMeshBufferUpload::SetupRequiredBuffer<u32>(
             graphics(),
             indexBufferName,
@@ -343,19 +350,20 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
             createdMesh.triangleIndexBuffer
         );
         if(indexFailure != RuntimeMeshBufferUpload::BufferSetupFailure::None){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create ray tracing index buffer for mesh '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace index buffer for mesh '{}'")
                 , StringConvert(meshPath.c_str())
             );
             return false;
         }
 
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: mesh '{}' ray tracing index buffer ready ({} indices, expected {})")
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: mesh '{}' shadow trace index buffer ready ({} indices, expected {})")
             , StringConvert(meshPath.c_str())
             , static_cast<u64>(triangleIndices.size())
             , static_cast<u64>(createdMesh.meshletPrimitiveIndexCount)
         );
 
-        createdMesh.blasBuildPending = true;
+        createdMesh.blasBuildPending = rtSupported;
+        createdMesh.swBvhBuildPending = swShadow;
     }
 
     NWB_ASSERT(createdMesh.valid());

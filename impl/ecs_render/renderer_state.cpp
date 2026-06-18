@@ -202,13 +202,7 @@ void RendererRayTracingState::invalidateResources(){
     m_bvhTopologyPipeline.reset();
     m_bvhFitShader.reset();
     m_bvhFitPipeline.reset();
-    m_bvhNodeBuffer.reset();
-    m_bvhParentBuffer.reset();
     m_bvhVisitCounterBuffer.reset();
-    m_bvhBuildBindingSet.reset();
-    m_bvhBuildBindingSetPositions = nullptr;
-    m_bvhBuildBindingSetIndices = nullptr;
-    m_bvhBuildBindingSetNodes = nullptr;
     m_bvhBuildCapacity = 0u;
     m_shadowPipelineFailed = false;
     m_bvhSortPipelineFailed = false;

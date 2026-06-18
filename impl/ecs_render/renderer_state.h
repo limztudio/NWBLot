@@ -288,13 +288,7 @@ private:
     Core::ComputePipelineHandle m_bvhTopologyPipeline;
     Core::ShaderHandle m_bvhFitShader;
     Core::ComputePipelineHandle m_bvhFitPipeline;
-    Core::BufferHandle m_bvhNodeBuffer;
-    Core::BufferHandle m_bvhParentBuffer;
     Core::BufferHandle m_bvhVisitCounterBuffer;
-    Core::BindingSetHandle m_bvhBuildBindingSet;
-    const Core::Buffer* m_bvhBuildBindingSetPositions = nullptr;
-    const Core::Buffer* m_bvhBuildBindingSetIndices = nullptr;
-    const Core::Buffer* m_bvhBuildBindingSetNodes = nullptr;
     usize m_bvhBuildCapacity = 0u;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;

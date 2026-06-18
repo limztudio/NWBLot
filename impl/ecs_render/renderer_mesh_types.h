@@ -59,13 +59,18 @@ struct MeshResources : public RuntimeMeshBuffers{
     Core::RayTracingAccelStructHandle blas;
     Core::BindingSetHandle meshBindingSet;
     Core::BindingSetHandle computeBindingSet;
+    Core::BufferHandle swBvhNodeBuffer;     // per-mesh software LBVH nodes (no-hardware-RT shadow fallback)
+    Core::BufferHandle swBvhParentBuffer;   // per-mesh software LBVH parent links (persist across refits)
+    Core::BindingSetHandle swBvhBindingSet; // per-mesh software LBVH build/refit binding set
     u32 meshletCount = 0;
     u32 meshletPrimitiveIndexCount = 0;
-    u32 blasRefitsSinceRebuild = 0u;   // refit count since the last full BLAS rebuild (runtime meshes)
+    u32 blasRefitsSinceRebuild = 0u;    // refit count since the last full BLAS rebuild (runtime meshes)
+    u32 swBvhRefitsSinceRebuild = 0u;   // refit count since the last full software BVH rebuild (runtime meshes)
     bool runtimeMesh = false;
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
     bool blasBuildPending = false;
+    bool swBvhBuildPending = false;     // static mesh awaiting its one-time software BVH build
     u64 runtimeMeshVersion = 0u;
     CsgReceiverCpuBounds csgLocalBounds;
 

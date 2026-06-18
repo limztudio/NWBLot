@@ -288,6 +288,9 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         return false;
 
     const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
+    // Without hardware ray tracing the software BVH shadow fallback runs instead, reading the skinned
+    // positions and triangle indices as raw byte buffers, so those buffers need raw views in that case.
+    const bool swShadow = !rtSupported;
 
     bool uploaded = true;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float3U>(
@@ -325,7 +328,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         instance.restPositions,
         true,
         NWB_TEXT("skinned position"),
-        false,
+        swShadow,
         rtSupported
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
@@ -432,7 +435,10 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         NWB_TEXT("attribute skin")
     ) && uploaded;
 
-    if(uploaded && rtSupported){
+    // Both shadow backends trace triangles, so the reconstructed index buffer is built whenever the upload
+    // otherwise succeeded; the hardware path consumes it as an accel-struct input and the software fallback
+    // reads it as a raw byte buffer.
+    if(uploaded){
         const usize indexCount = instance.meshletPrimitiveIndices.size();
         Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_RuntimeBlasIndexArena, indexCount * sizeof(u32) + 4096u);
         Vector<u32, Core::Alloc::ScratchArena> triangleIndices{ scratchArena };
@@ -467,8 +473,8 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             triangleIndices,
             false,
             NWB_TEXT("rt triangle index"),
-            false,
-            true
+            swShadow,
+            rtSupported
         ) && uploaded;
     }
 

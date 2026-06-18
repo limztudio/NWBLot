@@ -122,7 +122,13 @@ static bool TryMapStageToSlangStage(const AStringView stage, AStringView& outSta
         { "vs", "vertex" },
         { "ps", "fragment" },
         { "cs", "compute" },
-        { "mesh", "mesh" }
+        { "mesh", "mesh" },
+        { "rgen", "raygeneration" },
+        { "rmiss", "miss" },
+        { "rchit", "closesthit" },
+        { "rahit", "anyhit" },
+        { "rint", "intersection" },
+        { "rcall", "callable" },
     };
 
     for(const StageMapping& mapping : s_StageMappings){

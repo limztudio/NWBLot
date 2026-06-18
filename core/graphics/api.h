@@ -1922,7 +1922,7 @@ struct RayTracingInstanceDesc{
     RayTracingInstanceFlags::Mask flags : 8;
     union{
         RayTracingAccelStruct* bottomLevelAS; // for buildTopLevelAccelStruct
-        u64 blasDeviceAddress;       // for buildTopLevelAccelStructFromBuffer - use RayTracingAccelStruct::getDeviceAddress()
+        u64 blasDeviceAddress; // for buildTopLevelAccelStructFromBuffer - use RayTracingAccelStruct::getDeviceAddress()
     };
 
     RayTracingInstanceDesc()
@@ -2105,23 +2105,23 @@ struct RayTracingClusterOperationParams{
 struct RayTracingClusterOperationDesc{
     RayTracingClusterOperationParams params;
 
-    u64 scratchSizeInBytes = 0;                             // Size of scratch resource returned by getClusterOperationSizeInfo() scratchSizeInBytes
+    u64 scratchSizeInBytes = 0;                            // Size of scratch resource returned by getClusterOperationSizeInfo() scratchSizeInBytes
 
     // Input Resources
     Buffer* inIndirectArgCountBuffer = nullptr;            // Buffer containing the number of AS to build, instantiate, or move
-    u64 inIndirectArgCountOffsetInBytes = 0;                // Offset (in bytes) to where the count is in the inIndirectArgCountBuffer
+    u64 inIndirectArgCountOffsetInBytes = 0;               // Offset (in bytes) to where the count is in the inIndirectArgCountBuffer
     Buffer* inIndirectArgsBuffer = nullptr;                // Buffer of descriptor array of format IndirectTriangleClasArgs, IndirectTriangleTemplateArgs, IndirectInstantiateTemplateArgs
-    u64 inIndirectArgsOffsetInBytes = 0;                    // Offset (in bytes) to where the descriptor array starts inIndirectArgsBuffer
+    u64 inIndirectArgsOffsetInBytes = 0;                   // Offset (in bytes) to where the descriptor array starts inIndirectArgsBuffer
 
     // In/Out Resources
     Buffer* inOutAddressesBuffer = nullptr;                // Array of addresseses of CLAS, CLAS Templates, or BLAS
-    u64 inOutAddressesOffsetInBytes = 0;                    // Offset (in bytes) to where the addresses array starts in inOutAddressesBuffer
+    u64 inOutAddressesOffsetInBytes = 0;                   // Offset (in bytes) to where the addresses array starts in inOutAddressesBuffer
 
     // Output Resources
     Buffer* outSizesBuffer = nullptr;                      // Sizes (in bytes) of CLAS, CLAS Templates, or BLAS
-    u64 outSizesOffsetInBytes = 0;                          // Offset (in bytes) to where the output sizes array starts in outSizesBuffer
+    u64 outSizesOffsetInBytes = 0;                         // Offset (in bytes) to where the output sizes array starts in outSizesBuffer
     Buffer* outAccelerationStructuresBuffer = nullptr;     // Destination buffer for CLAS, CLAS Template, or BLAS data. Size must be calculated with getOperationSizeInfo or with the outSizesBuffer result of OperationMode::GetSizes
-    u64 outAccelerationStructuresOffsetInBytes = 0;         // Offset (in bytes) to where the output acceleration structures starts in outAccelerationStructuresBuffer
+    u64 outAccelerationStructuresOffsetInBytes = 0;        // Offset (in bytes) to where the output acceleration structures starts in outAccelerationStructuresBuffer
 };
 
 
@@ -2422,8 +2422,7 @@ struct BindingSetDesc{
     GraphicsVector<BindingSetItem> bindings;
 
     // Enables automatic liveness tracking of this binding set by command lists.
-    // When disabled, the caller must keep the binding set and referenced resources alive
-    // until all commands using the binding set have finished.
+    // When disabled, the caller must keep the binding set and referenced resources alive until all commands using the binding set have finished.
     bool trackLiveness = true;
 
     explicit BindingSetDesc(GraphicsArena& arena)

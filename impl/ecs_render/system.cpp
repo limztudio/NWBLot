@@ -172,8 +172,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     {
         Core::GpuTimingMeasure frameTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Frame, device, *commandList);
 
-        m_raytracingSystem.buildPendingMeshBlas(*commandList);
-        m_raytracingSystem.buildSceneTlas(*commandList, scratchArena);
+        bool shadowTlasReady = false;
+        if(m_raytracingSystem.buildPendingMeshBlas(*commandList))
+            shadowTlasReady = m_raytracingSystem.buildSceneTlas(*commandList, scratchArena);
 
         MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
         InstanceGpuDataVector instanceData{scratchArena};
@@ -296,6 +297,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
         }
         commandList->endRenderPass();
+
+        if(shadowTlasReady)
+            static_cast<void>(m_raytracingSystem.renderShadowVisibility(*commandList, deferredTargets));
 
         commandListReady = m_deferredSystem.renderDeferredLighting(*commandList, deferredTargets);
         if(commandListReady){

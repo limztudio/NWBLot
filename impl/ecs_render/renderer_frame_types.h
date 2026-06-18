@@ -100,6 +100,7 @@ struct DeferredFrameTargets{
     Core::Format::Enum worldPositionFormat = Core::Format::UNKNOWN;
     Core::Format::Enum opaqueColorFormat = Core::Format::UNKNOWN;
     Core::Format::Enum depthFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum shadowVisibilityFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgCapNormalFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgIntervalDepthFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgIntervalIdFormat = Core::Format::UNKNOWN;
@@ -131,6 +132,7 @@ struct DeferredFrameTargets{
     Core::TextureHandle csgRemovedIntervalCount;
     Core::TextureHandle opaqueColor;
     Core::TextureHandle depth;
+    Core::TextureHandle shadowVisibility;
     Core::FramebufferHandle framebuffer;
     Core::FramebufferHandle opaqueLightingFramebuffer;
     Core::BindingSetHandle lightingBindingSet;

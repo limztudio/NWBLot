@@ -6,6 +6,8 @@
 
 #include "renderer_private.h"
 
+#include <impl/assets/graphics/shadow/binding_slots.h>
+#include <impl/assets/graphics/shadow/names.h>
 #include <global/simdmath.h>
 
 
@@ -48,9 +50,9 @@ void RendererRayTracingSystem::logCapabilityOnce(){
     );
 }
 
-void RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandList){
+bool RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandList){
     if(!graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
-        return;
+        return false;
 
     auto& meshes = meshState().m_meshes;
     for(auto it = meshes.begin(); it != meshes.end(); ++it){
@@ -69,15 +71,16 @@ void RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandLi
         if(buildMeshBlas(commandList, meshResources))
             meshResources.blasBuildPending = false;
     }
+    return true;
 }
 
-void RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
+bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
     if(!graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
-        return;
+        return false;
 
     auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
     if(!meshSystem)
-        return;
+        return false;
 
     auto rendererView = world().view<RendererComponent>();
     Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena> instances{ scratchArena };
@@ -121,7 +124,7 @@ void RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
 
     if(instances.empty()){
         rayTracingState().m_tlasDeviceAddress = 0u;
-        return;
+        return false;
     }
 
     if(!rayTracingState().m_tlas || rayTracingState().m_tlasMaxInstances < instances.size()){
@@ -140,7 +143,7 @@ void RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene TLAS (capacity {})")
                 , static_cast<u64>(capacity)
             );
-            return;
+            return false;
         }
         rayTracingState().m_tlas = Move(tlas);
         rayTracingState().m_tlasMaxInstances = capacity;
@@ -156,6 +159,62 @@ void RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         Core::RayTracingAccelStructBuildFlags::PreferFastTrace
     );
     rayTracingState().m_tlasDeviceAddress = rayTracingState().m_tlas->getDeviceAddress();
+    return true;
+}
+
+bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& targets){
+    // Hardware ray-traced shadows write a per-light visibility mask into a screen-sized R32_UINT
+    // image. When ray tracing is unavailable the renderer falls back to fully lit surfaces, so skip
+    // the allocation entirely rather than reserving VRAM that nothing will ever write.
+    if(
+        !graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+        || !graphics().queryFeatureSupport(Core::Feature::RayTracingPipeline)
+    )
+        return true;
+
+    targets.shadowVisibilityFormat = Core::Format::R32_UINT;
+
+    Core::TextureDesc visibilityDesc;
+    visibilityDesc
+        .setWidth(targets.width)
+        .setHeight(targets.height)
+        .setFormat(targets.shadowVisibilityFormat)
+        .setInUAV(true)
+        .setName("engine/shadow/visibility")
+    ;
+    targets.shadowVisibility = graphics().createTexture(visibilityDesc);
+    if(!targets.shadowVisibility){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow visibility target"));
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    if(!targets.shadowVisibility)
+        return false;
+    if(!ensureShadowPipeline())
+        return false;
+    if(!ensureShadowBindingSet(targets))
+        return false;
+
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
+
+    // The binding set carries the TLAS, the G-buffer SRVs, the scene/light buffers and the visibility
+    // UAV; letting the command list derive their states keeps the accel-struct read, shader-resource
+    // and unordered-access transitions in one place instead of hand-listing each resource.
+    commandList.setResourceStatesForBindingSet(rayTracingState().m_shadowBindingSet.get());
+    commandList.commitBarriers();
+
+    Core::RayTracingState rayTracingPassState;
+    rayTracingPassState.setShaderTable(rayTracingState().m_shadowShaderTable.get());
+    rayTracingPassState.addBindingSet(rayTracingState().m_shadowBindingSet.get());
+    commandList.setRayTracingState(rayTracingPassState);
+
+    Core::RayTracingDispatchRaysArguments dispatchArgs;
+    dispatchArgs.setDimensions(targets.width, targets.height, 1u);
+    commandList.dispatchRays(dispatchArgs);
+    return true;
 }
 
 bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources){
@@ -236,6 +295,149 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
             , static_cast<u64>(meshResources.meshletPrimitiveIndexCount)
         );
     }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureShadowPipeline(){
+    if(rayTracingState().m_shadowPipeline)
+        return true;
+    if(rayTracingState().m_shadowPipelineFailed)
+        return false;
+    if(!graphics().queryFeatureSupport(Core::Feature::RayTracingPipeline)){
+        rayTracingState().m_shadowPipelineFailed = true;
+        return false;
+    }
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_shadowBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::AllRayTracing);
+        layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RT_BINDING_GBUFFER_WORLD_POSITION, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RT_BINDING_GBUFFER_NORMAL, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RT_BINDING_GBUFFER_DEPTH, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SHADOW_RT_BINDING_SCENE_SHADING, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_LIGHT_LIST, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, 1));
+
+        rayTracingState().m_shadowBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_shadowBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow binding layout"));
+            rayTracingState().m_shadowPipelineFailed = true;
+            return false;
+        }
+    }
+
+    Core::ShaderHandle raygenShader;
+    Core::ShaderHandle missShader;
+    Core::ShaderHandle closestHitShader;
+    if(
+        !m_renderer.shaderSystem().loadShader(raygenShader, AssetsGraphicsShadow::s_RaygenShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::RayGeneration, "ECSRender_ShadowRaygen")
+        || !m_renderer.shaderSystem().loadShader(missShader, AssetsGraphicsShadow::s_MissShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Miss, "ECSRender_ShadowMiss")
+        || !m_renderer.shaderSystem().loadShader(closestHitShader, AssetsGraphicsShadow::s_ClosestHitShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::ClosestHit, "ECSRender_ShadowClosestHit")
+    ){
+        rayTracingState().m_shadowPipelineFailed = true;
+        return false;
+    }
+
+    Core::RayTracingPipelineDesc pipelineDesc(arena());
+    pipelineDesc.setMaxPayloadSize(static_cast<u32>(sizeof(f32)));
+    pipelineDesc.setMaxRecursionDepth(1u);
+    pipelineDesc.addBindingLayout(rayTracingState().m_shadowBindingLayout);
+
+    Core::RayTracingPipelineShaderDesc raygenDesc(arena());
+    raygenDesc.setShader(raygenShader).setExportName("ShadowRayGen");
+    pipelineDesc.addShader(raygenDesc);
+
+    Core::RayTracingPipelineShaderDesc missDesc(arena());
+    missDesc.setShader(missShader).setExportName("ShadowMiss");
+    pipelineDesc.addShader(missDesc);
+
+    Core::RayTracingPipelineHitGroupDesc hitGroupDesc(arena());
+    hitGroupDesc.setClosestHitShader(closestHitShader).setExportName("ShadowHitGroup");
+    pipelineDesc.addHitGroup(hitGroupDesc);
+
+    rayTracingState().m_shadowPipeline = device->createRayTracingPipeline(pipelineDesc);
+    if(!rayTracingState().m_shadowPipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RT shadow pipeline"));
+        rayTracingState().m_shadowPipelineFailed = true;
+        return false;
+    }
+
+    Core::RayTracingShaderTableHandle shaderTable = rayTracingState().m_shadowPipeline->createShaderTable();
+    if(!shaderTable){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RT shadow shader table"));
+        rayTracingState().m_shadowPipelineFailed = true;
+        return false;
+    }
+    shaderTable->setRayGenerationShader("ShadowRayGen");
+    shaderTable->addMissShader("ShadowMiss");
+    shaderTable->addHitGroup("ShadowHitGroup");
+    rayTracingState().m_shadowShaderTable = Move(shaderTable);
+
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RT shadow pipeline + shader table"));
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targets){
+    NWB_ASSERT(rayTracingState().m_shadowBindingLayout);
+    NWB_ASSERT(rayTracingState().m_tlas);
+    NWB_ASSERT(targets.shadowVisibility);
+    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
+    NWB_ASSERT(deferredState().m_lightBuffer);
+
+    // The TLAS handle is the only binding input that can change without a target resize (it is
+    // recreated when the live instance count outgrows its capacity); a resize resets the binding set
+    // via resetDeferredFrameTargets, so caching against the TLAS pointer covers both rebuild triggers.
+    const Core::RayTracingAccelStruct* tlas = rayTracingState().m_tlas.get();
+    if(
+        rayTracingState().m_shadowBindingSet
+        && rayTracingState().m_shadowBindingSetTlas == tlas
+    )
+        return true;
+
+    Core::BindingSetDesc bindingSetDesc(arena());
+    bindingSetDesc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, rayTracingState().m_tlas.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_RT_BINDING_GBUFFER_WORLD_POSITION,
+        targets.worldPosition.get(),
+        targets.worldPositionFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_RT_BINDING_GBUFFER_NORMAL,
+        targets.normal.get(),
+        targets.normalFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_RT_BINDING_GBUFFER_DEPTH,
+        targets.depth.get(),
+        targets.depthFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SHADOW_RT_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT,
+        targets.shadowVisibility.get(),
+        targets.shadowVisibilityFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+
+    auto* device = graphics().getDevice();
+    rayTracingState().m_shadowBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_shadowBindingLayout);
+    if(!rayTracingState().m_shadowBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow binding set"));
+        rayTracingState().m_shadowBindingSetTlas = nullptr;
+        return false;
+    }
+    rayTracingState().m_shadowBindingSetTlas = tlas;
     return true;
 }
 

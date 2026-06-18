@@ -140,6 +140,8 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     csgState().m_intervalCombineBindingSet.reset();
     csgState().m_receiverSurfaceBindingSet.reset();
     csgState().m_intervalSampleBindingSet.reset();
+    rayTracingState().m_shadowBindingSet.reset();
+    rayTracingState().m_shadowBindingSetTlas = nullptr;
 
     deferredState().m_targets.framebuffer.reset();
     deferredState().m_targets.opaqueLightingFramebuffer.reset();
@@ -160,6 +162,7 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     deferredState().m_targets.csgRemovedIntervalCount.reset();
     deferredState().m_targets.opaqueColor.reset();
     deferredState().m_targets.depth.reset();
+    deferredState().m_targets.shadowVisibility.reset();
 
     deferredState().m_targets = DeferredFrameTargets{};
 }
@@ -376,6 +379,9 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
 
     if(!m_renderer.csgSystem().createCsgPeelTargets(createdTargets))
+        return false;
+
+    if(!m_renderer.raytracingSystem().createShadowVisibilityTarget(createdTargets))
         return false;
 
     Core::BindingSetDesc lightingBindingSetDesc(arena());

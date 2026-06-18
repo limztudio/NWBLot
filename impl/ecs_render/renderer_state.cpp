@@ -182,6 +182,12 @@ void RendererRayTracingState::invalidateResources(){
     m_tlas.reset();
     m_tlasMaxInstances = 0u;
     m_tlasDeviceAddress = 0u;
+    m_shadowShaderTable.reset();
+    m_shadowPipeline.reset();
+    m_shadowBindingLayout.reset();
+    m_shadowBindingSet.reset();
+    m_shadowBindingSetTlas = nullptr;
+    m_shadowPipelineFailed = false;
 }
 
 

@@ -185,6 +185,7 @@ class RendererDeferredState final : NoCopy{
     friend class RendererCsgSystem;
     friend class RendererDeferredSystem;
     friend class RendererAvboitSystem;
+    friend class RendererRayTracingSystem;
 
 public:
     RendererDeferredState() = default;
@@ -267,7 +268,13 @@ private:
     Core::RayTracingAccelStructHandle m_tlas;
     usize m_tlasMaxInstances = 0u;
     u64 m_tlasDeviceAddress = 0u;
+    Core::BindingLayoutHandle m_shadowBindingLayout;
+    Core::RayTracingPipelineHandle m_shadowPipeline;
+    Core::RayTracingShaderTableHandle m_shadowShaderTable;
+    Core::BindingSetHandle m_shadowBindingSet;
+    const Core::RayTracingAccelStruct* m_shadowBindingSetTlas = nullptr;
     bool m_capabilityLogged = false;
+    bool m_shadowPipelineFailed = false;
 };
 
 

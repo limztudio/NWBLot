@@ -123,6 +123,7 @@ private:
     [[nodiscard]] RendererMaterialSystem& materialSystem()noexcept{ return m_materialSystem; }
     [[nodiscard]] RendererCsgSystem& csgSystem()noexcept{ return m_csgSystem; }
     [[nodiscard]] RendererAvboitSystem& avboitSystem()noexcept{ return m_avboitSystem; }
+    [[nodiscard]] RendererRayTracingSystem& raytracingSystem()noexcept{ return m_raytracingSystem; }
 
 private:
     Core::Alloc::GlobalArena& m_arena;

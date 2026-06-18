@@ -1561,8 +1561,13 @@ bool CommandList::attachAccelStructBuildScratchBuffer(
     if(buildScratchSize == 0)
         return true;
 
+    // The build scratch device address must be aligned to minAccelerationStructureScratchOffsetAlignment (VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-03710).
+    // The buffer allocator does not guarantee that alignment, so over-allocate by the alignment and round the scratch address up into the buffer.
+    const u64 scratchAlignment = static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment);
+    const u64 scratchPadding = scratchAlignment > 1u ? scratchAlignment - 1u : 0u;
+
     BufferDesc scratchDesc;
-    scratchDesc.byteSize = buildScratchSize;
+    scratchDesc.byteSize = buildScratchSize + scratchPadding;
     scratchDesc.structStride = 1;
     scratchDesc.debugName = debugName;
 
@@ -1573,7 +1578,7 @@ bool CommandList::attachAccelStructBuildScratchBuffer(
         return false;
     }
 
-    buildInfo.scratchData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(scratchBuffer.get());
+    buildInfo.scratchData.deviceAddress = AlignUp<u64>(VulkanDetail::GetBufferDeviceAddress(scratchBuffer.get()), scratchAlignment);
     m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBuffer));
     return true;
 }
@@ -1783,13 +1788,24 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             buildGeometry(i);
     }
 
+    // An in-place refit (PerformUpdate) requires the structure to have been built with AllowUpdate and to already hold a built BLAS to read as the update source.
+    const bool performUpdate =
+        (buildFlags & RayTracingAccelStructBuildFlags::PerformUpdate)
+        && (buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)
+        && as->m_built
+    ;
+
     auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
     buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
         buildFlags,
         VulkanDetail::AccelStructCompactionMode::Allowed
     );
-    buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    buildInfo.mode = performUpdate
+        ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR
+        : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR
+    ;
+    buildInfo.srcAccelerationStructure = performUpdate ? as->m_accelStruct : VK_NULL_HANDLE;
     buildInfo.dstAccelerationStructure = as->m_accelStruct;
     buildInfo.geometryCount = static_cast<u32>(blasScratch.geometries.size());
     buildInfo.pGeometries = blasScratch.geometries.data();
@@ -1804,11 +1820,29 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
     }
 
-    if(!attachAccelStructBuildScratchBuffer(buildInfo, sizeInfo.buildScratchSize, "AS_BuildScratch", NWB_TEXT("allocate BLAS scratch buffer")))
+    const VkDeviceSize scratchSize = performUpdate ? sizeInfo.updateScratchSize : sizeInfo.buildScratchSize;
+    if(!attachAccelStructBuildScratchBuffer(buildInfo, scratchSize, "AS_BuildScratch", NWB_TEXT("allocate BLAS scratch buffer")))
         return;
+
+    // Rebuilding or refitting a BLAS in place writes (and an update also reads) the same acceleration-structure storage the previous build wrote. Insert an acceleration-structure
+    // write barrier so the prior build finishes first; on a single queue this also covers the cross-frame dependency for per-frame skinned refits.
+    if(as->m_built){
+        auto reuseBarrier = VulkanDetail::MakeVkStruct<VkMemoryBarrier2>(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
+        reuseBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        reuseBarrier.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+        reuseBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        reuseBarrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+        auto reuseDepInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+        reuseDepInfo.memoryBarrierCount = 1;
+        reuseDepInfo.pMemoryBarriers = &reuseBarrier;
+        vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &reuseDepInfo);
+    }
 
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = blasScratch.rangeInfos.data();
     vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfos);
+
+    as->m_built = true;
 
     if(transformBuffer)
         m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(transformBuffer));

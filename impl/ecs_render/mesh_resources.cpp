@@ -420,6 +420,8 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     createdMesh.meshletAttributeRefDeltaBuffer = desc.meshletAttributeRefDeltaBuffer;
     createdMesh.meshletLocalVertexRefBuffer = desc.meshletLocalVertexRefBuffer;
     createdMesh.meshletPrimitiveIndexBuffer = desc.meshletPrimitiveIndexBuffer;
+    createdMesh.triangleIndexBuffer = desc.triangleIndexBuffer;
+    createdMesh.blasBuildPending = (desc.triangleIndexBuffer != nullptr);
     createdMesh.meshletCount = desc.meshletCount;
     createdMesh.runtimeMesh = true;
     createdMesh.dynamicMeshletBoundsFresh = desc.dynamicMeshletBoundsFresh;

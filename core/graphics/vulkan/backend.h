@@ -1765,6 +1765,7 @@ private:
     BufferHandle m_buffer;
     u64 m_deviceAddress = 0;
     bool m_compacted = false;
+    bool m_built = false;
 
     VkQueryPool m_compactionQueryPool = VK_NULL_HANDLE;
     u32 m_compactionQueryIndex = 0;

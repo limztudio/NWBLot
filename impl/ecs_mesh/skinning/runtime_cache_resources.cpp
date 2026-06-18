@@ -4,11 +4,14 @@
 
 #include "runtime_cache.h"
 
+#include "arena_names.h"
 #include "resource_names.h"
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/graphics/module.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
+#include <impl/assets_mesh/meshlet_triangle_indices.h>
 #include <impl/assets_mesh/payload_validation.h>
 #include <impl/assets_mesh/skin_validation.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
@@ -201,7 +204,8 @@ template<typename PayloadT, typename PayloadVector>
     const PayloadVector& payload,
     const bool canHaveUavs,
     const tchar* label,
-    const bool canHaveRawViews = false
+    const bool canHaveRawViews = false,
+    const bool accelStructBuildInput = false
 ){
     const Name bufferName = DeriveRuntimeResourceName(
         instance.sourceName,
@@ -222,7 +226,7 @@ template<typename PayloadT, typename PayloadVector>
         graphics,
         bufferName,
         payload,
-        { canHaveUavs, canHaveRawViews },
+        { canHaveUavs, canHaveRawViews, accelStructBuildInput },
         buffer
     );
     switch(failure){
@@ -253,7 +257,8 @@ template<typename PayloadT, typename PayloadVector>
     const PayloadVector& payload,
     const bool canHaveUavs,
     const tchar* label,
-    const bool canHaveRawViews = false
+    const bool canHaveRawViews = false,
+    const bool accelStructBuildInput = false
 ){
     outBuffer = SetupRuntimeBuffer<PayloadT>(
         graphics,
@@ -262,7 +267,8 @@ template<typename PayloadT, typename PayloadVector>
         payload,
         canHaveUavs,
         label,
-        canHaveRawViews
+        canHaveRawViews,
+        accelStructBuildInput
     );
     return outBuffer != nullptr;
 }
@@ -280,6 +286,8 @@ template<typename PayloadT, typename PayloadVector>
 bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance){
     if(!__hidden_runtime_cache_resources::ValidateRuntimeMeshUploadPayload(m_arena, instance))
         return false;
+
+    const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
 
     bool uploaded = true;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float3U>(
@@ -316,7 +324,9 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("skinned_positions"),
         instance.restPositions,
         true,
-        NWB_TEXT("skinned position")
+        NWB_TEXT("skinned position"),
+        false,
+        rtSupported
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
         m_graphics,
@@ -421,6 +431,46 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         false,
         NWB_TEXT("attribute skin")
     ) && uploaded;
+
+    if(uploaded && rtSupported){
+        const usize indexCount = instance.meshletPrimitiveIndices.size();
+        Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_RuntimeBlasIndexArena, indexCount * sizeof(u32) + 4096u);
+        Vector<u32, Core::Alloc::ScratchArena> triangleIndices{ scratchArena };
+        triangleIndices.reserve(indexCount);
+        if(!BuildMeshletTriangleIndices(
+            instance.meshlets,
+            instance.meshletLocalVertexRefs,
+            instance.meshletPositionRefDeltas,
+            instance.meshletPrimitiveIndices,
+            instance.restPositions.size(),
+            triangleIndices
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'")
+                , instance.handle.value
+            );
+            return false;
+        }
+        if(triangleIndices.size() != indexCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: reconstructed ray tracing index count {} does not match expected {} for runtime mesh '{}'")
+                , static_cast<u64>(triangleIndices.size())
+                , static_cast<u64>(indexCount)
+                , instance.handle.value
+            );
+            return false;
+        }
+
+        uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<u32>(
+            m_graphics,
+            instance,
+            instance.triangleIndexBuffer,
+            AStringView("rt_triangle_indices"),
+            triangleIndices,
+            false,
+            NWB_TEXT("rt triangle index"),
+            false,
+            true
+        ) && uploaded;
+    }
 
     return uploaded;
 }

@@ -28,7 +28,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool buildStaticMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
+    [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
 };
 
 

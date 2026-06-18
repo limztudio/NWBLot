@@ -16,6 +16,16 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Number of in-place refits performed on a skinned BLAS before forcing a full rebuild. A refit
+// (in-place UPDATE) keeps the build-pose tree topology and only resizes the bounding boxes, so
+// traversal quality drifts as the pose moves away from the last full build; the periodic rebuild
+// restores it. This is the quality/cost knob for skinned ray-traced geometry.
+inline constexpr u32 s_BlasMaxRefitsBeforeRebuild = 8u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 RendererRayTracingSystem::RendererRayTracingSystem(RendererSystem& renderer)
     : RendererSystemSubsystemBase<RendererSystem>(renderer)
 {}
@@ -40,14 +50,23 @@ void RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandLi
     auto& meshes = meshState().m_meshes;
     for(auto it = meshes.begin(); it != meshes.end(); ++it){
         MeshResources& meshResources = it.value();
+
+        // Runtime (skinned/deforming) meshes change their vertex positions every
+        // frame, so their BLAS is rebuilt from the freshly skinned positions each
+        // frame. Static meshes build a BLAS once and clear the pending flag.
+        if(meshResources.runtimeMesh){
+            static_cast<void>(buildMeshBlas(commandList, meshResources));
+            continue;
+        }
+
         if(!meshResources.blasBuildPending)
             continue;
-        if(buildStaticMeshBlas(commandList, meshResources))
+        if(buildMeshBlas(commandList, meshResources))
             meshResources.blasBuildPending = false;
     }
 }
 
-bool RendererRayTracingSystem::buildStaticMeshBlas(Core::CommandList& commandList, MeshResources& meshResources){
+bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources){
     if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
         return false;
 
@@ -75,32 +94,56 @@ bool RendererRayTracingSystem::buildStaticMeshBlas(Core::CommandList& commandLis
         .setFlags(Core::RayTracingGeometryFlags::Opaque)
     ;
 
-    Core::RayTracingAccelStructDesc accelStructDesc(arena());
-    accelStructDesc.addBottomLevelGeometry(geometry);
-    accelStructDesc.setBuildFlags(Core::RayTracingAccelStructBuildFlags::PreferFastTrace);
-    accelStructDesc.setDebugName(DeriveName(meshResources.meshName, AStringView(":blas")));
+    // Runtime (skinned) meshes keep a single resident BLAS built with AllowUpdate and refit it in
+    // place from the freshly skinned positions each frame, forcing a full rebuild every
+    // s_BlasMaxRefitsBeforeRebuild frames to restore BVH quality. Static meshes build once.
+    Core::RayTracingAccelStructBuildFlags::Mask buildFlags = Core::RayTracingAccelStructBuildFlags::PreferFastTrace;
+    if(meshResources.runtimeMesh)
+        buildFlags |= Core::RayTracingAccelStructBuildFlags::AllowUpdate;
 
-    auto* device = graphics().getDevice();
-    Core::RayTracingAccelStructHandle blas = device->createAccelStruct(accelStructDesc);
-    if(!blas){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'")
-            , StringConvert(meshResources.meshName.c_str())
-        );
-        return false;
+    const bool firstBuild = !meshResources.blas;
+    if(firstBuild){
+        Core::RayTracingAccelStructDesc accelStructDesc(arena());
+        accelStructDesc.addBottomLevelGeometry(geometry);
+        accelStructDesc.setBuildFlags(buildFlags);
+        accelStructDesc.setDebugName(DeriveName(meshResources.meshName, AStringView(":blas")));
+
+        auto* device = graphics().getDevice();
+        Core::RayTracingAccelStructHandle blas = device->createAccelStruct(accelStructDesc);
+        if(!blas){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'")
+                , StringConvert(meshResources.meshName.c_str())
+            );
+            return false;
+        }
+        meshResources.blas = Move(blas);
+        meshResources.blasRefitsSinceRebuild = 0u;
     }
+
+    const bool performRefit =
+        meshResources.runtimeMesh
+        && !firstBuild
+        && meshResources.blasRefitsSinceRebuild < s_BlasMaxRefitsBeforeRebuild
+    ;
+    if(performRefit)
+        buildFlags |= Core::RayTracingAccelStructBuildFlags::PerformUpdate;
 
     commandList.setBufferState(meshResources.positionBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
     commandList.setBufferState(meshResources.triangleIndexBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
     commandList.commitBarriers();
 
-    commandList.buildBottomLevelAccelStruct(blas.get(), &geometry, 1u, Core::RayTracingAccelStructBuildFlags::PreferFastTrace);
+    commandList.buildBottomLevelAccelStruct(meshResources.blas.get(), &geometry, 1u, buildFlags);
 
-    meshResources.blas = Move(blas);
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built static BLAS for mesh '{}' ({} vertices, {} indices)")
-        , StringConvert(meshResources.meshName.c_str())
-        , static_cast<u64>(vertexCount)
-        , static_cast<u64>(meshResources.meshletPrimitiveIndexCount)
-    );
+    meshResources.blasRefitsSinceRebuild = performRefit ? (meshResources.blasRefitsSinceRebuild + 1u) : 0u;
+
+    if(firstBuild){
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")
+            , StringConvert(meshResources.meshName.c_str())
+            , meshResources.runtimeMesh
+            , static_cast<u64>(vertexCount)
+            , static_cast<u64>(meshResources.meshletPrimitiveIndexCount)
+        );
+    }
     return true;
 }
 

@@ -61,6 +61,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     Core::BindingSetHandle computeBindingSet;
     u32 meshletCount = 0;
     u32 meshletPrimitiveIndexCount = 0;
+    u32 blasRefitsSinceRebuild = 0u;   // refit count since the last full BLAS rebuild (runtime meshes)
     bool runtimeMesh = false;
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;

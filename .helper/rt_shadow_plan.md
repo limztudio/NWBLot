@@ -1,6 +1,6 @@
 # RT Shadow + Distance-Field Fallback Plan
 
-Updated: 2026-06-17
+Updated: 2026-06-18
 
 ## Goal
 
@@ -102,19 +102,30 @@ Work:
 - **Feature gating** (notes 48/49): `Core::Feature::RayTracingAccelStruct` / `RayTracingPipeline` / `RayQuery`, backed by feature structs + Volk entry points, selects HW vs SW backend.
 - **AS serialization (pipeline-cache style) is deferred**: the serialize/deserialize + `vkGetDeviceAccelerationStructureCompatibilityKHR` path mirrors `VkPipelineCache`, but AS builds are already fast, so it is a marginal, device-local optimization only — add later if load-time BLAS builds become a measured cost. Never cache TLAS or skinned BLAS.
 
-Phase 2 units: (1 ✅) RT capability gating + `RendererRayTracingSystem`/`RendererRayTracingState` skeleton; (2) static BLAS build+compact at load; (3) skinned BLAS per-frame refit; (4) per-frame TLAS from instances; (5) bindless instance table (minimal).
+Phase 2 units: (1 ✅) RT capability gating + `RendererRayTracingSystem`/`RendererRayTracingState` skeleton; (2 ✅) static BLAS build at load (compaction deferred); (3 ✅) skinned BLAS per-frame **refit** (in-place `MODE_UPDATE`) + periodic full rebuild on a resident `AllowUpdate` BLAS; runtime + validation-layer verified; (4) per-frame TLAS from instances; (5) bindless instance table (minimal).
 
 #### Unit 2 detail (decided: reconstruct the index buffer at runtime — do NOT cook it)
 
 Key realization: a BLAS reads the vertex+index buffers only **during the build**; afterward the AS is self-contained and no longer references them. So the index buffer is **transient build scaffolding**, not persistent geometry — no reason to cook it. The meshlet data already encodes the topology; expand it to a flat u32 index buffer at build time. **No asset-format change** (the earlier MSH5→MSH6 cook plan is dropped).
 
 - **Reconstruct on CPU at mesh load**, reusing the existing C++ decode helpers (`DecodeMeshletPositionRef`, [meshlet_ref_decode.h:284]) — meshlet streams are already in CPU memory at load; no compute shader; easy to verify. Produce a flat u32 array (positionStream-space, 3 per triangle, count == `meshletPrimitiveIndexCount`) → upload to a GPU buffer with `setIsAccelStructBuildInput(true)` + device address.
-  - ⚠ OPEN: verify the exact chain `meshletPrimitiveIndex(u8) → localPositionIndex` (direct vs via `meshletLocalVertexRef.localDeformedPosition`) against `nwbMeshBuildMeshletVertex` in `impl/assets/graphics/mesh/meshlet_payload.slangi` / `runtime.slangi`. Wrong chain = malformed BLAS.
+  - ✅ RESOLVED: chain is `primitiveIndices[u8] → meshletLocalVertexRefs[localVertexOffset + u8].localDeformedPosition → DecodeMeshletPositionRef → positionStream index` (matches `nwbMeshBuildMeshletVertex`). Implemented in [meshlet_triangle_indices.h] (shared core template; raw-stream + `MeshGeometryPayload` overloads). Runtime-verified — female mesh: 233118 indices == 678 meshlets × ~114.6 prims × 3, matches cook metrics.
 - **Lifetime:**
   - Static mesh: build BLAS (positionBuffer Float3U + transient index buffer; `PREFER_FAST_TRACE | ALLOW_COMPACTION`) → compact → **release the index buffer** after the build's GPU completion (tracked command buffers retain AS build inputs until done — note rules 50/53). positionBuffer just needs the AS-build-input usage flag (kept for rendering anyway).
-  - Skinned mesh (Unit 3): reconstruct the index buffer once at load, **keep it resident**; per-frame refit uses skinnedPositionBuffer (vertices) + the resident index buffer.
-- **Storage:** `RayTracingAccelStructHandle m_blas` on `MeshResources`; build/compact orchestrated by `RendererRayTracingSystem`, gated on `accelStructSupported()`. positionBuffer gains AS-build-input + device-address usage (gated on RT) in `mesh_resources.cpp`.
+  - Skinned mesh (Unit 3 ✅): reconstruct the index buffer once at upload (in `uploadRuntimeMeshBuffers`, gated on RT support), **keep it resident**; a resident `AllowUpdate` BLAS is **refit in place** (`MODE_UPDATE`) from skinnedPositionBuffer each frame, with a periodic full rebuild for BVH quality.
+- **Storage:** `RayTracingAccelStructHandle blas` on `MeshResources`; builds orchestrated by `RendererRayTracingSystem::buildMeshBlas` (serves both static + runtime), gated on `graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)`. position/index buffers gain AS-build-input usage **only when RT is supported** (static: `mesh_resources.cpp`; skinned: `runtime_cache_resources.cpp`).
 - (Future NV-only fast path: `VK_NV_cluster_acceleration_structure` lets meshlets feed the AS build directly — engine has stubs — but it's not portable, so not the default.)
+
+#### Unit 3 detail (skinned BLAS — DONE, runtime + validation-layer verified)
+
+- Reconstruction (`BuildMeshletTriangleIndices`) runs once in `MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers`, gated on a single `rtSupported`; uploads a resident `triangleIndexBuffer` (R32_UINT, AS-build-input). Topology is frame-invariant under skinning, so it is NOT re-decoded per frame. A count guard rejects `triangleIndices.size() != meshletPrimitiveIndexCount` (loud fail vs silent OOB). Scratch uses `SkinningArenaScope::s_RuntimeBlasIndexArena`.
+- `RuntimeMeshDesc`/`MeshResources` carry `triangleIndexBuffer` (RT-only, nullable, NOT in `valid()`); `createRuntimeMeshResources` sets `blasBuildPending = (triangleIndexBuffer != nullptr)`.
+- **Resident BLAS + refit**: `RendererRayTracingSystem::buildMeshBlas` creates the BLAS once (runtime ⇒ `PreferFastTrace | AllowUpdate`) and keeps it on `MeshResources::blas`. Each frame `buildPendingMeshBlas` (renderer CL, after the skinning pass) refits it in place via `MODE_UPDATE` from the fresh skinned positions, forcing a full rebuild every `s_BlasMaxRefitsBeforeRebuild` (=8) frames to restore BVH quality (refit keeps the build-pose tree topology; SAH cost drifts as the pose moves — see Catto's Dynamic BVH talk). Static meshes build once then clear `blasBuildPending`. Cadence tracked by `MeshResources::blasRefitsSinceRebuild`.
+- **Backend** (`buildBottomLevelAccelStruct`): honors `PerformUpdate` (mode=UPDATE + `srcAccelerationStructure` + `updateScratchSize`) gated on `AllowUpdate` + a per-AS `m_built` flag, and emits an acceleration-structure WRITE→WRITE/READ memory barrier before any re-build/refit (covers the cross-frame WAW on a single queue). `PerformUpdate` (0x20) is a mode signal only — `ConvertAccelStructBuildFlags` never maps it to a Vk flag.
+- **Scratch-alignment fix** (pre-existing latent bug, surfaced by validation): `attachAccelStructBuildScratchBuffer` now aligns `scratchData.deviceAddress` to `minAccelerationStructureScratchOffsetAlignment` (over-allocate + `AlignUp`) — VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-03710. Fixes both BLAS + TLAS scratch.
+- **Lifetime is safe**: `AccelStruct : RefCounter`; `buildBottomLevelAccelStruct` `retainResource`s the BLAS + its vertex/index inputs. With refit the BLAS is now **resident** (one AS + storage reused every frame — no per-frame alloc churn). (A 4-agent adversarial review's UAF/cross-CL-sync/index-race flags were each verified false positives.)
+- **Verified**: with Vulkan validation layers ON, a ~16s run (hundreds of refits + dozens of periodic rebuilds) produced ZERO validation messages; BLAS = `runtime true, 59586 vertices, 233118 indices`. To re-enable validation set `m_deviceCreationParams.enableDebugRuntime = true` in the `Graphics` ctor (SDK 1.4.341 + `VK_LAYER_KHRONOS_validation` installed).
+- **Remaining optimizations** (not blocking): skip refit/rebuild when the skinned pose didn't change this frame (needs a per-frame pose-dirty signal from the skinning system); per-AS (vs global) build barrier so multiple skinned-BLAS refits can overlap; BLAS compaction for static meshes.
 
 ### Phase 3 — SDF fallback foundation (software backend)
 

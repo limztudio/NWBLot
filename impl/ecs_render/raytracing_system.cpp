@@ -8,6 +8,8 @@
 
 #include <impl/assets/graphics/shadow/binding_slots.h>
 #include <impl/assets/graphics/shadow/names.h>
+#include <impl/assets/graphics/bvh/binding_slots.h>
+#include <impl/assets/graphics/bvh/names.h>
 #include <global/simdmath.h>
 
 
@@ -29,6 +31,18 @@ inline constexpr u32 s_BlasMaxRefitsBeforeRebuild = 8u;
 // Initial scene-TLAS instance capacity; grows by doubling when the live instance count exceeds it.
 inline constexpr usize s_TlasInitialInstanceCapacity = 128u;
 
+// Initial element capacity of the BVH Morton-sort scratch buffers (keys + payload); grows by doubling.
+inline constexpr usize s_BvhSortInitialCapacity = 1024u;
+
+// CPU mirror of the shader NwbBvhBitonicSortPushConstants block (one bitonic compare-exchange step).
+struct BvhSortPushConstants{
+    u32 elementCount = 0u;
+    u32 compareDistance = 0u;
+    u32 sequenceSize = 0u;
+    u32 pad0 = 0u;
+};
+static_assert(sizeof(BvhSortPushConstants) == sizeof(u32) * 4u, "BvhSortPushConstants must match the shader NwbBvhBitonicSortPushConstants layout");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -48,6 +62,10 @@ void RendererRayTracingSystem::logCapabilityOnce(){
         , graphics().queryFeatureSupport(Core::Feature::RayTracingPipeline)
         , graphics().queryFeatureSupport(Core::Feature::RayQuery)
     );
+
+#if defined(NWB_DEBUG)
+    runBvhSortSelfTest();
+#endif
 }
 
 bool RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandList){
@@ -449,6 +467,273 @@ bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targ
     rayTracingState().m_shadowBindingSetTlas = tlas;
     return true;
 }
+
+bool RendererRayTracingSystem::ensureBvhSortPipeline(){
+    if(rayTracingState().m_bvhSortPipeline)
+        return true;
+    if(rayTracingState().m_bvhSortPipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_bvhSortBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_SORT_BINDING_KEYS, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_SORT_BINDING_PAYLOAD, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhSortPushConstants)));
+
+        rayTracingState().m_bvhSortBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_bvhSortBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort binding layout"));
+            rayTracingState().m_bvhSortPipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_bvhSortShader,
+        AssetsGraphicsBvh::s_BitonicSortShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_BvhBitonicSort"
+    )){
+        rayTracingState().m_bvhSortPipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_bvhSortShader)
+        .addBindingLayout(rayTracingState().m_bvhSortBindingLayout)
+    ;
+    rayTracingState().m_bvhSortPipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_bvhSortPipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort compute pipeline"));
+        rayTracingState().m_bvhSortPipelineFailed = true;
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_bvhSortKeysBuffer || rayTracingState().m_bvhSortCapacity < paddedCount){
+        usize capacity = rayTracingState().m_bvhSortCapacity > 0u ? rayTracingState().m_bvhSortCapacity : s_BvhSortInitialCapacity;
+        while(capacity < paddedCount)
+            capacity *= 2u;
+
+        Core::BufferDesc keysBufferDesc;
+        keysBufferDesc
+            .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
+            .setStructStride(sizeof(u32))
+            .setCanHaveUAVs(true)
+            .setDebugName(Name("bvh_sort_keys"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        rayTracingState().m_bvhSortKeysBuffer = graphics().createBuffer(keysBufferDesc);
+        if(!rayTracingState().m_bvhSortKeysBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort keys buffer"));
+            return false;
+        }
+
+        Core::BufferDesc payloadBufferDesc;
+        payloadBufferDesc
+            .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
+            .setStructStride(sizeof(u32))
+            .setCanHaveUAVs(true)
+            .setDebugName(Name("bvh_sort_payload"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        rayTracingState().m_bvhSortPayloadBuffer = graphics().createBuffer(payloadBufferDesc);
+        if(!rayTracingState().m_bvhSortPayloadBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort payload buffer"));
+            return false;
+        }
+
+        rayTracingState().m_bvhSortCapacity = capacity;
+        rayTracingState().m_bvhSortBindingSet.reset();
+    }
+
+    const Core::Buffer* keysBuffer = rayTracingState().m_bvhSortKeysBuffer.get();
+    if(
+        rayTracingState().m_bvhSortBindingSet
+        && rayTracingState().m_bvhSortBindingSetKeys == keysBuffer
+    )
+        return true;
+
+    Core::BindingSetDesc bindingSetDesc(arena());
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_SORT_BINDING_KEYS, rayTracingState().m_bvhSortKeysBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_SORT_BINDING_PAYLOAD, rayTracingState().m_bvhSortPayloadBuffer.get()));
+
+    rayTracingState().m_bvhSortBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_bvhSortBindingLayout);
+    if(!rayTracingState().m_bvhSortBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort binding set"));
+        rayTracingState().m_bvhSortBindingSetKeys = nullptr;
+        return false;
+    }
+    rayTracingState().m_bvhSortBindingSetKeys = keysBuffer;
+    return true;
+}
+
+bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount){
+    NWB_ASSERT(rayTracingState().m_bvhSortPipeline);
+    NWB_ASSERT(rayTracingState().m_bvhSortBindingSet);
+    NWB_ASSERT(rayTracingState().m_bvhSortKeysBuffer);
+    NWB_ASSERT(rayTracingState().m_bvhSortPayloadBuffer);
+
+    // paddedCount must be a power of two and a multiple of the dispatch group size; the caller fills the
+    // sort buffers to it and pads the tail with sentinel keys that sort to the end.
+    if(paddedCount < static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE))
+        return false;
+
+    Core::Buffer* keysBuffer = rayTracingState().m_bvhSortKeysBuffer.get();
+    Core::Buffer* payloadBuffer = rayTracingState().m_bvhSortPayloadBuffer.get();
+
+    // Each (sequenceSize, compareDistance) step reads and writes the same buffers, so consecutive steps
+    // must be serialized with UAV barriers: enable per-buffer UAV barriers, then commit one per step.
+    commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
+
+    const u32 groupCount = paddedCount / static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE);
+    for(u32 sequenceSize = 2u; sequenceSize <= paddedCount; sequenceSize <<= 1u){
+        for(u32 compareDistance = sequenceSize >> 1u; compareDistance > 0u; compareDistance >>= 1u){
+            Core::ComputeState computeState;
+            computeState.setPipeline(rayTracingState().m_bvhSortPipeline.get());
+            computeState.addBindingSet(rayTracingState().m_bvhSortBindingSet.get());
+            commandList.setComputeState(computeState);
+
+            BvhSortPushConstants pushConstants;
+            pushConstants.elementCount = elementCount;
+            pushConstants.compareDistance = compareDistance;
+            pushConstants.sequenceSize = sequenceSize;
+            commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+            commandList.dispatch(groupCount, 1u, 1u);
+
+            commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
+            commandList.commitBarriers();
+        }
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_DEBUG)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererRayTracingSystem::runBvhSortSelfTest(){
+    if(rayTracingState().m_bvhSortSelfTestDone)
+        return;
+    rayTracingState().m_bvhSortSelfTestDone = true;
+
+    // A wrong sort silently corrupts every BVH built on top of it, so verify the kernel directly in debug
+    // builds: sort a reversed sequence with an identity payload and read it back. The ascending result must
+    // be exactly 0..elementCount-1, with the sentinel-padded tail still non-decreasing.
+    constexpr u32 elementCount = 1000u;
+    constexpr u32 paddedCount = 1024u;
+    static_assert(paddedCount >= static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE), "self-test padded count must cover one dispatch group");
+
+    if(!ensureBvhSortPipeline())
+        return;
+    if(!ensureBvhSortBuffers(paddedCount))
+        return;
+
+    auto* device = graphics().getDevice();
+
+    u32 inputKeys[paddedCount];
+    u32 inputPayload[paddedCount];
+    for(u32 i = 0u; i < paddedCount; ++i){
+        inputKeys[i] = i < elementCount ? (elementCount - 1u - i) : 0xFFFFFFFFu;
+        inputPayload[i] = i;
+    }
+
+    Core::BufferDesc readbackBufferDesc;
+    readbackBufferDesc
+        .setByteSize(static_cast<u64>(sizeof(u32) * paddedCount))
+        .setCpuAccess(Core::CpuAccessMode::Read)
+        .setDebugName(Name("bvh_sort_selftest_readback"))
+        .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
+    ;
+    Core::BufferHandle readbackBuffer = graphics().createBuffer(readbackBufferDesc);
+    if(!readbackBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort self-test readback buffer"));
+        return;
+    }
+
+    Core::CommandListHandle commandList = device->createCommandList();
+    if(!commandList){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort self-test command list"));
+        return;
+    }
+
+    commandList->open();
+    commandList->setBufferState(rayTracingState().m_bvhSortKeysBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList->setBufferState(rayTracingState().m_bvhSortPayloadBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList->commitBarriers();
+    commandList->writeBuffer(rayTracingState().m_bvhSortKeysBuffer.get(), inputKeys, sizeof(inputKeys));
+    commandList->writeBuffer(rayTracingState().m_bvhSortPayloadBuffer.get(), inputPayload, sizeof(inputPayload));
+    commandList->setBufferState(rayTracingState().m_bvhSortKeysBuffer.get(), Core::ResourceStates::UnorderedAccess);
+    commandList->setBufferState(rayTracingState().m_bvhSortPayloadBuffer.get(), Core::ResourceStates::UnorderedAccess);
+    commandList->commitBarriers();
+
+    if(!bvhBitonicSort(*commandList, elementCount, paddedCount)){
+        commandList->close();
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH sort self-test dispatch setup failed"));
+        return;
+    }
+
+    commandList->setBufferState(rayTracingState().m_bvhSortKeysBuffer.get(), Core::ResourceStates::CopySource);
+    commandList->commitBarriers();
+    commandList->copyBuffer(readbackBuffer.get(), 0u, rayTracingState().m_bvhSortKeysBuffer.get(), 0u, static_cast<u64>(sizeof(u32) * paddedCount));
+    commandList->close();
+
+    Core::CommandList* commandLists[] = { commandList.get() };
+    device->executeCommandLists(commandLists, 1u);
+    if(!device->waitForIdle()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH sort self-test wait-for-idle failed"));
+        return;
+    }
+
+    const u32* sortedKeys = static_cast<const u32*>(device->mapBuffer(readbackBuffer.get(), Core::CpuAccessMode::Read));
+    if(!sortedKeys){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to map BVH sort self-test readback buffer"));
+        return;
+    }
+
+    bool sorted = true;
+    for(u32 i = 0u; i < elementCount; ++i){
+        if(sortedKeys[i] != i){
+            sorted = false;
+            break;
+        }
+    }
+    for(u32 i = 0u; sorted && (i + 1u) < paddedCount; ++i){
+        if(sortedKeys[i] > sortedKeys[i + 1u]){
+            sorted = false;
+            break;
+        }
+    }
+    device->unmapBuffer(readbackBuffer.get());
+
+    if(sorted)
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BVH bitonic sort self-test PASSED ({} elements)"), elementCount);
+    else
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH bitonic sort self-test FAILED"));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

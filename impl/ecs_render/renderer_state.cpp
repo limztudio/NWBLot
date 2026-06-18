@@ -187,7 +187,16 @@ void RendererRayTracingState::invalidateResources(){
     m_shadowBindingLayout.reset();
     m_shadowBindingSet.reset();
     m_shadowBindingSetTlas = nullptr;
+    m_bvhSortBindingLayout.reset();
+    m_bvhSortShader.reset();
+    m_bvhSortPipeline.reset();
+    m_bvhSortKeysBuffer.reset();
+    m_bvhSortPayloadBuffer.reset();
+    m_bvhSortBindingSet.reset();
+    m_bvhSortBindingSetKeys = nullptr;
+    m_bvhSortCapacity = 0u;
     m_shadowPipelineFailed = false;
+    m_bvhSortPipelineFailed = false;
 }
 
 

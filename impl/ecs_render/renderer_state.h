@@ -273,8 +273,18 @@ private:
     Core::RayTracingShaderTableHandle m_shadowShaderTable;
     Core::BindingSetHandle m_shadowBindingSet;
     const Core::RayTracingAccelStruct* m_shadowBindingSetTlas = nullptr;
+    Core::BindingLayoutHandle m_bvhSortBindingLayout;
+    Core::ShaderHandle m_bvhSortShader;
+    Core::ComputePipelineHandle m_bvhSortPipeline;
+    Core::BufferHandle m_bvhSortKeysBuffer;
+    Core::BufferHandle m_bvhSortPayloadBuffer;
+    Core::BindingSetHandle m_bvhSortBindingSet;
+    const Core::Buffer* m_bvhSortBindingSetKeys = nullptr;
+    usize m_bvhSortCapacity = 0u;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;
+    bool m_bvhSortPipelineFailed = false;
+    bool m_bvhSortSelfTestDone = false;
 };
 
 

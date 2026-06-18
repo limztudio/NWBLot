@@ -37,6 +37,14 @@ private:
     [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
     [[nodiscard]] bool ensureShadowPipeline();
     [[nodiscard]] bool ensureShadowBindingSet(DeferredFrameTargets& targets);
+    [[nodiscard]] bool ensureBvhSortPipeline();
+    [[nodiscard]] bool ensureBvhSortBuffers(usize paddedCount);
+    [[nodiscard]] bool bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount);
+
+#if defined(NWB_DEBUG)
+private:
+    void runBvhSortSelfTest();
+#endif
 };
 
 

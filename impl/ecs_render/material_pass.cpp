@@ -53,7 +53,7 @@ struct MaterialTypedByteRangeKey{
 struct MaterialTypedByteRangeKeyHasher{
     usize operator()(const MaterialTypedByteRangeKey& key)const{
         usize seed = Hasher<Name>{}(key.materialName);
-        Core::CoreDetail::HashCombine(seed, key.typedLayoutHash);
+        ::HashCombine(seed, key.typedLayoutHash);
         return seed;
     }
 };

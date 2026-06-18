@@ -6,6 +6,7 @@
 
 
 #include "module.h"
+#include <global/command_line.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,19 +49,12 @@ inline auto ArgAddOption(CLI& cli, T& arg){
 
 template<typename CharT>
 [[nodiscard]] inline bool ArgHasValidArgv(const isize argc, CharT** argv){
-    return argc > 0 && argv != nullptr && argv[0] != nullptr;
+    return CommandLineHasValidArgv(argc, argv);
 }
 
 template<typename CLI, typename CharT>
 inline void ArgParseApp(CLI& cli, const isize argc, CharT** argv){
-    if(ArgHasValidArgv(argc, argv)){
-        cli.parse(static_cast<int>(argc), argv);
-        return;
-    }
-
-    CharT emptyProgramName[] = { CharT('\0') };
-    CharT* emptyArgv[] = { emptyProgramName, nullptr };
-    cli.parse(1, emptyArgv);
+    CommandLineParseApp(cli, argc, argv);
 }
 
 

@@ -76,7 +76,7 @@ struct MaterialTypedByteContentKey{
 struct MaterialTypedByteContentKeyHasher{
     usize operator()(const MaterialTypedByteContentKey& key)const{
         usize seed = Hasher<u64>{}(key.byteHash);
-        Core::CoreDetail::HashCombine(seed, key.bytes.size());
+        ::HashCombine(seed, key.bytes.size());
         return seed;
     }
 };

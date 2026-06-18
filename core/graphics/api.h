@@ -128,27 +128,6 @@ using CommandList = GraphicsBackend::CommandList;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace CoreDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename T>
-void HashCombine(usize& seed, const T& v){
-    ::HashCombine(seed, v);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 inline constexpr u32 s_MaxRenderTargets = 8;
 inline constexpr u32 s_MaxViewports = 16;
 inline constexpr u32 s_MaxVertexAttributes = 16;
@@ -3238,10 +3217,10 @@ template<>
 struct hash<NWB::Core::TextureSubresourceSet>{
     size_t operator()(NWB::Core::TextureSubresourceSet const& s)const noexcept{
         usize hash = 0;
-        NWB::Core::CoreDetail::HashCombine(hash, s.baseMipLevel);
-        NWB::Core::CoreDetail::HashCombine(hash, s.numMipLevels);
-        NWB::Core::CoreDetail::HashCombine(hash, s.baseArraySlice);
-        NWB::Core::CoreDetail::HashCombine(hash, s.numArraySlices);
+        ::HashCombine(hash, s.baseMipLevel);
+        ::HashCombine(hash, s.numMipLevels);
+        ::HashCombine(hash, s.baseArraySlice);
+        ::HashCombine(hash, s.numArraySlices);
         return static_cast<size_t>(hash);
     }
 };
@@ -3250,8 +3229,8 @@ template<>
 struct hash<NWB::Core::BufferRange>{
     size_t operator()(NWB::Core::BufferRange const& s)const noexcept{
         usize hash = 0;
-        NWB::Core::CoreDetail::HashCombine(hash, s.byteOffset);
-        NWB::Core::CoreDetail::HashCombine(hash, s.byteSize);
+        ::HashCombine(hash, s.byteOffset);
+        ::HashCombine(hash, s.byteSize);
         return static_cast<size_t>(hash);
     }
 };
@@ -3260,14 +3239,14 @@ template<>
 struct hash<NWB::Core::BindingSetItem>{
     size_t operator()(NWB::Core::BindingSetItem const& s)const noexcept{
         usize value = 0;
-        NWB::Core::CoreDetail::HashCombine(value, s.resourceHandle);
-        NWB::Core::CoreDetail::HashCombine(value, s.slot);
-        NWB::Core::CoreDetail::HashCombine(value, s.arrayElement);
-        NWB::Core::CoreDetail::HashCombine(value, s.type);
-        NWB::Core::CoreDetail::HashCombine(value, s.dimension);
-        NWB::Core::CoreDetail::HashCombine(value, s.format);
-        NWB::Core::CoreDetail::HashCombine(value, s.rawData[0]);
-        NWB::Core::CoreDetail::HashCombine(value, s.rawData[1]);
+        ::HashCombine(value, s.resourceHandle);
+        ::HashCombine(value, s.slot);
+        ::HashCombine(value, s.arrayElement);
+        ::HashCombine(value, s.type);
+        ::HashCombine(value, s.dimension);
+        ::HashCombine(value, s.format);
+        ::HashCombine(value, s.rawData[0]);
+        ::HashCombine(value, s.rawData[1]);
         return static_cast<size_t>(value);
     }
 };
@@ -3276,9 +3255,9 @@ template<>
 struct hash<NWB::Core::BindingSetDesc>{
     size_t operator()(NWB::Core::BindingSetDesc const& s)const noexcept{
         usize value = 0;
-        NWB::Core::CoreDetail::HashCombine(value, s.trackLiveness);
+        ::HashCombine(value, s.trackLiveness);
         for(const auto& item : s.bindings)
-            NWB::Core::CoreDetail::HashCombine(value, item);
+            ::HashCombine(value, item);
         return static_cast<size_t>(value);
     }
 };
@@ -3288,10 +3267,10 @@ struct hash<NWB::Core::FramebufferInfo>{
     size_t operator()(NWB::Core::FramebufferInfo const& s)const noexcept{
         usize hash = 0;
         for(const auto format : s.colorFormats)
-            NWB::Core::CoreDetail::HashCombine(hash, format);
-        NWB::Core::CoreDetail::HashCombine(hash, s.depthFormat);
-        NWB::Core::CoreDetail::HashCombine(hash, s.sampleCount);
-        NWB::Core::CoreDetail::HashCombine(hash, s.sampleQuality);
+            ::HashCombine(hash, format);
+        ::HashCombine(hash, s.depthFormat);
+        ::HashCombine(hash, s.sampleCount);
+        ::HashCombine(hash, s.sampleQuality);
         return static_cast<size_t>(hash);
     }
 };
@@ -3300,14 +3279,14 @@ template<>
 struct hash<NWB::Core::BlendState::RenderTarget>{
     size_t operator()(NWB::Core::BlendState::RenderTarget const& s)const noexcept{
         usize hash = 0;
-        NWB::Core::CoreDetail::HashCombine(hash, s.blendEnable);
-        NWB::Core::CoreDetail::HashCombine(hash, s.srcBlend);
-        NWB::Core::CoreDetail::HashCombine(hash, s.destBlend);
-        NWB::Core::CoreDetail::HashCombine(hash, s.blendOp);
-        NWB::Core::CoreDetail::HashCombine(hash, s.srcBlendAlpha);
-        NWB::Core::CoreDetail::HashCombine(hash, s.destBlendAlpha);
-        NWB::Core::CoreDetail::HashCombine(hash, s.blendOpAlpha);
-        NWB::Core::CoreDetail::HashCombine(hash, s.colorWriteMask);
+        ::HashCombine(hash, s.blendEnable);
+        ::HashCombine(hash, s.srcBlend);
+        ::HashCombine(hash, s.destBlend);
+        ::HashCombine(hash, s.blendOp);
+        ::HashCombine(hash, s.srcBlendAlpha);
+        ::HashCombine(hash, s.destBlendAlpha);
+        ::HashCombine(hash, s.blendOpAlpha);
+        ::HashCombine(hash, s.colorWriteMask);
         return static_cast<size_t>(hash);
     }
 };
@@ -3316,9 +3295,9 @@ template<>
 struct hash<NWB::Core::BlendState>{
     size_t operator()(NWB::Core::BlendState const& s)const noexcept{
         usize hash = 0;
-        NWB::Core::CoreDetail::HashCombine(hash, s.alphaToCoverageEnable);
+        ::HashCombine(hash, s.alphaToCoverageEnable);
         for(const auto& target : s.targets)
-            NWB::Core::CoreDetail::HashCombine(hash, target);
+            ::HashCombine(hash, target);
         return static_cast<size_t>(hash);
     }
 };
@@ -3327,10 +3306,10 @@ template<>
 struct hash<NWB::Core::VariableRateShadingState>{
     size_t operator()(NWB::Core::VariableRateShadingState const& s)const noexcept{
         usize hash = 0;
-        NWB::Core::CoreDetail::HashCombine(hash, s.enabled);
-        NWB::Core::CoreDetail::HashCombine(hash, s.shadingRate);
-        NWB::Core::CoreDetail::HashCombine(hash, s.pipelinePrimitiveCombiner);
-        NWB::Core::CoreDetail::HashCombine(hash, s.imageCombiner);
+        ::HashCombine(hash, s.enabled);
+        ::HashCombine(hash, s.shadingRate);
+        ::HashCombine(hash, s.pipelinePrimitiveCombiner);
+        ::HashCombine(hash, s.imageCombiner);
         return static_cast<size_t>(hash);
     }
 };

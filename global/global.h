@@ -20,6 +20,7 @@
 #include "containers.h"
 #include "fixed_buffer.h"
 #include "text_utils.h"
+#include "command_line.h"
 #include "environment.h"
 #include "process.h"
 #include "compact_string.h"
@@ -29,6 +30,7 @@
 #include "refcount_ptr.h"
 #include "simplemath.h"
 #include "simdmath.h"
+#include "math/frame.h"
 #include "timer.h"
 
 

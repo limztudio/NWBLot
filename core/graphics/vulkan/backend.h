@@ -958,9 +958,9 @@ inline bool operator==(const TextureViewKey& lhs, const TextureViewKey& rhs)noex
 struct TextureViewKeyHasher{
     usize operator()(const TextureViewKey& value)const noexcept{
         usize seed = 0;
-        CoreDetail::HashCombine(seed, value.subresources);
-        CoreDetail::HashCombine(seed, static_cast<u32>(value.dimension));
-        CoreDetail::HashCombine(seed, static_cast<u32>(value.format));
+        ::HashCombine(seed, value.subresources);
+        ::HashCombine(seed, static_cast<u32>(value.dimension));
+        ::HashCombine(seed, static_cast<u32>(value.format));
         return seed;
     }
 };
@@ -1175,7 +1175,7 @@ inline bool operator==(const ShaderLibraryKey& lhs, const ShaderLibraryKey& rhs)
 struct ShaderLibraryKeyHasher{
     usize operator()(const ShaderLibraryKey& value)const noexcept{
         usize seed = Hasher<GraphicsString>{}(value.entryName);
-        CoreDetail::HashCombine(seed, static_cast<u32>(value.shaderType));
+        ::HashCombine(seed, static_cast<u32>(value.shaderType));
         return seed;
     }
 };
@@ -1818,9 +1818,9 @@ struct TextureSubresourceStateKey{
 struct TextureSubresourceStateKeyHasher{
     [[nodiscard]] usize operator()(const TextureSubresourceStateKey& value)const noexcept{
         usize seed = 0;
-        CoreDetail::HashCombine(seed, value.texture);
-        CoreDetail::HashCombine(seed, value.mipLevel);
-        CoreDetail::HashCombine(seed, value.arraySlice);
+        ::HashCombine(seed, value.texture);
+        ::HashCombine(seed, value.mipLevel);
+        ::HashCombine(seed, value.arraySlice);
         return seed;
     }
 };

@@ -16,15 +16,15 @@ NWB_IMPL_BEGIN
 
 usize MaterialPipelineKeyHasher::operator()(const MaterialPipelineKey& key)const{
     usize seed = Hasher<Name>{}(key.material);
-    Core::CoreDetail::HashCombine(seed, static_cast<u32>(key.pass));
-    Core::CoreDetail::HashCombine(seed, key.twoSided ? 1u : 0u);
-    Core::CoreDetail::HashCombine(seed, static_cast<u32>(key.csgMode));
-    Core::CoreDetail::HashCombine(seed, Hasher<Name>{}(key.csgEvaluatorVariant));
-    Core::CoreDetail::HashCombine(seed, key.framebufferInfo.depthFormat);
-    Core::CoreDetail::HashCombine(seed, key.framebufferInfo.sampleCount);
-    Core::CoreDetail::HashCombine(seed, key.framebufferInfo.sampleQuality);
+    ::HashCombine(seed, static_cast<u32>(key.pass));
+    ::HashCombine(seed, key.twoSided ? 1u : 0u);
+    ::HashCombine(seed, static_cast<u32>(key.csgMode));
+    ::HashCombine(seed, Hasher<Name>{}(key.csgEvaluatorVariant));
+    ::HashCombine(seed, key.framebufferInfo.depthFormat);
+    ::HashCombine(seed, key.framebufferInfo.sampleCount);
+    ::HashCombine(seed, key.framebufferInfo.sampleQuality);
     for(const Core::Format::Enum format : key.framebufferInfo.colorFormats)
-        Core::CoreDetail::HashCombine(seed, format);
+        ::HashCombine(seed, format);
 
     return seed;
 }

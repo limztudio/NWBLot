@@ -4,14 +4,11 @@
 
 #include "system.h"
 
-#include <core/assets/manager.h>
 #include <core/graphics/module.h>
 #include <core/graphics/shader_archive.h>
-#include <core/graphics/shader_stage_names.h>
-#include <global/text_utils.h>
 #include <impl/assets/graphics/imgui/binding_slots.h>
 #include <impl/assets/graphics/imgui/names.h>
-#include <impl/assets_shader/asset.h>
+#include <impl/assets_shader/loader.h>
 #include <core/common/log.h>
 
 #include <cstddef>
@@ -63,63 +60,26 @@ static Core::RenderState BuildUiRenderState(){
     return renderState;
 }
 
-static Core::ShaderHandle CreateShaderFromAsset(
-    Core::GraphicsArena& arena,
+static bool LoadShader(
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
     UiSystem::ShaderPathResolveCallback& shaderPathResolver,
+    Core::ShaderHandle& outShader,
     const Name& shaderName,
     const Core::ShaderType::Mask shaderType,
     const Name& debugName
 ){
-    if(!shaderPathResolver){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: shader path resolver is null"));
-        return nullptr;
-    }
-
-    const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
-    if(!stageName){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: unsupported shader stage {}"), static_cast<u32>(shaderType));
-        return nullptr;
-    }
-
-    Name shaderVirtualPath = NAME_NONE;
-    if(!shaderPathResolver(shaderName, Core::ShaderArchive::s_DefaultVariant, stageName, shaderVirtualPath)){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to resolve shader '{}' stage '{}'")
-            , StringConvert(shaderName.c_str())
-            , StringConvert(stageName.c_str())
-        );
-        return nullptr;
-    }
-
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!assetManager.loadSync(Shader::AssetTypeName(), shaderVirtualPath, loadedAsset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to load shader asset '{}'"), StringConvert(shaderVirtualPath.c_str()));
-        return nullptr;
-    }
-    if(!loadedAsset || loadedAsset->assetType() != Shader::AssetTypeName()){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: asset '{}' is not a shader"), StringConvert(shaderVirtualPath.c_str()));
-        return nullptr;
-    }
-
-    const Shader& shaderAsset = static_cast<const Shader&>(*loadedAsset);
-    const Core::Assets::AssetBytes& shaderBinary = shaderAsset.bytecode();
-    if(shaderBinary.empty() || (shaderBinary.size() & 3u) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: shader asset '{}' has invalid bytecode")
-            , StringConvert(shaderVirtualPath.c_str())
-        );
-        return nullptr;
-    }
-
-    Core::ShaderDesc shaderDesc(arena);
-    shaderDesc.setShaderType(shaderType).setDebugName(debugName);
-    Core::ShaderHandle shader = graphics.getDevice()->createShader(shaderDesc, shaderBinary.data(), shaderBinary.size());
-    if(!shader){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create shader '{}'"), StringConvert(debugName.c_str()));
-        return nullptr;
-    }
-
-    return shader;
+    return ShaderAssetLoader::Load(
+        outShader,
+        shaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        shaderType,
+        debugName,
+        graphics,
+        assetManager,
+        shaderPathResolver,
+        NWB_TEXT("UiSystem")
+    );
 }
 
 
@@ -193,30 +153,28 @@ bool UiSystem::ensureRenderResources(Core::Framebuffer* framebuffer){
 
 bool UiSystem::ensureShadersLoaded(){
     if(!m_vertexShader){
-        m_vertexShader = __hidden_ui::CreateShaderFromAsset(
-            m_arena,
+        if(!__hidden_ui::LoadShader(
             m_graphics,
             m_assetManager,
             m_shaderPathResolver,
+            m_vertexShader,
             AssetsGraphicsImGui::s_VertexShaderName,
             Core::ShaderType::Vertex,
             Name("ECSUI_ImGuiVS")
-        );
-        if(!m_vertexShader)
+        ))
             return false;
     }
 
     if(!m_pixelShader){
-        m_pixelShader = __hidden_ui::CreateShaderFromAsset(
-            m_arena,
+        if(!__hidden_ui::LoadShader(
             m_graphics,
             m_assetManager,
             m_shaderPathResolver,
+            m_pixelShader,
             AssetsGraphicsImGui::s_PixelShaderName,
             Core::ShaderType::Pixel,
             Name("ECSUI_ImGuiPS")
-        );
-        if(!m_pixelShader)
+        ))
             return false;
     }
 

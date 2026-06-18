@@ -32,7 +32,6 @@
 #include <impl/assets/graphics/scene/binding_slots.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_material/shader_stage_names.h>
-#include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/loader.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>

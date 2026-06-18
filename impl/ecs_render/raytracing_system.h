@@ -45,6 +45,7 @@ private:
     [[nodiscard]] bool ensureBvhBuildBuffers(usize primitiveCount);
     [[nodiscard]] bool ensureBvhBuildBindingSet(Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer);
     [[nodiscard]] bool buildMeshSwBvh(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax);
+    [[nodiscard]] bool refitMeshSwBvh(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount);
 
 #if defined(NWB_DEBUG)
 private:

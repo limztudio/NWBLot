@@ -32,8 +32,8 @@ struct NwbBvhNode{
 struct NwbBvhBuildPushConstants{
     uint primitiveCount;
     uint internalCount;
+    uint refitMode;
     uint pad0;
-    uint pad1;
     float4 aabbMin;
     float4 aabbMax;
 };

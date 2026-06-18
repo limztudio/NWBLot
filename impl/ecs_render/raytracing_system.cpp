@@ -58,8 +58,8 @@ static_assert(sizeof(NwbBvhNodeGpu) == 32u, "NwbBvhNodeGpu must match the shader
 struct BvhBuildPushConstants{
     u32 primitiveCount = 0u;
     u32 internalCount = 0u;
+    u32 refitMode = 0u;
     u32 pad0 = 0u;
-    u32 pad1 = 0u;
     Float4 aabbMin = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     Float4 aabbMax = Float4(0.0f, 0.0f, 0.0f, 0.0f);
 };
@@ -907,6 +907,51 @@ bool RendererRayTracingSystem::buildMeshSwBvh(
     return true;
 }
 
+bool RendererRayTracingSystem::refitMeshSwBvh(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount){
+    if(primitiveCount == 0u)
+        return false;
+    if(!ensureBvhBuildPipeline())
+        return false;
+    if(!ensureBvhBuildBuffers(primitiveCount))
+        return false;
+    if(!ensureBvhBuildBindingSet(positionBuffer, triangleIndexBuffer))
+        return false;
+
+    Core::Buffer* nodeBuffer = rayTracingState().m_bvhNodeBuffer.get();
+    Core::Buffer* parentBuffer = rayTracingState().m_bvhParentBuffer.get();
+    Core::Buffer* visitCounterBuffer = rayTracingState().m_bvhVisitCounterBuffer.get();
+
+    BvhBuildPushConstants pushConstants;
+    pushConstants.primitiveCount = primitiveCount;
+    pushConstants.internalCount = primitiveCount - 1u;
+    pushConstants.refitMode = 1u;
+
+    // A refit reuses the sorted topology, child links, and per-leaf primitive from the last full build, so
+    // only the rendezvous counters reset; the fit pass recomputes every box from the current positions.
+    commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.clearBufferUInt(visitCounterBuffer, 0u);
+
+    commandList.setEnableUavBarriersForBuffer(nodeBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(parentBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
+    commandList.setBufferState(nodeBuffer, Core::ResourceStates::UnorderedAccess);
+    commandList.setBufferState(parentBuffer, Core::ResourceStates::UnorderedAccess);
+    commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::UnorderedAccess);
+    commandList.commitBarriers();
+
+    Core::ComputeState computeState;
+    computeState.setPipeline(rayTracingState().m_bvhFitPipeline.get());
+    computeState.addBindingSet(rayTracingState().m_bvhBuildBindingSet.get());
+    commandList.setComputeState(computeState);
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+    commandList.dispatch(DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)), 1u, 1u);
+
+    commandList.setBufferState(nodeBuffer, Core::ResourceStates::UnorderedAccess);
+    commandList.commitBarriers();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1184,6 +1229,62 @@ void RendererRayTracingSystem::runBvhBuildSelfTest(){
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BVH build self-test PASSED ({} triangles, {} nodes)"), triangleCount, nodeCount);
     else
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH build self-test FAILED"));
+
+    // Refit phase: translate every vertex and refit the EXISTING topology. A refit reuses the build-pose
+    // tree and only recomputes boxes from the current positions, so the root box must track the translation.
+    for(u32 vertex = 0u; vertex < vertexCount; ++vertex)
+        positionData[vertex * 3u + 0u] += 5.0f;
+    const SIMDVector refitOffset = VectorSet(5.0f, 0.0f, 0.0f, 0.0f);
+    const SIMDVector refitMin = VectorAdd(boundsMinVector, refitOffset);
+    const SIMDVector refitMax = VectorAdd(boundsMaxVector, refitOffset);
+
+    Core::BufferHandle refitReadbackBuffer = graphics().createBuffer(readbackBufferDesc);
+    Core::CommandListHandle refitCommandList = device->createCommandList();
+    if(!refitReadbackBuffer || !refitCommandList){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH refit self-test resources"));
+        return;
+    }
+
+    refitCommandList->open();
+    refitCommandList->setBufferState(positionBuffer.get(), Core::ResourceStates::CopyDest);
+    refitCommandList->commitBarriers();
+    refitCommandList->writeBuffer(positionBuffer.get(), positionData, sizeof(positionData));
+    refitCommandList->setBufferState(positionBuffer.get(), Core::ResourceStates::ShaderResource);
+    refitCommandList->commitBarriers();
+
+    if(!refitMeshSwBvh(*refitCommandList, positionBuffer.get(), indexBuffer.get(), triangleCount)){
+        refitCommandList->close();
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH refit self-test refit failed"));
+        return;
+    }
+
+    refitCommandList->setBufferState(rayTracingState().m_bvhNodeBuffer.get(), Core::ResourceStates::CopySource);
+    refitCommandList->commitBarriers();
+    refitCommandList->copyBuffer(refitReadbackBuffer.get(), 0u, rayTracingState().m_bvhNodeBuffer.get(), 0u, static_cast<u64>(sizeof(NwbBvhNodeGpu) * nodeCount));
+    refitCommandList->close();
+
+    Core::CommandList* refitCommandLists[] = { refitCommandList.get() };
+    device->executeCommandLists(refitCommandLists, 1u);
+    if(!device->waitForIdle()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH refit self-test wait-for-idle failed"));
+        return;
+    }
+
+    const NwbBvhNodeGpu* refitNodes = static_cast<const NwbBvhNodeGpu*>(device->mapBuffer(refitReadbackBuffer.get(), Core::CpuAccessMode::Read));
+    if(!refitNodes){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to map BVH refit self-test readback buffer"));
+        return;
+    }
+    const bool refitValid =
+        Vector3LessOrEqual(VectorAbs(VectorSubtract(LoadFloatInt(refitNodes[0].aabbMinLeftChild), refitMin)), epsilonVector)
+        && Vector3LessOrEqual(VectorAbs(VectorSubtract(LoadFloatInt(refitNodes[0].aabbMaxRightChild), refitMax)), epsilonVector)
+    ;
+    device->unmapBuffer(refitReadbackBuffer.get());
+
+    if(refitValid)
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BVH refit self-test PASSED ({} triangles)"), triangleCount);
+    else
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH refit self-test FAILED"));
 }
 
 

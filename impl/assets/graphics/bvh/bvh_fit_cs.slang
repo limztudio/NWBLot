@@ -49,7 +49,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint internalCount = g_NwbBvhBuildPushConstants.internalCount;
     const uint leafNodeIndex = internalCount + leaf;
 
-    const uint triangle = g_NwbBvhPayload[leaf];
+    // A full build reads the triangle from the freshly sorted payload and stores it in the leaf; a refit
+    // keeps the build-pose topology and reuses the primitive the leaf already holds, so it only recomputes
+    // boxes from the new (e.g. skinned) positions and leaves the child links untouched.
+    const bool refit = g_NwbBvhBuildPushConstants.refitMode != 0u;
+    const uint triangle = refit
+        ? (g_NwbBvhNodes[leafNodeIndex].leftChild & ~NWB_BVH_LEAF_FLAG)
+        : g_NwbBvhPayload[leaf];
     const uint indexBase = triangle * 3u;
     const uint i0 = g_NwbBvhTriangleIndices.Load(indexBase * 4u);
     const uint i1 = g_NwbBvhTriangleIndices.Load((indexBase + 1u) * 4u);
@@ -58,12 +64,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 p1 = asfloat(g_NwbBvhPositions.Load3(i1 * 12u));
     const float3 p2 = asfloat(g_NwbBvhPositions.Load3(i2 * 12u));
 
-    NwbBvhNode leafNode;
-    leafNode.aabbMin = min(p0, min(p1, p2));
-    leafNode.aabbMax = max(p0, max(p1, p2));
-    leafNode.leftChild = NWB_BVH_LEAF_FLAG | triangle;
-    leafNode.rightChild = 1u;
-    g_NwbBvhNodes[leafNodeIndex] = leafNode;
+    g_NwbBvhNodes[leafNodeIndex].aabbMin = min(p0, min(p1, p2));
+    g_NwbBvhNodes[leafNodeIndex].aabbMax = max(p0, max(p1, p2));
+    if(!refit){
+        g_NwbBvhNodes[leafNodeIndex].leftChild = NWB_BVH_LEAF_FLAG | triangle;
+        g_NwbBvhNodes[leafNodeIndex].rightChild = 1u;
+    }
 
     DeviceMemoryBarrier();
 

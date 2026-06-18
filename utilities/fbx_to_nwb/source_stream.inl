@@ -230,6 +230,26 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 }
 
 [[nodiscard]] TriangleAreaNormal64 BuildTriangleAreaNormal64(const Vec3& a, const Vec3& b, const Vec3& c){
+#if defined(NWB_HAS_AVX2)
+    const __m256d av = _mm256_set_pd(0.0, static_cast<f64>(a.z), static_cast<f64>(a.y), static_cast<f64>(a.x));
+    const __m256d bv = _mm256_set_pd(0.0, static_cast<f64>(b.z), static_cast<f64>(b.y), static_cast<f64>(b.x));
+    const __m256d cv = _mm256_set_pd(0.0, static_cast<f64>(c.z), static_cast<f64>(c.y), static_cast<f64>(c.x));
+    const __m256d ab = _mm256_sub_pd(bv, av);
+    const __m256d ac = _mm256_sub_pd(cv, av);
+    const __m256d abYzx = _mm256_permute4x64_pd(ab, _MM_SHUFFLE(3, 0, 2, 1));
+    const __m256d abZxy = _mm256_permute4x64_pd(ab, _MM_SHUFFLE(3, 1, 0, 2));
+    const __m256d acYzx = _mm256_permute4x64_pd(ac, _MM_SHUFFLE(3, 0, 2, 1));
+    const __m256d acZxy = _mm256_permute4x64_pd(ac, _MM_SHUFFLE(3, 1, 0, 2));
+    const __m256d cross = _mm256_sub_pd(_mm256_mul_pd(abYzx, acZxy), _mm256_mul_pd(abZxy, acYzx));
+
+    alignas(32) f64 areaNormal[4];
+    _mm256_store_pd(areaNormal, cross);
+    return TriangleAreaNormal64{
+        areaNormal[0],
+        areaNormal[1],
+        areaNormal[2],
+    };
+#else
     const f64 abX = static_cast<f64>(b.x) - static_cast<f64>(a.x);
     const f64 abY = static_cast<f64>(b.y) - static_cast<f64>(a.y);
     const f64 abZ = static_cast<f64>(b.z) - static_cast<f64>(a.z);
@@ -241,10 +261,21 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
         abZ * acX - abX * acZ,
         abX * acY - abY * acX,
     };
+#endif
 }
 
 [[nodiscard]] f64 TriangleAreaNormalLengthSquared(const TriangleAreaNormal64& areaNormal){
+#if defined(NWB_HAS_AVX2)
+    const __m256d normal = _mm256_set_pd(0.0, areaNormal.z, areaNormal.y, areaNormal.x);
+    const __m256d squared = _mm256_mul_pd(normal, normal);
+    const __m128d low = _mm256_castpd256_pd128(squared);
+    const __m128d high = _mm256_extractf128_pd(squared, 1);
+    __m128d sum = _mm_add_pd(low, high);
+    sum = _mm_add_sd(sum, _mm_unpackhi_pd(sum, sum));
+    return _mm_cvtsd_f64(sum);
+#else
     return areaNormal.x * areaNormal.x + areaNormal.y * areaNormal.y + areaNormal.z * areaNormal.z;
+#endif
 }
 
 [[nodiscard]] bool TriangleHasArea(

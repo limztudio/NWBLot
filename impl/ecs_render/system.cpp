@@ -191,11 +191,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         bool shadowTlasReady = false;
         if(m_raytracingSystem.buildPendingMeshBlas(*commandList))
             shadowTlasReady = m_raytracingSystem.buildSceneTlas(*commandList, scratchArena);
-        else
+        else{
             // No hardware ray tracing: build/refit the per-mesh software BVHs from the (already skinned)
             // geometry instead. The traversal pass that consumes them lands in a later unit; for now this
             // keeps the BVHs current so that path can be wired without a build-cadence gap.
-            static_cast<void>(m_raytracingSystem.buildPendingMeshSwBvh(*commandList));
+            const bool softwareShadowBvhReady = m_raytracingSystem.buildPendingMeshSwBvh(*commandList);
+            if(!softwareShadowBvhReady)
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH update failed"));
+        }
 
         MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
         InstanceGpuDataVector instanceData{scratchArena};

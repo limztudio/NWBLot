@@ -107,8 +107,20 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     }
     createdInfo.shaderVariant.assign(material.shaderVariant().data(), material.shaderVariant().size());
 
-    (void)material.findShaderForStage(Core::ShaderType::PixelStage, createdInfo.pixelShader);
-    (void)material.findShaderForStage(Core::ShaderType::MeshStage, createdInfo.meshShader);
+    const bool hasPixelShader = material.findShaderForStage(Core::ShaderType::PixelStage, createdInfo.pixelShader);
+    const bool hasMeshShader = material.findShaderForStage(Core::ShaderType::MeshStage, createdInfo.meshShader);
+    if(!hasMeshShader){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing required mesh shader")
+            , StringConvert(materialPath.c_str())
+        );
+        return false;
+    }
+    if(!hasPixelShader && !material.transparent()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: opaque material '{}' is missing required pixel shader")
+            , StringConvert(materialPath.c_str())
+        );
+        return false;
+    }
 
     if(!material.materialInterface()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing required material interface")

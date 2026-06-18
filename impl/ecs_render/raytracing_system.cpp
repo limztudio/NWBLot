@@ -131,6 +131,7 @@ bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandL
     if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
 
+    bool allBuildsReady = true;
     auto& meshes = meshState().m_meshes;
     for(auto it = meshes.begin(); it != meshes.end(); ++it){
         MeshResources& meshResources = it.value();
@@ -138,8 +139,12 @@ bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandL
         // Runtime (skinned/deforming) meshes update their software BVH every frame from the freshly skinned
         // positions; static meshes build once and clear the pending flag.
         if(meshResources.runtimeMesh){
-            if(!updateMeshSwBvh(commandList, meshResources))
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: runtime mesh software BVH update failed"));
+            if(!updateMeshSwBvh(commandList, meshResources)){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: runtime mesh '{}' software BVH update failed")
+                    , StringConvert(meshResources.meshName.c_str())
+                );
+                allBuildsReady = false;
+            }
             continue;
         }
 
@@ -147,8 +152,14 @@ bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandL
             continue;
         if(updateMeshSwBvh(commandList, meshResources))
             meshResources.swBvhBuildPending = false;
+        else{
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: static mesh '{}' software BVH build failed")
+                , StringConvert(meshResources.meshName.c_str())
+            );
+            allBuildsReady = false;
+        }
     }
-    return true;
+    return allBuildsReady;
 }
 
 bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){

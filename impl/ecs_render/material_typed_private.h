@@ -239,43 +239,45 @@ template<typename MaterialTypedByteVector>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ValidateMaterialTypedUploadRange(
+inline void AssertMaterialTypedUploadRange(
     const MaterialTypedByteRange& range,
     const usize uploadByteCount,
-    const tchar* rangeName
+    [[maybe_unused]] const tchar* rangeName
 ){
     if(range.byteCount == 0u){
-        if(MaterialTypedByteRangeEmptyOffsetValid(range))
-            return true;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} material typed byte range has zero count with nonzero offset"), rangeName);
-        return false;
+        NWB_ASSERT_MSG(
+            MaterialTypedByteRangeEmptyOffsetValid(range),
+            NWB_TEXT("RendererSystem: {} material typed byte range has zero count with nonzero offset"),
+            rangeName
+        );
+        return;
     }
 
-    if(((range.byteOffset | range.byteCount) & static_cast<u32>(NWB_MATERIAL_TYPED_WORD_BYTES - 1u)) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} material typed byte range is not word-aligned"), rangeName);
-        return false;
-    }
+    NWB_ASSERT_MSG(
+        ((range.byteOffset | range.byteCount) & static_cast<u32>(NWB_MATERIAL_TYPED_WORD_BYTES - 1u)) == 0u,
+        NWB_TEXT("RendererSystem: {} material typed byte range is not word-aligned"),
+        rangeName
+    );
 
     const usize byteOffset = static_cast<usize>(range.byteOffset);
-    if(byteOffset > uploadByteCount || static_cast<usize>(range.byteCount) > uploadByteCount - byteOffset){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} material typed byte range exceeds upload data"), rangeName);
-        return false;
-    }
-
-    return true;
+    NWB_ASSERT_MSG(
+        byteOffset <= uploadByteCount,
+        NWB_TEXT("RendererSystem: {} material typed byte range offset exceeds upload data"),
+        rangeName
+    );
+    NWB_ASSERT_MSG(
+        byteOffset <= uploadByteCount && static_cast<usize>(range.byteCount) <= uploadByteCount - byteOffset,
+        NWB_TEXT("RendererSystem: {} material typed byte range exceeds upload data"),
+        rangeName
+    );
 }
 
-[[nodiscard]] inline bool ValidateMaterialTypedInstanceRange(
+inline void AssertMaterialTypedInstanceRange(
     const MaterialTypedInstanceRanges& ranges,
     const usize uploadByteCount
 ){
-    if(!ValidateMaterialTypedUploadRange(ranges.constantRange, uploadByteCount, NWB_TEXT("constant")))
-        return false;
-    if(!ValidateMaterialTypedUploadRange(ranges.mutableRange, uploadByteCount, NWB_TEXT("mutable")))
-        return false;
-
-    return true;
+    AssertMaterialTypedUploadRange(ranges.constantRange, uploadByteCount, NWB_TEXT("constant"));
+    AssertMaterialTypedUploadRange(ranges.mutableRange, uploadByteCount, NWB_TEXT("mutable"));
 }
 
 struct MaterialTypedInstanceRangeVector{
@@ -296,23 +298,26 @@ private:
 };
 
 template<typename MaterialTypedByteVector>
-[[nodiscard]] inline bool ValidateMaterialTypedUploadRanges(
+inline void AssertMaterialTypedUploadRanges(
     const MaterialTypedInstanceRangeVector& instanceRanges,
     const MaterialTypedByteVector& materialTypedBytes
 ){
     if(instanceRanges.empty())
-        return true;
+        return;
 
-    usize uploadByteCount = 0u;
-    if(!ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadByteCount))
-        return false;
+    const usize uploadByteCount = materialTypedBytes.size();
+    NWB_ASSERT_MSG(
+        uploadByteCount != 0u,
+        NWB_TEXT("RendererSystem: material typed data upload is empty")
+    );
+    NWB_ASSERT_MSG(
+        (uploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u,
+        NWB_TEXT("RendererSystem: material typed data upload is not word-aligned")
+    );
 
     for(const MaterialTypedInstanceRanges& ranges : instanceRanges){
-        if(!ValidateMaterialTypedInstanceRange(ranges, uploadByteCount))
-            return false;
+        AssertMaterialTypedInstanceRange(ranges, uploadByteCount);
     }
-
-    return true;
 }
 
 

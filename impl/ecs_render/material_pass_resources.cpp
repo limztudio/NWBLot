@@ -314,8 +314,7 @@ bool RendererMaterialSystem::uploadMaterialPassDrawBuffers(
 ){
 #if defined(NWB_DEBUG)
     NWB_ASSERT(instanceData.size() == materialTypedRanges.size());
-    if(!ECSRenderDetail::ValidateMaterialTypedUploadRanges(materialTypedRanges, materialTypedBytes))
-        return false;
+    ECSRenderDetail::AssertMaterialTypedUploadRanges(materialTypedRanges, materialTypedBytes);
 #endif
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MaterialUpload, graphics().getDevice(), commandList);

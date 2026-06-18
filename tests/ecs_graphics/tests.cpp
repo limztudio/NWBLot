@@ -334,10 +334,10 @@ static void TestMaterialTypedByteRangeDeduplicatesContent(TestContext& context){
 #if defined(NWB_DEBUG)
     NWB::Impl::ECSRenderDetail::MaterialTypedInstanceRangeVector instanceRanges{scratchArena};
     instanceRanges.push_back(instanceRange);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderDetail::ValidateMaterialTypedUploadRanges(
+    NWB::Impl::ECSRenderDetail::AssertMaterialTypedUploadRanges(
         instanceRanges,
         uploadBytes
-    ));
+    );
 #endif
 }
 

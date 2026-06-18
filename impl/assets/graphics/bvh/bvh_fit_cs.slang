@@ -22,7 +22,7 @@ ByteAddressBuffer g_NwbBvhTriangleIndices;
 RWStructuredBuffer<uint> g_NwbBvhPayload;
 
 [[vk::binding(NWB_BVH_BUILD_BINDING_NODES, NWB_BVH_BUILD_SET)]]
-globallycoherent RWStructuredBuffer<NwbBvhNode> g_NwbBvhNodes;
+globallycoherent RWStructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbBvhNodes;
 
 [[vk::binding(NWB_BVH_BUILD_BINDING_PARENT, NWB_BVH_BUILD_SET)]]
 RWStructuredBuffer<uint> g_NwbBvhParent;

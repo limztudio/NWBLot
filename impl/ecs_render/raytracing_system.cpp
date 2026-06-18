@@ -10,7 +10,6 @@
 #include <impl/assets/graphics/shadow/names.h>
 #include <impl/assets/graphics/bvh/binding_slots.h>
 #include <impl/assets/graphics/bvh/names.h>
-#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,6 +42,33 @@ struct BvhSortPushConstants{
 };
 static_assert(sizeof(BvhSortPushConstants) == sizeof(u32) * 4u, "BvhSortPushConstants must match the shader NwbBvhBitonicSortPushConstants layout");
 
+// Initial per-mesh triangle capacity for the LBVH build scratch buffers (nodes / parent / visit counter);
+// grows by doubling like the sort buffers.
+inline constexpr usize s_BvhBuildInitialCapacity = 1024u;
+
+// CPU mirror of the shader NwbBvhNode (std430, 32 bytes): AABB + child node indices, or a leaf-flagged
+// primitive index in leftChild with rightChild = primitive count (see bvh_common.slangi).
+struct NwbBvhNodeGpu{
+    Float3UInt aabbMinLeftChild;
+    Float3UInt aabbMaxRightChild;
+};
+static_assert(sizeof(NwbBvhNodeGpu) == 32u, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
+
+// CPU mirror of the shader NwbBvhBuildPushConstants (shared by the morton / topology / fit kernels).
+struct BvhBuildPushConstants{
+    u32 primitiveCount = 0u;
+    u32 internalCount = 0u;
+    u32 pad0 = 0u;
+    u32 pad1 = 0u;
+    Float4 aabbMin = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+    Float4 aabbMax = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+};
+static_assert(sizeof(BvhBuildPushConstants) == sizeof(u32) * 4u + sizeof(Float4) * 2u, "BvhBuildPushConstants must match the shader NwbBvhBuildPushConstants layout");
+
+// Leaf-flag / sentinel mirrors of the bvh_common.slangi shader constants (CPU-side BVH validation + clears).
+inline constexpr u32 s_BvhLeafFlag = 0x80000000u;
+inline constexpr u32 s_BvhInvalidIndex = 0xFFFFFFFFu;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,6 +91,7 @@ void RendererRayTracingSystem::logCapabilityOnce(){
 
 #if defined(NWB_DEBUG)
     runBvhSortSelfTest();
+    runBvhBuildSelfTest();
 #endif
 }
 
@@ -619,6 +646,267 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
     return true;
 }
 
+bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
+    if(
+        rayTracingState().m_bvhMortonPipeline
+        && rayTracingState().m_bvhTopologyPipeline
+        && rayTracingState().m_bvhFitPipeline
+    )
+        return true;
+    if(rayTracingState().m_bvhBuildPipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_bvhBuildBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_BVH_BUILD_BINDING_POSITIONS, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_BVH_BUILD_BINDING_TRIANGLE_INDICES, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_KEYS, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PAYLOAD, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_NODES, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PARENT, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_VISIT_COUNTER, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhBuildPushConstants)));
+
+        rayTracingState().m_bvhBuildBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_bvhBuildBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build binding layout"));
+            rayTracingState().m_bvhBuildPipelineFailed = true;
+            return false;
+        }
+    }
+
+    const auto createBuildPipeline = [this, device](
+        Core::ShaderHandle& shader,
+        Core::ComputePipelineHandle& pipeline,
+        const Name& shaderName,
+        const char* debugLabel
+    )->bool{
+        if(pipeline)
+            return true;
+        if(!m_renderer.shaderSystem().loadShader(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Compute, debugLabel))
+            return false;
+
+        Core::ComputePipelineDesc pipelineDesc;
+        pipelineDesc
+            .setComputeShader(shader)
+            .addBindingLayout(rayTracingState().m_bvhBuildBindingLayout)
+        ;
+        pipeline = device->createComputePipeline(pipelineDesc);
+        return pipeline != nullptr;
+    };
+
+    if(
+        !createBuildPipeline(rayTracingState().m_bvhMortonShader, rayTracingState().m_bvhMortonPipeline, AssetsGraphicsBvh::s_BvhMortonShaderName, "ECSRender_BvhMorton")
+        || !createBuildPipeline(rayTracingState().m_bvhTopologyShader, rayTracingState().m_bvhTopologyPipeline, AssetsGraphicsBvh::s_BvhTopologyShaderName, "ECSRender_BvhTopology")
+        || !createBuildPipeline(rayTracingState().m_bvhFitShader, rayTracingState().m_bvhFitPipeline, AssetsGraphicsBvh::s_BvhFitShaderName, "ECSRender_BvhFit")
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build compute pipeline"));
+        rayTracingState().m_bvhBuildPipelineFailed = true;
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureBvhBuildBuffers(usize primitiveCount){
+    if(
+        rayTracingState().m_bvhNodeBuffer
+        && rayTracingState().m_bvhParentBuffer
+        && rayTracingState().m_bvhVisitCounterBuffer
+        && rayTracingState().m_bvhBuildCapacity >= primitiveCount
+    )
+        return true;
+
+    usize capacity = rayTracingState().m_bvhBuildCapacity > 0u ? rayTracingState().m_bvhBuildCapacity : s_BvhBuildInitialCapacity;
+    while(capacity < primitiveCount)
+        capacity *= 2u;
+
+    // A binary LBVH over N primitives has 2N-1 nodes (internal [0,N-1) + leaves [N-1,2N-1)); over-allocate
+    // to 2*capacity. The visit counter only indexes internal nodes, so capacity entries suffice.
+    const usize nodeCount = capacity * 2u;
+
+    Core::BufferDesc nodeBufferDesc;
+    nodeBufferDesc
+        .setByteSize(static_cast<u64>(sizeof(NwbBvhNodeGpu) * nodeCount))
+        .setStructStride(sizeof(NwbBvhNodeGpu))
+        .setCanHaveUAVs(true)
+        .setDebugName(Name("bvh_nodes"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    rayTracingState().m_bvhNodeBuffer = graphics().createBuffer(nodeBufferDesc);
+    if(!rayTracingState().m_bvhNodeBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH node buffer"));
+        return false;
+    }
+
+    Core::BufferDesc parentBufferDesc;
+    parentBufferDesc
+        .setByteSize(static_cast<u64>(sizeof(u32) * nodeCount))
+        .setStructStride(sizeof(u32))
+        .setCanHaveUAVs(true)
+        .setDebugName(Name("bvh_parent"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    rayTracingState().m_bvhParentBuffer = graphics().createBuffer(parentBufferDesc);
+    if(!rayTracingState().m_bvhParentBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH parent buffer"));
+        return false;
+    }
+
+    Core::BufferDesc counterBufferDesc;
+    counterBufferDesc
+        .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
+        .setStructStride(sizeof(u32))
+        .setCanHaveUAVs(true)
+        .setDebugName(Name("bvh_visit_counter"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    rayTracingState().m_bvhVisitCounterBuffer = graphics().createBuffer(counterBufferDesc);
+    if(!rayTracingState().m_bvhVisitCounterBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH visit counter buffer"));
+        return false;
+    }
+
+    rayTracingState().m_bvhBuildCapacity = capacity;
+    rayTracingState().m_bvhBuildBindingSet.reset();
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureBvhBuildBindingSet(Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer){
+    NWB_ASSERT(rayTracingState().m_bvhBuildBindingLayout);
+    NWB_ASSERT(rayTracingState().m_bvhSortKeysBuffer);
+    NWB_ASSERT(rayTracingState().m_bvhSortPayloadBuffer);
+    NWB_ASSERT(rayTracingState().m_bvhNodeBuffer);
+    NWB_ASSERT(rayTracingState().m_bvhParentBuffer);
+    NWB_ASSERT(rayTracingState().m_bvhVisitCounterBuffer);
+    NWB_ASSERT(positionBuffer);
+    NWB_ASSERT(triangleIndexBuffer);
+
+    const Core::Buffer* nodeBuffer = rayTracingState().m_bvhNodeBuffer.get();
+    if(
+        rayTracingState().m_bvhBuildBindingSet
+        && rayTracingState().m_bvhBuildBindingSetPositions == positionBuffer
+        && rayTracingState().m_bvhBuildBindingSetIndices == triangleIndexBuffer
+        && rayTracingState().m_bvhBuildBindingSetNodes == nodeBuffer
+    )
+        return true;
+
+    Core::BindingSetDesc bindingSetDesc(arena());
+    bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_BVH_BUILD_BINDING_POSITIONS, positionBuffer));
+    bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_BVH_BUILD_BINDING_TRIANGLE_INDICES, triangleIndexBuffer));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_KEYS, rayTracingState().m_bvhSortKeysBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PAYLOAD, rayTracingState().m_bvhSortPayloadBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_NODES, rayTracingState().m_bvhNodeBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PARENT, rayTracingState().m_bvhParentBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_VISIT_COUNTER, rayTracingState().m_bvhVisitCounterBuffer.get()));
+
+    rayTracingState().m_bvhBuildBindingSet = graphics().getDevice()->createBindingSet(bindingSetDesc, rayTracingState().m_bvhBuildBindingLayout);
+    if(!rayTracingState().m_bvhBuildBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build binding set"));
+        rayTracingState().m_bvhBuildBindingSetPositions = nullptr;
+        rayTracingState().m_bvhBuildBindingSetIndices = nullptr;
+        rayTracingState().m_bvhBuildBindingSetNodes = nullptr;
+        return false;
+    }
+    rayTracingState().m_bvhBuildBindingSetPositions = positionBuffer;
+    rayTracingState().m_bvhBuildBindingSetIndices = triangleIndexBuffer;
+    rayTracingState().m_bvhBuildBindingSetNodes = nodeBuffer;
+    return true;
+}
+
+bool RendererRayTracingSystem::buildMeshSwBvh(
+    Core::CommandList& commandList,
+    Core::Buffer* positionBuffer,
+    Core::Buffer* triangleIndexBuffer,
+    u32 primitiveCount,
+    const SIMDVector aabbMin,
+    const SIMDVector aabbMax
+){
+    if(primitiveCount == 0u)
+        return false;
+
+    u32 paddedCount = static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE);
+    while(paddedCount < primitiveCount)
+        paddedCount <<= 1u;
+
+    if(!ensureBvhSortPipeline())
+        return false;
+    if(!ensureBvhBuildPipeline())
+        return false;
+    if(!ensureBvhSortBuffers(paddedCount))
+        return false;
+    if(!ensureBvhBuildBuffers(primitiveCount))
+        return false;
+    if(!ensureBvhBuildBindingSet(positionBuffer, triangleIndexBuffer))
+        return false;
+
+    Core::Buffer* keysBuffer = rayTracingState().m_bvhSortKeysBuffer.get();
+    Core::Buffer* payloadBuffer = rayTracingState().m_bvhSortPayloadBuffer.get();
+    Core::Buffer* nodeBuffer = rayTracingState().m_bvhNodeBuffer.get();
+    Core::Buffer* parentBuffer = rayTracingState().m_bvhParentBuffer.get();
+    Core::Buffer* visitCounterBuffer = rayTracingState().m_bvhVisitCounterBuffer.get();
+
+    BvhBuildPushConstants pushConstants;
+    pushConstants.primitiveCount = primitiveCount;
+    pushConstants.internalCount = primitiveCount - 1u;
+    pushConstants.aabbMin = Float4(VectorGetX(aabbMin), VectorGetY(aabbMin), VectorGetZ(aabbMin), 0.0f);
+    pushConstants.aabbMax = Float4(VectorGetX(aabbMax), VectorGetY(aabbMax), VectorGetZ(aabbMax), 0.0f);
+
+    // Initialize: sort-key padding to a sentinel that sorts last, parent links to "no parent", and the
+    // per-internal-node visit counters to zero (the fit's second-arrival rendezvous).
+    commandList.setBufferState(keysBuffer, Core::ResourceStates::CopyDest);
+    commandList.setBufferState(parentBuffer, Core::ResourceStates::CopyDest);
+    commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.clearBufferUInt(keysBuffer, 0xFFFFFFFFu);
+    commandList.clearBufferUInt(parentBuffer, s_BvhInvalidIndex);
+    commandList.clearBufferUInt(visitCounterBuffer, 0u);
+
+    commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(nodeBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(parentBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
+
+    const auto bvhBuildBarrier = [&commandList, keysBuffer, payloadBuffer, nodeBuffer, parentBuffer, visitCounterBuffer](){
+        commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(nodeBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(parentBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+    };
+
+    const auto dispatchBuildKernel = [this, &commandList, &pushConstants](Core::ComputePipeline* pipeline, const u32 groupCount){
+        Core::ComputeState computeState;
+        computeState.setPipeline(pipeline);
+        computeState.addBindingSet(rayTracingState().m_bvhBuildBindingSet.get());
+        commandList.setComputeState(computeState);
+        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        commandList.dispatch(groupCount, 1u, 1u);
+    };
+
+    bvhBuildBarrier();
+
+    dispatchBuildKernel(rayTracingState().m_bvhMortonPipeline.get(), DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
+    bvhBuildBarrier();
+
+    if(!bvhBitonicSort(commandList, primitiveCount, paddedCount))
+        return false;
+    bvhBuildBarrier();
+
+    if(primitiveCount > 1u){
+        dispatchBuildKernel(rayTracingState().m_bvhTopologyPipeline.get(), DivideUp(primitiveCount - 1u, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
+        bvhBuildBarrier();
+    }
+
+    dispatchBuildKernel(rayTracingState().m_bvhFitPipeline.get(), DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
+    bvhBuildBarrier();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -727,6 +1015,175 @@ void RendererRayTracingSystem::runBvhSortSelfTest(){
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BVH bitonic sort self-test PASSED ({} elements)"), elementCount);
     else
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH bitonic sort self-test FAILED"));
+}
+
+void RendererRayTracingSystem::runBvhBuildSelfTest(){
+    if(rayTracingState().m_bvhBuildSelfTestDone)
+        return;
+    rayTracingState().m_bvhBuildSelfTestDone = true;
+
+    // Build an LBVH for a known triangle set and validate it on the CPU. A wrong topology can still bound
+    // everything correctly, so this checks leaf coverage and child-box nesting, not just the root box.
+    constexpr u32 triangleCount = 16u;
+    constexpr u32 vertexCount = triangleCount * 3u;
+    constexpr u32 floatCount = vertexCount * 3u;
+    constexpr u32 nodeCount = triangleCount * 2u - 1u;
+    constexpr u32 internalCount = triangleCount - 1u;
+
+    f32 positionData[floatCount];
+    u32 indexData[vertexCount];
+    for(u32 triangle = 0u; triangle < triangleCount; ++triangle){
+        const f32 baseX = static_cast<f32>(triangle);
+        const u32 floatBase = triangle * 9u;
+        positionData[floatBase + 0u] = baseX;         positionData[floatBase + 1u] = 0.0f;  positionData[floatBase + 2u] = 0.0f;
+        positionData[floatBase + 3u] = baseX + 0.6f;  positionData[floatBase + 4u] = 0.8f;  positionData[floatBase + 5u] = 0.1f;
+        positionData[floatBase + 6u] = baseX + 0.2f;  positionData[floatBase + 7u] = 0.1f;  positionData[floatBase + 8u] = 0.9f;
+    }
+    for(u32 index = 0u; index < vertexCount; ++index)
+        indexData[index] = index;
+
+    SIMDVector boundsMinVector = VectorReplicate(1e30f);
+    SIMDVector boundsMaxVector = VectorReplicate(-1e30f);
+    for(u32 vertex = 0u; vertex < vertexCount; ++vertex){
+        const SIMDVector position = VectorSet(positionData[vertex * 3u + 0u], positionData[vertex * 3u + 1u], positionData[vertex * 3u + 2u], 0.0f);
+        boundsMinVector = VectorMin(boundsMinVector, position);
+        boundsMaxVector = VectorMax(boundsMaxVector, position);
+    }
+    auto* device = graphics().getDevice();
+
+    Core::BufferDesc positionBufferDesc;
+    positionBufferDesc
+        .setByteSize(sizeof(positionData))
+        .setCanHaveRawViews(true)
+        .setDebugName(Name("bvh_build_selftest_positions"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    Core::BufferHandle positionBuffer = graphics().createBuffer(positionBufferDesc);
+
+    Core::BufferDesc indexBufferDesc;
+    indexBufferDesc
+        .setByteSize(sizeof(indexData))
+        .setCanHaveRawViews(true)
+        .setDebugName(Name("bvh_build_selftest_indices"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    Core::BufferHandle indexBuffer = graphics().createBuffer(indexBufferDesc);
+    if(!positionBuffer || !indexBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build self-test geometry buffers"));
+        return;
+    }
+
+    Core::BufferDesc readbackBufferDesc;
+    readbackBufferDesc
+        .setByteSize(static_cast<u64>(sizeof(NwbBvhNodeGpu) * nodeCount))
+        .setCpuAccess(Core::CpuAccessMode::Read)
+        .setDebugName(Name("bvh_build_selftest_readback"))
+        .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
+    ;
+    Core::BufferHandle readbackBuffer = graphics().createBuffer(readbackBufferDesc);
+    if(!readbackBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build self-test readback buffer"));
+        return;
+    }
+
+    Core::CommandListHandle commandList = device->createCommandList();
+    if(!commandList){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build self-test command list"));
+        return;
+    }
+
+    commandList->open();
+    commandList->setBufferState(positionBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList->setBufferState(indexBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList->commitBarriers();
+    commandList->writeBuffer(positionBuffer.get(), positionData, sizeof(positionData));
+    commandList->writeBuffer(indexBuffer.get(), indexData, sizeof(indexData));
+    commandList->setBufferState(positionBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList->setBufferState(indexBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList->commitBarriers();
+
+    if(!buildMeshSwBvh(*commandList, positionBuffer.get(), indexBuffer.get(), triangleCount, boundsMinVector, boundsMaxVector)){
+        commandList->close();
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH build self-test build failed"));
+        return;
+    }
+
+    commandList->setBufferState(rayTracingState().m_bvhNodeBuffer.get(), Core::ResourceStates::CopySource);
+    commandList->commitBarriers();
+    commandList->copyBuffer(readbackBuffer.get(), 0u, rayTracingState().m_bvhNodeBuffer.get(), 0u, static_cast<u64>(sizeof(NwbBvhNodeGpu) * nodeCount));
+    commandList->close();
+
+    Core::CommandList* commandLists[] = { commandList.get() };
+    device->executeCommandLists(commandLists, 1u);
+    if(!device->waitForIdle()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH build self-test wait-for-idle failed"));
+        return;
+    }
+
+    const NwbBvhNodeGpu* nodes = static_cast<const NwbBvhNodeGpu*>(device->mapBuffer(readbackBuffer.get(), Core::CpuAccessMode::Read));
+    if(!nodes){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to map BVH build self-test readback buffer"));
+        return;
+    }
+
+    bool valid = true;
+
+    // (1) Leaf coverage: every leaf node carries the flag + a unique primitive, and all primitives appear.
+    bool primitiveSeen[triangleCount] = {};
+    for(u32 leaf = 0u; valid && leaf < triangleCount; ++leaf){
+        const NwbBvhNodeGpu& node = nodes[internalCount + leaf];
+        if((node.aabbMinLeftChild.w & s_BvhLeafFlag) == 0u){
+            valid = false;
+            break;
+        }
+        const u32 primitive = node.aabbMinLeftChild.w & ~s_BvhLeafFlag;
+        if(primitive >= triangleCount || primitiveSeen[primitive]){
+            valid = false;
+            break;
+        }
+        primitiveSeen[primitive] = true;
+    }
+    for(u32 primitive = 0u; valid && primitive < triangleCount; ++primitive){
+        if(!primitiveSeen[primitive])
+            valid = false;
+    }
+
+    // (2) Root box matches the input bounds.
+    const SIMDVector epsilonVector = VectorReplicate(1e-3f);
+    if(valid){
+        const SIMDVector rootMin = LoadFloatInt(nodes[0].aabbMinLeftChild);
+        const SIMDVector rootMax = LoadFloatInt(nodes[0].aabbMaxRightChild);
+        if(
+            !Vector3LessOrEqual(VectorAbs(VectorSubtract(rootMin, boundsMinVector)), epsilonVector)
+            || !Vector3LessOrEqual(VectorAbs(VectorSubtract(rootMax, boundsMaxVector)), epsilonVector)
+        )
+            valid = false;
+    }
+
+    // (3) Every internal node references valid children and its box contains both child boxes.
+    for(u32 internal = 0u; valid && internal < internalCount; ++internal){
+        const NwbBvhNodeGpu& node = nodes[internal];
+        if(node.aabbMinLeftChild.w >= nodeCount || node.aabbMaxRightChild.w >= nodeCount){
+            valid = false;
+            break;
+        }
+        const NwbBvhNodeGpu& left = nodes[node.aabbMinLeftChild.w];
+        const NwbBvhNodeGpu& right = nodes[node.aabbMaxRightChild.w];
+        const SIMDVector childMin = VectorMin(LoadFloatInt(left.aabbMinLeftChild), LoadFloatInt(right.aabbMinLeftChild));
+        const SIMDVector childMax = VectorMax(LoadFloatInt(left.aabbMaxRightChild), LoadFloatInt(right.aabbMaxRightChild));
+        if(
+            !Vector3LessOrEqual(LoadFloatInt(node.aabbMinLeftChild), VectorAdd(childMin, epsilonVector))
+            || !Vector3GreaterOrEqual(LoadFloatInt(node.aabbMaxRightChild), VectorSubtract(childMax, epsilonVector))
+        )
+            valid = false;
+    }
+
+    device->unmapBuffer(readbackBuffer.get());
+
+    if(valid)
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BVH build self-test PASSED ({} triangles, {} nodes)"), triangleCount, nodeCount);
+    else
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH build self-test FAILED"));
 }
 
 

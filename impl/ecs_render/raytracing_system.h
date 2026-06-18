@@ -8,6 +8,7 @@
 #include "subsystem_base.h"
 
 #include <core/alloc/scratch.h>
+#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,10 +41,15 @@ private:
     [[nodiscard]] bool ensureBvhSortPipeline();
     [[nodiscard]] bool ensureBvhSortBuffers(usize paddedCount);
     [[nodiscard]] bool bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount);
+    [[nodiscard]] bool ensureBvhBuildPipeline();
+    [[nodiscard]] bool ensureBvhBuildBuffers(usize primitiveCount);
+    [[nodiscard]] bool ensureBvhBuildBindingSet(Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer);
+    [[nodiscard]] bool buildMeshSwBvh(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax);
 
 #if defined(NWB_DEBUG)
 private:
     void runBvhSortSelfTest();
+    void runBvhBuildSelfTest();
 #endif
 };
 

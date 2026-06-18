@@ -16,7 +16,7 @@ ConstantBuffer<NwbBvhBuildPushConstants> g_NwbBvhBuildPushConstants;
 RWStructuredBuffer<uint> g_NwbBvhKeys;
 
 [[vk::binding(NWB_BVH_BUILD_BINDING_NODES, NWB_BVH_BUILD_SET)]]
-RWStructuredBuffer<NwbBvhNode> g_NwbBvhNodes;
+RWStructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbBvhNodes;
 
 [[vk::binding(NWB_BVH_BUILD_BINDING_PARENT, NWB_BVH_BUILD_SET)]]
 RWStructuredBuffer<uint> g_NwbBvhParent;

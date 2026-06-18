@@ -1,0 +1,48 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_OCCLUSION_SLANGI
+#define NWB_GRAPHICS_SHADOW_OCCLUSION_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "binding_slots.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Occlusion ray payload shared by the raygen, miss, and closest-hit stages. visibility = 1 when the ray
+// reached the light unobstructed (set by the miss stage); 0 means an occluder was hit (the default the
+// raygen seeds before tracing, so a terminated-on-first-hit trace that skips the closest hit stays 0).
+struct NwbShadowOcclusionPayload{
+    float visibility;
+};
+
+[[vk::binding(NWB_SHADOW_RT_BINDING_TLAS, NWB_SHADOW_RT_SET)]]
+RaytracingAccelerationStructure g_NwbShadowTlas;
+
+[[vk::binding(NWB_SHADOW_RT_BINDING_GBUFFER_WORLD_POSITION, NWB_SHADOW_RT_SET)]]
+Texture2D<float4> g_NwbShadowGBufferWorldPosition;
+
+[[vk::binding(NWB_SHADOW_RT_BINDING_GBUFFER_NORMAL, NWB_SHADOW_RT_SET)]]
+Texture2D<float4> g_NwbShadowGBufferNormal;
+
+[[vk::binding(NWB_SHADOW_RT_BINDING_GBUFFER_DEPTH, NWB_SHADOW_RT_SET)]]
+Texture2D<float4> g_NwbShadowGBufferDepth;
+
+[[vk::binding(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, NWB_SHADOW_RT_SET)]]
+RWTexture2D<uint> g_NwbShadowVisibility;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

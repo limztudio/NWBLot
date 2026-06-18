@@ -6,6 +6,7 @@
 
 #include <core/common/log.h>
 #include <core/graphics/module.h>
+#include <core/graphics/pipeline_helpers.h>
 #include <core/graphics/shader_archive.h>
 #include <impl/assets/graphics/skinned_mesh/binding_slots.h>
 #include <impl/assets/graphics/skinned_mesh/names.h>
@@ -46,29 +47,6 @@ static bool LoadComputeShader(
         NWB_TEXT("MeshSkinningSystem")
     );
 }
-
-static bool CreateComputePipeline(
-    Core::Device& device,
-    Core::ComputePipelineHandle& pipeline,
-    const Core::ShaderHandle& shader,
-    const Core::BindingLayoutHandle& bindingLayout
-){
-    if(pipeline)
-        return true;
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(shader);
-    pipelineDesc.addBindingLayout(bindingLayout);
-    pipeline = device.createComputePipeline(pipelineDesc);
-    if(!pipeline)
-        return false;
-
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 };
 
@@ -113,7 +91,7 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
     ))
         return false;
 
-    if(__hidden_pipeline::CreateComputePipeline(
+    if(Core::CreateComputePipelineIfNeeded(
         *device,
         m_skinningComputePipeline,
         m_skinningComputeShader,
@@ -156,7 +134,7 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
     ))
         return false;
 
-    if(__hidden_pipeline::CreateComputePipeline(
+    if(Core::CreateComputePipelineIfNeeded(
         *device,
         m_boundsComputePipeline,
         m_boundsComputeShader,

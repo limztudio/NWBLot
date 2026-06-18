@@ -21,6 +21,8 @@
 
 #include <global/environment.h>
 
+#include "smoke_skinned_scene_helpers.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -33,6 +35,9 @@ namespace __hidden_skinning_culling_benchmark{
 
 using BenchmarkModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using BenchmarkMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
+using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
+using NWB::Tests::Smoke::FindSpawnedModelObject;
 
 inline constexpr Name s_EnvironmentFlagArena("tests/smoke/skinning_culling_benchmark/environment_flag");
 
@@ -277,29 +282,7 @@ private:
             throw RuntimeException("SkinningCullingBenchmark initialization failed");
         }
 
-        auto& meshSystem = world->addSystem<NWB::Impl::MeshSystem>(*world);
-        auto& rendererSystem = world->addSystem<NWB::Impl::RendererSystem>(
-            *world,
-            context.graphics,
-            context.assetManager,
-            context.shaderPathResolver
-        );
-        auto& modelSystem = world->addSystem<NWB::Impl::ModelSystem>(
-            *world,
-            context.assetManager,
-            NWB::Impl::CreateModelObjectRendererHooks()
-        );
-        static_cast<void>(modelSystem);
-        auto& meshSkinningSystem = world->addSystem<NWB::Impl::MeshSkinningSystem>(
-            *world,
-            context.graphics,
-            context.assetManager,
-            meshSystem,
-            context.shaderPathResolver
-        );
-
-        context.graphics.addRenderPassToBack(meshSkinningSystem);
-        context.graphics.addRenderPassToBack(rendererSystem);
+        AddSmokeSkinnedRenderSystems(*world, context);
         return MakeNotNullUnique(Move(world));
     }
 
@@ -308,21 +291,7 @@ private:
             return;
 
         m_runtimeMeshProvider.uninstall();
-
-        auto* meshSkinningSystem = m_world->getSystem<NWB::Impl::MeshSkinningSystem>();
-        if(meshSkinningSystem)
-            m_context.graphics.removeRenderPass(*meshSkinningSystem);
-
-        auto* rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
-        if(rendererSystem)
-            m_context.graphics.removeRenderPass(*rendererSystem);
-
-        m_context.graphics.waitAllJobs();
-        if(auto* device = m_context.graphics.getDevice())
-            device->waitForIdle();
-
-        m_world->clear();
-        m_world.owner().reset();
+        DestroySmokeSkinnedRenderWorld(m_context, m_world);
     }
 
     void requestQuit(){
@@ -488,24 +457,6 @@ private:
         }
     }
 
-    [[nodiscard]] NWB::Core::ECS::EntityID findSpawnedModelObject(
-        const NWB::Core::ECS::EntityID owner,
-        const Name objectName,
-        const NWB::Impl::ModelObjectKind::Enum objectKind
-    )const{
-        NWB::Core::ECS::EntityID result = NWB::Core::ECS::ENTITY_ID_INVALID;
-        m_world->view<NWB::Impl::ModelObjectComponent>().each(
-            [&](const NWB::Core::ECS::EntityID entity, NWB::Impl::ModelObjectComponent& object){
-                if(result.valid())
-                    return;
-                if(object.owner == owner && object.object == objectName && object.kind == objectKind)
-                    result = entity;
-            }
-        );
-        return result;
-    }
-
-
 public:
     explicit SkinningCullingBenchmarkProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
@@ -576,7 +527,8 @@ public:
 
         m_world->tick(0.0f);
         for(const NWB::Core::ECS::EntityID owner : modelOwners){
-            const NWB::Core::ECS::EntityID skeletonEntity = findSpawnedModelObject(
+            const NWB::Core::ECS::EntityID skeletonEntity = FindSpawnedModelObject(
+                *m_world,
                 owner,
                 s_ModelSkeletonObject,
                 NWB::Impl::ModelObjectKind::Skeleton

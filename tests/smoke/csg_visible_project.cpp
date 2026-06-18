@@ -8,8 +8,6 @@
 #include <core/ecs/module.h>
 #include <core/graphics/module.h>
 #include <core/mesh/frame_math.h>
-#include <impl/assets_mesh/asset.h>
-#include <impl/assets_material/asset.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
@@ -18,6 +16,7 @@
 
 #include "csg_smoke_helpers.h"
 #include "fps_probe.h"
+#include "smoke_scene_helpers.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,10 +28,12 @@ namespace __hidden_csg_visible_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using SmokeMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
-using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+using NWB::Tests::Smoke::AddSmokeRenderSystems;
+using NWB::Tests::Smoke::AddStaticCsgMeshReceiver;
 using NWB::Tests::Smoke::AssignCsgCutterParameters;
 using NWB::Tests::Smoke::AssignCsgCutterTransform;
+using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
+using NWB::Tests::Smoke::DestroySmokeRenderWorld;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,41 +99,23 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     const Float4& scale,
     const bool csgReceiver
 ){
-    SmokeMeshRef mesh;
-    mesh.virtualPath = Name(s_CubeMeshPath);
-    SmokeMaterialRef material;
-    material.virtualPath = Name(s_SolidMaterialPath);
-
-    auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
-    transform.position = position;
-    transform.scale = scale;
-
-    auto& meshComponent = entity.addComponent<NWB::Impl::MeshComponent>();
-    meshComponent.mesh = mesh;
-
-    auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
-    renderer.material = material;
-
-    const Name materialInterface(s_SmokeBxdfSurfaceMaterialInterface);
-    entity.addComponent<NWB::Impl::MaterialInstanceComponent>(arena, materialInterface);
-    if(!NWB::Impl::SetMaterialMutableFloat4(
+    const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
         world,
-        entity.id(),
-        materialInterface,
-        "runtime.color_tint",
-        colorTint
-    ))
+        arena,
+        s_CubeMeshPath,
+        s_SolidMaterialPath,
+        s_SmokeBxdfSurfaceMaterialInterface,
+        colorTint,
+        position,
+        scale
+    );
+    if(!entity.valid())
         return NWB::Core::ECS::ENTITY_ID_INVALID;
 
-    if(csgReceiver){
-        auto& receiver = entity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        receiver.receiverGroup = receiverGroup;
-        receiver.affectOpaquePass = true;
-        receiver.affectTransparentPass = false;
-    }
+    if(csgReceiver)
+        AddStaticCsgMeshReceiver(world, entity, receiverGroup, true, false);
 
-    return entity.id();
+    return entity;
 }
 
 [[nodiscard]] static SIMDVector BuildCubeRotation(const f32 time, const f32 phase){
@@ -272,42 +255,21 @@ private:
             throw RuntimeException("CsgVisibleSmokeProject initialization failed");
         }
 
-        world->addSystem<NWB::Impl::MeshSystem>(*world);
+        AddSmokeRenderSystems(*world, context);
         if(!world->getSystem<NWB::Impl::MeshSystem>()){
             NWB_LOGGER_FATAL(NWB_TEXT("CsgVisibleSmokeProject initialization failed: mesh system is missing"));
             throw RuntimeException("CsgVisibleSmokeProject initialization failed");
         }
-
-        auto& rendererSystem = world->addSystem<NWB::Impl::RendererSystem>(
-            *world,
-            context.graphics,
-            context.assetManager,
-            context.shaderPathResolver
-        );
         if(!world->getSystem<NWB::Impl::RendererSystem>()){
             NWB_LOGGER_FATAL(NWB_TEXT("CsgVisibleSmokeProject initialization failed: renderer system is missing"));
             throw RuntimeException("CsgVisibleSmokeProject initialization failed");
         }
 
-        context.graphics.addRenderPassToBack(rendererSystem);
         return MakeNotNullUnique(Move(world));
     }
 
     void destroyWorld(){
-        if(!m_world.owner())
-            return;
-
-        auto* rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
-        if(rendererSystem)
-            m_context.graphics.removeRenderPass(*rendererSystem);
-
-        m_context.graphics.waitAllJobs();
-        if(auto* device = m_context.graphics.getDevice())
-            device->waitForIdle();
-
-        m_world->clear();
-        m_world.owner().reset();
-
+        DestroySmokeRenderWorld(m_context, m_world);
 #if defined(NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION) && !defined(NWB_FINAL)
         m_context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::Meshlets, false);
 #endif

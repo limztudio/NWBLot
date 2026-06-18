@@ -4,6 +4,8 @@
 
 #include "avboit_private.h"
 
+#include <core/graphics/pipeline_helpers.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,31 +43,6 @@ static bool CreateBindingLayout(
 
     return false;
 }
-
-static bool CreateComputePipeline(
-    Core::Device& device,
-    Core::ComputePipelineHandle& pipeline,
-    const Core::ShaderHandle& shader,
-    const Core::BindingLayoutHandle& bindingLayout
-){
-    if(pipeline)
-        return true;
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(shader)
-        .addBindingLayout(bindingLayout)
-    ;
-    pipeline = device.createComputePipeline(pipelineDesc);
-    if(pipeline)
-        return true;
-
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 };
 
@@ -226,7 +203,7 @@ bool RendererAvboitSystem::createAvboitPipelines(){
 
     auto* device = graphics().getDevice();
 
-    if(!__hidden_avboit_resources::CreateComputePipeline(
+    if(!Core::CreateComputePipelineIfNeeded(
         *device,
         avboitState().m_depthWarpPipeline,
         avboitState().m_depthWarpComputeShader,
@@ -236,7 +213,7 @@ bool RendererAvboitSystem::createAvboitPipelines(){
         return false;
     }
 
-    if(!__hidden_avboit_resources::CreateComputePipeline(
+    if(!Core::CreateComputePipelineIfNeeded(
         *device,
         avboitState().m_integratePipeline,
         avboitState().m_integrateComputeShader,

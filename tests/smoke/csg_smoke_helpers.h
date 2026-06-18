@@ -8,6 +8,7 @@
 #ifndef NWB_TESTS_SMOKE_CSG_SMOKE_HELPERS_H
 #define NWB_TESTS_SMOKE_CSG_SMOKE_HELPERS_H
 
+#include <core/ecs/world.h>
 #include <core/mesh/frame_math.h>
 #include <impl/ecs_csg/components.h>
 
@@ -39,6 +40,53 @@ inline void AssignCsgCutterTransform(
     const SIMDMatrix worldToShape = MatrixInverse(&determinant, shapeToWorld);
     StoreFloat(worldToShape, &cutter.worldToShape);
     StoreFloat(shapeToWorld, &cutter.shapeToWorld);
+}
+
+template<typename ReceiverComponentT>
+inline ReceiverComponentT& AddCsgMeshReceiver(
+    Core::ECS::World& world,
+    const Core::ECS::EntityID entity,
+    const Name receiverGroup,
+    const bool affectOpaquePass,
+    const bool affectTransparentPass
+){
+    auto& receiver = world.addComponent<ReceiverComponentT>(entity);
+    receiver.receiverGroup = receiverGroup;
+    receiver.affectOpaquePass = affectOpaquePass;
+    receiver.affectTransparentPass = affectTransparentPass;
+    return receiver;
+}
+
+inline Impl::StaticCsgMeshComponent& AddStaticCsgMeshReceiver(
+    Core::ECS::World& world,
+    const Core::ECS::EntityID entity,
+    const Name receiverGroup,
+    const bool affectOpaquePass,
+    const bool affectTransparentPass
+){
+    return AddCsgMeshReceiver<Impl::StaticCsgMeshComponent>(
+        world,
+        entity,
+        receiverGroup,
+        affectOpaquePass,
+        affectTransparentPass
+    );
+}
+
+inline Impl::SkinnedCsgMeshComponent& AddSkinnedCsgMeshReceiver(
+    Core::ECS::World& world,
+    const Core::ECS::EntityID entity,
+    const Name receiverGroup,
+    const bool affectOpaquePass,
+    const bool affectTransparentPass
+){
+    return AddCsgMeshReceiver<Impl::SkinnedCsgMeshComponent>(
+        world,
+        entity,
+        receiverGroup,
+        affectOpaquePass,
+        affectTransparentPass
+    );
 }
 
 

@@ -8,8 +8,6 @@
 #include <core/ecs/module.h>
 #include <core/mesh/frame_math.h>
 #include <core/graphics/module.h>
-#include <impl/assets_mesh/asset.h>
-#include <impl/assets_material/asset.h>
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 #include <impl/ecs_csg/module.h>
 #endif
@@ -19,6 +17,7 @@
 #include <impl/ecs_render/material_instance.h>
 
 #include "fps_probe.h"
+#include "smoke_scene_helpers.h"
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 #include "csg_smoke_helpers.h"
 #endif
@@ -33,9 +32,11 @@ namespace __hidden_transparent_multi_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using SmokeMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
-using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+using NWB::Tests::Smoke::AddSmokeRenderSystems;
+using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
+using NWB::Tests::Smoke::DestroySmokeRenderWorld;
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
+using NWB::Tests::Smoke::AddStaticCsgMeshReceiver;
 using NWB::Tests::Smoke::AssignCsgCutterParameters;
 using NWB::Tests::Smoke::AssignCsgCutterTransform;
 #endif
@@ -119,45 +120,27 @@ static void ApplyTransparentCsgRotation(
     const Float4& scale,
     const Name csgReceiverGroup = NAME_NONE
 ){
-    SmokeMeshRef mesh;
-    mesh.virtualPath = Name(meshPath);
-    SmokeMaterialRef material;
-    material.virtualPath = Name(materialPath);
-
-    auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
-    transform.position = position;
-    transform.scale = scale;
-
-    auto& meshComponent = entity.addComponent<NWB::Impl::MeshComponent>();
-    meshComponent.mesh = mesh;
-
-    auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
-    renderer.material = material;
-
-    const Name materialInterface(s_SmokeBxdfSurfaceMaterialInterface);
-    entity.addComponent<NWB::Impl::MaterialInstanceComponent>(arena, materialInterface);
-    if(!NWB::Impl::SetMaterialMutableFloat4(
+    const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
         world,
-        entity.id(),
-        materialInterface,
-        "runtime.color_tint",
-        colorTint
-    ))
+        arena,
+        meshPath,
+        materialPath,
+        s_SmokeBxdfSurfaceMaterialInterface,
+        colorTint,
+        position,
+        scale
+    );
+    if(!entity.valid())
         return NWB::Core::ECS::ENTITY_ID_INVALID;
 
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-    if(csgReceiverGroup){
-        auto& receiver = entity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        receiver.receiverGroup = csgReceiverGroup;
-        receiver.affectOpaquePass = false;
-        receiver.affectTransparentPass = true;
-    }
+    if(csgReceiverGroup)
+        AddStaticCsgMeshReceiver(world, entity, csgReceiverGroup, false, true);
 #else
     static_cast<void>(csgReceiverGroup);
 #endif
 
-    return entity.id();
+    return entity;
 }
 
 
@@ -174,41 +157,21 @@ private:
             throw RuntimeException("TransparentMultiSmokeProject initialization failed");
         }
 
-        world->addSystem<NWB::Impl::MeshSystem>(*world);
+        AddSmokeRenderSystems(*world, context);
         if(!world->getSystem<NWB::Impl::MeshSystem>()){
             NWB_LOGGER_FATAL(NWB_TEXT("TransparentMultiSmokeProject initialization failed: mesh system is missing"));
             throw RuntimeException("TransparentMultiSmokeProject initialization failed");
         }
-
-        auto& rendererSystem = world->addSystem<NWB::Impl::RendererSystem>(
-            *world,
-            context.graphics,
-            context.assetManager,
-            context.shaderPathResolver
-        );
         if(!world->getSystem<NWB::Impl::RendererSystem>()){
             NWB_LOGGER_FATAL(NWB_TEXT("TransparentMultiSmokeProject initialization failed: renderer system is missing"));
             throw RuntimeException("TransparentMultiSmokeProject initialization failed");
         }
 
-        context.graphics.addRenderPassToBack(rendererSystem);
         return MakeNotNullUnique(Move(world));
     }
 
     void destroyWorld(){
-        if(!m_world.owner())
-            return;
-
-        auto* rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
-        if(rendererSystem)
-            m_context.graphics.removeRenderPass(*rendererSystem);
-
-        m_context.graphics.waitAllJobs();
-        if(auto* device = m_context.graphics.getDevice())
-            device->waitForIdle();
-
-        m_world->clear();
-        m_world.owner().reset();
+        DestroySmokeRenderWorld(m_context, m_world);
     }
 
 

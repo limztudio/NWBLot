@@ -6,10 +6,10 @@
 #include "../scene/binding_slots.h"
 #include "../mesh/runtime_constants.h"
 
-#define NWB_SCENE_SHADING_SET NWB_SCENE_SHADING_AVBOIT_ACCUMULATE_SET
-#define NWB_SCENE_SHADING_BINDING NWB_SCENE_SHADING_AVBOIT_ACCUMULATE_BINDING
-#define NWB_SCENE_LIGHT_LIST_SET NWB_SCENE_LIGHT_LIST_AVBOIT_ACCUMULATE_SET
-#define NWB_SCENE_LIGHT_LIST_BINDING NWB_SCENE_LIGHT_LIST_AVBOIT_ACCUMULATE_BINDING
+#define NWB_SCENE_SHADING_SET NWB_AVBOIT_TRANSPARENT_SET
+#define NWB_SCENE_SHADING_BINDING NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING
+#define NWB_SCENE_LIGHT_LIST_SET NWB_AVBOIT_TRANSPARENT_SET
+#define NWB_SCENE_LIGHT_LIST_BINDING NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST
 #include "common.slangi"
 #include "../scene/lighting.slangi"
 
@@ -101,7 +101,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input, float4 
 
     const float3 baseColor = clamp(inColor.rgb, float3(0.0), float3(1.0));
     const float3 shadedColor = clamp(
-        nwbSceneApplyLighting(baseColor, inNormal, inTangent, inWorldPosition),
+        nwbSceneApplyLighting(baseColor, inNormal, inTangent, inWorldPosition, 0xFFFFFFFFu),
         float3(0.0),
         float3(1.0)
     );

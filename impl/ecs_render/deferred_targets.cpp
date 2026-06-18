@@ -414,8 +414,15 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         Core::TextureDimension::Texture2D
     ));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, deferredState().m_sampler.get()));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SCENE_SHADING_DEFERRED_LIGHTING_BINDING, deferredState().m_sceneShadingBuffer.get()));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SCENE_LIGHT_LIST_DEFERRED_LIGHTING_BINDING, deferredState().m_lightBuffer.get()));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get()));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY,
+        createdTargets.shadowVisibility.get(),
+        createdTargets.shadowVisibilityFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
     createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, deferredState().m_lightingBindingLayout);
     if(!createdTargets.lightingBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding set"));

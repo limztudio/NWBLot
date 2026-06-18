@@ -1,0 +1,52 @@
+mesh plane;
+
+plane.positions = [
+    [-3.0, 0.0, -3.0],
+    [-3.0, 0.0,  3.0],
+    [ 3.0, 0.0,  3.0],
+    [ 3.0, 0.0, -3.0],
+];
+
+plane.normals = [
+    [0.0, 1.0, 0.0],
+];
+
+plane.tangents = [
+    [1.0, 0.0, 0.0, 1.0],
+];
+
+plane.uv0 = [
+    [0.0, 0.0],
+    [0.0, 1.0],
+    [1.0, 1.0],
+    [1.0, 0.0],
+];
+
+plane.colors = [
+    [1.0, 1.0, 1.0, 1.0],
+];
+
+plane.vertex_refs = [
+    [0, 0, 0, 0, 0],
+    [1, 0, 0, 1, 0],
+    [2, 0, 0, 2, 0],
+    [3, 0, 0, 3, 0],
+];
+
+plane.indices = [
+    [0, 1, 2],
+    [0, 2, 3],
+];
+
+
+model model;
+
+model.static_meshes = {
+    "plane": plane,
+};
+
+
+asset_bunch bunch = [
+    plane,
+    model,
+];

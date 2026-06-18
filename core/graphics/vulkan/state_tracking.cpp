@@ -28,12 +28,13 @@ VkImageMemoryBarrier2 BuildTextureStateBarrier(
     const VkImageAspectFlags aspectMask,
     const TextureSubresourceSet& subresources,
     const ResourceStates::Mask oldState,
-    const ResourceStates::Mask stateBits
+    const ResourceStates::Mask stateBits,
+    const bool rayTracingStageAvailable
 ){
     auto barrier = VulkanDetail::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
-    barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
+    barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common, rayTracingStageAvailable);
     barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
-    barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(stateBits);
+    barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(stateBits, rayTracingStageAvailable);
     barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(stateBits);
     barrier.oldLayout = oldState != ResourceStates::Unknown ? VulkanDetail::GetVkImageLayout(oldState) : VK_IMAGE_LAYOUT_UNDEFINED;
     barrier.newLayout = VulkanDetail::GetVkImageLayout(stateBits);
@@ -55,14 +56,16 @@ void AppendTextureStateBarrier(
     const ArraySlice arraySlice,
     const MipLevel mipLevel,
     const ResourceStates::Mask oldState,
-    const ResourceStates::Mask stateBits
+    const ResourceStates::Mask stateBits,
+    const bool rayTracingStageAvailable
 ){
     barriers.push_back(BuildTextureStateBarrier(
         image,
         aspectMask,
         TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u),
         oldState,
-        stateBits
+        stateBits,
+        rayTracingStageAvailable
     ));
 }
 
@@ -75,12 +78,13 @@ void AppendTextureStateBarriersBefore(
     const ArraySlice currentArraySlice,
     const MipLevel currentMipLevel,
     const ResourceStates::Mask oldState,
-    const ResourceStates::Mask stateBits
+    const ResourceStates::Mask stateBits,
+    const bool rayTracingStageAvailable
 ){
     for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice <= currentArraySlice; ++arraySlice){
         const MipLevel previousMipEnd = arraySlice == currentArraySlice ? currentMipLevel : mipEnd;
         for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < previousMipEnd; ++mipLevel)
-            AppendTextureStateBarrier(barriers, image, aspectMask, arraySlice, mipLevel, oldState, stateBits);
+            AppendTextureStateBarrier(barriers, image, aspectMask, arraySlice, mipLevel, oldState, stateBits, rayTracingStageAvailable);
     }
 }
 
@@ -281,7 +285,8 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
                         arraySlice,
                         mipLevel,
                         oldState,
-                        stateBits
+                        stateBits,
+                        m_context.extensions.KHR_ray_tracing_pipeline
                     );
                 }
             }
@@ -301,7 +306,8 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
                         arraySlice,
                         mipLevel,
                         subresourceOldState,
-                        stateBits
+                        stateBits,
+                        m_context.extensions.KHR_ray_tracing_pipeline
                     );
                 }
             }
@@ -317,7 +323,8 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
             texture.m_aspectMask,
             resolvedSubresources,
             oldState,
-            stateBits
+            stateBits,
+            m_context.extensions.KHR_ray_tracing_pipeline
         );
 
         m_stateTracker.beginTrackingResolvedTransientTexture(texture, resolvedSubresources, stateBits);
@@ -374,9 +381,9 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
         return;
 
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
-    barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
+    barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common, m_context.extensions.KHR_ray_tracing_pipeline);
     barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
-    barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(stateBits);
+    barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(stateBits, m_context.extensions.KHR_ray_tracing_pipeline);
     barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(stateBits);
     barrier.buffer = buffer.m_buffer;
     barrier.offset = 0;
@@ -568,7 +575,8 @@ void StateTracker::appendKeepInitialStateBarriers(
             texture->m_aspectMask,
             TextureSubresourceSet(key.mipLevel, 1u, key.arraySlice, 1u),
             currentState,
-            desc.initialState
+            desc.initialState,
+            m_context.extensions.KHR_ray_tracing_pipeline
         ));
         it.value() = desc.initialState;
         texture->m_keepInitialStateKnown = true;
@@ -586,9 +594,9 @@ void StateTracker::appendKeepInitialStateBarriers(
 
         auto* buffer = bufferResource;
         auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
-        barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(currentState != ResourceStates::Unknown ? currentState : ResourceStates::Common);
+        barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(currentState != ResourceStates::Unknown ? currentState : ResourceStates::Common, m_context.extensions.KHR_ray_tracing_pipeline);
         barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(currentState != ResourceStates::Unknown ? currentState : ResourceStates::Common);
-        barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(desc.initialState);
+        barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(desc.initialState, m_context.extensions.KHR_ray_tracing_pipeline);
         barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(desc.initialState);
         barrier.buffer = buffer->m_buffer;
         barrier.offset = 0;

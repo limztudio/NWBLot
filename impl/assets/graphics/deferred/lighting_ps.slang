@@ -5,10 +5,10 @@
 #include "binding_slots.h"
 #include "../scene/binding_slots.h"
 
-#define NWB_SCENE_SHADING_SET NWB_SCENE_SHADING_DEFERRED_LIGHTING_SET
-#define NWB_SCENE_SHADING_BINDING NWB_SCENE_SHADING_DEFERRED_LIGHTING_BINDING
-#define NWB_SCENE_LIGHT_LIST_SET NWB_SCENE_LIGHT_LIST_DEFERRED_LIGHTING_SET
-#define NWB_SCENE_LIGHT_LIST_BINDING NWB_SCENE_LIGHT_LIST_DEFERRED_LIGHTING_BINDING
+#define NWB_SCENE_SHADING_SET NWB_DEFERRED_LIGHTING_SET
+#define NWB_SCENE_SHADING_BINDING NWB_DEFERRED_LIGHTING_BINDING_SCENE_SHADING
+#define NWB_SCENE_LIGHT_LIST_SET NWB_DEFERRED_LIGHTING_SET
+#define NWB_SCENE_LIGHT_LIST_BINDING NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST
 
 #include "../scene/lighting.slangi"
 
@@ -21,8 +21,10 @@
 [[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferWorldPosition;
 [[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferDepth;
 [[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, NWB_DEFERRED_LIGHTING_SET)]] SamplerState g_DeferredSampler;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<uint> g_NwbShadowVisibility;
 
 struct NwbDeferredLightingPixelInput{
+    float4 position : SV_Position;
     [[vk::location(NWB_DEFERRED_FULLSCREEN_UV_LOCATION)]] float2 uv : TEXCOORD0;
 };
 
@@ -54,8 +56,11 @@ NwbDeferredLightingPixelOutput main(NwbDeferredLightingPixelInput input){
 
     const float3 normal = nwbDeferredDecodeNormal(g_GBufferNormal.Sample(g_DeferredSampler, input.uv).rgb);
     const float3 worldPosition = g_GBufferWorldPosition.Sample(g_DeferredSampler, input.uv).xyz;
+    // The shadow pass writes one visibility bit per light per pixel; the lighting framebuffer is 1:1
+    // with the G-buffer, so the fragment coordinate indexes the matching visibility texel directly.
+    const uint shadowMask = g_NwbShadowVisibility.Load(int3(int2(input.position.xy), 0));
     const float3 shadedColor = clamp(
-        nwbSceneApplyLighting(baseColor, normal, float4(0.0, 0.0, 0.0, 1.0), worldPosition),
+        nwbSceneApplyLighting(baseColor, normal, float4(0.0, 0.0, 0.0, 1.0), worldPosition, shadowMask),
         float3(0.0),
         float3(1.0)
     );

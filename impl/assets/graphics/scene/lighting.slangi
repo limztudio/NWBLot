@@ -74,7 +74,7 @@ float3 nwbSceneShadeLight(NwbSceneLight light, float3 baseColor, float3 normalVe
     return diffuse + specularColor + rimColor + frameCue + backLightCue;
 }
 
-float3 nwbSceneApplyLighting(float3 baseColor, float3 normal, float4 tangent, float3 worldPosition){
+float3 nwbSceneApplyLighting(float3 baseColor, float3 normal, float4 tangent, float3 worldPosition, uint shadowMask){
     const float3 normalVector = nwbSafeNormalize(normal, float3(0.0, 0.0, 1.0));
     const float3 tangentVector = nwbFrameOrthonormalTangent(tangent.xyz, normalVector);
     const float tangentSign = tangent.w < 0.0 ? -1.0 : 1.0;
@@ -90,8 +90,13 @@ float3 nwbSceneApplyLighting(float3 baseColor, float3 normal, float4 tangent, fl
 
     float3 litColor = baseColor * hemiAmbient;
     const uint lightCount = nwbSceneLightCount();
-    for(uint i = 0u; i < lightCount; ++i)
-        litColor += nwbSceneShadeLight(g_NwbSceneLights[i], baseColor, normalVector, tangentVector, bitangentVector, viewVector, ndotv, worldPosition);
+    for(uint i = 0u; i < lightCount; ++i){
+        // The shadow visibility mask packs one lit-bit per light; a 32-bit word covers the first 32
+        // lights and any beyond that stay fully lit. 0xFFFFFFFF (written by the clear / software
+        // fallback and passed by callers without shadows) leaves every light unshadowed.
+        const float visibility = (i < NWB_SCENE_SHADOW_VISIBILITY_LIGHT_COUNT) ? (((shadowMask >> i) & 1u) != 0u ? 1.0 : 0.0) : 1.0;
+        litColor += visibility * nwbSceneShadeLight(g_NwbSceneLights[i], baseColor, normalVector, tangentVector, bitangentVector, viewVector, ndotv, worldPosition);
+    }
 
     return litColor / (litColor + float3(0.65));
 }

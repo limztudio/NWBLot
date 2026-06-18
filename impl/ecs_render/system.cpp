@@ -298,10 +298,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         commandList->endRenderPass();
 
+        bool shadowVisibilityWritten = false;
         if(shadowTlasReady){
-            if(!m_raytracingSystem.renderShadowVisibility(*commandList, deferredTargets))
+            shadowVisibilityWritten = m_raytracingSystem.renderShadowVisibility(*commandList, deferredTargets);
+            if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
         }
+        // The deferred lighting pass always samples the visibility image; clear it to "all lit" on any frame the shadow trace did not write it so lighting never reads stale or undefined occlusion.
+        if(!shadowVisibilityWritten)
+            m_raytracingSystem.clearShadowVisibility(*commandList, deferredTargets);
 
         commandListReady = m_deferredSystem.renderDeferredLighting(*commandList, deferredTargets);
         if(commandListReady){

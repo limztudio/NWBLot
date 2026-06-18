@@ -78,16 +78,6 @@ static bool IsValidLightCone(const f32 innerConeCos, const f32 outerConeCos){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SceneDirectionalLight BuildDefaultSceneDirectionalLight(const SceneViewBasis& basis){
-    SceneDirectionalLight light;
-    StoreFloat(
-        __hidden_lighting::BuildDirectionalLightDirectionVector(LoadFloat(basis.forward)),
-        &light.direction
-    );
-    light.colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
-    return light;
-}
-
 Core::ECS::EntityID CreateDirectionalLightEntity(
     Core::ECS::World& world,
     const f32 pitchRadians,
@@ -110,39 +100,64 @@ Core::ECS::EntityID CreateDirectionalLightEntity(
     return lightEntity.id();
 }
 
-bool TryBuildSceneDirectionalLight(const TransformComponent& transform, const LightComponent& light, SceneDirectionalLight& outLight){
-    outLight = SceneDirectionalLight{};
-    if(light.type != LightType::Directional)
-        return false;
+Core::ECS::EntityID CreatePointLightEntity(
+    Core::ECS::World& world,
+    const Float4& position,
+    const Float4& color,
+    const f32 intensity,
+    const f32 range
+){
+    auto lightEntity = world.createEntity();
+    auto& transform = lightEntity.addComponent<TransformComponent>();
+    transform.position = position;
 
-    const SIMDVector rotation = LoadFloat(transform.rotation);
-    if(!__hidden_lighting::IsValidLightRotation(rotation))
-        return false;
-    if(!__hidden_lighting::IsValidLightColorIntensity(light))
-        return false;
-
-    StoreFloat(
-        __hidden_lighting::BuildDirectionalLightDirectionVector(
-            Vector3Rotate(s_SIMDIdentityR2, rotation)
-        ),
-        &outLight.direction
-    );
-    outLight.colorIntensity = light.colorIntensity;
-    return true;
+    auto& light = lightEntity.addComponent<LightComponent>();
+    light.type = LightType::Point;
+    light.setColor(color);
+    light.setIntensity(intensity);
+    light.range = range;
+    return lightEntity.id();
 }
 
-SceneDirectionalLight ResolveSceneDirectionalLight(Core::ECS::World& world, const SceneViewBasis& defaultBasis){
-    const auto lightView = world.view<TransformComponent, LightComponent>();
-    for(auto it = lightView.begin(); it != lightView.end(); ++it){
-        auto&& [entity, transform, light] = *it;
-        static_cast<void>(entity);
+Core::ECS::EntityID CreateSpotLightEntity(
+    Core::ECS::World& world,
+    const Float4& position,
+    const f32 pitchRadians,
+    const f32 yawRadians,
+    const f32 rollRadians,
+    const Float4& color,
+    const f32 intensity,
+    const f32 range,
+    const f32 innerConeCos,
+    const f32 outerConeCos
+){
+    auto lightEntity = world.createEntity();
+    auto& transform = lightEntity.addComponent<TransformComponent>();
+    transform.position = position;
+    StoreFloat(
+        QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians),
+        &transform.rotation
+    );
 
-        SceneDirectionalLight resolvedLight;
-        if(TryBuildSceneDirectionalLight(transform, light, resolvedLight))
-            return resolvedLight;
-    }
+    auto& light = lightEntity.addComponent<LightComponent>();
+    light.type = LightType::Spot;
+    light.setColor(color);
+    light.setIntensity(intensity);
+    light.range = range;
+    light.innerConeCos = innerConeCos;
+    light.outerConeCos = outerConeCos;
+    return lightEntity.id();
+}
 
-    return BuildDefaultSceneDirectionalLight(defaultBasis);
+SceneLight BuildDefaultSceneLight(const SceneViewBasis& basis){
+    SceneLight light;
+    StoreFloat(
+        __hidden_lighting::BuildDirectionalLightDirectionVector(LoadFloat(basis.forward)),
+        &light.direction
+    );
+    light.colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
+    light.type = LightType::Directional;
+    return light;
 }
 
 bool TryBuildSceneLight(const TransformComponent& transform, const LightComponent& light, SceneLight& outLight){
@@ -228,13 +243,7 @@ usize GatherSceneLights(Core::ECS::World& world, const SceneViewBasis& defaultBa
     }
 
     if(count == 0u){
-        SceneLight& fallbackLight = outLights[0];
-        fallbackLight = SceneLight{};
-
-        const SceneDirectionalLight defaultLight = BuildDefaultSceneDirectionalLight(defaultBasis);
-        fallbackLight.direction = defaultLight.direction;
-        fallbackLight.colorIntensity = defaultLight.colorIntensity;
-        fallbackLight.type = LightType::Directional;
+        outLights[0] = BuildDefaultSceneLight(defaultBasis);
         count = 1u;
     }
 

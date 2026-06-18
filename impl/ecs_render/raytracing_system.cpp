@@ -164,15 +164,11 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
 }
 
 bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& targets){
-    // Hardware ray-traced shadows write a per-light visibility mask into a screen-sized R32_UINT
-    // image. When ray tracing is unavailable the renderer falls back to fully lit surfaces, so skip
-    // the allocation entirely rather than reserving VRAM that nothing will ever write.
-    if(
-        !graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-        || !graphics().queryFeatureSupport(Core::Feature::RayTracingPipeline)
-    )
-        return true;
-
+    // The shadow-visibility image is the shared output of the shadow subsystem: hardware ray tracing
+    // writes a per-light visibility mask here, and the software distance-field fallback will write the
+    // same image. The deferred lighting pass always samples it, so it is allocated unconditionally and
+    // cleared to "all lit" each frame (then overwritten by whichever backend runs) to keep a single
+    // binding/shader path regardless of ray-tracing support.
     targets.shadowVisibilityFormat = Core::Format::R32_UINT;
 
     Core::TextureDesc visibilityDesc;
@@ -216,6 +212,18 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     dispatchArgs.setDimensions(targets.width, targets.height, 1u);
     commandList.dispatchRays(dispatchArgs);
     return true;
+}
+
+void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    if(!targets.shadowVisibility)
+        return;
+
+    // 0xFFFFFFFF = every per-light bit set = fully lit. This is the default the deferred lighting pass
+    // samples whenever no shadow backend wrote the image this frame (ray tracing unavailable, no
+    // trace-able geometry, or a trace that could not be dispatched).
+    commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.clearTextureUInt(targets.shadowVisibility.get(), ECSRenderDetail::s_FramebufferSubresources, 0xFFFFFFFFu);
 }
 
 bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources){

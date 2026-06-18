@@ -219,15 +219,21 @@ VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
     return flags;
 }
 
-VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states){
+VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, bool rayTracingStageAvailable){
     VkPipelineStageFlags2 flags = 0;
 
     if(states & ResourceStates::VertexBuffer)
         flags |= VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT;
     if(states & ResourceStates::IndexBuffer)
         flags |= VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT;
-    if(states & (ResourceStates::ConstantBuffer | ResourceStates::ShaderResource | ResourceStates::UnorderedAccess))
+    if(states & (ResourceStates::ConstantBuffer | ResourceStates::ShaderResource | ResourceStates::UnorderedAccess)){
+        // Shader-readable resources can be bound by any shader pipeline. ALL_GRAPHICS covers the graphics stages (vertex..fragment, plus mesh/task) and COMPUTE_SHADER the compute pipeline;
+        // ray-tracing shaders are a separate pipeline that ALL_GRAPHICS omits, so add that stage explicitly when the ray-tracing pipeline is enabled (the bit is illegal to specify otherwise).
+        // Without this, a UAV/SRV/CB written or read by a ray-tracing shader is left unsynchronized against later graphics/compute access.
         flags |= VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        if(rayTracingStageAvailable)
+            flags |= VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+    }
     if(states & ResourceStates::IndirectArgument)
         flags |= VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
     if(states & ResourceStates::RenderTarget)

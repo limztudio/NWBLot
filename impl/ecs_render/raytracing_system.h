@@ -30,6 +30,7 @@ public:
     [[nodiscard]] bool buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
     [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
 
 
 private:

@@ -134,7 +134,7 @@ inline void AttachGraphicsPipelineFixedState(
 
 
 VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state);
-VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state);
+VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state, bool rayTracingStageAvailable);
 VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
 VkFormat ConvertFormat(Format::Enum format);
 VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount);

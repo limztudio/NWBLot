@@ -57,8 +57,9 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SCENE_SHADING_DEFERRED_LIGHTING_BINDING, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SCENE_LIGHT_LIST_DEFERRED_LIGHTING_BINDING, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_SCENE_SHADING, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY, 1));
 
         deferredState().m_lightingBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!deferredState().m_lightingBindingLayout){

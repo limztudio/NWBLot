@@ -38,12 +38,18 @@ static constexpr f32 s_FlyCameraMoveSpeed = 2.5f;
 static constexpr f32 s_FlyCameraBoostMultiplier = 4.0f;
 static constexpr f32 s_FlyCameraMouseSensitivityRadiansPerPixel = 0.12f * (s_PI / 180.0f);
 static constexpr f32 s_FlyCameraPitchLimitRadians = 89.0f * (s_PI / 180.0f);
-static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
-static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
-static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
+static constexpr f32 s_DefaultDirectionalLightPitch = s_PI * 0.25f; // emission aimed 45 degrees below horizontal (sun shining down)
+static constexpr f32 s_DefaultDirectionalLightYaw = s_PI * 0.25f;   // 45 degrees around the up axis
+static constexpr f32 s_DefaultDirectionalLightIntensity = 1.0f;
 static constexpr f32 s_CharacterCameraTargetY = 0.85f;
+// Orbit the camera to the +Z side and yaw 180 degrees so it faces back along -Z onto the model's front.
+static constexpr f32 s_CameraStartYaw = s_PI;
+static constexpr f32 s_PointLightIntensity = 2.0f;
+static constexpr f32 s_PointLightRange = 16.0f; // larger range = gentler distance falloff so it stays comparable to the directional across the scene
 static constexpr AStringView s_FemaleModelPath = "project/characters/female/model";
 static constexpr AStringView s_ModelMaterialPath = "project/materials/mat_skinned_uv";
+static constexpr AStringView s_GroundPlaneModelPath = "project/meshes/ground_plane/model";
+static constexpr AStringView s_GroundPlaneMaterialPath = "project/materials/mat_white_opaque";
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
@@ -197,6 +203,25 @@ static void ApplyFlyCameraInputToMainCamera(
     return entity.id();
 }
 
+static NWB::Core::ECS::EntityID CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world){
+    TestbedModelRef model;
+    model.virtualPath = Name(s_GroundPlaneModelPath);
+    TestbedMaterialRef material;
+    material.virtualPath = Name(s_GroundPlaneMaterialPath);
+
+    auto entity = world.createEntity();
+    auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
+    transform.position = Float4(0.0f, 0.0f, 0.0f);
+    transform.scale = Float4(1.0f, 1.0f, 1.0f);
+
+    auto& modelComponent = entity.addComponent<NWB::Impl::ModelComponent>();
+    modelComponent.model = model;
+
+    auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
+    renderer.material = material;
+    return entity.id();
+}
+
 };
 
 
@@ -286,9 +311,11 @@ bool ProjectTestbed::onStartup(){
     const Float4 cameraPosition(
         0.0f,
         __hidden_runtime::s_CharacterCameraTargetY,
-        -__hidden_runtime::s_CameraStartDepth
+        __hidden_runtime::s_CameraStartDepth
     );
     activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
+    if(auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera))
+        StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), &cameraTransform->rotation);
     NWB::Impl::Scene::CreateDirectionalLightEntity(
         *m_world,
         __hidden_runtime::s_DefaultDirectionalLightPitch,
@@ -296,6 +323,13 @@ bool ProjectTestbed::onStartup(){
         0.0f,
         Float4(1.0f, 0.96f, 0.88f),
         __hidden_runtime::s_DefaultDirectionalLightIntensity
+    );
+    NWB::Impl::Scene::CreatePointLightEntity(
+        *m_world,
+        Float4(1.5f, 1.6f, 1.5f),
+        Float4(0.6f, 0.74f, 1.0f),
+        __hidden_runtime::s_PointLightIntensity,
+        __hidden_runtime::s_PointLightRange
     );
 
     createDefaultScene();
@@ -305,6 +339,7 @@ bool ProjectTestbed::onStartup(){
 
 void ProjectTestbed::createDefaultScene(){
     m_characterEntity = __hidden_runtime::CreateSkinnedCharacterEntity(*m_world);
+    __hidden_runtime::CreateStaticGroundPlaneEntity(*m_world);
 
     auto uiEntity = m_world->createEntity();
     auto& ui = uiEntity.addComponent<NWB::Impl::UiComponent>();
@@ -315,7 +350,7 @@ void ProjectTestbed::createDefaultScene(){
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
-        NWB_TEXT("directional light and female skinned character")
+        NWB_TEXT("45-degree directional + point light, female skinned character on a white ground plane")
     );
 }
 

@@ -73,17 +73,6 @@ static_assert((offsetof(LightComponent, type) % alignof(LightType::Enum)) == 0, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(Float4) SceneDirectionalLight{
-    Float4 direction = Float4(0.0f, 0.0f, -1.0f, 0.0f);
-    Float4 colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
-};
-
-static_assert(IsStandardLayout_V<SceneDirectionalLight>, "SceneDirectionalLight must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<SceneDirectionalLight>, "SceneDirectionalLight must stay cheap to pass by value");
-static_assert(alignof(SceneDirectionalLight) >= alignof(Float4), "SceneDirectionalLight must keep vectors aligned");
-
-
-[[nodiscard]] SceneDirectionalLight BuildDefaultSceneDirectionalLight(const SceneViewBasis& basis);
 Core::ECS::EntityID CreateDirectionalLightEntity(
     Core::ECS::World& world,
     f32 pitchRadians,
@@ -92,8 +81,25 @@ Core::ECS::EntityID CreateDirectionalLightEntity(
     const Float4& color,
     f32 intensity
 );
-[[nodiscard]] bool TryBuildSceneDirectionalLight(const TransformComponent& transform, const LightComponent& light, SceneDirectionalLight& outLight);
-[[nodiscard]] SceneDirectionalLight ResolveSceneDirectionalLight(Core::ECS::World& world, const SceneViewBasis& defaultBasis);
+Core::ECS::EntityID CreatePointLightEntity(
+    Core::ECS::World& world,
+    const Float4& position,
+    const Float4& color,
+    f32 intensity,
+    f32 range
+);
+Core::ECS::EntityID CreateSpotLightEntity(
+    Core::ECS::World& world,
+    const Float4& position,
+    f32 pitchRadians,
+    f32 yawRadians,
+    f32 rollRadians,
+    const Float4& color,
+    f32 intensity,
+    f32 range,
+    f32 innerConeCos,
+    f32 outerConeCos
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,6 +121,8 @@ static_assert(IsTriviallyCopyable_V<SceneLight>, "SceneLight must stay cheap to 
 static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep vectors aligned");
 
 
+// Fallback used when a world declares no lights: a single neutral directional light aimed along the view.
+[[nodiscard]] SceneLight BuildDefaultSceneLight(const SceneViewBasis& basis);
 [[nodiscard]] bool TryBuildSceneLight(const TransformComponent& transform, const LightComponent& light, SceneLight& outLight);
 [[nodiscard]] usize GatherSceneLights(Core::ECS::World& world, const SceneViewBasis& defaultBasis, SceneLight* outLights, usize maxLights);
 

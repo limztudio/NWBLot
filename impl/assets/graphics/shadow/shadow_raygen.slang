@@ -31,11 +31,20 @@ bool nwbShadowLightVisible(const float3 worldPosition, const float3 normal, cons
         toLight = (tMax > 1.0e-5) ? (delta / tMax) : float3(0.0, 1.0, 0.0);
     }
 
+    // A light closer than the self-intersection bias shell leaves no room for an occluder between it
+    // and the surface, so treat it as fully visible instead of tracing a degenerate [tMin, tMin] ray
+    // (point/spot lights within ~3mm would otherwise collapse to an empty interval and read as lit by
+    // luck rather than by construction).
+    const float tMin = 0.001;
+    const float tEnd = tMax - 0.002;
+    if(tEnd <= tMin)
+        return true;
+
     RayDesc ray;
-    ray.Origin = worldPosition + normal * 0.001;
+    ray.Origin = worldPosition + normal * tMin;
     ray.Direction = toLight;
-    ray.TMin = 0.001;
-    ray.TMax = max(tMax - 0.002, 0.001);
+    ray.TMin = tMin;
+    ray.TMax = tEnd;
 
     NwbShadowOcclusionPayload payload;
     payload.visibility = 0.0;
@@ -74,7 +83,7 @@ void main(){
     const float3 worldPosition = g_NwbShadowGBufferWorldPosition.Load(texel).xyz;
     const float3 normal = normalize(g_NwbShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
 
-    const uint lightCount = min(nwbSceneLightCount(), NWB_SHADOW_RT_MAX_SHADOWED_LIGHTS);
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_SHADOW_VISIBILITY_LIGHT_COUNT);
     uint visibilityMask = 0u;
     for(uint i = 0u; i < lightCount; ++i){
         if(nwbShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]))

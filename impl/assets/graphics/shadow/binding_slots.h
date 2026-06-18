@@ -19,10 +19,6 @@
 #define NWB_SHADOW_RT_BINDING_LIGHT_LIST 5
 #define NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT 6
 
-// Hard shadows pack one visibility bit per light into a single R32_UINT; lights beyond this cap are
-// left unshadowed (graceful degradation). Matches the shadow-slot-budget concept for v1.
-#define NWB_SHADOW_RT_MAX_SHADOWED_LIGHTS 32u
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

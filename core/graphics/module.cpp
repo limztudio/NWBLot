@@ -320,6 +320,7 @@ Graphics::Graphics(
     , m_windowTitle(m_allocator.getObjectArena())
 {
     m_deviceCreationParams.enableRayTracingExtensions = true;
+    m_deviceCreationParams.enableDebugRuntime = true;
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 }
 Graphics::~Graphics(){

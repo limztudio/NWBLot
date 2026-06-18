@@ -174,8 +174,8 @@ bool RendererAvboitSystem::createAvboitResources(){
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_TRANSMITTANCE, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SCENE_SHADING_AVBOIT_ACCUMULATE_BINDING, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SCENE_LIGHT_LIST_AVBOIT_ACCUMULATE_BINDING, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
         }
     )){

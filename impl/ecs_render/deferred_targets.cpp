@@ -142,9 +142,6 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     csgState().m_intervalSampleBindingSet.reset();
     rayTracingState().m_shadowBindingSet.reset();
     rayTracingState().m_shadowBindingSetTlas = nullptr;
-    rayTracingState().m_sdfShadowBindingSet.reset();
-    rayTracingState().m_sdfShadowBindingSetInstanceBuffer = nullptr;
-    rayTracingState().m_sdfShadowBindingSetVisibility = nullptr;
 
     deferredState().m_targets.framebuffer.reset();
     deferredState().m_targets.opaqueLightingFramebuffer.reset();

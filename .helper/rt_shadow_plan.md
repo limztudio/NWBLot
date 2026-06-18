@@ -7,7 +7,7 @@ Updated: 2026-06-18
 Add shadows to the deferred renderer.
 
 - **Default:** hardware ray-traced shadows.
-- **Fallback (no RT hardware):** software **distance-field tracing** (per-mesh SDF + a global distance field, Lumen-style) — an *emulation* of the same ray query, not a separate shadow technique.
+- **Fallback (no RT hardware):** software **triangle-BVH occlusion tracing** (GPU-built per-mesh BVH + per-frame scene BVH) — an *emulation* of the same ray query, not a separate shadow technique. (Was an SDF sphere-march; pivoted 2026-06-18 — see Phase 3.)
 - **One unified ray abstraction.** Hardware RT and software SDF are two backends behind a single `traceOcclusion` / `traceClosest` primitive. Effects are written once against the abstraction. This mirrors the engine's existing mesh-shader path + compute-emulation fallback pattern (note rules 15-20).
 - **Built as a reusable RT subsystem**, not a shadow one-off. Shadows are the first (cheapest) consumer; reflections / indirect light / caustics are future consumers of the same foundation.
 
@@ -44,12 +44,12 @@ nwbTraceClosest(ray) -> Hit                                    // reflections / 
 
 Backend selected once at init by feature gating (note rules 48/49: gate on real feature structs + Volk entry points, not extension names):
 - **Hardware:** RT pipeline + accel structures (existing `raytracing.cpp` stack).
-- **Software:** compute sphere-march of the global distance field.
+- **Software:** compute stackless any-hit traversal of a GPU-built triangle BVH (per-mesh + scene).
 
 ### Two layers
 
 - **Layer 1 — foundation (shared by all RT effects, both backends):**
-  - Scene→structure bridge: BLAS cache (static build + compact via `compactBottomLevelAccelStructs`; skinned refit per frame from skinned runtime position buffers) + per-frame TLAS from visible instances; **and** the software global distance field assembled from per-mesh SDFs.
+  - Scene→structure bridge: BLAS cache (static build + compact via `compactBottomLevelAccelStructs`; skinned refit per frame from skinned runtime position buffers) + per-frame TLAS from visible instances; **and** the software triangle BVH (per-mesh BVH built/refit on GPU + per-frame scene BVH), assembled by the same scene traversal.
   - **Bindless instance/material table** indexed by `RayTracingInstanceDesc::instanceID`. Backend-agnostic: HW closest-hit and SW traversal read the same table. v1 populates only the fields shadows need; material/texture binding lands with reflections.
   - **SBT ray-type convention:** hit-group index = `instanceContributionToHitGroupIndex + rayTypeOffset + rayTypeStride × geometryIndex`; stride = number of ray types, offset = ray-type index. v1 has one ray type (occlusion); new effects add ray-type indices + records, no restructuring.
   - **Instance mask bits** (`RayTracingInstanceDesc::instanceMask`): shadow-caster / reflective / GI-participant categories defined up front.
@@ -136,26 +136,30 @@ Key realization: a BLAS reads the vertex+index buffers only **during the build**
 - **Verified**: validation layers ON, ~16s run (per-frame TLAS rebuilds + BLAS refits) → ZERO validation messages; log shows `created scene TLAS (capacity 128 instances)`. `m_tlasDeviceAddress` is cached for the upcoming trace (Phase 4).
 - **Remaining** (not blocking): instanceID is currently a per-frame running index (revisit when hit shaders need entity identity); instanceMask is 0xFF (no per-light/layer mask convention yet); TLAS grows but never shrinks.
 
-### Phase 3 — SDF fallback foundation (software backend)
+### Phase 3 — Software triangle-BVH fallback (software backend) — DIRECTION CHANGED 2026-06-18
 
-The **mesh SDF is the one true cooked/baked artifact** (a 3D distance-field texture per mesh — deterministic and expensive, so baked offline and shipped). Runtime assembles a global distance field from instances; same instance table.
+**This supersedes the original SDF approach.** The earlier plan made the SW fallback a per-mesh cooked SDF sphere-march; that froze skinned meshes in bind pose (a grid SDF stores distances and cannot be linearly skinned). Per the user's call ("we should consider the skinned/movable cases"), the SW fallback is now a **GPU-built software triangle-BVH occlusion tracer** that structurally mirrors the HW BLAS/TLAS path, so it traces the actual per-frame deformed triangles (via refit) and produces HW/SW-matching shadows. The entire SDF path has been **DELETED** (analytic-box runtime path, `cook_sdf_build.inl` baker + `MeshCookEntry` sdf* fields, `shadow_march_cs.slang/.nwb`, `NWB_SHADOW_SDF_*` slots, `s_MarchComputeShaderName`, `renderSdfShadowVisibility`/`uploadSdfInstances`/`ensureSdfShadow*`, the `m_sdf*` state). `meshlet_triangle_indices.h` was also dropped from `cook.cpp` (the new BVH builds at runtime, not cook-time).
 
-Skinned caveat: SDFs are baked in bind pose, so the SW fallback handles skinned meshes only **approximately** (bind-pose SDF) or **omits** them from the software shadow field (static geometry still casts). HW RT handles skinned shadows exactly via the per-frame refit above. This asymmetry is accepted (same compromise as Lumen software tracing).
+Why a BVH, not a deforming SDF: a deforming mesh would need re-voxelization (too costly for the no-RT GPUs the fallback targets) or capsule/per-bone approximations; a triangle BVH instead traces the real posed triangles. GPU build/refit beats CPU-build+upload decisively because skinned positions are already GPU-resident (CPU build would need a readback that costs more than the whole GPU build). Research-verified (see memory [[rt-shadow-feature]] for citations — Karras HPG2012, H-PLOC HPG2024, NVIDIA RTX best-practices, SRDH, Kopta I3D2012): GPU LBVH of the 77k-tri character < ~0.15 ms on modern GPUs, refit ~10× cheaper than a full build, and LBVH's lower build quality is the mildest case for occlusion (any-hit + early-out; SAH is mis-specified for shadows).
 
-**Detailed plan (from the 2026-06-18 survey workflow).** The deferred consumer (`scene/lighting.slangi nwbSceneApplyLighting` reading `DeferredFrameTargets::shadowVisibility`, R32_UINT 32-light bitmask) is FIXED and untouched; the SW path just writes the same image by sphere-marching a field. **Sequencing decision: PIPELINE-FIRST with analytic SDFs** — build the runtime trace/assembly/selection with a box SDF per instance (each mesh's object-space AABB + instance world→object transform), proving the plumbing + the visibility contract end-to-end (force via the existing `NWB_TESTBED_FORCE_RAYTRACING_EMULATION`), THEN swap the analytic field for real cook-baked per-mesh SDFs. Units:
-- **A (analytic, now): runtime SW shadow pipeline, no cook changes.**
-  - Per-mesh object-space AABB on `MeshResources` (compute at `createMeshResources`/`createRuntimeMeshResources` from positions).
-  - `RendererShadowDistanceFieldSystem` (peer of `RendererRayTracingSystem`): per-frame `StructuredBuffer<SdfInstanceGpu>` (worldToObject inverse transform via `MatrixInverse` of the `buildSceneTlas` `MatrixAffineTransformation`, + object AABB) from the SAME `world().view<RendererComponent>()` traversal; analytic box-SDF.
-  - `shadow_march_cs.slang` compute pass (mirror `csg_interval_peel` C++ + `interval_peel_cs.slang`): per G-buffer pixel, loop ≤32 lights, march the instance boxes, pack the visible bit into the R32_UINT visibility UAV. New SW bindings in `shadow/binding_slots.h` (reuse gbuffer/scene-shading/light-list/visibility slots; replace TLAS slot with the SDF instance buffer).
-  - `nwbTraceOcclusion(origin,dir,tMax)` front-door in `occlusion.slangi` (HW = lift the `shadow_raygen` TraceRay; SW = march). `nwbShadowLightVisible` (per-light dir/tMax/bias) moves here so HW raygen + SW compute share it.
-  - Backend selection in `system.cpp`: `if(shadowTlasReady) HW; else if(sdf.available()) SW; else clear`. `available()` = RT-pipeline unsupported OR forced.
-- **B (baked SDFs, later): replace the analytic box with cook-baked 3D SDF textures.** Cook: `cook_sdf_build.inl` (`BuildMeshSdf` — voxelize triangles from `BuildMeshletTriangleIndices`, ray-parity sign, brute-force closest-triangle distance pruned by meshlet bounds, parallel over Z-slices; 32³ R8_SNORM, gated by a `.nwb` `bake_sdf` field). Binary `MSH5→MSH6` (embed SDF in the mesh artifact). Runtime: per-mesh `Texture3D` (R8_SNORM) on `MeshResources`; a single shared **SDF atlas Texture3D** (sub-box packer) sidesteps bindless (one fixed SRV slot); the march samples the atlas instead of the box.
-- **Hardest/riskiest:** (1) cook SDF baking correctness (ray-parity sign on non-watertight meshes) + cost; (2) object-space march matching the bake encoding across instance transforms (non-uniform scale distorts distances → warn/skip); (3) the atlas packer lifetime/overflow.
-- v1 = static + skinned both as analytic boxes (current/bind-pose AABB) so the skinned character casts a visible (blocky) shadow to prove the path; baked SDFs are static-only.
+The deferred consumer (`scene/lighting.slangi nwbSceneApplyLighting` reading `DeferredFrameTargets::shadowVisibility`, R32_UINT 32-light bitmask) is FIXED; the SW path writes the same image by tracing the BVH.
+
+Settled decisions: GPU LBVH (Morton → radix sort → Karras/Apetrei topology → bottom-up AABB fit); per-mesh BVH = BLAS-analog (static built once / skinned GPU-refit per frame + full rebuild every 8 frames, reusing the HW cadence); per-frame scene/instance BVH = TLAS-analog; reuse the resident R32_UINT `triangleIndexBuffer` + skinned `positionBuffer` (no cook changes, no extra index buffer); all-opaque any-hit (instanceMask 0xFF, accept-first-hit); CPU-driven plain `dispatch` (counts known CPU-side); new GPU state in a dedicated `RendererBvhShadowState` (mirrors `RendererAvboitState`); reusable build kernels + `bvh_common.slangi` in a new `impl/assets/graphics/bvh/` subsystem, the shadow trace kernel stays in `shadow/`.
+
+Ordered units:
+- **U0** — GPU data layout + binding/name scaffolding: `bvh_common.slangi` (NwbBvhNode / NwbBvhInstance / NwbBvhMeshRange std430), new binding-slot + shader-name headers, SW-BVH buffer handles + `swBvhRefitsSinceRebuild` on `MeshResources`.
+- **U1** — GPU radix sort over u32 Morton keys (histogram → scan → scatter, ping-pong). Hardest reusable block; needs a readback sanity test (a wrong sort silently corrupts the BVH).
+- **U2** — per-mesh LBVH build (centroid+AABB → 30-bit Morton over `csgLocalBounds` → U1 sort → Karras topology → bottom-up AABB fit via atomic parent-visit counter). Root AABB ≈ `csgLocalBounds`.
+- **U3** — skinned refit (re-run only the fit pass from fresh skinned positions) + full rebuild every `s_BvhMaxRefitsBeforeRebuild` (=8). MUST run after the skinning compute pass (same ordering the HW BLAS refit relies on).
+- **U4** — per-frame scene/instance BVH over visible instances (`world().view<RendererComponent>()`, object→world + world→object, doubling-grow instance buffer).
+- **U5** — stackless compute any-hit traversal kernel: per pixel, loop ≤32 lights, transform the ray into each instance via world→object, traverse instance BVH then per-mesh BVH, set the light bit on miss, write R32_UINT.
+- **U6** — `renderGpuBvhShadowVisibility` orchestration + wire into the `system.cpp` else-branch (replacing the deleted SDF call); dedicated `RendererBvhShadowState` with invalidate/reset.
+
+Riskiest (from the survey): GPU radix-sort correctness (readback test, not just validation-clean); bottom-up fit UAV-barrier race; skinning-before-build ordering; buffer-growth churn (double, never shrink); perf on low-end no-RT GPUs (measure via the `s_ShadowVisibility` timing scope; refit cadence is the cost knob).
 
 ### Phase 4 — Trace abstraction + shadow effect
 
-`nwbTraceOcclusion` (HW: RT-pipeline occlusion ray, terminate-on-first-hit, skip closest-hit, miss = lit; SW: sphere-march the global distance field). A screen-space visibility producer pass writing the visibility representation. **HW side DONE** (Units 1-4 + the deferred integration); the SW visibility producer is Phase 3 Unit A above.
+`nwbTraceOcclusion` (HW: RT-pipeline occlusion ray, terminate-on-first-hit, skip closest-hit, miss = lit; SW: stackless any-hit traversal of the software triangle BVH, accept-first-hit, miss = lit). A screen-space visibility producer pass writing the visibility representation. **HW side DONE** (Units 1-4 + the deferred integration); the SW visibility producer is Phase 3 (U0–U6) above.
 
 ### Phase 5 — Deferred integration
 
@@ -163,7 +167,7 @@ Lighting loop multiplies per-light contribution by per-light visibility. Shadow-
 
 ### Phase 6 — Transparent / colored transmittance shadows
 
-Visibility becomes `float3` transmittance: HW any-hit accumulates colored transmittance through transparent hits (terminate only on opaque); SW accumulates absorption (Beer-Lambert) along the march. Per-light, composes with the multi-light loop.
+Visibility becomes `float3` transmittance: HW any-hit accumulates colored transmittance through transparent hits (terminate only on opaque); SW any-hit accumulates colored transmittance through transparent triangle hits (terminate only on opaque). Per-light, composes with the multi-light loop.
 
 ### Later (quality/perf, post-Chapter-1)
 

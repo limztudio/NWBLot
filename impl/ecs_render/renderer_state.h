@@ -273,18 +273,8 @@ private:
     Core::RayTracingShaderTableHandle m_shadowShaderTable;
     Core::BindingSetHandle m_shadowBindingSet;
     const Core::RayTracingAccelStruct* m_shadowBindingSetTlas = nullptr;
-    Core::BufferHandle m_sdfInstanceBuffer;
-    Core::BufferHandle m_sdfParamsBuffer;
-    Core::BindingLayoutHandle m_sdfShadowBindingLayout;
-    Core::ShaderHandle m_sdfShadowComputeShader;
-    Core::ComputePipelineHandle m_sdfShadowPipeline;
-    Core::BindingSetHandle m_sdfShadowBindingSet;
-    const Core::Buffer* m_sdfShadowBindingSetInstanceBuffer = nullptr;
-    const Core::Texture* m_sdfShadowBindingSetVisibility = nullptr;
-    usize m_sdfInstanceCapacity = 0u;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;
-    bool m_sdfPipelineFailed = false;
 };
 
 

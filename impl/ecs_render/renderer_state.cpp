@@ -187,17 +187,7 @@ void RendererRayTracingState::invalidateResources(){
     m_shadowBindingLayout.reset();
     m_shadowBindingSet.reset();
     m_shadowBindingSetTlas = nullptr;
-    m_sdfInstanceBuffer.reset();
-    m_sdfParamsBuffer.reset();
-    m_sdfShadowBindingLayout.reset();
-    m_sdfShadowComputeShader.reset();
-    m_sdfShadowPipeline.reset();
-    m_sdfShadowBindingSet.reset();
-    m_sdfShadowBindingSetInstanceBuffer = nullptr;
-    m_sdfShadowBindingSetVisibility = nullptr;
-    m_sdfInstanceCapacity = 0u;
     m_shadowPipelineFailed = false;
-    m_sdfPipelineFailed = false;
 }
 
 

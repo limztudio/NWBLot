@@ -30,7 +30,6 @@ public:
     [[nodiscard]] bool buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
     [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    [[nodiscard]] bool renderSdfShadowVisibility(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena, DeferredFrameTargets& targets);
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
 
 
@@ -38,9 +37,6 @@ private:
     [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
     [[nodiscard]] bool ensureShadowPipeline();
     [[nodiscard]] bool ensureShadowBindingSet(DeferredFrameTargets& targets);
-    [[nodiscard]] bool ensureSdfShadowPipeline();
-    [[nodiscard]] bool uploadSdfInstances(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena, u32& outInstanceCount);
-    [[nodiscard]] bool ensureSdfShadowBindingSet(DeferredFrameTargets& targets);
 };
 
 

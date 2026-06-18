@@ -26,6 +26,9 @@ namespace AssetsGraphicsBvh{
 
 
 inline constexpr Name s_BitonicSortShaderName("engine/graphics/bvh/bvh_bitonic_sort_cs");
+inline constexpr Name s_BvhMortonShaderName("engine/graphics/bvh/bvh_morton_cs");
+inline constexpr Name s_BvhTopologyShaderName("engine/graphics/bvh/bvh_topology_cs");
+inline constexpr Name s_BvhFitShaderName("engine/graphics/bvh/bvh_fit_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

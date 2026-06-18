@@ -24,6 +24,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// LBVH build passes (Morton -> sort -> Karras topology -> bottom-up fit). One shared binding layout/set;
+// each kernel binds the whole set and references only the subset it uses. Positions and triangle indices
+// are raw ByteAddressBuffers; keys / payload / nodes / parent / visit-counter are RWStructuredBuffers.
+#define NWB_BVH_BUILD_GROUP_SIZE 256
+
+#define NWB_BVH_BUILD_SET 0
+
+#define NWB_BVH_BUILD_BINDING_POSITIONS 0
+#define NWB_BVH_BUILD_BINDING_TRIANGLE_INDICES 1
+#define NWB_BVH_BUILD_BINDING_KEYS 2
+#define NWB_BVH_BUILD_BINDING_PAYLOAD 3
+#define NWB_BVH_BUILD_BINDING_NODES 4
+#define NWB_BVH_BUILD_BINDING_PARENT 5
+#define NWB_BVH_BUILD_BINDING_VISIT_COUNTER 6
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 

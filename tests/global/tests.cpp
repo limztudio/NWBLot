@@ -60,6 +60,24 @@ struct U32VectorView{
     [[nodiscard]] u32 operator[](const usize index)const{ return values[index]; }
 };
 
+struct MoveOnlySwapValue{
+    i32 value = 0;
+
+    MoveOnlySwapValue() = default;
+    explicit MoveOnlySwapValue(const i32 initialValue)
+        : value(initialValue)
+    {}
+    MoveOnlySwapValue(const MoveOnlySwapValue&) = delete;
+    MoveOnlySwapValue& operator=(const MoveOnlySwapValue&) = delete;
+    MoveOnlySwapValue(MoveOnlySwapValue&& rhs)noexcept
+        : value(Exchange(rhs.value, -1))
+    {}
+    MoveOnlySwapValue& operator=(MoveOnlySwapValue&& rhs)noexcept{
+        value = Exchange(rhs.value, -1);
+        return *this;
+    }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -381,6 +399,31 @@ static void TestTriviallyCopyableVectorAlias(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, values[2u] == 4u);
 }
 
+static void TestCompressedPairSwapUsesMove(TestContext& context){
+    CompressedPair<MoveOnlySwapValue, MoveOnlySwapValue> lhs;
+    CompressedPair<MoveOnlySwapValue, MoveOnlySwapValue> rhs;
+    lhs.first().value = 1;
+    lhs.second().value = 2;
+    rhs.first().value = 3;
+    rhs.second().value = 4;
+
+    static_assert(noexcept(lhs.swap(rhs)));
+    using std::swap;
+    static_assert(noexcept(swap(lhs, rhs)));
+
+    lhs.swap(rhs);
+    NWB_GLOBAL_TEST_CHECK(context, lhs.first().value == 3);
+    NWB_GLOBAL_TEST_CHECK(context, lhs.second().value == 4);
+    NWB_GLOBAL_TEST_CHECK(context, rhs.first().value == 1);
+    NWB_GLOBAL_TEST_CHECK(context, rhs.second().value == 2);
+
+    swap(lhs, rhs);
+    NWB_GLOBAL_TEST_CHECK(context, lhs.first().value == 1);
+    NWB_GLOBAL_TEST_CHECK(context, lhs.second().value == 2);
+    NWB_GLOBAL_TEST_CHECK(context, rhs.first().value == 3);
+    NWB_GLOBAL_TEST_CHECK(context, rhs.second().value == 4);
+}
+
 static void TestBoundedRuntimeWrappers(TestContext& context){
     u32 copiedValue = 0u;
     const u32 sourceValue = 0xAABBCCDDu;
@@ -613,6 +656,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("global", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(context);
     __hidden_tests::TestAppendTriviallyCopyableVectorSelfAppend(context);
     __hidden_tests::TestTriviallyCopyableVectorAlias(context);
+    __hidden_tests::TestCompressedPairSwapUsesMove(context);
     __hidden_tests::TestBoundedRuntimeWrappers(context);
     __hidden_tests::TestLoggerMacrosBehaveAsSingleStatements(context);
     __hidden_tests::TestLoggerDiagnosticCaptureUsesFormattedMessage(context);

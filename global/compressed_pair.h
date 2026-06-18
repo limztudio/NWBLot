@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "type_properties.h"
 #include "call_traits.h"
 
 
@@ -25,10 +26,8 @@ namespace CompressedPairDetail{
 
 
 template<typename T>
-inline void internalSwap(T& t1, T& t2){
-    T tTemp = t1;
-    t1 = t2;
-    t2 = tTemp;
+inline void internalSwap(T& t1, T& t2)noexcept(noexcept(Swap(t1, t2))){
+    Swap(t1, t2);
 }
 
 template<typename T1, typename T2, bool isSame, bool firstEmpty, bool secondEmpty>
@@ -84,13 +83,16 @@ public:
 
 
 public:
-    typename Types::first_reference first(){ return m_first; }
-    typename Types::first_const_reference first()const{ return m_first; }
+    typename Types::first_reference first()noexcept{ return m_first; }
+    typename Types::first_const_reference first()const noexcept{ return m_first; }
 
-    typename Types::second_reference second(){ return m_second; }
-    typename Types::second_const_reference second()const{ return m_second; }
+    typename Types::second_reference second()noexcept{ return m_second; }
+    typename Types::second_const_reference second()const noexcept{ return m_second; }
 
-    void swap(::CompressedPair<T1, T2>& y){
+    void swap(::CompressedPair<T1, T2>& y)noexcept(
+        noexcept(internalSwap(m_first, y.first()))
+        && noexcept(internalSwap(m_second, y.second()))
+    ){
         internalSwap(m_first, y.first());
         internalSwap(m_second, y.second());
     }
@@ -108,13 +110,13 @@ private:
 
 
 public:
-    typename Types::first_reference first(){ return static_cast<Derived&>(*this); }
-    typename Types::first_const_reference first()const{ return static_cast<const Derived&>(*this); }
+    typename Types::first_reference first()noexcept{ return static_cast<Derived&>(*this); }
+    typename Types::first_const_reference first()const noexcept{ return static_cast<const Derived&>(*this); }
 
-    typename Types::second_reference second(){ return static_cast<Derived&>(*this); }
-    typename Types::second_const_reference second()const{ return static_cast<const Derived&>(*this); }
+    typename Types::second_reference second()noexcept{ return static_cast<Derived&>(*this); }
+    typename Types::second_const_reference second()const noexcept{ return static_cast<const Derived&>(*this); }
 
-    void swap(::CompressedPair<T1, T2>&){}
+    void swap(::CompressedPair<T1, T2>&)noexcept{}
 };
 
 template<typename T1, typename T2, int version>
@@ -168,13 +170,13 @@ public:
 
 
 public:
-    typename Types::first_reference first(){ return *this; }
-    typename Types::first_const_reference first()const{ return *this; }
+    typename Types::first_reference first()noexcept{ return *this; }
+    typename Types::first_const_reference first()const noexcept{ return *this; }
 
-    typename Types::second_reference second(){ return m_second; }
-    typename Types::second_const_reference second()const{ return m_second; }
+    typename Types::second_reference second()noexcept{ return m_second; }
+    typename Types::second_const_reference second()const noexcept{ return m_second; }
 
-    void swap(::CompressedPair<T1,T2>& y){
+    void swap(::CompressedPair<T1,T2>& y)noexcept(noexcept(internalSwap(m_second, y.second()))){
         internalSwap(m_second, y.second());
     }
 
@@ -203,13 +205,13 @@ public:
 
 
 public:
-    typename Types::first_reference first(){ return m_first; }
-    typename Types::first_const_reference first()const{ return m_first; }
+    typename Types::first_reference first()noexcept{ return m_first; }
+    typename Types::first_const_reference first()const noexcept{ return m_first; }
 
-    typename Types::second_reference second(){ return *this; }
-    typename Types::second_const_reference second()const{ return *this; }
+    typename Types::second_reference second()noexcept{ return *this; }
+    typename Types::second_const_reference second()const noexcept{ return *this; }
 
-    void swap(::CompressedPair<T1,T2>& y){
+    void swap(::CompressedPair<T1,T2>& y)noexcept(noexcept(internalSwap(m_first, y.first()))){
         internalSwap(m_first, y.first());
     }
 
@@ -314,13 +316,13 @@ public:
 
 
 public:
-    first_reference first(){ return Base::first(); }
-    first_const_reference first()const{ return Base::first(); }
+    first_reference first()noexcept{ return Base::first(); }
+    first_const_reference first()const noexcept{ return Base::first(); }
 
-    second_reference second(){ return Base::second(); }
-    second_const_reference second()const{ return Base::second(); }
+    second_reference second()noexcept{ return Base::second(); }
+    second_const_reference second()const noexcept{ return Base::second(); }
 
-    void swap(CompressedPair& y){ Base::swap(y); }
+    void swap(CompressedPair& y)noexcept(noexcept(Base::swap(y))){ Base::swap(y); }
 };
 
 
@@ -334,7 +336,7 @@ namespace std{
 
 
 template<typename T1, typename T2>
-inline void swap(CompressedPair<T1, T2>& x, CompressedPair<T1, T2>& y){ x.swap(y); }
+inline void swap(CompressedPair<T1, T2>& x, CompressedPair<T1, T2>& y)noexcept(noexcept(x.swap(y))){ x.swap(y); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

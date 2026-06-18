@@ -95,6 +95,8 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
 }
 
 bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
+    m_renderCommandList.reset();
+
     if(!framebuffer)
         return false;
 
@@ -125,8 +127,21 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     ))
         return false;
 
-    if(m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly))
-        return m_avboitSystem.prepareAvboitPassResources(deferredTargets, m_preparedCsgFrameState);
+    if(
+        m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly)
+        && !m_avboitSystem.prepareAvboitPassResources(deferredTargets, m_preparedCsgFrameState)
+    )
+        return false;
+
+    auto* device = m_graphics.getDevice();
+    if(!device)
+        return false;
+
+    m_renderCommandList = device->createCommandList();
+    if(!m_renderCommandList){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create prepared render command list"));
+        return false;
+    }
 
     return true;
 }
@@ -134,6 +149,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 void RendererSystem::invalidateResources(){
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
+    m_renderCommandList.reset();
     m_meshState.invalidateResources();
     m_materialState.invalidateResources();
     m_drawState.invalidateResources();
@@ -161,9 +177,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
         return;
     auto* device = m_graphics.getDevice();
-    Core::CommandListHandle commandList = device->createCommandList();
+    Core::CommandListHandle commandList = Move(m_renderCommandList);
     if(!commandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create render command list"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: render command list was not prepared"));
         return;
     }
     commandList->open();

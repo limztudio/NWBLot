@@ -157,9 +157,8 @@ ModelSystem::ModelSystem(
     }
 }
 
-void ModelSystem::update(Core::ECS::World& world, const f32 delta){
+void ModelSystem::prepare(Core::ECS::World& world){
     static_cast<void>(world);
-    static_cast<void>(delta);
 
     clearInvalidSpawnedObjects();
     clearRuntimeObjectsWithoutModel();
@@ -169,6 +168,11 @@ void ModelSystem::update(Core::ECS::World& world, const f32 delta){
             ensureModelRuntime(entity, component);
         }
     );
+}
+
+void ModelSystem::update(Core::ECS::World& world, const f32 delta){
+    static_cast<void>(world);
+    static_cast<void>(delta);
 
     updateModelObjectTransforms();
     updateStaticMeshAttachments();

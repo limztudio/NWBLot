@@ -200,6 +200,8 @@ bool UiSystem::validateResources(const u32 width, const u32 height, const u32 sa
 }
 
 bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
+    m_renderCommandList.reset();
+
     if(!framebuffer)
         return false;
 
@@ -246,10 +248,26 @@ bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
         device->executeCommandLists(commandLists, 1);
     }
 
-    return ensureBuffers(
+    if(!ensureBuffers(
         static_cast<usize>(drawData->TotalVtxCount),
         static_cast<usize>(drawData->TotalIdxCount)
-    );
+    ))
+        return false;
+
+    if(drawData->TotalVtxCount <= 0 || drawData->TotalIdxCount <= 0)
+        return true;
+
+    auto* device = m_graphics.getDevice();
+    if(!device)
+        return false;
+
+    m_renderCommandList = device->createCommandList();
+    if(!m_renderCommandList){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create prepared render command list"));
+        return false;
+    }
+
+    return true;
 }
 
 void UiSystem::render(Core::Framebuffer* framebuffer){
@@ -282,9 +300,15 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
         return;
 
     auto* device = m_graphics.getDevice();
-    Core::CommandListHandle commandList = device->createCommandList();
+    if(drawData->TotalVtxCount <= 0 || drawData->TotalIdxCount <= 0){
+        m_frameStarted = false;
+        m_frameFinished = false;
+        return;
+    }
+
+    Core::CommandListHandle commandList = Move(m_renderCommandList);
     if(!commandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create command list"));
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: render command list was not prepared"));
         return;
     }
 
@@ -304,6 +328,7 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
 }
 
 void UiSystem::backBufferResizing(){
+    m_renderCommandList.reset();
     m_pipeline.reset();
 }
 

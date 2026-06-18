@@ -105,11 +105,13 @@ void MeshSkinningSystem::update(Core::ECS::World& world, const f32 delta){
 
 bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
+    m_renderCommandList.reset();
 
     m_runtimeMeshCache.prepareResources(m_world);
     pruneRuntimeResources();
 
     bool ready = true;
+    bool hasRenderWork = false;
     m_world.view<SkinnedMeshBindingComponent>().each(
         [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
             if(!ready)
@@ -126,10 +128,30 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
             const SkeletonPoseComponent* skeletonPose = nullptr;
             __hidden_system::ResolveSkeletonComponents(m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
             ready = prepareRuntimeMeshResources(*instance, jointPalette, skeletonPose);
+            const auto foundResources = m_runtimeResources.find(instance->handle.value);
+            const bool hasSkinningResources = foundResources != m_runtimeResources.end() && foundResources.value().usesSkinning();
+            hasRenderWork =
+                hasRenderWork
+                || hasSkinningResources
+                || __hidden_system::HasPotentialSkinningWork(*instance, jointPalette, skeletonPose)
+            ;
         }
     );
 
-    return ready;
+    if(!ready || !hasRenderWork)
+        return ready;
+
+    auto* device = m_graphics.getDevice();
+    if(!device)
+        return false;
+
+    m_renderCommandList = device->createCommandList();
+    if(!m_renderCommandList){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create prepared render command list"));
+        return false;
+    }
+
+    return true;
 }
 
 bool MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh){
@@ -205,28 +227,13 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
 
     auto* device = m_graphics.getDevice();
-    Core::CommandListHandle commandList;
-    bool commandListOpen = false;
-    bool commandListFailed = false;
+    Core::CommandListHandle commandList = Move(m_renderCommandList);
+    if(!commandList)
+        return;
+
     bool submittedWork = false;
 
-    auto ensureCommandList = [&]() -> bool{
-        if(commandListOpen)
-            return true;
-        if(commandListFailed)
-            return false;
-
-        commandList = device->createCommandList();
-        if(!commandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create command list"));
-            commandListFailed = true;
-            return false;
-        }
-
-        commandList->open();
-        commandListOpen = true;
-        return true;
-    };
+    commandList->open();
 
     m_world.view<SkinnedMeshBindingComponent>().each(
         [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
@@ -249,15 +256,10 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
                 skeletonPose
             ) && !hadSkinningResources)
                 return;
-            if(!ensureCommandList())
-                return;
             if(dispatchRuntimeMesh(*commandList, *instance, jointPalette, skeletonPose))
                 submittedWork = true;
         }
     );
-
-    if(!commandListOpen)
-        return;
 
     commandList->close();
 
@@ -284,6 +286,7 @@ void MeshSkinningSystem::pruneRuntimeResources(){
 }
 
 void MeshSkinningSystem::invalidateResources(){
+    m_renderCommandList.reset();
     m_runtimeResources.clear();
     m_runtimeMeshCache.clear();
 

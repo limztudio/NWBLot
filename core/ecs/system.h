@@ -61,6 +61,7 @@ public:
 
 
 public:
+    virtual void prepare(World& world){ static_cast<void>(world); }
     virtual void update(World& world, f32 delta) = 0;
 
 

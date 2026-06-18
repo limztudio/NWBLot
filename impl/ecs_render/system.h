@@ -142,6 +142,7 @@ private:
     RendererAvboitState m_avboitState;
     RendererRayTracingState m_rayTracingState;
     CsgFrameState m_preparedCsgFrameState;
+    Core::CommandListHandle m_renderCommandList;
     bool m_preparedCsgFrameStateValid = false;
 
 private:

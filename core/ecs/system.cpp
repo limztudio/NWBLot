@@ -221,6 +221,9 @@ void SystemScheduler::execute(World& world, f32 delta){
     if(m_dirty)
         rebuild();
 
+    for(ISystem* system : m_allSystems)
+        system->prepare(world);
+
     Alloc::ThreadPool& pool = world.taskPool();
 
     for(auto& stage : m_stages){

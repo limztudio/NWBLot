@@ -185,6 +185,7 @@ private:
     Core::BindingLayoutHandle m_boundsBindingLayout;
     Core::ShaderHandle m_boundsComputeShader;
     Core::ComputePipelineHandle m_boundsComputePipeline;
+    Core::CommandListHandle m_renderCommandList;
 };
 
 

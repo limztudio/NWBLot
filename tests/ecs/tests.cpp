@@ -81,6 +81,11 @@ public:
     }
 
 public:
+    virtual void prepare(NWB::Core::ECS::World& world)override{
+        static_cast<void>(world);
+        ++prepares;
+    }
+
     virtual void update(NWB::Core::ECS::World& world, const f32 delta)override{
         ++updates;
         lastDelta = delta;
@@ -93,6 +98,7 @@ public:
     }
 
 public:
+    u32 prepares = 0;
     u32 updates = 0;
     f32 lastDelta = 0.0f;
 };
@@ -289,6 +295,7 @@ static void TestSystemTick(TestContext& context){
     NWB_ECS_TEST_CHECK(context, testWorld.world.getSystem<CountingSystem>() == &system);
 
     testWorld.world.tick(0.25f);
+    NWB_ECS_TEST_CHECK(context, system.prepares == 1);
     NWB_ECS_TEST_CHECK(context, system.updates == 1);
     NWB_ECS_TEST_CHECK(context, system.lastDelta == 0.25f);
     NWB_ECS_TEST_CHECK(context, position.x == 5);
@@ -335,6 +342,7 @@ static void TestDuplicateSchedulerAddIsStable(TestContext& context){
     scheduler.addSystem(system);
     scheduler.execute(testWorld.world, 0.5f);
 
+    NWB_ECS_TEST_CHECK(context, system.prepares == 1u);
     NWB_ECS_TEST_CHECK(context, system.updates == 1u);
     NWB_ECS_TEST_CHECK(context, position.x == 2);
 }

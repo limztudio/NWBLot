@@ -96,6 +96,7 @@ public:
 
 
 public:
+    virtual void prepare(Core::ECS::World& world)override;
     virtual void update(Core::ECS::World& world, f32 delta)override;
 
 

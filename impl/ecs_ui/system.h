@@ -130,6 +130,7 @@ private:
     Core::GraphicsPipelineHandle m_pipeline;
     Core::BufferHandle m_vertexBuffer;
     Core::BufferHandle m_indexBuffer;
+    Core::CommandListHandle m_renderCommandList;
     UiTextureResourceVector m_textures;
     UiTextureUploadVector m_textureUploadScratch;
     usize m_vertexBufferCapacity = 0;

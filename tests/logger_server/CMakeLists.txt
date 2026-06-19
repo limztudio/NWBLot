@@ -9,6 +9,7 @@ target_sources(nwb_logserver_crash_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_android.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_linux.cpp"
+    "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_rgd.cpp"
 )
 target_link_libraries(nwb_logserver_crash_tests PRIVATE
     nwb_common

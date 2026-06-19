@@ -125,19 +125,15 @@ public:
     GpuTimingMeasure(GpuTimingMeasure&&) = delete;
     GpuTimingMeasure& operator=(GpuTimingMeasure&&) = delete;
 
+    // Defined out-of-line: the ctor/dtor call CommandList::beginMarker/endMarker, and CommandList is only
+    // forward-declared in this header (the marker calls need the complete type, available in the .cpp).
     GpuTimingMeasure(
         GpuTimingRecorder& recorder,
         const Name& scopeName,
         Device* device,
         CommandList& commandList
-    )
-        : m_recorder(recorder)
-        , m_commandList(commandList)
-        , m_scope(recorder.beginScope(scopeName, device, commandList))
-    {}
-    ~GpuTimingMeasure(){
-        m_recorder.endScope(m_commandList, m_scope);
-    }
+    );
+    ~GpuTimingMeasure();
 
 
 private:

@@ -181,6 +181,32 @@ void GpuTimingRecorder::advanceEpoch(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+GpuTimingMeasure::GpuTimingMeasure(
+    GpuTimingRecorder& recorder,
+    const Name& scopeName,
+    Device* device,
+    CommandList& commandList
+)
+    : m_recorder(recorder)
+    , m_commandList(commandList)
+{
+    // The marker brackets the whole scope: it opens before the begin timestamp and closes after the end
+    // timestamp (see dtor), so a GPU crash anywhere inside the pass resolves to this scope. The marker label
+    // is the scope Name itself (its readable string under NWB_DEBUG, its hash string otherwise; a future
+    // NamePool decodes that hash back to text in release). beginMarker self-gates on the active marker
+    // backends, so it is a cheap no-op when none are enabled, and fires independently of timer-query state.
+    m_commandList.beginMarker(scopeName.c_str());
+    m_scope = m_recorder.beginScope(scopeName, device, commandList);
+}
+GpuTimingMeasure::~GpuTimingMeasure(){
+    m_recorder.endScope(m_commandList, m_scope);
+    m_commandList.endMarker();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_CORE_END
 
 

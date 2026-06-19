@@ -594,6 +594,23 @@ ResolvedMarker GpuCrashTracker::resolveMarker(usize markerHash){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static GpuCrashSink s_GpuCrashSink = nullptr;
+static void* s_GpuCrashSinkUserData = nullptr;
+
+void RegisterGpuCrashSink(GpuCrashSink sink, void* userData){
+    s_GpuCrashSink = sink;
+    s_GpuCrashSinkUserData = userData;
+}
+
+void DispatchGpuCrash(const GpuCrashReport& report){
+    if(s_GpuCrashSink)
+        s_GpuCrashSink(s_GpuCrashSinkUserData, report);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_CORE_END
 
 

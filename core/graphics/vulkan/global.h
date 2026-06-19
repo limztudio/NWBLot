@@ -59,6 +59,10 @@ inline constexpr u64 s_ScratchMemoryLimit = 256 * 1024 * 1024; // 256 MB
 inline constexpr u64 s_LargeBufferThreshold = 16 * 1024 * 1024; // 16 MB
 inline constexpr u64 s_BufferAlignmentBytes = 4;
 
+// Fixed-size, pre-reserved arena for GPU crash reports. Captured on device-lost, so it must
+// not touch the growable heap (which may be unsafe at crash time); the block is reserved up front.
+inline constexpr usize s_GpuCrashReportArenaSize = 64u * 1024u; // 64 KB
+
 // Queue and swap chain defaults.
 inline constexpr u32 s_GraphicsQueueIndex = 0;
 inline constexpr u32 s_ComputeQueueIndex = 0;

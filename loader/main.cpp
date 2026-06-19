@@ -225,6 +225,13 @@ bool InstallCrashReporting(CrashArena& crashArena, const LoaderOptions& options)
             NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'runtime' crash metadata"));
         if(!NWB::Core::Crash::SetCrashMetadata("gpu_debug", options.enableGpuDebug ? "true" : "false"))
             NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'gpu_debug' crash metadata"));
+
+        NWB::Core::RegisterGpuCrashSink([](void*, const NWB::Core::GpuCrashReport& report){
+            [[maybe_unused]] const auto dumpResult = NWB::Core::Crash::CaptureCrashDump(
+                AStringView(report.context.data(), report.context.size()),
+                AStringView(report.details.data(), report.details.size())
+            );
+        }, nullptr);
         return true;
     }
 

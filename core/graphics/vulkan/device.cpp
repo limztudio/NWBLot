@@ -174,6 +174,7 @@ Device::Device(const DeviceDesc& desc)
     : RefCounter<GraphicsResource>(desc.threadPool)
     , m_gpuCrashDiagnosticsEnabled(desc.gpuCrashDiagnosticsEnabled)
     , m_gpuCrashTracker(desc.allocator.getObjectArena())
+    , m_gpuCrashReportArena(VulkanArenaScope::s_GpuCrashReportArena, Alloc::PersistentArena::StructureAlignedSize(s_GpuCrashReportArenaSize))
     , m_context(desc.allocator, desc.threadPool, desc.instance, desc.physicalDevice, desc.device, desc.allocationCallbacks)
     , m_allocator(m_context)
     , m_descriptorHeapManager(m_context, m_allocator)
@@ -701,7 +702,8 @@ void Device::captureGpuCrash(const AStringView context){
 
     m_gpuCrashCaptured = true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GPU crash detected during {}; collecting diagnostics."), StringConvert(context));
+    GpuCrashReport report(m_gpuCrashReportArena);
+    report.context.append(context.data(), context.size());
 
     if(hasCheckpoints){
         for(u32 queueIndex = 0; queueIndex < static_cast<u32>(CommandQueue::kCount); ++queueIndex){
@@ -714,7 +716,7 @@ void Device::captureGpuCrash(const AStringView context){
             if(checkpointCount == 0)
                 continue;
 
-            GraphicsVector<VkCheckpointDataNV> checkpoints(m_context.objectArena);
+            Vector<VkCheckpointDataNV, Alloc::PersistentArena> checkpoints(m_gpuCrashReportArena);
             checkpoints.resize(checkpointCount, VulkanDetail::MakeVkStruct<VkCheckpointDataNV>(VK_STRUCTURE_TYPE_CHECKPOINT_DATA_NV));
             vkGetQueueCheckpointDataNV(queue, &checkpointCount, checkpoints.data());
 
@@ -724,8 +726,10 @@ void Device::captureGpuCrash(const AStringView context){
                     continue;
 
                 const auto resolved = m_gpuCrashTracker.resolveMarker(markerHash);
-                if(resolved.first())
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GPU crash - last executed marker (stage 0x{:x}): {}"), static_cast<u64>(checkpoint.stage), StringConvert(resolved.second().c_str()));
+                if(!resolved.first())
+                    continue;
+
+                report.details.append(StringFormat(m_gpuCrashReportArena, "last executed marker (stage 0x{:x}): {}\n", static_cast<u32>(checkpoint.stage), resolved.second().c_str()));
             }
         }
     }
@@ -735,8 +739,8 @@ void Device::captureGpuCrash(const AStringView context){
         if(vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, nullptr) == VK_SUCCESS){
             faultCounts.vendorBinarySize = 0;
 
-            GraphicsVector<VkDeviceFaultAddressInfoEXT> addressInfos(m_context.objectArena);
-            GraphicsVector<VkDeviceFaultVendorInfoEXT> vendorInfos(m_context.objectArena);
+            Vector<VkDeviceFaultAddressInfoEXT, Alloc::PersistentArena> addressInfos(m_gpuCrashReportArena);
+            Vector<VkDeviceFaultVendorInfoEXT, Alloc::PersistentArena> vendorInfos(m_gpuCrashReportArena);
             addressInfos.resize(faultCounts.addressInfoCount, VkDeviceFaultAddressInfoEXT{});
             vendorInfos.resize(faultCounts.vendorInfoCount, VkDeviceFaultVendorInfoEXT{});
 
@@ -746,28 +750,37 @@ void Device::captureGpuCrash(const AStringView context){
             faultInfo.pVendorBinaryData = nullptr;
 
             if(vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, &faultInfo) == VK_SUCCESS){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GPU crash - device fault: {}"), StringConvert(faultInfo.description));
+                const char* faultDescription = faultInfo.description;
+                report.details.append(StringFormat(m_gpuCrashReportArena, "device fault: {}\n", faultDescription));
 
                 for(u32 i = 0; i < faultCounts.addressInfoCount; ++i){
                     const VkDeviceFaultAddressInfoEXT& addressInfo = addressInfos[i];
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GPU crash - fault address 0x{:x} (type {}, precision 0x{:x})")
+                    report.details.append(StringFormat(m_gpuCrashReportArena, "fault address 0x{:x} (type {}, precision 0x{:x})\n"
                         , static_cast<u64>(addressInfo.reportedAddress)
                         , static_cast<u32>(addressInfo.addressType)
                         , static_cast<u64>(addressInfo.addressPrecision)
-                    );
+                    ));
                 }
 
                 for(u32 i = 0; i < faultCounts.vendorInfoCount; ++i){
                     const VkDeviceFaultVendorInfoEXT& vendorInfo = vendorInfos[i];
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GPU crash - vendor fault '{}' (code 0x{:x}, data 0x{:x})")
-                        , StringConvert(vendorInfo.description)
+                    const char* vendorDescription = vendorInfo.description;
+                    report.details.append(StringFormat(m_gpuCrashReportArena, "vendor fault '{}' (code 0x{:x}, data 0x{:x})\n"
+                        , vendorDescription
                         , static_cast<u64>(vendorInfo.vendorFaultCode)
                         , static_cast<u64>(vendorInfo.vendorFaultData)
-                    );
+                    ));
                 }
             }
         }
     }
+
+    if(report.details.empty())
+        report.details.append("(no GPU diagnostics available)");
+
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), StringConvert(report.context.c_str()), StringConvert(report.details.c_str()));
+
+    DispatchGpuCrash(report);
 }
 
 void Device::runGarbageCollection(){

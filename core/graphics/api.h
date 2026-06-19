@@ -3070,6 +3070,26 @@ private:
     GraphicsDeque<GpuCrashMarkerTracker> m_destroyedMarkerTrackers;
 };
 
+// A captured GPU crash report (vendor-neutral): the last-executed GPU marker stack and
+// device fault information, formatted as text ready to ship to the crash reporter.
+struct GpuCrashReport{
+    AString<Alloc::PersistentArena> context;
+    AString<Alloc::PersistentArena> details;
+
+    explicit GpuCrashReport(Alloc::PersistentArena& arena)
+        : context(arena)
+        , details(arena)
+    {}
+};
+
+// Process-global sink invoked when the graphics backend captures a GPU crash on device-lost.
+// The application registers a sink (e.g. forwarding to the crash reporter) so the graphics
+// layer stays crash-subsystem-agnostic.
+typedef void(*GpuCrashSink)(void* userData, const GpuCrashReport& report);
+
+void RegisterGpuCrashSink(GpuCrashSink sink, void* userData);
+void DispatchGpuCrash(const GpuCrashReport& report);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Device

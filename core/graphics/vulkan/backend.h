@@ -2321,6 +2321,8 @@ private:
     bool m_gpuCrashDiagnosticsEnabled = false;
     bool m_gpuCrashCaptured = false;
     GpuCrashTracker m_gpuCrashTracker;
+    // Fixed-size, pre-reserved arena the device-lost capture formats into (no growable-heap touch at crash time).
+    Alloc::PersistentArena m_gpuCrashReportArena;
 
     VulkanContext m_context;
     VulkanAllocator m_allocator;

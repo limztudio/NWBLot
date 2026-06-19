@@ -59,6 +59,8 @@ inline constexpr Name s_TextureResolveArena("core/graphics/texture_resolve");
 
 inline constexpr Name s_SubmitChunksArena("core/graphics/upload_submit_chunks");
 
+inline constexpr Name s_GpuCrashReportArena("core/graphics/gpu_crash_report");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -123,9 +123,13 @@ static void __hidden_capture_frame_pointer_callstack(
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 // glibc backtrace() unwinds through .eh_frame, so it captures a full callstack even when the frame pointer is
 // omitted (final builds compile with -fomit-frame-pointer). The first call lazily loads libgcc_s, so it is warmed
-// up at install time to keep the crash-time call allocation-free and async-signal-safe. When the faulting/trigger
-// instruction pointer is known, capture starts at that frame so crash-handler-internal frames are dropped without
-// depending on inlining-sensitive skip counts; the address search makes it robust to inlining. Returns false only
+// up at install time to keep the crash-time call allocation-free and async-signal-safe. (On glibc older than 2.35
+// the unwinder can still take the dynamic-loader lock through dl_iterate_phdr, so a fault while that lock is held
+// could deadlock; newer glibc uses the lock-free __dl_find_object fast path.) When the faulting/trigger instruction
+// pointer is known, capture starts at that frame so crash-handler-internal frames are dropped without depending on
+// inlining-sensitive skip counts; the address search makes it robust to inlining. If the trigger IP is not on the
+// unwound stack (e.g. a deferred or cross-thread diagnostic) only that instruction pointer is emitted, because the
+// rest of the unwound frames then belong to the crash machinery rather than the reported fault. Returns false only
 // when nothing could be unwound, so the caller can fall back to the frame-pointer walk.
 [[nodiscard]] static bool __hidden_capture_eh_frame_callstack(Detail::CrashDumpRequestOptions& options, const u64 alignmentInstructionPointer)noexcept{
     void* unwoundAddresses[Detail::s_MaxCallstackFrames] = {};
@@ -133,23 +137,21 @@ static void __hidden_capture_frame_pointer_callstack(
     if(unwoundFrameCount <= 0)
         return false;
 
-    usize startIndex = 0u;
-    bool aligned = false;
     if(alignmentInstructionPointer != 0u){
         for(int i = 0; i < unwoundFrameCount; ++i){
-            if(static_cast<u64>(reinterpret_cast<usize>(unwoundAddresses[i])) == alignmentInstructionPointer){
-                startIndex = static_cast<usize>(i);
-                aligned = true;
-                break;
-            }
+            if(static_cast<u64>(reinterpret_cast<usize>(unwoundAddresses[i])) != alignmentInstructionPointer)
+                continue;
+
+            for(usize frame = static_cast<usize>(i); frame < static_cast<usize>(unwoundFrameCount); ++frame)
+                __hidden_append_callstack_frame(options, static_cast<u64>(reinterpret_cast<usize>(unwoundAddresses[frame])));
+            return options.callstackFrameCount != 0u;
         }
+
+        __hidden_append_callstack_frame(options, alignmentInstructionPointer);
+        return true;
     }
 
-    // Keep the most important location even when it is absent from the unwound trace (rare).
-    if(alignmentInstructionPointer != 0u && !aligned)
-        __hidden_append_callstack_frame(options, alignmentInstructionPointer);
-
-    for(usize i = startIndex; i < static_cast<usize>(unwoundFrameCount); ++i)
+    for(int i = 0; i < unwoundFrameCount; ++i)
         __hidden_append_callstack_frame(options, static_cast<u64>(reinterpret_cast<usize>(unwoundAddresses[i])));
     return options.callstackFrameCount != 0u;
 }

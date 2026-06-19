@@ -301,6 +301,8 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
     // Best-effort: if a Radeon GPU Detective .rgd capture was shipped in the package, decode it via rgd (cross-platform).
     Symbolicate::AppendRadeonGpuDetectiveSummary(arena, packageDirectory, config, detailReport);
     Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_CpuContextFileName, "cpu_context");
+    Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_MetadataFileName, "metadata");
+    Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_BreadcrumbsFileName, "breadcrumbs");
     Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note");
     Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection");
     return Symbolicate::BuildOrderedCrashReport(arena, summary, detailReport);

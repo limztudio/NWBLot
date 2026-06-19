@@ -239,6 +239,8 @@ static void TestLinuxCrashPackageMapsInstructionPointer(TestContext& context){
 
     CrashTestText archive(arena);
     BuildLinuxCrashArchive(arena, archive, "linux-test");
+    AppendArchiveFile(archive, CrashNames::s_MetadataFileName, "build_channel=qa\ngpu=test-adapter\n");
+    AppendArchiveFile(archive, CrashNames::s_BreadcrumbsFileName, "1 [general] entered render loop\n2 [io] opened scene file\n");
 
     NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
     config.symbolication.symbolStoreDirectory = StorageDirectory(arena, s_Group) / "test_symbols";
@@ -263,6 +265,11 @@ static void TestLinuxCrashPackageMapsInstructionPointer(TestContext& context){
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "#0 0x0000000000401234 /tmp/nwb_loader+0x0000000000001234"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "#1 0x0000000000401240 /tmp/nwb_loader+0x0000000000001240"));
     NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "core_artifact=missing"));
+    // Client-shipped metadata and breadcrumbs must surface in the rendered crash report.
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[metadata]"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "build_channel=qa"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[breadcrumbs]"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "entered render loop"));
     NWB_LOGSERVER_TEST_CHECK(context, TextAppearsBefore(report, "callstack:", "details:"));
     NWB_LOGSERVER_TEST_CHECK(context, TextAppearsBefore(report, "details:", "[event]"));
 

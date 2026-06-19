@@ -5,6 +5,7 @@
 #include "raytracing_system.h"
 
 #include "renderer_private.h"
+#include "arena_names.h"
 
 #include <impl/assets/graphics/shadow/binding_slots.h>
 #include <impl/assets/graphics/shadow/names.h>
@@ -74,6 +75,105 @@ static_assert(sizeof(BvhBuildPushConstants) == sizeof(u32) * 4u + sizeof(Float4)
 inline constexpr u32 s_BvhLeafFlag = 0x80000000u;
 inline constexpr u32 s_BvhInvalidIndex = 0xFFFFFFFFu;
 
+// Initial scene/instance BVH instance capacity; grows by doubling like the hardware TLAS.
+inline constexpr usize s_SceneBvhInitialInstanceCapacity = 64u;
+
+// CPU mirror of the per-instance record the software shadow traversal (U5) consumes. Holds the affine
+// world->object transform (so a world-space ray can be pushed into each instance's object space) plus the
+// per-mesh BVH / geometry references resolved when traversal is wired. 64 bytes / std430-friendly.
+struct SceneSwBvhInstanceGpu{
+    Float34 worldToObject{};      // affine world->object (row-major 3x4)
+    u32 nodeBufferIndex = 0u;     // per-mesh BVH node buffer (bindless; populated in U5)
+    u32 positionBufferIndex = 0u; // per-mesh position buffer (bindless; populated in U5)
+    u32 indexBufferIndex = 0u;    // per-mesh triangle index buffer (bindless; populated in U5)
+    u32 primitiveCount = 0u;      // triangle count of the referenced mesh
+};
+static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_raytracing_system{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Extracts the axis-th component (0=x, 1=y, 2=z) of a SIMD vector.
+[[nodiscard]] f32 SceneBvhAxisComponent(const SIMDVector value, const u32 axis)noexcept{
+    return axis == 0u ? VectorGetX(value) : (axis == 1u ? VectorGetY(value) : VectorGetZ(value));
+}
+
+// Recursively builds a binary BVH over the [lo, hi) slice of the instance-index permutation, appending nodes
+// to `nodes` (the first node appended for the whole range is the root, index 0). It splits at the spatial
+// median of the largest centroid-extent axis, falling back to the count median when a spatial split puts
+// every instance on one side. Leaves store NWB_BVH_LEAF_FLAG | instanceIndex + the instance world AABB;
+// internal nodes store child node indices + the unioned box — the exact NwbBvhNode layout the per-mesh build
+// produces, so the GPU traversal is uniform across the scene BVH and every per-mesh BVH.
+u32 BuildSceneBvhNode(
+    u32* indices,
+    const u32 lo,
+    const u32 hi,
+    const Float4* instanceAabbMin,
+    const Float4* instanceAabbMax,
+    const Float4* instanceCentroid,
+    Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena>& nodes
+){
+    const u32 nodeIndex = static_cast<u32>(nodes.size());
+    nodes.push_back(NwbBvhNodeGpu{});
+
+    if((hi - lo) == 1u){
+        const u32 instance = indices[lo];
+        StoreFloatInt(LoadFloat(instanceAabbMin[instance]), s_BvhLeafFlag | instance, &nodes[nodeIndex].aabbMinLeftChild);
+        StoreFloatInt(LoadFloat(instanceAabbMax[instance]), 1u, &nodes[nodeIndex].aabbMaxRightChild);
+        return nodeIndex;
+    }
+
+    SIMDVector centroidMin = VectorReplicate(1e30f);
+    SIMDVector centroidMax = VectorReplicate(-1e30f);
+    for(u32 i = lo; i < hi; ++i){
+        const SIMDVector centroid = LoadFloat(instanceCentroid[indices[i]]);
+        centroidMin = VectorMin(centroidMin, centroid);
+        centroidMax = VectorMax(centroidMax, centroid);
+    }
+
+    const SIMDVector centroidExtent = VectorSubtract(centroidMax, centroidMin);
+    u32 axis = 0u;
+    f32 axisExtent = VectorGetX(centroidExtent);
+    if(VectorGetY(centroidExtent) > axisExtent){ axis = 1u; axisExtent = VectorGetY(centroidExtent); }
+    if(VectorGetZ(centroidExtent) > axisExtent){ axis = 2u; }
+
+    const f32 splitValue = 0.5f * (SceneBvhAxisComponent(centroidMin, axis) + SceneBvhAxisComponent(centroidMax, axis));
+
+    u32 mid = lo;
+    for(u32 i = lo; i < hi; ++i){
+        if(SceneBvhAxisComponent(LoadFloat(instanceCentroid[indices[i]]), axis) < splitValue){
+            const u32 swap = indices[i];
+            indices[i] = indices[mid];
+            indices[mid] = swap;
+            ++mid;
+        }
+    }
+    if(mid == lo || mid == hi)
+        mid = lo + (hi - lo) / 2u; // degenerate spatial split (coincident centroids) -> count median; still correct
+
+    const u32 leftChild = BuildSceneBvhNode(indices, lo, mid, instanceAabbMin, instanceAabbMax, instanceCentroid, nodes);
+    const u32 rightChild = BuildSceneBvhNode(indices, mid, hi, instanceAabbMin, instanceAabbMax, instanceCentroid, nodes);
+
+    const SIMDVector boxMin = VectorMin(LoadFloatInt(nodes[leftChild].aabbMinLeftChild), LoadFloatInt(nodes[rightChild].aabbMinLeftChild));
+    const SIMDVector boxMax = VectorMax(LoadFloatInt(nodes[leftChild].aabbMaxRightChild), LoadFloatInt(nodes[rightChild].aabbMaxRightChild));
+    StoreFloatInt(boxMin, leftChild, &nodes[nodeIndex].aabbMinLeftChild);
+    StoreFloatInt(boxMax, rightChild, &nodes[nodeIndex].aabbMaxRightChild);
+    return nodeIndex;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -97,6 +197,7 @@ void RendererRayTracingSystem::logCapabilityOnce(){
 #if defined(NWB_DEBUG)
     runBvhSortSelfTest();
     runBvhBuildSelfTest();
+    runSceneBvhSelfTest();
 #endif
 }
 
@@ -247,6 +348,137 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         Core::RayTracingAccelStructBuildFlags::PreferFastTrace
     );
     rayTracingState().m_tlasDeviceAddress = rayTracingState().m_tlas->getDeviceAddress();
+    return true;
+}
+
+bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
+    // Software scene/instance BVH (TLAS-analog) — only the no-hardware-ray-tracing fallback builds it; the
+    // hardware path uses buildSceneTlas instead.
+    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+        return false;
+
+    auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
+    if(!meshSystem)
+        return false;
+
+    auto rendererView = world().view<RendererComponent>();
+    const usize candidateCount = rendererView.candidateCount();
+
+    // Per-instance GPU records + the world-space AABBs / centroids the CPU build consumes (kept parallel so
+    // the BVH leaf payload indexes straight into the uploaded instance buffer).
+    Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena> instances{ scratchArena };
+    Vector<Float4, Core::Alloc::ScratchArena> instanceAabbMin{ scratchArena };
+    Vector<Float4, Core::Alloc::ScratchArena> instanceAabbMax{ scratchArena };
+    Vector<Float4, Core::Alloc::ScratchArena> instanceCentroid{ scratchArena };
+    instances.reserve(candidateCount);
+    instanceAabbMin.reserve(candidateCount);
+    instanceAabbMax.reserve(candidateCount);
+    instanceCentroid.reserve(candidateCount);
+
+    for(auto&& [entity, renderer] : rendererView){
+        if(!renderer.visible)
+            continue;
+
+        RenderableMeshDesc resolvedMesh;
+        if(!meshSystem->resolveRenderableMesh(entity, resolvedMesh))
+            continue;
+
+        MeshResources* mesh = nullptr;
+        const bool meshReady = resolvedMesh.runtime
+            ? m_renderer.meshSystem().findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
+            : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
+        ;
+        // Only instances whose per-mesh software BVH is built (and that have valid object-space bounds) can
+        // be traced.
+        if(!meshReady || !mesh || !mesh->swBvhNodeBuffer || !mesh->csgLocalBounds.valid())
+            continue;
+
+        // object->world from the decomposed transform (identity when absent), matching buildSceneTlas.
+        SIMDMatrix objectToWorld = MatrixIdentity();
+        if(const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity)){
+            objectToWorld = MatrixAffineTransformation(
+                LoadFloat(transform->scale),
+                VectorZero(),
+                LoadFloat(transform->rotation),
+                LoadFloat(transform->position)
+            );
+        }
+        SIMDVector determinant;
+        const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
+
+        // World AABB = bounds of the 8 object-space corners transformed to world space (exact under rotation).
+        const SIMDVector localMin = LoadFloatInt(mesh->csgLocalBounds.minBounds);
+        const SIMDVector localMax = LoadFloatInt(mesh->csgLocalBounds.maxBounds);
+        const f32 minX = VectorGetX(localMin), minY = VectorGetY(localMin), minZ = VectorGetZ(localMin);
+        const f32 maxX = VectorGetX(localMax), maxY = VectorGetY(localMax), maxZ = VectorGetZ(localMax);
+        SIMDVector worldMin = VectorReplicate(1e30f);
+        SIMDVector worldMax = VectorReplicate(-1e30f);
+        for(u32 corner = 0u; corner < 8u; ++corner){
+            const SIMDVector localCorner = VectorSet(
+                (corner & 1u) != 0u ? maxX : minX,
+                (corner & 2u) != 0u ? maxY : minY,
+                (corner & 4u) != 0u ? maxZ : minZ,
+                1.0f
+            );
+            const SIMDVector worldCorner = Vector3TransformCoord(localCorner, objectToWorld);
+            worldMin = VectorMin(worldMin, worldCorner);
+            worldMax = VectorMax(worldMax, worldCorner);
+        }
+
+        Float4 aabbMinStore, aabbMaxStore, centroidStore;
+        StoreFloat(worldMin, &aabbMinStore);
+        StoreFloat(worldMax, &aabbMaxStore);
+        StoreFloat(VectorScale(VectorAdd(worldMin, worldMax), 0.5f), &centroidStore);
+
+        SceneSwBvhInstanceGpu instance;
+        StoreFloat(worldToObject, &instance.worldToObject);
+        instance.primitiveCount = mesh->meshletPrimitiveIndexCount / 3u;
+        // nodeBufferIndex / positionBufferIndex / indexBufferIndex are bindless references resolved in U5.
+
+        instances.push_back(instance);
+        instanceAabbMin.push_back(aabbMinStore);
+        instanceAabbMax.push_back(aabbMaxStore);
+        instanceCentroid.push_back(centroidStore);
+    }
+
+    const u32 instanceCount = static_cast<u32>(instances.size());
+    if(instanceCount == 0u){
+        // No traceable instances is not a failure: the consumer treats a zero instance count as
+        // "nothing occludes" (fully lit), so report success and leave the resident buffers untouched.
+        rayTracingState().m_sceneBvhInstanceCount = 0u;
+        return true;
+    }
+
+    // CPU-build the scene BVH over the gathered instance world AABBs. At TLAS scale (a handful to a few
+    // hundred instances) a CPU build + upload is far cheaper than a GPU LBVH dispatch, and the node layout
+    // matches the per-mesh BVH so the traversal pass reads scene and mesh BVHs the same way.
+    Vector<u32, Core::Alloc::ScratchArena> indices{ scratchArena };
+    indices.reserve(instanceCount);
+    for(u32 i = 0u; i < instanceCount; ++i)
+        indices.push_back(i);
+
+    const usize nodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
+    Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };
+    nodes.reserve(nodeCount);
+    __hidden_raytracing_system::BuildSceneBvhNode(indices.data(), 0u, instanceCount, instanceAabbMin.data(), instanceAabbMax.data(), instanceCentroid.data(), nodes);
+    NWB_ASSERT(nodes.size() == nodeCount);
+
+    if(!ensureSceneBvhBuffers(instanceCount))
+        return false;
+
+    Core::Buffer* nodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
+    Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
+
+    commandList.setBufferState(nodeBuffer, Core::ResourceStates::CopyDest);
+    commandList.setBufferState(instanceBuffer, Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(nodeBuffer, nodes.data(), nodes.size() * sizeof(NwbBvhNodeGpu));
+    commandList.writeBuffer(instanceBuffer, instances.data(), instances.size() * sizeof(SceneSwBvhInstanceGpu));
+    commandList.setBufferState(nodeBuffer, Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instanceBuffer, Core::ResourceStates::ShaderResource);
+    commandList.commitBarriers();
+
+    rayTracingState().m_sceneBvhInstanceCount = instanceCount;
     return true;
 }
 
@@ -1089,6 +1321,61 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
     return true;
 }
 
+bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
+    // A binary BVH over N instances has 2N-1 nodes. Both buffers are CPU-written each frame and read by the
+    // traversal pass, so they are structured SRVs (no UAV) that grow by doubling like the hardware TLAS.
+    const usize requiredNodes = static_cast<usize>(instanceCount) * 2u - 1u;
+    if(!rayTracingState().m_sceneBvhNodeBuffer || rayTracingState().m_sceneBvhNodeCapacity < requiredNodes){
+        usize capacity = rayTracingState().m_sceneBvhNodeCapacity > 0u
+            ? rayTracingState().m_sceneBvhNodeCapacity
+            : (s_SceneBvhInitialInstanceCapacity * 2u - 1u)
+        ;
+        while(capacity < requiredNodes)
+            capacity *= 2u;
+
+        Core::BufferDesc nodeBufferDesc;
+        nodeBufferDesc
+            .setByteSize(static_cast<u64>(sizeof(NwbBvhNodeGpu) * capacity))
+            .setStructStride(sizeof(NwbBvhNodeGpu))
+            .setDebugName(Name("scene_bvh_nodes"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        rayTracingState().m_sceneBvhNodeBuffer = graphics().createBuffer(nodeBufferDesc);
+        if(!rayTracingState().m_sceneBvhNodeBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene BVH node buffer"));
+            return false;
+        }
+        rayTracingState().m_sceneBvhNodeCapacity = capacity;
+    }
+
+    if(!rayTracingState().m_sceneInstanceBuffer || rayTracingState().m_sceneInstanceCapacity < instanceCount){
+        usize capacity = rayTracingState().m_sceneInstanceCapacity > 0u
+            ? rayTracingState().m_sceneInstanceCapacity
+            : s_SceneBvhInitialInstanceCapacity
+        ;
+        while(capacity < instanceCount)
+            capacity *= 2u;
+
+        Core::BufferDesc instanceBufferDesc;
+        instanceBufferDesc
+            .setByteSize(static_cast<u64>(sizeof(SceneSwBvhInstanceGpu) * capacity))
+            .setStructStride(sizeof(SceneSwBvhInstanceGpu))
+            .setDebugName(Name("scene_bvh_instances"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        rayTracingState().m_sceneInstanceBuffer = graphics().createBuffer(instanceBufferDesc);
+        if(!rayTracingState().m_sceneInstanceBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene BVH instance buffer"));
+            return false;
+        }
+        rayTracingState().m_sceneInstanceCapacity = capacity;
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created software scene BVH buffers (capacity {} instances)")
+            , static_cast<u64>(capacity)
+        );
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1428,6 +1715,115 @@ void RendererRayTracingSystem::runBvhBuildSelfTest(){
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BVH refit self-test PASSED ({} triangles)"), triangleCount);
     else
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH refit self-test FAILED"));
+}
+
+void RendererRayTracingSystem::runSceneBvhSelfTest(){
+    if(rayTracingState().m_sceneBvhSelfTestDone)
+        return;
+    rayTracingState().m_sceneBvhSelfTestDone = true;
+
+    // The scene/instance BVH is CPU-built, so validate the builder directly: build a tree over known instance
+    // AABBs and check leaf coverage, the root box, and child-box nesting (a wrong topology can still bound
+    // everything, so the structural checks matter, not just the root box).
+    constexpr u32 instanceCount = 12u;
+    constexpr u32 nodeCount = instanceCount * 2u - 1u;
+
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RayTracingBuildArena, 16u * 1024u);
+
+    Vector<Float4, Core::Alloc::ScratchArena> instanceAabbMin{ scratchArena };
+    Vector<Float4, Core::Alloc::ScratchArena> instanceAabbMax{ scratchArena };
+    Vector<Float4, Core::Alloc::ScratchArena> instanceCentroid{ scratchArena };
+    instanceAabbMin.reserve(instanceCount);
+    instanceAabbMax.reserve(instanceCount);
+    instanceCentroid.reserve(instanceCount);
+
+    SIMDVector boundsMin = VectorReplicate(1e30f);
+    SIMDVector boundsMax = VectorReplicate(-1e30f);
+    for(u32 i = 0u; i < instanceCount; ++i){
+        const f32 base = static_cast<f32>(i) * 3.0f;
+        const SIMDVector boxMin = VectorSet(base, base * 0.25f, -base * 0.5f, 0.0f);
+        const SIMDVector boxMax = VectorAdd(boxMin, VectorSet(1.5f, 2.0f, 1.0f, 0.0f));
+
+        Float4 boxMinStore, boxMaxStore, centroidStore;
+        StoreFloat(boxMin, &boxMinStore);
+        StoreFloat(boxMax, &boxMaxStore);
+        StoreFloat(VectorScale(VectorAdd(boxMin, boxMax), 0.5f), &centroidStore);
+        instanceAabbMin.push_back(boxMinStore);
+        instanceAabbMax.push_back(boxMaxStore);
+        instanceCentroid.push_back(centroidStore);
+
+        boundsMin = VectorMin(boundsMin, boxMin);
+        boundsMax = VectorMax(boundsMax, boxMax);
+    }
+
+    Vector<u32, Core::Alloc::ScratchArena> indices{ scratchArena };
+    indices.reserve(instanceCount);
+    for(u32 i = 0u; i < instanceCount; ++i)
+        indices.push_back(i);
+
+    Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };
+    nodes.reserve(nodeCount);
+    __hidden_raytracing_system::BuildSceneBvhNode(indices.data(), 0u, instanceCount, instanceAabbMin.data(), instanceAabbMax.data(), instanceCentroid.data(), nodes);
+
+    bool valid = (nodes.size() == nodeCount);
+
+    // (1) Leaf coverage: every instance appears in exactly one leaf, and every leaf is a valid instance.
+    bool instanceSeen[instanceCount] = {};
+    u32 leafCount = 0u;
+    for(u32 i = 0u; valid && i < nodes.size(); ++i){
+        const u32 leftChild = nodes[i].aabbMinLeftChild.w;
+        if((leftChild & s_BvhLeafFlag) == 0u)
+            continue;
+        ++leafCount;
+        const u32 instance = leftChild & ~s_BvhLeafFlag;
+        if(instance >= instanceCount || instanceSeen[instance]){
+            valid = false;
+            break;
+        }
+        instanceSeen[instance] = true;
+    }
+    if(valid && leafCount != instanceCount)
+        valid = false;
+    for(u32 i = 0u; valid && i < instanceCount; ++i){
+        if(!instanceSeen[i])
+            valid = false;
+    }
+
+    // (2) Root box == union of all instance AABBs.
+    const SIMDVector epsilonVector = VectorReplicate(1e-3f);
+    if(valid){
+        const SIMDVector rootMin = LoadFloatInt(nodes[0].aabbMinLeftChild);
+        const SIMDVector rootMax = LoadFloatInt(nodes[0].aabbMaxRightChild);
+        if(
+            !Vector3LessOrEqual(VectorAbs(VectorSubtract(rootMin, boundsMin)), epsilonVector)
+            || !Vector3LessOrEqual(VectorAbs(VectorSubtract(rootMax, boundsMax)), epsilonVector)
+        )
+            valid = false;
+    }
+
+    // (3) Every internal node references valid children and its box contains both child boxes.
+    for(u32 i = 0u; valid && i < nodes.size(); ++i){
+        const u32 leftChild = nodes[i].aabbMinLeftChild.w;
+        if((leftChild & s_BvhLeafFlag) != 0u)
+            continue;
+        const u32 rightChild = nodes[i].aabbMaxRightChild.w;
+        if(leftChild >= nodes.size() || rightChild >= nodes.size()){
+            valid = false;
+            break;
+        }
+        const SIMDVector childMin = VectorMin(LoadFloatInt(nodes[leftChild].aabbMinLeftChild), LoadFloatInt(nodes[rightChild].aabbMinLeftChild));
+        const SIMDVector childMax = VectorMax(LoadFloatInt(nodes[leftChild].aabbMaxRightChild), LoadFloatInt(nodes[rightChild].aabbMaxRightChild));
+        if(
+            !Vector3LessOrEqual(LoadFloatInt(nodes[i].aabbMinLeftChild), VectorAdd(childMin, epsilonVector))
+            || !Vector3GreaterOrEqual(LoadFloatInt(nodes[i].aabbMaxRightChild), VectorSubtract(childMax, epsilonVector))
+        )
+            valid = false;
+    }
+
+    if(valid)
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: scene BVH self-test PASSED ({} instances, {} nodes)"), instanceCount, nodeCount);
+    else
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: scene BVH self-test FAILED"));
 }
 
 

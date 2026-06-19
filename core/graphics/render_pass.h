@@ -32,9 +32,11 @@ public:
 public:
     virtual void setLatewarpOptions(){}
     virtual bool shouldRenderUnfocused(){ return false; }
+
     virtual bool validateResources(u32, u32, u32){ return true; }
-    virtual bool prepareResources(Framebuffer*){ return true; }
     virtual void invalidateResources(){}
+
+    virtual bool prepareResources(Framebuffer*){ return true; }
     virtual void render(Framebuffer*){}
     virtual bool appendFrameGraph(
         Telemetry::FrameGraphNodeDescs&,
@@ -45,6 +47,7 @@ public:
         return false;
     }
     virtual void animate(f32){}
+
     virtual void backBufferResizing(){}
     virtual void backBufferResized(u32, u32, u32){}
     virtual void displayScaleChanged(f32, f32){}

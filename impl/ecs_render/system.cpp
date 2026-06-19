@@ -57,13 +57,6 @@ RendererSystem::RendererSystem(
 }
 RendererSystem::~RendererSystem(){}
 
-
-void RendererSystem::update(Core::ECS::World& world, f32 delta){
-    static_cast<void>(world);
-    static_cast<void>(delta);
-    m_materialSystem.pruneMaterialInstanceMutableCache();
-}
-
 bool RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
     static_cast<void>(sampleCount);
     m_raytracingSystem.logCapabilityOnce();
@@ -92,6 +85,25 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
         return false;
 
     return true;
+}
+
+void RendererSystem::invalidateResources(){
+    m_preparedCsgFrameState = CsgFrameState{};
+    m_preparedCsgFrameStateValid = false;
+    m_renderCommandList.reset();
+    m_meshState.invalidateResources();
+    m_materialState.invalidateResources();
+    m_drawState.invalidateResources();
+    m_csgState.invalidateResources();
+    m_deferredState.invalidateResources();
+    m_avboitState.invalidateResources();
+    m_rayTracingState.invalidateResources();
+}
+
+void RendererSystem::update(Core::ECS::World& world, f32 delta){
+    static_cast<void>(world);
+    static_cast<void>(delta);
+    m_materialSystem.pruneMaterialInstanceMutableCache();
 }
 
 bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
@@ -146,19 +158,6 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     return true;
 }
 
-void RendererSystem::invalidateResources(){
-    m_preparedCsgFrameState = CsgFrameState{};
-    m_preparedCsgFrameStateValid = false;
-    m_renderCommandList.reset();
-    m_meshState.invalidateResources();
-    m_materialState.invalidateResources();
-    m_drawState.invalidateResources();
-    m_csgState.invalidateResources();
-    m_deferredState.invalidateResources();
-    m_avboitState.invalidateResources();
-    m_rayTracingState.invalidateResources();
-}
-
 void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return;
@@ -193,11 +192,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             shadowTlasReady = m_raytracingSystem.buildSceneTlas(*commandList, scratchArena);
         else{
             // No hardware ray tracing: build/refit the per-mesh software BVHs from the (already skinned)
-            // geometry instead. The traversal pass that consumes them lands in a later unit; for now this
-            // keeps the BVHs current so that path can be wired without a build-cadence gap.
+            // geometry, then build the per-frame software scene/instance BVH (TLAS-analog) over them. The
+            // traversal pass that consumes both lands in a later unit; for now this keeps them current so
+            // that path can be wired without a build-cadence gap.
             const bool softwareShadowBvhReady = m_raytracingSystem.buildPendingMeshSwBvh(*commandList);
             if(!softwareShadowBvhReady)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH update failed"));
+            const bool softwareShadowSceneReady = m_raytracingSystem.buildSceneSwBvh(*commandList, scratchArena);
+            if(!softwareShadowSceneReady)
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow scene BVH build failed"));
         }
 
         MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};

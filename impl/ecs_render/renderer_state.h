@@ -290,12 +290,18 @@ private:
     Core::ComputePipelineHandle m_bvhFitPipeline;
     Core::BufferHandle m_bvhVisitCounterBuffer;
     usize m_bvhBuildCapacity = 0u;
+    Core::BufferHandle m_sceneBvhNodeBuffer;   // CPU-built scene/instance LBVH (TLAS-analog), uploaded each frame
+    Core::BufferHandle m_sceneInstanceBuffer;  // per-instance world->object transform + per-mesh refs
+    usize m_sceneBvhNodeCapacity = 0u;
+    usize m_sceneInstanceCapacity = 0u;
+    u32 m_sceneBvhInstanceCount = 0u;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;
     bool m_bvhSortPipelineFailed = false;
     bool m_bvhSortSelfTestDone = false;
     bool m_bvhBuildPipelineFailed = false;
     bool m_bvhBuildSelfTestDone = false;
+    bool m_sceneBvhSelfTestDone = false;
 };
 
 

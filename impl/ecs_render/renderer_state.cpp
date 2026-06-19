@@ -204,6 +204,11 @@ void RendererRayTracingState::invalidateResources(){
     m_bvhFitPipeline.reset();
     m_bvhVisitCounterBuffer.reset();
     m_bvhBuildCapacity = 0u;
+    m_sceneBvhNodeBuffer.reset();
+    m_sceneInstanceBuffer.reset();
+    m_sceneBvhNodeCapacity = 0u;
+    m_sceneInstanceCapacity = 0u;
+    m_sceneBvhInstanceCount = 0u;
     m_shadowPipelineFailed = false;
     m_bvhSortPipelineFailed = false;
     m_bvhBuildPipelineFailed = false;

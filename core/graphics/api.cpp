@@ -548,9 +548,9 @@ void GpuCrashMarkerTracker::popEvent(){
 ResolvedMarker GpuCrashMarkerTracker::getEventString(usize hash){
     auto found = m_eventStrings.find(hash);
     if(found != m_eventStrings.end())
-        return MakePair(true, found.value());
+        return MakePair(true, AStringView(found.value().c_str(), found.value().size()));
 
-    return MakePair(false, GraphicsString(s_NotFoundMarkerString, m_arena));
+    return MakePair(false, s_NotFoundMarkerString);
 }
 
 
@@ -590,7 +590,7 @@ ResolvedMarker GpuCrashTracker::resolveMarker(usize markerHash){
             return result;
     }
 
-    return MakePair(false, GraphicsString(s_NotFoundMarkerString, m_arena));
+    return MakePair(false, s_NotFoundMarkerString);
 }
 
 

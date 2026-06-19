@@ -3016,7 +3016,10 @@ typedef GraphicsBackend::Handle<CommandList> CommandListHandle;
 // GPU crash diagnostics
 
 
-typedef Pair<bool, GraphicsString> ResolvedMarker;
+// Non-owning view into a tracker's stored marker string (or the static not-found sentinel). Returned by value
+// so device-lost capture resolves markers WITHOUT allocating on the growable object arena. Consume promptly:
+// the view points into GpuCrashMarkerTracker storage that recording could mutate (best-effort at device-lost).
+typedef Pair<bool, AStringView> ResolvedMarker;
 
 // On a device-lost the GPU driver reports the payload of the last marker the GPU executed
 // (NVIDIA device-diagnostic checkpoints / AMD buffer markers).

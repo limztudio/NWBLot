@@ -766,7 +766,7 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
                     if(!resolved.first())
                         continue;
 
-                    report.details.append(StringFormat(m_gpuCrashReportArena, "last executed marker (stage 0x{:x}): {:.{}}\n", static_cast<u32>(checkpoint.stage), resolved.second().c_str(), static_cast<int>(s_MaxGpuCrashMarkerChars)));
+                    report.details.append(StringFormat(m_gpuCrashReportArena, "last executed marker (stage 0x{:x}): {:.{}}\n", static_cast<u32>(checkpoint.stage), resolved.second().data(), static_cast<int>(s_MaxGpuCrashMarkerChars)));
                 }
 
                 remainingEntries -= checkpointCount;
@@ -788,11 +788,17 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
                 }
 
                 if(furthestSequence != 0u){
-                    const AmdBreadcrumbSlotRecord& record = m_amdBreadcrumb.slotRecords[furthestSlot];
+                    AmdBreadcrumbSlotRecord record;
+                    {
+                        // Read the CPU-side record under the same lock reserveAmdBreadcrumb writes it, so a
+                        // worker still recording at device-lost cannot hand us a torn {sequence, markerHash}.
+                        ScopedLock lock(m_amdBreadcrumb.slotMutex);
+                        record = m_amdBreadcrumb.slotRecords[furthestSlot];
+                    }
                     if(record.sequence == furthestSequence){
                         const auto resolved = m_gpuCrashTracker.resolveMarker(record.markerHash);
                         if(resolved.first())
-                            report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): {:.{}}\n", furthestSequence, resolved.second().c_str(), static_cast<int>(s_MaxGpuCrashMarkerChars)));
+                            report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): {:.{}}\n", furthestSequence, resolved.second().data(), static_cast<int>(s_MaxGpuCrashMarkerChars)));
                         else
                             report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): <unresolved marker>\n", furthestSequence));
                     }
@@ -884,8 +890,14 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const usize markerHash){
     // record lets device-lost readback map the furthest-reached slot back to its marker hash.
     const u32 sequence = m_amdBreadcrumb.nextSequence.fetch_add(1u) + 1u;
     const u32 slot = sequence % s_MaxAmdBreadcrumbSlots;
-    m_amdBreadcrumb.slotRecords[slot].markerHash = markerHash;
-    m_amdBreadcrumb.slotRecords[slot].sequence = sequence;
+    {
+        // Concurrent recording can land two reservations on the same ring slot; serialize the pair store so
+        // device-lost readback never sees a torn {sequence, markerHash}. beginMarker is a region-boundary op,
+        // so this brief lock is not on a hot per-draw path.
+        ScopedLock lock(m_amdBreadcrumb.slotMutex);
+        m_amdBreadcrumb.slotRecords[slot].markerHash = markerHash;
+        m_amdBreadcrumb.slotRecords[slot].sequence = sequence;
+    }
 
     write.buffer = m_amdBreadcrumb.buffer;
     write.offset = static_cast<VkDeviceSize>(slot) * sizeof(u32);

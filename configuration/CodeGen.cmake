@@ -138,6 +138,10 @@ function(nwb_apply_codegen target)
             -Wall
             -Wextra
             $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+            # Crash callstack capture unwinds via .eh_frame (glibc backtrace), so asynchronous unwind tables must
+            # exist in every config: a fault can interrupt mid-instruction, and final builds omit the frame
+            # pointer so the unwinder cannot rely on a frame-pointer chain.
+            -fasynchronous-unwind-tables
             $<$<CONFIG:dbg>:-O0>
             $<$<CONFIG:dbg>:-g>
             $<$<CONFIG:dbg>:-fno-omit-frame-pointer>
@@ -146,7 +150,7 @@ function(nwb_apply_codegen target)
             $<$<CONFIG:opt>:-fno-omit-frame-pointer>
             $<$<CONFIG:fin>:-O3>
             $<$<CONFIG:fin>:-g>
-            $<$<CONFIG:fin>:-fno-omit-frame-pointer>
+            $<$<CONFIG:fin>:-fomit-frame-pointer>
         )
     else()
         message(FATAL_ERROR "NWBLot now requires a Clang-based toolchain.")

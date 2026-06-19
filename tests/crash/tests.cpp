@@ -414,6 +414,9 @@ static void TestDesktopInstalledHandlerWritesManualDumpPackage(TestContext& cont
         NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName));
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
         NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
+        // A "#1 " frame proves the unwinder walked past the leaf frame; final builds omit the frame pointer, so
+        // this guards that .eh_frame-based capture keeps producing a full callstack.
+        NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
 #endif
         NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"desktop handler runtime\"")));
         NWB::Core::Crash::UninstallCrashHandler();
@@ -474,6 +477,8 @@ static void TestLinuxSignalHandlerWritesCrashPackage(TestContext& context){
         NWB_CRASH_TEST_CHECK(context, WaitForDirectory(packageDirectory, 1000u));
         NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
         NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
+        // The faulting callstack must reach past the leaf frame even with the frame pointer omitted (final builds).
+        NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
         NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_ProcMapsFileName));
         NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"reason_kind\": \"signal\"")));
     }

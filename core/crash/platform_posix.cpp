@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#include <execinfo.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -119,6 +120,46 @@ static void __hidden_capture_frame_pointer_callstack(
     }
 }
 
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+// glibc backtrace() unwinds through .eh_frame, so it captures a full callstack even when the frame pointer is
+// omitted (final builds compile with -fomit-frame-pointer). The first call lazily loads libgcc_s, so it is warmed
+// up at install time to keep the crash-time call allocation-free and async-signal-safe. When the faulting/trigger
+// instruction pointer is known, capture starts at that frame so crash-handler-internal frames are dropped without
+// depending on inlining-sensitive skip counts; the address search makes it robust to inlining. Returns false only
+// when nothing could be unwound, so the caller can fall back to the frame-pointer walk.
+[[nodiscard]] static bool __hidden_capture_eh_frame_callstack(Detail::CrashDumpRequestOptions& options, const u64 alignmentInstructionPointer)noexcept{
+    void* unwoundAddresses[Detail::s_MaxCallstackFrames] = {};
+    const int unwoundFrameCount = backtrace(unwoundAddresses, static_cast<int>(Detail::s_MaxCallstackFrames));
+    if(unwoundFrameCount <= 0)
+        return false;
+
+    usize startIndex = 0u;
+    bool aligned = false;
+    if(alignmentInstructionPointer != 0u){
+        for(int i = 0; i < unwoundFrameCount; ++i){
+            if(static_cast<u64>(reinterpret_cast<usize>(unwoundAddresses[i])) == alignmentInstructionPointer){
+                startIndex = static_cast<usize>(i);
+                aligned = true;
+                break;
+            }
+        }
+    }
+
+    // Keep the most important location even when it is absent from the unwound trace (rare).
+    if(alignmentInstructionPointer != 0u && !aligned)
+        __hidden_append_callstack_frame(options, alignmentInstructionPointer);
+
+    for(usize i = startIndex; i < static_cast<usize>(unwoundFrameCount); ++i)
+        __hidden_append_callstack_frame(options, static_cast<u64>(reinterpret_cast<usize>(unwoundAddresses[i])));
+    return options.callstackFrameCount != 0u;
+}
+
+static void __hidden_warm_up_unwinder()noexcept{
+    void* warmUpAddresses[Detail::s_MaxCallstackFrames] = {};
+    [[maybe_unused]] const int warmedFrameCount = backtrace(warmUpAddresses, static_cast<int>(Detail::s_MaxCallstackFrames));
+}
+#endif
+
 static void __hidden_capture_current_callstack(
     Detail::CrashDumpRequestOptions& outOptions,
     const void* const stackPointer,
@@ -128,6 +169,17 @@ static void __hidden_capture_current_callstack(
     outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
     outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(framePointer));
     outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(instructionPointer));
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+    const u64 alignmentInstructionPointer = outOptions.triggerInstructionPointer != 0u
+        ? outOptions.triggerInstructionPointer
+        : outOptions.instructionPointer
+    ;
+    if(__hidden_capture_eh_frame_callstack(outOptions, alignmentInstructionPointer)){
+        // backtrace already trimmed crash-handler-internal frames, so the downstream skip must not drop user frames.
+        outOptions.callstackFramesToSkip = 0u;
+        return;
+    }
+#endif
     __hidden_capture_frame_pointer_callstack(
         outOptions,
         outOptions.instructionPointer,
@@ -154,6 +206,12 @@ static void __hidden_capture_signal_context(Detail::CrashDumpRequestOptions& opt
     options.framePointer = static_cast<u64>(context->uc_mcontext.regs[s_AArch64FramePointerRegisterIndex]);
 #endif
 
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+    // backtrace() crosses the kernel signal trampoline into the interrupted frame, so the fault instruction
+    // pointer aligns the trace and a frame-pointer-omitting final build still gets the full faulting callstack.
+    if(__hidden_capture_eh_frame_callstack(options, options.instructionPointer))
+        return;
+#endif
     __hidden_capture_frame_pointer_callstack(options, options.instructionPointer, options.stackPointer, options.framePointer);
 }
 
@@ -172,7 +230,13 @@ static void __hidden_signal_handler(const int signalNumber, siginfo_t* signalInf
 }
 
 [[noreturn]] static void __hidden_terminate_handler(){
-    Detail::NotifyCrashHandler(Detail::CrashReasonKind::Terminate, 0u);
+    Detail::CrashDumpRequestOptions options;
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+    // std::terminate runs in a normal thread context, so unwind a callstack directly instead of relying on the
+    // follow-up SIGABRT to carry it.
+    [[maybe_unused]] const bool unwoundTerminateCallstack = __hidden_capture_eh_frame_callstack(options, 0u);
+#endif
+    Detail::NotifyCrashHandler(Detail::CrashReasonKind::Terminate, 0u, options);
     abort();
 }
 
@@ -543,6 +607,9 @@ template bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerE
 void InstallPlatformHandlers(){
 #if defined(NWB_PLATFORM_ANDROID)
     __hidden_crash_posix::__hidden_open_android_emergency_file();
+#elif defined(NWB_PLATFORM_LINUX)
+    // Force libgcc_s to load now so the crash-time backtrace() is allocation-free and async-signal-safe.
+    __hidden_crash_posix::__hidden_warm_up_unwinder();
 #endif
 
     __hidden_crash_posix::__hidden_install_signal_handlers();

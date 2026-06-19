@@ -320,6 +320,7 @@ private:
     bool m_sceneBvhSelfTestDone = false;
     bool m_swShadowPipelineFailed = false;
     bool m_swShadowDispatchLogged = false;
+    bool m_swShadowMeshCapReported = false;
 };
 
 

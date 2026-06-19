@@ -82,6 +82,19 @@ bool nwbSwShadowRayAabb(const float3 origin, const float3 invDir, const float tM
     return tNear <= tFar;
 }
 
+// Reciprocal of the ray direction with each component nudged off exactly zero, so an axis-aligned ray gets
+// a large-but-finite slope instead of +/-inf. That keeps the slab test from forming inf*0 = NaN when the
+// ray origin lies exactly on a box face (a NaN there compares false and would silently drop the shadow).
+float3 nwbSwShadowSafeInvDir(const float3 direction){
+    const float epsilon = 1e-8;
+    const float3 safe = float3(
+        abs(direction.x) > epsilon ? direction.x : (direction.x < 0.0 ? -epsilon : epsilon),
+        abs(direction.y) > epsilon ? direction.y : (direction.y < 0.0 ? -epsilon : epsilon),
+        abs(direction.z) > epsilon ? direction.z : (direction.z < 0.0 ? -epsilon : epsilon)
+    );
+    return 1.0 / safe;
+}
+
 // Affine world->object transform of a point (row-major 3x4; the engine SIMDMatrix rows map onto the rows).
 float3 nwbSwShadowTransformPoint(const NwbSwShadowInstance instance, const float3 point){
     return float3(
@@ -133,9 +146,9 @@ bool nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     const uint meshIndex = instance.meshIndex;
     const float3 origin = nwbSwShadowTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwShadowTransformVector(instance, worldDirection);
-    const float3 invDir = 1.0 / direction;
+    const float3 invDir = nwbSwShadowSafeInvDir(direction);
 
-    uint stack[64];
+    uint stack[NWB_SW_SHADOW_MESH_STACK_SIZE];
     uint stackPointer = 0u;
     stack[stackPointer++] = 0u; // per-mesh root
 
@@ -157,7 +170,12 @@ bool nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
             if(nwbSwShadowRayTriangle(origin, direction, tMin, tMax, v0, v1, v2))
                 return true;
         }
-        else if((stackPointer + 2u) <= 64u){
+        else{
+            // Conservative on stack exhaustion: a subtree deeper than the traversal stack reports occluded
+            // rather than being skipped, so a pathologically unbalanced BVH over-darkens at worst instead of
+            // leaking light through unvisited geometry.
+            if((stackPointer + 2u) > NWB_SW_SHADOW_MESH_STACK_SIZE)
+                return true;
             stack[stackPointer++] = node.leftChild;
             stack[stackPointer++] = node.rightChild;
         }
@@ -171,9 +189,9 @@ bool nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
     if(g_NwbSwShadowPushConstants.instanceCount == 0u)
         return false;
 
-    const float3 invDir = 1.0 / direction;
+    const float3 invDir = nwbSwShadowSafeInvDir(direction);
 
-    uint stack[32];
+    uint stack[NWB_SW_SHADOW_SCENE_STACK_SIZE];
     uint stackPointer = 0u;
     stack[stackPointer++] = 0u; // root
 
@@ -187,7 +205,11 @@ bool nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
             if(nwbSwShadowInstanceOccluded(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax))
                 return true;
         }
-        else if((stackPointer + 2u) <= 32u){
+        else{
+            // Conservative on stack exhaustion (see nwbSwShadowInstanceOccluded): an over-deep scene tree
+            // reports occluded rather than dropping instances. Unreachable in practice (few instances).
+            if((stackPointer + 2u) > NWB_SW_SHADOW_SCENE_STACK_SIZE)
+                return true;
             stack[stackPointer++] = node.leftChild;
             stack[stackPointer++] = node.rightChild;
         }

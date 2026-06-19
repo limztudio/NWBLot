@@ -418,8 +418,15 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             }
         }
         if(meshSlot == NWB_SW_SHADOW_MAX_MESHES){
-            if(rayTracingState().m_swShadowMeshCount >= NWB_SW_SHADOW_MAX_MESHES)
+            if(rayTracingState().m_swShadowMeshCount >= NWB_SW_SHADOW_MAX_MESHES){
+                if(!rayTracingState().m_swShadowMeshCapReported){
+                    rayTracingState().m_swShadowMeshCapReported = true;
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow distinct-mesh cap ({}) reached; further meshes cast no software shadow this scene")
+                        , static_cast<u64>(NWB_SW_SHADOW_MAX_MESHES)
+                    );
+                }
                 continue;
+            }
             meshSlot = rayTracingState().m_swShadowMeshCount++;
             rayTracingState().m_swShadowMeshNodeBuffers[meshSlot] = meshNodeBuffer;
             rayTracingState().m_swShadowMeshPositionBuffers[meshSlot] = mesh->positionBuffer.get();

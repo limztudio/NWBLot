@@ -218,6 +218,7 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowBindingSetVisibility = nullptr;
     m_swShadowBindingSetMeshCount = 0u;
     m_swShadowMeshCount = 0u;
+    m_swShadowMeshCapReported = false;
     m_shadowPipelineFailed = false;
     m_bvhSortPipelineFailed = false;
     m_bvhBuildPipelineFailed = false;

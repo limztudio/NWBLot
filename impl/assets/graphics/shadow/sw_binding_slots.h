@@ -34,6 +34,12 @@
 // Maximum distinct meshes the per-mesh descriptor arrays can address in one frame.
 #define NWB_SW_SHADOW_MAX_MESHES 64
 
+// Per-thread traversal stack depths. The scene/instance BVH is shallow (a few-to-hundreds of instances);
+// the per-mesh triangle BVH is deeper. Both traversals treat a deeper subtree as occluded rather than
+// skipping it, so these are generous-but-not-proven bounds, not correctness-critical.
+#define NWB_SW_SHADOW_SCENE_STACK_SIZE 32
+#define NWB_SW_SHADOW_MESH_STACK_SIZE 64
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

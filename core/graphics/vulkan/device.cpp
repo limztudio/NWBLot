@@ -290,22 +290,6 @@ Device::Device(const DeviceDesc& desc)
         m_gpuCrashDiagnosticsEnabled = false;
     }
 
-    if(m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker){
-        auto breadcrumbInfo = VulkanDetail::MakeVkStruct<VkBufferCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO);
-        breadcrumbInfo.size = static_cast<VkDeviceSize>(s_MaxAmdBreadcrumbSlots) * sizeof(u32);
-        breadcrumbInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-        breadcrumbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        const VkResult breadcrumbRes = m_allocator.createHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory, breadcrumbInfo);
-        if(breadcrumbRes == VK_SUCCESS && m_amdBreadcrumb.mappedMemory){
-            NWB_MEMSET(m_amdBreadcrumb.mappedMemory, 0, static_cast<usize>(breadcrumbInfo.size));
-        }
-        else{
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to allocate AMD breadcrumb buffer; AMD GPU breadcrumbs disabled."));
-            m_context.extensions.AMD_buffer_marker = false;
-            m_amdBreadcrumb.buffer = VK_NULL_HANDLE;
-        }
-    }
-
     if(
         m_context.extensions.KHR_acceleration_structure
         && (
@@ -434,6 +418,23 @@ Device::Device(const DeviceDesc& desc)
 
     if(!m_allocator.initialize())
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to initialize VMA allocator"));
+
+    // AMD breadcrumb ring: allocated AFTER the VMA allocator is initialized (createHostMappedBuffer needs it).
+    if(m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker){
+        auto breadcrumbInfo = VulkanDetail::MakeVkStruct<VkBufferCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO);
+        breadcrumbInfo.size = static_cast<VkDeviceSize>(s_MaxAmdBreadcrumbSlots) * sizeof(u32);
+        breadcrumbInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        breadcrumbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        const VkResult breadcrumbRes = m_allocator.createHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory, breadcrumbInfo);
+        if(breadcrumbRes == VK_SUCCESS && m_amdBreadcrumb.mappedMemory){
+            NWB_MEMSET(m_amdBreadcrumb.mappedMemory, 0, static_cast<usize>(breadcrumbInfo.size));
+        }
+        else{
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to allocate AMD breadcrumb buffer ({}); AMD GPU breadcrumbs disabled."), ResultToString(breadcrumbRes));
+            m_context.extensions.AMD_buffer_marker = false;
+            m_amdBreadcrumb.buffer = VK_NULL_HANDLE;
+        }
+    }
 
     if(m_context.extensions.EXT_descriptor_heap){
         auto props2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);

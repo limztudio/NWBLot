@@ -270,6 +270,11 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
         return SupportsRequestedValue(requested.mutableDescriptorType.mutableDescriptorType, supported.mutableDescriptorType.mutableDescriptorType);
     case DeviceExtensionFeature::DescriptorHeap:
         return SupportsRequestedValue(requested.descriptorHeap.descriptorHeap, supported.descriptorHeap.descriptorHeap);
+    case DeviceExtensionFeature::DeviceFault:
+        // Only the core deviceFault capability gates the extension; deviceFaultVendorBinary is optional and is
+        // clamped to device support in FinalizeOptionalDeviceFeatureEnablement (requesting it unsupported makes
+        // vkCreateDevice fail with VK_ERROR_FEATURE_NOT_PRESENT).
+        return SupportsRequestedValue(requested.deviceFault.deviceFault, supported.deviceFault.deviceFault);
     case DeviceExtensionFeature::None:
     case DeviceExtensionFeature::Count:
     default:
@@ -282,6 +287,9 @@ static void FinalizeOptionalDeviceFeatureEnablement(OptionalDeviceFeatureSet& en
     enabled.meshShader.taskShader = supported.meshShader.taskShader;
     enabled.rayTracingLinearSweptSpheres.spheres = supported.rayTracingLinearSweptSpheres.spheres;
     enabled.rayTracingLinearSweptSpheres.linearSweptSpheres = supported.rayTracingLinearSweptSpheres.linearSweptSpheres;
+    // Optional VK_EXT_device_fault sub-feature: only enable the vendor-binary capability where the device
+    // actually supports it, otherwise vkCreateDevice fails with VK_ERROR_FEATURE_NOT_PRESENT (e.g. AMD iGPUs).
+    enabled.deviceFault.deviceFaultVendorBinary = supported.deviceFault.deviceFaultVendorBinary;
 }
 
 static void AppendFeatureStruct(void*& pNext, void* feature){

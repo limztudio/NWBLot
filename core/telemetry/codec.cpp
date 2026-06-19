@@ -38,10 +38,9 @@ struct ByteView{
 }
 
 [[nodiscard]] static bool ValidateHeaderPayload(const EventHeader& header)noexcept{
-    return header.valid()
-        && header.version == s_CodecVersion
-        && (header.payloadFormat != PayloadFormat::None || header.payloadBytes == 0u)
-    ;
+    // EventHeader::valid() already checks magic, kind, payload-format validity, and the
+    // none-format/zero-bytes invariant; the version equality gate was dev-stage compat machinery.
+    return header.valid();
 }
 
 [[nodiscard]] static bool ValidateEventPayload(const EventHeader& header, const void* const payload, const usize payloadBytes)noexcept{
@@ -53,7 +52,6 @@ struct ByteView{
 
 [[nodiscard]] static bool ValidateStreamHeader(const EncodedStreamHeader& header)noexcept{
     return header.magic == s_StreamMagic
-        && header.version == s_CodecVersion
         && header.reserved == 0u
     ;
 }
@@ -63,7 +61,6 @@ struct ByteView{
     encoded.magic = header.magic;
     encoded.version = header.version;
     encoded.kind = static_cast<u16>(header.kind);
-    encoded.payloadFormat = static_cast<u8>(header.payloadFormat);
     encoded.reserved = header.reserved;
     encoded.streamId = header.streamId;
     encoded.frameIndex = header.frameIndex;
@@ -77,7 +74,6 @@ struct ByteView{
     header.magic = encoded.magic;
     header.version = encoded.version;
     header.kind = static_cast<EventKind::Enum>(encoded.kind);
-    header.payloadFormat = static_cast<PayloadFormat::Enum>(encoded.payloadFormat);
     header.reserved = encoded.reserved;
     header.streamId = encoded.streamId;
     header.frameIndex = encoded.frameIndex;

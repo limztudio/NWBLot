@@ -35,7 +35,6 @@ struct ByteView{
 
 [[nodiscard]] static bool ValidateHeader(const EncodedPerfTimingPayloadHeader& header)noexcept{
     return header.magic == s_PerfTimingPayloadMagic
-        && header.version == s_PerfTimingPayloadVersion
         && header.reserved == 0u
         && IsValidPerfTimingSource(static_cast<PerfTimingSource::Enum>(header.source))
         && header.sampleCount != 0u
@@ -46,7 +45,6 @@ struct ByteView{
 [[nodiscard]] static bool ValidateHeader(const EncodedPerfMemoryPayloadHeader& header)noexcept{
     constexpr u16 s_KnownFlags = PerfMemoryPayloadFlag::HasDelta;
     return header.magic == s_PerfMemoryPayloadMagic
-        && header.version == s_PerfMemoryPayloadVersion
         && (header.flags & ~s_KnownFlags) == 0u
         && header.reserved == 0u
         && !NameDetail::IsZeroHash(header.scopeHash)
@@ -250,7 +248,7 @@ bool RecordPerfTiming(
     if(!BuildPerfTimingPayload(recorder.arena(), source, scopeName, stats, payload))
         return false;
 
-    return recorder.record(EventKind::PerfFrame, PayloadFormat::Binary, stats.publishFrameIndex, payload.data(), payload.size(), streamId);
+    return recorder.recordBinary(EventKind::PerfFrame, stats.publishFrameIndex, payload.data(), payload.size(), streamId);
 }
 
 bool BuildPerfMemoryPayload(
@@ -372,7 +370,7 @@ bool RecordPerfMemory(
     if(!BuildPerfMemoryPayload(recorder.arena(), scopeName, snapshot, delta, payload))
         return false;
 
-    return recorder.record(EventKind::MemoryFrame, PayloadFormat::Binary, snapshot.frameIndex, payload.data(), payload.size(), streamId);
+    return recorder.recordBinary(EventKind::MemoryFrame, snapshot.frameIndex, payload.data(), payload.size(), streamId);
 }
 
 PerfSessionRecordResult RecordPerfSessionReport(

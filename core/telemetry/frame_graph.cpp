@@ -54,7 +54,6 @@ struct ByteView{
 
 [[nodiscard]] static bool ValidateHeader(const EncodedFrameGraphPayloadHeader& header)noexcept{
     return header.magic == s_FrameGraphPayloadMagic
-        && header.version == s_FrameGraphPayloadVersion
         && header.reserved == 0u
     ;
 }
@@ -294,7 +293,7 @@ bool RecordFrameGraph(
     if(!BuildFrameGraphPayload(recorder.arena(), frameIndex, nodes, edges, payload))
         return false;
 
-    return recorder.record(EventKind::FrameGraphFrame, PayloadFormat::Binary, frameIndex, payload.data(), payload.size(), streamId);
+    return recorder.recordBinary(EventKind::FrameGraphFrame, frameIndex, payload.data(), payload.size(), streamId);
 }
 
 

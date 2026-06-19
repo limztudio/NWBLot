@@ -2137,6 +2137,35 @@ class Device final : public RefCounter<GraphicsResource>, NoCopy{
     friend class UploadManager;
 
 
+private:
+    // AMD GPU breadcrumb ring (vendor analog of NV checkpoints): command buffers write a monotonic sequence into
+    // a host-coherent buffer via vkCmdWriteBufferMarkerAMD; on device-lost the furthest-reached slot maps back
+    // (CPU side) to a marker hash resolved through m_gpuCrashTracker. slotRecords stays plain host RAM so it is
+    // readable at crash time without touching the growable heap.
+    struct AmdBreadcrumbSlotRecord{
+        u32 sequence = 0u;
+        usize markerHash = 0u;
+    };
+    struct AmdBreadcrumbBuffer{
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VulkanAllocationHandle allocation = {};
+        void* mappedMemory = nullptr;
+        Atomic<u32> nextSequence = 0u;
+        Array<AmdBreadcrumbSlotRecord, s_MaxAmdBreadcrumbSlots> slotRecords = {};
+    };
+
+
+public:
+    // Reserves a breadcrumb ring slot + monotonic sequence for a marker hash and returns what the command list
+    // needs to emit vkCmdWriteBufferMarkerAMD. valid==false when AMD breadcrumbs are unavailable.
+    struct AmdBreadcrumbWrite{
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VkDeviceSize offset = 0u;
+        u32 marker = 0u;
+        bool valid = false;
+    };
+
+
 public:
     explicit Device(const DeviceDesc& desc);
     ~Device();
@@ -2201,8 +2230,14 @@ public:
     usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns);
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue);
     bool isGpuCrashDiagnosticsEnabled(){ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
+    bool isAmdBreadcrumbEnabled(){ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
+    // NV checkpoints and AMD buffer markers both feed the shared per-command-list marker tracker; either one
+    // enables marker push/pop + tracker registration, while each per-vendor GPU command is emitted behind its own flag.
+    bool isAnyGpuMarkerEnabled(){ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
     [[nodiscard]] GpuCrashTracker& getGpuCrashTracker(){ return m_gpuCrashTracker; }
-    void captureGpuCrash(AStringView context);
+    void captureGpuCrash(AStringView context)noexcept;
+
+    [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(usize markerHash);
 
     void queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value);
     void queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value);
@@ -2320,10 +2355,12 @@ private:
     // GPU crash tracker must be first due to reverse destruction order
     // Queues will destroy CommandLists which will unregister from m_gpuCrashTracker in their destructors
     bool m_gpuCrashDiagnosticsEnabled = false;
-    bool m_gpuCrashCaptured = false;
+    Atomic<bool> m_gpuCrashCaptured = false;
     GpuCrashTracker m_gpuCrashTracker;
     // Fixed-size, pre-reserved arena the device-lost capture formats into (no growable-heap touch at crash time).
     Alloc::PersistentArena m_gpuCrashReportArena;
+
+    AmdBreadcrumbBuffer m_amdBreadcrumb;
 
     VulkanContext m_context;
     VulkanAllocator m_allocator;

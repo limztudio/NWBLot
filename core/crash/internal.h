@@ -44,7 +44,6 @@ inline constexpr usize s_MaxShortText = 64u;
 inline constexpr usize s_MaxMediumText = 256u;
 inline constexpr usize s_MaxPathText = 1024u;
 inline constexpr usize s_MaxUrlText = 1024u;
-inline constexpr usize s_MaxGpuReportText = 8192u;
 inline constexpr u32 s_ManualDumpExceptionCode = 0xE0425742u;
 inline constexpr u32 s_PlatformCrashHandlerWaitMilliseconds = 3000u;
 inline constexpr u32 s_ManualCrashDumpWaitMilliseconds = 10000u;
@@ -157,7 +156,6 @@ struct CrashRequest{
     char triggerExpression[s_MaxMediumText] = {};
     char triggerMessage[s_MaxMediumText] = {};
     char triggerFile[s_MaxPathText] = {};
-    char gpuReport[s_MaxGpuReportText] = {};
     u32 metadataCount = 0u;
     u32 breadcrumbCount = 0u;
     FixedMetadata metadata[s_MaxMetadata] = {};
@@ -222,6 +220,10 @@ struct CrashState{
     Atomic<u64> breadcrumbOrder{ 1u };
     Atomic<u64> crashSequence{ 1u };
     Atomic<u32> suppressedPlatformCrashCaptures{ 0u };
+    // Crash-transport channel guard: a single CAS claims the request pipe/event so concurrent faulting threads
+    // never interleave their fixed-POD writes. Deliberately distinct from `mutex` (which the assert/diagnostic
+    // path may already hold when a hard fault occurs), and an atomic (not a Futex) so it is signal/SEH-safe.
+    Atomic<u32> transportInFlight{ 0u };
 
 #if defined(NWB_PLATFORM_WINDOWS)
     HANDLE requestWriteHandle = INVALID_HANDLE_VALUE;

@@ -77,9 +77,8 @@ usize Recorder::eventCount()const{
     return m_events.size();
 }
 
-bool Recorder::record(
+bool Recorder::recordBinary(
     const EventKind::Enum kind,
-    const PayloadFormat::Enum payloadFormat,
     const u64 frameIndex,
     const void* payload,
     const usize payloadBytes,
@@ -91,7 +90,6 @@ bool Recorder::record(
 
     EventHeader header;
     header.kind = kind;
-    header.payloadFormat = payloadFormat;
     header.streamId = streamId;
     header.frameIndex = frameIndex;
     header.timestampNanoseconds = __hidden_telemetry_recorder::TimestampNanoseconds();
@@ -126,16 +124,6 @@ bool Recorder::appendUnlocked(const EventHeader& header, const void* payload, co
 
     m_events.push_back(Move(record));
     return true;
-}
-
-bool Recorder::recordBinary(
-    const EventKind::Enum kind,
-    const u64 frameIndex,
-    const void* payload,
-    const usize payloadBytes,
-    const u32 streamId
-){
-    return record(kind, PayloadFormat::Binary, frameIndex, payload, payloadBytes, streamId);
 }
 
 const EventRecord* Recorder::eventAt(const usize index)const{

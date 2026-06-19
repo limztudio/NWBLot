@@ -57,7 +57,6 @@ static void AppendText(Container& outPayload, const AStringView text){
 [[nodiscard]] static bool ValidateHeader(const EncodedDiagnosticPayloadHeader& header)noexcept{
     constexpr u16 s_KnownFlags = DiagnosticPayloadFlag::TerminatesProcess;
     return header.magic == s_DiagnosticPayloadMagic
-        && header.version == s_DiagnosticPayloadVersion
         && (header.flags & ~s_KnownFlags) == 0u
     ;
 }
@@ -192,7 +191,7 @@ bool RecordDiagnostic(
     if(!BuildDiagnosticPayload(recorder.arena(), record, payload))
         return false;
 
-    return recorder.record(EventKind::Diagnostic, PayloadFormat::Binary, frameIndex, payload.data(), payload.size(), streamId);
+    return recorder.recordBinary(EventKind::Diagnostic, frameIndex, payload.data(), payload.size(), streamId);
 }
 
 

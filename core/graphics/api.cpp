@@ -561,10 +561,12 @@ GpuCrashTracker::GpuCrashTracker(GraphicsArena& arena)
 {}
 
 void GpuCrashTracker::registerGpuCrashMarkerTracker(GpuCrashMarkerTracker& tracker){
+    ScopedLock lock(m_mutex);
     m_markerTrackers.insert(&tracker);
 }
 
 void GpuCrashTracker::unRegisterGpuCrashMarkerTracker(GpuCrashMarkerTracker& tracker){
+    ScopedLock lock(m_mutex);
     if(m_destroyedMarkerTrackers.size() >= s_NumDestroyedMarkerTrackers)
         m_destroyedMarkerTrackers.pop_front();
 
@@ -573,6 +575,7 @@ void GpuCrashTracker::unRegisterGpuCrashMarkerTracker(GpuCrashMarkerTracker& tra
 }
 
 ResolvedMarker GpuCrashTracker::resolveMarker(usize markerHash){
+    ScopedLock lock(m_mutex);
     // Search in active marker trackers
     for(auto* markerTracker : m_markerTrackers){
         auto result = markerTracker->getEventString(markerHash);

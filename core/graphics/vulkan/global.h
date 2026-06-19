@@ -62,7 +62,10 @@ inline constexpr u64 s_BufferAlignmentBytes = 4;
 // Fixed-size, pre-reserved arena for GPU crash reports. Captured on device-lost, so it must
 // not touch the growable heap (which may be unsafe at crash time); the block is reserved up front.
 inline constexpr usize s_GpuCrashReportArenaSize = 64u * 1024u; // 64 KB
-inline constexpr u32 s_MaxGpuCrashCaptureEntries = 64u; // cap on markers/fault entries formatted into the fixed crash arena
+inline constexpr u32 s_MaxGpuCrashCaptureEntries = 64u; // AGGREGATE cap on markers/fault entries formatted into the fixed crash arena (across all queues + fault sections)
+inline constexpr usize s_MaxGpuCrashMarkerChars = 256u; // per-marker string truncation so one deeply-nested label cannot blow the report budget
+inline constexpr usize s_MaxGpuCrashReportChars = 32u * 1024u; // reserved report.details capacity; bounds peak arena use well under s_GpuCrashReportArenaSize (no realloc transients)
+inline constexpr u32 s_MaxAmdBreadcrumbSlots = 256u; // AMD breadcrumb ring slot count (>= s_MaxGpuCrashCaptureEntries); buffer = slots * sizeof(u32)
 
 // Queue and swap chain defaults.
 inline constexpr u32 s_GraphicsQueueIndex = 0;

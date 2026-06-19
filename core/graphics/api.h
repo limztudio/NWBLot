@@ -3063,6 +3063,11 @@ public:
 
 
 private:
+    // Guards the containers below: command lists register/unregister from worker threads (create/destroy)
+    // while a device-lost capture iterates them via resolveMarker on another thread. Without this the
+    // Set/Deque could be mutated mid-iteration. (Per-tracker locking is impossible — destroyed trackers
+    // are copied by value into m_destroyedMarkerTrackers, so GpuCrashMarkerTracker must stay copyable.)
+    Futex m_mutex;
     GraphicsArena& m_arena;
     GraphicsSet<GpuCrashMarkerTracker*> m_markerTrackers;
     // Command lists deleted on CPU could still be executing (and crashing) on GPU,

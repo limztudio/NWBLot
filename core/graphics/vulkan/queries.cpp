@@ -228,8 +228,10 @@ void CommandList::endTimerQuery(TimerQuery* queryResource){
 void CommandList::beginMarker(const AStringView name){
     const bool useDebugUtils = m_context.extensions.EXT_debug_utils;
     const bool useDebugMarker = m_context.extensions.EXT_debug_marker;
-    const bool useGpuCrashMarkers = m_device.isGpuCrashDiagnosticsEnabled();
-    if(!useDebugUtils && !useDebugMarker && !useGpuCrashMarkers)
+    const bool useNvCheckpoint = m_device.isGpuCrashDiagnosticsEnabled();
+    const bool useAmdBreadcrumb = m_device.isAmdBreadcrumbEnabled();
+    const bool useGpuMarkers = useNvCheckpoint || useAmdBreadcrumb;
+    if(!useDebugUtils && !useDebugMarker && !useGpuMarkers)
         return;
 
     const GraphicsString markerName(name, m_context.objectArena);
@@ -245,9 +247,16 @@ void CommandList::beginMarker(const AStringView name){
         vkCmdDebugMarkerBeginEXT(m_currentCmdBuf->m_cmdBuf, &markerInfo);
     }
 
-    if(useGpuCrashMarkers){
+    // Both vendors share one nested-marker hash so resolveMarker works regardless of which (or both) is active.
+    if(useGpuMarkers){
         const usize gpuCrashMarker = m_gpuCrashMarkerTracker.pushEvent(markerName.c_str());
-        vkCmdSetCheckpointNV(m_currentCmdBuf->m_cmdBuf, reinterpret_cast<const void*>(gpuCrashMarker));
+        if(useNvCheckpoint)
+            vkCmdSetCheckpointNV(m_currentCmdBuf->m_cmdBuf, reinterpret_cast<const void*>(gpuCrashMarker));
+        if(useAmdBreadcrumb){
+            const Device::AmdBreadcrumbWrite breadcrumb = m_device.reserveAmdBreadcrumb(gpuCrashMarker);
+            if(breadcrumb.valid)
+                vkCmdWriteBufferMarkerAMD(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, breadcrumb.buffer, breadcrumb.offset, breadcrumb.marker);
+        }
     }
 }
 
@@ -257,7 +266,7 @@ void CommandList::endMarker(){
     else if(m_context.extensions.EXT_debug_marker)
         vkCmdDebugMarkerEndEXT(m_currentCmdBuf->m_cmdBuf);
 
-    if(m_device.isGpuCrashDiagnosticsEnabled())
+    if(m_device.isAnyGpuMarkerEnabled())
         m_gpuCrashMarkerTracker.popEvent();
 }
 

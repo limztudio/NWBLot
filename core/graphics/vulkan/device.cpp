@@ -290,6 +290,22 @@ Device::Device(const DeviceDesc& desc)
         m_gpuCrashDiagnosticsEnabled = false;
     }
 
+    if(m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker){
+        auto breadcrumbInfo = VulkanDetail::MakeVkStruct<VkBufferCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO);
+        breadcrumbInfo.size = static_cast<VkDeviceSize>(s_MaxAmdBreadcrumbSlots) * sizeof(u32);
+        breadcrumbInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        breadcrumbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        const VkResult breadcrumbRes = m_allocator.createHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory, breadcrumbInfo);
+        if(breadcrumbRes == VK_SUCCESS && m_amdBreadcrumb.mappedMemory){
+            NWB_MEMSET(m_amdBreadcrumb.mappedMemory, 0, static_cast<usize>(breadcrumbInfo.size));
+        }
+        else{
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to allocate AMD breadcrumb buffer; AMD GPU breadcrumbs disabled."));
+            m_context.extensions.AMD_buffer_marker = false;
+            m_amdBreadcrumb.buffer = VK_NULL_HANDLE;
+        }
+    }
+
     if(
         m_context.extensions.KHR_acceleration_structure
         && (
@@ -484,6 +500,11 @@ Device::~Device(){
 
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
         m_queues[i].reset();
+
+    // Freed after the queues (and their command lists) so isAmdBreadcrumbEnabled() stays stable while command
+    // lists unregister their marker trackers in their destructors.
+    if(m_amdBreadcrumb.buffer != VK_NULL_HANDLE)
+        m_allocator.destroyHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory);
 
     if(m_context.emptyDescriptorSetLayout){
         vkDestroyDescriptorSetLayout(m_context.device, m_context.emptyDescriptorSetLayout, m_context.allocationCallbacks);
@@ -691,103 +712,186 @@ bool Device::waitForIdle(){
     return true;
 }
 
-void Device::captureGpuCrash(const AStringView context){
-    if(!m_gpuCrashDiagnosticsEnabled || m_gpuCrashCaptured)
+void Device::captureGpuCrash(const AStringView context)noexcept{
+    if(!m_gpuCrashDiagnosticsEnabled)
         return;
 
     const bool hasCheckpoints = m_context.extensions.NV_device_diagnostic_checkpoints;
     const bool hasDeviceFault = m_context.extensions.EXT_device_fault;
-    if(!hasCheckpoints && !hasDeviceFault)
+    const bool hasBufferMarker = m_context.extensions.AMD_buffer_marker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE;
+    if(!hasCheckpoints && !hasDeviceFault && !hasBufferMarker)
         return;
 
-    m_gpuCrashCaptured = true;
+    // Claim the one-shot capture atomically: only the first thread to lose the device proceeds, so a
+    // device-lost reported concurrently from submit/present/waitForIdle never dispatches two crash dumps.
+    if(m_gpuCrashCaptured.exchange(true))
+        return;
 
     GpuCrashReport report(m_gpuCrashReportArena);
-    report.context.append(context.data(), context.size());
 
-    if(hasCheckpoints){
-        for(u32 queueIndex = 0; queueIndex < static_cast<u32>(CommandQueue::kCount); ++queueIndex){
-            if(!m_queues[queueIndex])
-                continue;
+    // The report lives in a fixed, pre-reserved arena so capture never touches the growable heap. Formatting
+    // is wrapped: if the arena is exhausted the report degrades to whatever was built rather than throwing
+    // std::bad_alloc out of the device-lost path (the function is noexcept, so an escape would terminate).
+    try{
+        report.details.reserve(s_MaxGpuCrashReportChars);
+        report.context.append(context.data(), context.size());
 
-            VkQueue queue = m_queues[queueIndex]->m_queue;
-            uint32_t checkpointCount = 0;
-            vkGetQueueCheckpointDataNV(queue, &checkpointCount, nullptr);
-            if(checkpointCount == 0)
-                continue;
-            if(checkpointCount > s_MaxGpuCrashCaptureEntries)
-                checkpointCount = s_MaxGpuCrashCaptureEntries;
+        // A single aggregate budget across all queues AND both fault sections keeps the formatted output
+        // within the fixed arena. (Clamping per-queue would let kCount queues each emit the full cap.)
+        u32 remainingEntries = s_MaxGpuCrashCaptureEntries;
 
-            Vector<VkCheckpointDataNV, Alloc::PersistentArena> checkpoints(m_gpuCrashReportArena);
-            checkpoints.resize(checkpointCount, VulkanDetail::MakeVkStruct<VkCheckpointDataNV>(VK_STRUCTURE_TYPE_CHECKPOINT_DATA_NV));
-            vkGetQueueCheckpointDataNV(queue, &checkpointCount, checkpoints.data());
-
-            for(const auto& checkpoint : checkpoints){
-                const usize markerHash = reinterpret_cast<usize>(checkpoint.pCheckpointMarker);
-                if(markerHash == 0)
+        if(hasCheckpoints){
+            for(u32 queueIndex = 0; queueIndex < static_cast<u32>(CommandQueue::kCount) && remainingEntries > 0u; ++queueIndex){
+                if(!m_queues[queueIndex])
                     continue;
 
-                const auto resolved = m_gpuCrashTracker.resolveMarker(markerHash);
-                if(!resolved.first())
+                VkQueue queue = m_queues[queueIndex]->m_queue;
+                uint32_t checkpointCount = 0;
+                vkGetQueueCheckpointDataNV(queue, &checkpointCount, nullptr);
+                if(checkpointCount == 0)
                     continue;
+                if(checkpointCount > remainingEntries)
+                    checkpointCount = remainingEntries;
 
-                report.details.append(StringFormat(m_gpuCrashReportArena, "last executed marker (stage 0x{:x}): {}\n", static_cast<u32>(checkpoint.stage), resolved.second().c_str()));
-            }
-        }
-    }
+                Vector<VkCheckpointDataNV, Alloc::PersistentArena> checkpoints(m_gpuCrashReportArena);
+                checkpoints.resize(checkpointCount, VulkanDetail::MakeVkStruct<VkCheckpointDataNV>(VK_STRUCTURE_TYPE_CHECKPOINT_DATA_NV));
+                vkGetQueueCheckpointDataNV(queue, &checkpointCount, checkpoints.data());
 
-    if(hasDeviceFault){
-        auto faultCounts = VulkanDetail::MakeVkStruct<VkDeviceFaultCountsEXT>(VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT);
-        if(vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, nullptr) == VK_SUCCESS){
-            faultCounts.vendorBinarySize = 0;
-            if(faultCounts.addressInfoCount > s_MaxGpuCrashCaptureEntries)
-                faultCounts.addressInfoCount = s_MaxGpuCrashCaptureEntries;
-            if(faultCounts.vendorInfoCount > s_MaxGpuCrashCaptureEntries)
-                faultCounts.vendorInfoCount = s_MaxGpuCrashCaptureEntries;
+                for(const auto& checkpoint : checkpoints){
+                    const usize markerHash = reinterpret_cast<usize>(checkpoint.pCheckpointMarker);
+                    if(markerHash == 0)
+                        continue;
 
-            Vector<VkDeviceFaultAddressInfoEXT, Alloc::PersistentArena> addressInfos(m_gpuCrashReportArena);
-            Vector<VkDeviceFaultVendorInfoEXT, Alloc::PersistentArena> vendorInfos(m_gpuCrashReportArena);
-            addressInfos.resize(faultCounts.addressInfoCount, VkDeviceFaultAddressInfoEXT{});
-            vendorInfos.resize(faultCounts.vendorInfoCount, VkDeviceFaultVendorInfoEXT{});
+                    const auto resolved = m_gpuCrashTracker.resolveMarker(markerHash);
+                    if(!resolved.first())
+                        continue;
 
-            auto faultInfo = VulkanDetail::MakeVkStruct<VkDeviceFaultInfoEXT>(VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT);
-            faultInfo.pAddressInfos = addressInfos.empty() ? nullptr : addressInfos.data();
-            faultInfo.pVendorInfos = vendorInfos.empty() ? nullptr : vendorInfos.data();
-            faultInfo.pVendorBinaryData = nullptr;
-
-            const VkResult faultResult = vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, &faultInfo);
-            if(faultResult == VK_SUCCESS || faultResult == VK_INCOMPLETE){
-                const char* faultDescription = faultInfo.description;
-                report.details.append(StringFormat(m_gpuCrashReportArena, "device fault: {}\n", faultDescription));
-
-                for(u32 i = 0; i < faultCounts.addressInfoCount; ++i){
-                    const VkDeviceFaultAddressInfoEXT& addressInfo = addressInfos[i];
-                    report.details.append(StringFormat(m_gpuCrashReportArena, "fault address 0x{:x} (type {}, precision 0x{:x})\n"
-                        , static_cast<u64>(addressInfo.reportedAddress)
-                        , static_cast<u32>(addressInfo.addressType)
-                        , static_cast<u64>(addressInfo.addressPrecision)
-                    ));
+                    report.details.append(StringFormat(m_gpuCrashReportArena, "last executed marker (stage 0x{:x}): {:.{}}\n", static_cast<u32>(checkpoint.stage), resolved.second().c_str(), static_cast<int>(s_MaxGpuCrashMarkerChars)));
                 }
 
-                for(u32 i = 0; i < faultCounts.vendorInfoCount; ++i){
-                    const VkDeviceFaultVendorInfoEXT& vendorInfo = vendorInfos[i];
-                    const char* vendorDescription = vendorInfo.description;
-                    report.details.append(StringFormat(m_gpuCrashReportArena, "vendor fault '{}' (code 0x{:x}, data 0x{:x})\n"
-                        , vendorDescription
-                        , static_cast<u64>(vendorInfo.vendorFaultCode)
-                        , static_cast<u64>(vendorInfo.vendorFaultData)
-                    ));
+                remainingEntries -= checkpointCount;
+            }
+        }
+
+        if(hasBufferMarker && remainingEntries > 0u){
+            const u32* breadcrumbSlots = static_cast<const u32*>(m_amdBreadcrumb.mappedMemory);
+            if(breadcrumbSlots){
+                // Each slot holds the highest sequence the GPU executed there; the slot with the global max
+                // sequence is the furthest point the GPU reached before the device was lost.
+                u32 furthestSequence = 0u;
+                u32 furthestSlot = 0u;
+                for(u32 slot = 0u; slot < s_MaxAmdBreadcrumbSlots; ++slot){
+                    if(breadcrumbSlots[slot] > furthestSequence){
+                        furthestSequence = breadcrumbSlots[slot];
+                        furthestSlot = slot;
+                    }
+                }
+
+                if(furthestSequence != 0u){
+                    const AmdBreadcrumbSlotRecord& record = m_amdBreadcrumb.slotRecords[furthestSlot];
+                    if(record.sequence == furthestSequence){
+                        const auto resolved = m_gpuCrashTracker.resolveMarker(record.markerHash);
+                        if(resolved.first())
+                            report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): {:.{}}\n", furthestSequence, resolved.second().c_str(), static_cast<int>(s_MaxGpuCrashMarkerChars)));
+                        else
+                            report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): <unresolved marker>\n", furthestSequence));
+                    }
+                    else{
+                        // The CPU lapped this ring slot after the GPU wrote it, so the recorded label is stale.
+                        report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): <label overwritten>\n", furthestSequence));
+                    }
+                    --remainingEntries;
                 }
             }
         }
+
+        if(hasDeviceFault && remainingEntries > 0u){
+            auto faultCounts = VulkanDetail::MakeVkStruct<VkDeviceFaultCountsEXT>(VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT);
+            if(vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, nullptr) == VK_SUCCESS){
+                faultCounts.vendorBinarySize = 0;
+                if(faultCounts.addressInfoCount > remainingEntries)
+                    faultCounts.addressInfoCount = remainingEntries;
+                remainingEntries -= faultCounts.addressInfoCount;
+                if(faultCounts.vendorInfoCount > remainingEntries)
+                    faultCounts.vendorInfoCount = remainingEntries;
+                remainingEntries -= faultCounts.vendorInfoCount;
+
+                Vector<VkDeviceFaultAddressInfoEXT, Alloc::PersistentArena> addressInfos(m_gpuCrashReportArena);
+                Vector<VkDeviceFaultVendorInfoEXT, Alloc::PersistentArena> vendorInfos(m_gpuCrashReportArena);
+                addressInfos.resize(faultCounts.addressInfoCount, VkDeviceFaultAddressInfoEXT{});
+                vendorInfos.resize(faultCounts.vendorInfoCount, VkDeviceFaultVendorInfoEXT{});
+
+                auto faultInfo = VulkanDetail::MakeVkStruct<VkDeviceFaultInfoEXT>(VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT);
+                faultInfo.pAddressInfos = addressInfos.empty() ? nullptr : addressInfos.data();
+                faultInfo.pVendorInfos = vendorInfos.empty() ? nullptr : vendorInfos.data();
+                faultInfo.pVendorBinaryData = nullptr;
+
+                const VkResult faultResult = vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, &faultInfo);
+                if(faultResult == VK_SUCCESS || faultResult == VK_INCOMPLETE){
+                    const char* faultDescription = faultInfo.description;
+                    report.details.append(StringFormat(m_gpuCrashReportArena, "device fault: {:.{}}\n", faultDescription, static_cast<int>(s_MaxGpuCrashMarkerChars)));
+
+                    for(u32 i = 0; i < faultCounts.addressInfoCount; ++i){
+                        const VkDeviceFaultAddressInfoEXT& addressInfo = addressInfos[i];
+                        report.details.append(StringFormat(m_gpuCrashReportArena, "fault address 0x{:x} (type {}, precision 0x{:x})\n"
+                            , static_cast<u64>(addressInfo.reportedAddress)
+                            , static_cast<u32>(addressInfo.addressType)
+                            , static_cast<u64>(addressInfo.addressPrecision)
+                        ));
+                    }
+
+                    for(u32 i = 0; i < faultCounts.vendorInfoCount; ++i){
+                        const VkDeviceFaultVendorInfoEXT& vendorInfo = vendorInfos[i];
+                        const char* vendorDescription = vendorInfo.description;
+                        report.details.append(StringFormat(m_gpuCrashReportArena, "vendor fault '{:.{}}' (code 0x{:x}, data 0x{:x})\n"
+                            , vendorDescription
+                            , static_cast<int>(s_MaxGpuCrashMarkerChars)
+                            , static_cast<u64>(vendorInfo.vendorFaultCode)
+                            , static_cast<u64>(vendorInfo.vendorFaultData)
+                        ));
+                    }
+                }
+            }
+        }
+
+        if(report.details.empty())
+            report.details.append("(no GPU diagnostics available)");
+    }
+    catch(...){
+        // Fixed crash arena exhausted while formatting; ship the partial report rather than terminate.
     }
 
-    if(report.details.empty())
-        report.details.append("(no GPU diagnostics available)");
+    // Logging itself formats/allocates; never let it abort the crash path.
+    try{
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), StringConvert(report.context.c_str()), StringConvert(report.details.c_str()));
+    }
+    catch(...){
+    }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), StringConvert(report.context.c_str()), StringConvert(report.details.c_str()));
+    try{
+        DispatchGpuCrash(report);
+    }
+    catch(...){
+    }
+}
 
-    DispatchGpuCrash(report);
+Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const usize markerHash){
+    AmdBreadcrumbWrite write;
+    if(m_amdBreadcrumb.buffer == VK_NULL_HANDLE)
+        return write;
+
+    // Monotonic sequence (>=1 so a zeroed slot reads as "never reached"), ring-mapped to a slot. The CPU-side
+    // record lets device-lost readback map the furthest-reached slot back to its marker hash.
+    const u32 sequence = m_amdBreadcrumb.nextSequence.fetch_add(1u) + 1u;
+    const u32 slot = sequence % s_MaxAmdBreadcrumbSlots;
+    m_amdBreadcrumb.slotRecords[slot].markerHash = markerHash;
+    m_amdBreadcrumb.slotRecords[slot].sequence = sequence;
+
+    write.buffer = m_amdBreadcrumb.buffer;
+    write.offset = static_cast<VkDeviceSize>(slot) * sizeof(u32);
+    write.marker = sequence;
+    write.valid = true;
+    return write;
 }
 
 void Device::runGarbageCollection(){

@@ -310,14 +310,10 @@ const char* EventKindText(const Telemetry::EventKind::Enum kind)noexcept{
         return "textLog";
     case Telemetry::EventKind::Diagnostic:
         return "diagnostic";
-    case Telemetry::EventKind::CrashUpload:
-        return "crashUpload";
     case Telemetry::EventKind::PerfFrame:
         return "perfFrame";
     case Telemetry::EventKind::FrameGraphFrame:
         return "frameGraphFrame";
-    case Telemetry::EventKind::Custom:
-        return "custom";
     case Telemetry::EventKind::MemoryFrame:
         return "memoryFrame";
     case Telemetry::EventKind::Unknown:

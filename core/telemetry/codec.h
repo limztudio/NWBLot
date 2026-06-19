@@ -17,13 +17,12 @@ NWB_TELEMETRY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u16 s_CodecVersion = 1u;
 inline constexpr u32 s_StreamMagic = 0x4E574253u; // NWBS
 
 #pragma pack(push, 1)
 struct EncodedStreamHeader{
     u32 magic = s_StreamMagic;
-    u16 version = s_CodecVersion;
+    u16 version = s_TelemetryFormatVersion;
     u16 reserved = 0u;
     u64 eventCount = 0u;
     u64 payloadBytes = 0u;
@@ -31,9 +30,8 @@ struct EncodedStreamHeader{
 
 struct EncodedEventHeader{
     u32 magic = s_EventMagic;
-    u16 version = s_CodecVersion;
+    u16 version = s_TelemetryFormatVersion;
     u16 kind = EventKind::Unknown;
-    u8 payloadFormat = PayloadFormat::None;
     u8 reserved = 0u;
     u32 streamId = 0u;
     u64 frameIndex = 0u;
@@ -45,7 +43,7 @@ static_assert(sizeof(EncodedStreamHeader) == 24u, "EncodedStreamHeader wire layo
 static_assert(alignof(EncodedStreamHeader) == 1u, "EncodedStreamHeader must stay packed");
 static_assert(IsStandardLayout_V<EncodedStreamHeader>, "EncodedStreamHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedStreamHeader>, "EncodedStreamHeader must stay binary-serializable");
-static_assert(sizeof(EncodedEventHeader) == 38u, "EncodedEventHeader wire layout drifted");
+static_assert(sizeof(EncodedEventHeader) == 37u, "EncodedEventHeader wire layout drifted");
 static_assert(alignof(EncodedEventHeader) == 1u, "EncodedEventHeader must stay packed");
 static_assert(IsStandardLayout_V<EncodedEventHeader>, "EncodedEventHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedEventHeader>, "EncodedEventHeader must stay binary-serializable");

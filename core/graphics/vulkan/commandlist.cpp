@@ -27,13 +27,13 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
     , m_pendingBufferBarriers(device.m_context.objectArena)
     , m_pendingCompactions(device.m_context.objectArena)
 {
-    if(m_device.isGpuCrashDiagnosticsEnabled())
+    if(m_device.isAnyGpuMarkerEnabled())
         m_device.getGpuCrashTracker().registerGpuCrashMarkerTracker(m_gpuCrashMarkerTracker);
 }
 CommandList::~CommandList(){
     discardUnsubmittedUploadChunks();
 
-    if(m_device.isGpuCrashDiagnosticsEnabled())
+    if(m_device.isAnyGpuMarkerEnabled())
         m_device.getGpuCrashTracker().unRegisterGpuCrashMarkerTracker(m_gpuCrashMarkerTracker);
 }
 

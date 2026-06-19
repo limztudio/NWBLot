@@ -425,9 +425,24 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
 CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, const u32 waitMilliseconds)noexcept{
     static_cast<void>(waitMilliseconds);
 
+    // Re-entrancy guard + concurrent-writer serialization, matching the Win32 transport: a fault while inside
+    // the transport bails, and only one faulting thread owns the channel (the Android emergency fd is a shared
+    // append target, so it needs the same guard against interleaved writes). Async-safe (atomic CAS, no Futex).
+    static thread_local bool s_inTransport = false;
+    if(s_inTransport)
+        return CrashDumpTransportStatus::Failed;
+    s_inTransport = true;
+
+    u32 expected = 0u;
+    if(!g_State.transportInFlight.compare_exchange_strong(expected, 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){
+        s_inTransport = false;
+        return CrashDumpTransportStatus::Sent;
+    }
+
+    CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;
 #if defined(NWB_PLATFORM_ANDROID)
     if(g_State.emergencyWriteFd >= 0)
-        return __hidden_crash_posix::__hidden_write_all_fd(g_State.emergencyWriteFd, &request, sizeof(request))
+        status = __hidden_crash_posix::__hidden_write_all_fd(g_State.emergencyWriteFd, &request, sizeof(request))
             ? CrashDumpTransportStatus::Sent
             : CrashDumpTransportStatus::Failed
         ;
@@ -435,12 +450,15 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     if(g_State.requestWriteFd >= 0){
         __hidden_crash_posix::__hidden_drain_pending_acks(g_State.ackReadFd);
         if(!__hidden_crash_posix::__hidden_send_all_socket_no_sigpipe(g_State.requestWriteFd, &request, sizeof(request)))
-            return CrashDumpTransportStatus::Failed;
-        return __hidden_crash_posix::__hidden_wait_for_ack(g_State.ackReadFd, request, waitMilliseconds);
+            status = CrashDumpTransportStatus::Failed;
+        else
+            status = __hidden_crash_posix::__hidden_wait_for_ack(g_State.ackReadFd, request, waitMilliseconds);
     }
 #endif
 
-    return CrashDumpTransportStatus::Failed;
+    g_State.transportInFlight.store(0u, MemoryOrder::release);
+    s_inTransport = false;
+    return status;
 }
 
 void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options)noexcept{

@@ -89,14 +89,6 @@ public:
     [[nodiscard]] usize eventCount()const;
     [[nodiscard]] EventView view()const{ return EventView(*this); }
 
-    [[nodiscard]] bool record(
-        const EventKind::Enum kind,
-        const PayloadFormat::Enum payloadFormat,
-        u64 frameIndex,
-        const void* payload,
-        usize payloadBytes,
-        u32 streamId = 0u
-    );
     [[nodiscard]] bool recordBinary(
         EventKind::Enum kind,
         u64 frameIndex,

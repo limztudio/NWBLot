@@ -198,6 +198,9 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         Detail::CrashRequest request;
         if(!__hidden_crash_handler::__hidden_read_all(requestReadHandle, &request, sizeof(request)))
             break;
+        // Defensive: reject a corrupt/interleaved request (writer serialization should prevent this).
+        if(request.magic != Detail::s_RequestMagic || request.version != Detail::s_RequestVersion)
+            break;
 
         const bool packageWritten = Detail::WriteCrashPackage(request);
         if(ackWriteHandle != INVALID_HANDLE_VALUE){
@@ -228,6 +231,9 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
     for(;;){
         Detail::CrashRequest request;
         if(!__hidden_crash_handler::__hidden_read_all(requestReadFd, &request, sizeof(request)))
+            break;
+        // Defensive: reject a corrupt/interleaved request (writer serialization should prevent this).
+        if(request.magic != Detail::s_RequestMagic || request.version != Detail::s_RequestVersion)
             break;
 
         const bool packageWritten = Detail::WriteCrashPackage(request);

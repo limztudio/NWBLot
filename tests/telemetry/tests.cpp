@@ -54,10 +54,8 @@ static void TestCaptureFlags(TestContext& context){
     static_assert(perf.perfEnabled());
     static_assert(all.textLogEnabled());
     static_assert(all.diagnosticEnabled());
-    static_assert(all.crashEnabled());
     static_assert(all.perfEnabled());
     static_assert(all.frameGraphEnabled());
-    static_assert(all.customEnabled());
 
     NWB_TELEMETRY_TEST_CHECK(context, Telemetry::CaptureAllowsEventKind(all, Telemetry::EventKind::TextLog));
     NWB_TELEMETRY_TEST_CHECK(context, Telemetry::CaptureAllowsEventKind(perf, Telemetry::EventKind::MemoryFrame));
@@ -88,9 +86,7 @@ static void TestRecorderFiltersAndCopiesPayload(TestContext& context){
     NWB_TELEMETRY_TEST_CHECK(context, record != nullptr);
     if(record){
         NWB_TELEMETRY_TEST_CHECK(context, record->header.valid());
-        NWB_TELEMETRY_TEST_CHECK(context, record->header.kind == Telemetry::EventKind::FrameGraphFrame);
-        NWB_TELEMETRY_TEST_CHECK(context, record->header.payloadFormat == Telemetry::PayloadFormat::Binary);
-        NWB_TELEMETRY_TEST_CHECK(context, record->header.streamId == 7u);
+        NWB_TELEMETRY_TEST_CHECK(context, record->header.kind == Telemetry::EventKind::FrameGraphFrame);        NWB_TELEMETRY_TEST_CHECK(context, record->header.streamId == 7u);
         NWB_TELEMETRY_TEST_CHECK(context, record->header.frameIndex == 13u);
         NWB_TELEMETRY_TEST_CHECK(context, record->header.payloadBytes == 3u);
         NWB_TELEMETRY_TEST_CHECK(context, record->payload.size() == 3u);
@@ -139,9 +135,7 @@ static void TestEventCodecRoundTrip(TestContext& context){
     NWB_TELEMETRY_TEST_CHECK(context, result.ok());
     NWB_TELEMETRY_TEST_CHECK(context, result.bytesRead == encoded.size());
     NWB_TELEMETRY_TEST_CHECK(context, decoded.header.valid());
-    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.kind == source->header.kind);
-    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.payloadFormat == source->header.payloadFormat);
-    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.streamId == source->header.streamId);
+    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.kind == source->header.kind);    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.streamId == source->header.streamId);
     NWB_TELEMETRY_TEST_CHECK(context, decoded.header.frameIndex == source->header.frameIndex);
     NWB_TELEMETRY_TEST_CHECK(context, decoded.header.payloadBytes == source->header.payloadBytes);
     NWB_TELEMETRY_TEST_CHECK(context, decoded.payload.size() == sizeof(payload));
@@ -155,20 +149,13 @@ static void TestEventCodecRejectsInvalidInput(TestContext& context){
 
     Telemetry::EventHeader invalidKindHeader;
     invalidKindHeader.kind = Telemetry::EventKind::Unknown;
-    invalidKindHeader.payloadFormat = Telemetry::PayloadFormat::Binary;
     invalidKindHeader.payloadBytes = 0u;
     NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::EncodeEvent(invalidKindHeader, nullptr, 0u, encoded));
 
-    Telemetry::EventHeader invalidPayloadHeader;
-    invalidPayloadHeader.kind = Telemetry::EventKind::PerfFrame;
-    invalidPayloadHeader.payloadFormat = Telemetry::PayloadFormat::None;
-    invalidPayloadHeader.payloadBytes = 1u;
     const u8 payload = 5u;
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::EncodeEvent(invalidPayloadHeader, &payload, sizeof(payload), encoded));
 
     Telemetry::EventHeader validHeader;
     validHeader.kind = Telemetry::EventKind::PerfFrame;
-    validHeader.payloadFormat = Telemetry::PayloadFormat::Binary;
     validHeader.payloadBytes = sizeof(payload);
     NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::EncodeEvent(validHeader, nullptr, sizeof(payload), encoded));
 
@@ -191,7 +178,6 @@ static void TestEventCodecReportsTruncatedPayload(TestContext& context){
     const u8 payload[] = { 1u, 2u, 3u };
     Telemetry::EventHeader header;
     header.kind = Telemetry::EventKind::PerfFrame;
-    header.payloadFormat = Telemetry::PayloadFormat::Binary;
     header.payloadBytes = sizeof(payload);
     NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEvent(header, payload, sizeof(payload), encoded));
 
@@ -208,9 +194,8 @@ static void TestEventStreamCodecRoundTrip(TestContext& context){
     const u32 perfPayload = 99u;
     const char frameGraphPayload[] = "{frame:1}";
     NWB_TELEMETRY_TEST_CHECK(context, recorder.recordBinary(Telemetry::EventKind::PerfFrame, 101u, &perfPayload, sizeof(perfPayload), 2u));
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.record(
+    NWB_TELEMETRY_TEST_CHECK(context, recorder.recordBinary(
         Telemetry::EventKind::FrameGraphFrame,
-        Telemetry::PayloadFormat::Json,
         102u,
         frameGraphPayload,
         sizeof(frameGraphPayload) - 1u,
@@ -241,9 +226,7 @@ static void TestEventStreamCodecRoundTrip(TestContext& context){
         if(!source || !parsed)
             continue;
 
-        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.kind == source->header.kind);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.payloadFormat == source->header.payloadFormat);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.streamId == source->header.streamId);
+        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.kind == source->header.kind);        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.streamId == source->header.streamId);
         NWB_TELEMETRY_TEST_CHECK(context, parsed->header.frameIndex == source->header.frameIndex);
         NWB_TELEMETRY_TEST_CHECK(context, parsed->header.timestampNanoseconds == source->header.timestampNanoseconds);
         NWB_TELEMETRY_TEST_CHECK(context, parsed->header.payloadBytes == source->header.payloadBytes);
@@ -410,9 +393,7 @@ static void TestRecordTextLogUsesTelemetryEvent(TestContext& context){
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.payloadFormat == Telemetry::PayloadFormat::Binary);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 123u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 123u);
     NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 9u);
 
     Telemetry::TextLogPayload parsed(testArena.arena);
@@ -508,9 +489,7 @@ static void TestRecordDiagnosticUsesTelemetryEvent(TestContext& context){
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::Diagnostic);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.payloadFormat == Telemetry::PayloadFormat::Binary);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 222u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::Diagnostic);    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 222u);
     NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 6u);
 
     Telemetry::DiagnosticPayload parsed(testArena.arena);
@@ -773,9 +752,7 @@ static void TestRecordFrameGraphUsesTelemetryEvent(TestContext& context){
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::FrameGraphFrame);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.payloadFormat == Telemetry::PayloadFormat::Binary);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 909u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::FrameGraphFrame);    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 909u);
     NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 14u);
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
@@ -803,9 +780,7 @@ static void TestCaptureSessionRecordsFrameGraphWithContext(TestContext& context)
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::FrameGraphFrame);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.payloadFormat == Telemetry::PayloadFormat::Binary);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 910u);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::FrameGraphFrame);    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 910u);
     NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 15u);
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
@@ -895,9 +870,7 @@ static void TestRecordPerfTimingUsesTelemetryEvent(TestContext& context){
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::PerfFrame);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.payloadFormat == Telemetry::PayloadFormat::Binary);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == stats.publishFrameIndex);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::PerfFrame);    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == stats.publishFrameIndex);
     NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 11u);
 
     Telemetry::PerfTimingPayload parsed(testArena.arena);
@@ -1039,9 +1012,7 @@ static void TestRecordPerfMemoryUsesTelemetryEvent(TestContext& context){
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::MemoryFrame);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.payloadFormat == Telemetry::PayloadFormat::Binary);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == snapshot.frameIndex);
+    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::MemoryFrame);    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == snapshot.frameIndex);
     NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 12u);
 
     Telemetry::PerfMemoryPayload parsed(testArena.arena);

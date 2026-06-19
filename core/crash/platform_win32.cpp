@@ -190,33 +190,70 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     if(g_State.requestWriteHandle == INVALID_HANDLE_VALUE)
         return CrashDumpTransportStatus::Failed;
 
-    __hidden_crash_win32::__hidden_drain_pending_acks(g_State.ackReadHandle);
-
-    if(g_State.crashHandledEvent)
-        ResetEvent(g_State.crashHandledEvent);
-
-    if(!__hidden_crash_win32::__hidden_write_all(g_State.requestWriteHandle, &request, sizeof(request)))
+    // Re-entrancy guard: a fault while already inside the transport (e.g. the SEH filter itself faulting)
+    // must not re-enter and corrupt the in-flight request or self-deadlock on the channel.
+    static thread_local bool s_inTransport = false;
+    if(s_inTransport)
         return CrashDumpTransportStatus::Failed;
+    s_inTransport = true;
 
-    if(!g_State.crashHandledEvent || g_State.ackReadHandle == INVALID_HANDLE_VALUE || waitMilliseconds == 0u)
+    // Serialize concurrent writers: if two threads fault at once, only one owns the single request pipe + ack
+    // event; the other bails (its sibling's report is still written). One async-safe CAS, never blocks.
+    u32 expected = 0u;
+    if(!g_State.transportInFlight.compare_exchange_strong(expected, 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){
+        s_inTransport = false;
         return CrashDumpTransportStatus::Sent;
-
-    const DWORD waitResult = WaitForSingleObject(g_State.crashHandledEvent, waitMilliseconds);
-    if(waitResult == WAIT_OBJECT_0){
-        CrashAck ack;
-        if(!__hidden_crash_win32::__hidden_read_all(g_State.ackReadHandle, &ack, sizeof(ack)))
-            return CrashDumpTransportStatus::Failed;
-        if(!__hidden_crash_win32::__hidden_ack_matches_request(ack, request))
-            return CrashDumpTransportStatus::Failed;
-        return ack.packageWritten
-            ? CrashDumpTransportStatus::PackageWritten
-            : CrashDumpTransportStatus::PackageWriteFailed
-        ;
     }
-    if(waitResult == WAIT_TIMEOUT)
-        return CrashDumpTransportStatus::TimedOut;
 
-    return CrashDumpTransportStatus::Failed;
+    CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;
+    do{
+        __hidden_crash_win32::__hidden_drain_pending_acks(g_State.ackReadHandle);
+
+        if(g_State.crashHandledEvent)
+            ResetEvent(g_State.crashHandledEvent);
+
+        if(!__hidden_crash_win32::__hidden_write_all(g_State.requestWriteHandle, &request, sizeof(request))){
+            status = CrashDumpTransportStatus::Failed;
+            break;
+        }
+
+        if(!g_State.crashHandledEvent || g_State.ackReadHandle == INVALID_HANDLE_VALUE || waitMilliseconds == 0u){
+            status = CrashDumpTransportStatus::Sent;
+            break;
+        }
+
+        // Wake on the ack event OR the handler process dying, so a dead/wedged handler never costs the full
+        // timeout. Falls back to a single-object wait if the handler process handle is unavailable.
+        HANDLE waitHandles[2] = { g_State.crashHandledEvent, g_State.handlerProcessInfo.hProcess };
+        const DWORD waitCount = g_State.handlerProcessInfo.hProcess ? 2u : 1u;
+        const DWORD waitResult = WaitForMultipleObjects(waitCount, waitHandles, FALSE, waitMilliseconds);
+        if(waitResult == WAIT_OBJECT_0){
+            CrashAck ack;
+            if(!__hidden_crash_win32::__hidden_read_all(g_State.ackReadHandle, &ack, sizeof(ack))){
+                status = CrashDumpTransportStatus::Failed;
+                break;
+            }
+            if(!__hidden_crash_win32::__hidden_ack_matches_request(ack, request)){
+                status = CrashDumpTransportStatus::Failed;
+                break;
+            }
+            status = ack.packageWritten
+                ? CrashDumpTransportStatus::PackageWritten
+                : CrashDumpTransportStatus::PackageWriteFailed
+            ;
+            break;
+        }
+        if(waitResult == WAIT_TIMEOUT){
+            status = CrashDumpTransportStatus::TimedOut;
+            break;
+        }
+        // WAIT_OBJECT_0 + 1 (handler process exited) or WAIT_FAILED: treat as a failed transport.
+        status = CrashDumpTransportStatus::Failed;
+    }while(false);
+
+    g_State.transportInFlight.store(0u, MemoryOrder::release);
+    s_inTransport = false;
+    return status;
 }
 
 void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options)noexcept{
@@ -238,7 +275,9 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
 
     HANDLE requestReadHandle = INVALID_HANDLE_VALUE;
     HANDLE requestWriteHandle = INVALID_HANDLE_VALUE;
-    if(!CreatePipe(&requestReadHandle, &requestWriteHandle, &securityAttributes, 0u))
+    // Size the request pipe for a whole CrashRequest so a single write never blocks waiting for the handler to
+    // drain (the POD exceeds the 64 KB default), which combined with the handler-death wakeup bounds the writer.
+    if(!CreatePipe(&requestReadHandle, &requestWriteHandle, &securityAttributes, static_cast<DWORD>(sizeof(CrashRequest))))
         return false;
 
     if(!SetHandleInformation(requestWriteHandle, HANDLE_FLAG_INHERIT, 0u)){

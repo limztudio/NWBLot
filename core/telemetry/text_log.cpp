@@ -35,7 +35,6 @@ struct ByteView{
 
 [[nodiscard]] static bool ValidatePayloadHeader(const EncodedTextLogPayloadHeader& header)noexcept{
     return header.magic == s_TextLogPayloadMagic
-        && header.version == s_TextLogPayloadVersion
         && header.reserved == 0u
         && IsValidTextLogType(static_cast<Common::LogType::Enum>(header.type))
     ;
@@ -147,7 +146,7 @@ bool RecordTextLog(
     if(!BuildTextLogPayload(recorder.arena(), type, message, payload))
         return false;
 
-    return recorder.record(EventKind::TextLog, PayloadFormat::Binary, frameIndex, payload.data(), payload.size(), streamId);
+    return recorder.recordBinary(EventKind::TextLog, frameIndex, payload.data(), payload.size(), streamId);
 }
 
 

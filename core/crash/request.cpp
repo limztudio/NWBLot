@@ -191,7 +191,18 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     CopyFixedBuffer(request.triggerExpression, options.triggerExpression);
     CopyFixedBuffer(request.triggerMessage, options.triggerMessage);
     CopyFixedBuffer(request.triggerFile, options.triggerFile);
-    CopyFixedBuffer(request.gpuReport, options.gpuReport);
+
+    // Ship the (untruncated) GPU report as a package file written straight from the caller's existing report
+    // bytes: no copy into the fixed POD and no growable-heap allocation. The handler archives the package
+    // directory, so the file is included automatically. gpuReport is only set on the GPU device-lost path
+    // (a normal thread context), so this never adds file I/O to the hard-crash (signal/SEH) path.
+    if(!options.gpuReport.empty()){
+        Alloc::PersistentArena& dumpArena = DumpArena();
+        const ::Path<Alloc::PersistentArena> packageDirectory = RequestPendingDirectory(dumpArena, request);
+        ErrorCode error;
+        if(EnsureDirectories(packageDirectory, error))
+            WriteTextFile(packageDirectory / PackageNames::s_GpuCrashReportFileName, options.gpuReport);
+    }
 
     const CrashDumpTransportStatus::Enum transportStatus = RequestCrashHandler(request, options.waitMilliseconds);
     if(transportStatus == CrashDumpTransportStatus::Failed)

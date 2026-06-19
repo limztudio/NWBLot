@@ -184,6 +184,11 @@ using IsDefaultConstructible = std::is_default_constructible<T>;
 template<class T>
 inline constexpr bool IsDefaultConstructible_V = std::is_default_constructible_v<T>;
 
+template<class T>
+using IsNothrowMoveConstructible = std::is_nothrow_move_constructible<T>;
+template<class T>
+inline constexpr bool IsNothrowMoveConstructible_V = std::is_nothrow_move_constructible_v<T>;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

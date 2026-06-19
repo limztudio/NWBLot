@@ -57,7 +57,7 @@ private:
         public:
             PendingMessage() = default;
             PendingMessage(const PendingMessage&) = delete;
-            PendingMessage(PendingMessage&& rhs)noexcept(std::is_nothrow_move_constructible_v<T>){
+            PendingMessage(PendingMessage&& rhs)noexcept(IsNothrowMoveConstructible_V<T>){
                 moveFrom(Move(rhs));
             }
             template<typename... Args>
@@ -67,7 +67,7 @@ private:
             ~PendingMessage() = default;
 
             PendingMessage& operator=(const PendingMessage&) = delete;
-            PendingMessage& operator=(PendingMessage&& rhs)noexcept(std::is_nothrow_move_constructible_v<T>){
+            PendingMessage& operator=(PendingMessage&& rhs)noexcept(IsNothrowMoveConstructible_V<T>){
                 if(this != &rhs){
                     m_value.reset();
                     moveFrom(Move(rhs));
@@ -86,7 +86,7 @@ private:
 
 
         private:
-            void moveFrom(PendingMessage&& rhs)noexcept(std::is_nothrow_move_constructible_v<T>){
+            void moveFrom(PendingMessage&& rhs)noexcept(IsNothrowMoveConstructible_V<T>){
                 if(rhs.m_value)
                     m_value.emplace(Move(*rhs.m_value));
             }

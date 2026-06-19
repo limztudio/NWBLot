@@ -3,6 +3,7 @@
 
 
 #include "package_internal.h"
+#include "arena_names.h"
 
 #include <global/filesystem/retention.h>
 
@@ -405,7 +406,14 @@ bool FlushCrashReportsForRequest(const CrashRequest& request){
     CopyFixedBuffer(snapshot.crashUploadToken, request.crashUploadToken);
     CopyFixedBuffer(snapshot.protectedPendingPackageName, request.crashId);
 
-    return FlushPendingCrashReportsImpl(DumpArena(), snapshot);
+    // The archive + upload run here in the out-of-process crash handler (a stable, normal process), NOT in the
+    // crashing client under signal/exception constraints. So this path uses a GROWABLE arena instead of the
+    // fixed in-process DumpArena, letting a package of ANY minidump size be archived and uploaded without
+    // overflowing a fixed reservation. (The fixed 512 KiB DumpArena could not hold even a small minidump plus
+    // its archive copy, so BuildPackageArchive overflowed and the handler died mid-archive, stranding packages
+    // in spool/uploading and keeping crash callstacks from ever reaching the log server.)
+    Alloc::GlobalArena uploadArena(CrashArenaScope::s_UploadArena);
+    return FlushPendingCrashReportsImpl(uploadArena, snapshot);
 }
 
 template bool ApplyCrashSpoolRetention(

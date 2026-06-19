@@ -184,6 +184,20 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
     outOptions.instructionPointer = __hidden_crash_win32::__hidden_context_instruction_pointer(storage.context);
     outOptions.stackPointer = __hidden_crash_win32::__hidden_context_stack_pointer(storage.context);
     outOptions.framePointer = __hidden_crash_win32::__hidden_context_frame_pointer(storage.context);
+
+    // Capture the full call stack here, in-process, where every module is loaded and unwinding is reliable
+    // (mirrors the POSIX frame-pointer walk). The log server then only has to resolve these addresses to
+    // symbols against the minidump's module map -- it does NOT have to unwind the minidump server-side, which
+    // needs module unwind data (.pdata) the server may not have, and which produced only the capture frame.
+    // The leading capture-internal frames are dropped downstream via options.callstackFramesToSkip.
+    void* backTrace[s_MaxCallstackFrames] = {};
+    const USHORT capturedFrames = RtlCaptureStackBackTrace(0u, static_cast<ULONG>(s_MaxCallstackFrames), backTrace, nullptr);
+    outOptions.callstackFrameCount = 0u;
+    for(USHORT i = 0u; i < capturedFrames; ++i){
+        const u64 address = static_cast<u64>(reinterpret_cast<usize>(backTrace[i]));
+        if(address != 0u)
+            outOptions.callstackFrames[outOptions.callstackFrameCount++] = address;
+    }
 }
 
 CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, const u32 waitMilliseconds)noexcept{

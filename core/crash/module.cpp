@@ -280,6 +280,16 @@ bool SetCrashMetadata(const AStringView key, const AStringView value){
     return true;
 }
 
+bool SetCrashUploadDestination(const AStringView logServerUrl, const AStringView crashUploadToken){
+    ScopedLock lock(Detail::g_State.mutex);
+    if(!Detail::g_State.installed)
+        return false;
+
+    CopyFixedBuffer(Detail::g_State.logServerUrl, logServerUrl);
+    CopyFixedBuffer(Detail::g_State.crashUploadToken, crashUploadToken);
+    return true;
+}
+
 bool AddCrashBreadcrumb(const AStringView category, const AStringView message){
     ScopedLock lock(Detail::g_State.mutex);
     __hidden_crash_module::__hidden_store_breadcrumb(category, message);

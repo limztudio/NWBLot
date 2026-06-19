@@ -101,6 +101,9 @@ template<typename ArenaT>
 void UninstallCrashHandler();
 
 [[nodiscard]] bool SetCrashMetadata(AStringView key, AStringView value);
+// Updates the crash-upload destination on an already-installed handler. This lets capture be armed first
+// (before the CLI is parsed) and the upload destination supplied later, once it is known.
+[[nodiscard]] bool SetCrashUploadDestination(AStringView logServerUrl, AStringView crashUploadToken);
 [[nodiscard]] bool AddCrashBreadcrumb(AStringView category, AStringView message);
 [[nodiscard]] CrashDumpResult CaptureCrashDump(AStringView category = AStringView(), AStringView message = AStringView());
 [[nodiscard]] CrashDumpResult CaptureGpuCrashDump(AStringView message);

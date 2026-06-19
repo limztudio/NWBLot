@@ -197,7 +197,12 @@ bool ApplyGraphicsOptions(NWB::Core::Graphics& graphics, const LoaderOptions& op
     return true;
 }
 
-bool InstallCrashReporting(CrashArena& crashArena, const LoaderOptions& options){
+// Arms crash/diagnostic capture as early as possible (before the CLI is parsed). Only options-independent,
+// capture-critical config is set here (application name + spool directory derived from the executable, dump
+// detail mode); the upload destination and metadata are applied later by ConfigureCrashReporting once the CLI
+// is parsed and the logger is up. Capture-to-disk is fully functional without the upload destination, so any
+// fault from this point on still leaves a dump in the spool. No logging happens here (the logger is not up yet).
+bool InstallCrashCapture(CrashArena& crashArena){
     ::Path<CrashArena> executableDirectory(crashArena);
     if(!GetExecutableDirectory(executableDirectory))
         executableDirectory = ::Path<CrashArena>(crashArena, ".");
@@ -213,28 +218,32 @@ bool InstallCrashReporting(CrashArena& crashArena, const LoaderOptions& options)
     crashConfig.buildId = AStringView("unknown");
     crashConfig.version = AStringView("unknown");
     crashConfig.spoolDirectory = executableDirectory / "crashes";
-    crashConfig.logServerUrl = options.useStandaloneLogger
+    crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
+
+    if(!NWB::Core::Crash::InstallCrashHandler(crashArena, crashConfig))
+        return false;
+
+    NWB::Core::RegisterGpuCrashSink([](void*, const NWB::Core::GpuCrashReport& report){
+        [[maybe_unused]] const auto dumpResult = NWB::Core::Crash::CaptureGpuCrashDump(
+            AStringView(report.details.data(), report.details.size())
+        );
+    }, nullptr);
+    return true;
+}
+
+// Applies the options-derived crash configuration once the CLI is parsed and the logger is up: the upload
+// destination (log-server URL + token) and the runtime/gpu_debug metadata. Logs here are safe (logger is up).
+void ConfigureCrashReporting(const LoaderOptions& options){
+    const AStringView logServerUrl = options.useStandaloneLogger
         ? AStringView()
         : AStringView(options.logAddress.data(), options.logAddress.size())
     ;
-    crashConfig.crashUploadToken = AStringView(options.crashUploadToken.data(), options.crashUploadToken.size());
-    crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
-
-    if(NWB::Core::Crash::InstallCrashHandler(crashArena, crashConfig)){
-        if(!NWB::Core::Crash::SetCrashMetadata("runtime", "loader"))
-            NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'runtime' crash metadata"));
-        if(!NWB::Core::Crash::SetCrashMetadata("gpu_debug", options.enableGpuDebug ? "true" : "false"))
-            NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'gpu_debug' crash metadata"));
-
-        NWB::Core::RegisterGpuCrashSink([](void*, const NWB::Core::GpuCrashReport& report){
-            [[maybe_unused]] const auto dumpResult = NWB::Core::Crash::CaptureGpuCrashDump(
-                AStringView(report.details.data(), report.details.size())
-            );
-        }, nullptr);
-        return true;
-    }
-
-    return false;
+    if(!NWB::Core::Crash::SetCrashUploadDestination(logServerUrl, AStringView(options.crashUploadToken.data(), options.crashUploadToken.size())))
+        NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set crash upload destination"));
+    if(!NWB::Core::Crash::SetCrashMetadata("runtime", "loader"))
+        NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'runtime' crash metadata"));
+    if(!NWB::Core::Crash::SetCrashMetadata("gpu_debug", options.enableGpuDebug ? "true" : "false"))
+        NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'gpu_debug' crash metadata"));
 }
 
 bool UploadTelemetry(void* userData, const void* bytes, const usize byteCount){
@@ -373,19 +382,17 @@ static int RunProjectRuntime(
     return 0;
 }
 
-static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader::LoaderOptions& options, void* inst){
-    const usize crashArenaReserveSize = __hidden_loader::CrashArena::StructureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
-    __hidden_loader::CrashArena crashArena(__hidden_loader::s_CrashReportingArena, crashArenaReserveSize);
-    const bool crashReportingInstalled = __hidden_loader::InstallCrashReporting(crashArena, options);
-
+static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader::LoaderOptions& options, void* inst, const bool crashReportingInstalled){
     if(options.useStandaloneLogger){
         NWB::Log::ClientStandalone logger;
         if(!logger.init())
             return -1;
         NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: using standalone log output"));
-        if(!crashReportingInstalled)
-            NWB_LOGGER_WARNING(NWB_TEXT("Loader: crash reporting unavailable"));
+        if(crashReportingInstalled)
+            __hidden_loader::ConfigureCrashReporting(options);
+        else
+            NWB_LOGGER_ERROR(NWB_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
 
         return RunProjectRuntime(arena, options, inst, nullptr);
     }
@@ -395,8 +402,10 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
         return -1;
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), StringConvert(options.logAddress.c_str()));
-    if(!crashReportingInstalled)
-        NWB_LOGGER_WARNING(NWB_TEXT("Loader: crash reporting unavailable"));
+    if(crashReportingInstalled)
+        __hidden_loader::ConfigureCrashReporting(options);
+    else
+        NWB_LOGGER_ERROR(NWB_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
 
     return RunProjectRuntime(arena, options, inst, &logger);
 }
@@ -407,6 +416,14 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
 
 template<typename CharT>
 static int EntryPoint(isize argc, CharT** argv, void* inst){
+    // Arm crash/diagnostic capture as the VERY FIRST action, before anything that can fault (CLI parsing,
+    // logger init, graphics/device creation). Capture-to-disk only needs executable-derived config, so the
+    // upload destination + metadata are applied later (ConfigureCrashReporting) once the CLI is parsed and
+    // the logger is up. From here on, any ERROR/FATAL/crash/exception leaves a dump in the spool.
+    const usize crashArenaReserveSize = __hidden_loader::CrashArena::StructureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
+    __hidden_loader::CrashArena crashArena(__hidden_loader::s_CrashReportingArena, crashArenaReserveSize);
+    const bool crashReportingInstalled = __hidden_loader::InstallCrashCapture(crashArena);
+
     NWB::Core::Alloc::GlobalArena commandLineArena(__hidden_loader::s_CommandLineArena);
     __hidden_loader::LoaderOptions options(commandLineArena);
     {
@@ -432,7 +449,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             options.logAddress = StringFormat(commandLineArena, "{}:{}", AStringView(address.data(), address.size()), port);
     }
 
-    return MainLogic(commandLineArena, options, inst);
+    return MainLogic(commandLineArena, options, inst, crashReportingInstalled);
 }
 
 

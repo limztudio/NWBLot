@@ -316,6 +316,57 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
     outReport += "\n";
 }
 
+[[nodiscard]] static u64 ParseHexAddressText(const AStringView hexText){
+    u64 value = 0u;
+    for(const char c : hexText){
+        u64 digit;
+        if(c >= '0' && c <= '9')
+            digit = static_cast<u64>(c - '0');
+        else if(c >= 'a' && c <= 'f')
+            digit = static_cast<u64>(c - 'a') + 10u;
+        else if(c >= 'A' && c <= 'F')
+            digit = static_cast<u64>(c - 'A') + 10u;
+        else
+            break;
+        value = (value << 4) | digit;
+    }
+    return value;
+}
+
+// The crashing process captures its own call stack at fault time (where all modules are loaded and unwinding
+// is reliable) and ships the frame addresses in callstack.txt. Resolving those addresses against the dump's
+// module map is far more dependable than unwinding the minidump server-side, so prefer them for the visible
+// callstack. Returns false when no client frames were shipped (e.g. the exception path), so the caller can
+// fall back to a server-side StackWalk64.
+[[nodiscard]] static bool AppendClientCallstack(LogArena& arena, const HANDLE symbolProcess, const Path& packageDirectory, CrashReportText& outReport){
+    AString<LogArena> callstackText{arena};
+    if(!ReadTextFile(packageDirectory / CrashNames::s_CallstackFileName, callstackText) || callstackText.empty())
+        return false;
+
+    const AStringView text(callstackText.data(), callstackText.size());
+    DWORD frameIndex = 0u;
+    usize lineStart = 0u;
+    bool decodedAnyFrame = false;
+    while(lineStart < text.size()){
+        usize lineEnd = text.find('\n', lineStart);
+        if(lineEnd == AStringView::npos)
+            lineEnd = text.size();
+
+        const AStringView line = text.substr(lineStart, lineEnd - lineStart);
+        const usize hexStart = line.find("0x");
+        if(hexStart != AStringView::npos){
+            const u64 address = ParseHexAddressText(line.substr(hexStart + 2u));
+            if(address != 0u){
+                AppendResolvedSymbol(arena, symbolProcess, outReport, frameIndex, static_cast<DWORD64>(address));
+                ++frameIndex;
+                decodedAnyFrame = true;
+            }
+        }
+        lineStart = lineEnd + 1u;
+    }
+    return decodedAnyFrame;
+}
+
 bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport){
     const Path dumpPath = packageDirectory / CrashNames::s_ProcessDumpFileName;
     CrashBytes dumpBytes{arena};
@@ -356,6 +407,14 @@ bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, c
     outReport += "\n";
     LoadDumpModules(arena, symbolProcess, dumpImage, outReport);
     outReport += "\n[callstack]\n";
+
+    // Prefer the client-captured backtrace (reliable in-process unwind) resolved against the dump's module
+    // map; only fall back to a server-side StackWalk64 when the client shipped no frames.
+    if(AppendClientCallstack(arena, symbolProcess, packageDirectory, outReport)){
+        s_CurrentDumpMemoryReader = nullptr;
+        SymCleanup(symbolProcess);
+        return true;
+    }
 
     CONTEXT walkContext = *context;
     STACKFRAME64 frame;

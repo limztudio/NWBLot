@@ -12,6 +12,7 @@
 
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
+#include <core/telemetry/frame_graph_contributor.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_csg/frame_state.h>
@@ -63,7 +64,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
+class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass, public Core::Telemetry::IFrameGraphContributor{
     template<typename RendererT>
     friend class RendererSystemSubsystemBase;
     friend class RendererShaderSystem;
@@ -97,12 +98,7 @@ public:
 
     virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
     virtual void render(Core::Framebuffer* framebuffer)override;
-    virtual bool appendFrameGraph(
-        Core::Telemetry::FrameGraphNodeDescs& nodes,
-        Core::Telemetry::FrameGraphEdgeDescs& edges,
-        u32& outEntryNodeIndex,
-        u32& outExitNodeIndex
-    )override;
+    virtual bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override;
     [[nodiscard]] CsgShapeRegistry& csgShapeRegistry(){ return m_csgShapeRegistry; }
     [[nodiscard]] const CsgShapeRegistry& csgShapeRegistry()const{ return m_csgShapeRegistry; }
 

@@ -137,7 +137,7 @@ inline constexpr u32 s_MaxVolatileConstantBuffersPerLayout = 6;
 inline constexpr u32 s_MaxVolatileConstantBuffers = 32;
 inline constexpr u32 s_MaxPushConstantSize = 128;
 inline constexpr u32 s_ConstantBufferOffsetSizeAlignment = 256;
-inline constexpr u32 s_MaxAftermathEventStrings = 128;
+inline constexpr u32 s_MaxGpuCrashMarkerStrings = 128;
 
 inline constexpr u32 s_BindingOffsetShaderResource = 0;
 inline constexpr u32 s_BindingOffsetSampler = 128;
@@ -3013,66 +3013,61 @@ typedef GraphicsBackend::Handle<CommandList> CommandListHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Aftermath
+// GPU crash diagnostics
 
 
-typedef Pair<bool, GraphicsTString> ResolvedMarker;
-typedef Pair<const void*, usize> BinaryBlob;
-typedef Function<u64(BinaryBlob, GraphicsAPI::Enum)> ShaderHashGeneratorFunction;
-typedef Function<BinaryBlob(u64, ShaderHashGeneratorFunction)> ShaderBinaryLookupCallback;
+typedef Pair<bool, GraphicsString> ResolvedMarker;
 
-// Aftermath will return the payload of the last marker the GPU executed.
+// On a device-lost the GPU driver reports the payload of the last marker the GPU executed
+// (NVIDIA device-diagnostic checkpoints / AMD buffer markers).
 // In cases of nested regimes, we want the marker payloads to represent the whole "stack" of regimes.
-// AftermathMarkerTracker pushes/pops regimes to this stack.
-// The payload itself is a 64bit value, so AftermathMarkerTracker stores the mappings of strings<->hashes.
-// There should be one AftermathMarkerTracker per graphics API-level command list.
-class AftermathMarkerTracker{
+// GpuCrashMarkerTracker pushes/pops regimes to this stack.
+// The payload itself is a 64bit value, so GpuCrashMarkerTracker stores the mappings of strings<->hashes.
+// There should be one GpuCrashMarkerTracker per graphics API-level command list.
+class GpuCrashMarkerTracker{
 public:
-    explicit AftermathMarkerTracker(GraphicsArena& arena);
+    explicit GpuCrashMarkerTracker(GraphicsArena& arena);
 
 
 public:
     usize pushEvent(const char* name);
-    void popEvent(){ m_eventStack = m_eventStack.parent_path(); }
-    Pair<bool, GraphicsString> getEventString(usize hash);
+    void popEvent();
+    ResolvedMarker getEventString(usize hash);
 
 
 private:
-    // Using a filesystem path to track the event stack since that automatically inserts "/" separators
     GraphicsArena& m_arena;
-    Path m_eventStack;
+    // Nested marker labels joined by "/" with an offset stack to pop the most recent segment.
+    GraphicsString m_eventStack;
+    GraphicsVector<usize> m_eventStackOffsets;
 
-    Array<usize, s_MaxAftermathEventStrings> m_eventHashes;
+    Array<usize, s_MaxGpuCrashMarkerStrings> m_eventHashes;
     usize m_oldestHashIndex;
     GraphicsHashMap<usize, GraphicsString> m_eventStrings;
 };
 
-// AftermathCrashDumpHelper tracks all Device-level constructs needed when generating a crash dump.
-// It provides two services: resolving a marker hash to the original string, and getting shader bytecode.
-// There should be one AftermathCrashDumpHelper per Device.
-// All command lists will register their AftermathMarkerTrackers with the AftermathCrashDumpHelper.
-class AftermathCrashDumpHelper{
+// GpuCrashTracker tracks all Device-level constructs needed when reporting a GPU crash.
+// It resolves a last-executed marker payload hash back to the original nested marker string.
+// There should be one GpuCrashTracker per Device.
+// All command lists will register their GpuCrashMarkerTrackers with the GpuCrashTracker.
+class GpuCrashTracker{
 public:
-    explicit AftermathCrashDumpHelper(GraphicsArena& arena);
+    explicit GpuCrashTracker(GraphicsArena& arena);
 
 
 public:
-    void registerAftermathMarkerTracker(AftermathMarkerTracker& tracker);
-    void unRegisterAftermathMarkerTracker(AftermathMarkerTracker& tracker);
-    void registerShaderBinaryLookupCallback(void* client, ShaderBinaryLookupCallback lookupCallback);
-    void unRegisterShaderBinaryLookupCallback(void* client);
+    void registerGpuCrashMarkerTracker(GpuCrashMarkerTracker& tracker);
+    void unRegisterGpuCrashMarkerTracker(GpuCrashMarkerTracker& tracker);
 
-    Pair<bool, GraphicsString> resolveMarker(usize markerHash);
-    BinaryBlob findShaderBinary(u64 shaderHash, ShaderHashGeneratorFunction hashGenerator);
+    ResolvedMarker resolveMarker(usize markerHash);
 
 
 private:
     GraphicsArena& m_arena;
-    GraphicsSet<AftermathMarkerTracker*> m_markerTrackers;
+    GraphicsSet<GpuCrashMarkerTracker*> m_markerTrackers;
     // Command lists deleted on CPU could still be executing (and crashing) on GPU,
     // so keep a small number of recently destroyed marker trackers
-    GraphicsDeque<AftermathMarkerTracker> m_destroyedMarkerTrackers;
-    GraphicsHashMap<void*, ShaderBinaryLookupCallback> m_shaderBinaryLookupCallbacks;
+    GraphicsDeque<GpuCrashMarkerTracker> m_destroyedMarkerTrackers;
 };
 
 
@@ -3115,7 +3110,7 @@ struct InstanceParameters{
     bool enableDebugRuntime = false;
     bool enableWarningsAsErrors = false;
     bool headlessDevice = false;
-    bool enableAftermath = false;
+    bool enableGpuCrashDiagnostics = false;
     bool logBufferLifetime = false;
     bool enablePerMonitorDPI = false;
 

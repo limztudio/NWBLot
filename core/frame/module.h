@@ -12,6 +12,7 @@
 #include <core/graphics/module.h>
 #include <core/perf/session.h>
 #include <core/telemetry/codec.h>
+#include <core/telemetry/frame_graph_registry.h>
 #include <core/telemetry/session.h>
 
 
@@ -89,6 +90,9 @@ public:
     void setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData);
     [[nodiscard]] bool flushTelemetryUpload(bool clearAfterUpload = false);
 
+    [[nodiscard]] inline Telemetry::FrameGraphRegistry& frameGraphRegistry(){ return m_frameGraphRegistry; }
+    [[nodiscard]] inline const Telemetry::FrameGraphRegistry& frameGraphRegistry()const{ return m_frameGraphRegistry; }
+
     [[nodiscard]] inline FrameString& appliedWindowTitle(){ return m_appliedWindowTitle; }
     [[nodiscard]] inline const FrameString& appliedWindowTitle()const{ return m_appliedWindowTitle; }
 
@@ -117,6 +121,7 @@ private:
     Alloc::GlobalArena m_projectObjectArena;
     Perf::Session m_perfSession;
     Telemetry::CaptureSession m_telemetrySession;
+    Telemetry::FrameGraphRegistry m_frameGraphRegistry;
     Telemetry::TelemetryBytes m_telemetryUploadBytes;
     Perf::MemoryScopeId m_graphicsObjectArenaMemoryScope;
     Perf::MemoryScopeId m_projectObjectArenaMemoryScope;

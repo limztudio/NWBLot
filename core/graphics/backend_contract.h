@@ -162,8 +162,8 @@ concept DeviceApi = requires(
     { device.queryCoopVecFeatures() }->SameAs<CooperativeVectorDeviceFeatures>;
     { device.getCoopVecMatrixSize(CooperativeVectorDataType::Float16, CooperativeVectorMatrixLayout::RowMajor, i32{}, i32{}) }->SameAs<usize>;
     { device.getNativeQueue(ObjectType{}, CommandQueue::Graphics) }->SameAs<Object>;
-    { device.isAftermathEnabled() }->SameAs<bool>;
-    { device.getAftermathCrashDumpHelper() }->SameAs<AftermathCrashDumpHelper&>;
+    { device.isGpuCrashDiagnosticsEnabled() }->SameAs<bool>;
+    { device.getGpuCrashTracker() }->SameAs<GpuCrashTracker&>;
 };
 
 template<typename T>

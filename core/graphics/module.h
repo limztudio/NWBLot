@@ -21,14 +21,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Telemetry{
-    class CaptureSession;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class Graphics{
 private:
     using Backend = GraphicsBackend::Backend;
@@ -181,7 +173,6 @@ public:
 
     void animate(f64 elapsedTime);
     void render();
-    [[nodiscard]] bool recordFrameGraph(Telemetry::CaptureSession& session);
     void updateAverageFrameTime(f64 elapsedTime);
     void notifyPointerScaleChanged()const;
     [[nodiscard]] bool shouldRenderUnfocused()const;

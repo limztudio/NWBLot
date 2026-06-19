@@ -13,6 +13,7 @@
 #include <core/assets/ref.h>
 #include <core/ecs/world.h>
 #include <core/graphics/module.h>
+#include <core/telemetry/frame_graph_registry.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/ecs_mesh/module.h>
@@ -85,6 +86,7 @@ inline Impl::RendererSystem& AddSmokeRenderSystems(
     );
 
     context.graphics.addRenderPassToBack(rendererSystem);
+    context.frameGraphRegistry.registerContributor(rendererSystem);
     return rendererSystem;
 }
 
@@ -108,8 +110,10 @@ inline void DestroySmokeRenderWorld(
         return;
 
     auto* rendererSystem = world->getSystem<Impl::RendererSystem>();
-    if(rendererSystem)
+    if(rendererSystem){
+        context.frameGraphRegistry.unregisterContributor(*rendererSystem);
         context.graphics.removeRenderPass(*rendererSystem);
+    }
 
     FinishDestroyingSmokeWorld(context, world);
 }

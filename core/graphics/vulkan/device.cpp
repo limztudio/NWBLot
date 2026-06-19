@@ -172,8 +172,8 @@ static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineC
 
 Device::Device(const DeviceDesc& desc)
     : RefCounter<GraphicsResource>(desc.threadPool)
-    , m_aftermathEnabled(desc.aftermathEnabled)
-    , m_aftermathCrashDumpHelper(desc.allocator.getObjectArena())
+    , m_gpuCrashDiagnosticsEnabled(desc.gpuCrashDiagnosticsEnabled)
+    , m_gpuCrashTracker(desc.allocator.getObjectArena())
     , m_context(desc.allocator, desc.threadPool, desc.instance, desc.physicalDevice, desc.device, desc.allocationCallbacks)
     , m_allocator(m_context)
     , m_descriptorHeapManager(m_context, m_allocator)
@@ -226,6 +226,10 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.NV_cluster_acceleration_structure = true;
         else if(NWB_STRCMP(ext, VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME) == 0)
             m_context.extensions.NV_device_diagnostic_checkpoints = true;
+        else if(NWB_STRCMP(ext, VK_EXT_DEVICE_FAULT_EXTENSION_NAME) == 0)
+            m_context.extensions.EXT_device_fault = true;
+        else if(NWB_STRCMP(ext, VK_AMD_BUFFER_MARKER_EXTENSION_NAME) == 0)
+            m_context.extensions.AMD_buffer_marker = true;
         else if(NWB_STRCMP(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_mesh_shader = true;
         else if(NWB_STRCMP(ext, VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME) == 0)
@@ -260,14 +264,24 @@ Device::Device(const DeviceDesc& desc)
         m_context.extensions.EXT_debug_marker = false;
     }
 
-    if(m_context.extensions.NV_device_diagnostic_checkpoints && !vkCmdSetCheckpointNV){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device diagnostic checkpoint entry point is unavailable."));
+    if(m_context.extensions.NV_device_diagnostic_checkpoints && (!vkCmdSetCheckpointNV || !vkGetQueueCheckpointDataNV)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device diagnostic checkpoint entry points are unavailable."));
         m_context.extensions.NV_device_diagnostic_checkpoints = false;
     }
 
-    if(m_aftermathEnabled && !m_context.extensions.NV_device_diagnostic_checkpoints){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Aftermath marker checkpoints are disabled because VK_NV_device_diagnostic_checkpoints is unavailable."));
-        m_aftermathEnabled = false;
+    if(m_context.extensions.EXT_device_fault && !vkGetDeviceFaultInfoEXT){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Device fault info entry point is unavailable."));
+        m_context.extensions.EXT_device_fault = false;
+    }
+
+    if(m_context.extensions.AMD_buffer_marker && !vkCmdWriteBufferMarkerAMD){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Buffer marker entry point is unavailable."));
+        m_context.extensions.AMD_buffer_marker = false;
+    }
+
+    if(m_gpuCrashDiagnosticsEnabled && !m_context.extensions.NV_device_diagnostic_checkpoints){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GPU crash diagnostic checkpoints are disabled because VK_NV_device_diagnostic_checkpoints is unavailable."));
+        m_gpuCrashDiagnosticsEnabled = false;
     }
 
     if(

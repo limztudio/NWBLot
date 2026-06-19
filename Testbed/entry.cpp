@@ -6,6 +6,7 @@
 
 #include <core/ecs/module.h>
 #include <core/graphics/module.h>
+#include <core/telemetry/frame_graph_registry.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>
@@ -103,6 +104,7 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
     context.graphics.addRenderPassToBack(meshSkinningSystem);
     context.graphics.addRenderPassToBack(rendererSystem);
     context.graphics.addRenderPassToBack(uiSystem);
+    context.frameGraphRegistry.registerContributor(rendererSystem);
 
     outWorld = Move(world);
 
@@ -146,6 +148,7 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
         return;
     }
 
+    context.frameGraphRegistry.unregisterContributor(*rendererSystem);
     context.graphics.removeRenderPass(*meshSkinningSystem);
     context.graphics.removeRenderPass(*rendererSystem);
     context.graphics.removeRenderPass(*uiSystem);

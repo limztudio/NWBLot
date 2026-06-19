@@ -508,31 +508,44 @@ static constexpr AStringView s_NotFoundMarkerString = "ERROR: could not resolve 
 static constexpr usize s_NumDestroyedMarkerTrackers = 2;
 
 
-AftermathMarkerTracker::AftermathMarkerTracker(GraphicsArena& arena)
+GpuCrashMarkerTracker::GpuCrashMarkerTracker(GraphicsArena& arena)
     : m_arena(arena)
     , m_eventStack(arena)
+    , m_eventStackOffsets(arena)
     , m_eventHashes()
     , m_oldestHashIndex(0)
     , m_eventStrings(0, Hasher<usize>(), EqualTo<usize>(), arena)
 {}
 
-usize AftermathMarkerTracker::pushEvent(const char* name){
+usize GpuCrashMarkerTracker::pushEvent(const char* name){
+    m_eventStackOffsets.push_back(m_eventStack.size());
+    if(!m_eventStack.empty())
+        m_eventStack.append("/");
     m_eventStack.append(name);
-    GraphicsString eventString = PathToString(m_arena, m_eventStack);
-    usize hash = Hasher<GraphicsString>{}(eventString);
+
+    GraphicsString eventString(m_eventStack.c_str(), m_arena);
+    const usize hash = Hasher<GraphicsString>{}(eventString);
 
     if(m_eventStrings.try_emplace(hash, Move(eventString)).second){
         const usize oldHash = m_eventHashes[m_oldestHashIndex];
         if(oldHash != hash)
             m_eventStrings.erase(oldHash);
         m_eventHashes[m_oldestHashIndex] = hash;
-        m_oldestHashIndex = (m_oldestHashIndex + 1) % s_MaxAftermathEventStrings;
+        m_oldestHashIndex = (m_oldestHashIndex + 1) % s_MaxGpuCrashMarkerStrings;
     }
 
     return hash;
 }
 
-Pair<bool, GraphicsString> AftermathMarkerTracker::getEventString(usize hash){
+void GpuCrashMarkerTracker::popEvent(){
+    if(m_eventStackOffsets.empty())
+        return;
+
+    m_eventStack.resize(m_eventStackOffsets.back());
+    m_eventStackOffsets.pop_back();
+}
+
+ResolvedMarker GpuCrashMarkerTracker::getEventString(usize hash){
     auto found = m_eventStrings.find(hash);
     if(found != m_eventStrings.end())
         return MakePair(true, found.value());
@@ -541,18 +554,17 @@ Pair<bool, GraphicsString> AftermathMarkerTracker::getEventString(usize hash){
 }
 
 
-AftermathCrashDumpHelper::AftermathCrashDumpHelper(GraphicsArena& arena)
+GpuCrashTracker::GpuCrashTracker(GraphicsArena& arena)
     : m_arena(arena)
     , m_markerTrackers(arena)
     , m_destroyedMarkerTrackers(arena)
-    , m_shaderBinaryLookupCallbacks(0, Hasher<void*>(), EqualTo<void*>(), arena)
 {}
 
-void AftermathCrashDumpHelper::registerAftermathMarkerTracker(AftermathMarkerTracker& tracker){
+void GpuCrashTracker::registerGpuCrashMarkerTracker(GpuCrashMarkerTracker& tracker){
     m_markerTrackers.insert(&tracker);
 }
 
-void AftermathCrashDumpHelper::unRegisterAftermathMarkerTracker(AftermathMarkerTracker& tracker){
+void GpuCrashTracker::unRegisterGpuCrashMarkerTracker(GpuCrashMarkerTracker& tracker){
     if(m_destroyedMarkerTrackers.size() >= s_NumDestroyedMarkerTrackers)
         m_destroyedMarkerTrackers.pop_front();
 
@@ -560,15 +572,7 @@ void AftermathCrashDumpHelper::unRegisterAftermathMarkerTracker(AftermathMarkerT
     m_markerTrackers.erase(&tracker);
 }
 
-void AftermathCrashDumpHelper::registerShaderBinaryLookupCallback(void* client, ShaderBinaryLookupCallback lookupCallback){
-    m_shaderBinaryLookupCallbacks.insert_or_assign(client, lookupCallback);
-}
-
-void AftermathCrashDumpHelper::unRegisterShaderBinaryLookupCallback(void* client){
-    m_shaderBinaryLookupCallbacks.erase(client);
-}
-
-Pair<bool, GraphicsString> AftermathCrashDumpHelper::resolveMarker(usize markerHash){
+ResolvedMarker GpuCrashTracker::resolveMarker(usize markerHash){
     // Search in active marker trackers
     for(auto* markerTracker : m_markerTrackers){
         auto result = markerTracker->getEventString(markerHash);
@@ -584,16 +588,6 @@ Pair<bool, GraphicsString> AftermathCrashDumpHelper::resolveMarker(usize markerH
     }
 
     return MakePair(false, GraphicsString(s_NotFoundMarkerString, m_arena));
-}
-
-Pair<const void*, usize> AftermathCrashDumpHelper::findShaderBinary(u64 shaderHash, ShaderHashGeneratorFunction hashGenerator){
-    for(auto& clientCallback : m_shaderBinaryLookupCallbacks){
-        auto result = clientCallback.second(shaderHash, hashGenerator);
-        if(result.second() > 0)
-            return result;
-    }
-
-    return MakePair(static_cast<const void*>(nullptr), static_cast<usize>(0));
 }
 
 

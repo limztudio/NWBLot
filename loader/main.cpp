@@ -308,6 +308,7 @@ static int RunProjectRuntime(
             frame.projectThreadPool(),
             frame.projectJobSystem(),
             assetManager,
+            frame.frameGraphRegistry(),
             {},
             {},
             {},

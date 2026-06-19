@@ -74,7 +74,7 @@ struct DeviceDesc{
     bool rayTracingSpheresSupported = false;
     // Indicates if VK_NV_ray_tracing_linear_swept_spheres linearSweptSpheres was enabled at device creation time
     bool rayTracingLinearSweptSpheresSupported = false;
-    bool aftermathEnabled = false;
+    bool gpuCrashDiagnosticsEnabled = false;
     bool logBufferLifetime = false;
 
     GraphicsString vulkanLibraryName;

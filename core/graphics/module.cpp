@@ -587,41 +587,6 @@ void Graphics::render(){
     }
 }
 
-bool Graphics::recordFrameGraph(Telemetry::CaptureSession& session){
-    if(!session.captureOptions().frameGraphEnabled())
-        return false;
-
-    Telemetry::FrameGraphNodeDescs nodes(session.recorder().arena());
-    Telemetry::FrameGraphEdgeDescs edges(session.recorder().arena());
-
-    nodes.push_back(Telemetry::FrameGraphNodeDesc{
-        .name = Name("graphics/frame"),
-        .label = "Graphics Frame",
-        .kind = Telemetry::FrameGraphNodeKind::Pass,
-    });
-
-    u32 previousExitNodeIndex = 0u;
-    bool hasRenderPassGraph = false;
-    for(auto* renderPass : m_renderPasses){
-        u32 entryNodeIndex = 0u;
-        u32 exitNodeIndex = 0u;
-        if(!renderPass->appendFrameGraph(nodes, edges, entryNodeIndex, exitNodeIndex))
-            continue;
-        if(entryNodeIndex >= nodes.size() || exitNodeIndex >= nodes.size())
-            continue;
-
-        edges.push_back(Telemetry::FrameGraphEdgeDesc{
-            .fromNodeIndex = previousExitNodeIndex,
-            .toNodeIndex = entryNodeIndex,
-            .kind = Telemetry::FrameGraphEdgeKind::DependsOn,
-        });
-        previousExitNodeIndex = exitNodeIndex;
-        hasRenderPassGraph = true;
-    }
-
-    return hasRenderPassGraph && session.recordFrameGraph(nodes, edges);
-}
-
 void Graphics::updateAverageFrameTime(f64 elapsedTime){
     m_frameTimeSum += elapsedTime;
     m_numberOfAccumulatedFrames += 1;

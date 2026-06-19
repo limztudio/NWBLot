@@ -53,6 +53,7 @@ inline void AddSmokeSkinnedRenderSystems(
 
     context.graphics.addRenderPassToBack(meshSkinningSystem);
     context.graphics.addRenderPassToBack(rendererSystem);
+    context.frameGraphRegistry.registerContributor(rendererSystem);
 }
 
 inline void DestroySmokeSkinnedRenderWorld(
@@ -67,8 +68,10 @@ inline void DestroySmokeSkinnedRenderWorld(
         context.graphics.removeRenderPass(*meshSkinningSystem);
 
     auto* rendererSystem = world->getSystem<Impl::RendererSystem>();
-    if(rendererSystem)
+    if(rendererSystem){
+        context.frameGraphRegistry.unregisterContributor(*rendererSystem);
         context.graphics.removeRenderPass(*rendererSystem);
+    }
 
     FinishDestroyingSmokeWorld(context, world);
 }

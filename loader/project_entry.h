@@ -35,6 +35,10 @@ namespace Assets{
     class AssetManager;
 };
 
+namespace Telemetry{
+    class FrameGraphRegistry;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,6 +72,7 @@ struct ProjectRuntimeContext{
     Core::Alloc::ThreadPool& threadPool;
     Core::Alloc::JobSystem& jobSystem;
     Core::Assets::AssetManager& assetManager;
+    Core::Telemetry::FrameGraphRegistry& frameGraphRegistry;
     ShaderPathResolveCallback shaderPathResolver;
     TelemetryCaptureCallback telemetryCapture;
     TelemetryUploadFlushCallback telemetryUploadFlush;

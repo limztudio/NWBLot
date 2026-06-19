@@ -228,8 +228,8 @@ void CommandList::endTimerQuery(TimerQuery* queryResource){
 void CommandList::beginMarker(const AStringView name){
     const bool useDebugUtils = m_context.extensions.EXT_debug_utils;
     const bool useDebugMarker = m_context.extensions.EXT_debug_marker;
-    const bool useAftermath = m_device.isAftermathEnabled();
-    if(!useDebugUtils && !useDebugMarker && !useAftermath)
+    const bool useGpuCrashMarkers = m_device.isGpuCrashDiagnosticsEnabled();
+    if(!useDebugUtils && !useDebugMarker && !useGpuCrashMarkers)
         return;
 
     const GraphicsString markerName(name, m_context.objectArena);
@@ -245,9 +245,9 @@ void CommandList::beginMarker(const AStringView name){
         vkCmdDebugMarkerBeginEXT(m_currentCmdBuf->m_cmdBuf, &markerInfo);
     }
 
-    if(useAftermath){
-        const usize aftermathMarker = m_aftermathMarkerTracker.pushEvent(markerName.c_str());
-        vkCmdSetCheckpointNV(m_currentCmdBuf->m_cmdBuf, reinterpret_cast<const void*>(aftermathMarker));
+    if(useGpuCrashMarkers){
+        const usize gpuCrashMarker = m_gpuCrashMarkerTracker.pushEvent(markerName.c_str());
+        vkCmdSetCheckpointNV(m_currentCmdBuf->m_cmdBuf, reinterpret_cast<const void*>(gpuCrashMarker));
     }
 }
 
@@ -257,8 +257,8 @@ void CommandList::endMarker(){
     else if(m_context.extensions.EXT_debug_marker)
         vkCmdDebugMarkerEndEXT(m_currentCmdBuf->m_cmdBuf);
 
-    if(m_device.isAftermathEnabled())
-        m_aftermathMarkerTracker.popEvent();
+    if(m_device.isGpuCrashDiagnosticsEnabled())
+        m_gpuCrashMarkerTracker.popEvent();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

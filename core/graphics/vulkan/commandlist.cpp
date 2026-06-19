@@ -22,19 +22,19 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
     , m_stateTracker(device.m_context)
     , m_device(device)
     , m_context(device.m_context)
-    , m_aftermathMarkerTracker(device.m_context.objectArena)
+    , m_gpuCrashMarkerTracker(device.m_context.objectArena)
     , m_pendingImageBarriers(device.m_context.objectArena)
     , m_pendingBufferBarriers(device.m_context.objectArena)
     , m_pendingCompactions(device.m_context.objectArena)
 {
-    if(m_device.isAftermathEnabled())
-        m_device.getAftermathCrashDumpHelper().registerAftermathMarkerTracker(m_aftermathMarkerTracker);
+    if(m_device.isGpuCrashDiagnosticsEnabled())
+        m_device.getGpuCrashTracker().registerGpuCrashMarkerTracker(m_gpuCrashMarkerTracker);
 }
 CommandList::~CommandList(){
     discardUnsubmittedUploadChunks();
 
-    if(m_device.isAftermathEnabled())
-        m_device.getAftermathCrashDumpHelper().unRegisterAftermathMarkerTracker(m_aftermathMarkerTracker);
+    if(m_device.isGpuCrashDiagnosticsEnabled())
+        m_device.getGpuCrashTracker().unRegisterGpuCrashMarkerTracker(m_gpuCrashMarkerTracker);
 }
 
 void CommandList::discardUnsubmittedUploadChunks(){

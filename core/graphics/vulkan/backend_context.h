@@ -32,6 +32,7 @@ namespace DeviceExtensionFeature{
         FragmentShadingRate,
         MutableDescriptorType,
         DescriptorHeap,
+        DeviceFault,
         Count,
     };
 };
@@ -94,6 +95,8 @@ private:
         { VK_EXT_MESH_SHADER_EXTENSION_NAME, DeviceExtensionFeature::MeshShader },
         { VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME, DeviceExtensionFeature::MutableDescriptorType },
         { VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME, DeviceExtensionFeature::None },
+        { VK_EXT_DEVICE_FAULT_EXTENSION_NAME, DeviceExtensionFeature::DeviceFault },
+        { VK_AMD_BUFFER_MARKER_EXTENSION_NAME, DeviceExtensionFeature::None },
     };
     static constexpr ExtEntry s_DebugDeviceExts[] = {
         { VK_EXT_DEBUG_MARKER_EXTENSION_NAME, DeviceExtensionFeature::None },

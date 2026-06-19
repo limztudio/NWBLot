@@ -586,6 +586,8 @@ struct VulkanContext{
         bool NV_cooperative_vector = false;
         bool NV_cluster_acceleration_structure = false;
         bool NV_device_diagnostic_checkpoints = false;
+        bool EXT_device_fault = false;
+        bool AMD_buffer_marker = false;
         bool EXT_mesh_shader = false;
         bool KHR_fragment_shading_rate = false;
         bool EXT_ray_tracing_invocation_reorder = false;
@@ -2072,7 +2074,7 @@ private:
 
     Device& m_device;
     const VulkanContext& m_context;
-    AftermathMarkerTracker m_aftermathMarkerTracker;
+    GpuCrashMarkerTracker m_gpuCrashMarkerTracker;
 
     Vector<VkImageMemoryBarrier2, Alloc::GlobalArena> m_pendingImageBarriers;
     Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena> m_pendingBufferBarriers;
@@ -2197,8 +2199,8 @@ public:
     [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures();
     usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns);
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue);
-    bool isAftermathEnabled(){ return m_aftermathEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
-    [[nodiscard]] AftermathCrashDumpHelper& getAftermathCrashDumpHelper(){ return m_aftermathCrashDumpHelper; }
+    bool isGpuCrashDiagnosticsEnabled(){ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
+    [[nodiscard]] GpuCrashTracker& getGpuCrashTracker(){ return m_gpuCrashTracker; }
 
     void queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value);
     void queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value);
@@ -2313,10 +2315,10 @@ private:
 
 
 private:
-    // Aftermath must be first due to reverse destruction order
-    // Queues will destroy CommandLists which will unregister from m_aftermathCrashDumpHelper in their destructors
-    bool m_aftermathEnabled = false;
-    AftermathCrashDumpHelper m_aftermathCrashDumpHelper;
+    // GPU crash tracker must be first due to reverse destruction order
+    // Queues will destroy CommandLists which will unregister from m_gpuCrashTracker in their destructors
+    bool m_gpuCrashDiagnosticsEnabled = false;
+    GpuCrashTracker m_gpuCrashTracker;
 
     VulkanContext m_context;
     VulkanAllocator m_allocator;

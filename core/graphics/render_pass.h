@@ -7,8 +7,6 @@
 
 #include "api.h"
 
-#include <core/telemetry/frame_graph.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -38,14 +36,6 @@ public:
 
     virtual bool prepareResources(Framebuffer*){ return true; }
     virtual void render(Framebuffer*){}
-    virtual bool appendFrameGraph(
-        Telemetry::FrameGraphNodeDescs&,
-        Telemetry::FrameGraphEdgeDescs&,
-        u32&,
-        u32&
-    ){
-        return false;
-    }
     virtual void animate(f32){}
 
     virtual void backBufferResizing(){}

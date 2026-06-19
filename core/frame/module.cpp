@@ -50,6 +50,7 @@ Frame::Frame(void* inst, u16 width, u16 height)
     , m_projectObjectArena(FrameArenaScope::s_ProjectObjectArena)
     , m_perfSession(m_projectObjectArena)
     , m_telemetrySession(m_projectObjectArena)
+    , m_frameGraphRegistry(m_projectObjectArena)
     , m_telemetryUploadBytes(m_projectObjectArena)
     , m_projectThreadPool(queryProjectWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_projectJobSystem(m_projectThreadPool)
@@ -143,7 +144,7 @@ bool Frame::updateFrame(f32 delta){
     }
 
     if(m_telemetrySession.captureOptions().frameGraphEnabled()){
-        if(!m_graphics.recordFrameGraph(m_telemetrySession))
+        if(!m_frameGraphRegistry.record(m_telemetrySession))
             NWB_LOGGER_WARNING(NWB_TEXT("Frame: frame graph telemetry record failed"));
     }
 

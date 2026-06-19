@@ -31,6 +31,31 @@ StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbSwShadowSceneNodes;
 [[vk::binding(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, NWB_SW_SHADOW_SET)]]
 RWTexture2D<uint> g_NwbSwShadowVisibility;
 
+// Per-instance record: the affine world->object transform (3 rows) + the slot into the parallel per-mesh
+// descriptor arrays. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes).
+struct NwbSwShadowInstance{
+    float4 worldToObjectRow0;
+    float4 worldToObjectRow1;
+    float4 worldToObjectRow2;
+    uint meshIndex;
+    uint primitiveCount;
+    uint pad0;
+    uint pad1;
+};
+
+[[vk::binding(NWB_SW_SHADOW_BINDING_SCENE_INSTANCES, NWB_SW_SHADOW_SET)]]
+StructuredBuffer<NwbSwShadowInstance, Std430DataLayout> g_NwbSwShadowInstances;
+
+// Parallel per-mesh arrays (slot k = mesh k): triangle BVH nodes + raw position / index byte buffers.
+[[vk::binding(NWB_SW_SHADOW_BINDING_MESH_NODES, NWB_SW_SHADOW_SET)]]
+StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbSwShadowMeshNodes[NWB_SW_SHADOW_MAX_MESHES];
+
+[[vk::binding(NWB_SW_SHADOW_BINDING_MESH_POSITIONS, NWB_SW_SHADOW_SET)]]
+ByteAddressBuffer g_NwbSwShadowMeshPositions[NWB_SW_SHADOW_MAX_MESHES];
+
+[[vk::binding(NWB_SW_SHADOW_BINDING_MESH_INDICES, NWB_SW_SHADOW_SET)]]
+ByteAddressBuffer g_NwbSwShadowMeshIndices[NWB_SW_SHADOW_MAX_MESHES];
+
 struct NwbSwShadowPushConstants{
     uint width;
     uint height;
@@ -57,9 +82,91 @@ bool nwbSwShadowRayAabb(const float3 origin, const float3 invDir, const float tM
     return tNear <= tFar;
 }
 
-// Scene-level occlusion: walk the software scene/instance BVH and report a hit as soon as the ray crosses
-// any instance's world AABB (a BVH leaf box). This is the coarse stage; the per-mesh triangle traversal
-// that refines each leaf hit to an exact ray/triangle test is added in the next stage.
+// Affine world->object transform of a point (row-major 3x4; the engine SIMDMatrix rows map onto the rows).
+float3 nwbSwShadowTransformPoint(const NwbSwShadowInstance instance, const float3 point){
+    return float3(
+        dot(instance.worldToObjectRow0.xyz, point) + instance.worldToObjectRow0.w,
+        dot(instance.worldToObjectRow1.xyz, point) + instance.worldToObjectRow1.w,
+        dot(instance.worldToObjectRow2.xyz, point) + instance.worldToObjectRow2.w
+    );
+}
+
+// Same transform applied as a direction (no translation). Left UN-normalized on purpose so the ray
+// parameter t is preserved between world and object space (object hit at t == world hit at t).
+float3 nwbSwShadowTransformVector(const NwbSwShadowInstance instance, const float3 vector){
+    return float3(
+        dot(instance.worldToObjectRow0.xyz, vector),
+        dot(instance.worldToObjectRow1.xyz, vector),
+        dot(instance.worldToObjectRow2.xyz, vector)
+    );
+}
+
+// Moeller-Trumbore ray/triangle test (two-sided: an occluder shadows regardless of facing). Reports a hit
+// strictly inside the (tMin, tMax) interval.
+bool nwbSwShadowRayTriangle(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
+    const float3 edge1 = v1 - v0;
+    const float3 edge2 = v2 - v0;
+    const float3 pVec = cross(direction, edge2);
+    const float det = dot(edge1, pVec);
+    if(abs(det) < 1e-12)
+        return false;
+
+    const float invDet = 1.0 / det;
+    const float3 tVec = origin - v0;
+    const float u = dot(tVec, pVec) * invDet;
+    if(u < 0.0 || u > 1.0)
+        return false;
+
+    const float3 qVec = cross(tVec, edge1);
+    const float v = dot(direction, qVec) * invDet;
+    if(v < 0.0 || (u + v) > 1.0)
+        return false;
+
+    const float t = dot(edge2, qVec) * invDet;
+    return (t > tMin && t < tMax);
+}
+
+// Per-instance occlusion: push the world ray into the instance's object space, then walk that mesh's
+// triangle BVH and report the first triangle the ray crosses within (tMin, tMax).
+bool nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax){
+    const NwbSwShadowInstance instance = g_NwbSwShadowInstances[instanceIndex];
+    const uint meshIndex = instance.meshIndex;
+    const float3 origin = nwbSwShadowTransformPoint(instance, worldOrigin);
+    const float3 direction = nwbSwShadowTransformVector(instance, worldDirection);
+    const float3 invDir = 1.0 / direction;
+
+    uint stack[64];
+    uint stackPointer = 0u;
+    stack[stackPointer++] = 0u; // per-mesh root
+
+    while(stackPointer > 0u){
+        const uint nodeIndex = stack[--stackPointer];
+        const NwbBvhNode node = g_NwbSwShadowMeshNodes[meshIndex][nodeIndex];
+        if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax))
+            continue;
+
+        if(nwbBvhNodeIsLeaf(node)){
+            const uint triangle = nwbBvhLeafPrimitive(node);
+            const uint indexBase = triangle * 3u;
+            const uint i0 = g_NwbSwShadowMeshIndices[meshIndex].Load(indexBase * 4u);
+            const uint i1 = g_NwbSwShadowMeshIndices[meshIndex].Load((indexBase + 1u) * 4u);
+            const uint i2 = g_NwbSwShadowMeshIndices[meshIndex].Load((indexBase + 2u) * 4u);
+            const float3 v0 = asfloat(g_NwbSwShadowMeshPositions[meshIndex].Load3(i0 * 12u));
+            const float3 v1 = asfloat(g_NwbSwShadowMeshPositions[meshIndex].Load3(i1 * 12u));
+            const float3 v2 = asfloat(g_NwbSwShadowMeshPositions[meshIndex].Load3(i2 * 12u));
+            if(nwbSwShadowRayTriangle(origin, direction, tMin, tMax, v0, v1, v2))
+                return true;
+        }
+        else if((stackPointer + 2u) <= 64u){
+            stack[stackPointer++] = node.leftChild;
+            stack[stackPointer++] = node.rightChild;
+        }
+    }
+    return false;
+}
+
+// Scene-level occlusion: walk the software scene/instance BVH; each leaf is an instance whose world AABB the
+// ray crossed, so refine it with the exact per-mesh triangle traversal and report the first real hit.
 bool nwbSwShadowOccluded(const float3 origin, const float3 direction, const float tMin, const float tMax){
     if(g_NwbSwShadowPushConstants.instanceCount == 0u)
         return false;
@@ -76,10 +183,11 @@ bool nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
         if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax))
             continue;
 
-        if(nwbBvhNodeIsLeaf(node))
-            return true;
-
-        if((stackPointer + 2u) <= 32u){
+        if(nwbBvhNodeIsLeaf(node)){
+            if(nwbSwShadowInstanceOccluded(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax))
+                return true;
+        }
+        else if((stackPointer + 2u) <= 32u){
             stack[stackPointer++] = node.leftChild;
             stack[stackPointer++] = node.rightChild;
         }

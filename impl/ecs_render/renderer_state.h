@@ -11,6 +11,7 @@
 
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
+#include <impl/assets/graphics/shadow/sw_binding_slots.h>
 
 #include <global/generic.h>
 
@@ -300,7 +301,16 @@ private:
     Core::ComputePipelineHandle m_swShadowPipeline;
     Core::BindingSetHandle m_swShadowBindingSet;
     const Core::Buffer* m_swShadowBindingSetSceneNodes = nullptr;
+    const Core::Buffer* m_swShadowBindingSetInstances = nullptr;
     const Core::Texture* m_swShadowBindingSetVisibility = nullptr;
+    u32 m_swShadowBindingSetMeshCount = 0u;
+    // Per-frame distinct meshes referenced by the software scene BVH (filled by buildSceneSwBvh); the per-mesh
+    // descriptor arrays bind these (parallel: slot k = mesh k's node/position/index buffers). Sized by the
+    // shared shader cap so the C++ arrays and the shader's `[NWB_SW_SHADOW_MAX_MESHES]` stay one definition.
+    Core::Buffer* m_swShadowMeshNodeBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
+    Core::Buffer* m_swShadowMeshPositionBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
+    Core::Buffer* m_swShadowMeshIndexBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
+    u32 m_swShadowMeshCount = 0u;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;
     bool m_bvhSortPipelineFailed = false;

@@ -32,7 +32,7 @@
 #define NWB_SW_SHADOW_GROUP_SIZE 8
 
 // Maximum distinct meshes the per-mesh descriptor arrays can address in one frame.
-#define NWB_SW_SHADOW_MAX_MESHES 256
+#define NWB_SW_SHADOW_MAX_MESHES 64
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

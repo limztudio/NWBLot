@@ -83,11 +83,11 @@ inline constexpr usize s_SceneBvhInitialInstanceCapacity = 64u;
 // world->object transform (so a world-space ray can be pushed into each instance's object space) plus the
 // per-mesh BVH / geometry references resolved when traversal is wired. 64 bytes / std430-friendly.
 struct SceneSwBvhInstanceGpu{
-    Float34 worldToObject{};      // affine world->object (row-major 3x4)
-    u32 nodeBufferIndex = 0u;     // per-mesh BVH node buffer (bindless; populated in U5)
-    u32 positionBufferIndex = 0u; // per-mesh position buffer (bindless; populated in U5)
-    u32 indexBufferIndex = 0u;    // per-mesh triangle index buffer (bindless; populated in U5)
-    u32 primitiveCount = 0u;      // triangle count of the referenced mesh
+    Float34 worldToObject{};   // affine world->object (row-major 3x4); pushes a world ray into object space
+    u32 meshIndex = 0u;        // slot into the parallel per-mesh node/position/index descriptor arrays
+    u32 primitiveCount = 0u;   // triangle count of the referenced mesh (sanity bound)
+    u32 pad0 = 0u;
+    u32 pad1 = 0u;
 };
 static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
 
@@ -385,6 +385,10 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     instanceAabbMax.reserve(candidateCount);
     instanceCentroid.reserve(candidateCount);
 
+    // Reset the per-frame distinct-mesh table; the gather repopulates it (slot k -> mesh k's buffers) for the
+    // per-mesh descriptor arrays the traversal binds.
+    rayTracingState().m_swShadowMeshCount = 0u;
+
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
             continue;
@@ -398,10 +402,29 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             ? m_renderer.meshSystem().findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
             : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
         ;
-        // Only instances whose per-mesh software BVH is built (and that have valid object-space bounds) can
-        // be traced.
-        if(!meshReady || !mesh || !mesh->swBvhNodeBuffer || !mesh->csgLocalBounds.valid())
+        // Only instances whose per-mesh software BVH + geometry are built (and that have valid object-space
+        // bounds) can be traced.
+        if(!meshReady || !mesh || !mesh->swBvhNodeBuffer || !mesh->positionBuffer || !mesh->triangleIndexBuffer || !mesh->csgLocalBounds.valid())
             continue;
+
+        // Dedupe to a per-mesh descriptor-array slot: instances sharing a mesh share its node/position/index
+        // buffers. Once the per-frame mesh cap is reached, the instance casts no software shadow this frame.
+        Core::Buffer* meshNodeBuffer = mesh->swBvhNodeBuffer.get();
+        u32 meshSlot = NWB_SW_SHADOW_MAX_MESHES;
+        for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
+            if(rayTracingState().m_swShadowMeshNodeBuffers[slot] == meshNodeBuffer){
+                meshSlot = slot;
+                break;
+            }
+        }
+        if(meshSlot == NWB_SW_SHADOW_MAX_MESHES){
+            if(rayTracingState().m_swShadowMeshCount >= NWB_SW_SHADOW_MAX_MESHES)
+                continue;
+            meshSlot = rayTracingState().m_swShadowMeshCount++;
+            rayTracingState().m_swShadowMeshNodeBuffers[meshSlot] = meshNodeBuffer;
+            rayTracingState().m_swShadowMeshPositionBuffers[meshSlot] = mesh->positionBuffer.get();
+            rayTracingState().m_swShadowMeshIndexBuffers[meshSlot] = mesh->triangleIndexBuffer.get();
+        }
 
         // object->world from the decomposed transform (identity when absent), matching buildSceneTlas.
         SIMDMatrix objectToWorld = MatrixIdentity();
@@ -442,8 +465,8 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
 
         SceneSwBvhInstanceGpu instance;
         StoreFloat(worldToObject, &instance.worldToObject);
+        instance.meshIndex = meshSlot;
         instance.primitiveCount = mesh->meshletPrimitiveIndexCount / 3u;
-        // nodeBufferIndex / positionBufferIndex / indexBufferIndex are bindless references resolved in U5.
 
         instances.push_back(instance);
         instanceAabbMin.push_back(aabbMinStore);
@@ -573,8 +596,15 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
-    // The scene BVH node buffer was uploaded as a shader resource by buildSceneSwBvh; the binding set's
-    // remaining states (G-buffer SRVs, visibility UAV) are derived here in one place.
+    // The per-mesh BVH node buffers were left in UnorderedAccess by the build pass; move each distinct mesh's
+    // node + geometry buffers to ShaderResource for the traversal reads. The scene node buffer was already
+    // uploaded as a shader resource by buildSceneSwBvh; setResourceStatesForBindingSet derives the rest
+    // (G-buffer SRVs, visibility UAV).
+    for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
+        commandList.setBufferState(rayTracingState().m_swShadowMeshNodeBuffers[slot], Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_swShadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_swShadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
+    }
     commandList.setResourceStatesForBindingSet(rayTracingState().m_swShadowBindingSet.get());
     commandList.commitBarriers();
 
@@ -847,6 +877,10 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_LIGHT_LIST, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_NODES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_INSTANCES, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MESH_NODES, NWB_SW_SHADOW_MAX_MESHES));
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SW_SHADOW_BINDING_MESH_POSITIONS, NWB_SW_SHADOW_MAX_MESHES));
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SW_SHADOW_BINDING_MESH_INDICES, NWB_SW_SHADOW_MAX_MESHES));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowPushConstants)));
 
         rayTracingState().m_swShadowBindingLayout = device->createBindingLayout(layoutDesc);
@@ -885,19 +919,26 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
 bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& targets){
     NWB_ASSERT(rayTracingState().m_swShadowBindingLayout);
     NWB_ASSERT(rayTracingState().m_sceneBvhNodeBuffer);
+    NWB_ASSERT(rayTracingState().m_sceneInstanceBuffer);
+    NWB_ASSERT(rayTracingState().m_swShadowMeshCount > 0u);
     NWB_ASSERT(targets.shadowVisibility);
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
     NWB_ASSERT(deferredState().m_lightBuffer);
 
-    // The scene node buffer (recreated when it outgrows its capacity) and the visibility target (recreated
-    // on resize, which also resets this binding set via resetDeferredFrameTargets) are the only binding
-    // inputs that change without a full invalidate, so caching against that pair covers both rebuilds.
+    // Rebuild when any binding input that can change without a full invalidate changes: the scene node /
+    // instance buffers (recreated when they outgrow their capacity), the visibility target (recreated on
+    // resize, which also resets this set via resetDeferredFrameTargets), and the distinct-mesh count (the
+    // per-mesh descriptor arrays repopulate when the set of traced meshes changes).
     Core::Buffer* sceneNodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
+    Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
     const Core::Texture* visibilityTarget = targets.shadowVisibility.get();
+    const u32 meshCount = rayTracingState().m_swShadowMeshCount;
     if(
         rayTracingState().m_swShadowBindingSet
         && rayTracingState().m_swShadowBindingSetSceneNodes == sceneNodeBuffer
+        && rayTracingState().m_swShadowBindingSetInstances == instanceBuffer
         && rayTracingState().m_swShadowBindingSetVisibility == visibilityTarget
+        && rayTracingState().m_swShadowBindingSetMeshCount == meshCount
     )
         return true;
 
@@ -933,17 +974,31 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_INSTANCES, instanceBuffer));
+
+    // Per-mesh descriptor arrays: bind every slot (the shader only indexes meshIndex < meshCount). Unused
+    // tail slots are padded with the last real mesh so a non-bindless array has no unbound descriptors.
+    for(u32 slot = 0u; slot < NWB_SW_SHADOW_MAX_MESHES; ++slot){
+        const u32 source = (slot < meshCount) ? slot : (meshCount - 1u);
+        bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MESH_NODES, rayTracingState().m_swShadowMeshNodeBuffers[source]).setArrayElement(slot));
+        bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SW_SHADOW_BINDING_MESH_POSITIONS, rayTracingState().m_swShadowMeshPositionBuffers[source]).setArrayElement(slot));
+        bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SW_SHADOW_BINDING_MESH_INDICES, rayTracingState().m_swShadowMeshIndexBuffers[source]).setArrayElement(slot));
+    }
 
     auto* device = graphics().getDevice();
     rayTracingState().m_swShadowBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_swShadowBindingLayout);
     if(!rayTracingState().m_swShadowBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow binding set"));
         rayTracingState().m_swShadowBindingSetSceneNodes = nullptr;
+        rayTracingState().m_swShadowBindingSetInstances = nullptr;
         rayTracingState().m_swShadowBindingSetVisibility = nullptr;
+        rayTracingState().m_swShadowBindingSetMeshCount = 0u;
         return false;
     }
     rayTracingState().m_swShadowBindingSetSceneNodes = sceneNodeBuffer;
+    rayTracingState().m_swShadowBindingSetInstances = instanceBuffer;
     rayTracingState().m_swShadowBindingSetVisibility = visibilityTarget;
+    rayTracingState().m_swShadowBindingSetMeshCount = meshCount;
     return true;
 }
 

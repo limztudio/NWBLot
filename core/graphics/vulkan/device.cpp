@@ -30,6 +30,14 @@ static constexpr u64 s_PipelineCacheVolumeSegmentSize = 16ull * 1024ull * 1024ul
 static constexpr u64 s_PipelineCacheVolumeMetadataSize = 4ull * 1024ull;
 static constexpr usize s_PipelineCacheDataMaxAttempts = 4;
 
+static AStringView TrimGpuCrashText(const AStringView text){
+    return AStringView(text.data(), Min(text.size(), s_MaxGpuCrashMarkerChars));
+}
+
+static AStringView TrimGpuCrashText(const char* const text){
+    return text ? TrimGpuCrashText(AStringView(text)) : AStringView();
+}
+
 
 template<typename T>
 static u64 UpdateFnv64Value(const u64 hash, const T& value){
@@ -767,7 +775,7 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
                     if(!resolved.first())
                         continue;
 
-                    report.details.append(StringFormat(m_gpuCrashReportArena, "last executed marker (stage 0x{:x}): {:.{}}\n", static_cast<u32>(checkpoint.stage), resolved.second().data(), static_cast<int>(s_MaxGpuCrashMarkerChars)));
+                    report.details.append(StringFormat(m_gpuCrashReportArena, "last executed marker (stage 0x{:x}): {}\n", static_cast<u32>(checkpoint.stage), VulkanDetail::TrimGpuCrashText(resolved.second())));
                 }
 
                 remainingEntries -= checkpointCount;
@@ -799,7 +807,7 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
                     if(record.sequence == furthestSequence){
                         const auto resolved = m_gpuCrashTracker.resolveMarker(record.markerHash);
                         if(resolved.first())
-                            report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): {:.{}}\n", furthestSequence, resolved.second().data(), static_cast<int>(s_MaxGpuCrashMarkerChars)));
+                            report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): {}\n", furthestSequence, VulkanDetail::TrimGpuCrashText(resolved.second())));
                         else
                             report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): <unresolved marker>\n", furthestSequence));
                     }
@@ -836,7 +844,7 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
                 const VkResult faultResult = vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, &faultInfo);
                 if(faultResult == VK_SUCCESS || faultResult == VK_INCOMPLETE){
                     const char* faultDescription = faultInfo.description;
-                    report.details.append(StringFormat(m_gpuCrashReportArena, "device fault: {:.{}}\n", faultDescription, static_cast<int>(s_MaxGpuCrashMarkerChars)));
+                    report.details.append(StringFormat(m_gpuCrashReportArena, "device fault: {}\n", VulkanDetail::TrimGpuCrashText(faultDescription)));
 
                     for(u32 i = 0; i < faultCounts.addressInfoCount; ++i){
                         const VkDeviceFaultAddressInfoEXT& addressInfo = addressInfos[i];
@@ -850,9 +858,8 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
                     for(u32 i = 0; i < faultCounts.vendorInfoCount; ++i){
                         const VkDeviceFaultVendorInfoEXT& vendorInfo = vendorInfos[i];
                         const char* vendorDescription = vendorInfo.description;
-                        report.details.append(StringFormat(m_gpuCrashReportArena, "vendor fault '{:.{}}' (code 0x{:x}, data 0x{:x})\n"
-                            , vendorDescription
-                            , static_cast<int>(s_MaxGpuCrashMarkerChars)
+                        report.details.append(StringFormat(m_gpuCrashReportArena, "vendor fault '{}' (code 0x{:x}, data 0x{:x})\n"
+                            , VulkanDetail::TrimGpuCrashText(vendorDescription)
                             , static_cast<u64>(vendorInfo.vendorFaultCode)
                             , static_cast<u64>(vendorInfo.vendorFaultData)
                         ));

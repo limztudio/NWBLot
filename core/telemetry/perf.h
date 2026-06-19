@@ -49,6 +49,9 @@ struct EncodedPerfTimingPayloadHeader{
     u8 reserved = 0u;
     NameHash scopeHash = {};
     f64 seconds = 0.0;
+    f64 minSeconds = 0.0;
+    f64 maxSeconds = 0.0;
+    f64 lastSeconds = 0.0;
     u64 publishFrameIndex = 0u;
     u64 firstSampleFrameIndex = 0u;
     u64 lastSampleFrameIndex = 0u;
@@ -79,7 +82,7 @@ struct EncodedPerfMemoryPayloadHeader{
     u32 reserved = 0u;
 };
 #pragma pack(pop)
-static_assert(sizeof(EncodedPerfTimingPayloadHeader) == 112u, "EncodedPerfTimingPayloadHeader wire layout drifted");
+static_assert(sizeof(EncodedPerfTimingPayloadHeader) == 136u, "EncodedPerfTimingPayloadHeader wire layout drifted");
 static_assert(alignof(EncodedPerfTimingPayloadHeader) == 1u, "EncodedPerfTimingPayloadHeader must stay packed");
 static_assert(IsStandardLayout_V<EncodedPerfTimingPayloadHeader>, "EncodedPerfTimingPayloadHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedPerfTimingPayloadHeader>, "EncodedPerfTimingPayloadHeader must stay binary-serializable");

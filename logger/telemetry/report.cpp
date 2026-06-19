@@ -108,7 +108,7 @@ void RecordFrameRange(TelemetryReportSummary& summary, const u64 frameIndex){
 }
 
 void AppendPerfCsvHeader(AString<TelemetryArena>& out){
-    out += "source,scope,publish_frame,seconds,sample_count,first_sample_frame,last_sample_frame\n";
+    out += "source,scope,publish_frame,seconds,min_seconds,max_seconds,last_seconds,sample_count,first_sample_frame,last_sample_frame\n";
 }
 
 void AppendPerfCsvRow(
@@ -123,9 +123,12 @@ void AppendPerfCsvRow(
     AppendFormat(
         arena,
         out,
-        ",{},{:.9},{},{},{}\n",
+        ",{},{:.9},{:.9},{:.9},{:.9},{},{},{}\n",
         payload.stats.publishFrameIndex,
         payload.stats.seconds,
+        payload.stats.minSeconds,
+        payload.stats.maxSeconds,
+        payload.stats.lastSeconds,
         payload.stats.sampleCount,
         payload.stats.firstSampleFrameIndex,
         payload.stats.lastSampleFrameIndex

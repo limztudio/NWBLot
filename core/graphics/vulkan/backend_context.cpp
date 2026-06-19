@@ -2023,6 +2023,8 @@ bool BackendContext::present(){
 
     res = vkQueuePresentKHR(m_presentQueue, &presentInfo);
     if(!(res == VK_SUCCESS || res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)){
+        if(res == VK_ERROR_DEVICE_LOST && m_rhiDevice)
+            m_rhiDevice->captureGpuCrash("present");
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present failed. {}"), ResultToString(res));
         return false;
     }

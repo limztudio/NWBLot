@@ -79,8 +79,9 @@ void TrackedCommandBuffer::clearTrackedReferences(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex)
+Queue::Queue(const VulkanContext& context, Device& device, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex)
     : m_context(context)
+    , m_device(device)
     , m_queue(queue)
     , m_queueID(queueID)
     , m_queueFamilyIndex(queueFamilyIndex)
@@ -312,6 +313,7 @@ u64 Queue::submit(CommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
 
         if(res == VK_ERROR_DEVICE_LOST){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device was lost during queue submission."));
+            m_device.captureGpuCrash("queue submit");
         }
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command buffers to queue: {}"), ResultToString(res));

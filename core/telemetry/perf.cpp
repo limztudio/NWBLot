@@ -173,6 +173,9 @@ bool BuildPerfTimingPayload(
     header.source = source;
     header.scopeHash = scopeName.hash();
     header.seconds = stats.seconds;
+    header.minSeconds = stats.minSeconds;
+    header.maxSeconds = stats.maxSeconds;
+    header.lastSeconds = stats.lastSeconds;
     header.publishFrameIndex = stats.publishFrameIndex;
     header.firstSampleFrameIndex = stats.firstSampleFrameIndex;
     header.lastSampleFrameIndex = stats.lastSampleFrameIndex;
@@ -223,6 +226,9 @@ bool ParsePerfTimingPayload(
     outPayload.scopeName = Name(header.scopeHash);
     outPayload.scopeText.assign(reinterpret_cast<const char*>(encoded.data() + cursor), header.scopeNameBytes);
     outPayload.stats.seconds = header.seconds;
+    outPayload.stats.minSeconds = header.minSeconds;
+    outPayload.stats.maxSeconds = header.maxSeconds;
+    outPayload.stats.lastSeconds = header.lastSeconds;
     outPayload.stats.sampleCount = header.sampleCount;
     outPayload.stats.publishFrameIndex = header.publishFrameIndex;
     outPayload.stats.firstSampleFrameIndex = header.firstSampleFrameIndex;

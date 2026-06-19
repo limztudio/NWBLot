@@ -465,13 +465,13 @@ Device::Device(const DeviceDesc& desc)
     }
 
     if(desc.graphicsQueue && desc.graphicsQueueIndex >= 0){
-        m_queues[static_cast<u32>(CommandQueue::Graphics)].emplace(m_context, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex);
+        m_queues[static_cast<u32>(CommandQueue::Graphics)].emplace(m_context, *this, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex);
     }
     if(desc.computeQueue && desc.computeQueueIndex >= 0){
-        m_queues[static_cast<u32>(CommandQueue::Compute)].emplace(m_context, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex);
+        m_queues[static_cast<u32>(CommandQueue::Compute)].emplace(m_context, *this, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex);
     }
     if(desc.transferQueue && desc.transferQueueIndex >= 0){
-        m_queues[static_cast<u32>(CommandQueue::Copy)].emplace(m_context, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex);
+        m_queues[static_cast<u32>(CommandQueue::Copy)].emplace(m_context, *this, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex);
     }
 }
 Device::~Device(){
@@ -715,6 +715,8 @@ void Device::captureGpuCrash(const AStringView context){
             vkGetQueueCheckpointDataNV(queue, &checkpointCount, nullptr);
             if(checkpointCount == 0)
                 continue;
+            if(checkpointCount > s_MaxGpuCrashCaptureEntries)
+                checkpointCount = s_MaxGpuCrashCaptureEntries;
 
             Vector<VkCheckpointDataNV, Alloc::PersistentArena> checkpoints(m_gpuCrashReportArena);
             checkpoints.resize(checkpointCount, VulkanDetail::MakeVkStruct<VkCheckpointDataNV>(VK_STRUCTURE_TYPE_CHECKPOINT_DATA_NV));
@@ -738,6 +740,10 @@ void Device::captureGpuCrash(const AStringView context){
         auto faultCounts = VulkanDetail::MakeVkStruct<VkDeviceFaultCountsEXT>(VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT);
         if(vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, nullptr) == VK_SUCCESS){
             faultCounts.vendorBinarySize = 0;
+            if(faultCounts.addressInfoCount > s_MaxGpuCrashCaptureEntries)
+                faultCounts.addressInfoCount = s_MaxGpuCrashCaptureEntries;
+            if(faultCounts.vendorInfoCount > s_MaxGpuCrashCaptureEntries)
+                faultCounts.vendorInfoCount = s_MaxGpuCrashCaptureEntries;
 
             Vector<VkDeviceFaultAddressInfoEXT, Alloc::PersistentArena> addressInfos(m_gpuCrashReportArena);
             Vector<VkDeviceFaultVendorInfoEXT, Alloc::PersistentArena> vendorInfos(m_gpuCrashReportArena);
@@ -749,7 +755,8 @@ void Device::captureGpuCrash(const AStringView context){
             faultInfo.pVendorInfos = vendorInfos.empty() ? nullptr : vendorInfos.data();
             faultInfo.pVendorBinaryData = nullptr;
 
-            if(vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, &faultInfo) == VK_SUCCESS){
+            const VkResult faultResult = vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, &faultInfo);
+            if(faultResult == VK_SUCCESS || faultResult == VK_INCOMPLETE){
                 const char* faultDescription = faultInfo.description;
                 report.details.append(StringFormat(m_gpuCrashReportArena, "device fault: {}\n", faultDescription));
 

@@ -34,6 +34,9 @@ struct TimingScopeId{
 
 struct TimingStats{
     f64 seconds = 0.0;
+    f64 minSeconds = 0.0;
+    f64 maxSeconds = 0.0;
+    f64 lastSeconds = 0.0;
     u32 sampleCount = 0u;
     u64 publishFrameIndex = 0u;
     u64 firstSampleFrameIndex = 0u;

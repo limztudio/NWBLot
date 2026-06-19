@@ -39,7 +39,7 @@ struct CsgBoundsGpuData{
 
 using CsgReceiverCpuBounds = CsgBoundsGpuData;
 
-[[nodiscard]] inline Float34 MakeIdentityCsgMatrix(){
+[[nodiscard]] NWB_INLINE Float34 MakeIdentityCsgMatrix(){
     Float34 matrix{};
     matrix.rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
     matrix.rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);

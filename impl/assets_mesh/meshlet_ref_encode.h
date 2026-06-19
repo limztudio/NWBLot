@@ -62,12 +62,12 @@ struct MeshletRefEncodeChannel{
 using MeshletPositionRefEncodeChannel = MeshletRefEncodeChannel<MeshletPositionStreamRef>;
 using MeshletAttributeRefEncodeChannel = MeshletRefEncodeChannel<MeshletAttributeStreamRef>;
 
-inline void AddMeshletRefEncodeIndex(MeshletRefEncodeRange& range, const u32 index){
+NWB_INLINE void AddMeshletRefEncodeIndex(MeshletRefEncodeRange& range, const u32 index){
     range.minimum = Min(range.minimum, index);
     range.maximum = Max(range.maximum, index);
 }
 
-inline void AddMeshletAttributeRefEncodeRanges(
+NWB_INLINE void AddMeshletAttributeRefEncodeRanges(
     MeshletAttributeRefEncodeRanges& ranges,
     const MeshletAttributeStreamRef& ref
 ){
@@ -77,7 +77,7 @@ inline void AddMeshletAttributeRefEncodeRanges(
     AddMeshletRefEncodeIndex(ranges.color, ref.color);
 }
 
-inline void StoreMeshletAttributeRefEncodeBases(
+NWB_INLINE void StoreMeshletAttributeRefEncodeBases(
     MeshletDesc& meshlet,
     const MeshletAttributeRefEncodeRanges& ranges
 ){
@@ -87,7 +87,7 @@ inline void StoreMeshletAttributeRefEncodeBases(
     meshlet.colorBase = ranges.color.minimum;
 }
 
-[[nodiscard]] inline MeshletRefDeltaWidth::Enum MeshletRefEncodeRangeWidth(const MeshletRefEncodeRange& range){
+[[nodiscard]] NWB_INLINE MeshletRefDeltaWidth::Enum MeshletRefEncodeRangeWidth(const MeshletRefEncodeRange& range){
     return MeshletRefDeltaWidthForMaxDelta(range.maximum - range.minimum);
 }
 
@@ -123,7 +123,7 @@ template<typename RefT, typename RefVectorT, typename DeltaVectorT, typename Fai
     return true;
 }
 
-[[nodiscard]] inline bool MeshletDecodedPositionRefMatches(
+[[nodiscard]] NWB_INLINE bool MeshletDecodedPositionRefMatches(
     const MeshletPositionStreamRef& decoded,
     const MeshletPositionStreamRef& source,
     const bool skinRequired
@@ -133,7 +133,7 @@ template<typename RefT, typename RefVectorT, typename DeltaVectorT, typename Fai
     ;
 }
 
-[[nodiscard]] inline bool MeshletDecodedAttributeRefMatches(
+[[nodiscard]] NWB_INLINE bool MeshletDecodedAttributeRefMatches(
     const MeshletAttributeStreamRef& decoded,
     const MeshletAttributeStreamRef& source
 ){

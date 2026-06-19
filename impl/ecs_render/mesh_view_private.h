@@ -82,11 +82,11 @@ inline SIMDMatrix BuildWorldToClipMatrix(
     return MatrixMultiply(viewToClip, worldToView);
 }
 
-inline SIMDVector BuildViewFrustumPlaneVector(const SIMDVector normal, const SIMDVector point){
+NWB_INLINE SIMDVector BuildViewFrustumPlaneVector(const SIMDVector normal, const SIMDVector point){
     return PlaneTests::FromPointNormal(normal, point, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
 }
 
-inline SIMDVector BuildViewFrustumSidePlaneVector(
+NWB_INLINE SIMDVector BuildViewFrustumSidePlaneVector(
     const SIMDVector forward,
     const SIMDVector side,
     const SIMDVector tanHalfAngle,

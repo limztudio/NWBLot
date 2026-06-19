@@ -25,7 +25,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline usize NextGrowingCapacity(const usize currentCapacity, const usize requiredCapacity){
+NWB_INLINE usize NextGrowingCapacity(const usize currentCapacity, const usize requiredCapacity){
     usize capacity = Max<usize>(currentCapacity, 1u);
     while(capacity < requiredCapacity){
         if(capacity > (Limit<usize>::s_Max / 2u))

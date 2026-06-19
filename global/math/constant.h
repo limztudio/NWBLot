@@ -12,17 +12,17 @@
 
 
 #define NWB_SIMD_VECTOR_CONST_CONVERSIONS \
-    inline operator SIMDVector()const noexcept{ return v; } \
-    inline operator int32x4_t()const noexcept{ return vreinterpretq_s32_f32(v); } \
-    inline operator uint32x4_t()const noexcept{ return vreinterpretq_u32_f32(v); }
+    NWB_INLINE operator SIMDVector()const noexcept{ return v; } \
+    NWB_INLINE operator int32x4_t()const noexcept{ return vreinterpretq_s32_f32(v); } \
+    NWB_INLINE operator uint32x4_t()const noexcept{ return vreinterpretq_u32_f32(v); }
 
 #define NWB_SIMD_VECTOR_CONST_X86_CONVERSIONS \
-    inline operator SIMDVector()const noexcept{ return v; } \
-    inline operator __m128i()const noexcept{ return _mm_castps_si128(v); } \
-    inline operator __m128d()const noexcept{ return _mm_castps_pd(v); }
+    NWB_INLINE operator SIMDVector()const noexcept{ return v; } \
+    NWB_INLINE operator __m128i()const noexcept{ return _mm_castps_si128(v); } \
+    NWB_INLINE operator __m128d()const noexcept{ return _mm_castps_pd(v); }
 
 #define NWB_SIMD_VECTOR_CONST_SCALAR_CONVERSION \
-    inline operator SIMDVector()const noexcept{ return v; }
+    NWB_INLINE operator SIMDVector()const noexcept{ return v; }
 
 #if defined(NWB_HAS_NEON)
 #define NWB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS NWB_SIMD_VECTOR_CONST_CONVERSIONS
@@ -38,7 +38,7 @@ struct alignas(16) SIMDVectorConstF{
         SIMDVector v;
     };
 
-    inline operator const f32*()const noexcept{ return f; }
+    NWB_INLINE operator const f32*()const noexcept{ return f; }
     NWB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
 };
 

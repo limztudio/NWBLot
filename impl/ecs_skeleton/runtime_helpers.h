@@ -31,15 +31,15 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool HasSkeletonPose(const SkeletonPoseComponent* pose){
+[[nodiscard]] NWB_INLINE bool HasSkeletonPose(const SkeletonPoseComponent* pose){
     return pose && (!pose->localJoints.empty() || !pose->parentJoints.empty());
 }
 
-[[nodiscard]] inline SIMDMatrix MultiplyJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs){
+[[nodiscard]] NWB_INLINE SIMDMatrix MultiplyJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs){
     return MatrixMultiply(lhs, rhs);
 }
 
-[[nodiscard]] inline bool IsAffineJointMatrix(const SIMDMatrix& matrix){
+[[nodiscard]] NWB_INLINE bool IsAffineJointMatrix(const SIMDMatrix& matrix){
     return
         VectorIsFinite(matrix.v[0], 0xFu)
         && VectorIsFinite(matrix.v[1], 0xFu)
@@ -49,14 +49,14 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     ;
 }
 
-[[nodiscard]] inline f32 JointLinearDeterminant(const SIMDMatrix& matrix){
+[[nodiscard]] NWB_INLINE f32 JointLinearDeterminant(const SIMDMatrix& matrix){
     const SIMDVector row0 = VectorSetW(matrix.v[0], 0.0f);
     const SIMDVector row1 = VectorSetW(matrix.v[1], 0.0f);
     const SIMDVector row2 = VectorSetW(matrix.v[2], 0.0f);
     return VectorGetX(Vector3Dot(row0, Vector3Cross(row1, row2)));
 }
 
-[[nodiscard]] inline bool IsInvertibleAffineJointMatrix(const SIMDMatrix& matrix){
+[[nodiscard]] NWB_INLINE bool IsInvertibleAffineJointMatrix(const SIMDMatrix& matrix){
     if(!IsAffineJointMatrix(matrix))
         return false;
 
@@ -64,7 +64,7 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return IsFinite(determinant) && Abs(determinant) > s_JointDeterminantEpsilon;
 }
 
-[[nodiscard]] inline bool ResolveSkinningJointMatrix(
+[[nodiscard]] NWB_INLINE bool ResolveSkinningJointMatrix(
     const SIMDMatrix& poseJoint,
     const bool hasInverseBind,
     const SIMDMatrix& inverseBind,
@@ -81,7 +81,7 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return IsInvertibleAffineJointMatrix(outMatrix);
 }
 
-[[nodiscard]] inline bool ResolveSkeletonPoseJointMatrix(
+[[nodiscard]] NWB_INLINE bool ResolveSkeletonPoseJointMatrix(
     const SIMDMatrix& localJoint,
     const SIMDMatrix* parentJoint,
     SIMDMatrix& outMatrix

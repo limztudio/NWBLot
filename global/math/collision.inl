@@ -19,46 +19,46 @@ namespace CollisionDetail{
 inline constexpr f32 s_RayEpsilon = 1.0e-20f;
 inline constexpr f32 s_PlaneEpsilon = 1.192092896e-7f;
 
-[[nodiscard]] inline bool Vector3AnyTrue(const SIMDVector value)noexcept{
+[[nodiscard]] NWB_INLINE bool Vector3AnyTrue(const SIMDVector value)noexcept{
     return (VectorMoveMask(value) & 0x7u) != 0u;
 }
 
-[[nodiscard]] inline bool Vector4AllTrue(const SIMDVector value)noexcept{
+[[nodiscard]] NWB_INLINE bool Vector4AllTrue(const SIMDVector value)noexcept{
     return (VectorMoveMask(value) & 0xFu) == 0xFu;
 }
 
-[[nodiscard]] inline bool Vector4AnyTrue(const SIMDVector value)noexcept{
+[[nodiscard]] NWB_INLINE bool Vector4AnyTrue(const SIMDVector value)noexcept{
     return (VectorMoveMask(value) & 0xFu) != 0u;
 }
 
-[[nodiscard]] inline SIMDVector Vector3MaxComponent(const SIMDVector value)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector Vector3MaxComponent(const SIMDVector value)noexcept{
     return VectorMax(VectorSplatX(value), VectorMax(VectorSplatY(value), VectorSplatZ(value)));
 }
 
-[[nodiscard]] inline SIMDVector Vector3SignedUnitMask(const SIMDVector position, const SIMDVector componentMask)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector Vector3SignedUnitMask(const SIMDVector position, const SIMDVector componentMask)noexcept{
     const SIMDVector sign = VectorSelect(s_SIMDNegativeOne, s_SIMDOne, VectorGreaterOrEqual(position, VectorZero()));
     return VectorAndInt(sign, componentMask);
 }
 
-[[nodiscard]] inline SIMDVector CapsuleYSegmentPoint(const SIMDVector position, const SIMDVector radiusHalfHeight)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector CapsuleYSegmentPoint(const SIMDVector position, const SIMDVector radiusHalfHeight)noexcept{
     const SIMDVector halfHeight = VectorSplatY(radiusHalfHeight);
     const SIMDVector clampedY = VectorClamp(VectorSplatY(position), VectorNegate(halfHeight), halfHeight);
     return VectorAndInt(clampedY, s_SIMDMaskY);
 }
 
-[[nodiscard]] inline const Float3U* StrideFloat3Pointer(const Float3U* points, const usize stride, const usize index)noexcept{
+[[nodiscard]] NWB_INLINE const Float3U* StrideFloat3Pointer(const Float3U* points, const usize stride, const usize index)noexcept{
     return reinterpret_cast<const Float3U*>(reinterpret_cast<const u8*>(points) + stride * index);
 }
 
-[[nodiscard]] inline SIMDVector SphereCenter(const SIMDVector centerRadius)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector SphereCenter(const SIMDVector centerRadius)noexcept{
     return VectorSetW(centerRadius, 0.0f);
 }
 
-[[nodiscard]] inline f32 SphereRadius(const SIMDVector centerRadius)noexcept{
+[[nodiscard]] NWB_INLINE f32 SphereRadius(const SIMDVector centerRadius)noexcept{
     return VectorGetW(centerRadius);
 }
 
-[[nodiscard]] inline SIMDVector SphereCenterRadius(const SIMDVector center, const f32 radius)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector SphereCenterRadius(const SIMDVector center, const f32 radius)noexcept{
     return VectorSetW(center, radius);
 }
 
@@ -80,7 +80,7 @@ inline constexpr f32 s_PlaneEpsilon = 1.192092896e-7f;
     return SphereCenterRadius(centerVector, VectorGetX(VectorSqrt(radiusSq)));
 }
 
-[[nodiscard]] inline SIMDVector BoxCornerOffset(const u32 index)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector BoxCornerOffset(const u32 index)noexcept{
     return VectorSet(
         (index & 1u) ? 1.0f : -1.0f,
         (index & 2u) ? 1.0f : -1.0f,
@@ -89,20 +89,20 @@ inline constexpr f32 s_PlaneEpsilon = 1.192092896e-7f;
     );
 }
 
-[[nodiscard]] inline SIMDVector PlaneNormalizeSafe(const SIMDVector plane)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector PlaneNormalizeSafe(const SIMDVector plane)noexcept{
     const SIMDVector length = Vector3Length(plane);
     if(VectorGetX(length) <= s_PlaneEpsilon)
         return plane;
     return VectorDivide(plane, length);
 }
 
-[[nodiscard]] inline SIMDVector TransformPlane(const SIMDVector plane, const SIMDVector rotation, const SIMDVector translation)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector TransformPlane(const SIMDVector plane, const SIMDVector rotation, const SIMDVector translation)noexcept{
     const SIMDVector normal = Vector3Rotate(plane, rotation);
     const SIMDVector distance = VectorSubtract(VectorSplatW(plane), Vector3Dot(normal, translation));
     return VectorSelect(normal, distance, s_SIMDMaskW);
 }
 
-[[nodiscard]] inline SIMDVector PlaneDistance(const SIMDVector plane, const SIMDVector point)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector PlaneDistance(const SIMDVector plane, const SIMDVector point)noexcept{
     return VectorAdd(Vector3Dot(plane, point), VectorSplatW(plane));
 }
 
@@ -135,7 +135,7 @@ inline constexpr f32 s_PlaneEpsilon = 1.192092896e-7f;
     return true;
 }
 
-inline void MinMaxFromCenterExtents(
+NWB_INLINE void MinMaxFromCenterExtents(
     const SIMDVector center,
     const SIMDVector extents,
     SIMDVector& outMinBounds,
@@ -145,7 +145,7 @@ inline void MinMaxFromCenterExtents(
     outMaxBounds = VectorAdd(center, extents);
 }
 
-inline void CenterExtentsFromMinMax(
+NWB_INLINE void CenterExtentsFromMinMax(
     const SIMDVector minBounds,
     const SIMDVector maxBounds,
     SIMDVector& outCenter,
@@ -155,12 +155,12 @@ inline void CenterExtentsFromMinMax(
     outExtents = VectorSetW(VectorMultiply(VectorSubtract(maxBounds, minBounds), VectorReplicate(0.5f)), 0.0f);
 }
 
-inline void ExpandMinMax(const SIMDVector point, SIMDVector& inOutMinBounds, SIMDVector& inOutMaxBounds)noexcept{
+NWB_INLINE void ExpandMinMax(const SIMDVector point, SIMDVector& inOutMinBounds, SIMDVector& inOutMaxBounds)noexcept{
     inOutMinBounds = VectorMin(inOutMinBounds, point);
     inOutMaxBounds = VectorMax(inOutMaxBounds, point);
 }
 
-[[nodiscard]] inline SIMDVector ClosestPointOnMinMax(
+[[nodiscard]] NWB_INLINE SIMDVector ClosestPointOnMinMax(
     const SIMDVector point,
     const SIMDVector minBounds,
     const SIMDVector maxBounds
@@ -168,7 +168,7 @@ inline void ExpandMinMax(const SIMDVector point, SIMDVector& inOutMinBounds, SIM
     return VectorMin(VectorMax(point, minBounds), maxBounds);
 }
 
-[[nodiscard]] inline bool MinMaxIntersects(
+[[nodiscard]] NWB_INLINE bool MinMaxIntersects(
     const SIMDVector lhsMinBounds,
     const SIMDVector lhsMaxBounds,
     const SIMDVector rhsMinBounds,
@@ -178,7 +178,7 @@ inline void ExpandMinMax(const SIMDVector point, SIMDVector& inOutMinBounds, SIM
     return !Vector3AnyTrue(disjoint);
 }
 
-inline void FastIntersectSpherePlane(
+NWB_INLINE void FastIntersectSpherePlane(
     const SIMDVector center,
     const SIMDVector radius,
     const SIMDVector plane,
@@ -190,7 +190,7 @@ inline void FastIntersectSpherePlane(
     outInside = VectorGreaterOrEqual(distance, radius);
 }
 
-inline void FastIntersectAxisAlignedBoxPlane(
+NWB_INLINE void FastIntersectAxisAlignedBoxPlane(
     const SIMDVector center,
     const SIMDVector extents,
     const SIMDVector plane,
@@ -203,7 +203,7 @@ inline void FastIntersectAxisAlignedBoxPlane(
     outInside = VectorGreaterOrEqual(distance, radius);
 }
 
-inline void FastIntersectOrientedBoxPlane(
+NWB_INLINE void FastIntersectOrientedBoxPlane(
     const SIMDVector center,
     const SIMDVector extents,
     const SIMDVector axis0,
@@ -363,7 +363,7 @@ inline void FastIntersectPointsPlane(
     return true;
 }
 
-inline void ObbAxes(
+NWB_INLINE void ObbAxes(
     const SIMDVector orientation,
     SIMDVector& outAxis0,
     SIMDVector& outAxis1,
@@ -374,7 +374,7 @@ inline void ObbAxes(
     outAxis2 = Vector3Rotate(s_SIMDIdentityR2, orientation);
 }
 
-[[nodiscard]] inline SIMDVector PointToObbLocal(
+[[nodiscard]] NWB_INLINE SIMDVector PointToObbLocal(
     const SIMDVector point,
     const SIMDVector center,
     const SIMDVector orientation
@@ -382,7 +382,7 @@ inline void ObbAxes(
     return Vector3InverseRotate(VectorSubtract(point, center), orientation);
 }
 
-[[nodiscard]] inline bool PointInsideObb(
+[[nodiscard]] NWB_INLINE bool PointInsideObb(
     const SIMDVector point,
     const SIMDVector center,
     const SIMDVector extents,
@@ -689,11 +689,11 @@ inline void FrustumPlanes(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SIMDVector SIMDCALL PlaneTests::Distance(const SIMDVector plane, const SIMDVector point)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL PlaneTests::Distance(const SIMDVector plane, const SIMDVector point)noexcept{
     return CollisionDetail::PlaneDistance(plane, point);
 }
 
-[[nodiscard]] inline SIMDVector SIMDCALL PlaneTests::FromPointNormal(
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL PlaneTests::FromPointNormal(
     const SIMDVector normal,
     const SIMDVector point,
     const SIMDVector fallbackNormal
@@ -710,14 +710,14 @@ inline void FrustumPlanes(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SIMDVector SIMDCALL SdfTests::Plane(
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL SdfTests::Plane(
     const SIMDVector position,
     const SIMDVector normalDistance
 )noexcept{
     return PlaneTests::Distance(normalDistance, position);
 }
 
-[[nodiscard]] inline SIMDVector SIMDCALL SdfTests::Box(
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL SdfTests::Box(
     const SIMDVector position,
     const SIMDVector halfExtents
 )noexcept{
@@ -727,14 +727,14 @@ inline void FrustumPlanes(
     return VectorAdd(Vector3Length(outside), insideDistance);
 }
 
-[[nodiscard]] inline SIMDVector SIMDCALL SdfTests::Sphere(
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL SdfTests::Sphere(
     const SIMDVector position,
     const SIMDVector radius
 )noexcept{
     return VectorSubtract(Vector3Length(position), VectorSplatX(radius));
 }
 
-[[nodiscard]] inline SIMDVector SIMDCALL SdfTests::CapsuleY(
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL SdfTests::CapsuleY(
     const SIMDVector position,
     const SIMDVector radiusHalfHeight
 )noexcept{
@@ -742,7 +742,7 @@ inline void FrustumPlanes(
     return VectorSubtract(Vector3Length(VectorSubtract(position, segmentPoint)), VectorSplatX(radiusHalfHeight));
 }
 
-[[nodiscard]] inline SIMDVector SIMDCALL SdfTests::PlaneNormal(
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL SdfTests::PlaneNormal(
     const SIMDVector normalDistance,
     const SIMDVector fallback,
     const f32 minLengthSquared
@@ -775,7 +775,7 @@ inline void FrustumPlanes(
     return VectorSelect(faceNormal, outsideNormal, useOutside);
 }
 
-[[nodiscard]] inline SIMDVector SIMDCALL SdfTests::SphereNormal(
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL SdfTests::SphereNormal(
     const SIMDVector position,
     const SIMDVector fallback,
     const f32 minLengthSquared
@@ -783,7 +783,7 @@ inline void FrustumPlanes(
     return Vector3NormalizeOr(position, fallback, minLengthSquared);
 }
 
-[[nodiscard]] inline SIMDVector SIMDCALL SdfTests::CapsuleYNormal(
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL SdfTests::CapsuleYNormal(
     const SIMDVector position,
     const SIMDVector radiusHalfHeight,
     const f32 minLengthSquared
@@ -805,7 +805,7 @@ inline void FrustumPlanes(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool SIMDCALL AabbTests::Valid(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
+[[nodiscard]] NWB_INLINE bool SIMDCALL AabbTests::Valid(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
     return
         !Vector3IsNaN(minBounds)
         && !Vector3IsInfinite(minBounds)
@@ -815,16 +815,16 @@ inline void FrustumPlanes(
     ;
 }
 
-inline void SIMDCALL AabbTests::Reset(SIMDVector& outMinBounds, SIMDVector& outMaxBounds)noexcept{
+NWB_INLINE void SIMDCALL AabbTests::Reset(SIMDVector& outMinBounds, SIMDVector& outMaxBounds)noexcept{
     outMinBounds = VectorReplicate(s_MaxF32);
     outMaxBounds = VectorReplicate(-s_MaxF32);
 }
 
-inline void SIMDCALL AabbTests::Expand(const SIMDVector point, SIMDVector& inOutMinBounds, SIMDVector& inOutMaxBounds)noexcept{
+NWB_INLINE void SIMDCALL AabbTests::Expand(const SIMDVector point, SIMDVector& inOutMinBounds, SIMDVector& inOutMaxBounds)noexcept{
     CollisionDetail::ExpandMinMax(point, inOutMinBounds, inOutMaxBounds);
 }
 
-inline void SIMDCALL AabbTests::ExpandTriangle(
+NWB_INLINE void SIMDCALL AabbTests::ExpandTriangle(
     const SIMDVector v0,
     const SIMDVector v1,
     const SIMDVector v2,
@@ -836,7 +836,7 @@ inline void SIMDCALL AabbTests::ExpandTriangle(
     AabbTests::Expand(v2, inOutMinBounds, inOutMaxBounds);
 }
 
-[[nodiscard]] inline bool SIMDCALL AabbTests::Intersects(
+[[nodiscard]] NWB_INLINE bool SIMDCALL AabbTests::Intersects(
     const SIMDVector lhsMinBounds,
     const SIMDVector lhsMaxBounds,
     const SIMDVector rhsMinBounds,
@@ -849,15 +849,15 @@ inline void SIMDCALL AabbTests::ExpandTriangle(
     ;
 }
 
-[[nodiscard]] inline SIMDVector SIMDCALL AabbTests::Center(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL AabbTests::Center(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
     return VectorSetW(VectorScale(VectorAdd(minBounds, maxBounds), 0.5f), 0.0f);
 }
 
-[[nodiscard]] inline SIMDVector SIMDCALL AabbTests::Extents(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL AabbTests::Extents(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
     return VectorSetW(VectorScale(VectorSubtract(maxBounds, minBounds), 0.5f), 0.0f);
 }
 
-[[nodiscard]] inline f32 SIMDCALL AabbTests::Radius(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
+[[nodiscard]] NWB_INLINE f32 SIMDCALL AabbTests::Radius(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
     return VectorGetX(Vector3Length(AabbTests::Extents(minBounds, maxBounds)));
 }
 
@@ -886,7 +886,7 @@ inline void SIMDCALL AabbTests::ExpandTriangle(
     return AabbTests::Valid(outMinBounds, outMaxBounds);
 }
 
-[[nodiscard]] inline SIMDVector SIMDCALL TriangleTests::EdgeCross2D(
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL TriangleTests::EdgeCross2D(
     const SIMDVector a,
     const SIMDVector b,
     const SIMDVector c
@@ -896,7 +896,7 @@ inline void SIMDCALL AabbTests::ExpandTriangle(
     return VectorSubtract(VectorMultiply(VectorSplatX(ab), VectorSplatY(ac)), VectorMultiply(VectorSplatY(ab), VectorSplatX(ac)));
 }
 
-[[nodiscard]] inline SIMDVector SIMDCALL TriangleTests::SignedArea2D(
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL TriangleTests::SignedArea2D(
     const SIMDVector a,
     const SIMDVector b,
     const SIMDVector c
@@ -904,7 +904,7 @@ inline void SIMDCALL AabbTests::ExpandTriangle(
     return VectorScale(TriangleTests::EdgeCross2D(a, b, c), 0.5f);
 }
 
-[[nodiscard]] inline SIMDVector SIMDCALL TriangleTests::AreaNormal(
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL TriangleTests::AreaNormal(
     const SIMDVector v0,
     const SIMDVector v1,
     const SIMDVector v2
@@ -912,7 +912,7 @@ inline void SIMDCALL AabbTests::ExpandTriangle(
     return Vector3Cross(VectorSubtract(v1, v0), VectorSubtract(v2, v0));
 }
 
-[[nodiscard]] inline bool SIMDCALL TriangleTests::ContainsPoint2D(
+[[nodiscard]] NWB_INLINE bool SIMDCALL TriangleTests::ContainsPoint2D(
     const SIMDVector point,
     const SIMDVector a,
     const SIMDVector b,

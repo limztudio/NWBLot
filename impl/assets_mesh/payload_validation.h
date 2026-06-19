@@ -23,7 +23,7 @@ namespace MeshPayloadValidation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool CountFitsU32(const usize count){
+[[nodiscard]] NWB_INLINE bool CountFitsU32(const usize count){
     return count <= static_cast<usize>(Limit<u32>::s_Max);
 }
 

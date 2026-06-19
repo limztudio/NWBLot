@@ -27,7 +27,7 @@ namespace SkeletonSkinningMode{
     };
 };
 
-[[nodiscard]] inline bool ValidSkeletonSkinningMode(const u32 mode){
+[[nodiscard]] NWB_INLINE bool ValidSkeletonSkinningMode(const u32 mode){
     return mode == SkeletonSkinningMode::LinearBlend || mode == SkeletonSkinningMode::DualQuaternion;
 }
 

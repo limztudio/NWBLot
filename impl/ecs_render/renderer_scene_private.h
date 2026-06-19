@@ -26,14 +26,14 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline f32 ResolveExtentAspectRatio(const u32 width, const u32 height){
+NWB_INLINE f32 ResolveExtentAspectRatio(const u32 width, const u32 height){
     if(width != 0u && height != 0u)
         return static_cast<f32>(width) / static_cast<f32>(height);
 
     return 1.0f;
 }
 
-inline f32 ResolveFramebufferAspectRatio(const Core::FramebufferInfoEx& framebufferInfo){
+NWB_INLINE f32 ResolveFramebufferAspectRatio(const Core::FramebufferInfoEx& framebufferInfo){
     return ResolveExtentAspectRatio(framebufferInfo.width, framebufferInfo.height);
 }
 

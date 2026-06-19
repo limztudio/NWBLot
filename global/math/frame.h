@@ -14,15 +14,15 @@
 static constexpr f32 s_FrameDirectionEpsilon = 0.00000001f;
 static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
 
-[[nodiscard]] inline bool FrameValidDirection(const SIMDVector value){
+[[nodiscard]] NWB_INLINE bool FrameValidDirection(const SIMDVector value){
     return VectorIsFinite(value, 0x7u) && VectorGetX(Vector3LengthSq(value)) > s_FrameDirectionEpsilon;
 }
 
-[[nodiscard]] inline SIMDVector FrameNormalizeDirection(const SIMDVector value, const SIMDVector fallback){
+[[nodiscard]] NWB_INLINE SIMDVector FrameNormalizeDirection(const SIMDVector value, const SIMDVector fallback){
     return Vector3NormalizeOr(value, fallback, s_FrameDirectionEpsilon);
 }
 
-[[nodiscard]] inline SIMDVector FrameProjectOntoPlane(const SIMDVector value, const SIMDVector normal){
+[[nodiscard]] NWB_INLINE SIMDVector FrameProjectOntoPlane(const SIMDVector value, const SIMDVector normal){
     return VectorMultiplyAdd(
         normal,
         VectorReplicate(-VectorGetX(Vector3Dot(value, normal))),
@@ -30,7 +30,7 @@ static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
     );
 }
 
-[[nodiscard]] inline SIMDVector FrameFallbackTangent(const SIMDVector normal){
+[[nodiscard]] NWB_INLINE SIMDVector FrameFallbackTangent(const SIMDVector normal){
     const SIMDVector axis = Abs(VectorGetZ(normal)) < 0.999f
         ? VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
         : VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
@@ -38,13 +38,13 @@ static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
     return FrameNormalizeDirection(Vector3Cross(axis, normal), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
 }
 
-[[nodiscard]] inline f32 FrameTangentHandedness(const f32 handedness, const f32 fallbackHandedness){
+[[nodiscard]] NWB_INLINE f32 FrameTangentHandedness(const f32 handedness, const f32 fallbackHandedness){
     if(Abs(handedness) > s_FrameHandednessEpsilon)
         return handedness < 0.0f ? -1.0f : 1.0f;
     return fallbackHandedness < 0.0f ? -1.0f : 1.0f;
 }
 
-[[nodiscard]] inline SIMDVector FrameResolveTangent(const SIMDVector normal, const SIMDVector tangent, const SIMDVector fallbackTangent){
+[[nodiscard]] NWB_INLINE SIMDVector FrameResolveTangent(const SIMDVector normal, const SIMDVector tangent, const SIMDVector fallbackTangent){
     const SIMDVector safeFallbackTangent = FrameFallbackTangent(normal);
 
     SIMDVector projectedTangent = VectorIsFinite(tangent, 0x7u)
@@ -63,7 +63,7 @@ static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
     return FrameNormalizeDirection(projectedTangent, safeFallbackTangent);
 }
 
-[[nodiscard]] inline SIMDVector FrameResolveBitangent(const SIMDVector normal, const SIMDVector tangent, const SIMDVector fallbackBitangent){
+[[nodiscard]] NWB_INLINE SIMDVector FrameResolveBitangent(const SIMDVector normal, const SIMDVector tangent, const SIMDVector fallbackBitangent){
     const SIMDVector safeFallbackBitangent = FrameNormalizeDirection(
         VectorIsFinite(fallbackBitangent, 0x7u)
             ? FrameProjectOntoPlane(fallbackBitangent, normal)
@@ -77,7 +77,7 @@ static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
     return FrameNormalizeDirection(bitangent, safeFallbackBitangent);
 }
 
-inline void FrameOrthonormalize(SIMDVector& normal, SIMDVector& tangent, const SIMDVector fallbackNormal, const SIMDVector fallbackTangent){
+NWB_INLINE void FrameOrthonormalize(SIMDVector& normal, SIMDVector& tangent, const SIMDVector fallbackNormal, const SIMDVector fallbackTangent){
     normal = FrameNormalizeDirection(normal, FrameNormalizeDirection(fallbackNormal, VectorSet(0.0f, 0.0f, 1.0f, 0.0f)));
     tangent = VectorSetW(
         FrameResolveTangent(normal, tangent, fallbackTangent),

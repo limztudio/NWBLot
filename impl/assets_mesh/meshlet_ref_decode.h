@@ -17,11 +17,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline constexpr bool MeshletRefDeltaWidthValid(const MeshletRefDeltaWidth::Enum width){
+[[nodiscard]] constexpr NWB_INLINE bool MeshletRefDeltaWidthValid(const MeshletRefDeltaWidth::Enum width){
     return width == MeshletRefDeltaWidth::U8 || width == MeshletRefDeltaWidth::U16 || width == MeshletRefDeltaWidth::U32;
 }
 
-[[nodiscard]] inline constexpr u32 MeshletRefDeltaByteWidth(const MeshletRefDeltaWidth::Enum width){
+[[nodiscard]] constexpr NWB_INLINE u32 MeshletRefDeltaByteWidth(const MeshletRefDeltaWidth::Enum width){
     return width == MeshletRefDeltaWidth::U8
         ? 1u
         : width == MeshletRefDeltaWidth::U16
@@ -30,7 +30,7 @@ NWB_IMPL_BEGIN
     ;
 }
 
-[[nodiscard]] inline bool MeshletRefDeltaByteCount(
+[[nodiscard]] NWB_INLINE bool MeshletRefDeltaByteCount(
     const u32 refCount,
     const MeshletRefDeltaWidth::Enum width,
     usize& outByteCount
@@ -47,7 +47,7 @@ NWB_IMPL_BEGIN
     return true;
 }
 
-[[nodiscard]] inline bool AddMeshletRefDeltaByteCount(
+[[nodiscard]] NWB_INLINE bool AddMeshletRefDeltaByteCount(
     usize& inOutByteCount,
     const u32 refCount,
     const MeshletRefDeltaWidth::Enum width
@@ -82,7 +82,7 @@ struct MeshletAttributeRefEncodingLayout{
     usize byteCount = 0u;
 };
 
-[[nodiscard]] inline bool AddMeshletRefLayoutChannel(
+[[nodiscard]] NWB_INLINE bool AddMeshletRefLayoutChannel(
     const usize baseOffset,
     const u32 refCount,
     const MeshletRefDeltaWidth::Enum width,
@@ -96,7 +96,7 @@ struct MeshletAttributeRefEncodingLayout{
     return AddMeshletRefDeltaByteCount(inOutRelativeOffset, refCount, width);
 }
 
-[[nodiscard]] inline bool BuildMeshletPositionRefEncodingLayout(
+[[nodiscard]] NWB_INLINE bool BuildMeshletPositionRefEncodingLayout(
     const MeshletDesc& meshlet,
     const bool skinRequired,
     MeshletPositionRefEncodingLayout& outLayout
@@ -128,7 +128,7 @@ struct MeshletAttributeRefEncodingLayout{
     );
 }
 
-[[nodiscard]] inline bool BuildMeshletAttributeRefEncodingLayout(
+[[nodiscard]] NWB_INLINE bool BuildMeshletAttributeRefEncodingLayout(
     const MeshletDesc& meshlet,
     MeshletAttributeRefEncodingLayout& outLayout
 ){
@@ -170,7 +170,7 @@ struct MeshletAttributeRefEncodingLayout{
     ;
 }
 
-[[nodiscard]] inline bool MeshletEncodedPositionRefByteCount(
+[[nodiscard]] NWB_INLINE bool MeshletEncodedPositionRefByteCount(
     const MeshletDesc& meshlet,
     const bool skinRequired,
     usize& outByteCount
@@ -183,7 +183,7 @@ struct MeshletAttributeRefEncodingLayout{
     return true;
 }
 
-[[nodiscard]] inline bool MeshletEncodedAttributeRefByteCount(const MeshletDesc& meshlet, usize& outByteCount){
+[[nodiscard]] NWB_INLINE bool MeshletEncodedAttributeRefByteCount(const MeshletDesc& meshlet, usize& outByteCount){
     MeshletAttributeRefEncodingLayout layout;
     if(!BuildMeshletAttributeRefEncodingLayout(meshlet, layout))
         return false;
@@ -192,7 +192,7 @@ struct MeshletAttributeRefEncodingLayout{
     return true;
 }
 
-[[nodiscard]] inline bool DecodeMeshletRefDelta(
+[[nodiscard]] NWB_INLINE bool DecodeMeshletRefDelta(
     const u8* const bytes,
     const usize byteCount,
     const usize byteOffset,
@@ -220,7 +220,7 @@ struct MeshletAttributeRefEncodingLayout{
     return true;
 }
 
-[[nodiscard]] inline bool DecodeMeshletRefDeltaAtIndex(
+[[nodiscard]] NWB_INLINE bool DecodeMeshletRefDeltaAtIndex(
     const u8* const bytes,
     const usize byteCount,
     const usize channelByteOffset,
@@ -251,7 +251,7 @@ struct MeshletPositionRefDecodeChannel{
     u32 MeshletPositionStreamRef::* indexMember = nullptr;
 };
 
-[[nodiscard]] inline bool DecodeMeshletPositionRefChannel(
+[[nodiscard]] NWB_INLINE bool DecodeMeshletPositionRefChannel(
     const u8* const bytes,
     const usize byteCount,
     const MeshletPositionRefDecodeChannel& channel,
@@ -266,7 +266,7 @@ struct MeshletPositionRefDecodeChannel{
     return true;
 }
 
-[[nodiscard]] inline bool DecodeMeshletAttributeRefChannel(
+[[nodiscard]] NWB_INLINE bool DecodeMeshletAttributeRefChannel(
     const u8* const bytes,
     const usize byteCount,
     const MeshletAttributeRefDecodeChannel& channel,
@@ -281,7 +281,7 @@ struct MeshletPositionRefDecodeChannel{
     return true;
 }
 
-[[nodiscard]] inline bool DecodeMeshletPositionRef(
+[[nodiscard]] NWB_INLINE bool DecodeMeshletPositionRef(
     const u8* const bytes,
     const usize byteCount,
     const MeshletDesc& meshlet,
@@ -319,7 +319,7 @@ struct MeshletPositionRefDecodeChannel{
     return DecodeMeshletPositionRefChannel(bytes, byteCount, skinChannel, localPositionIndex, outRef);
 }
 
-[[nodiscard]] inline bool DecodeMeshletAttributeRef(
+[[nodiscard]] NWB_INLINE bool DecodeMeshletAttributeRef(
     const u8* const bytes,
     const usize byteCount,
     const MeshletDesc& meshlet,

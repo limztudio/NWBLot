@@ -55,7 +55,7 @@ namespace MaterialPipelineCsgMode{
     };
 };
 
-[[nodiscard]] inline bool MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pass){
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
@@ -66,7 +66,7 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgShaderVariant(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgShaderVariant(const MaterialPipelinePass::Enum pass){
     switch(pass){
     case MaterialPipelinePass::Opaque:
     case MaterialPipelinePass::CsgReceiverSurface:
@@ -76,7 +76,7 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgClip(const MaterialPipelinePass::Enum pass, const bool transparent){
+[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgClip(const MaterialPipelinePass::Enum pass, const bool transparent){
     switch(pass){
     case MaterialPipelinePass::Opaque:
         return !transparent;
@@ -87,11 +87,11 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgReceiverSurface(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgReceiverSurface(const MaterialPipelinePass::Enum pass){
     return pass == MaterialPipelinePass::CsgReceiverSurface;
 }
 
-[[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgIntervalSample(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgIntervalSample(const MaterialPipelinePass::Enum pass){
     return pass == MaterialPipelinePass::Opaque || MaterialPipelinePassUsesRendererAvboit(pass);
 }
 
@@ -124,7 +124,7 @@ struct MaterialPipelineCsgBindingUse{
     bool intervalSample = false;
 };
 
-[[nodiscard]] inline MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(
+[[nodiscard]] NWB_INLINE MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(
     const MaterialPipelineKey& pipelineKey,
     const MaterialPipelinePass::Enum pass
 ){

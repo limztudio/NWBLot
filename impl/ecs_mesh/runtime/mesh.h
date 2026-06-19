@@ -49,10 +49,10 @@ struct RuntimeMeshHandle{
     void reset(){ value = 0; }
 };
 
-[[nodiscard]] inline bool operator==(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){
+[[nodiscard]] NWB_INLINE bool operator==(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){
     return lhs.value == rhs.value;
 }
-[[nodiscard]] inline bool operator!=(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){
+[[nodiscard]] NWB_INLINE bool operator!=(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){
     return !(lhs == rhs);
 }
 

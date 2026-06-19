@@ -39,8 +39,8 @@ struct Object{
     explicit operator T*()const noexcept{ return static_cast<T*>(pointer); }
 };
 
-inline bool operator==(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer == rhs.integer; }
-inline bool operator!=(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer != rhs.integer; }
+NWB_INLINE bool operator==(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer == rhs.integer; }
+NWB_INLINE bool operator!=(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer != rhs.integer; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

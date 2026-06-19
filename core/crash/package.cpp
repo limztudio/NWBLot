@@ -299,6 +299,8 @@ static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
         return false;
     if(HasCallstack(request) && !WriteCrashTextFile(packageDirectory / PackageNames::s_CallstackFileName, BuildCallstackText(arena, request)))
         return false;
+    if(request.gpuReport[0] != '\0' && !WriteTextFile(packageDirectory / PackageNames::s_GpuCrashReportFileName, AStringView(request.gpuReport)))
+        return false;
     return true;
 }
 

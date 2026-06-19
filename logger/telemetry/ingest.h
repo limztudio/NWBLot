@@ -34,18 +34,21 @@ struct TelemetryIngestResult{
         , rawPath(arena)
         , jsonPath(arena)
         , perfCsvPath(arena)
+        , graphPath(arena)
     {}
 
     LogString message;
     Path rawPath;
     Path jsonPath;
     Path perfCsvPath;
+    Path graphPath;
     Type::Enum type = Type::Info;
     Telemetry::DecodeResult decode;
     TelemetryReportSummary summary;
     bool storedRaw = false;
     bool wroteJson = false;
     bool wrotePerfCsv = false;
+    bool wroteGraph = false;
 
     [[nodiscard]] bool ok()const{
         return storedRaw && decode.ok() && wroteJson && wrotePerfCsv && summary.parseFailureCount == 0u;

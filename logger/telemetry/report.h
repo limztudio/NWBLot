@@ -65,10 +65,12 @@ struct TelemetryReport{
     TelemetryReportSummary summary;
     AString<TelemetryArena> json;
     AString<TelemetryArena> perfCsv;
+    AString<TelemetryArena> graph;
 
     explicit TelemetryReport(TelemetryArena& arena)
         : json(arena)
         , perfCsv(arena)
+        , graph(arena)
     {}
 };
 

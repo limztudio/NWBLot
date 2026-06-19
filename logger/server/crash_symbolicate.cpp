@@ -91,6 +91,10 @@ static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, 
         outReport += "exception=manual diagnostic dump\n";
         return;
     }
+    if(summary.reasonKind == "gpu_crash"){
+        outReport += "exception=GPU device removed / crash\n";
+        return;
+    }
 
     outReport += "exception=";
     outReport += summary.reasonKind;
@@ -293,6 +297,7 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
         detailReport += "status=not_decoded\nresolver=unknown\ndetail=unknown crash platform\n";
     }
 
+    Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_GpuCrashReportFileName, "gpu_crash");
     Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_CpuContextFileName, "cpu_context");
     Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note");
     Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection");

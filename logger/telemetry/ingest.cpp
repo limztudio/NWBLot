@@ -30,6 +30,7 @@ inline constexpr const char* s_ReportDirectoryName = "reports";
 inline constexpr const char* s_RawStreamFileExtension = ".nwbs";
 inline constexpr const char* s_JsonFileExtension = ".json";
 inline constexpr const char* s_PerfCsvFileExtension = ".perf.csv";
+inline constexpr const char* s_GraphFileExtension = ".graph.dot";
 static Atomic<u64> s_TelemetryUploadCounter{ 1u };
 
 struct ByteView{
@@ -136,6 +137,8 @@ TelemetryIngestResult ProcessTelemetryUpload(
     result.jsonPath.replace_extension(__hidden_telemetry_ingest::s_JsonFileExtension);
     result.perfCsvPath = reportDirectory / uploadStem;
     result.perfCsvPath.replace_extension(__hidden_telemetry_ingest::s_PerfCsvFileExtension);
+    result.graphPath = reportDirectory / uploadStem;
+    result.graphPath.replace_extension(__hidden_telemetry_ingest::s_GraphFileExtension);
 
     result.storedRaw = __hidden_telemetry_ingest::StoreRawTelemetry(result.rawPath, bytes, byteCount);
     if(!result.storedRaw){
@@ -167,6 +170,8 @@ TelemetryIngestResult ProcessTelemetryUpload(
     result.summary = report.summary;
     result.wroteJson = WriteTextFile(result.jsonPath, AStringView(report.json.data(), report.json.size()));
     result.wrotePerfCsv = WriteTextFile(result.perfCsvPath, AStringView(report.perfCsv.data(), report.perfCsv.size()));
+    if(!report.graph.empty())
+        result.wroteGraph = WriteTextFile(result.graphPath, AStringView(report.graph.data(), report.graph.size()));
     if(!result.wroteJson || !result.wrotePerfCsv){
         result.message = StringFormat(
             arena,

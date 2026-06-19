@@ -59,6 +59,8 @@ const char* ReasonKindName(const u32 reasonKind)noexcept{
         return "terminate";
     case CrashReasonKind::ManualDump:
         return s_ManualDumpCategory;
+    case CrashReasonKind::GpuCrash:
+        return s_GpuCrashCategory;
     default:
         return "unknown";
     }
@@ -82,6 +84,8 @@ static AStringView EventNameForRequest(const CrashReasonKind::Enum reasonKind, c
         return AStringView(DiagnosticEventName::s_Assert);
     if(options.triggerCategory == DiagnosticEventCategory::s_FatalAssert)
         return AStringView(DiagnosticEventName::s_Assert);
+    if(reasonKind == CrashReasonKind::GpuCrash)
+        return AStringView(DiagnosticEventName::s_GpuCrash);
     if(reasonKind == CrashReasonKind::ManualDump)
         return AStringView(DiagnosticEventName::s_ManualDump);
     return AStringView(DiagnosticEventName::s_Crash);
@@ -187,6 +191,7 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     CopyFixedBuffer(request.triggerExpression, options.triggerExpression);
     CopyFixedBuffer(request.triggerMessage, options.triggerMessage);
     CopyFixedBuffer(request.triggerFile, options.triggerFile);
+    CopyFixedBuffer(request.gpuReport, options.gpuReport);
 
     const CrashDumpTransportStatus::Enum transportStatus = RequestCrashHandler(request, options.waitMilliseconds);
     if(transportStatus == CrashDumpTransportStatus::Failed)

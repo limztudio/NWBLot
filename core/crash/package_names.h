@@ -37,6 +37,7 @@ inline constexpr const char* s_EmergencyFileName = "emergency.txt";
 inline constexpr const char* s_ArtifactStrategyFileName = "artifact_strategy.txt";
 inline constexpr const char* s_CpuContextFileName = "cpu_context.txt";
 inline constexpr const char* s_CallstackFileName = "callstack.txt";
+inline constexpr const char* s_GpuCrashReportFileName = "gpu_crash.txt";
 inline constexpr const char* s_SymbolicationFileName = "symbolication.txt";
 inline constexpr const char* s_ProcessDumpFileName = "process.dmp";
 inline constexpr const char* s_UploadAttemptFileName = "upload_attempt.txt";

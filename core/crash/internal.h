@@ -44,6 +44,7 @@ inline constexpr usize s_MaxShortText = 64u;
 inline constexpr usize s_MaxMediumText = 256u;
 inline constexpr usize s_MaxPathText = 1024u;
 inline constexpr usize s_MaxUrlText = 1024u;
+inline constexpr usize s_MaxGpuReportText = 8192u;
 inline constexpr u32 s_ManualDumpExceptionCode = 0xE0425742u;
 inline constexpr u32 s_PlatformCrashHandlerWaitMilliseconds = 3000u;
 inline constexpr u32 s_ManualCrashDumpWaitMilliseconds = 10000u;
@@ -66,6 +67,7 @@ inline constexpr const char* s_RequestFdArgument = "--request-fd";
 inline constexpr const char* s_AckFdArgument = "--ack-fd";
 inline constexpr const char* s_DefaultBreadcrumbCategory = "general";
 inline constexpr const char* s_ManualDumpCategory = "manual_dump";
+inline constexpr const char* s_GpuCrashCategory = "gpu_crash";
 
 
 template<typename ArenaT>
@@ -90,6 +92,7 @@ namespace CrashReasonKind{
         PosixSignal,
         Terminate,
         ManualDump,
+        GpuCrash,
     };
 };
 
@@ -154,6 +157,7 @@ struct CrashRequest{
     char triggerExpression[s_MaxMediumText] = {};
     char triggerMessage[s_MaxMediumText] = {};
     char triggerFile[s_MaxPathText] = {};
+    char gpuReport[s_MaxGpuReportText] = {};
     u32 metadataCount = 0u;
     u32 breadcrumbCount = 0u;
     FixedMetadata metadata[s_MaxMetadata] = {};
@@ -182,6 +186,7 @@ struct CrashDumpRequestOptions{
     AStringView triggerExpression;
     AStringView triggerMessage;
     AStringView triggerFile;
+    AStringView gpuReport;
     u64 triggerInstructionPointer = 0u;
     u32 triggerLine = 0u;
     u32 callstackFramesToSkip = 0u;

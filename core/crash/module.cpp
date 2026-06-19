@@ -125,7 +125,7 @@ static bool __hidden_reserve_diagnostic_capture(const DiagnosticEventRecord& rec
     return true;
 }
 
-NWB_NOINLINE static CrashDumpResult __hidden_capture_crash_dump(const AStringView category, const AStringView message, Detail::CrashDumpRequestOptions& options){
+NWB_NOINLINE static CrashDumpResult __hidden_capture_crash_dump(const Detail::CrashReasonKind::Enum reasonKind, const AStringView category, const AStringView message, Detail::CrashDumpRequestOptions& options){
     const AStringView breadcrumbCategory = category.empty() ? AStringView(Detail::s_ManualDumpCategory) : category;
 
     {
@@ -147,7 +147,7 @@ NWB_NOINLINE static CrashDumpResult __hidden_capture_crash_dump(const AStringVie
     Detail::ManualDumpContextStorage contextStorage;
     Detail::CaptureManualDumpContext(options, contextStorage);
 
-    return Detail::RequestCrashDump(Detail::CrashReasonKind::ManualDump, 0u, options);
+    return Detail::RequestCrashDump(reasonKind, 0u, options);
 }
 
 NWB_NOINLINE static void __hidden_capture_diagnostic_crash(const DiagnosticEventRecord& record)noexcept{
@@ -164,7 +164,7 @@ NWB_NOINLINE static void __hidden_capture_diagnostic_crash(const DiagnosticEvent
         options.callstackFramesToSkip = 5u;
         if(!__hidden_reserve_diagnostic_capture(record, options.event, options.triggerCategory))
             return;
-        const CrashDumpResult result = __hidden_capture_crash_dump(options.triggerCategory, options.triggerMessage, options);
+        const CrashDumpResult result = __hidden_capture_crash_dump(Detail::CrashReasonKind::ManualDump, options.triggerCategory, options.triggerMessage, options);
         if(record.terminatesProcess && __hidden_diagnostic_result_can_suppress_duplicate_platform_crash(result))
             Detail::SuppressNextPlatformCrashCapture();
     }
@@ -292,7 +292,13 @@ template bool InstallCrashHandler(Alloc::PersistentArena& arena, const CrashConf
 
 CrashDumpResult CaptureCrashDump(const AStringView category, const AStringView message){
     Detail::CrashDumpRequestOptions options;
-    return __hidden_crash_module::__hidden_capture_crash_dump(category, message, options);
+    return __hidden_crash_module::__hidden_capture_crash_dump(Detail::CrashReasonKind::ManualDump, category, message, options);
+}
+
+CrashDumpResult CaptureGpuCrashDump(const AStringView message){
+    Detail::CrashDumpRequestOptions options;
+    options.gpuReport = message;
+    return __hidden_crash_module::__hidden_capture_crash_dump(Detail::CrashReasonKind::GpuCrash, AStringView(Detail::s_GpuCrashCategory), message, options);
 }
 
 

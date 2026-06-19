@@ -171,6 +171,82 @@ void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphP
         summary.maxFrameGraphEdgeCount = edgeCount;
 }
 
+using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, TelemetryArena>;
+
+void AppendDotQuoted(AString<TelemetryArena>& out, const AStringView text){
+    out += '"';
+    for(const char ch : text){
+        if(ch == '\n'){
+            out += "\\n";
+            continue;
+        }
+        if(ch == '"' || ch == '\\')
+            out += '\\';
+        out += ch;
+    }
+    out += '"';
+}
+
+[[nodiscard]] const char* FrameGraphNodeShape(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
+    switch(kind){
+    case Telemetry::FrameGraphNodeKind::Resource:
+        return "ellipse";
+    case Telemetry::FrameGraphNodeKind::External:
+        return "diamond";
+    case Telemetry::FrameGraphNodeKind::Pass:
+    case Telemetry::FrameGraphNodeKind::Unknown:
+    default:
+        return "box";
+    }
+}
+
+[[nodiscard]] const char* FrameGraphEdgeLabel(const Telemetry::FrameGraphEdgeKind::Enum kind)noexcept{
+    switch(kind){
+    case Telemetry::FrameGraphEdgeKind::Reads:
+        return "reads";
+    case Telemetry::FrameGraphEdgeKind::Writes:
+        return "writes";
+    case Telemetry::FrameGraphEdgeKind::DependsOn:
+        return "dependsOn";
+    case Telemetry::FrameGraphEdgeKind::Unknown:
+    default:
+        return "";
+    }
+}
+
+// Joins the decoded frame-graph topology with per-scope timing (keyed by Name hash, which is
+// shared between graph nodes and perf-timing scopes) and emits a Graphviz DOT timed frame graph.
+void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayload& graph, const GraphTimingMap& timing, AString<TelemetryArena>& out){
+    out.clear();
+    out += "digraph frame_graph {\n";
+    out += "  rankdir=LR;\n";
+    out += "  node [shape=box, fontname=\"monospace\"];\n";
+
+    for(usize i = 0u; i < graph.nodes.size(); ++i){
+        const Telemetry::FrameGraphNodePayload& node = graph.nodes[i];
+
+        AString<TelemetryArena> label(arena);
+        label.append(node.label.data(), node.label.size());
+        const auto timed = timing.find(node.name);
+        if(timed != timing.end()){
+            label += '\n';
+            label += StringFormat(arena, "{:.3f} ms", timed.value() * 1000.0);
+        }
+
+        AppendFormat(arena, out, "  n{} [shape={}, label=", i, FrameGraphNodeShape(node.kind));
+        AppendDotQuoted(out, AStringView(label.data(), label.size()));
+        out += "];\n";
+    }
+
+    for(const Telemetry::FrameGraphEdgePayload& edge : graph.edges){
+        AppendFormat(arena, out, "  n{} -> n{} [label=", edge.fromNodeIndex, edge.toNodeIndex);
+        AppendDotQuoted(out, AStringView(FrameGraphEdgeLabel(edge.kind)));
+        out += "];\n";
+    }
+
+    out += "}\n";
+}
+
 void BuildJson(TelemetryArena& arena, const TelemetryReportSummary& summary, AString<TelemetryArena>& out){
     out.clear();
     out += "{\n";
@@ -267,6 +343,10 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
         return false;
 
     outReport.summary.eventCount = events.eventCount();
+
+    __hidden_telemetry_report::GraphTimingMap timingByScope(0, Hasher<Name>(), EqualTo<Name>(), arena);
+    usize lastFrameGraphIndex = events.eventCount();
+
     for(usize i = 0u; i < events.eventCount(); ++i){
         const Telemetry::EventRecord* const event = events.eventAt(i);
         if(!event){
@@ -298,6 +378,7 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
             }
             __hidden_telemetry_report::AddTiming(outReport.summary, payload);
             __hidden_telemetry_report::AppendPerfCsvRow(arena, outReport.perfCsv, payload.source, payload);
+            timingByScope.insert_or_assign(payload.scopeName, payload.stats.seconds);
             break;
         }
         case Telemetry::EventKind::MemoryFrame: {
@@ -316,10 +397,20 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
                 break;
             }
             __hidden_telemetry_report::AddFrameGraph(outReport.summary, payload);
+            lastFrameGraphIndex = i;
             break;
         }
         default:
             break;
+        }
+    }
+
+    if(lastFrameGraphIndex < events.eventCount()){
+        const Telemetry::EventRecord* const graphEvent = events.eventAt(lastFrameGraphIndex);
+        if(graphEvent){
+            Telemetry::FrameGraphPayload graphPayload(arena);
+            if(Telemetry::ParseFrameGraphPayload(arena, graphEvent->payload.data(), graphEvent->payload.size(), graphPayload))
+                __hidden_telemetry_report::BuildTimedGraphDot(arena, graphPayload, timingByScope, outReport.graph);
         }
     }
 

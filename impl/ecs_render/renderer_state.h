@@ -295,6 +295,12 @@ private:
     usize m_sceneBvhNodeCapacity = 0u;
     usize m_sceneInstanceCapacity = 0u;
     u32 m_sceneBvhInstanceCount = 0u;
+    Core::BindingLayoutHandle m_swShadowBindingLayout;          // software (compute) shadow traversal pass
+    Core::ShaderHandle m_swShadowShader;
+    Core::ComputePipelineHandle m_swShadowPipeline;
+    Core::BindingSetHandle m_swShadowBindingSet;
+    const Core::Buffer* m_swShadowBindingSetSceneNodes = nullptr;
+    const Core::Texture* m_swShadowBindingSetVisibility = nullptr;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;
     bool m_bvhSortPipelineFailed = false;
@@ -302,6 +308,8 @@ private:
     bool m_bvhBuildPipelineFailed = false;
     bool m_bvhBuildSelfTestDone = false;
     bool m_sceneBvhSelfTestDone = false;
+    bool m_swShadowPipelineFailed = false;
+    bool m_swShadowDispatchLogged = false;
 };
 
 

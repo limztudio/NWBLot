@@ -331,6 +331,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
         }
+        else{
+            // No hardware ray tracing: trace the same per-light occlusion against the software scene/instance
+            // BVH built earlier this frame. Returns false (and falls through to the all-lit clear) when there
+            // is no software BVH to trace this frame.
+            shadowVisibilityWritten = m_raytracingSystem.renderGpuBvhShadowVisibility(*commandList, deferredTargets);
+        }
         // The deferred lighting pass always samples the visibility image; clear it to "all lit" on any frame neither shadow backend wrote it so lighting never reads stale or undefined occlusion.
         if(!shadowVisibilityWritten)
             m_raytracingSystem.clearShadowVisibility(*commandList, deferredTargets);

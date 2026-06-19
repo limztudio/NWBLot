@@ -28,6 +28,7 @@ namespace AssetsGraphicsShadow{
 inline constexpr Name s_RaygenShaderName("engine/graphics/shadow/shadow_raygen");
 inline constexpr Name s_MissShaderName("engine/graphics/shadow/shadow_miss");
 inline constexpr Name s_ClosestHitShaderName("engine/graphics/shadow/shadow_chit");
+inline constexpr Name s_SwTraversalShaderName("engine/graphics/shadow/shadow_sw_traversal_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

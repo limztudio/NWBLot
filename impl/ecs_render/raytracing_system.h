@@ -34,12 +34,15 @@ public:
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
     [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    [[nodiscard]] bool renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
 
 
 private:
     [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
     [[nodiscard]] bool ensureShadowPipeline();
     [[nodiscard]] bool ensureShadowBindingSet(DeferredFrameTargets& targets);
+    [[nodiscard]] bool ensureSwShadowPipeline();
+    [[nodiscard]] bool ensureSwShadowBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureBvhSortPipeline();
     [[nodiscard]] bool ensureBvhSortBuffers(usize paddedCount);
     [[nodiscard]] bool bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount);

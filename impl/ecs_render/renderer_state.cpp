@@ -209,9 +209,17 @@ void RendererRayTracingState::invalidateResources(){
     m_sceneBvhNodeCapacity = 0u;
     m_sceneInstanceCapacity = 0u;
     m_sceneBvhInstanceCount = 0u;
+    m_swShadowBindingLayout.reset();
+    m_swShadowShader.reset();
+    m_swShadowPipeline.reset();
+    m_swShadowBindingSet.reset();
+    m_swShadowBindingSetSceneNodes = nullptr;
+    m_swShadowBindingSetVisibility = nullptr;
     m_shadowPipelineFailed = false;
     m_bvhSortPipelineFailed = false;
     m_bvhBuildPipelineFailed = false;
+    m_swShadowPipelineFailed = false;
+    m_swShadowDispatchLogged = false;
 }
 
 

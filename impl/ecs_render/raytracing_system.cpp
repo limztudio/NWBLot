@@ -8,6 +8,7 @@
 #include "arena_names.h"
 
 #include <impl/assets/graphics/shadow/binding_slots.h>
+#include <impl/assets/graphics/shadow/sw_binding_slots.h>
 #include <impl/assets/graphics/shadow/names.h>
 #include <impl/assets/graphics/bvh/binding_slots.h>
 #include <impl/assets/graphics/bvh/names.h>
@@ -89,6 +90,15 @@ struct SceneSwBvhInstanceGpu{
     u32 primitiveCount = 0u;      // triangle count of the referenced mesh
 };
 static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
+
+// CPU mirror of the software shadow traversal push constants (see shadow_sw_traversal_cs.slang).
+struct SwShadowPushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 instanceCount = 0u;
+    u32 pad0 = 0u;
+};
+static_assert(sizeof(SwShadowPushConstants) == sizeof(u32) * 4u, "SwShadowPushConstants must match the shader push-constant layout");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -545,6 +555,56 @@ void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandL
     commandList.clearTextureUInt(targets.shadowVisibility.get(), ECSRenderDetail::s_FramebufferSubresources, 0xFFFFFFFFu);
 }
 
+bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    // Software shadow traversal — the no-hardware-ray-tracing fallback that consumes the per-frame software
+    // scene/instance BVH (buildSceneSwBvh) + the per-mesh BVHs. When hardware accel structs are available
+    // renderShadowVisibility handles shadows and this path stays idle.
+    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+        return false;
+    if(!targets.shadowVisibility)
+        return false;
+    // No software scene BVH this frame (no traceable instances) -> the caller clears the mask to all-lit.
+    if(!rayTracingState().m_sceneBvhNodeBuffer || rayTracingState().m_sceneBvhInstanceCount == 0u)
+        return false;
+    if(!ensureSwShadowPipeline())
+        return false;
+    if(!ensureSwShadowBindingSet(targets))
+        return false;
+
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
+
+    // The scene BVH node buffer was uploaded as a shader resource by buildSceneSwBvh; the binding set's
+    // remaining states (G-buffer SRVs, visibility UAV) are derived here in one place.
+    commandList.setResourceStatesForBindingSet(rayTracingState().m_swShadowBindingSet.get());
+    commandList.commitBarriers();
+
+    SwShadowPushConstants pushConstants;
+    pushConstants.width = targets.width;
+    pushConstants.height = targets.height;
+    pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+
+    Core::ComputeState computeState;
+    computeState.setPipeline(rayTracingState().m_swShadowPipeline.get());
+    computeState.addBindingSet(rayTracingState().m_swShadowBindingSet.get());
+    commandList.setComputeState(computeState);
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+    commandList.dispatch(
+        DivideUp(targets.width, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE)),
+        DivideUp(targets.height, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE)),
+        1u
+    );
+
+    if(!rayTracingState().m_swShadowDispatchLogged){
+        rayTracingState().m_swShadowDispatchLogged = true;
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)")
+            , static_cast<u64>(targets.width)
+            , static_cast<u64>(targets.height)
+            , static_cast<u64>(rayTracingState().m_sceneBvhInstanceCount)
+        );
+    }
+    return true;
+}
+
 bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources){
     if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
         return false;
@@ -766,6 +826,124 @@ bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targ
         return false;
     }
     rayTracingState().m_shadowBindingSetTlas = tlas;
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSwShadowPipeline(){
+    if(rayTracingState().m_swShadowPipeline)
+        return true;
+    if(rayTracingState().m_swShadowPipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_swShadowBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SW_SHADOW_BINDING_GBUFFER_NORMAL, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SW_SHADOW_BINDING_GBUFFER_DEPTH, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SW_SHADOW_BINDING_SCENE_SHADING, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_LIGHT_LIST, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_NODES, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowPushConstants)));
+
+        rayTracingState().m_swShadowBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_swShadowBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow binding layout"));
+            rayTracingState().m_swShadowPipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_swShadowShader,
+        AssetsGraphicsShadow::s_SwTraversalShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_SwShadowTraversal"
+    )){
+        rayTracingState().m_swShadowPipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_swShadowShader)
+        .addBindingLayout(rayTracingState().m_swShadowBindingLayout)
+    ;
+    rayTracingState().m_swShadowPipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_swShadowPipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
+        rayTracingState().m_swShadowPipelineFailed = true;
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& targets){
+    NWB_ASSERT(rayTracingState().m_swShadowBindingLayout);
+    NWB_ASSERT(rayTracingState().m_sceneBvhNodeBuffer);
+    NWB_ASSERT(targets.shadowVisibility);
+    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
+    NWB_ASSERT(deferredState().m_lightBuffer);
+
+    // The scene node buffer (recreated when it outgrows its capacity) and the visibility target (recreated
+    // on resize, which also resets this binding set via resetDeferredFrameTargets) are the only binding
+    // inputs that change without a full invalidate, so caching against that pair covers both rebuilds.
+    Core::Buffer* sceneNodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
+    const Core::Texture* visibilityTarget = targets.shadowVisibility.get();
+    if(
+        rayTracingState().m_swShadowBindingSet
+        && rayTracingState().m_swShadowBindingSetSceneNodes == sceneNodeBuffer
+        && rayTracingState().m_swShadowBindingSetVisibility == visibilityTarget
+    )
+        return true;
+
+    Core::BindingSetDesc bindingSetDesc(arena());
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION,
+        targets.worldPosition.get(),
+        targets.worldPositionFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SW_SHADOW_BINDING_GBUFFER_NORMAL,
+        targets.normal.get(),
+        targets.normalFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SW_SHADOW_BINDING_GBUFFER_DEPTH,
+        targets.depth.get(),
+        targets.depthFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SW_SHADOW_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_NODES, sceneNodeBuffer));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT,
+        targets.shadowVisibility.get(),
+        targets.shadowVisibilityFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+
+    auto* device = graphics().getDevice();
+    rayTracingState().m_swShadowBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_swShadowBindingLayout);
+    if(!rayTracingState().m_swShadowBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow binding set"));
+        rayTracingState().m_swShadowBindingSetSceneNodes = nullptr;
+        rayTracingState().m_swShadowBindingSetVisibility = nullptr;
+        return false;
+    }
+    rayTracingState().m_swShadowBindingSetSceneNodes = sceneNodeBuffer;
+    rayTracingState().m_swShadowBindingSetVisibility = visibilityTarget;
     return true;
 }
 

@@ -2201,6 +2201,7 @@ public:
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue);
     bool isGpuCrashDiagnosticsEnabled(){ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
     [[nodiscard]] GpuCrashTracker& getGpuCrashTracker(){ return m_gpuCrashTracker; }
+    void captureGpuCrash(AStringView context);
 
     void queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value);
     void queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value);
@@ -2318,6 +2319,7 @@ private:
     // GPU crash tracker must be first due to reverse destruction order
     // Queues will destroy CommandLists which will unregister from m_gpuCrashTracker in their destructors
     bool m_gpuCrashDiagnosticsEnabled = false;
+    bool m_gpuCrashCaptured = false;
     GpuCrashTracker m_gpuCrashTracker;
 
     VulkanContext m_context;

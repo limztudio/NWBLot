@@ -1793,7 +1793,7 @@ bool BackendContext::createDevice(){
         registerDeviceExtension(m_enabledExtensions.device, name, resolveDeviceExtensionFeature(name));
     for(const auto& name : m_deviceParams.optionalBackendDeviceExtensions)
         registerDeviceExtension(m_optionalExtensions.device, name, resolveDeviceExtensionFeature(name));
-    if(m_deviceParams.enableDebugRuntime && m_deviceParams.enableGpuCrashDiagnostics)
+    if(m_deviceParams.enableGpuCrashDiagnostics)
         m_optionalExtensions.device.emplace(GraphicsString(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
 
     m_swapChainState.backBufferFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
@@ -1814,12 +1814,6 @@ bool BackendContext::createDevice(){
 
     auto vecInstanceExt = VulkanDetail::StringSetToVector(m_enabledExtensions.instance, scratchArena);
     auto vecDeviceExt = VulkanDetail::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
-    const bool gpuCrashCheckpointsEnabled =
-        m_deviceParams.enableDebugRuntime
-        && isDeviceExtensionEnabled(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME)
-    ;
-    if(m_deviceParams.enableDebugRuntime && m_deviceParams.enableGpuCrashDiagnostics && !gpuCrashCheckpointsEnabled)
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GPU crash diagnostic checkpoints are disabled because VK_NV_device_diagnostic_checkpoints is unavailable."));
 
     DeviceDesc deviceDesc(m_allocator, m_threadPool);
     deviceDesc.instance = m_vulkanInstance;
@@ -1845,7 +1839,7 @@ bool BackendContext::createDevice(){
     deviceDesc.meshTaskShaderSupported = m_meshTaskShaderSupported;
     deviceDesc.rayTracingSpheresSupported = m_rayTracingSpheresSupported;
     deviceDesc.rayTracingLinearSweptSpheresSupported = m_rayTracingLinearSweptSpheresSupported;
-    deviceDesc.gpuCrashDiagnosticsEnabled = m_deviceParams.enableDebugRuntime && m_deviceParams.enableGpuCrashDiagnostics && gpuCrashCheckpointsEnabled;
+    deviceDesc.gpuCrashDiagnosticsEnabled = m_deviceParams.enableGpuCrashDiagnostics;
     deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
     deviceDesc.vulkanLibraryName = m_deviceParams.backendLibraryName;
     deviceDesc.pipelineCacheDirectory = m_deviceParams.pipelineCacheDirectory;

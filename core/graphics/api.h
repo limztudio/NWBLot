@@ -3110,7 +3110,7 @@ struct InstanceParameters{
     bool enableDebugRuntime = false;
     bool enableWarningsAsErrors = false;
     bool headlessDevice = false;
-    bool enableGpuCrashDiagnostics = false;
+    bool enableGpuCrashDiagnostics = true;
     bool logBufferLifetime = false;
     bool enablePerMonitorDPI = false;
 

@@ -878,7 +878,7 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
 
     // Logging itself formats/allocates; never let it abort the crash path.
     try{
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), StringConvert(report.context.c_str()), StringConvert(report.details.c_str()));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), StringConvert(report.context.c_str()), StringConvert(report.details.c_str()));
     }
     catch(...){
     }

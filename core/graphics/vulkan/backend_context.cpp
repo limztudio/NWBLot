@@ -7,6 +7,7 @@
 #include "aftermath.h"
 
 #include <core/common/log.h>
+#include <global/environment.h>
 
 #include <sstream>
 
@@ -41,6 +42,29 @@ static ScratchStringStream MakeScratchStringStream(Alloc::ScratchArena& arena){
 static ScratchString MakeScratchString(Alloc::ScratchArena& arena, const AStringView text){
     return ScratchString(text, arena);
 }
+
+#if defined(NWB_GPU_FAULT_INJECTION)
+static bool IsDisabledEnvironmentFlagValue(const AStringView value){
+    return value.empty()
+        || value == "0"
+        || value == "false"
+        || value == "False"
+        || value == "FALSE"
+        || value == "off"
+        || value == "Off"
+        || value == "OFF"
+    ;
+}
+
+static bool IsGpuFaultInjectionRequested(){
+    Alloc::ScratchArena arena(VulkanArenaScope::s_DeviceExtensionSetupArena, 1024);
+    ScratchString value(arena);
+    if(!ReadEnvironmentVariable("NWB_DEBUG_GPU_FAULT", value))
+        return false;
+
+    return !IsDisabledEnvironmentFlagValue(AStringView(value.data(), value.size()));
+}
+#endif
 
 template<typename Set>
 static Vector<const char*, Alloc::ScratchArena> StringSetToVector(const Set& set, Alloc::ScratchArena& arena){
@@ -1892,7 +1916,8 @@ bool BackendContext::createDevice(){
     // DEBUG / TEST ONLY (compiled only when NWB_ENABLE_GPU_FAULT_INJECTION is configured): once the device is
     // created, deterministically fault the GPU to exercise the device-lost -> GPU crash capture path. Done here
     // rather than per-frame so it does not depend on the render loop running.
-    m_rhiDevice->debugTriggerGpuFault();
+    if(VulkanDetail::IsGpuFaultInjectionRequested())
+        m_rhiDevice->debugTriggerGpuFault();
 #endif
 
     return true;

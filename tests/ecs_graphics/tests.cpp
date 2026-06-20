@@ -9,6 +9,7 @@
 #include <tests/ecs_test_world.h>
 #include <tests/meshlet_ref_test_data.h>
 #include <tests/test_context.h>
+#include <gtest/gtest.h>
 
 #include <core/common/module.h>
 #include <core/ecs/module.h>
@@ -665,19 +666,53 @@ static void TestMeshSkinningPayloadValidatesSkeletonAndPalette(TestContext& cont
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_TEST_ENTRY_POINT("ecs graphics", [](NWB::Tests::TestContext& context){
-    __hidden_tests::CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+TEST(EcsGraphics, RuntimeResourceNameBuilderMatchesFormattedSuffix){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRuntimeResourceNameBuilderMatchesFormattedSuffix(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
 
-    __hidden_tests::TestRuntimeResourceNameBuilderMatchesFormattedSuffix(context);
-    __hidden_tests::TestLightComponents(context);
-    __hidden_tests::TestMeshSystemResolvesMeshComponent(context);
-    __hidden_tests::TestMaterialInstanceComponentSetters(context);
-    __hidden_tests::TestMaterialTypedByteRangeDeduplicatesContent(context);
-    __hidden_tests::TestJointRotationQuaternionBuildsColumnVectorRotations(context);
-    __hidden_tests::TestSkeletonPoseBuildsHierarchicalPalette(context);
-    __hidden_tests::TestMeshSkinningPayloadValidatesSkeletonAndPalette(context);
-})
+TEST(EcsGraphics, LightComponents){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestLightComponents(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(EcsGraphics, MeshSystemResolvesMeshComponent){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshSystemResolvesMeshComponent(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(EcsGraphics, MaterialInstanceComponentSetters){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMaterialInstanceComponentSetters(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMaterialTypedByteRangeDeduplicatesContent(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(EcsGraphics, JointRotationQuaternionBuildsColumnVectorRotations){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestJointRotationQuaternionBuildsColumnVectorRotations(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(EcsGraphics, SkeletonPoseBuildsHierarchicalPalette){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestSkeletonPoseBuildsHierarchicalPalette(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshSkinningPayloadValidatesSkeletonAndPalette(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

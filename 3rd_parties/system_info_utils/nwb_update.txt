@@ -1,0 +1,5 @@
+package: system_info_utils
+version: commit 928d2a2f
+updated_utc: 2026-06-20
+source: https://github.com/GPUOpen-Tools/system_info_utils
+notes: AMD system-info + driver-overrides RDF readers used by RGD/RMV. Bundled nlohmann json removed in favor of shared nwb::nlohmann_json. (third_party/wmi still bundled - pending policy lift.)

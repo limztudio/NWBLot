@@ -1,0 +1,5 @@
+package: libmicrohttpd
+version: 1.0.1
+updated_utc: 2026-06-06
+source: https://ftp.gnu.org/gnu/libmicrohttpd
+notes: GNU libmicrohttpd HTTP server for the log server.

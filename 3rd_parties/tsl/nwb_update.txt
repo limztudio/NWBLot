@@ -1,0 +1,5 @@
+package: tsl
+version: robin-map (header-only)
+updated_utc: 2026-04-21
+source: https://github.com/Tessil/robin-map
+notes: tsl::robin_map open-addressing hash map.

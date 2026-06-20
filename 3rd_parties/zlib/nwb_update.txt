@@ -1,0 +1,5 @@
+package: zlib
+version: 1.3.2.1-motley
+updated_utc: 2026-06-06
+source: https://github.com/madler/zlib
+notes: zlib compression library.

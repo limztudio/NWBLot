@@ -15,7 +15,7 @@
 #include <vector>
 
 // JSON.
-#include "json/single_include/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 /// @brief SRD type enumeration.
 enum class SrdType : uint32_t

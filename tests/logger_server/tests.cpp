@@ -7,6 +7,8 @@
 #include <tests/filesystem_helpers.h>
 #include <tests/test_context.h>
 
+#include <gtest/gtest.h>
+
 #include <core/crash/module.h>
 #include <core/crash/package_names.h>
 #include <core/common/log.h>
@@ -652,6 +654,32 @@ static void TestWindowsCrashPackageReportsMissingMinidump(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 }
 
+static void TestWindowsCrashPackageDecodesGpuDetectiveCaptureInProcess(TestContext& context){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    constexpr AStringView s_Group("logger_server_gpu_detective_test");
+    constexpr AStringView s_Stem("gpu_detective_001");
+    RemoveTestArtifacts(arena, s_Group);
+
+    CrashTestText archive(arena);
+    BeginArchiveWithManifest(arena, archive, "gpu-detective-test", "windows", "crash", "windows_exception", 0xC0000005u);
+    // A non-RDF blob. The Radeon GPU Detective capture is now decoded in-process (no rgd.exe subprocess), so this
+    // exercises that decoder end to end: it must reject the garbage gracefully — no crash, no exception escaping
+    // the boundary — and surface a decode failure rather than aborting the surrounding crash ingest.
+    AppendArchiveFile(archive, CrashNames::s_GpuDetectiveCaptureFileName, "not a valid radeon gpu detective capture\n");
+
+    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(context, arena, s_Group, s_Stem, archive);
+    NWB_LOGSERVER_TEST_CHECK(context, result.accepted);
+
+    CrashTestText report(arena);
+    NWB_LOGSERVER_TEST_CHECK(context, ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    // The section header is always emitted (the decoder ran), and garbage input degrades to a reported failure.
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "[gpu_detective]"));
+    NWB_LOGSERVER_TEST_CHECK(context, Contains(report, "status=decode_failed"));
+
+    RemoveTestArtifacts(arena, s_Group);
+}
+
 static void TestAssertCrashPackageUsesAssertLogType(TestContext& context){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -917,25 +945,113 @@ static void TestCrashUploadAuthorizationMatchesBearerToken(TestContext& context)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_TEST_ENTRY_POINT("logserver crash", [](NWB::Tests::TestContext& context){
-    __hidden_logger_server_tests::TestLinuxCrashPackageMapsInstructionPointer(context);
-    __hidden_logger_server_tests::TestLinuxCrashPackageSymbolicatesSelfFrame(context);
-    __hidden_logger_server_tests::TestLinuxAssertCrashProducesObservableLoggerReport(context);
-    __hidden_logger_server_tests::TestRecoverableErrorDiagnosticProducesObservableLoggerReport(context);
-    __hidden_logger_server_tests::TestAndroidCrashPackageCopiesTombstoneFrames(context);
-    __hidden_logger_server_tests::TestLinuxCrashPackageReportsMissingProcMaps(context);
-    __hidden_logger_server_tests::TestLinuxCrashPackageReportsUnmappedInstructionPointer(context);
-    __hidden_logger_server_tests::TestAndroidCrashPackageReportsTombstoneWithoutFrames(context);
-    __hidden_logger_server_tests::TestWindowsCrashPackageReportsMissingMinidump(context);
-    __hidden_logger_server_tests::TestAssertCrashPackageUsesAssertLogType(context);
-    __hidden_logger_server_tests::TestFatalCrashPackageUsesFatalLogType(context);
-    __hidden_logger_server_tests::TestInvalidCrashPackageIsRejected(context);
-    __hidden_logger_server_tests::TestCrashManifestWithoutEventIsRejected(context);
-    __hidden_logger_server_tests::TestCrashRetentionPrunesOldestAcceptedUploads(context);
-    __hidden_logger_server_tests::TestAcceptedCrashWarnsWhenRawArchiveCannotBeRetained(context);
-    __hidden_logger_server_tests::TestCrashRetentionPrunesOldestInvalidUploads(context);
-    __hidden_logger_server_tests::TestCrashUploadAuthorizationMatchesBearerToken(context);
-})
+TEST(LoggerServerCrash, LinuxCrashPackageMapsInstructionPointer){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestLinuxCrashPackageMapsInstructionPointer(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, LinuxCrashPackageSymbolicatesSelfFrame){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestLinuxCrashPackageSymbolicatesSelfFrame(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestLinuxAssertCrashProducesObservableLoggerReport(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerReport){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestRecoverableErrorDiagnosticProducesObservableLoggerReport(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, AndroidCrashPackageCopiesTombstoneFrames){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestAndroidCrashPackageCopiesTombstoneFrames(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, LinuxCrashPackageReportsMissingProcMaps){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestLinuxCrashPackageReportsMissingProcMaps(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, LinuxCrashPackageReportsUnmappedInstructionPointer){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestLinuxCrashPackageReportsUnmappedInstructionPointer(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, AndroidCrashPackageReportsTombstoneWithoutFrames){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestAndroidCrashPackageReportsTombstoneWithoutFrames(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, WindowsCrashPackageReportsMissingMinidump){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestWindowsCrashPackageReportsMissingMinidump(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestWindowsCrashPackageDecodesGpuDetectiveCaptureInProcess(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, AssertCrashPackageUsesAssertLogType){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestAssertCrashPackageUsesAssertLogType(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, FatalCrashPackageUsesFatalLogType){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestFatalCrashPackageUsesFatalLogType(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, InvalidCrashPackageIsRejected){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestInvalidCrashPackageIsRejected(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestCrashManifestWithoutEventIsRejected(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, CrashRetentionPrunesOldestAcceptedUploads){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestCrashRetentionPrunesOldestAcceptedUploads(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestAcceptedCrashWarnsWhenRawArchiveCannotBeRetained(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, CrashRetentionPrunesOldestInvalidUploads){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestCrashRetentionPrunesOldestInvalidUploads(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(LoggerServerCrash, CrashUploadAuthorizationMatchesBearerToken){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_logger_server_tests::TestCrashUploadAuthorizationMatchesBearerToken(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

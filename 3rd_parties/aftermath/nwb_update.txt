@@ -1,0 +1,5 @@
+package: aftermath
+version: 2.26
+updated_utc: 2026-06-20
+source: https://developer.nvidia.com/nsight-aftermath
+notes: NVIDIA Nsight Aftermath SDK (headers + runtime DLL) for GPU crash-dump decode. Runtime DLL is deployed next to consumers, not linked.

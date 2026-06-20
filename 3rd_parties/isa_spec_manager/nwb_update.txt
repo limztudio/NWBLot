@@ -1,0 +1,5 @@
+package: isa_spec_manager
+version: 1.2.0
+updated_utc: 2026-06-20
+source: https://github.com/GPUOpen-Tools/isa_spec_manager
+notes: AMD ISA decoder (isa_decoder target) for RGD shader disassembly.

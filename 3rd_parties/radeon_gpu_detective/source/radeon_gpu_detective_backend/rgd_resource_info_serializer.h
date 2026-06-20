@@ -11,7 +11,7 @@
 #include "rgd_data_types.h"
 
 // JSON.
-#include "json/single_include/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 class RgdResourceInfoSerializer
 {

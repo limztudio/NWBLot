@@ -1,0 +1,5 @@
+package: ufbx
+version: 0.21.3
+updated_utc: 2026-06-06
+source: https://github.com/ufbx/ufbx
+notes: Single-file FBX loader.

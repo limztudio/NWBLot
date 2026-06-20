@@ -7,6 +7,7 @@
 
 #include <tests/ecs_test_world.h>
 #include <tests/test_context.h>
+#include <gtest/gtest.h>
 
 #include <global/compile.h>
 
@@ -363,17 +364,59 @@ static void TestDuplicateSchedulerAddIsStable(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_TEST_ENTRY_POINT("ecs", [](NWB::Tests::TestContext& context){
-    __hidden_tests::TestComponentStorageAndView(context);
-    __hidden_tests::TestEmptyViewDoesNotAllocateComponentPools(context);
-    __hidden_tests::TestComponentLifetime(context);
-    __hidden_tests::TestComponentMutationVersion(context);
-    __hidden_tests::TestMessageBus(context);
-    __hidden_tests::TestMoveOnlyMessageBus(context);
-    __hidden_tests::TestSystemTick(context);
-    __hidden_tests::TestDuplicateComponentAddIsStable(context);
-    __hidden_tests::TestDuplicateSchedulerAddIsStable(context);
-})
+TEST(Ecs, ComponentStorageAndView){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestComponentStorageAndView(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestEmptyViewDoesNotAllocateComponentPools(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Ecs, ComponentLifetime){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestComponentLifetime(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Ecs, ComponentMutationVersion){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestComponentMutationVersion(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Ecs, MessageBus){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMessageBus(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Ecs, MoveOnlyMessageBus){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMoveOnlyMessageBus(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Ecs, SystemTick){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestSystemTick(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Ecs, DuplicateComponentAddIsStable){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestDuplicateComponentAddIsStable(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Ecs, DuplicateSchedulerAddIsStable){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestDuplicateSchedulerAddIsStable(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

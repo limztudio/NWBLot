@@ -298,7 +298,7 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
     }
 
     Symbolicate::AppendOptionalTextFile(arena, detailReport, packageDirectory, Core::Crash::PackageNames::s_GpuCrashReportFileName, "gpu_crash");
-    // if a Radeon GPU Detective .rgd capture was shipped in the package, decode it via rgd (cross-platform).
+    // if a Radeon GPU Detective .rgd capture was shipped in the package, decode it in-process (cross-platform).
     Symbolicate::AppendRadeonGpuDetectiveSummary(arena, packageDirectory, config, detailReport);
     // if an NVIDIA Aftermath .nv-gpudmp was shipped in the package, decode it via the Aftermath SDK (cross-platform).
     Symbolicate::AppendAftermathGpuDumpSummary(arena, packageDirectory, config, detailReport);

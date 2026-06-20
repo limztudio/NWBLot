@@ -4,6 +4,7 @@
 
 #include <tests/capturing_logger.h>
 #include <tests/test_context.h>
+#include <gtest/gtest.h>
 
 #include <global/binary.h>
 #include <global/compile.h>
@@ -640,29 +641,131 @@ static void TestDiagnosticEventHook(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_TEST_ENTRY_POINT("global", [](NWB::Tests::TestContext& context){
-    __hidden_tests::TestPodRoundTrip(context);
-    __hidden_tests::TestLengthPrefixedStringRoundTrip(context);
-    __hidden_tests::TestRejectedStringReadsDoNotAdvanceCursor(context);
-    __hidden_tests::TestRejectedACompactStringAssignResetsText(context);
-    __hidden_tests::TestBasicCompactStringTypes(context);
-    __hidden_tests::TestTextUtilityHelpers(context);
-    __hidden_tests::TestFilesystemMovePathToDirectory(context);
-    __hidden_tests::TestStringTableText(context);
-    __hidden_tests::TestInvalidStringTableReads(context);
-    __hidden_tests::TestBinaryVectorPayloadRoundTrip(context);
-    __hidden_tests::TestFixedVectorBinaryPayloadRoundTrip(context);
-    __hidden_tests::TestFixedVectorBinaryStringWrites(context);
-    __hidden_tests::TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(context);
-    __hidden_tests::TestAppendTriviallyCopyableVectorSelfAppend(context);
-    __hidden_tests::TestTriviallyCopyableVectorAlias(context);
-    __hidden_tests::TestCompressedPairSwapUsesMove(context);
-    __hidden_tests::TestBoundedRuntimeWrappers(context);
-    __hidden_tests::TestLoggerMacrosBehaveAsSingleStatements(context);
-    __hidden_tests::TestLoggerDiagnosticCaptureUsesFormattedMessage(context);
-    __hidden_tests::TestLoggerAssertTypeCapturesAssertDiagnostic(context);
-    __hidden_tests::TestDiagnosticEventHook(context);
-})
+TEST(Global, PodRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestPodRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, LengthPrefixedStringRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestLengthPrefixedStringRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, RejectedStringReadsDoNotAdvanceCursor){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRejectedStringReadsDoNotAdvanceCursor(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, RejectedACompactStringAssignResetsText){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRejectedACompactStringAssignResetsText(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, BasicCompactStringTypes){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestBasicCompactStringTypes(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, TextUtilityHelpers){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestTextUtilityHelpers(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, FilesystemMovePathToDirectory){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestFilesystemMovePathToDirectory(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, StringTableText){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestStringTableText(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, InvalidStringTableReads){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestInvalidStringTableReads(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, BinaryVectorPayloadRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestBinaryVectorPayloadRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, FixedVectorBinaryPayloadRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestFixedVectorBinaryPayloadRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, FixedVectorBinaryStringWrites){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestFixedVectorBinaryStringWrites(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, AppendTriviallyCopyableVectorSelfAppend){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestAppendTriviallyCopyableVectorSelfAppend(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, TriviallyCopyableVectorAlias){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestTriviallyCopyableVectorAlias(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, CompressedPairSwapUsesMove){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestCompressedPairSwapUsesMove(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, BoundedRuntimeWrappers){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestBoundedRuntimeWrappers(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, LoggerMacrosBehaveAsSingleStatements){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestLoggerMacrosBehaveAsSingleStatements(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, LoggerDiagnosticCaptureUsesFormattedMessage){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestLoggerDiagnosticCaptureUsesFormattedMessage(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, LoggerAssertTypeCapturesAssertDiagnostic){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestLoggerAssertTypeCapturesAssertDiagnostic(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Global, DiagnosticEventHook){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestDiagnosticEventHook(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

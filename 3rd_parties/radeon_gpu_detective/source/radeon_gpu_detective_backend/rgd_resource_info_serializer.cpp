@@ -27,7 +27,7 @@
 #include "rmv/source/backend/rmt_trace_loader.h"
 
 // JSON.
-#include "json/single_include/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 // *** INTERNALLY-LINKED AUXILIARY CONSTANTS - BEGIN ***
 

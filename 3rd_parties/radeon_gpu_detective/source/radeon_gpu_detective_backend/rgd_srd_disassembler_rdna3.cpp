@@ -12,7 +12,7 @@
 #include <sstream>
 
 // JSON.
-#include "json/single_include/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 // Architecture name constants.
 static const char* kArchitectureName = "RDNA3";

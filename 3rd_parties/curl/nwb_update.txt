@@ -1,0 +1,5 @@
+package: curl
+version: 8.20.0-DEV
+updated_utc: 2026-06-06
+source: https://github.com/curl/curl
+notes: libcurl transport for the log client.

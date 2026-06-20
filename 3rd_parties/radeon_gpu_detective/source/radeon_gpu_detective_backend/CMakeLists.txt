@@ -1,128 +1,46 @@
-#=============================================================================
-# Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
-#  @author AMD Developer Tools Team
-#  @file
-#  @brief  RGD Backend CMakeLists file.
-#=============================================================================
+# NWB-rewritten RGD backend CMakeLists for an offline/vendored, in-process .rgd decoder build.
+# Differences from upstream: no FetchContent (the comgr lib + ISA-spec XML are optional runtime-deploy data,
+# like Aftermath's DLL); link the engine's vendored miniz instead of compiling a bundled copy; exclude the
+# DXBC (DirectX bytecode) parser, which needs DXC and is irrelevant to a Vulkan engine. amd_gpu_dis / amd_comgr
+# are dlopen'd at runtime, so the disassembly degrades gracefully if those runtime libs / the ISA XML are absent.
+cmake_minimum_required(VERSION 3.10)
+project(rgd_backend)
 
-cmake_minimum_required (VERSION 3.10)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-project (rgd_backend)
+set(_RGD_3P "${CMAKE_SOURCE_DIR}/3rd_parties")
 
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
+# Build the crash-SUMMARY decoder (markers, page fault, registers, resources, system info). The shader
+# disassembly / code-object files are excluded: they need amd_gpu_dis's CodeObjectDisassemblerApi.h, which
+# ships only inside Radeon GPU Analyzer (not in RGD's dependency map). rgd_dxbc_parser is DirectX-only.
+# Drop in the amd_gpu_dis package + re-include these to enable live ISA disassembly later.
+file(GLOB RGD_BACKEND_SRC "${PROJECT_SOURCE_DIR}/*.cpp")
+list(FILTER RGD_BACKEND_SRC EXCLUDE REGEX
+    "rgd_dxbc_parser|rgd_process_utils|rgd_amd_gpu_dis_loader|rgd_code_object_database|rgd_srd_disassembler|rgd_srd_instruction_analyzer|rgd_enhanced_crash_info_serializer")
 
-# Include cxxopts for command line parsing.
-include_directories("${PROJECT_SOURCE_DIR}/../../external/")
-include_directories("${PROJECT_SOURCE_DIR}/../../external/rmv/source/parser/")
-include_directories("${PROJECT_SOURCE_DIR}/../../external/rmv/source/backend/")
-include_directories("${PROJECT_SOURCE_DIR}/../../external/third_party/")
-include_directories("${PROJECT_SOURCE_DIR}/../../external/comgr_utils/")
-include_directories("${PROJECT_SOURCE_DIR}/../../external/isa_spec_manager/include/")
-include_directories(AFTER ${AMDGPU_DIS_INCLUDE_DIR} )
+add_library(rgd_backend STATIC ${RGD_BACKEND_SRC})
+add_library(nwb::rgd_backend ALIAS rgd_backend)
 
-# Add path to miniz library
-include_directories("${PROJECT_SOURCE_DIR}/../../external/miniz/")
+target_include_directories(rgd_backend PUBLIC "${PROJECT_SOURCE_DIR}")
+target_include_directories(rgd_backend PRIVATE
+    "${_RGD_3P}"                              # rmv/source/..., dev_driver/include/... (root-relative includes)
+    "${_RGD_3P}/dev_driver/include"           # rgdevents.h
+    "${_RGD_3P}/rmv/source/parser"
+    "${_RGD_3P}/rmv/source/backend"
+    "${_RGD_3P}/isa_spec_manager/include")
 
-set(CMAKE_CXX_STANDARD 17)
-
-IF (WIN32)
-    add_link_options(/STACK:16777216)
-ELSEIF(UNIX)
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,stack-size=16777216")
-ENDIF(WIN32)
-
-# RGD backend source files that are common for Windows and Linux
-file (GLOB RGD_BACKEND_SOURCE
-    "*.h"
-    "*.cpp"
-    "../../external/nlohmann/*.hpp"
-)
-
-# Find the miniz library source files
-file (GLOB MINIZ_SOURCE
-    "../../external/third_party/miniz/*.c"
-    "../../external/third_party/miniz/*.h"
-)
-
-# Add miniz source files to the build
-add_library(${PROJECT_NAME} STATIC ${RGD_BACKEND_SOURCE} ${MINIZ_SOURCE})
-
-# Link library dependencies.
-# ComgrUtils is PUBLIC so the comgr include path (carried by the imported `comgr` target it
-# links) propagates to consumers like rgd_test that include amd_comgr.h transitively.
-target_link_libraries(${PROJECT_NAME}
-    PUBLIC rdf system_info ComgrUtils
-    PRIVATE isa_decoder)
-
-# PixEventsDecoder is Windows-only (Microsoft's upstream library uses <Windows.h> types).
+# nwb::nlohmann_json provides <nlohmann/json.hpp> (the single shared vendored copy); rgd_data_types.h pulls it
+# into the PUBLIC headers, so the link is PUBLIC.
+target_link_libraries(rgd_backend
+    PUBLIC amdrdf system_info AMD::ComgrUtils nwb::miniz nwb::nlohmann_json
+    PRIVATE isa_decoder RmvBackend)
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE PixEventsDecoder)
+    target_link_libraries(rgd_backend PRIVATE pix_events_decoder)
 endif()
 
-set_property(TARGET ${PROJECT_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)
-
-# Include FetchContent module for downloading ISA spec XML files
-include(FetchContent)
-
-set(ISA_DECODER_XML_URL "https://gpuopen.com/download/AMD_GPU_MR_ISA_XML_2026_03_05.zip")
-set(ISA_DECODER_XML_DIR "${PROJECT_SOURCE_DIR}/../../external/isa_spec_xml")
-
-FetchContent_Declare(
-    isa_spec_xml
-    URL ${ISA_DECODER_XML_URL}
-    SOURCE_DIR ${ISA_DECODER_XML_DIR}
-    DOWNLOAD_EXTRACT_TIMESTAMP true
-)
-
-message(STATUS "Downloading ${ISA_DECODER_XML_URL} into ${ISA_DECODER_XML_DIR}")
-
-FetchContent_MakeAvailable(isa_spec_xml)
-
-if (EXISTS "${ISA_DECODER_XML_DIR}")
-    message(STATUS "ISA decoder XML directory created successfully at ${ISA_DECODER_XML_DIR}")
-else ()
-    message(FATAL_ERROR "Directory ${ISA_DECODER_XML_DIR} was not created.")
-endif ()
-
-# Validate that the downloaded XML schema version is compatible with the isa_spec_manager API version.
-# The API's IsCompatible() always returns true (even for incompatible versions), so we check here
-# at configure time to catch mismatches early instead of getting runtime crashes.
-set(ISA_API_VERSION_HEADER "${PROJECT_SOURCE_DIR}/../../external/isa_spec_manager/include/amdisa/api_version.h")
-if (EXISTS "${ISA_API_VERSION_HEADER}")
-    file(READ "${ISA_API_VERSION_HEADER}" _api_version_contents)
-    string(REGEX MATCH "AMDISA_DECODE_API_VERSION_MAJOR ([0-9]+)" _api_version_match "${_api_version_contents}")
-    if (_api_version_match)
-        set(ISA_API_MAJOR "${CMAKE_MATCH_1}")
-
-        # Read schema version from first XML file found.
-        file(GLOB _isa_xml_files "${ISA_DECODER_XML_DIR}/*.xml")
-        list(LENGTH _isa_xml_files _xml_count)
-        if (_xml_count GREATER 0)
-            list(GET _isa_xml_files 0 _first_xml)
-            file(READ "${_first_xml}" _xml_contents)
-            string(REGEX MATCH "<SchemaVersion>([0-9]+)\\.([0-9]+)\\.([0-9]+)</SchemaVersion>" _xml_schema_match "${_xml_contents}")
-            if (_xml_schema_match)
-                set(XML_SCHEMA_MAJOR "${CMAKE_MATCH_1}")
-                set(XML_SCHEMA_VERSION "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${CMAKE_MATCH_3}")
-                message(STATUS "ISA spec XML schema version: ${XML_SCHEMA_VERSION}, API major version: ${ISA_API_MAJOR}")
-                if (NOT "${XML_SCHEMA_MAJOR}" STREQUAL "${ISA_API_MAJOR}")
-                    message(FATAL_ERROR
-                        "ISA spec XML schema major version (${XML_SCHEMA_MAJOR}) does not match "
-                        "isa_spec_manager API major version (${ISA_API_MAJOR}). "
-                        "The downloaded XML files from ${ISA_DECODER_XML_URL} may be incompatible. "
-                        "Update the isa_spec_manager dependency or check for a compatible XML release.")
-                endif ()
-            else ()
-                message(WARNING
-                    "Could not parse SchemaVersion from XML file ${_first_xml}; "
-                    "skipping ISA schema/API compatibility validation.")
-            endif ()
-        else ()
-            message(WARNING "No XML files found in ${ISA_DECODER_XML_DIR} to validate schema version.")
-        endif ()
-    else ()
-        message(WARNING
-            "Could not parse AMDISA_DECODE_API_VERSION_MAJOR from ${ISA_API_VERSION_HEADER}; "
-            "skipping ISA schema/API compatibility validation.")
-    endif ()
-endif ()
+# SYSTEM_INFO_ENABLE_RDF (selects system_info's rdf::ChunkFile Parse overload) and RDF_CXX_BINDINGS (the
+# rdf::ChunkFile C++ wrapper) both arrive transitively: the former PUBLIC from system_info once
+# SYSTEM_INFO_BUILD_RDF_INTERFACES is on, the latter PUBLIC from amdrdf.
+target_compile_definitions(rgd_backend PRIVATE NOMINMAX)
+set_target_properties(rgd_backend PROPERTIES
+    CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON
+    POSITION_INDEPENDENT_CODE ON)
+nwb_disable_vendor_warnings(rgd_backend)

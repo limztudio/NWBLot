@@ -3,6 +3,7 @@
 
 
 #include <tests/test_context.h>
+#include <gtest/gtest.h>
 #include <tests/capturing_logger.h>
 
 #include <core/telemetry/module.h>
@@ -1295,42 +1296,209 @@ static void TestTelemetryIngestStoresRawAndReports(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_TEST_ENTRY_POINT("telemetry", [](NWB::Tests::TestContext& context){
-    __hidden_tests::TestCaptureFlags(context);
-    __hidden_tests::TestRecorderFiltersAndCopiesPayload(context);
-    __hidden_tests::TestRecorderClearAndDisabledState(context);
-    __hidden_tests::TestRecorderAcceptsConcurrentRecords(context);
-    __hidden_tests::TestEventCodecRoundTrip(context);
-    __hidden_tests::TestEventCodecRejectsInvalidInput(context);
-    __hidden_tests::TestEventCodecReportsTruncatedPayload(context);
-    __hidden_tests::TestEventStreamCodecRoundTrip(context);
-    __hidden_tests::TestEventStreamCodecHandlesEmptyStreams(context);
-    __hidden_tests::TestEventStreamCodecRejectsInvalidInput(context);
-    __hidden_tests::TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(context);
-    __hidden_tests::TestTextLogPayloadRoundTrip(context);
-    __hidden_tests::TestRecordTextLogUsesTelemetryEvent(context);
-    __hidden_tests::TestTextLogCaptureLoggerForwardsAndRecords(context);
-    __hidden_tests::TestDiagnosticPayloadRoundTrip(context);
-    __hidden_tests::TestRecordDiagnosticUsesTelemetryEvent(context);
-    __hidden_tests::TestDiagnosticCaptureGuardRecordsGlobalDiagnostic(context);
-    __hidden_tests::TestDiagnosticCaptureGuardManualCaptureReturnsStatus(context);
-    __hidden_tests::TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(context);
-    __hidden_tests::TestFrameGraphPayloadRoundTrip(context);
-    __hidden_tests::TestFrameGraphPayloadRejectsInvalidInput(context);
-    __hidden_tests::TestRecordFrameGraphUsesTelemetryEvent(context);
-    __hidden_tests::TestCaptureSessionRecordsFrameGraphWithContext(context);
-    __hidden_tests::TestPerfTimingPayloadRoundTrip(context);
-    __hidden_tests::TestPerfTimingPayloadRejectsInvalidInput(context);
-    __hidden_tests::TestRecordPerfTimingUsesTelemetryEvent(context);
-    __hidden_tests::TestPerfMemoryPayloadRoundTrip(context);
-    __hidden_tests::TestPerfMemoryPayloadRejectsInvalidInput(context);
-    __hidden_tests::TestRecordPerfMemoryUsesTelemetryEvent(context);
-    __hidden_tests::TestPerfViewsExposeScopes(context);
-    __hidden_tests::TestRecordPerfSessionReportUsesTelemetryEvents(context);
-    __hidden_tests::TestCaptureSessionRecordsPerfReport(context);
-    __hidden_tests::TestTelemetryReportSummarizesBenchmarkEvents(context);
-    __hidden_tests::TestTelemetryIngestStoresRawAndReports(context);
-})
+TEST(Telemetry, CaptureFlags){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestCaptureFlags(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, RecorderFiltersAndCopiesPayload){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRecorderFiltersAndCopiesPayload(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, RecorderClearAndDisabledState){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRecorderClearAndDisabledState(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, RecorderAcceptsConcurrentRecords){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRecorderAcceptsConcurrentRecords(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, EventCodecRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestEventCodecRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, EventCodecRejectsInvalidInput){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestEventCodecRejectsInvalidInput(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, EventCodecReportsTruncatedPayload){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestEventCodecReportsTruncatedPayload(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, EventStreamCodecRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestEventStreamCodecRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, EventStreamCodecHandlesEmptyStreams){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestEventStreamCodecHandlesEmptyStreams(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, EventStreamCodecRejectsInvalidInput){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestEventStreamCodecRejectsInvalidInput(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, CaptureSessionCaptureScopeRecordsLogAndDiagnostic){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, TextLogPayloadRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestTextLogPayloadRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, RecordTextLogUsesTelemetryEvent){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRecordTextLogUsesTelemetryEvent(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, TextLogCaptureLoggerForwardsAndRecords){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestTextLogCaptureLoggerForwardsAndRecords(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, DiagnosticPayloadRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestDiagnosticPayloadRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, RecordDiagnosticUsesTelemetryEvent){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRecordDiagnosticUsesTelemetryEvent(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, DiagnosticCaptureGuardRecordsGlobalDiagnostic){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestDiagnosticCaptureGuardRecordsGlobalDiagnostic(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, DiagnosticCaptureGuardManualCaptureReturnsStatus){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestDiagnosticCaptureGuardManualCaptureReturnsStatus(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, FrameGraphPayloadRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestFrameGraphPayloadRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, FrameGraphPayloadRejectsInvalidInput){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestFrameGraphPayloadRejectsInvalidInput(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, RecordFrameGraphUsesTelemetryEvent){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRecordFrameGraphUsesTelemetryEvent(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, CaptureSessionRecordsFrameGraphWithContext){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestCaptureSessionRecordsFrameGraphWithContext(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, PerfTimingPayloadRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestPerfTimingPayloadRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, PerfTimingPayloadRejectsInvalidInput){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestPerfTimingPayloadRejectsInvalidInput(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, RecordPerfTimingUsesTelemetryEvent){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRecordPerfTimingUsesTelemetryEvent(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, PerfMemoryPayloadRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestPerfMemoryPayloadRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestPerfMemoryPayloadRejectsInvalidInput(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, RecordPerfMemoryUsesTelemetryEvent){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRecordPerfMemoryUsesTelemetryEvent(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, PerfViewsExposeScopes){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestPerfViewsExposeScopes(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, RecordPerfSessionReportUsesTelemetryEvents){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRecordPerfSessionReportUsesTelemetryEvents(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, CaptureSessionRecordsPerfReport){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestCaptureSessionRecordsPerfReport(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestTelemetryReportSummarizesBenchmarkEvents(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Telemetry, TelemetryIngestStoresRawAndReports){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestTelemetryIngestStoresRawAndReports(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

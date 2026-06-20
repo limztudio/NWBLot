@@ -1,0 +1,5 @@
+package: VulkanMemoryAllocator
+version: 3.4.0-development
+updated_utc: 2026-05-02
+source: https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
+notes: Header-only Vulkan allocator (vk_mem_alloc.h).

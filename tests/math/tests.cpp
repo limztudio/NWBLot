@@ -5,6 +5,7 @@
 #include <core/common/module.h>
 
 #include <tests/test_context.h>
+#include <gtest/gtest.h>
 
 #include <global/simdmath.h>
 #include <global/compile.h>
@@ -424,20 +425,77 @@ static void TestMathStorageHashAndEquality(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_TEST_ENTRY_POINT("math", [](NWB::Tests::TestContext& context){
-    __hidden_tests::TestVector2CrossOrientation(context);
-    __hidden_tests::TestVector3CrossOrientation(context);
-    __hidden_tests::TestVector3RotateQuarterTurn(context);
-    __hidden_tests::TestVector4CrossBasisOrientation(context);
-    __hidden_tests::TestVectorNamedScalarFunctions(context);
-    __hidden_tests::TestRefractCriticalAngle(context);
-    __hidden_tests::TestNormalizeOrHelpers(context);
-    __hidden_tests::TestSdfHelpers(context);
-    __hidden_tests::TestHalfFloatScalarConversion(context);
-    __hidden_tests::TestHalfFloatBufferConversion(context);
-    __hidden_tests::TestFloatIntStorageConversion(context);
-    __hidden_tests::TestMathStorageHashAndEquality(context);
-})
+TEST(Math, Vector2CrossOrientation){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestVector2CrossOrientation(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Math, Vector3CrossOrientation){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestVector3CrossOrientation(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Math, Vector3RotateQuarterTurn){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestVector3RotateQuarterTurn(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Math, Vector4CrossBasisOrientation){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestVector4CrossBasisOrientation(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Math, VectorNamedScalarFunctions){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestVectorNamedScalarFunctions(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Math, RefractCriticalAngle){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRefractCriticalAngle(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Math, NormalizeOrHelpers){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestNormalizeOrHelpers(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Math, SdfHelpers){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestSdfHelpers(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Math, HalfFloatScalarConversion){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestHalfFloatScalarConversion(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Math, HalfFloatBufferConversion){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestHalfFloatBufferConversion(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Math, FloatIntStorageConversion){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestFloatIntStorageConversion(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Math, MathStorageHashAndEquality){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMathStorageHashAndEquality(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

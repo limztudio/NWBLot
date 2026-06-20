@@ -4,6 +4,7 @@
 
 #include <tests/filesystem_helpers.h>
 #include <tests/test_context.h>
+#include <gtest/gtest.h>
 
 #include <core/crash/package_internal.h>
 
@@ -503,21 +504,63 @@ static void TestLinuxSignalHandlerWritesCrashPackage(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_TEST_ENTRY_POINT("crash", [](NWB::Tests::TestContext& context){
-    __hidden_crash_tests::TestWriteCrashPackageCreatesRequiredFiles(context);
-    __hidden_crash_tests::TestWriteCrashPackageFailsWhenSpoolPathIsFile(context);
-    __hidden_crash_tests::TestCrashBreadcrumbCapturedInRequest(context);
-    __hidden_crash_tests::TestCrashSpoolRetentionPrunesOldestPackages(context);
-    __hidden_crash_tests::TestCrashSpoolRetentionZeroDisablesPruning(context);
-    __hidden_crash_tests::TestCrashSpoolRetentionProtectsActivePendingPackage(context);
-    __hidden_crash_tests::TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(context);
+TEST(Crash, WriteCrashPackageCreatesRequiredFiles){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_crash_tests::TestWriteCrashPackageCreatesRequiredFiles(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Crash, WriteCrashPackageFailsWhenSpoolPathIsFile){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_crash_tests::TestWriteCrashPackageFailsWhenSpoolPathIsFile(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Crash, CrashBreadcrumbCapturedInRequest){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_crash_tests::TestCrashBreadcrumbCapturedInRequest(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Crash, CrashSpoolRetentionPrunesOldestPackages){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_crash_tests::TestCrashSpoolRetentionPrunesOldestPackages(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Crash, CrashSpoolRetentionZeroDisablesPruning){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_crash_tests::TestCrashSpoolRetentionZeroDisablesPruning(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Crash, CrashSpoolRetentionProtectsActivePendingPackage){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_crash_tests::TestCrashSpoolRetentionProtectsActivePendingPackage(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_crash_tests::TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-    __hidden_crash_tests::TestDesktopInstalledHandlerWritesManualDumpPackage(context);
+TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_crash_tests::TestDesktopInstalledHandlerWritesManualDumpPackage(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
 #endif
+
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    __hidden_crash_tests::TestLinuxSignalHandlerWritesCrashPackage(context);
+TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_crash_tests::TestLinuxSignalHandlerWritesCrashPackage(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
 #endif
-})
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

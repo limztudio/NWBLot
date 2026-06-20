@@ -11,6 +11,8 @@
 
 #include <global/compile.h>
 
+#include <gtest/gtest.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -221,10 +223,17 @@ static void TestSceneCameraResolution(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_TEST_ENTRY_POINT("scene", [](NWB::Tests::TestContext& context){
-    __hidden_tests::TestSceneAndMainCamera(context);
-    __hidden_tests::TestSceneCameraResolution(context);
-})
+TEST(Scene, SceneAndMainCamera){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestSceneAndMainCamera(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Scene, SceneCameraResolution){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestSceneCameraResolution(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

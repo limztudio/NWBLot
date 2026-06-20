@@ -35,3 +35,6 @@ endif()
 target_link_libraries(nwb_logserver PRIVATE nwb::microhttpd nwb_common nwb_alloc nwb_logtelemetry nwb::cli11_headers)
 target_link_libraries(nwb_logserver PRIVATE nwb::aftermath_headers)
 nwb_copy_aftermath_runtime(nwb_logserver)
+# Radeon GPU Detective in-process .rgd decoder (replaces the former rgd.exe subprocess). Its PUBLIC include
+# dir exposes nwb_rgd_decode.h; it pulls in the vendored amdrdf/system_info/isa_decoder/comgr_utils/pix stack.
+target_link_libraries(nwb_logserver PRIVATE nwb::rgd_backend)

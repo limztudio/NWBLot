@@ -1,0 +1,5 @@
+package: oneTBB
+version: 2023.0.0 (TBB 12)
+updated_utc: 2026-06-15
+source: https://github.com/oneapi-src/oneTBB
+notes: Intel oneTBB task scheduler / scalable allocator.

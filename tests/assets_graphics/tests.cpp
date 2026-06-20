@@ -20,6 +20,8 @@
 #include <tests/meshlet_ref_test_data.h>
 #include <tests/test_context.h>
 
+#include <gtest/gtest.h>
+
 #include <core/alloc/scratch.h>
 #include <core/alloc/thread.h>
 #include <core/common/module.h>
@@ -1497,48 +1499,245 @@ static bool FindShaderArchiveSourceChecksum(
 
 #include "mesh_cooker_tests.inl"
 
-NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& context){
-    __hidden_tests::TestVolumeSessionAcceptsScratchBytes(context);
-    __hidden_tests::TestMeshCodecRoundTrip(context);
-    __hidden_tests::TestMeshletRefEncodingWidthRules(context);
-    __hidden_tests::TestMeshletRefEncodingRoundTrip(context);
-    __hidden_tests::TestMeshletConeOctPackingRoundTrip(context);
-    __hidden_tests::TestShaderArchiveVariantLookupIsExact(context);
-    __hidden_tests::TestSpirvEntryPointLookup(context);
-    __hidden_tests::TestShaderMetadataRejectsDefaultVariantAlias(context);
-    __hidden_tests::TestShaderDependencyChecksumAliasesGeneratedRoot(context);
-    __hidden_tests::TestShaderCookWithoutMaterialBindIncludes(context);
-    __hidden_tests::TestShaderCookIgnoresInvalidBytecodeCache(context);
-    __hidden_tests::TestMaterialMetadataInterfaceAndBlockParameters(context);
-    __hidden_tests::TestMaterialCodecTypedLayoutBoundary(context);
-    __hidden_tests::TestMaterialBindSchemaValidation(context);
-    __hidden_tests::TestMaterialBindHalfTypedLayoutValues(context);
-    __hidden_tests::TestMaterialBindCompactIntegerTypedLayoutValues(context);
-    __hidden_tests::TestMaterialBindGeneratedSlangText(context);
-    __hidden_tests::TestMaterialBindCookIntegration(context);
-    __hidden_tests::TestMaterialRejectsMissingInterfaceCookIntegration(context);
-    __hidden_tests::TestMaterialBindDependencyInvalidation(context);
-    __hidden_tests::TestProjectCookEntryAutoRegistration(context);
-    __hidden_tests::TestProjectCookEntryDocumentCook(context);
-    __hidden_tests::TestProjectCookEntryAssetBunchCook(context);
-    __hidden_tests::TestModelBunchLocalReferencesAndWrapperExpansion(context);
-    __hidden_tests::TestModelBunchStaticMeshAttachmentToNamedJoint(context);
-    __hidden_tests::TestModelBunchRejectsDuplicateLocalReference(context);
-    __hidden_tests::TestModelBunchRejectsMissingLocalReference(context);
-    __hidden_tests::TestMeshCookerTypedStreams(context);
-    __hidden_tests::TestMeshCookerDefaultColors(context);
-    __hidden_tests::TestMeshAcceptanceHardEdgeCubeZippedRefs(context);
-    __hidden_tests::TestMeshAcceptanceSphereSmooth(context);
-    __hidden_tests::TestMeshAcceptanceUvSeamQuad(context);
-    __hidden_tests::TestMeshAcceptanceMirroredUvQuad(context);
-    __hidden_tests::TestMeshAcceptanceTwoSidedPlane(context);
-    __hidden_tests::TestMeshAcceptanceLargeManyMeshlets(context);
-    __hidden_tests::TestMeshAcceptanceQualityBuilderChecks(context);
-    __hidden_tests::TestMaterialBindDiscoveryValidation(context);
-    __hidden_tests::TestMeshCookerValidationFailures(context);
-    __hidden_tests::TestMeshClassPolicyHelpers(context);
-    __hidden_tests::TestFormatBlockDimensions(context);
-})
+TEST(AssetsGraphics, VolumeSessionAcceptsScratchBytes){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestVolumeSessionAcceptsScratchBytes(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshCodecRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshCodecRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshletRefEncodingWidthRules){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshletRefEncodingWidthRules(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshletRefEncodingRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshletRefEncodingRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshletConeOctPackingRoundTrip){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshletConeOctPackingRoundTrip(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, ShaderArchiveVariantLookupIsExact){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestShaderArchiveVariantLookupIsExact(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, SpirvEntryPointLookup){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestSpirvEntryPointLookup(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, ShaderMetadataRejectsDefaultVariantAlias){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestShaderMetadataRejectsDefaultVariantAlias(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestShaderDependencyChecksumAliasesGeneratedRoot(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, ShaderCookWithoutMaterialBindIncludes){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestShaderCookWithoutMaterialBindIncludes(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, ShaderCookIgnoresInvalidBytecodeCache){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestShaderCookIgnoresInvalidBytecodeCache(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMaterialMetadataInterfaceAndBlockParameters(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMaterialCodecTypedLayoutBoundary(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MaterialBindSchemaValidation){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMaterialBindSchemaValidation(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MaterialBindHalfTypedLayoutValues){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMaterialBindHalfTypedLayoutValues(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MaterialBindCompactIntegerTypedLayoutValues){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMaterialBindCompactIntegerTypedLayoutValues(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MaterialBindGeneratedSlangText){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMaterialBindGeneratedSlangText(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MaterialBindCookIntegration){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMaterialBindCookIntegration(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMaterialRejectsMissingInterfaceCookIntegration(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMaterialBindDependencyInvalidation(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, ProjectCookEntryAutoRegistration){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestProjectCookEntryAutoRegistration(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, ProjectCookEntryDocumentCook){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestProjectCookEntryDocumentCook(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, ProjectCookEntryAssetBunchCook){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestProjectCookEntryAssetBunchCook(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestModelBunchLocalReferencesAndWrapperExpansion(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestModelBunchStaticMeshAttachmentToNamedJoint(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, ModelBunchRejectsDuplicateLocalReference){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestModelBunchRejectsDuplicateLocalReference(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, ModelBunchRejectsMissingLocalReference){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestModelBunchRejectsMissingLocalReference(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshCookerTypedStreams){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshCookerTypedStreams(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshCookerDefaultColors){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshCookerDefaultColors(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshAcceptanceHardEdgeCubeZippedRefs(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshAcceptanceSphereSmooth){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshAcceptanceSphereSmooth(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshAcceptanceUvSeamQuad(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshAcceptanceMirroredUvQuad){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshAcceptanceMirroredUvQuad(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshAcceptanceTwoSidedPlane){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshAcceptanceTwoSidedPlane(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshAcceptanceLargeManyMeshlets){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshAcceptanceLargeManyMeshlets(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshAcceptanceQualityBuilderChecks){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshAcceptanceQualityBuilderChecks(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMaterialBindDiscoveryValidation(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshCookerValidationFailures){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshCookerValidationFailures(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, MeshClassPolicyHelpers){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshClassPolicyHelpers(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(AssetsGraphics, FormatBlockDimensions){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestFormatBlockDimensions(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

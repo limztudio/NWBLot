@@ -1,0 +1,5 @@
+package: rmv
+version: commit 7b3e1fba (RMT backend)
+updated_utc: 2026-06-20
+source: https://github.com/GPUOpen-Tools/radeon_memory_visualizer
+notes: Radeon Memory Visualizer RMT parser + backend (RmvParser/RmvBackend), used by RGD for the page-fault resource history. Only source/parser and source/backend are built (no Qt frontend).

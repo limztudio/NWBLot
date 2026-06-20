@@ -406,3 +406,6 @@ FodyWeavers.xsd
 # 3rd_parties/ so vendored binaries are committed. (Builds are out-of-source under __cmake/ and __exec/.)
 !3rd_parties/**/
 !3rd_parties/**
+
+# Claude Code local session data (memory, transcripts, settings) — local tooling, not part of the project.
+.claude/

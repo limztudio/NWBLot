@@ -11,7 +11,7 @@
 #include <string>
 
 // JSON.
-#include "json/single_include/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 // System Info.
 #include "system_info_reader.h"

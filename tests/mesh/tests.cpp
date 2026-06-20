@@ -7,6 +7,7 @@
 #include <core/mesh/tangent_frame_rebuild.h>
 
 #include <tests/test_context.h>
+#include <gtest/gtest.h>
 
 #include <core/common/module.h>
 
@@ -172,13 +173,35 @@ static void TestRejectsDegenerateTriangle(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_TEST_ENTRY_POINT("mesh", [](NWB::Tests::TestContext& context){
-    __hidden_tests::TestMeshClassMetadata(context);
-    __hidden_tests::TestResolvesCoreFrameMath(context);
-    __hidden_tests::TestRebuildsFlatQuadFrame(context);
-    __hidden_tests::TestDegenerateUvsUseStableTangentFallback(context);
-    __hidden_tests::TestRejectsDegenerateTriangle(context);
-})
+TEST(Mesh, MeshClassMetadata){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestMeshClassMetadata(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Mesh, ResolvesCoreFrameMath){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestResolvesCoreFrameMath(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Mesh, RebuildsFlatQuadFrame){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRebuildsFlatQuadFrame(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Mesh, DegenerateUvsUseStableTangentFallback){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestDegenerateUvsUseStableTangentFallback(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
+
+TEST(Mesh, RejectsDegenerateTriangle){
+    NWB::Tests::TestContext nwbTestContext;
+    __hidden_tests::TestRejectsDegenerateTriangle(nwbTestContext);
+    EXPECT_EQ(nwbTestContext.failed, 0u);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

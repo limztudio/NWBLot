@@ -1,0 +1,5 @@
+package: miniz
+version: 3.0.0
+updated_utc: 2026-06-20
+source: https://github.com/richgel999/miniz
+notes: Single-file zlib-compatible (de)compression.

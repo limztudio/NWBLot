@@ -1,0 +1,5 @@
+package: volk
+version: header v341 (Vulkan 1.4.x)
+updated_utc: 2026-06-06
+source: https://github.com/zeux/volk
+notes: Vulkan meta-loader.

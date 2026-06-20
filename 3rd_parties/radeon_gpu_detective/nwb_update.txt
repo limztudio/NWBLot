@@ -1,0 +1,5 @@
+package: radeon_gpu_detective
+version: 1.5.0.0
+updated_utc: 2026-06-20
+source: https://github.com/GPUOpen-Tools/radeon_gpu_detective
+notes: In-process .rgd GPU-crash decoder backend (rgd_backend / nwb_rgd_decode). CLI frontend, DXBC parser, and shader-disassembler paths excluded; summary decode only.

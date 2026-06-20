@@ -1,0 +1,5 @@
+package: comgr_utils
+version: rdts-2025-11-03 (COMGR windows build 93)
+updated_utc: 2026-06-20
+source: https://github.com/GPUOpen-Tools/comgr_utils
+notes: Only amd_comgr.h is vendored (external/comgr/include); the ~135MB amd_comgr LLVM runtime lib is dlopen'd at runtime, not linked. CMake rewritten to drop FetchContent.

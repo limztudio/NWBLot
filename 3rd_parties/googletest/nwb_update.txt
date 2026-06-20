@@ -1,0 +1,5 @@
+package: googletest
+version: 1.17.0
+updated_utc: 2026-06-20
+source: https://github.com/google/googletest
+notes: gtest only (no gmock). Vendored the googletest sublib (include/ + src/ + LICENSE). Built from the gtest-all.cc unity source via an NWB-authored CMakeLists; the engine supplies its own test entry point (tests/gtest_nwb_main.cpp) instead of gtest_main. Samples/docs/tests not vendored.

@@ -1,0 +1,5 @@
+package: rdf
+version: 1.4.x (RDF_INTERFACE_VERSION 1.4)
+updated_utc: 2026-06-20
+source: https://github.com/GPUOpen-Tools/rdf
+notes: AMD RDF chunk-file library (amdrdf). Flattened out of the nested rdf/rdf layout and built STATIC (no DLL). Bundled zstd lifted to top-level 3rd_parties/zstd.

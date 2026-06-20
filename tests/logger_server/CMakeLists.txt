@@ -1,4 +1,4 @@
-nwb_declare_executable(nwb_logserver_crash_tests)
+nwb_declare_gtest_executable(nwb_logserver_crash_tests)
 target_sources(nwb_logserver_crash_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/crash_test_helpers.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_test_helpers.h"
@@ -17,6 +17,7 @@ target_link_libraries(nwb_logserver_crash_tests PRIVATE
     nwb_crash_package
     nwb_alloc
     nwb::aftermath_headers
+    nwb::rgd_backend
 )
 nwb_copy_aftermath_runtime(nwb_logserver_crash_tests)
 if(WIN32)
@@ -28,4 +29,3 @@ endif()
 if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_dependencies(nwb_logserver_crash_tests nwb_crash_handler)
 endif()
-add_test(NAME nwb_logserver_crash_tests COMMAND nwb_logserver_crash_tests)

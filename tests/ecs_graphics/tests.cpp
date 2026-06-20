@@ -669,49 +669,41 @@ static void TestMeshSkinningPayloadValidatesSkeletonAndPalette(TestContext& cont
 TEST(EcsGraphics, RuntimeResourceNameBuilderMatchesFormattedSuffix){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestRuntimeResourceNameBuilderMatchesFormattedSuffix(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(EcsGraphics, LightComponents){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestLightComponents(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(EcsGraphics, MeshSystemResolvesMeshComponent){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestMeshSystemResolvesMeshComponent(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(EcsGraphics, MaterialInstanceComponentSetters){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestMaterialInstanceComponentSetters(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestMaterialTypedByteRangeDeduplicatesContent(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(EcsGraphics, JointRotationQuaternionBuildsColumnVectorRotations){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestJointRotationQuaternionBuildsColumnVectorRotations(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(EcsGraphics, SkeletonPoseBuildsHierarchicalPalette){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestSkeletonPoseBuildsHierarchicalPalette(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestMeshSkinningPayloadValidatesSkeletonAndPalette(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 

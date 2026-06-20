@@ -2,10 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared GoogleTest entry point for the NWB test executables. It replaces the former custom RunTestSuite /
-// NWB_DEFINE_TEST_ENTRY_POINT harness: each test binary links this single object, which performs the engine's
-// common initialization once (Core::Common::InitializerGuard, exactly as RunTestSuite did) and then runs every
-// gtest case registered in the linked test sources. GoogleTest's own gtest_main is intentionally not used — the
+// Shared GoogleTest entry point for the NWB test executables. Each test binary links this single object, which
+// performs the engine's common initialization once (Core::Common::InitializerGuard) and then runs every gtest
+// case registered in the linked test sources. GoogleTest's own gtest_main is intentionally not used — the
 // engine needs its own application entry point (NWB_DEFINE_APPLICATION_ENTRY_POINT) for startup.
 
 

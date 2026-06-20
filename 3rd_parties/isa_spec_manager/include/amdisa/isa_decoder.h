@@ -5,6 +5,7 @@
 #define ISA_DECODER_H_
 
 // C++ libraries.
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>

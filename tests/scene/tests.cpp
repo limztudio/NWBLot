@@ -226,13 +226,11 @@ static void TestSceneCameraResolution(TestContext& context){
 TEST(Scene, SceneAndMainCamera){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestSceneAndMainCamera(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(Scene, SceneCameraResolution){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestSceneCameraResolution(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 

@@ -367,55 +367,46 @@ static void TestDuplicateSchedulerAddIsStable(TestContext& context){
 TEST(Ecs, ComponentStorageAndView){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestComponentStorageAndView(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestEmptyViewDoesNotAllocateComponentPools(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(Ecs, ComponentLifetime){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestComponentLifetime(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(Ecs, ComponentMutationVersion){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestComponentMutationVersion(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(Ecs, MessageBus){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestMessageBus(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(Ecs, MoveOnlyMessageBus){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestMoveOnlyMessageBus(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(Ecs, SystemTick){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestSystemTick(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(Ecs, DuplicateComponentAddIsStable){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestDuplicateComponentAddIsStable(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 TEST(Ecs, DuplicateSchedulerAddIsStable){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_tests::TestDuplicateSchedulerAddIsStable(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 

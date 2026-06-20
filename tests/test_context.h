@@ -5,9 +5,10 @@
 #pragma once
 
 
+#include <gtest/gtest.h>
+
 #include <core/alloc/core.h>
 #include <core/alloc/general.h>
-#include <core/common/application_entry.h>
 
 #include <global/global.h>
 
@@ -28,21 +29,13 @@ namespace Tests{
 
 
 struct TestContext{
-    u32 passed = 0;
-    u32 failed = 0;
-
-    void checkTrue(const bool condition, const AStringView expression, const AStringView file, const i32 line){
-        if(condition){
-            ++passed;
-            return;
-        }
-
-        ++failed;
-        NWB_CERR << file << '(' << line << "): check failed: " << expression << '\n';
-    }
 };
 
-#define NWB_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
+#define NWB_TEST_CHECK(context, expression) \
+    do { \
+        static_cast<void>(context); \
+        EXPECT_TRUE((expression)); \
+    } while(false)
 
 inline constexpr Name s_TestArena("tests/test_arena");
 inline constexpr Name s_DefaultTestArena("tests/default_test_arena");
@@ -112,34 +105,6 @@ inline TestVector<u32> MakeQuadTriangleIndices(){
     indices.push_back(3u);
     return indices;
 }
-
-template<typename RunTests>
-[[nodiscard]] inline int RunTestSuite(const char* suiteName, RunTests&& runTests){
-    Core::Common::InitializerGuard commonInitializerGuard;
-    if(!commonInitializerGuard.initialize()){
-        NWB_CERR << suiteName << " tests failed: common initialization failed\n";
-        return -1;
-    }
-
-    TestContext context;
-    Forward<RunTests>(runTests)(context);
-
-    if(context.failed != 0u){
-        NWB_CERR << suiteName << " tests failed: " << context.failed << " of " << (context.passed + context.failed) << '\n';
-        return -1;
-    }
-
-    NWB_COUT << suiteName << " tests passed: " << context.passed << '\n';
-    return 0;
-}
-
-#define NWB_DEFINE_TEST_ENTRY_POINT(suiteName, ...) \
-    static int EntryPoint(const isize argc, tchar** argv, void*){ \
-        static_cast<void>(argc); \
-        static_cast<void>(argv); \
-        return ::NWB::Tests::RunTestSuite(suiteName, __VA_ARGS__); \
-    } \
-    NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 
 };
 

@@ -125,7 +125,6 @@ static void TestCameraProjectionHelpers(TestContext& context){
 TEST(Scene, CameraProjectionHelpers){
     NWB::Tests::TestContext nwbTestContext;
     __hidden_scene_camera_tests::TestCameraProjectionHelpers(nwbTestContext);
-    EXPECT_EQ(nwbTestContext.failed, 0u);
 }
 
 

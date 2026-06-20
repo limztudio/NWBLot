@@ -1366,7 +1366,7 @@ static bool LoadCookedAsset(
 ){
     NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
     const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
-    EXPECT_TRUE((loadedVolume));
+    EXPECT_TRUE(loadedVolume);
     if(!loadedVolume)
         return false;
 
@@ -1375,15 +1375,15 @@ static bool LoadCookedAsset(
 
     NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     const bool loadedBinary = volumeSession.loadData(assetName, binary);
-    EXPECT_TRUE((loadedBinary));
+    EXPECT_TRUE(loadedBinary);
     EXPECT_FALSE(binary.empty());
     if(!loadedBinary || binary.empty())
         return false;
 
     AssetCodecT codec;
     const bool deserialized = codec.deserialize(testArena.arena, assetName, binary, outLoadedAsset);
-    EXPECT_TRUE((deserialized));
-    EXPECT_TRUE((static_cast<bool>(outLoadedAsset)));
+    EXPECT_TRUE(deserialized);
+    EXPECT_TRUE(static_cast<bool>(outLoadedAsset));
     return deserialized && static_cast<bool>(outLoadedAsset);
 }
 
@@ -1434,19 +1434,19 @@ static bool LoadCookedShaderArchiveRecords(
 ){
     NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
     const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
-    EXPECT_TRUE((loadedVolume));
+    EXPECT_TRUE(loadedVolume);
     if(!loadedVolume)
         return false;
 
     NWB::Core::GraphicsBytes indexBinary(testArena.arena);
     const bool loadedIndex = volumeSession.loadData(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary);
-    EXPECT_TRUE((loadedIndex));
+    EXPECT_TRUE(loadedIndex);
     EXPECT_FALSE(indexBinary.empty());
     if(!loadedIndex || indexBinary.empty())
         return false;
 
     const bool deserialized = NWB::Core::ShaderArchive::deserializeIndex(indexBinary, outRecords);
-    EXPECT_TRUE((deserialized));
+    EXPECT_TRUE(deserialized);
     return deserialized;
 }
 

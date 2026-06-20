@@ -58,19 +58,19 @@ static void CheckStringValue(const Value* value, MStringView expected){
     if(!value)
         return;
 
-    EXPECT_TRUE((value->isString()));
+    EXPECT_TRUE(value->isString());
     if(value->isString())
         EXPECT_EQ(value->asString(), expected);
 }
 
 static void CheckReferenceListElement(const Value& value, MStringView expected){
-    EXPECT_TRUE((value.isReference()));
+    EXPECT_TRUE(value.isReference());
     if(value.isReference())
         EXPECT_EQ(value.asReference(), expected);
 }
 
 static void CheckStringListElement(const Value& value, const AString& expected){
-    EXPECT_TRUE((value.isString()));
+    EXPECT_TRUE(value.isString());
     if(value.isString())
         EXPECT_EQ(value.asString(), ViewOf(expected));
 }
@@ -85,7 +85,7 @@ static void CheckImplicitMaterialBindParseFailsWithMessage(const AString& source
 
     const bool parsed = ParseImplicitMaterialBind(document, source);
     EXPECT_FALSE(parsed);
-    EXPECT_TRUE((document.hasErrors()));
+    EXPECT_TRUE(document.hasErrors());
     if(document.errors().empty())
         return;
 
@@ -95,7 +95,7 @@ static void CheckImplicitMaterialBindParseFailsWithMessage(const AString& source
 }
 
 static void CheckSingleStringListValue(const Value& value, const AString& text){
-    ASSERT_TRUE((value.isList()));
+    ASSERT_TRUE(value.isList());
     ASSERT_EQ(value.asList().size(), 1u);
     CheckStringListElement(value.asList()[0u], text);
 }
@@ -116,8 +116,8 @@ TEST(Metascript, CrossArenaMoveAssignmentCopiesIntoDestinationArena){
 
     destination = Move(source);
 
-    EXPECT_TRUE((source.isNull()));
-    EXPECT_TRUE((destination.isString()));
+    EXPECT_TRUE(source.isNull());
+    EXPECT_TRUE(destination.isString());
     EXPECT_EQ(destination.asString(), ViewOf(text));
 }
 
@@ -135,8 +135,8 @@ TEST(Metascript, CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena)
 
     destination = source;
 
-    EXPECT_TRUE((source.isMap()));
-    EXPECT_TRUE((destination.isMap()));
+    EXPECT_TRUE(source.isMap());
+    EXPECT_TRUE(destination.isMap());
 
     const Value* copiedList = destination.findField(MStringView("items", 5u));
     EXPECT_NE(copiedList, nullptr);
@@ -171,7 +171,7 @@ TEST(Metascript, CrossArenaAppendCopiesIntoDestinationArena){
 
     destination.append(Move(source));
 
-    EXPECT_TRUE((source.isNull()));
+    EXPECT_TRUE(source.isNull());
     CheckSingleStringListValue(destination, text);
 }
 
@@ -200,11 +200,11 @@ TEST(Metascript, AppendSelfMoveCopiesOriginalValue){
 
     list.append(Move(list));
 
-    EXPECT_TRUE((list.isList()));
+    EXPECT_TRUE(list.isList());
     EXPECT_EQ(list.asList().size(), 2u);
     if(list.isList() && list.asList().size() == 2u){
         CheckStringListElement(list.asList()[0u], text);
-        EXPECT_TRUE((list.asList()[1u].isList()));
+        EXPECT_TRUE(list.asList()[1u].isList());
         EXPECT_EQ(list.asList()[1u].asList().size(), 1u);
         if(list.asList()[1u].isList() && list.asList()[1u].asList().size() == 1u){
             const Value& nestedText = list.asList()[1u].asList()[0u];
@@ -222,10 +222,10 @@ TEST(Metascript, AppendExistingListElementMoveCopiesBeforeDestroy){
 
     list.append(Move(list.asList()[0u]));
 
-    EXPECT_TRUE((list.isList()));
+    EXPECT_TRUE(list.isList());
     EXPECT_EQ(list.asList().size(), 2u);
     if(list.isList() && list.asList().size() == 2u){
-        EXPECT_TRUE((list.asList()[0u].isNull()));
+        EXPECT_TRUE(list.asList()[0u].isNull());
         CheckStringListElement(list.asList()[1u], text);
     }
 }
@@ -239,7 +239,7 @@ TEST(Metascript, ListAppendExistingElementCopiesBeforeReallocation){
 
     list += list.asList()[0u];
 
-    EXPECT_TRUE((list.isList()));
+    EXPECT_TRUE(list.isList());
     EXPECT_EQ(list.asList().size(), 2u);
     if(list.isList() && list.asList().size() == 2u){
         CheckStringListElement(list.asList()[0u], text);
@@ -255,7 +255,7 @@ TEST(Metascript, ExponentDoubleLiterals){
         "asset.values = [2.89785676e-05, -3.66009772E-07, 1e+03, 2E2];\n"
     ;
 
-    EXPECT_TRUE((document.parse(ViewOf(source))));
+    EXPECT_TRUE(document.parse(ViewOf(source)));
     const Value* values = document.asset().findField(MStringView("values", 6u));
     EXPECT_NE(values, nullptr);
     if(!values || !values->isList())
@@ -266,10 +266,10 @@ TEST(Metascript, ExponentDoubleLiterals){
     if(list.size() != 4u)
         return;
 
-    EXPECT_TRUE((list[0u].isDouble()));
-    EXPECT_TRUE((list[1u].isDouble()));
-    EXPECT_TRUE((list[2u].isDouble()));
-    EXPECT_TRUE((list[3u].isDouble()));
+    EXPECT_TRUE(list[0u].isDouble());
+    EXPECT_TRUE(list[1u].isDouble());
+    EXPECT_TRUE(list[2u].isDouble());
+    EXPECT_TRUE(list[3u].isDouble());
     EXPECT_LT(Abs(list[0u].asDouble() - 0.0000289785676), 0.0000000001);
     EXPECT_LT(Abs(list[1u].asDouble() + 0.000000366009772), 0.0000000001);
     EXPECT_LT(Abs(list[2u].asDouble() - 1000.0), 0.0000000001);
@@ -300,7 +300,7 @@ TEST(Metascript, BindStyleStructDeclarations){
     ;
 
     const bool parsed = ParseImplicitMaterialBind(document, source);
-    EXPECT_TRUE((parsed));
+    EXPECT_TRUE(parsed);
     if(!parsed)
         return;
 
@@ -310,7 +310,7 @@ TEST(Metascript, BindStyleStructDeclarations){
     const Value& asset = document.asset();
     const Value* structs = FindTestField(asset, LiteralView("structs"));
     EXPECT_NE(structs, nullptr);
-    EXPECT_TRUE((structs && structs->isMap()));
+    EXPECT_TRUE(structs && structs->isMap());
     if(!structs || !structs->isMap())
         return;
 
@@ -323,13 +323,13 @@ TEST(Metascript, BindStyleStructDeclarations){
 
     const Value* surfaceAttributes = FindTestField(*surfaceStruct, LiteralView("attributes"));
     ASSERT_NE(surfaceAttributes, nullptr);
-    ASSERT_TRUE((surfaceAttributes->isList()));
+    ASSERT_TRUE(surfaceAttributes->isList());
     ASSERT_EQ(surfaceAttributes->asList().size(), 1u);
     CheckStringField(surfaceAttributes->asList()[0u], LiteralView("name"), LiteralView("material_constant"));
 
     const Value* surfaceFields = FindTestField(*surfaceStruct, LiteralView("fields"));
     ASSERT_NE(surfaceFields, nullptr);
-    ASSERT_TRUE((surfaceFields->isList()));
+    ASSERT_TRUE(surfaceFields->isList());
     ASSERT_EQ(surfaceFields->asList().size(), 2u);
 
     const Value& baseColorField = surfaceFields->asList()[0u];
@@ -338,20 +338,20 @@ TEST(Metascript, BindStyleStructDeclarations){
 
     const Value* baseColorAttributes = FindTestField(baseColorField, LiteralView("attributes"));
     ASSERT_NE(baseColorAttributes, nullptr);
-    ASSERT_TRUE((baseColorAttributes->isList()));
+    ASSERT_TRUE(baseColorAttributes->isList());
     ASSERT_EQ(baseColorAttributes->asList().size(), 1u);
     const Value& defaultAttribute = baseColorAttributes->asList()[0u];
     CheckStringField(defaultAttribute, LiteralView("name"), LiteralView("default"));
 
     const Value* arguments = FindTestField(defaultAttribute, LiteralView("arguments"));
     ASSERT_NE(arguments, nullptr);
-    ASSERT_TRUE((arguments->isList()));
+    ASSERT_TRUE(arguments->isList());
     ASSERT_EQ(arguments->asList().size(), 1u);
     CheckStringValue(&arguments->asList()[0u], LiteralView("float4(1.0, 1.0, 1.0, 1.0)"));
 
     const Value* instances = FindTestField(asset, LiteralView("instances"));
     ASSERT_NE(instances, nullptr);
-    ASSERT_TRUE((instances->isList()));
+    ASSERT_TRUE(instances->isList());
     ASSERT_EQ(instances->asList().size(), 2u);
 
     CheckStringField(instances->asList()[0u], LiteralView("type"), LiteralView("NwbProjectBxdfSurfaceMaterial"));
@@ -405,7 +405,7 @@ TEST(Metascript, GenericDeclarationsAndReferences){
     ;
 
     const bool parsed = document.parse(ViewOf(source));
-    EXPECT_TRUE((parsed));
+    EXPECT_TRUE(parsed);
     if(!parsed)
         return;
 
@@ -422,7 +422,7 @@ TEST(Metascript, GenericDeclarationsAndReferences){
 
     const Value* bunch = document.findVariable(LiteralView("bunch"));
     EXPECT_NE(bunch, nullptr);
-    EXPECT_TRUE((bunch && bunch->isList()));
+    EXPECT_TRUE(bunch && bunch->isList());
     if(!bunch || !bunch->isList() || bunch->asList().size() != 2u)
         return;
 
@@ -441,7 +441,7 @@ TEST(Metascript, GenericDeclarationsAndReferences){
 
     const Value* indices = FindTestField(*meshValue, LiteralView("indices"));
     ASSERT_NE(indices, nullptr);
-    ASSERT_TRUE((indices->isList()));
+    ASSERT_TRUE(indices->isList());
     EXPECT_EQ(indices->asList().size(), 3u);
 }
 

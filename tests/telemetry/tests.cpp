@@ -52,12 +52,12 @@ TEST(Telemetry, CaptureFlags){
     static_assert(all.perfEnabled());
     static_assert(all.frameGraphEnabled());
 
-    EXPECT_TRUE((Telemetry::CaptureAllowsEventKind(all, Telemetry::EventKind::TextLog)));
-    EXPECT_TRUE((Telemetry::CaptureAllowsEventKind(perf, Telemetry::EventKind::MemoryFrame)));
-    EXPECT_TRUE((Telemetry::CaptureAllowsEventKind(all, Telemetry::EventKind::FrameGraphFrame)));
+    EXPECT_TRUE(Telemetry::CaptureAllowsEventKind(all, Telemetry::EventKind::TextLog));
+    EXPECT_TRUE(Telemetry::CaptureAllowsEventKind(perf, Telemetry::EventKind::MemoryFrame));
+    EXPECT_TRUE(Telemetry::CaptureAllowsEventKind(all, Telemetry::EventKind::FrameGraphFrame));
     EXPECT_FALSE(Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::PerfFrame));
     EXPECT_FALSE(Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::MemoryFrame));
-    EXPECT_TRUE((Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::FrameGraphFrame)));
+    EXPECT_TRUE(Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::FrameGraphFrame));
 }
 
 TEST(Telemetry, RecorderFiltersAndCopiesPayload){
@@ -70,17 +70,17 @@ TEST(Telemetry, RecorderFiltersAndCopiesPayload){
     EXPECT_EQ(recorder.eventCount(), 0u);
 
     u8 frameGraphPayload[] = { 4u, 5u, 6u };
-    EXPECT_TRUE((recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 13u, frameGraphPayload, sizeof(frameGraphPayload), 7u)));
+    EXPECT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 13u, frameGraphPayload, sizeof(frameGraphPayload), 7u));
     frameGraphPayload[0u] = 99u;
 
     const Telemetry::EventView view = recorder.view();
-    EXPECT_TRUE((view.valid()));
+    EXPECT_TRUE(view.valid());
     EXPECT_EQ(view.eventCount(), 1u);
 
     const Telemetry::EventRecord* record = view.eventAt(0u);
     EXPECT_NE(record, nullptr);
     if(record){
-        EXPECT_TRUE((record->header.valid()));
+        EXPECT_TRUE(record->header.valid());
         EXPECT_EQ(record->header.kind, Telemetry::EventKind::FrameGraphFrame);
         EXPECT_EQ(record->header.streamId, 7u);
         EXPECT_EQ(record->header.frameIndex, 13u);
@@ -100,7 +100,7 @@ TEST(Telemetry, RecorderClearAndDisabledState){
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
 
     const u32 payload = 42u;
-    EXPECT_TRUE((recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, &payload, sizeof(payload))));
+    EXPECT_TRUE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, &payload, sizeof(payload)));
     EXPECT_EQ(recorder.eventCount(), 1u);
 
     recorder.setCaptureOptions(Telemetry::CaptureOptions::Disabled());
@@ -115,7 +115,7 @@ TEST(Telemetry, EventCodecRoundTrip){
     recorder.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
 
     const u8 payload[] = { 10u, 20u, 30u, 40u };
-    EXPECT_TRUE((recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 44u, payload, sizeof(payload), 3u)));
+    EXPECT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 44u, payload, sizeof(payload), 3u));
 
     const Telemetry::EventRecord* source = recorder.view().eventAt(0u);
     EXPECT_NE(source, nullptr);
@@ -123,14 +123,14 @@ TEST(Telemetry, EventCodecRoundTrip){
         return;
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
-    EXPECT_TRUE((Telemetry::EncodeEvent(*source, encoded)));
+    EXPECT_TRUE(Telemetry::EncodeEvent(*source, encoded));
     EXPECT_EQ(encoded.size(), sizeof(Telemetry::EncodedEventHeader) + sizeof(payload));
 
     Telemetry::EventRecord decoded(testArena.arena);
     const Telemetry::DecodeResult result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size(), decoded);
-    EXPECT_TRUE((result.ok()));
+    EXPECT_TRUE(result.ok());
     EXPECT_EQ(result.bytesRead, encoded.size());
-    EXPECT_TRUE((decoded.header.valid()));
+    EXPECT_TRUE(decoded.header.valid());
     EXPECT_EQ(decoded.header.kind, source->header.kind);
     EXPECT_EQ(decoded.header.streamId, source->header.streamId);
     EXPECT_EQ(decoded.header.frameIndex, source->header.frameIndex);
@@ -157,7 +157,7 @@ TEST(Telemetry, EventCodecRejectsInvalidInput){
     EXPECT_FALSE(Telemetry::EncodeEvent(validHeader, nullptr, sizeof(payload), encoded));
 
     validHeader.payloadBytes = 0u;
-    EXPECT_TRUE((Telemetry::EncodeEvent(validHeader, nullptr, 0u, encoded)));
+    EXPECT_TRUE(Telemetry::EncodeEvent(validHeader, nullptr, 0u, encoded));
     encoded[0u] = 0u;
 
     Telemetry::EventRecord decoded(testArena.arena);
@@ -176,7 +176,7 @@ TEST(Telemetry, EventCodecReportsTruncatedPayload){
     Telemetry::EventHeader header;
     header.kind = Telemetry::EventKind::PerfFrame;
     header.payloadBytes = sizeof(payload);
-    EXPECT_TRUE((Telemetry::EncodeEvent(header, payload, sizeof(payload), encoded)));
+    EXPECT_TRUE(Telemetry::EncodeEvent(header, payload, sizeof(payload), encoded));
 
     Telemetry::EventRecord decoded(testArena.arena);
     const Telemetry::DecodeResult result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size() - 1u, decoded);
@@ -190,17 +190,17 @@ TEST(Telemetry, EventStreamCodecRoundTrip){
 
     const u32 perfPayload = 99u;
     const char frameGraphPayload[] = "{frame:1}";
-    EXPECT_TRUE((recorder.recordBinary(Telemetry::EventKind::PerfFrame, 101u, &perfPayload, sizeof(perfPayload), 2u)));
-    EXPECT_TRUE((recorder.recordBinary(
+    EXPECT_TRUE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 101u, &perfPayload, sizeof(perfPayload), 2u));
+    EXPECT_TRUE(recorder.recordBinary(
         Telemetry::EventKind::FrameGraphFrame,
         102u,
         frameGraphPayload,
         sizeof(frameGraphPayload) - 1u,
         3u
-    )));
+    ));
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
-    EXPECT_TRUE((Telemetry::EncodeEventStream(recorder.view(), encoded)));
+    EXPECT_TRUE(Telemetry::EncodeEventStream(recorder.view(), encoded));
     EXPECT_EQ(encoded.size(), sizeof(Telemetry::EncodedStreamHeader)
             + (sizeof(Telemetry::EncodedEventHeader) * 2u)
             + sizeof(perfPayload)
@@ -208,7 +208,7 @@ TEST(Telemetry, EventStreamCodecRoundTrip){
 
     Telemetry::Recorder decoded(testArena.arena);
     const Telemetry::DecodeResult result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded);
-    EXPECT_TRUE((result.ok()));
+    EXPECT_TRUE(result.ok());
     EXPECT_EQ(result.bytesRead, encoded.size());
     EXPECT_EQ(decoded.eventCount(), recorder.eventCount());
 
@@ -236,12 +236,12 @@ TEST(Telemetry, EventStreamCodecHandlesEmptyStreams){
     Telemetry::Recorder recorder(testArena.arena);
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
-    EXPECT_TRUE((Telemetry::EncodeEventStream(recorder.view(), encoded)));
+    EXPECT_TRUE(Telemetry::EncodeEventStream(recorder.view(), encoded));
     EXPECT_EQ(encoded.size(), sizeof(Telemetry::EncodedStreamHeader));
 
     Telemetry::Recorder decoded(testArena.arena);
     const Telemetry::DecodeResult result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded);
-    EXPECT_TRUE((result.ok()));
+    EXPECT_TRUE(result.ok());
     EXPECT_EQ(result.bytesRead, encoded.size());
     EXPECT_EQ(decoded.eventCount(), 0u);
 }
@@ -252,10 +252,10 @@ TEST(Telemetry, EventStreamCodecRejectsInvalidInput){
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
 
     const u8 payload[] = { 7u, 8u };
-    EXPECT_TRUE((recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, payload, sizeof(payload))));
+    EXPECT_TRUE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, payload, sizeof(payload)));
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
-    EXPECT_TRUE((Telemetry::EncodeEventStream(recorder.view(), encoded)));
+    EXPECT_TRUE(Telemetry::EncodeEventStream(recorder.view(), encoded));
 
     Telemetry::Recorder decoded(testArena.arena);
     Telemetry::DecodeResult result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), sizeof(Telemetry::EncodedStreamHeader) - 1u, decoded);
@@ -320,8 +320,8 @@ TEST(Telemetry, CaptureSessionCaptureScopeRecordsLogAndDiagnostic){
     });
 
     EXPECT_EQ(previousLogger.messageCount(), 2u);
-    EXPECT_TRUE((previousLogger.sawMessageContaining(NWB_TEXT("scope text"))));
-    EXPECT_TRUE((previousLogger.sawMessageContaining(NWB_TEXT("after scope"))));
+    EXPECT_TRUE(previousLogger.sawMessageContaining(NWB_TEXT("scope text")));
+    EXPECT_TRUE(previousLogger.sawMessageContaining(NWB_TEXT("after scope")));
     EXPECT_EQ(session.eventCount(), 2u);
 
     const Telemetry::EventRecord* logEvent = session.view().eventAt(0u);
@@ -340,8 +340,8 @@ TEST(Telemetry, CaptureSessionCaptureScopeRecordsLogAndDiagnostic){
 
     Telemetry::TextLogPayload logPayload(testArena.arena);
     Telemetry::DiagnosticPayload diagnosticPayload(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParseTextLogPayload(testArena.arena, logEvent->payload.data(), logEvent->payload.size(), logPayload)));
-    EXPECT_TRUE((Telemetry::ParseDiagnosticPayload(testArena.arena, diagnosticEvent->payload.data(), diagnosticEvent->payload.size(), diagnosticPayload)));
+    EXPECT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, logEvent->payload.data(), logEvent->payload.size(), logPayload));
+    EXPECT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, diagnosticEvent->payload.data(), diagnosticEvent->payload.size(), diagnosticPayload));
     EXPECT_EQ(logPayload.messageUtf8, "scope text");
     EXPECT_EQ(diagnosticPayload.category, "scope_diagnostic");
     EXPECT_EQ(diagnosticPayload.message, "scope diagnostic");
@@ -353,16 +353,16 @@ TEST(Telemetry, TextLogPayloadRoundTrip){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
 
-    EXPECT_TRUE((Telemetry::BuildTextLogPayload(
+    EXPECT_TRUE(Telemetry::BuildTextLogPayload(
         testArena.arena,
         NWB::Core::Common::LogType::Warning,
         NWB_TEXT("telemetry text log"),
         payload
-    )));
+    ));
     EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedTextLogPayloadHeader) + sizeof("telemetry text log") - 1u);
 
     Telemetry::TextLogPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
     EXPECT_EQ(parsed.type, NWB::Core::Common::LogType::Warning);
     EXPECT_EQ(parsed.messageUtf8, "telemetry text log");
 
@@ -375,13 +375,13 @@ TEST(Telemetry, RecordTextLogUsesTelemetryEvent){
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
-    EXPECT_TRUE((Telemetry::RecordTextLog(
+    EXPECT_TRUE(Telemetry::RecordTextLog(
         recorder,
         NWB::Core::Common::LogType::EssentialInfo,
         NWB_TEXT("captured text"),
         123u,
         9u
-    )));
+    ));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
     EXPECT_NE(event, nullptr);
@@ -393,7 +393,7 @@ TEST(Telemetry, RecordTextLogUsesTelemetryEvent){
     EXPECT_EQ(event->header.streamId, 9u);
 
     Telemetry::TextLogPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.type, NWB::Core::Common::LogType::EssentialInfo);
     EXPECT_EQ(parsed.messageUtf8, "captured text");
 }
@@ -412,7 +412,7 @@ TEST(Telemetry, TextLogCaptureLoggerForwardsAndRecords){
 
     EXPECT_EQ(forwardLogger.messageCount(), 1u);
     EXPECT_EQ(forwardLogger.lastType(), NWB::Core::Common::LogType::Warning);
-    EXPECT_TRUE((forwardLogger.sawMessageContaining(NWB_TEXT("bridged warning"))));
+    EXPECT_TRUE(forwardLogger.sawMessageContaining(NWB_TEXT("bridged warning")));
     EXPECT_EQ(recorder.eventCount(), 1u);
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
@@ -425,7 +425,7 @@ TEST(Telemetry, TextLogCaptureLoggerForwardsAndRecords){
     EXPECT_EQ(event->header.streamId, 4u);
 
     Telemetry::TextLogPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.type, NWB::Core::Common::LogType::Warning);
     EXPECT_EQ(parsed.messageUtf8, "bridged warning");
 }
@@ -445,11 +445,11 @@ TEST(Telemetry, DiagnosticPayloadRoundTrip){
         .terminatesProcess = true,
     };
 
-    EXPECT_TRUE((Telemetry::BuildDiagnosticPayload(testArena.arena, source, payload)));
+    EXPECT_TRUE(Telemetry::BuildDiagnosticPayload(testArena.arena, source, payload));
     EXPECT_GT(payload.size(), sizeof(Telemetry::EncodedDiagnosticPayloadHeader));
 
     Telemetry::DiagnosticPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed));
     EXPECT_EQ(parsed.event, DiagnosticEventName::s_Error);
     EXPECT_EQ(parsed.category, "unit_category");
     EXPECT_EQ(parsed.expression, "value != nullptr");
@@ -457,7 +457,7 @@ TEST(Telemetry, DiagnosticPayloadRoundTrip){
     EXPECT_EQ(parsed.file, "diagnostic_test.cpp");
     EXPECT_EQ(parsed.instructionPointer, 0x1234u);
     EXPECT_EQ(parsed.line, 77u);
-    EXPECT_TRUE((parsed.terminatesProcess));
+    EXPECT_TRUE(parsed.terminatesProcess);
 
     payload[0u] = 0u;
     EXPECT_FALSE(Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed));
@@ -478,7 +478,7 @@ TEST(Telemetry, RecordDiagnosticUsesTelemetryEvent){
         .line = 12u,
     };
 
-    EXPECT_TRUE((Telemetry::RecordDiagnostic(recorder, source, 222u, 6u)));
+    EXPECT_TRUE(Telemetry::RecordDiagnostic(recorder, source, 222u, 6u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
     EXPECT_NE(event, nullptr);
@@ -490,7 +490,7 @@ TEST(Telemetry, RecordDiagnosticUsesTelemetryEvent){
     EXPECT_EQ(event->header.streamId, 6u);
 
     Telemetry::DiagnosticPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.event, DiagnosticEventName::s_Assert);
     EXPECT_EQ(parsed.category, DiagnosticEventCategory::s_Assert);
     EXPECT_EQ(parsed.message, "assert payload");
@@ -503,7 +503,7 @@ TEST(Telemetry, DiagnosticCaptureGuardRecordsGlobalDiagnostic){
 
     {
         Telemetry::DiagnosticCaptureGuard guard(recorder);
-        EXPECT_TRUE((guard.installed()));
+        EXPECT_TRUE(guard.installed());
         guard.setFrameIndex(333u);
         guard.setStreamId(8u);
         CaptureDiagnosticEvent(DiagnosticEventRecord{
@@ -533,7 +533,7 @@ TEST(Telemetry, DiagnosticCaptureGuardRecordsGlobalDiagnostic){
     EXPECT_EQ(event->header.streamId, 8u);
 
     Telemetry::DiagnosticPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.event, DiagnosticEventName::s_Error);
     EXPECT_EQ(parsed.category, "telemetry_guard");
     EXPECT_EQ(parsed.message, "captured diagnostic");
@@ -556,13 +556,13 @@ TEST(Telemetry, DiagnosticCaptureGuardManualCaptureReturnsStatus){
     guard.setFrameIndex(444u);
     guard.setStreamId(5u);
 
-    EXPECT_TRUE((guard.capture(DiagnosticEventRecord{
+    EXPECT_TRUE(guard.capture(DiagnosticEventRecord{
         .event = DiagnosticEventName::s_Error,
         .category = "manual_capture",
         .message = "manual diagnostic",
         .file = "manual.cpp",
         .line = 55u,
-    })));
+    }));
     EXPECT_EQ(recorder.eventCount(), 1u);
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
@@ -574,7 +574,7 @@ TEST(Telemetry, DiagnosticCaptureGuardManualCaptureReturnsStatus){
     EXPECT_EQ(event->header.streamId, 5u);
 
     Telemetry::DiagnosticPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.category, "manual_capture");
     EXPECT_EQ(parsed.message, "manual diagnostic");
 }
@@ -673,7 +673,7 @@ TEST(Telemetry, FrameGraphPayloadRoundTrip){
     BuildTestFrameGraph(testArena.arena, nodes, edges);
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    EXPECT_TRUE((Telemetry::BuildFrameGraphPayload(testArena.arena, 905u, nodes, edges, payload)));
+    EXPECT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 905u, nodes, edges, payload));
     EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeader)
             + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
             + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
@@ -682,7 +682,7 @@ TEST(Telemetry, FrameGraphPayloadRoundTrip){
             + sizeof("Lighting Pass"));
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
     EXPECT_EQ(parsed.frameIndex, 905u);
     EXPECT_EQ(parsed.nodes.size(), 3u);
     EXPECT_EQ(parsed.edges.size(), 2u);
@@ -739,7 +739,7 @@ TEST(Telemetry, RecordFrameGraphUsesTelemetryEvent){
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
 
-    EXPECT_TRUE((Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 14u)));
+    EXPECT_TRUE(Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 14u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
     EXPECT_NE(event, nullptr);
@@ -751,7 +751,7 @@ TEST(Telemetry, RecordFrameGraphUsesTelemetryEvent){
     EXPECT_EQ(event->header.streamId, 14u);
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.frameIndex, 909u);
     EXPECT_EQ(parsed.nodes.size(), 3u);
     EXPECT_EQ(parsed.edges.size(), 2u);
@@ -768,7 +768,7 @@ TEST(Telemetry, CaptureSessionRecordsFrameGraphWithContext){
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
 
-    EXPECT_TRUE((session.recordFrameGraph(nodes, edges)));
+    EXPECT_TRUE(session.recordFrameGraph(nodes, edges));
 
     const Telemetry::EventRecord* event = session.view().eventAt(0u);
     EXPECT_NE(event, nullptr);
@@ -780,7 +780,7 @@ TEST(Telemetry, CaptureSessionRecordsFrameGraphWithContext){
     EXPECT_EQ(event->header.streamId, 15u);
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.frameIndex, 910u);
     EXPECT_EQ(parsed.nodes.size(), 3u);
     EXPECT_EQ(parsed.edges.size(), 2u);
@@ -802,18 +802,18 @@ TEST(Telemetry, PerfTimingPayloadRoundTrip){
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    EXPECT_TRUE((Telemetry::BuildPerfTimingPayload(
+    EXPECT_TRUE(Telemetry::BuildPerfTimingPayload(
         testArena.arena,
         Telemetry::PerfTimingSource::Gpu,
         scopeName,
         "Renderer Frame",
         stats,
         payload
-    )));
+    ));
     EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedPerfTimingPayloadHeader) + sizeof("Renderer Frame") - 1u);
 
     Telemetry::PerfTimingPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed));
     EXPECT_EQ(parsed.source, Telemetry::PerfTimingSource::Gpu);
     EXPECT_EQ(parsed.scopeName, scopeName);
     EXPECT_EQ(parsed.scopeText, "Renderer Frame");
@@ -859,7 +859,7 @@ TEST(Telemetry, RecordPerfTimingUsesTelemetryEvent){
 
     const Name scopeName("cpu/update");
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    EXPECT_TRUE((Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, scopeName, stats, 11u)));
+    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, scopeName, stats, 11u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
     EXPECT_NE(event, nullptr);
@@ -871,7 +871,7 @@ TEST(Telemetry, RecordPerfTimingUsesTelemetryEvent){
     EXPECT_EQ(event->header.streamId, 11u);
 
     Telemetry::PerfTimingPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParsePerfTimingPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParsePerfTimingPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.source, Telemetry::PerfTimingSource::Cpu);
     EXPECT_EQ(parsed.scopeName, scopeName);
     EXPECT_EQ(parsed.stats.sampleCount, stats.sampleCount);
@@ -911,18 +911,18 @@ TEST(Telemetry, PerfMemoryPayloadRoundTrip){
     const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    EXPECT_TRUE((Telemetry::BuildPerfMemoryPayload(
+    EXPECT_TRUE(Telemetry::BuildPerfMemoryPayload(
         testArena.arena,
         scopeName,
         "Project Arena",
         snapshot,
         delta,
         payload
-    )));
+    ));
     EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedPerfMemoryPayloadHeader) + sizeof("Project Arena") - 1u);
 
     Telemetry::PerfMemoryPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size(), parsed));
     EXPECT_EQ(parsed.scopeName, scopeName);
     EXPECT_EQ(parsed.scopeText, "Project Arena");
     EXPECT_EQ(parsed.snapshot.scopeName, scopeName);
@@ -933,7 +933,7 @@ TEST(Telemetry, PerfMemoryPayloadRoundTrip){
     EXPECT_EQ(parsed.snapshot.allocationCount, snapshot.allocationCount);
     EXPECT_EQ(parsed.snapshot.reallocationCount, snapshot.reallocationCount);
     EXPECT_EQ(parsed.snapshot.deallocationCount, snapshot.deallocationCount);
-    EXPECT_TRUE((parsed.delta.hasSamples));
+    EXPECT_TRUE(parsed.delta.hasSamples);
     EXPECT_EQ(parsed.delta.previousFrameIndex, delta.previousFrameIndex);
     EXPECT_EQ(parsed.delta.currentFrameIndex, snapshot.frameIndex);
     EXPECT_EQ(parsed.delta.reservedBytes, delta.reservedBytes);
@@ -1002,7 +1002,7 @@ TEST(Telemetry, RecordPerfMemoryUsesTelemetryEvent){
     const Name scopeName("memory/project_arena");
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
-    EXPECT_TRUE((Telemetry::RecordPerfMemory(recorder, scopeName, snapshot, delta, 12u)));
+    EXPECT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, snapshot, delta, 12u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
     EXPECT_NE(event, nullptr);
@@ -1014,10 +1014,10 @@ TEST(Telemetry, RecordPerfMemoryUsesTelemetryEvent){
     EXPECT_EQ(event->header.streamId, 12u);
 
     Telemetry::PerfMemoryPayload parsed(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParsePerfMemoryPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.scopeName, scopeName);
     EXPECT_EQ(parsed.snapshot.usedBytes, snapshot.usedBytes);
-    EXPECT_TRUE((parsed.delta.hasSamples));
+    EXPECT_TRUE(parsed.delta.hasSamples);
     EXPECT_EQ(parsed.delta.usedBytes, delta.usedBytes);
 }
 
@@ -1087,7 +1087,7 @@ TEST(Telemetry, PerfViewsExposeScopes){
     EXPECT_EQ(report.cpuTiming.scopeNameAt(0u), Name("perf/cpu/update"));
     EXPECT_EQ(report.gpuTiming.scopeNameAt(0u), Name("perf/gpu/frame"));
     EXPECT_EQ(report.memory.scopeNameAt(0u), Name("perf/memory/project"));
-    EXPECT_TRUE((report.cpuTiming.scopeAt(0u).valid()));
+    EXPECT_TRUE(report.cpuTiming.scopeAt(0u).valid());
     EXPECT_FALSE(report.cpuTiming.scopeAt(1u).valid());
     EXPECT_EQ(report.cpuTiming.statsAt(0u).sampleCount, 2u);
     EXPECT_EQ(report.gpuTiming.statsAt(0u).sampleCount, 1u);
@@ -1107,7 +1107,7 @@ TEST(Telemetry, RecordPerfSessionReportUsesTelemetryEvents){
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     const Telemetry::PerfSessionRecordResult result = Telemetry::RecordPerfSessionReport(recorder, report, 17u);
-    EXPECT_TRUE((result.recordedAny()));
+    EXPECT_TRUE(result.recordedAny());
     EXPECT_EQ(result.cpuTimingEvents, 1u);
     EXPECT_EQ(result.gpuTimingEvents, 1u);
     EXPECT_EQ(result.memoryEvents, 1u);
@@ -1133,16 +1133,16 @@ TEST(Telemetry, RecordPerfSessionReportUsesTelemetryEvents){
     Telemetry::PerfTimingPayload cpuPayload(testArena.arena);
     Telemetry::PerfTimingPayload gpuPayload(testArena.arena);
     Telemetry::PerfMemoryPayload memoryPayload(testArena.arena);
-    EXPECT_TRUE((Telemetry::ParsePerfTimingPayload(testArena.arena, cpuEvent->payload.data(), cpuEvent->payload.size(), cpuPayload)));
-    EXPECT_TRUE((Telemetry::ParsePerfTimingPayload(testArena.arena, gpuEvent->payload.data(), gpuEvent->payload.size(), gpuPayload)));
-    EXPECT_TRUE((Telemetry::ParsePerfMemoryPayload(testArena.arena, memoryEvent->payload.data(), memoryEvent->payload.size(), memoryPayload)));
+    EXPECT_TRUE(Telemetry::ParsePerfTimingPayload(testArena.arena, cpuEvent->payload.data(), cpuEvent->payload.size(), cpuPayload));
+    EXPECT_TRUE(Telemetry::ParsePerfTimingPayload(testArena.arena, gpuEvent->payload.data(), gpuEvent->payload.size(), gpuPayload));
+    EXPECT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, memoryEvent->payload.data(), memoryEvent->payload.size(), memoryPayload));
     EXPECT_EQ(cpuPayload.source, Telemetry::PerfTimingSource::Cpu);
     EXPECT_EQ(gpuPayload.source, Telemetry::PerfTimingSource::Gpu);
     EXPECT_EQ(cpuPayload.scopeName, Name("perf/cpu/update"));
     EXPECT_EQ(gpuPayload.scopeName, Name("perf/gpu/frame"));
     EXPECT_EQ(memoryPayload.scopeName, Name("perf/memory/project"));
     EXPECT_EQ(memoryPayload.snapshot.frameIndex, 102u);
-    EXPECT_TRUE((memoryPayload.delta.hasSamples));
+    EXPECT_TRUE(memoryPayload.delta.hasSamples);
 }
 
 TEST(Telemetry, CaptureSessionRecordsPerfReport){
@@ -1186,30 +1186,30 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
-    EXPECT_TRUE((Telemetry::RecordTextLog(
+    EXPECT_TRUE(Telemetry::RecordTextLog(
         recorder,
         NWB::Core::Common::LogType::Info,
         NWB_TEXT("benchmark report"),
         4u,
         1u
-    )));
+    ));
 
     const Name cpuScopeName("cpu/update");
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    EXPECT_TRUE((Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, stats, 2u)));
+    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, stats, 2u));
 
     const Name memoryScopeName("memory/project_arena");
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(memoryScopeName);
     const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
-    EXPECT_TRUE((Telemetry::RecordPerfMemory(recorder, memoryScopeName, snapshot, delta, 3u)));
+    EXPECT_TRUE(Telemetry::RecordPerfMemory(recorder, memoryScopeName, snapshot, delta, 3u));
 
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
-    EXPECT_TRUE((Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 4u)));
+    EXPECT_TRUE(Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 4u));
 
     Log::TelemetryReport report(testArena.arena);
-    EXPECT_TRUE((Log::BuildTelemetryReport(testArena.arena, recorder.view(), report)));
+    EXPECT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
 
     EXPECT_EQ(report.summary.eventCount, 4u);
     EXPECT_EQ(report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::TextLog)], 1u);
@@ -1217,7 +1217,7 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     EXPECT_EQ(report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::MemoryFrame)], 1u);
     EXPECT_EQ(report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::FrameGraphFrame)], 1u);
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
-    EXPECT_TRUE((report.summary.hasFrameRange));
+    EXPECT_TRUE(report.summary.hasFrameRange);
     EXPECT_EQ(report.summary.minFrameIndex, 4u);
     EXPECT_EQ(report.summary.maxFrameIndex, 909u);
     EXPECT_EQ(report.summary.cpuTimingEventCount, 1u);
@@ -1229,9 +1229,9 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     EXPECT_EQ(report.summary.frameGraphFrameCount, 1u);
     EXPECT_EQ(report.summary.frameGraphNodeCount, 3u);
     EXPECT_EQ(report.summary.frameGraphEdgeCount, 2u);
-    EXPECT_TRUE((ContainsText(AStringView(report.json.data(), report.json.size()), "\"eventCount\": 4")));
-    EXPECT_TRUE((ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "source,scope,publish_frame")));
-    EXPECT_TRUE((ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "cpu,cpu/update")));
+    EXPECT_TRUE(ContainsText(AStringView(report.json.data(), report.json.size()), "\"eventCount\": 4"));
+    EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "source,scope,publish_frame"));
+    EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "cpu,cpu/update"));
 }
 
 TEST(Telemetry, TelemetryIngestStoresRawAndReports){
@@ -1239,48 +1239,48 @@ TEST(Telemetry, TelemetryIngestStoresRawAndReports){
     const ::Path<NWB::Core::Alloc::GlobalArena> storageDirectory = TelemetryTestStorageDirectory(testArena.arena) / "ingest";
 
     ErrorCode error;
-    EXPECT_TRUE((RemoveAllIfExists(storageDirectory, error)));
+    EXPECT_TRUE(RemoveAllIfExists(storageDirectory, error));
 
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    EXPECT_TRUE((Telemetry::RecordTextLog(
+    EXPECT_TRUE(Telemetry::RecordTextLog(
         recorder,
         NWB::Core::Common::LogType::Info,
         NWB_TEXT("ingest log"),
         10u,
         1u
-    )));
+    ));
 
     const Name cpuScopeName("ingest/cpu");
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    EXPECT_TRUE((Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, stats, 2u)));
+    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, stats, 2u));
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
-    EXPECT_TRUE((Telemetry::EncodeEventStream(recorder.view(), encoded)));
+    EXPECT_TRUE(Telemetry::EncodeEventStream(recorder.view(), encoded));
 
     Log::TelemetryIngestConfig config(testArena.arena);
     config.storageDirectory = storageDirectory;
     const Log::TelemetryIngestResult result = Log::ProcessTelemetryUpload(testArena.arena, encoded.data(), encoded.size(), config);
 
-    EXPECT_TRUE((result.ok()));
-    EXPECT_TRUE((result.decode.ok()));
+    EXPECT_TRUE(result.ok());
+    EXPECT_TRUE(result.decode.ok());
     EXPECT_EQ(result.decode.bytesRead, encoded.size());
     EXPECT_EQ(result.summary.eventCount, 2u);
     EXPECT_EQ(result.summary.cpuTimingEventCount, 1u);
-    EXPECT_TRUE((FileExists(result.rawPath, error)));
+    EXPECT_TRUE(FileExists(result.rawPath, error));
     EXPECT_FALSE(error);
     error.clear();
-    EXPECT_TRUE((FileExists(result.jsonPath, error)));
+    EXPECT_TRUE(FileExists(result.jsonPath, error));
     EXPECT_FALSE(error);
     error.clear();
-    EXPECT_TRUE((FileExists(result.perfCsvPath, error)));
+    EXPECT_TRUE(FileExists(result.perfCsvPath, error));
     EXPECT_FALSE(error);
 
     AString<NWB::Core::Alloc::GlobalArena> perfCsv(testArena.arena);
-    EXPECT_TRUE((ReadTextFile(result.perfCsvPath, perfCsv)));
-    EXPECT_TRUE((ContainsText(AStringView(perfCsv.data(), perfCsv.size()), "cpu,ingest/cpu")));
+    EXPECT_TRUE(ReadTextFile(result.perfCsvPath, perfCsv));
+    EXPECT_TRUE(ContainsText(AStringView(perfCsv.data(), perfCsv.size()), "cpu,ingest/cpu"));
 
-    EXPECT_TRUE((RemoveAllIfExists(storageDirectory, error)));
+    EXPECT_TRUE(RemoveAllIfExists(storageDirectory, error));
 }
 
 

@@ -158,18 +158,18 @@ TEST(Crash, WriteCrashPackageCreatesRequiredFiles){
     CopyFixedBuffer(request.triggerMessage, AStringView("required-files"));
     CopyFixedBuffer(request.triggerFile, AStringView("tests/crash/tests.cpp"));
 
-    EXPECT_TRUE((NWB::Core::Crash::Detail::WriteCrashPackage(request)));
+    EXPECT_TRUE(NWB::Core::Crash::Detail::WriteCrashPackage(request));
 
     const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CrashId);
-    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName)));
-    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_MetadataFileName)));
-    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_BreadcrumbsFileName)));
-    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_EmergencyFileName)));
-    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_ArtifactStrategyFileName)));
-    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_CpuContextFileName)));
-    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName)));
-    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName)));
-    EXPECT_TRUE((TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"required-files\""))));
+    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
+    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_MetadataFileName));
+    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_BreadcrumbsFileName));
+    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_EmergencyFileName));
+    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_ArtifactStrategyFileName));
+    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_CpuContextFileName));
+    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
+    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName));
+    EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"required-files\"")));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -181,9 +181,9 @@ TEST(Crash, WriteCrashPackageFailsWhenSpoolPathIsFile){
     RemoveTestArtifacts(arena, s_Group);
 
     ErrorCode error;
-    EXPECT_TRUE((EnsureDirectories(TestCaseDirectory(arena, s_Group), error)));
+    EXPECT_TRUE(EnsureDirectories(TestCaseDirectory(arena, s_Group), error));
     const CrashTestPath spoolPath = SpoolDirectory(arena, s_Group);
-    EXPECT_TRUE((WriteTextFile(spoolPath, AStringView("not a directory"))));
+    EXPECT_TRUE(WriteTextFile(spoolPath, AStringView("not a directory")));
 
     NWB::Core::Crash::Detail::CrashRequest request;
     FillPackageRequest(arena, request, spoolPath, AStringView("crash-package-bad-spool"));
@@ -200,7 +200,7 @@ TEST(Crash, CrashBreadcrumbCapturedInRequest){
 
     const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
     ErrorCode error;
-    EXPECT_TRUE((EnsureDirectories(spoolDirectory, error)));
+    EXPECT_TRUE(EnsureDirectories(spoolDirectory, error));
 
     char previousSpoolDirectory[NWB::Core::Crash::Detail::s_MaxPathText] = {};
     NWB::Core::Crash::Detail::FixedBreadcrumb previousBreadcrumbs[NWB::Core::Crash::Detail::s_MaxBreadcrumbs] = {};
@@ -221,7 +221,7 @@ TEST(Crash, CrashBreadcrumbCapturedInRequest){
         NWB::Core::Crash::Detail::g_State.breadcrumbOrder.store(1u, MemoryOrder::relaxed);
     }
 
-    EXPECT_TRUE((NWB::Core::Crash::AddCrashBreadcrumb(AStringView("test"), AStringView("persisted breadcrumb"))));
+    EXPECT_TRUE(NWB::Core::Crash::AddCrashBreadcrumb(AStringView("test"), AStringView("persisted breadcrumb")));
 
     NWB::Core::Crash::Detail::CrashRequest request;
     NWB::Core::Crash::Detail::SnapshotCrashState(request, NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u);
@@ -247,34 +247,34 @@ TEST(Crash, CrashSpoolRetentionPrunesOldestPackages){
     constexpr AStringView s_Group("crash_spool_retention_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003")));
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "bad package name")));
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-001")));
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-002")));
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-001")));
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-002")));
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-001")));
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-002")));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003"));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "bad package name"));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-001"));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-002"));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-001"));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-002"));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-001"));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-002"));
 
     NWB::Core::Crash::CrashSpoolRetentionConfig retention;
     retention.maxPendingPackages = 2u;
     retention.maxUploadedPackages = 1u;
     retention.maxFailedPackages = 1u;
     retention.maxUploadingPackages = 1u;
-    EXPECT_TRUE((NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention)));
+    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention));
 
-    EXPECT_TRUE((PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"))));
-    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"))));
-    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003"))));
-    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "bad package name"))));
-    EXPECT_TRUE((PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-001"))));
-    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-002"))));
-    EXPECT_TRUE((PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-001"))));
-    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-002"))));
-    EXPECT_TRUE((PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-001"))));
-    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-002"))));
+    EXPECT_TRUE(PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
+    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
+    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003")));
+    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "bad package name")));
+    EXPECT_TRUE(PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-001")));
+    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-002")));
+    EXPECT_TRUE(PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-001")));
+    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-002")));
+    EXPECT_TRUE(PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-001")));
+    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-002")));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -285,18 +285,18 @@ TEST(Crash, CrashSpoolRetentionZeroDisablesPruning){
     constexpr AStringView s_Group("crash_spool_retention_zero_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"));
 
     NWB::Core::Crash::CrashSpoolRetentionConfig retention;
     retention.maxPendingPackages = 0u;
     retention.maxUploadedPackages = 0u;
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
-    EXPECT_TRUE((NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention)));
+    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention));
 
-    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"))));
-    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"))));
+    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
+    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -307,25 +307,25 @@ TEST(Crash, CrashSpoolRetentionProtectsActivePendingPackage){
     constexpr AStringView s_Group("crash_spool_retention_protect_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003")));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003"));
 
     NWB::Core::Crash::CrashSpoolRetentionConfig retention;
     retention.maxPendingPackages = 1u;
     retention.maxUploadedPackages = 0u;
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
-    EXPECT_TRUE((NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(
+    EXPECT_TRUE(NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(
         arena,
         SpoolDirectory(arena, s_Group),
         retention,
         AStringView("crash-001")
-    )));
+    ));
 
-    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"))));
-    EXPECT_TRUE((PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"))));
-    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003"))));
+    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
+    EXPECT_TRUE(PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
+    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003")));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -337,20 +337,20 @@ TEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked){
     constexpr AStringView s_CrashId("crash-recovery-blocked");
     RemoveTestArtifacts(arena, s_Group);
 
-    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId)));
-    EXPECT_TRUE((WriteTextFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName), AStringView("blocked"))));
+    EXPECT_TRUE(CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId));
+    EXPECT_TRUE(WriteTextFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName), AStringView("blocked")));
 
     NWB::Core::Crash::Detail::CrashUploadSnapshot snapshot;
     CopyPathText(arena, snapshot.spoolDirectory, SpoolDirectory(arena, s_Group));
     CopyFixedBuffer(snapshot.logServerUrl, AStringView("http://127.0.0.1:1"));
 
     EXPECT_FALSE(NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(arena, snapshot));
-    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId))));
-    EXPECT_TRUE((PathIsRegularFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName))));
-    EXPECT_TRUE((TextFileContains(
+    EXPECT_TRUE(PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId)));
+    EXPECT_TRUE(PathIsRegularFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName)));
+    EXPECT_TRUE(TextFileContains(
             PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId) / CrashNames::s_UploadAttemptFileName,
             AStringView(CrashNames::s_UploadAttemptRetryInterruptedState)
-        )));
+        ));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -378,7 +378,7 @@ TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){
     }
 
     const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, config);
-    EXPECT_TRUE((installed));
+    EXPECT_TRUE(installed);
 
     if(installed){
         NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
@@ -399,16 +399,16 @@ TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){
         BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
 
         const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
-        EXPECT_TRUE((WaitForDirectory(packageDirectory, 3000u)));
-        EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName)));
-        EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName)));
+        EXPECT_TRUE(WaitForDirectory(packageDirectory, 3000u));
+        EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
+        EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName));
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-        EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName)));
+        EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
         // A "#1 " frame proves the unwinder walked past the leaf frame; final builds omit the frame pointer, so
         // this guards that .eh_frame-based capture keeps producing a full callstack.
-        EXPECT_TRUE((TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x"))));
+        EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
 #endif
-        EXPECT_TRUE((TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"desktop handler runtime\""))));
+        EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"desktop handler runtime\"")));
         NWB::Core::Crash::UninstallCrashHandler();
     }
 
@@ -457,20 +457,20 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
             break;
         }
 
-        EXPECT_TRUE((WIFSIGNALED(status)));
+        EXPECT_TRUE(WIFSIGNALED(status));
         EXPECT_EQ(WTERMSIG(status), SIGSEGV);
 
         char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
         BuildCrashIdForProcess(crashId, static_cast<u32>(childPid), 1u);
 
         const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
-        EXPECT_TRUE((WaitForDirectory(packageDirectory, 1000u)));
-        EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName)));
-        EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName)));
+        EXPECT_TRUE(WaitForDirectory(packageDirectory, 1000u));
+        EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
+        EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
         // The faulting callstack must reach past the leaf frame even with the frame pointer omitted (final builds).
-        EXPECT_TRUE((TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x"))));
-        EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_ProcMapsFileName)));
-        EXPECT_TRUE((TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"reason_kind\": \"signal\""))));
+        EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
+        EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_ProcMapsFileName));
+        EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"reason_kind\": \"signal\"")));
     }
 
     RemoveTestArtifacts(arena, s_Group);

@@ -35,10 +35,10 @@ TEST(Math, Vector2CrossOrientation){
     const SIMDVector xy = Vector2Cross(xAxis, yAxis);
     const SIMDVector yx = Vector2Cross(yAxis, xAxis);
 
-    EXPECT_TRUE((NearlyEqual(VectorGetX(xy), 1.0f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetY(xy), 1.0f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetX(yx), -1.0f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetY(yx), -1.0f)));
+    EXPECT_TRUE(NearlyEqual(VectorGetX(xy), 1.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetY(xy), 1.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetX(yx), -1.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetY(yx), -1.0f));
 }
 
 TEST(Math, Vector3CrossOrientation){
@@ -46,13 +46,13 @@ TEST(Math, Vector3CrossOrientation){
     const SIMDVector yAxis = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     const SIMDVector zAxis = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 
-    EXPECT_TRUE((NearlyEqual3(Vector3Cross(xAxis, yAxis), 0.0f, 0.0f, 1.0f)));
-    EXPECT_TRUE((NearlyEqual3(Vector3Cross(yAxis, xAxis), 0.0f, 0.0f, -1.0f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3Dot(Vector3Cross(xAxis, yAxis), zAxis)), 1.0f)));
+    EXPECT_TRUE(NearlyEqual3(Vector3Cross(xAxis, yAxis), 0.0f, 0.0f, 1.0f));
+    EXPECT_TRUE(NearlyEqual3(Vector3Cross(yAxis, xAxis), 0.0f, 0.0f, -1.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetX(Vector3Dot(Vector3Cross(xAxis, yAxis), zAxis)), 1.0f));
 
     const SIMDVector a = VectorSet(2.0f, -3.0f, 5.0f, 0.0f);
     const SIMDVector b = VectorSet(-7.0f, 11.0f, 13.0f, 0.0f);
-    EXPECT_TRUE((NearlyEqual3(Vector3Cross(a, b), -94.0f, -61.0f, 1.0f)));
+    EXPECT_TRUE(NearlyEqual3(Vector3Cross(a, b), -94.0f, -61.0f, 1.0f));
 }
 
 TEST(Math, Vector3RotateQuarterTurn){
@@ -60,7 +60,7 @@ TEST(Math, Vector3RotateQuarterTurn){
     const SIMDVector value = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector rotated = Vector3Rotate(value, rotation);
 
-    EXPECT_TRUE((NearlyEqual3(rotated, 0.0f, 1.0f, 0.0f)));
+    EXPECT_TRUE(NearlyEqual3(rotated, 0.0f, 1.0f, 0.0f));
 }
 
 TEST(Math, Vector4CrossBasisOrientation){
@@ -69,8 +69,8 @@ TEST(Math, Vector4CrossBasisOrientation){
     const SIMDVector zAxis = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
     const SIMDVector result = Vector4Cross(xAxis, yAxis, zAxis);
 
-    EXPECT_TRUE((NearlyEqual3(result, 0.0f, 0.0f, 0.0f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetW(result), 1.0f)));
+    EXPECT_TRUE(NearlyEqual3(result, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetW(result), 1.0f));
 }
 
 TEST(Math, VectorNamedScalarFunctions){
@@ -78,67 +78,67 @@ TEST(Math, VectorNamedScalarFunctions){
         VectorSet(5.5f, -5.5f, 5.5f, -5.5f),
         VectorSet(2.0f, 2.0f, -2.0f, -2.0f)
     );
-    EXPECT_TRUE((NearlyEqual4(modResult, 1.5f, 0.5f, -0.5f, -1.5f)));
+    EXPECT_TRUE(NearlyEqual4(modResult, 1.5f, 0.5f, -0.5f, -1.5f));
 
     const SIMDVector expInput = VectorSet(1.0f, 2.0f, -1.0f, 0.5f);
     const SIMDVector expResult = VectorExp(expInput);
-    EXPECT_TRUE((NearlyEqual4(
+    EXPECT_TRUE(NearlyEqual4(
         expResult,
         Exp(1.0f),
         Exp(2.0f),
         Exp(-1.0f),
         Exp(0.5f),
         0.0005f
-    )));
+    ));
 
     const f32 e = Exp(1.0f);
     const SIMDVector logResult = VectorLog(VectorSet(e, e * e, 1.0f, 0.25f));
-    EXPECT_TRUE((NearlyEqual4(
+    EXPECT_TRUE(NearlyEqual4(
         logResult,
         1.0f,
         2.0f,
         0.0f,
         Log(0.25f),
         0.0005f
-    )));
+    ));
 
     const SIMDVector hyperbolicInput = VectorSet(0.5f, -0.5f, 1.0f, -1.0f);
-    EXPECT_TRUE((NearlyEqual4(
+    EXPECT_TRUE(NearlyEqual4(
         VectorSinH(hyperbolicInput),
         SinH(0.5f),
         SinH(-0.5f),
         SinH(1.0f),
         SinH(-1.0f),
         0.0005f
-    )));
-    EXPECT_TRUE((NearlyEqual4(
+    ));
+    EXPECT_TRUE(NearlyEqual4(
         VectorCosH(hyperbolicInput),
         CosH(0.5f),
         CosH(-0.5f),
         CosH(1.0f),
         CosH(-1.0f),
         0.0005f
-    )));
-    EXPECT_TRUE((NearlyEqual4(
+    ));
+    EXPECT_TRUE(NearlyEqual4(
         VectorTanH(hyperbolicInput),
         TanH(0.5f),
         TanH(-0.5f),
         TanH(1.0f),
         TanH(-1.0f),
         0.0005f
-    )));
+    ));
 
     const f32 infinity = Limit<f32>::s_Infinity;
-    EXPECT_TRUE((NearlyEqual4(
+    EXPECT_TRUE(NearlyEqual4(
         VectorTanH(VectorSet(50.0f, -50.0f, infinity, -infinity)),
         1.0f,
         -1.0f,
         1.0f,
         -1.0f
-    )));
+    ));
 
     const SIMDVector signedZeroTanH = VectorTanH(VectorSet(-0.0f, 0.0f, -0.0f, 0.0f));
-    EXPECT_TRUE((SignBit(VectorGetX(signedZeroTanH))));
+    EXPECT_TRUE(SignBit(VectorGetX(signedZeroTanH)));
     EXPECT_FALSE(SignBit(VectorGetY(signedZeroTanH)));
 }
 
@@ -147,52 +147,52 @@ TEST(Math, RefractCriticalAngle){
     const SIMDVector criticalIncident = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector totalInternalIncident = VectorSet(0.866025404f, -0.5f, 0.0f, 0.0f);
 
-    EXPECT_TRUE((NearlyEqual4(Vector2Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f)));
-    EXPECT_TRUE((NearlyEqual4(Vector3Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f)));
-    EXPECT_TRUE((NearlyEqual4(Vector4Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f)));
-    EXPECT_TRUE((NearlyEqual4(Vector3Refract(totalInternalIncident, normal, 2.0f), 0.0f, 0.0f, 0.0f, 0.0f)));
+    EXPECT_TRUE(NearlyEqual4(Vector2Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(Vector3Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(Vector4Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(Vector3Refract(totalInternalIncident, normal, 2.0f), 0.0f, 0.0f, 0.0f, 0.0f));
 }
 
 TEST(Math, NormalizeOrHelpers){
     const SIMDVector fallback = VectorSet(0.0f, 1.0f, 0.0f, 1.0f);
     const f32 infinity = Limit<f32>::s_Infinity;
 
-    EXPECT_TRUE((NearlyEqual4(Vector2NormalizeOr(VectorSet(3.0f, 4.0f, 7.0f, 9.0f), fallback, 0.0f), 0.6f, 0.8f, 0.0f, 0.0f)));
-    EXPECT_TRUE((NearlyEqual3(Vector3NormalizeOr(VectorSet(0.0f, 0.0f, 0.0f, 5.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f)));
-    EXPECT_TRUE((NearlyEqual4(Vector4NormalizeOr(VectorSet(infinity, 0.0f, 0.0f, 0.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f, 1.0f)));
+    EXPECT_TRUE(NearlyEqual4(Vector2NormalizeOr(VectorSet(3.0f, 4.0f, 7.0f, 9.0f), fallback, 0.0f), 0.6f, 0.8f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual3(Vector3NormalizeOr(VectorSet(0.0f, 0.0f, 0.0f, 5.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(Vector4NormalizeOr(VectorSet(infinity, 0.0f, 0.0f, 0.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f, 1.0f));
 }
 
 TEST(Math, SdfHelpers){
     const SIMDVector boxHalfExtents = VectorSet(1.0f, 1.0f, 1.0f, 0.0f);
 
-    EXPECT_TRUE((NearlyEqual(VectorGetX(SdfTests::Box(VectorSet(2.0f, 0.5f, -0.25f, 0.0f), boxHalfExtents)), 1.0f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetX(SdfTests::Box(VectorSet(0.25f, 0.5f, 0.1f, 0.0f), boxHalfExtents)), -0.5f)));
+    EXPECT_TRUE(NearlyEqual(VectorGetX(SdfTests::Box(VectorSet(2.0f, 0.5f, -0.25f, 0.0f), boxHalfExtents)), 1.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetX(SdfTests::Box(VectorSet(0.25f, 0.5f, 0.1f, 0.0f), boxHalfExtents)), -0.5f));
 
-    EXPECT_TRUE((NearlyEqual3(
+    EXPECT_TRUE(NearlyEqual3(
         SdfTests::BoxNormal(VectorSet(2.0f, 2.0f, 1.0f, 0.0f), boxHalfExtents, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.000001f),
         0.70710677f,
         0.70710677f,
         0.0f,
         0.00001f
-    )));
-    EXPECT_TRUE((NearlyEqual3(
+    ));
+    EXPECT_TRUE(NearlyEqual3(
         SdfTests::BoxNormal(VectorSet(0.2f, -0.9f, 0.1f, 0.0f), boxHalfExtents, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.000001f),
         0.0f,
         -1.0f,
         0.0f
-    )));
-    EXPECT_TRUE((NearlyEqual3(
+    ));
+    EXPECT_TRUE(NearlyEqual3(
         SdfTests::BoxNormal(VectorSet(0.9f, 0.9f, 0.2f, 0.0f), boxHalfExtents, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.000001f),
         1.0f,
         0.0f,
         0.0f
-    )));
+    ));
 
     const SIMDVector capsuleRadiusHalfHeight = VectorSet(0.5f, 1.5f, 0.0f, 0.0f);
-    EXPECT_TRUE((NearlyEqual(VectorGetX(SdfTests::CapsuleY(VectorSet(0.0f, 2.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight)), 0.5f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetX(SdfTests::CapsuleY(VectorSet(0.25f, 0.0f, 0.0f, 0.0f), capsuleRadiusHalfHeight)), -0.25f)));
-    EXPECT_TRUE((NearlyEqual3(SdfTests::CapsuleYNormal(VectorSet(0.0f, 2.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight, 0.000001f), 0.0f, 1.0f, 0.0f)));
-    EXPECT_TRUE((NearlyEqual3(SdfTests::CapsuleYNormal(VectorSet(1.0f, 0.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight, 0.000001f), 1.0f, 0.0f, 0.0f)));
+    EXPECT_TRUE(NearlyEqual(VectorGetX(SdfTests::CapsuleY(VectorSet(0.0f, 2.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight)), 0.5f));
+    EXPECT_TRUE(NearlyEqual(VectorGetX(SdfTests::CapsuleY(VectorSet(0.25f, 0.0f, 0.0f, 0.0f), capsuleRadiusHalfHeight)), -0.25f));
+    EXPECT_TRUE(NearlyEqual3(SdfTests::CapsuleYNormal(VectorSet(0.0f, 2.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight, 0.000001f), 0.0f, 1.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual3(SdfTests::CapsuleYNormal(VectorSet(1.0f, 0.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight, 0.000001f), 1.0f, 0.0f, 0.0f));
 }
 
 TEST(Math, HalfFloatScalarConversion){
@@ -212,14 +212,14 @@ TEST(Math, HalfFloatScalarConversion){
     EXPECT_EQ(ConvertFloatToHalf(6.103515625e-5f), static_cast<Half>(0x0400u));
     EXPECT_EQ(ConvertFloatToHalf(1.00048828125f), static_cast<Half>(0x3c00u));
 
-    EXPECT_TRUE((NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x0000u)), 0.0f)));
-    EXPECT_TRUE((SignBit(ConvertHalfToFloat(static_cast<Half>(0x8000u)))));
-    EXPECT_TRUE((NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x3c00u)), 1.0f)));
-    EXPECT_TRUE((NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0xc000u)), -2.0f)));
-    EXPECT_TRUE((NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x7bffu)), 65504.0f)));
+    EXPECT_TRUE(NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x0000u)), 0.0f));
+    EXPECT_TRUE(SignBit(ConvertHalfToFloat(static_cast<Half>(0x8000u))));
+    EXPECT_TRUE(NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x3c00u)), 1.0f));
+    EXPECT_TRUE(NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0xc000u)), -2.0f));
+    EXPECT_TRUE(NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x7bffu)), 65504.0f));
     EXPECT_EQ(ConvertHalfToFloat(static_cast<Half>(0x7c00u)), Limit<f32>::s_Infinity);
     EXPECT_EQ(ConvertHalfToFloat(static_cast<Half>(0xfc00u)), -Limit<f32>::s_Infinity);
-    EXPECT_TRUE((IsNaN(ConvertHalfToFloat(static_cast<Half>(0x7e00u)))));
+    EXPECT_TRUE(IsNaN(ConvertHalfToFloat(static_cast<Half>(0x7e00u))));
 }
 
 TEST(Math, HalfFloatBufferConversion){
@@ -243,11 +243,11 @@ TEST(Math, HalfFloatBufferConversion){
     EXPECT_EQ(packed[5], static_cast<Half>(0x7c00u));
 
     EXPECT_EQ(ConvertHalfBufferToFloat(unpacked, packed, 6u), unpacked);
-    EXPECT_TRUE((NearlyEqual(unpacked[0], 0.0f)));
-    EXPECT_TRUE((NearlyEqual(unpacked[1], -1.5f)));
-    EXPECT_TRUE((NearlyEqual(unpacked[2], 1.0f)));
-    EXPECT_TRUE((NearlyEqual(unpacked[3], 65504.0f)));
-    EXPECT_TRUE((NearlyEqual(unpacked[4], 5.9604644775390625e-8f)));
+    EXPECT_TRUE(NearlyEqual(unpacked[0], 0.0f));
+    EXPECT_TRUE(NearlyEqual(unpacked[1], -1.5f));
+    EXPECT_TRUE(NearlyEqual(unpacked[2], 1.0f));
+    EXPECT_TRUE(NearlyEqual(unpacked[3], 65504.0f));
+    EXPECT_TRUE(NearlyEqual(unpacked[4], 5.9604644775390625e-8f));
     EXPECT_EQ(unpacked[5], Limit<f32>::s_Infinity);
 }
 
@@ -259,16 +259,16 @@ TEST(Math, FloatIntStorageConversion){
     EXPECT_EQ(signedValue, Float3Int(1.25f, -2.5f, 3.75f, -17));
 
     const SIMDVector loadedSigned = LoadFloatInt(signedValue);
-    EXPECT_TRUE((NearlyEqual3(loadedSigned, 1.25f, -2.5f, 3.75f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetW(loadedSigned), 0.0f)));
+    EXPECT_TRUE(NearlyEqual3(loadedSigned, 1.25f, -2.5f, 3.75f));
+    EXPECT_TRUE(NearlyEqual(VectorGetW(loadedSigned), 0.0f));
 
     Float3UInt unsignedValue = {};
     StoreFloatInt(xyz, 42u, &unsignedValue);
     EXPECT_EQ(unsignedValue, Float3UInt(1.25f, -2.5f, 3.75f, 42u));
 
     const SIMDVector loadedUnsigned = LoadFloatInt(unsignedValue);
-    EXPECT_TRUE((NearlyEqual3(loadedUnsigned, 1.25f, -2.5f, 3.75f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetW(loadedUnsigned), 0.0f)));
+    EXPECT_TRUE(NearlyEqual3(loadedUnsigned, 1.25f, -2.5f, 3.75f));
+    EXPECT_TRUE(NearlyEqual(VectorGetW(loadedUnsigned), 0.0f));
 }
 
 template<typename Value>

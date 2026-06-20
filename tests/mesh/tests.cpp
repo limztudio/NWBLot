@@ -48,9 +48,9 @@ TEST(Mesh, MeshClassMetadata){
 
     for(const Case& testCase : cases){
         u32 parsedClass = MeshClass::Invalid;
-        EXPECT_TRUE((ParseMeshClassText(testCase.text, parsedClass)));
+        EXPECT_TRUE(ParseMeshClassText(testCase.text, parsedClass));
         EXPECT_EQ(parsedClass, testCase.meshClass);
-        EXPECT_TRUE((ValidMeshClass(testCase.meshClass)));
+        EXPECT_TRUE(ValidMeshClass(testCase.meshClass));
         EXPECT_EQ(MeshClassText(testCase.meshClass), testCase.text);
         EXPECT_EQ(MeshClassUsesSkinning(testCase.meshClass), testCase.usesSkinning);
     }
@@ -83,14 +83,14 @@ TEST(Mesh, ResolvesCoreFrameMath){
     StoreFloat(normal, &normalValue);
     StoreFloat(bitangent, &bitangentValue);
 
-    EXPECT_TRUE((NearlyEqual4(normalValue, 0.0f, 0.0f, 1.0f, 0.0f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3LengthSq(tangent)), 1.0f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3LengthSq(bitangent)), 1.0f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3Dot(normal, tangent)), 0.0f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3Dot(normal, bitangent)), 0.0f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3Dot(tangent, bitangent)), 0.0f)));
-    EXPECT_TRUE((NearlyEqual(VectorGetW(tangent), -1.0f)));
-    EXPECT_TRUE((NearlyEqual(bitangentValue.w, 0.0f)));
+    EXPECT_TRUE(NearlyEqual4(normalValue, 0.0f, 0.0f, 1.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetX(Vector3LengthSq(tangent)), 1.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetX(Vector3LengthSq(bitangent)), 1.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetX(Vector3Dot(normal, tangent)), 0.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetX(Vector3Dot(normal, bitangent)), 0.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetX(Vector3Dot(tangent, bitangent)), 0.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetW(tangent), -1.0f));
+    EXPECT_TRUE(NearlyEqual(bitangentValue.w, 0.0f));
 }
 
 static TangentFrameRebuildVertex MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u, const f32 v){
@@ -116,15 +116,15 @@ TEST(Mesh, RebuildsFlatQuadFrame){
     const Vector<u32> indices = MakeQuadTriangleIndices();
 
     NWB::Core::Mesh::TangentFrameRebuildResult result;
-    EXPECT_TRUE((NWB::Core::Mesh::RebuildTangentFrames(vertices, indices, &result)));
+    EXPECT_TRUE(NWB::Core::Mesh::RebuildTangentFrames(vertices, indices, &result));
     EXPECT_EQ(result.rebuiltVertexCount, vertices.size());
     EXPECT_EQ(result.degenerateUvTriangleCount, 0u);
     EXPECT_EQ(result.fallbackTangentVertexCount, 0u);
 
     for(const TangentFrameRebuildVertex& vertex : vertices){
-        EXPECT_TRUE((NearlyEqual3(vertex.normal, 0.0f, 0.0f, 1.0f)));
-        EXPECT_TRUE((NearlyEqual3(vertex.tangent, 1.0f, 0.0f, 0.0f)));
-        EXPECT_TRUE((NearlyEqual(vertex.tangent.w, 1.0f)));
+        EXPECT_TRUE(NearlyEqual3(vertex.normal, 0.0f, 0.0f, 1.0f));
+        EXPECT_TRUE(NearlyEqual3(vertex.tangent, 1.0f, 0.0f, 0.0f));
+        EXPECT_TRUE(NearlyEqual(vertex.tangent.w, 1.0f));
     }
 }
 
@@ -135,15 +135,15 @@ TEST(Mesh, DegenerateUvsUseStableTangentFallback){
         vertex.uv0 = Float2U(0.0f, 0.0f);
 
     NWB::Core::Mesh::TangentFrameRebuildResult result;
-    EXPECT_TRUE((NWB::Core::Mesh::RebuildTangentFrames(vertices, indices, &result)));
+    EXPECT_TRUE(NWB::Core::Mesh::RebuildTangentFrames(vertices, indices, &result));
     EXPECT_EQ(result.rebuiltVertexCount, vertices.size());
     EXPECT_EQ(result.degenerateUvTriangleCount, 2u);
     EXPECT_EQ(result.fallbackTangentVertexCount, vertices.size());
 
     for(const TangentFrameRebuildVertex& vertex : vertices){
-        EXPECT_TRUE((NearlyEqual3(vertex.normal, 0.0f, 0.0f, 1.0f)));
-        EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3LengthSq(LoadFloat(vertex.tangent))), 1.0f)));
-        EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3Dot(LoadFloat(vertex.normal), LoadFloat(vertex.tangent))), 0.0f)));
+        EXPECT_TRUE(NearlyEqual3(vertex.normal, 0.0f, 0.0f, 1.0f));
+        EXPECT_TRUE(NearlyEqual(VectorGetX(Vector3LengthSq(LoadFloat(vertex.tangent))), 1.0f));
+        EXPECT_TRUE(NearlyEqual(VectorGetX(Vector3Dot(LoadFloat(vertex.normal), LoadFloat(vertex.tangent))), 0.0f));
     }
 }
 

@@ -115,11 +115,11 @@ TEST(Ecs, ComponentStorageAndView){
     velocity.x = 6;
     velocity.y = 8;
 
-    EXPECT_TRUE((entity.alive()));
+    EXPECT_TRUE(entity.alive());
     EXPECT_EQ(testWorld.world.entityCount(), 1u);
-    EXPECT_TRUE((entity.hasComponent<PositionComponent>()));
-    EXPECT_TRUE((entity.hasComponent<VelocityComponent>()));
-    EXPECT_TRUE((entity.hasComponent<OverAlignedComponent>()));
+    EXPECT_TRUE(entity.hasComponent<PositionComponent>());
+    EXPECT_TRUE(entity.hasComponent<VelocityComponent>());
+    EXPECT_TRUE(entity.hasComponent<OverAlignedComponent>());
     EXPECT_EQ(testWorld.world.tryGetComponent<PositionComponent>(entityId), &position);
     EXPECT_EQ(testWorld.world.tryGetComponent<VelocityComponent>(entityId), &velocity);
     EXPECT_EQ((reinterpret_cast<usize>(&aligned) % alignof(OverAlignedComponent)), 0u);
@@ -170,8 +170,8 @@ TEST(Ecs, ComponentLifetime){
     const auto entityId = entity.id();
 
     entity.addComponent<PositionComponent>();
-    EXPECT_TRUE((entity.alive()));
-    EXPECT_TRUE((entity.hasComponent<PositionComponent>()));
+    EXPECT_TRUE(entity.alive());
+    EXPECT_TRUE(entity.hasComponent<PositionComponent>());
     EXPECT_NE(testWorld.world.tryGetComponent<PositionComponent>(entityId), nullptr);
     EXPECT_EQ(testWorld.world.tryGetComponent<VelocityComponent>(entityId), nullptr);
 
@@ -180,10 +180,10 @@ TEST(Ecs, ComponentLifetime){
     EXPECT_EQ(testWorld.world.tryGetComponent<PositionComponent>(entityId), nullptr);
 
     entity.addComponent<VelocityComponent>();
-    EXPECT_TRUE((entity.hasComponent<VelocityComponent>()));
+    EXPECT_TRUE(entity.hasComponent<VelocityComponent>());
 
     entity.addComponent<OverAlignedComponent>();
-    EXPECT_TRUE((entity.hasComponent<OverAlignedComponent>()));
+    EXPECT_TRUE(entity.hasComponent<OverAlignedComponent>());
 
     entity.removeComponent<OverAlignedComponent>();
     EXPECT_FALSE(entity.hasComponent<OverAlignedComponent>());
@@ -193,7 +193,7 @@ TEST(Ecs, ComponentLifetime){
     EXPECT_EQ(testWorld.world.entityCount(), 0u);
 
     auto recycledEntity = testWorld.world.createEntity();
-    EXPECT_TRUE((recycledEntity.alive()));
+    EXPECT_TRUE(recycledEntity.alive());
     EXPECT_NE(recycledEntity.id(), entityId);
 }
 

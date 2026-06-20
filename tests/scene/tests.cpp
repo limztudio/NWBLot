@@ -40,11 +40,11 @@ TEST(Scene, SceneAndMainCamera){
     auto& camera = cameraEntity.addComponent<NWB::Impl::Scene::CameraComponent>();
     activeCamera.camera = cameraEntity.id();
 
-    EXPECT_TRUE((activeCameraEntity.hasComponent<NWB::Impl::Scene::ActiveCameraComponent>()));
-    EXPECT_TRUE((cameraEntity.hasComponent<NWB::Impl::Scene::TransformComponent>()));
-    EXPECT_TRUE((cameraEntity.hasComponent<NWB::Impl::Scene::CameraComponent>()));
+    EXPECT_TRUE(activeCameraEntity.hasComponent<NWB::Impl::Scene::ActiveCameraComponent>());
+    EXPECT_TRUE(cameraEntity.hasComponent<NWB::Impl::Scene::TransformComponent>());
+    EXPECT_TRUE(cameraEntity.hasComponent<NWB::Impl::Scene::CameraComponent>());
     EXPECT_EQ(activeCamera.camera, cameraEntity.id());
-    EXPECT_TRUE((activeCamera.camera.valid()));
+    EXPECT_TRUE(activeCamera.camera.valid());
     EXPECT_EQ(testWorld.world.entityCount(), 2u);
 
     EXPECT_EQ((reinterpret_cast<usize>(&transform) % alignof(NWB::Impl::Scene::TransformComponent)), 0u);
@@ -105,7 +105,7 @@ TEST(Scene, SceneCameraResolution){
     auto* secondCamera = testWorld.world.tryGetComponent<NWB::Impl::Scene::CameraComponent>(secondCameraEntity.id());
 
     NWB::Impl::Scene::SceneCameraView fallbackCameraView = NWB::Impl::Scene::ResolveSceneCameraView(testWorld.world);
-    EXPECT_TRUE((fallbackCameraView.valid()));
+    EXPECT_TRUE(fallbackCameraView.valid());
     EXPECT_EQ(fallbackCameraView.entity, firstCameraEntity.id());
     EXPECT_EQ(fallbackCameraView.transform, firstTransform);
     EXPECT_EQ(fallbackCameraView.camera, firstCamera);
@@ -117,7 +117,7 @@ TEST(Scene, SceneCameraResolution){
     activeCamera.camera = secondCameraEntity.id();
 
     NWB::Impl::Scene::SceneCameraView requestedCameraView = NWB::Impl::Scene::ResolveSceneCameraView(testWorld.world);
-    EXPECT_TRUE((requestedCameraView.valid()));
+    EXPECT_TRUE(requestedCameraView.valid());
     EXPECT_EQ(requestedCameraView.entity, secondCameraEntity.id());
     EXPECT_EQ(requestedCameraView.transform, secondTransform);
     EXPECT_EQ(requestedCameraView.camera, secondCamera);
@@ -130,7 +130,7 @@ TEST(Scene, SceneCameraResolution){
 
     secondCamera->setNearPlane(0.0f);
     NWB::Impl::Scene::SceneCameraView invalidRequestedFallbackCameraView = NWB::Impl::Scene::ResolveSceneCameraView(testWorld.world);
-    EXPECT_TRUE((invalidRequestedFallbackCameraView.valid()));
+    EXPECT_TRUE(invalidRequestedFallbackCameraView.valid());
     EXPECT_EQ(invalidRequestedFallbackCameraView.entity, firstCameraEntity.id());
     EXPECT_EQ(invalidRequestedFallbackCameraView.transform, firstTransform);
     EXPECT_EQ(invalidRequestedFallbackCameraView.camera, firstCamera);
@@ -138,7 +138,7 @@ TEST(Scene, SceneCameraResolution){
 
     secondTransform->rotation = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     NWB::Impl::Scene::SceneCameraView invalidTransformFallbackCameraView = NWB::Impl::Scene::ResolveSceneCameraView(testWorld.world);
-    EXPECT_TRUE((invalidTransformFallbackCameraView.valid()));
+    EXPECT_TRUE(invalidTransformFallbackCameraView.valid());
     EXPECT_EQ(invalidTransformFallbackCameraView.entity, firstCameraEntity.id());
     EXPECT_EQ(invalidTransformFallbackCameraView.transform, firstTransform);
     EXPECT_EQ(invalidTransformFallbackCameraView.camera, firstCamera);
@@ -147,7 +147,7 @@ TEST(Scene, SceneCameraResolution){
     secondCamera->setVerticalFovRadians(179.0f * (s_PI / 180.0f));
     secondCamera->setAspectRatio(s_MaxF32);
     NWB::Impl::Scene::SceneCameraView invalidProjectionFallbackCameraView = NWB::Impl::Scene::ResolveSceneCameraView(testWorld.world);
-    EXPECT_TRUE((invalidProjectionFallbackCameraView.valid()));
+    EXPECT_TRUE(invalidProjectionFallbackCameraView.valid());
     EXPECT_EQ(invalidProjectionFallbackCameraView.entity, firstCameraEntity.id());
     EXPECT_EQ(invalidProjectionFallbackCameraView.transform, firstTransform);
     EXPECT_EQ(invalidProjectionFallbackCameraView.camera, firstCamera);
@@ -155,7 +155,7 @@ TEST(Scene, SceneCameraResolution){
 
     secondCamera->setVerticalFovRadians(179.0f * (s_PI / 180.0f));
     NWB::Impl::Scene::SceneCameraView invalidFallbackAspectCameraView = NWB::Impl::Scene::ResolveSceneCameraView(testWorld.world, s_MaxF32);
-    EXPECT_TRUE((invalidFallbackAspectCameraView.valid()));
+    EXPECT_TRUE(invalidFallbackAspectCameraView.valid());
     EXPECT_EQ(invalidFallbackAspectCameraView.entity, firstCameraEntity.id());
     EXPECT_EQ(invalidFallbackAspectCameraView.transform, firstTransform);
     EXPECT_EQ(invalidFallbackAspectCameraView.camera, firstCamera);
@@ -163,7 +163,7 @@ TEST(Scene, SceneCameraResolution){
 
     secondTransform->rotation = Float4(0.0f, 0.0f, 0.0f, 2.0f);
     NWB::Impl::Scene::SceneCameraView nonUnitTransformFallbackCameraView = NWB::Impl::Scene::ResolveSceneCameraView(testWorld.world);
-    EXPECT_TRUE((nonUnitTransformFallbackCameraView.valid()));
+    EXPECT_TRUE(nonUnitTransformFallbackCameraView.valid());
     EXPECT_EQ(nonUnitTransformFallbackCameraView.entity, firstCameraEntity.id());
     EXPECT_EQ(nonUnitTransformFallbackCameraView.transform, firstTransform);
     EXPECT_EQ(nonUnitTransformFallbackCameraView.camera, firstCamera);
@@ -173,7 +173,7 @@ TEST(Scene, SceneCameraResolution){
     nonFiniteScale *= 2.0f;
     secondTransform->scale = Float4(nonFiniteScale, 1.0f, 1.0f);
     NWB::Impl::Scene::SceneCameraView nonFiniteScaleFallbackCameraView = NWB::Impl::Scene::ResolveSceneCameraView(testWorld.world);
-    EXPECT_TRUE((nonFiniteScaleFallbackCameraView.valid()));
+    EXPECT_TRUE(nonFiniteScaleFallbackCameraView.valid());
     EXPECT_EQ(nonFiniteScaleFallbackCameraView.entity, firstCameraEntity.id());
     EXPECT_EQ(nonFiniteScaleFallbackCameraView.transform, firstTransform);
     EXPECT_EQ(nonFiniteScaleFallbackCameraView.camera, firstCamera);
@@ -183,14 +183,14 @@ TEST(Scene, SceneCameraResolution){
     activeCamera.camera = staleMainCameraEntity.id();
 
     NWB::Impl::Scene::SceneCameraView staleFallbackCameraView = NWB::Impl::Scene::ResolveSceneCameraView(testWorld.world);
-    EXPECT_TRUE((staleFallbackCameraView.valid()));
+    EXPECT_TRUE(staleFallbackCameraView.valid());
     EXPECT_EQ(staleFallbackCameraView.entity, firstCameraEntity.id());
     EXPECT_EQ(staleFallbackCameraView.transform, firstTransform);
     EXPECT_EQ(staleFallbackCameraView.camera, firstCamera);
 
     firstTransform->rotation = Float4(0.0f, 0.0f, 0.0f, 2.0f);
     NWB::Impl::Scene::SceneCameraView invalidFallbackSkippedCameraView = NWB::Impl::Scene::ResolveSceneCameraView(testWorld.world);
-    EXPECT_TRUE((invalidFallbackSkippedCameraView.valid()));
+    EXPECT_TRUE(invalidFallbackSkippedCameraView.valid());
     EXPECT_EQ(invalidFallbackSkippedCameraView.entity, secondCameraEntity.id());
     EXPECT_EQ(invalidFallbackSkippedCameraView.transform, secondTransform);
     EXPECT_EQ(invalidFallbackSkippedCameraView.camera, secondCamera);

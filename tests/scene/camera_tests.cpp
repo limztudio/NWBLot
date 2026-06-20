@@ -24,28 +24,28 @@ TEST(Scene, CameraProjectionHelpers){
     NWB::Impl::Scene::CameraComponent camera;
 
     f32 tanHalfFov = 0.0f;
-    EXPECT_TRUE((NWB::Impl::Scene::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)));
+    EXPECT_TRUE(NWB::Impl::Scene::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov));
     EXPECT_GT(tanHalfFov, 0.0f);
-    EXPECT_TRUE((NWB::Impl::Scene::CameraClipRangeValid(camera)));
+    EXPECT_TRUE(NWB::Impl::Scene::CameraClipRangeValid(camera));
     EXPECT_EQ(NWB::Impl::Scene::ResolveCameraAspectRatio(camera, 1.5f), 1.5f);
 
     camera.setAspectRatio(2.0f);
     EXPECT_EQ(NWB::Impl::Scene::ResolveCameraAspectRatio(camera, 1.5f), 2.0f);
 
     Float4 projectionParams;
-    EXPECT_TRUE((NWB::Impl::Scene::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams)));
+    EXPECT_TRUE(NWB::Impl::Scene::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
     EXPECT_GT(projectionParams.x, 0.0f);
     EXPECT_GT(projectionParams.y, 0.0f);
     EXPECT_GT(projectionParams.z, 0.0f);
     EXPECT_LT(projectionParams.w, 0.0f);
 
     NWB::Impl::Scene::CameraProjectionData projectionData;
-    EXPECT_TRUE((NWB::Impl::Scene::TryBuildCameraProjectionData(camera, 1.5f, projectionData)));
-    EXPECT_TRUE((NWB::Impl::Scene::CameraProjectionDataValid(
+    EXPECT_TRUE(NWB::Impl::Scene::TryBuildCameraProjectionData(camera, 1.5f, projectionData));
+    EXPECT_TRUE(NWB::Impl::Scene::CameraProjectionDataValid(
             LoadFloat(projectionData.projectionParams),
             projectionData.aspectRatio,
             projectionData.tanHalfVerticalFov
-        )));
+        ));
     EXPECT_EQ(projectionData.projectionParams.x, projectionParams.x);
     EXPECT_EQ(projectionData.projectionParams.y, projectionParams.y);
     EXPECT_EQ(projectionData.projectionParams.z, projectionParams.z);
@@ -66,7 +66,7 @@ TEST(Scene, CameraProjectionHelpers){
     camera = NWB::Impl::Scene::CameraComponent{};
     camera.setNearPlane(2.0f);
     camera.setFarPlane(s_MaxF32);
-    EXPECT_TRUE((NWB::Impl::Scene::CameraClipRangeValid(camera)));
+    EXPECT_TRUE(NWB::Impl::Scene::CameraClipRangeValid(camera));
     EXPECT_FALSE(NWB::Impl::Scene::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
 
     camera = NWB::Impl::Scene::CameraComponent{};

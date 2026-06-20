@@ -84,7 +84,7 @@ TEST(Global, PodRoundTrip){
 
     usize cursor = 0u;
     u32 readValue = 0u;
-    EXPECT_TRUE((ReadPOD(binary, cursor, readValue)));
+    EXPECT_TRUE(ReadPOD(binary, cursor, readValue));
     EXPECT_EQ(readValue, writtenValue);
     EXPECT_EQ(cursor, sizeof(writtenValue));
 
@@ -98,11 +98,11 @@ TEST(Global, PodRoundTrip){
 TEST(Global, LengthPrefixedStringRoundTrip){
     Vector<u8> binary;
     const AString source("alpha");
-    EXPECT_TRUE((AppendString(binary, AStringView(source.data(), source.size()))));
+    EXPECT_TRUE(AppendString(binary, AStringView(source.data(), source.size())));
 
     usize cursor = 0u;
     AString parsed;
-    EXPECT_TRUE((ReadString(binary, cursor, parsed)));
+    EXPECT_TRUE(ReadString(binary, cursor, parsed));
     EXPECT_EQ(parsed, source);
     EXPECT_EQ(cursor, binary.size());
 }
@@ -120,7 +120,7 @@ TEST(Global, RejectedStringReadsDoNotAdvanceCursor){
 
     Vector<u8> embeddedNull;
     const char textWithNull[] = { 'a', '\0', 'b' };
-    EXPECT_TRUE((AppendString(embeddedNull, AStringView(textWithNull, sizeof(textWithNull)))));
+    EXPECT_TRUE(AppendString(embeddedNull, AStringView(textWithNull, sizeof(textWithNull))));
 
     ACompactString compact("unchanged");
     EXPECT_FALSE(ReadString(embeddedNull, cursor, compact));
@@ -133,8 +133,8 @@ TEST(Global, RejectedACompactStringAssignResetsText){
     const char textWithNull[] = { 'a', '\0', 'b' };
 
     EXPECT_FALSE(compact.assign(AStringView(textWithNull, sizeof(textWithNull))));
-    EXPECT_TRUE((compact.empty()));
-    EXPECT_TRUE((compact.view().empty()));
+    EXPECT_TRUE(compact.empty());
+    EXPECT_TRUE(compact.view().empty());
     EXPECT_EQ(compact.c_str()[0], '\0');
 }
 
@@ -160,7 +160,7 @@ TEST(Global, BasicCompactStringTypes){
 
     WCompactString rejected(L"unchanged");
     EXPECT_FALSE(rejected.assign(WStringView(oversized, WCompactString::s_MaxLength + 1u)));
-    EXPECT_TRUE((rejected.empty()));
+    EXPECT_TRUE(rejected.empty());
 }
 
 TEST(Global, TextUtilityHelpers){
@@ -171,15 +171,15 @@ TEST(Global, TextUtilityHelpers){
     EXPECT_EQ(AStringView(genericPathText.data(), genericPathText.size()), AStringView("alpha/beta/file.txt"));
     EXPECT_EQ(TrimLeftView(AStringView(" \talpha ")), AStringView("alpha "));
     EXPECT_EQ(TrimView(AStringView(" \talpha \r\n")), AStringView("alpha"));
-    EXPECT_TRUE((StartsWith(AStringView("alpha"), AStringView("alp"))));
-    EXPECT_TRUE((StartsWith(AStringView("alpha"), "al")));
+    EXPECT_TRUE(StartsWith(AStringView("alpha"), AStringView("alp")));
+    EXPECT_TRUE(StartsWith(AStringView("alpha"), "al"));
     EXPECT_FALSE(StartsWith(AStringView("alpha"), AStringView("beta")));
     EXPECT_FALSE(StartsWith(AStringView("al"), AStringView("alpha")));
 
     u64 value = 0u;
-    EXPECT_TRUE((ParseVariableHexU64(AStringView("0x10"), value)));
+    EXPECT_TRUE(ParseVariableHexU64(AStringView("0x10"), value));
     EXPECT_EQ(value, 16u);
-    EXPECT_TRUE((ParseVariableHexU64(AStringView("FFFFFFFFFFFFFFFF"), value)));
+    EXPECT_TRUE(ParseVariableHexU64(AStringView("FFFFFFFFFFFFFFFF"), value));
     EXPECT_EQ(value, Limit<u64>::s_Max);
     EXPECT_FALSE(ParseVariableHexU64(AStringView(), value));
     EXPECT_FALSE(ParseVariableHexU64(AStringView("0x"), value));
@@ -188,12 +188,12 @@ TEST(Global, TextUtilityHelpers){
 
     constexpr AStringView s_KeyValueText("alpha=one\r\nbeta=42\nempty=\n");
     AStringView textValue;
-    EXPECT_TRUE((FindLineKeyValue(s_KeyValueText, "alpha", textValue)));
+    EXPECT_TRUE(FindLineKeyValue(s_KeyValueText, "alpha", textValue));
     EXPECT_EQ(textValue, AStringView("one"));
-    EXPECT_TRUE((FindLineKeyValue(s_KeyValueText, "empty", textValue)));
-    EXPECT_TRUE((textValue.empty()));
+    EXPECT_TRUE(FindLineKeyValue(s_KeyValueText, "empty", textValue));
+    EXPECT_TRUE(textValue.empty());
     EXPECT_FALSE(FindLineKeyValue(s_KeyValueText, "missing", textValue));
-    EXPECT_TRUE((FindLineKeyValueU64(s_KeyValueText, "beta", value)));
+    EXPECT_TRUE(FindLineKeyValueU64(s_KeyValueText, "beta", value));
     EXPECT_EQ(value, 42u);
 }
 
@@ -205,23 +205,23 @@ TEST(Global, FilesystemMovePathToDirectory){
     const Path<NWB::Core::Alloc::GlobalArena> destination = destinationDirectory / "source.txt";
 
     ErrorCode error;
-    EXPECT_TRUE((EnsureEmptyDirectory(root, error)));
-    EXPECT_TRUE((WriteTextFile(source, AStringView("fresh"))));
-    EXPECT_TRUE((EnsureDirectories(destinationDirectory, error)));
+    EXPECT_TRUE(EnsureEmptyDirectory(root, error));
+    EXPECT_TRUE(WriteTextFile(source, AStringView("fresh")));
+    EXPECT_TRUE(EnsureDirectories(destinationDirectory, error));
     EXPECT_FALSE(error);
-    EXPECT_TRUE((WriteTextFile(destination, AStringView("old"))));
+    EXPECT_TRUE(WriteTextFile(destination, AStringView("old")));
 
     Path<NWB::Core::Alloc::GlobalArena> movedPath(testArena.arena);
-    EXPECT_TRUE((MovePathToDirectory(source, destinationDirectory, movedPath)));
+    EXPECT_TRUE(MovePathToDirectory(source, destinationDirectory, movedPath));
     EXPECT_EQ(movedPath, destination);
 
     BasicString<char, NWB::Core::Alloc::GlobalArena> movedText{testArena.arena};
-    EXPECT_TRUE((ReadTextFile(destination, movedText)));
+    EXPECT_TRUE(ReadTextFile(destination, movedText));
     EXPECT_EQ(AStringView(movedText.data(), movedText.size()), AStringView("fresh"));
     EXPECT_FALSE(FileExists(source, error));
     EXPECT_FALSE(error);
 
-    EXPECT_TRUE((RemoveAllIfExists(root, error)));
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
 
 TEST(Global, StringTableText){
@@ -229,19 +229,19 @@ TEST(Global, StringTableText){
     u32 alphaOffset = Limit<u32>::s_Max;
     u32 betaOffset = Limit<u32>::s_Max;
 
-    EXPECT_TRUE((AppendStringTableText(stringTable, AStringView("alpha"), alphaOffset)));
-    EXPECT_TRUE((AppendStringTableText(stringTable, AStringView("beta"), betaOffset)));
+    EXPECT_TRUE(AppendStringTableText(stringTable, AStringView("alpha"), alphaOffset));
+    EXPECT_TRUE(AppendStringTableText(stringTable, AStringView("beta"), betaOffset));
     EXPECT_EQ(alphaOffset, 0u);
     EXPECT_EQ(betaOffset, 6u);
 
     ACompactString parsed;
-    EXPECT_TRUE((ReadStringTableText(stringTable, 0u, stringTable.size(), alphaOffset, parsed)));
+    EXPECT_TRUE(ReadStringTableText(stringTable, 0u, stringTable.size(), alphaOffset, parsed));
     EXPECT_EQ(parsed.view(), AStringView("alpha"));
 
     Vector<u8> prefixedBinary;
     prefixedBinary.push_back(0xFFu);
     prefixedBinary.insert(prefixedBinary.end(), stringTable.begin(), stringTable.end());
-    EXPECT_TRUE((ReadStringTableText(prefixedBinary, 1u, stringTable.size(), betaOffset, parsed)));
+    EXPECT_TRUE(ReadStringTableText(prefixedBinary, 1u, stringTable.size(), betaOffset, parsed));
     EXPECT_EQ(parsed.view(), AStringView("beta"));
 
     u32 emptyOffset = 0u;
@@ -256,7 +256,7 @@ TEST(Global, InvalidStringTableReads){
 
     ACompactString parsed("unchanged");
     EXPECT_FALSE(ReadStringTableText(unterminated, 0u, unterminated.size(), 0u, parsed));
-    EXPECT_TRUE((parsed.empty()));
+    EXPECT_TRUE(parsed.empty());
 
     Vector<u8> emptyText;
     emptyText.push_back(0u);
@@ -282,7 +282,7 @@ TEST(Global, BinaryVectorPayloadRoundTrip){
     parsed.push_back(7u);
     EXPECT_EQ(ReadBinaryVectorPayload(binary, cursor, 0u, parsed), BinaryVectorPayloadFailure::None);
     EXPECT_EQ(cursor, 0u);
-    EXPECT_TRUE((parsed.empty()));
+    EXPECT_TRUE(parsed.empty());
 }
 
 TEST(Global, FixedVectorBinaryPayloadRoundTrip){
@@ -292,7 +292,7 @@ TEST(Global, FixedVectorBinaryPayloadRoundTrip){
 
     usize podCursor = 0u;
     u32 readValue = 0u;
-    EXPECT_TRUE((ReadPOD(fixedBinary, podCursor, readValue)));
+    EXPECT_TRUE(ReadPOD(fixedBinary, podCursor, readValue));
     EXPECT_EQ(readValue, writtenValue);
     EXPECT_EQ(podCursor, sizeof(writtenValue));
 
@@ -314,26 +314,26 @@ TEST(Global, FixedVectorBinaryPayloadRoundTrip){
     FixedVector<u16, 2u> tooSmall;
     EXPECT_EQ(ReadBinaryVectorPayload(vectorBinary, vectorCursor, 3u, tooSmall), BinaryVectorPayloadFailure::OutputOverflow);
     EXPECT_EQ(vectorCursor, 0u);
-    EXPECT_TRUE((tooSmall.empty()));
+    EXPECT_TRUE(tooSmall.empty());
 }
 
 TEST(Global, FixedVectorBinaryStringWrites){
     FixedVector<u8, 16u> fixedBinary;
-    EXPECT_TRUE((AppendString(fixedBinary, AStringView("fixed"))));
+    EXPECT_TRUE(AppendString(fixedBinary, AStringView("fixed")));
 
     usize cursor = 0u;
     AString parsed;
-    EXPECT_TRUE((ReadString(fixedBinary, cursor, parsed)));
+    EXPECT_TRUE(ReadString(fixedBinary, cursor, parsed));
     EXPECT_EQ(parsed, "fixed");
     EXPECT_EQ(cursor, fixedBinary.size());
 
     FixedVector<u8, 8u> fixedStringTable;
     u32 textOffset = Limit<u32>::s_Max;
-    EXPECT_TRUE((AppendStringTableText(fixedStringTable, AStringView("bind"), textOffset)));
+    EXPECT_TRUE(AppendStringTableText(fixedStringTable, AStringView("bind"), textOffset));
     EXPECT_EQ(textOffset, 0u);
 
     ACompactString tableText;
-    EXPECT_TRUE((ReadStringTableText(fixedStringTable, 0u, fixedStringTable.size(), textOffset, tableText)));
+    EXPECT_TRUE(ReadStringTableText(fixedStringTable, 0u, fixedStringTable.size(), textOffset, tableText));
     EXPECT_EQ(tableText.view(), AStringView("bind"));
 }
 
@@ -347,7 +347,7 @@ TEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor){
     parsed.push_back(0xAABBCCDDu);
     EXPECT_EQ(ReadBinaryVectorPayload(truncated, cursor, 2u, parsed), BinaryVectorPayloadFailure::SourceTruncated);
     EXPECT_EQ(cursor, 0u);
-    EXPECT_TRUE((parsed.empty()));
+    EXPECT_TRUE(parsed.empty());
 }
 
 TEST(Global, AppendTriviallyCopyableVectorSelfAppend){
@@ -471,14 +471,14 @@ TEST(Global, LoggerMacrosBehaveAsSingleStatements){
     else
         elseBranchRan = true;
 
-    EXPECT_TRUE((elseBranchRan));
+    EXPECT_TRUE(elseBranchRan);
     EXPECT_EQ(logger.messageCount(), 0u);
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("macro {}"), 42);
 
     EXPECT_EQ(logger.messageCount(), 1u);
     EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::EssentialInfo);
-    EXPECT_TRUE((logger.sawMessageContaining(NWB_TEXT("macro 42"))));
+    EXPECT_TRUE(logger.sawMessageContaining(NWB_TEXT("macro 42")));
 
     const AString rawMessage("raw converted warning");
     NWB_LOGGER_WARNING(StringConvert(rawMessage));
@@ -486,7 +486,7 @@ TEST(Global, LoggerMacrosBehaveAsSingleStatements){
 #if NWB_OCCUR_WARNING
     EXPECT_EQ(logger.messageCount(), 2u);
     EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::Warning);
-    EXPECT_TRUE((logger.sawMessageContaining(NWB_TEXT("raw converted warning"))));
+    EXPECT_TRUE(logger.sawMessageContaining(NWB_TEXT("raw converted warning")));
 #else
     EXPECT_EQ(logger.messageCount(), 1u);
     EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::EssentialInfo);
@@ -528,7 +528,7 @@ TEST(Global, LoggerDiagnosticCaptureUsesFormattedMessage){
 
     EXPECT_EQ(logger.messageCount(), 1u);
     EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::Error);
-    EXPECT_TRUE((logger.sawMessageContaining(NWB_TEXT("recoverable error 13"))));
+    EXPECT_TRUE(logger.sawMessageContaining(NWB_TEXT("recoverable error 13")));
     EXPECT_EQ(s_DiagnosticEventCaptureCount, 1u);
     ASSERT_NE(s_DiagnosticEventName, nullptr);
     ASSERT_NE(s_DiagnosticEventCategory, nullptr);
@@ -577,7 +577,7 @@ TEST(Global, LoggerAssertTypeCapturesAssertDiagnostic){
 
     EXPECT_EQ(logger.messageCount(), 1u);
     EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::Assert);
-    EXPECT_TRUE((logger.sawMessageContaining(NWB_TEXT("assert log 21"))));
+    EXPECT_TRUE(logger.sawMessageContaining(NWB_TEXT("assert log 21")));
     EXPECT_EQ(s_DiagnosticEventCaptureCount, 1u);
     ASSERT_NE(s_DiagnosticEventName, nullptr);
     ASSERT_NE(s_DiagnosticEventCategory, nullptr);

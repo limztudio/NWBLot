@@ -183,7 +183,7 @@ static NWB::Log::CrashIngestResult ProcessCrashArchive(
     const CrashTestText& archive,
     const NWB::Log::CrashIngestConfig& config
 ){
-    EXPECT_TRUE((WriteArchive(arena, testGroup, stem, archive)));
+    EXPECT_TRUE(WriteArchive(arena, testGroup, stem, archive));
     return NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, testGroup, stem), config);
 }
 
@@ -204,7 +204,7 @@ static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(
     const CrashTestBytes& archive,
     const NWB::Log::CrashIngestConfig& config
 ){
-    EXPECT_TRUE((WriteArchiveBytes(arena, testGroup, stem, archive)));
+    EXPECT_TRUE(WriteArchiveBytes(arena, testGroup, stem, archive));
     return NWB::Log::ProcessCrashUpload(arena, ArchivePath(arena, testGroup, stem), config);
 }
 
@@ -249,32 +249,32 @@ TEST(LoggerServerCrash, LinuxCrashPackageMapsInstructionPointer){
     config.symbolication.symbolStoreDirectory = StorageDirectory(arena, s_Group) / "test_symbols";
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive, config);
 
-    EXPECT_TRUE((result.accepted));
+    EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, NWB::Log::Type::EssentialInfo);
-    EXPECT_TRUE((ContainsMessage(result.message, NWB_TEXT("module_relative_ip=0x0000000000001234"))));
+    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("module_relative_ip=0x0000000000001234")));
 
     CrashTestText report(arena);
-    EXPECT_TRUE((ReadServerSymbolication(arena, s_Group, s_Stem, report)));
-    EXPECT_TRUE((Contains(report, "platform=linux")));
-    EXPECT_TRUE((Contains(report, "[event]")));
-    EXPECT_TRUE((Contains(report, "event=crash")));
-    EXPECT_TRUE((Contains(report, "exception=SIGSEGV (11)")));
-    EXPECT_TRUE((Contains(report, "status=callstack_captured")));
-    EXPECT_TRUE((Contains(report, "symbol_store=")));
-    EXPECT_TRUE((Contains(report, "symbol_store_status=missing")));
-    EXPECT_TRUE((Contains(report, "instruction_pointer_module=/tmp/nwb_loader")));
-    EXPECT_TRUE((Contains(report, "module_relative_ip=0x0000000000001234")));
-    EXPECT_TRUE((Contains(report, "callstack:")));
-    EXPECT_TRUE((Contains(report, "#0 0x0000000000401234 /tmp/nwb_loader+0x0000000000001234")));
-    EXPECT_TRUE((Contains(report, "#1 0x0000000000401240 /tmp/nwb_loader+0x0000000000001240")));
-    EXPECT_TRUE((Contains(report, "core_artifact=missing")));
+    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    EXPECT_TRUE(Contains(report, "platform=linux"));
+    EXPECT_TRUE(Contains(report, "[event]"));
+    EXPECT_TRUE(Contains(report, "event=crash"));
+    EXPECT_TRUE(Contains(report, "exception=SIGSEGV (11)"));
+    EXPECT_TRUE(Contains(report, "status=callstack_captured"));
+    EXPECT_TRUE(Contains(report, "symbol_store="));
+    EXPECT_TRUE(Contains(report, "symbol_store_status=missing"));
+    EXPECT_TRUE(Contains(report, "instruction_pointer_module=/tmp/nwb_loader"));
+    EXPECT_TRUE(Contains(report, "module_relative_ip=0x0000000000001234"));
+    EXPECT_TRUE(Contains(report, "callstack:"));
+    EXPECT_TRUE(Contains(report, "#0 0x0000000000401234 /tmp/nwb_loader+0x0000000000001234"));
+    EXPECT_TRUE(Contains(report, "#1 0x0000000000401240 /tmp/nwb_loader+0x0000000000001240"));
+    EXPECT_TRUE(Contains(report, "core_artifact=missing"));
     // Client-shipped metadata and breadcrumbs must surface in the rendered crash report.
-    EXPECT_TRUE((Contains(report, "[metadata]")));
-    EXPECT_TRUE((Contains(report, "build_channel=qa")));
-    EXPECT_TRUE((Contains(report, "[breadcrumbs]")));
-    EXPECT_TRUE((Contains(report, "entered render loop")));
-    EXPECT_TRUE((TextAppearsBefore(report, "callstack:", "details:")));
-    EXPECT_TRUE((TextAppearsBefore(report, "details:", "[event]")));
+    EXPECT_TRUE(Contains(report, "[metadata]"));
+    EXPECT_TRUE(Contains(report, "build_channel=qa"));
+    EXPECT_TRUE(Contains(report, "[breadcrumbs]"));
+    EXPECT_TRUE(Contains(report, "entered render loop"));
+    EXPECT_TRUE(TextAppearsBefore(report, "callstack:", "details:"));
+    EXPECT_TRUE(TextAppearsBefore(report, "details:", "[event]"));
 
     PreserveObservedReport(arena, report, "linux_maps");
 
@@ -296,7 +296,7 @@ TEST(LoggerServerCrash, LinuxCrashPackageSymbolicatesSelfFrame){
 
     CrashTestText procMapLine(arena);
     u64 expectedSymbolicationOffset = 0u;
-    EXPECT_TRUE((BuildSelfProcMapLineForAddress(arena, frameAddress, procMapLine, expectedSymbolicationOffset)));
+    EXPECT_TRUE(BuildSelfProcMapLineForAddress(arena, frameAddress, procMapLine, expectedSymbolicationOffset));
 
     CrashTestText archive(arena);
     BeginArchiveWithManifest(arena, archive, "linux-symbolized-test", "linux", "crash", "signal", 11u);
@@ -316,17 +316,17 @@ TEST(LoggerServerCrash, LinuxCrashPackageSymbolicatesSelfFrame){
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
-    EXPECT_TRUE((result.accepted));
+    EXPECT_TRUE(result.accepted);
 
     CrashTestText report(arena);
-    EXPECT_TRUE((ReadServerSymbolication(arena, s_Group, s_Stem, report)));
-    EXPECT_TRUE((Contains(report, "platform=linux")));
-    EXPECT_TRUE((Contains(report, "module frames are symbolized with DWARF")));
-    EXPECT_TRUE((Contains(report, "LinuxCrashSymbolicationProbe") || Contains(report, "tests/logger_server/tests.cpp")));
+    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    EXPECT_TRUE(Contains(report, "platform=linux"));
+    EXPECT_TRUE(Contains(report, "module frames are symbolized with DWARF"));
+    EXPECT_TRUE(Contains(report, "LinuxCrashSymbolicationProbe") || Contains(report, "tests/logger_server/tests.cpp"));
     CrashTestText expectedSymbolicationIp(arena);
     expectedSymbolicationIp += "symbolication_relative_ip=";
     AppendHexAddressText(arena, expectedSymbolicationIp, expectedSymbolicationOffset);
-    EXPECT_TRUE((Contains(report, AStringView(expectedSymbolicationIp.data(), expectedSymbolicationIp.size()))));
+    EXPECT_TRUE(Contains(report, AStringView(expectedSymbolicationIp.data(), expectedSymbolicationIp.size())));
 
     PreserveObservedReport(arena, report, "linux_symbolicated");
 
@@ -372,11 +372,11 @@ TEST(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
         break;
     }
 
-    EXPECT_TRUE((WIFSIGNALED(status)));
+    EXPECT_TRUE(WIFSIGNALED(status));
     EXPECT_EQ(WTERMSIG(status), SIGABRT);
 
     const CrashTestPath pendingDirectory = spoolDirectory / CrashNames::s_PendingDirectoryName;
-    EXPECT_TRUE((WaitForDirectory(pendingDirectory, 3000u)));
+    EXPECT_TRUE(WaitForDirectory(pendingDirectory, 3000u));
 
     CrashTestText expectedAbortCode(arena);
     expectedAbortCode += "\"reason_code\": ";
@@ -389,7 +389,7 @@ TEST(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
         ));
 
     CrashTestPath assertPackageDirectory(arena);
-    EXPECT_TRUE((WaitForTriggerPackage(
+    EXPECT_TRUE(WaitForTriggerPackage(
             arena,
             pendingDirectory,
             expectedAssertCategory,
@@ -397,26 +397,26 @@ TEST(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
             AStringView(),
             "tests/logger_server/tests.cpp",
             assertPackageDirectory
-        )));
+        ));
 
     CrashTestBytes archive(arena);
-    EXPECT_TRUE((BuildArchiveFromPackageDirectory(arena, assertPackageDirectory, archive)));
+    EXPECT_TRUE(BuildArchiveFromPackageDirectory(arena, assertPackageDirectory, archive));
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(arena, s_Group, s_Stem, archive);
-    EXPECT_TRUE((result.accepted));
+    EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, NWB::Log::Type::Assert);
 
     CrashTestText report(arena);
-    EXPECT_TRUE((ReadServerSymbolication(arena, s_Group, s_Stem, report)));
-    EXPECT_TRUE((Contains(report, "platform=linux")));
-    EXPECT_TRUE((Contains(report, "reason=manual_dump")));
-    EXPECT_TRUE((Contains(report, "[event]")));
-    EXPECT_TRUE((Contains(report, "event=assert")));
-    EXPECT_TRUE((Contains(report, "status=callstack_captured")));
-    EXPECT_TRUE((Contains(report, "callstack:")));
+    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    EXPECT_TRUE(Contains(report, "platform=linux"));
+    EXPECT_TRUE(Contains(report, "reason=manual_dump"));
+    EXPECT_TRUE(Contains(report, "[event]"));
+    EXPECT_TRUE(Contains(report, "event=assert"));
+    EXPECT_TRUE(Contains(report, "status=callstack_captured"));
+    EXPECT_TRUE(Contains(report, "callstack:"));
     EXPECT_EQ(FindText(report, "false\nat "), 0u);
-    EXPECT_TRUE((Contains(report, "tests/logger_server/tests.cpp")));
+    EXPECT_TRUE(Contains(report, "tests/logger_server/tests.cpp"));
     if(LinuxExternalSymbolizerAvailable(arena)){
-        EXPECT_TRUE((Contains(report, "LinuxForceAssertFalseForCrashObservation")));
+        EXPECT_TRUE(Contains(report, "LinuxForceAssertFalseForCrashObservation"));
     }
 
     PreserveObservedReport(arena, report, "linux_assert");
@@ -447,7 +447,7 @@ TEST(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerReport
     crashConfig.spoolDirectory = spoolDirectory;
 
     const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, crashConfig);
-    EXPECT_TRUE((installed));
+    EXPECT_TRUE(installed);
 
     bool continuedAfterError = false;
     if(installed){
@@ -457,7 +457,7 @@ TEST(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerReport
 
     const CrashTestPath pendingDirectory = spoolDirectory / CrashNames::s_PendingDirectoryName;
     CrashTestPath errorPackageDirectory(arena);
-    EXPECT_TRUE((WaitForTriggerPackage(
+    EXPECT_TRUE(WaitForTriggerPackage(
             arena,
             pendingDirectory,
             NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,
@@ -465,31 +465,31 @@ TEST(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerReport
             s_ErrorMessage,
             "tests/logger_server/tests.cpp",
             errorPackageDirectory
-        )));
-    EXPECT_TRUE((continuedAfterError));
+        ));
+    EXPECT_TRUE(continuedAfterError);
     NWB::Core::Crash::UninstallCrashHandler();
 
     CrashTestBytes archive(arena);
-    EXPECT_TRUE((BuildArchiveFromPackageDirectory(arena, errorPackageDirectory, archive)));
+    EXPECT_TRUE(BuildArchiveFromPackageDirectory(arena, errorPackageDirectory, archive));
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(arena, s_Group, s_Stem, archive);
-    EXPECT_TRUE((result.accepted));
+    EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, NWB::Log::Type::Error);
 
     CrashTestText report(arena);
-    EXPECT_TRUE((ReadServerSymbolication(arena, s_Group, s_Stem, report)));
-    EXPECT_TRUE((Contains(report, "[event]")));
-    EXPECT_TRUE((Contains(report, "event=error")));
-    EXPECT_TRUE((Contains(report, s_ErrorMessage)));
-    EXPECT_TRUE((Contains(report, "tests/logger_server/tests.cpp")));
+    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    EXPECT_TRUE(Contains(report, "[event]"));
+    EXPECT_TRUE(Contains(report, "event=error"));
+    EXPECT_TRUE(Contains(report, s_ErrorMessage));
+    EXPECT_TRUE(Contains(report, "tests/logger_server/tests.cpp"));
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-    EXPECT_TRUE((Contains(report, "platform=linux")));
-    EXPECT_TRUE((Contains(report, "status=callstack_captured")));
-    EXPECT_TRUE((Contains(report, "callstack:")));
+    EXPECT_TRUE(Contains(report, "platform=linux"));
+    EXPECT_TRUE(Contains(report, "status=callstack_captured"));
+    EXPECT_TRUE(Contains(report, "callstack:"));
     if(LinuxExternalSymbolizerAvailable(arena))
-        EXPECT_TRUE((Contains(report, "CaptureRecoverableErrorForCrashObservation")));
+        EXPECT_TRUE(Contains(report, "CaptureRecoverableErrorForCrashObservation"));
 #elif defined(NWB_PLATFORM_WINDOWS)
-    EXPECT_TRUE((Contains(report, "platform=windows")));
-    EXPECT_TRUE((Contains(report, "resolver=windows_pdb_minidump")));
+    EXPECT_TRUE(Contains(report, "platform=windows"));
+    EXPECT_TRUE(Contains(report, "resolver=windows_pdb_minidump"));
 #endif
 
     PreserveObservedReport(arena, report, "recoverable_error");
@@ -516,16 +516,16 @@ TEST(LoggerServerCrash, AndroidCrashPackageCopiesTombstoneFrames){
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
-    EXPECT_TRUE((result.accepted));
-    EXPECT_TRUE((ContainsMessage(result.message, NWB_TEXT("status=tombstone_parsed"))));
-    EXPECT_TRUE((ContainsMessage(result.message, NWB_TEXT("callstack:"))));
-    EXPECT_TRUE((ContainsMessage(result.message, NWB_TEXT("#00 pc 0000000000012344"))));
+    EXPECT_TRUE(result.accepted);
+    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("status=tombstone_parsed")));
+    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("callstack:")));
+    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("#00 pc 0000000000012344")));
 
     CrashTestText report(arena);
-    EXPECT_TRUE((ReadServerSymbolication(arena, s_Group, s_Stem, report)));
-    EXPECT_TRUE((Contains(report, "platform=android")));
-    EXPECT_TRUE((Contains(report, "android_tombstone=present")));
-    EXPECT_TRUE((Contains(report, "#01 pc 0000000000012450")));
+    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    EXPECT_TRUE(Contains(report, "platform=android"));
+    EXPECT_TRUE(Contains(report, "android_tombstone=present"));
+    EXPECT_TRUE(Contains(report, "#01 pc 0000000000012450"));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -543,13 +543,13 @@ TEST(LoggerServerCrash, LinuxCrashPackageReportsMissingProcMaps){
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
-    EXPECT_TRUE((result.accepted));
+    EXPECT_TRUE(result.accepted);
 
     CrashTestText report(arena);
-    EXPECT_TRUE((ReadServerSymbolication(arena, s_Group, s_Stem, report)));
-    EXPECT_TRUE((Contains(report, "platform=linux")));
-    EXPECT_TRUE((Contains(report, "proc_maps=missing")));
-    EXPECT_TRUE((Contains(report, "proc maps missing for module lookup")));
+    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    EXPECT_TRUE(Contains(report, "platform=linux"));
+    EXPECT_TRUE(Contains(report, "proc_maps=missing"));
+    EXPECT_TRUE(Contains(report, "proc maps missing for module lookup"));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -568,13 +568,13 @@ TEST(LoggerServerCrash, LinuxCrashPackageReportsUnmappedInstructionPointer){
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
-    EXPECT_TRUE((result.accepted));
+    EXPECT_TRUE(result.accepted);
 
     CrashTestText report(arena);
-    EXPECT_TRUE((ReadServerSymbolication(arena, s_Group, s_Stem, report)));
-    EXPECT_TRUE((Contains(report, "platform=linux")));
-    EXPECT_TRUE((Contains(report, "proc_maps=present")));
-    EXPECT_TRUE((Contains(report, "instruction pointer was not found in proc maps")));
+    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    EXPECT_TRUE(Contains(report, "platform=linux"));
+    EXPECT_TRUE(Contains(report, "proc_maps=present"));
+    EXPECT_TRUE(Contains(report, "instruction pointer was not found in proc maps"));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -592,14 +592,14 @@ TEST(LoggerServerCrash, AndroidCrashPackageReportsTombstoneWithoutFrames){
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
-    EXPECT_TRUE((result.accepted));
+    EXPECT_TRUE(result.accepted);
 
     CrashTestText report(arena);
-    EXPECT_TRUE((ReadServerSymbolication(arena, s_Group, s_Stem, report)));
-    EXPECT_TRUE((Contains(report, "platform=android")));
-    EXPECT_TRUE((Contains(report, "status=not_decoded")));
-    EXPECT_TRUE((Contains(report, "android_tombstone=present")));
-    EXPECT_TRUE((Contains(report, "no native frame lines were recognized")));
+    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    EXPECT_TRUE(Contains(report, "platform=android"));
+    EXPECT_TRUE(Contains(report, "status=not_decoded"));
+    EXPECT_TRUE(Contains(report, "android_tombstone=present"));
+    EXPECT_TRUE(Contains(report, "no native frame lines were recognized"));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -616,22 +616,22 @@ TEST(LoggerServerCrash, WindowsCrashPackageReportsMissingMinidump){
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
-    EXPECT_TRUE((result.accepted));
+    EXPECT_TRUE(result.accepted);
 
     CrashTestText report(arena);
-    EXPECT_TRUE((ReadServerSymbolication(arena, s_Group, s_Stem, report)));
-    EXPECT_TRUE((Contains(report, "platform=windows")));
-    EXPECT_TRUE((Contains(report, "[event]")));
-    EXPECT_TRUE((Contains(report, "event=crash")));
-    EXPECT_TRUE((Contains(report, "exception=access_violation 0x00000000c0000005")));
-    EXPECT_TRUE((Contains(report, "resolver=windows_pdb_minidump")));
+    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
+    EXPECT_TRUE(Contains(report, "platform=windows"));
+    EXPECT_TRUE(Contains(report, "[event]"));
+    EXPECT_TRUE(Contains(report, "event=crash"));
+    EXPECT_TRUE(Contains(report, "exception=access_violation 0x00000000c0000005"));
+    EXPECT_TRUE(Contains(report, "resolver=windows_pdb_minidump"));
 #if defined(NWB_PLATFORM_WINDOWS)
     CrashTestText missingDumpMessage(arena);
     missingDumpMessage += CrashNames::s_ProcessDumpFileName;
     missingDumpMessage += " is missing or unreadable";
-    EXPECT_TRUE((Contains(report, AStringView(missingDumpMessage.data(), missingDumpMessage.size()))));
+    EXPECT_TRUE(Contains(report, AStringView(missingDumpMessage.data(), missingDumpMessage.size())));
 #else
-    EXPECT_TRUE((Contains(report, "only available on Windows logserver builds")));
+    EXPECT_TRUE(Contains(report, "only available on Windows logserver builds"));
 #endif
 
     RemoveTestArtifacts(arena, s_Group);
@@ -652,13 +652,13 @@ TEST(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess){
     AppendArchiveFile(archive, CrashNames::s_GpuDetectiveCaptureFileName, "not a valid radeon gpu detective capture\n");
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
-    EXPECT_TRUE((result.accepted));
+    EXPECT_TRUE(result.accepted);
 
     CrashTestText report(arena);
-    EXPECT_TRUE((ReadServerSymbolication(arena, s_Group, s_Stem, report)));
+    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
     // The section header is always emitted (the decoder ran), and garbage input degrades to a reported failure.
-    EXPECT_TRUE((Contains(report, "[gpu_detective]")));
-    EXPECT_TRUE((Contains(report, "status=decode_failed")));
+    EXPECT_TRUE(Contains(report, "[gpu_detective]"));
+    EXPECT_TRUE(Contains(report, "status=decode_failed"));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -691,14 +691,14 @@ TEST(LoggerServerCrash, AssertCrashPackageUsesAssertLogType){
     );
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
-    EXPECT_TRUE((result.accepted));
+    EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, NWB::Log::Type::Assert);
-    EXPECT_TRUE((ContainsMessage(result.message, NWB_TEXT("event=assert"))));
+    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("event=assert")));
     EXPECT_EQ(result.message.find(NWB_TEXT("value != nullptr\nmissing pointer\nat tests/logger_server/tests.cpp:123\n\ncallstack:\n")), 0u);
-    EXPECT_TRUE((ContainsMessage(result.message, NWB_TEXT("\ndetails:\n"))));
+    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("\ndetails:\n")));
 
     CrashTestText report(arena);
-    EXPECT_TRUE((ReadServerSymbolication(arena, s_Group, s_Stem, report)));
+    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
     EXPECT_EQ(FindText(report, "value != nullptr\nmissing pointer\nat tests/logger_server/tests.cpp:123\n\ncallstack:\n"), 0u);
 
     RemoveTestArtifacts(arena, s_Group);
@@ -732,16 +732,16 @@ TEST(LoggerServerCrash, FatalCrashPackageUsesFatalLogType){
     );
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
-    EXPECT_TRUE((result.accepted));
+    EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, NWB::Log::Type::Fatal);
     EXPECT_EQ(TStringView(NWB::Log::MessageTypeToString(NWB::Log::Type::Fatal)), TStringView(NWB_TEXT("FATAL")));
-    EXPECT_TRUE((ContainsMessage(result.message, NWB_TEXT("event=fatal"))));
+    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("event=fatal")));
     EXPECT_FALSE(ContainsMessage(result.message, NWB_TEXT("category=logger_Fatal")));
     EXPECT_FALSE(ContainsMessage(result.message, NWB_TEXT("message=fatal logger observation")));
     EXPECT_FALSE(ContainsMessage(result.message, NWB_TEXT("file=tests/logger_server/tests.cpp")));
 
     CrashTestText report(arena);
-    EXPECT_TRUE((ReadServerSymbolication(arena, s_Group, s_Stem, report)));
+    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
     EXPECT_EQ(FindText(report, "fatal logger observation\nat tests/logger_server/tests.cpp:321\n\ncallstack:\n"), 0u);
 
     RemoveTestArtifacts(arena, s_Group);
@@ -760,11 +760,11 @@ TEST(LoggerServerCrash, InvalidCrashPackageIsRejected){
 
     EXPECT_FALSE(result.accepted);
     EXPECT_EQ(result.type, NWB::Log::Type::Error);
-    EXPECT_TRUE((ContainsMessage(result.message, NWB_TEXT("Crash upload rejected"))));
-    EXPECT_TRUE((ContainsMessage(result.message, NWB_TEXT("invalid crash archive header"))));
+    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("Crash upload rejected")));
+    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("invalid crash archive header")));
 
     ErrorCode error;
-    EXPECT_TRUE((IsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem), error) && !error));
+    EXPECT_TRUE(IsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem), error) && !error);
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -791,8 +791,8 @@ TEST(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
 
     EXPECT_FALSE(result.accepted);
     EXPECT_EQ(result.type, NWB::Log::Type::Error);
-    EXPECT_TRUE((ContainsMessage(result.message, NWB_TEXT("manifest.json is missing required fields"))));
-    EXPECT_TRUE((PathIsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem))));
+    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("manifest.json is missing required fields")));
+    EXPECT_TRUE(PathIsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem)));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -815,27 +815,27 @@ TEST(LoggerServerCrash, CrashRetentionPrunesOldestAcceptedUploads){
         CrashTestText archive(arena);
         BuildLinuxCrashArchive(arena, archive, s_Stem0);
         const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem0, archive, config);
-        EXPECT_TRUE((result.accepted));
+        EXPECT_TRUE(result.accepted);
     }
     {
         CrashTestText archive(arena);
         BuildLinuxCrashArchive(arena, archive, s_Stem1);
         const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem1, archive, config);
-        EXPECT_TRUE((result.accepted));
+        EXPECT_TRUE(result.accepted);
     }
     {
         CrashTestText archive(arena);
         BuildLinuxCrashArchive(arena, archive, s_Stem2);
         const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem2, archive, config);
-        EXPECT_TRUE((result.accepted));
+        EXPECT_TRUE(result.accepted);
     }
 
-    EXPECT_TRUE((PathIsMissing(ExtractedPackageDirectory(arena, s_Group, s_Stem0))));
-    EXPECT_TRUE((PathIsMissing(RawArchivePath(arena, s_Group, s_Stem0))));
-    EXPECT_TRUE((PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem1))));
-    EXPECT_TRUE((PathIsRegularFile(RawArchivePath(arena, s_Group, s_Stem1))));
-    EXPECT_TRUE((PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem2))));
-    EXPECT_TRUE((PathIsRegularFile(RawArchivePath(arena, s_Group, s_Stem2))));
+    EXPECT_TRUE(PathIsMissing(ExtractedPackageDirectory(arena, s_Group, s_Stem0)));
+    EXPECT_TRUE(PathIsMissing(RawArchivePath(arena, s_Group, s_Stem0)));
+    EXPECT_TRUE(PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem1)));
+    EXPECT_TRUE(PathIsRegularFile(RawArchivePath(arena, s_Group, s_Stem1)));
+    EXPECT_TRUE(PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem2)));
+    EXPECT_TRUE(PathIsRegularFile(RawArchivePath(arena, s_Group, s_Stem2)));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -851,17 +851,17 @@ TEST(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained){
     BuildLinuxCrashArchive(arena, archive, s_Stem);
 
     ErrorCode error;
-    EXPECT_TRUE((EnsureDirectories(StorageDirectory(arena, s_Group), error)));
-    EXPECT_TRUE((WriteTextFile(StorageDirectory(arena, s_Group) / NWB::Log::s_CrashRawDirectoryName, AStringView("blocked"))));
+    EXPECT_TRUE(EnsureDirectories(StorageDirectory(arena, s_Group), error));
+    EXPECT_TRUE(WriteTextFile(StorageDirectory(arena, s_Group) / NWB::Log::s_CrashRawDirectoryName, AStringView("blocked")));
 
     NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive, config);
 
-    EXPECT_TRUE((result.accepted));
+    EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, NWB::Log::Type::Warning);
-    EXPECT_TRUE((ContainsMessage(result.message, NWB_TEXT("raw upload archive could not be retained"))));
-    EXPECT_TRUE((PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem))));
-    EXPECT_TRUE((PathIsMissing(ArchivePath(arena, s_Group, s_Stem))));
+    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("raw upload archive could not be retained")));
+    EXPECT_TRUE(PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem)));
+    EXPECT_TRUE(PathIsMissing(ArchivePath(arena, s_Group, s_Stem)));
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -892,16 +892,16 @@ TEST(LoggerServerCrash, CrashRetentionPrunesOldestInvalidUploads){
         EXPECT_FALSE(result.accepted);
     }
 
-    EXPECT_TRUE((PathIsMissing(InvalidArchivePath(arena, s_Group, s_Stem0))));
-    EXPECT_TRUE((PathIsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem1))));
+    EXPECT_TRUE(PathIsMissing(InvalidArchivePath(arena, s_Group, s_Stem0)));
+    EXPECT_TRUE(PathIsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem1)));
 
     RemoveTestArtifacts(arena, s_Group);
 }
 
 TEST(LoggerServerCrash, CrashUploadAuthorizationMatchesBearerToken){
-    EXPECT_TRUE((NWB::Log::CrashUploadAuthorizationMatches(AStringView(), nullptr)));
-    EXPECT_TRUE((NWB::Log::CrashUploadAuthorizationMatches(AStringView(), "bad")));
-    EXPECT_TRUE((NWB::Log::CrashUploadAuthorizationMatches("secret-token", "Bearer secret-token")));
+    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), nullptr));
+    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), "bad"));
+    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches("secret-token", "Bearer secret-token"));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches("secret-token", nullptr));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches("secret-token", "secret-token"));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches("secret-token", "Bearer wrong"));

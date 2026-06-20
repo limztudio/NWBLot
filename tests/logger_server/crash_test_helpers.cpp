@@ -338,8 +338,8 @@ void PreserveObservedReport(Core::Alloc::GlobalArena& arena, const CrashTestText
     const CrashTestPath baseOutputPath(arena, AStringView(outputPathText.data(), outputPathText.size()));
     const CrashTestPath outputPath = ObservedReportPath(arena, baseOutputPath, suffix);
     ErrorCode error;
-    EXPECT_TRUE((EnsureDirectories(outputPath.parent_path(), error)));
-    EXPECT_TRUE((WriteTextFile(outputPath, AStringView(report.data(), report.size()))));
+    EXPECT_TRUE(EnsureDirectories(outputPath.parent_path(), error));
+    EXPECT_TRUE(WriteTextFile(outputPath, AStringView(report.data(), report.size())));
 }
 
 

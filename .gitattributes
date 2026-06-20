@@ -16,3 +16,8 @@ CMakeLists.txt text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,
 *.vcxproj text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 
 3rd_parties/** -text whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
+3rd_parties/**/*.dll filter=lfs diff=lfs merge=lfs -text
+3rd_parties/**/*.lib filter=lfs diff=lfs merge=lfs -text
+3rd_parties/**/*.so filter=lfs diff=lfs merge=lfs -text
+3rd_parties/**/*.dylib filter=lfs diff=lfs merge=lfs -text
+3rd_parties/**/*.a filter=lfs diff=lfs merge=lfs -text

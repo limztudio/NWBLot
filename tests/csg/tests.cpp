@@ -7,7 +7,6 @@
 #include <impl/ecs_csg/module.h>
 
 #include <tests/ecs_test_world.h>
-#include <tests/test_context.h>
 #include <gtest/gtest.h>
 
 

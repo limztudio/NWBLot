@@ -4,9 +4,6 @@
 
 #pragma once
 
-
-#include <tests/test_context.h>
-
 #include <logger/server/crash_ingest.h>
 
 

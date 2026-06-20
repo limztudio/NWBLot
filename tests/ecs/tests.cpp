@@ -6,7 +6,6 @@
 #include <core/common/module.h>
 
 #include <tests/ecs_test_world.h>
-#include <tests/test_context.h>
 #include <gtest/gtest.h>
 
 #include <global/compile.h>

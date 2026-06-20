@@ -9,8 +9,6 @@
 #include <core/alloc/thread.h>
 #include <core/ecs/world.h>
 
-#include <tests/test_context.h>
-
 #include <global/global.h>
 
 

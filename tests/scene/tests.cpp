@@ -7,7 +7,6 @@
 #include <impl/ecs_scene/module.h>
 
 #include <tests/ecs_test_world.h>
-#include <tests/test_context.h>
 
 #include <global/compile.h>
 

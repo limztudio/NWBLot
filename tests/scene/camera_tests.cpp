@@ -6,8 +6,6 @@
 
 #include <core/common/module.h>
 
-#include <tests/test_context.h>
-
 #include <global/compile.h>
 
 #include <gtest/gtest.h>

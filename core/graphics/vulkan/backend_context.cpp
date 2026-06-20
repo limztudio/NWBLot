@@ -8,6 +8,7 @@
 
 #include <core/common/log.h>
 #include <global/environment.h>
+#include <global/text_utils.h>
 
 #include <sstream>
 
@@ -44,25 +45,25 @@ static ScratchString MakeScratchString(Alloc::ScratchArena& arena, const AString
 }
 
 #if defined(NWB_GPU_FAULT_INJECTION)
-static bool IsDisabledEnvironmentFlagValue(const AStringView value){
-    return value.empty()
-        || value == "0"
-        || value == "false"
-        || value == "False"
-        || value == "FALSE"
-        || value == "off"
-        || value == "Off"
-        || value == "OFF"
-    ;
-}
+static bool ReadGpuFaultInjectionValue(u64& outFaultDeviceAddress){
+    outFaultDeviceAddress = 0u;
 
-static bool IsGpuFaultInjectionRequested(){
     Alloc::ScratchArena arena(VulkanArenaScope::s_DeviceExtensionSetupArena, 1024);
     ScratchString value(arena);
-    if(!ReadEnvironmentVariable("NWB_DEBUG_GPU_FAULT", value))
+    if(!ReadEnvironmentVariable("NWB_DEBUG_GPU_FAULT_INJECTION", value))
         return false;
 
-    return !IsDisabledEnvironmentFlagValue(AStringView(value.data(), value.size()));
+    u64 parsedValue = 0u;
+    if(!ParseU64(AStringView(value.data(), value.size()), parsedValue)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: [debug] ignoring invalid NWB_DEBUG_GPU_FAULT_INJECTION value; expected an unsigned integer, with 0 disabling fault injection."));
+        return false;
+    }
+
+    if(parsedValue == 0u)
+        return false;
+
+    outFaultDeviceAddress = parsedValue;
+    return true;
 }
 #endif
 
@@ -1916,8 +1917,9 @@ bool BackendContext::createDevice(){
     // DEBUG / TEST ONLY (compiled only when NWB_ENABLE_GPU_FAULT_INJECTION is configured): once the device is
     // created, deterministically fault the GPU to exercise the device-lost -> GPU crash capture path. Done here
     // rather than per-frame so it does not depend on the render loop running.
-    if(VulkanDetail::IsGpuFaultInjectionRequested())
-        m_rhiDevice->debugTriggerGpuFault();
+    u64 faultDeviceAddress = 0u;
+    if(VulkanDetail::ReadGpuFaultInjectionValue(faultDeviceAddress))
+        m_rhiDevice->debugTriggerGpuFault(faultDeviceAddress);
 #endif
 
     return true;

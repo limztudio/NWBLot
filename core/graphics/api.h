@@ -3078,6 +3078,14 @@ private:
     GraphicsDeque<GpuCrashMarkerTracker> m_destroyedMarkerTrackers;
 };
 
+namespace GpuCrashDumpKind{
+    enum Enum : u8{
+        None,
+        Aftermath,
+        RadeonGpuDetective,
+    };
+};
+
 // A captured GPU crash report (vendor-neutral): the last-executed GPU marker stack and
 // device fault information, formatted as text ready to ship to the crash reporter.
 struct GpuCrashReport{
@@ -3087,6 +3095,7 @@ struct GpuCrashReport{
     // Optional vendor-neutral binary GPU crash dump (e.g. an NVIDIA Aftermath '.nv-gpudmp'),
     // captured alongside the text 'details'. Non-owning view into the capturer's buffer; valid
     // only for the duration of the synchronous DispatchGpuCrash call.
+    GpuCrashDumpKind::Enum binaryDumpKind = GpuCrashDumpKind::None;
     const u8* binaryDump = nullptr;
     usize binaryDumpSize = 0u;
 

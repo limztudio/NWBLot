@@ -2242,8 +2242,8 @@ public:
 #if defined(NWB_GPU_FAULT_INJECTION)
     // DEBUG / TEST ONLY: deliberately faults the GPU (page fault) to exercise the device-lost capture path.
     // Compiled only when NWB_ENABLE_GPU_FAULT_INJECTION is configured; defined in debug_gpu_fault.cpp and
-    // triggered at the call site by the NWB_DEBUG_GPU_FAULT environment variable.
-    void debugTriggerGpuFault();
+    // triggered at the call site by a nonzero NWB_DEBUG_GPU_FAULT_INJECTION environment value.
+    void debugTriggerGpuFault(u64 faultDeviceAddress);
 #endif
 
     [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(usize markerHash);
@@ -2368,6 +2368,7 @@ private:
     GpuCrashTracker m_gpuCrashTracker;
     // Fixed-size, pre-reserved arena the device-lost capture formats into (no growable-heap touch at crash time).
     Alloc::PersistentArena m_gpuCrashReportArena;
+    Alloc::PersistentArena m_gpuCrashVendorBinaryArena;
 
     AmdBreadcrumbBuffer m_amdBreadcrumb;
 

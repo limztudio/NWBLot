@@ -39,6 +39,14 @@ namespace CrashDumpStatus{
     };
 };
 
+namespace GpuCrashDumpKind{
+    enum Enum : u8{
+        None,
+        Aftermath,
+        RadeonGpuDetective,
+    };
+};
+
 inline constexpr u32 s_DefaultMaxDiagnosticDumpsPerProcess = 8u;
 inline constexpr u32 s_DefaultMaxDiagnosticDumpsPerSite = 1u;
 inline constexpr usize s_DefaultMaxPendingCrashPackages = 128u;
@@ -106,7 +114,11 @@ void UninstallCrashHandler();
 [[nodiscard]] bool SetCrashUploadDestination(AStringView logServerUrl, AStringView crashUploadToken);
 [[nodiscard]] bool AddCrashBreadcrumb(AStringView category, AStringView message);
 [[nodiscard]] CrashDumpResult CaptureCrashDump(AStringView category = AStringView(), AStringView message = AStringView());
-[[nodiscard]] CrashDumpResult CaptureGpuCrashDump(AStringView message, AStringView binaryDump = AStringView());
+[[nodiscard]] CrashDumpResult CaptureGpuCrashDump(
+    AStringView message,
+    AStringView binaryDump = AStringView(),
+    GpuCrashDumpKind::Enum dumpKind = GpuCrashDumpKind::Aftermath
+);
 
 template<typename ArenaT>
 [[nodiscard]] ::Path<ArenaT> DefaultCrashSpoolDirectory(ArenaT& arena);

@@ -9,9 +9,9 @@
 
 
 // DEBUG / TEST ONLY. Deliberately faults the GPU to exercise the device-lost -> GPU crash capture path
-// (vendor-neutral diagnostics + NVIDIA Aftermath dump). Gated at the call site by the NWB_DEBUG_GPU_FAULT
-// environment variable; never runs in normal execution. Remove this file (and Device::debugTriggerGpuFault)
-// to drop the hook entirely.
+// (vendor-neutral diagnostics + NVIDIA Aftermath dump). Gated at the call site by the
+// NWB_DEBUG_GPU_FAULT_INJECTION environment value; never runs in normal execution. Remove this file
+// (and Device::debugTriggerGpuFault) to drop the hook entirely.
 #include "backend.h"
 
 #include <core/common/log.h>
@@ -31,10 +31,6 @@ namespace __hidden_debug_gpu_fault{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// A wild, unmapped GPU virtual address. Writing through it from a shader raises an immediate page fault,
-// which the driver reports as device-lost (richer for Aftermath than a watchdog timeout).
-inline constexpr u64 s_WildDeviceAddress = 0x0000F000DEAD0000ull;
 
 // Compiled SPIR-V (glslc -O, vulkan1.3) for a compute shader that writes 0xDEADBEEF through a
 // buffer_reference pointer taken from an 8-byte push constant. Requires bufferDeviceAddress + shaderInt64,
@@ -69,7 +65,7 @@ inline constexpr u32 s_FaultComputeSpirv[] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Device::debugTriggerGpuFault(){
+void Device::debugTriggerGpuFault(const u64 faultDeviceAddress){
     using namespace __hidden_debug_gpu_fault;
 
     Optional<Queue>& graphicsQueue = m_queues[static_cast<u32>(CommandQueue::Graphics)];
@@ -78,7 +74,7 @@ void Device::debugTriggerGpuFault(){
         return;
     }
 
-    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: [debug] injecting a GPU page fault to force device-lost."));
+    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: [debug] injecting a GPU page fault at device address 0x{:x} to force device-lost."), faultDeviceAddress);
 
     VkShaderModule shaderModule = VK_NULL_HANDLE;
     auto moduleInfo = VulkanDetail::MakeVkStruct<VkShaderModuleCreateInfo>(VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO);
@@ -129,8 +125,7 @@ void Device::debugTriggerGpuFault(){
             beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
             vkBeginCommandBuffer(commandBuffer, &beginInfo);
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-            const u64 wildAddress = s_WildDeviceAddress;
-            vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(u64), &wildAddress);
+            vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(u64), &faultDeviceAddress);
             vkCmdDispatch(commandBuffer, 1, 1, 1);
             vkEndCommandBuffer(commandBuffer);
 

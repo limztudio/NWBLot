@@ -197,7 +197,7 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     // The handler archives the package directory, so the files are included automatically. gpuReport/gpuDump
     // are only set on the GPU device-lost path (a normal thread context), so this never adds file I/O to the
     // hard-crash (signal/SEH) path. WriteTextFile opens the stream in binary mode and writes verbatim, so it
-    // serializes the raw '.nv-gpudmp' dump bytes unchanged.
+    // serializes raw '.rgd' and '.nv-gpudmp' dump bytes unchanged.
     if(!options.gpuReport.empty() || !options.gpuDump.empty()){
         Alloc::PersistentArena& dumpArena = DumpArena();
         const ::Path<Alloc::PersistentArena> packageDirectory = RequestPendingDirectory(dumpArena, request);
@@ -207,7 +207,15 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
                 [[maybe_unused]] const bool gpuReportWritten = WriteTextFile(packageDirectory / PackageNames::s_GpuCrashReportFileName, options.gpuReport);
             }
             if(!options.gpuDump.empty()){
-                [[maybe_unused]] const bool gpuDumpWritten = WriteTextFile(packageDirectory / PackageNames::s_AftermathGpuDumpFileName, options.gpuDump);
+                const char* gpuDumpFileName = nullptr;
+                if(options.gpuDumpKind == GpuCrashDumpKind::RadeonGpuDetective)
+                    gpuDumpFileName = PackageNames::s_GpuDetectiveCaptureFileName;
+                else if(options.gpuDumpKind == GpuCrashDumpKind::Aftermath)
+                    gpuDumpFileName = PackageNames::s_AftermathGpuDumpFileName;
+
+                if(gpuDumpFileName){
+                    [[maybe_unused]] const bool gpuDumpWritten = WriteTextFile(packageDirectory / gpuDumpFileName, options.gpuDump);
+                }
             }
         }
     }

@@ -184,6 +184,7 @@ Device::Device(const DeviceDesc& desc)
     , m_gpuCrashDiagnosticsEnabled(desc.gpuCrashDiagnosticsEnabled)
     , m_gpuCrashTracker(desc.allocator.getObjectArena())
     , m_gpuCrashReportArena(VulkanArenaScope::s_GpuCrashReportArena, Alloc::PersistentArena::StructureAlignedSize(s_GpuCrashReportArenaSize))
+    , m_gpuCrashVendorBinaryArena(VulkanArenaScope::s_GpuCrashVendorBinaryArena, Alloc::PersistentArena::StructureAlignedSize(s_MaxDeviceFaultVendorBinaryBytes))
     , m_context(desc.allocator, desc.threadPool, desc.instance, desc.physicalDevice, desc.device, desc.allocationCallbacks)
     , m_allocator(m_context)
     , m_descriptorHeapManager(m_context, m_allocator)
@@ -738,6 +739,7 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
         return;
 
     GpuCrashReport report(m_gpuCrashReportArena);
+    Vector<u8, Alloc::PersistentArena> vendorBinary(m_gpuCrashVendorBinaryArena);
 
     // The report lives in a fixed, pre-reserved arena so capture never touches the growable heap. Formatting
     // is wrapped: if the arena is exhausted the report degrades to whatever was built rather than throwing
@@ -824,7 +826,8 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
         if(hasDeviceFault && remainingEntries > 0u){
             auto faultCounts = VulkanDetail::MakeVkStruct<VkDeviceFaultCountsEXT>(VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT);
             if(vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, nullptr) == VK_SUCCESS){
-                faultCounts.vendorBinarySize = 0;
+                const VkDeviceSize vendorBinaryByteSize = faultCounts.vendorBinarySize;
+                const bool vendorBinaryIsRgd = m_context.physicalDeviceProperties.vendorID == s_AmdVendorId;
                 if(faultCounts.addressInfoCount > remainingEntries)
                     faultCounts.addressInfoCount = remainingEntries;
                 remainingEntries -= faultCounts.addressInfoCount;
@@ -836,16 +839,32 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
                 Vector<VkDeviceFaultVendorInfoEXT, Alloc::PersistentArena> vendorInfos(m_gpuCrashReportArena);
                 addressInfos.resize(faultCounts.addressInfoCount, VkDeviceFaultAddressInfoEXT{});
                 vendorInfos.resize(faultCounts.vendorInfoCount, VkDeviceFaultVendorInfoEXT{});
+                if(vendorBinaryIsRgd && vendorBinaryByteSize != 0u && vendorBinaryByteSize <= static_cast<VkDeviceSize>(s_MaxDeviceFaultVendorBinaryBytes))
+                    vendorBinary.resize(static_cast<usize>(vendorBinaryByteSize));
 
                 auto faultInfo = VulkanDetail::MakeVkStruct<VkDeviceFaultInfoEXT>(VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT);
                 faultInfo.pAddressInfos = addressInfos.empty() ? nullptr : addressInfos.data();
                 faultInfo.pVendorInfos = vendorInfos.empty() ? nullptr : vendorInfos.data();
-                faultInfo.pVendorBinaryData = nullptr;
+                faultInfo.pVendorBinaryData = vendorBinary.empty() ? nullptr : vendorBinary.data();
 
                 const VkResult faultResult = vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, &faultInfo);
                 if(faultResult == VK_SUCCESS || faultResult == VK_INCOMPLETE){
                     const char* faultDescription = faultInfo.description;
                     report.details.append(StringFormat(m_gpuCrashReportArena, "device fault: {}\n", VulkanDetail::TrimGpuCrashText(faultDescription)));
+                    if(vendorBinaryByteSize != 0u){
+                        if(!vendorBinary.empty()){
+                            report.details.append(StringFormat(m_gpuCrashReportArena, "device fault vendor binary (RGD): {} bytes\n", vendorBinary.size()));
+                            report.binaryDumpKind = GpuCrashDumpKind::RadeonGpuDetective;
+                            report.binaryDump = vendorBinary.data();
+                            report.binaryDumpSize = vendorBinary.size();
+                        }
+                        else if(!vendorBinaryIsRgd){
+                            report.details.append(StringFormat(m_gpuCrashReportArena, "device fault vendor binary not packaged: {} bytes from vendor 0x{:x}\n", static_cast<u64>(vendorBinaryByteSize), static_cast<u32>(m_context.physicalDeviceProperties.vendorID)));
+                        }
+                        else{
+                            report.details.append(StringFormat(m_gpuCrashReportArena, "device fault vendor binary skipped: {} bytes exceeds {} byte cap\n", static_cast<u64>(vendorBinaryByteSize), static_cast<u64>(s_MaxDeviceFaultVendorBinaryBytes)));
+                        }
+                    }
 
                     for(u32 i = 0; i < faultCounts.addressInfoCount; ++i){
                         const VkDeviceFaultAddressInfoEXT& addressInfo = addressInfos[i];
@@ -888,8 +907,11 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
     // dispatch below, where the crash reporter copies them into the package.
     if(Aftermath::IsActive()){
         const Aftermath::GpuCrashDumpView dump = Aftermath::WaitForCrashDump();
-        report.binaryDump = dump.data;
-        report.binaryDumpSize = dump.size;
+        if(dump.data && dump.size != 0u){
+            report.binaryDumpKind = GpuCrashDumpKind::Aftermath;
+            report.binaryDump = dump.data;
+            report.binaryDumpSize = dump.size;
+        }
     }
 
     try{

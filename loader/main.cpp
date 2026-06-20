@@ -228,9 +228,14 @@ bool InstallCrashCapture(CrashArena& crashArena){
             ? AStringView(reinterpret_cast<const char*>(report.binaryDump), report.binaryDumpSize)
             : AStringView()
         ;
+        const auto dumpKind = report.binaryDumpKind == NWB::Core::GpuCrashDumpKind::RadeonGpuDetective
+            ? NWB::Core::Crash::GpuCrashDumpKind::RadeonGpuDetective
+            : NWB::Core::Crash::GpuCrashDumpKind::Aftermath
+        ;
         [[maybe_unused]] const auto dumpResult = NWB::Core::Crash::CaptureGpuCrashDump(
             AStringView(report.details.data(), report.details.size())
             , binaryDump
+            , dumpKind
         );
     }, nullptr);
     return true;

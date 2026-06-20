@@ -65,7 +65,9 @@ inline constexpr usize s_GpuCrashReportArenaSize = 64u * 1024u; // 64 KB
 inline constexpr u32 s_MaxGpuCrashCaptureEntries = 64u; // AGGREGATE cap on markers/fault entries formatted into the fixed crash arena (across all queues + fault sections)
 inline constexpr usize s_MaxGpuCrashMarkerChars = 256u; // per-marker string truncation so one deeply-nested label cannot blow the report budget
 inline constexpr usize s_MaxGpuCrashReportChars = 32u * 1024u; // reserved report.details capacity; bounds peak arena use well under s_GpuCrashReportArenaSize (no realloc transients)
+inline constexpr usize s_MaxDeviceFaultVendorBinaryBytes = 512u * 1024u; // VK_EXT_device_fault vendor blob cap; large dumps are skipped rather than touching growable heap on device-lost.
 inline constexpr u32 s_MaxAmdBreadcrumbSlots = 256u; // AMD breadcrumb ring slot count (>= s_MaxGpuCrashCaptureEntries); buffer = slots * sizeof(u32)
+inline constexpr u32 s_AmdVendorId = 0x1002; // PCI vendor ID for AMD; gates Radeon GPU Detective dump naming.
 inline constexpr u32 s_NvidiaVendorId = 0x10DE; // PCI vendor ID for NVIDIA; gates NVIDIA-only Aftermath GPU crash dump setup
 
 // Queue and swap chain defaults.

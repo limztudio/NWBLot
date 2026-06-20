@@ -305,10 +305,11 @@ CrashDumpResult CaptureCrashDump(const AStringView category, const AStringView m
     return __hidden_crash_module::__hidden_capture_crash_dump(Detail::CrashReasonKind::ManualDump, category, message, options);
 }
 
-CrashDumpResult CaptureGpuCrashDump(const AStringView message, const AStringView binaryDump){
+CrashDumpResult CaptureGpuCrashDump(const AStringView message, const AStringView binaryDump, const GpuCrashDumpKind::Enum dumpKind){
     Detail::CrashDumpRequestOptions options;
     options.gpuReport = message;
     options.gpuDump = binaryDump;
+    options.gpuDumpKind = binaryDump.empty() ? GpuCrashDumpKind::None : dumpKind;
     return __hidden_crash_module::__hidden_capture_crash_dump(Detail::CrashReasonKind::GpuCrash, AStringView(Detail::s_GpuCrashCategory), message, options);
 }
 

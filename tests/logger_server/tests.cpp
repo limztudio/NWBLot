@@ -763,8 +763,7 @@ TEST(LoggerServerCrash, InvalidCrashPackageIsRejected){
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("Crash upload rejected")));
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("invalid crash archive header")));
 
-    ErrorCode error;
-    EXPECT_TRUE(IsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem), error) && !error);
+    EXPECT_TRUE(PathIsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem)));
 
     RemoveTestArtifacts(arena, s_Group);
 }

@@ -427,33 +427,33 @@ TEST(Global, BoundedRuntimeWrappers){
 
     char copiedText[8] = {};
     EXPECT_EQ(NWB_STRCPY(copiedText, sizeof(copiedText), "alpha"), 0);
-    EXPECT_EQ(NWB_STRCMP(copiedText, "alpha"), 0);
+    EXPECT_STREQ(copiedText, "alpha");
 
     char copiedPrefix[8] = {};
     EXPECT_EQ(NWB_STRNCPY(copiedPrefix, sizeof(copiedPrefix), "abcdef", 3u), 0);
-    EXPECT_EQ(NWB_STRCMP(copiedPrefix, "abc"), 0);
+    EXPECT_STREQ(copiedPrefix, "abc");
 
     char appendedText[8] = {};
     EXPECT_EQ(NWB_STRCPY(appendedText, sizeof(appendedText), "ab"), 0);
     EXPECT_EQ(NWB_STRCAT(appendedText, sizeof(appendedText), "cd"), 0);
-    EXPECT_EQ(NWB_STRCMP(appendedText, "abcd"), 0);
+    EXPECT_STREQ(appendedText, "abcd");
 
     char formattedText[8] = {};
     EXPECT_EQ(NWB_SPRINTF(formattedText, sizeof(formattedText), "%s", "ok"), 2);
-    EXPECT_EQ(NWB_STRCMP(formattedText, "ok"), 0);
+    EXPECT_STREQ(formattedText, "ok");
 
     wchar wideText[8] = {};
     EXPECT_EQ(NWB_WSTRCPY(wideText, sizeof(wideText) / sizeof(wideText[0]), L"wide"), 0);
-    EXPECT_EQ(NWB_WSTRCMP(wideText, L"wide"), 0);
+    EXPECT_STREQ(wideText, L"wide");
 
     wchar formattedWideText[8] = {};
     EXPECT_EQ(NWB_WSPRINTF(formattedWideText, sizeof(formattedWideText) / sizeof(formattedWideText[0]), L"%ls", L"ok"), 2);
-    EXPECT_EQ(NWB_WSTRCMP(formattedWideText, L"ok"), 0);
+    EXPECT_STREQ(formattedWideText, L"ok");
 
 #if !defined(_MSC_VER)
     char truncatedText[4] = {};
     EXPECT_NE(NWB_STRCPY(truncatedText, sizeof(truncatedText), "abcdef"), 0);
-    EXPECT_EQ(NWB_STRCMP(truncatedText, "abc"), 0);
+    EXPECT_STREQ(truncatedText, "abc");
 
     char nullTerminatedText[4] = { 'a', 'b', 'c', 'd' };
     EXPECT_NE(NWB_STRCAT(nullTerminatedText, sizeof(nullTerminatedText), "e"), 0);

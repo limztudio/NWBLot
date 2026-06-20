@@ -346,7 +346,7 @@ TEST(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
 
     const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
     const pid_t childPid = fork();
-    EXPECT_GE(childPid, 0);
+    ASSERT_GE(childPid, 0);
     if(childPid == 0){
         NWB::Core::Alloc::PersistentArena installArena(
             s_AssertChildInstallArena,

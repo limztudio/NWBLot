@@ -378,39 +378,37 @@ TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){
     }
 
     const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, config);
-    EXPECT_TRUE(installed);
+    ASSERT_TRUE(installed);
 
-    if(installed){
-        NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
-        options.waitMilliseconds = NWB::Core::Crash::Detail::s_PlatformCrashHandlerWaitMilliseconds;
-        options.triggerCategory = AStringView("test");
-        options.triggerMessage = AStringView("desktop handler runtime");
-        options.triggerFile = AStringView("tests/crash/tests.cpp");
-        NWB::Core::Crash::Detail::ManualDumpContextStorage contextStorage;
-        NWB::Core::Crash::Detail::CaptureManualDumpContext(options, contextStorage);
-        const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::Detail::RequestCrashDump(
-            NWB::Core::Crash::Detail::CrashReasonKind::ManualDump,
-            0u,
-            options
-        );
-        EXPECT_EQ(result.status, NWB::Core::Crash::CrashDumpStatus::PackageWritten);
+    NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
+    options.waitMilliseconds = NWB::Core::Crash::Detail::s_PlatformCrashHandlerWaitMilliseconds;
+    options.triggerCategory = AStringView("test");
+    options.triggerMessage = AStringView("desktop handler runtime");
+    options.triggerFile = AStringView("tests/crash/tests.cpp");
+    NWB::Core::Crash::Detail::ManualDumpContextStorage contextStorage;
+    NWB::Core::Crash::Detail::CaptureManualDumpContext(options, contextStorage);
+    const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::Detail::RequestCrashDump(
+        NWB::Core::Crash::Detail::CrashReasonKind::ManualDump,
+        0u,
+        options
+    );
+    EXPECT_EQ(result.status, NWB::Core::Crash::CrashDumpStatus::PackageWritten);
 
-        char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
-        BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
+    char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
+    BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
 
-        const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
-        EXPECT_TRUE(WaitForDirectory(packageDirectory, 3000u));
-        EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
-        EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName));
+    const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
+    EXPECT_TRUE(WaitForDirectory(packageDirectory, 3000u));
+    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
+    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName));
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-        EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
-        // A "#1 " frame proves the unwinder walked past the leaf frame; final builds omit the frame pointer, so
-        // this guards that .eh_frame-based capture keeps producing a full callstack.
-        EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
+    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
+    // A "#1 " frame proves the unwinder walked past the leaf frame; final builds omit the frame pointer, so
+    // this guards that .eh_frame-based capture keeps producing a full callstack.
+    EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
 #endif
-        EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"desktop handler runtime\"")));
-        NWB::Core::Crash::UninstallCrashHandler();
-    }
+    EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"desktop handler runtime\"")));
+    NWB::Core::Crash::UninstallCrashHandler();
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -425,7 +423,7 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
 
     const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
     const pid_t childPid = fork();
-    EXPECT_GE(childPid, 0);
+    ASSERT_GE(childPid, 0);
     if(childPid == 0){
         NWB::Core::Alloc::PersistentArena installArena(
             s_SignalChildInstallArena,

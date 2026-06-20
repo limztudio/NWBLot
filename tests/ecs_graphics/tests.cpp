@@ -454,7 +454,7 @@ static void CheckJointRotationQuaternion(
     const f32 z,
     const f32 w){
     SIMDVector quaternion = QuaternionIdentity();
-    EXPECT_TRUE(NWB::Impl::SkeletonRuntime::TryBuildJointRotationQuaternion(
+    ASSERT_TRUE(NWB::Impl::SkeletonRuntime::TryBuildJointRotationQuaternion(
             LoadFloat(joint),
             quaternion
         ));
@@ -499,18 +499,16 @@ TEST(EcsGraphics, SkeletonPoseBuildsHierarchicalPalette){
 
     Vector<NWB::Impl::SkeletonJointMatrix> resolvedJoints;
     u32 skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
-    EXPECT_TRUE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode));
+    ASSERT_TRUE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode));
     EXPECT_EQ(skinningMode, NWB::Impl::SkeletonSkinningMode::LinearBlend);
-    EXPECT_EQ(resolvedJoints.size(), 2u);
-    if(resolvedJoints.size() == 2u){
-        EXPECT_TRUE(NearlyEqual(resolvedJoints[0u].rows[0].w, 1.0f));
-        EXPECT_TRUE(NearlyEqual(resolvedJoints[0u].rows[1].w, 0.0f));
-        EXPECT_TRUE(NearlyEqual(resolvedJoints[1u].rows[0].w, 1.0f));
-        EXPECT_TRUE(NearlyEqual(resolvedJoints[1u].rows[1].w, 2.0f));
-    }
+    ASSERT_EQ(resolvedJoints.size(), 2u);
+    EXPECT_TRUE(NearlyEqual(resolvedJoints[0u].rows[0].w, 1.0f));
+    EXPECT_TRUE(NearlyEqual(resolvedJoints[0u].rows[1].w, 0.0f));
+    EXPECT_TRUE(NearlyEqual(resolvedJoints[1u].rows[0].w, 1.0f));
+    EXPECT_TRUE(NearlyEqual(resolvedJoints[1u].rows[1].w, 2.0f));
 
     pose.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
-    EXPECT_TRUE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode));
+    ASSERT_TRUE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode));
     EXPECT_EQ(skinningMode, NWB::Impl::SkeletonSkinningMode::DualQuaternion);
 
     pose.parentJoints[1u] = 1u;

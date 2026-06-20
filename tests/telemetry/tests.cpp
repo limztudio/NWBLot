@@ -78,18 +78,16 @@ TEST(Telemetry, RecorderFiltersAndCopiesPayload){
     EXPECT_EQ(view.eventCount(), 1u);
 
     const Telemetry::EventRecord* record = view.eventAt(0u);
-    EXPECT_NE(record, nullptr);
-    if(record){
-        EXPECT_TRUE(record->header.valid());
-        EXPECT_EQ(record->header.kind, Telemetry::EventKind::FrameGraphFrame);
-        EXPECT_EQ(record->header.streamId, 7u);
-        EXPECT_EQ(record->header.frameIndex, 13u);
-        EXPECT_EQ(record->header.payloadBytes, 3u);
-        EXPECT_EQ(record->payload.size(), 3u);
-        EXPECT_EQ(record->payload[0u], 4u);
-        EXPECT_EQ(record->payload[1u], 5u);
-        EXPECT_EQ(record->payload[2u], 6u);
-    }
+    ASSERT_NE(record, nullptr);
+    EXPECT_TRUE(record->header.valid());
+    EXPECT_EQ(record->header.kind, Telemetry::EventKind::FrameGraphFrame);
+    EXPECT_EQ(record->header.streamId, 7u);
+    EXPECT_EQ(record->header.frameIndex, 13u);
+    EXPECT_EQ(record->header.payloadBytes, 3u);
+    EXPECT_EQ(record->payload.size(), 3u);
+    EXPECT_EQ(record->payload[0u], 4u);
+    EXPECT_EQ(record->payload[1u], 5u);
+    EXPECT_EQ(record->payload[2u], 6u);
 
     EXPECT_EQ(view.eventAt(1u), nullptr);
 }
@@ -118,9 +116,7 @@ TEST(Telemetry, EventCodecRoundTrip){
     EXPECT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 44u, payload, sizeof(payload), 3u));
 
     const Telemetry::EventRecord* source = recorder.view().eventAt(0u);
-    EXPECT_NE(source, nullptr);
-    if(!source)
-        return;
+    ASSERT_NE(source, nullptr);
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
     EXPECT_TRUE(Telemetry::EncodeEvent(*source, encoded));
@@ -210,22 +206,20 @@ TEST(Telemetry, EventStreamCodecRoundTrip){
     const Telemetry::DecodeResult result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded);
     EXPECT_TRUE(result.ok());
     EXPECT_EQ(result.bytesRead, encoded.size());
-    EXPECT_EQ(decoded.eventCount(), recorder.eventCount());
+    ASSERT_EQ(decoded.eventCount(), recorder.eventCount());
 
     for(usize i = 0u; i < recorder.eventCount(); ++i){
         const Telemetry::EventRecord* source = recorder.view().eventAt(i);
         const Telemetry::EventRecord* parsed = decoded.view().eventAt(i);
-        EXPECT_NE(source, nullptr);
-        EXPECT_NE(parsed, nullptr);
-        if(!source || !parsed)
-            continue;
+        ASSERT_NE(source, nullptr);
+        ASSERT_NE(parsed, nullptr);
 
         EXPECT_EQ(parsed->header.kind, source->header.kind);
         EXPECT_EQ(parsed->header.streamId, source->header.streamId);
         EXPECT_EQ(parsed->header.frameIndex, source->header.frameIndex);
         EXPECT_EQ(parsed->header.timestampNanoseconds, source->header.timestampNanoseconds);
         EXPECT_EQ(parsed->header.payloadBytes, source->header.payloadBytes);
-        EXPECT_EQ(parsed->payload.size(), source->payload.size());
+        ASSERT_EQ(parsed->payload.size(), source->payload.size());
         if(!source->payload.empty())
             EXPECT_EQ(NWB_MEMCMP(parsed->payload.data(), source->payload.data(), source->payload.size()), 0);
     }
@@ -326,10 +320,8 @@ TEST(Telemetry, CaptureSessionCaptureScopeRecordsLogAndDiagnostic){
 
     const Telemetry::EventRecord* logEvent = session.view().eventAt(0u);
     const Telemetry::EventRecord* diagnosticEvent = session.view().eventAt(1u);
-    EXPECT_NE(logEvent, nullptr);
-    EXPECT_NE(diagnosticEvent, nullptr);
-    if(!logEvent || !diagnosticEvent)
-        return;
+    ASSERT_NE(logEvent, nullptr);
+    ASSERT_NE(diagnosticEvent, nullptr);
 
     EXPECT_EQ(logEvent->header.kind, Telemetry::EventKind::TextLog);
     EXPECT_EQ(diagnosticEvent->header.kind, Telemetry::EventKind::Diagnostic);
@@ -384,9 +376,7 @@ TEST(Telemetry, RecordTextLogUsesTelemetryEvent){
     ));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    EXPECT_NE(event, nullptr);
-    if(!event)
-        return;
+    ASSERT_NE(event, nullptr);
 
     EXPECT_EQ(event->header.kind, Telemetry::EventKind::TextLog);
     EXPECT_EQ(event->header.frameIndex, 123u);
@@ -416,9 +406,7 @@ TEST(Telemetry, TextLogCaptureLoggerForwardsAndRecords){
     EXPECT_EQ(recorder.eventCount(), 1u);
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    EXPECT_NE(event, nullptr);
-    if(!event)
-        return;
+    ASSERT_NE(event, nullptr);
 
     EXPECT_EQ(event->header.kind, Telemetry::EventKind::TextLog);
     EXPECT_EQ(event->header.frameIndex, 321u);
@@ -481,9 +469,7 @@ TEST(Telemetry, RecordDiagnosticUsesTelemetryEvent){
     EXPECT_TRUE(Telemetry::RecordDiagnostic(recorder, source, 222u, 6u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    EXPECT_NE(event, nullptr);
-    if(!event)
-        return;
+    ASSERT_NE(event, nullptr);
 
     EXPECT_EQ(event->header.kind, Telemetry::EventKind::Diagnostic);
     EXPECT_EQ(event->header.frameIndex, 222u);
@@ -524,9 +510,7 @@ TEST(Telemetry, DiagnosticCaptureGuardRecordsGlobalDiagnostic){
     EXPECT_EQ(recorder.eventCount(), 1u);
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    EXPECT_NE(event, nullptr);
-    if(!event)
-        return;
+    ASSERT_NE(event, nullptr);
 
     EXPECT_EQ(event->header.kind, Telemetry::EventKind::Diagnostic);
     EXPECT_EQ(event->header.frameIndex, 333u);
@@ -566,9 +550,7 @@ TEST(Telemetry, DiagnosticCaptureGuardManualCaptureReturnsStatus){
     EXPECT_EQ(recorder.eventCount(), 1u);
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    EXPECT_NE(event, nullptr);
-    if(!event)
-        return;
+    ASSERT_NE(event, nullptr);
 
     EXPECT_EQ(event->header.frameIndex, 444u);
     EXPECT_EQ(event->header.streamId, 5u);
@@ -684,28 +666,24 @@ TEST(Telemetry, FrameGraphPayloadRoundTrip){
     Telemetry::FrameGraphPayload parsed(testArena.arena);
     EXPECT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
     EXPECT_EQ(parsed.frameIndex, 905u);
-    EXPECT_EQ(parsed.nodes.size(), 3u);
-    EXPECT_EQ(parsed.edges.size(), 2u);
-    if(parsed.nodes.size() == 3u){
-        EXPECT_EQ(parsed.nodes[0u].name, Name("gbuffer"));
-        EXPECT_EQ(parsed.nodes[0u].label, "GBuffer Pass");
-        EXPECT_EQ(parsed.nodes[0u].kind, Telemetry::FrameGraphNodeKind::Pass);
-        EXPECT_EQ(parsed.nodes[0u].flags, 1u);
-        EXPECT_EQ(parsed.nodes[1u].name, Name("albedo"));
-        EXPECT_EQ(parsed.nodes[1u].label, "Albedo Texture");
-        EXPECT_EQ(parsed.nodes[1u].kind, Telemetry::FrameGraphNodeKind::Resource);
-        EXPECT_EQ(parsed.nodes[2u].name, Name("lighting"));
-        EXPECT_EQ(parsed.nodes[2u].label, "Lighting Pass");
-    }
-    if(parsed.edges.size() == 2u){
-        EXPECT_EQ(parsed.edges[0u].fromNodeIndex, 0u);
-        EXPECT_EQ(parsed.edges[0u].toNodeIndex, 1u);
-        EXPECT_EQ(parsed.edges[0u].kind, Telemetry::FrameGraphEdgeKind::Writes);
-        EXPECT_EQ(parsed.edges[1u].fromNodeIndex, 1u);
-        EXPECT_EQ(parsed.edges[1u].toNodeIndex, 2u);
-        EXPECT_EQ(parsed.edges[1u].kind, Telemetry::FrameGraphEdgeKind::Reads);
-        EXPECT_EQ(parsed.edges[1u].flags, 2u);
-    }
+    ASSERT_EQ(parsed.nodes.size(), 3u);
+    ASSERT_EQ(parsed.edges.size(), 2u);
+    EXPECT_EQ(parsed.nodes[0u].name, Name("gbuffer"));
+    EXPECT_EQ(parsed.nodes[0u].label, "GBuffer Pass");
+    EXPECT_EQ(parsed.nodes[0u].kind, Telemetry::FrameGraphNodeKind::Pass);
+    EXPECT_EQ(parsed.nodes[0u].flags, 1u);
+    EXPECT_EQ(parsed.nodes[1u].name, Name("albedo"));
+    EXPECT_EQ(parsed.nodes[1u].label, "Albedo Texture");
+    EXPECT_EQ(parsed.nodes[1u].kind, Telemetry::FrameGraphNodeKind::Resource);
+    EXPECT_EQ(parsed.nodes[2u].name, Name("lighting"));
+    EXPECT_EQ(parsed.nodes[2u].label, "Lighting Pass");
+    EXPECT_EQ(parsed.edges[0u].fromNodeIndex, 0u);
+    EXPECT_EQ(parsed.edges[0u].toNodeIndex, 1u);
+    EXPECT_EQ(parsed.edges[0u].kind, Telemetry::FrameGraphEdgeKind::Writes);
+    EXPECT_EQ(parsed.edges[1u].fromNodeIndex, 1u);
+    EXPECT_EQ(parsed.edges[1u].toNodeIndex, 2u);
+    EXPECT_EQ(parsed.edges[1u].kind, Telemetry::FrameGraphEdgeKind::Reads);
+    EXPECT_EQ(parsed.edges[1u].flags, 2u);
 
     payload[0u] = 0u;
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
@@ -742,9 +720,7 @@ TEST(Telemetry, RecordFrameGraphUsesTelemetryEvent){
     EXPECT_TRUE(Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 14u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    EXPECT_NE(event, nullptr);
-    if(!event)
-        return;
+    ASSERT_NE(event, nullptr);
 
     EXPECT_EQ(event->header.kind, Telemetry::EventKind::FrameGraphFrame);
     EXPECT_EQ(event->header.frameIndex, 909u);
@@ -771,9 +747,7 @@ TEST(Telemetry, CaptureSessionRecordsFrameGraphWithContext){
     EXPECT_TRUE(session.recordFrameGraph(nodes, edges));
 
     const Telemetry::EventRecord* event = session.view().eventAt(0u);
-    EXPECT_NE(event, nullptr);
-    if(!event)
-        return;
+    ASSERT_NE(event, nullptr);
 
     EXPECT_EQ(event->header.kind, Telemetry::EventKind::FrameGraphFrame);
     EXPECT_EQ(event->header.frameIndex, 910u);
@@ -862,9 +836,7 @@ TEST(Telemetry, RecordPerfTimingUsesTelemetryEvent){
     EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, scopeName, stats, 11u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    EXPECT_NE(event, nullptr);
-    if(!event)
-        return;
+    ASSERT_NE(event, nullptr);
 
     EXPECT_EQ(event->header.kind, Telemetry::EventKind::PerfFrame);
     EXPECT_EQ(event->header.frameIndex, stats.publishFrameIndex);
@@ -1005,9 +977,7 @@ TEST(Telemetry, RecordPerfMemoryUsesTelemetryEvent){
     EXPECT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, snapshot, delta, 12u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    EXPECT_NE(event, nullptr);
-    if(!event)
-        return;
+    ASSERT_NE(event, nullptr);
 
     EXPECT_EQ(event->header.kind, Telemetry::EventKind::MemoryFrame);
     EXPECT_EQ(event->header.frameIndex, snapshot.frameIndex);
@@ -1117,11 +1087,9 @@ TEST(Telemetry, RecordPerfSessionReportUsesTelemetryEvents){
     const Telemetry::EventRecord* cpuEvent = recorder.view().eventAt(0u);
     const Telemetry::EventRecord* gpuEvent = recorder.view().eventAt(1u);
     const Telemetry::EventRecord* memoryEvent = recorder.view().eventAt(2u);
-    EXPECT_NE(cpuEvent, nullptr);
-    EXPECT_NE(gpuEvent, nullptr);
-    EXPECT_NE(memoryEvent, nullptr);
-    if(!cpuEvent || !gpuEvent || !memoryEvent)
-        return;
+    ASSERT_NE(cpuEvent, nullptr);
+    ASSERT_NE(gpuEvent, nullptr);
+    ASSERT_NE(memoryEvent, nullptr);
 
     EXPECT_EQ(cpuEvent->header.kind, Telemetry::EventKind::PerfFrame);
     EXPECT_EQ(gpuEvent->header.kind, Telemetry::EventKind::PerfFrame);
@@ -1163,11 +1131,9 @@ TEST(Telemetry, CaptureSessionRecordsPerfReport){
     const Telemetry::EventRecord* cpuEvent = session.view().eventAt(0u);
     const Telemetry::EventRecord* gpuEvent = session.view().eventAt(1u);
     const Telemetry::EventRecord* memoryEvent = session.view().eventAt(2u);
-    EXPECT_NE(cpuEvent, nullptr);
-    EXPECT_NE(gpuEvent, nullptr);
-    EXPECT_NE(memoryEvent, nullptr);
-    if(!cpuEvent || !gpuEvent || !memoryEvent)
-        return;
+    ASSERT_NE(cpuEvent, nullptr);
+    ASSERT_NE(gpuEvent, nullptr);
+    ASSERT_NE(memoryEvent, nullptr);
 
     EXPECT_EQ(cpuEvent->header.kind, Telemetry::EventKind::PerfFrame);
     EXPECT_EQ(gpuEvent->header.kind, Telemetry::EventKind::PerfFrame);

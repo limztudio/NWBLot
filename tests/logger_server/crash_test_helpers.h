@@ -103,7 +103,7 @@ void BeginArchiveWithManifest(
 void BuildLinuxCrashArchive(Core::Alloc::GlobalArena& arena, CrashTestText& archive, AStringView crashId);
 [[nodiscard]] bool Contains(const CrashTestText& text, AStringView needle);
 [[nodiscard]] bool ContainsMessage(const Log::LogString& text, TStringView needle);
-void PreserveObservedReport(TestContext& context, Core::Alloc::GlobalArena& arena, const CrashTestText& report, AStringView suffix);
+void PreserveObservedReport(Core::Alloc::GlobalArena& arena, const CrashTestText& report, AStringView suffix);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

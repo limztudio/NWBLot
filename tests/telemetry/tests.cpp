@@ -22,15 +22,9 @@ namespace __hidden_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestContext = NWB::Tests::TestContext;
 using TestArena = NWB::Tests::TestArena<struct TelemetryTestsTag>;
 namespace Telemetry = NWB::Core::Telemetry;
 namespace Log = NWB::Log;
-
-
-#define NWB_TELEMETRY_TEST_CHECK NWB_TEST_CHECK
 
 static u32 s_ExistingDiagnosticCallbackCount = 0u;
 
@@ -42,7 +36,7 @@ static void ExistingDiagnosticCallback(const DiagnosticEventRecord&)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestCaptureFlags(TestContext& context){
+static void TestCaptureFlags(){
     constexpr Telemetry::CaptureOptions disabled = Telemetry::CaptureOptions::Disabled();
     constexpr Telemetry::CaptureOptions frameGraph = Telemetry::CaptureOptions::FrameGraphOnly();
     constexpr Telemetry::CaptureOptions perf = Telemetry::CaptureOptions::PerfOnly();
@@ -58,121 +52,123 @@ static void TestCaptureFlags(TestContext& context){
     static_assert(all.perfEnabled());
     static_assert(all.frameGraphEnabled());
 
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::CaptureAllowsEventKind(all, Telemetry::EventKind::TextLog));
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::CaptureAllowsEventKind(perf, Telemetry::EventKind::MemoryFrame));
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::CaptureAllowsEventKind(all, Telemetry::EventKind::FrameGraphFrame));
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::PerfFrame));
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::MemoryFrame));
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::FrameGraphFrame));
+    EXPECT_TRUE((Telemetry::CaptureAllowsEventKind(all, Telemetry::EventKind::TextLog)));
+    EXPECT_TRUE((Telemetry::CaptureAllowsEventKind(perf, Telemetry::EventKind::MemoryFrame)));
+    EXPECT_TRUE((Telemetry::CaptureAllowsEventKind(all, Telemetry::EventKind::FrameGraphFrame)));
+    EXPECT_TRUE((!Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::PerfFrame)));
+    EXPECT_TRUE((!Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::MemoryFrame)));
+    EXPECT_TRUE((Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::FrameGraphFrame)));
 }
 
-static void TestRecorderFiltersAndCopiesPayload(TestContext& context){
+static void TestRecorderFiltersAndCopiesPayload(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
 
     const u8 perfPayload[] = { 1u, 2u };
-    NWB_TELEMETRY_TEST_CHECK(context, !recorder.recordBinary(Telemetry::EventKind::PerfFrame, 12u, perfPayload, sizeof(perfPayload)));
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 0u);
+    EXPECT_TRUE((!recorder.recordBinary(Telemetry::EventKind::PerfFrame, 12u, perfPayload, sizeof(perfPayload))));
+    EXPECT_TRUE((recorder.eventCount() == 0u));
 
     u8 frameGraphPayload[] = { 4u, 5u, 6u };
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 13u, frameGraphPayload, sizeof(frameGraphPayload), 7u));
+    EXPECT_TRUE((recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 13u, frameGraphPayload, sizeof(frameGraphPayload), 7u)));
     frameGraphPayload[0u] = 99u;
 
     const Telemetry::EventView view = recorder.view();
-    NWB_TELEMETRY_TEST_CHECK(context, view.valid());
-    NWB_TELEMETRY_TEST_CHECK(context, view.eventCount() == 1u);
+    EXPECT_TRUE((view.valid()));
+    EXPECT_TRUE((view.eventCount() == 1u));
 
     const Telemetry::EventRecord* record = view.eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, record != nullptr);
+    EXPECT_TRUE((record != nullptr));
     if(record){
-        NWB_TELEMETRY_TEST_CHECK(context, record->header.valid());
-        NWB_TELEMETRY_TEST_CHECK(context, record->header.kind == Telemetry::EventKind::FrameGraphFrame);        NWB_TELEMETRY_TEST_CHECK(context, record->header.streamId == 7u);
-        NWB_TELEMETRY_TEST_CHECK(context, record->header.frameIndex == 13u);
-        NWB_TELEMETRY_TEST_CHECK(context, record->header.payloadBytes == 3u);
-        NWB_TELEMETRY_TEST_CHECK(context, record->payload.size() == 3u);
-        NWB_TELEMETRY_TEST_CHECK(context, record->payload[0u] == 4u);
-        NWB_TELEMETRY_TEST_CHECK(context, record->payload[1u] == 5u);
-        NWB_TELEMETRY_TEST_CHECK(context, record->payload[2u] == 6u);
+        EXPECT_TRUE((record->header.valid()));
+        EXPECT_TRUE((record->header.kind == Telemetry::EventKind::FrameGraphFrame));
+        EXPECT_TRUE((record->header.streamId == 7u));
+        EXPECT_TRUE((record->header.frameIndex == 13u));
+        EXPECT_TRUE((record->header.payloadBytes == 3u));
+        EXPECT_TRUE((record->payload.size() == 3u));
+        EXPECT_TRUE((record->payload[0u] == 4u));
+        EXPECT_TRUE((record->payload[1u] == 5u));
+        EXPECT_TRUE((record->payload[2u] == 6u));
     }
 
-    NWB_TELEMETRY_TEST_CHECK(context, view.eventAt(1u) == nullptr);
+    EXPECT_TRUE((view.eventAt(1u) == nullptr));
 }
 
-static void TestRecorderClearAndDisabledState(TestContext& context){
+static void TestRecorderClearAndDisabledState(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
 
     const u32 payload = 42u;
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, &payload, sizeof(payload)));
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 1u);
+    EXPECT_TRUE((recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, &payload, sizeof(payload))));
+    EXPECT_TRUE((recorder.eventCount() == 1u));
 
     recorder.setCaptureOptions(Telemetry::CaptureOptions::Disabled());
-    NWB_TELEMETRY_TEST_CHECK(context, !recorder.enabled());
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 0u);
-    NWB_TELEMETRY_TEST_CHECK(context, !recorder.recordBinary(Telemetry::EventKind::PerfFrame, 2u, &payload, sizeof(payload)));
+    EXPECT_TRUE((!recorder.enabled()));
+    EXPECT_TRUE((recorder.eventCount() == 0u));
+    EXPECT_TRUE((!recorder.recordBinary(Telemetry::EventKind::PerfFrame, 2u, &payload, sizeof(payload))));
 }
 
-static void TestEventCodecRoundTrip(TestContext& context){
+static void TestEventCodecRoundTrip(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
 
     const u8 payload[] = { 10u, 20u, 30u, 40u };
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 44u, payload, sizeof(payload), 3u));
+    EXPECT_TRUE((recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 44u, payload, sizeof(payload), 3u)));
 
     const Telemetry::EventRecord* source = recorder.view().eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, source != nullptr);
+    EXPECT_TRUE((source != nullptr));
     if(!source)
         return;
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEvent(*source, encoded));
-    NWB_TELEMETRY_TEST_CHECK(context, encoded.size() == sizeof(Telemetry::EncodedEventHeader) + sizeof(payload));
+    EXPECT_TRUE((Telemetry::EncodeEvent(*source, encoded)));
+    EXPECT_TRUE((encoded.size() == sizeof(Telemetry::EncodedEventHeader) + sizeof(payload)));
 
     Telemetry::EventRecord decoded(testArena.arena);
     const Telemetry::DecodeResult result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size(), decoded);
-    NWB_TELEMETRY_TEST_CHECK(context, result.ok());
-    NWB_TELEMETRY_TEST_CHECK(context, result.bytesRead == encoded.size());
-    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.valid());
-    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.kind == source->header.kind);    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.streamId == source->header.streamId);
-    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.frameIndex == source->header.frameIndex);
-    NWB_TELEMETRY_TEST_CHECK(context, decoded.header.payloadBytes == source->header.payloadBytes);
-    NWB_TELEMETRY_TEST_CHECK(context, decoded.payload.size() == sizeof(payload));
-    NWB_TELEMETRY_TEST_CHECK(context, decoded.payload[0u] == 10u);
-    NWB_TELEMETRY_TEST_CHECK(context, decoded.payload[3u] == 40u);
+    EXPECT_TRUE((result.ok()));
+    EXPECT_TRUE((result.bytesRead == encoded.size()));
+    EXPECT_TRUE((decoded.header.valid()));
+    EXPECT_TRUE((decoded.header.kind == source->header.kind));
+    EXPECT_TRUE((decoded.header.streamId == source->header.streamId));
+    EXPECT_TRUE((decoded.header.frameIndex == source->header.frameIndex));
+    EXPECT_TRUE((decoded.header.payloadBytes == source->header.payloadBytes));
+    EXPECT_TRUE((decoded.payload.size() == sizeof(payload)));
+    EXPECT_TRUE((decoded.payload[0u] == 10u));
+    EXPECT_TRUE((decoded.payload[3u] == 40u));
 }
 
-static void TestEventCodecRejectsInvalidInput(TestContext& context){
+static void TestEventCodecRejectsInvalidInput(){
     TestArena testArena;
     Telemetry::TelemetryBytes encoded(testArena.arena);
 
     Telemetry::EventHeader invalidKindHeader;
     invalidKindHeader.kind = Telemetry::EventKind::Unknown;
     invalidKindHeader.payloadBytes = 0u;
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::EncodeEvent(invalidKindHeader, nullptr, 0u, encoded));
+    EXPECT_TRUE((!Telemetry::EncodeEvent(invalidKindHeader, nullptr, 0u, encoded)));
 
     const u8 payload = 5u;
 
     Telemetry::EventHeader validHeader;
     validHeader.kind = Telemetry::EventKind::PerfFrame;
     validHeader.payloadBytes = sizeof(payload);
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::EncodeEvent(validHeader, nullptr, sizeof(payload), encoded));
+    EXPECT_TRUE((!Telemetry::EncodeEvent(validHeader, nullptr, sizeof(payload), encoded)));
 
     validHeader.payloadBytes = 0u;
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEvent(validHeader, nullptr, 0u, encoded));
+    EXPECT_TRUE((Telemetry::EncodeEvent(validHeader, nullptr, 0u, encoded)));
     encoded[0u] = 0u;
 
     Telemetry::EventRecord decoded(testArena.arena);
     Telemetry::DecodeResult result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size(), decoded);
-    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::InvalidHeader);
+    EXPECT_TRUE((result.status == Telemetry::DecodeStatus::InvalidHeader));
 
     result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), sizeof(Telemetry::EncodedEventHeader) - 1u, decoded);
-    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::TruncatedHeader);
+    EXPECT_TRUE((result.status == Telemetry::DecodeStatus::TruncatedHeader));
 }
 
-static void TestEventCodecReportsTruncatedPayload(TestContext& context){
+static void TestEventCodecReportsTruncatedPayload(){
     TestArena testArena;
     Telemetry::TelemetryBytes encoded(testArena.arena);
 
@@ -180,101 +176,99 @@ static void TestEventCodecReportsTruncatedPayload(TestContext& context){
     Telemetry::EventHeader header;
     header.kind = Telemetry::EventKind::PerfFrame;
     header.payloadBytes = sizeof(payload);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEvent(header, payload, sizeof(payload), encoded));
+    EXPECT_TRUE((Telemetry::EncodeEvent(header, payload, sizeof(payload), encoded)));
 
     Telemetry::EventRecord decoded(testArena.arena);
     const Telemetry::DecodeResult result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size() - 1u, decoded);
-    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::TruncatedPayload);
+    EXPECT_TRUE((result.status == Telemetry::DecodeStatus::TruncatedPayload));
 }
 
-static void TestEventStreamCodecRoundTrip(TestContext& context){
+static void TestEventStreamCodecRoundTrip(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     const u32 perfPayload = 99u;
     const char frameGraphPayload[] = "{frame:1}";
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.recordBinary(Telemetry::EventKind::PerfFrame, 101u, &perfPayload, sizeof(perfPayload), 2u));
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.recordBinary(
+    EXPECT_TRUE((recorder.recordBinary(Telemetry::EventKind::PerfFrame, 101u, &perfPayload, sizeof(perfPayload), 2u)));
+    EXPECT_TRUE((recorder.recordBinary(
         Telemetry::EventKind::FrameGraphFrame,
         102u,
         frameGraphPayload,
         sizeof(frameGraphPayload) - 1u,
         3u
-    ));
+    )));
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEventStream(recorder.view(), encoded));
-    NWB_TELEMETRY_TEST_CHECK(
-        context,
-        encoded.size() == sizeof(Telemetry::EncodedStreamHeader)
+    EXPECT_TRUE((Telemetry::EncodeEventStream(recorder.view(), encoded)));
+    EXPECT_TRUE((encoded.size() == sizeof(Telemetry::EncodedStreamHeader)
             + (sizeof(Telemetry::EncodedEventHeader) * 2u)
             + sizeof(perfPayload)
-            + sizeof(frameGraphPayload) - 1u
-    );
+            + sizeof(frameGraphPayload) - 1u));
 
     Telemetry::Recorder decoded(testArena.arena);
     const Telemetry::DecodeResult result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded);
-    NWB_TELEMETRY_TEST_CHECK(context, result.ok());
-    NWB_TELEMETRY_TEST_CHECK(context, result.bytesRead == encoded.size());
-    NWB_TELEMETRY_TEST_CHECK(context, decoded.eventCount() == recorder.eventCount());
+    EXPECT_TRUE((result.ok()));
+    EXPECT_TRUE((result.bytesRead == encoded.size()));
+    EXPECT_TRUE((decoded.eventCount() == recorder.eventCount()));
 
     for(usize i = 0u; i < recorder.eventCount(); ++i){
         const Telemetry::EventRecord* source = recorder.view().eventAt(i);
         const Telemetry::EventRecord* parsed = decoded.view().eventAt(i);
-        NWB_TELEMETRY_TEST_CHECK(context, source != nullptr);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed != nullptr);
+        EXPECT_TRUE((source != nullptr));
+        EXPECT_TRUE((parsed != nullptr));
         if(!source || !parsed)
             continue;
 
-        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.kind == source->header.kind);        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.streamId == source->header.streamId);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.frameIndex == source->header.frameIndex);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.timestampNanoseconds == source->header.timestampNanoseconds);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed->header.payloadBytes == source->header.payloadBytes);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed->payload.size() == source->payload.size());
+        EXPECT_TRUE((parsed->header.kind == source->header.kind));
+        EXPECT_TRUE((parsed->header.streamId == source->header.streamId));
+        EXPECT_TRUE((parsed->header.frameIndex == source->header.frameIndex));
+        EXPECT_TRUE((parsed->header.timestampNanoseconds == source->header.timestampNanoseconds));
+        EXPECT_TRUE((parsed->header.payloadBytes == source->header.payloadBytes));
+        EXPECT_TRUE((parsed->payload.size() == source->payload.size()));
         if(!source->payload.empty())
-            NWB_TELEMETRY_TEST_CHECK(context, NWB_MEMCMP(parsed->payload.data(), source->payload.data(), source->payload.size()) == 0);
+            EXPECT_TRUE((NWB_MEMCMP(parsed->payload.data(), source->payload.data(), source->payload.size()) == 0));
     }
 }
 
-static void TestEventStreamCodecHandlesEmptyStreams(TestContext& context){
+static void TestEventStreamCodecHandlesEmptyStreams(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEventStream(recorder.view(), encoded));
-    NWB_TELEMETRY_TEST_CHECK(context, encoded.size() == sizeof(Telemetry::EncodedStreamHeader));
+    EXPECT_TRUE((Telemetry::EncodeEventStream(recorder.view(), encoded)));
+    EXPECT_TRUE((encoded.size() == sizeof(Telemetry::EncodedStreamHeader)));
 
     Telemetry::Recorder decoded(testArena.arena);
     const Telemetry::DecodeResult result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded);
-    NWB_TELEMETRY_TEST_CHECK(context, result.ok());
-    NWB_TELEMETRY_TEST_CHECK(context, result.bytesRead == encoded.size());
-    NWB_TELEMETRY_TEST_CHECK(context, decoded.eventCount() == 0u);
+    EXPECT_TRUE((result.ok()));
+    EXPECT_TRUE((result.bytesRead == encoded.size()));
+    EXPECT_TRUE((decoded.eventCount() == 0u));
 }
 
-static void TestEventStreamCodecRejectsInvalidInput(TestContext& context){
+static void TestEventStreamCodecRejectsInvalidInput(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
 
     const u8 payload[] = { 7u, 8u };
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, payload, sizeof(payload)));
+    EXPECT_TRUE((recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, payload, sizeof(payload))));
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEventStream(recorder.view(), encoded));
+    EXPECT_TRUE((Telemetry::EncodeEventStream(recorder.view(), encoded)));
 
     Telemetry::Recorder decoded(testArena.arena);
     Telemetry::DecodeResult result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), sizeof(Telemetry::EncodedStreamHeader) - 1u, decoded);
-    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::TruncatedHeader);
+    EXPECT_TRUE((result.status == Telemetry::DecodeStatus::TruncatedHeader));
 
     Telemetry::TelemetryBytes corrupted(testArena.arena);
     corrupted = encoded;
     corrupted[0u] = 0u;
     result = Telemetry::DecodeEventStream(testArena.arena, corrupted.data(), corrupted.size(), decoded);
-    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::InvalidHeader);
+    EXPECT_TRUE((result.status == Telemetry::DecodeStatus::InvalidHeader));
 
     result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size() - 1u, decoded);
-    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::TruncatedPayload);
+    EXPECT_TRUE((result.status == Telemetry::DecodeStatus::TruncatedPayload));
 
     corrupted = encoded;
     Telemetry::EncodedStreamHeader streamHeader;
@@ -282,7 +276,7 @@ static void TestEventStreamCodecRejectsInvalidInput(TestContext& context){
     streamHeader.eventCount = 0u;
     NWB_MEMCPY(corrupted.data(), corrupted.size(), &streamHeader, sizeof(streamHeader));
     result = Telemetry::DecodeEventStream(testArena.arena, corrupted.data(), corrupted.size(), decoded);
-    NWB_TELEMETRY_TEST_CHECK(context, result.status == Telemetry::DecodeStatus::InvalidHeader);
+    EXPECT_TRUE((result.status == Telemetry::DecodeStatus::InvalidHeader));
 }
 
 static ::Path<NWB::Core::Alloc::GlobalArena> TelemetryTestStorageDirectory(NWB::Core::Alloc::GlobalArena& arena){
@@ -293,7 +287,7 @@ static ::Path<NWB::Core::Alloc::GlobalArena> TelemetryTestStorageDirectory(NWB::
     return ::Path<NWB::Core::Alloc::GlobalArena>(arena, "telemetry_test_storage");
 }
 
-static void TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(TestContext& context){
+static void TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(){
     TestArena testArena;
     Telemetry::CaptureSession session(testArena.arena);
     session.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -325,85 +319,86 @@ static void TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(TestContext& c
         .message = "ignored after scope",
     });
 
-    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.messageCount() == 2u);
-    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.sawMessageContaining(NWB_TEXT("scope text")));
-    NWB_TELEMETRY_TEST_CHECK(context, previousLogger.sawMessageContaining(NWB_TEXT("after scope")));
-    NWB_TELEMETRY_TEST_CHECK(context, session.eventCount() == 2u);
+    EXPECT_TRUE((previousLogger.messageCount() == 2u));
+    EXPECT_TRUE((previousLogger.sawMessageContaining(NWB_TEXT("scope text"))));
+    EXPECT_TRUE((previousLogger.sawMessageContaining(NWB_TEXT("after scope"))));
+    EXPECT_TRUE((session.eventCount() == 2u));
 
     const Telemetry::EventRecord* logEvent = session.view().eventAt(0u);
     const Telemetry::EventRecord* diagnosticEvent = session.view().eventAt(1u);
-    NWB_TELEMETRY_TEST_CHECK(context, logEvent != nullptr);
-    NWB_TELEMETRY_TEST_CHECK(context, diagnosticEvent != nullptr);
+    EXPECT_TRUE((logEvent != nullptr));
+    EXPECT_TRUE((diagnosticEvent != nullptr));
     if(!logEvent || !diagnosticEvent)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, logEvent->header.kind == Telemetry::EventKind::TextLog);
-    NWB_TELEMETRY_TEST_CHECK(context, diagnosticEvent->header.kind == Telemetry::EventKind::Diagnostic);
-    NWB_TELEMETRY_TEST_CHECK(context, logEvent->header.frameIndex == 610u);
-    NWB_TELEMETRY_TEST_CHECK(context, diagnosticEvent->header.frameIndex == 610u);
-    NWB_TELEMETRY_TEST_CHECK(context, logEvent->header.streamId == 28u);
-    NWB_TELEMETRY_TEST_CHECK(context, diagnosticEvent->header.streamId == 28u);
+    EXPECT_TRUE((logEvent->header.kind == Telemetry::EventKind::TextLog));
+    EXPECT_TRUE((diagnosticEvent->header.kind == Telemetry::EventKind::Diagnostic));
+    EXPECT_TRUE((logEvent->header.frameIndex == 610u));
+    EXPECT_TRUE((diagnosticEvent->header.frameIndex == 610u));
+    EXPECT_TRUE((logEvent->header.streamId == 28u));
+    EXPECT_TRUE((diagnosticEvent->header.streamId == 28u));
 
     Telemetry::TextLogPayload logPayload(testArena.arena);
     Telemetry::DiagnosticPayload diagnosticPayload(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, logEvent->payload.data(), logEvent->payload.size(), logPayload));
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseDiagnosticPayload(testArena.arena, diagnosticEvent->payload.data(), diagnosticEvent->payload.size(), diagnosticPayload));
-    NWB_TELEMETRY_TEST_CHECK(context, logPayload.messageUtf8 == "scope text");
-    NWB_TELEMETRY_TEST_CHECK(context, diagnosticPayload.category == "scope_diagnostic");
-    NWB_TELEMETRY_TEST_CHECK(context, diagnosticPayload.message == "scope diagnostic");
-    NWB_TELEMETRY_TEST_CHECK(context, diagnosticPayload.file == "scope.cpp");
-    NWB_TELEMETRY_TEST_CHECK(context, diagnosticPayload.line == 67u);
+    EXPECT_TRUE((Telemetry::ParseTextLogPayload(testArena.arena, logEvent->payload.data(), logEvent->payload.size(), logPayload)));
+    EXPECT_TRUE((Telemetry::ParseDiagnosticPayload(testArena.arena, diagnosticEvent->payload.data(), diagnosticEvent->payload.size(), diagnosticPayload)));
+    EXPECT_TRUE((logPayload.messageUtf8 == "scope text"));
+    EXPECT_TRUE((diagnosticPayload.category == "scope_diagnostic"));
+    EXPECT_TRUE((diagnosticPayload.message == "scope diagnostic"));
+    EXPECT_TRUE((diagnosticPayload.file == "scope.cpp"));
+    EXPECT_TRUE((diagnosticPayload.line == 67u));
 }
 
-static void TestTextLogPayloadRoundTrip(TestContext& context){
+static void TestTextLogPayloadRoundTrip(){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
 
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::BuildTextLogPayload(
+    EXPECT_TRUE((Telemetry::BuildTextLogPayload(
         testArena.arena,
         NWB::Core::Common::LogType::Warning,
         NWB_TEXT("telemetry text log"),
         payload
-    ));
-    NWB_TELEMETRY_TEST_CHECK(context, payload.size() == sizeof(Telemetry::EncodedTextLogPayloadHeader) + sizeof("telemetry text log") - 1u);
+    )));
+    EXPECT_TRUE((payload.size() == sizeof(Telemetry::EncodedTextLogPayloadHeader) + sizeof("telemetry text log") - 1u));
 
     Telemetry::TextLogPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::Warning);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "telemetry text log");
+    EXPECT_TRUE((Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed)));
+    EXPECT_TRUE((parsed.type == NWB::Core::Common::LogType::Warning));
+    EXPECT_TRUE((parsed.messageUtf8 == "telemetry text log"));
 
     payload[0u] = 0u;
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_TRUE((!Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed)));
 }
 
-static void TestRecordTextLogUsesTelemetryEvent(TestContext& context){
+static void TestRecordTextLogUsesTelemetryEvent(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordTextLog(
+    EXPECT_TRUE((Telemetry::RecordTextLog(
         recorder,
         NWB::Core::Common::LogType::EssentialInfo,
         NWB_TEXT("captured text"),
         123u,
         9u
-    ));
+    )));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    EXPECT_TRUE((event != nullptr));
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 123u);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 9u);
+    EXPECT_TRUE((event->header.kind == Telemetry::EventKind::TextLog));
+    EXPECT_TRUE((event->header.frameIndex == 123u));
+    EXPECT_TRUE((event->header.streamId == 9u));
 
     Telemetry::TextLogPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::EssentialInfo);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "captured text");
+    EXPECT_TRUE((Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE((parsed.type == NWB::Core::Common::LogType::EssentialInfo));
+    EXPECT_TRUE((parsed.messageUtf8 == "captured text"));
 }
 
-static void TestTextLogCaptureLoggerForwardsAndRecords(TestContext& context){
+static void TestTextLogCaptureLoggerForwardsAndRecords(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -415,27 +410,27 @@ static void TestTextLogCaptureLoggerForwardsAndRecords(TestContext& context){
 
     logger.enqueue(NWB::Core::Common::LogString(NWB_TEXT("bridged warning"), logger.arena()), NWB::Core::Common::LogType::Warning);
 
-    NWB_TELEMETRY_TEST_CHECK(context, forwardLogger.messageCount() == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, forwardLogger.lastType() == NWB::Core::Common::LogType::Warning);
-    NWB_TELEMETRY_TEST_CHECK(context, forwardLogger.sawMessageContaining(NWB_TEXT("bridged warning")));
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 1u);
+    EXPECT_TRUE((forwardLogger.messageCount() == 1u));
+    EXPECT_TRUE((forwardLogger.lastType() == NWB::Core::Common::LogType::Warning));
+    EXPECT_TRUE((forwardLogger.sawMessageContaining(NWB_TEXT("bridged warning"))));
+    EXPECT_TRUE((recorder.eventCount() == 1u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    EXPECT_TRUE((event != nullptr));
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::TextLog);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 321u);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 4u);
+    EXPECT_TRUE((event->header.kind == Telemetry::EventKind::TextLog));
+    EXPECT_TRUE((event->header.frameIndex == 321u));
+    EXPECT_TRUE((event->header.streamId == 4u));
 
     Telemetry::TextLogPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.type == NWB::Core::Common::LogType::Warning);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.messageUtf8 == "bridged warning");
+    EXPECT_TRUE((Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE((parsed.type == NWB::Core::Common::LogType::Warning));
+    EXPECT_TRUE((parsed.messageUtf8 == "bridged warning"));
 }
 
-static void TestDiagnosticPayloadRoundTrip(TestContext& context){
+static void TestDiagnosticPayloadRoundTrip(){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
 
@@ -450,25 +445,25 @@ static void TestDiagnosticPayloadRoundTrip(TestContext& context){
         .terminatesProcess = true,
     };
 
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::BuildDiagnosticPayload(testArena.arena, source, payload));
-    NWB_TELEMETRY_TEST_CHECK(context, payload.size() > sizeof(Telemetry::EncodedDiagnosticPayloadHeader));
+    EXPECT_TRUE((Telemetry::BuildDiagnosticPayload(testArena.arena, source, payload)));
+    EXPECT_TRUE((payload.size() > sizeof(Telemetry::EncodedDiagnosticPayloadHeader)));
 
     Telemetry::DiagnosticPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.event == DiagnosticEventName::s_Error);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.category == "unit_category");
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.expression == "value != nullptr");
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.message == "diagnostic message");
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.file == "diagnostic_test.cpp");
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.instructionPointer == 0x1234u);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.line == 77u);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.terminatesProcess);
+    EXPECT_TRUE((Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed)));
+    EXPECT_TRUE((parsed.event == DiagnosticEventName::s_Error));
+    EXPECT_TRUE((parsed.category == "unit_category"));
+    EXPECT_TRUE((parsed.expression == "value != nullptr"));
+    EXPECT_TRUE((parsed.message == "diagnostic message"));
+    EXPECT_TRUE((parsed.file == "diagnostic_test.cpp"));
+    EXPECT_TRUE((parsed.instructionPointer == 0x1234u));
+    EXPECT_TRUE((parsed.line == 77u));
+    EXPECT_TRUE((parsed.terminatesProcess));
 
     payload[0u] = 0u;
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_TRUE((!Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed)));
 }
 
-static void TestRecordDiagnosticUsesTelemetryEvent(TestContext& context){
+static void TestRecordDiagnosticUsesTelemetryEvent(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -483,31 +478,32 @@ static void TestRecordDiagnosticUsesTelemetryEvent(TestContext& context){
         .line = 12u,
     };
 
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordDiagnostic(recorder, source, 222u, 6u));
+    EXPECT_TRUE((Telemetry::RecordDiagnostic(recorder, source, 222u, 6u)));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    EXPECT_TRUE((event != nullptr));
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::Diagnostic);    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 222u);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 6u);
+    EXPECT_TRUE((event->header.kind == Telemetry::EventKind::Diagnostic));
+    EXPECT_TRUE((event->header.frameIndex == 222u));
+    EXPECT_TRUE((event->header.streamId == 6u));
 
     Telemetry::DiagnosticPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.event == DiagnosticEventName::s_Assert);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.category == DiagnosticEventCategory::s_Assert);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.message == "assert payload");
+    EXPECT_TRUE((Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE((parsed.event == DiagnosticEventName::s_Assert));
+    EXPECT_TRUE((parsed.category == DiagnosticEventCategory::s_Assert));
+    EXPECT_TRUE((parsed.message == "assert payload"));
 }
 
-static void TestDiagnosticCaptureGuardRecordsGlobalDiagnostic(TestContext& context){
+static void TestDiagnosticCaptureGuardRecordsGlobalDiagnostic(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     {
         Telemetry::DiagnosticCaptureGuard guard(recorder);
-        NWB_TELEMETRY_TEST_CHECK(context, guard.installed());
+        EXPECT_TRUE((guard.installed()));
         guard.setFrameIndex(333u);
         guard.setStreamId(8u);
         CaptureDiagnosticEvent(DiagnosticEventRecord{
@@ -525,34 +521,34 @@ static void TestDiagnosticCaptureGuardRecordsGlobalDiagnostic(TestContext& conte
         .message = "ignored after guard",
     });
 
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 1u);
+    EXPECT_TRUE((recorder.eventCount() == 1u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    EXPECT_TRUE((event != nullptr));
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::Diagnostic);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 333u);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 8u);
+    EXPECT_TRUE((event->header.kind == Telemetry::EventKind::Diagnostic));
+    EXPECT_TRUE((event->header.frameIndex == 333u));
+    EXPECT_TRUE((event->header.streamId == 8u));
 
     Telemetry::DiagnosticPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.event == DiagnosticEventName::s_Error);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.category == "telemetry_guard");
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.message == "captured diagnostic");
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.file == "guard.cpp");
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.line == 44u);
+    EXPECT_TRUE((Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE((parsed.event == DiagnosticEventName::s_Error));
+    EXPECT_TRUE((parsed.category == "telemetry_guard"));
+    EXPECT_TRUE((parsed.message == "captured diagnostic"));
+    EXPECT_TRUE((parsed.file == "guard.cpp"));
+    EXPECT_TRUE((parsed.line == 44u));
 }
 
-static void TestDiagnosticCaptureGuardManualCaptureReturnsStatus(TestContext& context){
+static void TestDiagnosticCaptureGuardManualCaptureReturnsStatus(){
     TestArena testArena;
     Telemetry::Recorder disabledRecorder(testArena.arena);
     Telemetry::DiagnosticCaptureGuard disabledGuard(disabledRecorder);
-    NWB_TELEMETRY_TEST_CHECK(context, !disabledGuard.capture(DiagnosticEventRecord{
+    EXPECT_TRUE((!disabledGuard.capture(DiagnosticEventRecord{
         .event = DiagnosticEventName::s_Error,
         .message = "disabled diagnostic",
-    }));
+    })));
 
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -560,30 +556,30 @@ static void TestDiagnosticCaptureGuardManualCaptureReturnsStatus(TestContext& co
     guard.setFrameIndex(444u);
     guard.setStreamId(5u);
 
-    NWB_TELEMETRY_TEST_CHECK(context, guard.capture(DiagnosticEventRecord{
+    EXPECT_TRUE((guard.capture(DiagnosticEventRecord{
         .event = DiagnosticEventName::s_Error,
         .category = "manual_capture",
         .message = "manual diagnostic",
         .file = "manual.cpp",
         .line = 55u,
-    }));
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 1u);
+    })));
+    EXPECT_TRUE((recorder.eventCount() == 1u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    EXPECT_TRUE((event != nullptr));
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 444u);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 5u);
+    EXPECT_TRUE((event->header.frameIndex == 444u));
+    EXPECT_TRUE((event->header.streamId == 5u));
 
     Telemetry::DiagnosticPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.category == "manual_capture");
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.message == "manual diagnostic");
+    EXPECT_TRUE((Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE((parsed.category == "manual_capture"));
+    EXPECT_TRUE((parsed.message == "manual diagnostic"));
 }
 
-static void TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(TestContext& context){
+static void TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -592,7 +588,7 @@ static void TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(TestContext
     SetDiagnosticEventCallback(ExistingDiagnosticCallback);
     {
         Telemetry::DiagnosticCaptureGuard guard(recorder);
-        NWB_TELEMETRY_TEST_CHECK(context, !guard.installed());
+        EXPECT_TRUE((!guard.installed()));
         CaptureDiagnosticEvent(DiagnosticEventRecord{
             .event = DiagnosticEventName::s_Error,
             .message = "existing callback should keep ownership",
@@ -600,11 +596,11 @@ static void TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(TestContext
     }
     ClearDiagnosticEventCallback(ExistingDiagnosticCallback);
 
-    NWB_TELEMETRY_TEST_CHECK(context, s_ExistingDiagnosticCallbackCount == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 0u);
+    EXPECT_TRUE((s_ExistingDiagnosticCallbackCount == 1u));
+    EXPECT_TRUE((recorder.eventCount() == 0u));
 }
 
-static void TestRecorderAcceptsConcurrentRecords(TestContext& context){
+static void TestRecorderAcceptsConcurrentRecords(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -629,7 +625,7 @@ static void TestRecorderAcceptsConcurrentRecords(TestContext& context){
     for(std::thread& thread : threads)
         thread.join();
 
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == threadCount * eventsPerThread);
+    EXPECT_TRUE((recorder.eventCount() == threadCount * eventsPerThread));
 }
 
 static void BuildTestFrameGraph(
@@ -670,55 +666,52 @@ static void BuildTestFrameGraph(
     });
 }
 
-static void TestFrameGraphPayloadRoundTrip(TestContext& context){
+static void TestFrameGraphPayloadRoundTrip(){
     TestArena testArena;
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::BuildFrameGraphPayload(testArena.arena, 905u, nodes, edges, payload));
-    NWB_TELEMETRY_TEST_CHECK(
-        context,
-        payload.size() == sizeof(Telemetry::EncodedFrameGraphPayloadHeader)
+    EXPECT_TRUE((Telemetry::BuildFrameGraphPayload(testArena.arena, 905u, nodes, edges, payload)));
+    EXPECT_TRUE((payload.size() == sizeof(Telemetry::EncodedFrameGraphPayloadHeader)
             + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
             + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
             + sizeof("GBuffer Pass")
             + sizeof("Albedo Texture")
-            + sizeof("Lighting Pass")
-    );
+            + sizeof("Lighting Pass")));
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.frameIndex == 905u);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes.size() == 3u);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.edges.size() == 2u);
+    EXPECT_TRUE((Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed)));
+    EXPECT_TRUE((parsed.frameIndex == 905u));
+    EXPECT_TRUE((parsed.nodes.size() == 3u));
+    EXPECT_TRUE((parsed.edges.size() == 2u));
     if(parsed.nodes.size() == 3u){
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[0u].name == Name("gbuffer"));
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[0u].label == "GBuffer Pass");
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[0u].kind == Telemetry::FrameGraphNodeKind::Pass);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[0u].flags == 1u);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[1u].name == Name("albedo"));
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[1u].label == "Albedo Texture");
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[1u].kind == Telemetry::FrameGraphNodeKind::Resource);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[2u].name == Name("lighting"));
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes[2u].label == "Lighting Pass");
+        EXPECT_TRUE((parsed.nodes[0u].name == Name("gbuffer")));
+        EXPECT_TRUE((parsed.nodes[0u].label == "GBuffer Pass"));
+        EXPECT_TRUE((parsed.nodes[0u].kind == Telemetry::FrameGraphNodeKind::Pass));
+        EXPECT_TRUE((parsed.nodes[0u].flags == 1u));
+        EXPECT_TRUE((parsed.nodes[1u].name == Name("albedo")));
+        EXPECT_TRUE((parsed.nodes[1u].label == "Albedo Texture"));
+        EXPECT_TRUE((parsed.nodes[1u].kind == Telemetry::FrameGraphNodeKind::Resource));
+        EXPECT_TRUE((parsed.nodes[2u].name == Name("lighting")));
+        EXPECT_TRUE((parsed.nodes[2u].label == "Lighting Pass"));
     }
     if(parsed.edges.size() == 2u){
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[0u].fromNodeIndex == 0u);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[0u].toNodeIndex == 1u);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[0u].kind == Telemetry::FrameGraphEdgeKind::Writes);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[1u].fromNodeIndex == 1u);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[1u].toNodeIndex == 2u);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[1u].kind == Telemetry::FrameGraphEdgeKind::Reads);
-        NWB_TELEMETRY_TEST_CHECK(context, parsed.edges[1u].flags == 2u);
+        EXPECT_TRUE((parsed.edges[0u].fromNodeIndex == 0u));
+        EXPECT_TRUE((parsed.edges[0u].toNodeIndex == 1u));
+        EXPECT_TRUE((parsed.edges[0u].kind == Telemetry::FrameGraphEdgeKind::Writes));
+        EXPECT_TRUE((parsed.edges[1u].fromNodeIndex == 1u));
+        EXPECT_TRUE((parsed.edges[1u].toNodeIndex == 2u));
+        EXPECT_TRUE((parsed.edges[1u].kind == Telemetry::FrameGraphEdgeKind::Reads));
+        EXPECT_TRUE((parsed.edges[1u].flags == 2u));
     }
 
     payload[0u] = 0u;
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_TRUE((!Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed)));
 }
 
-static void TestFrameGraphPayloadRejectsInvalidInput(TestContext& context){
+static void TestFrameGraphPayloadRejectsInvalidInput(){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
@@ -726,18 +719,18 @@ static void TestFrameGraphPayloadRejectsInvalidInput(TestContext& context){
     BuildTestFrameGraph(testArena.arena, nodes, edges);
 
     nodes[0u].kind = Telemetry::FrameGraphNodeKind::Unknown;
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+    EXPECT_TRUE((!Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload)));
 
     BuildTestFrameGraph(testArena.arena, nodes, edges);
     nodes[0u].label = AStringView("bad\0label", 9u);
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+    EXPECT_TRUE((!Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload)));
 
     BuildTestFrameGraph(testArena.arena, nodes, edges);
     edges[0u].toNodeIndex = 99u;
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload));
+    EXPECT_TRUE((!Telemetry::BuildFrameGraphPayload(testArena.arena, 1u, nodes, edges, payload)));
 }
 
-static void TestRecordFrameGraphUsesTelemetryEvent(TestContext& context){
+static void TestRecordFrameGraphUsesTelemetryEvent(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -746,24 +739,25 @@ static void TestRecordFrameGraphUsesTelemetryEvent(TestContext& context){
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
 
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 14u));
+    EXPECT_TRUE((Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 14u)));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    EXPECT_TRUE((event != nullptr));
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::FrameGraphFrame);    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 909u);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 14u);
+    EXPECT_TRUE((event->header.kind == Telemetry::EventKind::FrameGraphFrame));
+    EXPECT_TRUE((event->header.frameIndex == 909u));
+    EXPECT_TRUE((event->header.streamId == 14u));
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.frameIndex == 909u);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes.size() == 3u);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.edges.size() == 2u);
+    EXPECT_TRUE((Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE((parsed.frameIndex == 909u));
+    EXPECT_TRUE((parsed.nodes.size() == 3u));
+    EXPECT_TRUE((parsed.edges.size() == 2u));
 }
 
-static void TestCaptureSessionRecordsFrameGraphWithContext(TestContext& context){
+static void TestCaptureSessionRecordsFrameGraphWithContext(){
     TestArena testArena;
     Telemetry::CaptureSession session(testArena.arena);
     session.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -774,21 +768,22 @@ static void TestCaptureSessionRecordsFrameGraphWithContext(TestContext& context)
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
 
-    NWB_TELEMETRY_TEST_CHECK(context, session.recordFrameGraph(nodes, edges));
+    EXPECT_TRUE((session.recordFrameGraph(nodes, edges)));
 
     const Telemetry::EventRecord* event = session.view().eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    EXPECT_TRUE((event != nullptr));
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::FrameGraphFrame);    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == 910u);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 15u);
+    EXPECT_TRUE((event->header.kind == Telemetry::EventKind::FrameGraphFrame));
+    EXPECT_TRUE((event->header.frameIndex == 910u));
+    EXPECT_TRUE((event->header.streamId == 15u));
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.frameIndex == 910u);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.nodes.size() == 3u);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.edges.size() == 2u);
+    EXPECT_TRUE((Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE((parsed.frameIndex == 910u));
+    EXPECT_TRUE((parsed.nodes.size() == 3u));
+    EXPECT_TRUE((parsed.edges.size() == 2u));
 }
 
 static NWB::Core::Perf::TimingStats MakeTestTimingStats(){
@@ -801,84 +796,85 @@ static NWB::Core::Perf::TimingStats MakeTestTimingStats(){
     return stats;
 }
 
-static void TestPerfTimingPayloadRoundTrip(TestContext& context){
+static void TestPerfTimingPayloadRoundTrip(){
     TestArena testArena;
     const Name scopeName("renderer/frame");
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::BuildPerfTimingPayload(
+    EXPECT_TRUE((Telemetry::BuildPerfTimingPayload(
         testArena.arena,
         Telemetry::PerfTimingSource::Gpu,
         scopeName,
         "Renderer Frame",
         stats,
         payload
-    ));
-    NWB_TELEMETRY_TEST_CHECK(context, payload.size() == sizeof(Telemetry::EncodedPerfTimingPayloadHeader) + sizeof("Renderer Frame") - 1u);
+    )));
+    EXPECT_TRUE((payload.size() == sizeof(Telemetry::EncodedPerfTimingPayloadHeader) + sizeof("Renderer Frame") - 1u));
 
     Telemetry::PerfTimingPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.source == Telemetry::PerfTimingSource::Gpu);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.scopeName == scopeName);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.scopeText == "Renderer Frame");
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.stats.seconds == stats.seconds);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.stats.sampleCount == stats.sampleCount);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.stats.publishFrameIndex == stats.publishFrameIndex);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.stats.firstSampleFrameIndex == stats.firstSampleFrameIndex);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.stats.lastSampleFrameIndex == stats.lastSampleFrameIndex);
+    EXPECT_TRUE((Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed)));
+    EXPECT_TRUE((parsed.source == Telemetry::PerfTimingSource::Gpu));
+    EXPECT_TRUE((parsed.scopeName == scopeName));
+    EXPECT_TRUE((parsed.scopeText == "Renderer Frame"));
+    EXPECT_TRUE((parsed.stats.seconds == stats.seconds));
+    EXPECT_TRUE((parsed.stats.sampleCount == stats.sampleCount));
+    EXPECT_TRUE((parsed.stats.publishFrameIndex == stats.publishFrameIndex));
+    EXPECT_TRUE((parsed.stats.firstSampleFrameIndex == stats.firstSampleFrameIndex));
+    EXPECT_TRUE((parsed.stats.lastSampleFrameIndex == stats.lastSampleFrameIndex));
 
     payload[0u] = 0u;
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_TRUE((!Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed)));
 }
 
-static void TestPerfTimingPayloadRejectsInvalidInput(TestContext& context){
+static void TestPerfTimingPayloadRejectsInvalidInput(){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
     NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
 
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildPerfTimingPayload(
+    EXPECT_TRUE((!Telemetry::BuildPerfTimingPayload(
         testArena.arena,
         Telemetry::PerfTimingSource::Unknown,
         Name("renderer/frame"),
         "Renderer Frame",
         stats,
         payload
-    ));
+    )));
 
     stats.sampleCount = 0u;
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildPerfTimingPayload(
+    EXPECT_TRUE((!Telemetry::BuildPerfTimingPayload(
         testArena.arena,
         Telemetry::PerfTimingSource::Cpu,
         Name("renderer/frame"),
         "Renderer Frame",
         stats,
         payload
-    ));
+    )));
 }
 
-static void TestRecordPerfTimingUsesTelemetryEvent(TestContext& context){
+static void TestRecordPerfTimingUsesTelemetryEvent(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     const Name scopeName("cpu/update");
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, scopeName, stats, 11u));
+    EXPECT_TRUE((Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, scopeName, stats, 11u)));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    EXPECT_TRUE((event != nullptr));
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::PerfFrame);    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == stats.publishFrameIndex);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 11u);
+    EXPECT_TRUE((event->header.kind == Telemetry::EventKind::PerfFrame));
+    EXPECT_TRUE((event->header.frameIndex == stats.publishFrameIndex));
+    EXPECT_TRUE((event->header.streamId == 11u));
 
     Telemetry::PerfTimingPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfTimingPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.source == Telemetry::PerfTimingSource::Cpu);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.scopeName == scopeName);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.stats.sampleCount == stats.sampleCount);
+    EXPECT_TRUE((Telemetry::ParsePerfTimingPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE((parsed.source == Telemetry::PerfTimingSource::Cpu));
+    EXPECT_TRUE((parsed.scopeName == scopeName));
+    EXPECT_TRUE((parsed.stats.sampleCount == stats.sampleCount));
 }
 
 static NWB::Core::Perf::MemorySnapshot MakeTestMemorySnapshot(const Name& scopeName){
@@ -908,97 +904,97 @@ static NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(){
     return delta;
 }
 
-static void TestPerfMemoryPayloadRoundTrip(TestContext& context){
+static void TestPerfMemoryPayloadRoundTrip(){
     TestArena testArena;
     const Name scopeName("memory/project_arena");
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
 
     Telemetry::TelemetryBytes payload(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::BuildPerfMemoryPayload(
+    EXPECT_TRUE((Telemetry::BuildPerfMemoryPayload(
         testArena.arena,
         scopeName,
         "Project Arena",
         snapshot,
         delta,
         payload
-    ));
-    NWB_TELEMETRY_TEST_CHECK(context, payload.size() == sizeof(Telemetry::EncodedPerfMemoryPayloadHeader) + sizeof("Project Arena") - 1u);
+    )));
+    EXPECT_TRUE((payload.size() == sizeof(Telemetry::EncodedPerfMemoryPayloadHeader) + sizeof("Project Arena") - 1u));
 
     Telemetry::PerfMemoryPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.scopeName == scopeName);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.scopeText == "Project Arena");
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.scopeName == scopeName);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.frameIndex == snapshot.frameIndex);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.reservedBytes == snapshot.reservedBytes);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.usedBytes == snapshot.usedBytes);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.peakUsedBytes == snapshot.peakUsedBytes);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.allocationCount == snapshot.allocationCount);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.reallocationCount == snapshot.reallocationCount);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.deallocationCount == snapshot.deallocationCount);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.hasSamples);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.previousFrameIndex == delta.previousFrameIndex);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.currentFrameIndex == snapshot.frameIndex);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.reservedBytes == delta.reservedBytes);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.usedBytes == delta.usedBytes);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.peakUsedBytes == delta.peakUsedBytes);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.allocationCount == delta.allocationCount);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.reallocationCount == delta.reallocationCount);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.deallocationCount == delta.deallocationCount);
+    EXPECT_TRUE((Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size(), parsed)));
+    EXPECT_TRUE((parsed.scopeName == scopeName));
+    EXPECT_TRUE((parsed.scopeText == "Project Arena"));
+    EXPECT_TRUE((parsed.snapshot.scopeName == scopeName));
+    EXPECT_TRUE((parsed.snapshot.frameIndex == snapshot.frameIndex));
+    EXPECT_TRUE((parsed.snapshot.reservedBytes == snapshot.reservedBytes));
+    EXPECT_TRUE((parsed.snapshot.usedBytes == snapshot.usedBytes));
+    EXPECT_TRUE((parsed.snapshot.peakUsedBytes == snapshot.peakUsedBytes));
+    EXPECT_TRUE((parsed.snapshot.allocationCount == snapshot.allocationCount));
+    EXPECT_TRUE((parsed.snapshot.reallocationCount == snapshot.reallocationCount));
+    EXPECT_TRUE((parsed.snapshot.deallocationCount == snapshot.deallocationCount));
+    EXPECT_TRUE((parsed.delta.hasSamples));
+    EXPECT_TRUE((parsed.delta.previousFrameIndex == delta.previousFrameIndex));
+    EXPECT_TRUE((parsed.delta.currentFrameIndex == snapshot.frameIndex));
+    EXPECT_TRUE((parsed.delta.reservedBytes == delta.reservedBytes));
+    EXPECT_TRUE((parsed.delta.usedBytes == delta.usedBytes));
+    EXPECT_TRUE((parsed.delta.peakUsedBytes == delta.peakUsedBytes));
+    EXPECT_TRUE((parsed.delta.allocationCount == delta.allocationCount));
+    EXPECT_TRUE((parsed.delta.reallocationCount == delta.reallocationCount));
+    EXPECT_TRUE((parsed.delta.deallocationCount == delta.deallocationCount));
 
     payload[0u] = 0u;
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_TRUE((!Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size(), parsed)));
 }
 
-static void TestPerfMemoryPayloadRejectsInvalidInput(TestContext& context){
+static void TestPerfMemoryPayloadRejectsInvalidInput(){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
     const Name scopeName("memory/project_arena");
     NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
 
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildPerfMemoryPayload(
+    EXPECT_TRUE((!Telemetry::BuildPerfMemoryPayload(
         testArena.arena,
         NAME_NONE,
         "Project Arena",
         snapshot,
         delta,
         payload
-    ));
+    )));
 
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildPerfMemoryPayload(
+    EXPECT_TRUE((!Telemetry::BuildPerfMemoryPayload(
         testArena.arena,
         scopeName,
         AStringView(),
         snapshot,
         delta,
         payload
-    ));
+    )));
 
     snapshot.scopeName = Name("memory/other_arena");
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildPerfMemoryPayload(
+    EXPECT_TRUE((!Telemetry::BuildPerfMemoryPayload(
         testArena.arena,
         scopeName,
         "Project Arena",
         snapshot,
         delta,
         payload
-    ));
+    )));
 
     snapshot = MakeTestMemorySnapshot(scopeName);
     delta.currentFrameIndex = 99u;
-    NWB_TELEMETRY_TEST_CHECK(context, !Telemetry::BuildPerfMemoryPayload(
+    EXPECT_TRUE((!Telemetry::BuildPerfMemoryPayload(
         testArena.arena,
         scopeName,
         "Project Arena",
         snapshot,
         delta,
         payload
-    ));
+    )));
 }
 
-static void TestRecordPerfMemoryUsesTelemetryEvent(TestContext& context){
+static void TestRecordPerfMemoryUsesTelemetryEvent(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -1006,22 +1002,23 @@ static void TestRecordPerfMemoryUsesTelemetryEvent(TestContext& context){
     const Name scopeName("memory/project_arena");
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordPerfMemory(recorder, scopeName, snapshot, delta, 12u));
+    EXPECT_TRUE((Telemetry::RecordPerfMemory(recorder, scopeName, snapshot, delta, 12u)));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    NWB_TELEMETRY_TEST_CHECK(context, event != nullptr);
+    EXPECT_TRUE((event != nullptr));
     if(!event)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.kind == Telemetry::EventKind::MemoryFrame);    NWB_TELEMETRY_TEST_CHECK(context, event->header.frameIndex == snapshot.frameIndex);
-    NWB_TELEMETRY_TEST_CHECK(context, event->header.streamId == 12u);
+    EXPECT_TRUE((event->header.kind == Telemetry::EventKind::MemoryFrame));
+    EXPECT_TRUE((event->header.frameIndex == snapshot.frameIndex));
+    EXPECT_TRUE((event->header.streamId == 12u));
 
     Telemetry::PerfMemoryPayload parsed(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfMemoryPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.scopeName == scopeName);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.snapshot.usedBytes == snapshot.usedBytes);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.hasSamples);
-    NWB_TELEMETRY_TEST_CHECK(context, parsed.delta.usedBytes == delta.usedBytes);
+    EXPECT_TRUE((Telemetry::ParsePerfMemoryPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed)));
+    EXPECT_TRUE((parsed.scopeName == scopeName));
+    EXPECT_TRUE((parsed.snapshot.usedBytes == snapshot.usedBytes));
+    EXPECT_TRUE((parsed.delta.hasSamples));
+    EXPECT_TRUE((parsed.delta.usedBytes == delta.usedBytes));
 }
 
 static NWB::Core::Alloc::ArenaMemoryStats MakeTestArenaStats(
@@ -1076,7 +1073,7 @@ static void BuildTestPerfReport(
     report.memory = NWB::Core::Perf::MemoryView(memory);
 }
 
-static void TestPerfViewsExposeScopes(TestContext& context){
+static void TestPerfViewsExposeScopes(){
     TestArena testArena;
     NWB::Core::Perf::TimingRecorder cpuTiming(testArena.arena);
     NWB::Core::Perf::TimingRecorder gpuTiming(testArena.arena);
@@ -1084,21 +1081,21 @@ static void TestPerfViewsExposeScopes(TestContext& context){
     NWB::Core::Perf::SessionReport report;
     BuildTestPerfReport(cpuTiming, gpuTiming, memory, report);
 
-    NWB_TELEMETRY_TEST_CHECK(context, report.cpuTiming.scopeCount() == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.gpuTiming.scopeCount() == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.memory.scopeCount() == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.cpuTiming.scopeNameAt(0u) == Name("perf/cpu/update"));
-    NWB_TELEMETRY_TEST_CHECK(context, report.gpuTiming.scopeNameAt(0u) == Name("perf/gpu/frame"));
-    NWB_TELEMETRY_TEST_CHECK(context, report.memory.scopeNameAt(0u) == Name("perf/memory/project"));
-    NWB_TELEMETRY_TEST_CHECK(context, report.cpuTiming.scopeAt(0u).valid());
-    NWB_TELEMETRY_TEST_CHECK(context, !report.cpuTiming.scopeAt(1u).valid());
-    NWB_TELEMETRY_TEST_CHECK(context, report.cpuTiming.statsAt(0u).sampleCount == 2u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.gpuTiming.statsAt(0u).sampleCount == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.memory.snapshotAt(0u).usedBytes == 2048u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.memory.deltaAt(0u).usedBytes == 1024);
+    EXPECT_TRUE((report.cpuTiming.scopeCount() == 1u));
+    EXPECT_TRUE((report.gpuTiming.scopeCount() == 1u));
+    EXPECT_TRUE((report.memory.scopeCount() == 1u));
+    EXPECT_TRUE((report.cpuTiming.scopeNameAt(0u) == Name("perf/cpu/update")));
+    EXPECT_TRUE((report.gpuTiming.scopeNameAt(0u) == Name("perf/gpu/frame")));
+    EXPECT_TRUE((report.memory.scopeNameAt(0u) == Name("perf/memory/project")));
+    EXPECT_TRUE((report.cpuTiming.scopeAt(0u).valid()));
+    EXPECT_TRUE((!report.cpuTiming.scopeAt(1u).valid()));
+    EXPECT_TRUE((report.cpuTiming.statsAt(0u).sampleCount == 2u));
+    EXPECT_TRUE((report.gpuTiming.statsAt(0u).sampleCount == 1u));
+    EXPECT_TRUE((report.memory.snapshotAt(0u).usedBytes == 2048u));
+    EXPECT_TRUE((report.memory.deltaAt(0u).usedBytes == 1024));
 }
 
-static void TestRecordPerfSessionReportUsesTelemetryEvents(TestContext& context){
+static void TestRecordPerfSessionReportUsesTelemetryEvents(){
     TestArena testArena;
     NWB::Core::Perf::TimingRecorder cpuTiming(testArena.arena);
     NWB::Core::Perf::TimingRecorder gpuTiming(testArena.arena);
@@ -1110,45 +1107,45 @@ static void TestRecordPerfSessionReportUsesTelemetryEvents(TestContext& context)
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     const Telemetry::PerfSessionRecordResult result = Telemetry::RecordPerfSessionReport(recorder, report, 17u);
-    NWB_TELEMETRY_TEST_CHECK(context, result.recordedAny());
-    NWB_TELEMETRY_TEST_CHECK(context, result.cpuTimingEvents == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, result.gpuTimingEvents == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, result.memoryEvents == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, result.eventCount() == 3u);
-    NWB_TELEMETRY_TEST_CHECK(context, recorder.eventCount() == 3u);
+    EXPECT_TRUE((result.recordedAny()));
+    EXPECT_TRUE((result.cpuTimingEvents == 1u));
+    EXPECT_TRUE((result.gpuTimingEvents == 1u));
+    EXPECT_TRUE((result.memoryEvents == 1u));
+    EXPECT_TRUE((result.eventCount() == 3u));
+    EXPECT_TRUE((recorder.eventCount() == 3u));
 
     const Telemetry::EventRecord* cpuEvent = recorder.view().eventAt(0u);
     const Telemetry::EventRecord* gpuEvent = recorder.view().eventAt(1u);
     const Telemetry::EventRecord* memoryEvent = recorder.view().eventAt(2u);
-    NWB_TELEMETRY_TEST_CHECK(context, cpuEvent != nullptr);
-    NWB_TELEMETRY_TEST_CHECK(context, gpuEvent != nullptr);
-    NWB_TELEMETRY_TEST_CHECK(context, memoryEvent != nullptr);
+    EXPECT_TRUE((cpuEvent != nullptr));
+    EXPECT_TRUE((gpuEvent != nullptr));
+    EXPECT_TRUE((memoryEvent != nullptr));
     if(!cpuEvent || !gpuEvent || !memoryEvent)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, cpuEvent->header.kind == Telemetry::EventKind::PerfFrame);
-    NWB_TELEMETRY_TEST_CHECK(context, gpuEvent->header.kind == Telemetry::EventKind::PerfFrame);
-    NWB_TELEMETRY_TEST_CHECK(context, memoryEvent->header.kind == Telemetry::EventKind::MemoryFrame);
-    NWB_TELEMETRY_TEST_CHECK(context, cpuEvent->header.streamId == 17u);
-    NWB_TELEMETRY_TEST_CHECK(context, gpuEvent->header.streamId == 17u);
-    NWB_TELEMETRY_TEST_CHECK(context, memoryEvent->header.streamId == 17u);
+    EXPECT_TRUE((cpuEvent->header.kind == Telemetry::EventKind::PerfFrame));
+    EXPECT_TRUE((gpuEvent->header.kind == Telemetry::EventKind::PerfFrame));
+    EXPECT_TRUE((memoryEvent->header.kind == Telemetry::EventKind::MemoryFrame));
+    EXPECT_TRUE((cpuEvent->header.streamId == 17u));
+    EXPECT_TRUE((gpuEvent->header.streamId == 17u));
+    EXPECT_TRUE((memoryEvent->header.streamId == 17u));
 
     Telemetry::PerfTimingPayload cpuPayload(testArena.arena);
     Telemetry::PerfTimingPayload gpuPayload(testArena.arena);
     Telemetry::PerfMemoryPayload memoryPayload(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfTimingPayload(testArena.arena, cpuEvent->payload.data(), cpuEvent->payload.size(), cpuPayload));
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfTimingPayload(testArena.arena, gpuEvent->payload.data(), gpuEvent->payload.size(), gpuPayload));
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::ParsePerfMemoryPayload(testArena.arena, memoryEvent->payload.data(), memoryEvent->payload.size(), memoryPayload));
-    NWB_TELEMETRY_TEST_CHECK(context, cpuPayload.source == Telemetry::PerfTimingSource::Cpu);
-    NWB_TELEMETRY_TEST_CHECK(context, gpuPayload.source == Telemetry::PerfTimingSource::Gpu);
-    NWB_TELEMETRY_TEST_CHECK(context, cpuPayload.scopeName == Name("perf/cpu/update"));
-    NWB_TELEMETRY_TEST_CHECK(context, gpuPayload.scopeName == Name("perf/gpu/frame"));
-    NWB_TELEMETRY_TEST_CHECK(context, memoryPayload.scopeName == Name("perf/memory/project"));
-    NWB_TELEMETRY_TEST_CHECK(context, memoryPayload.snapshot.frameIndex == 102u);
-    NWB_TELEMETRY_TEST_CHECK(context, memoryPayload.delta.hasSamples);
+    EXPECT_TRUE((Telemetry::ParsePerfTimingPayload(testArena.arena, cpuEvent->payload.data(), cpuEvent->payload.size(), cpuPayload)));
+    EXPECT_TRUE((Telemetry::ParsePerfTimingPayload(testArena.arena, gpuEvent->payload.data(), gpuEvent->payload.size(), gpuPayload)));
+    EXPECT_TRUE((Telemetry::ParsePerfMemoryPayload(testArena.arena, memoryEvent->payload.data(), memoryEvent->payload.size(), memoryPayload)));
+    EXPECT_TRUE((cpuPayload.source == Telemetry::PerfTimingSource::Cpu));
+    EXPECT_TRUE((gpuPayload.source == Telemetry::PerfTimingSource::Gpu));
+    EXPECT_TRUE((cpuPayload.scopeName == Name("perf/cpu/update")));
+    EXPECT_TRUE((gpuPayload.scopeName == Name("perf/gpu/frame")));
+    EXPECT_TRUE((memoryPayload.scopeName == Name("perf/memory/project")));
+    EXPECT_TRUE((memoryPayload.snapshot.frameIndex == 102u));
+    EXPECT_TRUE((memoryPayload.delta.hasSamples));
 }
 
-static void TestCaptureSessionRecordsPerfReport(TestContext& context){
+static void TestCaptureSessionRecordsPerfReport(){
     TestArena testArena;
     NWB::Core::Perf::TimingRecorder cpuTiming(testArena.arena);
     NWB::Core::Perf::TimingRecorder gpuTiming(testArena.arena);
@@ -1160,130 +1157,130 @@ static void TestCaptureSessionRecordsPerfReport(TestContext& context){
     session.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
 
     const Telemetry::PerfSessionRecordResult result = session.recordPerfReport(report, 23u);
-    NWB_TELEMETRY_TEST_CHECK(context, result.eventCount() == 3u);
-    NWB_TELEMETRY_TEST_CHECK(context, session.eventCount() == 3u);
+    EXPECT_TRUE((result.eventCount() == 3u));
+    EXPECT_TRUE((session.eventCount() == 3u));
 
     const Telemetry::EventRecord* cpuEvent = session.view().eventAt(0u);
     const Telemetry::EventRecord* gpuEvent = session.view().eventAt(1u);
     const Telemetry::EventRecord* memoryEvent = session.view().eventAt(2u);
-    NWB_TELEMETRY_TEST_CHECK(context, cpuEvent != nullptr);
-    NWB_TELEMETRY_TEST_CHECK(context, gpuEvent != nullptr);
-    NWB_TELEMETRY_TEST_CHECK(context, memoryEvent != nullptr);
+    EXPECT_TRUE((cpuEvent != nullptr));
+    EXPECT_TRUE((gpuEvent != nullptr));
+    EXPECT_TRUE((memoryEvent != nullptr));
     if(!cpuEvent || !gpuEvent || !memoryEvent)
         return;
 
-    NWB_TELEMETRY_TEST_CHECK(context, cpuEvent->header.kind == Telemetry::EventKind::PerfFrame);
-    NWB_TELEMETRY_TEST_CHECK(context, gpuEvent->header.kind == Telemetry::EventKind::PerfFrame);
-    NWB_TELEMETRY_TEST_CHECK(context, memoryEvent->header.kind == Telemetry::EventKind::MemoryFrame);
-    NWB_TELEMETRY_TEST_CHECK(context, cpuEvent->header.streamId == 23u);
-    NWB_TELEMETRY_TEST_CHECK(context, gpuEvent->header.streamId == 23u);
-    NWB_TELEMETRY_TEST_CHECK(context, memoryEvent->header.streamId == 23u);
+    EXPECT_TRUE((cpuEvent->header.kind == Telemetry::EventKind::PerfFrame));
+    EXPECT_TRUE((gpuEvent->header.kind == Telemetry::EventKind::PerfFrame));
+    EXPECT_TRUE((memoryEvent->header.kind == Telemetry::EventKind::MemoryFrame));
+    EXPECT_TRUE((cpuEvent->header.streamId == 23u));
+    EXPECT_TRUE((gpuEvent->header.streamId == 23u));
+    EXPECT_TRUE((memoryEvent->header.streamId == 23u));
 }
 
 static bool ContainsText(const AStringView text, const AStringView needle){
     return text.find(needle) != AStringView::npos;
 }
 
-static void TestTelemetryReportSummarizesBenchmarkEvents(TestContext& context){
+static void TestTelemetryReportSummarizesBenchmarkEvents(){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordTextLog(
+    EXPECT_TRUE((Telemetry::RecordTextLog(
         recorder,
         NWB::Core::Common::LogType::Info,
         NWB_TEXT("benchmark report"),
         4u,
         1u
-    ));
+    )));
 
     const Name cpuScopeName("cpu/update");
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, stats, 2u));
+    EXPECT_TRUE((Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, stats, 2u)));
 
     const Name memoryScopeName("memory/project_arena");
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(memoryScopeName);
     const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordPerfMemory(recorder, memoryScopeName, snapshot, delta, 3u));
+    EXPECT_TRUE((Telemetry::RecordPerfMemory(recorder, memoryScopeName, snapshot, delta, 3u)));
 
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 4u));
+    EXPECT_TRUE((Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 4u)));
 
     Log::TelemetryReport report(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    EXPECT_TRUE((Log::BuildTelemetryReport(testArena.arena, recorder.view(), report)));
 
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventCount == 4u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::TextLog)] == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::PerfFrame)] == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::MemoryFrame)] == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::FrameGraphFrame)] == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.parseFailureCount == 0u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.hasFrameRange);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.minFrameIndex == 4u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.maxFrameIndex == 909u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.cpuTimingEventCount == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.cpuTimingSampleCount == stats.sampleCount);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.cpuTimingSeconds == stats.seconds);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.memoryEventCount == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.maxMemoryUsedBytes == snapshot.usedBytes);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.totalMemoryUsedDeltaBytes == delta.usedBytes);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.frameGraphFrameCount == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.frameGraphNodeCount == 3u);
-    NWB_TELEMETRY_TEST_CHECK(context, report.summary.frameGraphEdgeCount == 2u);
-    NWB_TELEMETRY_TEST_CHECK(context, ContainsText(AStringView(report.json.data(), report.json.size()), "\"eventCount\": 4"));
-    NWB_TELEMETRY_TEST_CHECK(context, ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "source,scope,publish_frame"));
-    NWB_TELEMETRY_TEST_CHECK(context, ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "cpu,cpu/update"));
+    EXPECT_TRUE((report.summary.eventCount == 4u));
+    EXPECT_TRUE((report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::TextLog)] == 1u));
+    EXPECT_TRUE((report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::PerfFrame)] == 1u));
+    EXPECT_TRUE((report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::MemoryFrame)] == 1u));
+    EXPECT_TRUE((report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::FrameGraphFrame)] == 1u));
+    EXPECT_TRUE((report.summary.parseFailureCount == 0u));
+    EXPECT_TRUE((report.summary.hasFrameRange));
+    EXPECT_TRUE((report.summary.minFrameIndex == 4u));
+    EXPECT_TRUE((report.summary.maxFrameIndex == 909u));
+    EXPECT_TRUE((report.summary.cpuTimingEventCount == 1u));
+    EXPECT_TRUE((report.summary.cpuTimingSampleCount == stats.sampleCount));
+    EXPECT_TRUE((report.summary.cpuTimingSeconds == stats.seconds));
+    EXPECT_TRUE((report.summary.memoryEventCount == 1u));
+    EXPECT_TRUE((report.summary.maxMemoryUsedBytes == snapshot.usedBytes));
+    EXPECT_TRUE((report.summary.totalMemoryUsedDeltaBytes == delta.usedBytes));
+    EXPECT_TRUE((report.summary.frameGraphFrameCount == 1u));
+    EXPECT_TRUE((report.summary.frameGraphNodeCount == 3u));
+    EXPECT_TRUE((report.summary.frameGraphEdgeCount == 2u));
+    EXPECT_TRUE((ContainsText(AStringView(report.json.data(), report.json.size()), "\"eventCount\": 4")));
+    EXPECT_TRUE((ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "source,scope,publish_frame")));
+    EXPECT_TRUE((ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "cpu,cpu/update")));
 }
 
-static void TestTelemetryIngestStoresRawAndReports(TestContext& context){
+static void TestTelemetryIngestStoresRawAndReports(){
     TestArena testArena;
     const ::Path<NWB::Core::Alloc::GlobalArena> storageDirectory = TelemetryTestStorageDirectory(testArena.arena) / "ingest";
 
     ErrorCode error;
-    NWB_TELEMETRY_TEST_CHECK(context, RemoveAllIfExists(storageDirectory, error));
+    EXPECT_TRUE((RemoveAllIfExists(storageDirectory, error)));
 
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordTextLog(
+    EXPECT_TRUE((Telemetry::RecordTextLog(
         recorder,
         NWB::Core::Common::LogType::Info,
         NWB_TEXT("ingest log"),
         10u,
         1u
-    ));
+    )));
 
     const Name cpuScopeName("ingest/cpu");
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, stats, 2u));
+    EXPECT_TRUE((Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, stats, 2u)));
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, Telemetry::EncodeEventStream(recorder.view(), encoded));
+    EXPECT_TRUE((Telemetry::EncodeEventStream(recorder.view(), encoded)));
 
     Log::TelemetryIngestConfig config(testArena.arena);
     config.storageDirectory = storageDirectory;
     const Log::TelemetryIngestResult result = Log::ProcessTelemetryUpload(testArena.arena, encoded.data(), encoded.size(), config);
 
-    NWB_TELEMETRY_TEST_CHECK(context, result.ok());
-    NWB_TELEMETRY_TEST_CHECK(context, result.decode.ok());
-    NWB_TELEMETRY_TEST_CHECK(context, result.decode.bytesRead == encoded.size());
-    NWB_TELEMETRY_TEST_CHECK(context, result.summary.eventCount == 2u);
-    NWB_TELEMETRY_TEST_CHECK(context, result.summary.cpuTimingEventCount == 1u);
-    NWB_TELEMETRY_TEST_CHECK(context, FileExists(result.rawPath, error));
-    NWB_TELEMETRY_TEST_CHECK(context, !error);
+    EXPECT_TRUE((result.ok()));
+    EXPECT_TRUE((result.decode.ok()));
+    EXPECT_TRUE((result.decode.bytesRead == encoded.size()));
+    EXPECT_TRUE((result.summary.eventCount == 2u));
+    EXPECT_TRUE((result.summary.cpuTimingEventCount == 1u));
+    EXPECT_TRUE((FileExists(result.rawPath, error)));
+    EXPECT_TRUE((!error));
     error.clear();
-    NWB_TELEMETRY_TEST_CHECK(context, FileExists(result.jsonPath, error));
-    NWB_TELEMETRY_TEST_CHECK(context, !error);
+    EXPECT_TRUE((FileExists(result.jsonPath, error)));
+    EXPECT_TRUE((!error));
     error.clear();
-    NWB_TELEMETRY_TEST_CHECK(context, FileExists(result.perfCsvPath, error));
-    NWB_TELEMETRY_TEST_CHECK(context, !error);
+    EXPECT_TRUE((FileExists(result.perfCsvPath, error)));
+    EXPECT_TRUE((!error));
 
     AString<NWB::Core::Alloc::GlobalArena> perfCsv(testArena.arena);
-    NWB_TELEMETRY_TEST_CHECK(context, ReadTextFile(result.perfCsvPath, perfCsv));
-    NWB_TELEMETRY_TEST_CHECK(context, ContainsText(AStringView(perfCsv.data(), perfCsv.size()), "cpu,ingest/cpu"));
+    EXPECT_TRUE((ReadTextFile(result.perfCsvPath, perfCsv)));
+    EXPECT_TRUE((ContainsText(AStringView(perfCsv.data(), perfCsv.size()), "cpu,ingest/cpu")));
 
-    NWB_TELEMETRY_TEST_CHECK(context, RemoveAllIfExists(storageDirectory, error));
+    EXPECT_TRUE((RemoveAllIfExists(storageDirectory, error)));
 }
 
 
@@ -1297,173 +1294,139 @@ static void TestTelemetryIngestStoresRawAndReports(TestContext& context){
 
 
 TEST(Telemetry, CaptureFlags){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestCaptureFlags(nwbTestContext);
+    __hidden_tests::TestCaptureFlags();
 }
 
 TEST(Telemetry, RecorderFiltersAndCopiesPayload){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestRecorderFiltersAndCopiesPayload(nwbTestContext);
+    __hidden_tests::TestRecorderFiltersAndCopiesPayload();
 }
 
 TEST(Telemetry, RecorderClearAndDisabledState){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestRecorderClearAndDisabledState(nwbTestContext);
+    __hidden_tests::TestRecorderClearAndDisabledState();
 }
 
 TEST(Telemetry, RecorderAcceptsConcurrentRecords){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestRecorderAcceptsConcurrentRecords(nwbTestContext);
+    __hidden_tests::TestRecorderAcceptsConcurrentRecords();
 }
 
 TEST(Telemetry, EventCodecRoundTrip){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestEventCodecRoundTrip(nwbTestContext);
+    __hidden_tests::TestEventCodecRoundTrip();
 }
 
 TEST(Telemetry, EventCodecRejectsInvalidInput){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestEventCodecRejectsInvalidInput(nwbTestContext);
+    __hidden_tests::TestEventCodecRejectsInvalidInput();
 }
 
 TEST(Telemetry, EventCodecReportsTruncatedPayload){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestEventCodecReportsTruncatedPayload(nwbTestContext);
+    __hidden_tests::TestEventCodecReportsTruncatedPayload();
 }
 
 TEST(Telemetry, EventStreamCodecRoundTrip){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestEventStreamCodecRoundTrip(nwbTestContext);
+    __hidden_tests::TestEventStreamCodecRoundTrip();
 }
 
 TEST(Telemetry, EventStreamCodecHandlesEmptyStreams){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestEventStreamCodecHandlesEmptyStreams(nwbTestContext);
+    __hidden_tests::TestEventStreamCodecHandlesEmptyStreams();
 }
 
 TEST(Telemetry, EventStreamCodecRejectsInvalidInput){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestEventStreamCodecRejectsInvalidInput(nwbTestContext);
+    __hidden_tests::TestEventStreamCodecRejectsInvalidInput();
 }
 
 TEST(Telemetry, CaptureSessionCaptureScopeRecordsLogAndDiagnostic){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic(nwbTestContext);
+    __hidden_tests::TestCaptureSessionCaptureScopeRecordsLogAndDiagnostic();
 }
 
 TEST(Telemetry, TextLogPayloadRoundTrip){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestTextLogPayloadRoundTrip(nwbTestContext);
+    __hidden_tests::TestTextLogPayloadRoundTrip();
 }
 
 TEST(Telemetry, RecordTextLogUsesTelemetryEvent){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestRecordTextLogUsesTelemetryEvent(nwbTestContext);
+    __hidden_tests::TestRecordTextLogUsesTelemetryEvent();
 }
 
 TEST(Telemetry, TextLogCaptureLoggerForwardsAndRecords){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestTextLogCaptureLoggerForwardsAndRecords(nwbTestContext);
+    __hidden_tests::TestTextLogCaptureLoggerForwardsAndRecords();
 }
 
 TEST(Telemetry, DiagnosticPayloadRoundTrip){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestDiagnosticPayloadRoundTrip(nwbTestContext);
+    __hidden_tests::TestDiagnosticPayloadRoundTrip();
 }
 
 TEST(Telemetry, RecordDiagnosticUsesTelemetryEvent){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestRecordDiagnosticUsesTelemetryEvent(nwbTestContext);
+    __hidden_tests::TestRecordDiagnosticUsesTelemetryEvent();
 }
 
 TEST(Telemetry, DiagnosticCaptureGuardRecordsGlobalDiagnostic){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestDiagnosticCaptureGuardRecordsGlobalDiagnostic(nwbTestContext);
+    __hidden_tests::TestDiagnosticCaptureGuardRecordsGlobalDiagnostic();
 }
 
 TEST(Telemetry, DiagnosticCaptureGuardManualCaptureReturnsStatus){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestDiagnosticCaptureGuardManualCaptureReturnsStatus(nwbTestContext);
+    __hidden_tests::TestDiagnosticCaptureGuardManualCaptureReturnsStatus();
 }
 
 TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback(nwbTestContext);
+    __hidden_tests::TestDiagnosticCaptureGuardDoesNotReplaceExistingCallback();
 }
 
 TEST(Telemetry, FrameGraphPayloadRoundTrip){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestFrameGraphPayloadRoundTrip(nwbTestContext);
+    __hidden_tests::TestFrameGraphPayloadRoundTrip();
 }
 
 TEST(Telemetry, FrameGraphPayloadRejectsInvalidInput){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestFrameGraphPayloadRejectsInvalidInput(nwbTestContext);
+    __hidden_tests::TestFrameGraphPayloadRejectsInvalidInput();
 }
 
 TEST(Telemetry, RecordFrameGraphUsesTelemetryEvent){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestRecordFrameGraphUsesTelemetryEvent(nwbTestContext);
+    __hidden_tests::TestRecordFrameGraphUsesTelemetryEvent();
 }
 
 TEST(Telemetry, CaptureSessionRecordsFrameGraphWithContext){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestCaptureSessionRecordsFrameGraphWithContext(nwbTestContext);
+    __hidden_tests::TestCaptureSessionRecordsFrameGraphWithContext();
 }
 
 TEST(Telemetry, PerfTimingPayloadRoundTrip){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestPerfTimingPayloadRoundTrip(nwbTestContext);
+    __hidden_tests::TestPerfTimingPayloadRoundTrip();
 }
 
 TEST(Telemetry, PerfTimingPayloadRejectsInvalidInput){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestPerfTimingPayloadRejectsInvalidInput(nwbTestContext);
+    __hidden_tests::TestPerfTimingPayloadRejectsInvalidInput();
 }
 
 TEST(Telemetry, RecordPerfTimingUsesTelemetryEvent){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestRecordPerfTimingUsesTelemetryEvent(nwbTestContext);
+    __hidden_tests::TestRecordPerfTimingUsesTelemetryEvent();
 }
 
 TEST(Telemetry, PerfMemoryPayloadRoundTrip){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestPerfMemoryPayloadRoundTrip(nwbTestContext);
+    __hidden_tests::TestPerfMemoryPayloadRoundTrip();
 }
 
 TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestPerfMemoryPayloadRejectsInvalidInput(nwbTestContext);
+    __hidden_tests::TestPerfMemoryPayloadRejectsInvalidInput();
 }
 
 TEST(Telemetry, RecordPerfMemoryUsesTelemetryEvent){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestRecordPerfMemoryUsesTelemetryEvent(nwbTestContext);
+    __hidden_tests::TestRecordPerfMemoryUsesTelemetryEvent();
 }
 
 TEST(Telemetry, PerfViewsExposeScopes){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestPerfViewsExposeScopes(nwbTestContext);
+    __hidden_tests::TestPerfViewsExposeScopes();
 }
 
 TEST(Telemetry, RecordPerfSessionReportUsesTelemetryEvents){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestRecordPerfSessionReportUsesTelemetryEvents(nwbTestContext);
+    __hidden_tests::TestRecordPerfSessionReportUsesTelemetryEvents();
 }
 
 TEST(Telemetry, CaptureSessionRecordsPerfReport){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestCaptureSessionRecordsPerfReport(nwbTestContext);
+    __hidden_tests::TestCaptureSessionRecordsPerfReport();
 }
 
 TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestTelemetryReportSummarizesBenchmarkEvents(nwbTestContext);
+    __hidden_tests::TestTelemetryReportSummarizesBenchmarkEvents();
 }
 
 TEST(Telemetry, TelemetryIngestStoresRawAndReports){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestTelemetryIngestStoresRawAndReports(nwbTestContext);
+    __hidden_tests::TestTelemetryIngestStoresRawAndReports();
 }
 
 

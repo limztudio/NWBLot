@@ -3,7 +3,6 @@
 
 
 static bool CookAndLoadSmokeMesh(
-    TestContext& context,
     TestArena& testArena,
     const char* assetFilename,
     const AStringView caseName,
@@ -19,10 +18,10 @@ static bool CookAndLoadSmokeMesh(
         outRoot,
         outputDirectory
     );
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
+    EXPECT_TRUE((cooked));
     if(!cooked)
         return false;
-    return LoadCookedMesh(context, testArena, outputDirectory, assetName, outLoadedAsset);
+    return LoadCookedMesh(testArena, outputDirectory, assetName, outLoadedAsset);
 }
 
 struct MeshletAcceptanceVertexKey{
@@ -311,7 +310,6 @@ template<typename MeshT>
 
 template<typename CallbackT>
 static void RunSmokeMeshAcceptance(
-    TestContext& context,
     const char* assetFilename,
     const AStringView caseName,
     const Name assetName,
@@ -323,73 +321,72 @@ static void RunSmokeMeshAcceptance(
     TestArena testArena;
     Path root(testArena.arena);
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(CookAndLoadSmokeMesh(context, testArena, assetFilename, caseName, assetName, root, loadedAsset)){
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedAsset->assetType() == NWB::Impl::Mesh::AssetTypeName());
+    if(CookAndLoadSmokeMesh(testArena, assetFilename, caseName, assetName, root, loadedAsset)){
+        EXPECT_TRUE((loadedAsset->assetType() == NWB::Impl::Mesh::AssetTypeName()));
         const NWB::Impl::Mesh& loadedMesh = static_cast<const NWB::Impl::Mesh&>(*loadedAsset);
         Forward<CallbackT>(callback)(loadedMesh);
     }
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+    EXPECT_TRUE((logger.errorCount() == 0u));
 
     ErrorCode errorCode;
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
 }
 
-static void TestMeshAcceptanceHardEdgeCubeZippedRefs(TestContext& context){
+static void TestMeshAcceptanceHardEdgeCubeZippedRefs(){
     RunSmokeMeshAcceptance(
-        context,
         "cube_hard_edges.nwb",
         "hard_edge_cube",
         Name("project/meshes/cube_hard_edges"),
-        [&context](const NWB::Impl::Mesh& loadedMesh){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.positionStream().size() == 8u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.normalStream().size() == 6u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.tangentStream().size() == 6u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.uv0Stream().size() == 4u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.colorStream().size() == 1u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshlets().size() == 1u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletLocalVertexRefs().size() == 24u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPrimitiveIndices().size() == 36u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletReferenceCompressionShrinksPayload(loadedMesh));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletReferenceCompressionBandwidthNeutralOrBetter(loadedMesh));
+        [](const NWB::Impl::Mesh& loadedMesh){
+            EXPECT_TRUE((loadedMesh.positionStream().size() == 8u));
+            EXPECT_TRUE((loadedMesh.normalStream().size() == 6u));
+            EXPECT_TRUE((loadedMesh.tangentStream().size() == 6u));
+            EXPECT_TRUE((loadedMesh.uv0Stream().size() == 4u));
+            EXPECT_TRUE((loadedMesh.colorStream().size() == 1u));
+            EXPECT_TRUE((loadedMesh.meshlets().size() == 1u));
+            EXPECT_TRUE((loadedMesh.meshletLocalVertexRefs().size() == 24u));
+            EXPECT_TRUE((loadedMesh.meshletPrimitiveIndices().size() == 36u));
+            EXPECT_TRUE((TestMeshletReferenceCompressionShrinksPayload(loadedMesh)));
+            EXPECT_TRUE((TestMeshletReferenceCompressionBandwidthNeutralOrBetter(loadedMesh)));
 
             const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0];
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletVertexCount(meshlet) == 24u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletPrimitiveCount(meshlet) == 12u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletPositionCount(meshlet) == 8u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletAttributeCount(meshlet) == 24u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.positionBase == 0u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.skinBase == NWB::Impl::s_MeshMissingStreamIndex);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.normalBase == 0u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.tangentBase == 0u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.uv0Base == 0u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.colorBase == 0u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.encoding == 0u);
+            EXPECT_TRUE((NWB::Impl::MeshletVertexCount(meshlet) == 24u));
+            EXPECT_TRUE((NWB::Impl::MeshletPrimitiveCount(meshlet) == 12u));
+            EXPECT_TRUE((NWB::Impl::MeshletPositionCount(meshlet) == 8u));
+            EXPECT_TRUE((NWB::Impl::MeshletAttributeCount(meshlet) == 24u));
+            EXPECT_TRUE((meshlet.positionBase == 0u));
+            EXPECT_TRUE((meshlet.skinBase == NWB::Impl::s_MeshMissingStreamIndex));
+            EXPECT_TRUE((meshlet.normalBase == 0u));
+            EXPECT_TRUE((meshlet.tangentBase == 0u));
+            EXPECT_TRUE((meshlet.uv0Base == 0u));
+            EXPECT_TRUE((meshlet.colorBase == 0u));
+            EXPECT_TRUE((meshlet.encoding == 0u));
 
             const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
             const auto& positions = loadedMesh.positionStream();
             const auto& normals = loadedMesh.normalStream();
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletPositionRefsAreFirstUseOrdered(meshlet, loadedMesh));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletAttributeRefsAreFirstUseOrdered(
+            EXPECT_TRUE((TestMeshletPositionRefsAreFirstUseOrdered(meshlet, loadedMesh)));
+            EXPECT_TRUE((TestMeshletAttributeRefsAreFirstUseOrdered(
                 meshlet,
                 loadedMesh,
                 [](const NWB::Impl::MeshletAttributeStreamRef& ref){ return ref.normal; }
-            ));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletAttributeRefsAreFirstUseOrdered(
+            )));
+            EXPECT_TRUE((TestMeshletAttributeRefsAreFirstUseOrdered(
                 meshlet,
                 loadedMesh,
                 [](const NWB::Impl::MeshletAttributeStreamRef& ref){ return ref.tangent; }
-            ));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletAttributeRefsAreFirstUseOrdered(
+            )));
+            EXPECT_TRUE((TestMeshletAttributeRefsAreFirstUseOrdered(
                 meshlet,
                 loadedMesh,
                 [](const NWB::Impl::MeshletAttributeStreamRef& ref){ return ref.uv0; }
-            ));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletAttributeRefsAreFirstUseOrdered(
+            )));
+            EXPECT_TRUE((TestMeshletAttributeRefsAreFirstUseOrdered(
                 meshlet,
                 loadedMesh,
                 [](const NWB::Impl::MeshletAttributeStreamRef& ref){ return ref.color; }
-            ));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletHasPositionNormalValue(
+            )));
+            EXPECT_TRUE((TestMeshletHasPositionNormalValue(
                 loadedMesh,
                 meshlet,
                 positions,
@@ -397,8 +394,8 @@ static void TestMeshAcceptanceHardEdgeCubeZippedRefs(TestContext& context){
                 localRefs,
                 Float3U(-0.5f, -0.5f, -0.5f),
                 Float4U(0.0f, 0.0f, -1.0f, 0.0f)
-            ));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletHasPositionNormalValue(
+            )));
+            EXPECT_TRUE((TestMeshletHasPositionNormalValue(
                 loadedMesh,
                 meshlet,
                 positions,
@@ -406,8 +403,8 @@ static void TestMeshAcceptanceHardEdgeCubeZippedRefs(TestContext& context){
                 localRefs,
                 Float3U(-0.5f, -0.5f, -0.5f),
                 Float4U(0.0f, -1.0f, 0.0f, 0.0f)
-            ));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletHasPositionNormalValue(
+            )));
+            EXPECT_TRUE((TestMeshletHasPositionNormalValue(
                 loadedMesh,
                 meshlet,
                 positions,
@@ -415,12 +412,12 @@ static void TestMeshAcceptanceHardEdgeCubeZippedRefs(TestContext& context){
                 localRefs,
                 Float3U(-0.5f, -0.5f, -0.5f),
                 Float4U(-1.0f, 0.0f, 0.0f, 0.0f)
-            ));
+            )));
         }
     );
 }
 
-static void TestMeshAcceptanceQualityBuilderChecks(TestContext& context){
+static void TestMeshAcceptanceQualityBuilderChecks(){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -435,149 +432,141 @@ static void TestMeshAcceptanceQualityBuilderChecks(TestContext& context){
         root,
         outputDirectory
     );
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
+    EXPECT_TRUE((cooked));
     if(cooked){
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        if(LoadCookedMinimalMesh(context, testArena, outputDirectory, loadedAsset)){
+        if(LoadCookedMinimalMesh(testArena, outputDirectory, loadedAsset)){
             const NWB::Impl::Mesh& loadedMesh = static_cast<const NWB::Impl::Mesh&>(*loadedAsset);
             auto sourceTriangles = MakeAssetVector<MeshletAcceptanceTriangleKey>(testArena);
             BuildMeshletAcceptanceAlternatingConeSourceTriangles(sourceTriangles);
             const MeshletAcceptanceQualityMetrics cookedMetrics = BuildCookedMeshletAcceptanceQualityMetrics(loadedMesh);
 
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletAcceptanceLimits(loadedMesh));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletAcceptanceTrianglesMatchSource(testArena, loadedMesh, sourceTriangles));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cookedMetrics.meshletCount == 2u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cookedMetrics.coneDisabledCount == 0u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Tests::NearlyEqual(static_cast<f32>(MeshletAcceptanceAverageRadius(cookedMetrics)), 0.88388348f, 0.0001f));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(
-                context,
-                MeshletAcceptanceAverageVertexReuse(cookedMetrics) == static_cast<f64>(NWB::Impl::s_MeshMaxMeshletTriangles)
-            );
+            EXPECT_TRUE((TestMeshletAcceptanceLimits(loadedMesh)));
+            EXPECT_TRUE((TestMeshletAcceptanceTrianglesMatchSource(testArena, loadedMesh, sourceTriangles)));
+            EXPECT_TRUE((cookedMetrics.meshletCount == 2u));
+            EXPECT_TRUE((cookedMetrics.coneDisabledCount == 0u));
+            EXPECT_TRUE((NWB::Tests::NearlyEqual(static_cast<f32>(MeshletAcceptanceAverageRadius(cookedMetrics)), 0.88388348f, 0.0001f)));
+            EXPECT_TRUE((MeshletAcceptanceAverageVertexReuse(cookedMetrics) == static_cast<f64>(NWB::Impl::s_MeshMaxMeshletTriangles)));
         }
     }
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+    EXPECT_TRUE((logger.errorCount() == 0u));
 
     ErrorCode errorCode;
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
 }
 
-static void TestMeshAcceptanceSphereSmooth(TestContext& context){
+static void TestMeshAcceptanceSphereSmooth(){
     RunSmokeMeshAcceptance(
-        context,
         "sphere_smooth.nwb",
         "sphere_smooth",
         Name("project/meshes/sphere_smooth"),
-        [&context](const NWB::Impl::Mesh& loadedMesh){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.positionStream().size() == 6u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.normalStream().size() == 6u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshlets().size() == 1u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPrimitiveIndices().size() == 24u);
+        [](const NWB::Impl::Mesh& loadedMesh){
+            EXPECT_TRUE((loadedMesh.positionStream().size() == 6u));
+            EXPECT_TRUE((loadedMesh.normalStream().size() == 6u));
+            EXPECT_TRUE((loadedMesh.meshlets().size() == 1u));
+            EXPECT_TRUE((loadedMesh.meshletPrimitiveIndices().size() == 24u));
 
             for(usize i = 0u; i < loadedMesh.positionStream().size(); ++i){
                 const Float3U& position = loadedMesh.positionStream()[i];
                 const Float4U normal = LoadHalf4U(loadedMesh.normalStream()[i]);
-                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, normal.x == position.x);
-                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, normal.y == position.y);
-                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, normal.z == position.z);
+                EXPECT_TRUE((normal.x == position.x));
+                EXPECT_TRUE((normal.y == position.y));
+                EXPECT_TRUE((normal.z == position.z));
             }
 
             const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletPrimitiveCount(meshlet) == 8u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
+            EXPECT_TRUE((NWB::Impl::MeshletPrimitiveCount(meshlet) == 8u));
+            EXPECT_TRUE((!NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u])));
         }
     );
 }
 
-static void TestMeshAcceptanceUvSeamQuad(TestContext& context){
+static void TestMeshAcceptanceUvSeamQuad(){
     RunSmokeMeshAcceptance(
-        context,
         "uv_seam_quad.nwb",
         "uv_seam_quad",
         Name("project/meshes/uv_seam_quad"),
-        [&context](const NWB::Impl::Mesh& loadedMesh){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.positionStream().size() == 4u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.uv0Stream().size() == 6u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.tangentStream().size() == 2u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletLogicalPositionRefCount(loadedMesh) == 4u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletLogicalAttributeRefCount(loadedMesh) == 6u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletReferenceCompressionShrinksPayload(loadedMesh));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletReferenceCompressionBandwidthNeutralOrBetter(loadedMesh));
+        [](const NWB::Impl::Mesh& loadedMesh){
+            EXPECT_TRUE((loadedMesh.positionStream().size() == 4u));
+            EXPECT_TRUE((loadedMesh.uv0Stream().size() == 6u));
+            EXPECT_TRUE((loadedMesh.tangentStream().size() == 2u));
+            EXPECT_TRUE((TestMeshletLogicalPositionRefCount(loadedMesh) == 4u));
+            EXPECT_TRUE((TestMeshletLogicalAttributeRefCount(loadedMesh) == 6u));
+            EXPECT_TRUE((TestMeshletReferenceCompressionShrinksPayload(loadedMesh)));
+            EXPECT_TRUE((TestMeshletReferenceCompressionBandwidthNeutralOrBetter(loadedMesh)));
 
             const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
             const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, localRefs[0u].localDeformedPosition == localRefs[3u].localDeformedPosition);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, localRefs[2u].localDeformedPosition == localRefs[4u].localDeformedPosition);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, localRefs[0u].localAttribute != localRefs[3u].localAttribute);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, localRefs[2u].localAttribute != localRefs[4u].localAttribute);
+            EXPECT_TRUE((localRefs[0u].localDeformedPosition == localRefs[3u].localDeformedPosition));
+            EXPECT_TRUE((localRefs[2u].localDeformedPosition == localRefs[4u].localDeformedPosition));
+            EXPECT_TRUE((localRefs[0u].localAttribute != localRefs[3u].localAttribute));
+            EXPECT_TRUE((localRefs[2u].localAttribute != localRefs[4u].localAttribute));
 
             NWB::Impl::MeshletAttributeStreamRef attributeRef0;
             NWB::Impl::MeshletAttributeStreamRef attributeRef3;
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute, attributeRef0));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute, attributeRef3));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, attributeRef0.uv0 == 0u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, attributeRef3.uv0 == 3u);
+            EXPECT_TRUE((TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute, attributeRef0)));
+            EXPECT_TRUE((TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute, attributeRef3)));
+            EXPECT_TRUE((attributeRef0.uv0 == 0u));
+            EXPECT_TRUE((attributeRef3.uv0 == 3u));
         }
     );
 }
 
-static void TestMeshAcceptanceMirroredUvQuad(TestContext& context){
+static void TestMeshAcceptanceMirroredUvQuad(){
     RunSmokeMeshAcceptance(
-        context,
         "mirrored_uv_quad.nwb",
         "mirrored_uv_quad",
         Name("project/meshes/mirrored_uv_quad"),
-        [&context](const NWB::Impl::Mesh& loadedMesh){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.tangentStream().size() == 2u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadHalf4U(loadedMesh.tangentStream()[0u]).w == 1.0f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadHalf4U(loadedMesh.tangentStream()[1u]).w == -1.0f);
+        [](const NWB::Impl::Mesh& loadedMesh){
+            EXPECT_TRUE((loadedMesh.tangentStream().size() == 2u));
+            EXPECT_TRUE((LoadHalf4U(loadedMesh.tangentStream()[0u]).w == 1.0f));
+            EXPECT_TRUE((LoadHalf4U(loadedMesh.tangentStream()[1u]).w == -1.0f));
 
             const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
             const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
             NWB::Impl::MeshletAttributeStreamRef attributeRef0;
             NWB::Impl::MeshletAttributeStreamRef attributeRef3;
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute, attributeRef0));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute, attributeRef3));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, attributeRef0.tangent == 0u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, attributeRef3.tangent == 1u);
+            EXPECT_TRUE((TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute, attributeRef0)));
+            EXPECT_TRUE((TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute, attributeRef3)));
+            EXPECT_TRUE((attributeRef0.tangent == 0u));
+            EXPECT_TRUE((attributeRef3.tangent == 1u));
         }
     );
 }
 
-static void TestMeshAcceptanceTwoSidedPlane(TestContext& context){
+static void TestMeshAcceptanceTwoSidedPlane(){
     RunSmokeMeshAcceptance(
-        context,
         "two_sided_plane.nwb",
         "two_sided_plane",
         Name("project/meshes/two_sided_plane"),
-        [&context](const NWB::Impl::Mesh& loadedMesh){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.positionStream().size() == 3u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.normalStream().size() == 2u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletLogicalPositionRefCount(loadedMesh) == 3u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletLogicalAttributeRefCount(loadedMesh) == 6u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
+        [](const NWB::Impl::Mesh& loadedMesh){
+            EXPECT_TRUE((loadedMesh.positionStream().size() == 3u));
+            EXPECT_TRUE((loadedMesh.normalStream().size() == 2u));
+            EXPECT_TRUE((TestMeshletLogicalPositionRefCount(loadedMesh) == 3u));
+            EXPECT_TRUE((TestMeshletLogicalAttributeRefCount(loadedMesh) == 6u));
+            EXPECT_TRUE((!NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u])));
         }
     );
 }
 
-static void TestMeshAcceptanceLargeManyMeshlets(TestContext& context){
+static void TestMeshAcceptanceLargeManyMeshlets(){
     RunSmokeMeshAcceptance(
-        context,
         "large_mesh_many_meshlets.nwb",
         "large_mesh_many_meshlets",
         Name("project/meshes/large_mesh_many_meshlets"),
-        [&context](const NWB::Impl::Mesh& loadedMesh){
+        [](const NWB::Impl::Mesh& loadedMesh){
             const usize expectedPrimitiveCount = static_cast<usize>(NWB::Impl::s_MeshMaxMeshletTriangles) + 1u;
             const usize expectedMeshletCount = 2u;
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshlets().size() == 2u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPrimitiveIndices().size() == expectedPrimitiveCount * 3u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletLogicalPositionRefCount(loadedMesh) == 6u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletLogicalAttributeRefCount(loadedMesh) == 6u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletLocalVertexRefs().size() == 6u);
+            EXPECT_TRUE((loadedMesh.meshlets().size() == 2u));
+            EXPECT_TRUE((loadedMesh.meshletPrimitiveIndices().size() == expectedPrimitiveCount * 3u));
+            EXPECT_TRUE((TestMeshletLogicalPositionRefCount(loadedMesh) == 6u));
+            EXPECT_TRUE((TestMeshletLogicalAttributeRefCount(loadedMesh) == 6u));
+            EXPECT_TRUE((loadedMesh.meshletLocalVertexRefs().size() == 6u));
             if(loadedMesh.meshlets().size() < expectedMeshletCount)
                 return;
 
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletPrimitiveCount(loadedMesh.meshlets()[0u]) == NWB::Impl::s_MeshMaxMeshletTriangles);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletPrimitiveCount(loadedMesh.meshlets()[1u]) == 1u);
+            EXPECT_TRUE((NWB::Impl::MeshletPrimitiveCount(loadedMesh.meshlets()[0u]) == NWB::Impl::s_MeshMaxMeshletTriangles));
+            EXPECT_TRUE((NWB::Impl::MeshletPrimitiveCount(loadedMesh.meshlets()[1u]) == 1u));
         }
     );
 }

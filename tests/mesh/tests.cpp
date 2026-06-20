@@ -19,9 +19,6 @@ namespace __hidden_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestContext = NWB::Tests::TestContext;
 using NWB::Tests::MakeQuadTriangleIndices;
 using NWB::Tests::MakeTriangleIndices;
 using NWB::Tests::NearlyEqual;
@@ -32,13 +29,10 @@ template<typename T>
 using Vector = NWB::Tests::TestVector<T>;
 
 
-#define NWB_MESH_TEST_CHECK NWB_TEST_CHECK
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestMeshClassMetadata(TestContext& context){
+static void TestMeshClassMetadata(){
     using namespace NWB::Core::Mesh;
 
     struct Case{
@@ -54,21 +48,21 @@ static void TestMeshClassMetadata(TestContext& context){
 
     for(const Case& testCase : cases){
         u32 parsedClass = MeshClass::Invalid;
-        NWB_MESH_TEST_CHECK(context, ParseMeshClassText(testCase.text, parsedClass));
-        NWB_MESH_TEST_CHECK(context, parsedClass == testCase.meshClass);
-        NWB_MESH_TEST_CHECK(context, ValidMeshClass(testCase.meshClass));
-        NWB_MESH_TEST_CHECK(context, MeshClassText(testCase.meshClass) == testCase.text);
-        NWB_MESH_TEST_CHECK(context, MeshClassUsesSkinning(testCase.meshClass) == testCase.usesSkinning);
+        EXPECT_TRUE((ParseMeshClassText(testCase.text, parsedClass)));
+        EXPECT_TRUE((parsedClass == testCase.meshClass));
+        EXPECT_TRUE((ValidMeshClass(testCase.meshClass)));
+        EXPECT_TRUE((MeshClassText(testCase.meshClass) == testCase.text));
+        EXPECT_TRUE((MeshClassUsesSkinning(testCase.meshClass) == testCase.usesSkinning));
     }
 
     u32 parsedClass = MeshClass::Static;
-    NWB_MESH_TEST_CHECK(context, !ParseMeshClassText("STATIC", parsedClass));
-    NWB_MESH_TEST_CHECK(context, parsedClass == MeshClass::Invalid);
-    NWB_MESH_TEST_CHECK(context, MeshClassText(MeshClass::Invalid) == AStringView("invalid"));
-    NWB_MESH_TEST_CHECK(context, MeshClassText(999u) == AStringView("unknown"));
+    EXPECT_TRUE((!ParseMeshClassText("STATIC", parsedClass)));
+    EXPECT_TRUE((parsedClass == MeshClass::Invalid));
+    EXPECT_TRUE((MeshClassText(MeshClass::Invalid) == AStringView("invalid")));
+    EXPECT_TRUE((MeshClassText(999u) == AStringView("unknown")));
 }
 
-static void TestResolvesCoreFrameMath(TestContext& context){
+static void TestResolvesCoreFrameMath(){
     SIMDVector normal = VectorSet(0.0f, 0.0f, 5.0f, 0.0f);
     SIMDVector tangent = VectorSet(2.0f, 1.0f, 0.0f, -0.25f);
     NWB::Core::Mesh::FrameOrthonormalize(
@@ -89,14 +83,14 @@ static void TestResolvesCoreFrameMath(TestContext& context){
     StoreFloat(normal, &normalValue);
     StoreFloat(bitangent, &bitangentValue);
 
-    NWB_MESH_TEST_CHECK(context, NearlyEqual4(normalValue, 0.0f, 0.0f, 1.0f, 0.0f));
-    NWB_MESH_TEST_CHECK(context, NearlyEqual(VectorGetX(Vector3LengthSq(tangent)), 1.0f));
-    NWB_MESH_TEST_CHECK(context, NearlyEqual(VectorGetX(Vector3LengthSq(bitangent)), 1.0f));
-    NWB_MESH_TEST_CHECK(context, NearlyEqual(VectorGetX(Vector3Dot(normal, tangent)), 0.0f));
-    NWB_MESH_TEST_CHECK(context, NearlyEqual(VectorGetX(Vector3Dot(normal, bitangent)), 0.0f));
-    NWB_MESH_TEST_CHECK(context, NearlyEqual(VectorGetX(Vector3Dot(tangent, bitangent)), 0.0f));
-    NWB_MESH_TEST_CHECK(context, NearlyEqual(VectorGetW(tangent), -1.0f));
-    NWB_MESH_TEST_CHECK(context, NearlyEqual(bitangentValue.w, 0.0f));
+    EXPECT_TRUE((NearlyEqual4(normalValue, 0.0f, 0.0f, 1.0f, 0.0f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3LengthSq(tangent)), 1.0f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3LengthSq(bitangent)), 1.0f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3Dot(normal, tangent)), 0.0f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3Dot(normal, bitangent)), 0.0f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3Dot(tangent, bitangent)), 0.0f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetW(tangent), -1.0f)));
+    EXPECT_TRUE((NearlyEqual(bitangentValue.w, 0.0f)));
 }
 
 static TangentFrameRebuildVertex MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u, const f32 v){
@@ -117,50 +111,50 @@ static Vector<TangentFrameRebuildVertex> MakeFlatQuadVertices(){
     return vertices;
 }
 
-static void TestRebuildsFlatQuadFrame(TestContext& context){
+static void TestRebuildsFlatQuadFrame(){
     Vector<TangentFrameRebuildVertex> vertices = MakeFlatQuadVertices();
     const Vector<u32> indices = MakeQuadTriangleIndices();
 
     NWB::Core::Mesh::TangentFrameRebuildResult result;
-    NWB_MESH_TEST_CHECK(context, NWB::Core::Mesh::RebuildTangentFrames(vertices, indices, &result));
-    NWB_MESH_TEST_CHECK(context, result.rebuiltVertexCount == vertices.size());
-    NWB_MESH_TEST_CHECK(context, result.degenerateUvTriangleCount == 0u);
-    NWB_MESH_TEST_CHECK(context, result.fallbackTangentVertexCount == 0u);
+    EXPECT_TRUE((NWB::Core::Mesh::RebuildTangentFrames(vertices, indices, &result)));
+    EXPECT_TRUE((result.rebuiltVertexCount == vertices.size()));
+    EXPECT_TRUE((result.degenerateUvTriangleCount == 0u));
+    EXPECT_TRUE((result.fallbackTangentVertexCount == 0u));
 
     for(const TangentFrameRebuildVertex& vertex : vertices){
-        NWB_MESH_TEST_CHECK(context, NearlyEqual3(vertex.normal, 0.0f, 0.0f, 1.0f));
-        NWB_MESH_TEST_CHECK(context, NearlyEqual3(vertex.tangent, 1.0f, 0.0f, 0.0f));
-        NWB_MESH_TEST_CHECK(context, NearlyEqual(vertex.tangent.w, 1.0f));
+        EXPECT_TRUE((NearlyEqual3(vertex.normal, 0.0f, 0.0f, 1.0f)));
+        EXPECT_TRUE((NearlyEqual3(vertex.tangent, 1.0f, 0.0f, 0.0f)));
+        EXPECT_TRUE((NearlyEqual(vertex.tangent.w, 1.0f)));
     }
 }
 
-static void TestDegenerateUvsUseStableTangentFallback(TestContext& context){
+static void TestDegenerateUvsUseStableTangentFallback(){
     Vector<TangentFrameRebuildVertex> vertices = MakeFlatQuadVertices();
     const Vector<u32> indices = MakeQuadTriangleIndices();
     for(TangentFrameRebuildVertex& vertex : vertices)
         vertex.uv0 = Float2U(0.0f, 0.0f);
 
     NWB::Core::Mesh::TangentFrameRebuildResult result;
-    NWB_MESH_TEST_CHECK(context, NWB::Core::Mesh::RebuildTangentFrames(vertices, indices, &result));
-    NWB_MESH_TEST_CHECK(context, result.rebuiltVertexCount == vertices.size());
-    NWB_MESH_TEST_CHECK(context, result.degenerateUvTriangleCount == 2u);
-    NWB_MESH_TEST_CHECK(context, result.fallbackTangentVertexCount == vertices.size());
+    EXPECT_TRUE((NWB::Core::Mesh::RebuildTangentFrames(vertices, indices, &result)));
+    EXPECT_TRUE((result.rebuiltVertexCount == vertices.size()));
+    EXPECT_TRUE((result.degenerateUvTriangleCount == 2u));
+    EXPECT_TRUE((result.fallbackTangentVertexCount == vertices.size()));
 
     for(const TangentFrameRebuildVertex& vertex : vertices){
-        NWB_MESH_TEST_CHECK(context, NearlyEqual3(vertex.normal, 0.0f, 0.0f, 1.0f));
-        NWB_MESH_TEST_CHECK(context, NearlyEqual(VectorGetX(Vector3LengthSq(LoadFloat(vertex.tangent))), 1.0f));
-        NWB_MESH_TEST_CHECK(context, NearlyEqual(VectorGetX(Vector3Dot(LoadFloat(vertex.normal), LoadFloat(vertex.tangent))), 0.0f));
+        EXPECT_TRUE((NearlyEqual3(vertex.normal, 0.0f, 0.0f, 1.0f)));
+        EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3LengthSq(LoadFloat(vertex.tangent))), 1.0f)));
+        EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3Dot(LoadFloat(vertex.normal), LoadFloat(vertex.tangent))), 0.0f)));
     }
 }
 
-static void TestRejectsDegenerateTriangle(TestContext& context){
+static void TestRejectsDegenerateTriangle(){
     Vector<TangentFrameRebuildVertex> vertices;
     vertices.push_back(MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
     vertices.push_back(MakeVertex(0.0f, 0.0f, 0.0f, 1.0f, 0.0f));
     vertices.push_back(MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 1.0f));
     const Vector<u32> indices = MakeTriangleIndices();
 
-    NWB_MESH_TEST_CHECK(context, !NWB::Core::Mesh::RebuildTangentFrames(vertices, indices));
+    EXPECT_TRUE((!NWB::Core::Mesh::RebuildTangentFrames(vertices, indices)));
 }
 
 
@@ -174,28 +168,23 @@ static void TestRejectsDegenerateTriangle(TestContext& context){
 
 
 TEST(Mesh, MeshClassMetadata){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshClassMetadata(nwbTestContext);
+    __hidden_tests::TestMeshClassMetadata();
 }
 
 TEST(Mesh, ResolvesCoreFrameMath){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestResolvesCoreFrameMath(nwbTestContext);
+    __hidden_tests::TestResolvesCoreFrameMath();
 }
 
 TEST(Mesh, RebuildsFlatQuadFrame){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestRebuildsFlatQuadFrame(nwbTestContext);
+    __hidden_tests::TestRebuildsFlatQuadFrame();
 }
 
 TEST(Mesh, DegenerateUvsUseStableTangentFallback){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestDegenerateUvsUseStableTangentFallback(nwbTestContext);
+    __hidden_tests::TestDegenerateUvsUseStableTangentFallback();
 }
 
 TEST(Mesh, RejectsDegenerateTriangle){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestRejectsDegenerateTriangle(nwbTestContext);
+    __hidden_tests::TestRejectsDegenerateTriangle();
 }
 
 

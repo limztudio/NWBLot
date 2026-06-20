@@ -150,14 +150,12 @@ static const NWB::Impl::ModelStaticMeshObject* FindStaticModelObject(
 }
 
 static bool LoadCookedModel(
-    TestContext& context,
     TestArena& testArena,
     const Path& outputDirectory,
     const Name assetName,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
 ){
     return LoadCookedAsset<NWB::Impl::ModelAssetCodec>(
-        context,
         testArena,
         outputDirectory,
         assetName,
@@ -166,7 +164,7 @@ static bool LoadCookedModel(
     );
 }
 
-static void TestModelBunchLocalReferencesAndWrapperExpansion(TestContext& context){
+static void TestModelBunchLocalReferencesAndWrapperExpansion(){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -183,13 +181,12 @@ static void TestModelBunchLocalReferencesAndWrapperExpansion(TestContext& contex
         root,
         outputDirectory
     );
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
+    EXPECT_TRUE((cooked));
     if(!cooked)
         return;
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     if(!LoadCookedModel(
-        context,
         testArena,
         outputDirectory,
         Name("project/characters/model_fixture/model"),
@@ -197,34 +194,34 @@ static void TestModelBunchLocalReferencesAndWrapperExpansion(TestContext& contex
     ))
         return;
 
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedAsset->assetType() == NWB::Impl::Model::AssetTypeName());
+    EXPECT_TRUE((loadedAsset->assetType() == NWB::Impl::Model::AssetTypeName()));
     const NWB::Impl::Model& model = static_cast<const NWB::Impl::Model&>(*loadedAsset);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, model.skeletonObjects().size() == 1u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, model.skinnedMeshObjects().size() == 2u);
+    EXPECT_TRUE((model.skeletonObjects().size() == 1u));
+    EXPECT_TRUE((model.skinnedMeshObjects().size() == 2u));
     if(model.skeletonObjects().size() != 1u)
         return;
 
     const Name expectedMesh("project/characters/model_fixture/mesh");
     const Name expectedSkin("project/characters/model_fixture/skin");
     const Name expectedSkeleton("project/characters/model_fixture/skeleton");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, model.skeletonObjects()[0].name == Name("rig"));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, model.skeletonObjects()[0].skeleton.name() == expectedSkeleton);
+    EXPECT_TRUE((model.skeletonObjects()[0].name == Name("rig")));
+    EXPECT_TRUE((model.skeletonObjects()[0].skeleton.name() == expectedSkeleton));
 
     const NWB::Impl::ModelSkinnedMeshObject* body = FindSkinnedModelObject(model, Name("body"));
     const NWB::Impl::ModelSkinnedMeshObject* detail = FindSkinnedModelObject(model, Name("detail"));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, body != nullptr);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, detail != nullptr);
+    EXPECT_TRUE((body != nullptr));
+    EXPECT_TRUE((detail != nullptr));
     if(body){
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, body->mesh.name() == expectedMesh);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, body->skin.name() == expectedSkin);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, body->skeletonObject == Name("rig"));
+        EXPECT_TRUE((body->mesh.name() == expectedMesh));
+        EXPECT_TRUE((body->skin.name() == expectedSkin));
+        EXPECT_TRUE((body->skeletonObject == Name("rig")));
     }
     if(detail){
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, detail->mesh.name() == expectedMesh);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, detail->skin.name() == expectedSkin);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, detail->skeletonObject == Name("rig"));
+        EXPECT_TRUE((detail->mesh.name() == expectedMesh));
+        EXPECT_TRUE((detail->skin.name() == expectedSkin));
+        EXPECT_TRUE((detail->skeletonObject == Name("rig")));
     }
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+    EXPECT_TRUE((logger.errorCount() == 0u));
 }
 
 static AString BuildStaticAttachmentModelBunchFixture(){
@@ -260,7 +257,7 @@ asset_bunch bunch = [
     return meta;
 }
 
-static void TestModelBunchStaticMeshAttachmentToNamedJoint(TestContext& context){
+static void TestModelBunchStaticMeshAttachmentToNamedJoint(){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -277,13 +274,12 @@ static void TestModelBunchStaticMeshAttachmentToNamedJoint(TestContext& context)
         root,
         outputDirectory
     );
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
+    EXPECT_TRUE((cooked));
     if(!cooked)
         return;
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     if(!LoadCookedModel(
-        context,
         testArena,
         outputDirectory,
         Name("project/characters/model_attachment_fixture/model"),
@@ -291,24 +287,24 @@ static void TestModelBunchStaticMeshAttachmentToNamedJoint(TestContext& context)
     ))
         return;
 
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedAsset->assetType() == NWB::Impl::Model::AssetTypeName());
+    EXPECT_TRUE((loadedAsset->assetType() == NWB::Impl::Model::AssetTypeName()));
     const NWB::Impl::Model& model = static_cast<const NWB::Impl::Model&>(*loadedAsset);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, model.skeletonObjects().size() == 1u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, model.staticMeshObjects().size() == 1u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, model.skinnedMeshObjects().empty());
+    EXPECT_TRUE((model.skeletonObjects().size() == 1u));
+    EXPECT_TRUE((model.staticMeshObjects().size() == 1u));
+    EXPECT_TRUE((model.skinnedMeshObjects().empty()));
 
     const NWB::Impl::ModelStaticMeshObject* tool = FindStaticModelObject(model, Name("tool"));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool != nullptr);
+    EXPECT_TRUE((tool != nullptr));
     if(tool){
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool->mesh.name() == Name("project/characters/model_attachment_fixture/mesh"));
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !tool->material.valid());
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool->parentObject == Name("rig"));
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool->parentJoint == Name("hand"));
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool->transform._14 == 0.5f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool->transform._24 == 0.125f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool->transform._34 == -0.25f);
+        EXPECT_TRUE((tool->mesh.name() == Name("project/characters/model_attachment_fixture/mesh")));
+        EXPECT_TRUE((!tool->material.valid()));
+        EXPECT_TRUE((tool->parentObject == Name("rig")));
+        EXPECT_TRUE((tool->parentJoint == Name("hand")));
+        EXPECT_TRUE((tool->transform._14 == 0.5f));
+        EXPECT_TRUE((tool->transform._24 == 0.125f));
+        EXPECT_TRUE((tool->transform._34 == -0.25f));
     }
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+    EXPECT_TRUE((logger.errorCount() == 0u));
 }
 
 #if defined(NWB_FINAL)
@@ -336,7 +332,7 @@ static bool ExpandModelBunchFixture(
 }
 #endif
 
-static void TestModelBunchRejectsDuplicateLocalReference(TestContext& context){
+static void TestModelBunchRejectsDuplicateLocalReference(){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -369,14 +365,13 @@ asset_bunch bunch = [
         expandedAssets,
         scratchArena
     );
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !expanded);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("variable 'mesh' is listed more than once")));
+    EXPECT_TRUE((!expanded));
+    EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("variable 'mesh' is listed more than once"))));
 #else
-    static_cast<void>(context);
 #endif
 }
 
-static void TestModelBunchRejectsMissingLocalReference(TestContext& context){
+static void TestModelBunchRejectsMissingLocalReference(){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -408,9 +403,8 @@ asset_bunch bunch = [
         expandedAssets,
         scratchArena
     );
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !expanded);
+    EXPECT_TRUE((!expanded));
 #else
-    static_cast<void>(context);
 #endif
 }
 

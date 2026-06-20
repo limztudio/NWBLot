@@ -20,215 +20,209 @@ namespace __hidden_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestContext = NWB::Tests::TestContext;
 using NWB::Tests::NearlyEqual;
 using NWB::Tests::NearlyEqual3;
 using NWB::Tests::NearlyEqual4;
 
 
-#define NWB_MATH_TEST_CHECK NWB_TEST_CHECK
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestVector2CrossOrientation(TestContext& context){
+static void TestVector2CrossOrientation(){
     const SIMDVector xAxis = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector yAxis = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 
     const SIMDVector xy = Vector2Cross(xAxis, yAxis);
     const SIMDVector yx = Vector2Cross(yAxis, xAxis);
 
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetX(xy), 1.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetY(xy), 1.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetX(yx), -1.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetY(yx), -1.0f));
+    EXPECT_TRUE((NearlyEqual(VectorGetX(xy), 1.0f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetY(xy), 1.0f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetX(yx), -1.0f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetY(yx), -1.0f)));
 }
 
-static void TestVector3CrossOrientation(TestContext& context){
+static void TestVector3CrossOrientation(){
     const SIMDVector xAxis = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector yAxis = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     const SIMDVector zAxis = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 
-    NWB_MATH_TEST_CHECK(context, NearlyEqual3(Vector3Cross(xAxis, yAxis), 0.0f, 0.0f, 1.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual3(Vector3Cross(yAxis, xAxis), 0.0f, 0.0f, -1.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetX(Vector3Dot(Vector3Cross(xAxis, yAxis), zAxis)), 1.0f));
+    EXPECT_TRUE((NearlyEqual3(Vector3Cross(xAxis, yAxis), 0.0f, 0.0f, 1.0f)));
+    EXPECT_TRUE((NearlyEqual3(Vector3Cross(yAxis, xAxis), 0.0f, 0.0f, -1.0f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetX(Vector3Dot(Vector3Cross(xAxis, yAxis), zAxis)), 1.0f)));
 
     const SIMDVector a = VectorSet(2.0f, -3.0f, 5.0f, 0.0f);
     const SIMDVector b = VectorSet(-7.0f, 11.0f, 13.0f, 0.0f);
-    NWB_MATH_TEST_CHECK(context, NearlyEqual3(Vector3Cross(a, b), -94.0f, -61.0f, 1.0f));
+    EXPECT_TRUE((NearlyEqual3(Vector3Cross(a, b), -94.0f, -61.0f, 1.0f)));
 }
 
-static void TestVector3RotateQuarterTurn(TestContext& context){
+static void TestVector3RotateQuarterTurn(){
     const SIMDVector rotation = QuaternionRotationAxis(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_PI * 0.5f);
     const SIMDVector value = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector rotated = Vector3Rotate(value, rotation);
 
-    NWB_MATH_TEST_CHECK(context, NearlyEqual3(rotated, 0.0f, 1.0f, 0.0f));
+    EXPECT_TRUE((NearlyEqual3(rotated, 0.0f, 1.0f, 0.0f)));
 }
 
-static void TestVector4CrossBasisOrientation(TestContext& context){
+static void TestVector4CrossBasisOrientation(){
     const SIMDVector xAxis = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector yAxis = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     const SIMDVector zAxis = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
     const SIMDVector result = Vector4Cross(xAxis, yAxis, zAxis);
 
-    NWB_MATH_TEST_CHECK(context, NearlyEqual3(result, 0.0f, 0.0f, 0.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetW(result), 1.0f));
+    EXPECT_TRUE((NearlyEqual3(result, 0.0f, 0.0f, 0.0f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetW(result), 1.0f)));
 }
 
-static void TestVectorNamedScalarFunctions(TestContext& context){
+static void TestVectorNamedScalarFunctions(){
     const SIMDVector modResult = VectorMod(
         VectorSet(5.5f, -5.5f, 5.5f, -5.5f),
         VectorSet(2.0f, 2.0f, -2.0f, -2.0f)
     );
-    NWB_MATH_TEST_CHECK(context, NearlyEqual4(modResult, 1.5f, 0.5f, -0.5f, -1.5f));
+    EXPECT_TRUE((NearlyEqual4(modResult, 1.5f, 0.5f, -0.5f, -1.5f)));
 
     const SIMDVector expInput = VectorSet(1.0f, 2.0f, -1.0f, 0.5f);
     const SIMDVector expResult = VectorExp(expInput);
-    NWB_MATH_TEST_CHECK(context, NearlyEqual4(
+    EXPECT_TRUE((NearlyEqual4(
         expResult,
         Exp(1.0f),
         Exp(2.0f),
         Exp(-1.0f),
         Exp(0.5f),
         0.0005f
-    ));
+    )));
 
     const f32 e = Exp(1.0f);
     const SIMDVector logResult = VectorLog(VectorSet(e, e * e, 1.0f, 0.25f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual4(
+    EXPECT_TRUE((NearlyEqual4(
         logResult,
         1.0f,
         2.0f,
         0.0f,
         Log(0.25f),
         0.0005f
-    ));
+    )));
 
     const SIMDVector hyperbolicInput = VectorSet(0.5f, -0.5f, 1.0f, -1.0f);
-    NWB_MATH_TEST_CHECK(context, NearlyEqual4(
+    EXPECT_TRUE((NearlyEqual4(
         VectorSinH(hyperbolicInput),
         SinH(0.5f),
         SinH(-0.5f),
         SinH(1.0f),
         SinH(-1.0f),
         0.0005f
-    ));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual4(
+    )));
+    EXPECT_TRUE((NearlyEqual4(
         VectorCosH(hyperbolicInput),
         CosH(0.5f),
         CosH(-0.5f),
         CosH(1.0f),
         CosH(-1.0f),
         0.0005f
-    ));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual4(
+    )));
+    EXPECT_TRUE((NearlyEqual4(
         VectorTanH(hyperbolicInput),
         TanH(0.5f),
         TanH(-0.5f),
         TanH(1.0f),
         TanH(-1.0f),
         0.0005f
-    ));
+    )));
 
     const f32 infinity = Limit<f32>::s_Infinity;
-    NWB_MATH_TEST_CHECK(context, NearlyEqual4(
+    EXPECT_TRUE((NearlyEqual4(
         VectorTanH(VectorSet(50.0f, -50.0f, infinity, -infinity)),
         1.0f,
         -1.0f,
         1.0f,
         -1.0f
-    ));
+    )));
 
     const SIMDVector signedZeroTanH = VectorTanH(VectorSet(-0.0f, 0.0f, -0.0f, 0.0f));
-    NWB_MATH_TEST_CHECK(context, SignBit(VectorGetX(signedZeroTanH)));
-    NWB_MATH_TEST_CHECK(context, !SignBit(VectorGetY(signedZeroTanH)));
+    EXPECT_TRUE((SignBit(VectorGetX(signedZeroTanH))));
+    EXPECT_TRUE((!SignBit(VectorGetY(signedZeroTanH))));
 }
 
-static void TestRefractCriticalAngle(TestContext& context){
+static void TestRefractCriticalAngle(){
     const SIMDVector normal = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     const SIMDVector criticalIncident = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector totalInternalIncident = VectorSet(0.866025404f, -0.5f, 0.0f, 0.0f);
 
-    NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector2Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector3Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector4Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector3Refract(totalInternalIncident, normal, 2.0f), 0.0f, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE((NearlyEqual4(Vector2Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f)));
+    EXPECT_TRUE((NearlyEqual4(Vector3Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f)));
+    EXPECT_TRUE((NearlyEqual4(Vector4Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f)));
+    EXPECT_TRUE((NearlyEqual4(Vector3Refract(totalInternalIncident, normal, 2.0f), 0.0f, 0.0f, 0.0f, 0.0f)));
 }
 
-static void TestNormalizeOrHelpers(TestContext& context){
+static void TestNormalizeOrHelpers(){
     const SIMDVector fallback = VectorSet(0.0f, 1.0f, 0.0f, 1.0f);
     const f32 infinity = Limit<f32>::s_Infinity;
 
-    NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector2NormalizeOr(VectorSet(3.0f, 4.0f, 7.0f, 9.0f), fallback, 0.0f), 0.6f, 0.8f, 0.0f, 0.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual3(Vector3NormalizeOr(VectorSet(0.0f, 0.0f, 0.0f, 5.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector4NormalizeOr(VectorSet(infinity, 0.0f, 0.0f, 0.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f, 1.0f));
+    EXPECT_TRUE((NearlyEqual4(Vector2NormalizeOr(VectorSet(3.0f, 4.0f, 7.0f, 9.0f), fallback, 0.0f), 0.6f, 0.8f, 0.0f, 0.0f)));
+    EXPECT_TRUE((NearlyEqual3(Vector3NormalizeOr(VectorSet(0.0f, 0.0f, 0.0f, 5.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f)));
+    EXPECT_TRUE((NearlyEqual4(Vector4NormalizeOr(VectorSet(infinity, 0.0f, 0.0f, 0.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f, 1.0f)));
 }
 
-static void TestSdfHelpers(TestContext& context){
+static void TestSdfHelpers(){
     const SIMDVector boxHalfExtents = VectorSet(1.0f, 1.0f, 1.0f, 0.0f);
 
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetX(SdfTests::Box(VectorSet(2.0f, 0.5f, -0.25f, 0.0f), boxHalfExtents)), 1.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetX(SdfTests::Box(VectorSet(0.25f, 0.5f, 0.1f, 0.0f), boxHalfExtents)), -0.5f));
+    EXPECT_TRUE((NearlyEqual(VectorGetX(SdfTests::Box(VectorSet(2.0f, 0.5f, -0.25f, 0.0f), boxHalfExtents)), 1.0f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetX(SdfTests::Box(VectorSet(0.25f, 0.5f, 0.1f, 0.0f), boxHalfExtents)), -0.5f)));
 
-    NWB_MATH_TEST_CHECK(context, NearlyEqual3(
+    EXPECT_TRUE((NearlyEqual3(
         SdfTests::BoxNormal(VectorSet(2.0f, 2.0f, 1.0f, 0.0f), boxHalfExtents, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.000001f),
         0.70710677f,
         0.70710677f,
         0.0f,
         0.00001f
-    ));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual3(
+    )));
+    EXPECT_TRUE((NearlyEqual3(
         SdfTests::BoxNormal(VectorSet(0.2f, -0.9f, 0.1f, 0.0f), boxHalfExtents, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.000001f),
         0.0f,
         -1.0f,
         0.0f
-    ));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual3(
+    )));
+    EXPECT_TRUE((NearlyEqual3(
         SdfTests::BoxNormal(VectorSet(0.9f, 0.9f, 0.2f, 0.0f), boxHalfExtents, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.000001f),
         1.0f,
         0.0f,
         0.0f
-    ));
+    )));
 
     const SIMDVector capsuleRadiusHalfHeight = VectorSet(0.5f, 1.5f, 0.0f, 0.0f);
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetX(SdfTests::CapsuleY(VectorSet(0.0f, 2.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight)), 0.5f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetX(SdfTests::CapsuleY(VectorSet(0.25f, 0.0f, 0.0f, 0.0f), capsuleRadiusHalfHeight)), -0.25f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual3(SdfTests::CapsuleYNormal(VectorSet(0.0f, 2.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight, 0.000001f), 0.0f, 1.0f, 0.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual3(SdfTests::CapsuleYNormal(VectorSet(1.0f, 0.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight, 0.000001f), 1.0f, 0.0f, 0.0f));
+    EXPECT_TRUE((NearlyEqual(VectorGetX(SdfTests::CapsuleY(VectorSet(0.0f, 2.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight)), 0.5f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetX(SdfTests::CapsuleY(VectorSet(0.25f, 0.0f, 0.0f, 0.0f), capsuleRadiusHalfHeight)), -0.25f)));
+    EXPECT_TRUE((NearlyEqual3(SdfTests::CapsuleYNormal(VectorSet(0.0f, 2.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight, 0.000001f), 0.0f, 1.0f, 0.0f)));
+    EXPECT_TRUE((NearlyEqual3(SdfTests::CapsuleYNormal(VectorSet(1.0f, 0.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight, 0.000001f), 1.0f, 0.0f, 0.0f)));
 }
 
-static void TestHalfFloatScalarConversion(TestContext& context){
-    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(0.0f) == static_cast<Half>(0x0000u));
-    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(-0.0f) == static_cast<Half>(0x8000u));
-    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(1.0f) == static_cast<Half>(0x3c00u));
-    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(-2.0f) == static_cast<Half>(0xc000u));
-    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(65504.0f) == static_cast<Half>(0x7bffu));
-    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(Limit<f32>::s_Infinity) == static_cast<Half>(0x7c00u));
-    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(-Limit<f32>::s_Infinity) == static_cast<Half>(0xfc00u));
+static void TestHalfFloatScalarConversion(){
+    EXPECT_TRUE((ConvertFloatToHalf(0.0f) == static_cast<Half>(0x0000u)));
+    EXPECT_TRUE((ConvertFloatToHalf(-0.0f) == static_cast<Half>(0x8000u)));
+    EXPECT_TRUE((ConvertFloatToHalf(1.0f) == static_cast<Half>(0x3c00u)));
+    EXPECT_TRUE((ConvertFloatToHalf(-2.0f) == static_cast<Half>(0xc000u)));
+    EXPECT_TRUE((ConvertFloatToHalf(65504.0f) == static_cast<Half>(0x7bffu)));
+    EXPECT_TRUE((ConvertFloatToHalf(Limit<f32>::s_Infinity) == static_cast<Half>(0x7c00u)));
+    EXPECT_TRUE((ConvertFloatToHalf(-Limit<f32>::s_Infinity) == static_cast<Half>(0xfc00u)));
 
     const Half quietNaN = ConvertFloatToHalf(Limit<f32>::s_QuietNaN);
-    NWB_MATH_TEST_CHECK(context, (quietNaN & static_cast<Half>(0x7c00u)) == static_cast<Half>(0x7c00u));
-    NWB_MATH_TEST_CHECK(context, (quietNaN & static_cast<Half>(0x03ffu)) != static_cast<Half>(0u));
+    EXPECT_TRUE(((quietNaN & static_cast<Half>(0x7c00u)) == static_cast<Half>(0x7c00u)));
+    EXPECT_TRUE(((quietNaN & static_cast<Half>(0x03ffu)) != static_cast<Half>(0u)));
 
-    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(5.9604644775390625e-8f) == static_cast<Half>(0x0001u));
-    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(6.103515625e-5f) == static_cast<Half>(0x0400u));
-    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(1.00048828125f) == static_cast<Half>(0x3c00u));
+    EXPECT_TRUE((ConvertFloatToHalf(5.9604644775390625e-8f) == static_cast<Half>(0x0001u)));
+    EXPECT_TRUE((ConvertFloatToHalf(6.103515625e-5f) == static_cast<Half>(0x0400u)));
+    EXPECT_TRUE((ConvertFloatToHalf(1.00048828125f) == static_cast<Half>(0x3c00u)));
 
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x0000u)), 0.0f));
-    NWB_MATH_TEST_CHECK(context, SignBit(ConvertHalfToFloat(static_cast<Half>(0x8000u))));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x3c00u)), 1.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0xc000u)), -2.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x7bffu)), 65504.0f));
-    NWB_MATH_TEST_CHECK(context, ConvertHalfToFloat(static_cast<Half>(0x7c00u)) == Limit<f32>::s_Infinity);
-    NWB_MATH_TEST_CHECK(context, ConvertHalfToFloat(static_cast<Half>(0xfc00u)) == -Limit<f32>::s_Infinity);
-    NWB_MATH_TEST_CHECK(context, IsNaN(ConvertHalfToFloat(static_cast<Half>(0x7e00u))));
+    EXPECT_TRUE((NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x0000u)), 0.0f)));
+    EXPECT_TRUE((SignBit(ConvertHalfToFloat(static_cast<Half>(0x8000u)))));
+    EXPECT_TRUE((NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x3c00u)), 1.0f)));
+    EXPECT_TRUE((NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0xc000u)), -2.0f)));
+    EXPECT_TRUE((NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x7bffu)), 65504.0f)));
+    EXPECT_TRUE((ConvertHalfToFloat(static_cast<Half>(0x7c00u)) == Limit<f32>::s_Infinity));
+    EXPECT_TRUE((ConvertHalfToFloat(static_cast<Half>(0xfc00u)) == -Limit<f32>::s_Infinity));
+    EXPECT_TRUE((IsNaN(ConvertHalfToFloat(static_cast<Half>(0x7e00u)))));
 }
 
-static void TestHalfFloatBufferConversion(TestContext& context){
+static void TestHalfFloatBufferConversion(){
     f32 source[6] = {
         0.0f,
         -1.5f,
@@ -240,48 +234,48 @@ static void TestHalfFloatBufferConversion(TestContext& context){
     Half packed[6] = {};
     f32 unpacked[6] = {};
 
-    NWB_MATH_TEST_CHECK(context, ConvertFloatBufferToHalf(packed, source, 6u) == packed);
-    NWB_MATH_TEST_CHECK(context, packed[0] == static_cast<Half>(0x0000u));
-    NWB_MATH_TEST_CHECK(context, packed[1] == static_cast<Half>(0xbe00u));
-    NWB_MATH_TEST_CHECK(context, packed[2] == static_cast<Half>(0x3c00u));
-    NWB_MATH_TEST_CHECK(context, packed[3] == static_cast<Half>(0x7bffu));
-    NWB_MATH_TEST_CHECK(context, packed[4] == static_cast<Half>(0x0001u));
-    NWB_MATH_TEST_CHECK(context, packed[5] == static_cast<Half>(0x7c00u));
+    EXPECT_TRUE((ConvertFloatBufferToHalf(packed, source, 6u) == packed));
+    EXPECT_TRUE((packed[0] == static_cast<Half>(0x0000u)));
+    EXPECT_TRUE((packed[1] == static_cast<Half>(0xbe00u)));
+    EXPECT_TRUE((packed[2] == static_cast<Half>(0x3c00u)));
+    EXPECT_TRUE((packed[3] == static_cast<Half>(0x7bffu)));
+    EXPECT_TRUE((packed[4] == static_cast<Half>(0x0001u)));
+    EXPECT_TRUE((packed[5] == static_cast<Half>(0x7c00u)));
 
-    NWB_MATH_TEST_CHECK(context, ConvertHalfBufferToFloat(unpacked, packed, 6u) == unpacked);
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(unpacked[0], 0.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(unpacked[1], -1.5f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(unpacked[2], 1.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(unpacked[3], 65504.0f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(unpacked[4], 5.9604644775390625e-8f));
-    NWB_MATH_TEST_CHECK(context, unpacked[5] == Limit<f32>::s_Infinity);
+    EXPECT_TRUE((ConvertHalfBufferToFloat(unpacked, packed, 6u) == unpacked));
+    EXPECT_TRUE((NearlyEqual(unpacked[0], 0.0f)));
+    EXPECT_TRUE((NearlyEqual(unpacked[1], -1.5f)));
+    EXPECT_TRUE((NearlyEqual(unpacked[2], 1.0f)));
+    EXPECT_TRUE((NearlyEqual(unpacked[3], 65504.0f)));
+    EXPECT_TRUE((NearlyEqual(unpacked[4], 5.9604644775390625e-8f)));
+    EXPECT_TRUE((unpacked[5] == Limit<f32>::s_Infinity));
 }
 
-static void TestFloatIntStorageConversion(TestContext& context){
+static void TestFloatIntStorageConversion(){
     const SIMDVector xyz = VectorSet(1.25f, -2.5f, 3.75f, 99.0f);
 
     Float3Int signedValue = {};
     StoreFloatInt(xyz, -17, &signedValue);
-    NWB_MATH_TEST_CHECK(context, signedValue == Float3Int(1.25f, -2.5f, 3.75f, -17));
+    EXPECT_TRUE((signedValue == Float3Int(1.25f, -2.5f, 3.75f, -17)));
 
     const SIMDVector loadedSigned = LoadFloatInt(signedValue);
-    NWB_MATH_TEST_CHECK(context, NearlyEqual3(loadedSigned, 1.25f, -2.5f, 3.75f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetW(loadedSigned), 0.0f));
+    EXPECT_TRUE((NearlyEqual3(loadedSigned, 1.25f, -2.5f, 3.75f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetW(loadedSigned), 0.0f)));
 
     Float3UInt unsignedValue = {};
     StoreFloatInt(xyz, 42u, &unsignedValue);
-    NWB_MATH_TEST_CHECK(context, unsignedValue == Float3UInt(1.25f, -2.5f, 3.75f, 42u));
+    EXPECT_TRUE((unsignedValue == Float3UInt(1.25f, -2.5f, 3.75f, 42u)));
 
     const SIMDVector loadedUnsigned = LoadFloatInt(unsignedValue);
-    NWB_MATH_TEST_CHECK(context, NearlyEqual3(loadedUnsigned, 1.25f, -2.5f, 3.75f));
-    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetW(loadedUnsigned), 0.0f));
+    EXPECT_TRUE((NearlyEqual3(loadedUnsigned, 1.25f, -2.5f, 3.75f)));
+    EXPECT_TRUE((NearlyEqual(VectorGetW(loadedUnsigned), 0.0f)));
 }
 
 template<typename Value>
-static void CheckStorageHashMatchesEquality(TestContext& context, const Value& lhs, const Value& same, const Value& different){
-    NWB_MATH_TEST_CHECK(context, lhs == same);
-    NWB_MATH_TEST_CHECK(context, lhs != different);
-    NWB_MATH_TEST_CHECK(context, Hasher<Value>{}(lhs) == Hasher<Value>{}(same));
+static void CheckStorageHashMatchesEquality(const Value& lhs, const Value& same, const Value& different){
+    EXPECT_TRUE((lhs == same));
+    EXPECT_TRUE((lhs != different));
+    EXPECT_TRUE((Hasher<Value>{}(lhs) == Hasher<Value>{}(same)));
 }
 
 static Int2U MakeInt2Value(const i32 x, const i32 y){
@@ -350,30 +344,30 @@ static UInt4U MakeUInt4UValue(const u32 x, const u32 y, const u32 z, const u32 w
     return value;
 }
 
-static void TestMathStorageHashAndEquality(TestContext& context){
-    NWB_MATH_TEST_CHECK(context, FloatHashBits(-0.0f) == FloatHashBits(0.0f));
+static void TestMathStorageHashAndEquality(){
+    EXPECT_TRUE((FloatHashBits(-0.0f) == FloatHashBits(0.0f)));
 
     const Half h1 = static_cast<Half>(1u);
     const Half h2 = static_cast<Half>(2u);
     const Half h3 = static_cast<Half>(3u);
     const Half h4 = static_cast<Half>(4u);
     const Half h5 = static_cast<Half>(5u);
-    CheckStorageHashMatchesEquality(context, Half2U(h1, h2), Half2U(h1, h2), Half2U(h1, h3));
-    CheckStorageHashMatchesEquality(context, Half4U(h1, h2, h3, h4), Half4U(h1, h2, h3, h4), Half4U(h1, h2, h3, h5));
-    CheckStorageHashMatchesEquality(context, Float4(-0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 4.0f));
-    CheckStorageHashMatchesEquality(context, MakeInt4Value(-1, 2, -3, 4), MakeInt4Value(-1, 2, -3, 4), MakeInt4Value(-1, 2, -3, 5));
-    CheckStorageHashMatchesEquality(context, MakeUInt4Value(1u, 2u, 3u, 4u), MakeUInt4Value(1u, 2u, 3u, 4u), MakeUInt4Value(1u, 2u, 3u, 5u));
-    CheckStorageHashMatchesEquality(context, Float3Int(-0.0f, 1.0f, 2.0f, -3), Float3Int(0.0f, 1.0f, 2.0f, -3), Float3Int(0.0f, 1.0f, 2.0f, -4));
-    CheckStorageHashMatchesEquality(context, Float3UInt(-0.0f, 1.0f, 2.0f, 3u), Float3UInt(0.0f, 1.0f, 2.0f, 3u), Float3UInt(0.0f, 1.0f, 2.0f, 4u));
-    CheckStorageHashMatchesEquality(context, Float2U(-0.0f, 1.0f), Float2U(0.0f, 1.0f), Float2U(0.0f, 2.0f));
-    CheckStorageHashMatchesEquality(context, Float3U(-0.0f, 1.0f, 2.0f), Float3U(0.0f, 1.0f, 2.0f), Float3U(0.0f, 1.0f, 3.0f));
-    CheckStorageHashMatchesEquality(context, Float4U(-0.0f, 1.0f, 2.0f, 3.0f), Float4U(0.0f, 1.0f, 2.0f, 3.0f), Float4U(0.0f, 1.0f, 2.0f, 4.0f));
-    CheckStorageHashMatchesEquality(context, MakeInt2Value(-1, 2), MakeInt2Value(-1, 2), MakeInt2Value(-1, 3));
-    CheckStorageHashMatchesEquality(context, MakeInt3Value(-1, 2, -3), MakeInt3Value(-1, 2, -3), MakeInt3Value(-1, 2, -4));
-    CheckStorageHashMatchesEquality(context, MakeInt4UValue(-1, 2, -3, 4), MakeInt4UValue(-1, 2, -3, 4), MakeInt4UValue(-1, 2, -3, 5));
-    CheckStorageHashMatchesEquality(context, MakeUInt2Value(1u, 2u), MakeUInt2Value(1u, 2u), MakeUInt2Value(1u, 3u));
-    CheckStorageHashMatchesEquality(context, MakeUInt3Value(1u, 2u, 3u), MakeUInt3Value(1u, 2u, 3u), MakeUInt3Value(1u, 2u, 4u));
-    CheckStorageHashMatchesEquality(context, MakeUInt4UValue(1u, 2u, 3u, 4u), MakeUInt4UValue(1u, 2u, 3u, 4u), MakeUInt4UValue(1u, 2u, 3u, 5u));
+    CheckStorageHashMatchesEquality(Half2U(h1, h2), Half2U(h1, h2), Half2U(h1, h3));
+    CheckStorageHashMatchesEquality(Half4U(h1, h2, h3, h4), Half4U(h1, h2, h3, h4), Half4U(h1, h2, h3, h5));
+    CheckStorageHashMatchesEquality(Float4(-0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 4.0f));
+    CheckStorageHashMatchesEquality(MakeInt4Value(-1, 2, -3, 4), MakeInt4Value(-1, 2, -3, 4), MakeInt4Value(-1, 2, -3, 5));
+    CheckStorageHashMatchesEquality(MakeUInt4Value(1u, 2u, 3u, 4u), MakeUInt4Value(1u, 2u, 3u, 4u), MakeUInt4Value(1u, 2u, 3u, 5u));
+    CheckStorageHashMatchesEquality(Float3Int(-0.0f, 1.0f, 2.0f, -3), Float3Int(0.0f, 1.0f, 2.0f, -3), Float3Int(0.0f, 1.0f, 2.0f, -4));
+    CheckStorageHashMatchesEquality(Float3UInt(-0.0f, 1.0f, 2.0f, 3u), Float3UInt(0.0f, 1.0f, 2.0f, 3u), Float3UInt(0.0f, 1.0f, 2.0f, 4u));
+    CheckStorageHashMatchesEquality(Float2U(-0.0f, 1.0f), Float2U(0.0f, 1.0f), Float2U(0.0f, 2.0f));
+    CheckStorageHashMatchesEquality(Float3U(-0.0f, 1.0f, 2.0f), Float3U(0.0f, 1.0f, 2.0f), Float3U(0.0f, 1.0f, 3.0f));
+    CheckStorageHashMatchesEquality(Float4U(-0.0f, 1.0f, 2.0f, 3.0f), Float4U(0.0f, 1.0f, 2.0f, 3.0f), Float4U(0.0f, 1.0f, 2.0f, 4.0f));
+    CheckStorageHashMatchesEquality(MakeInt2Value(-1, 2), MakeInt2Value(-1, 2), MakeInt2Value(-1, 3));
+    CheckStorageHashMatchesEquality(MakeInt3Value(-1, 2, -3), MakeInt3Value(-1, 2, -3), MakeInt3Value(-1, 2, -4));
+    CheckStorageHashMatchesEquality(MakeInt4UValue(-1, 2, -3, 4), MakeInt4UValue(-1, 2, -3, 4), MakeInt4UValue(-1, 2, -3, 5));
+    CheckStorageHashMatchesEquality(MakeUInt2Value(1u, 2u), MakeUInt2Value(1u, 2u), MakeUInt2Value(1u, 3u));
+    CheckStorageHashMatchesEquality(MakeUInt3Value(1u, 2u, 3u), MakeUInt3Value(1u, 2u, 3u), MakeUInt3Value(1u, 2u, 4u));
+    CheckStorageHashMatchesEquality(MakeUInt4UValue(1u, 2u, 3u, 4u), MakeUInt4UValue(1u, 2u, 3u, 4u), MakeUInt4UValue(1u, 2u, 3u, 5u));
 
     Float33U float33 = {};
     Float34U float34u = {};
@@ -402,18 +396,15 @@ static void TestMathStorageHashAndEquality(TestContext& context){
     different34.raw[11u] = 13.0f;
     different44.raw[15u] = 17.0f;
 
-    CheckStorageHashMatchesEquality(context, float33, float33, different33);
-    CheckStorageHashMatchesEquality(context, float34u, float34u, different34u);
-    CheckStorageHashMatchesEquality(context, float44u, float44u, different44u);
-    CheckStorageHashMatchesEquality(context, float34, float34, different34);
-    CheckStorageHashMatchesEquality(context, float44, float44, different44);
+    CheckStorageHashMatchesEquality(float33, float33, different33);
+    CheckStorageHashMatchesEquality(float34u, float34u, different34u);
+    CheckStorageHashMatchesEquality(float44u, float44u, different44u);
+    CheckStorageHashMatchesEquality(float34, float34, different34);
+    CheckStorageHashMatchesEquality(float44, float44, different44);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#undef NWB_MATH_TEST_CHECK
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -426,63 +417,51 @@ static void TestMathStorageHashAndEquality(TestContext& context){
 
 
 TEST(Math, Vector2CrossOrientation){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestVector2CrossOrientation(nwbTestContext);
+    __hidden_tests::TestVector2CrossOrientation();
 }
 
 TEST(Math, Vector3CrossOrientation){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestVector3CrossOrientation(nwbTestContext);
+    __hidden_tests::TestVector3CrossOrientation();
 }
 
 TEST(Math, Vector3RotateQuarterTurn){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestVector3RotateQuarterTurn(nwbTestContext);
+    __hidden_tests::TestVector3RotateQuarterTurn();
 }
 
 TEST(Math, Vector4CrossBasisOrientation){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestVector4CrossBasisOrientation(nwbTestContext);
+    __hidden_tests::TestVector4CrossBasisOrientation();
 }
 
 TEST(Math, VectorNamedScalarFunctions){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestVectorNamedScalarFunctions(nwbTestContext);
+    __hidden_tests::TestVectorNamedScalarFunctions();
 }
 
 TEST(Math, RefractCriticalAngle){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestRefractCriticalAngle(nwbTestContext);
+    __hidden_tests::TestRefractCriticalAngle();
 }
 
 TEST(Math, NormalizeOrHelpers){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestNormalizeOrHelpers(nwbTestContext);
+    __hidden_tests::TestNormalizeOrHelpers();
 }
 
 TEST(Math, SdfHelpers){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestSdfHelpers(nwbTestContext);
+    __hidden_tests::TestSdfHelpers();
 }
 
 TEST(Math, HalfFloatScalarConversion){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestHalfFloatScalarConversion(nwbTestContext);
+    __hidden_tests::TestHalfFloatScalarConversion();
 }
 
 TEST(Math, HalfFloatBufferConversion){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestHalfFloatBufferConversion(nwbTestContext);
+    __hidden_tests::TestHalfFloatBufferConversion();
 }
 
 TEST(Math, FloatIntStorageConversion){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestFloatIntStorageConversion(nwbTestContext);
+    __hidden_tests::TestFloatIntStorageConversion();
 }
 
 TEST(Math, MathStorageHashAndEquality){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMathStorageHashAndEquality(nwbTestContext);
+    __hidden_tests::TestMathStorageHashAndEquality();
 }
 
 

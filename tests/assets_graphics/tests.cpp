@@ -47,16 +47,10 @@ namespace __hidden_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestContext = NWB::Tests::TestContext;
 using CapturingLogger = NWB::Tests::CapturingLogger;
 using NWB::Tests::MakeQuadTriangleIndices;
 using NWB::Tests::MakeTriangleIndices;
 using AString = NWB::Tests::TestAString;
-
-
-#define NWB_ASSETS_GRAPHICS_TEST_CHECK NWB_TEST_CHECK
 #define NWB_ASSETS_GRAPHICS_TEST_STRINGIFY_IMPL(Value) #Value
 #define NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(Value) NWB_ASSETS_GRAPHICS_TEST_STRINGIFY_IMPL(Value)
 
@@ -1364,7 +1358,6 @@ static bool CookMaterialBindMaterialIntegration(
 
 template<typename AssetCodecT>
 static bool LoadCookedAsset(
-    TestContext& context,
     TestArena& testArena,
     const Path& outputDirectory,
     const Name assetName,
@@ -1373,34 +1366,32 @@ static bool LoadCookedAsset(
 ){
     NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
     const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedVolume);
+    EXPECT_TRUE((loadedVolume));
     if(!loadedVolume)
         return false;
 
     if(expectedVolumeFileCount != 0u)
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.fileCount() == expectedVolumeFileCount);
+        EXPECT_TRUE((volumeSession.fileCount() == expectedVolumeFileCount));
 
     NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     const bool loadedBinary = volumeSession.loadData(assetName, binary);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedBinary);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
+    EXPECT_TRUE((loadedBinary));
+    EXPECT_TRUE((!binary.empty()));
     if(!loadedBinary || binary.empty())
         return false;
 
     AssetCodecT codec;
     const bool deserialized = codec.deserialize(testArena.arena, assetName, binary, outLoadedAsset);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, deserialized);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(outLoadedAsset));
+    EXPECT_TRUE((deserialized));
+    EXPECT_TRUE((static_cast<bool>(outLoadedAsset)));
     return deserialized && static_cast<bool>(outLoadedAsset);
 }
 
 static bool LoadCookedMinimalMesh(
-    TestContext& context,
     TestArena& testArena,
     const Path& outputDirectory,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
     return LoadCookedAsset<NWB::Impl::MeshAssetCodec>(
-        context,
         testArena,
         outputDirectory,
         Name("project/meshes/minimal_mesh"),
@@ -1409,13 +1400,11 @@ static bool LoadCookedMinimalMesh(
 }
 
 static bool LoadCookedMesh(
-    TestContext& context,
     TestArena& testArena,
     const Path& outputDirectory,
     const Name assetName,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
     return LoadCookedAsset<NWB::Impl::MeshAssetCodec>(
-        context,
         testArena,
         outputDirectory,
         assetName,
@@ -1424,14 +1413,12 @@ static bool LoadCookedMesh(
 }
 
 static bool LoadCookedMaterial(
-    TestContext& context,
     TestArena& testArena,
     const Path& outputDirectory,
     const Name assetName,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
 ){
     return LoadCookedAsset<NWB::Impl::MaterialAssetCodec>(
-        context,
         testArena,
         outputDirectory,
         assetName,
@@ -1441,26 +1428,25 @@ static bool LoadCookedMaterial(
 }
 
 static bool LoadCookedShaderArchiveRecords(
-    TestContext& context,
     TestArena& testArena,
     const Path& outputDirectory,
     NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& outRecords
 ){
     NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
     const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedVolume);
+    EXPECT_TRUE((loadedVolume));
     if(!loadedVolume)
         return false;
 
     NWB::Core::GraphicsBytes indexBinary(testArena.arena);
     const bool loadedIndex = volumeSession.loadData(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedIndex);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !indexBinary.empty());
+    EXPECT_TRUE((loadedIndex));
+    EXPECT_TRUE((!indexBinary.empty()));
     if(!loadedIndex || indexBinary.empty())
         return false;
 
     const bool deserialized = NWB::Core::ShaderArchive::deserializeIndex(indexBinary, outRecords);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, deserialized);
+    EXPECT_TRUE((deserialized));
     return deserialized;
 }
 
@@ -1500,203 +1486,163 @@ static bool FindShaderArchiveSourceChecksum(
 #include "mesh_cooker_tests.inl"
 
 TEST(AssetsGraphics, VolumeSessionAcceptsScratchBytes){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestVolumeSessionAcceptsScratchBytes(nwbTestContext);
+    __hidden_tests::TestVolumeSessionAcceptsScratchBytes();
 }
 
 TEST(AssetsGraphics, MeshCodecRoundTrip){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshCodecRoundTrip(nwbTestContext);
+    __hidden_tests::TestMeshCodecRoundTrip();
 }
 
 TEST(AssetsGraphics, MeshletRefEncodingWidthRules){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshletRefEncodingWidthRules(nwbTestContext);
+    __hidden_tests::TestMeshletRefEncodingWidthRules();
 }
 
 TEST(AssetsGraphics, MeshletRefEncodingRoundTrip){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshletRefEncodingRoundTrip(nwbTestContext);
+    __hidden_tests::TestMeshletRefEncodingRoundTrip();
 }
 
 TEST(AssetsGraphics, MeshletConeOctPackingRoundTrip){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshletConeOctPackingRoundTrip(nwbTestContext);
+    __hidden_tests::TestMeshletConeOctPackingRoundTrip();
 }
 
 TEST(AssetsGraphics, ShaderArchiveVariantLookupIsExact){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestShaderArchiveVariantLookupIsExact(nwbTestContext);
+    __hidden_tests::TestShaderArchiveVariantLookupIsExact();
 }
 
 TEST(AssetsGraphics, SpirvEntryPointLookup){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestSpirvEntryPointLookup(nwbTestContext);
+    __hidden_tests::TestSpirvEntryPointLookup();
 }
 
 TEST(AssetsGraphics, ShaderMetadataRejectsDefaultVariantAlias){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestShaderMetadataRejectsDefaultVariantAlias(nwbTestContext);
+    __hidden_tests::TestShaderMetadataRejectsDefaultVariantAlias();
 }
 
 TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestShaderDependencyChecksumAliasesGeneratedRoot(nwbTestContext);
+    __hidden_tests::TestShaderDependencyChecksumAliasesGeneratedRoot();
 }
 
 TEST(AssetsGraphics, ShaderCookWithoutMaterialBindIncludes){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestShaderCookWithoutMaterialBindIncludes(nwbTestContext);
+    __hidden_tests::TestShaderCookWithoutMaterialBindIncludes();
 }
 
 TEST(AssetsGraphics, ShaderCookIgnoresInvalidBytecodeCache){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestShaderCookIgnoresInvalidBytecodeCache(nwbTestContext);
+    __hidden_tests::TestShaderCookIgnoresInvalidBytecodeCache();
 }
 
 TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMaterialMetadataInterfaceAndBlockParameters(nwbTestContext);
+    __hidden_tests::TestMaterialMetadataInterfaceAndBlockParameters();
 }
 
 TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMaterialCodecTypedLayoutBoundary(nwbTestContext);
+    __hidden_tests::TestMaterialCodecTypedLayoutBoundary();
 }
 
 TEST(AssetsGraphics, MaterialBindSchemaValidation){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMaterialBindSchemaValidation(nwbTestContext);
+    __hidden_tests::TestMaterialBindSchemaValidation();
 }
 
 TEST(AssetsGraphics, MaterialBindHalfTypedLayoutValues){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMaterialBindHalfTypedLayoutValues(nwbTestContext);
+    __hidden_tests::TestMaterialBindHalfTypedLayoutValues();
 }
 
 TEST(AssetsGraphics, MaterialBindCompactIntegerTypedLayoutValues){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMaterialBindCompactIntegerTypedLayoutValues(nwbTestContext);
+    __hidden_tests::TestMaterialBindCompactIntegerTypedLayoutValues();
 }
 
 TEST(AssetsGraphics, MaterialBindGeneratedSlangText){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMaterialBindGeneratedSlangText(nwbTestContext);
+    __hidden_tests::TestMaterialBindGeneratedSlangText();
 }
 
 TEST(AssetsGraphics, MaterialBindCookIntegration){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMaterialBindCookIntegration(nwbTestContext);
+    __hidden_tests::TestMaterialBindCookIntegration();
 }
 
 TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMaterialRejectsMissingInterfaceCookIntegration(nwbTestContext);
+    __hidden_tests::TestMaterialRejectsMissingInterfaceCookIntegration();
 }
 
 TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMaterialBindDependencyInvalidation(nwbTestContext);
+    __hidden_tests::TestMaterialBindDependencyInvalidation();
 }
 
 TEST(AssetsGraphics, ProjectCookEntryAutoRegistration){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestProjectCookEntryAutoRegistration(nwbTestContext);
+    __hidden_tests::TestProjectCookEntryAutoRegistration();
 }
 
 TEST(AssetsGraphics, ProjectCookEntryDocumentCook){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestProjectCookEntryDocumentCook(nwbTestContext);
+    __hidden_tests::TestProjectCookEntryDocumentCook();
 }
 
 TEST(AssetsGraphics, ProjectCookEntryAssetBunchCook){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestProjectCookEntryAssetBunchCook(nwbTestContext);
+    __hidden_tests::TestProjectCookEntryAssetBunchCook();
 }
 
 TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestModelBunchLocalReferencesAndWrapperExpansion(nwbTestContext);
+    __hidden_tests::TestModelBunchLocalReferencesAndWrapperExpansion();
 }
 
 TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestModelBunchStaticMeshAttachmentToNamedJoint(nwbTestContext);
+    __hidden_tests::TestModelBunchStaticMeshAttachmentToNamedJoint();
 }
 
 TEST(AssetsGraphics, ModelBunchRejectsDuplicateLocalReference){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestModelBunchRejectsDuplicateLocalReference(nwbTestContext);
+    __hidden_tests::TestModelBunchRejectsDuplicateLocalReference();
 }
 
 TEST(AssetsGraphics, ModelBunchRejectsMissingLocalReference){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestModelBunchRejectsMissingLocalReference(nwbTestContext);
+    __hidden_tests::TestModelBunchRejectsMissingLocalReference();
 }
 
 TEST(AssetsGraphics, MeshCookerTypedStreams){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshCookerTypedStreams(nwbTestContext);
+    __hidden_tests::TestMeshCookerTypedStreams();
 }
 
 TEST(AssetsGraphics, MeshCookerDefaultColors){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshCookerDefaultColors(nwbTestContext);
+    __hidden_tests::TestMeshCookerDefaultColors();
 }
 
 TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshAcceptanceHardEdgeCubeZippedRefs(nwbTestContext);
+    __hidden_tests::TestMeshAcceptanceHardEdgeCubeZippedRefs();
 }
 
 TEST(AssetsGraphics, MeshAcceptanceSphereSmooth){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshAcceptanceSphereSmooth(nwbTestContext);
+    __hidden_tests::TestMeshAcceptanceSphereSmooth();
 }
 
 TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshAcceptanceUvSeamQuad(nwbTestContext);
+    __hidden_tests::TestMeshAcceptanceUvSeamQuad();
 }
 
 TEST(AssetsGraphics, MeshAcceptanceMirroredUvQuad){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshAcceptanceMirroredUvQuad(nwbTestContext);
+    __hidden_tests::TestMeshAcceptanceMirroredUvQuad();
 }
 
 TEST(AssetsGraphics, MeshAcceptanceTwoSidedPlane){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshAcceptanceTwoSidedPlane(nwbTestContext);
+    __hidden_tests::TestMeshAcceptanceTwoSidedPlane();
 }
 
 TEST(AssetsGraphics, MeshAcceptanceLargeManyMeshlets){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshAcceptanceLargeManyMeshlets(nwbTestContext);
+    __hidden_tests::TestMeshAcceptanceLargeManyMeshlets();
 }
 
 TEST(AssetsGraphics, MeshAcceptanceQualityBuilderChecks){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshAcceptanceQualityBuilderChecks(nwbTestContext);
+    __hidden_tests::TestMeshAcceptanceQualityBuilderChecks();
 }
 
 TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMaterialBindDiscoveryValidation(nwbTestContext);
+    __hidden_tests::TestMaterialBindDiscoveryValidation();
 }
 
 TEST(AssetsGraphics, MeshCookerValidationFailures){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshCookerValidationFailures(nwbTestContext);
+    __hidden_tests::TestMeshCookerValidationFailures();
 }
 
 TEST(AssetsGraphics, MeshClassPolicyHelpers){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMeshClassPolicyHelpers(nwbTestContext);
+    __hidden_tests::TestMeshClassPolicyHelpers();
 }
 
 TEST(AssetsGraphics, FormatBlockDimensions){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestFormatBlockDimensions(nwbTestContext);
+    __hidden_tests::TestFormatBlockDimensions();
 }
 
 

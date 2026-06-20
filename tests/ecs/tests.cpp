@@ -21,12 +21,6 @@ namespace __hidden_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using TestContext = NWB::Tests::TestContext;
-
-
-#define NWB_ECS_TEST_CHECK NWB_TEST_CHECK
-
-
 using TestWorld = NWB::Tests::EcsTestWorld;
 
 
@@ -108,7 +102,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestComponentStorageAndView(TestContext& context){
+static void TestComponentStorageAndView(){
     TestWorld testWorld;
 
     auto entity = testWorld.world.createEntity();
@@ -122,34 +116,34 @@ static void TestComponentStorageAndView(TestContext& context){
     velocity.x = 6;
     velocity.y = 8;
 
-    NWB_ECS_TEST_CHECK(context, entity.alive());
-    NWB_ECS_TEST_CHECK(context, testWorld.world.entityCount() == 1);
-    NWB_ECS_TEST_CHECK(context, entity.hasComponent<PositionComponent>());
-    NWB_ECS_TEST_CHECK(context, entity.hasComponent<VelocityComponent>());
-    NWB_ECS_TEST_CHECK(context, entity.hasComponent<OverAlignedComponent>());
-    NWB_ECS_TEST_CHECK(context, testWorld.world.tryGetComponent<PositionComponent>(entityId) == &position);
-    NWB_ECS_TEST_CHECK(context, testWorld.world.tryGetComponent<VelocityComponent>(entityId) == &velocity);
-    NWB_ECS_TEST_CHECK(context, (reinterpret_cast<usize>(&aligned) % alignof(OverAlignedComponent)) == 0);
+    EXPECT_TRUE((entity.alive()));
+    EXPECT_TRUE((testWorld.world.entityCount() == 1));
+    EXPECT_TRUE((entity.hasComponent<PositionComponent>()));
+    EXPECT_TRUE((entity.hasComponent<VelocityComponent>()));
+    EXPECT_TRUE((entity.hasComponent<OverAlignedComponent>()));
+    EXPECT_TRUE((testWorld.world.tryGetComponent<PositionComponent>(entityId) == &position));
+    EXPECT_TRUE((testWorld.world.tryGetComponent<VelocityComponent>(entityId) == &velocity));
+    EXPECT_TRUE(((reinterpret_cast<usize>(&aligned) % alignof(OverAlignedComponent)) == 0));
 
     usize viewCount = 0;
     testWorld.world.view<PositionComponent, VelocityComponent>().each(
-        [&context, &viewCount, entityId](
+        [&viewCount, entityId](
             NWB::Core::ECS::EntityID viewEntityId,
             PositionComponent& viewPosition,
             VelocityComponent& viewVelocity
         ){
             ++viewCount;
-            NWB_ECS_TEST_CHECK(context, viewEntityId == entityId);
-            NWB_ECS_TEST_CHECK(context, viewPosition.x == 2);
-            NWB_ECS_TEST_CHECK(context, viewPosition.y == 4);
-            NWB_ECS_TEST_CHECK(context, viewVelocity.x == 6);
-            NWB_ECS_TEST_CHECK(context, viewVelocity.y == 8);
+            EXPECT_TRUE((viewEntityId == entityId));
+            EXPECT_TRUE((viewPosition.x == 2));
+            EXPECT_TRUE((viewPosition.y == 4));
+            EXPECT_TRUE((viewVelocity.x == 6));
+            EXPECT_TRUE((viewVelocity.y == 8));
         }
     );
-    NWB_ECS_TEST_CHECK(context, viewCount == 1);
+    EXPECT_TRUE((viewCount == 1));
 }
 
-static void TestEmptyViewDoesNotAllocateComponentPools(TestContext& context){
+static void TestEmptyViewDoesNotAllocateComponentPools(){
     TestWorld testWorld;
 
     usize singleViewCount = 0;
@@ -166,80 +160,80 @@ static void TestEmptyViewDoesNotAllocateComponentPools(TestContext& context){
         }
     );
 
-    NWB_ECS_TEST_CHECK(context, singleViewCount == 0);
-    NWB_ECS_TEST_CHECK(context, multiViewCount == 0);
+    EXPECT_TRUE((singleViewCount == 0));
+    EXPECT_TRUE((multiViewCount == 0));
 }
 
-static void TestComponentLifetime(TestContext& context){
+static void TestComponentLifetime(){
     TestWorld testWorld;
 
     auto entity = testWorld.world.createEntity();
     const auto entityId = entity.id();
 
     entity.addComponent<PositionComponent>();
-    NWB_ECS_TEST_CHECK(context, entity.alive());
-    NWB_ECS_TEST_CHECK(context, entity.hasComponent<PositionComponent>());
-    NWB_ECS_TEST_CHECK(context, testWorld.world.tryGetComponent<PositionComponent>(entityId) != nullptr);
-    NWB_ECS_TEST_CHECK(context, testWorld.world.tryGetComponent<VelocityComponent>(entityId) == nullptr);
+    EXPECT_TRUE((entity.alive()));
+    EXPECT_TRUE((entity.hasComponent<PositionComponent>()));
+    EXPECT_TRUE((testWorld.world.tryGetComponent<PositionComponent>(entityId) != nullptr));
+    EXPECT_TRUE((testWorld.world.tryGetComponent<VelocityComponent>(entityId) == nullptr));
 
     entity.removeComponent<PositionComponent>();
-    NWB_ECS_TEST_CHECK(context, !entity.hasComponent<PositionComponent>());
-    NWB_ECS_TEST_CHECK(context, testWorld.world.tryGetComponent<PositionComponent>(entityId) == nullptr);
+    EXPECT_TRUE((!entity.hasComponent<PositionComponent>()));
+    EXPECT_TRUE((testWorld.world.tryGetComponent<PositionComponent>(entityId) == nullptr));
 
     entity.addComponent<VelocityComponent>();
-    NWB_ECS_TEST_CHECK(context, entity.hasComponent<VelocityComponent>());
+    EXPECT_TRUE((entity.hasComponent<VelocityComponent>()));
 
     entity.addComponent<OverAlignedComponent>();
-    NWB_ECS_TEST_CHECK(context, entity.hasComponent<OverAlignedComponent>());
+    EXPECT_TRUE((entity.hasComponent<OverAlignedComponent>()));
 
     entity.removeComponent<OverAlignedComponent>();
-    NWB_ECS_TEST_CHECK(context, !entity.hasComponent<OverAlignedComponent>());
+    EXPECT_TRUE((!entity.hasComponent<OverAlignedComponent>()));
 
     entity.destroy();
-    NWB_ECS_TEST_CHECK(context, !entity.alive());
-    NWB_ECS_TEST_CHECK(context, testWorld.world.entityCount() == 0);
+    EXPECT_TRUE((!entity.alive()));
+    EXPECT_TRUE((testWorld.world.entityCount() == 0));
 
     auto recycledEntity = testWorld.world.createEntity();
-    NWB_ECS_TEST_CHECK(context, recycledEntity.alive());
-    NWB_ECS_TEST_CHECK(context, recycledEntity.id() != entityId);
+    EXPECT_TRUE((recycledEntity.alive()));
+    EXPECT_TRUE((recycledEntity.id() != entityId));
 }
 
-static void TestComponentMutationVersion(TestContext& context){
+static void TestComponentMutationVersion(){
     TestWorld testWorld;
 
-    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<PositionComponent>() == 0u);
+    EXPECT_TRUE((testWorld.world.componentMutationVersion<PositionComponent>() == 0u));
 
     auto entity = testWorld.world.createEntity();
     entity.addComponent<PositionComponent>();
-    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<PositionComponent>() == 1u);
+    EXPECT_TRUE((testWorld.world.componentMutationVersion<PositionComponent>() == 1u));
 
     entity.addComponent<PositionComponent>();
-    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<PositionComponent>() == 1u);
+    EXPECT_TRUE((testWorld.world.componentMutationVersion<PositionComponent>() == 1u));
 
     entity.addComponent<VelocityComponent>();
-    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<PositionComponent>() == 1u);
-    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<VelocityComponent>() == 1u);
+    EXPECT_TRUE((testWorld.world.componentMutationVersion<PositionComponent>() == 1u));
+    EXPECT_TRUE((testWorld.world.componentMutationVersion<VelocityComponent>() == 1u));
 
     entity.removeComponent<VelocityComponent>();
-    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<VelocityComponent>() == 2u);
+    EXPECT_TRUE((testWorld.world.componentMutationVersion<VelocityComponent>() == 2u));
 
     entity.removeComponent<VelocityComponent>();
-    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<VelocityComponent>() == 2u);
+    EXPECT_TRUE((testWorld.world.componentMutationVersion<VelocityComponent>() == 2u));
 
     entity.destroy();
-    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<PositionComponent>() == 2u);
+    EXPECT_TRUE((testWorld.world.componentMutationVersion<PositionComponent>() == 2u));
 }
 
-static void TestMessageBus(TestContext& context){
+static void TestMessageBus(){
     TestWorld testWorld;
 
     TickMessage lvalueMessage{ 7u };
     testWorld.world.postMessage(lvalueMessage);
     testWorld.world.postMessage(TickMessage{ 11u });
-    NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<TickMessage>() == 0);
+    EXPECT_TRUE((testWorld.world.messageCount<TickMessage>() == 0));
 
     testWorld.world.swapMessageBuffers();
-    NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<TickMessage>() == 2);
+    EXPECT_TRUE((testWorld.world.messageCount<TickMessage>() == 2));
 
     u32 consumedCount = 0;
     u32 consumedValueSum = 0;
@@ -249,21 +243,21 @@ static void TestMessageBus(TestContext& context){
             consumedValueSum += message.value;
         }
     );
-    NWB_ECS_TEST_CHECK(context, consumedCount == 2);
-    NWB_ECS_TEST_CHECK(context, consumedValueSum == 18u);
+    EXPECT_TRUE((consumedCount == 2));
+    EXPECT_TRUE((consumedValueSum == 18u));
 
     testWorld.world.clearMessages();
-    NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<TickMessage>() == 0);
+    EXPECT_TRUE((testWorld.world.messageCount<TickMessage>() == 0));
 }
 
-static void TestMoveOnlyMessageBus(TestContext& context){
+static void TestMoveOnlyMessageBus(){
     TestWorld testWorld;
 
     testWorld.world.emplaceMessage<MoveOnlyMessage>(23u);
-    NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<MoveOnlyMessage>() == 0);
+    EXPECT_TRUE((testWorld.world.messageCount<MoveOnlyMessage>() == 0));
 
     testWorld.world.swapMessageBuffers();
-    NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<MoveOnlyMessage>() == 1);
+    EXPECT_TRUE((testWorld.world.messageCount<MoveOnlyMessage>() == 1));
 
     u32 consumedCount = 0u;
     u32 consumedValue = 0u;
@@ -273,19 +267,19 @@ static void TestMoveOnlyMessageBus(TestContext& context){
             consumedValue = message.value;
         }
     );
-    NWB_ECS_TEST_CHECK(context, consumedCount == 1u);
-    NWB_ECS_TEST_CHECK(context, consumedValue == 23u);
+    EXPECT_TRUE((consumedCount == 1u));
+    EXPECT_TRUE((consumedValue == 23u));
 
     testWorld.world.clearMessages();
-    NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<MoveOnlyMessage>() == 0);
+    EXPECT_TRUE((testWorld.world.messageCount<MoveOnlyMessage>() == 0));
 
     testWorld.world.emplaceMessage<MoveOnlyMessage>(41u);
     testWorld.world.clearMessages();
     testWorld.world.swapMessageBuffers();
-    NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<MoveOnlyMessage>() == 0);
+    EXPECT_TRUE((testWorld.world.messageCount<MoveOnlyMessage>() == 0));
 }
 
-static void TestSystemTick(TestContext& context){
+static void TestSystemTick(){
     TestWorld testWorld;
 
     auto entity = testWorld.world.createEntity();
@@ -293,19 +287,19 @@ static void TestSystemTick(TestContext& context){
     position.x = 4;
 
     auto& system = testWorld.world.addSystem<CountingSystem>();
-    NWB_ECS_TEST_CHECK(context, testWorld.world.getSystem<CountingSystem>() == &system);
+    EXPECT_TRUE((testWorld.world.getSystem<CountingSystem>() == &system));
 
     testWorld.world.tick(0.25f);
-    NWB_ECS_TEST_CHECK(context, system.prepares == 1);
-    NWB_ECS_TEST_CHECK(context, system.updates == 1);
-    NWB_ECS_TEST_CHECK(context, system.lastDelta == 0.25f);
-    NWB_ECS_TEST_CHECK(context, position.x == 5);
+    EXPECT_TRUE((system.prepares == 1));
+    EXPECT_TRUE((system.updates == 1));
+    EXPECT_TRUE((system.lastDelta == 0.25f));
+    EXPECT_TRUE((position.x == 5));
 
     testWorld.world.removeSystem(system);
-    NWB_ECS_TEST_CHECK(context, testWorld.world.getSystem<CountingSystem>() == nullptr);
+    EXPECT_TRUE((testWorld.world.getSystem<CountingSystem>() == nullptr));
 }
 
-static void TestDuplicateComponentAddIsStable(TestContext& context){
+static void TestDuplicateComponentAddIsStable(){
     TestWorld testWorld;
 
     auto entity = testWorld.world.createEntity();
@@ -314,9 +308,9 @@ static void TestDuplicateComponentAddIsStable(TestContext& context){
     first.y = 4;
 
     auto& second = entity.addComponent<PositionComponent>();
-    NWB_ECS_TEST_CHECK(context, &first == &second);
-    NWB_ECS_TEST_CHECK(context, second.x == 9);
-    NWB_ECS_TEST_CHECK(context, second.y == 4);
+    EXPECT_TRUE((&first == &second));
+    EXPECT_TRUE((second.x == 9));
+    EXPECT_TRUE((second.y == 4));
 
     usize viewCount = 0u;
     testWorld.world.view<PositionComponent>().each(
@@ -324,13 +318,13 @@ static void TestDuplicateComponentAddIsStable(TestContext& context){
             ++viewCount;
         }
     );
-    NWB_ECS_TEST_CHECK(context, viewCount == 1u);
+    EXPECT_TRUE((viewCount == 1u));
 
     entity.removeComponent<PositionComponent>();
-    NWB_ECS_TEST_CHECK(context, !entity.hasComponent<PositionComponent>());
+    EXPECT_TRUE((!entity.hasComponent<PositionComponent>()));
 }
 
-static void TestDuplicateSchedulerAddIsStable(TestContext& context){
+static void TestDuplicateSchedulerAddIsStable(){
     TestWorld testWorld;
 
     auto entity = testWorld.world.createEntity();
@@ -343,16 +337,13 @@ static void TestDuplicateSchedulerAddIsStable(TestContext& context){
     scheduler.addSystem(system);
     scheduler.execute(testWorld.world, 0.5f);
 
-    NWB_ECS_TEST_CHECK(context, system.prepares == 1u);
-    NWB_ECS_TEST_CHECK(context, system.updates == 1u);
-    NWB_ECS_TEST_CHECK(context, position.x == 2);
+    EXPECT_TRUE((system.prepares == 1u));
+    EXPECT_TRUE((system.updates == 1u));
+    EXPECT_TRUE((position.x == 2));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#undef NWB_ECS_TEST_CHECK
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -365,48 +356,39 @@ static void TestDuplicateSchedulerAddIsStable(TestContext& context){
 
 
 TEST(Ecs, ComponentStorageAndView){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestComponentStorageAndView(nwbTestContext);
+    __hidden_tests::TestComponentStorageAndView();
 }
 
 TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestEmptyViewDoesNotAllocateComponentPools(nwbTestContext);
+    __hidden_tests::TestEmptyViewDoesNotAllocateComponentPools();
 }
 
 TEST(Ecs, ComponentLifetime){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestComponentLifetime(nwbTestContext);
+    __hidden_tests::TestComponentLifetime();
 }
 
 TEST(Ecs, ComponentMutationVersion){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestComponentMutationVersion(nwbTestContext);
+    __hidden_tests::TestComponentMutationVersion();
 }
 
 TEST(Ecs, MessageBus){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMessageBus(nwbTestContext);
+    __hidden_tests::TestMessageBus();
 }
 
 TEST(Ecs, MoveOnlyMessageBus){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestMoveOnlyMessageBus(nwbTestContext);
+    __hidden_tests::TestMoveOnlyMessageBus();
 }
 
 TEST(Ecs, SystemTick){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestSystemTick(nwbTestContext);
+    __hidden_tests::TestSystemTick();
 }
 
 TEST(Ecs, DuplicateComponentAddIsStable){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestDuplicateComponentAddIsStable(nwbTestContext);
+    __hidden_tests::TestDuplicateComponentAddIsStable();
 }
 
 TEST(Ecs, DuplicateSchedulerAddIsStable){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestDuplicateSchedulerAddIsStable(nwbTestContext);
+    __hidden_tests::TestDuplicateSchedulerAddIsStable();
 }
 
 

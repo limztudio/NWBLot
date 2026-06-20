@@ -5,8 +5,6 @@
 #pragma once
 
 
-#include <gtest/gtest.h>
-
 #include <core/alloc/core.h>
 #include <core/alloc/general.h>
 
@@ -27,15 +25,6 @@ namespace Tests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct TestContext{
-};
-
-#define NWB_TEST_CHECK(context, expression) \
-    do { \
-        static_cast<void>(context); \
-        EXPECT_TRUE((expression)); \
-    } while(false)
 
 inline constexpr Name s_TestArena("tests/test_arena");
 inline constexpr Name s_DefaultTestArena("tests/default_test_arena");

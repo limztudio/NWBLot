@@ -26,16 +26,11 @@ namespace __hidden_crash_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestContext = NWB::Tests::TestContext;
 using TestArena = NWB::Tests::TestArena<struct CrashTestsTag>;
 using CrashTestPath = Path<NWB::Core::Alloc::GlobalArena>;
 using NWB::Tests::TextFileContains;
 using NWB::Tests::WaitForDirectory;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
-
-#define NWB_CRASH_TEST_CHECK NWB_TEST_CHECK
 
 inline constexpr Name s_InstallArena("tests/crash/install");
 inline constexpr Name s_SignalChildInstallArena("tests/crash/signal_child_install");
@@ -145,7 +140,7 @@ static void FillPackageRequest(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestWriteCrashPackageCreatesRequiredFiles(TestContext& context){
+static void TestWriteCrashPackageCreatesRequiredFiles(){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_package_write_test");
@@ -163,41 +158,41 @@ static void TestWriteCrashPackageCreatesRequiredFiles(TestContext& context){
     CopyFixedBuffer(request.triggerMessage, AStringView("required-files"));
     CopyFixedBuffer(request.triggerFile, AStringView("tests/crash/tests.cpp"));
 
-    NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::Detail::WriteCrashPackage(request));
+    EXPECT_TRUE((NWB::Core::Crash::Detail::WriteCrashPackage(request)));
 
     const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CrashId);
-    NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
-    NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_MetadataFileName));
-    NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_BreadcrumbsFileName));
-    NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_EmergencyFileName));
-    NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_ArtifactStrategyFileName));
-    NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_CpuContextFileName));
-    NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
-    NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName));
-    NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"required-files\"")));
+    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName)));
+    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_MetadataFileName)));
+    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_BreadcrumbsFileName)));
+    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_EmergencyFileName)));
+    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_ArtifactStrategyFileName)));
+    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_CpuContextFileName)));
+    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName)));
+    EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName)));
+    EXPECT_TRUE((TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"required-files\""))));
 
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestWriteCrashPackageFailsWhenSpoolPathIsFile(TestContext& context){
+static void TestWriteCrashPackageFailsWhenSpoolPathIsFile(){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_package_bad_spool_test");
     RemoveTestArtifacts(arena, s_Group);
 
     ErrorCode error;
-    NWB_CRASH_TEST_CHECK(context, EnsureDirectories(TestCaseDirectory(arena, s_Group), error));
+    EXPECT_TRUE((EnsureDirectories(TestCaseDirectory(arena, s_Group), error)));
     const CrashTestPath spoolPath = SpoolDirectory(arena, s_Group);
-    NWB_CRASH_TEST_CHECK(context, WriteTextFile(spoolPath, AStringView("not a directory")));
+    EXPECT_TRUE((WriteTextFile(spoolPath, AStringView("not a directory"))));
 
     NWB::Core::Crash::Detail::CrashRequest request;
     FillPackageRequest(arena, request, spoolPath, AStringView("crash-package-bad-spool"));
-    NWB_CRASH_TEST_CHECK(context, !NWB::Core::Crash::Detail::WriteCrashPackage(request));
+    EXPECT_TRUE((!NWB::Core::Crash::Detail::WriteCrashPackage(request)));
 
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestCrashBreadcrumbCapturedInRequest(TestContext& context){
+static void TestCrashBreadcrumbCapturedInRequest(){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_breadcrumb_persist_test");
@@ -205,7 +200,7 @@ static void TestCrashBreadcrumbCapturedInRequest(TestContext& context){
 
     const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
     ErrorCode error;
-    NWB_CRASH_TEST_CHECK(context, EnsureDirectories(spoolDirectory, error));
+    EXPECT_TRUE((EnsureDirectories(spoolDirectory, error)));
 
     char previousSpoolDirectory[NWB::Core::Crash::Detail::s_MaxPathText] = {};
     NWB::Core::Crash::Detail::FixedBreadcrumb previousBreadcrumbs[NWB::Core::Crash::Detail::s_MaxBreadcrumbs] = {};
@@ -226,13 +221,13 @@ static void TestCrashBreadcrumbCapturedInRequest(TestContext& context){
         NWB::Core::Crash::Detail::g_State.breadcrumbOrder.store(1u, MemoryOrder::relaxed);
     }
 
-    NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::AddCrashBreadcrumb(AStringView("test"), AStringView("persisted breadcrumb")));
+    EXPECT_TRUE((NWB::Core::Crash::AddCrashBreadcrumb(AStringView("test"), AStringView("persisted breadcrumb"))));
 
     NWB::Core::Crash::Detail::CrashRequest request;
     NWB::Core::Crash::Detail::SnapshotCrashState(request, NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u);
-    NWB_CRASH_TEST_CHECK(context, request.breadcrumbCount == 1u);
-    NWB_CRASH_TEST_CHECK(context, AStringView(request.breadcrumbs[0].category) == AStringView("test"));
-    NWB_CRASH_TEST_CHECK(context, AStringView(request.breadcrumbs[0].message) == AStringView("persisted breadcrumb"));
+    EXPECT_TRUE((request.breadcrumbCount == 1u));
+    EXPECT_TRUE((AStringView(request.breadcrumbs[0].category) == AStringView("test")));
+    EXPECT_TRUE((AStringView(request.breadcrumbs[0].message) == AStringView("persisted breadcrumb")));
 
     {
         ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
@@ -246,125 +241,122 @@ static void TestCrashBreadcrumbCapturedInRequest(TestContext& context){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestCrashSpoolRetentionPrunesOldestPackages(TestContext& context){
+static void TestCrashSpoolRetentionPrunesOldestPackages(){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_spool_retention_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "bad package name"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-001"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-002"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-001"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-002"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-001"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-002"));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003")));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "bad package name")));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-001")));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-002")));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-001")));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-002")));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-001")));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-002")));
 
     NWB::Core::Crash::CrashSpoolRetentionConfig retention;
     retention.maxPendingPackages = 2u;
     retention.maxUploadedPackages = 1u;
     retention.maxFailedPackages = 1u;
     retention.maxUploadingPackages = 1u;
-    NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention));
+    EXPECT_TRUE((NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention)));
 
-    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
-    NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
-    NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003")));
-    NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "bad package name")));
-    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-001")));
-    NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-002")));
-    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-001")));
-    NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-002")));
-    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-001")));
-    NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-002")));
+    EXPECT_TRUE((PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"))));
+    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"))));
+    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003"))));
+    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "bad package name"))));
+    EXPECT_TRUE((PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-001"))));
+    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadedDirectoryName, "crash-002"))));
+    EXPECT_TRUE((PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-001"))));
+    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_FailedDirectoryName, "crash-002"))));
+    EXPECT_TRUE((PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-001"))));
+    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, "crash-002"))));
 
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestCrashSpoolRetentionZeroDisablesPruning(TestContext& context){
+static void TestCrashSpoolRetentionZeroDisablesPruning(){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_spool_retention_zero_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
 
     NWB::Core::Crash::CrashSpoolRetentionConfig retention;
     retention.maxPendingPackages = 0u;
     retention.maxUploadedPackages = 0u;
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
-    NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention));
+    EXPECT_TRUE((NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(arena, SpoolDirectory(arena, s_Group), retention)));
 
-    NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
-    NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
+    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"))));
+    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"))));
 
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestCrashSpoolRetentionProtectsActivePendingPackage(TestContext& context){
+static void TestCrashSpoolRetentionProtectsActivePendingPackage(){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_spool_retention_protect_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"));
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003"));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003")));
 
     NWB::Core::Crash::CrashSpoolRetentionConfig retention;
     retention.maxPendingPackages = 1u;
     retention.maxUploadedPackages = 0u;
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
-    NWB_CRASH_TEST_CHECK(context, NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(
+    EXPECT_TRUE((NWB::Core::Crash::Detail::ApplyCrashSpoolRetention(
         arena,
         SpoolDirectory(arena, s_Group),
         retention,
         AStringView("crash-001")
-    ));
+    )));
 
-    NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001")));
-    NWB_CRASH_TEST_CHECK(context, PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002")));
-    NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003")));
+    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-001"))));
+    EXPECT_TRUE((PathIsMissing(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-002"))));
+    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, "crash-003"))));
 
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(TestContext& context){
+static void TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_uploading_recovery_blocked_test");
     constexpr AStringView s_CrashId("crash-recovery-blocked");
     RemoveTestArtifacts(arena, s_Group);
 
-    NWB_CRASH_TEST_CHECK(context, CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId));
-    NWB_CRASH_TEST_CHECK(context, WriteTextFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName), AStringView("blocked")));
+    EXPECT_TRUE((CreatePackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId)));
+    EXPECT_TRUE((WriteTextFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName), AStringView("blocked"))));
 
     NWB::Core::Crash::Detail::CrashUploadSnapshot snapshot;
     CopyPathText(arena, snapshot.spoolDirectory, SpoolDirectory(arena, s_Group));
     CopyFixedBuffer(snapshot.logServerUrl, AStringView("http://127.0.0.1:1"));
 
-    NWB_CRASH_TEST_CHECK(context, !NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(arena, snapshot));
-    NWB_CRASH_TEST_CHECK(context, PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId)));
-    NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName)));
-    NWB_CRASH_TEST_CHECK(
-        context,
-        TextFileContains(
+    EXPECT_TRUE((!NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(arena, snapshot)));
+    EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId))));
+    EXPECT_TRUE((PathIsRegularFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName))));
+    EXPECT_TRUE((TextFileContains(
             PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId) / CrashNames::s_UploadAttemptFileName,
             AStringView(CrashNames::s_UploadAttemptRetryInterruptedState)
-        )
-    );
+        )));
 
     RemoveTestArtifacts(arena, s_Group);
 }
 
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-static void TestDesktopInstalledHandlerWritesManualDumpPackage(TestContext& context){
+static void TestDesktopInstalledHandlerWritesManualDumpPackage(){
     TestArena testArena;
     auto& arena = testArena.arena;
     NWB::Core::Alloc::PersistentArena installArena(
@@ -386,7 +378,7 @@ static void TestDesktopInstalledHandlerWritesManualDumpPackage(TestContext& cont
     }
 
     const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, config);
-    NWB_CRASH_TEST_CHECK(context, installed);
+    EXPECT_TRUE((installed));
 
     if(installed){
         NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
@@ -401,25 +393,22 @@ static void TestDesktopInstalledHandlerWritesManualDumpPackage(TestContext& cont
             0u,
             options
         );
-        NWB_CRASH_TEST_CHECK(
-            context,
-            result.status == NWB::Core::Crash::CrashDumpStatus::PackageWritten
-        );
+        EXPECT_TRUE((result.status == NWB::Core::Crash::CrashDumpStatus::PackageWritten));
 
         char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
         BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
 
         const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
-        NWB_CRASH_TEST_CHECK(context, WaitForDirectory(packageDirectory, 3000u));
-        NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
-        NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName));
+        EXPECT_TRUE((WaitForDirectory(packageDirectory, 3000u)));
+        EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName)));
+        EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName)));
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-        NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
+        EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName)));
         // A "#1 " frame proves the unwinder walked past the leaf frame; final builds omit the frame pointer, so
         // this guards that .eh_frame-based capture keeps producing a full callstack.
-        NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
+        EXPECT_TRUE((TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x"))));
 #endif
-        NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"desktop handler runtime\"")));
+        EXPECT_TRUE((TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"desktop handler runtime\""))));
         NWB::Core::Crash::UninstallCrashHandler();
     }
 
@@ -428,7 +417,7 @@ static void TestDesktopInstalledHandlerWritesManualDumpPackage(TestContext& cont
 #endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-static void TestLinuxSignalHandlerWritesCrashPackage(TestContext& context){
+static void TestLinuxSignalHandlerWritesCrashPackage(){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_linux_signal_runtime_test");
@@ -436,7 +425,7 @@ static void TestLinuxSignalHandlerWritesCrashPackage(TestContext& context){
 
     const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
     const pid_t childPid = fork();
-    NWB_CRASH_TEST_CHECK(context, childPid >= 0);
+    EXPECT_TRUE((childPid >= 0));
     if(childPid == 0){
         NWB::Core::Alloc::PersistentArena installArena(
             s_SignalChildInstallArena,
@@ -468,20 +457,20 @@ static void TestLinuxSignalHandlerWritesCrashPackage(TestContext& context){
             break;
         }
 
-        NWB_CRASH_TEST_CHECK(context, WIFSIGNALED(status));
-        NWB_CRASH_TEST_CHECK(context, WTERMSIG(status) == SIGSEGV);
+        EXPECT_TRUE((WIFSIGNALED(status)));
+        EXPECT_TRUE((WTERMSIG(status) == SIGSEGV));
 
         char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
         BuildCrashIdForProcess(crashId, static_cast<u32>(childPid), 1u);
 
         const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
-        NWB_CRASH_TEST_CHECK(context, WaitForDirectory(packageDirectory, 1000u));
-        NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
-        NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
+        EXPECT_TRUE((WaitForDirectory(packageDirectory, 1000u)));
+        EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName)));
+        EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName)));
         // The faulting callstack must reach past the leaf frame even with the frame pointer omitted (final builds).
-        NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
-        NWB_CRASH_TEST_CHECK(context, PathIsRegularFile(packageDirectory / CrashNames::s_ProcMapsFileName));
-        NWB_CRASH_TEST_CHECK(context, TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"reason_kind\": \"signal\"")));
+        EXPECT_TRUE((TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x"))));
+        EXPECT_TRUE((PathIsRegularFile(packageDirectory / CrashNames::s_ProcMapsFileName)));
+        EXPECT_TRUE((TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"reason_kind\": \"signal\""))));
     }
 
     RemoveTestArtifacts(arena, s_Group);
@@ -490,9 +479,6 @@ static void TestLinuxSignalHandlerWritesCrashPackage(TestContext& context){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#undef NWB_CRASH_TEST_CHECK
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -505,51 +491,42 @@ static void TestLinuxSignalHandlerWritesCrashPackage(TestContext& context){
 
 
 TEST(Crash, WriteCrashPackageCreatesRequiredFiles){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_crash_tests::TestWriteCrashPackageCreatesRequiredFiles(nwbTestContext);
+    __hidden_crash_tests::TestWriteCrashPackageCreatesRequiredFiles();
 }
 
 TEST(Crash, WriteCrashPackageFailsWhenSpoolPathIsFile){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_crash_tests::TestWriteCrashPackageFailsWhenSpoolPathIsFile(nwbTestContext);
+    __hidden_crash_tests::TestWriteCrashPackageFailsWhenSpoolPathIsFile();
 }
 
 TEST(Crash, CrashBreadcrumbCapturedInRequest){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_crash_tests::TestCrashBreadcrumbCapturedInRequest(nwbTestContext);
+    __hidden_crash_tests::TestCrashBreadcrumbCapturedInRequest();
 }
 
 TEST(Crash, CrashSpoolRetentionPrunesOldestPackages){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_crash_tests::TestCrashSpoolRetentionPrunesOldestPackages(nwbTestContext);
+    __hidden_crash_tests::TestCrashSpoolRetentionPrunesOldestPackages();
 }
 
 TEST(Crash, CrashSpoolRetentionZeroDisablesPruning){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_crash_tests::TestCrashSpoolRetentionZeroDisablesPruning(nwbTestContext);
+    __hidden_crash_tests::TestCrashSpoolRetentionZeroDisablesPruning();
 }
 
 TEST(Crash, CrashSpoolRetentionProtectsActivePendingPackage){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_crash_tests::TestCrashSpoolRetentionProtectsActivePendingPackage(nwbTestContext);
+    __hidden_crash_tests::TestCrashSpoolRetentionProtectsActivePendingPackage();
 }
 
 TEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_crash_tests::TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(nwbTestContext);
+    __hidden_crash_tests::TestFlushReportsFailsWhenUploadingRecoveryIsBlocked();
 }
 
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
 TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_crash_tests::TestDesktopInstalledHandlerWritesManualDumpPackage(nwbTestContext);
+    __hidden_crash_tests::TestDesktopInstalledHandlerWritesManualDumpPackage();
 }
 #endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_crash_tests::TestLinuxSignalHandlerWritesCrashPackage(nwbTestContext);
+    __hidden_crash_tests::TestLinuxSignalHandlerWritesCrashPackage();
 }
 #endif
 

@@ -15,16 +15,10 @@ namespace __hidden_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestContext = NWB::Tests::TestContext;
 using Document = NWB::Core::Metascript::Document;
 using Value = NWB::Core::Metascript::Value;
 using MStringView = NWB::Core::Metascript::MStringView;
 using AString = NWB::Tests::TestAString;
-
-
-#define NWB_METASCRIPT_TEST_CHECK NWB_TEST_CHECK
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,52 +53,52 @@ template<usize N>
     return value.findField(name);
 }
 
-static void CheckStringValue(TestContext& context, const Value* value, MStringView expected){
-    NWB_METASCRIPT_TEST_CHECK(context, value != nullptr);
+static void CheckStringValue(const Value* value, MStringView expected){
+    EXPECT_TRUE((value != nullptr));
     if(!value)
         return;
 
-    NWB_METASCRIPT_TEST_CHECK(context, value->isString());
+    EXPECT_TRUE((value->isString()));
     if(value->isString())
-        NWB_METASCRIPT_TEST_CHECK(context, value->asString() == expected);
+        EXPECT_TRUE((value->asString() == expected));
 }
 
-static void CheckReferenceListElement(TestContext& context, const Value& value, MStringView expected){
-    NWB_METASCRIPT_TEST_CHECK(context, value.isReference());
+static void CheckReferenceListElement(const Value& value, MStringView expected){
+    EXPECT_TRUE((value.isReference()));
     if(value.isReference())
-        NWB_METASCRIPT_TEST_CHECK(context, value.asReference() == expected);
+        EXPECT_TRUE((value.asReference() == expected));
 }
 
-static void CheckStringListElement(TestContext& context, const Value& value, const AString& expected){
-    NWB_METASCRIPT_TEST_CHECK(context, value.isString());
+static void CheckStringListElement(const Value& value, const AString& expected){
+    EXPECT_TRUE((value.isString()));
     if(value.isString())
-        NWB_METASCRIPT_TEST_CHECK(context, value.asString() == ViewOf(expected));
+        EXPECT_TRUE((value.asString() == ViewOf(expected)));
 }
 
-static void CheckStringField(TestContext& context, const Value& value, MStringView fieldName, MStringView expected){
-    CheckStringValue(context, FindTestField(value, fieldName), expected);
+static void CheckStringField(const Value& value, MStringView fieldName, MStringView expected){
+    CheckStringValue(FindTestField(value, fieldName), expected);
 }
 
-static void CheckImplicitMaterialBindParseFailsWithMessage(TestContext& context, const AString& source, MStringView expectedMessage){
+static void CheckImplicitMaterialBindParseFailsWithMessage(const AString& source, MStringView expectedMessage){
     DestinationArena arena;
     Document document(arena.arena);
 
     const bool parsed = ParseImplicitMaterialBind(document, source);
-    NWB_METASCRIPT_TEST_CHECK(context, !parsed);
-    NWB_METASCRIPT_TEST_CHECK(context, document.hasErrors());
+    EXPECT_TRUE((!parsed));
+    EXPECT_TRUE((document.hasErrors()));
     if(document.errors().empty())
         return;
 
     const auto& error = document.errors()[0u];
     const MStringView message(error.message.data(), error.message.size());
-    NWB_METASCRIPT_TEST_CHECK(context, message == expectedMessage);
+    EXPECT_TRUE((message == expectedMessage));
 }
 
-static void CheckSingleStringListValue(TestContext& context, const Value& value, const AString& text){
-    NWB_METASCRIPT_TEST_CHECK(context, value.isList());
-    NWB_METASCRIPT_TEST_CHECK(context, value.isList() && value.asList().size() == 1u);
+static void CheckSingleStringListValue(const Value& value, const AString& text){
+    EXPECT_TRUE((value.isList()));
+    EXPECT_TRUE((value.isList() && value.asList().size() == 1u));
     if(value.isList() && value.asList().size() == 1u)
-        CheckStringListElement(context, value.asList()[0u], text);
+        CheckStringListElement(value.asList()[0u], text);
 }
 
 template<typename ArenaT>
@@ -113,7 +107,7 @@ static void MakeSingleStringList(Value& list, ArenaT& arena, const AString& text
     list.append(Value(ViewOf(text), arena.arena));
 }
 
-static void TestCrossArenaMoveAssignmentCopiesIntoDestinationArena(TestContext& context){
+static void TestCrossArenaMoveAssignmentCopiesIntoDestinationArena(){
     SourceArena sourceArena;
     DestinationArena destinationArena;
     const AString text(128u, 'm');
@@ -123,12 +117,12 @@ static void TestCrossArenaMoveAssignmentCopiesIntoDestinationArena(TestContext& 
 
     destination = Move(source);
 
-    NWB_METASCRIPT_TEST_CHECK(context, source.isNull());
-    NWB_METASCRIPT_TEST_CHECK(context, destination.isString());
-    NWB_METASCRIPT_TEST_CHECK(context, destination.asString() == ViewOf(text));
+    EXPECT_TRUE((source.isNull()));
+    EXPECT_TRUE((destination.isString()));
+    EXPECT_TRUE((destination.asString() == ViewOf(text)));
 }
 
-static void TestCrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena(TestContext& context){
+static void TestCrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena(){
     SourceArena sourceArena;
     DestinationArena destinationArena;
     const AString text(128u, 'c');
@@ -142,16 +136,16 @@ static void TestCrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena(T
 
     destination = source;
 
-    NWB_METASCRIPT_TEST_CHECK(context, source.isMap());
-    NWB_METASCRIPT_TEST_CHECK(context, destination.isMap());
+    EXPECT_TRUE((source.isMap()));
+    EXPECT_TRUE((destination.isMap()));
 
     const Value* copiedList = destination.findField(MStringView("items", 5u));
-    NWB_METASCRIPT_TEST_CHECK(context, copiedList != nullptr);
+    EXPECT_TRUE((copiedList != nullptr));
     if(copiedList)
-        CheckSingleStringListValue(context, *copiedList, text);
+        CheckSingleStringListValue(*copiedList, text);
 }
 
-static void TestCrossArenaListConcatCopiesIntoResultArena(TestContext& context){
+static void TestCrossArenaListConcatCopiesIntoResultArena(){
     SourceArena sourceArena;
     DestinationArena destinationArena;
     const AString text(128u, 'p');
@@ -164,10 +158,10 @@ static void TestCrossArenaListConcatCopiesIntoResultArena(TestContext& context){
 
     Value result = destination + source;
 
-    CheckSingleStringListValue(context, result, text);
+    CheckSingleStringListValue(result, text);
 }
 
-static void TestCrossArenaAppendCopiesIntoDestinationArena(TestContext& context){
+static void TestCrossArenaAppendCopiesIntoDestinationArena(){
     SourceArena sourceArena;
     DestinationArena destinationArena;
     const AString text(128u, 'a');
@@ -178,11 +172,11 @@ static void TestCrossArenaAppendCopiesIntoDestinationArena(TestContext& context)
 
     destination.append(Move(source));
 
-    NWB_METASCRIPT_TEST_CHECK(context, source.isNull());
-    CheckSingleStringListValue(context, destination, text);
+    EXPECT_TRUE((source.isNull()));
+    CheckSingleStringListValue(destination, text);
 }
 
-static void TestListSelfAppendCopiesOriginalValues(TestContext& context){
+static void TestListSelfAppendCopiesOriginalValues(){
     DestinationArena arena;
     const AString text(128u, 's');
 
@@ -191,14 +185,14 @@ static void TestListSelfAppendCopiesOriginalValues(TestContext& context){
 
     list += list;
 
-    NWB_METASCRIPT_TEST_CHECK(context, list.asList().size() == 2u);
+    EXPECT_TRUE((list.asList().size() == 2u));
     if(list.asList().size() == 2u){
-        CheckStringListElement(context, list.asList()[0u], text);
-        CheckStringListElement(context, list.asList()[1u], text);
+        CheckStringListElement(list.asList()[0u], text);
+        CheckStringListElement(list.asList()[1u], text);
     }
 }
 
-static void TestAppendSelfMoveCopiesOriginalValue(TestContext& context){
+static void TestAppendSelfMoveCopiesOriginalValue(){
     DestinationArena arena;
     const AString text(128u, 'v');
 
@@ -207,20 +201,20 @@ static void TestAppendSelfMoveCopiesOriginalValue(TestContext& context){
 
     list.append(Move(list));
 
-    NWB_METASCRIPT_TEST_CHECK(context, list.isList());
-    NWB_METASCRIPT_TEST_CHECK(context, list.asList().size() == 2u);
+    EXPECT_TRUE((list.isList()));
+    EXPECT_TRUE((list.asList().size() == 2u));
     if(list.isList() && list.asList().size() == 2u){
-        CheckStringListElement(context, list.asList()[0u], text);
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].isList());
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].asList().size() == 1u);
+        CheckStringListElement(list.asList()[0u], text);
+        EXPECT_TRUE((list.asList()[1u].isList()));
+        EXPECT_TRUE((list.asList()[1u].asList().size() == 1u));
         if(list.asList()[1u].isList() && list.asList()[1u].asList().size() == 1u){
             const Value& nestedText = list.asList()[1u].asList()[0u];
-            CheckStringListElement(context, nestedText, text);
+            CheckStringListElement(nestedText, text);
         }
     }
 }
 
-static void TestAppendExistingListElementMoveCopiesBeforeDestroy(TestContext& context){
+static void TestAppendExistingListElementMoveCopiesBeforeDestroy(){
     DestinationArena arena;
     const AString text(128u, 'e');
 
@@ -229,15 +223,15 @@ static void TestAppendExistingListElementMoveCopiesBeforeDestroy(TestContext& co
 
     list.append(Move(list.asList()[0u]));
 
-    NWB_METASCRIPT_TEST_CHECK(context, list.isList());
-    NWB_METASCRIPT_TEST_CHECK(context, list.asList().size() == 2u);
+    EXPECT_TRUE((list.isList()));
+    EXPECT_TRUE((list.asList().size() == 2u));
     if(list.isList() && list.asList().size() == 2u){
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[0u].isNull());
-        CheckStringListElement(context, list.asList()[1u], text);
+        EXPECT_TRUE((list.asList()[0u].isNull()));
+        CheckStringListElement(list.asList()[1u], text);
     }
 }
 
-static void TestListAppendExistingElementCopiesBeforeReallocation(TestContext& context){
+static void TestListAppendExistingElementCopiesBeforeReallocation(){
     DestinationArena arena;
     const AString text(128u, 'r');
 
@@ -246,15 +240,15 @@ static void TestListAppendExistingElementCopiesBeforeReallocation(TestContext& c
 
     list += list.asList()[0u];
 
-    NWB_METASCRIPT_TEST_CHECK(context, list.isList());
-    NWB_METASCRIPT_TEST_CHECK(context, list.asList().size() == 2u);
+    EXPECT_TRUE((list.isList()));
+    EXPECT_TRUE((list.asList().size() == 2u));
     if(list.isList() && list.asList().size() == 2u){
-        CheckStringListElement(context, list.asList()[0u], text);
-        CheckStringListElement(context, list.asList()[1u], text);
+        CheckStringListElement(list.asList()[0u], text);
+        CheckStringListElement(list.asList()[1u], text);
     }
 }
 
-static void TestExponentDoubleLiterals(TestContext& context){
+static void TestExponentDoubleLiterals(){
     DestinationArena arena;
     Document document(arena.arena);
     const AString source =
@@ -262,28 +256,28 @@ static void TestExponentDoubleLiterals(TestContext& context){
         "asset.values = [2.89785676e-05, -3.66009772E-07, 1e+03, 2E2];\n"
     ;
 
-    NWB_METASCRIPT_TEST_CHECK(context, document.parse(ViewOf(source)));
+    EXPECT_TRUE((document.parse(ViewOf(source))));
     const Value* values = document.asset().findField(MStringView("values", 6u));
-    NWB_METASCRIPT_TEST_CHECK(context, values != nullptr);
+    EXPECT_TRUE((values != nullptr));
     if(!values || !values->isList())
         return;
 
     const auto& list = values->asList();
-    NWB_METASCRIPT_TEST_CHECK(context, list.size() == 4u);
+    EXPECT_TRUE((list.size() == 4u));
     if(list.size() != 4u)
         return;
 
-    NWB_METASCRIPT_TEST_CHECK(context, list[0u].isDouble());
-    NWB_METASCRIPT_TEST_CHECK(context, list[1u].isDouble());
-    NWB_METASCRIPT_TEST_CHECK(context, list[2u].isDouble());
-    NWB_METASCRIPT_TEST_CHECK(context, list[3u].isDouble());
-    NWB_METASCRIPT_TEST_CHECK(context, Abs(list[0u].asDouble() - 0.0000289785676) < 0.0000000001);
-    NWB_METASCRIPT_TEST_CHECK(context, Abs(list[1u].asDouble() + 0.000000366009772) < 0.0000000001);
-    NWB_METASCRIPT_TEST_CHECK(context, Abs(list[2u].asDouble() - 1000.0) < 0.0000000001);
-    NWB_METASCRIPT_TEST_CHECK(context, Abs(list[3u].asDouble() - 200.0) < 0.0000000001);
+    EXPECT_TRUE((list[0u].isDouble()));
+    EXPECT_TRUE((list[1u].isDouble()));
+    EXPECT_TRUE((list[2u].isDouble()));
+    EXPECT_TRUE((list[3u].isDouble()));
+    EXPECT_TRUE((Abs(list[0u].asDouble() - 0.0000289785676) < 0.0000000001));
+    EXPECT_TRUE((Abs(list[1u].asDouble() + 0.000000366009772) < 0.0000000001));
+    EXPECT_TRUE((Abs(list[2u].asDouble() - 1000.0) < 0.0000000001));
+    EXPECT_TRUE((Abs(list[3u].asDouble() - 200.0) < 0.0000000001));
 }
 
-static void TestBindStyleStructDeclarations(TestContext& context){
+static void TestBindStyleStructDeclarations(){
     DestinationArena arena;
     Document document(arena.arena);
     const AString source =
@@ -307,82 +301,82 @@ static void TestBindStyleStructDeclarations(TestContext& context){
     ;
 
     const bool parsed = ParseImplicitMaterialBind(document, source);
-    NWB_METASCRIPT_TEST_CHECK(context, parsed);
+    EXPECT_TRUE((parsed));
     if(!parsed)
         return;
 
-    NWB_METASCRIPT_TEST_CHECK(context, document.assetType() == LiteralView("material_bind"));
-    NWB_METASCRIPT_TEST_CHECK(context, document.assetVariable() == LiteralView("asset"));
+    EXPECT_TRUE((document.assetType() == LiteralView("material_bind")));
+    EXPECT_TRUE((document.assetVariable() == LiteralView("asset")));
 
     const Value& asset = document.asset();
     const Value* structs = FindTestField(asset, LiteralView("structs"));
-    NWB_METASCRIPT_TEST_CHECK(context, structs != nullptr);
-    NWB_METASCRIPT_TEST_CHECK(context, structs && structs->isMap());
+    EXPECT_TRUE((structs != nullptr));
+    EXPECT_TRUE((structs && structs->isMap()));
     if(!structs || !structs->isMap())
         return;
 
     const Value* surfaceStruct = structs->findField(LiteralView("NwbProjectBxdfSurfaceMaterial"));
     const Value* runtimeStruct = structs->findField(LiteralView("NwbProjectBxdfRuntimeMaterial"));
-    NWB_METASCRIPT_TEST_CHECK(context, surfaceStruct != nullptr);
-    NWB_METASCRIPT_TEST_CHECK(context, runtimeStruct != nullptr);
+    EXPECT_TRUE((surfaceStruct != nullptr));
+    EXPECT_TRUE((runtimeStruct != nullptr));
     if(!surfaceStruct || !runtimeStruct)
         return;
 
     const Value* surfaceAttributes = FindTestField(*surfaceStruct, LiteralView("attributes"));
-    NWB_METASCRIPT_TEST_CHECK(context, surfaceAttributes != nullptr);
-    NWB_METASCRIPT_TEST_CHECK(context, surfaceAttributes && surfaceAttributes->isList());
-    NWB_METASCRIPT_TEST_CHECK(context, surfaceAttributes && surfaceAttributes->isList() && surfaceAttributes->asList().size() == 1u);
+    EXPECT_TRUE((surfaceAttributes != nullptr));
+    EXPECT_TRUE((surfaceAttributes && surfaceAttributes->isList()));
+    EXPECT_TRUE((surfaceAttributes && surfaceAttributes->isList() && surfaceAttributes->asList().size() == 1u));
     if(surfaceAttributes && surfaceAttributes->isList() && surfaceAttributes->asList().size() == 1u)
-        CheckStringField(context, surfaceAttributes->asList()[0u], LiteralView("name"), LiteralView("material_constant"));
+        CheckStringField(surfaceAttributes->asList()[0u], LiteralView("name"), LiteralView("material_constant"));
 
     const Value* surfaceFields = FindTestField(*surfaceStruct, LiteralView("fields"));
-    NWB_METASCRIPT_TEST_CHECK(context, surfaceFields != nullptr);
-    NWB_METASCRIPT_TEST_CHECK(context, surfaceFields && surfaceFields->isList());
-    NWB_METASCRIPT_TEST_CHECK(context, surfaceFields && surfaceFields->isList() && surfaceFields->asList().size() == 2u);
+    EXPECT_TRUE((surfaceFields != nullptr));
+    EXPECT_TRUE((surfaceFields && surfaceFields->isList()));
+    EXPECT_TRUE((surfaceFields && surfaceFields->isList() && surfaceFields->asList().size() == 2u));
     if(!surfaceFields || !surfaceFields->isList() || surfaceFields->asList().size() != 2u)
         return;
 
     const Value& baseColorField = surfaceFields->asList()[0u];
-    CheckStringField(context, baseColorField, LiteralView("type"), LiteralView("float4"));
-    CheckStringField(context, baseColorField, LiteralView("name"), LiteralView("base_color"));
+    CheckStringField(baseColorField, LiteralView("type"), LiteralView("float4"));
+    CheckStringField(baseColorField, LiteralView("name"), LiteralView("base_color"));
 
     const Value* baseColorAttributes = FindTestField(baseColorField, LiteralView("attributes"));
-    NWB_METASCRIPT_TEST_CHECK(context, baseColorAttributes != nullptr);
-    NWB_METASCRIPT_TEST_CHECK(context, baseColorAttributes && baseColorAttributes->isList());
-    NWB_METASCRIPT_TEST_CHECK(context, baseColorAttributes && baseColorAttributes->isList() && baseColorAttributes->asList().size() == 1u);
+    EXPECT_TRUE((baseColorAttributes != nullptr));
+    EXPECT_TRUE((baseColorAttributes && baseColorAttributes->isList()));
+    EXPECT_TRUE((baseColorAttributes && baseColorAttributes->isList() && baseColorAttributes->asList().size() == 1u));
     if(baseColorAttributes && baseColorAttributes->isList() && baseColorAttributes->asList().size() == 1u){
         const Value& defaultAttribute = baseColorAttributes->asList()[0u];
-        CheckStringField(context, defaultAttribute, LiteralView("name"), LiteralView("default"));
+        CheckStringField(defaultAttribute, LiteralView("name"), LiteralView("default"));
 
         const Value* arguments = FindTestField(defaultAttribute, LiteralView("arguments"));
-        NWB_METASCRIPT_TEST_CHECK(context, arguments != nullptr);
-        NWB_METASCRIPT_TEST_CHECK(context, arguments && arguments->isList());
-        NWB_METASCRIPT_TEST_CHECK(context, arguments && arguments->isList() && arguments->asList().size() == 1u);
+        EXPECT_TRUE((arguments != nullptr));
+        EXPECT_TRUE((arguments && arguments->isList()));
+        EXPECT_TRUE((arguments && arguments->isList() && arguments->asList().size() == 1u));
         if(arguments && arguments->isList() && arguments->asList().size() == 1u)
-            CheckStringValue(context, &arguments->asList()[0u], LiteralView("float4(1.0, 1.0, 1.0, 1.0)"));
+            CheckStringValue(&arguments->asList()[0u], LiteralView("float4(1.0, 1.0, 1.0, 1.0)"));
     }
 
     const Value* instances = FindTestField(asset, LiteralView("instances"));
-    NWB_METASCRIPT_TEST_CHECK(context, instances != nullptr);
-    NWB_METASCRIPT_TEST_CHECK(context, instances && instances->isList());
-    NWB_METASCRIPT_TEST_CHECK(context, instances && instances->isList() && instances->asList().size() == 2u);
+    EXPECT_TRUE((instances != nullptr));
+    EXPECT_TRUE((instances && instances->isList()));
+    EXPECT_TRUE((instances && instances->isList() && instances->asList().size() == 2u));
     if(!instances || !instances->isList() || instances->asList().size() != 2u)
         return;
 
-    CheckStringField(context, instances->asList()[0u], LiteralView("type"), LiteralView("NwbProjectBxdfSurfaceMaterial"));
-    CheckStringField(context, instances->asList()[0u], LiteralView("name"), LiteralView("surface"));
-    CheckStringField(context, instances->asList()[1u], LiteralView("type"), LiteralView("NwbProjectBxdfRuntimeMaterial"));
-    CheckStringField(context, instances->asList()[1u], LiteralView("name"), LiteralView("runtime"));
+    CheckStringField(instances->asList()[0u], LiteralView("type"), LiteralView("NwbProjectBxdfSurfaceMaterial"));
+    CheckStringField(instances->asList()[0u], LiteralView("name"), LiteralView("surface"));
+    CheckStringField(instances->asList()[1u], LiteralView("type"), LiteralView("NwbProjectBxdfRuntimeMaterial"));
+    CheckStringField(instances->asList()[1u], LiteralView("name"), LiteralView("runtime"));
 }
 
-static void TestBindStyleStructDuplicateRejections(TestContext& context){
+static void TestBindStyleStructDuplicateRejections(){
     const AString duplicateFieldSource =
         "struct NwbDup{\n"
         "    float value;\n"
         "    float value;\n"
         "};\n"
     ;
-    CheckImplicitMaterialBindParseFailsWithMessage(context, duplicateFieldSource, LiteralView("duplicate struct field declaration"));
+    CheckImplicitMaterialBindParseFailsWithMessage(duplicateFieldSource, LiteralView("duplicate struct field declaration"));
 
     const AString duplicateInstanceSource =
         "struct NwbDup{\n"
@@ -391,7 +385,7 @@ static void TestBindStyleStructDuplicateRejections(TestContext& context){
         "NwbDup runtime;\n"
         "NwbDup runtime;\n"
     ;
-    CheckImplicitMaterialBindParseFailsWithMessage(context, duplicateInstanceSource, LiteralView("duplicate struct instance declaration"));
+    CheckImplicitMaterialBindParseFailsWithMessage(duplicateInstanceSource, LiteralView("duplicate struct instance declaration"));
 
     const AString existingInstanceSource =
         "asset.instances = [{ \"type\": \"NwbDup\", \"name\": \"runtime\" }];\n"
@@ -400,10 +394,10 @@ static void TestBindStyleStructDuplicateRejections(TestContext& context){
         "};\n"
         "NwbDup runtime;\n"
     ;
-    CheckImplicitMaterialBindParseFailsWithMessage(context, existingInstanceSource, LiteralView("duplicate struct instance declaration"));
+    CheckImplicitMaterialBindParseFailsWithMessage(existingInstanceSource, LiteralView("duplicate struct instance declaration"));
 }
 
-static void TestGenericDeclarationsAndReferences(TestContext& context){
+static void TestGenericDeclarationsAndReferences(){
     DestinationArena arena;
     Document document(arena.arena);
     const AString source =
@@ -420,51 +414,48 @@ static void TestGenericDeclarationsAndReferences(TestContext& context){
     ;
 
     const bool parsed = document.parse(ViewOf(source));
-    NWB_METASCRIPT_TEST_CHECK(context, parsed);
+    EXPECT_TRUE((parsed));
     if(!parsed)
         return;
 
-    NWB_METASCRIPT_TEST_CHECK(context, document.declarations().size() == 3u);
+    EXPECT_TRUE((document.declarations().size() == 3u));
     if(document.declarations().size() != 3u)
         return;
 
-    NWB_METASCRIPT_TEST_CHECK(context, document.declarations()[0u].type == LiteralView("model"));
-    NWB_METASCRIPT_TEST_CHECK(context, document.declarations()[0u].variable == LiteralView("model"));
-    NWB_METASCRIPT_TEST_CHECK(context, document.declarations()[1u].type == LiteralView("mesh"));
-    NWB_METASCRIPT_TEST_CHECK(context, document.declarations()[1u].variable == LiteralView("mesh"));
-    NWB_METASCRIPT_TEST_CHECK(context, document.declarations()[2u].type == LiteralView("asset_bunch"));
-    NWB_METASCRIPT_TEST_CHECK(context, document.declarations()[2u].variable == LiteralView("bunch"));
+    EXPECT_TRUE((document.declarations()[0u].type == LiteralView("model")));
+    EXPECT_TRUE((document.declarations()[0u].variable == LiteralView("model")));
+    EXPECT_TRUE((document.declarations()[1u].type == LiteralView("mesh")));
+    EXPECT_TRUE((document.declarations()[1u].variable == LiteralView("mesh")));
+    EXPECT_TRUE((document.declarations()[2u].type == LiteralView("asset_bunch")));
+    EXPECT_TRUE((document.declarations()[2u].variable == LiteralView("bunch")));
 
     const Value* bunch = document.findVariable(LiteralView("bunch"));
-    NWB_METASCRIPT_TEST_CHECK(context, bunch != nullptr);
-    NWB_METASCRIPT_TEST_CHECK(context, bunch && bunch->isList());
+    EXPECT_TRUE((bunch != nullptr));
+    EXPECT_TRUE((bunch && bunch->isList()));
     if(!bunch || !bunch->isList() || bunch->asList().size() != 2u)
         return;
 
-    CheckReferenceListElement(context, bunch->asList()[0u], LiteralView("model"));
-    CheckReferenceListElement(context, bunch->asList()[1u], LiteralView("mesh"));
+    CheckReferenceListElement(bunch->asList()[0u], LiteralView("model"));
+    CheckReferenceListElement(bunch->asList()[1u], LiteralView("mesh"));
 
     const Value* modelValue = document.findVariable(LiteralView("model"));
-    NWB_METASCRIPT_TEST_CHECK(context, modelValue != nullptr);
+    EXPECT_TRUE((modelValue != nullptr));
     if(modelValue)
-        CheckStringField(context, *modelValue, LiteralView("mesh"), LiteralView("project/body/mesh"));
+        CheckStringField(*modelValue, LiteralView("mesh"), LiteralView("project/body/mesh"));
 
     const Value* meshValue = document.findVariable(LiteralView("mesh"));
-    NWB_METASCRIPT_TEST_CHECK(context, meshValue != nullptr);
+    EXPECT_TRUE((meshValue != nullptr));
     if(!meshValue)
         return;
 
     const Value* indices = FindTestField(*meshValue, LiteralView("indices"));
-    NWB_METASCRIPT_TEST_CHECK(context, indices != nullptr);
-    NWB_METASCRIPT_TEST_CHECK(context, indices && indices->isList());
-    NWB_METASCRIPT_TEST_CHECK(context, indices && indices->isList() && indices->asList().size() == 3u);
+    EXPECT_TRUE((indices != nullptr));
+    EXPECT_TRUE((indices && indices->isList()));
+    EXPECT_TRUE((indices && indices->isList() && indices->asList().size() == 3u));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#undef NWB_METASCRIPT_TEST_CHECK
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -477,63 +468,51 @@ static void TestGenericDeclarationsAndReferences(TestContext& context){
 
 
 TEST(Metascript, CrossArenaMoveAssignmentCopiesIntoDestinationArena){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestCrossArenaMoveAssignmentCopiesIntoDestinationArena(nwbTestContext);
+    __hidden_tests::TestCrossArenaMoveAssignmentCopiesIntoDestinationArena();
 }
 
 TEST(Metascript, CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestCrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena(nwbTestContext);
+    __hidden_tests::TestCrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena();
 }
 
 TEST(Metascript, CrossArenaListConcatCopiesIntoResultArena){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestCrossArenaListConcatCopiesIntoResultArena(nwbTestContext);
+    __hidden_tests::TestCrossArenaListConcatCopiesIntoResultArena();
 }
 
 TEST(Metascript, CrossArenaAppendCopiesIntoDestinationArena){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestCrossArenaAppendCopiesIntoDestinationArena(nwbTestContext);
+    __hidden_tests::TestCrossArenaAppendCopiesIntoDestinationArena();
 }
 
 TEST(Metascript, ListSelfAppendCopiesOriginalValues){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestListSelfAppendCopiesOriginalValues(nwbTestContext);
+    __hidden_tests::TestListSelfAppendCopiesOriginalValues();
 }
 
 TEST(Metascript, AppendSelfMoveCopiesOriginalValue){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestAppendSelfMoveCopiesOriginalValue(nwbTestContext);
+    __hidden_tests::TestAppendSelfMoveCopiesOriginalValue();
 }
 
 TEST(Metascript, AppendExistingListElementMoveCopiesBeforeDestroy){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestAppendExistingListElementMoveCopiesBeforeDestroy(nwbTestContext);
+    __hidden_tests::TestAppendExistingListElementMoveCopiesBeforeDestroy();
 }
 
 TEST(Metascript, ListAppendExistingElementCopiesBeforeReallocation){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestListAppendExistingElementCopiesBeforeReallocation(nwbTestContext);
+    __hidden_tests::TestListAppendExistingElementCopiesBeforeReallocation();
 }
 
 TEST(Metascript, ExponentDoubleLiterals){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestExponentDoubleLiterals(nwbTestContext);
+    __hidden_tests::TestExponentDoubleLiterals();
 }
 
 TEST(Metascript, BindStyleStructDeclarations){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestBindStyleStructDeclarations(nwbTestContext);
+    __hidden_tests::TestBindStyleStructDeclarations();
 }
 
 TEST(Metascript, BindStyleStructDuplicateRejections){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestBindStyleStructDuplicateRejections(nwbTestContext);
+    __hidden_tests::TestBindStyleStructDuplicateRejections();
 }
 
 TEST(Metascript, GenericDeclarationsAndReferences){
-    NWB::Tests::TestContext nwbTestContext;
-    __hidden_tests::TestGenericDeclarationsAndReferences(nwbTestContext);
+    __hidden_tests::TestGenericDeclarationsAndReferences();
 }
 
 

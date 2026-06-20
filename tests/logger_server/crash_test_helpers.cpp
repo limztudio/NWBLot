@@ -5,6 +5,7 @@
 #include "crash_test_helpers.h"
 
 #include <tests/filesystem_helpers.h>
+#include <gtest/gtest.h>
 
 #include <core/crash/package_internal.h>
 #include <core/crash/package_names.h>
@@ -329,7 +330,7 @@ static CrashTestPath ObservedReportPath(Core::Alloc::GlobalArena& arena, const C
     return basePath.parent_path() / AStringView(fileName.data(), fileName.size());
 }
 
-void PreserveObservedReport(TestContext& context, Core::Alloc::GlobalArena& arena, const CrashTestText& report, const AStringView suffix){
+void PreserveObservedReport(Core::Alloc::GlobalArena& arena, const CrashTestText& report, const AStringView suffix){
     CrashTestText outputPathText(arena);
     if(!ReadEnvironmentVariable("NWB_LOGSERVER_CRASH_TEST_OBSERVE_PATH", outputPathText) || outputPathText.empty())
         return;
@@ -337,8 +338,8 @@ void PreserveObservedReport(TestContext& context, Core::Alloc::GlobalArena& aren
     const CrashTestPath baseOutputPath(arena, AStringView(outputPathText.data(), outputPathText.size()));
     const CrashTestPath outputPath = ObservedReportPath(arena, baseOutputPath, suffix);
     ErrorCode error;
-    NWB_TEST_CHECK(context, EnsureDirectories(outputPath.parent_path(), error));
-    NWB_TEST_CHECK(context, WriteTextFile(outputPath, AStringView(report.data(), report.size())));
+    EXPECT_TRUE((EnsureDirectories(outputPath.parent_path(), error)));
+    EXPECT_TRUE((WriteTextFile(outputPath, AStringView(report.data(), report.size()))));
 }
 
 

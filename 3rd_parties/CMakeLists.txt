@@ -8,6 +8,8 @@ endfunction()
 
 add_subdirectory(CLI11)
 add_subdirectory(tsl)
+add_subdirectory(miniz)
+add_subdirectory(nlohmann_json)
 add_subdirectory(zlib)
 add_subdirectory(volk)
 add_subdirectory(aftermath)

@@ -2239,6 +2239,12 @@ public:
     bool isAnyGpuMarkerEnabled(){ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
     [[nodiscard]] GpuCrashTracker& getGpuCrashTracker(){ return m_gpuCrashTracker; }
     void captureGpuCrash(AStringView context)noexcept;
+#if defined(NWB_GPU_FAULT_INJECTION)
+    // DEBUG / TEST ONLY: deliberately faults the GPU (page fault) to exercise the device-lost capture path.
+    // Compiled only when NWB_ENABLE_GPU_FAULT_INJECTION is configured; defined in debug_gpu_fault.cpp and
+    // triggered at the call site by the NWB_DEBUG_GPU_FAULT environment variable.
+    void debugTriggerGpuFault();
+#endif
 
     [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(usize markerHash);
 

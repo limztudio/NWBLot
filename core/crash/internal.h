@@ -185,6 +185,7 @@ struct CrashDumpRequestOptions{
     AStringView triggerMessage;
     AStringView triggerFile;
     AStringView gpuReport;
+    AStringView gpuDump;
     u64 triggerInstructionPointer = 0u;
     u32 triggerLine = 0u;
     u32 callstackFramesToSkip = 0u;

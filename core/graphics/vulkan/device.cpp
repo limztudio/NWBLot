@@ -4,6 +4,7 @@
 
 #include "backend.h"
 #include "arena_names.h"
+#include "aftermath.h"
 
 #include <core/filesystem/module.h>
 #include <core/filesystem/volume_naming.h>
@@ -880,6 +881,15 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), StringConvert(report.context.c_str()), StringConvert(report.details.c_str()));
     }
     catch(...){
+    }
+
+    // Attach the NVIDIA Aftermath GPU crash dump if one was collected. WaitForCrashDump blocks briefly while
+    // the driver finishes writing the dump; the bytes stay owned by the Aftermath module for the synchronous
+    // dispatch below, where the crash reporter copies them into the package.
+    if(Aftermath::IsActive()){
+        const Aftermath::GpuCrashDumpView dump = Aftermath::WaitForCrashDump();
+        report.binaryDump = dump.data;
+        report.binaryDumpSize = dump.size;
     }
 
     try{

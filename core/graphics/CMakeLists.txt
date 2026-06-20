@@ -27,6 +27,8 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/texture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/upload.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/aftermath.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/debug_gpu_fault.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/resource_base.h"
     "${CMAKE_CURRENT_LIST_DIR}/backend_contract.h"
     "${CMAKE_CURRENT_LIST_DIR}/api.h"
@@ -43,6 +45,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/aftermath.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vma.h"
 )
 target_link_libraries(nwb_graphics PUBLIC nwb_common)
@@ -51,6 +54,11 @@ target_link_libraries(nwb_graphics PUBLIC nwb_telemetry)
 target_link_libraries(nwb_graphics PUBLIC nwb::volk)
 target_link_libraries(nwb_graphics PRIVATE nwb::vma_headers)
 target_link_libraries(nwb_graphics PRIVATE nwb_filesystem)
+target_link_libraries(nwb_graphics PRIVATE nwb::aftermath_headers)
+
+if(NWB_ENABLE_GPU_FAULT_INJECTION)
+    target_compile_definitions(nwb_graphics PRIVATE NWB_GPU_FAULT_INJECTION=1)
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(nwb_graphics PRIVATE nwb::x11)

@@ -224,8 +224,13 @@ bool InstallCrashCapture(CrashArena& crashArena){
         return false;
 
     NWB::Core::RegisterGpuCrashSink([](void*, const NWB::Core::GpuCrashReport& report){
+        const AStringView binaryDump = report.binaryDump
+            ? AStringView(reinterpret_cast<const char*>(report.binaryDump), report.binaryDumpSize)
+            : AStringView()
+        ;
         [[maybe_unused]] const auto dumpResult = NWB::Core::Crash::CaptureGpuCrashDump(
             AStringView(report.details.data(), report.details.size())
+            , binaryDump
         );
     }, nullptr);
     return true;

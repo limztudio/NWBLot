@@ -399,3 +399,10 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Third-party SDKs are vendored in full (headers + prebuilt binaries). The build-output directory
+# patterns above (e.g. 'x64/', 'win32/', 'x86/') would otherwise drop vendored libraries such as the
+# NVIDIA Aftermath runtime under 3rd_parties/aftermath/lib/<platform>/x64/. Re-include everything under
+# 3rd_parties/ so vendored binaries are committed. (Builds are out-of-source under __cmake/ and __exec/.)
+!3rd_parties/**/
+!3rd_parties/**

@@ -4,6 +4,7 @@
 
 #include "backend_context.h"
 #include "arena_names.h"
+#include "aftermath.h"
 
 #include <core/common/log.h>
 
@@ -1112,6 +1113,14 @@ bool BackendContext::createVulkanDevice(){
     const bool synchronization2ExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
     const bool maintenance4ExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
 
+    const bool diagnosticsConfigExtensionEnabled = isDeviceExtensionEnabled(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
+    const bool aftermathRequested = m_deviceParams.enableGpuCrashDiagnostics && physicalDeviceProperties.vendorID == s_NvidiaVendorId;
+    // Aftermath is process-global and must be enabled before the device is created so the driver attaches GPU
+    // crash dump collection to it. NVIDIA-only; on any other vendor the vendor-neutral diagnostics still apply.
+    const bool aftermathActive = aftermathRequested && Aftermath::Initialize();
+    if(aftermathRequested && !aftermathActive)
+        NWB_LOGGER_INFO(NWB_TEXT("Vulkan: NVIDIA Aftermath GPU crash dumps unavailable; using vendor-neutral GPU diagnostics only."));
+
     m_swapChainMutableFormatSupported = isDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
 
     constexpr usize kOptionalDeviceFeatureCount = static_cast<usize>(DeviceExtensionFeature::Count);
@@ -1310,6 +1319,23 @@ bool BackendContext::createVulkanDevice(){
         VulkanDetail::AppendFeatureStruct(pNext, &vulkan13features);
     else if(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
         VulkanDetail::AppendFeatureStruct(pNext, &maintenance4Features);
+
+    // NVIDIA Aftermath device configuration. Both structs must outlive vkCreateDevice, so they are declared at
+    // function scope and only chained into pNext when Aftermath is active and the extension is enabled.
+    VkPhysicalDeviceDiagnosticsConfigFeaturesNV diagnosticsConfigFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceDiagnosticsConfigFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DIAGNOSTICS_CONFIG_FEATURES_NV);
+    VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfigCreateInfo = VulkanDetail::MakeVkStruct<VkDeviceDiagnosticsConfigCreateInfoNV>(VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV);
+    if(aftermathActive && diagnosticsConfigExtensionEnabled){
+        diagnosticsConfigFeatures.diagnosticsConfig = VK_TRUE;
+        VulkanDetail::AppendFeatureStruct(pNext, &diagnosticsConfigFeatures);
+
+        diagnosticsConfigCreateInfo.flags =
+            VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_SHADER_DEBUG_INFO_BIT_NV
+            | VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_RESOURCE_TRACKING_BIT_NV
+            | VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_AUTOMATIC_CHECKPOINTS_BIT_NV
+            | VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_SHADER_ERROR_REPORTING_BIT_NV
+        ;
+        VulkanDetail::AppendFeatureStruct(pNext, &diagnosticsConfigCreateInfo);
+    }
 
     VkPhysicalDeviceFeatures coreDeviceFeatures = {};
     coreDeviceFeatures.shaderImageGatherExtended = supportedCoreFeatures.shaderImageGatherExtended;
@@ -1801,8 +1827,12 @@ bool BackendContext::createDevice(){
         registerDeviceExtension(m_enabledExtensions.device, name, resolveDeviceExtensionFeature(name));
     for(const auto& name : m_deviceParams.optionalBackendDeviceExtensions)
         registerDeviceExtension(m_optionalExtensions.device, name, resolveDeviceExtensionFeature(name));
-    if(m_deviceParams.enableGpuCrashDiagnostics)
+    if(m_deviceParams.enableGpuCrashDiagnostics){
         m_optionalExtensions.device.emplace(GraphicsString(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
+        // NVIDIA Aftermath enrichment (shader debug info / resource tracking / automatic checkpoints). The
+        // diagnosticsConfig feature is chained manually in createVulkanDevice when this extension is enabled.
+        m_optionalExtensions.device.emplace(GraphicsString(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
+    }
 
     m_swapChainState.backBufferFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
     if(!m_deviceParams.headlessDevice)
@@ -1857,6 +1887,13 @@ bool BackendContext::createDevice(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create RHI device wrapper."));
         return false;
     }
+
+#if defined(NWB_GPU_FAULT_INJECTION)
+    // DEBUG / TEST ONLY (compiled only when NWB_ENABLE_GPU_FAULT_INJECTION is configured): once the device is
+    // created, deterministically fault the GPU to exercise the device-lost -> GPU crash capture path. Done here
+    // rather than per-frame so it does not depend on the render loop running.
+    m_rhiDevice->debugTriggerGpuFault();
+#endif
 
     return true;
 }
@@ -1922,6 +1959,10 @@ void BackendContext::destroy(){
         vkDestroyInstance(m_vulkanInstance, nullptr);
         m_vulkanInstance = VK_NULL_HANDLE;
     }
+
+    // Process-global: re-establish any Nsight monitor settings now that this backend's device/instance are
+    // gone. Safe when Aftermath was never enabled.
+    Aftermath::Shutdown();
 }
 
 

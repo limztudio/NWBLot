@@ -3084,6 +3084,12 @@ struct GpuCrashReport{
     AString<Alloc::PersistentArena> context;
     AString<Alloc::PersistentArena> details;
 
+    // Optional vendor-neutral binary GPU crash dump (e.g. an NVIDIA Aftermath '.nv-gpudmp'),
+    // captured alongside the text 'details'. Non-owning view into the capturer's buffer; valid
+    // only for the duration of the synchronous DispatchGpuCrash call.
+    const u8* binaryDump = nullptr;
+    usize binaryDumpSize = 0u;
+
     explicit GpuCrashReport(Alloc::PersistentArena& arena)
         : context(arena)
         , details(arena)

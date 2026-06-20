@@ -66,6 +66,7 @@ inline constexpr u32 s_MaxGpuCrashCaptureEntries = 64u; // AGGREGATE cap on mark
 inline constexpr usize s_MaxGpuCrashMarkerChars = 256u; // per-marker string truncation so one deeply-nested label cannot blow the report budget
 inline constexpr usize s_MaxGpuCrashReportChars = 32u * 1024u; // reserved report.details capacity; bounds peak arena use well under s_GpuCrashReportArenaSize (no realloc transients)
 inline constexpr u32 s_MaxAmdBreadcrumbSlots = 256u; // AMD breadcrumb ring slot count (>= s_MaxGpuCrashCaptureEntries); buffer = slots * sizeof(u32)
+inline constexpr u32 s_NvidiaVendorId = 0x10DE; // PCI vendor ID for NVIDIA; gates NVIDIA-only Aftermath GPU crash dump setup
 
 // Queue and swap chain defaults.
 inline constexpr u32 s_GraphicsQueueIndex = 0;

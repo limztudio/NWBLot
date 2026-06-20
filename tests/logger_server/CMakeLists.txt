@@ -10,12 +10,15 @@ target_sources(nwb_logserver_crash_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_android.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_linux.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_rgd.cpp"
+    "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_aftermath.cpp"
 )
 target_link_libraries(nwb_logserver_crash_tests PRIVATE
     nwb_common
     nwb_crash_package
     nwb_alloc
+    nwb::aftermath_headers
 )
+nwb_copy_aftermath_runtime(nwb_logserver_crash_tests)
 if(WIN32)
     target_sources(nwb_logserver_crash_tests PRIVATE
         "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_win32.cpp"

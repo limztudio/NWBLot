@@ -37,6 +37,8 @@ void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, c
 void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDirectory, CrashReportText& outReport);
 // Cross-platform: rgd ships for Windows + Linux, and a .rgd may be decoded by whichever server ingests the package.
 void AppendRadeonGpuDetectiveSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport);
+// Cross-platform: the Aftermath runtime ships for Windows + Linux, and a .nv-gpudmp may be decoded by whichever server ingests the package.
+void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport);
 
 #if defined(NWB_PLATFORM_WINDOWS)
 [[nodiscard]] bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport);

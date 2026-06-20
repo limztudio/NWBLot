@@ -27,6 +27,9 @@ target_link_libraries(testbed PRIVATE
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_shader>"
 )
 
+# Place the NVIDIA Aftermath runtime next to testbed so the device-side dynamic load resolves it.
+nwb_copy_aftermath_runtime(testbed)
+
 if(TARGET nwb_logserver)
     add_dependencies(testbed nwb_logserver)
 endif()

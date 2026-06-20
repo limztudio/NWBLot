@@ -106,7 +106,7 @@ void UninstallCrashHandler();
 [[nodiscard]] bool SetCrashUploadDestination(AStringView logServerUrl, AStringView crashUploadToken);
 [[nodiscard]] bool AddCrashBreadcrumb(AStringView category, AStringView message);
 [[nodiscard]] CrashDumpResult CaptureCrashDump(AStringView category = AStringView(), AStringView message = AStringView());
-[[nodiscard]] CrashDumpResult CaptureGpuCrashDump(AStringView message);
+[[nodiscard]] CrashDumpResult CaptureGpuCrashDump(AStringView message, AStringView binaryDump = AStringView());
 
 template<typename ArenaT>
 [[nodiscard]] ::Path<ArenaT> DefaultCrashSpoolDirectory(ArenaT& arena);

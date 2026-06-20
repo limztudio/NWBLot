@@ -29,6 +29,10 @@ option(NWB_BUILD_LOADER "Build the loader static library." ${NWB_BUILD_LOADER_DE
 option(NWB_BUILD_TESTBED "Build the testbed app." ${WIN32})
 option(NWB_BUILD_TESTS "Build internal validation executables." OFF)
 option(NWB_ENABLE_WAYLAND "Build the native Wayland backend on Linux when dependencies are available." ${NWB_ENABLE_WAYLAND_DEFAULT})
+# DEBUG / TEST ONLY: compiles the deliberate GPU fault-injection hook (Device::debugTriggerGpuFault, triggered by
+# the NWB_DEBUG_GPU_FAULT environment variable) used to exercise the GPU crash capture path. Off by default;
+# never enable in shipping builds.
+option(NWB_ENABLE_GPU_FAULT_INJECTION "Compile the debug GPU fault-injection hook (off in normal builds)." OFF)
 
 add_subdirectory(3rd_parties)
 nwb_configure_external_dependencies()

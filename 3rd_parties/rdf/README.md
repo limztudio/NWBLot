@@ -37,7 +37,7 @@ Patch releases (for example, `1.1.1`) will be bumped for bug fixes and other imp
 
 * **1.0**: Initial release
 * **1.1**: Improve naming consistency: Add `rdfStreamFromUserStream`, mark `rdfStreamCreateFromUserStream` as deprecated
-* **1.1.1**: Fix `rdfChunkFileContainsChunk` returning `rdfResultError` when a chunk was not found instead of `rdfResultOk`  
+* **1.1.1**: Fix `rdfChunkFileContainsChunk` returning `rdfResultError` when a chunk was not found instead of `rdfResultOk`
 * **1.1.2**:
   * Fix `rdfChunkFileWriterWriteChunk`, `rdfChunkFileWriterEndChunk` returning indices starting at 0 when in append mode instead of counting off the actual contents of the file
   * Fix `rdfChunkFileWriterWriteChunk`, `rdfChunkFileWriterBeginChunk` returning an error when using identifiers of the maximum allowed length (i.e. without a trailing null-terminator.) and a non-zero header pointer
@@ -53,7 +53,7 @@ Patch releases (for example, `1.1.1`) will be bumped for bug fixes and other imp
   * Add a new `Close` callback function to `rdfUserStream`. This allows wrapped user streams to clean up the wrapped object, making it easier to track lifetime. ⚠️ This is an ABI breaking change.
 * **1.3.0**
   * Internal refactoring to the internal stream abstraction. It no longer exposes `Seek()` and `Tell()`. There's no change to user streams for now; but a future release will switch to a matching API or may expose a new user stream which doesn't expose `Seek()`, `Tell()`. If you're implementing a custom stream, you'll notice that every read and write operation will be preceded by a `Seek()` now.
-  
+
     This also clarifies how stream wrapping works. Previously undocumented, but assumed, was that the stream was at position 0, and not modified outside. It was already a bug before if those conditions weren't true, but now it's actually documented.
   * Fix bug in `rdfm` which would incorrectly write the last chunk's data when merging an empty chunk.
   * Change validation for the `rdfChunkFileReadChunk*` read functions such that a `nullptr` for the `buffer` argument is valid if the requested size is 0. Previously, this would fail with an invalid argument error.

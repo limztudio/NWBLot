@@ -1,5 +1,5 @@
 package: nlohmann_json
-version: 3.11.2
-updated_utc: 2026-06-20
-source: https://github.com/nlohmann/json
-notes: Single-header JSON. Upgraded 3.9.1 -> 3.11.2 and made the single shared copy: merged the former json/single_include and system_info's bundled 3.11.2 copy per the latest-wins dedup policy. Consumers include <nlohmann/json.hpp>.
+version: 3.12.0
+updated_utc: 2026-06-20T15:40:47Z
+source: https://github.com/nlohmann/json/releases/tag/v3.12.0
+notes: Single-header JSON. Single shared top-level copy; consumers include <nlohmann/json.hpp>.

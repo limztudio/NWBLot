@@ -1,5 +1,5 @@
 //=============================================================================
-// Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Advanced Micro Devices, Inc. All rights reserved.
 /// @author AMD Developer Tools Team
 /// @file
 /// @brief  Definition of the RFD Adapter Information chunk parser
@@ -8,7 +8,7 @@
 #ifndef RMV_PARSER_RMT_RDF_ADAPTER_INFO_H_
 #define RMV_PARSER_RMT_RDF_ADAPTER_INFO_H_
 
-#include "rdf/inc/amdrdf.h"
+#include "amdrdf.h"
 
 /// The Parser for the Adapter Info Chunk.
 class RmtRdfAdapterInfo

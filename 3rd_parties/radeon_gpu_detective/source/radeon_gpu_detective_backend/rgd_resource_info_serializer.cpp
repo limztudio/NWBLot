@@ -860,7 +860,7 @@ bool RgdResourceInfoSerializer::Impl::BuildResourceMapFromEvent(const RmtGpuAddr
                         {
                             RgdResource& paired_resource            = *va_info.resource_map_[paired_resource_rmv_id];
                             paired_resource.associated_resource_idx = current_resource_list_idx;
-                            
+
                             // Find the ResourceList index of the paired_resource.
                             for (intmax_t idx = current_resource_list_idx - 1; idx >= 0; idx--)
                             {
@@ -1177,7 +1177,7 @@ void RgdResourceInfoSerializer::Impl::ResourceHistoryToString(const Config&  use
     const char* kResourceIdStr = "Resource id: ";
     const char* kNameStr = "Name: ";
     bool              is_no_associated_resources = false;
-    
+
     const RgdVaInfo&  va_info                    = *va_info_map_[virtual_address];
 
     if (va_info_map_.find(virtual_address) != va_info_map_.end())
@@ -1217,7 +1217,7 @@ void RgdResourceInfoSerializer::Impl::ResourceHistoryToString(const Config&  use
         // Upon creation of a committed resource an implicit heap is created or upon a creation of a heap an implicit buffer is created.
         // RGD output will include implicit resource when '--implicit-res' option is used.
         // associated_resource_idx holds the index of the associated RmtResource and implicit resource pair.
-        
+
         if (!current_resource.is_implicit || user_config.is_include_implicit_resources)
         {
             txt << kResourceIdStr << std::hex << "0x" << current_resource.rmv_identifier << std::dec << std::endl;
@@ -1774,7 +1774,7 @@ void RgdResourceInfoSerializer::Impl::GenerateResourceTimeline(const Config&  us
             if (!rgd_resource.is_implicit || user_config.is_include_implicit_resources)
             {
                 if (index == 0 || look_ahead_counter[index - 1] == 0 || same_events_count == 0)
-                { 
+                {
                     // Set same events count.
                     same_events_count = look_ahead_counter[index];
                     timestamp_txt << GetTimestampString(rgd_resource_event.event_timestamp);
@@ -1822,7 +1822,7 @@ void RgdResourceInfoSerializer::Impl::GenerateResourceTimeline(const Config&  us
                     std::stringstream resource_type_string;
                     std::stringstream resource_name_string;
                     std::stringstream resource_id_string;
-                    
+
                     resource_id_string << std::hex << "0x" << rgd_resource.rmv_identifier << std::dec;
                     resource_type_string << GetResourceTypeText(rgd_resource.resource_type);
                     resource_name_string << rgd_resource.resource_name;

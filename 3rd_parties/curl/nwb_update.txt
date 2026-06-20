@@ -1,5 +1,5 @@
 package: curl
-version: 8.20.0-DEV
-updated_utc: 2026-06-06
-source: https://github.com/curl/curl
-notes: libcurl transport for the log client.
+version: 8.20.0
+updated_utc: 2026-06-20T15:40:47Z
+source: https://curl.se/download/curl-8.20.0.tar.xz
+notes: libcurl transport for the log client. Public headers + lib/ are vendored from the official release tarball; NWB CMake and curl_config.h are local integration files.

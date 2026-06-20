@@ -87,11 +87,11 @@ static size_t CountSourceLines(const std::string& source)
     size_t line_count = 0;
     std::istringstream stream(source);
     std::string line;
-    
+
     while (std::getline(stream, line)) {
         line_count++;
     }
-    
+
     return line_count;
 }
 
@@ -216,13 +216,13 @@ static void DisplayTruncatedSource(std::stringstream& out, const std::string& so
     std::vector<std::string> lines;
 
     constexpr const char* kFullSourceMsg = "// Run rgd with --full-source to include the complete source code of";
-    
+
     // Store all lines for processing
     while (std::getline(stream, line))
     {
         lines.push_back(line);
     }
-    
+
     // Display first 10 lines
     const size_t kInitialLines = 10;
     size_t i = 0;
@@ -230,42 +230,42 @@ static void DisplayTruncatedSource(std::stringstream& out, const std::string& so
     {
         out << lines[i] << "\n";
     }
-    
+
     if (lines.size() > kInitialLines)
     {
         // Find entry point line
         size_t entry_line = 0;
         for (size_t j = 0; j < lines.size(); ++j)
         {
-            if (lines[j].find(entry_name) != std::string::npos && 
-                (lines[j].find("(") != std::string::npos || 
+            if (lines[j].find(entry_name) != std::string::npos &&
+                (lines[j].find("(") != std::string::npos ||
                  (j+1 < lines.size() && lines[j+1].find("(") != std::string::npos)))
             {
                 entry_line = j;
                 break;
             }
         }
-        
+
         // If entry point found, display context lines around it
         if (entry_line > 0)
         {
             // Calculate start_line ensuring we don't print already shown lines
             size_t start_line = (entry_line > kSourceContextLines) ? entry_line - kSourceContextLines : 0;
-            
+
             // Adjust start_line to avoid overlap with already printed lines
             if (start_line < kInitialLines)
             {
                 start_line = kInitialLines;
             }
-            
+
             // Only add ellipsis if there's a gap between what we've shown and what we'll show next
             if (start_line > kInitialLines)
             {
                 PrintVerticalEllipsisWithMessage(std::string(kFullSourceMsg) + " " + source_file_name + ".", out);
             }
-            
+
             size_t end_line = std::min(entry_line + kSourceContextLines, lines.size() - 1);
-            
+
             // Only print lines if there are any new lines to print
             if (start_line <= end_line)
             {
@@ -274,7 +274,7 @@ static void DisplayTruncatedSource(std::stringstream& out, const std::string& so
                     out << lines[i] << "\n";
                 }
             }
-            
+
             // Add trailing ellipsis if we haven't reached the end
             if (end_line < lines.size() - 1)
             {
@@ -288,7 +288,7 @@ static void DisplayTruncatedSource(std::stringstream& out, const std::string& so
 static std::string ConsolidateWaveCoordinates(const std::vector<uint32_t>& shader_ids)
 {
     std::set<uint32_t> se_ids, sa_ids, wgp_ids;
-    
+
     for (uint32_t shader_id : shader_ids)
     {
         // Extract bit fields from shader_id as defined in rgdevents.h
@@ -306,12 +306,12 @@ static std::string ConsolidateWaveCoordinates(const std::vector<uint32_t>& shade
 
         // bits 18-21 (4 bits)
         uint32_t se_id = (shader_id >> 18) & 0xF;
-        
+
         se_ids.insert(se_id);
         sa_ids.insert(sa_id);
         wgp_ids.insert(wgp_id);
     }
-    
+
     std::stringstream result;
     result << "Wave Coordinates: SE: { ";
     bool first = true;
@@ -338,7 +338,7 @@ static std::string ConsolidateWaveCoordinates(const std::vector<uint32_t>& shade
         first = false;
     }
     result << " }";
-    
+
     return result.str();
 }
 
@@ -354,11 +354,11 @@ public:
     ~Impl() {}
 
     /// @brief Build the crashing code object info map.
-    /// 
+    ///
     /// The code object database holds the information of the crashing code objects.
     bool BuildCrashingCodeObjectDatabase(const Config& user_config, RgdCrashDumpContents& rgd_crash_dump_contents);
 
-    /// @brief Build the output text for the shader info section. 
+    /// @brief Build the output text for the shader info section.
     bool BuildInFlightShaderInfo(const Config& user_config, std::string& out_text);
 
     /// @brief Build the output JSON for the shader info section.
@@ -413,8 +413,8 @@ private:
                                      std::vector<std::pair<uint64_t, std::string>>& instructions,
                                      std::string&                                   out_disassembly_text,
                                      std::vector<std::pair<std::string, std::string>>* srd_analysis_data = nullptr,
-                                     SrdAnalysisUnavailableReason* srd_unavailable_reason = nullptr);    
-    
+                                     SrdAnalysisUnavailableReason* srd_unavailable_reason = nullptr);
+
     void GetDisassemblyJson(const std::map<uint64_t, size_t>&              pc_offset_to_hung_wave_count_map_,
                             const std::map<uint64_t, std::vector<uint32_t>>& pc_offset_to_wave_coords_map_,
                             std::vector<std::pair<uint64_t, std::string>>& instructions,
@@ -536,7 +536,7 @@ bool RgdEnhancedCrashInfoSerializer::Initialize(const Config& user_config, RgdCr
 
     // Set the crash type - page fault or hang.
     enhanced_crash_info_serializer_impl_->SetIsPageFault(is_page_fault);
-    
+
     // Set the API type.
     enhanced_crash_info_serializer_impl_->SetTraceApiType(rgd_crash_dump_contents.api_info.apiType);
 
@@ -557,7 +557,7 @@ bool RgdEnhancedCrashInfoSerializer::Initialize(const Config& user_config, RgdCr
         // The class instance is initialized to a default state.
         RgdUtils::PrintMessage("Hardware crash analysis feature is not enabled.", RgdMessageType::kInfo, user_config.is_verbose);
     }
-    
+
     return ret;
 }
 
@@ -726,7 +726,7 @@ bool RgdEnhancedCrashInfoSerializer::Impl::BuildCrashingCodeObjectDatabase(const
 
                 // Calculate PC offset and build PC offset to shader ID mapping.
                 uint64_t pc_instruction_offset = (program_counter | kAddressHighWordOne) - base_address;
-                
+
                 // Get shader IDs for this program counter from the prebuilt mapping.
                 std::vector<uint32_t> wave_coords;
                 auto pc_to_wave_coords_it = pc_to_wave_coords_map_.find(program_counter);
@@ -739,9 +739,9 @@ bool RgdEnhancedCrashInfoSerializer::Impl::BuildCrashingCodeObjectDatabase(const
                 assert(base_address_code_object_hash_map_.find(base_address) != base_address_code_object_hash_map_.end());
                 if (base_address_code_object_hash_map_.find(base_address) != base_address_code_object_hash_map_.end())
                 {
-                    
+
                     Rgd128bitHash code_object_hash = base_address_code_object_hash_map_[base_address];
-                    
+
                     if (rgd_crash_dump_contents.code_objects_map.find(code_object_hash) != rgd_crash_dump_contents.code_objects_map.end())
                     {
                         uint64_t    api_pso_hash          = GetApiPsoHashFromPsoCorrelationsChunk(code_object_hash, rgd_crash_dump_contents.pso_correlations);
@@ -767,7 +767,7 @@ bool RgdEnhancedCrashInfoSerializer::Impl::BuildCrashingCodeObjectDatabase(const
             {
                 // Populate the code object database entries with additional information.
                 rgd_code_object_database_->Populate(rgd_crash_dump_contents.gpu_series);
-                
+
                 // Extract the debug info if the pdb files are available.
                 // Collect the pdb search paths from the user config and the crash dump contents.
                 // Prioritize the user config paths over the crash dump contents paths.
@@ -788,7 +788,7 @@ bool RgdEnhancedCrashInfoSerializer::Impl::BuildCrashingCodeObjectDatabase(const
                 {
                     // Update the in-flight shader info with the debug info extracted from the PDB files.
                     std::cout << "PDB search path found. Extracting debug info for in-flight shaders..." << std::endl;
-                    
+
                     if (rgd_code_object_database_->ExtractDebugInfo(user_config, pdb_search_paths))
                     {
                         std::cout << "Debug info extracted successfully." << std::endl;
@@ -816,7 +816,7 @@ bool RgdEnhancedCrashInfoSerializer::Impl::BuildCrashingCodeObjectDatabase(const
 bool RgdEnhancedCrashInfoSerializer::Impl::BuildBaseAddressCodeObjectHashMap(
     const std::vector<RgdCodeObjectLoadEvent>& code_object_load_events)
 {
-    base_address_code_object_hash_map_.clear(); 
+    base_address_code_object_hash_map_.clear();
 
     for (const auto& code_object_load_event : code_object_load_events)
     {
@@ -838,7 +838,7 @@ bool RgdEnhancedCrashInfoSerializer::Impl::BuildProgramCountersMap()
         const uint32_t           current_wave_coordinates           = pair.first;
         const WaveInfoRegisters& wave_info_registers = pair.second;
         uint64_t                 program_counter     = wave_info_registers.sq_wave_pc_lo;
-        
+
         // Build program counter count map.
         if (program_counters_map_.find(program_counter) == program_counters_map_.end())
         {
@@ -860,7 +860,7 @@ bool RgdEnhancedCrashInfoSerializer::Impl::BuildProgramCountersMap()
 bool RgdEnhancedCrashInfoSerializer::Impl::BuildEnhancedCrashInfoRegisterContext(const RgdCrashDumpContents& rgd_crash_dump_contents)
 {
     bool ret = false;
-    
+
     std::unique_ptr<ICrashInfoRegistersParser> crash_info_registers_parser = CrashInfoRegistersParserFactory::CreateParser(rgd_crash_dump_contents.gpu_series);
 
     assert(crash_info_registers_parser != nullptr);
@@ -1074,7 +1074,7 @@ bool RgdEnhancedCrashInfoSerializer::Impl::BuildInFlightShaderInfoJson(const Con
                     {
                         shader_info_json[kJsonElemShaderIoAndResourceBindings].push_back(shader_io_line);
                     }
-                    
+
                     // Build source json (truncated if necessary) with context around entry point.
                     BuildHighLevelSourceJson(shader_info.high_level_source, shader_info.entry_point_name, user_config.is_full_source, shader_info_json[kJsonElemSourceCode]);
 
@@ -1176,7 +1176,7 @@ void RgdEnhancedCrashInfoSerializer::Impl::GetDisassemblyJson(const std::map<uin
                 for (size_t range_pair_idx = 0; range_pair_idx < instruction_ranges.size(); range_pair_idx++)
                 {
                     const auto& instruction_range = instruction_ranges[range_pair_idx];
-                    
+
                     if (range_pair_idx == 0 && instruction_range.first > 0)
                     {
                         // Add leading json object for hidden instructions.
@@ -1207,7 +1207,7 @@ void RgdEnhancedCrashInfoSerializer::Impl::GetDisassemblyJson(const std::map<uin
                             // So for the page fault, on instruction before the program counter is the one that caused the crash.
                             // Wave count represents the number waves having the same program counter value.
                             // For the page fault, attrubute the wave count from next instruction indicating number waves already executed current instruction.
-                            
+
                             if (i + 1 < instructions.size() &&
                                 pc_offset_to_hung_wave_count_map_.find(instructions[i + 1].first) != pc_offset_to_hung_wave_count_map_.end())
                             {
@@ -1238,7 +1238,7 @@ void RgdEnhancedCrashInfoSerializer::Impl::GetDisassemblyJson(const std::map<uin
                         out_disassembly_json[kJsonElemInstructionsDisassembly].push_back(std::move(instruction_json));
                     }
                 }
-                
+
                 // Add SRD analysis if available.
                 if (!srd_analysis_json.is_null() && srd_analysis_json.is_array() && !srd_analysis_json.empty())
                 {
@@ -1339,7 +1339,7 @@ void RgdEnhancedCrashInfoSerializer::Impl::CalculateInstructionRangesToPrint(
 
             std::string out_instruction_disassembly;
             size_t      pc_wave_count = offset_wave_count_pair.second;
-            
+
             assert(pc_wave_count != 0);
             std::vector<uint32_t> wave_coords;
             if(pc_offset_to_wave_coords_map_.find(instruction_offset) != pc_offset_to_wave_coords_map_.end())
@@ -1357,19 +1357,19 @@ void RgdEnhancedCrashInfoSerializer::Impl::CalculateInstructionRangesToPrint(
             {
                 // SRD analysis is applicable only for page fault crashes.
                 // Generate SRD analysis for an offending instruction when at least one of the operands is using SGPRs to hold the resource descriptor and SGPR collection was enabled at the time of the crash.
-                
+
                 // Generate text SRD analysis if requested.
                 if (srd_analysis_data != nullptr)
                 {
                     GenerateSrdAnalysisForInstruction(crashing_instr_disassembly, wave_coords, srd_analysis_data, srd_unavailable_reason);
                 }
-                
+
                 // Generate JSON SRD analysis if requested.
                 if (srd_analysis_json != nullptr)
                 {
                     nlohmann::json current_srd_json;
                     GenerateSrdAnalysisForInstructionJson(crashing_instr_disassembly, wave_coords, current_srd_json);
-                    
+
                     if (!current_srd_json.empty())
                     {
                         // Initialize as array if not already done.
@@ -1473,7 +1473,7 @@ void RgdEnhancedCrashInfoSerializer::Impl::GenerateSrdAnalysisForInstruction(con
             {
                 // Group shader IDs/Wave coordinates by their SGPR values to consolidate SRD analysis.
                 std::map<std::string, std::vector<uint32_t>> sgpr_signature_to_wave_coords;
-                
+
                 for (uint32_t current_wave_coordinates : wave_coords)
                 {
                     // Get SGPR signature for this shader ID/Wave coordinates.
@@ -1486,18 +1486,18 @@ void RgdEnhancedCrashInfoSerializer::Impl::GenerateSrdAnalysisForInstruction(con
                         sgpr_signature_to_wave_coords[sgpr_signature].push_back(current_wave_coordinates);
                     }
                 }
-                
+
                 // Perform SRD analysis for each unique SGPR signature group.
                 std::stringstream consolidated_analysis;
                 size_t group_index = 0;
-                
+
                 for (const auto& [sgpr_signature, current_group_wave_coordinates] : sgpr_signature_to_wave_coords)
                 {
                     if (!sgpr_signature.empty())
                     {
                         // Use the first shader ID/wave coordinates from the group for SRD analysis.
                         std::string srd_analysis = srd_analyzer_->GetSrdAnalysisForOffendingInstruction(crashing_instr_disassembly, sgpr_groups, current_group_wave_coordinates[0]);
-                        
+
                         if (!srd_analysis.empty())
                         {
                             if (sgpr_signature_to_wave_coords.size() > 1)
@@ -1507,7 +1507,7 @@ void RgdEnhancedCrashInfoSerializer::Impl::GenerateSrdAnalysisForInstruction(con
                                 consolidated_analysis << "-" << (group_index + 1) << "- ";
                                 consolidated_analysis << ConsolidateWaveCoordinates(current_group_wave_coordinates);
                                 consolidated_analysis << srd_analysis << std::endl;
-                                
+
                                 if (group_index < sgpr_signature_to_wave_coords.size() - 1)
                                 {
                                     consolidated_analysis << "\n\n";
@@ -1518,12 +1518,12 @@ void RgdEnhancedCrashInfoSerializer::Impl::GenerateSrdAnalysisForInstruction(con
                                 // Single SGPR signature, use the original analysis.
                                 consolidated_analysis << srd_analysis << std::endl;
                             }
-                            
+
                             group_index++;
                         }
                     }
                 }
-                
+
                 // Store consolidated SRD analysis data if any analysis was performed.
                 std::string final_analysis = consolidated_analysis.str();
                 if (!final_analysis.empty())
@@ -1581,7 +1581,7 @@ void RgdEnhancedCrashInfoSerializer::Impl::GenerateSrdAnalysisForInstructionJson
                 {
                     // Group shader IDs/Wave coordinates by their SGPR values to consolidate SRD analysis.
                     std::map<std::string, std::vector<uint32_t>> sgpr_signature_to_wave_coords;
-                    
+
                     for (uint32_t current_wave_coordinates : wave_coords)
                     {
                         // Get SGPR signature for this shader ID/Wave coordinates.
@@ -1594,11 +1594,11 @@ void RgdEnhancedCrashInfoSerializer::Impl::GenerateSrdAnalysisForInstructionJson
                             sgpr_signature_to_wave_coords[sgpr_signature].push_back(current_wave_coordinates);
                         }
                     }
-                    
+
                     // Perform SRD analysis for each unique SGPR signature group.
                     out_srd_analysis_json["instruction"] = crashing_instr_disassembly;
                     out_srd_analysis_json["srd_disassembly"] = nlohmann::json::array();
-                    
+
                     for (const auto& [sgpr_signature, current_group_wave_coordinates] : sgpr_signature_to_wave_coords)
                     {
                         if (!sgpr_signature.empty())
@@ -1611,7 +1611,7 @@ void RgdEnhancedCrashInfoSerializer::Impl::GenerateSrdAnalysisForInstructionJson
                                 nlohmann::json signature_group;
                                 signature_group["wave_coordinates"] = ConsolidateWaveCoordinates(current_group_wave_coordinates);
                                 signature_group["srd_analysis"] = srd_analysis_array;
-                                
+
                                 out_srd_analysis_json["srd_disassembly"].push_back(std::move(signature_group));
                             }
                         }
@@ -1623,7 +1623,7 @@ void RgdEnhancedCrashInfoSerializer::Impl::GenerateSrdAnalysisForInstructionJson
                 // Log the error and continue without SRD analysis for this instruction.
                 std::string error_msg = SrdAnalysisErrors::kJsonErrorPrefix + std::string(e.what());
                 RgdUtils::PrintMessage(error_msg.c_str(), RgdMessageType::kError, true);
-                
+
                 // Clear any partial JSON data that might have been set.
                 out_srd_analysis_json.clear();
             }
@@ -1632,7 +1632,7 @@ void RgdEnhancedCrashInfoSerializer::Impl::GenerateSrdAnalysisForInstructionJson
                 // Handle other exceptions that might occur during SRD analysis.
                 std::string error_msg = SrdAnalysisErrors::kGeneralErrorPrefix + std::string(e.what());
                 RgdUtils::PrintMessage(error_msg.c_str(), RgdMessageType::kError, true);
-                
+
                 // Clear any partial JSON data that might have been set.
                 out_srd_analysis_json.clear();
             }
@@ -1689,7 +1689,7 @@ void RgdEnhancedCrashInfoSerializer::Impl::BuildGprEventIndex(const CrashData& k
 {
     wave_coords_to_gpr_event_indices_.clear();
     std::set<uint32_t> processed_wave_coords;
-    
+
     // Build index of GPR events by shader ID/Wave coordinates for efficient lookup.
     for (size_t i = 0, count = kmd_crash_data.events.size(); i < count; ++i)
     {
@@ -1700,13 +1700,13 @@ void RgdEnhancedCrashInfoSerializer::Impl::BuildGprEventIndex(const CrashData& k
             if (rgd_event.header.eventId == uint8_t(KmdEventId::SgprVgprRegisters))
             {
                 const GprRegistersData& gpr_event = static_cast<const GprRegistersData&>(rgd_event);
-                
+
                 // Skip if we've already processed a complete set for this shader ID/Wave coordinates.
                 if (processed_wave_coords.find(gpr_event.shaderId) != processed_wave_coords.end())
                 {
                     continue;
                 }
-                
+
                 if (gpr_event.isVgpr)
                 {
                     // VGPR event - add to the vector of VGPR indices.
@@ -1748,7 +1748,7 @@ std::string RgdEnhancedCrashInfoSerializer::Impl::GetGprDataForShader(const std:
         // Collect shader IDs/Wave coordinates for this shader's PC offsets.
         // pc_offset_to_hung_wave_count_map contains offsets for all the shaders withing the code object.
         // We need to filter out the offsets that belong to this shader only.
-        
+
         std::set<uint32_t> wave_coords_for_this_shader;
         for (const auto& pc_offset_pair : pc_offset_to_hung_wave_count_map)
         {
@@ -1779,36 +1779,36 @@ std::string RgdEnhancedCrashInfoSerializer::Impl::GetGprDataForShader(const std:
         {
             // Use pre-built index to find GPR events for our shader IDs/Wave coordinates.
             std::vector<std::pair<uint32_t, std::pair<size_t, std::vector<size_t>>>> matching_shader_events;
-            
+
             for (uint32_t current_wave_coordinates : wave_coords_for_this_shader)
             {
                 auto it = wave_coords_to_gpr_event_indices_.find(current_wave_coordinates);
-                
+
                 // Check if we have at least SGPR or some VGPR data.
-                if (it != wave_coords_to_gpr_event_indices_.end() && 
+                if (it != wave_coords_to_gpr_event_indices_.end() &&
                     (it->second.first != 0 || !it->second.second.empty()))
                 {
                     matching_shader_events.push_back(*it);
                 }
             }
-            
+
             if (!matching_shader_events.empty())
             {
                 // Calculate total number of waves (shader IDs/Wave coordinates with any GPR data).
                 size_t total_waves = matching_shader_events.size();
                 size_t current_wave_index = 1;
-                
+
                 // Print events using the pre-built index.
                 for (const auto& shader_event : matching_shader_events)
                 {
                     uint32_t current_wave_coordinates = shader_event.first;
                     size_t sgpr_event_index = shader_event.second.first;
                     const std::vector<size_t>& vgpr_event_indices = shader_event.second.second;
-                    
+
                     result << std::endl;
                     result << "*** Wave " << current_wave_index << "/" << total_waves << ": ***" << std::endl;
                     result << "Wave coordinate ID: 0x" << std::hex << current_wave_coordinates << std::dec << std::endl;
-                    
+
                     // Print SGPR data if available
                     if (sgpr_event_index != 0 && IsSgprCollectionEnabled())
                     {
@@ -1824,7 +1824,7 @@ std::string RgdEnhancedCrashInfoSerializer::Impl::GetGprDataForShader(const std:
                     {
                         result << kMsgSgprData << ": " << kStrNotAvailable << " (" << kMsgSgprCollectionNotEnabled << ")" << std::endl;
                     }
-                    
+
                     // Print VGPR data if available
                     if (!vgpr_event_indices.empty() && IsVgprCollectionEnabled())
                     {
@@ -1843,7 +1843,7 @@ std::string RgdEnhancedCrashInfoSerializer::Impl::GetGprDataForShader(const std:
                     {
                         result << kMsgVgprData << ": " << kStrNotAvailable << " (" << kMsgVgprCollectionNotEnabled << ")" << std::endl;
                     }
-                    
+
                     current_wave_index++;
                 }
             }
@@ -1863,7 +1863,7 @@ std::string RgdEnhancedCrashInfoSerializer::Impl::GetGprDataForShader(const std:
                 {
                     availability_msg = "VGPR collection was enabled";
                 }
-                
+
                 result << kStrNotAvailable << " (" << availability_msg << " at the time of the capture but no data was found.)" << std::endl;
                 RgdUtils::PrintMessage((availability_msg + " but no GPR data was found.").c_str(), RgdMessageType::kError, true);
                 assert(false);
@@ -1886,7 +1886,7 @@ std::string RgdEnhancedCrashInfoSerializer::Impl::GetGprDataForShader(const std:
         {
             enabled_types = "VGPR";
         }
-        
+
         // Parse the events to see if any GPR data is present. If not, likely a misconfiguration/incorrect driver.
         bool gpr_events_found = false;
         for(const auto& event : kmd_crash_data_->events)
@@ -1974,18 +1974,18 @@ void RgdEnhancedCrashInfoSerializer::Impl::GetGprDataForShaderJson(const std::ma
             for (uint32_t current_wave_coordinates : wave_coords_for_this_shader)
             {
                 auto it = wave_coords_to_gpr_event_indices_.find(current_wave_coordinates);
-                if (it != wave_coords_to_gpr_event_indices_.end() && 
+                if (it != wave_coords_to_gpr_event_indices_.end() &&
                     (it->second.first != 0 || !it->second.second.empty()))
                 {
                     size_t sgpr_event_index = it->second.first;
                     const std::vector<size_t>& vgpr_event_indices = it->second.second;
-                    
+
                     // Add SGPR data if available
                     if (sgpr_event_index != 0 && IsSgprCollectionEnabled())
                     {
                         const RgdEventOccurrence* event_occurrence = &kmd_crash_data_->events[sgpr_event_index];
                         const GprRegistersData& gpr_event = static_cast<const GprRegistersData&>(*event_occurrence->rgd_event);
-                        
+
                         nlohmann::json gpr_entry;
                         gpr_entry["timestamp"] = event_occurrence->event_time;
                         gpr_entry["type"] = "SGPR";
@@ -2008,10 +2008,10 @@ void RgdEnhancedCrashInfoSerializer::Impl::GetGprDataForShaderJson(const std::ma
                         {
                             gpr_entry["register_values"] = nlohmann::json::array();
                         }
-                        
+
                         gpr_data_array.emplace_back(std::move(gpr_entry));
                     }
-                    
+
                     // Process VGPR events if available
                     if (!vgpr_event_indices.empty() && IsVgprCollectionEnabled())
                     {
@@ -2019,7 +2019,7 @@ void RgdEnhancedCrashInfoSerializer::Impl::GetGprDataForShaderJson(const std::ma
                         {
                             const RgdEventOccurrence* vgpr_event_occurrence = &kmd_crash_data_->events[vgpr_index];
                             const GprRegistersData& vgpr_event = static_cast<const GprRegistersData&>(*vgpr_event_occurrence->rgd_event);
-                            
+
                             nlohmann::json vgpr_entry;
                             vgpr_entry["timestamp"] = vgpr_event_occurrence->event_time;
                             vgpr_entry["type"] = "VGPR";
@@ -2042,7 +2042,7 @@ void RgdEnhancedCrashInfoSerializer::Impl::GetGprDataForShaderJson(const std::ma
                             {
                                 vgpr_entry["register_values"] = nlohmann::json::array();
                             }
-                            
+
                             gpr_data_array.emplace_back(std::move(vgpr_entry));
                         }
                     }
@@ -2089,7 +2089,7 @@ bool RgdEnhancedCrashInfoSerializer::Impl::GetCompleteDisassembly(const Config& 
         txt << "===========" << std::endl;
         txt << entry.disassembly_ << std::endl << std::endl;
     }
-    
+
     out_text = txt.str();
     return !out_text.empty();
 }

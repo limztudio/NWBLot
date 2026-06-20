@@ -1,5 +1,5 @@
 package: libmicrohttpd
-version: 1.0.1
-updated_utc: 2026-06-06
-source: https://ftp.gnu.org/gnu/libmicrohttpd
-notes: GNU libmicrohttpd HTTP server for the log server.
+version: 1.0.5
+updated_utc: 2026-06-20T15:40:47Z
+source: https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-1.0.5.tar.gz
+notes: GNU libmicrohttpd HTTP server for the log server. Vendored src/include + src/microhttpd layout; NWB CMake and MHD_config.h preserved.

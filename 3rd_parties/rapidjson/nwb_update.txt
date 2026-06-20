@@ -1,0 +1,5 @@
+package: rapidjson
+version: 1.1.0 (bundled system_info_utils snapshot)
+updated_utc: 2026-06-20T15:40:47Z
+source: https://github.com/GPUOpen-Tools/system_info_utils/releases/tag/v2.3 (source/third_party/rapidjson)
+notes: Header-only RapidJSON. Flattened out of system_info_utils/source/third_party because system_info_utils v2.3 includes <rapidjson/...> directly.

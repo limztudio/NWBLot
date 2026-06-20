@@ -141,7 +141,7 @@ namespace internal
             assert(bytesRead <= count);
             return bytesRead;
         }
-        
+
         std::int64_t WriteImpl(const std::int64_t offset,
                                const std::int64_t count,
                                const void* buffer) override
@@ -156,20 +156,20 @@ namespace internal
         }
 
         std::int64_t GetSizeImpl() const override
-        { 
+        {
             std::int64_t size = 0;
             CheckCall(stream_.GetSize(stream_.context, &size));
             assert(size >= 0);
             return size;
         }
 
-        bool CanWriteImpl() const override 
-        { 
+        bool CanWriteImpl() const override
+        {
             return stream_.Write != nullptr;
         }
 
-        bool CanReadImpl() const override 
-        { 
+        bool CanReadImpl() const override
+        {
             return stream_.Read != nullptr;
         }
 
@@ -732,7 +732,7 @@ namespace internal
         {
             assert(stream_);
             stream_->Write(dataWriteOffset_, chunks_.size() * sizeof(ChunkFile::IndexEntry), chunks_.data());
-            
+
             header_.indexOffset = dataWriteOffset_;
             header_.indexSize = chunks_.size() * sizeof(ChunkFile::IndexEntry);
 
@@ -852,7 +852,7 @@ namespace internal
     {
         CloseImpl();
     }
-    
+
     //////////////////////////////////////////////////////////////////////
     bool IStream::CanRead() const
     {
@@ -930,7 +930,7 @@ namespace internal
         }
 
         void CloseImpl() override
-        { 
+        {
             std::fclose(fd_);
             fd_ = nullptr;
         }
@@ -1053,7 +1053,7 @@ namespace internal
         }
 
         void CloseImpl() override
-        { 
+        {
             data_.clear();
         }
 
@@ -2106,7 +2106,7 @@ int RDF_EXPORT rdfChunkFileWriterCreate(rdfStream* stream, rdfChunkFileWriter** 
 /**
 Create a new chunk file writer.
 
-The stream must allow both read and write access if appending is enabled. 
+The stream must allow both read and write access if appending is enabled.
 When appending, the stream must be pointing at an existing chunk file,
 otherwise appending will fail (i.e. you can't use append on a fresh stream.)
 */

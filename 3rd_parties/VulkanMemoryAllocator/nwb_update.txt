@@ -1,5 +1,5 @@
 package: VulkanMemoryAllocator
-version: 3.4.0-development
-updated_utc: 2026-05-02
-source: https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
+version: 3.4.0
+updated_utc: 2026-06-20T15:40:47Z
+source: https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/releases/tag/v3.4.0
 notes: Header-only Vulkan allocator (vk_mem_alloc.h).

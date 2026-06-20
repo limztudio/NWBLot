@@ -233,9 +233,9 @@ CURLcode Curl_http_proxy_create_CONNECT(struct httpreq **preq,
       goto out;
   }
 
-  if(data->state.aptr.proxyuserpwd) {
+  if(data->req.proxyuserpwd) {
     result = Curl_dynhds_h1_cadd_line(&req->headers,
-                                      data->state.aptr.proxyuserpwd);
+                                      data->req.proxyuserpwd);
     if(result)
       goto out;
   }
@@ -391,7 +391,7 @@ static void http_proxy_cf_close(struct Curl_cfilter *cf,
 
 struct Curl_cftype Curl_cft_http_proxy = {
   "HTTP-PROXY",
-  CF_TYPE_IP_CONNECT | CF_TYPE_PROXY,
+  CF_TYPE_IP_CONNECT | CF_TYPE_PROXY | CF_TYPE_SETUP,
   0,
   http_proxy_cf_destroy,
   http_proxy_cf_connect,

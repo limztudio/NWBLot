@@ -249,7 +249,7 @@ bool RgdParsingUtils::ParseCrashDataChunks(rdf::ChunkFile& chunk_file, const cha
                         current_time += (curr_event->header.delta * (uint64_t)timeUnit);
                         curr_crash_data.events.push_back(RgdEventOccurrence(curr_event, current_time));
                         bytes_read += sizeof(DDEventHeader) + curr_event->header.eventSize;
-                        
+
                         // Set the crash type as page fault.
                         SetIsPageFault(true);
                     }
@@ -344,7 +344,7 @@ bool RgdParsingUtils::ParseCrashDataChunks(rdf::ChunkFile& chunk_file, const cha
         RgdUtils::PrintMessage(warning_txt.str().c_str(), RgdMessageType::kWarning, true);
     }
 
-    error_msg = error_txt.str();  
+    error_msg = error_txt.str();
     ret = error_msg.empty();
     return ret;
 }
@@ -790,7 +790,7 @@ bool RgdParsingUtils::ParseDriverOverridesChunk(rdf::ChunkFile& chunk_file, cons
         error_txt << kErrorMsg << " (Driver Experiments information missing [" << kChunkIdDriverOverrides << "])";
         RgdUtils::PrintMessage(error_txt.str().c_str(), RgdMessageType::kError, true);
     }
-    
+
     ret = error_txt.str().empty();
 
     return ret;
@@ -823,27 +823,27 @@ bool RgdParsingUtils::ParseRgdExtendedInfoChunk(rdf::ChunkFile& chunk_file, cons
                 try
                 {
                     json_doc = nlohmann::json::parse(extended_info_json_data.data());
-                    
+
                     // Extract data from JSON into the RgdExtendedInfo structure
                     if (json_doc.contains(kJsonElemHcaEnabled))
                     {
                         extended_info.is_hca_enabled = json_doc[kJsonElemHcaEnabled].get<bool>();
                     }
-                    
+
                     if (json_doc.contains(kJsonElemHcaFlags))
                     {
                         auto& hca_flags = json_doc[kJsonElemHcaFlags];
-                        
+
                         if (hca_flags.contains(kJsonElemCaptureWaveData))
                         {
                             extended_info.is_capture_wave_data = hca_flags[kJsonElemCaptureWaveData].get<bool>();
                         }
-                        
+
                         if (hca_flags.contains(kJsonElemEnableSingleAluOp))
                         {
                             extended_info.is_enable_single_alu_op = hca_flags[kJsonElemEnableSingleAluOp].get<bool>();
                         }
-                        
+
                         if (hca_flags.contains(kJsonElemEnableSingleMemOp))
                         {
                             extended_info.is_enable_single_memory_op = hca_flags[kJsonElemEnableSingleMemOp].get<bool>();
@@ -859,7 +859,7 @@ bool RgdParsingUtils::ParseRgdExtendedInfoChunk(rdf::ChunkFile& chunk_file, cons
                             extended_info.is_capture_vgpr_data = hca_flags[kJsonElemCaptureVgprData].get<bool>();
                         }
                     }
-                    
+
                     if (json_doc.contains(kJsonElemPdbSearchPaths))
                     {
                         extended_info.pdb_search_paths.clear();
@@ -892,7 +892,7 @@ bool RgdParsingUtils::ParseRgdExtendedInfoChunk(rdf::ChunkFile& chunk_file, cons
         error_txt << kErrorMsg << " (Extended Information missing [" << kChunkIdRgdExtendedInfo << "]).";
         RgdUtils::PrintMessage(error_txt.str().c_str(), RgdMessageType::kError, true);
     }
-    
+
     ret = error_txt.str().empty();
 
     return ret;
@@ -1122,7 +1122,7 @@ bool RgdParsingUtils::ParseCrashDump(const Config& user_config, RgdCrashDumpCont
         ret = RgdParsingUtils::ParseCrashDataChunks(chunk_file, kChunkCrashData, contents.umd_crash_data, contents.kmd_crash_data, error_msg);
 
         // Parse System Info chunk.
-        is_system_info_parsed = system_info_utils::SystemInfoReader::Parse(chunk_file, contents.system_info);
+        is_system_info_parsed = system_info_utils::SystemInfoReader::Parse(static_cast<rdfChunkFile*>(chunk_file), contents.system_info);
         if (is_system_info_parsed)
         {
             ecitrace::GpuSeries gpu_series = ecitrace::GpuSeries::kUnknown;

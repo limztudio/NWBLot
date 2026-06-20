@@ -19,13 +19,13 @@ MOSTLYCLEANFILES =
 AM_V_LIB = $(am__v_LIB_@AM_V@)
 am__v_LIB_ = $(am__v_LIB_@AM_DEFAULT_V@)
 am__v_LIB_0 = @echo "  LIB     " $@;
-am__v_LIB_1 = 
+am__v_LIB_1 =
 
 if W32_SHARED_LIB_EXP
 AM_V_DLLTOOL = $(am__v_DLLTOOL_@AM_V@)
 am__v_DLLTOOL_ = $(am__v_DLLTOOL_@AM_DEFAULT_V@)
 am__v_DLLTOOL_0 = @echo "  DLLTOOL " $@;
-am__v_DLLTOOL_1 = 
+am__v_DLLTOOL_1 =
 
 W32_MHD_LIB_LDFLAGS = -Wl,--output-def,$(lt_cv_objdir)/libmicrohttpd.def -XCClinker -static-libgcc
 noinst_DATA += $(lt_cv_objdir)/libmicrohttpd.lib $(lt_cv_objdir)/libmicrohttpd.def
@@ -126,7 +126,7 @@ libmicrohttpd_la_LIBADD = \
 AM_V_RC = $(am__v_RC_@AM_V@)
 am__v_RC_ = $(am__v_RC_@AM_DEFAULT_V@)
 am__v_RC_0 = @echo "  RC      " $@;
-am__v_RC_1 = 
+am__v_RC_1 =
 
 # General rule is not required, but keep it just in case
 # Note: windres does not understand '-isystem' flag, so all
@@ -144,7 +144,7 @@ libmicrohttpd_la-microhttpd_dll_res.lo: $(builddir)/microhttpd_dll_res.rc
 if HAVE_W32
 MHD_DLL_RES_LO = libmicrohttpd_la-microhttpd_dll_res.lo
 else
-MHD_DLL_RES_LO = 
+MHD_DLL_RES_LO =
 endif
 
 EXTRA_libmicrohttpd_la_DEPENDENCIES = $(MHD_DLL_RES_LO)

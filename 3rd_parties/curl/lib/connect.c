@@ -97,14 +97,17 @@ enum alpnid Curl_str2alpnid(const struct Curl_str *cstr)
 #endif
 
 /*
- * Curl_timeleft_ms() returns the amount of milliseconds left allowed for the
+ * timeleft_now_ms() returns the amount of milliseconds left allowed for the
  * transfer/connection. If the value is 0, there is no timeout (ie there is
  * infinite time left). If the value is negative, the timeout time has already
  * elapsed.
- * @unittest: 1303
+ *
+ * @unittest 1303
  */
-timediff_t Curl_timeleft_now_ms(struct Curl_easy *data,
-                                const struct curltime *pnow)
+UNITTEST timediff_t timeleft_now_ms(struct Curl_easy *data,
+                                    const struct curltime *pnow);
+UNITTEST timediff_t timeleft_now_ms(struct Curl_easy *data,
+                                    const struct curltime *pnow)
 {
   timediff_t timeleft_ms = 0;
   timediff_t ctimeleft_ms = 0;
@@ -139,7 +142,7 @@ timediff_t Curl_timeleft_now_ms(struct Curl_easy *data,
 
 timediff_t Curl_timeleft_ms(struct Curl_easy *data)
 {
-  return Curl_timeleft_now_ms(data, Curl_pgrs_now(data));
+  return timeleft_now_ms(data, Curl_pgrs_now(data));
 }
 
 void Curl_shutdown_start(struct Curl_easy *data, int sockindex,
@@ -371,7 +374,27 @@ connect_sub_chain:
   /* sub-chain connected, do we need to add more? */
 #ifndef CURL_DISABLE_PROXY
   if(ctx->state < CF_SETUP_CNNCT_SOCKS && cf->conn->bits.socksproxy) {
-    result = Curl_cf_socks_proxy_insert_after(cf, data);
+    /* for the secondary socket (FTP), use the "connect to host"
+     * but ignore the "connect to port" (use the secondary port)
+     */
+    const char *hostname =
+      cf->conn->bits.httpproxy ?
+      cf->conn->http_proxy.host.name :
+      cf->conn->bits.conn_to_host ?
+      cf->conn->conn_to_host.name :
+      cf->sockindex == SECONDARYSOCKET ?
+      cf->conn->secondaryhostname : cf->conn->host.name;
+    uint16_t port =
+      cf->conn->bits.httpproxy ? cf->conn->http_proxy.port :
+      cf->sockindex == SECONDARYSOCKET ? cf->conn->secondary_port :
+      cf->conn->bits.conn_to_port ? cf->conn->conn_to_port :
+      cf->conn->remote_port;
+    const char *user = cf->conn->socks_proxy.user;
+    const char *passwd = cf->conn->socks_proxy.passwd;
+
+    result = Curl_cf_socks_proxy_insert_after(
+      cf, data, hostname, port, cf->conn->ip_version,
+      cf->conn->socks_proxy.proxytype, user, passwd);
     if(result)
       return result;
     ctx->state = CF_SETUP_CNNCT_SOCKS;
@@ -406,7 +429,7 @@ connect_sub_chain:
 #ifndef CURL_DISABLE_PROXY
     if(data->set.haproxyprotocol) {
       if(Curl_conn_is_ssl(cf->conn, cf->sockindex)) {
-        failf(data, "haproxy protocol not support with SSL "
+        failf(data, "haproxy protocol not supported with SSL "
               "encryption in place (QUIC?)");
         return CURLE_UNSUPPORTED_PROTOCOL;
       }
@@ -467,7 +490,7 @@ static void cf_setup_destroy(struct Curl_cfilter *cf, struct Curl_easy *data)
 
 struct Curl_cftype Curl_cft_setup = {
   "SETUP",
-  0,
+  CF_TYPE_SETUP,
   CURL_LOG_LVL_NONE,
   cf_setup_destroy,
   cf_setup_connect,
@@ -599,7 +622,7 @@ const char *Curl_conn_get_unix_path(struct connectdata *conn)
   const char *unix_path = conn->unix_domain_socket;
 
 #ifndef CURL_DISABLE_PROXY
-  if(!unix_path && CONN_IS_PROXIED(conn) && conn->socks_proxy.host.name &&
+  if(!unix_path && conn->bits.proxy && conn->socks_proxy.host.name &&
      !strncmp(UNIX_SOCKET_PREFIX "/",
               conn->socks_proxy.host.name, sizeof(UNIX_SOCKET_PREFIX)))
     unix_path = conn->socks_proxy.host.name + sizeof(UNIX_SOCKET_PREFIX) - 1;

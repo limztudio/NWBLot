@@ -1,5 +1,5 @@
 package: system_info_utils
-version: commit 928d2a2f
-updated_utc: 2026-06-20
-source: https://github.com/GPUOpen-Tools/system_info_utils
-notes: system_info static lib (source/{system_info_reader,driver_overrides_reader}.cpp). nlohmann json now from shared nwb::nlohmann_json; third_party/wmi flattened to top-level (unused). Built via source/CMakeLists directly. Pruned dead: the bypassed package CMakeLists, Buildinfo.properties.in, source/version.h.in, README, .clang-format, .gitignore.
+version: 2.3
+updated_utc: 2026-06-20T15:40:47Z
+source: https://github.com/GPUOpen-Tools/system_info_utils/releases/tag/v2.3
+notes: system_info static lib (source/{system_info_reader,driver_overrides_reader}.cpp). nlohmann json from shared nwb::nlohmann_json; bundled third_party dependencies remain flattened/unused. Built via source/CMakeLists directly.

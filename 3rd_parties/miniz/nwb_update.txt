@@ -1,5 +1,5 @@
 package: miniz
-version: 3.0.0 (MZ_VERSION macro 11.0.2)
-updated_utc: 2026-06-20
-source: https://github.com/richgel999/miniz
-notes: Single-file zlib-compatible (de)compression. Release 3.0.0; the internal MZ_VERSION macro reports the legacy zlib-compat string 11.0.2.
+version: 3.1.1 (MZ_VERSION macro 11.3.1)
+updated_utc: 2026-06-20T15:40:47Z
+source: https://github.com/richgel999/miniz/releases/tag/3.1.1
+notes: zlib-compatible (de)compression. Upstream 3.1.1 split the former single-file drop into miniz.c plus miniz_{tdef,tinfl,zip}.c/h and miniz_common.h; local CMake builds that static source set. The internal MZ_VERSION macro reports the legacy zlib-compat string 11.3.1. Added static-build miniz_export.h because upstream generates it from CMake/Meson.

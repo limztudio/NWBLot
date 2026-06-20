@@ -1,5 +1,5 @@
 package: rmv
-version: commit 7b3e1fba (RMT backend)
-updated_utc: 2026-06-20
-source: https://github.com/GPUOpen-Tools/radeon_memory_visualizer
-notes: Only source/parser + source/backend are vendored/built (RmvParser/RmvBackend) for RGD's page-fault resource history. Pruned everything not compiled: the Qt frontend (source/frontend), source/assets (incl. ionicons), cmake/ (dev_tools, unused after the CMakeLists were rewritten), the standalone CMakeLists.txt orchestrator, and full-tool build docs. Bundled third_party/pevents was flattened to top-level 3rd_parties/pevents. Re-vendor = re-fetch then re-apply this prune.
+version: 1.15
+updated_utc: 2026-06-20T15:40:47Z
+source: https://github.com/GPUOpen-Tools/radeon_memory_visualizer/releases/tag/v1.15
+notes: Only source/parser + source/backend are vendored/built for RGD page-fault resource history. Pruned frontend/assets/cmake/tests/docs. Bundled third_party/pevents flattened to top-level 3rd_parties/pevents.

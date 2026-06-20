@@ -83,7 +83,7 @@ public:
     nlohmann::json GetSrdAnalysisForOffendingInstructionJson(const std::string& instruction_text,
                                                              const std::vector<SgprGroup>& sgpr_groups,
                                                              uint32_t shader_id) const;
-    
+
     /// @brief Get a unique signature based on SGPR values for pre-detected SGPR groups.
     /// @param sgpr_groups Pre-detected SGPR groups from the instruction.
     /// @param shader_id The shader ID to get the SGPR values from.
@@ -109,10 +109,10 @@ private:
     /// @param [in] has_rsrc_field True if the instruction has an RSRC encoding field.
     /// @param [in] has_samp_field True if the instruction has a SAMP encoding field.
     /// @return The detected SRD type for this specific group.
-    SrdType DetermineSrdTypeForGroup(const amdisa::InstructionInfo& instruction_info, 
+    SrdType DetermineSrdTypeForGroup(const amdisa::InstructionInfo& instruction_info,
                                      size_t operand_index,
-                                     size_t group_index, 
-                                     uint32_t start_reg, 
+                                     size_t group_index,
+                                     uint32_t start_reg,
                                      uint32_t end_reg,
                                      bool has_rsrc_field,
                                      bool has_samp_field) const;

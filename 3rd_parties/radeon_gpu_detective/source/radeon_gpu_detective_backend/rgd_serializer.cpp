@@ -50,11 +50,11 @@ static std::string GetDriverExperimentsString(const nlohmann::json& driver_exper
             && driver_experiments_json[kJsonElemIsDriverExperimentsDriverOverridesChunk].is_boolean())
         {
             const bool is_driver_experiments = driver_experiments_json[kJsonElemIsDriverExperimentsDriverOverridesChunk].get<bool>();
-            
+
             if (is_driver_experiments)
             {
                 const nlohmann::json& components_json             = driver_experiments_json[kJsonElemComponentsDriverOverridesChunk];
-                
+
                 for (const auto& component : components_json)
                 {
                     // Process "Experiments" component.
@@ -292,7 +292,7 @@ void RgdSerializer::InputInfoToString(const Config&                        user_
         << " (PID: " << contents.crashing_app_process_info.process_id << ")" << std::endl;
     txt << "API: " << RgdUtils::GetApiString(contents.api_info.apiType) << std::endl;
     txt << "PDB files used: ";
-    
+
     if (contents.api_info.apiType != TraceApiType::DIRECTX_12)
     {
         txt << kStrNotAvailable << std::endl;
@@ -303,7 +303,7 @@ void RgdSerializer::InputInfoToString(const Config&                        user_
     }
     else
     {
-        
+
         for (const auto& debug_info_file : debug_info_files)
         {
             txt << debug_info_file;
@@ -315,7 +315,7 @@ void RgdSerializer::InputInfoToString(const Config&                        user_
         txt << std::endl;
     }
     if (user_config.is_extended_output)
-    { 
+    {
         txt << "PDB search paths (.rgd file):";
         if (contents.rgd_extended_info.pdb_search_paths.empty())
         {
@@ -629,8 +629,8 @@ std::string RgdSerializer::EventGprRegisterDataToString(const GprRegistersData& 
     uint32_t se_id = gpr_register_data_event.seId;
 
     // Print header line (VGPR or SGPR).
-    ret << (gpr_register_data_event.isVgpr ? "VGPR" : "SGPR") << " --- SE: " << se_id 
-        << " SA: " << sa_id << " WGP: " << wgp_id << " SIMD: " << simd_id 
+    ret << (gpr_register_data_event.isVgpr ? "VGPR" : "SGPR") << " --- SE: " << se_id
+        << " SA: " << sa_id << " WGP: " << wgp_id << " SIMD: " << simd_id
         << " WAVE: " << wave_id << " WORK ITEM: " << gpr_register_data_event.workItem << std::endl;
     // Print GPR values, 8 per line.
     for (uint32_t reg_idx = 0; reg_idx < gpr_register_data_event.regToRead; reg_idx += 8)

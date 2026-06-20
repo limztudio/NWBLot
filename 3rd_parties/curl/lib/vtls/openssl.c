@@ -279,7 +279,7 @@ static CURLcode get_pkey_rsa(struct Curl_easy *data,
 #else
   RSA_get0_key(rsa, &n, &e, NULL);
 #endif /* HAVE_EVP_PKEY_GET_PARAMS */
-  BIO_printf(mem, "%d", n ? BN_num_bits(n) : 0);
+  BIO_printf(mem, "%d", (int)(n ? BN_num_bits(n) : 0));
   result = push_certinfo(data, mem, "RSA Public Key", i);
   if(!result) {
     result = print_pubkey_BN(rsa, n, i);
@@ -384,7 +384,7 @@ static CURLcode ossl_certchain(struct Curl_easy *data, SSL *ssl)
 
   numcerts = sk_X509_num(sk);
   if(numcerts > MAX_ALLOWED_CERT_AMOUNT) {
-    failf(data, "%d certificates is more than allowed (%u)", (int)numcerts,
+    failf(data, "%d certificates is more than allowed (%d)", (int)numcerts,
           MAX_ALLOWED_CERT_AMOUNT);
     return CURLE_SSL_CONNECT_ERROR;
   }
@@ -2946,7 +2946,7 @@ static CURLcode ossl_windows_load_anchors(struct Curl_cfilter *cf,
   /* Import certificates from the Windows root certificate store if
      requested.
      https://stackoverflow.com/questions/9507184/
-     https://github.com/d3x0r/SACK/blob/master/src/netlib/ssl_layer.c#L1037
+     https://github.com/d3x0r/SACK/blob/ff15424d3c581b86d40f818532e5a400c516d39d/src/netlib/ssl_layer.c#L1410
      https://datatracker.ietf.org/doc/html/rfc5280 */
   const char *win_stores[] = {
     "ROOT",   /* Trusted Root Certification Authorities */
@@ -3424,7 +3424,7 @@ ossl_init_session_and_alpns(struct ossl_ctx *octx,
 }
 
 #ifdef HAVE_SSL_SET1_ECH_CONFIG_LIST
-static bool ossl_ech_need_httpsrr(struct Curl_easy *data)
+bool Curl_ossl_need_httpsrr(struct Curl_easy *data)
 {
   if(!CURLECH_ENABLED(data))
     return FALSE;
@@ -3506,7 +3506,7 @@ static CURLcode ossl_init_ech(struct ossl_ctx *octx,
       const unsigned char *ecl = rinfo->echconfiglist;
       size_t elen = rinfo->echconfiglist_len;
 
-      infof(data, "ECH: ECHConfig from DoH HTTPS RR");
+      infof(data, "ECH: ECHConfig from HTTPS RR");
       if(SSL_set1_ech_config_list(octx->ssl, ecl, elen) != 1) {
         infof(data, "ECH: SSL_set1_ech_config_list failed");
         if(data->set.tls_ech & CURLECH_HARD)
@@ -3550,7 +3550,13 @@ static CURLcode ossl_init_ech(struct ossl_ctx *octx,
 
   return CURLE_OK;
 }
-#endif /* HAVE_SSL_SET1_ECH_CONFIG_LIST */
+#else /* HAVE_SSL_SET1_ECH_CONFIG_LIST */
+bool Curl_ossl_need_httpsrr(struct Curl_easy *data)
+{
+  (void)data;
+  return FALSE;
+}
+#endif /* else HAVE_SSL_SET1_ECH_CONFIG_LIST */
 
 static CURLcode ossl_init_ssl(struct ossl_ctx *octx,
                               struct Curl_cfilter *cf,
@@ -4045,8 +4051,8 @@ static CURLcode ossl_connect_step1(struct Curl_cfilter *cf,
 
 #ifdef HAVE_SSL_SET1_ECH_CONFIG_LIST
 /* If we have retry configs, then trace those out */
-static void ossl_trace_ech_retry_configs(struct Curl_easy *data, SSL *ssl,
-                                         int reason)
+static int ossl_trace_ech_retry_configs(struct Curl_easy *data, SSL *ssl,
+                                        int reason)
 {
   CURLcode result = CURLE_OK;
   size_t rcl = 0;
@@ -4062,10 +4068,11 @@ static void ossl_trace_ech_retry_configs(struct Curl_easy *data, SSL *ssl,
   size_t out_name_len = 0;
   int servername_type = 0;
 #endif
+  NOVERBOSE((void)reason);
 
   /* nothing to trace if not doing ECH */
   if(!CURLECH_ENABLED(data))
-    return;
+    return rv;
 #ifndef HAVE_BORINGSSL_LIKE
   rv = SSL_ech_get1_retry_config(ssl, &rcs, &rcl);
 #else
@@ -4102,7 +4109,7 @@ static void ossl_trace_ech_retry_configs(struct Curl_easy *data, SSL *ssl,
   OPENSSL_free(rcs);
   OPENSSL_free(outer);
 #endif
-  return;
+  return rv;
 }
 
 #endif
@@ -4270,49 +4277,50 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
 #if defined(HAVE_SSL_SET1_ECH_CONFIG_LIST) && !defined(HAVE_BORINGSSL_LIKE)
     if(CURLECH_ENABLED(data)) {
       char *inner = NULL, *outer = NULL;
-      const char *status = NULL;
       int rv;
+      VERBOSE(const char *status);
 
       rv = SSL_ech_get1_status(octx->ssl, &inner, &outer);
       switch(rv) {
       case SSL_ECH_STATUS_SUCCESS:
-        status = "succeeded";
+        VERBOSE(status = "succeeded");
         break;
       case SSL_ECH_STATUS_GREASE_ECH:
-        status = "sent GREASE, got retry-configs";
+        VERBOSE(status = "sent GREASE, got retry-configs");
         break;
       case SSL_ECH_STATUS_GREASE:
-        status = "sent GREASE";
+        VERBOSE(status = "sent GREASE");
         break;
       case SSL_ECH_STATUS_NOT_TRIED:
-        status = "not attempted";
+        VERBOSE(status = "not attempted");
         break;
       case SSL_ECH_STATUS_NOT_CONFIGURED:
-        status = "not configured";
+        VERBOSE(status = "not configured");
         break;
       case SSL_ECH_STATUS_BACKEND:
-        status = "backend (unexpected)";
+        VERBOSE(status = "backend (unexpected)");
         break;
       case SSL_ECH_STATUS_FAILED:
-        status = "failed";
+        VERBOSE(status = "failed");
         break;
       case SSL_ECH_STATUS_BAD_CALL:
-        status = "bad call (unexpected)";
+        VERBOSE(status = "bad call (unexpected)");
         break;
       case SSL_ECH_STATUS_BAD_NAME: {
         struct ssl_primary_config *conn_config =
           Curl_ssl_cf_get_primary_config(cf);
         if(!conn_config->verifypeer && !conn_config->verifyhost &&
            inner && !strcmp(inner, connssl->peer.hostname)) {
-          status = "bad name (tolerated without peer verification)";
+          VERBOSE(status = "bad name (tolerated without peer verification)");
           rv = SSL_ECH_STATUS_SUCCESS;
         }
-        else
-          status = "bad name (unexpected)";
+        else {
+          VERBOSE(status = "bad name (unexpected)");
+        }
         break;
       }
       default:
-        status = "unexpected status";
+        VERBOSE(status = "unexpected status");
         infof(data, "ECH: unexpected status %d", rv);
       }
       infof(data, "ECH: result: status is %s, inner is %s, outer is %s",
@@ -4695,16 +4703,26 @@ static CURLcode ossl_apple_verify(struct Curl_cfilter *cf,
     unsigned char *ocsp_data = NULL;
 #endif
     long ocsp_len = 0;
+    bool ocsp_missing = FALSE;
     if(conn_config->verifystatus && !octx->reused_session)
       ocsp_len = (long)SSL_get_tlsext_status_ocsp_resp(octx->ssl, &ocsp_data);
 
     /* SSL_get_tlsext_status_ocsp_resp() returns the length of the OCSP
        response data or -1 if there is no OCSP response data. */
-    if(ocsp_len < 0)
+    if(ocsp_len < 0) {
       ocsp_len = 0; /* no data available */
+      ocsp_missing = TRUE;
+    }
     result = Curl_vtls_apple_verify(cf, data, peer, chain.num_certs,
                                     ossl_chain_get_der, &chain,
                                     ocsp_data, ocsp_len);
+    if(!result && ocsp_missing && conn_config->verifystatus &&
+       !octx->reused_session) {
+      /* verified, but OCSP stapling is required and server sent none */
+      *pverified = TRUE;
+      failf(data, "No OCSP response received");
+      return CURLE_SSL_INVALIDCERTSTATUS;
+    }
   }
   *pverified = !result;
   return result;
@@ -4943,15 +4961,11 @@ static CURLcode ossl_connect(struct Curl_cfilter *cf,
   connssl->io_need = CURL_SSL_IO_NEED_NONE;
 
   if(ssl_connect_1 == connssl->connecting_state) {
-#ifdef HAVE_SSL_SET1_ECH_CONFIG_LIST
-    /* if we do ECH and need the HTTPS-RR information for it,
-     * we delay the connect until it arrives or DNS resolve fails. */
-    if(ossl_ech_need_httpsrr(data) &&
+    if(Curl_ossl_need_httpsrr(data) &&
        !Curl_conn_dns_resolved_https(data, cf->sockindex)) {
-      CURL_TRC_CF(data, cf, "need HTTPS-RR for ECH, delaying connect");
+      CURL_TRC_CF(data, cf, "need HTTPS-RR, delaying connect");
       return CURLE_OK;
     }
-#endif
     CURL_TRC_CF(data, cf, "ossl_connect, step1");
     result = ossl_connect_step1(cf, data);
     if(result)

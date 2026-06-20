@@ -26,7 +26,7 @@ SrdBufferRdna3::BufferFields SrdBufferRdna3::ExtractFields() const
     BufferFields fields;
 
     // Base address (bits 47:0 from dwords 0 and 1).
-    fields.base_address = static_cast<uint64_t>(GetDword(0)) | 
+    fields.base_address = static_cast<uint64_t>(GetDword(0)) |
                           (static_cast<uint64_t>(ExtractBits(1, 0, 15)) << 32);
     fields.stride         = ExtractBitsFull(48, 14);
     fields.swizzle_enable = ExtractBitsFull(62, 2);
@@ -47,7 +47,7 @@ std::string SrdBufferRdna3::ToString() const
 {
     std::stringstream ss;
     ss << "Buffer (" << kArchitectureName << "):\n";
-    
+
     const auto fields = ExtractFields();
     const std::string type = "Buffer";
 
@@ -73,7 +73,7 @@ std::string SrdBufferRdna3::GetBufferFormatString(uint32_t format) const
 {
     // Buffer format definitions for RDNA3 (GFX11).
     switch (format)
-    {    
+    {
     case 0x00000000: return "BUF_FMT_INVALID";
     case 0x00000001: return "BUF_FMT_8_UNORM";
     case 0x00000002: return "BUF_FMT_8_SNORM";
@@ -188,7 +188,7 @@ nlohmann::json SrdBufferRdna3::ToJson() const
     nlohmann::json json;
     json["type"] = "Buffer";
     json["architecture"] = "RDNA3";
-    
+
     const auto fields = ExtractFields();
 
     // Populate JSON with interpreted values (same as text output)
@@ -240,11 +240,11 @@ SrdImageRdna3::SrdImageRdna3(const std::vector<uint32_t>& data) : ShaderResource
 SrdImageRdna3::ImageFields SrdImageRdna3::ExtractFields() const
 {
     ImageFields fields;
-    
+
     // Base address (bits 39:0 from dwords 0 and 1, shifted left by 8).
-    fields.base_address = ((static_cast<uint64_t>(GetDword(0)) | 
+    fields.base_address = ((static_cast<uint64_t>(GetDword(0)) |
                            (static_cast<uint64_t>(ExtractBits(1, 0, 7)) << 32)) << 8);
-    
+
     fields.llc_noalloc = ExtractBitsFull(45, 2);
     fields.big_page    = ExtractBitsFull(47, 1);
     fields.max_mip     = ExtractBitsFull(48, 4);
@@ -260,14 +260,14 @@ SrdImageRdna3::ImageFields SrdImageRdna3::ExtractFields() const
     fields.sw_mode     = ExtractBitsFull(116, 5);
     fields.bc_swizzle  = ExtractBitsFull(121, 3);
     fields.rsrcType    = ExtractBitsFull(124, 4);
-    
+
     // Special processing case; certain resource types add one.
     fields.depth       = ExtractBitsFull(128, 14);
     if (IsDepthAddOne(fields.rsrcType))
     {
         fields.depth += 1;
     }
-    
+
     fields.base_array                  = ExtractBitsFull(144, 13);
     fields.array_pitch                 = ExtractBitsFull(160, 4);
     fields.min_lod_warn                = ExtractBitsFull(168, 12);
@@ -285,7 +285,7 @@ SrdImageRdna3::ImageFields SrdImageRdna3::ExtractFields() const
     fields.compression_en              = ExtractBitsFull(213, 1);
     fields.alpha_is_on_msb             = ExtractBitsFull(214, 1);
     fields.color_transform             = ExtractBitsFull(215, 1);
-    
+
     // Metadata address (bits 255:216 from dwords 6 and 7, shifted left by 8).
     fields.meta_data_addr = ((static_cast<uint64_t>(ExtractBits(6, 24, 31)) |
                               (static_cast<uint64_t>(GetDword(7)) << 8))
@@ -294,12 +294,12 @@ SrdImageRdna3::ImageFields SrdImageRdna3::ExtractFields() const
     return fields;
 }
 
-std::string SrdImageRdna3::ToString() const 
+std::string SrdImageRdna3::ToString() const
 {
     std::stringstream ss;
     ss << "Image (" << kArchitectureName << "):\n";
     const auto fields = ExtractFields();
-    
+
     ss << "  " << kStrImageBaseAddr << ": 0x" << std::hex << fields.base_address << "\n";
 
     ss << "  Llc_NoAlloc: " << std::dec << fields.llc_noalloc << "\n";
@@ -348,7 +348,7 @@ std::string SrdImageRdna3::ToString() const
     ss << "  " << kStrImageAlphaIsOnMsb << ": " << (fields.alpha_is_on_msb ? "true" : "false") << "\n";
     ss << "  " << kStrImageColorTransform << ": " << (fields.color_transform ? "true" : "false") << "\n";
     ss << "  " << kStrImageMetaDataAddress << ": 0x" << std::hex << fields.meta_data_addr << "\n";
-    
+
     return ss.str();
 }
 
@@ -588,9 +588,9 @@ nlohmann::json SrdImageRdna3::ToJson() const
     nlohmann::json json;
     json["type"] = "Image";
     json["architecture"] = "RDNA3";
-    
+
     const auto fields_data = ExtractFields();
-    
+
     // Populate JSON with interpreted values (same as text output)
     nlohmann::json fields = {
         {"base_address", fields_data.base_address},
@@ -689,7 +689,7 @@ std::string SrdSamplerRdna3::ToString() const
 {
     std::stringstream ss;
     ss << "Sampler (" << kArchitectureName << "):\n";
-    
+
     const auto fields = ExtractFields();
 
     ss << "  " << kStrSamplerClampX << ": " << GetClampString(fields.clampX) << "\n";
@@ -832,7 +832,7 @@ nlohmann::json SrdSamplerRdna3::ToJson() const
     nlohmann::json json;
     json["type"] = "Sampler";
     json["architecture"] = "RDNA3";
-    
+
     const auto fields = ExtractFields();
 
     // Populate JSON with interpreted values (same as text output)
@@ -877,16 +877,16 @@ SrdBvhRdna3::SrdBvhRdna3(const std::vector<uint32_t>& data) : ShaderResourceDesc
 SrdBvhRdna3::BvhFields SrdBvhRdna3::ExtractFields() const
 {
     BvhFields fields;
-    
+
     // Base address (bits 47:0 from dwords 0 and 1).
-    fields.base_address = (static_cast<uint64_t>(GetDword(0)) | 
+    fields.base_address = (static_cast<uint64_t>(GetDword(0)) |
                            (static_cast<uint64_t>(ExtractBits(1, 0, 15)) << 32)) << 8;
     fields.box_sorting_heuristic = ExtractBitsFull(53, 2);
     fields.box_grow_value        = ExtractBitsFull(55, 8);
     fields.box_sort_en           = ExtractBitsFull(63, 1);
-    
+
     // Size (bits 105:64) from dword 2 and 3.
-    fields.size = (static_cast<uint64_t>(GetDword(2)) | 
+    fields.size = (static_cast<uint64_t>(GetDword(2)) |
                    (static_cast<uint64_t>(ExtractBits(3, 0, 9)) << 32)) + 1;
     fields.pointer_flags        = ExtractBitsFull(119, 1);
     fields.triangle_return_mode = ExtractBitsFull(120, 1);
@@ -899,7 +899,7 @@ std::string SrdBvhRdna3::ToString() const
 {
     std::stringstream ss;
     ss << "BVH (" << kArchitectureName << "):\n";
-    
+
     const auto fields = ExtractFields();
     const std::string type = "BVH";
 
@@ -934,7 +934,7 @@ nlohmann::json SrdBvhRdna3::ToJson() const
     nlohmann::json json;
     json["type"] = "BVH";
     json["architecture"] = "RDNA3";
-    
+
     const auto fields = ExtractFields();
 
     // Populate JSON with interpreted values (same as text output)
@@ -987,7 +987,7 @@ nlohmann::json SrdDisassemblerRdna3::DisassembleSrdJson(const std::vector<uint32
     {
         return srd->ToJson();
     }
-    
+
     nlohmann::json error_json;
     error_json["error"] = "Unknown SRD type for RDNA3";
     error_json["architecture"] = "RDNA3";

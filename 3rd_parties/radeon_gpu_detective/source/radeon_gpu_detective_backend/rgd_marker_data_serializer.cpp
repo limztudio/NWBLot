@@ -50,7 +50,7 @@ static size_t CalculateDisplayWidth(const std::string& str)
                 // 4-byte character.
                 i += 3;
             }
-            
+
             // Assume each multi-byte character takes 1 display width
             width += 1;
         }
@@ -189,7 +189,7 @@ bool ExecMarkerDataSerializer::GenerateExecutionMarkerTreeToJson(const Config& u
     nlohmann::json& all_cmd_buffers_marker_tree_json)
 {
     bool ret = true;
-    
+
     nlohmann::json marker_tree_json;
 
     if (command_buffer_exec_tree_.empty())
@@ -607,7 +607,7 @@ bool ExecMarkerDataSerializer::BuildCmdBufferExecutionMarkerTreeNodes(const Conf
 
         for (const std::pair<const uint64_t, std::unique_ptr<ExecMarkerTreeSerializer>>& pair : command_buffer_exec_tree_)
         {
-            // 
+            //
             ExecMarkerTreeSerializer& cmd_buffer_tree_serializer = *pair.second;
 
             // Build the look ahead counter of consecutive same status nodes on the same level.

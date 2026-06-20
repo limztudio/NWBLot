@@ -1,5 +1,5 @@
 package: dev_driver
-version: AMD GPUOpen DevDriver (rgdevents.h)
-updated_utc: 2026-06-20
-source: https://github.com/GPUOpen-Tools/radeon_gpu_detective
+version: AMD GPUOpen DevDriver (rgdevents.h from RGD v1.6.3)
+updated_utc: 2026-06-20T15:40:47Z
+source: https://github.com/GPUOpen-Tools/radeon_gpu_detective/releases/tag/v1.6.3
 notes: RGD crash-event struct definitions (rgdevents.h). Vendored as part of the Radeon GPU Detective dependency set.

@@ -70,10 +70,10 @@ struct rdfStreamFromFileCreateInfo
 
 /**
  * @brief User-provided I/O callbacks
- * 
+ *
  * There are six callback functions here which will be called with the user-
  * provided context variable:
- * 
+ *
  * - Seek/Tell/GetSize must be always non-null
  * - Read/Write can be null. Note that a stream which has both set to null
  *   is invalid. The chunk writer can work with a stream that is in write-
@@ -82,13 +82,13 @@ struct rdfStreamFromFileCreateInfo
  *   which can be used to clean-up the context. A closed stream cannot be
  *   reused, and it's the responsibility of the user to ensure a stream
  *   is not closed more than once.
- * 
+ *
  * The first argument is always the context provided along with the user
  * stream. Notice that the context pointer is copied internally, so you can't
  * rely on the address of the context to be the same as the one passed into
  * the various create functions. Specifically, you can't use `&ctx` to modify
  * the context provided at creation time.
- * 
+ *
  * User provided streams cannot be used through other APIs while a `rdfStream`
  * is wrapping them. I.e. writes, reads, or in general anything modifying the
  * file pointer will corrupt the wrapped stream.
@@ -98,22 +98,22 @@ struct rdfUserStream
     /**
      * @brief Read count bytes into buffer
      * @return rdfResult
-     * 
+     *
      * This function can be `null` if the stream doesn't support reading.
-     * 
+     *
      * - `bytesRead` can be optionally set, if it's non-null, the number of
      *   bytes actually read must be set.
      * - `buffer` can be null only if `count` is 0
      * - The provided context will be passed into `ctx`
     */
     int (*Read)(void* ctx, const std::int64_t count, void* buffer, std::int64_t* bytesRead);
-    
+
     /**
      * @brief Write count bytes from buffer
      * @return rdfResult
-     * 
+     *
      * This function can be `null` if the stream doesn't support writing.
-     * 
+     *
      * - `bytesWritten` can be optionally set, if it's non-null, the number of
      *   bytes actually written must be set.
      * - `buffer` can be null only if `count` is 0
@@ -127,31 +127,31 @@ struct rdfUserStream
     /**
      * @brief Get the current position
      * @return rdfResult
-     * 
+     *
      * This function must be always provided.
-     * 
+     *
      * - `position` must not be null
      * - The provided context will be passed into `ctx`
     */
     int (*Tell)(void* ctx, std::int64_t* position);
-    
+
     /**
      * @brief Set the current position
      * @return rdfResult
-     * 
+     *
      * This function must be always provided.
-     * 
+     *
      * - `position` must not positive or 0
      * - The provided context will be passed into `ctx`
     */
     int (*Seek)(void* ctx, std::int64_t position);
-    
+
     /**
      * @brief Get the size
      * @return rdfResult
-     * 
+     *
      * This function must be always provided.
-     * 
+     *
      * - `size` must not be `null`
      * - The provided context will be passed into `ctx`
     */
@@ -160,9 +160,9 @@ struct rdfUserStream
     /**
     * @brief Close the stream.
     * @return rdfResult
-    * 
+    *
     * This function can be `null` if the stream handles closing elsewhere.
-    * 
+    *
     * @since 1.2
     */
     int (*Close)(void* ctx);
@@ -181,7 +181,7 @@ int RDF_EXPORT rdfStreamCreateMemoryStream(rdfStream** stream);
 
 /**
  * @deprecated Use `rdfStreamFromUserStream` instead
- * 
+ *
  * This entry point will be removed in the next major version
  */
 int RDF_EXPORT rdfStreamCreateFromUserStream(const rdfUserStream* userStream, rdfStream** stream);
@@ -334,7 +334,7 @@ public:
         rdfFileMode fileMode)
     {
         Stream result;
-        
+
         rdfStreamFromFileCreateInfo info = {};
         info.filename = filename;
         info.fileMode = fileMode;

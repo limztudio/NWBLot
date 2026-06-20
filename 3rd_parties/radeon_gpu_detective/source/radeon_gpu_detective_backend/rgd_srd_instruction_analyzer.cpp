@@ -34,20 +34,20 @@ bool SrdInstructionAnalyzer::Initialize(const RgdCrashDumpContents& crash_dump_c
 {
     bool result = false;
     gpu_series_ = crash_dump_contents.gpu_series;
-    
+
     // Create SRD disassembler for the detected GPU series.
     srd_disassembler_ = SrdDisassemblerFactory::CreateDisassembler(gpu_series_);
     if (srd_disassembler_ != nullptr)
     {
         // Store reference to crash dump contents for later SGPR data access.
         crash_dump_contents_ = &crash_dump_contents;
-        
+
         // Store reference to GPR event indices for efficient lookup.
         gpr_event_indices_ = &gpr_event_indices;
-        
+
         // Initialize ISA decoder for the GPU series.
         isa_decoder_ = std::make_unique<amdisa::IsaDecoder>();
-        
+
         // Map GPU series to ISA spec XML file path.
         std::string isa_spec_path = GetIsaSpecPath(gpu_series_);
         if (!isa_spec_path.empty())
@@ -91,7 +91,7 @@ bool SrdInstructionAnalyzer::Initialize(const RgdCrashDumpContents& crash_dump_c
 std::string SrdInstructionAnalyzer::GetIsaSpecPath(ecitrace::GpuSeries gpu_series) const
 {
     std::string result = "";
-    
+
     std::string spec_filename;
     switch (gpu_series)
     {
@@ -108,7 +108,7 @@ std::string SrdInstructionAnalyzer::GetIsaSpecPath(ecitrace::GpuSeries gpu_serie
             // Empty string for unsupported architectures.
             break;
     }
-    
+
     // Construct path relative to the module (DLL/EXE) directory.
     // ISA spec files are copied to utils/isa_spec/ during build.
     if (!spec_filename.empty())
@@ -117,7 +117,7 @@ std::string SrdInstructionAnalyzer::GetIsaSpecPath(ecitrace::GpuSeries gpu_serie
         const std::filesystem::path base_dir = module_dir.empty() ? std::filesystem::path(".") : std::filesystem::path(module_dir);
         result = (base_dir / "utils" / "isa_spec" / spec_filename).string();
     }
-    
+
     return result;
 }
 
@@ -128,18 +128,18 @@ std::string SrdInstructionAnalyzer::GetSrdAnalysisForOffendingInstruction(const 
                                                                           uint32_t shader_id) const
 {
     std::string result = "";
-    
+
     if (srd_disassembler_ != nullptr && crash_dump_contents_ != nullptr && !sgpr_groups.empty())
     {
         std::stringstream output;
-        
+
         output << std::endl;
         output << "    " << "Wave coordinate ID: 0x" << std::hex << shader_id << std::dec << std::endl;
         // Process each SGPR group separately.
         for (size_t group_idx = 0; group_idx < sgpr_groups.size(); ++group_idx)
         {
             const SgprGroup& current_sgpr_group = sgpr_groups[group_idx];
-            
+
             // Extract SRD data from SGPR registers for this group.
             std::vector<uint32_t> srd_data = ExtractSrdData(current_sgpr_group.indices, shader_id);
             if (!srd_data.empty())
@@ -161,7 +161,7 @@ std::string SrdInstructionAnalyzer::GetSrdAnalysisForOffendingInstruction(const 
                         }
                         output << "    " << type_name << " SGPRs (s[" << current_sgpr_group.indices.front() << ":" << current_sgpr_group.indices.back() << "]):\n";
                     }
-                    
+
                     // Add indentation to each line of the SRD disassembly.
                     std::stringstream srd_stream(srd_disassembly);
                     std::string line;
@@ -178,7 +178,7 @@ std::string SrdInstructionAnalyzer::GetSrdAnalysisForOffendingInstruction(const 
                             output << "    " << line << "\n";
                         }
                     }
-                    
+
                     // Add spacing between groups.
                     if (group_idx < sgpr_groups.size() - 1)
                     {
@@ -199,7 +199,7 @@ nlohmann::json SrdInstructionAnalyzer::GetSrdAnalysisForOffendingInstructionJson
                                                                                   uint32_t shader_id) const
 {
     nlohmann::json result = nlohmann::json::array();
-    
+
     if (srd_disassembler_ != nullptr && crash_dump_contents_ != nullptr && !sgpr_groups.empty())
     {
         try
@@ -208,7 +208,7 @@ nlohmann::json SrdInstructionAnalyzer::GetSrdAnalysisForOffendingInstructionJson
             for (size_t group_idx = 0; group_idx < sgpr_groups.size(); ++group_idx)
             {
                 const SgprGroup& current_sgpr_group = sgpr_groups[group_idx];
-                
+
                 // Extract SRD data from SGPR registers for this group.
                 std::vector<uint32_t> srd_data = ExtractSrdData(current_sgpr_group.indices, shader_id);
                 if (!srd_data.empty())
@@ -226,12 +226,12 @@ nlohmann::json SrdInstructionAnalyzer::GetSrdAnalysisForOffendingInstructionJson
                             case SrdType::kBuffer: type_name = "Buffer"; break;
                             case SrdType::kBvh: type_name = "BVH"; break;
                         }
-                        
+
                         // Add metadata to the SRD JSON.
                         srd_json[SrdAnalysisJsonFields::kJsonElemWaveCoordinateId] = shader_id;
                         srd_json["type"] = type_name;
                         srd_json["sgpr_range"] = "s[" + std::to_string(current_sgpr_group.indices.front()) + ":" + std::to_string(current_sgpr_group.indices.back()) + "]";
-                        
+
                         result.push_back(std::move(srd_json));
                     }
                 }
@@ -281,7 +281,7 @@ SrdAnalysisUnavailableReason SrdInstructionAnalyzer::DetectSgprGroupsUsingIsaDec
                                                             std::vector<SgprGroup>& sgpr_groups) const
 {
     SrdAnalysisUnavailableReason result = SrdAnalysisUnavailableReason::kUnknown;
-    
+
     if (isa_decoder_ != nullptr)
     {
         sgpr_groups.clear();
@@ -301,7 +301,7 @@ SrdAnalysisUnavailableReason SrdInstructionAnalyzer::DetectSgprGroupsUsingIsaDec
             {
                 std::vector<amdisa::InstructionInfoBundle> instruction_info_stream;
                 std::string err_message;
-                
+
                 if (isa_decoder_->DecodeInstructionStream(machine_code_stream, instruction_info_stream, err_message))
                 {
                     // ISA decoding was successful - now try to extract SGPR groups.
@@ -367,13 +367,13 @@ SrdAnalysisUnavailableReason SrdInstructionAnalyzer::DetectSgprGroupsUsingIsaDec
 std::string SrdInstructionAnalyzer::ExtractMachineCode(const std::string& instruction_text) const
 {
     std::string result = "";
-    
+
     // Look for machine code after "//" comment marker.
     size_t comment_pos = instruction_text.find("//");
     if (comment_pos != std::string::npos)
     {
         std::string code_part = instruction_text.substr(comment_pos + 2);
-        
+
         // Look for offset pattern and extract machine code after ": ".
         size_t colon_pos = code_part.find(": ");
         if (colon_pos != std::string::npos)
@@ -381,27 +381,27 @@ std::string SrdInstructionAnalyzer::ExtractMachineCode(const std::string& instru
             // Extract everything after the ": " separator.
             code_part = code_part.substr(colon_pos + 2);
         }
-        
+
         // Trim leading/trailing whitespace using utility function.
         RgdUtils::TrimLeadingAndTrailingWhitespace(code_part, result);
     }
-    
+
     return result;
 }
 
 std::vector<uint32_t> SrdInstructionAnalyzer::ParseMachineCodeString(const std::string& machine_code_str) const
 {
     std::vector<uint32_t> machine_code_stream;
-    
+
     if (machine_code_str.empty())
     {
         return machine_code_stream;
     }
-    
+
     // Split the machine code string by spaces to get individual DWORD values.
     std::stringstream ss(machine_code_str);
     std::string dword_str;
-    
+
     while (ss >> dword_str)
     {
         // Remove any non-hex characters and convert to uint32_t.
@@ -413,7 +413,7 @@ std::vector<uint32_t> SrdInstructionAnalyzer::ParseMachineCodeString(const std::
                 clean_dword += c;
             }
         }
-        
+
         if (!clean_dword.empty() && clean_dword.length() <= 8) // Max 8 hex chars for 32-bit
         {
             try
@@ -428,7 +428,7 @@ std::vector<uint32_t> SrdInstructionAnalyzer::ParseMachineCodeString(const std::
             }
         }
     }
-    
+
     return machine_code_stream;
 }
 
@@ -438,7 +438,7 @@ bool SrdInstructionAnalyzer::ExtractSgprGroupsFromInstructionAndIsa(const std::s
 {
     bool result = false;
     sgpr_groups.clear();
-    
+
     // First, check if this instruction has any RSRC or SAMP encoding fields.
     // Only instructions with RSRC fields should be considered for SRD analysis.
     bool has_rsrc_field = false;
@@ -456,40 +456,40 @@ bool SrdInstructionAnalyzer::ExtractSgprGroupsFromInstructionAndIsa(const std::s
             has_samp_field = true;
         }
     }
-    
+
     // If RSRC field is present, this instruction uses resource descriptors.
     if (has_rsrc_field)
     {
         // Use regex to find SGPR ranges in the instruction text.
         std::regex sgpr_range_pattern(R"(\bs\[(\d+):(\d+)\])");
         std::smatch match;
-        
+
         std::string::const_iterator search_start = instruction_text.cbegin();
         size_t group_index = 0;
-        
+
         while (std::regex_search(search_start, instruction_text.cend(), match, sgpr_range_pattern))
         {
             uint32_t start_reg = static_cast<uint32_t>(std::stoul(match[1].str()));
             uint32_t end_reg = static_cast<uint32_t>(std::stoul(match[2].str()));
-            
+
             SgprGroup current_sgpr_group;
-            
+
             // Add all registers in the range.
             for (uint32_t reg = start_reg; reg <= end_reg; ++reg)
             {
                 current_sgpr_group.indices.push_back(reg);
             }
-            
+
             // Determine SRD type using ISA decoder information.
-            current_sgpr_group.type = DetermineSrdTypeForGroup(instruction_info, group_index, sgpr_groups.size(), 
+            current_sgpr_group.type = DetermineSrdTypeForGroup(instruction_info, group_index, sgpr_groups.size(),
                                                               start_reg, end_reg, has_rsrc_field, has_samp_field);
-            
+
             sgpr_groups.push_back(current_sgpr_group);
-            
+
             search_start = match.suffix().first;
             ++group_index;
         }
-        
+
         result = !sgpr_groups.empty();
     }
 
@@ -580,10 +580,10 @@ SrdType ClassifySrdTypeFromSubgroups(const std::vector<amdisa::FunctionalSubgrou
     return srd_type;
 }
 
-SrdType SrdInstructionAnalyzer::DetermineSrdTypeForGroup(const amdisa::InstructionInfo& instruction_info, 
+SrdType SrdInstructionAnalyzer::DetermineSrdTypeForGroup(const amdisa::InstructionInfo& instruction_info,
                                                         size_t operand_index,
-                                                        size_t group_index, 
-                                                        uint32_t start_reg, 
+                                                        size_t group_index,
+                                                        uint32_t start_reg,
                                                         uint32_t end_reg,
                                                         bool has_rsrc_field,
                                                         bool has_samp_field) const
@@ -602,7 +602,7 @@ SrdType SrdInstructionAnalyzer::DetermineSrdTypeForGroup(const amdisa::Instructi
 std::vector<uint32_t> SrdInstructionAnalyzer::ExtractSrdData(const std::vector<uint32_t>& sgpr_indices, uint32_t shader_id) const
 {
     std::vector<uint32_t> srd_data;
-    
+
     if (crash_dump_contents_ != nullptr && gpr_event_indices_ != nullptr && !sgpr_indices.empty())
     {
         // Use pre-built index to find SGPR data for this shader.
@@ -612,11 +612,11 @@ std::vector<uint32_t> SrdInstructionAnalyzer::ExtractSrdData(const std::vector<u
             size_t sgpr_event_index = it->second.first;
             const RgdEventOccurrence& event = crash_dump_contents_->kmd_crash_data.events[sgpr_event_index];
             const GprRegistersData* gpr_data = static_cast<const GprRegistersData*>(event.rgd_event);
-            
+
             // Sort the indices to ensure proper order.
             std::vector<uint32_t> sorted_indices = sgpr_indices;
             std::sort(sorted_indices.begin(), sorted_indices.end());
-            
+
             // Extract up to 8 consecutive dwords starting from the first SGPR.
             uint32_t start_reg = sorted_indices[0];
             constexpr uint32_t kMaxSrdDwords = 8;
@@ -649,9 +649,9 @@ std::vector<uint32_t> SrdInstructionAnalyzer::ExtractSrdData(const std::vector<u
 std::string SrdInstructionAnalyzer::GetSgprSignatureFromGroups(const std::vector<SgprGroup>& sgpr_groups, uint32_t shader_id) const
 {
     std::string signature;
-    
-    if (!sgpr_groups.empty() && 
-        gpr_event_indices_ != nullptr && 
+
+    if (!sgpr_groups.empty() &&
+        gpr_event_indices_ != nullptr &&
         crash_dump_contents_ != nullptr)
     {
         auto it = gpr_event_indices_->find(shader_id);
@@ -659,15 +659,15 @@ std::string SrdInstructionAnalyzer::GetSgprSignatureFromGroups(const std::vector
         {
             // Get the SGPR event index.
             size_t sgpr_event_index = it->second.first;
-            
+
             // Access the SGPR event.
             const RgdEventOccurrence& sgpr_event_occurrence = crash_dump_contents_->kmd_crash_data.events[sgpr_event_index];
             const GprRegistersData& sgpr_event = static_cast<const GprRegistersData&>(*sgpr_event_occurrence.rgd_event);
-            
+
             // Create a signature from all SGPR groups.
             std::stringstream sig_stream;
             bool first_group = true;
-            
+
             for (const auto& group : sgpr_groups)
             {
                 if (!first_group)
@@ -675,11 +675,11 @@ std::string SrdInstructionAnalyzer::GetSgprSignatureFromGroups(const std::vector
                     // Separate groups with pipe character.
                     sig_stream << "|";
                 }
-                
+
                 // Sort the indices to ensure consistent signature generation.
                 std::vector<uint32_t> sorted_indices = group.indices;
                 std::sort(sorted_indices.begin(), sorted_indices.end());
-                
+
                 bool first_reg = true;
                 for (uint32_t reg_index : sorted_indices)
                 {
@@ -695,7 +695,7 @@ std::string SrdInstructionAnalyzer::GetSgprSignatureFromGroups(const std::vector
                 }
                 first_group = false;
             }
-            
+
             signature = sig_stream.str();
         }
     }
@@ -704,6 +704,6 @@ std::string SrdInstructionAnalyzer::GetSgprSignatureFromGroups(const std::vector
         // Should not reach here.
         assert(false);
     }
-    
+
     return signature;
 }

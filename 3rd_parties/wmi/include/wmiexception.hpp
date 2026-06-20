@@ -16,7 +16,7 @@ namespace Wmi
 
 	struct WmiException
 	{
-	
+
 		WmiException(const std::string &str_errorMessage, long l_errorCode) :
 			errorMessage(str_errorMessage),
 			errorCode(l_errorCode)
@@ -32,7 +32,7 @@ namespace Wmi
 		std::string errorMessage;
 
 		long errorCode;
-	
+
 	}; //end struct WmiException
 
 }; //end namespace Wmi

@@ -17,7 +17,7 @@ namespace Wmi
 
 	class WmiResult
 	{
-	
+
 	public:
 		WmiResult() :
 			result()

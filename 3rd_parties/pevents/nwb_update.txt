@@ -1,5 +1,5 @@
 package: pevents
-version: NeoSmart pevents (WIN32 events for POSIX)
-updated_utc: 2026-06-20
-source: https://github.com/neosmart/pevents
-notes: Cross-platform WIN32-style event primitives. Flattened out of rmv/source/third_party to top-level. Used by RmvBackend on Linux only (rmt_include_pevents.cpp / rmt_thread_event.cpp); inert on Windows. Consumed by #include, not a standalone lib.
+version: 1.22.11
+updated_utc: 2026-06-20T15:40:47Z
+source: https://github.com/neosmart/pevents/releases/tag/1.22.11
+notes: Cross-platform WIN32-style event primitives. Flattened out of rmv/source/third_party to top-level. Used by RmvBackend on Linux only; consumed by #include, not a standalone lib.

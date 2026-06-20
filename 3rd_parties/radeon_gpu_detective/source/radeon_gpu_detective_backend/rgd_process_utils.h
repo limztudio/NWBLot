@@ -16,7 +16,7 @@
 // Include the subprocess.h single header library.
 #include "subprocess/subprocess.h"
 
-class RgdProcessUtils 
+class RgdProcessUtils
 {
 public:
     // Execute a command and capture its output.

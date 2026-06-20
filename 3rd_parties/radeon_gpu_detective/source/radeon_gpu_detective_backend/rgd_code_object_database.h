@@ -2,7 +2,7 @@
 // Copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.
 /// @author AMD Developer Tools
 /// @file
-/// @brief 
+/// @brief
 //============================================================================================
 
 #ifndef RGD_CODE_OBJECT_DATABASE_H_
@@ -31,7 +31,7 @@ enum class SrdAnalysisUnavailableReason
 
     // Instruction does not use resource descriptor.
     kInstructionDoesNotUseResourceDescriptor,
-    
+
     // SGPR data not available for active waves (only available for hung waves).
     kDataNotAvailableForActiveWaves,
 
@@ -40,7 +40,7 @@ enum class SrdAnalysisUnavailableReason
 
     // ISA decoder failed to decode instruction.
     kIsaDecodingFailed,
-    
+
     // SRD analysis is available.
     kAvailable
 };

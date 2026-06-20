@@ -61,7 +61,7 @@ static std::string GenerateBarrierString()
     // Surround "Barrier" strings with a line to clearly separate the markers before and after the "Barrier".
     const char* kBarrierSymbol = "----------";
     std::stringstream ret_txt;
-    
+
     ret_txt << kBarrierSymbol;
     ret_txt << kBarrierStandard;
     ret_txt << kBarrierSymbol;
@@ -762,7 +762,7 @@ std::string ExecMarkerTreeSerializer::TreeNodeToString(std::vector<bool> is_last
             {
                 count_type_string = kIndexCountStr;
             }
-                
+
             txt << "(" << count_type_string << "=" << draw_info->vtxIdxCount << ", " << kInstanceCountStr << "=" << draw_info->instanceCount << ")";
         }
 
@@ -770,7 +770,7 @@ std::string ExecMarkerTreeSerializer::TreeNodeToString(std::vector<bool> is_last
         {
             const bool is_multiple_ids = item.nested_cmd_buffer_ids.size() > 1;
             txt << "(Nested Command Buffer IDs: {0x";
-            
+
             for (size_t i = 0; i < item.nested_cmd_buffer_ids.size(); ++i)
             {
                 txt << "0x" << std::hex << item.nested_cmd_buffer_ids[i] << std::dec;
@@ -812,11 +812,11 @@ std::string ExecMarkerTreeSerializer::TreeNodeToString(std::vector<bool> is_last
         if (item.is_shader_in_flight && status == MarkerExecutionStatus::kInProgress && !is_barrier_marker && !is_application_marker)
         {
             txt << " " << kMarkerNodeHasACorrelatedRunningWave << " <" << kShaderInfoSectionId;
-            
+
             const bool is_multiple_ids = item.crashing_shader_info.crashing_shader_ids.size() > 1;
             if (is_multiple_ids)
             {
-                // When there are multiple shaders associated with a single marker node, print only the Shader Info Section IDs. 
+                // When there are multiple shaders associated with a single marker node, print only the Shader Info Section IDs.
                 txt << "s: {";
                 for (size_t i = 0; i < item.crashing_shader_info.crashing_shader_ids.size(); ++i)
                 {
@@ -833,7 +833,7 @@ std::string ExecMarkerTreeSerializer::TreeNodeToString(std::vector<bool> is_last
             {
                 // When there is only one shader associated with a single marker node, print the Shader Info Section ID, API PSO Hash and API stage.
                 // Print source file name and entry point name if debug information is available.
-                txt << ": " << item.crashing_shader_info.crashing_shader_ids[0];  
+                txt << ": " << item.crashing_shader_info.crashing_shader_ids[0];
                 if (!item.crashing_shader_info.source_file_names.empty() && !item.crashing_shader_info.source_entry_point_names.empty() &&
                     item.crashing_shader_info.source_file_names.size() == 1 && item.crashing_shader_info.source_entry_point_names.size() == 1)
                 {

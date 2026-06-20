@@ -1,5 +1,5 @@
 package: cxxopts
-version: 3.0.0
-updated_utc: 2026-06-20
-source: https://github.com/jarro2783/cxxopts
-notes: Header-only command-line parser. Flattened out of isa_spec_manager/source/third_party. Currently UNUSED by the built targets (only the isa_spec_manager CLI tool, which we do not build, uses it); retained as a top-level package per the flatten policy.
+version: 3.3.1
+updated_utc: 2026-06-20T15:40:47Z
+source: https://github.com/jarro2783/cxxopts/releases/tag/v3.3.1
+notes: Header-only command-line parser. Flattened out of isa_spec_manager/source/third_party. Currently UNUSED by built targets; retained as a top-level package per the flatten policy.

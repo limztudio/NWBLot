@@ -86,7 +86,7 @@ bool WmiResult::extract(std::size_t index, const string &name, wstring &out) con
 
 	auto found = result[index].find(key);
 	if(found == result[index].cend())return false;
-	
+
 	out = found->second;
 	return true;
 }
@@ -105,7 +105,7 @@ bool WmiResult::extract(std::size_t index, const string &name, int &out) const
 {
 	string temp;
 	if(!extract(index, name, temp))return false;
-	
+
 	char *test;
 	out = strtol(temp.c_str(), &test, 0);
 	return (test == temp.c_str() + temp.length());
@@ -120,7 +120,7 @@ bool WmiResult::extract(std::size_t index, const string &name, bool &out) const
 	if(temp == "true" || temp == "1")out = true;
 	else if(temp == "false" || temp == "0")out = false;
 	else return false;
-	
+
 	return true;
 }
 
@@ -128,7 +128,7 @@ bool WmiResult::extract(std::size_t index, const string &name, uint64_t &out) co
 {
 	string temp;
 	if(!extract(index, name, temp))return false;
-	
+
 	char *test;
 	out = strtoull(temp.c_str(), &test, 0);
 	return (test == temp.c_str() + temp.length());
@@ -138,7 +138,7 @@ bool WmiResult::extract(std::size_t index, const string &name, uint32_t &out) co
 {
 	string temp;
 	if(!extract(index, name, temp))return false;
-	
+
 	char *test;
 	out = (uint32_t)std::strtoul(temp.c_str(), &test, 0);
 	return (test == temp.c_str() + temp.length());
@@ -148,7 +148,7 @@ bool WmiResult::extract(std::size_t index, const string &name, uint16_t &out) co
 {
 	string temp;
 	if(!extract(index, name, temp))return false;
-	
+
 	char *test;
 	out = (uint16_t)std::strtoul(temp.c_str(), &test, 0);
 	return (test == temp.c_str() + temp.length());
@@ -158,7 +158,7 @@ bool WmiResult::extract(std::size_t index, const string &name, uint8_t &out) con
 {
 	string temp;
 	if(!extract(index, name, temp))return false;
-	
+
 	char *test;
 	out = (uint8_t)std::strtoul(temp.c_str(), &test, 0);
 	return (test == temp.c_str() + temp.length());

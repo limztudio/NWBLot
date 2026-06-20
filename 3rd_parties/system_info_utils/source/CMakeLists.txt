@@ -12,7 +12,7 @@ add_library(${PROJECT_NAME} STATIC
         driver_overrides_reader.h
         driver_overrides_reader.cpp)
 set_target_properties(${PROJECT_NAME} PROPERTIES
-        CXX_STANDARD 17
+        CXX_STANDARD 20
         CXX_STANDARD_REQUIRED ON)
 
 if (SYSTEM_INFO_BUILD_RDF_INTERFACES)
@@ -26,10 +26,9 @@ if (WIN32)
     target_link_libraries(${PROJECT_NAME} PUBLIC Netapi32 Secur32)
 endif()
 
-# nlohmann json comes from the single shared vendored copy (nwb::nlohmann_json) rather than a bundled duplicate.
-target_link_libraries(${PROJECT_NAME} PUBLIC nwb::nlohmann_json)
 target_include_directories(${PROJECT_NAME}
         PUBLIC .)
+target_link_libraries(${PROJECT_NAME} PRIVATE nwb::rapidjson)
 
 if (SYSTEM_INFO_ENABLE_PACKAGING)
     install(TARGETS ${PROJECT_NAME}

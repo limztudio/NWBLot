@@ -20,7 +20,7 @@ namespace {
     const int kProcessErrorJoinFailed = -3;
 
     // Helper function to read from a file stream and append to an output stream
-    static void ReadFromFileStream(FILE* file_stream, std::stringstream& output_stream) 
+    static void ReadFromFileStream(FILE* file_stream, std::stringstream& output_stream)
     {
         if (file_stream)
         {
@@ -77,19 +77,19 @@ std::vector<const char*> RgdProcessUtils::PrepareCommandLine(
     const std::vector<std::string>& arguments)
 {
     std::vector<const char*> command_line;
-    
+
     // Add the executable path as the first argument.
     command_line.push_back(executable_path.c_str());
-    
+
     // Add all other arguments.
     for (const auto& arg : arguments)
     {
         command_line.push_back(arg.c_str());
     }
-    
+
     // NULL-terminate the array as required by subprocess_create.
     command_line.push_back(NULL);
-    
+
     return command_line;
 }
 
@@ -107,10 +107,10 @@ int RgdProcessUtils::ExecuteAndCapture(
     struct subprocess_s process;
     std::stringstream output_stream;
     std::stringstream error_stream;
-    
+
     // Prepare command line arguments.
     std::vector<const char*> command_line = PrepareCommandLine(executable_path, arguments);
-    
+
     // Build a command string for logging.
     std::stringstream command_str;
     command_str << executable_path;
@@ -118,43 +118,43 @@ int RgdProcessUtils::ExecuteAndCapture(
     {
         command_str << " " << arg;
     }
-    
+
     // Log the command.
     std::stringstream console_msg;
     console_msg << "Executing command: " << command_str.str();
     RgdUtils::PrintMessage(console_msg.str().c_str(), RgdMessageType::kInfo, true);
-    
+
     // Set up subprocess options.
     int options = 0;
     if (inherit_env)
     {
         options |= subprocess_option_inherit_environment;
     }
-    
+
     // Create subprocess.
     int create_result = subprocess_create(
         command_line.data(),
         options,
         &process);
-    
+
     if (create_result == 0)
     {
         process_created = true;
-        
+
         // Get stdout and stderr handles
         FILE* p_stdout = subprocess_stdout(&process);
         FILE* p_stderr = subprocess_stderr(&process);
-        
+
         // Read output from stdout
         ReadFromFileStream(p_stdout, output_stream);
-        
-        // Read output from stderr 
+
+        // Read output from stderr
         ReadFromFileStream(p_stderr, error_stream);
-        
+
         // Wait for process to complete and get exit code.
         int process_return;
         int join_result = subprocess_join(&process, &process_return);
-        
+
         if (join_result == 0)
         {
             result = process_return;
@@ -170,16 +170,16 @@ int RgdProcessUtils::ExecuteAndCapture(
         std::cerr << "Error: Failed to create process for: " << executable_path << std::endl;
         result = kProcessErrorCreateFailed;
     }
-    
+
     // Clean up.
     if (process_created)
     {
         subprocess_destroy(&process);
     }
-    
+
     // Store output.
     output = output_stream.str();
     error_output = error_stream.str();  // Store stderr output
-    
+
     return result;
 }

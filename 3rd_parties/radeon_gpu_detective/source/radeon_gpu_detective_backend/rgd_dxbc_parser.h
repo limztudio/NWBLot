@@ -150,10 +150,10 @@ public:
         std::string& high_level_source,
         std::string& io_and_bindings,
         const bool is_separate_pdb = false);
-        
+
     // Extract PDB file path from a DXBC file.
     bool ExtractSeparatePdbFileNameFromDxbc(const std::string& dxbc_file_path, std::string& pdb_file_name);
-    
+
     // Search for a PDB file in debug directories.
     bool FindPdbFileInDirectories(const std::string& pdb_file_name, std::string& found_pdb_path);
 
@@ -175,7 +175,7 @@ private:
         const std::string& source_file_name,
         std::string& high_level_source);
     bool FindShaderIoAndBindings(const std::string& dxc_dumpbin_output, std::string& io_and_bindings);
-        
+
     // Helper method to create file content pattern based on file name.
     std::regex CreateFileContentPattern(const std::string& source_file_name) const;
 
@@ -190,7 +190,7 @@ private:
 
     // Should search subdirectories of each PDB path for shader debug info files?
     bool is_pdb_subdir_ = false;
-    
+
     // Static regex patterns for parsing.
     static const std::regex kLineRefPattern;
     static const std::regex kEntryNamePattern;

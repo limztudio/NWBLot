@@ -10,7 +10,7 @@
 
 bool CrashInfoRegistersParserRdna3::ParseWaveInfoRegisters(const CrashData& kmd_crash_data, std::unordered_map<uint32_t, WaveInfoRegisters>& wave_info_registers_map)
 {
-    // Parse wave info registers events.    
+    // Parse wave info registers events.
     return RegisterParsingUtils::ParseWaveInfoRegisters(kmd_crash_data, wave_info_registers_map);
     ;
 }

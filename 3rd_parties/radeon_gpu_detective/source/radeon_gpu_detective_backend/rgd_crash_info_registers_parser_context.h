@@ -18,7 +18,7 @@ public:
     explicit CrashInfoRegistersParserContext(std::unique_ptr<ICrashInfoRegistersParser> crash_info_registers_parser);
 
     bool ParseWaveInfoRegisters(const CrashData& kmd_crash_data, std::unordered_map<uint32_t, WaveInfoRegisters>& wave_info_registers_map);
-    
+
 private:
     std::unique_ptr<ICrashInfoRegistersParser> crash_info_registers_parser_;
 };

@@ -50,6 +50,7 @@
 #include "vtls/vtls.h" /* generic SSL protos etc */
 #include "vtls/vtls_int.h"
 #include "vtls/vtls_scache.h"
+#include "vtls/keylog.h"
 
 #include "vtls/openssl.h"        /* OpenSSL versions */
 #include "vtls/gtls.h"           /* GnuTLS versions */
@@ -395,7 +396,7 @@ CURLcode Curl_ssl_easy_config_complete(struct Curl_easy *data)
 CURLcode Curl_ssl_conn_config_init(struct Curl_easy *data,
                                    struct connectdata *conn)
 {
-  /* Clone "primary" SSL configurations from the esay handle to
+  /* Clone "primary" SSL configurations from the easy handle to
    * the connection. They are used for connection cache matching and
    * probably outlive the easy handle */
   if(!clone_ssl_primary_config(&data->set.ssl.primary, &conn->ssl_config))
@@ -802,7 +803,7 @@ CURLcode Curl_pin_peer_pubkey(struct Curl_easy *data,
       pinned_hash_len = end_pos ?
                         (size_t)(end_pos - pinned_hash) : strlen(pinned_hash);
 
-      /* compare base64 sha256 digests" */
+      /* compare base64 sha256 digests */
       if(cert_hash_len == pinned_hash_len &&
          !memcmp(cert_hash, pinned_hash, cert_hash_len)) {
         DEBUGF(infof(data, "public key hash matches pinned value"));
@@ -822,7 +823,7 @@ CURLcode Curl_pin_peer_pubkey(struct Curl_easy *data,
     size_t size, pem_len;
     CURLcode pem_read;
     struct dynbuf buf;
-    char unsigned *pem_ptr = NULL;
+    unsigned char *pem_ptr = NULL;
     size_t left;
     FILE *fp = curlx_fopen(pinnedpubkey, "rb");
     if(!fp)
@@ -1367,6 +1368,13 @@ static CURLcode ssl_cf_connect(struct Curl_cfilter *cf,
     if(connssl->state == ssl_connection_complete) {
       connssl->handshake_done = *Curl_pgrs_now(data);
     }
+    if(Curl_tls_keylog_enabled()) {
+      infof(data, "SSLKEYLOGFILE set, all TLS secrets are logged to '%s'",
+            Curl_tls_keylog_file_name());
+#ifdef LIBRESSL_VERSION_NUMBER
+      infof(data, "Note LibreSSL only supports SSLKEYLOGFILE for TLS <= 1.2");
+#endif
+    }
     /* Connection can be deferred when sending early data */
     DEBUGASSERT(connssl->state == ssl_connection_complete ||
                 connssl->state == ssl_connection_deferred);
@@ -1393,7 +1401,7 @@ static CURLcode ssl_cf_set_earlydata(struct Curl_cfilter *cf,
     if(blen > connssl->earlydata_max)
       blen = connssl->earlydata_max;
     result = Curl_bufq_write(&connssl->earlydata, buf, blen, &nwritten);
-    CURL_TRC_CF(data, cf, "ssl_cf_set_earlydata(len=%zu) -> %zd",
+    CURL_TRC_CF(data, cf, "ssl_cf_set_earlydata(len=%zu) -> %zu",
                 blen, nwritten);
     if(result)
       return result;
@@ -1684,7 +1692,7 @@ struct Curl_cftype Curl_cft_ssl = {
 
 struct Curl_cftype Curl_cft_ssl_proxy = {
   "SSL-PROXY",
-  CF_TYPE_SSL|CF_TYPE_PROXY,
+  CF_TYPE_SSL | CF_TYPE_PROXY,
   CURL_LOG_LVL_NONE,
   ssl_cf_destroy,
   ssl_cf_connect,

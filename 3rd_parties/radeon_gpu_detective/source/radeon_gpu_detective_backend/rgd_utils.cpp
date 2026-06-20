@@ -289,11 +289,11 @@ std::string RgdUtils::GetAlphaNumericId(std::string id_prefix, uint64_t id)
     return ret_txt.str();
 }
 
-bool RgdUtils::SaveCodeObjectBinaries(const std::string& file_name, const std::map<Rgd128bitHash, CodeObject>& code_objects_map, 
+bool RgdUtils::SaveCodeObjectBinaries(const std::string& file_name, const std::map<Rgd128bitHash, CodeObject>& code_objects_map,
                                       std::string& output_dir_str)
 {
     bool ret = true;
-    
+
     try
     {
         // Create the output directory based on the input file path.

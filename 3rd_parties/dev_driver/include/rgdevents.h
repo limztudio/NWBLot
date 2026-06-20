@@ -9,7 +9,7 @@
 #pragma pack(push,1)
 
 // RDF.
-#include "rdf/inc/amdrdf.h"
+#include "amdrdf.h"
 #include "rgd_hash.h"
 
 /// Generic event header for Rdf Chunks
@@ -213,7 +213,7 @@ struct CrashDebugNopData : RgdEvent
 //  The most typical use of the event is to describe an already existing ExecutionMarkerTop event.
 //  Take 'Draw' as an example, here is what the tool can expect to see
 //
-//  => ExecutionMarkerTop({marker=0x10000003, makerName="Draw"} 
+//  => ExecutionMarkerTop({marker=0x10000003, makerName="Draw"}
 //  => ExecutionMarkerInfo({
 //          marker=0x10000003,
 //          markerInfo={ExecutionMarkerHeader({typeInfo=Draw}) + DrawInfo({drawType=...})
@@ -233,7 +233,7 @@ struct CrashDebugNopData : RgdEvent
 //     a pipeline does not cause any GPU work. Therefore no timestamp is needed.
 //  3. Barrier operation will have one timestamp generated but 2 different ExecutionMarkerInfo generated (BarrierBegin
 //     and BarrierEnd). Expect MarkerTop + MarkerInfo(BarrierBegin) + MarkerInfo(BarrierEnd) + MarkerBottom in this case.
-// 
+//
 struct CrashAnalysisExecutionMarkerInfo : RgdEvent
 {
     // Unique identifier of the relevant command buffer

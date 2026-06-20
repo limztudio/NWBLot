@@ -606,7 +606,7 @@ void RgdSerializerJson::SetDriverExperimentsInfoData(const nlohmann::json& drive
         std::stringstream error_msg;
         error_msg << kErrorMsgFailedToParseDriverExperimentsInfo << " (" << e.what() << ")";
         RgdUtils::PrintMessage(error_msg.str().c_str(), RgdMessageType::kError, true);
-    } 
+    }
 }
 
 void RgdSerializerJson::SetShaderInfo(const Config& user_config, RgdEnhancedCrashInfoSerializer& enhanced_crash_info_serializer)
@@ -631,7 +631,7 @@ void RgdSerializerJson::SetShaderInfo(const Config& user_config, RgdEnhancedCras
 void RgdSerializerJson::SetGprData(const CrashData& kmd_crash_data)
 {
     bool should_process = true;
-    
+
     // Check if no events.
     if (kmd_crash_data.events.empty())
     {
@@ -640,7 +640,7 @@ void RgdSerializerJson::SetGprData(const CrashData& kmd_crash_data)
 
     const size_t total_events = should_process ? kmd_crash_data.events.size() : 0;
     const uint8_t gpr_event_id = uint8_t(KmdEventId::SgprVgprRegisters);
-    
+
     // Two-pass algorithm to pre-count GPR events for exact allocation.
     size_t gpr_event_count = 0;
     if (should_process)
@@ -648,44 +648,44 @@ void RgdSerializerJson::SetGprData(const CrashData& kmd_crash_data)
         for (size_t i = 0; i < total_events; ++i)
         {
             const RgdEventOccurrence& current_event = kmd_crash_data.events[i];
-            if (current_event.rgd_event != nullptr && 
+            if (current_event.rgd_event != nullptr &&
                 current_event.rgd_event->header.eventId == gpr_event_id)
             {
                 gpr_event_count++;
             }
         }
     }
-    
+
     // Check if no GPR events found.
     if (gpr_event_count == 0)
     {
         should_process = false;
     }
-    
+
     nlohmann::json gpr_data_array;
     size_t gpr_events_processed = 0;
-    
+
     if (should_process)
     {
         gpr_data_array = nlohmann::json::array();
-        
+
         for (size_t i = 0; i < total_events; ++i)
         {
             const RgdEventOccurrence& current_event = kmd_crash_data.events[i];
-            
-            if (current_event.rgd_event != nullptr && 
+
+            if (current_event.rgd_event != nullptr &&
                 current_event.rgd_event->header.eventId == gpr_event_id)
             {
                 gpr_events_processed++;
                 const GprRegistersData& gpr_event = static_cast<const GprRegistersData&>(*current_event.rgd_event);
-                
+
                 const uint32_t shader_id = gpr_event.shaderId;
                 const uint32_t wave_id = gpr_event.waveId;
                 const uint32_t simd_id = gpr_event.simdId;
                 const uint32_t wgp_id = gpr_event.wgpId;
                 const uint32_t sa_id = gpr_event.saId;
                 const uint32_t se_id = gpr_event.seId;
-                
+
                 nlohmann::json gpr_entry;
                 gpr_entry[kJsonElemGprTimestamp] = current_event.event_time;
                 gpr_entry[kJsonElemGprType] = gpr_event.isVgpr ? kJsonElemGprTypeVgpr : kJsonElemGprTypeSgpr;
@@ -712,7 +712,7 @@ void RgdSerializerJson::SetGprData(const CrashData& kmd_crash_data)
                 {
                     gpr_entry[kJsonElemGprRegisterValues] = nlohmann::json::array();
                 }
-                
+
                 // Add entry to main array.
                 gpr_data_array.emplace_back(std::move(gpr_entry));
             }
@@ -781,7 +781,7 @@ void RgdSerializerJson::Clear()
         nlohmann::json temp_gpr = std::move(json_[kJsonElemGprRawData]);
         json_.erase(kJsonElemGprRawData);
     }
-    
+
     // Clear the remaining JSON object.
     json_.clear();
     has_gpr_data_ = false;

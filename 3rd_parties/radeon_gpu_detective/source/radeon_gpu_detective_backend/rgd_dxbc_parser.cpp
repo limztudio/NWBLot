@@ -34,7 +34,7 @@ namespace {
         const std::filesystem::path base_dir = module_dir.empty() ? std::filesystem::path(".") : std::filesystem::path(module_dir);
         return (base_dir / "utils" / "dx12" / "dxc" / "dxc.exe").string();
     }
-    
+
     // DXBC magic number: "DXBC".
     constexpr uint8_t kDxbcMagic[4] = {'D', 'X', 'B', 'C'};
 
@@ -70,10 +70,10 @@ namespace {
     std::string EscapeRegexSpecialChars(const std::string& input)
     {
         std::string result;
-        
+
         // Reserve space to avoid reallocations.
         result.reserve(input.length() * 2);
-        
+
         for (char c : input)
         {
             // Escape regex special characters.
@@ -115,10 +115,10 @@ bool RgdDxbcParser::GetDumpbinOutputForFile(const std::string& input_pdb_file_pa
 {
     bool result = false;
     constexpr const char* kDumpBinCommand = "-dumpbin";
-    
+
     // Get the full path to dxc.exe.
     std::string dxc_path = GetDxcExecutablePath();
-    
+
     // Use dxc.exe to dump binary information.
     if (!std::filesystem::exists(dxc_path))
     {
@@ -130,14 +130,14 @@ bool RgdDxbcParser::GetDumpbinOutputForFile(const std::string& input_pdb_file_pa
     {
         // Prepare arguments for the DXC command.
         std::vector<std::string> arguments = {kDumpBinCommand, input_pdb_file_path};
-            
+
         std::string dxc_error_output;
 
         // Execute the command and capture output.
         int process_result = RgdProcessUtils::ExecuteAndCapture(dxc_path, arguments, dxc_dumpbin_output, dxc_error_output);
-                
+
         result = (process_result == 0 && !dxc_dumpbin_output.empty());
-            
+
         if (!result)
         {
             std::stringstream error_msg;
@@ -149,14 +149,14 @@ bool RgdDxbcParser::GetDumpbinOutputForFile(const std::string& input_pdb_file_pa
             RgdUtils::PrintMessage(error_msg.str().c_str(), RgdMessageType::kWarning, is_verbose_);
         }
     }
-    
+
     return result;
 }
 
 bool RgdDxbcParser::FindDxbcFileByHash(uint64_t hash_hi, uint64_t hash_lo, std::string& file_path)
 {
     bool result = false;
-    
+
     if (!debug_info_dirs_.empty())
     {
         try
@@ -229,7 +229,7 @@ bool RgdDxbcParser::FindDxbcFileByHash(uint64_t hash_hi, uint64_t hash_lo, std::
                         }
                     }
                 }
-                
+
                 if (result)
                 {
                     // Found a match, stop searching directories.
@@ -251,14 +251,14 @@ bool RgdDxbcParser::FindDxbcFileByHash(uint64_t hash_hi, uint64_t hash_lo, std::
 std::ifstream RgdDxbcParser::OpenFileStream(const std::string& file_path, std::ios_base::openmode mode)
 {
     std::ifstream file(file_path, mode);
-    
+
     if (!file.is_open())
     {
         std::stringstream error_msg;
         error_msg << kMsgFailedToOpenFile << file_path;
         RgdUtils::PrintMessage(error_msg.str().c_str(), RgdMessageType::kError, is_verbose_);
     }
-    
+
     return file;
 }
 
@@ -266,7 +266,7 @@ bool RgdDxbcParser::CheckDigestMatch(const std::string& file_path, uint64_t hash
 {
     bool result = false;
     std::ifstream file = OpenFileStream(file_path, std::ios::binary);
-    
+
     if (file.is_open())
     {
         // For the input file, check magic number to be 'DXBC' and ignore the file if it doesn't match.
@@ -274,7 +274,7 @@ bool RgdDxbcParser::CheckDigestMatch(const std::string& file_path, uint64_t hash
         // If PDBs are generated using '-Zi -Qsource_in_debug_module', a file with magic number 'DXBC' along with a separate PDB file is created for each shader.
         // If PDBs are generated using '-Zs', a file with magic number 'DXBC' along with a separate slim/small PDB file is created for each shader.
         // This slim pdb file only contains the shader source code and no debug info.
-        
+
         // Read the header.
         DxbcHeader header;
         if (!file.read(reinterpret_cast<char*>(&header), sizeof(header)))
@@ -291,7 +291,7 @@ bool RgdDxbcParser::CheckDigestMatch(const std::string& file_path, uint64_t hash
 
             // First 8 bytes for hi part.
             memcpy(&file_digest_hi, header.digest, sizeof(uint64_t));
-            
+
             // Next 8 bytes for low part.
             memcpy(&file_digest_lo, header.digest + sizeof(uint64_t), sizeof(uint64_t));
 
@@ -299,7 +299,7 @@ bool RgdDxbcParser::CheckDigestMatch(const std::string& file_path, uint64_t hash
             result = (file_digest_lo == hash_lo) && (file_digest_hi == hash_hi);
         }
     }
-    
+
     return result;
 }
 
@@ -313,39 +313,39 @@ bool RgdDxbcParser::ExtractShaderDebugInfo(
 {
     // Maps to store the line contents.
     std::unordered_map<std::string, std::string> line_map;
-    
+
     // Parse the file line by line.
     std::istringstream iss(dxc_dumpbin_output);
     std::string line;
-    while (std::getline(iss, line)) 
+    while (std::getline(iss, line))
     {
         // Extract line number and content for lines starting with "!".
-        if (line.size() > 1 && line[0] == '!') 
+        if (line.size() > 1 && line[0] == '!')
         {
             size_t equal_pos = line.find("=");
-            if (equal_pos != std::string::npos) 
+            if (equal_pos != std::string::npos)
             {
                 std::string line_num = line.substr(0, equal_pos);
                 std::string content = line.substr(equal_pos + 1);
-                
+
                 // Remove leading and trailing whitespace from line number and content.
                 std::string trimmed_line_num;
                 RgdUtils::TrimLeadingAndTrailingWhitespace(line_num, trimmed_line_num);
-                
+
                 std::string trimmed_content;
                 RgdUtils::TrimLeadingAndTrailingWhitespace(content, trimmed_content);
-                
+
                 line_map[trimmed_line_num] = trimmed_content;
             }
         }
     }
-    
+
     // Call specialized helper functions to extract different parts of the debug info.
     bool is_found_entry = FindEntryPoint(line_map, entry_name);
     bool is_found_file = FindSourceFileName(line_map, source_file_name);
 
     bool is_found_source = false;
-    
+
     if (is_found_file) {
         is_found_source = FindSourceContents(line_map, source_file_name, high_level_source);
         assert(is_found_source);
@@ -372,7 +372,7 @@ bool RgdDxbcParser::ExtractShaderDebugInfo(
 
     // Extract shader IO and resource bindings.
     bool is_found_io_bindings = FindShaderIoAndBindings(dxc_dumpbin_output, io_and_bindings);
-    
+
     return is_found_entry && is_found_file && is_found_source && is_found_io_bindings;
 }
 
@@ -380,22 +380,22 @@ bool RgdDxbcParser::FindEntryPoint(const std::unordered_map<std::string, std::st
 {
     bool result = false;
     std::unordered_map<std::string, std::string>::const_iterator entry_points_it = line_map.find(kDxEntryPointsTag);
-    if (entry_points_it != line_map.end()) 
+    if (entry_points_it != line_map.end())
     {
         std::string entry_points_ref = entry_points_it->second;
 
         // Extract the line number reference (e.g., !{!364}).
         std::smatch matches;
-        if (std::regex_search(entry_points_ref, matches, kLineRefPattern)) 
+        if (std::regex_search(entry_points_ref, matches, kLineRefPattern))
         {
             std::string entry_point_line = "!" + matches[1].str();
 
             // Find the actual entry point line.
             std::unordered_map<std::string, std::string>::const_iterator entry_line_it = line_map.find(entry_point_line);
-            if (entry_line_it != line_map.end()) 
+            if (entry_line_it != line_map.end())
             {
                 // Extract entry name (the second string in the tuple).
-                if (std::regex_search(entry_line_it->second, matches, kEntryNamePattern)) 
+                if (std::regex_search(entry_line_it->second, matches, kEntryNamePattern))
                 {
                     entry_name = matches[1].str();
                     result = true;
@@ -410,22 +410,22 @@ bool RgdDxbcParser::FindSourceFileName(const std::unordered_map<std::string, std
 {
     bool result = false;
     std::unordered_map<std::string, std::string>::const_iterator main_file_it = line_map.find(kDxMainFileNameTag);
-    if (main_file_it != line_map.end()) 
+    if (main_file_it != line_map.end())
     {
         std::string main_file_ref = main_file_it->second;
 
         // Extract the line number reference.
         std::smatch matches;
-        if (std::regex_search(main_file_ref, matches, kLineRefPattern)) 
+        if (std::regex_search(main_file_ref, matches, kLineRefPattern))
         {
             std::string main_file_line = "!" + matches[1].str();
 
             // Find the actual main file line.
             std::unordered_map<std::string, std::string>::const_iterator file_line_it = line_map.find(main_file_line);
-            if (file_line_it != line_map.end()) 
+            if (file_line_it != line_map.end())
             {
                 // Extract file name.
-                if (std::regex_search(file_line_it->second, matches, kFileNamePattern)) 
+                if (std::regex_search(file_line_it->second, matches, kFileNamePattern))
                 {
                     source_file_name = matches[1].str();
                     result = true;
@@ -451,11 +451,11 @@ std::regex RgdDxbcParser::CreateFileContentPattern(const std::string& source_fil
         if (is_verbose_)
         {
             std::stringstream error_msg;
-            error_msg << "failed to create regex pattern for source file '" << source_file_name 
+            error_msg << "failed to create regex pattern for source file '" << source_file_name
                       << "': " << e.what();
             RgdUtils::PrintMessage(error_msg.str().c_str(), RgdMessageType::kError, is_verbose_);
         }
-        
+
         // Return a regex that will never match to gracefully handle the error.
         // Negative lookahead that never matches.
         file_content_pattern = std::regex("(?!)");
@@ -465,14 +465,14 @@ std::regex RgdDxbcParser::CreateFileContentPattern(const std::string& source_fil
 }
 
 bool RgdDxbcParser::FindSourceContents(
-    const std::unordered_map<std::string, std::string>& line_map, 
-    const std::string& source_file_name, 
+    const std::unordered_map<std::string, std::string>& line_map,
+    const std::string& source_file_name,
     std::string& high_level_source)
 {
     bool result = false;
     std::unordered_map<std::string, std::string>::const_iterator source_contents_it = line_map.find(kDxSourceContentsTag);
-    
-    if (source_contents_it != line_map.end()) 
+
+    if (source_contents_it != line_map.end())
     {
         std::string content_refs = source_contents_it->second;
 
@@ -481,22 +481,22 @@ bool RgdDxbcParser::FindSourceContents(
             // Extract all content references.
             std::sregex_iterator it(content_refs.begin(), content_refs.end(), kContentRefPattern);
             std::sregex_iterator end;
-            
+
             // Create regex pattern for this specific source file.
             std::regex file_content_pattern = CreateFileContentPattern(source_file_name);
-            
+
             // Search through all content references until we find our source file.
-            while (it != end && !result) 
+            while (it != end && !result)
             {
                 std::smatch match = *it;
                 std::string content_line = "!" + match[1].str();
                 std::unordered_map<std::string, std::string>::const_iterator content_it = line_map.find(content_line);
-                
-                if (content_it != line_map.end()) 
+
+                if (content_it != line_map.end())
                 {
                     // Check if this content entry is for our main file.
                     std::smatch content_match;
-                    if (std::regex_search(content_it->second, content_match, file_content_pattern)) 
+                    if (std::regex_search(content_it->second, content_match, file_content_pattern))
                     {
                         // Extract the source code (unescape escape sequences).
                         high_level_source = content_match[1].str();
@@ -518,7 +518,7 @@ bool RgdDxbcParser::FindSourceContents(
             if (is_verbose_)
             {
                 std::stringstream error_msg;
-                error_msg << "regex error while processing source file '" << source_file_name 
+                error_msg << "regex error while processing source file '" << source_file_name
                           << "': " << e.what();
                 RgdUtils::PrintMessage(error_msg.str().c_str(), RgdMessageType::kError, is_verbose_);
             }
@@ -530,14 +530,14 @@ bool RgdDxbcParser::FindSourceContents(
             if (is_verbose_)
             {
                 std::stringstream error_msg;
-                error_msg << "unexpected error while processing source file '" << source_file_name 
+                error_msg << "unexpected error while processing source file '" << source_file_name
                           << "': " << e.what();
                 RgdUtils::PrintMessage(error_msg.str().c_str(), RgdMessageType::kError, is_verbose_);
             }
             result = false;
         }
     }
-    
+
     return result;
 }
 
@@ -549,27 +549,27 @@ bool RgdDxbcParser::FindShaderIoAndBindings(const std::string& dxc_dumpbin_outpu
     bool found_section = false;
     bool section_ended = false;
     std::stringstream extracted_content;
-    
-    while (std::getline(iss, line) && !section_ended) 
+
+    while (std::getline(iss, line) && !section_ended)
     {
         // Trim whitespace from the line.
         std::string trimmed_line;
         RgdUtils::TrimLeadingAndTrailingWhitespace(line, trimmed_line);
-        
+
         // Check if the line starts with a semicolon.
-        if (!trimmed_line.empty() && trimmed_line[0] == ';') 
+        if (!trimmed_line.empty() && trimmed_line[0] == ';')
         {
             found_section = true;
             extracted_content << trimmed_line << std::endl;
         }
-        else if (found_section) 
+        else if (found_section)
         {
             // Once we've found lines with semicolons and encountered a line without,
             // we've reached the end of the section.
             section_ended = true;
         }
     }
-    
+
     io_and_bindings = extracted_content.str();
     return found_section;
 }
@@ -578,7 +578,7 @@ bool RgdDxbcParser::ExtractSeparatePdbFileNameFromDxbc(const std::string& dxbc_f
 {
     bool result = false;
     std::ifstream file = OpenFileStream(dxbc_file_path, std::ios::binary);
-    
+
     if (file.is_open())
     {
         // Read the header.
@@ -596,7 +596,7 @@ bool RgdDxbcParser::ExtractSeparatePdbFileNameFromDxbc(const std::string& dxbc_f
                     {
                         // Seek to chunk position.
                         file.seekg(chunk_offsets[chunk_idx], std::ios::beg);
-                        
+
                         // Read chunk header.
                         uint32_t fourcc;
                         uint32_t chunk_size;
@@ -616,22 +616,22 @@ bool RgdDxbcParser::ExtractSeparatePdbFileNameFromDxbc(const std::string& dxbc_f
                                     {
                                         // Extract the file name from the path (could be a full path).
                                         std::string path_str(path_buffer.data(), ildn_header.name_length);
-                                        
+
                                         // Get just the filename part.
                                         std::filesystem::path full_path(path_str);
                                         pdb_file_name = full_path.filename().string();
-                                        
+
                                         std::stringstream debug_msg;
                                         debug_msg << kMsgFoundPdbInIldn << pdb_file_name;
                                         RgdUtils::PrintMessage(debug_msg.str().c_str(), RgdMessageType::kInfo, is_verbose_);
-                                        
+
                                         result = true;
                                     }
                                 }
                             }
                         }
                     }
-                    
+
                     if (!result)
                     {
                         std::stringstream warning_msg;
@@ -666,14 +666,14 @@ bool RgdDxbcParser::ExtractSeparatePdbFileNameFromDxbc(const std::string& dxbc_f
         error_msg << kMsgFailedToOpenPdb << dxbc_file_path;
         RgdUtils::PrintMessage(error_msg.str().c_str(), RgdMessageType::kError, is_verbose_);
     }
-    
+
     return result;
 }
 
 bool RgdDxbcParser::FindPdbFileInDirectories(const std::string& pdb_file_name, std::string& found_pdb_path)
 {
     bool result = false;
-    
+
     if (!pdb_file_name.empty())
     {
         for (const auto& dir : debug_info_dirs_)
@@ -734,7 +734,7 @@ bool RgdDxbcParser::FindPdbFileInDirectories(const std::string& pdb_file_name, s
     {
         RgdUtils::PrintMessage(kMsgPdbFilenameEmpty, RgdMessageType::kError, is_verbose_);
     }
-    
+
     return result;
 }
 
@@ -752,20 +752,20 @@ bool RgdDxbcParser::ExtractDebugInfoFromSmallPdb(
 
     // Open the PDB file as binary.
     file = OpenFileStream(pdb_file_path, std::ios::binary);
-    
+
     if (file.is_open())
     {
         // Read the entire file into a buffer.
         file.seekg(0, std::ios::end);
         file_size = file.tellg();
         file.seekg(0, std::ios::beg);
-        
+
         file_data.resize(file_size);
         if (file.read(reinterpret_cast<char*>(file_data.data()), file_size))
         {
             // Check if the file starts with "Microsoft C/C++ MSF 7.00".
             const char* msf_signature = "Microsoft C/C++ MSF 7.00";
-            is_msf_format = (file_size > std::strlen(msf_signature) && 
+            is_msf_format = (file_size > std::strlen(msf_signature) &&
                             std::memcmp(file_data.data(), msf_signature, std::strlen(msf_signature)) == 0);
 
             // If it's not a DXBC file directly, we need to find the DXBC section in the PDB.
@@ -820,7 +820,7 @@ bool RgdDxbcParser::ExtractDebugInfoFromSmallPdb(
                         {
                             const SRCISection* section = reinterpret_cast<const SRCISection*>(chunk_contents);
                             const uint8_t* section_contents = reinterpret_cast<const uint8_t*>(section + 1);
-                            
+
                             // Move to the next section for the next iteration.
                             chunk_contents += section->section_size;
 
@@ -833,7 +833,7 @@ bool RgdDxbcParser::ExtractDebugInfoFromSmallPdb(
                                     if (!source_files.empty() && source_files.size() != contents->num_files)
                                     {
                                         std::stringstream error_msg;
-                                        error_msg << "unexpected number of source files in contents section " 
+                                        error_msg << "unexpected number of source files in contents section "
                                                 << contents->num_files << " when we have " << source_files.size() << " already";
                                         RgdUtils::PrintMessage(error_msg.str().c_str(), RgdMessageType::kError, is_verbose_);
                                     }
@@ -879,7 +879,7 @@ bool RgdDxbcParser::ExtractDebugInfoFromSmallPdb(
                                                 else
                                                 {
                                                     decompressed_data.resize(stream.total_out);
-                                                    
+
                                                     status = mz_inflateEnd(&stream);
                                                     if (status != MZ_OK)
                                                     {
@@ -916,7 +916,7 @@ bool RgdDxbcParser::ExtractDebugInfoFromSmallPdb(
                                     }
                                     break;
                                 }
-                                
+
                                 case SRCISectionType::Filenames:
                                 {
                                     const SRCIFilenamesSection* names = reinterpret_cast<const SRCIFilenamesSection*>(section + 1);
@@ -945,13 +945,13 @@ bool RgdDxbcParser::ExtractDebugInfoFromSmallPdb(
                                     }
                                     break;
                                 }
-                                
+
                                 case SRCISectionType::Args:
                                 {
                                     // We don't need to process arguments for our purpose.
                                     break;
                                 }
-                                
+
                                 default:
                                 {
                                     std::stringstream warning_msg;
@@ -969,7 +969,7 @@ bool RgdDxbcParser::ExtractDebugInfoFromSmallPdb(
                             source_file_name = source_files[0].filename;
                             high_level_source_code = source_files[0].contents;
                             result = true;
-                            
+
                             std::stringstream info_msg;
                             info_msg << kMsgSuccessExtractSource << pdb_file_path;
                             RgdUtils::PrintMessage(info_msg.str().c_str(), RgdMessageType::kInfo, is_verbose_);

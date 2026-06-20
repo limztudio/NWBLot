@@ -1,5 +1,5 @@
 package: imgui
-version: 1.92.8 (WIP)
-updated_utc: 2026-06-06
-source: https://github.com/ocornut/imgui
-notes: Dear ImGui debug UI.
+version: 1.92.8
+updated_utc: 2026-06-20T15:40:47Z
+source: https://github.com/ocornut/imgui/releases/tag/v1.92.8
+notes: Dear ImGui debug UI. Root source/header subset only; NWB CMake preserved.

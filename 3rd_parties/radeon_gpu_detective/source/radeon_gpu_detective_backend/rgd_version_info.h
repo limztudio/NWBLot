@@ -19,11 +19,11 @@
 #define STRINGIFY_VERSION(major, minor, patch, build) STRINGIFY_MACRO(major) "." STRINGIFY_MACRO(minor) "." STRINGIFY_MACRO(patch) "." STRINGIFY_MACRO(build)
 
 #define RGD_MAJOR_VERSION 1   ///< Major version number.
-#define RGD_MINOR_VERSION 5   ///< Minor version number.
-#define RGD_PATCH_NUMBER  0   ///< Patch number.
+#define RGD_MINOR_VERSION 6   ///< Minor version number.
+#define RGD_PATCH_NUMBER  3   ///< Patch number.
 #define RGD_BUILD_NUMBER  0   ///< Build number.
 #define RGD_BUILD_SUFFIX  ""  ///< Build suffix
-#define RGD_BUILD_YEAR "2025"
+#define RGD_BUILD_YEAR "2026"
 #define RGD_VERSION STRINGIFY_VERSION(RGD_MAJOR_VERSION, RGD_MINOR_VERSION, RGD_PATCH_NUMBER, RGD_BUILD_NUMBER)
 #define RGD_APP_NAME "Radeon GPU Detective"
 #define RGD_TITLE RGD_APP_NAME " " RGD_VERSION " " RGD_BUILD_SUFFIX ///< Title

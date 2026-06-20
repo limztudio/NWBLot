@@ -126,7 +126,7 @@ public:
 
     // Get the flag to check if the command buffer is a nested command buffer.
     bool IsNestedCmdBuffer() const;
-    
+
     // Update the flag to true if the command buffer executes one or more nested command buffers; false otherwise.
     void SetIsExecutesNestedCmdBuffer(bool is_execute_nested_cmd_buffer);
 

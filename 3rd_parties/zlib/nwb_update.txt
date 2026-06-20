@@ -1,5 +1,5 @@
 package: zlib
-version: 1.3.2.1-motley
-updated_utc: 2026-06-06
-source: https://github.com/madler/zlib
-notes: zlib compression library.
+version: 1.3.2.1-motley (commit e3dc0a85b7032e98380dec011bc8f2c2ee0d8fca)
+updated_utc: 2026-06-20T15:40:47Z
+source: https://github.com/madler/zlib/tree/e3dc0a85b7032e98380dec011bc8f2c2ee0d8fca
+notes: zlib compression library. Tracks madler/zlib develop because that is newer than the latest 1.3.2 release tag and carries ZLIB_VERSION 1.3.2.1-motley.

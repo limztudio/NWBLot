@@ -37,7 +37,7 @@ enum class WaveRegistersRdna4 : uint32_t
     kSqWavePcLo         = 0x0140,
     kSqWaveIbSts        = 0x0107,
     kSqWaveExcpFlagPriv = 0x0111,
-    kSqWaveExcpFlagUser = 0x0112,   
+    kSqWaveExcpFlagUser = 0x0112,
     kSqWaveIbSts2       = 0x011c,
     kSqWaveActive       = 0x000a,
     kSqWaveExecHi       = 0x027f,

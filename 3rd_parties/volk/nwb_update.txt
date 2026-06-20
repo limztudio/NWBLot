@@ -1,5 +1,5 @@
 package: volk
-version: header v341 (Vulkan 1.4.x)
-updated_utc: 2026-06-06
-source: https://github.com/zeux/volk
-notes: Vulkan meta-loader.
+version: header v350 (Vulkan 1.4.350)
+updated_utc: 2026-06-20T15:40:47Z
+source: https://github.com/zeux/volk/releases/tag/1.4.350 and https://github.com/KhronosGroup/Vulkan-Headers/releases/tag/vulkan-sdk-1.4.350.1
+notes: Vulkan meta-loader. volk.c/h from zeux/volk vulkan-sdk-1.4.350.1; Vulkan header subset from KhronosGroup/Vulkan-Headers vulkan-sdk-1.4.350.1.

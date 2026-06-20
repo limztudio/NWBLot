@@ -20,7 +20,7 @@ ShaderResourceDescriptor::ShaderResourceDescriptor(const std::vector<uint32_t>& 
 uint32_t ShaderResourceDescriptor::ExtractBits(uint32_t dword_index, uint32_t start_bit, uint32_t end_bit) const
 {
     uint32_t result = 0;
-    
+
     assert(dword_index < data_.size());
     assert(start_bit <= end_bit);
     assert(end_bit < 32);

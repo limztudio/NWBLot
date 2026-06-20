@@ -26,7 +26,7 @@ int main(int /*argc*/, char */*args*/[])
 		Win32_ComputerSystemProduct product  = retrieveWmi<Win32_ComputerSystemProduct>();
 		SoftwareLicensingService liscense  = retrieveWmi<SoftwareLicensingService>();
 		Win32_OperatingSystem os_info  = retrieveWmi<Win32_OperatingSystem>();
-				
+
 		cout<<"Computername: "<<computer.Name<<" Domain: "<<computer.Domain<<endl;
 		cout<<"Product: "<<product.Name<<" UUID:"<<product.UUID<<endl;
 		cout<<"Architecture: "<<os_info.OSArchitecture<<std::endl;
@@ -44,7 +44,7 @@ int main(int /*argc*/, char */*args*/[])
 		{
 			cout<<service.Caption<<" started:"<<service.Started<<" state:"<<service.State<<  endl;
 		}
-		
+
 		// gets all rows and only specified columns(better performance)
 		for(const Win32_Service &service : retrieveAllWmi<Win32_Service>("Caption,Started,State"))
 		{

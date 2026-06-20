@@ -34,11 +34,9 @@
 #include "curlx/strparse.h"
 
 #ifdef UNITTESTS
-/* used by unit2600.c */
-UNITTEST void Curl_cf_def_close(struct Curl_cfilter *cf,
-                                struct Curl_easy *data);
-UNITTEST void Curl_cf_def_close(struct Curl_cfilter *cf,
-                                struct Curl_easy *data)
+/* @unittest 2600 */
+UNITTEST void cf_def_close(struct Curl_cfilter *cf, struct Curl_easy *data);
+UNITTEST void cf_def_close(struct Curl_cfilter *cf, struct Curl_easy *data)
 {
   cf->connected = FALSE;
   if(cf->next)
@@ -117,6 +115,37 @@ CURLcode Curl_cf_def_query(struct Curl_cfilter *cf,
     cf->next->cft->query(cf->next, data, query, pres1, pres2) :
     CURLE_UNKNOWN_OPTION;
 }
+
+#ifdef CURLVERBOSE
+static void conn_trc_filters(struct Curl_easy *data,
+                                  int sockindex,
+                                  const char *info)
+{
+  if(CURL_TRC_M_is_verbose(data) && data->conn) {
+    struct Curl_cfilter *cf = data->conn->cfilter[sockindex];
+
+    if(cf) {
+      struct dynbuf msg;
+      CURLcode result = CURLE_OK;
+
+      curlx_dyn_init(&msg, 1024);
+      result = curlx_dyn_addf(&msg, "%s [%d]", info, sockindex);
+      for(; cf && !result; cf = cf->next) {
+        result = curlx_dyn_addf(&msg, "[%s%s]",
+                                cf->connected ? "" : "!", cf->cft->name);
+      }
+      if(!result)
+        CURL_TRC_M(data, "%s", curlx_dyn_ptr(&msg));
+      else
+        CURL_TRC_M(data, "%s [%d] error %d tracing chain",
+                   info, sockindex, result);
+      curlx_dyn_free(&msg);
+    }
+    else
+      CURL_TRC_M(data, "%s [%d][-]", info, sockindex);
+  }
+}
+#endif /* CURLVERBOSE */
 
 void Curl_conn_cf_discard_chain(struct Curl_cfilter **pcf,
                                 struct Curl_easy *data)
@@ -491,6 +520,24 @@ static void conn_report_connect_stats(struct Curl_cfilter *cf,
   }
 }
 
+static void conn_remove_setup_filters(struct Curl_easy *data,
+                                      int sockindex)
+{
+  struct Curl_cfilter **anchor = &data->conn->cfilter[sockindex];
+  while(*anchor) {
+    struct Curl_cfilter *cf = *anchor;
+    if(cf->connected && (cf->cft->flags & CF_TYPE_SETUP)) {
+      *anchor = cf->next;
+      cf->next = NULL;
+      CURL_TRC_CF(data, cf, "removing connected setup filter");
+      cf->cft->destroy(cf, data);
+      curlx_free(cf);
+    }
+    else
+      anchor = &cf->next;
+  }
+}
+
 CURLcode Curl_conn_connect(struct Curl_easy *data,
                            int sockindex,
                            bool blocking,
@@ -544,10 +591,14 @@ CURLcode Curl_conn_connect(struct Curl_easy *data,
       conn_report_connect_stats(cf, data);
       data->conn->keepalive = *Curl_pgrs_now(data);
       VERBOSE(result = cf_verboseconnect(data, cf));
+      VERBOSE(conn_trc_filters(data, sockindex, "connected"));
+      conn_remove_setup_filters(data, sockindex);
+      VERBOSE(conn_trc_filters(data, sockindex, "reduced to"));
       goto out;
     }
     else if(result) {
       CURL_TRC_CF(data, cf, "Curl_conn_connect(), filter returned %d", result);
+      VERBOSE(conn_trc_filters(data, sockindex, "failed to connect"));
       conn_report_connect_stats(cf, data);
       goto out;
     }
@@ -657,14 +708,16 @@ bool Curl_conn_is_ssl(struct connectdata *conn, int sockindex)
 
 bool Curl_conn_get_ssl_info(struct Curl_easy *data,
                             struct connectdata *conn, int sockindex,
+                            int query,
                             struct curl_tlssessioninfo *info)
 {
   if(!CONN_SOCK_IDX_VALID(sockindex))
     return FALSE;
   if(Curl_conn_is_ssl(conn, sockindex)) {
     struct Curl_cfilter *cf = conn->cfilter[sockindex];
-    CURLcode result = cf ? cf->cft->query(cf, data, CF_QUERY_SSL_INFO,
-                               NULL, (void *)info) : CURLE_UNKNOWN_OPTION;
+    CURLcode result = cf ?
+      cf->cft->query(cf, data, query, NULL, (void *)info) :
+      CURLE_UNKNOWN_OPTION;
     return !result;
   }
   return FALSE;
@@ -727,6 +780,17 @@ int Curl_protocol_for_transport(uint8_t transport)
   default: /* UDP and QUIC */
     return IPPROTO_UDP;
   }
+}
+
+bool Curl_conn_cf_wants_httpsrr(struct Curl_cfilter *cf,
+                                struct Curl_easy *data)
+{
+  (void)data;
+  for(; cf; cf = cf->next) {
+    if(cf->cft->flags & CF_TYPE_HTTPSRR)
+      return TRUE;
+  }
+  return FALSE;
 }
 
 const char *Curl_conn_get_alpn_negotiated(struct Curl_easy *data,

@@ -74,14 +74,14 @@ IWbemServices* connect(IWbemLocator *pLocator, const std::string& path)
 	}
 
 	//Set authentication proxy
-	hr = CoSetProxyBlanket(pServices, 
-		RPC_C_AUTHN_DEFAULT, 
-		RPC_C_AUTHZ_NONE, 
-		COLE_DEFAULT_PRINCIPAL, 
-		RPC_C_AUTHN_LEVEL_DEFAULT, 
-		RPC_C_IMP_LEVEL_IMPERSONATE, 
-		nullptr, 
-		EOAC_NONE 
+	hr = CoSetProxyBlanket(pServices,
+		RPC_C_AUTHN_DEFAULT,
+		RPC_C_AUTHZ_NONE,
+		COLE_DEFAULT_PRINCIPAL,
+		RPC_C_AUTHN_LEVEL_DEFAULT,
+		RPC_C_IMP_LEVEL_IMPERSONATE,
+		nullptr,
+		EOAC_NONE
 	);
 
 	if(FAILED(hr))
@@ -257,8 +257,8 @@ wstring convertVariant(const VARIANT &value)
 
 			break;
 		}
-		
-		
+
+
 		case VT_CY:				throw WmiException("Data type not yet supported: VT_CY", value.vt);
 		case VT_DATE:			throw WmiException("Data type not yet supported: VT_DATE", value.vt);
 		case VT_DISPATCH:		throw WmiException("Data type not yet supported: VT_DISPATCH", value.vt);
@@ -282,7 +282,7 @@ wstring convertVariant(const VARIANT &value)
 			handled = false;
 			break;
 	}
-	
+
 	if(!handled)
 	{
 		throw WmiException("Unknown data type", value.vt);
@@ -307,12 +307,12 @@ void foreachProperty(IWbemClassObject *object, function<bool(const wstring&, con
 		}
     }
 
-	long lLower, lUpper; 
+	long lLower, lUpper;
 	BSTR propName = nullptr;
 	SafeArrayGetLBound(psaNames, 1, &lLower);
 	SafeArrayGetUBound(psaNames, 1, &lUpper);
 
-	for(long i = lLower; i <= lUpper; ++i) 
+	for(long i = lLower; i <= lUpper; ++i)
 	{
 		hr = SafeArrayGetElement(psaNames, &i, &propName);
 
@@ -330,7 +330,7 @@ void foreachProperty(IWbemClassObject *object, function<bool(const wstring&, con
 		VARIANT value;
 		VariantInit(&value);
 		hr = object->Get(propName, 0, &value, nullptr, nullptr);
-		
+
 		if(FAILED(hr))
 		{
 			switch(hr)
@@ -342,7 +342,7 @@ void foreachProperty(IWbemClassObject *object, function<bool(const wstring&, con
 				default:								throw WmiException("Could not get property: Unknown Error", hr);
 			}
 		}
-		
+
 		bool cont;
 		try {
 			cont = fn(propName, convertVariant(value));
@@ -383,7 +383,7 @@ void Wmi::query(const string& q, const string& p, WmiResult &out)
 	try {
 		pServices = connect(pLocator, p);
 	} catch (const WmiException &) {
-		pLocator->Release(); 
+		pLocator->Release();
 		CoUninitialize();
 		throw;
 	}
@@ -393,14 +393,14 @@ void Wmi::query(const string& q, const string& p, WmiResult &out)
 		pClassObject = execute(pServices, q);
 	} catch (const WmiException &) {
 		pServices->Release();
-		pLocator->Release(); 
+		pLocator->Release();
 		CoUninitialize();
 		throw;
 	}
 
 	try {
 		std::size_t index = 0;
-		
+
 		foreachObject(pClassObject, [&out,&index](IWbemClassObject *object)
 		{
 			foreachProperty(object, [&out,index](const wstring &name, const std::wstring &value)
@@ -413,14 +413,14 @@ void Wmi::query(const string& q, const string& p, WmiResult &out)
 		});
 	} catch (const WmiException &) {
 		pServices->Release();
-		pLocator->Release(); 
+		pLocator->Release();
 		CoUninitialize();
 		throw;
 	}
-	
+
 	pClassObject->Release();
 
 	pServices->Release();
-	pLocator->Release(); 
+	pLocator->Release();
 	CoUninitialize();
 }

@@ -26,7 +26,7 @@ SrdBufferRdna4::BufferFields SrdBufferRdna4::ExtractFields() const
     BufferFields fields;
 
     // Base address (bits 47:0 from dwords 0 and 1).
-    fields.base_address = static_cast<uint64_t>(GetDword(0)) | 
+    fields.base_address = static_cast<uint64_t>(GetDword(0)) |
                           (static_cast<uint64_t>(ExtractBits(1, 0, 15)) << 32);
     fields.stride                  = ExtractBitsFull(48, 14);
     fields.swizzle_enable          = ExtractBitsFull(62, 2);
@@ -50,7 +50,7 @@ std::string SrdBufferRdna4::ToString() const
 {
     std::stringstream ss;
     ss << "Buffer (" << kArchitectureName << "):\n";
-    
+
     // Extract individual Buffer SRD fields.
     const auto fields = ExtractFields();
     const std::string type("Buffer");
@@ -153,7 +153,7 @@ std::string SrdBufferRdna4::GetIndexStrideString(uint32_t index_stride) const
 {
     // Index stride definitions for RDNA4.
     switch (index_stride)
-    {    
+    {
     case 0x0: return "IndexStride_8B";
     case 0x1: return "IndexStride_16B";
     case 0x2: return "IndexStride_32B";
@@ -195,7 +195,7 @@ nlohmann::json SrdBufferRdna4::ToJson() const
     nlohmann::json json;
     json["type"] = "Buffer";
     json["architecture"] = "RDNA4";
-    
+
     // Extract fields individual Buffer SRD fields.
     BufferFields fields = ExtractFields();
 
@@ -236,9 +236,9 @@ enum SQ_RSRC_IMG_TYPE
 
 static bool IsDepthAddOne(const uint32_t rsrc_type)
 {
-    return (rsrc_type == SQ_RSRC_IMG_1D 
-        || rsrc_type == SQ_RSRC_IMG_2D 
-        || rsrc_type == SQ_RSRC_IMG_2D_MSAA 
+    return (rsrc_type == SQ_RSRC_IMG_1D
+        || rsrc_type == SQ_RSRC_IMG_2D
+        || rsrc_type == SQ_RSRC_IMG_2D_MSAA
         || rsrc_type == SQ_RSRC_IMG_3D);
 }
 
@@ -256,7 +256,7 @@ SrdImageRdna4::ImageFields SrdImageRdna4::ExtractFields() const
     ImageFields fields;
 
     // Base address (bits 39:0 from dwords 0 and 1, shifted left by 8).
-    fields.base_address = (static_cast<uint64_t>(GetDword(0)) | 
+    fields.base_address = (static_cast<uint64_t>(GetDword(0)) |
                           (static_cast<uint64_t>(ExtractBits(1, 0, 7)) << 32)) << 8;
     fields.max_mip                      = ExtractBitsFull(44, 5);
     fields.format                       = ExtractBitsFull(49, 8);
@@ -302,10 +302,10 @@ std::string SrdImageRdna4::ToString() const
 {
     std::stringstream ss;
     ss << "Image (" << kArchitectureName << "):\n";
-    
+
     // Extract individual Image SRD fields.
     ImageFields fields = ExtractFields();
-    
+
     ss << "  " << kStrImageBaseAddr << ": 0x" << std::hex << fields.base_address << "\n";
     ss << "  " << kStrImageMaxMip << ": " << std::dec << fields.max_mip << "\n";
     ss << "  " << kStrImageFormat << ": " << GetImageFormatString(fields.format) << "\n";
@@ -606,7 +606,7 @@ std::string SrdSamplerRdna4::ToString() const
 
     // Extract individual Sampler SRD fields.
     SamplerFields fields = ExtractFields();
-    
+
     ss << "  " << kStrSamplerClampX << ": " << GetClampString(fields.clampX) << " (" << fields.clampX << ")\n";
     ss << "  " << kStrSamplerClampY << ": " << GetClampString(fields.clampY) << " (" << fields.clampY << ")\n";
     ss << "  " << kStrSamplerClampZ << ": " << GetClampString(fields.clampZ) << " (" << fields.clampZ << ")\n";
@@ -751,14 +751,14 @@ SrdBvhRdna4::BvhFields SrdBvhRdna4::ExtractFields() const
     BvhFields fields;
 
     // Base address (bits 47:0 from dwords 0 and 1).
-    fields.base_address = (static_cast<uint64_t>(GetDword(0)) | 
+    fields.base_address = (static_cast<uint64_t>(GetDword(0)) |
                           (static_cast<uint64_t>(ExtractBits(1, 0, 15)) << 32)) << 8;
     fields.sort_triangles_first  = ExtractBitsFull(52, 1);
     fields.box_sorting_heuristic = ExtractBitsFull(53, 2);
     fields.box_grow_value        = ExtractBitsFull(55, 8);
     fields.box_sort_en           = ExtractBitsFull(63, 1);
     // Size (bits 105:64) from dword 2 and 3.
-    fields.size = (static_cast<uint64_t>(GetDword(2)) | 
+    fields.size = (static_cast<uint64_t>(GetDword(2)) |
         (static_cast<uint64_t>(ExtractBits(3, 0, 9)) << 32)) + 1;
     fields.compressed_format_en = ExtractBitsFull(115, 1);
     fields.box_node_64b         = ExtractBitsFull(116, 1);
@@ -774,11 +774,11 @@ std::string SrdBvhRdna4::ToString() const
 {
     std::stringstream ss;
     ss << "BVH (RDNA4):\n";
-    
+
     // Extract individual BVH SRD fields.
     BvhFields fields = ExtractFields();
     const std::string type = "BVH";
-    
+
     ss << "  " << kStrBvhBaseAddress << ": 0x" << std::hex << std::setw(16) << std::setfill('0') << fields.base_address << "\n";
     ss << "  " << kStrBvhSortTrianglesFirst << ": " << (fields.sort_triangles_first ? "true" : "false") << "\n";
     ss << "  " << kStrBvhBoxSortingHeuristic << ": " << GetBoxSortingHeuristicString(fields.box_sorting_heuristic) << "\n";
@@ -974,7 +974,7 @@ nlohmann::json SrdDisassemblerRdna4::DisassembleSrdJson(const std::vector<uint32
     {
         return srd->ToJson();
     }
-    
+
     nlohmann::json error_json;
     error_json["error"] = "Unknown SRD type for RDNA4";
     error_json["architecture"] = "RDNA4";

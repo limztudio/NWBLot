@@ -1,0 +1,5 @@
+package: wmi
+version: WMI++ C++ wrapper
+updated_utc: 2026-06-20
+source: https://github.com/Thomas-Sparber/wmi
+notes: C++ wrapper over Windows WMI. Flattened out of system_info_utils/source/third_party to top-level per the flatten policy. UNUSED/dead in this build: system_info gathers data from RDF chunks + registry, never WMI, and the wmi lib is not compiled or linked anywhere. Safe to delete if a WMI path is never needed.

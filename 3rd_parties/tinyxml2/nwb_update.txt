@@ -1,0 +1,5 @@
+package: tinyxml2
+version: 8.0.0
+updated_utc: 2026-06-20
+source: https://github.com/leethomason/tinyxml2
+notes: Single-file XML parser. Flattened out of isa_spec_manager/source/third_party to top-level. Compiled directly into the isa_decoder target (tinyxml2.cpp), not a standalone lib.

@@ -4,10 +4,10 @@ cmake_minimum_required(VERSION 3.10)
 # Setting project directories.
 set (SRC_DIR ../../source)
 set (INC_DIR ../../include)
-set (THIRD_PARTY_DIR ../third_party)
 
-# Control the path of tinyxml2.
-set (TINYXML_DIR ${THIRD_PARTY_DIR}/tinyxml2)
+# Control the path of tinyxml2. NWB: tinyxml2 was flattened out of the bundled isa_spec_manager/source/third_party
+# into top-level 3rd_parties/tinyxml2 (see .helper/3rd_parties.md); isa_decoder still compiles it directly.
+set (TINYXML_DIR ${CMAKE_SOURCE_DIR}/3rd_parties/tinyxml2)
 if (TINYXML_SRC_PATH)
     message("-- IsaDecoder: Overwritting default tinyxml2 source files with ${TINYXML_SRC_PATH}")
     set (TINYXML_DIR ${TINYXML_SRC_PATH})

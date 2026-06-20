@@ -20,9 +20,8 @@ add_library(RmvBackend STATIC ${RMV_BACKEND_SRC})
 target_include_directories(RmvBackend
     PUBLIC "${PROJECT_SOURCE_DIR}"
     PRIVATE
-        "${_3P}"                              # rdf/rdf/inc/amdrdf.h, system_info_utils/source/*.h
-        "${PROJECT_SOURCE_DIR}/../parser"     # sibling RMT parser headers
-        "${PROJECT_SOURCE_DIR}/../third_party")
+        "${_3P}"                              # rdf/inc/amdrdf.h, system_info_utils/source/*.h, pevents/src/* (flattened)
+        "${PROJECT_SOURCE_DIR}/../parser")    # sibling RMT parser headers
 
 # The RMT backend's RDF code paths and the system-info / driver-overrides readers it parses are gated on these.
 target_compile_definitions(RmvBackend PRIVATE SYSTEM_INFO_ENABLE_RDF DRIVER_OVERRIDES_ENABLE_RDF NOMINMAX)

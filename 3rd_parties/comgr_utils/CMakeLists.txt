@@ -10,7 +10,7 @@ set (COMGR_UTILS_VERSION_MAJOR 1)
 set (COMGR_UTILS_VERSION_MINOR 0)
 
 # NWB: amd_comgr is loaded at runtime via dlopen/LoadLibrary (ComgrEntryPoints), so we vendor only its
-# header (external/comgr/include/amd_comgr.h) and never link the ~135 MB LLVM-based lib. Defining
+# header (the flattened top-level 3rd_parties/comgr) and never link the ~135 MB LLVM-based lib. Defining
 # COMGR_DYNAMIC_LINKING selects that runtime-loaded code path. (Upstream used FetchContent to download comgr;
 # that is removed here so the build is fully offline/vendored. The amd_comgr runtime lib is deployed separately.)
 add_library(${PROJECT_NAME} STATIC "source/comgr_utils.cpp")
@@ -18,7 +18,7 @@ add_library(AMD::ComgrUtils ALIAS ${PROJECT_NAME})
 
 target_include_directories(${PROJECT_NAME} PUBLIC
     "${PROJECT_SOURCE_DIR}/source"
-    "${PROJECT_SOURCE_DIR}/external/comgr/include")
+    "${CMAKE_SOURCE_DIR}/3rd_parties/comgr/include")   # amd_comgr.h, flattened out of external/comgr to top-level
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC COMGR_DYNAMIC_LINKING)
 if (NOT WIN32)

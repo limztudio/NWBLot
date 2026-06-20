@@ -1,5 +1,5 @@
 package: libmicrohttpd
 version: 1.0.5
-updated_utc: 2026-06-20T15:40:47Z
+updated_utc: 2026-06-20T18:35:29Z
 source: https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-1.0.5.tar.gz
-notes: GNU libmicrohttpd HTTP server for the log server. Vendored src/include + src/microhttpd layout; NWB CMake and MHD_config.h preserved.
+notes: GNU libmicrohttpd HTTP server for the log server. Vendored src/include + src/microhttpd layout; NWB CMake is local integration. The Windows vendored build generates MHD_config.h into the CMake binary tree from MHD_config.h.in instead of preserving upstream's w32/common snapshot.

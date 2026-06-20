@@ -2,4 +2,4 @@ package: comgr_utils
 version: rdts-2025-11-03 (COMGR windows build 93)
 updated_utc: 2026-06-20
 source: https://github.com/GPUOpen-Tools/comgr_utils
-notes: Static helper over amd_comgr. amd_comgr.h header was flattened out of external/comgr to top-level 3rd_parties/comgr (now included from there). The amd_comgr runtime lib is dlopen'd, not linked. CMake rewritten to drop FetchContent.
+notes: Static helper over amd_comgr (single TU source/comgr_utils.cpp). amd_comgr.h flattened to top-level 3rd_parties/comgr. The amd_comgr runtime lib is dlopen'd, not linked. CMake rewritten (no FetchContent). Pruned dead README + .gitignore.

@@ -1,5 +1,5 @@
 package: miniz
-version: 3.0.0
+version: 3.0.0 (MZ_VERSION macro 11.0.2)
 updated_utc: 2026-06-20
 source: https://github.com/richgel999/miniz
-notes: Single-file zlib-compatible (de)compression.
+notes: Single-file zlib-compatible (de)compression. Release 3.0.0; the internal MZ_VERSION macro reports the legacy zlib-compat string 11.0.2.

@@ -1,5 +1,5 @@
 package: tsl
-version: robin-map (header-only)
+version: robin-map (header-only; vendored snapshot has no version macro)
 updated_utc: 2026-04-21
 source: https://github.com/Tessil/robin-map
-notes: tsl::robin_map open-addressing hash map.
+notes: tsl::robin_map open-addressing hash map. Header-only; the vendored headers carry no version macro, so the exact upstream tag is not recorded in-source.

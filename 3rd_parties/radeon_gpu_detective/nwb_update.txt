@@ -2,4 +2,4 @@ package: radeon_gpu_detective
 version: 1.5.0.0
 updated_utc: 2026-06-20
 source: https://github.com/GPUOpen-Tools/radeon_gpu_detective
-notes: In-process .rgd GPU-crash decoder backend (rgd_backend / nwb_rgd_decode). CLI frontend, DXBC parser, and shader-disassembler paths excluded; summary decode only.
+notes: In-process .rgd GPU-crash decoder backend (rgd_backend / nwb_rgd_decode); summary decode only. The disassembler/DXBC/code-object .cpp+.h are EXCLUDED from the build but KEPT on disk as a deferred ISA-disasm feature (re-include + add amd_gpu_dis to enable). Pruned dead non-build files: orphaned pix_events_decoder/CMakeLists, rgd_perf.h (unused), README. Kept License.txt + RGD_NOTICES.txt.

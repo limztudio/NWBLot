@@ -2,4 +2,4 @@ package: pix_events
 version: commit 3a7e70dd (PIX3BLOB v2)
 updated_utc: 2026-06-20
 source: https://github.com/microsoft/PixEvents
-notes: Microsoft PIX event decoder (Windows-only) used by RGD to decode execution markers. NWB-authored CMake (upstream ships only a .vcxproj).
+notes: Microsoft PIX event decoder (Windows-only) used by RGD; built from decoder/lib/*.cpp via NWB-authored CMake. Pruned dead non-build files: PixEvents.sln, decoder/lib/PixEventDecoder.lib.vcxproj, Directory.Build.{props,targets}, cgmanifest.json, README/CODE_OF_CONDUCT/CONTRIBUTING/SECURITY, .gitignore. Kept decoder/{include,lib}, include/, shared/, nwb_force_std_includes.h, LICENSE.txt, NOTICE.txt.

@@ -127,22 +127,22 @@ static bool LoadProjectProbeAsset(
     ))
         return false;
 
-    EXPECT_TRUE((loadedAsset->assetType() == ProjectProbeAsset::AssetTypeName()));
+    EXPECT_EQ(loadedAsset->assetType(), ProjectProbeAsset::AssetTypeName());
     const ProjectProbeAsset* probe = static_cast<const ProjectProbeAsset*>(loadedAsset.get());
-    EXPECT_TRUE((probe->marker() == expectedMarker));
+    EXPECT_EQ(probe->marker(), expectedMarker);
     return probe->marker() == expectedMarker;
 }
 
-static void TestProjectCookEntryAutoRegistration(){
+TEST(AssetsGraphics, ProjectCookEntryAutoRegistration){
     NWB::Core::Assets::CookArena arena(s_ProjectCookEntryArena);
     NWB::Core::Assets::CookEntryRegistry registry(arena);
 
-    EXPECT_TRUE((!registry.has(ProjectProbeAsset::AssetTypeName())));
+    EXPECT_FALSE(registry.has(ProjectProbeAsset::AssetTypeName()));
     EXPECT_TRUE((NWB::Core::Assets::RegisterAutoCollectedCookEntryTypes(registry)));
     EXPECT_TRUE((registry.has(ProjectProbeAsset::AssetTypeName())));
 }
 
-static void TestProjectCookEntryDocumentCook(){
+TEST(AssetsGraphics, ProjectCookEntryDocumentCook){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -169,10 +169,10 @@ static void TestProjectCookEntryDocumentCook(){
         Name("project/custom/probe"),
         s_ProjectProbeDocumentMarker
     );
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 }
 
-static void TestProjectCookEntryAssetBunchCook(){
+TEST(AssetsGraphics, ProjectCookEntryAssetBunchCook){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -202,7 +202,7 @@ static void TestProjectCookEntryAssetBunchCook(){
         Name("project/custom/bundle/probe"),
         s_ProjectProbeValueMarker
     );
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 }
 
 

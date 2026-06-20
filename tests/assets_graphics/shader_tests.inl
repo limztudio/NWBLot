@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestShaderArchiveVariantLookupIsExact(){
+TEST(AssetsGraphics, ShaderArchiveVariantLookupIsExact){
     TestArena testArena;
     NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
     NWB::Core::ShaderArchive::Record defaultRecord(testArena.arena);
@@ -20,31 +20,31 @@ static void TestShaderArchiveVariantLookupIsExact(){
         Name("ps"),
         virtualPath
     )));
-    EXPECT_TRUE((virtualPath == Name(records[0].virtualPathHash)));
-    EXPECT_TRUE((NWB::Core::ShaderArchive::buildVirtualPathName(
+    EXPECT_EQ(virtualPath, Name(records[0].virtualPathHash));
+    EXPECT_EQ(NWB::Core::ShaderArchive::buildVirtualPathName(
         Name("project/shaders/test_shader"),
         "",
         Name("ps")
-    ) == NAME_NONE));
+    ), NAME_NONE);
 
     virtualPath = NAME_NONE;
-    EXPECT_TRUE((!NWB::Core::ShaderArchive::findVirtualPath(
+    EXPECT_FALSE(NWB::Core::ShaderArchive::findVirtualPath(
         records,
         Name("project/shaders/test_shader"),
         "NWB_FEATURE=1",
         Name("ps"),
         virtualPath
-    )));
-    EXPECT_TRUE((virtualPath == NAME_NONE));
+    ));
+    EXPECT_EQ(virtualPath, NAME_NONE);
 
-    EXPECT_TRUE((!NWB::Core::ShaderArchive::findVirtualPath(
+    EXPECT_FALSE(NWB::Core::ShaderArchive::findVirtualPath(
         records,
         Name("project/shaders/test_shader"),
         "",
         Name("ps"),
         virtualPath
-    )));
-    EXPECT_TRUE((virtualPath == NAME_NONE));
+    ));
+    EXPECT_EQ(virtualPath, NAME_NONE);
 }
 
 static constexpr u32 PackSpirvStringWord(const char a, const char b, const char c, const char d){
@@ -56,7 +56,7 @@ static constexpr u32 PackSpirvStringWord(const char a, const char b, const char 
     ;
 }
 
-static void TestSpirvEntryPointLookup(){
+TEST(AssetsGraphics, SpirvEntryPointLookup){
     TestArena testArena;
     NWB::Core::GraphicsString entryPoint(testArena.arena);
 
@@ -73,22 +73,22 @@ static void TestSpirvEntryPointLookup(){
         0u,
     };
 
-    EXPECT_TRUE((NWB::Core::ResolveSpirvEntryPointName(
+    EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
             words,
             LengthOf(words),
             "main",
             NWB::Core::ShaderType::Pixel,
             entryPoint
-        ) == NWB::Core::SpirvEntryPointLookupResult::Found));
-    EXPECT_TRUE((entryPoint == "main"));
+        ), NWB::Core::SpirvEntryPointLookupResult::Found);
+    EXPECT_EQ(entryPoint, "main");
 
-    EXPECT_TRUE((NWB::Core::ResolveSpirvEntryPointName(
+    EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
             words,
             LengthOf(words),
             "main",
             NWB::Core::ShaderType::Compute,
             entryPoint
-        ) == NWB::Core::SpirvEntryPointLookupResult::NotFound));
+        ), NWB::Core::SpirvEntryPointLookupResult::NotFound);
     EXPECT_TRUE((entryPoint.empty()));
 
     const u32 invalidWords[] = {
@@ -103,17 +103,17 @@ static void TestSpirvEntryPointLookup(){
         PackSpirvStringWord('m', 'a', 'i', 'n'),
     };
 
-    EXPECT_TRUE((NWB::Core::ResolveSpirvEntryPointName(
+    EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
             invalidWords,
             LengthOf(invalidWords),
             "main",
             NWB::Core::ShaderType::Pixel,
             entryPoint
-        ) == NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv));
+        ), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
     EXPECT_TRUE((entryPoint.empty()));
 }
 
-static void TestShaderMetadataRejectsDefaultVariantAlias(){
+TEST(AssetsGraphics, ShaderMetadataRejectsDefaultVariantAlias){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -137,7 +137,7 @@ static void TestShaderMetadataRejectsDefaultVariantAlias(){
     NWB::Impl::ShaderCook shaderCook(testArena.arena);
     NWB::Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(s_ShaderScratchArena);
-    EXPECT_TRUE((!shaderCook.parseIncludeMeta(includeMetaPath, includeEntry, scratchArena)));
+    EXPECT_FALSE(shaderCook.parseIncludeMeta(includeMetaPath, includeEntry, scratchArena));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT(
         "unsupported asset field 'default_variant'"
     ))));
@@ -148,7 +148,7 @@ static void TestShaderMetadataRejectsDefaultVariantAlias(){
 #endif
 }
 
-static void TestShaderDependencyChecksumAliasesGeneratedRoot(){
+TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
     TestArena testArena;
     Path root(testArena.arena);
     EXPECT_TRUE((PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_checksum_alias", root)));
@@ -187,7 +187,7 @@ static void TestShaderDependencyChecksumAliasesGeneratedRoot(){
         secondChecksum,
         scratchArena
     )));
-    EXPECT_TRUE((firstChecksum == secondChecksum));
+    EXPECT_EQ(firstChecksum, secondChecksum);
 
     EXPECT_TRUE((WriteTextFile(secondGeneratedInclude, "changed generated include\n")));
     u64 changedChecksum = 0u;
@@ -199,7 +199,7 @@ static void TestShaderDependencyChecksumAliasesGeneratedRoot(){
         changedChecksum,
         scratchArena
     )));
-    EXPECT_TRUE((firstChecksum != changedChecksum));
+    EXPECT_NE(firstChecksum, changedChecksum);
 
 #if defined(NWB_FINAL)
     const Path unaliasedDependency = root / "outside" / "unaliased.slangi";
@@ -210,14 +210,14 @@ static void TestShaderDependencyChecksumAliasesGeneratedRoot(){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
     u64 rejectedChecksum = 0u;
-    EXPECT_TRUE((!shaderCook.computeDependencyChecksum(
+    EXPECT_FALSE(shaderCook.computeDependencyChecksum(
         unaliasedDependencies,
         {
             { firstGeneratedRoot, "material_bind_includes" }
         },
         rejectedChecksum,
         scratchArena
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT(
         "outside the declared dependency root aliases"
     ))));
@@ -240,7 +240,7 @@ static bool WriteStandaloneShaderProbe(const Path& assetRoot){
     return WriteTextFile(assetRoot / "shaders" / "standalone_ps.slang", s_MaterialBindPixelShaderProbeSource);
 }
 
-static void TestShaderCookWithoutMaterialBindIncludes(){
+TEST(AssetsGraphics, ShaderCookWithoutMaterialBindIncludes){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -276,7 +276,7 @@ static void TestShaderCookWithoutMaterialBindIncludes(){
         )));
     }
 
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
     EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
@@ -287,7 +287,7 @@ static bool FindSingleShaderBytecodeCachePath(TestArena& testArena, const Path& 
 
     ErrorCode errorCode;
     RecursiveDirectoryIterator<Path::Arena> cacheEntries(cacheDirectory, errorCode);
-    EXPECT_TRUE((!errorCode));
+    EXPECT_FALSE(errorCode);
     if(errorCode)
         return false;
 
@@ -295,7 +295,7 @@ static bool FindSingleShaderBytecodeCachePath(TestArena& testArena, const Path& 
     for(const auto& entry : cacheEntries){
         errorCode.clear();
         const bool isRegularFile = entry.is_regular_file(errorCode);
-        EXPECT_TRUE((!errorCode));
+        EXPECT_FALSE(errorCode);
         if(errorCode)
             return false;
         if(!isRegularFile)
@@ -309,11 +309,11 @@ static bool FindSingleShaderBytecodeCachePath(TestArena& testArena, const Path& 
         ++foundCount;
     }
 
-    EXPECT_TRUE((foundCount == 1u));
+    EXPECT_EQ(foundCount, 1u);
     return foundCount == 1u;
 }
 
-static void TestShaderCookIgnoresInvalidBytecodeCache(){
+TEST(AssetsGraphics, ShaderCookIgnoresInvalidBytecodeCache){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -350,7 +350,7 @@ static void TestShaderCookIgnoresInvalidBytecodeCache(){
         )));
     }
 
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
     EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));

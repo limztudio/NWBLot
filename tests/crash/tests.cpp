@@ -140,7 +140,7 @@ static void FillPackageRequest(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestWriteCrashPackageCreatesRequiredFiles(){
+TEST(Crash, WriteCrashPackageCreatesRequiredFiles){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_package_write_test");
@@ -174,7 +174,7 @@ static void TestWriteCrashPackageCreatesRequiredFiles(){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestWriteCrashPackageFailsWhenSpoolPathIsFile(){
+TEST(Crash, WriteCrashPackageFailsWhenSpoolPathIsFile){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_package_bad_spool_test");
@@ -187,12 +187,12 @@ static void TestWriteCrashPackageFailsWhenSpoolPathIsFile(){
 
     NWB::Core::Crash::Detail::CrashRequest request;
     FillPackageRequest(arena, request, spoolPath, AStringView("crash-package-bad-spool"));
-    EXPECT_TRUE((!NWB::Core::Crash::Detail::WriteCrashPackage(request)));
+    EXPECT_FALSE(NWB::Core::Crash::Detail::WriteCrashPackage(request));
 
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestCrashBreadcrumbCapturedInRequest(){
+TEST(Crash, CrashBreadcrumbCapturedInRequest){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_breadcrumb_persist_test");
@@ -225,9 +225,9 @@ static void TestCrashBreadcrumbCapturedInRequest(){
 
     NWB::Core::Crash::Detail::CrashRequest request;
     NWB::Core::Crash::Detail::SnapshotCrashState(request, NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u);
-    EXPECT_TRUE((request.breadcrumbCount == 1u));
-    EXPECT_TRUE((AStringView(request.breadcrumbs[0].category) == AStringView("test")));
-    EXPECT_TRUE((AStringView(request.breadcrumbs[0].message) == AStringView("persisted breadcrumb")));
+    EXPECT_EQ(request.breadcrumbCount, 1u);
+    EXPECT_EQ(AStringView(request.breadcrumbs[0].category), AStringView("test"));
+    EXPECT_EQ(AStringView(request.breadcrumbs[0].message), AStringView("persisted breadcrumb"));
 
     {
         ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
@@ -241,7 +241,7 @@ static void TestCrashBreadcrumbCapturedInRequest(){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestCrashSpoolRetentionPrunesOldestPackages(){
+TEST(Crash, CrashSpoolRetentionPrunesOldestPackages){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_spool_retention_test");
@@ -279,7 +279,7 @@ static void TestCrashSpoolRetentionPrunesOldestPackages(){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestCrashSpoolRetentionZeroDisablesPruning(){
+TEST(Crash, CrashSpoolRetentionZeroDisablesPruning){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_spool_retention_zero_test");
@@ -301,7 +301,7 @@ static void TestCrashSpoolRetentionZeroDisablesPruning(){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestCrashSpoolRetentionProtectsActivePendingPackage(){
+TEST(Crash, CrashSpoolRetentionProtectsActivePendingPackage){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_spool_retention_protect_test");
@@ -330,7 +330,7 @@ static void TestCrashSpoolRetentionProtectsActivePendingPackage(){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-static void TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(){
+TEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_uploading_recovery_blocked_test");
@@ -344,7 +344,7 @@ static void TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(){
     CopyPathText(arena, snapshot.spoolDirectory, SpoolDirectory(arena, s_Group));
     CopyFixedBuffer(snapshot.logServerUrl, AStringView("http://127.0.0.1:1"));
 
-    EXPECT_TRUE((!NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(arena, snapshot)));
+    EXPECT_FALSE(NWB::Core::Crash::Detail::FlushPendingCrashReportsImpl(arena, snapshot));
     EXPECT_TRUE((PathIsDirectory(PackageDirectory(arena, s_Group, CrashNames::s_UploadingDirectoryName, s_CrashId))));
     EXPECT_TRUE((PathIsRegularFile(BucketDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName))));
     EXPECT_TRUE((TextFileContains(
@@ -356,7 +356,7 @@ static void TestFlushReportsFailsWhenUploadingRecoveryIsBlocked(){
 }
 
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-static void TestDesktopInstalledHandlerWritesManualDumpPackage(){
+TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){
     TestArena testArena;
     auto& arena = testArena.arena;
     NWB::Core::Alloc::PersistentArena installArena(
@@ -393,7 +393,7 @@ static void TestDesktopInstalledHandlerWritesManualDumpPackage(){
             0u,
             options
         );
-        EXPECT_TRUE((result.status == NWB::Core::Crash::CrashDumpStatus::PackageWritten));
+        EXPECT_EQ(result.status, NWB::Core::Crash::CrashDumpStatus::PackageWritten);
 
         char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
         BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
@@ -417,7 +417,7 @@ static void TestDesktopInstalledHandlerWritesManualDumpPackage(){
 #endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-static void TestLinuxSignalHandlerWritesCrashPackage(){
+TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
     TestArena testArena;
     auto& arena = testArena.arena;
     constexpr AStringView s_Group("crash_linux_signal_runtime_test");
@@ -425,7 +425,7 @@ static void TestLinuxSignalHandlerWritesCrashPackage(){
 
     const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
     const pid_t childPid = fork();
-    EXPECT_TRUE((childPid >= 0));
+    EXPECT_GE(childPid, 0);
     if(childPid == 0){
         NWB::Core::Alloc::PersistentArena installArena(
             s_SignalChildInstallArena,
@@ -458,7 +458,7 @@ static void TestLinuxSignalHandlerWritesCrashPackage(){
         }
 
         EXPECT_TRUE((WIFSIGNALED(status)));
-        EXPECT_TRUE((WTERMSIG(status) == SIGSEGV));
+        EXPECT_EQ(WTERMSIG(status), SIGSEGV);
 
         char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
         BuildCrashIdForProcess(crashId, static_cast<u32>(childPid), 1u);
@@ -490,44 +490,26 @@ static void TestLinuxSignalHandlerWritesCrashPackage(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Crash, WriteCrashPackageCreatesRequiredFiles){
-    __hidden_crash_tests::TestWriteCrashPackageCreatesRequiredFiles();
-}
 
-TEST(Crash, WriteCrashPackageFailsWhenSpoolPathIsFile){
-    __hidden_crash_tests::TestWriteCrashPackageFailsWhenSpoolPathIsFile();
-}
 
-TEST(Crash, CrashBreadcrumbCapturedInRequest){
-    __hidden_crash_tests::TestCrashBreadcrumbCapturedInRequest();
-}
 
-TEST(Crash, CrashSpoolRetentionPrunesOldestPackages){
-    __hidden_crash_tests::TestCrashSpoolRetentionPrunesOldestPackages();
-}
 
-TEST(Crash, CrashSpoolRetentionZeroDisablesPruning){
-    __hidden_crash_tests::TestCrashSpoolRetentionZeroDisablesPruning();
-}
 
-TEST(Crash, CrashSpoolRetentionProtectsActivePendingPackage){
-    __hidden_crash_tests::TestCrashSpoolRetentionProtectsActivePendingPackage();
-}
 
-TEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked){
-    __hidden_crash_tests::TestFlushReportsFailsWhenUploadingRecoveryIsBlocked();
-}
+
+
+
+
+
+
+
 
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){
-    __hidden_crash_tests::TestDesktopInstalledHandlerWritesManualDumpPackage();
-}
+
 #endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
-    __hidden_crash_tests::TestLinuxSignalHandlerWritesCrashPackage();
-}
+
 #endif
 
 

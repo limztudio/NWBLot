@@ -43,7 +43,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_tests{
+namespace __hidden_assets_graphics_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1371,12 +1371,12 @@ static bool LoadCookedAsset(
         return false;
 
     if(expectedVolumeFileCount != 0u)
-        EXPECT_TRUE((volumeSession.fileCount() == expectedVolumeFileCount));
+        EXPECT_EQ(volumeSession.fileCount(), expectedVolumeFileCount);
 
     NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     const bool loadedBinary = volumeSession.loadData(assetName, binary);
     EXPECT_TRUE((loadedBinary));
-    EXPECT_TRUE((!binary.empty()));
+    EXPECT_FALSE(binary.empty());
     if(!loadedBinary || binary.empty())
         return false;
 
@@ -1441,7 +1441,7 @@ static bool LoadCookedShaderArchiveRecords(
     NWB::Core::GraphicsBytes indexBinary(testArena.arena);
     const bool loadedIndex = volumeSession.loadData(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary);
     EXPECT_TRUE((loadedIndex));
-    EXPECT_TRUE((!indexBinary.empty()));
+    EXPECT_FALSE(indexBinary.empty());
     if(!loadedIndex || indexBinary.empty())
         return false;
 
@@ -1485,166 +1485,4 @@ static bool FindShaderArchiveSourceChecksum(
 
 #include "mesh_cooker_tests.inl"
 
-TEST(AssetsGraphics, VolumeSessionAcceptsScratchBytes){
-    __hidden_tests::TestVolumeSessionAcceptsScratchBytes();
-}
-
-TEST(AssetsGraphics, MeshCodecRoundTrip){
-    __hidden_tests::TestMeshCodecRoundTrip();
-}
-
-TEST(AssetsGraphics, MeshletRefEncodingWidthRules){
-    __hidden_tests::TestMeshletRefEncodingWidthRules();
-}
-
-TEST(AssetsGraphics, MeshletRefEncodingRoundTrip){
-    __hidden_tests::TestMeshletRefEncodingRoundTrip();
-}
-
-TEST(AssetsGraphics, MeshletConeOctPackingRoundTrip){
-    __hidden_tests::TestMeshletConeOctPackingRoundTrip();
-}
-
-TEST(AssetsGraphics, ShaderArchiveVariantLookupIsExact){
-    __hidden_tests::TestShaderArchiveVariantLookupIsExact();
-}
-
-TEST(AssetsGraphics, SpirvEntryPointLookup){
-    __hidden_tests::TestSpirvEntryPointLookup();
-}
-
-TEST(AssetsGraphics, ShaderMetadataRejectsDefaultVariantAlias){
-    __hidden_tests::TestShaderMetadataRejectsDefaultVariantAlias();
-}
-
-TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
-    __hidden_tests::TestShaderDependencyChecksumAliasesGeneratedRoot();
-}
-
-TEST(AssetsGraphics, ShaderCookWithoutMaterialBindIncludes){
-    __hidden_tests::TestShaderCookWithoutMaterialBindIncludes();
-}
-
-TEST(AssetsGraphics, ShaderCookIgnoresInvalidBytecodeCache){
-    __hidden_tests::TestShaderCookIgnoresInvalidBytecodeCache();
-}
-
-TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
-    __hidden_tests::TestMaterialMetadataInterfaceAndBlockParameters();
-}
-
-TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
-    __hidden_tests::TestMaterialCodecTypedLayoutBoundary();
-}
-
-TEST(AssetsGraphics, MaterialBindSchemaValidation){
-    __hidden_tests::TestMaterialBindSchemaValidation();
-}
-
-TEST(AssetsGraphics, MaterialBindHalfTypedLayoutValues){
-    __hidden_tests::TestMaterialBindHalfTypedLayoutValues();
-}
-
-TEST(AssetsGraphics, MaterialBindCompactIntegerTypedLayoutValues){
-    __hidden_tests::TestMaterialBindCompactIntegerTypedLayoutValues();
-}
-
-TEST(AssetsGraphics, MaterialBindGeneratedSlangText){
-    __hidden_tests::TestMaterialBindGeneratedSlangText();
-}
-
-TEST(AssetsGraphics, MaterialBindCookIntegration){
-    __hidden_tests::TestMaterialBindCookIntegration();
-}
-
-TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
-    __hidden_tests::TestMaterialRejectsMissingInterfaceCookIntegration();
-}
-
-TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
-    __hidden_tests::TestMaterialBindDependencyInvalidation();
-}
-
-TEST(AssetsGraphics, ProjectCookEntryAutoRegistration){
-    __hidden_tests::TestProjectCookEntryAutoRegistration();
-}
-
-TEST(AssetsGraphics, ProjectCookEntryDocumentCook){
-    __hidden_tests::TestProjectCookEntryDocumentCook();
-}
-
-TEST(AssetsGraphics, ProjectCookEntryAssetBunchCook){
-    __hidden_tests::TestProjectCookEntryAssetBunchCook();
-}
-
-TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
-    __hidden_tests::TestModelBunchLocalReferencesAndWrapperExpansion();
-}
-
-TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
-    __hidden_tests::TestModelBunchStaticMeshAttachmentToNamedJoint();
-}
-
-TEST(AssetsGraphics, ModelBunchRejectsDuplicateLocalReference){
-    __hidden_tests::TestModelBunchRejectsDuplicateLocalReference();
-}
-
-TEST(AssetsGraphics, ModelBunchRejectsMissingLocalReference){
-    __hidden_tests::TestModelBunchRejectsMissingLocalReference();
-}
-
-TEST(AssetsGraphics, MeshCookerTypedStreams){
-    __hidden_tests::TestMeshCookerTypedStreams();
-}
-
-TEST(AssetsGraphics, MeshCookerDefaultColors){
-    __hidden_tests::TestMeshCookerDefaultColors();
-}
-
-TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
-    __hidden_tests::TestMeshAcceptanceHardEdgeCubeZippedRefs();
-}
-
-TEST(AssetsGraphics, MeshAcceptanceSphereSmooth){
-    __hidden_tests::TestMeshAcceptanceSphereSmooth();
-}
-
-TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
-    __hidden_tests::TestMeshAcceptanceUvSeamQuad();
-}
-
-TEST(AssetsGraphics, MeshAcceptanceMirroredUvQuad){
-    __hidden_tests::TestMeshAcceptanceMirroredUvQuad();
-}
-
-TEST(AssetsGraphics, MeshAcceptanceTwoSidedPlane){
-    __hidden_tests::TestMeshAcceptanceTwoSidedPlane();
-}
-
-TEST(AssetsGraphics, MeshAcceptanceLargeManyMeshlets){
-    __hidden_tests::TestMeshAcceptanceLargeManyMeshlets();
-}
-
-TEST(AssetsGraphics, MeshAcceptanceQualityBuilderChecks){
-    __hidden_tests::TestMeshAcceptanceQualityBuilderChecks();
-}
-
-TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
-    __hidden_tests::TestMaterialBindDiscoveryValidation();
-}
-
-TEST(AssetsGraphics, MeshCookerValidationFailures){
-    __hidden_tests::TestMeshCookerValidationFailures();
-}
-
-TEST(AssetsGraphics, MeshClassPolicyHelpers){
-    __hidden_tests::TestMeshClassPolicyHelpers();
-}
-
-TEST(AssetsGraphics, FormatBlockDimensions){
-    __hidden_tests::TestFormatBlockDimensions();
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

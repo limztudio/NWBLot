@@ -11,13 +11,13 @@ static void ExpectCookFailure(
 ){
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    EXPECT_TRUE((!cookSingleMeta(
+    EXPECT_FALSE(cookSingleMeta(
         metaText,
         caseName,
         testArena,
         root,
         outputDirectory
-    )));
+    ));
 
     ErrorCode errorCode;
     EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
@@ -33,32 +33,32 @@ static void ExpectCookFailure(
 }
 #endif
 
-static void TestMeshCookerTypedStreams(){
+TEST(AssetsGraphics, MeshCookerTypedStreams){
     CookAndCheckMinimalTypedAsset<NWB::Impl::Mesh>(
         s_MinimalMeshMeta,
         "minimal_mesh",
         MinimalAssetKind::Mesh,
         [&](const NWB::Impl::Mesh& loadedMesh){
-            EXPECT_TRUE((loadedMesh.meshClass() == NWB::Core::Mesh::MeshClass::Static));
-            EXPECT_TRUE((loadedMesh.positionStream().size() == 3u));
+            EXPECT_EQ(loadedMesh.meshClass(), NWB::Core::Mesh::MeshClass::Static);
+            EXPECT_EQ(loadedMesh.positionStream().size(), 3u);
             CheckMinimalRuntimeMeshletPayload(loadedMesh);
-            EXPECT_TRUE((loadedMesh.positionStream()[0].x == -0.5f));
-            EXPECT_TRUE((LoadHalf4U(loadedMesh.normalStream()[0]).z == 1.f));
-            EXPECT_TRUE((LoadHalf4U(loadedMesh.colorStream()[2]).z == 1.f));
+            EXPECT_EQ(loadedMesh.positionStream()[0].x, -0.5f);
+            EXPECT_EQ(LoadHalf4U(loadedMesh.normalStream()[0]).z, 1.f);
+            EXPECT_EQ(LoadHalf4U(loadedMesh.colorStream()[2]).z, 1.f);
         }
     );
 }
 
-static void TestMeshCookerDefaultColors(){
+TEST(AssetsGraphics, MeshCookerDefaultColors){
     CookAndCheckMinimalTypedAsset<NWB::Impl::Mesh>(
         s_DefaultColorMeshMeta,
         "default_color_mesh",
         MinimalAssetKind::Mesh,
         [&](const NWB::Impl::Mesh& loadedMesh){
-            EXPECT_TRUE((loadedMesh.positionStream().size() == 3u));
+            EXPECT_EQ(loadedMesh.positionStream().size(), 3u);
             const Float4U color0 = LoadHalf4U(loadedMesh.colorStream()[0]);
-            EXPECT_TRUE((color0.x == 1.f));
-            EXPECT_TRUE((color0.w == 1.f));
+            EXPECT_EQ(color0.x, 1.f);
+            EXPECT_EQ(color0.w, 1.f);
         }
     );
 }
@@ -66,7 +66,7 @@ static void TestMeshCookerDefaultColors(){
 #include "meshlet_ref_acceptance_helpers.inl"
 #include "acceptance_tests.inl"
 
-static void TestMeshCookerValidationFailures(){
+TEST(AssetsGraphics, MeshCookerValidationFailures){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -130,7 +130,7 @@ static void TestMeshCookerValidationFailures(){
         BuildMeshTriangleMeta(s_TriangleNormalField, s_EmptyTangentMapField, s_TriangleVertexRefsField),
         "empty_map_mesh_tangent"
     );
-    EXPECT_TRUE((logger.errorCount() >= 10u));
+    EXPECT_GE(logger.errorCount(), 10u);
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("unsupported asset field"))));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("'uv0' must be a list"))));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("'normals' must be a list"))));
@@ -143,31 +143,31 @@ static void TestMeshCookerValidationFailures(){
 #endif
 }
 
-static void TestMeshClassPolicyHelpers(){
+TEST(AssetsGraphics, MeshClassPolicyHelpers){
     using namespace NWB::Core::Mesh;
 
     EXPECT_TRUE((MeshClassMatchesSkinPayload(MeshClass::Static, false)));
-    EXPECT_TRUE((!MeshClassMatchesSkinPayload(MeshClass::Static, true)));
+    EXPECT_FALSE(MeshClassMatchesSkinPayload(MeshClass::Static, true));
     EXPECT_TRUE((MeshClassMatchesSkinPayload(MeshClass::Skinned, true)));
-    EXPECT_TRUE((!MeshClassMatchesSkinPayload(MeshClass::Skinned, false)));
+    EXPECT_FALSE(MeshClassMatchesSkinPayload(MeshClass::Skinned, false));
 }
 
-static void TestFormatBlockDimensions(){
+TEST(AssetsGraphics, FormatBlockDimensions){
     const NWB::Core::FormatInfo& rgba8 = NWB::Core::GetFormatInfo(NWB::Core::Format::RGBA8_UNORM);
-    EXPECT_TRUE((NWB::Core::GetFormatBlockWidth(rgba8) == 1u));
-    EXPECT_TRUE((NWB::Core::GetFormatBlockHeight(rgba8) == 1u));
+    EXPECT_EQ(NWB::Core::GetFormatBlockWidth(rgba8), 1u);
+    EXPECT_EQ(NWB::Core::GetFormatBlockHeight(rgba8), 1u);
 
     const NWB::Core::FormatInfo& bc1 = NWB::Core::GetFormatInfo(NWB::Core::Format::BC1_UNORM);
-    EXPECT_TRUE((NWB::Core::GetFormatBlockWidth(bc1) == 4u));
-    EXPECT_TRUE((NWB::Core::GetFormatBlockHeight(bc1) == 4u));
+    EXPECT_EQ(NWB::Core::GetFormatBlockWidth(bc1), 4u);
+    EXPECT_EQ(NWB::Core::GetFormatBlockHeight(bc1), 4u);
 
     const NWB::Core::FormatInfo& astc8x5 = NWB::Core::GetFormatInfo(NWB::Core::Format::ASTC_8x5_UNORM);
-    EXPECT_TRUE((NWB::Core::GetFormatBlockWidth(astc8x5) == 8u));
-    EXPECT_TRUE((NWB::Core::GetFormatBlockHeight(astc8x5) == 5u));
+    EXPECT_EQ(NWB::Core::GetFormatBlockWidth(astc8x5), 8u);
+    EXPECT_EQ(NWB::Core::GetFormatBlockHeight(astc8x5), 5u);
 
     const NWB::Core::FormatInfo& astc12x10 = NWB::Core::GetFormatInfo(NWB::Core::Format::ASTC_12x10_FLOAT);
-    EXPECT_TRUE((NWB::Core::GetFormatBlockWidth(astc12x10) == 12u));
-    EXPECT_TRUE((NWB::Core::GetFormatBlockHeight(astc12x10) == 10u));
+    EXPECT_EQ(NWB::Core::GetFormatBlockWidth(astc12x10), 12u);
+    EXPECT_EQ(NWB::Core::GetFormatBlockHeight(astc12x10), 10u);
 }
 
 

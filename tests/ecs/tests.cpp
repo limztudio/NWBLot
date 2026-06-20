@@ -14,7 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_tests{
+namespace __hidden_ecs_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,7 +101,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestComponentStorageAndView(){
+TEST(Ecs, ComponentStorageAndView){
     TestWorld testWorld;
 
     auto entity = testWorld.world.createEntity();
@@ -116,13 +116,13 @@ static void TestComponentStorageAndView(){
     velocity.y = 8;
 
     EXPECT_TRUE((entity.alive()));
-    EXPECT_TRUE((testWorld.world.entityCount() == 1));
+    EXPECT_EQ(testWorld.world.entityCount(), 1u);
     EXPECT_TRUE((entity.hasComponent<PositionComponent>()));
     EXPECT_TRUE((entity.hasComponent<VelocityComponent>()));
     EXPECT_TRUE((entity.hasComponent<OverAlignedComponent>()));
-    EXPECT_TRUE((testWorld.world.tryGetComponent<PositionComponent>(entityId) == &position));
-    EXPECT_TRUE((testWorld.world.tryGetComponent<VelocityComponent>(entityId) == &velocity));
-    EXPECT_TRUE(((reinterpret_cast<usize>(&aligned) % alignof(OverAlignedComponent)) == 0));
+    EXPECT_EQ(testWorld.world.tryGetComponent<PositionComponent>(entityId), &position);
+    EXPECT_EQ(testWorld.world.tryGetComponent<VelocityComponent>(entityId), &velocity);
+    EXPECT_EQ((reinterpret_cast<usize>(&aligned) % alignof(OverAlignedComponent)), 0u);
 
     usize viewCount = 0;
     testWorld.world.view<PositionComponent, VelocityComponent>().each(
@@ -132,17 +132,17 @@ static void TestComponentStorageAndView(){
             VelocityComponent& viewVelocity
         ){
             ++viewCount;
-            EXPECT_TRUE((viewEntityId == entityId));
-            EXPECT_TRUE((viewPosition.x == 2));
-            EXPECT_TRUE((viewPosition.y == 4));
-            EXPECT_TRUE((viewVelocity.x == 6));
-            EXPECT_TRUE((viewVelocity.y == 8));
+            EXPECT_EQ(viewEntityId, entityId);
+            EXPECT_EQ(viewPosition.x, 2);
+            EXPECT_EQ(viewPosition.y, 4);
+            EXPECT_EQ(viewVelocity.x, 6);
+            EXPECT_EQ(viewVelocity.y, 8);
         }
     );
-    EXPECT_TRUE((viewCount == 1));
+    EXPECT_EQ(viewCount, 1u);
 }
 
-static void TestEmptyViewDoesNotAllocateComponentPools(){
+TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
     TestWorld testWorld;
 
     usize singleViewCount = 0;
@@ -159,11 +159,11 @@ static void TestEmptyViewDoesNotAllocateComponentPools(){
         }
     );
 
-    EXPECT_TRUE((singleViewCount == 0));
-    EXPECT_TRUE((multiViewCount == 0));
+    EXPECT_EQ(singleViewCount, 0u);
+    EXPECT_EQ(multiViewCount, 0u);
 }
 
-static void TestComponentLifetime(){
+TEST(Ecs, ComponentLifetime){
     TestWorld testWorld;
 
     auto entity = testWorld.world.createEntity();
@@ -172,12 +172,12 @@ static void TestComponentLifetime(){
     entity.addComponent<PositionComponent>();
     EXPECT_TRUE((entity.alive()));
     EXPECT_TRUE((entity.hasComponent<PositionComponent>()));
-    EXPECT_TRUE((testWorld.world.tryGetComponent<PositionComponent>(entityId) != nullptr));
-    EXPECT_TRUE((testWorld.world.tryGetComponent<VelocityComponent>(entityId) == nullptr));
+    EXPECT_NE(testWorld.world.tryGetComponent<PositionComponent>(entityId), nullptr);
+    EXPECT_EQ(testWorld.world.tryGetComponent<VelocityComponent>(entityId), nullptr);
 
     entity.removeComponent<PositionComponent>();
-    EXPECT_TRUE((!entity.hasComponent<PositionComponent>()));
-    EXPECT_TRUE((testWorld.world.tryGetComponent<PositionComponent>(entityId) == nullptr));
+    EXPECT_FALSE(entity.hasComponent<PositionComponent>());
+    EXPECT_EQ(testWorld.world.tryGetComponent<PositionComponent>(entityId), nullptr);
 
     entity.addComponent<VelocityComponent>();
     EXPECT_TRUE((entity.hasComponent<VelocityComponent>()));
@@ -186,53 +186,53 @@ static void TestComponentLifetime(){
     EXPECT_TRUE((entity.hasComponent<OverAlignedComponent>()));
 
     entity.removeComponent<OverAlignedComponent>();
-    EXPECT_TRUE((!entity.hasComponent<OverAlignedComponent>()));
+    EXPECT_FALSE(entity.hasComponent<OverAlignedComponent>());
 
     entity.destroy();
-    EXPECT_TRUE((!entity.alive()));
-    EXPECT_TRUE((testWorld.world.entityCount() == 0));
+    EXPECT_FALSE(entity.alive());
+    EXPECT_EQ(testWorld.world.entityCount(), 0u);
 
     auto recycledEntity = testWorld.world.createEntity();
     EXPECT_TRUE((recycledEntity.alive()));
-    EXPECT_TRUE((recycledEntity.id() != entityId));
+    EXPECT_NE(recycledEntity.id(), entityId);
 }
 
-static void TestComponentMutationVersion(){
+TEST(Ecs, ComponentMutationVersion){
     TestWorld testWorld;
 
-    EXPECT_TRUE((testWorld.world.componentMutationVersion<PositionComponent>() == 0u));
+    EXPECT_EQ(testWorld.world.componentMutationVersion<PositionComponent>(), 0u);
 
     auto entity = testWorld.world.createEntity();
     entity.addComponent<PositionComponent>();
-    EXPECT_TRUE((testWorld.world.componentMutationVersion<PositionComponent>() == 1u));
+    EXPECT_EQ(testWorld.world.componentMutationVersion<PositionComponent>(), 1u);
 
     entity.addComponent<PositionComponent>();
-    EXPECT_TRUE((testWorld.world.componentMutationVersion<PositionComponent>() == 1u));
+    EXPECT_EQ(testWorld.world.componentMutationVersion<PositionComponent>(), 1u);
 
     entity.addComponent<VelocityComponent>();
-    EXPECT_TRUE((testWorld.world.componentMutationVersion<PositionComponent>() == 1u));
-    EXPECT_TRUE((testWorld.world.componentMutationVersion<VelocityComponent>() == 1u));
+    EXPECT_EQ(testWorld.world.componentMutationVersion<PositionComponent>(), 1u);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<VelocityComponent>(), 1u);
 
     entity.removeComponent<VelocityComponent>();
-    EXPECT_TRUE((testWorld.world.componentMutationVersion<VelocityComponent>() == 2u));
+    EXPECT_EQ(testWorld.world.componentMutationVersion<VelocityComponent>(), 2u);
 
     entity.removeComponent<VelocityComponent>();
-    EXPECT_TRUE((testWorld.world.componentMutationVersion<VelocityComponent>() == 2u));
+    EXPECT_EQ(testWorld.world.componentMutationVersion<VelocityComponent>(), 2u);
 
     entity.destroy();
-    EXPECT_TRUE((testWorld.world.componentMutationVersion<PositionComponent>() == 2u));
+    EXPECT_EQ(testWorld.world.componentMutationVersion<PositionComponent>(), 2u);
 }
 
-static void TestMessageBus(){
+TEST(Ecs, MessageBus){
     TestWorld testWorld;
 
     TickMessage lvalueMessage{ 7u };
     testWorld.world.postMessage(lvalueMessage);
     testWorld.world.postMessage(TickMessage{ 11u });
-    EXPECT_TRUE((testWorld.world.messageCount<TickMessage>() == 0));
+    EXPECT_EQ(testWorld.world.messageCount<TickMessage>(), 0u);
 
     testWorld.world.swapMessageBuffers();
-    EXPECT_TRUE((testWorld.world.messageCount<TickMessage>() == 2));
+    EXPECT_EQ(testWorld.world.messageCount<TickMessage>(), 2u);
 
     u32 consumedCount = 0;
     u32 consumedValueSum = 0;
@@ -242,21 +242,21 @@ static void TestMessageBus(){
             consumedValueSum += message.value;
         }
     );
-    EXPECT_TRUE((consumedCount == 2));
-    EXPECT_TRUE((consumedValueSum == 18u));
+    EXPECT_EQ(consumedCount, 2u);
+    EXPECT_EQ(consumedValueSum, 18u);
 
     testWorld.world.clearMessages();
-    EXPECT_TRUE((testWorld.world.messageCount<TickMessage>() == 0));
+    EXPECT_EQ(testWorld.world.messageCount<TickMessage>(), 0u);
 }
 
-static void TestMoveOnlyMessageBus(){
+TEST(Ecs, MoveOnlyMessageBus){
     TestWorld testWorld;
 
     testWorld.world.emplaceMessage<MoveOnlyMessage>(23u);
-    EXPECT_TRUE((testWorld.world.messageCount<MoveOnlyMessage>() == 0));
+    EXPECT_EQ(testWorld.world.messageCount<MoveOnlyMessage>(), 0u);
 
     testWorld.world.swapMessageBuffers();
-    EXPECT_TRUE((testWorld.world.messageCount<MoveOnlyMessage>() == 1));
+    EXPECT_EQ(testWorld.world.messageCount<MoveOnlyMessage>(), 1u);
 
     u32 consumedCount = 0u;
     u32 consumedValue = 0u;
@@ -266,19 +266,19 @@ static void TestMoveOnlyMessageBus(){
             consumedValue = message.value;
         }
     );
-    EXPECT_TRUE((consumedCount == 1u));
-    EXPECT_TRUE((consumedValue == 23u));
+    EXPECT_EQ(consumedCount, 1u);
+    EXPECT_EQ(consumedValue, 23u);
 
     testWorld.world.clearMessages();
-    EXPECT_TRUE((testWorld.world.messageCount<MoveOnlyMessage>() == 0));
+    EXPECT_EQ(testWorld.world.messageCount<MoveOnlyMessage>(), 0u);
 
     testWorld.world.emplaceMessage<MoveOnlyMessage>(41u);
     testWorld.world.clearMessages();
     testWorld.world.swapMessageBuffers();
-    EXPECT_TRUE((testWorld.world.messageCount<MoveOnlyMessage>() == 0));
+    EXPECT_EQ(testWorld.world.messageCount<MoveOnlyMessage>(), 0u);
 }
 
-static void TestSystemTick(){
+TEST(Ecs, SystemTick){
     TestWorld testWorld;
 
     auto entity = testWorld.world.createEntity();
@@ -286,19 +286,19 @@ static void TestSystemTick(){
     position.x = 4;
 
     auto& system = testWorld.world.addSystem<CountingSystem>();
-    EXPECT_TRUE((testWorld.world.getSystem<CountingSystem>() == &system));
+    EXPECT_EQ(testWorld.world.getSystem<CountingSystem>(), &system);
 
     testWorld.world.tick(0.25f);
-    EXPECT_TRUE((system.prepares == 1));
-    EXPECT_TRUE((system.updates == 1));
-    EXPECT_TRUE((system.lastDelta == 0.25f));
-    EXPECT_TRUE((position.x == 5));
+    EXPECT_EQ(system.prepares, 1u);
+    EXPECT_EQ(system.updates, 1u);
+    EXPECT_EQ(system.lastDelta, 0.25f);
+    EXPECT_EQ(position.x, 5);
 
     testWorld.world.removeSystem(system);
-    EXPECT_TRUE((testWorld.world.getSystem<CountingSystem>() == nullptr));
+    EXPECT_EQ(testWorld.world.getSystem<CountingSystem>(), nullptr);
 }
 
-static void TestDuplicateComponentAddIsStable(){
+TEST(Ecs, DuplicateComponentAddIsStable){
     TestWorld testWorld;
 
     auto entity = testWorld.world.createEntity();
@@ -307,9 +307,9 @@ static void TestDuplicateComponentAddIsStable(){
     first.y = 4;
 
     auto& second = entity.addComponent<PositionComponent>();
-    EXPECT_TRUE((&first == &second));
-    EXPECT_TRUE((second.x == 9));
-    EXPECT_TRUE((second.y == 4));
+    EXPECT_EQ(&first, &second);
+    EXPECT_EQ(second.x, 9);
+    EXPECT_EQ(second.y, 4);
 
     usize viewCount = 0u;
     testWorld.world.view<PositionComponent>().each(
@@ -317,13 +317,13 @@ static void TestDuplicateComponentAddIsStable(){
             ++viewCount;
         }
     );
-    EXPECT_TRUE((viewCount == 1u));
+    EXPECT_EQ(viewCount, 1u);
 
     entity.removeComponent<PositionComponent>();
-    EXPECT_TRUE((!entity.hasComponent<PositionComponent>()));
+    EXPECT_FALSE(entity.hasComponent<PositionComponent>());
 }
 
-static void TestDuplicateSchedulerAddIsStable(){
+TEST(Ecs, DuplicateSchedulerAddIsStable){
     TestWorld testWorld;
 
     auto entity = testWorld.world.createEntity();
@@ -336,9 +336,9 @@ static void TestDuplicateSchedulerAddIsStable(){
     scheduler.addSystem(system);
     scheduler.execute(testWorld.world, 0.5f);
 
-    EXPECT_TRUE((system.prepares == 1u));
-    EXPECT_TRUE((system.updates == 1u));
-    EXPECT_TRUE((position.x == 2));
+    EXPECT_EQ(system.prepares, 1u);
+    EXPECT_EQ(system.updates, 1u);
+    EXPECT_EQ(position.x, 2);
 }
 
 
@@ -353,43 +353,4 @@ static void TestDuplicateSchedulerAddIsStable(){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST(Ecs, ComponentStorageAndView){
-    __hidden_tests::TestComponentStorageAndView();
-}
-
-TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
-    __hidden_tests::TestEmptyViewDoesNotAllocateComponentPools();
-}
-
-TEST(Ecs, ComponentLifetime){
-    __hidden_tests::TestComponentLifetime();
-}
-
-TEST(Ecs, ComponentMutationVersion){
-    __hidden_tests::TestComponentMutationVersion();
-}
-
-TEST(Ecs, MessageBus){
-    __hidden_tests::TestMessageBus();
-}
-
-TEST(Ecs, MoveOnlyMessageBus){
-    __hidden_tests::TestMoveOnlyMessageBus();
-}
-
-TEST(Ecs, SystemTick){
-    __hidden_tests::TestSystemTick();
-}
-
-TEST(Ecs, DuplicateComponentAddIsStable){
-    __hidden_tests::TestDuplicateComponentAddIsStable();
-}
-
-TEST(Ecs, DuplicateSchedulerAddIsStable){
-    __hidden_tests::TestDuplicateSchedulerAddIsStable();
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

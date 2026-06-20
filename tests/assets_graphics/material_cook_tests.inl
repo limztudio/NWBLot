@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestMaterialBindCookIntegration(){
+TEST(AssetsGraphics, MaterialBindCookIntegration){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -51,9 +51,9 @@ static void TestMaterialBindCookIntegration(){
         loadedAsset
     )));
     if(loadedAsset){
-        EXPECT_TRUE((loadedAsset->assetType() == NWB::Impl::Material::AssetTypeName()));
+        EXPECT_EQ(loadedAsset->assetType(), NWB::Impl::Material::AssetTypeName());
         const NWB::Impl::Material& material = static_cast<const NWB::Impl::Material&>(*loadedAsset);
-        EXPECT_TRUE((material.materialInterface() == Name("project/material_interfaces/test_surface")));
+        EXPECT_EQ(material.materialInterface(), Name("project/material_interfaces/test_surface"));
         CheckMinimalMaterialTypedLayout(material);
         CheckMinimalMaterialTypedBlockBytes(material);
         CheckGeneratedMaterialBindBinaryConstants(
@@ -91,9 +91,9 @@ static void TestMaterialBindCookIntegration(){
         loadedHalfAsset
     )));
     if(loadedHalfAsset){
-        EXPECT_TRUE((loadedHalfAsset->assetType() == NWB::Impl::Material::AssetTypeName()));
+        EXPECT_EQ(loadedHalfAsset->assetType(), NWB::Impl::Material::AssetTypeName());
         const NWB::Impl::Material& halfMaterial = static_cast<const NWB::Impl::Material&>(*loadedHalfAsset);
-        EXPECT_TRUE((halfMaterial.materialInterface() == Name("project/material_interfaces/test_surface")));
+        EXPECT_EQ(halfMaterial.materialInterface(), Name("project/material_interfaces/test_surface"));
         CheckHalfMaterialTypedLayoutAndBlockBytes(halfMaterial);
         CheckGeneratedMaterialBindBinaryConstants(halfGeneratedSourceView, halfMaterial);
     }
@@ -127,14 +127,14 @@ static void TestMaterialBindCookIntegration(){
         loadedCompactAsset
     )));
     if(loadedCompactAsset){
-        EXPECT_TRUE((loadedCompactAsset->assetType() == NWB::Impl::Material::AssetTypeName()));
+        EXPECT_EQ(loadedCompactAsset->assetType(), NWB::Impl::Material::AssetTypeName());
         const NWB::Impl::Material& compactMaterial = static_cast<const NWB::Impl::Material&>(*loadedCompactAsset);
-        EXPECT_TRUE((compactMaterial.materialInterface() == Name("project/material_interfaces/test_surface")));
+        EXPECT_EQ(compactMaterial.materialInterface(), Name("project/material_interfaces/test_surface"));
         CheckCompactIntegerMaterialTypedLayoutAndBlockBytes(compactMaterial);
         CheckGeneratedMaterialBindBinaryConstants(compactGeneratedSourceView, compactMaterial);
     }
 
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
     EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
@@ -146,14 +146,14 @@ static void TestMaterialBindCookIntegration(){
 #if defined(NWB_FINAL)
     Path invalidRoot(testArena.arena);
     Path invalidOutputDirectory(testArena.arena);
-    EXPECT_TRUE((!CookMaterialBindMaterialIntegration(
+    EXPECT_FALSE(CookMaterialBindMaterialIntegration(
         s_MinimalMaterialBindSource,
         s_UnknownInterfaceParameterMaterialMeta,
         "material_bind_unknown_interface_parameter",
         testArena,
         invalidRoot,
         invalidOutputDirectory
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT(
         "parameter 'surface.missing' is not declared by interface"
     ))));
@@ -163,14 +163,14 @@ static void TestMaterialBindCookIntegration(){
 
     Path flatRoot(testArena.arena);
     Path flatOutputDirectory(testArena.arena);
-    EXPECT_TRUE((!CookMaterialBindMaterialIntegration(
+    EXPECT_FALSE(CookMaterialBindMaterialIntegration(
         s_MinimalMaterialBindSource,
         s_FlatInterfaceParameterMaterialMeta,
         "material_bind_flat_interface_parameter",
         testArena,
         flatRoot,
         flatOutputDirectory
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT(
         "interface parameter 'runtime.fade_alpha' must be declared inside a block map"
     ))));
@@ -180,14 +180,14 @@ static void TestMaterialBindCookIntegration(){
 
     Path untypedParameterRoot(testArena.arena);
     Path untypedParameterOutputDirectory(testArena.arena);
-    EXPECT_TRUE((!CookMaterialBindMaterialIntegration(
+    EXPECT_FALSE(CookMaterialBindMaterialIntegration(
         s_MinimalMaterialBindSource,
         s_UntypedMaterialParameterMeta,
         "material_bind_untyped_material_parameter",
         testArena,
         untypedParameterRoot,
         untypedParameterOutputDirectory
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT(
         "has invalid value '0.25, 0.5, 0.75, 1.0'"
     ))));
@@ -197,14 +197,14 @@ static void TestMaterialBindCookIntegration(){
 
     Path vectorAliasParameterRoot(testArena.arena);
     Path vectorAliasParameterOutputDirectory(testArena.arena);
-    EXPECT_TRUE((!CookMaterialBindMaterialIntegration(
+    EXPECT_FALSE(CookMaterialBindMaterialIntegration(
         s_MinimalMaterialBindSource,
         s_VectorAliasMaterialParameterMeta,
         "material_bind_vector_alias_material_parameter",
         testArena,
         vectorAliasParameterRoot,
         vectorAliasParameterOutputDirectory
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT(
         "has invalid value 'vec4(0.25, 0.5, 0.75, 1.0)'"
     ))));
@@ -214,14 +214,14 @@ static void TestMaterialBindCookIntegration(){
 
     Path unsupportedFieldRoot(testArena.arena);
     Path unsupportedFieldOutputDirectory(testArena.arena);
-    EXPECT_TRUE((!CookMaterialBindMaterialIntegration(
+    EXPECT_FALSE(CookMaterialBindMaterialIntegration(
         s_MinimalMaterialBindSource,
         s_UnsupportedMaterialFieldMeta,
         "material_bind_unsupported_material_field",
         testArena,
         unsupportedFieldRoot,
         unsupportedFieldOutputDirectory
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'compiler'"))));
 
     errorCode.clear();
@@ -229,14 +229,14 @@ static void TestMaterialBindCookIntegration(){
 
     Path missingShaderVariantRoot(testArena.arena);
     Path missingShaderVariantOutputDirectory(testArena.arena);
-    EXPECT_TRUE((!CookMaterialBindMaterialIntegration(
+    EXPECT_FALSE(CookMaterialBindMaterialIntegration(
         s_MinimalMaterialBindSource,
         s_MissingShaderVariantMaterialMeta,
         "material_bind_missing_shader_variant",
         testArena,
         missingShaderVariantRoot,
         missingShaderVariantOutputDirectory
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("field 'shader_variant' is required"))));
 
     errorCode.clear();
@@ -244,14 +244,14 @@ static void TestMaterialBindCookIntegration(){
 
     Path incompleteBindRoot(testArena.arena);
     Path incompleteBindOutputDirectory(testArena.arena);
-    EXPECT_TRUE((!CookMaterialBindMaterialIntegration(
+    EXPECT_FALSE(CookMaterialBindMaterialIntegration(
         s_SurfaceOnlyMaterialBindSource,
         s_BlockScopedMaterialMeta,
         "material_bind_incomplete_block_scoped",
         testArena,
         incompleteBindRoot,
         incompleteBindOutputDirectory
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT(
         "typed parameter 'runtime.fade_alpha' is not declared by interface"
     ))));
@@ -275,12 +275,12 @@ static void TestMaterialBindCookIntegration(){
         s_BlockScopedMaterialMeta,
         s_UnboundMaterialShaderProbeSource
     )));
-    EXPECT_TRUE((!CookPreparedGraphicsAssetRoots(
+    EXPECT_FALSE(CookPreparedGraphicsAssetRoots(
         testArena,
         interfaceShaderMismatchRoot,
         interfaceShaderMismatchOutputDirectory,
         { interfaceShaderMismatchAssetRoot }
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("does not include a generated material bind"))));
 
     errorCode.clear();
@@ -306,12 +306,12 @@ static void TestMaterialBindCookIntegration(){
         interfaceIdentityMismatchAssetRoot / "material_interfaces" / "other_surface.bind",
         s_MinimalMaterialBindSource
     )));
-    EXPECT_TRUE((!CookPreparedGraphicsAssetRoots(
+    EXPECT_FALSE(CookPreparedGraphicsAssetRoots(
         testArena,
         interfaceIdentityMismatchRoot,
         interfaceIdentityMismatchOutputDirectory,
         { interfaceIdentityMismatchAssetRoot }
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT(
         "includes generated material bind interface 'project/material_interfaces/other_surface'"
     ))));
@@ -322,7 +322,7 @@ static void TestMaterialBindCookIntegration(){
 #endif
 }
 
-static void TestMaterialRejectsMissingInterfaceCookIntegration(){
+TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -344,12 +344,12 @@ static void TestMaterialRejectsMissingInterfaceCookIntegration(){
         s_MissingInterfaceMaterialMeta,
         s_UnboundMaterialShaderProbeSource
     )));
-    EXPECT_TRUE((!CookPreparedGraphicsAssetRoots(
+    EXPECT_FALSE(CookPreparedGraphicsAssetRoots(
         testArena,
         root,
         outputDirectory,
         { assetRoot }
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("interface is required"))));
 
     ErrorCode errorCode;
@@ -358,7 +358,7 @@ static void TestMaterialRejectsMissingInterfaceCookIntegration(){
 #endif
 }
 
-static void TestMaterialBindDependencyInvalidation(){
+TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -438,7 +438,7 @@ static void TestMaterialBindDependencyInvalidation(){
         CheckMinimalMaterialTypedLayout(updatedMaterial, 7u, 8u, 9u);
         CheckMinimalMaterialTypedBlockBytes(updatedMaterial, 7u, 8u, 9u);
         CheckGeneratedMaterialBindBinaryConstants(updatedGeneratedSource, updatedMaterial);
-        EXPECT_TRUE((updatedMaterial.typedLayoutHash() != initialLayoutHash));
+        EXPECT_NE(updatedMaterial.typedLayoutHash(), initialLayoutHash);
     }
 
     records.clear();
@@ -450,14 +450,14 @@ static void TestMaterialBindDependencyInvalidation(){
         Name("mesh"),
         updatedMeshSourceChecksum
     )));
-    EXPECT_TRUE((updatedMeshSourceChecksum != initialMeshSourceChecksum));
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_NE(updatedMeshSourceChecksum, initialMeshSourceChecksum);
+    EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
     EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
 }
 
-static void TestMaterialBindDiscoveryValidation(){
+TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -495,7 +495,7 @@ static void TestMaterialBindDiscoveryValidation(){
         scratchArena
     )));
     EXPECT_TRUE((ContainsCanonicalPath(dependencies, generatedIncludePath)));
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
     EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
@@ -509,7 +509,7 @@ static void TestMaterialBindDiscoveryValidation(){
         shaderProbeRoot,
         shaderProbeOutputDirectory
     )));
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 
     errorCode.clear();
     EXPECT_TRUE((RemoveAllIfExists(shaderProbeRoot, errorCode)));
@@ -517,12 +517,12 @@ static void TestMaterialBindDiscoveryValidation(){
 #if defined(NWB_FINAL)
     Path duplicateIncludeRoot(testArena.arena);
     Path duplicateIncludeOutputDirectory(testArena.arena);
-    EXPECT_TRUE((!CookDuplicateGeneratedMaterialBindIncludePath(
+    EXPECT_FALSE(CookDuplicateGeneratedMaterialBindIncludePath(
         "material_bind_duplicate_include_path",
         testArena,
         duplicateIncludeRoot,
         duplicateIncludeOutputDirectory
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT(
         "duplicate material bind include path 'project/material_interfaces/test_surface.bind'"
     ))));
@@ -532,13 +532,13 @@ static void TestMaterialBindDiscoveryValidation(){
 
     Path invalidRoot(testArena.arena);
     Path invalidOutputDirectory(testArena.arena);
-    EXPECT_TRUE((!CookMinimalMeshWithMaterialBind(
+    EXPECT_FALSE(CookMinimalMeshWithMaterialBind(
         s_DuplicateFieldMaterialBindSource,
         "material_bind_duplicate_field",
         testArena,
         invalidRoot,
         invalidOutputDirectory
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("duplicate struct field declaration"))));
 
     errorCode.clear();

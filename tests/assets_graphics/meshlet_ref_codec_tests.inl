@@ -2,12 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestMeshletRefEncodingWidthRules(){
-    EXPECT_TRUE((NWB::Impl::MeshletRefDeltaWidthForMaxDelta(0u) == NWB::Impl::MeshletRefDeltaWidth::U8));
-    EXPECT_TRUE((NWB::Impl::MeshletRefDeltaWidthForMaxDelta(255u) == NWB::Impl::MeshletRefDeltaWidth::U8));
-    EXPECT_TRUE((NWB::Impl::MeshletRefDeltaWidthForMaxDelta(256u) == NWB::Impl::MeshletRefDeltaWidth::U16));
-    EXPECT_TRUE((NWB::Impl::MeshletRefDeltaWidthForMaxDelta(65535u) == NWB::Impl::MeshletRefDeltaWidth::U16));
-    EXPECT_TRUE((NWB::Impl::MeshletRefDeltaWidthForMaxDelta(65536u) == NWB::Impl::MeshletRefDeltaWidth::U32));
+TEST(AssetsGraphics, MeshletRefEncodingWidthRules){
+    EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(0u), NWB::Impl::MeshletRefDeltaWidth::U8);
+    EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(255u), NWB::Impl::MeshletRefDeltaWidth::U8);
+    EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(256u), NWB::Impl::MeshletRefDeltaWidth::U16);
+    EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(65535u), NWB::Impl::MeshletRefDeltaWidth::U16);
+    EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(65536u), NWB::Impl::MeshletRefDeltaWidth::U32);
 }
 
 static bool EncodeTestMeshletRefs(
@@ -29,7 +29,7 @@ static bool EncodeTestMeshletRefs(
     );
 }
 
-static void TestMeshletRefEncodingRoundTrip(){
+TEST(AssetsGraphics, MeshletRefEncodingRoundTrip){
     TestArena testArena;
     auto meshlets = MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);
     meshlets.push_back(NWB::Impl::MeshletDesc{
@@ -65,14 +65,10 @@ static void TestMeshletRefEncodingRoundTrip(){
         return;
 
     const NWB::Impl::MeshletDesc& meshlet = meshlets[0u];
-    EXPECT_TRUE((NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingPositionShift)
-            == NWB::Impl::MeshletRefDeltaWidth::U32));
-    EXPECT_TRUE((NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingSkinShift)
-            == NWB::Impl::MeshletRefDeltaWidth::U8));
-    EXPECT_TRUE((NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingTangentShift)
-            == NWB::Impl::MeshletRefDeltaWidth::U16));
-    EXPECT_TRUE((NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingUv0Shift)
-            == NWB::Impl::MeshletRefDeltaWidth::U32));
+    EXPECT_EQ(NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingPositionShift), NWB::Impl::MeshletRefDeltaWidth::U32);
+    EXPECT_EQ(NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingSkinShift), NWB::Impl::MeshletRefDeltaWidth::U8);
+    EXPECT_EQ(NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingTangentShift), NWB::Impl::MeshletRefDeltaWidth::U16);
+    EXPECT_EQ(NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingUv0Shift), NWB::Impl::MeshletRefDeltaWidth::U32);
 
     for(u32 localPositionIndex = 0u; localPositionIndex < NWB::Impl::MeshletPositionCount(meshlet); ++localPositionIndex){
         NWB::Impl::MeshletPositionStreamRef decodedRef;
@@ -84,8 +80,8 @@ static void TestMeshletRefEncodingRoundTrip(){
             true,
             decodedRef
         )));
-        EXPECT_TRUE((decodedRef.position == positionRefs[localPositionIndex].position));
-        EXPECT_TRUE((decodedRef.skin == positionRefs[localPositionIndex].skin));
+        EXPECT_EQ(decodedRef.position, positionRefs[localPositionIndex].position);
+        EXPECT_EQ(decodedRef.skin, positionRefs[localPositionIndex].skin);
     }
 
     for(u32 localAttributeIndex = 0u; localAttributeIndex < NWB::Impl::MeshletAttributeCount(meshlet); ++localAttributeIndex){
@@ -97,19 +93,19 @@ static void TestMeshletRefEncodingRoundTrip(){
             localAttributeIndex,
             decodedRef
         )));
-        EXPECT_TRUE((decodedRef.normal == attributeRefs[localAttributeIndex].normal));
-        EXPECT_TRUE((decodedRef.tangent == attributeRefs[localAttributeIndex].tangent));
-        EXPECT_TRUE((decodedRef.uv0 == attributeRefs[localAttributeIndex].uv0));
-        EXPECT_TRUE((decodedRef.color == attributeRefs[localAttributeIndex].color));
+        EXPECT_EQ(decodedRef.normal, attributeRefs[localAttributeIndex].normal);
+        EXPECT_EQ(decodedRef.tangent, attributeRefs[localAttributeIndex].tangent);
+        EXPECT_EQ(decodedRef.uv0, attributeRefs[localAttributeIndex].uv0);
+        EXPECT_EQ(decodedRef.color, attributeRefs[localAttributeIndex].color);
     }
 }
 
-static void TestMeshletConeOctPackingRoundTrip(){
+TEST(AssetsGraphics, MeshletConeOctPackingRoundTrip){
     const u32 centeredPacked =
         (128u << NWB::Impl::s_MeshletConeAxisXShift)
         | (128u << NWB::Impl::s_MeshletConeAxisYShift);
-    EXPECT_TRUE((NWB::Impl::PackMeshletConeOct16(VectorSet(0.0f, 0.0f, 1.0f, 0.0f)) == centeredPacked));
-    EXPECT_TRUE((NWB::Impl::PackMeshletConeOct16(VectorZero()) == NWB::Impl::s_MeshletConeAxisFallback));
+    EXPECT_EQ(NWB::Impl::PackMeshletConeOct16(VectorSet(0.0f, 0.0f, 1.0f, 0.0f)), centeredPacked);
+    EXPECT_EQ(NWB::Impl::PackMeshletConeOct16(VectorZero()), NWB::Impl::s_MeshletConeAxisFallback);
 
     const SIMDVector axes[] = {
         Vector3Normalize(VectorSet(0.25f, -0.50f, -0.75f, 0.0f)),
@@ -119,9 +115,9 @@ static void TestMeshletConeOctPackingRoundTrip(){
     for(const SIMDVector axis : axes){
         const u32 packed = NWB::Impl::PackMeshletConeOct16(axis);
         const SIMDVector unpacked = NWB::Impl::UnpackMeshletConeOct16Axis(packed);
-        EXPECT_TRUE((VectorGetX(Vector3Dot(axis, unpacked)) > 0.999f));
+        EXPECT_GT(VectorGetX(Vector3Dot(axis, unpacked)), 0.999f);
         if(VectorGetZ(axis) < 0.0f)
-            EXPECT_TRUE((VectorGetZ(unpacked) < 0.0f));
+            EXPECT_LT(VectorGetZ(unpacked), 0.0f);
     }
 }
 

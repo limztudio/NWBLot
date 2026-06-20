@@ -31,11 +31,11 @@ static void CheckGeneratedSourceContainsAll(
 }
 
 static void CheckGeneratedSourceHasNoMutableLoads(const AStringView generatedSourceView){
-    EXPECT_TRUE((!ContainsText(generatedSourceView, "nwbMaterialLoadMutable")));
+    EXPECT_FALSE(ContainsText(generatedSourceView, "nwbMaterialLoadMutable"));
 }
 
 static void CheckGeneratedSourceHasNoImplicitInstanceAccessors(const AStringView generatedSourceView){
-    EXPECT_TRUE((!ContainsText(generatedSourceView, "nwbMeshLoadInstance()")));
+    EXPECT_FALSE(ContainsText(generatedSourceView, "nwbMeshLoadInstance()"));
 }
 
 static AString BuildGeneratedUint2ConstantText(const AStringView symbol, const u64 value){
@@ -91,8 +91,8 @@ static void CheckMaterialBindStructBlockClass(
 ){
     const bool hasConstantAttribute = bindStruct.findAttribute("material_constant") != nullptr;
     const bool hasMutableAttribute = bindStruct.findAttribute("material_mutable") != nullptr;
-    EXPECT_TRUE((hasConstantAttribute == (expectedBlockClass == NWB::Impl::MaterialBlockClass::MaterialConstant)));
-    EXPECT_TRUE((hasMutableAttribute == (expectedBlockClass == NWB::Impl::MaterialBlockClass::MaterialMutable)));
+    EXPECT_EQ(hasConstantAttribute, (expectedBlockClass == NWB::Impl::MaterialBlockClass::MaterialConstant));
+    EXPECT_EQ(hasMutableAttribute, (expectedBlockClass == NWB::Impl::MaterialBlockClass::MaterialMutable));
 }
 
 static void CheckGeneratedMaterialBindSource(const AStringView generatedSourceView){
@@ -128,10 +128,10 @@ static void CheckGeneratedMaterialBindSource(const AStringView generatedSourceVi
         "static const float NWB_MATERIAL_BIND_RUNTIME_FADE_ALPHA_DEFAULT = float(1.0);",
     };
     CheckGeneratedSourceContainsAll(generatedSourceView, expectedSnippets);
-    EXPECT_TRUE((!ContainsText(
+    EXPECT_FALSE(ContainsText(
         generatedSourceView,
         "nwbMaterialFind"
-    )));
+    ));
     CheckGeneratedSourceHasNoImplicitInstanceAccessors(generatedSourceView);
 }
 
@@ -241,10 +241,10 @@ static const NWB::Impl::MaterialTypedLayoutField* CheckMaterialTypedLayoutField(
     const u32 expectedOffset
 ){
     const NWB::Impl::MaterialTypedLayoutField* field = FindMaterialTypedLayoutField(material, block, fieldName);
-    EXPECT_TRUE((field != nullptr));
+    EXPECT_NE(field, nullptr);
     if(field){
-        EXPECT_TRUE((field->fieldType == expectedFieldType));
-        EXPECT_TRUE((field->offset == expectedOffset));
+        EXPECT_EQ(field->fieldType, expectedFieldType);
+        EXPECT_EQ(field->offset, expectedOffset);
     }
     return field;
 }
@@ -291,7 +291,7 @@ static void CheckMaterialTypedLayoutDefaultPODValues(
     const ValueType (&expectedDefaults)[ExpectedDefaultCount]
 ){
     for(usize componentIndex = 0u; componentIndex < ExpectedDefaultCount; ++componentIndex){
-        EXPECT_TRUE((LoadMaterialTypedLayoutDefaultPOD<ValueType>(field, static_cast<u32>(componentIndex)) == expectedDefaults[componentIndex]));
+        EXPECT_EQ(LoadMaterialTypedLayoutDefaultPOD<ValueType>(field, static_cast<u32>(componentIndex)), expectedDefaults[componentIndex]);
     }
 }
 
@@ -315,8 +315,7 @@ static void CheckMaterialTypedLayoutHalfField(
         return;
 
     for(usize componentIndex = 0u; componentIndex < ExpectedDefaultCount; ++componentIndex){
-        EXPECT_TRUE((ConvertHalfToFloat(LoadMaterialTypedLayoutDefaultPOD<Half>(*field, static_cast<u32>(componentIndex)))
-            == expectedDefaults[componentIndex]));
+        EXPECT_EQ(ConvertHalfToFloat(LoadMaterialTypedLayoutDefaultPOD<Half>(*field, static_cast<u32>(componentIndex))), expectedDefaults[componentIndex]);
     }
 }
 
@@ -399,16 +398,16 @@ static void CheckMinimalMaterialTypedLayout(
     const u32 expectedFeatureMaskY = 5u,
     const u32 expectedFeatureMaskZ = 6u
 ){
-    EXPECT_TRUE((material.typedLayoutHash() != 0u));
-    EXPECT_TRUE((material.typedLayoutBlocks().size() == 2u));
-    EXPECT_TRUE((material.typedLayoutFields().size() == 6u));
+    EXPECT_NE(material.typedLayoutHash(), 0u);
+    EXPECT_EQ(material.typedLayoutBlocks().size(), 2u);
+    EXPECT_EQ(material.typedLayoutFields().size(), 6u);
 
     const NWB::Impl::MaterialTypedLayoutBlock* runtimeBlock = FindMaterialTypedLayoutBlock(material, "runtime");
-    EXPECT_TRUE((runtimeBlock != nullptr));
+    EXPECT_NE(runtimeBlock, nullptr);
     if(runtimeBlock){
-        EXPECT_TRUE((runtimeBlock->blockClass == NWB::Impl::MaterialBlockClass::MaterialMutable));
-        EXPECT_TRUE((runtimeBlock->fieldCount == 1u));
-        EXPECT_TRUE((runtimeBlock->byteSize == 4u));
+        EXPECT_EQ(runtimeBlock->blockClass, NWB::Impl::MaterialBlockClass::MaterialMutable);
+        EXPECT_EQ(runtimeBlock->fieldCount, 1u);
+        EXPECT_EQ(runtimeBlock->byteSize, 4u);
 
         const NWB::Impl::MaterialTypedLayoutField* fadeAlpha = CheckMaterialTypedLayoutField(
             material,
@@ -424,11 +423,11 @@ static void CheckMinimalMaterialTypedLayout(
     }
 
     const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, "surface");
-    EXPECT_TRUE((surfaceBlock != nullptr));
+    EXPECT_NE(surfaceBlock, nullptr);
     if(surfaceBlock){
-        EXPECT_TRUE((surfaceBlock->blockClass == NWB::Impl::MaterialBlockClass::MaterialConstant));
-        EXPECT_TRUE((surfaceBlock->fieldCount == 5u));
-        EXPECT_TRUE((surfaceBlock->byteSize == 44u));
+        EXPECT_EQ(surfaceBlock->blockClass, NWB::Impl::MaterialBlockClass::MaterialConstant);
+        EXPECT_EQ(surfaceBlock->fieldCount, 5u);
+        EXPECT_EQ(surfaceBlock->byteSize, 44u);
 
         const NWB::Impl::MaterialTypedLayoutField* baseColor = CheckMaterialTypedLayoutField(
             material,
@@ -498,7 +497,7 @@ static void CheckMinimalMaterialTypedBlockBytes(
     const u32 expectedFeatureMaskY = 5u,
     const u32 expectedFeatureMaskZ = 6u
 ){
-    EXPECT_TRUE((material.typedBlockBytes().size() == 48u));
+    EXPECT_EQ(material.typedBlockBytes().size(), 48u);
 
     const ExpectedTypedBlockFloatValue expectedFloatValues[] = {
         { "runtime", 0u, 0.75f },
@@ -529,19 +528,19 @@ static void CheckMinimalMaterialTypedBlockBytes(
 }
 
 static void CheckHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Material& material){
-    EXPECT_TRUE((material.typedLayoutHash() != 0u));
-    EXPECT_TRUE((material.typedLayoutBlocks().size() == 1u));
-    EXPECT_TRUE((material.typedLayoutFields().size() == 4u));
-    EXPECT_TRUE((material.typedBlockBytes().size() == 20u));
+    EXPECT_NE(material.typedLayoutHash(), 0u);
+    EXPECT_EQ(material.typedLayoutBlocks().size(), 1u);
+    EXPECT_EQ(material.typedLayoutFields().size(), 4u);
+    EXPECT_EQ(material.typedBlockBytes().size(), 20u);
 
     const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, "surface");
-    EXPECT_TRUE((surfaceBlock != nullptr));
+    EXPECT_NE(surfaceBlock, nullptr);
     if(!surfaceBlock)
         return;
 
-    EXPECT_TRUE((surfaceBlock->blockClass == NWB::Impl::MaterialBlockClass::MaterialConstant));
-    EXPECT_TRUE((surfaceBlock->fieldCount == 4u));
-    EXPECT_TRUE((surfaceBlock->byteSize == 20u));
+    EXPECT_EQ(surfaceBlock->blockClass, NWB::Impl::MaterialBlockClass::MaterialConstant);
+    EXPECT_EQ(surfaceBlock->fieldCount, 4u);
+    EXPECT_EQ(surfaceBlock->byteSize, 20u);
 
     const f32 roughnessDefaults[] = { 0.5f };
     CheckMaterialTypedLayoutHalfField(
@@ -599,19 +598,19 @@ static void CheckHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Material&
 }
 
 static void CheckMixedHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Material& material){
-    EXPECT_TRUE((material.typedLayoutHash() != 0u));
-    EXPECT_TRUE((material.typedLayoutBlocks().size() == 1u));
-    EXPECT_TRUE((material.typedLayoutFields().size() == 5u));
-    EXPECT_TRUE((material.typedBlockBytes().size() == 24u));
+    EXPECT_NE(material.typedLayoutHash(), 0u);
+    EXPECT_EQ(material.typedLayoutBlocks().size(), 1u);
+    EXPECT_EQ(material.typedLayoutFields().size(), 5u);
+    EXPECT_EQ(material.typedBlockBytes().size(), 24u);
 
     const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, "surface");
-    EXPECT_TRUE((surfaceBlock != nullptr));
+    EXPECT_NE(surfaceBlock, nullptr);
     if(!surfaceBlock)
         return;
 
-    EXPECT_TRUE((surfaceBlock->blockClass == NWB::Impl::MaterialBlockClass::MaterialConstant));
-    EXPECT_TRUE((surfaceBlock->fieldCount == 5u));
-    EXPECT_TRUE((surfaceBlock->byteSize == 24u));
+    EXPECT_EQ(surfaceBlock->blockClass, NWB::Impl::MaterialBlockClass::MaterialConstant);
+    EXPECT_EQ(surfaceBlock->fieldCount, 5u);
+    EXPECT_EQ(surfaceBlock->byteSize, 24u);
 
     const ExpectedMaterialLayoutField expectedFields[] = {
         { "roughness", NWB::Impl::MaterialLayoutFieldType::Half, 0u },
@@ -627,7 +626,7 @@ static void CheckMixedHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Mate
         return;
     const u32 expectedZeroByteOffsets[] = { 2u, 3u, 14u, 15u, 22u, 23u };
     for(const u32 byteOffset : expectedZeroByteOffsets)
-        EXPECT_TRUE((bytes[byteOffset] == 0u));
+        EXPECT_EQ(bytes[byteOffset], 0u);
 
     const ExpectedHalfBlockValue expectedHalfValues[] = {
         { 0u, 0.25f },
@@ -650,19 +649,19 @@ static void CheckMixedHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Mate
 }
 
 static void CheckCompactIntegerMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Material& material){
-    EXPECT_TRUE((material.typedLayoutHash() != 0u));
-    EXPECT_TRUE((material.typedLayoutBlocks().size() == 1u));
-    EXPECT_TRUE((material.typedLayoutFields().size() == 5u));
-    EXPECT_TRUE((material.typedBlockBytes().size() == 20u));
+    EXPECT_NE(material.typedLayoutHash(), 0u);
+    EXPECT_EQ(material.typedLayoutBlocks().size(), 1u);
+    EXPECT_EQ(material.typedLayoutFields().size(), 5u);
+    EXPECT_EQ(material.typedBlockBytes().size(), 20u);
 
     const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, "surface");
-    EXPECT_TRUE((surfaceBlock != nullptr));
+    EXPECT_NE(surfaceBlock, nullptr);
     if(!surfaceBlock)
         return;
 
-    EXPECT_TRUE((surfaceBlock->blockClass == NWB::Impl::MaterialBlockClass::MaterialConstant));
-    EXPECT_TRUE((surfaceBlock->fieldCount == 5u));
-    EXPECT_TRUE((surfaceBlock->byteSize == 20u));
+    EXPECT_EQ(surfaceBlock->blockClass, NWB::Impl::MaterialBlockClass::MaterialConstant);
+    EXPECT_EQ(surfaceBlock->fieldCount, 5u);
+    EXPECT_EQ(surfaceBlock->byteSize, 20u);
 
     const ExpectedMaterialLayoutField expectedFields[] = {
         { "enabled", NWB::Impl::MaterialLayoutFieldType::Bool4, 0u },
@@ -817,7 +816,7 @@ static bool RoundTripMaterialAssetCodec(
     NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     const bool serialized = codec.serialize(material, binary);
     EXPECT_TRUE((serialized));
-    EXPECT_TRUE((!binary.empty()));
+    EXPECT_FALSE(binary.empty());
     if(!serialized || binary.empty())
         return false;
 
@@ -832,7 +831,7 @@ static bool RoundTripMaterialAssetCodec(
     return deserialized && static_cast<bool>(outLoadedAsset);
 }
 
-static void TestMaterialBindHalfTypedLayoutValues(){
+TEST(AssetsGraphics, MaterialBindHalfTypedLayoutValues){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -912,14 +911,14 @@ static void TestMaterialBindHalfTypedLayoutValues(){
         CheckGeneratedMixedHalfMaterialBindSource(AStringView(generatedSource.data(), generatedSource.size()));
     }
 
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
     EXPECT_TRUE((RemoveAllIfExists(bindRoot, errorCode)));
     EXPECT_TRUE((RemoveAllIfExists(mixedBindRoot, errorCode)));
 }
 
-static void TestMaterialBindCompactIntegerTypedLayoutValues(){
+TEST(AssetsGraphics, MaterialBindCompactIntegerTypedLayoutValues){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -962,13 +961,13 @@ static void TestMaterialBindCompactIntegerTypedLayoutValues(){
         CheckGeneratedCompactIntegerMaterialBindSource(AStringView(generatedSource.data(), generatedSource.size()));
     }
 
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
     EXPECT_TRUE((RemoveAllIfExists(bindRoot, errorCode)));
 }
 
-static void TestMaterialMetadataInterfaceAndBlockParameters(){
+TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -980,8 +979,8 @@ static void TestMaterialMetadataInterfaceAndBlockParameters(){
     if(!parsed)
         return;
 
-    EXPECT_TRUE((materialEntry.materialInterface == Name("project/material_interfaces/test_surface")));
-    EXPECT_TRUE((materialEntry.parameters.size() == 3u));
+    EXPECT_EQ(materialEntry.materialInterface, Name("project/material_interfaces/test_surface"));
+    EXPECT_EQ(materialEntry.parameters.size(), 3u);
 
     NWB::Impl::MaterialBindEntry bindEntry(testArena.arena);
     Path bindRoot(testArena.arena);
@@ -1013,8 +1012,8 @@ static void TestMaterialMetadataInterfaceAndBlockParameters(){
     if(!built)
         return;
 
-    EXPECT_TRUE((!material.transparent()));
-    EXPECT_TRUE((material.materialInterface() == Name("project/material_interfaces/test_surface")));
+    EXPECT_FALSE(material.transparent());
+    EXPECT_EQ(material.materialInterface(), Name("project/material_interfaces/test_surface"));
 
     NWB::Impl::Material transparentMaterial(testArena.arena);
     EXPECT_TRUE((BuildMaterialFromBindAndMeta(
@@ -1037,12 +1036,12 @@ static void TestMaterialMetadataInterfaceAndBlockParameters(){
         scratchArena
     )));
     EXPECT_TRUE((twoSidedMaterial.twoSided()));
-    EXPECT_TRUE((!twoSidedMaterial.transparent()));
+    EXPECT_FALSE(twoSidedMaterial.transparent());
 
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 }
 
-static void TestMaterialCodecTypedLayoutBoundary(){
+TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
     TestArena testArena;
     NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
     NWB::Impl::Material material(testArena.arena);
@@ -1069,8 +1068,8 @@ static void TestMaterialCodecTypedLayoutBoundary(){
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         if(RoundTripMaterialAssetCodec(testArena, codec, material, loadedAsset)){
             const NWB::Impl::Material& loadedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
-            EXPECT_TRUE((loadedMaterial.materialInterface() == material.materialInterface()));
-            EXPECT_TRUE((loadedMaterial.typedLayoutHash() == material.typedLayoutHash()));
+            EXPECT_EQ(loadedMaterial.materialInterface(), material.materialInterface());
+            EXPECT_EQ(loadedMaterial.typedLayoutHash(), material.typedLayoutHash());
             EXPECT_TRUE((loadedMaterial.transparent()));
             CheckMinimalMaterialTypedLayout(loadedMaterial);
             CheckMinimalMaterialTypedBlockBytes(loadedMaterial);
@@ -1089,8 +1088,8 @@ static void TestMaterialCodecTypedLayoutBoundary(){
         UniquePtr<NWB::Core::Assets::IAsset> loadedHalfAsset;
         if(builtHalfMaterial && RoundTripMaterialAssetCodec(testArena, codec, halfMaterial, loadedHalfAsset)){
             const NWB::Impl::Material& loadedHalfMaterial = static_cast<const NWB::Impl::Material&>(*loadedHalfAsset);
-            EXPECT_TRUE((loadedHalfMaterial.materialInterface() == halfMaterial.materialInterface()));
-            EXPECT_TRUE((loadedHalfMaterial.typedLayoutHash() == halfMaterial.typedLayoutHash()));
+            EXPECT_EQ(loadedHalfMaterial.materialInterface(), halfMaterial.materialInterface());
+            EXPECT_EQ(loadedHalfMaterial.typedLayoutHash(), halfMaterial.typedLayoutHash());
             CheckHalfMaterialTypedLayoutAndBlockBytes(loadedHalfMaterial);
         }
 
@@ -1111,12 +1110,12 @@ static void TestMaterialCodecTypedLayoutBoundary(){
         ){
             const NWB::Impl::Material& loadedMixedHalfMaterial =
                 static_cast<const NWB::Impl::Material&>(*loadedMixedHalfAsset);
-            EXPECT_TRUE((loadedMixedHalfMaterial.materialInterface() == mixedHalfMaterial.materialInterface()));
-            EXPECT_TRUE((loadedMixedHalfMaterial.typedLayoutHash() == mixedHalfMaterial.typedLayoutHash()));
+            EXPECT_EQ(loadedMixedHalfMaterial.materialInterface(), mixedHalfMaterial.materialInterface());
+            EXPECT_EQ(loadedMixedHalfMaterial.typedLayoutHash(), mixedHalfMaterial.typedLayoutHash());
             CheckMixedHalfMaterialTypedLayoutAndBlockBytes(loadedMixedHalfMaterial);
         }
 
-        EXPECT_TRUE((logger.errorCount() == 0u));
+        EXPECT_EQ(logger.errorCount(), 0u);
     }
 
 #if defined(NWB_FINAL)
@@ -1142,7 +1141,7 @@ static void TestMaterialCodecTypedLayoutBoundary(){
         CheckCodecRejectsBinary(testArena, codec, material.virtualPath(), hashMismatchBinary);
 
         NWB::Core::Assets::AssetBytes byteSizeMismatchBinary = binary;
-        EXPECT_TRUE((!material.typedBlockBytes().empty()));
+        EXPECT_FALSE(material.typedBlockBytes().empty());
         EXPECT_TRUE((OverwritePOD(
             byteSizeMismatchBinary,
             blockByteCountOffset,
@@ -1150,7 +1149,7 @@ static void TestMaterialCodecTypedLayoutBoundary(){
         )));
         CheckCodecRejectsBinary(testArena, codec, material.virtualPath(), byteSizeMismatchBinary);
 
-        EXPECT_TRUE((logger.errorCount() == 2u));
+        EXPECT_EQ(logger.errorCount(), 2u);
         EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("typed layout hash mismatch"))));
         EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT(
             "typed block byte count does not match typed layout"
@@ -1159,7 +1158,7 @@ static void TestMaterialCodecTypedLayoutBoundary(){
 #endif
 }
 
-static void TestMaterialBindSchemaValidation(){
+TEST(AssetsGraphics, MaterialBindSchemaValidation){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -1177,30 +1176,28 @@ static void TestMaterialBindSchemaValidation(){
     );
     EXPECT_TRUE((parsed));
     if(parsed){
-        EXPECT_TRUE((entry.structs.size() == 2u));
-        EXPECT_TRUE((entry.instances.size() == 2u));
+        EXPECT_EQ(entry.structs.size(), 2u);
+        EXPECT_EQ(entry.instances.size(), 2u);
 
         const NWB::Impl::MaterialBindStruct* surfaceStruct = entry.findStruct("NwbTestSurfaceMaterial");
         const NWB::Impl::MaterialBindStruct* runtimeStruct = entry.findStruct("NwbTestRuntimeMaterial");
-        EXPECT_TRUE((surfaceStruct != nullptr));
-        EXPECT_TRUE((runtimeStruct != nullptr));
+        EXPECT_NE(surfaceStruct, nullptr);
+        EXPECT_NE(runtimeStruct, nullptr);
         if(surfaceStruct){
             CheckMaterialBindStructBlockClass(
                 *surfaceStruct,
                 NWB::Impl::MaterialBlockClass::MaterialConstant
             );
-            EXPECT_TRUE((surfaceStruct->fields.size() == 5u));
+            EXPECT_EQ(surfaceStruct->fields.size(), 5u);
 
             const NWB::Impl::MaterialBindField* baseColorField = surfaceStruct->findField("base_color");
-            EXPECT_TRUE((baseColorField != nullptr));
+            EXPECT_NE(baseColorField, nullptr);
             if(baseColorField){
-                EXPECT_TRUE((AStringView(baseColorField->type) == "float4"));
+                EXPECT_EQ(AStringView(baseColorField->type), "float4");
                 const NWB::Impl::MaterialBindAttribute* defaultAttribute = baseColorField->findAttribute("default");
-                EXPECT_TRUE((defaultAttribute != nullptr));
-                EXPECT_TRUE((defaultAttribute && defaultAttribute->arguments.size() == 1u));
-                if(defaultAttribute && defaultAttribute->arguments.size() == 1u){
-                    EXPECT_TRUE((AStringView(defaultAttribute->arguments[0u]) == "float4(1.0, 1.0, 1.0, 1.0)"));
-                }
+                ASSERT_NE(defaultAttribute, nullptr);
+                ASSERT_EQ(defaultAttribute->arguments.size(), 1u);
+                EXPECT_EQ(AStringView(defaultAttribute->arguments[0u]), "float4(1.0, 1.0, 1.0, 1.0)");
             }
         }
         if(runtimeStruct){
@@ -1208,17 +1205,17 @@ static void TestMaterialBindSchemaValidation(){
                 *runtimeStruct,
                 NWB::Impl::MaterialBlockClass::MaterialMutable
             );
-            EXPECT_TRUE((runtimeStruct->fields.size() == 1u));
+            EXPECT_EQ(runtimeStruct->fields.size(), 1u);
         }
 
         const NWB::Impl::MaterialBindInstance* surfaceInstance = entry.findInstance("surface");
         const NWB::Impl::MaterialBindInstance* runtimeInstance = entry.findInstance("runtime");
-        EXPECT_TRUE((surfaceInstance != nullptr));
-        EXPECT_TRUE((runtimeInstance != nullptr));
+        EXPECT_NE(surfaceInstance, nullptr);
+        EXPECT_NE(runtimeInstance, nullptr);
         if(surfaceInstance)
-            EXPECT_TRUE((AStringView(surfaceInstance->type) == "NwbTestSurfaceMaterial"));
+            EXPECT_EQ(AStringView(surfaceInstance->type), "NwbTestSurfaceMaterial");
         if(runtimeInstance)
-            EXPECT_TRUE((AStringView(runtimeInstance->type) == "NwbTestRuntimeMaterial"));
+            EXPECT_EQ(AStringView(runtimeInstance->type), "NwbTestRuntimeMaterial");
     }
 
     Path halfRoot(testArena.arena);
@@ -1234,16 +1231,16 @@ static void TestMaterialBindSchemaValidation(){
     EXPECT_TRUE((parsedHalf));
     if(parsedHalf){
         const NWB::Impl::MaterialBindStruct* halfStruct = halfEntry.findStruct("NwbTestSurfaceMaterial");
-        EXPECT_TRUE((halfStruct != nullptr));
+        EXPECT_NE(halfStruct, nullptr);
         if(halfStruct){
-            EXPECT_TRUE((halfStruct->findField("roughness") != nullptr));
-            EXPECT_TRUE((halfStruct->findField("range") != nullptr));
-            EXPECT_TRUE((halfStruct->findField("tint") != nullptr));
-            EXPECT_TRUE((halfStruct->findField("base_color") != nullptr));
+            EXPECT_NE(halfStruct->findField("roughness"), nullptr);
+            EXPECT_NE(halfStruct->findField("range"), nullptr);
+            EXPECT_NE(halfStruct->findField("tint"), nullptr);
+            EXPECT_NE(halfStruct->findField("base_color"), nullptr);
         }
     }
 
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
     EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
@@ -1257,14 +1254,14 @@ static void TestMaterialBindSchemaValidation(){
     ){
         Path invalidRoot(testArena.arena);
         NWB::Impl::MaterialBindEntry invalidEntry(testArena.arena);
-        EXPECT_TRUE((!ParseMaterialBindFromText(
+        EXPECT_FALSE(ParseMaterialBindFromText(
             testArena,
             bindText,
             caseName,
             invalidEntry,
             invalidRoot,
             scratchArena
-        )));
+        ));
         EXPECT_TRUE((logger.sawErrorContaining(expectedError)));
 
         ErrorCode removeErrorCode;
@@ -1314,12 +1311,12 @@ static void TestMaterialBindSchemaValidation(){
     )));
     float1DefaultEntry.virtualPath = "project/material_interfaces/test_surface";
     NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
-    EXPECT_TRUE((!NWB::Impl::BuildMaterialBindIncludeSource(
+    EXPECT_FALSE(NWB::Impl::BuildMaterialBindIncludeSource(
         testArena.arena,
         float1DefaultEntry,
         generatedSource,
         scratchArena
-    )));
+    ));
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'"))));
 
     ErrorCode removeErrorCode;
@@ -1327,7 +1324,7 @@ static void TestMaterialBindSchemaValidation(){
 #endif
 }
 
-static void TestMaterialBindGeneratedSlangText(){
+TEST(AssetsGraphics, MaterialBindGeneratedSlangText){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -1357,7 +1354,7 @@ static void TestMaterialBindGeneratedSlangText(){
         CheckGeneratedMaterialBindSource(AStringView(generatedSource.data(), generatedSource.size()));
     }
 
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
     EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));

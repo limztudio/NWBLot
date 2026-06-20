@@ -13,7 +13,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_tests{
+namespace __hidden_csg_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,7 +25,7 @@ inline constexpr Name s_ScratchArena("tests/csg/scratch");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestCsgReceiverComponents(){
+TEST(Csg, CsgReceiverComponents){
     TestWorld testWorld;
 
     auto staticReceiverEntity = testWorld.world.createEntity();
@@ -33,7 +33,7 @@ static void TestCsgReceiverComponents(){
     staticReceiver.receiverGroup = Name("project/csg/receiver_group_a");
 
     EXPECT_TRUE((staticReceiverEntity.hasComponent<NWB::Impl::StaticCsgMeshComponent>()));
-    EXPECT_TRUE((staticReceiver.receiverGroup == Name("project/csg/receiver_group_a")));
+    EXPECT_EQ(staticReceiver.receiverGroup, Name("project/csg/receiver_group_a"));
     EXPECT_TRUE((staticReceiver.enabled));
     EXPECT_TRUE((staticReceiver.affectOpaquePass));
     EXPECT_TRUE((staticReceiver.affectTransparentPass));
@@ -43,40 +43,40 @@ static void TestCsgReceiverComponents(){
     skinnedReceiver.affectTransparentPass = false;
 
     EXPECT_TRUE((skinnedReceiverEntity.hasComponent<NWB::Impl::SkinnedCsgMeshComponent>()));
-    EXPECT_TRUE((skinnedReceiver.receiverGroup == NAME_NONE));
+    EXPECT_EQ(skinnedReceiver.receiverGroup, NAME_NONE);
     EXPECT_TRUE((skinnedReceiver.enabled));
     EXPECT_TRUE((skinnedReceiver.affectOpaquePass));
-    EXPECT_TRUE((!skinnedReceiver.affectTransparentPass));
+    EXPECT_FALSE(skinnedReceiver.affectTransparentPass);
 
     usize staticReceiverCount = 0u;
     testWorld.world.view<NWB::Impl::StaticCsgMeshComponent>().each(
         [&staticReceiverCount](NWB::Core::ECS::EntityID entityId, NWB::Impl::StaticCsgMeshComponent& receiver){
             ++staticReceiverCount;
             EXPECT_TRUE((entityId.valid()));
-            EXPECT_TRUE((receiver.receiverGroup == Name("project/csg/receiver_group_a")));
+            EXPECT_EQ(receiver.receiverGroup, Name("project/csg/receiver_group_a"));
         }
     );
-    EXPECT_TRUE((staticReceiverCount == 1u));
+    EXPECT_EQ(staticReceiverCount, 1u);
 }
 
-static void TestCsgCutterComponent(){
+TEST(Csg, CsgCutterComponent){
     TestWorld testWorld;
 
     auto cutterEntity = testWorld.world.createEntity();
     auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
 
     EXPECT_TRUE((cutterEntity.hasComponent<NWB::Impl::CsgCutterComponent>()));
-    EXPECT_TRUE((cutter.receiverGroup == NAME_NONE));
-    EXPECT_TRUE((cutter.shapeType == NAME_NONE));
+    EXPECT_EQ(cutter.receiverGroup, NAME_NONE);
+    EXPECT_EQ(cutter.shapeType, NAME_NONE);
     EXPECT_TRUE((cutter.active));
     EXPECT_TRUE((cutter.parameterBytes.empty()));
 
-    EXPECT_TRUE((cutter.worldToShape._11 == 1.0f));
-    EXPECT_TRUE((cutter.worldToShape._22 == 1.0f));
-    EXPECT_TRUE((cutter.worldToShape._33 == 1.0f));
-    EXPECT_TRUE((cutter.shapeToWorld._11 == 1.0f));
-    EXPECT_TRUE((cutter.shapeToWorld._22 == 1.0f));
-    EXPECT_TRUE((cutter.shapeToWorld._33 == 1.0f));
+    EXPECT_EQ(cutter.worldToShape._11, 1.0f);
+    EXPECT_EQ(cutter.worldToShape._22, 1.0f);
+    EXPECT_EQ(cutter.worldToShape._33, 1.0f);
+    EXPECT_EQ(cutter.shapeToWorld._11, 1.0f);
+    EXPECT_EQ(cutter.shapeToWorld._22, 1.0f);
+    EXPECT_EQ(cutter.shapeToWorld._33, 1.0f);
 
     cutter.receiverGroup = Name("project/csg/receiver_group_a");
     cutter.shapeType = Name("engine/csg/box");
@@ -88,14 +88,14 @@ static void TestCsgCutterComponent(){
         [&cutterCount](NWB::Core::ECS::EntityID entityId, NWB::Impl::CsgCutterComponent& viewCutter){
             ++cutterCount;
             EXPECT_TRUE((entityId.valid()));
-            EXPECT_TRUE((viewCutter.receiverGroup == Name("project/csg/receiver_group_a")));
-            EXPECT_TRUE((viewCutter.shapeType == Name("engine/csg/box")));
-            EXPECT_TRUE((viewCutter.parameterBytes.size() == 2u));
-            EXPECT_TRUE((viewCutter.parameterBytes[0u] == 0xAu));
-            EXPECT_TRUE((viewCutter.parameterBytes[1u] == 0xBu));
+            EXPECT_EQ(viewCutter.receiverGroup, Name("project/csg/receiver_group_a"));
+            EXPECT_EQ(viewCutter.shapeType, Name("engine/csg/box"));
+            EXPECT_EQ(viewCutter.parameterBytes.size(), 2u);
+            EXPECT_EQ(viewCutter.parameterBytes[0u], 0xAu);
+            EXPECT_EQ(viewCutter.parameterBytes[1u], 0xBu);
         }
     );
-    EXPECT_TRUE((cutterCount == 1u));
+    EXPECT_EQ(cutterCount, 1u);
 }
 
 static NWB::Impl::CsgFrameState BuildTestCsgFrameState(
@@ -136,16 +136,16 @@ static bool TestCsgReceiverVisible(
     return !filter || entity != filter->hiddenEntity;
 }
 
-static void TestCsgFrameStateKillSwitch(){
+TEST(Csg, CsgFrameStateKillSwitch){
     {
         TestWorld testWorld;
-        EXPECT_TRUE((!NWB::Impl::HasCsgFrameCandidates(testWorld.world)));
+        EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
 
         EXPECT_TRUE((state.empty()));
-        EXPECT_TRUE((!state.hasAnyWork));
-        EXPECT_TRUE((state.receiverCount == 0u));
-        EXPECT_TRUE((state.cutterCount == 0u));
+        EXPECT_FALSE(state.hasAnyWork);
+        EXPECT_EQ(state.receiverCount, 0u);
+        EXPECT_EQ(state.cutterCount, 0u);
     }
 
     {
@@ -156,13 +156,13 @@ static void TestCsgFrameStateKillSwitch(){
         cutter.receiverGroup = Name("project/csg/group_a");
         cutter.shapeType = Name("engine/csg/box");
 
-        EXPECT_TRUE((!NWB::Impl::HasCsgFrameCandidates(testWorld.world)));
+        EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
 
         EXPECT_TRUE((state.empty()));
-        EXPECT_TRUE((!state.hasAnyWork));
-        EXPECT_TRUE((state.receiverCount == 0u));
-        EXPECT_TRUE((state.cutterCount == 0u));
+        EXPECT_FALSE(state.hasAnyWork);
+        EXPECT_EQ(state.receiverCount, 0u);
+        EXPECT_EQ(state.cutterCount, 0u);
     }
 
     {
@@ -172,11 +172,11 @@ static void TestCsgFrameStateKillSwitch(){
         auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
         receiver.receiverGroup = Name("project/csg/group_a");
 
-        EXPECT_TRUE((!NWB::Impl::HasCsgFrameCandidates(testWorld.world)));
+        EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
 
         EXPECT_TRUE((state.empty()));
-        EXPECT_TRUE((!state.hasAnyWork));
+        EXPECT_FALSE(state.hasAnyWork);
     }
 
     {
@@ -194,14 +194,14 @@ static void TestCsgFrameStateKillSwitch(){
         EXPECT_TRUE((NWB::Impl::HasCsgFrameCandidates(testWorld.world)));
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
 
-        EXPECT_TRUE((!state.empty()));
+        EXPECT_FALSE(state.empty());
         EXPECT_TRUE((state.hasAnyWork));
         EXPECT_TRUE((state.hasOpaqueStaticWork));
-        EXPECT_TRUE((!state.hasOpaqueSkinnedWork));
+        EXPECT_FALSE(state.hasOpaqueSkinnedWork);
         EXPECT_TRUE((state.hasTransparentStaticWork));
-        EXPECT_TRUE((!state.hasTransparentSkinnedWork));
-        EXPECT_TRUE((state.receiverCount == 1u));
-        EXPECT_TRUE((state.cutterCount == 1u));
+        EXPECT_FALSE(state.hasTransparentSkinnedWork);
+        EXPECT_EQ(state.receiverCount, 1u);
+        EXPECT_EQ(state.cutterCount, 1u);
     }
 
     {
@@ -231,9 +231,9 @@ static void TestCsgFrameStateKillSwitch(){
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
 
         EXPECT_TRUE((state.empty()));
-        EXPECT_TRUE((!state.hasAnyWork));
-        EXPECT_TRUE((state.receiverCount == 0u));
-        EXPECT_TRUE((state.cutterCount == 0u));
+        EXPECT_FALSE(state.hasAnyWork);
+        EXPECT_EQ(state.receiverCount, 0u);
+        EXPECT_EQ(state.cutterCount, 0u);
     }
 
     {
@@ -251,13 +251,13 @@ static void TestCsgFrameStateKillSwitch(){
 
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
 
-        EXPECT_TRUE((!state.empty()));
-        EXPECT_TRUE((!state.hasOpaqueStaticWork));
-        EXPECT_TRUE((!state.hasOpaqueSkinnedWork));
-        EXPECT_TRUE((!state.hasTransparentStaticWork));
+        EXPECT_FALSE(state.empty());
+        EXPECT_FALSE(state.hasOpaqueStaticWork);
+        EXPECT_FALSE(state.hasOpaqueSkinnedWork);
+        EXPECT_FALSE(state.hasTransparentStaticWork);
         EXPECT_TRUE((state.hasTransparentSkinnedWork));
-        EXPECT_TRUE((state.receiverCount == 1u));
-        EXPECT_TRUE((state.cutterCount == 1u));
+        EXPECT_EQ(state.receiverCount, 1u);
+        EXPECT_EQ(state.cutterCount, 1u);
     }
 
     {
@@ -285,11 +285,11 @@ static void TestCsgFrameStateKillSwitch(){
 
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld, desc);
 
-        EXPECT_TRUE((!state.empty()));
+        EXPECT_FALSE(state.empty());
         EXPECT_TRUE((state.hasOpaqueStaticWork));
         EXPECT_TRUE((state.hasTransparentStaticWork));
-        EXPECT_TRUE((state.receiverCount == 1u));
-        EXPECT_TRUE((state.cutterCount == 1u));
+        EXPECT_EQ(state.receiverCount, 1u);
+        EXPECT_EQ(state.cutterCount, 1u);
     }
 
     {
@@ -311,13 +311,13 @@ static void TestCsgFrameStateKillSwitch(){
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld, desc);
 
         EXPECT_TRUE((state.empty()));
-        EXPECT_TRUE((!state.hasAnyWork));
-        EXPECT_TRUE((state.receiverCount == 0u));
-        EXPECT_TRUE((state.cutterCount == 0u));
+        EXPECT_FALSE(state.hasAnyWork);
+        EXPECT_EQ(state.receiverCount, 0u);
+        EXPECT_EQ(state.cutterCount, 0u);
     }
 }
 
-static void TestCsgFrameReceiverLookup(){
+TEST(Csg, CsgFrameReceiverLookup){
     {
         TestWorld testWorld;
 
@@ -326,14 +326,14 @@ static void TestCsgFrameReceiverLookup(){
         receiver.receiverGroup = Name("project/csg/group_a");
 
         NWB::Impl::CsgReceiverDrawState drawState;
-        EXPECT_TRUE((!ResolveTestCsgReceiverDrawState(
+        EXPECT_FALSE(ResolveTestCsgReceiverDrawState(
             testWorld,
             receiverEntity.id(),
             NWB::Impl::CsgReceiverPass::Opaque,
             drawState
-        )));
-        EXPECT_TRUE((!drawState.active));
-        EXPECT_TRUE((drawState.cutterCount == 0u));
+        ));
+        EXPECT_FALSE(drawState.active);
+        EXPECT_EQ(drawState.cutterCount, 0u);
     }
 
     {
@@ -376,8 +376,8 @@ static void TestCsgFrameReceiverLookup(){
             opaqueDrawState
         )));
         EXPECT_TRUE((opaqueDrawState.active));
-        EXPECT_TRUE((opaqueDrawState.receiverKind == NWB::Impl::CsgReceiverKind::Static));
-        EXPECT_TRUE((opaqueDrawState.cutterCount == 2u));
+        EXPECT_EQ(opaqueDrawState.receiverKind, NWB::Impl::CsgReceiverKind::Static);
+        EXPECT_EQ(opaqueDrawState.cutterCount, 2u);
 
         NWB::Impl::CsgReceiverDrawState transparentDrawState;
         EXPECT_TRUE((ResolveTestCsgReceiverDrawState(
@@ -387,8 +387,8 @@ static void TestCsgFrameReceiverLookup(){
             transparentDrawState
         )));
         EXPECT_TRUE((transparentDrawState.active));
-        EXPECT_TRUE((transparentDrawState.receiverKind == NWB::Impl::CsgReceiverKind::Static));
-        EXPECT_TRUE((transparentDrawState.cutterCount == 2u));
+        EXPECT_EQ(transparentDrawState.receiverKind, NWB::Impl::CsgReceiverKind::Static);
+        EXPECT_EQ(transparentDrawState.cutterCount, 2u);
     }
 
     {
@@ -414,13 +414,13 @@ static void TestCsgFrameReceiverLookup(){
         EXPECT_TRUE((opaqueDrawState.active));
 
         NWB::Impl::CsgReceiverDrawState transparentDrawState;
-        EXPECT_TRUE((!ResolveTestCsgReceiverDrawState(
+        EXPECT_FALSE(ResolveTestCsgReceiverDrawState(
             testWorld,
             receiverEntity.id(),
             NWB::Impl::CsgReceiverPass::Transparent,
             transparentDrawState
-        )));
-        EXPECT_TRUE((!transparentDrawState.active));
+        ));
+        EXPECT_FALSE(transparentDrawState.active);
     }
 
     {
@@ -437,13 +437,13 @@ static void TestCsgFrameReceiverLookup(){
         cutter.shapeType = Name("engine/csg/capsule");
 
         NWB::Impl::CsgReceiverDrawState opaqueDrawState;
-        EXPECT_TRUE((!ResolveTestCsgReceiverDrawState(
+        EXPECT_FALSE(ResolveTestCsgReceiverDrawState(
             testWorld,
             receiverEntity.id(),
             NWB::Impl::CsgReceiverPass::Opaque,
             opaqueDrawState
-        )));
-        EXPECT_TRUE((!opaqueDrawState.active));
+        ));
+        EXPECT_FALSE(opaqueDrawState.active);
 
         NWB::Impl::CsgReceiverDrawState transparentDrawState;
         EXPECT_TRUE((ResolveTestCsgReceiverDrawState(
@@ -453,8 +453,8 @@ static void TestCsgFrameReceiverLookup(){
             transparentDrawState
         )));
         EXPECT_TRUE((transparentDrawState.active));
-        EXPECT_TRUE((transparentDrawState.receiverKind == NWB::Impl::CsgReceiverKind::Skinned));
-        EXPECT_TRUE((transparentDrawState.cutterCount == 1u));
+        EXPECT_EQ(transparentDrawState.receiverKind, NWB::Impl::CsgReceiverKind::Skinned);
+        EXPECT_EQ(transparentDrawState.cutterCount, 1u);
     }
 }
 
@@ -488,29 +488,29 @@ static bool TestProjectShapeBounds(
     return true;
 }
 
-static void TestCsgShapeRegistryBuiltIns(){
+TEST(Csg, CsgShapeRegistryBuiltIns){
     TestWorld testWorld;
     NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
 
-    EXPECT_TRUE((registry.shapeTypeCount() == 0u));
+    EXPECT_EQ(registry.shapeTypeCount(), 0u);
     EXPECT_TRUE((NWB::Impl::RegisterBuiltInCsgShapeTypes(registry)));
-    EXPECT_TRUE((registry.shapeTypeCount() == 4u));
+    EXPECT_EQ(registry.shapeTypeCount(), 4u);
 
     const NWB::Impl::CsgShapeTypeId boxId = registry.findShapeTypeId(Name("engine/csg/box"));
-    EXPECT_TRUE((boxId != NWB::Impl::s_InvalidCsgShapeTypeId));
+    EXPECT_NE(boxId, NWB::Impl::s_InvalidCsgShapeTypeId);
 
     NWB::Impl::CsgShapeTypeInfo boxShape;
     EXPECT_TRUE((registry.findShapeType(boxId, boxShape)));
-    EXPECT_TRUE((boxShape.desc.name == Name("engine/csg/box")));
-    EXPECT_TRUE((!boxShape.desc.shaderModule));
-    EXPECT_TRUE((boxShape.desc.parameterByteSize == sizeof(NWB::Impl::CsgBoxShapeParameters)));
+    EXPECT_EQ(boxShape.desc.name, Name("engine/csg/box"));
+    EXPECT_FALSE(boxShape.desc.shaderModule);
+    EXPECT_EQ(boxShape.desc.parameterByteSize, sizeof(NWB::Impl::CsgBoxShapeParameters));
 
     EXPECT_TRUE((NWB::Impl::RegisterBuiltInCsgShapeTypes(registry)));
-    EXPECT_TRUE((registry.shapeTypeCount() == 4u));
-    EXPECT_TRUE((registry.findShapeTypeId(Name("engine/csg/box")) == boxId));
+    EXPECT_EQ(registry.shapeTypeCount(), 4u);
+    EXPECT_EQ(registry.findShapeTypeId(Name("engine/csg/box")), boxId);
 }
 
-static void TestCsgShapeRegistryBounds(){
+TEST(Csg, CsgShapeRegistryBounds){
     TestWorld testWorld;
     NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
     EXPECT_TRUE((NWB::Impl::RegisterBuiltInCsgShapeTypes(registry)));
@@ -537,12 +537,12 @@ static void TestCsgShapeRegistryBounds(){
         finiteBounds
     )));
     EXPECT_TRUE((finiteBounds));
-    EXPECT_TRUE((VectorGetX(minBounds) == 8.0f));
-    EXPECT_TRUE((VectorGetY(minBounds) == -8.0f));
-    EXPECT_TRUE((VectorGetZ(minBounds) == -3.0f));
-    EXPECT_TRUE((VectorGetX(maxBounds) == 12.0f));
-    EXPECT_TRUE((VectorGetY(maxBounds) == -2.0f));
-    EXPECT_TRUE((VectorGetZ(maxBounds) == 5.0f));
+    EXPECT_EQ(VectorGetX(minBounds), 8.0f);
+    EXPECT_EQ(VectorGetY(minBounds), -8.0f);
+    EXPECT_EQ(VectorGetZ(minBounds), -3.0f);
+    EXPECT_EQ(VectorGetX(maxBounds), 12.0f);
+    EXPECT_EQ(VectorGetY(maxBounds), -2.0f);
+    EXPECT_EQ(VectorGetZ(maxBounds), 5.0f);
 
     const NWB::Impl::CsgShapeTypeId boxId = registry.findShapeTypeId(Name("engine/csg/box"));
     EXPECT_TRUE((registry.buildShapeBounds(
@@ -555,8 +555,8 @@ static void TestCsgShapeRegistryBounds(){
         finiteBounds
     )));
     EXPECT_TRUE((finiteBounds));
-    EXPECT_TRUE((VectorGetX(minBounds) == 8.0f));
-    EXPECT_TRUE((VectorGetX(maxBounds) == 12.0f));
+    EXPECT_EQ(VectorGetX(minBounds), 8.0f);
+    EXPECT_EQ(VectorGetX(maxBounds), 12.0f);
 
     NWB::Impl::CsgPlaneShapeParameters planeParameters;
     EXPECT_TRUE((registry.buildShapeBounds(
@@ -568,9 +568,9 @@ static void TestCsgShapeRegistryBounds(){
         maxBounds,
         finiteBounds
     )));
-    EXPECT_TRUE((!finiteBounds));
+    EXPECT_FALSE(finiteBounds);
 
-    EXPECT_TRUE((!registry.buildShapeBounds(
+    EXPECT_FALSE(registry.buildShapeBounds(
         Name("engine/csg/box"),
         shapeToWorldMatrix,
         reinterpret_cast<const u8*>(&boxParameters),
@@ -578,10 +578,10 @@ static void TestCsgShapeRegistryBounds(){
         minBounds,
         maxBounds,
         finiteBounds
-    )));
+    ));
 }
 
-static void TestCsgShapeRegistryProjectShape(){
+TEST(Csg, CsgShapeRegistryProjectShape){
     TestWorld testWorld;
     NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
 
@@ -594,18 +594,18 @@ static void TestCsgShapeRegistryProjectShape(){
 
     NWB::Impl::CsgShapeTypeId shapeTypeId = NWB::Impl::s_InvalidCsgShapeTypeId;
     EXPECT_TRUE((registry.registerShapeType(desc, shapeTypeId)));
-    EXPECT_TRUE((shapeTypeId != NWB::Impl::s_InvalidCsgShapeTypeId));
-    EXPECT_TRUE((registry.findShapeTypeId(desc.name) == shapeTypeId));
+    EXPECT_NE(shapeTypeId, NWB::Impl::s_InvalidCsgShapeTypeId);
+    EXPECT_EQ(registry.findShapeTypeId(desc.name), shapeTypeId);
 
     NWB::Impl::CsgShapeTypeInfo shapeType;
     EXPECT_TRUE((registry.findShapeType(desc.name, shapeType)));
-    EXPECT_TRUE((shapeType.desc.shaderModule == desc.shaderModule));
-    EXPECT_TRUE((shapeType.desc.shaderModuleInclude == desc.shaderModuleInclude));
-    EXPECT_TRUE((shapeType.desc.boundsCallback == &TestProjectShapeBounds));
+    EXPECT_EQ(shapeType.desc.shaderModule, desc.shaderModule);
+    EXPECT_EQ(shapeType.desc.shaderModuleInclude, desc.shaderModuleInclude);
+    EXPECT_EQ(shapeType.desc.boundsCallback, &TestProjectShapeBounds);
 
     ACompactString shaderModuleInclude;
     EXPECT_TRUE((registry.findShaderModuleInclude(desc.shaderModule, shaderModuleInclude)));
-    EXPECT_TRUE((shaderModuleInclude == desc.shaderModuleInclude));
+    EXPECT_EQ(shaderModuleInclude, desc.shaderModuleInclude);
 
     TestProjectShapeParameters parameters;
     SIMDVector minBounds;
@@ -622,12 +622,12 @@ static void TestCsgShapeRegistryProjectShape(){
         finiteBounds
     )));
     EXPECT_TRUE((finiteBounds));
-    EXPECT_TRUE((VectorGetX(minBounds) == -2.0f));
-    EXPECT_TRUE((VectorGetY(minBounds) == -3.0f));
-    EXPECT_TRUE((VectorGetZ(minBounds) == -4.0f));
-    EXPECT_TRUE((VectorGetX(maxBounds) == 2.0f));
-    EXPECT_TRUE((VectorGetY(maxBounds) == 3.0f));
-    EXPECT_TRUE((VectorGetZ(maxBounds) == 4.0f));
+    EXPECT_EQ(VectorGetX(minBounds), -2.0f);
+    EXPECT_EQ(VectorGetY(minBounds), -3.0f);
+    EXPECT_EQ(VectorGetZ(minBounds), -4.0f);
+    EXPECT_EQ(VectorGetX(maxBounds), 2.0f);
+    EXPECT_EQ(VectorGetY(maxBounds), 3.0f);
+    EXPECT_EQ(VectorGetZ(maxBounds), 4.0f);
 }
 
 
@@ -642,35 +642,4 @@ static void TestCsgShapeRegistryProjectShape(){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST(Csg, CsgReceiverComponents){
-    __hidden_tests::TestCsgReceiverComponents();
-}
-
-TEST(Csg, CsgCutterComponent){
-    __hidden_tests::TestCsgCutterComponent();
-}
-
-TEST(Csg, CsgFrameStateKillSwitch){
-    __hidden_tests::TestCsgFrameStateKillSwitch();
-}
-
-TEST(Csg, CsgFrameReceiverLookup){
-    __hidden_tests::TestCsgFrameReceiverLookup();
-}
-
-TEST(Csg, CsgShapeRegistryBuiltIns){
-    __hidden_tests::TestCsgShapeRegistryBuiltIns();
-}
-
-TEST(Csg, CsgShapeRegistryBounds){
-    __hidden_tests::TestCsgShapeRegistryBounds();
-}
-
-TEST(Csg, CsgShapeRegistryProjectShape){
-    __hidden_tests::TestCsgShapeRegistryProjectShape();
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

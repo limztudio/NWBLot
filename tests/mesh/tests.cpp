@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_tests{
+namespace __hidden_mesh_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,7 +32,7 @@ using Vector = NWB::Tests::TestVector<T>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestMeshClassMetadata(){
+TEST(Mesh, MeshClassMetadata){
     using namespace NWB::Core::Mesh;
 
     struct Case{
@@ -49,20 +49,20 @@ static void TestMeshClassMetadata(){
     for(const Case& testCase : cases){
         u32 parsedClass = MeshClass::Invalid;
         EXPECT_TRUE((ParseMeshClassText(testCase.text, parsedClass)));
-        EXPECT_TRUE((parsedClass == testCase.meshClass));
+        EXPECT_EQ(parsedClass, testCase.meshClass);
         EXPECT_TRUE((ValidMeshClass(testCase.meshClass)));
-        EXPECT_TRUE((MeshClassText(testCase.meshClass) == testCase.text));
-        EXPECT_TRUE((MeshClassUsesSkinning(testCase.meshClass) == testCase.usesSkinning));
+        EXPECT_EQ(MeshClassText(testCase.meshClass), testCase.text);
+        EXPECT_EQ(MeshClassUsesSkinning(testCase.meshClass), testCase.usesSkinning);
     }
 
     u32 parsedClass = MeshClass::Static;
-    EXPECT_TRUE((!ParseMeshClassText("STATIC", parsedClass)));
-    EXPECT_TRUE((parsedClass == MeshClass::Invalid));
-    EXPECT_TRUE((MeshClassText(MeshClass::Invalid) == AStringView("invalid")));
-    EXPECT_TRUE((MeshClassText(999u) == AStringView("unknown")));
+    EXPECT_FALSE(ParseMeshClassText("STATIC", parsedClass));
+    EXPECT_EQ(parsedClass, MeshClass::Invalid);
+    EXPECT_EQ(MeshClassText(MeshClass::Invalid), AStringView("invalid"));
+    EXPECT_EQ(MeshClassText(999u), AStringView("unknown"));
 }
 
-static void TestResolvesCoreFrameMath(){
+TEST(Mesh, ResolvesCoreFrameMath){
     SIMDVector normal = VectorSet(0.0f, 0.0f, 5.0f, 0.0f);
     SIMDVector tangent = VectorSet(2.0f, 1.0f, 0.0f, -0.25f);
     NWB::Core::Mesh::FrameOrthonormalize(
@@ -111,15 +111,15 @@ static Vector<TangentFrameRebuildVertex> MakeFlatQuadVertices(){
     return vertices;
 }
 
-static void TestRebuildsFlatQuadFrame(){
+TEST(Mesh, RebuildsFlatQuadFrame){
     Vector<TangentFrameRebuildVertex> vertices = MakeFlatQuadVertices();
     const Vector<u32> indices = MakeQuadTriangleIndices();
 
     NWB::Core::Mesh::TangentFrameRebuildResult result;
     EXPECT_TRUE((NWB::Core::Mesh::RebuildTangentFrames(vertices, indices, &result)));
-    EXPECT_TRUE((result.rebuiltVertexCount == vertices.size()));
-    EXPECT_TRUE((result.degenerateUvTriangleCount == 0u));
-    EXPECT_TRUE((result.fallbackTangentVertexCount == 0u));
+    EXPECT_EQ(result.rebuiltVertexCount, vertices.size());
+    EXPECT_EQ(result.degenerateUvTriangleCount, 0u);
+    EXPECT_EQ(result.fallbackTangentVertexCount, 0u);
 
     for(const TangentFrameRebuildVertex& vertex : vertices){
         EXPECT_TRUE((NearlyEqual3(vertex.normal, 0.0f, 0.0f, 1.0f)));
@@ -128,7 +128,7 @@ static void TestRebuildsFlatQuadFrame(){
     }
 }
 
-static void TestDegenerateUvsUseStableTangentFallback(){
+TEST(Mesh, DegenerateUvsUseStableTangentFallback){
     Vector<TangentFrameRebuildVertex> vertices = MakeFlatQuadVertices();
     const Vector<u32> indices = MakeQuadTriangleIndices();
     for(TangentFrameRebuildVertex& vertex : vertices)
@@ -136,9 +136,9 @@ static void TestDegenerateUvsUseStableTangentFallback(){
 
     NWB::Core::Mesh::TangentFrameRebuildResult result;
     EXPECT_TRUE((NWB::Core::Mesh::RebuildTangentFrames(vertices, indices, &result)));
-    EXPECT_TRUE((result.rebuiltVertexCount == vertices.size()));
-    EXPECT_TRUE((result.degenerateUvTriangleCount == 2u));
-    EXPECT_TRUE((result.fallbackTangentVertexCount == vertices.size()));
+    EXPECT_EQ(result.rebuiltVertexCount, vertices.size());
+    EXPECT_EQ(result.degenerateUvTriangleCount, 2u);
+    EXPECT_EQ(result.fallbackTangentVertexCount, vertices.size());
 
     for(const TangentFrameRebuildVertex& vertex : vertices){
         EXPECT_TRUE((NearlyEqual3(vertex.normal, 0.0f, 0.0f, 1.0f)));
@@ -147,14 +147,14 @@ static void TestDegenerateUvsUseStableTangentFallback(){
     }
 }
 
-static void TestRejectsDegenerateTriangle(){
+TEST(Mesh, RejectsDegenerateTriangle){
     Vector<TangentFrameRebuildVertex> vertices;
     vertices.push_back(MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
     vertices.push_back(MakeVertex(0.0f, 0.0f, 0.0f, 1.0f, 0.0f));
     vertices.push_back(MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 1.0f));
     const Vector<u32> indices = MakeTriangleIndices();
 
-    EXPECT_TRUE((!NWB::Core::Mesh::RebuildTangentFrames(vertices, indices)));
+    EXPECT_FALSE(NWB::Core::Mesh::RebuildTangentFrames(vertices, indices));
 }
 
 
@@ -166,27 +166,4 @@ static void TestRejectsDegenerateTriangle(){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST(Mesh, MeshClassMetadata){
-    __hidden_tests::TestMeshClassMetadata();
-}
-
-TEST(Mesh, ResolvesCoreFrameMath){
-    __hidden_tests::TestResolvesCoreFrameMath();
-}
-
-TEST(Mesh, RebuildsFlatQuadFrame){
-    __hidden_tests::TestRebuildsFlatQuadFrame();
-}
-
-TEST(Mesh, DegenerateUvsUseStableTangentFallback){
-    __hidden_tests::TestDegenerateUvsUseStableTangentFallback();
-}
-
-TEST(Mesh, RejectsDegenerateTriangle){
-    __hidden_tests::TestRejectsDegenerateTriangle();
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

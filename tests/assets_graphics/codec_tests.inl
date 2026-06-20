@@ -45,7 +45,7 @@ static bool CookAndLoadMinimalAssetByKind(
         loadCookedAsset = LoadCookedMinimalMesh;
         break;
     default:
-        EXPECT_TRUE((false));
+        ADD_FAILURE();
         return false;
     }
 
@@ -64,32 +64,32 @@ template<typename MeshT>
 static void CheckMinimalRuntimeMeshletPayload(
     const MeshT& loadedMesh
 ){
-    EXPECT_TRUE((loadedMesh.meshlets().size() == 1u));
-    EXPECT_TRUE((loadedMesh.meshletBounds().size() == 1u));
-    EXPECT_TRUE((loadedMesh.meshletLocalVertexRefs().size() == 3u));
-    EXPECT_TRUE((loadedMesh.meshletPrimitiveIndices().size() == 3u));
+    EXPECT_EQ(loadedMesh.meshlets().size(), 1u);
+    EXPECT_EQ(loadedMesh.meshletBounds().size(), 1u);
+    EXPECT_EQ(loadedMesh.meshletLocalVertexRefs().size(), 3u);
+    EXPECT_EQ(loadedMesh.meshletPrimitiveIndices().size(), 3u);
 
     const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
     const bool skinRequired = NWB::Core::Mesh::MeshClassUsesSkinning(loadedMesh.meshClass());
     usize expectedPositionRefBytes = 0u;
     usize expectedAttributeRefBytes = 0u;
-    EXPECT_TRUE((NWB::Impl::MeshletVertexCount(meshlet) == 3u));
-    EXPECT_TRUE((NWB::Impl::MeshletPrimitiveCount(meshlet) == 1u));
-    EXPECT_TRUE((NWB::Impl::MeshletPositionCount(meshlet) == 3u));
-    EXPECT_TRUE((NWB::Impl::MeshletAttributeCount(meshlet) == 3u));
+    EXPECT_EQ(NWB::Impl::MeshletVertexCount(meshlet), 3u);
+    EXPECT_EQ(NWB::Impl::MeshletPrimitiveCount(meshlet), 1u);
+    EXPECT_EQ(NWB::Impl::MeshletPositionCount(meshlet), 3u);
+    EXPECT_EQ(NWB::Impl::MeshletAttributeCount(meshlet), 3u);
     EXPECT_TRUE((NWB::Impl::MeshletEncodedPositionRefByteCount(meshlet, skinRequired, expectedPositionRefBytes)));
     EXPECT_TRUE((NWB::Impl::MeshletEncodedAttributeRefByteCount(meshlet, expectedAttributeRefBytes)));
-    EXPECT_TRUE((loadedMesh.meshletPositionRefDeltas().size() == expectedPositionRefBytes));
-    EXPECT_TRUE((loadedMesh.meshletAttributeRefDeltas().size() == expectedAttributeRefBytes));
-    EXPECT_TRUE((meshlet.positionBase == 0u));
+    EXPECT_EQ(loadedMesh.meshletPositionRefDeltas().size(), expectedPositionRefBytes);
+    EXPECT_EQ(loadedMesh.meshletAttributeRefDeltas().size(), expectedAttributeRefBytes);
+    EXPECT_EQ(meshlet.positionBase, 0u);
     const u32 expectedSkinBase = skinRequired ? 0u : NWB::Impl::s_MeshMissingStreamIndex;
-    EXPECT_TRUE((meshlet.skinBase == expectedSkinBase));
-    EXPECT_TRUE((meshlet.normalBase == 0u));
-    EXPECT_TRUE((meshlet.tangentBase == 0u));
-    EXPECT_TRUE((meshlet.uv0Base == 0u));
-    EXPECT_TRUE((meshlet.colorBase == 0u));
-    EXPECT_TRUE((meshlet.encoding == 0u));
-    EXPECT_TRUE((loadedMesh.meshletBounds()[0u].sphere.w > 0.0f));
+    EXPECT_EQ(meshlet.skinBase, expectedSkinBase);
+    EXPECT_EQ(meshlet.normalBase, 0u);
+    EXPECT_EQ(meshlet.tangentBase, 0u);
+    EXPECT_EQ(meshlet.uv0Base, 0u);
+    EXPECT_EQ(meshlet.colorBase, 0u);
+    EXPECT_EQ(meshlet.encoding, 0u);
+    EXPECT_GT(loadedMesh.meshletBounds()[0u].sphere.w, 0.0f);
     EXPECT_TRUE((NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u])));
 }
 
@@ -121,10 +121,10 @@ static void CookAndCheckMinimalTypedAsset(
 
     ErrorCode errorCode;
     EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 }
 
-static void TestVolumeSessionAcceptsScratchBytes(){
+TEST(AssetsGraphics, VolumeSessionAcceptsScratchBytes){
     TestArena testArena;
     const Path root = AssetsGraphicsTestCaseRoot(testArena, "volume_scratch_bytes");
     const bool prepared = PrepareCleanDirectory(root);
@@ -161,11 +161,11 @@ static void TestVolumeSessionAcceptsScratchBytes(){
                     const bool loaded = volumeSession.loadData(virtualPath, readback);
                     EXPECT_TRUE((loaded));
                     if(loaded){
-                        EXPECT_TRUE((readback.size() == 4u
-                                && readback[0] == 1u
-                                && readback[1] == 2u
-                                && readback[2] == 3u
-                                && readback[3] == 4u));
+                        ASSERT_EQ(readback.size(), 4u);
+                        EXPECT_EQ(readback[0], 1u);
+                        EXPECT_EQ(readback[1], 2u);
+                        EXPECT_EQ(readback[2], 3u);
+                        EXPECT_EQ(readback[3], 4u);
                     }
                 }
             }
@@ -343,11 +343,11 @@ static const AssetT& CheckCodecRoundTrip(
 
     NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     EXPECT_TRUE((codec.serialize(asset, binary)));
-    EXPECT_TRUE((!binary.empty()));
+    EXPECT_FALSE(binary.empty());
 
     EXPECT_TRUE((codec.deserialize(testArena.arena, asset.virtualPath(), binary, outLoadedAsset)));
     EXPECT_TRUE((static_cast<bool>(outLoadedAsset)));
-    EXPECT_TRUE((outLoadedAsset->assetType() == AssetT::AssetTypeName()));
+    EXPECT_EQ(outLoadedAsset->assetType(), AssetT::AssetTypeName());
     return static_cast<const AssetT&>(*outLoadedAsset);
 }
 
@@ -358,23 +358,23 @@ static void CheckCodecRejectsBinary(
     const Name& virtualPath,
     const NWB::Core::Assets::AssetBytes& binary){
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    EXPECT_TRUE((!codec.deserialize(testArena.arena, virtualPath, binary, loadedAsset)));
-    EXPECT_TRUE((!loadedAsset));
+    EXPECT_FALSE(codec.deserialize(testArena.arena, virtualPath, binary, loadedAsset));
+    EXPECT_FALSE(loadedAsset);
 }
 
-static void TestMeshCodecRoundTrip(){
+TEST(AssetsGraphics, MeshCodecRoundTrip){
     TestArena testArena;
     NWB::Impl::Mesh mesh = BuildMinimalMesh(testArena);
 
     NWB::Impl::MeshAssetCodec codec;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     const NWB::Impl::Mesh& loadedMesh = CheckCodecRoundTrip(testArena, mesh, codec, loadedAsset);
-    EXPECT_TRUE((loadedMesh.positionStream().size() == 3u));
-    EXPECT_TRUE((loadedMesh.meshletPrimitiveIndices().size() == 3u));
-    EXPECT_TRUE((loadedMesh.positionStream()[1].x == 0.5f));
-    EXPECT_TRUE((LoadHalf4U(loadedMesh.normalStream()[1]).z == 1.f));
-    EXPECT_TRUE((LoadHalf4U(loadedMesh.colorStream()[1]).y == 1.f));
-    EXPECT_TRUE((loadedMesh.meshletPrimitiveIndices()[2] == 2u));
+    EXPECT_EQ(loadedMesh.positionStream().size(), 3u);
+    EXPECT_EQ(loadedMesh.meshletPrimitiveIndices().size(), 3u);
+    EXPECT_EQ(loadedMesh.positionStream()[1].x, 0.5f);
+    EXPECT_EQ(LoadHalf4U(loadedMesh.normalStream()[1]).z, 1.f);
+    EXPECT_EQ(LoadHalf4U(loadedMesh.colorStream()[1]).y, 1.f);
+    EXPECT_EQ(loadedMesh.meshletPrimitiveIndices()[2], 2u);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

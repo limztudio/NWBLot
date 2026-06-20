@@ -164,7 +164,7 @@ static bool LoadCookedModel(
     );
 }
 
-static void TestModelBunchLocalReferencesAndWrapperExpansion(){
+TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -194,34 +194,34 @@ static void TestModelBunchLocalReferencesAndWrapperExpansion(){
     ))
         return;
 
-    EXPECT_TRUE((loadedAsset->assetType() == NWB::Impl::Model::AssetTypeName()));
+    EXPECT_EQ(loadedAsset->assetType(), NWB::Impl::Model::AssetTypeName());
     const NWB::Impl::Model& model = static_cast<const NWB::Impl::Model&>(*loadedAsset);
-    EXPECT_TRUE((model.skeletonObjects().size() == 1u));
-    EXPECT_TRUE((model.skinnedMeshObjects().size() == 2u));
+    EXPECT_EQ(model.skeletonObjects().size(), 1u);
+    EXPECT_EQ(model.skinnedMeshObjects().size(), 2u);
     if(model.skeletonObjects().size() != 1u)
         return;
 
     const Name expectedMesh("project/characters/model_fixture/mesh");
     const Name expectedSkin("project/characters/model_fixture/skin");
     const Name expectedSkeleton("project/characters/model_fixture/skeleton");
-    EXPECT_TRUE((model.skeletonObjects()[0].name == Name("rig")));
-    EXPECT_TRUE((model.skeletonObjects()[0].skeleton.name() == expectedSkeleton));
+    EXPECT_EQ(model.skeletonObjects()[0].name, Name("rig"));
+    EXPECT_EQ(model.skeletonObjects()[0].skeleton.name(), expectedSkeleton);
 
     const NWB::Impl::ModelSkinnedMeshObject* body = FindSkinnedModelObject(model, Name("body"));
     const NWB::Impl::ModelSkinnedMeshObject* detail = FindSkinnedModelObject(model, Name("detail"));
-    EXPECT_TRUE((body != nullptr));
-    EXPECT_TRUE((detail != nullptr));
+    EXPECT_NE(body, nullptr);
+    EXPECT_NE(detail, nullptr);
     if(body){
-        EXPECT_TRUE((body->mesh.name() == expectedMesh));
-        EXPECT_TRUE((body->skin.name() == expectedSkin));
-        EXPECT_TRUE((body->skeletonObject == Name("rig")));
+        EXPECT_EQ(body->mesh.name(), expectedMesh);
+        EXPECT_EQ(body->skin.name(), expectedSkin);
+        EXPECT_EQ(body->skeletonObject, Name("rig"));
     }
     if(detail){
-        EXPECT_TRUE((detail->mesh.name() == expectedMesh));
-        EXPECT_TRUE((detail->skin.name() == expectedSkin));
-        EXPECT_TRUE((detail->skeletonObject == Name("rig")));
+        EXPECT_EQ(detail->mesh.name(), expectedMesh);
+        EXPECT_EQ(detail->skin.name(), expectedSkin);
+        EXPECT_EQ(detail->skeletonObject, Name("rig"));
     }
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 }
 
 static AString BuildStaticAttachmentModelBunchFixture(){
@@ -257,7 +257,7 @@ asset_bunch bunch = [
     return meta;
 }
 
-static void TestModelBunchStaticMeshAttachmentToNamedJoint(){
+TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -287,24 +287,24 @@ static void TestModelBunchStaticMeshAttachmentToNamedJoint(){
     ))
         return;
 
-    EXPECT_TRUE((loadedAsset->assetType() == NWB::Impl::Model::AssetTypeName()));
+    EXPECT_EQ(loadedAsset->assetType(), NWB::Impl::Model::AssetTypeName());
     const NWB::Impl::Model& model = static_cast<const NWB::Impl::Model&>(*loadedAsset);
-    EXPECT_TRUE((model.skeletonObjects().size() == 1u));
-    EXPECT_TRUE((model.staticMeshObjects().size() == 1u));
+    EXPECT_EQ(model.skeletonObjects().size(), 1u);
+    EXPECT_EQ(model.staticMeshObjects().size(), 1u);
     EXPECT_TRUE((model.skinnedMeshObjects().empty()));
 
     const NWB::Impl::ModelStaticMeshObject* tool = FindStaticModelObject(model, Name("tool"));
-    EXPECT_TRUE((tool != nullptr));
+    EXPECT_NE(tool, nullptr);
     if(tool){
-        EXPECT_TRUE((tool->mesh.name() == Name("project/characters/model_attachment_fixture/mesh")));
-        EXPECT_TRUE((!tool->material.valid()));
-        EXPECT_TRUE((tool->parentObject == Name("rig")));
-        EXPECT_TRUE((tool->parentJoint == Name("hand")));
-        EXPECT_TRUE((tool->transform._14 == 0.5f));
-        EXPECT_TRUE((tool->transform._24 == 0.125f));
-        EXPECT_TRUE((tool->transform._34 == -0.25f));
+        EXPECT_EQ(tool->mesh.name(), Name("project/characters/model_attachment_fixture/mesh"));
+        EXPECT_FALSE(tool->material.valid());
+        EXPECT_EQ(tool->parentObject, Name("rig"));
+        EXPECT_EQ(tool->parentJoint, Name("hand"));
+        EXPECT_EQ(tool->transform._14, 0.5f);
+        EXPECT_EQ(tool->transform._24, 0.125f);
+        EXPECT_EQ(tool->transform._34, -0.25f);
     }
-    EXPECT_TRUE((logger.errorCount() == 0u));
+    EXPECT_EQ(logger.errorCount(), 0u);
 }
 
 #if defined(NWB_FINAL)
@@ -332,7 +332,7 @@ static bool ExpandModelBunchFixture(
 }
 #endif
 
-static void TestModelBunchRejectsDuplicateLocalReference(){
+TEST(AssetsGraphics, ModelBunchRejectsDuplicateLocalReference){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -365,13 +365,13 @@ asset_bunch bunch = [
         expandedAssets,
         scratchArena
     );
-    EXPECT_TRUE((!expanded));
+    EXPECT_FALSE(expanded);
     EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("variable 'mesh' is listed more than once"))));
 #else
 #endif
 }
 
-static void TestModelBunchRejectsMissingLocalReference(){
+TEST(AssetsGraphics, ModelBunchRejectsMissingLocalReference){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -403,7 +403,7 @@ asset_bunch bunch = [
         expandedAssets,
         scratchArena
     );
-    EXPECT_TRUE((!expanded));
+    EXPECT_FALSE(expanded);
 #else
 #endif
 }

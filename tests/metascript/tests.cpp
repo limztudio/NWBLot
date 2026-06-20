@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_tests{
+namespace __hidden_metascript_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,25 +54,25 @@ template<usize N>
 }
 
 static void CheckStringValue(const Value* value, MStringView expected){
-    EXPECT_TRUE((value != nullptr));
+    EXPECT_NE(value, nullptr);
     if(!value)
         return;
 
     EXPECT_TRUE((value->isString()));
     if(value->isString())
-        EXPECT_TRUE((value->asString() == expected));
+        EXPECT_EQ(value->asString(), expected);
 }
 
 static void CheckReferenceListElement(const Value& value, MStringView expected){
     EXPECT_TRUE((value.isReference()));
     if(value.isReference())
-        EXPECT_TRUE((value.asReference() == expected));
+        EXPECT_EQ(value.asReference(), expected);
 }
 
 static void CheckStringListElement(const Value& value, const AString& expected){
     EXPECT_TRUE((value.isString()));
     if(value.isString())
-        EXPECT_TRUE((value.asString() == ViewOf(expected)));
+        EXPECT_EQ(value.asString(), ViewOf(expected));
 }
 
 static void CheckStringField(const Value& value, MStringView fieldName, MStringView expected){
@@ -84,21 +84,20 @@ static void CheckImplicitMaterialBindParseFailsWithMessage(const AString& source
     Document document(arena.arena);
 
     const bool parsed = ParseImplicitMaterialBind(document, source);
-    EXPECT_TRUE((!parsed));
+    EXPECT_FALSE(parsed);
     EXPECT_TRUE((document.hasErrors()));
     if(document.errors().empty())
         return;
 
     const auto& error = document.errors()[0u];
     const MStringView message(error.message.data(), error.message.size());
-    EXPECT_TRUE((message == expectedMessage));
+    EXPECT_EQ(message, expectedMessage);
 }
 
 static void CheckSingleStringListValue(const Value& value, const AString& text){
-    EXPECT_TRUE((value.isList()));
-    EXPECT_TRUE((value.isList() && value.asList().size() == 1u));
-    if(value.isList() && value.asList().size() == 1u)
-        CheckStringListElement(value.asList()[0u], text);
+    ASSERT_TRUE((value.isList()));
+    ASSERT_EQ(value.asList().size(), 1u);
+    CheckStringListElement(value.asList()[0u], text);
 }
 
 template<typename ArenaT>
@@ -107,7 +106,7 @@ static void MakeSingleStringList(Value& list, ArenaT& arena, const AString& text
     list.append(Value(ViewOf(text), arena.arena));
 }
 
-static void TestCrossArenaMoveAssignmentCopiesIntoDestinationArena(){
+TEST(Metascript, CrossArenaMoveAssignmentCopiesIntoDestinationArena){
     SourceArena sourceArena;
     DestinationArena destinationArena;
     const AString text(128u, 'm');
@@ -119,10 +118,10 @@ static void TestCrossArenaMoveAssignmentCopiesIntoDestinationArena(){
 
     EXPECT_TRUE((source.isNull()));
     EXPECT_TRUE((destination.isString()));
-    EXPECT_TRUE((destination.asString() == ViewOf(text)));
+    EXPECT_EQ(destination.asString(), ViewOf(text));
 }
 
-static void TestCrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena(){
+TEST(Metascript, CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena){
     SourceArena sourceArena;
     DestinationArena destinationArena;
     const AString text(128u, 'c');
@@ -140,12 +139,12 @@ static void TestCrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena()
     EXPECT_TRUE((destination.isMap()));
 
     const Value* copiedList = destination.findField(MStringView("items", 5u));
-    EXPECT_TRUE((copiedList != nullptr));
+    EXPECT_NE(copiedList, nullptr);
     if(copiedList)
         CheckSingleStringListValue(*copiedList, text);
 }
 
-static void TestCrossArenaListConcatCopiesIntoResultArena(){
+TEST(Metascript, CrossArenaListConcatCopiesIntoResultArena){
     SourceArena sourceArena;
     DestinationArena destinationArena;
     const AString text(128u, 'p');
@@ -161,7 +160,7 @@ static void TestCrossArenaListConcatCopiesIntoResultArena(){
     CheckSingleStringListValue(result, text);
 }
 
-static void TestCrossArenaAppendCopiesIntoDestinationArena(){
+TEST(Metascript, CrossArenaAppendCopiesIntoDestinationArena){
     SourceArena sourceArena;
     DestinationArena destinationArena;
     const AString text(128u, 'a');
@@ -176,7 +175,7 @@ static void TestCrossArenaAppendCopiesIntoDestinationArena(){
     CheckSingleStringListValue(destination, text);
 }
 
-static void TestListSelfAppendCopiesOriginalValues(){
+TEST(Metascript, ListSelfAppendCopiesOriginalValues){
     DestinationArena arena;
     const AString text(128u, 's');
 
@@ -185,14 +184,14 @@ static void TestListSelfAppendCopiesOriginalValues(){
 
     list += list;
 
-    EXPECT_TRUE((list.asList().size() == 2u));
+    EXPECT_EQ(list.asList().size(), 2u);
     if(list.asList().size() == 2u){
         CheckStringListElement(list.asList()[0u], text);
         CheckStringListElement(list.asList()[1u], text);
     }
 }
 
-static void TestAppendSelfMoveCopiesOriginalValue(){
+TEST(Metascript, AppendSelfMoveCopiesOriginalValue){
     DestinationArena arena;
     const AString text(128u, 'v');
 
@@ -202,11 +201,11 @@ static void TestAppendSelfMoveCopiesOriginalValue(){
     list.append(Move(list));
 
     EXPECT_TRUE((list.isList()));
-    EXPECT_TRUE((list.asList().size() == 2u));
+    EXPECT_EQ(list.asList().size(), 2u);
     if(list.isList() && list.asList().size() == 2u){
         CheckStringListElement(list.asList()[0u], text);
         EXPECT_TRUE((list.asList()[1u].isList()));
-        EXPECT_TRUE((list.asList()[1u].asList().size() == 1u));
+        EXPECT_EQ(list.asList()[1u].asList().size(), 1u);
         if(list.asList()[1u].isList() && list.asList()[1u].asList().size() == 1u){
             const Value& nestedText = list.asList()[1u].asList()[0u];
             CheckStringListElement(nestedText, text);
@@ -214,7 +213,7 @@ static void TestAppendSelfMoveCopiesOriginalValue(){
     }
 }
 
-static void TestAppendExistingListElementMoveCopiesBeforeDestroy(){
+TEST(Metascript, AppendExistingListElementMoveCopiesBeforeDestroy){
     DestinationArena arena;
     const AString text(128u, 'e');
 
@@ -224,14 +223,14 @@ static void TestAppendExistingListElementMoveCopiesBeforeDestroy(){
     list.append(Move(list.asList()[0u]));
 
     EXPECT_TRUE((list.isList()));
-    EXPECT_TRUE((list.asList().size() == 2u));
+    EXPECT_EQ(list.asList().size(), 2u);
     if(list.isList() && list.asList().size() == 2u){
         EXPECT_TRUE((list.asList()[0u].isNull()));
         CheckStringListElement(list.asList()[1u], text);
     }
 }
 
-static void TestListAppendExistingElementCopiesBeforeReallocation(){
+TEST(Metascript, ListAppendExistingElementCopiesBeforeReallocation){
     DestinationArena arena;
     const AString text(128u, 'r');
 
@@ -241,14 +240,14 @@ static void TestListAppendExistingElementCopiesBeforeReallocation(){
     list += list.asList()[0u];
 
     EXPECT_TRUE((list.isList()));
-    EXPECT_TRUE((list.asList().size() == 2u));
+    EXPECT_EQ(list.asList().size(), 2u);
     if(list.isList() && list.asList().size() == 2u){
         CheckStringListElement(list.asList()[0u], text);
         CheckStringListElement(list.asList()[1u], text);
     }
 }
 
-static void TestExponentDoubleLiterals(){
+TEST(Metascript, ExponentDoubleLiterals){
     DestinationArena arena;
     Document document(arena.arena);
     const AString source =
@@ -258,12 +257,12 @@ static void TestExponentDoubleLiterals(){
 
     EXPECT_TRUE((document.parse(ViewOf(source))));
     const Value* values = document.asset().findField(MStringView("values", 6u));
-    EXPECT_TRUE((values != nullptr));
+    EXPECT_NE(values, nullptr);
     if(!values || !values->isList())
         return;
 
     const auto& list = values->asList();
-    EXPECT_TRUE((list.size() == 4u));
+    EXPECT_EQ(list.size(), 4u);
     if(list.size() != 4u)
         return;
 
@@ -271,13 +270,13 @@ static void TestExponentDoubleLiterals(){
     EXPECT_TRUE((list[1u].isDouble()));
     EXPECT_TRUE((list[2u].isDouble()));
     EXPECT_TRUE((list[3u].isDouble()));
-    EXPECT_TRUE((Abs(list[0u].asDouble() - 0.0000289785676) < 0.0000000001));
-    EXPECT_TRUE((Abs(list[1u].asDouble() + 0.000000366009772) < 0.0000000001));
-    EXPECT_TRUE((Abs(list[2u].asDouble() - 1000.0) < 0.0000000001));
-    EXPECT_TRUE((Abs(list[3u].asDouble() - 200.0) < 0.0000000001));
+    EXPECT_LT(Abs(list[0u].asDouble() - 0.0000289785676), 0.0000000001);
+    EXPECT_LT(Abs(list[1u].asDouble() + 0.000000366009772), 0.0000000001);
+    EXPECT_LT(Abs(list[2u].asDouble() - 1000.0), 0.0000000001);
+    EXPECT_LT(Abs(list[3u].asDouble() - 200.0), 0.0000000001);
 }
 
-static void TestBindStyleStructDeclarations(){
+TEST(Metascript, BindStyleStructDeclarations){
     DestinationArena arena;
     Document document(arena.arena);
     const AString source =
@@ -305,63 +304,55 @@ static void TestBindStyleStructDeclarations(){
     if(!parsed)
         return;
 
-    EXPECT_TRUE((document.assetType() == LiteralView("material_bind")));
-    EXPECT_TRUE((document.assetVariable() == LiteralView("asset")));
+    EXPECT_EQ(document.assetType(), LiteralView("material_bind"));
+    EXPECT_EQ(document.assetVariable(), LiteralView("asset"));
 
     const Value& asset = document.asset();
     const Value* structs = FindTestField(asset, LiteralView("structs"));
-    EXPECT_TRUE((structs != nullptr));
+    EXPECT_NE(structs, nullptr);
     EXPECT_TRUE((structs && structs->isMap()));
     if(!structs || !structs->isMap())
         return;
 
     const Value* surfaceStruct = structs->findField(LiteralView("NwbProjectBxdfSurfaceMaterial"));
     const Value* runtimeStruct = structs->findField(LiteralView("NwbProjectBxdfRuntimeMaterial"));
-    EXPECT_TRUE((surfaceStruct != nullptr));
-    EXPECT_TRUE((runtimeStruct != nullptr));
+    EXPECT_NE(surfaceStruct, nullptr);
+    EXPECT_NE(runtimeStruct, nullptr);
     if(!surfaceStruct || !runtimeStruct)
         return;
 
     const Value* surfaceAttributes = FindTestField(*surfaceStruct, LiteralView("attributes"));
-    EXPECT_TRUE((surfaceAttributes != nullptr));
-    EXPECT_TRUE((surfaceAttributes && surfaceAttributes->isList()));
-    EXPECT_TRUE((surfaceAttributes && surfaceAttributes->isList() && surfaceAttributes->asList().size() == 1u));
-    if(surfaceAttributes && surfaceAttributes->isList() && surfaceAttributes->asList().size() == 1u)
-        CheckStringField(surfaceAttributes->asList()[0u], LiteralView("name"), LiteralView("material_constant"));
+    ASSERT_NE(surfaceAttributes, nullptr);
+    ASSERT_TRUE((surfaceAttributes->isList()));
+    ASSERT_EQ(surfaceAttributes->asList().size(), 1u);
+    CheckStringField(surfaceAttributes->asList()[0u], LiteralView("name"), LiteralView("material_constant"));
 
     const Value* surfaceFields = FindTestField(*surfaceStruct, LiteralView("fields"));
-    EXPECT_TRUE((surfaceFields != nullptr));
-    EXPECT_TRUE((surfaceFields && surfaceFields->isList()));
-    EXPECT_TRUE((surfaceFields && surfaceFields->isList() && surfaceFields->asList().size() == 2u));
-    if(!surfaceFields || !surfaceFields->isList() || surfaceFields->asList().size() != 2u)
-        return;
+    ASSERT_NE(surfaceFields, nullptr);
+    ASSERT_TRUE((surfaceFields->isList()));
+    ASSERT_EQ(surfaceFields->asList().size(), 2u);
 
     const Value& baseColorField = surfaceFields->asList()[0u];
     CheckStringField(baseColorField, LiteralView("type"), LiteralView("float4"));
     CheckStringField(baseColorField, LiteralView("name"), LiteralView("base_color"));
 
     const Value* baseColorAttributes = FindTestField(baseColorField, LiteralView("attributes"));
-    EXPECT_TRUE((baseColorAttributes != nullptr));
-    EXPECT_TRUE((baseColorAttributes && baseColorAttributes->isList()));
-    EXPECT_TRUE((baseColorAttributes && baseColorAttributes->isList() && baseColorAttributes->asList().size() == 1u));
-    if(baseColorAttributes && baseColorAttributes->isList() && baseColorAttributes->asList().size() == 1u){
-        const Value& defaultAttribute = baseColorAttributes->asList()[0u];
-        CheckStringField(defaultAttribute, LiteralView("name"), LiteralView("default"));
+    ASSERT_NE(baseColorAttributes, nullptr);
+    ASSERT_TRUE((baseColorAttributes->isList()));
+    ASSERT_EQ(baseColorAttributes->asList().size(), 1u);
+    const Value& defaultAttribute = baseColorAttributes->asList()[0u];
+    CheckStringField(defaultAttribute, LiteralView("name"), LiteralView("default"));
 
-        const Value* arguments = FindTestField(defaultAttribute, LiteralView("arguments"));
-        EXPECT_TRUE((arguments != nullptr));
-        EXPECT_TRUE((arguments && arguments->isList()));
-        EXPECT_TRUE((arguments && arguments->isList() && arguments->asList().size() == 1u));
-        if(arguments && arguments->isList() && arguments->asList().size() == 1u)
-            CheckStringValue(&arguments->asList()[0u], LiteralView("float4(1.0, 1.0, 1.0, 1.0)"));
-    }
+    const Value* arguments = FindTestField(defaultAttribute, LiteralView("arguments"));
+    ASSERT_NE(arguments, nullptr);
+    ASSERT_TRUE((arguments->isList()));
+    ASSERT_EQ(arguments->asList().size(), 1u);
+    CheckStringValue(&arguments->asList()[0u], LiteralView("float4(1.0, 1.0, 1.0, 1.0)"));
 
     const Value* instances = FindTestField(asset, LiteralView("instances"));
-    EXPECT_TRUE((instances != nullptr));
-    EXPECT_TRUE((instances && instances->isList()));
-    EXPECT_TRUE((instances && instances->isList() && instances->asList().size() == 2u));
-    if(!instances || !instances->isList() || instances->asList().size() != 2u)
-        return;
+    ASSERT_NE(instances, nullptr);
+    ASSERT_TRUE((instances->isList()));
+    ASSERT_EQ(instances->asList().size(), 2u);
 
     CheckStringField(instances->asList()[0u], LiteralView("type"), LiteralView("NwbProjectBxdfSurfaceMaterial"));
     CheckStringField(instances->asList()[0u], LiteralView("name"), LiteralView("surface"));
@@ -369,7 +360,7 @@ static void TestBindStyleStructDeclarations(){
     CheckStringField(instances->asList()[1u], LiteralView("name"), LiteralView("runtime"));
 }
 
-static void TestBindStyleStructDuplicateRejections(){
+TEST(Metascript, BindStyleStructDuplicateRejections){
     const AString duplicateFieldSource =
         "struct NwbDup{\n"
         "    float value;\n"
@@ -397,7 +388,7 @@ static void TestBindStyleStructDuplicateRejections(){
     CheckImplicitMaterialBindParseFailsWithMessage(existingInstanceSource, LiteralView("duplicate struct instance declaration"));
 }
 
-static void TestGenericDeclarationsAndReferences(){
+TEST(Metascript, GenericDeclarationsAndReferences){
     DestinationArena arena;
     Document document(arena.arena);
     const AString source =
@@ -418,19 +409,19 @@ static void TestGenericDeclarationsAndReferences(){
     if(!parsed)
         return;
 
-    EXPECT_TRUE((document.declarations().size() == 3u));
+    EXPECT_EQ(document.declarations().size(), 3u);
     if(document.declarations().size() != 3u)
         return;
 
-    EXPECT_TRUE((document.declarations()[0u].type == LiteralView("model")));
-    EXPECT_TRUE((document.declarations()[0u].variable == LiteralView("model")));
-    EXPECT_TRUE((document.declarations()[1u].type == LiteralView("mesh")));
-    EXPECT_TRUE((document.declarations()[1u].variable == LiteralView("mesh")));
-    EXPECT_TRUE((document.declarations()[2u].type == LiteralView("asset_bunch")));
-    EXPECT_TRUE((document.declarations()[2u].variable == LiteralView("bunch")));
+    EXPECT_EQ(document.declarations()[0u].type, LiteralView("model"));
+    EXPECT_EQ(document.declarations()[0u].variable, LiteralView("model"));
+    EXPECT_EQ(document.declarations()[1u].type, LiteralView("mesh"));
+    EXPECT_EQ(document.declarations()[1u].variable, LiteralView("mesh"));
+    EXPECT_EQ(document.declarations()[2u].type, LiteralView("asset_bunch"));
+    EXPECT_EQ(document.declarations()[2u].variable, LiteralView("bunch"));
 
     const Value* bunch = document.findVariable(LiteralView("bunch"));
-    EXPECT_TRUE((bunch != nullptr));
+    EXPECT_NE(bunch, nullptr);
     EXPECT_TRUE((bunch && bunch->isList()));
     if(!bunch || !bunch->isList() || bunch->asList().size() != 2u)
         return;
@@ -439,19 +430,19 @@ static void TestGenericDeclarationsAndReferences(){
     CheckReferenceListElement(bunch->asList()[1u], LiteralView("mesh"));
 
     const Value* modelValue = document.findVariable(LiteralView("model"));
-    EXPECT_TRUE((modelValue != nullptr));
+    EXPECT_NE(modelValue, nullptr);
     if(modelValue)
         CheckStringField(*modelValue, LiteralView("mesh"), LiteralView("project/body/mesh"));
 
     const Value* meshValue = document.findVariable(LiteralView("mesh"));
-    EXPECT_TRUE((meshValue != nullptr));
+    EXPECT_NE(meshValue, nullptr);
     if(!meshValue)
         return;
 
     const Value* indices = FindTestField(*meshValue, LiteralView("indices"));
-    EXPECT_TRUE((indices != nullptr));
-    EXPECT_TRUE((indices && indices->isList()));
-    EXPECT_TRUE((indices && indices->isList() && indices->asList().size() == 3u));
+    ASSERT_NE(indices, nullptr);
+    ASSERT_TRUE((indices->isList()));
+    EXPECT_EQ(indices->asList().size(), 3u);
 }
 
 
@@ -466,55 +457,4 @@ static void TestGenericDeclarationsAndReferences(){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST(Metascript, CrossArenaMoveAssignmentCopiesIntoDestinationArena){
-    __hidden_tests::TestCrossArenaMoveAssignmentCopiesIntoDestinationArena();
-}
-
-TEST(Metascript, CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena){
-    __hidden_tests::TestCrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena();
-}
-
-TEST(Metascript, CrossArenaListConcatCopiesIntoResultArena){
-    __hidden_tests::TestCrossArenaListConcatCopiesIntoResultArena();
-}
-
-TEST(Metascript, CrossArenaAppendCopiesIntoDestinationArena){
-    __hidden_tests::TestCrossArenaAppendCopiesIntoDestinationArena();
-}
-
-TEST(Metascript, ListSelfAppendCopiesOriginalValues){
-    __hidden_tests::TestListSelfAppendCopiesOriginalValues();
-}
-
-TEST(Metascript, AppendSelfMoveCopiesOriginalValue){
-    __hidden_tests::TestAppendSelfMoveCopiesOriginalValue();
-}
-
-TEST(Metascript, AppendExistingListElementMoveCopiesBeforeDestroy){
-    __hidden_tests::TestAppendExistingListElementMoveCopiesBeforeDestroy();
-}
-
-TEST(Metascript, ListAppendExistingElementCopiesBeforeReallocation){
-    __hidden_tests::TestListAppendExistingElementCopiesBeforeReallocation();
-}
-
-TEST(Metascript, ExponentDoubleLiterals){
-    __hidden_tests::TestExponentDoubleLiterals();
-}
-
-TEST(Metascript, BindStyleStructDeclarations){
-    __hidden_tests::TestBindStyleStructDeclarations();
-}
-
-TEST(Metascript, BindStyleStructDuplicateRejections){
-    __hidden_tests::TestBindStyleStructDuplicateRejections();
-}
-
-TEST(Metascript, GenericDeclarationsAndReferences){
-    __hidden_tests::TestGenericDeclarationsAndReferences();
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

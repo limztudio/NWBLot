@@ -36,7 +36,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_tests{
+namespace __hidden_ecs_graphics_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,21 +50,21 @@ using Vector = NWB::Tests::TestVector<T>;
 inline constexpr Name s_ScratchArena("tests/ecs_graphics/scratch");
 
 
-static void TestRuntimeResourceNameBuilderMatchesFormattedSuffix(){
+TEST(EcsGraphics, RuntimeResourceNameBuilderMatchesFormattedSuffix){
     NWB::Tests::TestArena<> arena;
     const Name sourceName("project/meshes/mesh_skinning_source");
     const auto suffix = NWB::Impl::BuildRuntimeResourceSuffix(arena.arena, 42u, 17u, "mesh_skinning_ranges");
-    EXPECT_TRUE((AStringView(suffix.data(), suffix.size()) == AStringView(":runtime_42_revision_17_mesh_skinning_ranges")));
+    EXPECT_EQ(AStringView(suffix.data(), suffix.size()), AStringView(":runtime_42_revision_17_mesh_skinning_ranges"));
 
     const Name builtName = NWB::Impl::DeriveRuntimeResourceName(sourceName, 42u, 17u, "mesh_skinning_ranges");
     const Name formattedName = DeriveName(sourceName, AStringView(":runtime_42_revision_17_mesh_skinning_ranges"));
-    EXPECT_TRUE((builtName == formattedName));
+    EXPECT_EQ(builtName, formattedName);
 }
 
 
 using TestWorld = NWB::Tests::EcsTestWorld;
 
-static void TestLightComponents(){
+TEST(EcsGraphics, LightComponents){
     TestWorld testWorld;
 
     auto directionalEntity = testWorld.world.createEntity();
@@ -73,13 +73,13 @@ static void TestLightComponents(){
 
     EXPECT_TRUE((directionalEntity.hasComponent<NWB::Impl::Scene::TransformComponent>()));
     EXPECT_TRUE((directionalEntity.hasComponent<NWB::Impl::Scene::LightComponent>()));
-    EXPECT_TRUE((directionalLight.type == NWB::Impl::Scene::LightType::Directional));
-    EXPECT_TRUE((directionalLight.color().x == 1.0f));
-    EXPECT_TRUE((directionalLight.color().y == 1.0f));
-    EXPECT_TRUE((directionalLight.color().z == 1.0f));
-    EXPECT_TRUE((directionalLight.intensity() > 0.0f));
-    EXPECT_TRUE((directionalLight.range > 0.0f));
-    EXPECT_TRUE((directionalTransform.rotation.w == 1.0f));
+    EXPECT_EQ(directionalLight.type, NWB::Impl::Scene::LightType::Directional);
+    EXPECT_EQ(directionalLight.color().x, 1.0f);
+    EXPECT_EQ(directionalLight.color().y, 1.0f);
+    EXPECT_EQ(directionalLight.color().z, 1.0f);
+    EXPECT_GT(directionalLight.intensity(), 0.0f);
+    EXPECT_GT(directionalLight.range, 0.0f);
+    EXPECT_EQ(directionalTransform.rotation.w, 1.0f);
 
     auto pointEntity = testWorld.world.createEntity();
     auto& pointTransform = pointEntity.addComponent<NWB::Impl::Scene::TransformComponent>();
@@ -92,15 +92,15 @@ static void TestLightComponents(){
 
     EXPECT_TRUE((pointEntity.hasComponent<NWB::Impl::Scene::TransformComponent>()));
     EXPECT_TRUE((pointEntity.hasComponent<NWB::Impl::Scene::LightComponent>()));
-    EXPECT_TRUE((pointLight.type == NWB::Impl::Scene::LightType::Point));
-    EXPECT_TRUE((pointLight.color().x == 1.0f));
-    EXPECT_TRUE((pointLight.color().y == 0.75f));
-    EXPECT_TRUE((pointLight.color().z == 0.5f));
-    EXPECT_TRUE((pointLight.intensity() == 4.0f));
-    EXPECT_TRUE((pointLight.range == 12.0f));
+    EXPECT_EQ(pointLight.type, NWB::Impl::Scene::LightType::Point);
+    EXPECT_EQ(pointLight.color().x, 1.0f);
+    EXPECT_EQ(pointLight.color().y, 0.75f);
+    EXPECT_EQ(pointLight.color().z, 0.5f);
+    EXPECT_EQ(pointLight.intensity(), 4.0f);
+    EXPECT_EQ(pointLight.range, 12.0f);
 
-    EXPECT_TRUE(((reinterpret_cast<usize>(&directionalLight) % alignof(NWB::Impl::Scene::LightComponent)) == 0));
-    EXPECT_TRUE(((reinterpret_cast<usize>(&pointLight) % alignof(NWB::Impl::Scene::LightComponent)) == 0));
+    EXPECT_EQ((reinterpret_cast<usize>(&directionalLight) % alignof(NWB::Impl::Scene::LightComponent)), 0u);
+    EXPECT_EQ((reinterpret_cast<usize>(&pointLight) % alignof(NWB::Impl::Scene::LightComponent)), 0u);
 
     const NWB::Core::ECS::EntityID pointEntityId = pointEntity.id();
     usize lightViewCount = 0;
@@ -118,25 +118,25 @@ static void TestLightComponents(){
             ++lightViewCount;
             if(viewLight.type == NWB::Impl::Scene::LightType::Directional){
                 ++directionalLightCount;
-                EXPECT_TRUE((viewLight.intensity() > 0.0f));
+                EXPECT_GT(viewLight.intensity(), 0.0f);
             }
             else if(viewLight.type == NWB::Impl::Scene::LightType::Point){
                 ++pointLightCount;
-                EXPECT_TRUE((entityId == pointEntityId));
-                EXPECT_TRUE((viewTransform.position.x == 1.0f));
-                EXPECT_TRUE((viewLight.range > 0.0f));
+                EXPECT_EQ(entityId, pointEntityId);
+                EXPECT_EQ(viewTransform.position.x, 1.0f);
+                EXPECT_GT(viewLight.range, 0.0f);
             }
             else{
-                EXPECT_TRUE((false));
+                ADD_FAILURE();
             }
         }
     );
-    EXPECT_TRUE((lightViewCount == 2));
-    EXPECT_TRUE((directionalLightCount == 1));
-    EXPECT_TRUE((pointLightCount == 1));
+    EXPECT_EQ(lightViewCount, 2u);
+    EXPECT_EQ(directionalLightCount, 1u);
+    EXPECT_EQ(pointLightCount, 1u);
 }
 
-static void TestMeshSystemResolvesMeshComponent(){
+TEST(EcsGraphics, MeshSystemResolvesMeshComponent){
     TestWorld testWorld;
     auto& meshSystem = testWorld.world.addSystem<NWB::Impl::MeshSystem>(testWorld.world);
 
@@ -146,12 +146,12 @@ static void TestMeshSystemResolvesMeshComponent(){
 
     NWB::Core::Assets::AssetRef<NWB::Impl::Mesh> resolvedMesh;
     EXPECT_TRUE((meshSystem.resolveMesh(entity.id(), resolvedMesh)));
-    EXPECT_TRUE((resolvedMesh.name() == mesh.mesh.name()));
-    EXPECT_TRUE((meshSystem.findMesh(entity.id()) == &mesh));
+    EXPECT_EQ(resolvedMesh.name(), mesh.mesh.name());
+    EXPECT_EQ(meshSystem.findMesh(entity.id()), &mesh);
 
     auto missingMeshEntity = testWorld.world.createEntity();
-    EXPECT_TRUE((!meshSystem.resolveMesh(missingMeshEntity.id(), resolvedMesh)));
-    EXPECT_TRUE((!resolvedMesh.valid()));
+    EXPECT_FALSE(meshSystem.resolveMesh(missingMeshEntity.id(), resolvedMesh));
+    EXPECT_FALSE(resolvedMesh.valid());
 }
 
 static u32 TestFloatBits(const f32 value){
@@ -160,7 +160,7 @@ static u32 TestFloatBits(const f32 value){
     return bits;
 }
 
-static void TestMaterialInstanceComponentSetters(){
+TEST(EcsGraphics, MaterialInstanceComponentSetters){
     TestWorld testWorld;
     const Name materialInterface("project/material_interfaces/test_surface");
     auto entity = testWorld.world.createEntity();
@@ -168,7 +168,7 @@ static void TestMaterialInstanceComponentSetters(){
         NWB::Tests::TestDetail::Arena(),
         materialInterface
     );
-    EXPECT_TRUE((materialInstance.materialInterface == materialInterface));
+    EXPECT_EQ(materialInstance.materialInterface, materialInterface);
 
     EXPECT_TRUE((NWB::Impl::SetMaterialMutableFloat(
         testWorld.world,
@@ -177,13 +177,13 @@ static void TestMaterialInstanceComponentSetters(){
         "runtime.fade_alpha",
         0.5f
     )));
-    EXPECT_TRUE((materialInstance.overrides.size() == 1u));
-    EXPECT_TRUE((materialInstance.revision == 1u));
-    EXPECT_TRUE((materialInstance.overrides[0u].parameterName == Name("runtime.fade_alpha")));
-    EXPECT_TRUE((materialInstance.overrides[0u].blockName == Name("runtime")));
-    EXPECT_TRUE((materialInstance.overrides[0u].fieldName == Name("fade_alpha")));
-    EXPECT_TRUE((materialInstance.overrides[0u].fieldType == NWB::Impl::MaterialLayoutFieldType::Float));
-    EXPECT_TRUE((materialInstance.overrides[0u].value.raw[0u] == TestFloatBits(0.5f)));
+    EXPECT_EQ(materialInstance.overrides.size(), 1u);
+    EXPECT_EQ(materialInstance.revision, 1u);
+    EXPECT_EQ(materialInstance.overrides[0u].parameterName, Name("runtime.fade_alpha"));
+    EXPECT_EQ(materialInstance.overrides[0u].blockName, Name("runtime"));
+    EXPECT_EQ(materialInstance.overrides[0u].fieldName, Name("fade_alpha"));
+    EXPECT_EQ(materialInstance.overrides[0u].fieldType, NWB::Impl::MaterialLayoutFieldType::Float);
+    EXPECT_EQ(materialInstance.overrides[0u].value.raw[0u], TestFloatBits(0.5f));
 
     EXPECT_TRUE((NWB::Impl::SetMaterialMutableFloat(
         testWorld.world,
@@ -192,9 +192,9 @@ static void TestMaterialInstanceComponentSetters(){
         "runtime.fade_alpha",
         0.75f
     )));
-    EXPECT_TRUE((materialInstance.overrides.size() == 1u));
-    EXPECT_TRUE((materialInstance.revision == 2u));
-    EXPECT_TRUE((materialInstance.overrides[0u].value.raw[0u] == TestFloatBits(0.75f)));
+    EXPECT_EQ(materialInstance.overrides.size(), 1u);
+    EXPECT_EQ(materialInstance.revision, 2u);
+    EXPECT_EQ(materialInstance.overrides[0u].value.raw[0u], TestFloatBits(0.75f));
 
     EXPECT_TRUE((NWB::Impl::SetMaterialMutableFloat4(
         testWorld.world,
@@ -203,17 +203,17 @@ static void TestMaterialInstanceComponentSetters(){
         "runtime.tint",
         Float4(1.0f, 0.5f, 0.25f, 0.125f)
     )));
-    EXPECT_TRUE((materialInstance.overrides.size() == 2u));
-    EXPECT_TRUE((materialInstance.revision == 3u));
-    EXPECT_TRUE((materialInstance.overrides[1u].parameterName == Name("runtime.tint")));
-    EXPECT_TRUE((materialInstance.overrides[1u].fieldType == NWB::Impl::MaterialLayoutFieldType::Float4));
-    EXPECT_TRUE((materialInstance.overrides[1u].value.raw[0u] == TestFloatBits(1.0f)));
-    EXPECT_TRUE((materialInstance.overrides[1u].value.raw[1u] == TestFloatBits(0.5f)));
-    EXPECT_TRUE((materialInstance.overrides[1u].value.raw[2u] == TestFloatBits(0.25f)));
-    EXPECT_TRUE((materialInstance.overrides[1u].value.raw[3u] == TestFloatBits(0.125f)));
+    EXPECT_EQ(materialInstance.overrides.size(), 2u);
+    EXPECT_EQ(materialInstance.revision, 3u);
+    EXPECT_EQ(materialInstance.overrides[1u].parameterName, Name("runtime.tint"));
+    EXPECT_EQ(materialInstance.overrides[1u].fieldType, NWB::Impl::MaterialLayoutFieldType::Float4);
+    EXPECT_EQ(materialInstance.overrides[1u].value.raw[0u], TestFloatBits(1.0f));
+    EXPECT_EQ(materialInstance.overrides[1u].value.raw[1u], TestFloatBits(0.5f));
+    EXPECT_EQ(materialInstance.overrides[1u].value.raw[2u], TestFloatBits(0.25f));
+    EXPECT_EQ(materialInstance.overrides[1u].value.raw[3u], TestFloatBits(0.125f));
 }
 
-static void TestMaterialTypedByteRangeDeduplicatesContent(){
+TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     using ByteVector = ::Vector<u8, NWB::Core::Alloc::ScratchArena>;
     using MaterialTypedByteContentKey = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKey;
@@ -246,9 +246,9 @@ static void TestMaterialTypedByteRangeDeduplicatesContent(){
         firstBytes,
         firstRange
     )));
-    EXPECT_TRUE((firstRange.byteOffset == 0u));
-    EXPECT_TRUE((firstRange.byteCount == 4u));
-    EXPECT_TRUE((uploadBytes.size() == 4u));
+    EXPECT_EQ(firstRange.byteOffset, 0u);
+    EXPECT_EQ(firstRange.byteCount, 4u);
+    EXPECT_EQ(uploadBytes.size(), 4u);
 
     ByteVector duplicateBytes{scratchArena};
     duplicateBytes.assign(firstBytes.begin(), firstBytes.end());
@@ -259,9 +259,9 @@ static void TestMaterialTypedByteRangeDeduplicatesContent(){
         duplicateBytes,
         duplicateRange
     )));
-    EXPECT_TRUE((duplicateRange.byteOffset == firstRange.byteOffset));
-    EXPECT_TRUE((duplicateRange.byteCount == firstRange.byteCount));
-    EXPECT_TRUE((uploadBytes.size() == 4u));
+    EXPECT_EQ(duplicateRange.byteOffset, firstRange.byteOffset);
+    EXPECT_EQ(duplicateRange.byteCount, firstRange.byteCount);
+    EXPECT_EQ(uploadBytes.size(), 4u);
 
     ByteVector secondBytes{scratchArena};
     secondBytes.push_back(1u);
@@ -275,10 +275,10 @@ static void TestMaterialTypedByteRangeDeduplicatesContent(){
         secondBytes,
         secondRange
     )));
-    EXPECT_TRUE((secondRange.byteOffset == 4u));
-    EXPECT_TRUE((secondRange.byteCount == 4u));
-    EXPECT_TRUE((uploadBytes.size() == 8u));
-    EXPECT_TRUE((ranges.size() == 2u));
+    EXPECT_EQ(secondRange.byteOffset, 4u);
+    EXPECT_EQ(secondRange.byteCount, 4u);
+    EXPECT_EQ(uploadBytes.size(), 8u);
+    EXPECT_EQ(ranges.size(), 2u);
 
     ByteVector emptyBytes{scratchArena};
     NWB::Impl::ECSRenderDetail::MaterialTypedByteRange emptyRange;
@@ -288,9 +288,9 @@ static void TestMaterialTypedByteRangeDeduplicatesContent(){
         emptyBytes,
         emptyRange
     )));
-    EXPECT_TRUE((emptyRange.byteOffset == 0u));
-    EXPECT_TRUE((emptyRange.byteCount == 0u));
-    EXPECT_TRUE((uploadBytes.size() == 8u));
+    EXPECT_EQ(emptyRange.byteOffset, 0u);
+    EXPECT_EQ(emptyRange.byteCount, 0u);
+    EXPECT_EQ(uploadBytes.size(), 8u);
 
     for(u32 instanceIndex = 0u; instanceIndex < 128u; ++instanceIndex){
         ByteVector overrideBytes{scratchArena};
@@ -307,16 +307,16 @@ static void TestMaterialTypedByteRangeDeduplicatesContent(){
             overrideBytes,
             stressRange
         )));
-        EXPECT_TRUE((stressRange.byteCount == 4u));
+        EXPECT_EQ(stressRange.byteCount, 4u);
     }
-    EXPECT_TRUE((ranges.size() == 34u));
-    EXPECT_TRUE((uploadBytes.size() == 136u));
+    EXPECT_EQ(ranges.size(), 34u);
+    EXPECT_EQ(uploadBytes.size(), 136u);
 
     NWB::Impl::ECSRenderDetail::MaterialTypedInstanceRanges instanceRange;
     instanceRange.constantRange = firstRange;
     instanceRange.mutableRange = secondRange;
     const NWB::Impl::InstanceGpuData gpuData = NWB::Impl::ECSRenderDetail::BuildInstanceGpuData(nullptr, instanceRange);
-    EXPECT_TRUE((gpuData.translation.w == secondRange.byteOffset));
+    EXPECT_EQ(gpuData.translation.w, secondRange.byteOffset);
 #if defined(NWB_DEBUG)
     NWB::Impl::ECSRenderDetail::MaterialTypedInstanceRangeVector instanceRanges{scratchArena};
     instanceRanges.push_back(instanceRange);
@@ -464,7 +464,7 @@ static void CheckJointRotationQuaternion(
     EXPECT_TRUE((NearlyEqual(VectorGetW(quaternion), w)));
 }
 
-static void TestJointRotationQuaternionBuildsColumnVectorRotations(){
+TEST(EcsGraphics, JointRotationQuaternionBuildsColumnVectorRotations){
     constexpr f32 s_HalfSqrtTwo = 0.70710678118f;
 
     CheckJointRotationQuaternion(MakeIdentityJointMatrix(), 0.0f, 0.0f, 0.0f, 1.0f);
@@ -474,10 +474,10 @@ static void TestJointRotationQuaternionBuildsColumnVectorRotations(){
     CheckJointRotationQuaternion(MakeZHalfTurnJointMatrix(), 0.0f, 0.0f, 1.0f, 0.0f);
 
     SIMDVector quaternion = QuaternionIdentity();
-    EXPECT_TRUE((!NWB::Impl::SkeletonRuntime::TryBuildJointRotationQuaternion(
+    EXPECT_FALSE(NWB::Impl::SkeletonRuntime::TryBuildJointRotationQuaternion(
             LoadFloat(MakeNonUniformScaleJointMatrix()),
             quaternion
-        )));
+        ));
 }
 
 static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(
@@ -491,7 +491,7 @@ static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(
     return pose;
 }
 
-static void TestSkeletonPoseBuildsHierarchicalPalette(){
+TEST(EcsGraphics, SkeletonPoseBuildsHierarchicalPalette){
     NWB::Impl::SkeletonPoseComponent pose = MakeTwoJointSkeletonPose(
         MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f),
         MakeTranslationJointMatrix(0.0f, 2.0f, 0.0f)
@@ -500,8 +500,8 @@ static void TestSkeletonPoseBuildsHierarchicalPalette(){
     Vector<NWB::Impl::SkeletonJointMatrix> resolvedJoints;
     u32 skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     EXPECT_TRUE((NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)));
-    EXPECT_TRUE((skinningMode == NWB::Impl::SkeletonSkinningMode::LinearBlend));
-    EXPECT_TRUE((resolvedJoints.size() == 2u));
+    EXPECT_EQ(skinningMode, NWB::Impl::SkeletonSkinningMode::LinearBlend);
+    EXPECT_EQ(resolvedJoints.size(), 2u);
     if(resolvedJoints.size() == 2u){
         EXPECT_TRUE((NearlyEqual(resolvedJoints[0u].rows[0].w, 1.0f)));
         EXPECT_TRUE((NearlyEqual(resolvedJoints[0u].rows[1].w, 0.0f)));
@@ -511,15 +511,15 @@ static void TestSkeletonPoseBuildsHierarchicalPalette(){
 
     pose.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     EXPECT_TRUE((NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)));
-    EXPECT_TRUE((skinningMode == NWB::Impl::SkeletonSkinningMode::DualQuaternion));
+    EXPECT_EQ(skinningMode, NWB::Impl::SkeletonSkinningMode::DualQuaternion);
 
     pose.parentJoints[1u] = 1u;
-    EXPECT_TRUE((!NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)));
+    EXPECT_FALSE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode));
     pose.parentJoints[1u] = 0u;
     pose.parentJoints.pop_back();
-    EXPECT_TRUE((!NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)));
+    EXPECT_FALSE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode));
 }
-static void TestMeshSkinningPayloadValidatesSkeletonAndPalette(){
+TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     NWB::Impl::MeshSkinningRuntimeInstance instance = MakeTriangleInstance();
     AssignSingleJointSkin(instance, 0u);
     instance.handle.value = 517u;
@@ -530,15 +530,15 @@ static void TestMeshSkinningPayloadValidatesSkeletonAndPalette(){
     Vector<NWB::Impl::MeshSkinningInfluenceGpu> skinInfluences;
     Vector<NWB::Impl::SkeletonJointMatrix> jointMatrices;
     EXPECT_TRUE((NWB::Impl::MeshSkinningPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices)));
-    EXPECT_TRUE((skinInfluences.size() == instance.skin.size()));
-    EXPECT_TRUE((jointMatrices.size() == 1u));
-    EXPECT_TRUE((skinInfluences[0u].joint[0u] == 0u));
+    EXPECT_EQ(skinInfluences.size(), instance.skin.size());
+    EXPECT_EQ(jointMatrices.size(), 1u);
+    EXPECT_EQ(skinInfluences[0u].joint[0u], 0u);
     EXPECT_TRUE((NearlyEqual(skinInfluences[0u].weight.x, 1.0f)));
 
     instance.inverseBindMatrices.push_back(MakeTranslationJointMatrix(-0.25f, 0.0f, 0.0f));
     joints.joints[0u] = MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f);
     EXPECT_TRUE((NWB::Impl::MeshSkinningPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices)));
-    EXPECT_TRUE((jointMatrices.size() == 1u));
+    EXPECT_EQ(jointMatrices.size(), 1u);
     EXPECT_TRUE((NearlyEqual(jointMatrices[0u].rows[0].w, 0.75f)));
     joints.joints[0u] = MakeIdentityJointMatrix();
 
@@ -548,7 +548,7 @@ static void TestMeshSkinningPayloadValidatesSkeletonAndPalette(){
     joints.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     joints.joints[0u] = MakeTranslationJointMatrix(2.0f, 4.0f, 6.0f);
     EXPECT_TRUE((NWB::Impl::MeshSkinningPayload::BuildSkinPayload(dualQuaternionInstance, &joints, skinInfluences, jointMatrices)));
-    EXPECT_TRUE((jointMatrices.size() == 1u));
+    EXPECT_EQ(jointMatrices.size(), 1u);
     EXPECT_TRUE((NearlyEqual(jointMatrices[0u].rows[0].x, 0.0f)));
     EXPECT_TRUE((NearlyEqual(jointMatrices[0u].rows[0].y, 0.0f)));
     EXPECT_TRUE((NearlyEqual(jointMatrices[0u].rows[0].z, 0.0f)));
@@ -569,25 +569,25 @@ static void TestMeshSkinningPayloadValidatesSkeletonAndPalette(){
     outsidePalette.skeletonJointCount = 2u;
     outsidePalette.inverseBindMatrices.clear();
     joints.joints.resize(1u, NWB::Impl::MakeIdentitySkeletonJointMatrix());
-    EXPECT_TRUE((!NWB::Impl::MeshSkinningPayload::BuildSkinPayload(outsidePalette, &joints, skinInfluences, jointMatrices)));
+    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinPayload(outsidePalette, &joints, skinInfluences, jointMatrices));
 
     NWB::Impl::MeshSkinningRuntimeInstance nonAffineJoint = instance;
     joints.joints[0u] = MakeIdentityJointMatrix();
     joints.joints[0u].rows[0] = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    EXPECT_TRUE((!NWB::Impl::MeshSkinningPayload::BuildSkinPayload(nonAffineJoint, &joints, skinInfluences, jointMatrices)));
+    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinPayload(nonAffineJoint, &joints, skinInfluences, jointMatrices));
 
     NWB::Impl::MeshSkinningRuntimeInstance scaledDualQuaternionJoint = instance;
     scaledDualQuaternionJoint.inverseBindMatrices.clear();
     joints.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     joints.joints[0u] = MakeNonUniformScaleJointMatrix();
-    EXPECT_TRUE((!NWB::Impl::MeshSkinningPayload::BuildSkinPayload(
+    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinPayload(
             scaledDualQuaternionJoint,
             &joints,
             skinInfluences,
             jointMatrices
-        )));
+        ));
 
-    EXPECT_TRUE((runtimeValidationLogger.errorCount() == 3u));
+    EXPECT_EQ(runtimeValidationLogger.errorCount(), 3u);
     EXPECT_TRUE((runtimeValidationLogger.sawErrorContaining(NWB_TEXT("joint palette count"))));
     EXPECT_TRUE((runtimeValidationLogger.sawErrorContaining(NWB_TEXT("joint palette entry 0 is not a finite invertible affine matrix"))));
     EXPECT_TRUE((runtimeValidationLogger.sawErrorContaining(NWB_TEXT("failed dual-quaternion payload build"))));
@@ -603,39 +603,4 @@ static void TestMeshSkinningPayloadValidatesSkeletonAndPalette(){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST(EcsGraphics, RuntimeResourceNameBuilderMatchesFormattedSuffix){
-    __hidden_tests::TestRuntimeResourceNameBuilderMatchesFormattedSuffix();
-}
-
-TEST(EcsGraphics, LightComponents){
-    __hidden_tests::TestLightComponents();
-}
-
-TEST(EcsGraphics, MeshSystemResolvesMeshComponent){
-    __hidden_tests::TestMeshSystemResolvesMeshComponent();
-}
-
-TEST(EcsGraphics, MaterialInstanceComponentSetters){
-    __hidden_tests::TestMaterialInstanceComponentSetters();
-}
-
-TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
-    __hidden_tests::TestMaterialTypedByteRangeDeduplicatesContent();
-}
-
-TEST(EcsGraphics, JointRotationQuaternionBuildsColumnVectorRotations){
-    __hidden_tests::TestJointRotationQuaternionBuildsColumnVectorRotations();
-}
-
-TEST(EcsGraphics, SkeletonPoseBuildsHierarchicalPalette){
-    __hidden_tests::TestSkeletonPoseBuildsHierarchicalPalette();
-}
-
-TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
-    __hidden_tests::TestMeshSkinningPayloadValidatesSkeletonAndPalette();
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

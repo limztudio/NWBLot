@@ -16,7 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_tests{
+namespace __hidden_math_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,7 +28,7 @@ using NWB::Tests::NearlyEqual4;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestVector2CrossOrientation(){
+TEST(Math, Vector2CrossOrientation){
     const SIMDVector xAxis = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector yAxis = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 
@@ -41,7 +41,7 @@ static void TestVector2CrossOrientation(){
     EXPECT_TRUE((NearlyEqual(VectorGetY(yx), -1.0f)));
 }
 
-static void TestVector3CrossOrientation(){
+TEST(Math, Vector3CrossOrientation){
     const SIMDVector xAxis = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector yAxis = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     const SIMDVector zAxis = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
@@ -55,7 +55,7 @@ static void TestVector3CrossOrientation(){
     EXPECT_TRUE((NearlyEqual3(Vector3Cross(a, b), -94.0f, -61.0f, 1.0f)));
 }
 
-static void TestVector3RotateQuarterTurn(){
+TEST(Math, Vector3RotateQuarterTurn){
     const SIMDVector rotation = QuaternionRotationAxis(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_PI * 0.5f);
     const SIMDVector value = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector rotated = Vector3Rotate(value, rotation);
@@ -63,7 +63,7 @@ static void TestVector3RotateQuarterTurn(){
     EXPECT_TRUE((NearlyEqual3(rotated, 0.0f, 1.0f, 0.0f)));
 }
 
-static void TestVector4CrossBasisOrientation(){
+TEST(Math, Vector4CrossBasisOrientation){
     const SIMDVector xAxis = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector yAxis = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     const SIMDVector zAxis = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
@@ -73,7 +73,7 @@ static void TestVector4CrossBasisOrientation(){
     EXPECT_TRUE((NearlyEqual(VectorGetW(result), 1.0f)));
 }
 
-static void TestVectorNamedScalarFunctions(){
+TEST(Math, VectorNamedScalarFunctions){
     const SIMDVector modResult = VectorMod(
         VectorSet(5.5f, -5.5f, 5.5f, -5.5f),
         VectorSet(2.0f, 2.0f, -2.0f, -2.0f)
@@ -139,10 +139,10 @@ static void TestVectorNamedScalarFunctions(){
 
     const SIMDVector signedZeroTanH = VectorTanH(VectorSet(-0.0f, 0.0f, -0.0f, 0.0f));
     EXPECT_TRUE((SignBit(VectorGetX(signedZeroTanH))));
-    EXPECT_TRUE((!SignBit(VectorGetY(signedZeroTanH))));
+    EXPECT_FALSE(SignBit(VectorGetY(signedZeroTanH)));
 }
 
-static void TestRefractCriticalAngle(){
+TEST(Math, RefractCriticalAngle){
     const SIMDVector normal = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     const SIMDVector criticalIncident = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector totalInternalIncident = VectorSet(0.866025404f, -0.5f, 0.0f, 0.0f);
@@ -153,7 +153,7 @@ static void TestRefractCriticalAngle(){
     EXPECT_TRUE((NearlyEqual4(Vector3Refract(totalInternalIncident, normal, 2.0f), 0.0f, 0.0f, 0.0f, 0.0f)));
 }
 
-static void TestNormalizeOrHelpers(){
+TEST(Math, NormalizeOrHelpers){
     const SIMDVector fallback = VectorSet(0.0f, 1.0f, 0.0f, 1.0f);
     const f32 infinity = Limit<f32>::s_Infinity;
 
@@ -162,7 +162,7 @@ static void TestNormalizeOrHelpers(){
     EXPECT_TRUE((NearlyEqual4(Vector4NormalizeOr(VectorSet(infinity, 0.0f, 0.0f, 0.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f, 1.0f)));
 }
 
-static void TestSdfHelpers(){
+TEST(Math, SdfHelpers){
     const SIMDVector boxHalfExtents = VectorSet(1.0f, 1.0f, 1.0f, 0.0f);
 
     EXPECT_TRUE((NearlyEqual(VectorGetX(SdfTests::Box(VectorSet(2.0f, 0.5f, -0.25f, 0.0f), boxHalfExtents)), 1.0f)));
@@ -195,34 +195,34 @@ static void TestSdfHelpers(){
     EXPECT_TRUE((NearlyEqual3(SdfTests::CapsuleYNormal(VectorSet(1.0f, 0.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight, 0.000001f), 1.0f, 0.0f, 0.0f)));
 }
 
-static void TestHalfFloatScalarConversion(){
-    EXPECT_TRUE((ConvertFloatToHalf(0.0f) == static_cast<Half>(0x0000u)));
-    EXPECT_TRUE((ConvertFloatToHalf(-0.0f) == static_cast<Half>(0x8000u)));
-    EXPECT_TRUE((ConvertFloatToHalf(1.0f) == static_cast<Half>(0x3c00u)));
-    EXPECT_TRUE((ConvertFloatToHalf(-2.0f) == static_cast<Half>(0xc000u)));
-    EXPECT_TRUE((ConvertFloatToHalf(65504.0f) == static_cast<Half>(0x7bffu)));
-    EXPECT_TRUE((ConvertFloatToHalf(Limit<f32>::s_Infinity) == static_cast<Half>(0x7c00u)));
-    EXPECT_TRUE((ConvertFloatToHalf(-Limit<f32>::s_Infinity) == static_cast<Half>(0xfc00u)));
+TEST(Math, HalfFloatScalarConversion){
+    EXPECT_EQ(ConvertFloatToHalf(0.0f), static_cast<Half>(0x0000u));
+    EXPECT_EQ(ConvertFloatToHalf(-0.0f), static_cast<Half>(0x8000u));
+    EXPECT_EQ(ConvertFloatToHalf(1.0f), static_cast<Half>(0x3c00u));
+    EXPECT_EQ(ConvertFloatToHalf(-2.0f), static_cast<Half>(0xc000u));
+    EXPECT_EQ(ConvertFloatToHalf(65504.0f), static_cast<Half>(0x7bffu));
+    EXPECT_EQ(ConvertFloatToHalf(Limit<f32>::s_Infinity), static_cast<Half>(0x7c00u));
+    EXPECT_EQ(ConvertFloatToHalf(-Limit<f32>::s_Infinity), static_cast<Half>(0xfc00u));
 
     const Half quietNaN = ConvertFloatToHalf(Limit<f32>::s_QuietNaN);
-    EXPECT_TRUE(((quietNaN & static_cast<Half>(0x7c00u)) == static_cast<Half>(0x7c00u)));
-    EXPECT_TRUE(((quietNaN & static_cast<Half>(0x03ffu)) != static_cast<Half>(0u)));
+    EXPECT_EQ((quietNaN & static_cast<Half>(0x7c00u)), static_cast<Half>(0x7c00u));
+    EXPECT_NE((quietNaN & static_cast<Half>(0x03ffu)), static_cast<Half>(0u));
 
-    EXPECT_TRUE((ConvertFloatToHalf(5.9604644775390625e-8f) == static_cast<Half>(0x0001u)));
-    EXPECT_TRUE((ConvertFloatToHalf(6.103515625e-5f) == static_cast<Half>(0x0400u)));
-    EXPECT_TRUE((ConvertFloatToHalf(1.00048828125f) == static_cast<Half>(0x3c00u)));
+    EXPECT_EQ(ConvertFloatToHalf(5.9604644775390625e-8f), static_cast<Half>(0x0001u));
+    EXPECT_EQ(ConvertFloatToHalf(6.103515625e-5f), static_cast<Half>(0x0400u));
+    EXPECT_EQ(ConvertFloatToHalf(1.00048828125f), static_cast<Half>(0x3c00u));
 
     EXPECT_TRUE((NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x0000u)), 0.0f)));
     EXPECT_TRUE((SignBit(ConvertHalfToFloat(static_cast<Half>(0x8000u)))));
     EXPECT_TRUE((NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x3c00u)), 1.0f)));
     EXPECT_TRUE((NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0xc000u)), -2.0f)));
     EXPECT_TRUE((NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x7bffu)), 65504.0f)));
-    EXPECT_TRUE((ConvertHalfToFloat(static_cast<Half>(0x7c00u)) == Limit<f32>::s_Infinity));
-    EXPECT_TRUE((ConvertHalfToFloat(static_cast<Half>(0xfc00u)) == -Limit<f32>::s_Infinity));
+    EXPECT_EQ(ConvertHalfToFloat(static_cast<Half>(0x7c00u)), Limit<f32>::s_Infinity);
+    EXPECT_EQ(ConvertHalfToFloat(static_cast<Half>(0xfc00u)), -Limit<f32>::s_Infinity);
     EXPECT_TRUE((IsNaN(ConvertHalfToFloat(static_cast<Half>(0x7e00u)))));
 }
 
-static void TestHalfFloatBufferConversion(){
+TEST(Math, HalfFloatBufferConversion){
     f32 source[6] = {
         0.0f,
         -1.5f,
@@ -234,29 +234,29 @@ static void TestHalfFloatBufferConversion(){
     Half packed[6] = {};
     f32 unpacked[6] = {};
 
-    EXPECT_TRUE((ConvertFloatBufferToHalf(packed, source, 6u) == packed));
-    EXPECT_TRUE((packed[0] == static_cast<Half>(0x0000u)));
-    EXPECT_TRUE((packed[1] == static_cast<Half>(0xbe00u)));
-    EXPECT_TRUE((packed[2] == static_cast<Half>(0x3c00u)));
-    EXPECT_TRUE((packed[3] == static_cast<Half>(0x7bffu)));
-    EXPECT_TRUE((packed[4] == static_cast<Half>(0x0001u)));
-    EXPECT_TRUE((packed[5] == static_cast<Half>(0x7c00u)));
+    EXPECT_EQ(ConvertFloatBufferToHalf(packed, source, 6u), packed);
+    EXPECT_EQ(packed[0], static_cast<Half>(0x0000u));
+    EXPECT_EQ(packed[1], static_cast<Half>(0xbe00u));
+    EXPECT_EQ(packed[2], static_cast<Half>(0x3c00u));
+    EXPECT_EQ(packed[3], static_cast<Half>(0x7bffu));
+    EXPECT_EQ(packed[4], static_cast<Half>(0x0001u));
+    EXPECT_EQ(packed[5], static_cast<Half>(0x7c00u));
 
-    EXPECT_TRUE((ConvertHalfBufferToFloat(unpacked, packed, 6u) == unpacked));
+    EXPECT_EQ(ConvertHalfBufferToFloat(unpacked, packed, 6u), unpacked);
     EXPECT_TRUE((NearlyEqual(unpacked[0], 0.0f)));
     EXPECT_TRUE((NearlyEqual(unpacked[1], -1.5f)));
     EXPECT_TRUE((NearlyEqual(unpacked[2], 1.0f)));
     EXPECT_TRUE((NearlyEqual(unpacked[3], 65504.0f)));
     EXPECT_TRUE((NearlyEqual(unpacked[4], 5.9604644775390625e-8f)));
-    EXPECT_TRUE((unpacked[5] == Limit<f32>::s_Infinity));
+    EXPECT_EQ(unpacked[5], Limit<f32>::s_Infinity);
 }
 
-static void TestFloatIntStorageConversion(){
+TEST(Math, FloatIntStorageConversion){
     const SIMDVector xyz = VectorSet(1.25f, -2.5f, 3.75f, 99.0f);
 
     Float3Int signedValue = {};
     StoreFloatInt(xyz, -17, &signedValue);
-    EXPECT_TRUE((signedValue == Float3Int(1.25f, -2.5f, 3.75f, -17)));
+    EXPECT_EQ(signedValue, Float3Int(1.25f, -2.5f, 3.75f, -17));
 
     const SIMDVector loadedSigned = LoadFloatInt(signedValue);
     EXPECT_TRUE((NearlyEqual3(loadedSigned, 1.25f, -2.5f, 3.75f)));
@@ -264,7 +264,7 @@ static void TestFloatIntStorageConversion(){
 
     Float3UInt unsignedValue = {};
     StoreFloatInt(xyz, 42u, &unsignedValue);
-    EXPECT_TRUE((unsignedValue == Float3UInt(1.25f, -2.5f, 3.75f, 42u)));
+    EXPECT_EQ(unsignedValue, Float3UInt(1.25f, -2.5f, 3.75f, 42u));
 
     const SIMDVector loadedUnsigned = LoadFloatInt(unsignedValue);
     EXPECT_TRUE((NearlyEqual3(loadedUnsigned, 1.25f, -2.5f, 3.75f)));
@@ -273,9 +273,9 @@ static void TestFloatIntStorageConversion(){
 
 template<typename Value>
 static void CheckStorageHashMatchesEquality(const Value& lhs, const Value& same, const Value& different){
-    EXPECT_TRUE((lhs == same));
-    EXPECT_TRUE((lhs != different));
-    EXPECT_TRUE((Hasher<Value>{}(lhs) == Hasher<Value>{}(same)));
+    EXPECT_EQ(lhs, same);
+    EXPECT_NE(lhs, different);
+    EXPECT_EQ(Hasher<Value>{}(lhs), Hasher<Value>{}(same));
 }
 
 static Int2U MakeInt2Value(const i32 x, const i32 y){
@@ -344,8 +344,8 @@ static UInt4U MakeUInt4UValue(const u32 x, const u32 y, const u32 z, const u32 w
     return value;
 }
 
-static void TestMathStorageHashAndEquality(){
-    EXPECT_TRUE((FloatHashBits(-0.0f) == FloatHashBits(0.0f)));
+TEST(Math, MathStorageHashAndEquality){
+    EXPECT_EQ(FloatHashBits(-0.0f), FloatHashBits(0.0f));
 
     const Half h1 = static_cast<Half>(1u);
     const Half h2 = static_cast<Half>(2u);
@@ -415,55 +415,4 @@ static void TestMathStorageHashAndEquality(){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST(Math, Vector2CrossOrientation){
-    __hidden_tests::TestVector2CrossOrientation();
-}
-
-TEST(Math, Vector3CrossOrientation){
-    __hidden_tests::TestVector3CrossOrientation();
-}
-
-TEST(Math, Vector3RotateQuarterTurn){
-    __hidden_tests::TestVector3RotateQuarterTurn();
-}
-
-TEST(Math, Vector4CrossBasisOrientation){
-    __hidden_tests::TestVector4CrossBasisOrientation();
-}
-
-TEST(Math, VectorNamedScalarFunctions){
-    __hidden_tests::TestVectorNamedScalarFunctions();
-}
-
-TEST(Math, RefractCriticalAngle){
-    __hidden_tests::TestRefractCriticalAngle();
-}
-
-TEST(Math, NormalizeOrHelpers){
-    __hidden_tests::TestNormalizeOrHelpers();
-}
-
-TEST(Math, SdfHelpers){
-    __hidden_tests::TestSdfHelpers();
-}
-
-TEST(Math, HalfFloatScalarConversion){
-    __hidden_tests::TestHalfFloatScalarConversion();
-}
-
-TEST(Math, HalfFloatBufferConversion){
-    __hidden_tests::TestHalfFloatBufferConversion();
-}
-
-TEST(Math, FloatIntStorageConversion){
-    __hidden_tests::TestFloatIntStorageConversion();
-}
-
-TEST(Math, MathStorageHashAndEquality){
-    __hidden_tests::TestMathStorageHashAndEquality();
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

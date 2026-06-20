@@ -181,7 +181,7 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
         root,
         outputDirectory
     );
-    EXPECT_TRUE((cooked));
+    EXPECT_TRUE(cooked);
     if(!cooked)
         return;
 
@@ -274,7 +274,7 @@ TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
         root,
         outputDirectory
     );
-    EXPECT_TRUE((cooked));
+    EXPECT_TRUE(cooked);
     if(!cooked)
         return;
 
@@ -291,7 +291,7 @@ TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
     const NWB::Impl::Model& model = static_cast<const NWB::Impl::Model&>(*loadedAsset);
     EXPECT_EQ(model.skeletonObjects().size(), 1u);
     EXPECT_EQ(model.staticMeshObjects().size(), 1u);
-    EXPECT_TRUE((model.skinnedMeshObjects().empty()));
+    EXPECT_TRUE(model.skinnedMeshObjects().empty());
 
     const NWB::Impl::ModelStaticMeshObject* tool = FindStaticModelObject(model, Name("tool"));
     EXPECT_NE(tool, nullptr);
@@ -366,7 +366,7 @@ asset_bunch bunch = [
         scratchArena
     );
     EXPECT_FALSE(expanded);
-    EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("variable 'mesh' is listed more than once"))));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("variable 'mesh' is listed more than once")));
 #else
 #endif
 }

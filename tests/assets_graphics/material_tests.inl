@@ -27,7 +27,7 @@ static void CheckGeneratedSourceContainsAll(
     const AStringView (&expectedSnippets)[SnippetCount]
 ){
     for(const AStringView expectedSnippet : expectedSnippets)
-        EXPECT_TRUE((ContainsText(generatedSourceView, expectedSnippet)));
+        EXPECT_TRUE(ContainsText(generatedSourceView, expectedSnippet));
 }
 
 static void CheckGeneratedSourceHasNoMutableLoads(const AStringView generatedSourceView){
@@ -362,8 +362,8 @@ static void CheckMaterialTypedBlockHalfRawValues(
 ){
     Half rawValue = 0u;
     for(const ExpectedHalfBlockValue& expectedValue : expectedValues){
-        EXPECT_TRUE((LoadMaterialTypedBlockPOD(material, blockName, expectedValue.byteOffset, rawValue)
-            && rawValue == ConvertFloatToHalf(expectedValue.value)));
+        EXPECT_TRUE(LoadMaterialTypedBlockPOD(material, blockName, expectedValue.byteOffset, rawValue)
+            && rawValue == ConvertFloatToHalf(expectedValue.value));
     }
 }
 
@@ -387,8 +387,8 @@ static void CheckMaterialTypedBlockValues(
 ){
     ValueType loadedValue = {};
     for(const ExpectedTypedBlockValue<ValueType>& expectedValue : expectedValues){
-        EXPECT_TRUE((LoadMaterialTypedBlockPOD(material, expectedValue.blockName, expectedValue.byteOffset, loadedValue)
-            && loadedValue == expectedValue.value));
+        EXPECT_TRUE(LoadMaterialTypedBlockPOD(material, expectedValue.blockName, expectedValue.byteOffset, loadedValue)
+            && loadedValue == expectedValue.value);
     }
 }
 
@@ -725,21 +725,21 @@ static void CheckGeneratedMaterialBindBinaryConstants(
     const AStringView generatedSourceView,
     const NWB::Impl::Material& material
 ){
-    EXPECT_TRUE((ContainsGeneratedUint2Constant(
+    EXPECT_TRUE(ContainsGeneratedUint2Constant(
         generatedSourceView,
         "NWB_MATERIAL_BIND_LAYOUT_HASH",
         material.typedLayoutHash()
-    )));
-    EXPECT_TRUE((ContainsGeneratedUintConstant(
+    ));
+    EXPECT_TRUE(ContainsGeneratedUintConstant(
         generatedSourceView,
         "NWB_MATERIAL_BIND_BLOCK_COUNT",
         static_cast<u32>(material.typedLayoutBlocks().size())
-    )));
-    EXPECT_TRUE((ContainsGeneratedUintConstant(
+    ));
+    EXPECT_TRUE(ContainsGeneratedUintConstant(
         generatedSourceView,
         "NWB_MATERIAL_BIND_FIELD_COUNT",
         static_cast<u32>(material.typedLayoutFields().size())
-    )));
+    ));
     u32 constantByteSize = 0u;
     u32 mutableByteSize = 0u;
     for(const NWB::Impl::MaterialTypedLayoutBlock& block : material.typedLayoutBlocks()){
@@ -748,27 +748,27 @@ static void CheckGeneratedMaterialBindBinaryConstants(
         else if(block.blockClass == NWB::Impl::MaterialBlockClass::MaterialMutable)
             mutableByteSize += block.byteSize;
     }
-    EXPECT_TRUE((ContainsGeneratedUintConstant(
+    EXPECT_TRUE(ContainsGeneratedUintConstant(
         generatedSourceView,
         "NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE",
         constantByteSize
-    )));
-    EXPECT_TRUE((ContainsGeneratedUintConstant(
+    ));
+    EXPECT_TRUE(ContainsGeneratedUintConstant(
         generatedSourceView,
         "NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE",
         mutableByteSize
-    )));
+    ));
 
     const NameHash& materialInterfaceHash = material.materialInterface().hash();
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
         AString symbol("NWB_MATERIAL_BIND_INTERFACE_HASH_");
         char laneDigits[16u];
         symbol += FormatDecimal(static_cast<usize>(lane), laneDigits);
-        EXPECT_TRUE((ContainsGeneratedUint2Constant(
+        EXPECT_TRUE(ContainsGeneratedUint2Constant(
             generatedSourceView,
             AStringView(symbol.data(), symbol.size()),
             materialInterfaceHash.qwords[lane]
-        )));
+        ));
     }
 }
 
@@ -815,7 +815,7 @@ static bool RoundTripMaterialAssetCodec(
 ){
     NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     const bool serialized = codec.serialize(material, binary);
-    EXPECT_TRUE((serialized));
+    EXPECT_TRUE(serialized);
     EXPECT_FALSE(binary.empty());
     if(!serialized || binary.empty())
         return false;
@@ -826,8 +826,8 @@ static bool RoundTripMaterialAssetCodec(
         binary,
         outLoadedAsset
     );
-    EXPECT_TRUE((deserialized));
-    EXPECT_TRUE((static_cast<bool>(outLoadedAsset)));
+    EXPECT_TRUE(deserialized);
+    EXPECT_NE(outLoadedAsset.get(), nullptr);
     return deserialized && static_cast<bool>(outLoadedAsset);
 }
 
@@ -846,7 +846,7 @@ TEST(AssetsGraphics, MaterialBindHalfTypedLayoutValues){
         material,
         scratchArena
     );
-    EXPECT_TRUE((built));
+    EXPECT_TRUE(built);
     if(built)
         CheckHalfMaterialTypedLayoutAndBlockBytes(material);
 
@@ -859,7 +859,7 @@ TEST(AssetsGraphics, MaterialBindHalfTypedLayoutValues){
         mixedMaterial,
         scratchArena
     );
-    EXPECT_TRUE((builtMixed));
+    EXPECT_TRUE(builtMixed);
     if(builtMixed)
         CheckMixedHalfMaterialTypedLayoutAndBlockBytes(mixedMaterial);
 
@@ -873,17 +873,17 @@ TEST(AssetsGraphics, MaterialBindHalfTypedLayoutValues){
         bindRoot,
         scratchArena
     );
-    EXPECT_TRUE((parsed));
+    EXPECT_TRUE(parsed);
     if(parsed){
         bindEntry.virtualPath = "project/material_interfaces/test_surface";
 
         NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
-        EXPECT_TRUE((NWB::Impl::BuildMaterialBindIncludeSource(
+        EXPECT_TRUE(NWB::Impl::BuildMaterialBindIncludeSource(
             testArena.arena,
             bindEntry,
             generatedSource,
             scratchArena
-        )));
+        ));
         CheckGeneratedHalfMaterialBindSource(AStringView(generatedSource.data(), generatedSource.size()));
     }
 
@@ -897,25 +897,25 @@ TEST(AssetsGraphics, MaterialBindHalfTypedLayoutValues){
         mixedBindRoot,
         scratchArena
     );
-    EXPECT_TRUE((parsedMixed));
+    EXPECT_TRUE(parsedMixed);
     if(parsedMixed){
         mixedBindEntry.virtualPath = "project/material_interfaces/test_surface";
 
         NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
-        EXPECT_TRUE((NWB::Impl::BuildMaterialBindIncludeSource(
+        EXPECT_TRUE(NWB::Impl::BuildMaterialBindIncludeSource(
             testArena.arena,
             mixedBindEntry,
             generatedSource,
             scratchArena
-        )));
+        ));
         CheckGeneratedMixedHalfMaterialBindSource(AStringView(generatedSource.data(), generatedSource.size()));
     }
 
     EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
-    EXPECT_TRUE((RemoveAllIfExists(bindRoot, errorCode)));
-    EXPECT_TRUE((RemoveAllIfExists(mixedBindRoot, errorCode)));
+    EXPECT_TRUE(RemoveAllIfExists(bindRoot, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(mixedBindRoot, errorCode));
 }
 
 TEST(AssetsGraphics, MaterialBindCompactIntegerTypedLayoutValues){
@@ -933,7 +933,7 @@ TEST(AssetsGraphics, MaterialBindCompactIntegerTypedLayoutValues){
         material,
         scratchArena
     );
-    EXPECT_TRUE((built));
+    EXPECT_TRUE(built);
     if(built)
         CheckCompactIntegerMaterialTypedLayoutAndBlockBytes(material);
 
@@ -947,24 +947,24 @@ TEST(AssetsGraphics, MaterialBindCompactIntegerTypedLayoutValues){
         bindRoot,
         scratchArena
     );
-    EXPECT_TRUE((parsed));
+    EXPECT_TRUE(parsed);
     if(parsed){
         bindEntry.virtualPath = "project/material_interfaces/test_surface";
 
         NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
-        EXPECT_TRUE((NWB::Impl::BuildMaterialBindIncludeSource(
+        EXPECT_TRUE(NWB::Impl::BuildMaterialBindIncludeSource(
             testArena.arena,
             bindEntry,
             generatedSource,
             scratchArena
-        )));
+        ));
         CheckGeneratedCompactIntegerMaterialBindSource(AStringView(generatedSource.data(), generatedSource.size()));
     }
 
     EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
-    EXPECT_TRUE((RemoveAllIfExists(bindRoot, errorCode)));
+    EXPECT_TRUE(RemoveAllIfExists(bindRoot, errorCode));
 }
 
 TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
@@ -975,7 +975,7 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
     NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
     const bool parsed = ParseMaterialEntryFromMetaText(s_BlockScopedMaterialMeta, testArena, materialEntry, scratchArena);
-    EXPECT_TRUE((parsed));
+    EXPECT_TRUE(parsed);
     if(!parsed)
         return;
 
@@ -992,7 +992,7 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
         bindRoot,
         scratchArena
     );
-    EXPECT_TRUE((parsedBind));
+    EXPECT_TRUE(parsedBind);
     if(!parsedBind)
         return;
     bindEntry.virtualPath = "project/material_interfaces/test_surface";
@@ -1002,13 +1002,13 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialCookEntry> materialEntries(testArena.arena);
     materialEntries.push_back(Move(materialEntry));
     const bool validated = NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, materialEntries, scratchArena);
-    EXPECT_TRUE((validated));
+    EXPECT_TRUE(validated);
     if(!validated)
         return;
 
     NWB::Impl::Material material(testArena.arena);
     const bool built = NWB::Impl::BuildMaterialAsset(materialEntries[0u], material);
-    EXPECT_TRUE((built));
+    EXPECT_TRUE(built);
     if(!built)
         return;
 
@@ -1016,26 +1016,26 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     EXPECT_EQ(material.materialInterface(), Name("project/material_interfaces/test_surface"));
 
     NWB::Impl::Material transparentMaterial(testArena.arena);
-    EXPECT_TRUE((BuildMaterialFromBindAndMeta(
+    EXPECT_TRUE(BuildMaterialFromBindAndMeta(
         s_MinimalMaterialBindSource,
         s_TransparentMaterialMeta,
         "material_meta_explicit_transparent",
         testArena,
         transparentMaterial,
         scratchArena
-    )));
-    EXPECT_TRUE((transparentMaterial.transparent()));
+    ));
+    EXPECT_TRUE(transparentMaterial.transparent());
 
     NWB::Impl::Material twoSidedMaterial(testArena.arena);
-    EXPECT_TRUE((BuildMaterialFromBindAndMeta(
+    EXPECT_TRUE(BuildMaterialFromBindAndMeta(
         s_MinimalMaterialBindSource,
         s_TwoSidedMaterialMeta,
         "material_meta_explicit_two_sided",
         testArena,
         twoSidedMaterial,
         scratchArena
-    )));
-    EXPECT_TRUE((twoSidedMaterial.twoSided()));
+    ));
+    EXPECT_TRUE(twoSidedMaterial.twoSided());
     EXPECT_FALSE(twoSidedMaterial.transparent());
 
     EXPECT_EQ(logger.errorCount(), 0u);
@@ -1058,7 +1058,7 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
             material,
             scratchArena
         );
-        EXPECT_TRUE((built));
+        EXPECT_TRUE(built);
         if(!built)
             return;
 
@@ -1070,7 +1070,7 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
             const NWB::Impl::Material& loadedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
             EXPECT_EQ(loadedMaterial.materialInterface(), material.materialInterface());
             EXPECT_EQ(loadedMaterial.typedLayoutHash(), material.typedLayoutHash());
-            EXPECT_TRUE((loadedMaterial.transparent()));
+            EXPECT_TRUE(loadedMaterial.transparent());
             CheckMinimalMaterialTypedLayout(loadedMaterial);
             CheckMinimalMaterialTypedBlockBytes(loadedMaterial);
         }
@@ -1084,7 +1084,7 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
             halfMaterial,
             scratchArena
         );
-        EXPECT_TRUE((builtHalfMaterial));
+        EXPECT_TRUE(builtHalfMaterial);
         UniquePtr<NWB::Core::Assets::IAsset> loadedHalfAsset;
         if(builtHalfMaterial && RoundTripMaterialAssetCodec(testArena, codec, halfMaterial, loadedHalfAsset)){
             const NWB::Impl::Material& loadedHalfMaterial = static_cast<const NWB::Impl::Material&>(*loadedHalfAsset);
@@ -1102,7 +1102,7 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
             mixedHalfMaterial,
             scratchArena
         );
-        EXPECT_TRUE((builtMixedHalfMaterial));
+        EXPECT_TRUE(builtMixedHalfMaterial);
         UniquePtr<NWB::Core::Assets::IAsset> loadedMixedHalfAsset;
         if(
             builtMixedHalfMaterial
@@ -1125,35 +1125,35 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
 
         NWB::Impl::MaterialAssetCodec codec;
         NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
-        EXPECT_TRUE((codec.serialize(material, binary)));
+        EXPECT_TRUE(codec.serialize(material, binary));
 
         usize layoutHashOffset = 0u;
         usize blockByteCountOffset = 0u;
-        EXPECT_TRUE((FindMaterialBinaryTypedLayoutOffsets(
+        EXPECT_TRUE(FindMaterialBinaryTypedLayoutOffsets(
             binary,
             layoutHashOffset,
             blockByteCountOffset
-        )));
+        ));
 
         NWB::Core::Assets::AssetBytes hashMismatchBinary = binary;
         const u64 invalidLayoutHash = material.typedLayoutHash() == Limit<u64>::s_Max ? material.typedLayoutHash() - 1u : material.typedLayoutHash() + 1u;
-        EXPECT_TRUE((OverwritePOD(hashMismatchBinary, layoutHashOffset, invalidLayoutHash)));
+        EXPECT_TRUE(OverwritePOD(hashMismatchBinary, layoutHashOffset, invalidLayoutHash));
         CheckCodecRejectsBinary(testArena, codec, material.virtualPath(), hashMismatchBinary);
 
         NWB::Core::Assets::AssetBytes byteSizeMismatchBinary = binary;
         EXPECT_FALSE(material.typedBlockBytes().empty());
-        EXPECT_TRUE((OverwritePOD(
+        EXPECT_TRUE(OverwritePOD(
             byteSizeMismatchBinary,
             blockByteCountOffset,
             static_cast<u32>(material.typedBlockBytes().size() - 1u)
-        )));
+        ));
         CheckCodecRejectsBinary(testArena, codec, material.virtualPath(), byteSizeMismatchBinary);
 
         EXPECT_EQ(logger.errorCount(), 2u);
-        EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("typed layout hash mismatch"))));
-        EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT(
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("typed layout hash mismatch")));
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
             "typed block byte count does not match typed layout"
-        ))));
+        )));
     }
 #endif
 }
@@ -1174,7 +1174,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         root,
         scratchArena
     );
-    EXPECT_TRUE((parsed));
+    EXPECT_TRUE(parsed);
     if(parsed){
         EXPECT_EQ(entry.structs.size(), 2u);
         EXPECT_EQ(entry.instances.size(), 2u);
@@ -1228,7 +1228,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         halfRoot,
         scratchArena
     );
-    EXPECT_TRUE((parsedHalf));
+    EXPECT_TRUE(parsedHalf);
     if(parsedHalf){
         const NWB::Impl::MaterialBindStruct* halfStruct = halfEntry.findStruct("NwbTestSurfaceMaterial");
         EXPECT_NE(halfStruct, nullptr);
@@ -1243,8 +1243,8 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
     EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
-    EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
-    EXPECT_TRUE((RemoveAllIfExists(halfRoot, errorCode)));
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(halfRoot, errorCode));
 
 #if defined(NWB_FINAL)
     auto expectParseFailure = [&](
@@ -1262,10 +1262,10 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
             invalidRoot,
             scratchArena
         ));
-        EXPECT_TRUE((logger.sawErrorContaining(expectedError)));
+        EXPECT_TRUE(logger.sawErrorContaining(expectedError));
 
         ErrorCode removeErrorCode;
-        EXPECT_TRUE((RemoveAllIfExists(invalidRoot, removeErrorCode)));
+        EXPECT_TRUE(RemoveAllIfExists(invalidRoot, removeErrorCode));
     };
 
     expectParseFailure(
@@ -1301,14 +1301,14 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
 
     Path float1DefaultRoot(testArena.arena);
     NWB::Impl::MaterialBindEntry float1DefaultEntry(testArena.arena);
-    EXPECT_TRUE((ParseMaterialBindFromText(
+    EXPECT_TRUE(ParseMaterialBindFromText(
         testArena,
         s_Float1DefaultMaterialBindSource,
         "material_bind_float1_default",
         float1DefaultEntry,
         float1DefaultRoot,
         scratchArena
-    )));
+    ));
     float1DefaultEntry.virtualPath = "project/material_interfaces/test_surface";
     NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
     EXPECT_FALSE(NWB::Impl::BuildMaterialBindIncludeSource(
@@ -1317,10 +1317,10 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         generatedSource,
         scratchArena
     ));
-    EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'"))));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'")));
 
     ErrorCode removeErrorCode;
-    EXPECT_TRUE((RemoveAllIfExists(float1DefaultRoot, removeErrorCode)));
+    EXPECT_TRUE(RemoveAllIfExists(float1DefaultRoot, removeErrorCode));
 #endif
 }
 
@@ -1340,24 +1340,24 @@ TEST(AssetsGraphics, MaterialBindGeneratedSlangText){
         root,
         scratchArena
     );
-    EXPECT_TRUE((parsed));
+    EXPECT_TRUE(parsed);
     if(parsed){
         entry.virtualPath = "project/material_interfaces/test_surface";
 
         NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
-        EXPECT_TRUE((NWB::Impl::BuildMaterialBindIncludeSource(
+        EXPECT_TRUE(NWB::Impl::BuildMaterialBindIncludeSource(
             testArena.arena,
             entry,
             generatedSource,
             scratchArena
-        )));
+        ));
         CheckGeneratedMaterialBindSource(AStringView(generatedSource.data(), generatedSource.size()));
     }
 
     EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
-    EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

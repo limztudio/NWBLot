@@ -138,8 +138,8 @@ TEST(AssetsGraphics, ProjectCookEntryAutoRegistration){
     NWB::Core::Assets::CookEntryRegistry registry(arena);
 
     EXPECT_FALSE(registry.has(ProjectProbeAsset::AssetTypeName()));
-    EXPECT_TRUE((NWB::Core::Assets::RegisterAutoCollectedCookEntryTypes(registry)));
-    EXPECT_TRUE((registry.has(ProjectProbeAsset::AssetTypeName())));
+    EXPECT_TRUE(NWB::Core::Assets::RegisterAutoCollectedCookEntryTypes(registry));
+    EXPECT_TRUE(registry.has(ProjectProbeAsset::AssetTypeName()));
 }
 
 TEST(AssetsGraphics, ProjectCookEntryDocumentCook){
@@ -159,7 +159,7 @@ TEST(AssetsGraphics, ProjectCookEntryDocumentCook){
         root,
         outputDirectory
     );
-    EXPECT_TRUE((cooked));
+    EXPECT_TRUE(cooked);
     if(!cooked)
         return;
 
@@ -192,7 +192,7 @@ TEST(AssetsGraphics, ProjectCookEntryAssetBunchCook){
         root,
         outputDirectory
     );
-    EXPECT_TRUE((cooked));
+    EXPECT_TRUE(cooked);
     if(!cooked)
         return;
 

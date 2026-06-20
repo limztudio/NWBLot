@@ -1383,7 +1383,7 @@ static bool LoadCookedAsset(
     AssetCodecT codec;
     const bool deserialized = codec.deserialize(testArena.arena, assetName, binary, outLoadedAsset);
     EXPECT_TRUE(deserialized);
-    EXPECT_TRUE(static_cast<bool>(outLoadedAsset));
+    EXPECT_NE(outLoadedAsset.get(), nullptr);
     return deserialized && static_cast<bool>(outLoadedAsset);
 }
 

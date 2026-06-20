@@ -14,10 +14,10 @@ static bool CookAndLoadMinimalAsset(
     Path outputDirectory(testArena.arena);
     const bool cooked = cookSingleMeta(metaText, caseName, testArena, outRoot, outputDirectory);
 
-    EXPECT_TRUE((cooked));
+    EXPECT_TRUE(cooked);
     if(!cooked){
         ErrorCode errorCode;
-        EXPECT_TRUE((RemoveAllIfExists(outRoot, errorCode)));
+        EXPECT_TRUE(RemoveAllIfExists(outRoot, errorCode));
         return false;
     }
 
@@ -25,7 +25,7 @@ static bool CookAndLoadMinimalAsset(
         return true;
 
     ErrorCode errorCode;
-    EXPECT_TRUE((RemoveAllIfExists(outRoot, errorCode)));
+    EXPECT_TRUE(RemoveAllIfExists(outRoot, errorCode));
     return false;
 }
 
@@ -77,8 +77,8 @@ static void CheckMinimalRuntimeMeshletPayload(
     EXPECT_EQ(NWB::Impl::MeshletPrimitiveCount(meshlet), 1u);
     EXPECT_EQ(NWB::Impl::MeshletPositionCount(meshlet), 3u);
     EXPECT_EQ(NWB::Impl::MeshletAttributeCount(meshlet), 3u);
-    EXPECT_TRUE((NWB::Impl::MeshletEncodedPositionRefByteCount(meshlet, skinRequired, expectedPositionRefBytes)));
-    EXPECT_TRUE((NWB::Impl::MeshletEncodedAttributeRefByteCount(meshlet, expectedAttributeRefBytes)));
+    EXPECT_TRUE(NWB::Impl::MeshletEncodedPositionRefByteCount(meshlet, skinRequired, expectedPositionRefBytes));
+    EXPECT_TRUE(NWB::Impl::MeshletEncodedAttributeRefByteCount(meshlet, expectedAttributeRefBytes));
     EXPECT_EQ(loadedMesh.meshletPositionRefDeltas().size(), expectedPositionRefBytes);
     EXPECT_EQ(loadedMesh.meshletAttributeRefDeltas().size(), expectedAttributeRefBytes);
     EXPECT_EQ(meshlet.positionBase, 0u);
@@ -90,7 +90,7 @@ static void CheckMinimalRuntimeMeshletPayload(
     EXPECT_EQ(meshlet.colorBase, 0u);
     EXPECT_EQ(meshlet.encoding, 0u);
     EXPECT_GT(loadedMesh.meshletBounds()[0u].sphere.w, 0.0f);
-    EXPECT_TRUE((NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u])));
+    EXPECT_TRUE(NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
 }
 
 template<typename AssetT, typename CheckLoadedAssetFn>
@@ -120,7 +120,7 @@ static void CookAndCheckMinimalTypedAsset(
     checkLoadedAsset(loadedTypedAsset);
 
     ErrorCode errorCode;
-    EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
@@ -128,7 +128,7 @@ TEST(AssetsGraphics, VolumeSessionAcceptsScratchBytes){
     TestArena testArena;
     const Path root = AssetsGraphicsTestCaseRoot(testArena, "volume_scratch_bytes");
     const bool prepared = PrepareCleanDirectory(root);
-    EXPECT_TRUE((prepared));
+    EXPECT_TRUE(prepared);
 
     if(prepared){
         NWB::Core::Filesystem::VolumeBuildConfig config;
@@ -138,7 +138,7 @@ TEST(AssetsGraphics, VolumeSessionAcceptsScratchBytes){
 
         NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
         const bool created = volumeSession.create(root / "volume", config);
-        EXPECT_TRUE((created));
+        EXPECT_TRUE(created);
         if(created){
             NWB::Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
             ::Vector<u8, NWB::Core::Alloc::ScratchArena> payload{ scratchArena };
@@ -150,16 +150,16 @@ TEST(AssetsGraphics, VolumeSessionAcceptsScratchBytes){
 
             const Name virtualPath("project/tests/scratch_payload");
             const bool pushed = volumeSession.pushDataDeferred(virtualPath, payload);
-            EXPECT_TRUE((pushed));
+            EXPECT_TRUE(pushed);
             if(pushed){
                 payload[0] = 99u;
 
                 const bool flushed = volumeSession.flush();
-                EXPECT_TRUE((flushed));
+                EXPECT_TRUE(flushed);
                 if(flushed){
                     NWB::Core::Assets::AssetBytes readback = MakeAssetBytes(testArena);
                     const bool loaded = volumeSession.loadData(virtualPath, readback);
-                    EXPECT_TRUE((loaded));
+                    EXPECT_TRUE(loaded);
                     if(loaded){
                         ASSERT_EQ(readback.size(), 4u);
                         EXPECT_EQ(readback[0], 1u);
@@ -173,7 +173,7 @@ TEST(AssetsGraphics, VolumeSessionAcceptsScratchBytes){
     }
 
     ErrorCode errorCode;
-    EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
 }
 
 static NWB::Impl::MeshletBounds MakeTestMeshletBounds(){
@@ -339,14 +339,14 @@ static const AssetT& CheckCodecRoundTrip(
     const AssetT& asset,
     const CodecT& codec,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
-    EXPECT_TRUE((asset.validatePayload()));
+    EXPECT_TRUE(asset.validatePayload());
 
     NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
-    EXPECT_TRUE((codec.serialize(asset, binary)));
+    EXPECT_TRUE(codec.serialize(asset, binary));
     EXPECT_FALSE(binary.empty());
 
-    EXPECT_TRUE((codec.deserialize(testArena.arena, asset.virtualPath(), binary, outLoadedAsset)));
-    EXPECT_TRUE((static_cast<bool>(outLoadedAsset)));
+    EXPECT_TRUE(codec.deserialize(testArena.arena, asset.virtualPath(), binary, outLoadedAsset));
+    EXPECT_NE(outLoadedAsset.get(), nullptr);
     EXPECT_EQ(outLoadedAsset->assetType(), AssetT::AssetTypeName());
     return static_cast<const AssetT&>(*outLoadedAsset);
 }

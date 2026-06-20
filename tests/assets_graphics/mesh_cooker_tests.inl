@@ -20,7 +20,7 @@ static void ExpectCookFailure(
     ));
 
     ErrorCode errorCode;
-    EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
 }
 
 static void ExpectCookFailure(
@@ -131,14 +131,14 @@ TEST(AssetsGraphics, MeshCookerValidationFailures){
         "empty_map_mesh_tangent"
     );
     EXPECT_GE(logger.errorCount(), 10u);
-    EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("unsupported asset field"))));
-    EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("'uv0' must be a list"))));
-    EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("'normals' must be a list"))));
-    EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("vertex_ref normal index is out of range"))));
-    EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("'normals' must not be empty"))));
-    EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("'tangents' must be a list"))));
-    EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("vertex_ref tangent index is out of range"))));
-    EXPECT_TRUE((logger.sawErrorContaining(NWB_TEXT("'tangents' must not be empty"))));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'uv0' must be a list")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'normals' must be a list")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("vertex_ref normal index is out of range")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'normals' must not be empty")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'tangents' must be a list")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("vertex_ref tangent index is out of range")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'tangents' must not be empty")));
 #else
 #endif
 }
@@ -146,9 +146,9 @@ TEST(AssetsGraphics, MeshCookerValidationFailures){
 TEST(AssetsGraphics, MeshClassPolicyHelpers){
     using namespace NWB::Core::Mesh;
 
-    EXPECT_TRUE((MeshClassMatchesSkinPayload(MeshClass::Static, false)));
+    EXPECT_TRUE(MeshClassMatchesSkinPayload(MeshClass::Static, false));
     EXPECT_FALSE(MeshClassMatchesSkinPayload(MeshClass::Static, true));
-    EXPECT_TRUE((MeshClassMatchesSkinPayload(MeshClass::Skinned, true)));
+    EXPECT_TRUE(MeshClassMatchesSkinPayload(MeshClass::Skinned, true));
     EXPECT_FALSE(MeshClassMatchesSkinPayload(MeshClass::Skinned, false));
 }
 

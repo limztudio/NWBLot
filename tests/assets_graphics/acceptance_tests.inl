@@ -18,7 +18,7 @@ static bool CookAndLoadSmokeMesh(
         outRoot,
         outputDirectory
     );
-    EXPECT_TRUE((cooked));
+    EXPECT_TRUE(cooked);
     if(!cooked)
         return false;
     return LoadCookedMesh(testArena, outputDirectory, assetName, outLoadedAsset);
@@ -329,7 +329,7 @@ static void RunSmokeMeshAcceptance(
     EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
-    EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
 }
 
 TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
@@ -346,8 +346,8 @@ TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
             EXPECT_EQ(loadedMesh.meshlets().size(), 1u);
             EXPECT_EQ(loadedMesh.meshletLocalVertexRefs().size(), 24u);
             EXPECT_EQ(loadedMesh.meshletPrimitiveIndices().size(), 36u);
-            EXPECT_TRUE((TestMeshletReferenceCompressionShrinksPayload(loadedMesh)));
-            EXPECT_TRUE((TestMeshletReferenceCompressionBandwidthNeutralOrBetter(loadedMesh)));
+            EXPECT_TRUE(TestMeshletReferenceCompressionShrinksPayload(loadedMesh));
+            EXPECT_TRUE(TestMeshletReferenceCompressionBandwidthNeutralOrBetter(loadedMesh));
 
             const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0];
             EXPECT_EQ(NWB::Impl::MeshletVertexCount(meshlet), 24u);
@@ -365,28 +365,28 @@ TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
             const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
             const auto& positions = loadedMesh.positionStream();
             const auto& normals = loadedMesh.normalStream();
-            EXPECT_TRUE((TestMeshletPositionRefsAreFirstUseOrdered(meshlet, loadedMesh)));
-            EXPECT_TRUE((TestMeshletAttributeRefsAreFirstUseOrdered(
+            EXPECT_TRUE(TestMeshletPositionRefsAreFirstUseOrdered(meshlet, loadedMesh));
+            EXPECT_TRUE(TestMeshletAttributeRefsAreFirstUseOrdered(
                 meshlet,
                 loadedMesh,
                 [](const NWB::Impl::MeshletAttributeStreamRef& ref){ return ref.normal; }
-            )));
-            EXPECT_TRUE((TestMeshletAttributeRefsAreFirstUseOrdered(
+            ));
+            EXPECT_TRUE(TestMeshletAttributeRefsAreFirstUseOrdered(
                 meshlet,
                 loadedMesh,
                 [](const NWB::Impl::MeshletAttributeStreamRef& ref){ return ref.tangent; }
-            )));
-            EXPECT_TRUE((TestMeshletAttributeRefsAreFirstUseOrdered(
+            ));
+            EXPECT_TRUE(TestMeshletAttributeRefsAreFirstUseOrdered(
                 meshlet,
                 loadedMesh,
                 [](const NWB::Impl::MeshletAttributeStreamRef& ref){ return ref.uv0; }
-            )));
-            EXPECT_TRUE((TestMeshletAttributeRefsAreFirstUseOrdered(
+            ));
+            EXPECT_TRUE(TestMeshletAttributeRefsAreFirstUseOrdered(
                 meshlet,
                 loadedMesh,
                 [](const NWB::Impl::MeshletAttributeStreamRef& ref){ return ref.color; }
-            )));
-            EXPECT_TRUE((TestMeshletHasPositionNormalValue(
+            ));
+            EXPECT_TRUE(TestMeshletHasPositionNormalValue(
                 loadedMesh,
                 meshlet,
                 positions,
@@ -394,8 +394,8 @@ TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
                 localRefs,
                 Float3U(-0.5f, -0.5f, -0.5f),
                 Float4U(0.0f, 0.0f, -1.0f, 0.0f)
-            )));
-            EXPECT_TRUE((TestMeshletHasPositionNormalValue(
+            ));
+            EXPECT_TRUE(TestMeshletHasPositionNormalValue(
                 loadedMesh,
                 meshlet,
                 positions,
@@ -403,8 +403,8 @@ TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
                 localRefs,
                 Float3U(-0.5f, -0.5f, -0.5f),
                 Float4U(0.0f, -1.0f, 0.0f, 0.0f)
-            )));
-            EXPECT_TRUE((TestMeshletHasPositionNormalValue(
+            ));
+            EXPECT_TRUE(TestMeshletHasPositionNormalValue(
                 loadedMesh,
                 meshlet,
                 positions,
@@ -412,7 +412,7 @@ TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
                 localRefs,
                 Float3U(-0.5f, -0.5f, -0.5f),
                 Float4U(-1.0f, 0.0f, 0.0f, 0.0f)
-            )));
+            ));
         }
     );
 }
@@ -432,7 +432,7 @@ TEST(AssetsGraphics, MeshAcceptanceQualityBuilderChecks){
         root,
         outputDirectory
     );
-    EXPECT_TRUE((cooked));
+    EXPECT_TRUE(cooked);
     if(cooked){
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         if(LoadCookedMinimalMesh(testArena, outputDirectory, loadedAsset)){
@@ -441,18 +441,18 @@ TEST(AssetsGraphics, MeshAcceptanceQualityBuilderChecks){
             BuildMeshletAcceptanceAlternatingConeSourceTriangles(sourceTriangles);
             const MeshletAcceptanceQualityMetrics cookedMetrics = BuildCookedMeshletAcceptanceQualityMetrics(loadedMesh);
 
-            EXPECT_TRUE((TestMeshletAcceptanceLimits(loadedMesh)));
-            EXPECT_TRUE((TestMeshletAcceptanceTrianglesMatchSource(testArena, loadedMesh, sourceTriangles)));
+            EXPECT_TRUE(TestMeshletAcceptanceLimits(loadedMesh));
+            EXPECT_TRUE(TestMeshletAcceptanceTrianglesMatchSource(testArena, loadedMesh, sourceTriangles));
             EXPECT_EQ(cookedMetrics.meshletCount, 2u);
             EXPECT_EQ(cookedMetrics.coneDisabledCount, 0u);
-            EXPECT_TRUE((NWB::Tests::NearlyEqual(static_cast<f32>(MeshletAcceptanceAverageRadius(cookedMetrics)), 0.88388348f, 0.0001f)));
+            EXPECT_TRUE(NWB::Tests::NearlyEqual(static_cast<f32>(MeshletAcceptanceAverageRadius(cookedMetrics)), 0.88388348f, 0.0001f));
             EXPECT_EQ(MeshletAcceptanceAverageVertexReuse(cookedMetrics), static_cast<f64>(NWB::Impl::s_MeshMaxMeshletTriangles));
         }
     }
     EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;
-    EXPECT_TRUE((RemoveAllIfExists(root, errorCode)));
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
 }
 
 TEST(AssetsGraphics, MeshAcceptanceSphereSmooth){
@@ -492,8 +492,8 @@ TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
             EXPECT_EQ(loadedMesh.tangentStream().size(), 2u);
             EXPECT_EQ(TestMeshletLogicalPositionRefCount(loadedMesh), 4u);
             EXPECT_EQ(TestMeshletLogicalAttributeRefCount(loadedMesh), 6u);
-            EXPECT_TRUE((TestMeshletReferenceCompressionShrinksPayload(loadedMesh)));
-            EXPECT_TRUE((TestMeshletReferenceCompressionBandwidthNeutralOrBetter(loadedMesh)));
+            EXPECT_TRUE(TestMeshletReferenceCompressionShrinksPayload(loadedMesh));
+            EXPECT_TRUE(TestMeshletReferenceCompressionBandwidthNeutralOrBetter(loadedMesh));
 
             const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
             const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
@@ -504,8 +504,8 @@ TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
 
             NWB::Impl::MeshletAttributeStreamRef attributeRef0;
             NWB::Impl::MeshletAttributeStreamRef attributeRef3;
-            EXPECT_TRUE((TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute, attributeRef0)));
-            EXPECT_TRUE((TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute, attributeRef3)));
+            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute, attributeRef0));
+            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute, attributeRef3));
             EXPECT_EQ(attributeRef0.uv0, 0u);
             EXPECT_EQ(attributeRef3.uv0, 3u);
         }
@@ -526,8 +526,8 @@ TEST(AssetsGraphics, MeshAcceptanceMirroredUvQuad){
             const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
             NWB::Impl::MeshletAttributeStreamRef attributeRef0;
             NWB::Impl::MeshletAttributeStreamRef attributeRef3;
-            EXPECT_TRUE((TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute, attributeRef0)));
-            EXPECT_TRUE((TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute, attributeRef3)));
+            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute, attributeRef0));
+            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute, attributeRef3));
             EXPECT_EQ(attributeRef0.tangent, 0u);
             EXPECT_EQ(attributeRef3.tangent, 1u);
         }

@@ -430,12 +430,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         }
 
         auto appendInstance = [&](ECSRenderDetail::MaterialTypedInstanceRanges& typedRanges) -> u32{
-#if defined(NWB_DEBUG)
-            if(instanceData.size() >= static_cast<usize>(Limit<u32>::s_Max)){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer instance count exceeds u32 limits"));
-                return Limit<u32>::s_Max;
-            }
-#endif
+            NWB_ASSERT(instanceData.size() < static_cast<usize>(Limit<u32>::s_Max));
 
             if(!appendConstantMaterialTypedBytes(*materialInfo, typedRanges.constantRange))
                 return Limit<u32>::s_Max;

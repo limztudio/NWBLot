@@ -158,12 +158,7 @@ bool RendererMaterialSystem::createEmulationViewResources(){
 bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceCount){
     if(instanceCount == 0)
         return true;
-#if defined(NWB_DEBUG)
-    if(instanceCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance buffer request exceeds u32 instance-index limits"));
-        return false;
-    }
-#endif
+    NWB_ASSERT(instanceCount <= static_cast<usize>(Limit<u32>::s_Max));
     if(drawState().m_instanceBuffer && drawState().m_instanceBufferCapacity >= instanceCount)
         return true;
 

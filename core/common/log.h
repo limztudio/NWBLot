@@ -264,7 +264,11 @@ NWB_COMMON_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_LOGGER_IGNORE_MESSAGE(...) static_cast<void>(sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0)))
+#define NWB_LOGGER_IGNORE_MESSAGE(...)                                                                                         \
+    do{                                                                                                                        \
+        [[maybe_unused]] constexpr auto nwbIgnoredLoggerMessageSize =                                                           \
+            sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0));                                        \
+    }while(false)
 #define NWB_DIAGNOSTIC_LOGGER_CATEGORY(Type) ::NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategory ## Type
 
 #define NWB_LOGGER_ENQUEUE_MESSAGE(Type, ...)                                                                                  \

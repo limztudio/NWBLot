@@ -154,7 +154,9 @@ GpuTimingAccumulator* GpuTimingRecorder::findOrCreateAccumulator(const Name& sco
         return nullptr;
 
     auto [it, inserted] = m_accumulators.try_emplace(scopeName, Move(accumulator));
-    static_cast<void>(inserted);
+    if(!inserted)
+        return it.value().get();
+
     it.value()->setEnabled(m_accumulatorsActive);
     return it.value().get();
 }

@@ -130,8 +130,10 @@ static ACompactString FilesystemMutationFailureDetail(const ErrorCode& errorCode
     if(errorCode && detail.assign(errorCode.message()))
         return detail;
 
-    const bool assigned = detail.assign(fallbackDetail);
-    static_cast<void>(assigned);
+    if(!detail.assign(fallbackDetail)){
+        if(!detail.assign("filesystem operation failed"))
+            return {};
+    }
     return detail;
 }
 

@@ -43,26 +43,29 @@ public:
         : m_storage{}
         , m_size(0)
     {
-        const bool assigned = assign(text);
-        NWB_ASSERT_MSG(assigned, NWB_TEXT("BasicCompactString initialization exceeded capacity"));
-        static_cast<void>(assigned);
+        if(!assign(text)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString initialization exceeded capacity"));
+            clear();
+        }
     }
     explicit BasicCompactString(const view_type text)
         : m_storage{}
         , m_size(0)
     {
-        const bool assigned = assign(text);
-        NWB_ASSERT_MSG(assigned, NWB_TEXT("BasicCompactString initialization exceeded capacity"));
-        static_cast<void>(assigned);
+        if(!assign(text)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString initialization exceeded capacity"));
+            clear();
+        }
     }
     template<typename ArenaT>
     explicit BasicCompactString(const BasicString<value_type, ArenaT>& text)
         : m_storage{}
         , m_size(0)
     {
-        const bool assigned = assign(text);
-        NWB_ASSERT_MSG(assigned, NWB_TEXT("BasicCompactString initialization exceeded capacity"));
-        static_cast<void>(assigned);
+        if(!assign(text)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString initialization exceeded capacity"));
+            clear();
+        }
     }
 
 
@@ -215,38 +218,38 @@ public:
     }
 
     BasicCompactString& operator+=(const value_type* text){
-        const bool appended = append(text);
-        NWB_ASSERT_MSG(appended, NWB_TEXT("BasicCompactString append exceeded capacity"));
-        static_cast<void>(appended);
+        if(!append(text)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
+        }
         return *this;
     }
 
     BasicCompactString& operator+=(const view_type text){
-        const bool appended = append(text);
-        NWB_ASSERT_MSG(appended, NWB_TEXT("BasicCompactString append exceeded capacity"));
-        static_cast<void>(appended);
+        if(!append(text)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
+        }
         return *this;
     }
 
     template<typename ArenaT>
     BasicCompactString& operator+=(const BasicString<value_type, ArenaT>& text){
-        const bool appended = append(text);
-        NWB_ASSERT_MSG(appended, NWB_TEXT("BasicCompactString append exceeded capacity"));
-        static_cast<void>(appended);
+        if(!append(text)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
+        }
         return *this;
     }
 
     BasicCompactString& operator+=(const BasicCompactString& text){
-        const bool appended = append(text);
-        NWB_ASSERT_MSG(appended, NWB_TEXT("BasicCompactString append exceeded capacity"));
-        static_cast<void>(appended);
+        if(!append(text)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
+        }
         return *this;
     }
 
     BasicCompactString& operator+=(const value_type ch){
-        const bool appended = pushBack(ch);
-        NWB_ASSERT_MSG(appended, NWB_TEXT("BasicCompactString append exceeded capacity"));
-        static_cast<void>(appended);
+        if(!pushBack(ch)){
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
+        }
         return *this;
     }
 

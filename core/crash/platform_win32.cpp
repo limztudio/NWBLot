@@ -3,6 +3,7 @@
 
 
 #include "internal.h"
+#include "io_win32.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -29,42 +30,6 @@ inline constexpr usize s_HandlerCommandLineReserveSlack = 160u;
 inline constexpr DWORD s_HandlerExitWaitMilliseconds = 3000u;
 
 
-[[nodiscard]] static bool __hidden_read_all(const HANDLE handle, void* const data, const usize byteCount)noexcept{
-    u8* cursor = static_cast<u8*>(data);
-    usize remaining = byteCount;
-    while(remaining > 0u){
-        DWORD bytesRead = 0u;
-        const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max)
-            ? Limit<DWORD>::s_Max
-            : static_cast<DWORD>(remaining)
-        ;
-        if(!ReadFile(handle, cursor, requestSize, &bytesRead, nullptr) || bytesRead == 0u)
-            return false;
-
-        cursor += bytesRead;
-        remaining -= bytesRead;
-    }
-    return true;
-}
-
-[[nodiscard]] static bool __hidden_write_all(const HANDLE handle, const void* const data, const usize byteCount)noexcept{
-    const u8* cursor = static_cast<const u8*>(data);
-    usize remaining = byteCount;
-    while(remaining > 0u){
-        DWORD bytesWritten = 0u;
-        const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max)
-            ? Limit<DWORD>::s_Max
-            : static_cast<DWORD>(remaining)
-        ;
-        if(!WriteFile(handle, cursor, requestSize, &bytesWritten, nullptr) || bytesWritten == 0u)
-            return false;
-
-        cursor += bytesWritten;
-        remaining -= bytesWritten;
-    }
-    return true;
-}
-
 [[nodiscard]] static bool __hidden_ack_matches_request(
     const Detail::CrashAck& ack,
     const Detail::CrashRequest& request
@@ -87,7 +52,7 @@ static void __hidden_drain_pending_acks(const HANDLE ackReadHandle)noexcept{
             return;
 
         Detail::CrashAck ignoredAck;
-        if(!__hidden_read_all(ackReadHandle, &ignoredAck, sizeof(ignoredAck)))
+        if(!Detail::ReadAllWin32(ackReadHandle, &ignoredAck, sizeof(ignoredAck)))
             return;
     }
 }
@@ -226,7 +191,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
         if(g_State.crashHandledEvent)
             ResetEvent(g_State.crashHandledEvent);
 
-        if(!__hidden_crash_win32::__hidden_write_all(g_State.requestWriteHandle, &request, sizeof(request))){
+        if(!Detail::WriteAllWin32(g_State.requestWriteHandle, &request, sizeof(request))){
             status = CrashDumpTransportStatus::Failed;
             break;
         }
@@ -243,7 +208,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
         const DWORD waitResult = WaitForMultipleObjects(waitCount, waitHandles, FALSE, waitMilliseconds);
         if(waitResult == WAIT_OBJECT_0){
             CrashAck ack;
-            if(!__hidden_crash_win32::__hidden_read_all(g_State.ackReadHandle, &ack, sizeof(ack))){
+            if(!Detail::ReadAllWin32(g_State.ackReadHandle, &ack, sizeof(ack))){
                 status = CrashDumpTransportStatus::Failed;
                 break;
             }

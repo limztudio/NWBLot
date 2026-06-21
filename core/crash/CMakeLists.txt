@@ -8,6 +8,7 @@ target_sources(nwb_crash PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/global.h"
     "${CMAKE_CURRENT_LIST_DIR}/internal.h"
+    "${CMAKE_CURRENT_LIST_DIR}/io_win32.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/package_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/reason_names.h"
@@ -30,6 +31,7 @@ target_sources(nwb_crash_package PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/package_upload.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/handler.h"
     "${CMAKE_CURRENT_LIST_DIR}/internal.h"
+    "${CMAKE_CURRENT_LIST_DIR}/io_win32.h"
     "${CMAKE_CURRENT_LIST_DIR}/package_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/package_names.h"
 )

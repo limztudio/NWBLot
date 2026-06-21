@@ -37,6 +37,26 @@ static const char* s_DiagnosticEventMessage = nullptr;
 static const char* s_DiagnosticEventFile = nullptr;
 static u32 s_DiagnosticEventLine = 0u;
 
+static void ResetDiagnosticEventCapture()noexcept{
+    s_DiagnosticEventCaptureCount = 0u;
+    s_DiagnosticEventName = nullptr;
+    s_DiagnosticEventCategory = nullptr;
+    s_DiagnosticEventExpression = nullptr;
+    s_DiagnosticEventMessage = nullptr;
+    s_DiagnosticEventFile = nullptr;
+    s_DiagnosticEventLine = 0u;
+}
+
+static void RecordDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
+    ++s_DiagnosticEventCaptureCount;
+    s_DiagnosticEventName = record.event;
+    s_DiagnosticEventCategory = record.category;
+    s_DiagnosticEventExpression = record.expression;
+    s_DiagnosticEventMessage = record.message;
+    s_DiagnosticEventFile = record.file;
+    s_DiagnosticEventLine = record.line;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -495,26 +515,10 @@ TEST(Global, LoggerMacrosBehaveAsSingleStatements){
 }
 
 TEST(Global, LoggerDiagnosticCaptureUsesFormattedMessage){
-    s_DiagnosticEventCaptureCount = 0u;
-    s_DiagnosticEventName = nullptr;
-    s_DiagnosticEventCategory = nullptr;
-    s_DiagnosticEventExpression = nullptr;
-    s_DiagnosticEventMessage = nullptr;
-    s_DiagnosticEventFile = nullptr;
-    s_DiagnosticEventLine = 0u;
-
-    const DiagnosticEventCallback callback = [](const DiagnosticEventRecord& record)noexcept{
-        ++s_DiagnosticEventCaptureCount;
-        s_DiagnosticEventName = record.event;
-        s_DiagnosticEventCategory = record.category;
-        s_DiagnosticEventExpression = record.expression;
-        s_DiagnosticEventMessage = record.message;
-        s_DiagnosticEventFile = record.file;
-        s_DiagnosticEventLine = record.line;
-    };
+    ResetDiagnosticEventCapture();
 
     CapturingLogger logger;
-    SetDiagnosticEventCallback(callback);
+    SetDiagnosticEventCallback(RecordDiagnosticEvent);
     NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(
         logger,
         NWB::Core::Common::LogType::Error,
@@ -524,7 +528,7 @@ TEST(Global, LoggerDiagnosticCaptureUsesFormattedMessage){
         NWB_TEXT("recoverable error {}"),
         13
     );
-    ClearDiagnosticEventCallback(callback);
+    ClearDiagnosticEventCallback(RecordDiagnosticEvent);
 
     EXPECT_EQ(logger.messageCount(), 1u);
     EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::Error);
@@ -544,26 +548,10 @@ TEST(Global, LoggerDiagnosticCaptureUsesFormattedMessage){
 }
 
 TEST(Global, LoggerAssertTypeCapturesAssertDiagnostic){
-    s_DiagnosticEventCaptureCount = 0u;
-    s_DiagnosticEventName = nullptr;
-    s_DiagnosticEventCategory = nullptr;
-    s_DiagnosticEventExpression = nullptr;
-    s_DiagnosticEventMessage = nullptr;
-    s_DiagnosticEventFile = nullptr;
-    s_DiagnosticEventLine = 0u;
-
-    const DiagnosticEventCallback callback = [](const DiagnosticEventRecord& record)noexcept{
-        ++s_DiagnosticEventCaptureCount;
-        s_DiagnosticEventName = record.event;
-        s_DiagnosticEventCategory = record.category;
-        s_DiagnosticEventExpression = record.expression;
-        s_DiagnosticEventMessage = record.message;
-        s_DiagnosticEventFile = record.file;
-        s_DiagnosticEventLine = record.line;
-    };
+    ResetDiagnosticEventCapture();
 
     CapturingLogger logger;
-    SetDiagnosticEventCallback(callback);
+    SetDiagnosticEventCallback(RecordDiagnosticEvent);
     NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(
         logger,
         NWB::Core::Common::LogType::Assert,
@@ -573,7 +561,7 @@ TEST(Global, LoggerAssertTypeCapturesAssertDiagnostic){
         NWB_TEXT("assert log {}"),
         21
     );
-    ClearDiagnosticEventCallback(callback);
+    ClearDiagnosticEventCallback(RecordDiagnosticEvent);
 
     EXPECT_EQ(logger.messageCount(), 1u);
     EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::Assert);
@@ -591,22 +579,10 @@ TEST(Global, LoggerAssertTypeCapturesAssertDiagnostic){
 }
 
 TEST(Global, DiagnosticEventHook){
-    s_DiagnosticEventCaptureCount = 0u;
-    s_DiagnosticEventName = nullptr;
-    s_DiagnosticEventCategory = nullptr;
-    s_DiagnosticEventExpression = nullptr;
-    s_DiagnosticEventMessage = nullptr;
-    s_DiagnosticEventFile = nullptr;
-    s_DiagnosticEventLine = 0u;
+    ResetDiagnosticEventCapture();
 
     const DiagnosticEventCallback callback = [](const DiagnosticEventRecord& record)noexcept{
-        ++s_DiagnosticEventCaptureCount;
-        s_DiagnosticEventName = record.event;
-        s_DiagnosticEventCategory = record.category;
-        s_DiagnosticEventExpression = record.expression;
-        s_DiagnosticEventMessage = record.message;
-        s_DiagnosticEventFile = record.file;
-        s_DiagnosticEventLine = record.line;
+        RecordDiagnosticEvent(record);
         CaptureDiagnosticEvent("recursive", "ignored");
     };
 

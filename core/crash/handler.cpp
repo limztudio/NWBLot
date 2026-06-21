@@ -7,6 +7,7 @@
 #include <cstdlib>
 
 #if defined(NWB_PLATFORM_WINDOWS)
+#include "io_win32.h"
 #if defined(_MSC_VER) && !defined(NDEBUG)
 #include <crtdbg.h>
 #endif
@@ -71,43 +72,7 @@ static Detail::CrashAck __hidden_make_ack(const Detail::CrashRequest& request, c
     return ack;
 }
 
-#if defined(NWB_PLATFORM_WINDOWS)
-[[nodiscard]] static bool __hidden_read_all(const HANDLE handle, void* const data, const usize byteCount)noexcept{
-    u8* cursor = static_cast<u8*>(data);
-    usize remaining = byteCount;
-    while(remaining > 0u){
-        DWORD bytesRead = 0u;
-        const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max)
-            ? Limit<DWORD>::s_Max
-            : static_cast<DWORD>(remaining)
-        ;
-        if(!ReadFile(handle, cursor, requestSize, &bytesRead, nullptr) || bytesRead == 0u)
-            return false;
-
-        cursor += bytesRead;
-        remaining -= bytesRead;
-    }
-    return true;
-}
-
-[[nodiscard]] static bool __hidden_write_all(const HANDLE handle, const void* const data, const usize byteCount)noexcept{
-    const u8* cursor = static_cast<const u8*>(data);
-    usize remaining = byteCount;
-    while(remaining > 0u){
-        DWORD bytesWritten = 0u;
-        const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max)
-            ? Limit<DWORD>::s_Max
-            : static_cast<DWORD>(remaining)
-        ;
-        if(!WriteFile(handle, cursor, requestSize, &bytesWritten, nullptr) || bytesWritten == 0u)
-            return false;
-
-        cursor += bytesWritten;
-        remaining -= bytesWritten;
-    }
-    return true;
-}
-#elif defined(NWB_PLATFORM_LINUX)
+#if defined(NWB_PLATFORM_LINUX)
 [[nodiscard]] static bool __hidden_read_all(const int fd, void* const data, const usize byteCount)noexcept{
     u8* cursor = static_cast<u8*>(data);
     usize remaining = byteCount;
@@ -196,7 +161,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
 
     for(;;){
         Detail::CrashRequest request;
-        if(!__hidden_crash_handler::__hidden_read_all(requestReadHandle, &request, sizeof(request)))
+        if(!Detail::ReadAllWin32(requestReadHandle, &request, sizeof(request)))
             break;
         // Defensive: reject a corrupt/interleaved request (writer serialization should prevent this).
         if(request.magic != Detail::s_RequestMagic || request.version != Detail::s_RequestVersion)
@@ -205,7 +170,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         const bool packageWritten = Detail::WriteCrashPackage(request);
         if(ackWriteHandle != INVALID_HANDLE_VALUE){
             const Detail::CrashAck ack = __hidden_crash_handler::__hidden_make_ack(request, packageWritten);
-            [[maybe_unused]] const bool ackWritten = __hidden_crash_handler::__hidden_write_all(ackWriteHandle, &ack, sizeof(ack));
+            [[maybe_unused]] const bool ackWritten = Detail::WriteAllWin32(ackWriteHandle, &ack, sizeof(ack));
         }
         if(ackEvent)
             SetEvent(ackEvent);

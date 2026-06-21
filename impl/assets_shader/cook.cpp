@@ -204,9 +204,32 @@ static bool ReadDiagnostics(const Path& diagnosticsPath, CookString& outDiagnost
 
 static void RemoveFileBestEffort(const Path& path){
     ErrorCode errorCode;
-    if(FileExists(path, errorCode) && !errorCode){
-        if(!RemoveFile(path, errorCode))
-            NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to remove temporary file"));
+    const bool exists = FileExists(path, errorCode);
+    if(errorCode){
+        if(!IsMissingPathError(errorCode)){
+            NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to query stale compiler output '{}' before cleanup: {}")
+                , PathToString<tchar>(path)
+                , StringConvert(errorCode.message())
+            );
+        }
+        return;
+    }
+
+    if(exists){
+        errorCode.clear();
+        if(!RemoveFile(path, errorCode)){
+            if(errorCode){
+                NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to remove stale compiler output '{}': {}")
+                    , PathToString<tchar>(path)
+                    , StringConvert(errorCode.message())
+                );
+            }
+            else{
+                NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to remove stale compiler output '{}'")
+                    , PathToString<tchar>(path)
+                );
+            }
+        }
     }
 }
 

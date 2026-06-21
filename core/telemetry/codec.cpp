@@ -38,8 +38,7 @@ struct ByteView{
 }
 
 [[nodiscard]] static bool ValidateHeaderPayload(const EventHeader& header)noexcept{
-    // EventHeader::valid() already checks magic, kind, payload-format validity, and the
-    // none-format/zero-bytes invariant; the version equality gate was dev-stage compat machinery.
+    // EventHeader::valid() owns the wire-format invariant checks for encoded telemetry events.
     return header.valid();
 }
 

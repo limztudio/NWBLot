@@ -466,6 +466,58 @@ TEST(Crash, DesktopInstalledHandlerWritesRadeonGpuDetectiveDumpPackage){
 
     RemoveTestArtifacts(arena, s_Group);
 }
+
+TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
+    TestArena testArena;
+    auto& arena = testArena.arena;
+    NWB::Core::Alloc::PersistentArena installArena(
+        s_InstallArena,
+        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
+    );
+    constexpr AStringView s_Group("crash_gpu_text_only_runtime_test");
+    RemoveTestArtifacts(arena, s_Group);
+
+    NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
+    config.applicationName = AStringView("crash_tests");
+    config.version = AStringView("1");
+    config.buildId = AStringView("gpu-text-only-runtime-test");
+    config.spoolDirectory = SpoolDirectory(arena, s_Group);
+
+    {
+        ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
+        NWB::Core::Crash::Detail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
+    }
+
+    const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, config);
+    ASSERT_TRUE(installed);
+
+    NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
+    options.waitMilliseconds = NWB::Core::Crash::Detail::s_PlatformCrashHandlerWaitMilliseconds;
+    options.triggerCategory = AStringView(NWB::Core::Crash::Detail::s_GpuCrashCategory);
+    options.gpuReport = AStringView("minimal GPU crash report: no vendor GPU dump or device-fault details were available\n");
+    options.gpuDumpKind = NWB::Core::Crash::GpuCrashDumpKind::None;
+    NWB::Core::Crash::Detail::ManualDumpContextStorage contextStorage;
+    NWB::Core::Crash::Detail::CaptureManualDumpContext(options, contextStorage);
+    const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::Detail::RequestCrashDump(
+        NWB::Core::Crash::Detail::CrashReasonKind::GpuCrash,
+        0u,
+        options
+    );
+    EXPECT_EQ(result.status, NWB::Core::Crash::CrashDumpStatus::PackageWritten);
+
+    char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
+    BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
+
+    const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
+    EXPECT_TRUE(WaitForDirectory(packageDirectory, 3000u));
+    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_GpuCrashReportFileName));
+    EXPECT_TRUE(PathIsMissing(packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName));
+    EXPECT_TRUE(PathIsMissing(packageDirectory / CrashNames::s_AftermathGpuDumpFileName));
+    EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_GpuCrashReportFileName, AStringView("minimal GPU crash report")));
+    NWB::Core::Crash::UninstallCrashHandler();
+
+    RemoveTestArtifacts(arena, s_Group);
+}
 #endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)

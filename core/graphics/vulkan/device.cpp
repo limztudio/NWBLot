@@ -39,6 +39,10 @@ static AStringView TrimGpuCrashText(const char* const text){
     return text ? TrimGpuCrashText(AStringView(text)) : AStringView();
 }
 
+static const char* GpuCrashAvailabilityText(const bool available){
+    return available ? "available" : "unavailable";
+}
+
 
 template<typename T>
 static u64 UpdateFnv64Value(const u64 hash, const T& value){
@@ -296,8 +300,7 @@ Device::Device(const DeviceDesc& desc)
         && !m_context.extensions.AMD_buffer_marker
         && !m_context.extensions.EXT_device_fault
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GPU crash diagnostics requested but no supported backend (device diagnostic checkpoints / buffer markers / device fault) is available; disabling."));
-        m_gpuCrashDiagnosticsEnabled = false;
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GPU crash diagnostics requested but no supported backend (device diagnostic checkpoints / buffer markers / device fault) is available; minimal text GPU crash reports remain enabled."));
     }
 
     if(
@@ -730,8 +733,6 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
     const bool hasCheckpoints = m_context.extensions.NV_device_diagnostic_checkpoints;
     const bool hasDeviceFault = m_context.extensions.EXT_device_fault;
     const bool hasBufferMarker = m_context.extensions.AMD_buffer_marker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE;
-    if(!hasCheckpoints && !hasDeviceFault && !hasBufferMarker)
-        return;
 
     // Claim the one-shot capture atomically: only the first thread to lose the device proceeds, so a
     // device-lost reported concurrently from submit/present/waitForIdle never dispatches two crash dumps.
@@ -889,7 +890,21 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
         }
 
         if(report.details.empty())
-            report.details.append("(no GPU diagnostics available)");
+            report.details.append(StringFormat(m_gpuCrashReportArena,
+                "minimal GPU crash report: no vendor GPU dump or device-fault details were available\n"
+                "capture context: {}\n"
+                "device: {} (vendor 0x{:x}, device 0x{:x}, driver 0x{:x})\n"
+                "diagnostic paths: NV_device_diagnostic_checkpoints={}, AMD_buffer_marker={}, VK_EXT_device_fault={}, NVIDIA Aftermath={}\n"
+                , VulkanDetail::TrimGpuCrashText(context)
+                , VulkanDetail::TrimGpuCrashText(m_context.physicalDeviceProperties.deviceName)
+                , static_cast<u32>(m_context.physicalDeviceProperties.vendorID)
+                , static_cast<u32>(m_context.physicalDeviceProperties.deviceID)
+                , static_cast<u32>(m_context.physicalDeviceProperties.driverVersion)
+                , VulkanDetail::GpuCrashAvailabilityText(hasCheckpoints)
+                , VulkanDetail::GpuCrashAvailabilityText(hasBufferMarker)
+                , VulkanDetail::GpuCrashAvailabilityText(hasDeviceFault)
+                , VulkanDetail::GpuCrashAvailabilityText(Aftermath::IsActive())
+            ));
     }
     catch(...){
         // Fixed crash arena exhausted while formatting; ship the partial report rather than terminate.

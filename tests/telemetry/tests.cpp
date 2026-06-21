@@ -7,6 +7,7 @@
 #include <tests/capturing_logger.h>
 
 #include <core/telemetry/module.h>
+#include <core/telemetry/frame_graph_registry.h>
 #include <logger/telemetry/ingest.h>
 #include <logger/telemetry/report.h>
 
@@ -646,6 +647,44 @@ static void BuildTestFrameGraph(
         .kind = Telemetry::FrameGraphEdgeKind::Reads,
         .flags = 2u,
     });
+}
+
+class PendingNameFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
+public:
+    virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
+        const Telemetry::FrameGraphNodeHandle source = builder.addPass(Name("source"), "Source");
+        [[maybe_unused]] const Telemetry::FrameGraphNodeHandle target = builder.addResource(Name("target"), "Target");
+        [[maybe_unused]] const Telemetry::FrameGraphNodeHandle duplicateTarget = builder.addResource(Name("target"), "Duplicate Target");
+
+        builder.dependsOnByName(source, Name("target"), 7u);
+        builder.dependsOnByName(source, Name("missing"), 9u);
+        return true;
+    }
+};
+
+TEST(Telemetry, FrameGraphRegistryResolvesPendingNameEdges){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+
+    Telemetry::FrameGraphRegistry registry(testArena.arena);
+    PendingNameFrameGraphContributor contributor;
+    registry.registerContributor(contributor);
+
+    EXPECT_TRUE(registry.record(session));
+    EXPECT_EQ(session.eventCount(), 1u);
+
+    const Telemetry::EventRecord* event = session.view().eventAt(0u);
+    ASSERT_NE(event, nullptr);
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    EXPECT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
+    ASSERT_EQ(parsed.nodes.size(), 3u);
+    ASSERT_EQ(parsed.edges.size(), 1u);
+    EXPECT_EQ(parsed.edges[0u].fromNodeIndex, 0u);
+    EXPECT_EQ(parsed.edges[0u].toNodeIndex, 1u);
+    EXPECT_EQ(parsed.edges[0u].kind, Telemetry::FrameGraphEdgeKind::DependsOn);
+    EXPECT_EQ(parsed.edges[0u].flags, 7u);
 }
 
 TEST(Telemetry, FrameGraphPayloadRoundTrip){

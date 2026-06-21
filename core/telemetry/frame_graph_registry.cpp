@@ -22,24 +22,34 @@ namespace __hidden_frame_graph_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using FrameGraphNodeIndexLookup = HashMap<Name, u32, Hasher<Name>, EqualTo<Name>, TelemetryArena>;
+
 static void ResolvePendingNameEdges(
+    TelemetryArena& arena,
     const FrameGraphNodeDescs& nodes,
     FrameGraphEdgeDescs& edges,
     const FrameGraphPendingNameEdges& pendingNameEdges
 ){
-    for(const auto& pending : pendingNameEdges){
-        for(u32 i = 0u; i < static_cast<u32>(nodes.size()); ++i){
-            if(nodes[i].name != pending.toName)
-                continue;
+    if(nodes.empty() || pendingNameEdges.empty())
+        return;
 
-            edges.push_back(FrameGraphEdgeDesc{
-                .fromNodeIndex = pending.fromNodeIndex,
-                .toNodeIndex = i,
-                .kind = pending.kind,
-                .flags = pending.flags,
-            });
-            break;
-        }
+    FrameGraphNodeIndexLookup nodeIndices(arena);
+    nodeIndices.reserve(nodes.size());
+    for(u32 i = 0u; i < static_cast<u32>(nodes.size()); ++i)
+        nodeIndices.emplace(nodes[i].name, i);
+
+    edges.reserve(edges.size() + pendingNameEdges.size());
+    for(const auto& pending : pendingNameEdges){
+        const auto foundNode = nodeIndices.find(pending.toName);
+        if(foundNode == nodeIndices.end())
+            continue;
+
+        edges.push_back(FrameGraphEdgeDesc{
+            .fromNodeIndex = pending.fromNodeIndex,
+            .toNodeIndex = foundNode.value(),
+            .kind = pending.kind,
+            .flags = pending.flags,
+        });
     }
 }
 
@@ -86,7 +96,7 @@ bool FrameGraphRegistry::record(CaptureSession& session){
     if(!hasGraph)
         return false;
 
-    __hidden_frame_graph_registry::ResolvePendingNameEdges(nodes, edges, pendingNameEdges);
+    __hidden_frame_graph_registry::ResolvePendingNameEdges(arena, nodes, edges, pendingNameEdges);
 
     return session.recordFrameGraph(nodes, edges);
 }

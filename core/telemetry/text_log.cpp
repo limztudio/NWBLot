@@ -22,17 +22,6 @@ namespace __hidden_telemetry_text_log{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ByteView{
-    using value_type = u8;
-
-    const u8* bytes = nullptr;
-    usize byteCount = 0u;
-
-    [[nodiscard]] usize size()const{ return byteCount; }
-    [[nodiscard]] const u8* data()const{ return bytes; }
-    [[nodiscard]] u8 operator[](const usize index)const{ return bytes[index]; }
-};
-
 [[nodiscard]] static bool ValidatePayloadHeader(const EncodedTextLogPayloadHeader& header)noexcept{
     return header.magic == s_TextLogPayloadMagic
         && header.reserved == 0u
@@ -112,7 +101,7 @@ bool ParseTextLogPayload(
     if(payloadBytes < sizeof(EncodedTextLogPayloadHeader) || !payload)
         return false;
 
-    const __hidden_telemetry_text_log::ByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
+    const BinaryByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
     usize cursor = 0u;
 
     EncodedTextLogPayloadHeader header;

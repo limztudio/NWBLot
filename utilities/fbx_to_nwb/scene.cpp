@@ -91,7 +91,7 @@ AString FormatUfbxError(const ufbx_error& error){
 }
 
 bool ParseIndexSelector(const AString& text, usize& outIndex){
-    const AString trimmed = Trim(text);
+    const AString trimmed = TrimCopy(text);
     if(trimmed.empty())
         return false;
 
@@ -199,7 +199,7 @@ bool SelectMeshInstances(
 ){
     outSelection.clear();
 
-    const AString normalized = ToLower(Trim(selector));
+    const AString normalized = ToAsciiLowerCopy(TrimCopy(selector));
     if(normalized.empty() || normalized == "all"){
         outSelection.reserve(instances.size());
         for(usize instanceIndex = 0u; instanceIndex < instances.size(); ++instanceIndex)

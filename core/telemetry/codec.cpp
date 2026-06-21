@@ -22,17 +22,6 @@ namespace __hidden_telemetry_codec{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ByteView{
-    using value_type = u8;
-
-    const u8* bytes = nullptr;
-    usize byteCount = 0u;
-
-    [[nodiscard]] usize size()const{ return byteCount; }
-    [[nodiscard]] const u8* data()const{ return bytes; }
-    [[nodiscard]] u8 operator[](const usize index)const{ return bytes[index]; }
-};
-
 [[nodiscard]] static bool ValidatePayloadPointer(const void* const payload, const usize payloadBytes)noexcept{
     return payloadBytes == 0u || payload != nullptr;
 }
@@ -100,7 +89,7 @@ template<typename Container>
     return true;
 }
 
-[[nodiscard]] static DecodeResult ReadHeader(const ByteView& encoded, EventHeader& outHeader){
+[[nodiscard]] static DecodeResult ReadHeader(const BinaryByteView& encoded, EventHeader& outHeader){
     DecodeResult result;
     result.status = DecodeStatus::TruncatedHeader;
 
@@ -155,7 +144,7 @@ DecodeResult DecodeEvent(TelemetryArena& arena, const void* const bytes, const u
         return result;
     }
 
-    const __hidden_telemetry_codec::ByteView encoded{ static_cast<const u8*>(bytes), byteCount };
+    const BinaryByteView encoded{ static_cast<const u8*>(bytes), byteCount };
     result = __hidden_telemetry_codec::ReadHeader(encoded, outEvent.header);
     if(!result.ok())
         return result;
@@ -232,7 +221,7 @@ DecodeResult DecodeEventStream(TelemetryArena& arena, const void* const bytes, c
         return result;
     }
 
-    const __hidden_telemetry_codec::ByteView encoded{ static_cast<const u8*>(bytes), byteCount };
+    const BinaryByteView encoded{ static_cast<const u8*>(bytes), byteCount };
     usize cursor = 0u;
 
     EncodedStreamHeader streamHeader;

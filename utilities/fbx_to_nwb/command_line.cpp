@@ -58,7 +58,7 @@ bool PromptString(const AString& label, const AString& defaultValue, AString& ou
         return !outValue.empty();
     }
 
-    line = Trim(Move(line));
+    line = TrimCopy(Move(line));
     outValue = line.empty() ? defaultValue : Move(line);
     return !outValue.empty();
 }
@@ -74,7 +74,7 @@ bool PromptBool(const AString& label, const bool defaultValue, bool& outValue, b
             return true;
         }
 
-        line = ToLower(Trim(Move(line)));
+        line = ToAsciiLowerCopy(TrimCopy(Move(line)));
         if(line.empty()){
             outValue = defaultValue;
             return true;
@@ -103,7 +103,7 @@ bool PromptDouble(const AString& label, const f64 defaultValue, f64& outValue, b
             return true;
         }
 
-        line = Trim(Move(line));
+        line = TrimCopy(Move(line));
         if(line.empty()){
             outValue = defaultValue;
             return true;
@@ -155,7 +155,7 @@ bool ConfigurePromptsBeforeLoad(ImportOptions& options, const OptionPresence& pr
         }
         options.inputPath = input;
     }
-    options.inputPath = UnquotePath(Move(options.inputPath));
+    options.inputPath = UnquoteMatchingAsciiQuotes(Move(options.inputPath));
 
     if(!presence.preserveSpace && !options.acceptDefaults && !options.listMeshes){
         bool convertSpace = true;
@@ -196,7 +196,7 @@ bool ConfigurePromptsAfterLoad(
     }
     if(options.outputPath.empty())
         options.outputPath = PathToUtf8(DefaultOutputPath(options.inputPath));
-    options.outputPath = UnquotePath(Move(options.outputPath));
+    options.outputPath = UnquoteMatchingAsciiQuotes(Move(options.outputPath));
 
     if(!presence.normalMode && !options.acceptDefaults){
         AString normalMode;

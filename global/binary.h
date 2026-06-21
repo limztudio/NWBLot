@@ -109,6 +109,22 @@ template<typename ValueContainer>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct BinaryByteView{
+    using value_type = u8;
+
+    const u8* bytes = nullptr;
+    usize byteCount = 0u;
+
+    [[nodiscard]] bool empty()const{ return byteCount == 0u; }
+    [[nodiscard]] usize size()const{ return byteCount; }
+    [[nodiscard]] const u8* data()const{ return bytes; }
+    [[nodiscard]] u8 operator[](const usize index)const{ return bytes[index]; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename Container, typename PodType>
 inline void AppendPOD(Container& outBinary, const PodType& value){
     if(!BinaryDetail::CanAppendBytes(outBinary, sizeof(PodType)))
@@ -120,6 +136,12 @@ inline void AppendPOD(Container& outBinary, const PodType& value){
 template<typename Container, typename PodType>
 [[nodiscard]] inline bool ReadPOD(const Container& binary, usize& inOutOffset, PodType& outValue){
     return BinaryDetail::ReadBytes(binary, inOutOffset, &outValue, sizeof(PodType));
+}
+
+template<typename Container, typename CharT>
+inline void AppendTextBytesNoReserveUnchecked(Container& outBinary, const BasicStringView<CharT> text){
+    if(!text.empty())
+        BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, text.data(), text.size() * sizeof(CharT));
 }
 
 

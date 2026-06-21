@@ -24,11 +24,11 @@
     const TStringView meshPathText
 ){
     if(
-        !CountFitsU32(positions.size())
-        || !CountFitsU32(normals.size())
-        || !CountFitsU32(tangents.size())
-        || !CountFitsU32(uv0.size())
-        || !CountFitsU32(colors.size())
+        !FitsU32(positions.size())
+        || !FitsU32(normals.size())
+        || !FitsU32(tangents.size())
+        || !FitsU32(uv0.size())
+        || !FitsU32(colors.size())
     ){
         return FailMeshPayloadValidation(
             contextText,

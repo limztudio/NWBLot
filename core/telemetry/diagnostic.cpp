@@ -23,35 +23,10 @@ namespace __hidden_telemetry_diagnostic{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ByteView{
-    using value_type = u8;
-
-    const u8* bytes = nullptr;
-    usize byteCount = 0u;
-
-    [[nodiscard]] usize size()const{ return byteCount; }
-    [[nodiscard]] const u8* data()const{ return bytes; }
-    [[nodiscard]] u8 operator[](const usize index)const{ return bytes[index]; }
-};
-
 inline Atomic<DiagnosticCaptureGuard*> g_CaptureGuard{ nullptr };
 
-[[nodiscard]] static AStringView SafeText(const char* const text)noexcept{
-    return text ? AStringView(text) : AStringView();
-}
-
-[[nodiscard]] static bool TextFitsU32(const AStringView text)noexcept{
-    return text.size() <= Limit<u32>::s_Max;
-}
-
 [[nodiscard]] static bool AddTextBytes(usize& inOutPayloadBytes, const AStringView text)noexcept{
-    return TextFitsU32(text) && AddBinaryReserveBytes(inOutPayloadBytes, text.size());
-}
-
-template<typename Container>
-static void AppendText(Container& outPayload, const AStringView text){
-    if(!text.empty())
-        BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, text.data(), text.size());
+    return FitsU32(text.size()) && AddBinaryReserveBytes(inOutPayloadBytes, text.size());
 }
 
 [[nodiscard]] static bool ValidateHeader(const EncodedDiagnosticPayloadHeader& header)noexcept{
@@ -63,7 +38,7 @@ static void AppendText(Container& outPayload, const AStringView text){
 
 template<typename StringT>
 [[nodiscard]] static bool ReadText(
-    const ByteView& payload,
+    const BinaryByteView& payload,
     usize& inOutCursor,
     const u32 byteCount,
     StringT& outText
@@ -105,11 +80,11 @@ bool BuildDiagnosticPayload(
 ){
     outPayload.clear();
 
-    const AStringView event = __hidden_telemetry_diagnostic::SafeText(record.event);
-    const AStringView category = __hidden_telemetry_diagnostic::SafeText(record.category);
-    const AStringView expression = __hidden_telemetry_diagnostic::SafeText(record.expression);
-    const AStringView message = __hidden_telemetry_diagnostic::SafeText(record.message);
-    const AStringView file = __hidden_telemetry_diagnostic::SafeText(record.file);
+    const AStringView event = SafeStringView(record.event);
+    const AStringView category = SafeStringView(record.category);
+    const AStringView expression = SafeStringView(record.expression);
+    const AStringView message = SafeStringView(record.message);
+    const AStringView file = SafeStringView(record.file);
 
     usize payloadBytes = sizeof(EncodedDiagnosticPayloadHeader);
     if(
@@ -133,11 +108,11 @@ bool BuildDiagnosticPayload(
 
     outPayload.reserve(payloadBytes);
     AppendPOD(outPayload, header);
-    __hidden_telemetry_diagnostic::AppendText(outPayload, event);
-    __hidden_telemetry_diagnostic::AppendText(outPayload, category);
-    __hidden_telemetry_diagnostic::AppendText(outPayload, expression);
-    __hidden_telemetry_diagnostic::AppendText(outPayload, message);
-    __hidden_telemetry_diagnostic::AppendText(outPayload, file);
+    AppendTextBytesNoReserveUnchecked(outPayload, event);
+    AppendTextBytesNoReserveUnchecked(outPayload, category);
+    AppendTextBytesNoReserveUnchecked(outPayload, expression);
+    AppendTextBytesNoReserveUnchecked(outPayload, message);
+    AppendTextBytesNoReserveUnchecked(outPayload, file);
 
     return outPayload.size() == payloadBytes;
 }
@@ -153,7 +128,7 @@ bool ParseDiagnosticPayload(
     if(payloadBytes < sizeof(EncodedDiagnosticPayloadHeader) || !payload)
         return false;
 
-    const __hidden_telemetry_diagnostic::ByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
+    const BinaryByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
     usize cursor = 0u;
 
     EncodedDiagnosticPayloadHeader header;

@@ -7,6 +7,7 @@
 
 #include <core/crash/package_names.h>
 
+#include <global/binary.h>
 #include <global/filesystem/archive.h>
 #include <global/filesystem/retention.h>
 #include <global/text_utils.h>
@@ -32,17 +33,6 @@ using CrashBytes = Vector<u8, LogArena>;
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
 inline constexpr usize s_GeneratedJsonNeedleReserveSlack = 4u;
-
-struct ByteView{
-    using value_type = u8;
-
-    const u8* bytes = nullptr;
-    usize byteCount = 0u;
-
-    [[nodiscard]] bool empty()const{ return byteCount == 0u; }
-    [[nodiscard]] usize size()const{ return byteCount; }
-    [[nodiscard]] const u8* data()const{ return bytes; }
-};
 
 static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
     if(!ApplyDirectoryRetention(
@@ -130,7 +120,7 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
             return false;
     }
 
-    const ByteView fileBytes{ bytes, byteCount };
+    const BinaryByteView fileBytes{ bytes, byteCount };
     return WriteBinaryFile(outputPath, fileBytes);
 }
 

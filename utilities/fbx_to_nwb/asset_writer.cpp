@@ -612,7 +612,7 @@ UtilityVector<AString> BuildUniqueJointNames(const UtilityVector<ufbx_node*>& jo
 }
 
 AString BuildVirtualBasePath(const Path& outputPath, AString virtualRoot){
-    virtualRoot = Trim(Move(virtualRoot));
+    virtualRoot = TrimCopy(Move(virtualRoot));
     if(virtualRoot.empty())
         virtualRoot = "project";
 
@@ -622,7 +622,7 @@ AString BuildVirtualBasePath(const Path& outputPath, AString virtualRoot){
     Path relativePath(outputPath.arena());
     bool foundAssets = false;
     for(const Path& part : noExtension){
-        const AString partText = ToLower(PathToUtf8(part));
+        const AString partText = ToAsciiLowerCopy(PathToUtf8(part));
         if(partText == "assets"){
             foundAssets = true;
             relativePath.clear();

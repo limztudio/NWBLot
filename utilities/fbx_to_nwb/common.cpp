@@ -14,41 +14,8 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AString Trim(AString value){
-    const AStringView trimmed = TrimView(AStringView(value));
-    if(trimmed.size() == value.size())
-        return value;
-
-    const usize trimBegin = static_cast<usize>(trimmed.data() - value.data());
-    value.erase(trimBegin + trimmed.size());
-    value.erase(0u, trimBegin);
-    return value;
-}
-
-AString UnquotePath(AString value){
-    value = Trim(Move(value));
-    if(value.size() >= 2u){
-        const char first = value.front();
-        const char last = value.back();
-        if((first == '"' && last == '"') || (first == '\'' && last == '\'')){
-            value.erase(value.size() - 1u);
-            value.erase(0u, 1u);
-        }
-    }
-    return value;
-}
-
-AString ToLower(AString value){
-    Transform(value.begin(), value.end(), value.begin(), [](const char c){
-        if(c >= 'A' && c <= 'Z')
-            return static_cast<char>(c - 'A' + 'a');
-        return c;
-    });
-    return value;
-}
-
 static AString NormalizeAssetTypeText(AString value){
-    return ToLower(Trim(Move(value)));
+    return ToAsciiLowerCopy(TrimCopy(Move(value)));
 }
 
 static AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType){
@@ -132,7 +99,7 @@ bool ValidateAssetTypeText(AString& inOutValue){
 }
 
 static AString NormalizeNormalModeText(AString value){
-    return ToLower(Trim(Move(value)));
+    return ToAsciiLowerCopy(TrimCopy(Move(value)));
 }
 
 static AStringView NormalModeText(const NormalMode::Enum normalMode){

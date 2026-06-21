@@ -22,17 +22,6 @@ namespace __hidden_telemetry_perf{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ByteView{
-    using value_type = u8;
-
-    const u8* bytes = nullptr;
-    usize byteCount = 0u;
-
-    [[nodiscard]] usize size()const{ return byteCount; }
-    [[nodiscard]] const u8* data()const{ return bytes; }
-    [[nodiscard]] u8 operator[](const usize index)const{ return bytes[index]; }
-};
-
 [[nodiscard]] static bool ValidateHeader(const EncodedPerfTimingPayloadHeader& header)noexcept{
     return header.magic == s_PerfTimingPayloadMagic
         && header.reserved == 0u
@@ -81,12 +70,6 @@ struct ByteView{
         return false;
 
     return !delta.hasSamples || delta.currentFrameIndex == snapshot.frameIndex;
-}
-
-template<typename Container>
-static void AppendScopeText(Container& outPayload, const AStringView text){
-    if(!text.empty())
-        BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, text.data(), text.size());
 }
 
 [[nodiscard]] static u32 RecordTimingView(
@@ -182,7 +165,7 @@ bool BuildPerfTimingPayload(
 
     outPayload.reserve(payloadBytes);
     AppendPOD(outPayload, header);
-    __hidden_telemetry_perf::AppendScopeText(outPayload, scopeText);
+    AppendTextBytesNoReserveUnchecked(outPayload, scopeText);
     return outPayload.size() == payloadBytes;
 }
 
@@ -207,7 +190,7 @@ bool ParsePerfTimingPayload(
     if(payloadBytes < sizeof(EncodedPerfTimingPayloadHeader) || !payload)
         return false;
 
-    const __hidden_telemetry_perf::ByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
+    const BinaryByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
     usize cursor = 0u;
 
     EncodedPerfTimingPayloadHeader header;
@@ -292,7 +275,7 @@ bool BuildPerfMemoryPayload(
 
     outPayload.reserve(payloadBytes);
     AppendPOD(outPayload, header);
-    __hidden_telemetry_perf::AppendScopeText(outPayload, scopeText);
+    AppendTextBytesNoReserveUnchecked(outPayload, scopeText);
     return outPayload.size() == payloadBytes;
 }
 
@@ -317,7 +300,7 @@ bool ParsePerfMemoryPayload(
     if(payloadBytes < sizeof(EncodedPerfMemoryPayloadHeader) || !payload)
         return false;
 
-    const __hidden_telemetry_perf::ByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
+    const BinaryByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
     usize cursor = 0u;
 
     EncodedPerfMemoryPayloadHeader header;

@@ -86,29 +86,6 @@ inline constexpr const char* s_TelemetryUploadEndpoint = "/telemetry";
     return StringFormat(arena, NWB_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
 }
 
-namespace MessagePayloadDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ByteView{
-    using value_type = u8;
-
-    const u8* bytes = nullptr;
-    usize byteCount = 0u;
-
-    [[nodiscard]] usize size()const{ return byteCount; }
-    [[nodiscard]] const u8* data()const{ return bytes; }
-    [[nodiscard]] u8 operator[](const usize index)const{ return bytes[index]; }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
 template<typename PayloadContainer>
 [[nodiscard]] inline bool BuildMessagePayload(const MessageType& msg, PayloadContainer& outPayload){
     const auto& [time, type, str] = msg;
@@ -159,7 +136,7 @@ template<typename PayloadContainer>
         return false;
     }
 
-    const MessagePayloadDetail::ByteView payload{ static_cast<const u8*>(contents), totalSize };
+    const BinaryByteView payload{ static_cast<const u8*>(contents), totalSize };
     usize cursor = 0u;
 
     Timer time{};

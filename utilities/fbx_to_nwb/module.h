@@ -148,9 +148,6 @@ struct SceneHandle{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AString Trim(AString value);
-AString UnquotePath(AString value);
-AString ToLower(AString value);
 AString OutputAssetTypeOptionsText();
 AString OutputAssetTypeErrorText();
 bool ParseAssetTypeText(const AString& value, OutputAssetType::Enum& outAssetType);

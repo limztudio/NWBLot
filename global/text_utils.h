@@ -19,6 +19,11 @@ template<typename CharT>
     return ch == CharT(' ') || ch == CharT('\t') || ch == CharT('\n') || ch == CharT('\r') || ch == CharT('\f') || ch == CharT('\v');
 }
 
+template<typename CharT>
+[[nodiscard]] inline BasicStringView<CharT> SafeStringView(const CharT* const text)noexcept{
+    return text ? BasicStringView<CharT>(text) : BasicStringView<CharT>();
+}
+
 
 template<typename CharT>
 [[nodiscard]] inline BasicStringView<CharT> TrimView(const BasicStringView<CharT> text){
@@ -85,6 +90,30 @@ template<typename CharT, typename ArenaT>
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> Trim(const BasicString<CharT, ArenaT>& text){
     return BasicString<CharT, ArenaT>(TrimView<CharT>(BasicStringView<CharT>{text}), text.get_allocator());
+}
+
+template<typename StringT>
+    requires requires(StringT& text, usize index, usize count){
+        typename StringT::value_type;
+        text.data();
+        text.size();
+        text.erase(index);
+        text.erase(index, count);
+    }
+inline void TrimInPlace(StringT& inOutText){
+    const BasicStringView<typename StringT::value_type> trimmed = TrimView(inOutText);
+    if(trimmed.size() == inOutText.size())
+        return;
+
+    const usize trimBegin = static_cast<usize>(trimmed.data() - inOutText.data());
+    inOutText.erase(trimBegin + trimmed.size());
+    inOutText.erase(0u, trimBegin);
+}
+
+template<typename StringT>
+[[nodiscard]] inline StringT TrimCopy(StringT text){
+    TrimInPlace(text);
+    return text;
 }
 
 
@@ -423,6 +452,35 @@ inline constexpr CharT ToAsciiUpper(CharT c){
         ? static_cast<CharT>(c - (static_cast<CharT>('a') - static_cast<CharT>('A')))
         : c
     ;
+}
+
+template<typename StringT>
+inline void ToAsciiLowerInPlace(StringT& inOutText){
+    for(auto& ch : inOutText)
+        ch = ToAsciiLower(ch);
+}
+
+template<typename StringT>
+[[nodiscard]] inline StringT ToAsciiLowerCopy(StringT text){
+    ToAsciiLowerInPlace(text);
+    return text;
+}
+
+template<typename StringT>
+[[nodiscard]] inline StringT UnquoteMatchingAsciiQuotes(StringT text){
+    TrimInPlace(text);
+    if(text.size() >= 2u){
+        const auto first = text.front();
+        const auto last = text.back();
+        if(
+            (first == static_cast<decltype(first)>('"') && last == static_cast<decltype(last)>('"'))
+            || (first == static_cast<decltype(first)>('\'') && last == static_cast<decltype(last)>('\''))
+        ){
+            text.erase(text.size() - 1u);
+            text.erase(0u, 1u);
+        }
+    }
+    return text;
 }
 
 template<typename CharT>

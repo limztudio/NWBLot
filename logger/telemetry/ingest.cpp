@@ -5,6 +5,7 @@
 #include "ingest.h"
 
 #include <core/telemetry/codec.h>
+#include <global/binary.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,15 +33,6 @@ inline constexpr const char* s_JsonFileExtension = ".json";
 inline constexpr const char* s_PerfCsvFileExtension = ".perf.csv";
 inline constexpr const char* s_GraphFileExtension = ".graph.dot";
 static Atomic<u64> s_TelemetryUploadCounter{ 1u };
-
-struct ByteView{
-    const u8* bytes = nullptr;
-    usize byteCount = 0u;
-
-    [[nodiscard]] bool empty()const{ return byteCount == 0u; }
-    [[nodiscard]] usize size()const{ return byteCount; }
-    [[nodiscard]] const u8* data()const{ return bytes; }
-};
 
 [[nodiscard]] Path MakeTelemetryUploadStem(LogArena& arena){
     LocalTime localTime = {};
@@ -74,7 +66,7 @@ void SetResultMessage(TelemetryIngestResult& result, AStringView message, const 
 }
 
 [[nodiscard]] bool StoreRawTelemetry(const Path& rawPath, const void* bytes, const usize byteCount){
-    const ByteView view{ static_cast<const u8*>(bytes), byteCount };
+    const BinaryByteView view{ static_cast<const u8*>(bytes), byteCount };
     return WriteBinaryFile(rawPath, view);
 }
 

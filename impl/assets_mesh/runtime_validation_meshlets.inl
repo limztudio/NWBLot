@@ -89,9 +89,9 @@
         );
     }
     if(
-        !CountFitsU32(positionRefDeltas.size())
-        || !CountFitsU32(attributeRefDeltas.size())
-        || (skinRequired && !CountFitsU32(skinCount))
+        !FitsU32(positionRefDeltas.size())
+        || !FitsU32(attributeRefDeltas.size())
+        || (skinRequired && !FitsU32(skinCount))
     ){
         return FailMeshPayloadValidation(
             contextText,

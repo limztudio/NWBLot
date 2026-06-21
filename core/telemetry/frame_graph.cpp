@@ -22,32 +22,9 @@ namespace __hidden_telemetry_frame_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ByteView{
-    using value_type = u8;
-
-    const u8* bytes = nullptr;
-    usize byteCount = 0u;
-
-    [[nodiscard]] usize size()const{ return byteCount; }
-    [[nodiscard]] const u8* data()const{ return bytes; }
-    [[nodiscard]] u8 operator[](const usize index)const{ return bytes[index]; }
-};
-
-[[nodiscard]] static bool FitsU32(const usize value)noexcept{
-    return value <= static_cast<usize>(Limit<u32>::s_Max);
-}
-
-[[nodiscard]] static bool ContainsNull(const AStringView text)noexcept{
-    for(const char ch : text){
-        if(ch == char{})
-            return true;
-    }
-    return false;
-}
-
 [[nodiscard]] static bool IsValidStringTableText(const AStringView text)noexcept{
     return !text.empty()
-        && !ContainsNull(text)
+        && !HasEmbeddedNull(text)
         && text.size() < static_cast<usize>(Limit<u32>::s_Max)
     ;
 }
@@ -129,8 +106,8 @@ bool BuildFrameGraphPayload(
     outPayload.clear();
 
     if(
-        !__hidden_telemetry_frame_graph::FitsU32(nodes.size())
-        || !__hidden_telemetry_frame_graph::FitsU32(edges.size())
+        !FitsU32(nodes.size())
+        || !FitsU32(edges.size())
     )
         return false;
 
@@ -208,7 +185,7 @@ bool ParseFrameGraphPayload(
     if(payloadBytes < sizeof(EncodedFrameGraphPayloadHeader) || !payload)
         return false;
 
-    const __hidden_telemetry_frame_graph::ByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
+    const BinaryByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
     usize cursor = 0u;
 
     EncodedFrameGraphPayloadHeader header;

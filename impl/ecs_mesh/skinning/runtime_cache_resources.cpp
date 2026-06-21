@@ -32,8 +32,6 @@ namespace __hidden_runtime_cache_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MeshPayloadValidation::CountFitsU32;
-
 #include <impl/assets_mesh/meshlet_ref_range_validation.inl>
 
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const MeshSkinningRuntimeInstance& instance){
@@ -72,15 +70,15 @@ using MeshPayloadValidation::CountFitsU32;
         return false;
     }
     if(
-        !CountFitsU32(instance.restPositions.size())
-        || !CountFitsU32(instance.uv0.size())
-        || !CountFitsU32(instance.colors.size())
-        || !CountFitsU32(instance.skin.size())
-        || !CountFitsU32(instance.meshlets.size())
-        || !CountFitsU32(instance.meshletPositionRefDeltas.size())
-        || !CountFitsU32(instance.meshletAttributeRefDeltas.size())
-        || !CountFitsU32(instance.meshletLocalVertexRefs.size())
-        || !CountFitsU32(instance.meshletPrimitiveIndices.size())
+        !FitsU32(instance.restPositions.size())
+        || !FitsU32(instance.uv0.size())
+        || !FitsU32(instance.colors.size())
+        || !FitsU32(instance.skin.size())
+        || !FitsU32(instance.meshlets.size())
+        || !FitsU32(instance.meshletPositionRefDeltas.size())
+        || !FitsU32(instance.meshletAttributeRefDeltas.size())
+        || !FitsU32(instance.meshletLocalVertexRefs.size())
+        || !FitsU32(instance.meshletPrimitiveIndices.size())
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' exceeds u32 payload limits")
             , TStringView(sourceText)

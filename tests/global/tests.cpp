@@ -113,6 +113,16 @@ TEST(Global, PodRoundTrip){
     EXPECT_FALSE(ReadPOD(binary, cursor, unchangedValue));
     EXPECT_EQ(cursor, failedCursor);
     EXPECT_EQ(unchangedValue, 0xAABBCCDDu);
+
+    const BinaryByteView byteView{ binary.data(), binary.size() };
+    EXPECT_FALSE(byteView.empty());
+    EXPECT_EQ(byteView.size(), binary.size());
+    EXPECT_EQ(byteView[0u], binary[0u]);
+
+    cursor = 0u;
+    readValue = 0u;
+    EXPECT_TRUE(ReadPOD(byteView, cursor, readValue));
+    EXPECT_EQ(readValue, writtenValue);
 }
 
 TEST(Global, LengthPrefixedStringRoundTrip){
@@ -191,6 +201,15 @@ TEST(Global, TextUtilityHelpers){
     EXPECT_EQ(AStringView(genericPathText.data(), genericPathText.size()), AStringView("alpha/beta/file.txt"));
     EXPECT_EQ(TrimLeftView(AStringView(" \talpha ")), AStringView("alpha "));
     EXPECT_EQ(TrimView(AStringView(" \talpha \r\n")), AStringView("alpha"));
+    EXPECT_EQ(TrimCopy(AString(" \tMiXeD \r\n")), AString("MiXeD"));
+    EXPECT_EQ(ToAsciiLowerCopy(AString("MiXeD")), AString("mixed"));
+    EXPECT_EQ(UnquoteMatchingAsciiQuotes(AString(" 'asset path' ")), AString("asset path"));
+    EXPECT_EQ(UnquoteMatchingAsciiQuotes(AString(" \"asset path\" ")), AString("asset path"));
+    EXPECT_TRUE(SafeStringView(static_cast<const char*>(nullptr)).empty());
+    EXPECT_EQ(SafeStringView("safe"), AStringView("safe"));
+    EXPECT_TRUE(FitsU32(static_cast<usize>(Limit<u32>::s_Max)));
+    EXPECT_FALSE(FitsU32(static_cast<u64>(Limit<u32>::s_Max) + 1u));
+    EXPECT_FALSE(FitsU32(-1));
     EXPECT_TRUE(StartsWith(AStringView("alpha"), AStringView("alp")));
     EXPECT_TRUE(StartsWith(AStringView("alpha"), "al"));
     EXPECT_FALSE(StartsWith(AStringView("alpha"), AStringView("beta")));
@@ -355,6 +374,13 @@ TEST(Global, FixedVectorBinaryStringWrites){
     ACompactString tableText;
     EXPECT_TRUE(ReadStringTableText(fixedStringTable, 0u, fixedStringTable.size(), textOffset, tableText));
     EXPECT_EQ(tableText.view(), AStringView("bind"));
+
+    FixedVector<u8, 8u> rawText;
+    AppendTextBytesNoReserveUnchecked(rawText, AStringView("raw"));
+    ASSERT_EQ(rawText.size(), 3u);
+    EXPECT_EQ(rawText[0u], static_cast<u8>('r'));
+    EXPECT_EQ(rawText[1u], static_cast<u8>('a'));
+    EXPECT_EQ(rawText[2u], static_cast<u8>('w'));
 }
 
 TEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor){

@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MeshPayloadValidation::CountFitsU32;
-
 #include "meshlet_ref_validation.inl"
 #include "runtime_validation_diagnostics.inl"
 #include "runtime_validation_streams.inl"

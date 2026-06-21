@@ -64,3 +64,15 @@ inline constexpr f64 s_MaxF64 = Limit<f64>::s_Max;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+template<typename T>
+[[nodiscard]] inline constexpr bool FitsU32(const T value){
+    if constexpr(IsSigned_V<T>)
+        return value >= T(0) && static_cast<u64>(value) <= static_cast<u64>(Limit<u32>::s_Max);
+    else
+        return static_cast<u64>(value) <= static_cast<u64>(Limit<u32>::s_Max);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

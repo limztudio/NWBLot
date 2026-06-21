@@ -90,6 +90,7 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
 void RendererSystem::invalidateResources(){
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
+    m_preparedShadowVisibilityReady = false;
     m_renderCommandList.reset();
     m_meshState.invalidateResources();
     m_materialState.invalidateResources();
@@ -108,6 +109,7 @@ void RendererSystem::update(Core::ECS::World& world, f32 delta){
 
 bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     m_renderCommandList.reset();
+    m_preparedShadowVisibilityReady = false;
 
     if(!framebuffer)
         return false;
@@ -155,6 +157,26 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
     }
 
+    Core::CommandListHandle shadowPrepareCommandList = device->createCommandList();
+    if(!shadowPrepareCommandList){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow preparation command list"));
+        return false;
+    }
+
+    shadowPrepareCommandList->open();
+    const bool shadowResourcesPrepared = m_raytracingSystem.prepareShadowVisibilityResources(
+        *shadowPrepareCommandList,
+        deferredTargets,
+        scratchArena,
+        m_preparedShadowVisibilityReady
+    );
+    shadowPrepareCommandList->close();
+    if(!shadowResourcesPrepared)
+        return false;
+
+    Core::CommandList* shadowPrepareCommandLists[] = { shadowPrepareCommandList.get() };
+    device->executeCommandLists(shadowPrepareCommandLists, 1);
+
     return true;
 }
 
@@ -186,22 +208,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     bool commandListReady = true;
     {
         Core::GpuTimingMeasure frameTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Frame, device, *commandList);
-
-        bool shadowTlasReady = false;
-        if(m_raytracingSystem.buildPendingMeshBlas(*commandList))
-            shadowTlasReady = m_raytracingSystem.buildSceneTlas(*commandList, scratchArena);
-        else{
-            // No hardware ray tracing: build/refit the per-mesh software BVHs from the (already skinned)
-            // geometry, then build the per-frame software scene/instance BVH (TLAS-analog) over them. The
-            // traversal pass that consumes both lands in a later unit; for now this keeps them current so
-            // that path can be wired without a build-cadence gap.
-            const bool softwareShadowBvhReady = m_raytracingSystem.buildPendingMeshSwBvh(*commandList);
-            if(!softwareShadowBvhReady)
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH update failed"));
-            const bool softwareShadowSceneReady = m_raytracingSystem.buildSceneSwBvh(*commandList, scratchArena);
-            if(!softwareShadowSceneReady)
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow scene BVH build failed"));
-        }
 
         MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
         InstanceGpuDataVector instanceData{scratchArena};
@@ -326,15 +332,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         commandList->endRenderPass();
 
         bool shadowVisibilityWritten = false;
-        if(shadowTlasReady){
+        if(m_preparedShadowVisibilityReady && m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
             shadowVisibilityWritten = m_raytracingSystem.renderShadowVisibility(*commandList, deferredTargets);
             if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
         }
-        else{
+        else if(m_preparedShadowVisibilityReady){
             // No hardware ray tracing: trace the same per-light occlusion against the software scene/instance
-            // BVH built earlier this frame. Returns false (and falls through to the all-lit clear) when there
-            // is no software BVH to trace this frame.
+            // BVH prepared earlier this frame.
             shadowVisibilityWritten = m_raytracingSystem.renderGpuBvhShadowVisibility(*commandList, deferredTargets);
         }
         // The deferred lighting pass always samples the visibility image; clear it to "all lit" on any frame neither shadow backend wrote it so lighting never reads stale or undefined occlusion.

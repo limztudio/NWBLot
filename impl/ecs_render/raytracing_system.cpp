@@ -537,6 +537,44 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     return true;
 }
 
+bool RendererRayTracingSystem::prepareShadowVisibilityResources(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    Core::Alloc::ScratchArena& scratchArena,
+    bool& outBackendReady
+){
+    outBackendReady = false;
+    if(!targets.shadowVisibility)
+        return false;
+
+    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
+        if(!buildPendingMeshBlas(commandList))
+            return true;
+
+        const bool sceneReady = buildSceneTlas(commandList, scratchArena);
+        if(!sceneReady)
+            return true;
+
+        outBackendReady = ensureShadowPipeline() && ensureShadowBindingSet(targets);
+        return true;
+    }
+
+    // No hardware ray tracing: build/refit the per-mesh software BVHs from the already skinned geometry, then
+    // build the per-frame software scene/instance BVH over them before the render pass consumes it.
+    if(!buildPendingMeshSwBvh(commandList))
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH update failed"));
+    if(!buildSceneSwBvh(commandList, scratchArena)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow scene BVH build failed"));
+        return true;
+    }
+
+    if(rayTracingState().m_sceneBvhInstanceCount == 0u)
+        return true;
+
+    outBackendReady = ensureSwShadowPipeline() && ensureSwShadowBindingSet(targets);
+    return true;
+}
+
 bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& targets){
     // The shadow-visibility image is the shared output of the shadow subsystem: hardware ray tracing
     // writes a per-light visibility mask here, and the software distance-field fallback will write the
@@ -564,9 +602,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
 bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.shadowVisibility)
         return false;
-    if(!ensureShadowPipeline())
-        return false;
-    if(!ensureShadowBindingSet(targets))
+    if(!rayTracingState().m_tlas || !rayTracingState().m_shadowPipeline || !rayTracingState().m_shadowShaderTable || !rayTracingState().m_shadowBindingSet)
         return false;
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
@@ -611,9 +647,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     // No software scene BVH this frame (no traceable instances) -> the caller clears the mask to all-lit.
     if(!rayTracingState().m_sceneBvhNodeBuffer || rayTracingState().m_sceneBvhInstanceCount == 0u)
         return false;
-    if(!ensureSwShadowPipeline())
-        return false;
-    if(!ensureSwShadowBindingSet(targets))
+    if(!rayTracingState().m_swShadowPipeline || !rayTracingState().m_swShadowBindingSet || rayTracingState().m_swShadowMeshCount == 0u)
         return false;
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);

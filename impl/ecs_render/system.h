@@ -141,6 +141,7 @@ private:
     CsgFrameState m_preparedCsgFrameState;
     Core::CommandListHandle m_renderCommandList;
     bool m_preparedCsgFrameStateValid = false;
+    bool m_preparedShadowVisibilityReady = false;
 
 private:
     RendererShaderSystem m_shaderSystem;

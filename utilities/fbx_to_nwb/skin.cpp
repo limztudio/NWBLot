@@ -64,13 +64,11 @@ JointMatrix ToJointMatrix(const ufbx_matrix& matrix){
 
 bool NearlyEqualJointMatrix(const JointMatrix& lhs, const JointMatrix& rhs){
     static constexpr f32 s_Epsilon = 0.0001f;
+    const SIMDVector epsilon = VectorReplicate(s_Epsilon);
     for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
-        const Vec4& lhsRow = lhs.rows[rowIndex];
-        const Vec4& rhsRow = rhs.rows[rowIndex];
-        for(usize componentIndex = 0u; componentIndex < 4u; ++componentIndex){
-            if(Abs(lhsRow.raw[componentIndex] - rhsRow.raw[componentIndex]) > s_Epsilon)
-                return false;
-        }
+        const SIMDVector delta = VectorAbs(VectorSubtract(LoadFloat(lhs.rows[rowIndex]), LoadFloat(rhs.rows[rowIndex])));
+        if(!Vector4LessOrEqual(delta, epsilon))
+            return false;
     }
     return true;
 }

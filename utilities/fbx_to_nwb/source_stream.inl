@@ -280,10 +280,7 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     }
 
     Vec3 outputPosition = ToVec3(position);
-    const f32 scale = static_cast<f32>(options.scale);
-    outputPosition.x *= scale;
-    outputPosition.y *= scale;
-    outputPosition.z *= scale;
+    StoreFloat(VectorScale(LoadFloat(outputPosition), static_cast<f32>(options.scale)), &outputPosition);
     return outputPosition;
 }
 
@@ -341,17 +338,9 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
         Vec3 outputBitangent = ToVec3(bitangent);
         if(Normalize(outputBitangent)){
-            const Vec3 tangentSpaceBitangent{
-                normal.y * outputTangent.z - normal.z * outputTangent.y,
-                normal.z * outputTangent.x - normal.x * outputTangent.z,
-                normal.x * outputTangent.y - normal.y * outputTangent.x,
-            };
-            const f32 bitangentDot =
-                tangentSpaceBitangent.x * outputBitangent.x
-                + tangentSpaceBitangent.y * outputBitangent.y
-                + tangentSpaceBitangent.z * outputBitangent.z
-            ;
-            sign = bitangentDot < 0.0f ? -1.0f : 1.0f;
+            const SIMDVector tangentSpaceBitangent = Vector3Cross(LoadFloat(normal), LoadFloat(outputTangent));
+            const SIMDVector bitangentDot = Vector3Dot(tangentSpaceBitangent, LoadFloat(outputBitangent));
+            sign = VectorGetX(bitangentDot) < 0.0f ? -1.0f : 1.0f;
         }
     }
 

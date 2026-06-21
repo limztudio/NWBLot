@@ -307,12 +307,8 @@ public:
         for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
             const Float4 receiverPosition = CsgVisibleShapePosition(shapeSlot);
             const Float4 cutterLocalOffset = CsgVisibleCutterLocalOffset(shapeSlot);
-            const Float4 cutterPosition(
-                receiverPosition.x + cutterLocalOffset.x,
-                receiverPosition.y + cutterLocalOffset.y,
-                receiverPosition.z + cutterLocalOffset.z,
-                0.0f
-            );
+            Float4 cutterPosition;
+            StoreFloat(VectorSetW(VectorAdd(LoadFloat(receiverPosition), LoadFloat(cutterLocalOffset)), 0.0f), &cutterPosition);
             m_receivers[shapeSlot] = CreateSolidCubeEntity(
                 *m_world,
                 m_context.objectArena,

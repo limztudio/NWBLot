@@ -26,17 +26,13 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
 
 
 [[nodiscard]] static bool MeshletConeCullScaleSafe(const SIMDVector scale){
-    const f32 x = VectorGetX(scale);
-    const f32 y = VectorGetY(scale);
-    const f32 z = VectorGetZ(scale);
-    if(!IsFinite(x) || !IsFinite(y) || !IsFinite(z))
-        return false;
-    if(x <= 0.0f || y <= 0.0f || z <= 0.0f)
+    if(!VectorIsFinite(scale, 0x7u) || !Vector3Greater(scale, VectorZero()))
         return false;
 
-    const f32 minScale = Min<f32>(Min<f32>(x, y), z);
-    const f32 maxScale = Max<f32>(Max<f32>(x, y), z);
-    return Abs(maxScale - minScale) <= Max<f32>(maxScale, 1.0f) * s_MeshletConeCullUniformScaleEpsilon;
+    const SIMDVector minScale = VectorMin(VectorMin(VectorSplatX(scale), VectorSplatY(scale)), VectorSplatZ(scale));
+    const SIMDVector maxScale = VectorMax(VectorMax(VectorSplatX(scale), VectorSplatY(scale)), VectorSplatZ(scale));
+    const SIMDVector tolerance = VectorScale(VectorMax(maxScale, s_SIMDOne), s_MeshletConeCullUniformScaleEpsilon);
+    return VectorGetX(VectorSubtract(maxScale, minScale)) <= VectorGetX(tolerance);
 }
 
 struct MaterialTypedByteRangeKey{

@@ -96,8 +96,8 @@ static void ResolveFlyCameraAnglesFromRotation(
     outPitchRadians = IsFinite(pitchRadians) ? ClampPitch(pitchRadians, s_FlyCameraPitchLimitRadians) : 0.0f;
 }
 
-static void ApplyFlyCameraInput(
-    NWB::Impl::Scene::TransformComponent& transform,
+static void ResolveFlyCameraInput(
+    const SIMDVector currentPosition,
     f32& yawRadians,
     f32& pitchRadians,
     const f32 rightAxis,
@@ -105,7 +105,9 @@ static void ApplyFlyCameraInput(
     const bool boosted,
     const f32 mouseDeltaX,
     const f32 mouseDeltaY,
-    const f32 delta
+    const f32 delta,
+    SIMDVector& outRotation,
+    SIMDVector& outPosition
 ){
     if(!IsFinite(yawRadians))
         yawRadians = 0.0f;
@@ -126,10 +128,8 @@ static void ApplyFlyCameraInput(
         s_FlyCameraPitchLimitRadians
     );
 
-    const SIMDVector rotation = QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f);
-    StoreFloat(rotation, &transform.rotation);
-    if(!Vector3IsFinite(LoadFloat(transform.position)))
-        transform.position = Float4(0.0f, 0.0f, 0.0f);
+    outRotation = QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f);
+    outPosition = Vector3IsFinite(currentPosition) ? currentPosition : VectorZero();
 
     const SIMDVector moveAxis = VectorSet(safeRightAxis, safeForwardAxis, 0.0f, 0.0f);
     const SIMDVector moveLengthSqVector = Vector2LengthSq(moveAxis);
@@ -145,13 +145,13 @@ static void ApplyFlyCameraInput(
             VectorSet(safeRightAxis, 0.0f, safeForwardAxis, 0.0f),
             VectorReplicate(moveScale)
         );
-        const SIMDVector worldMove = Vector3Rotate(localMove, rotation);
+        const SIMDVector worldMove = Vector3Rotate(localMove, outRotation);
         if(!Vector3IsFinite(worldMove))
             return;
 
-        const SIMDVector newPosition = VectorAdd(LoadFloat(transform.position), worldMove);
+        const SIMDVector newPosition = VectorAdd(outPosition, worldMove);
         if(Vector3IsFinite(newPosition))
-            StoreFloat(newPosition, &transform.position);
+            outPosition = newPosition;
     }
 }
 
@@ -171,8 +171,10 @@ static void ApplyFlyCameraInputToMainCamera(
     f32 yawRadians = 0.0f;
     f32 pitchRadians = 0.0f;
     ResolveFlyCameraAnglesFromRotation(LoadFloat(cameraView.transform->rotation), yawRadians, pitchRadians);
-    ApplyFlyCameraInput(
-        *cameraView.transform,
+    SIMDVector resolvedRotation;
+    SIMDVector resolvedPosition;
+    ResolveFlyCameraInput(
+        LoadFloat(cameraView.transform->position),
         yawRadians,
         pitchRadians,
         rightAxis,
@@ -180,8 +182,12 @@ static void ApplyFlyCameraInputToMainCamera(
         boosted,
         mouseDeltaX,
         mouseDeltaY,
-        delta
+        delta,
+        resolvedRotation,
+        resolvedPosition
     );
+    StoreFloat(resolvedRotation, &cameraView.transform->rotation);
+    StoreFloat(resolvedPosition, &cameraView.transform->position);
 }
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateSkinnedCharacterEntity(NWB::Core::ECS::World& world){

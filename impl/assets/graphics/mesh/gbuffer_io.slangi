@@ -48,10 +48,19 @@ float3 nwbGBufferEncodeNormal(float3 normal){
     return normalVector * 0.5 + 0.5;
 }
 
+// Full G-buffer write: the three RGBA16F targets carry, in their otherwise-unused alpha channels, the
+// shading-model id (base-color.a) + two user BXDF parameters (normal.a, world.a). The deferred lighting
+// framework unpacks these into the surface the user BXDF reads, so a material chooses both its shading
+// model and what those two scalars mean (e.g. roughness / metallic).
+void nwbWriteMeshGBufferModel(float3 baseColor, float3 normal, float3 worldPosition, uint shadingModel, float param0, float param1){
+    outGBufferBaseColor = float4(clamp(baseColor, float3(0.0), float3(1.0)), float(shadingModel));
+    outGBufferNormal = float4(nwbGBufferEncodeNormal(normal), param0);
+    outGBufferWorldPosition = float4(worldPosition, param1);
+}
+
+// Convenience for materials that use the default shading model (0) and need no extra parameters.
 void nwbWriteMeshGBuffer(float3 baseColor, float3 normal, float3 worldPosition){
-    outGBufferBaseColor = float4(clamp(baseColor, float3(0.0), float3(1.0)), 1.0);
-    outGBufferNormal = float4(nwbGBufferEncodeNormal(normal), 1.0);
-    outGBufferWorldPosition = float4(worldPosition, 1.0);
+    nwbWriteMeshGBufferModel(baseColor, normal, worldPosition, 0u, 0.0, 0.0);
 }
 
 

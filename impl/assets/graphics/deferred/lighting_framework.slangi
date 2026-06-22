@@ -1,0 +1,129 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
+#define NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Deferred lighting framework: the engine-provided library a deferred lighting shader (engine default or a
+// project override) builds on. It exposes the surface inputs the geometry pass packed into the G-buffer
+// (base color, normal, world position, the shading-model id + two BXDF params from the alpha channels), the
+// scene light list + per-light resolve, and the shadow-visibility accessor. The lighting shader itself owns
+// the loop: it loads the surface, dispatches on surface.shadingModel to a (user-authored) BXDF that walks the
+// lights, applies per-light visibility, and tonemaps. Nothing here hard-codes a shading model.
+
+
+#include "binding_slots.h"
+#include "../scene/binding_slots.h"
+
+// The scene shading cbuffer + light list live in the deferred lighting binding set; point scene/buffer.slangi
+// (pulled in via scene/lighting.slangi) at those slots before it declares them.
+#ifndef NWB_SCENE_SHADING_SET
+#define NWB_SCENE_SHADING_SET NWB_DEFERRED_LIGHTING_SET
+#endif
+#ifndef NWB_SCENE_SHADING_BINDING
+#define NWB_SCENE_SHADING_BINDING NWB_DEFERRED_LIGHTING_BINDING_SCENE_SHADING
+#endif
+#ifndef NWB_SCENE_LIGHT_LIST_SET
+#define NWB_SCENE_LIGHT_LIST_SET NWB_DEFERRED_LIGHTING_SET
+#endif
+#ifndef NWB_SCENE_LIGHT_LIST_BINDING
+#define NWB_SCENE_LIGHT_LIST_BINDING NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST
+#endif
+
+// Brings common/math (nwbSafeNormalize, frame helpers), scene/buffer (g_NwbSceneLights, nwbSceneLightCount,
+// g_NwbSceneCameraPosition, nwbSceneResolveLight) and the engine's default BRDF lobe (nwbSceneShadeLight) +
+// whole-surface model (nwbSceneApplyLighting). A project BXDF may use or ignore the default model.
+#include "../scene/lighting.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferBaseColor;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_NORMAL, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferNormal;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferWorldPosition;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferDepth;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, NWB_DEFERRED_LIGHTING_SET)]] SamplerState g_DeferredSampler;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<uint> g_NwbShadowVisibility;
+
+struct NwbDeferredLightingPixelInput{
+    float4 position : SV_Position;
+    [[vk::location(NWB_DEFERRED_FULLSCREEN_UV_LOCATION)]] float2 uv : TEXCOORD0;
+};
+
+struct NwbDeferredLightingPixelOutput{
+    [[vk::location(NWB_DEFERRED_COLOR_TARGET_LOCATION)]] float4 color : SV_Target0;
+};
+
+// The surface a deferred lighting shader receives, unpacked from the G-buffer. The two params are whatever
+// the material's pixel shader packed into the normal/world alpha channels (e.g. roughness / metallic);
+// shadingModel selects which BXDF the lighting shader dispatches to.
+struct NwbBxdfSurface{
+    float3 baseColor;
+    float3 normal;          // world space, normalized
+    float3 worldPosition;
+    float3 viewVector;      // normalized, surface -> camera
+    uint   shadingModel;
+    float  param0;
+    float  param1;
+    bool   isBackground;    // no geometry at this pixel (sky); lighting shaders pass the base color through
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float3 nwbDeferredDecodeNormal(float3 value){
+    return nwbSafeNormalize(value * 2.0 - 1.0, float3(0.0, 0.0, 1.0));
+}
+
+// Unpack the G-buffer at a fullscreen UV into the surface a BXDF reads.
+NwbBxdfSurface nwbBxdfLoadSurface(float2 uv){
+    const float4 baseColorSample = g_GBufferBaseColor.Sample(g_DeferredSampler, uv);
+    const float4 normalSample = g_GBufferNormal.Sample(g_DeferredSampler, uv);
+    const float4 worldSample = g_GBufferWorldPosition.Sample(g_DeferredSampler, uv);
+    const float depth = g_GBufferDepth.Sample(g_DeferredSampler, uv).r;
+
+    NwbBxdfSurface surface;
+    surface.baseColor = baseColorSample.rgb;
+    surface.shadingModel = uint(baseColorSample.a + 0.5);
+    surface.normal = nwbDeferredDecodeNormal(normalSample.rgb);
+    surface.param0 = normalSample.a;
+    surface.worldPosition = worldSample.xyz;
+    surface.param1 = worldSample.a;
+    surface.viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - surface.worldPosition, float3(0.0, 0.0, 1.0));
+    surface.isBackground = depth >= 0.999999;
+    return surface;
+}
+
+// The shadow pass packs one visibility bit per light into the R32_UINT mask, 1:1 with the framebuffer.
+uint nwbBxdfLoadShadowMask(int2 pixel){
+    return g_NwbShadowVisibility.Load(int3(pixel, 0));
+}
+
+// 1.0 = lit, 0.0 = shadowed. Lights beyond the 32-bit mask (and the all-lit 0xFFFFFFFF clear) stay lit.
+float nwbBxdfLightVisibility(uint shadowMask, uint lightIndex){
+    return (lightIndex < NWB_SCENE_SHADOW_VISIBILITY_LIGHT_COUNT)
+        ? (((shadowMask >> lightIndex) & 1u) != 0u ? 1.0 : 0.0)
+        : 1.0
+    ;
+}
+
+// Default Reinhard tonemap the engine model uses; a project BXDF may reuse or replace it.
+float3 nwbBxdfTonemap(float3 color){
+    return color / (color + float3(0.65));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

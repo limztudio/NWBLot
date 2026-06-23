@@ -513,6 +513,7 @@ NwbMaterialBindPixelOutput main(NwbMaterialBindPixelInput input){
 static constexpr AStringView s_BlockScopedMaterialMeta = R"NWB_META(material asset;
 
 asset.interface = "project/material_interfaces/test_surface";
+asset.bxdf = "shaders/material_bxdf.slangi";
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -535,6 +536,7 @@ asset.parameters = {
 static constexpr AStringView s_HalfMaterialMeta = R"NWB_META(material asset;
 
 asset.interface = "project/material_interfaces/test_surface";
+asset.bxdf = "shaders/material_bxdf.slangi";
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -578,6 +580,7 @@ asset.parameters = {
 static constexpr AStringView s_CompactIntegerMaterialMeta = R"NWB_META(material asset;
 
 asset.interface = "project/material_interfaces/test_surface";
+asset.bxdf = "shaders/material_bxdf.slangi";
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",

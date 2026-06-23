@@ -42,6 +42,11 @@ struct MaterialCookEntry{
     Material::TypedLayoutFieldVector typedLayoutFields;
     Material::TypedBlockByteVector typedBlockBytes;
     MaterialCookString shaderVariant;
+    // Absolute, canonical (forward-slash) path of the .slangi authoring this material's deferred lighting BXDF,
+    // resolved from the required `bxdf` field against the material's asset root at parse time. The cross-asset
+    // phase dedups by this path, assigns shadingModelId, and generates the deferred lighting dispatch module.
+    MaterialCookString bxdfSource;
+    u32 shadingModelId = 0u;
     StageShaderMap stageShaders;
     ParameterMap parameters;
     bool transparent = false;
@@ -52,6 +57,7 @@ struct MaterialCookEntry{
         , typedLayoutFields(arena)
         , typedBlockBytes(arena)
         , shaderVariant(arena)
+        , bxdfSource(arena)
         , stageShaders(0, Hasher<Core::ShaderType::Enum>(), EqualTo<Core::ShaderType::Enum>(), arena)
         , parameters(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), arena)
     {}
@@ -64,6 +70,8 @@ struct MaterialCookEntry{
         typedLayoutFields.clear();
         typedBlockBytes.clear();
         shaderVariant.clear();
+        bxdfSource.clear();
+        shadingModelId = 0u;
         stageShaders.clear();
         parameters.clear();
         transparent = false;
@@ -111,6 +119,26 @@ struct MaterialCookEntry{
     Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMaterial);
+
+// Assigns each material a deferred shading-model id from the unique set of `bxdf` sources (sorted for
+// deterministic ids; materials sharing a bxdf share an id). Must run before the material assets are built
+// (so the id is baked into each cooked material) and before EmitDeferredBxdfDispatchModule.
+[[nodiscard]] bool AssignMaterialShadingModelIds(
+    MaterialCookVector<MaterialCookEntry>& materialEntries,
+    Core::Alloc::ScratchArena& scratchArena
+);
+// Generates the deferred lighting BXDF dispatch module (deferred/generated/bxdf_dispatch.slangi) under the
+// returned include root. The module includes each unique bxdf (macro-renamed per id) + a switch dispatch
+// keyed by shading-model id; an unknown id resolves to a visible magenta (the engine ships no default BXDF).
+// The engine's deferred lighting harness includes this module. Always writes the module (empty dispatch if
+// no materials declare a bxdf). Run after AssignMaterialShadingModelIds + before PrepareShaderEntriesForCook.
+[[nodiscard]] bool EmitDeferredBxdfDispatchModule(
+    const Path& cacheDirectory,
+    AStringView configurationSafeName,
+    const MaterialCookVector<MaterialCookEntry>& materialEntries,
+    Path& outIncludeRoot,
+    Core::Alloc::ScratchArena& scratchArena
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

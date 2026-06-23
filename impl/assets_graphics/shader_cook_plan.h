@@ -94,6 +94,7 @@ struct PreparedShaderPlan{
     const ResolvedCookPaths& resolvedPaths,
     const Path& materialBindIncludeRoot,
     const Path& csgShapeIncludeRoot,
+    const Path& deferredBxdfIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
     const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,

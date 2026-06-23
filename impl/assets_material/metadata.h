@@ -31,6 +31,11 @@ static constexpr AStringView s_ShaderVariantField = "shader_variant";
 static constexpr AStringView s_ParametersField = "parameters";
 static constexpr AStringView s_TransparentField = "transparent";
 static constexpr AStringView s_TwoSidedField = "two_sided";
+// Required: a .slangi include (relative to this material's asset root) authoring the deferred lighting BXDF
+// for this material's surfaces. The cook assigns each unique BXDF a shading-model id, generates the deferred
+// lighting dispatch module from them, and bakes this material's id into its cooked asset. The engine never
+// ships a default BXDF: every material declares its own.
+static constexpr AStringView s_BxdfField = "bxdf";
 
 static constexpr AStringView s_AllowedAssetFields[] = {
     s_InterfaceField,
@@ -39,6 +44,7 @@ static constexpr AStringView s_AllowedAssetFields[] = {
     s_ParametersField,
     s_TransparentField,
     s_TwoSidedField,
+    s_BxdfField,
 };
 
 [[nodiscard]] inline bool IsAllowedAssetField(const AStringView fieldName){

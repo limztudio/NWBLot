@@ -14,6 +14,13 @@
 #define NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL (1u << 2u)
 #define NWB_MESH_DISPATCH_FLAG_CSG_MESHLET_FULLY_REMOVED_CULL (1u << 3u)
 
+// The per-draw dispatch word (dispatch.w) carries cull/dispatch flags in its low 16 bits and the owning
+// material's shading-model id in its high 16 bits. The G-buffer pixel shader reads the id back out and writes
+// it into the base-color alpha, where the deferred lighting pass uses it to dispatch the material's BXDF.
+#define NWB_MESH_DISPATCH_FLAG_MASK 0x0000FFFFu
+#define NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT 16u
+#define NWB_MESH_DISPATCH_SHADING_MODEL_MASK 0x0000FFFFu
+
 #define NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED (1u << 0u)
 
 #define NWB_MESH_PUSH_DISPATCH_MESHLET_COUNT 0u

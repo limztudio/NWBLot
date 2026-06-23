@@ -3,9 +3,9 @@
 
 
 #include "mesh/authoring.slangi"
-#include "project/shaders/bxdf_surface.bind"
-#include "bxdf.slangi"
-#include "bxdf_mesh_vertex.slangi"
+#include "project/shaders/surface.bind"
+#include "material_color.slangi"
+#include "material_mesh_vertex.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

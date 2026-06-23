@@ -552,6 +552,85 @@ static bool ParseMaterialInterface(
     return true;
 }
 
+static bool ParseMaterialBxdf(
+    const Path& assetRoot,
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    CookString& outBxdfSource,
+    ScratchArena& scratchArena
+){
+    outBxdfSource.clear();
+
+    // Optional at parse; required at cook. A material with no `bxdf` parses fine (parse-only consumers such as
+    // typed-layout tests do not need one), but the cross-asset phase (AssignMaterialShadingModelIds) rejects any
+    // material lacking a bxdf, so every material in a real deferred-lit cook still authors its own.
+    const auto* bxdfValue = asset.findField(MaterialAssetMetadataSchema::s_BxdfField);
+    if(!bxdfValue)
+        return true;
+    if(!bxdfValue->isString()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a string")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(MaterialAssetMetadataSchema::s_BxdfField)
+        );
+        return false;
+    }
+
+    const Core::Metascript::MStringView bxdfText = bxdfValue->asString();
+    const AStringView bxdfRelative = TrimView(AStringView(bxdfText.data(), bxdfText.size()));
+    if(bxdfRelative.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must not be empty")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(MaterialAssetMetadataSchema::s_BxdfField)
+        );
+        return false;
+    }
+
+    ScratchString bxdfRelativeStr(bxdfRelative, scratchArena);
+    const ::Path<ScratchArena> bxdfRelativePath(scratchArena, AStringView(bxdfRelativeStr));
+    if(bxdfRelativePath.is_absolute()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a path relative to the asset root")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(MaterialAssetMetadataSchema::s_BxdfField)
+        );
+        return false;
+    }
+
+    ErrorCode errorCode;
+    const Path absoluteBxdf = AbsolutePath(assetRoot / bxdfRelativeStr.c_str(), errorCode).lexically_normal();
+    if(errorCode){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': failed to resolve bxdf '{}': {}")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(bxdfRelative)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    ScratchString extension = PathToString(scratchArena, absoluteBxdf.extension());
+    CanonicalizeTextInPlace(extension);
+    if(AStringView(extension) != AStringView(".slangi")){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must reference a .slangi file")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(MaterialAssetMetadataSchema::s_BxdfField)
+        );
+        return false;
+    }
+    // Existence is enforced later, by the real cook: EmitDeferredBxdfDispatchModule emits a verbatim #include
+    // of this path, and the dependency-checksum reads each dependency file (a missing bxdf fails there / at
+    // slang compile). Parse stays filesystem-light so it does not couple to where the file is mounted.
+
+    // Store the absolute path with forward slashes but original case: it becomes a verbatim #include in the
+    // generated dispatch module, and the cook's dependency-checksum matches it case-sensitively against the
+    // repo-root alias (lowercasing it would push it "outside" the declared roots).
+    ScratchString resolved = PathToString(scratchArena, absoluteBxdf);
+    for(char& ch : resolved){
+        if(ch == '\\')
+            ch = '/';
+    }
+    outBxdfSource.assign(AStringView(resolved));
+    return true;
+}
+
 static bool ParseMaterialBoolProperty(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -1644,6 +1723,8 @@ static bool ParseMaterialMeta(
         return false;
     if(!ParseMaterialInterface(nwbFilePath, asset, outEntry.materialInterface))
         return false;
+    if(!ParseMaterialBxdf(assetRoot, nwbFilePath, asset, outEntry.bxdfSource, scratchArena))
+        return false;
     if(!ParseMaterialRenderProperties(nwbFilePath, asset, outEntry))
         return false;
     if(!ParseMaterialStageShaders(nwbFilePath, asset, outEntry.stageShaders))
@@ -1651,6 +1732,193 @@ static bool ParseMaterialMeta(
     if(!ParseMaterialParameters(nwbFilePath, asset, outEntry.parameters))
         return false;
 
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// deferred lighting BXDF dispatch (per-material shading model id + generated dispatch module)
+
+
+static constexpr AStringView s_DeferredBxdfFunctionMacro = "NWB_DEFERRED_BXDF_FUNCTION";
+static constexpr AStringView s_DeferredBxdfModelPrefix = "nwbDeferredBxdfModel";
+static constexpr AStringView s_DeferredBxdfModuleSubPath = "deferred/generated/bxdf_dispatch.slangi";
+
+static bool AssignMaterialShadingModelIdsImpl(
+    CookVector<MaterialCookEntry>& materialEntries,
+    ScratchArena& scratchArena
+){
+    for(const MaterialCookEntry& entry : materialEntries){
+        if(entry.bxdfSource.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing a deferred bxdf"), StringConvert(entry.virtualPath.c_str()));
+            return false;
+        }
+    }
+
+    Vector<AStringView, ScratchArena> uniqueSources(scratchArena);
+    uniqueSources.reserve(materialEntries.size());
+    for(const MaterialCookEntry& entry : materialEntries)
+        uniqueSources.push_back(AStringView(entry.bxdfSource));
+    Sort(uniqueSources.begin(), uniqueSources.end(), [](const AStringView lhs, const AStringView rhs){ return lhs < rhs; });
+
+    usize uniqueCount = 0u;
+    for(usize i = 0u; i < uniqueSources.size(); ++i){
+        if(i == 0u || uniqueSources[i] != uniqueSources[uniqueCount - 1u])
+            uniqueSources[uniqueCount++] = uniqueSources[i];
+    }
+    uniqueSources.resize(uniqueCount);
+    if(uniqueCount > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: too many unique deferred bxdfs"));
+        return false;
+    }
+
+    for(MaterialCookEntry& entry : materialEntries){
+        const AStringView source(entry.bxdfSource);
+        bool assigned = false;
+        for(usize id = 0u; id < uniqueSources.size(); ++id){
+            if(uniqueSources[id] == source){
+                entry.shadingModelId = static_cast<u32>(id);
+                assigned = true;
+                break;
+            }
+        }
+        if(!assigned){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign shading model id for '{}'"), StringConvert(entry.virtualPath.c_str()));
+            return false;
+        }
+    }
+    return true;
+}
+
+static Path BuildDeferredBxdfIncludeRoot(
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    ScratchArena& scratchArena
+){
+    ScratchString configurationName(configurationSafeName, scratchArena);
+    return cacheDirectory / configurationName.c_str() / "deferred_modules";
+}
+
+static bool PrepareDeferredBxdfIncludeRoot(const Path& includeRoot){
+    ErrorCode errorCode;
+    if(!RemoveAllIfExists(includeRoot, errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to clear generated include directory '{}': {}")
+            , PathToString<tchar>(includeRoot)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    errorCode.clear();
+    if(!EnsureDirectories(includeRoot, errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to create generated include directory '{}': {}")
+            , PathToString<tchar>(includeRoot)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    return true;
+}
+
+static bool EmitDeferredBxdfDispatchModuleImpl(
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    const CookVector<MaterialCookEntry>& materialEntries,
+    Path& outIncludeRoot,
+    ScratchArena& scratchArena
+){
+    outIncludeRoot.clear();
+    outIncludeRoot = BuildDeferredBxdfIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
+    if(!PrepareDeferredBxdfIncludeRoot(outIncludeRoot))
+        return false;
+
+    // Build a dense id -> bxdf-source table from the (already assigned) materials. Each unique bxdf appears at
+    // exactly one id; materials sharing a bxdf share the slot.
+    u32 maxId = 0u;
+    bool anyBxdf = false;
+    for(const MaterialCookEntry& entry : materialEntries){
+        if(entry.bxdfSource.empty())
+            continue;
+        anyBxdf = true;
+        if(entry.shadingModelId > maxId)
+            maxId = entry.shadingModelId;
+    }
+
+    Vector<AStringView, ScratchArena> sourceById(scratchArena);
+    if(anyBxdf)
+        sourceById.resize(static_cast<usize>(maxId) + 1u);
+    for(const MaterialCookEntry& entry : materialEntries){
+        if(entry.bxdfSource.empty())
+            continue;
+
+        const AStringView source(entry.bxdfSource);
+        AStringView& slot = sourceById[entry.shadingModelId];
+        if(!slot.empty() && slot != source){
+            NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: shading model id {} maps to multiple bxdf sources"), entry.shadingModelId);
+            return false;
+        }
+        slot = source;
+    }
+
+    CookArena& arena = materialEntries.get_allocator().arena();
+    CookString source(arena);
+    source += "// Generated by AssetVolumeCooker from material `bxdf` declarations. Do not edit.\n";
+    source += "#ifndef NWB_GRAPHICS_DEFERRED_GENERATED_BXDF_DISPATCH_SLANGI\n";
+    source += "#define NWB_GRAPHICS_DEFERRED_GENERATED_BXDF_DISPATCH_SLANGI\n\n";
+
+    for(usize id = 0u; id < sourceById.size(); ++id){
+        if(sourceById[id].empty())
+            continue;
+
+        char idText[32] = {};
+        const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
+        source += "#define ";
+        source += s_DeferredBxdfFunctionMacro;
+        source += ' ';
+        source += s_DeferredBxdfModelPrefix;
+        source += idView;
+        source += "\n#include \"";
+        source += sourceById[id];
+        source += "\"\n#undef ";
+        source += s_DeferredBxdfFunctionMacro;
+        source += "\n\n";
+    }
+
+    source += "float3 nwbDeferredDispatchBxdf(uint shadingModel, NwbBxdfSurface surface, uint shadowMask){\n";
+    source += "    switch(shadingModel){\n";
+    for(usize id = 0u; id < sourceById.size(); ++id){
+        if(sourceById[id].empty())
+            continue;
+
+        char idText[32] = {};
+        const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
+        source += "    case ";
+        source += idView;
+        source += "u: return ";
+        source += s_DeferredBxdfModelPrefix;
+        source += idView;
+        source += "(surface, shadowMask);\n";
+    }
+    source += "    default: return float3(1.0, 0.0, 1.0); // no engine default BXDF: an unknown id shows magenta\n";
+    source += "    }\n";
+    source += "}\n\n#endif\n";
+
+    const Path outputPath = outIncludeRoot / s_DeferredBxdfModuleSubPath.data();
+    ErrorCode errorCode;
+    if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to create generated include parent '{}': {}")
+            , PathToString<tchar>(outputPath.parent_path())
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+    if(!WriteTextFile(outputPath, AStringView(source))){
+        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to write generated include '{}'")
+            , PathToString<tchar>(outputPath)
+        );
+        return false;
+    }
     return true;
 }
 
@@ -1759,6 +2027,7 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
     outMaterial = Material(arena, materialEntry.virtualPath);
     outMaterial.setShaderVariant(materialEntry.shaderVariant);
     outMaterial.setMaterialInterface(materialEntry.materialInterface);
+    outMaterial.setShadingModelId(materialEntry.shadingModelId);
     outMaterial.setTransparent(materialEntry.transparent);
     outMaterial.setTwoSided(materialEntry.twoSided);
     outMaterial.setTypedLayout(
@@ -1780,6 +2049,29 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
     }
 
     return true;
+}
+
+bool AssignMaterialShadingModelIds(
+    MaterialCookVector<MaterialCookEntry>& materialEntries,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    return __hidden_cook::AssignMaterialShadingModelIdsImpl(materialEntries, scratchArena);
+}
+
+bool EmitDeferredBxdfDispatchModule(
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    const MaterialCookVector<MaterialCookEntry>& materialEntries,
+    Path& outIncludeRoot,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    return __hidden_cook::EmitDeferredBxdfDispatchModuleImpl(
+        cacheDirectory,
+        configurationSafeName,
+        materialEntries,
+        outIncludeRoot,
+        scratchArena
+    );
 }
 
 
@@ -1863,7 +2155,8 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         && AddBinaryReserveBytes(reserveBytes, material.typedBlockBytes().size())
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
         && AddBinaryRepeatedReserveBytes(reserveBytes, material.stageShaderCount(), MaterialBinaryPayload::s_ShaderEntryBytes)
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // material flags
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // shading model id
     ;
 
     outBinary.clear();
@@ -1926,6 +2219,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     if(material.twoSided())
         materialFlags |= MaterialBinaryPayload::s_MaterialFlagTwoSided;
     AppendPOD(outBinary, materialFlags);
+    AppendPOD(outBinary, material.shadingModelId());
 
     return true;
 }

@@ -537,6 +537,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         drawItem.pipelineKey = pipelineKey;
         drawItem.instanceIndex = instanceIndex;
         drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
+        drawItem.shadingModelId = materialInfo->shadingModelId;
         drawItem.meshletConeCullScaleSafe = transform
             ? __hidden_material_pass::MeshletConeCullScaleSafe(LoadFloat(transform->scale))
             : true

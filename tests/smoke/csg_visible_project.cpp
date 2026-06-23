@@ -57,7 +57,7 @@ static constexpr f32 s_CutterScale = s_ReceiverScale / s_ReceiverBaseScale;
 static constexpr usize s_CsgVisibleShapeCount = 4u;
 static constexpr AStringView s_CubeMeshPath = "project/meshes/cube_hard_edges";
 static constexpr AStringView s_SolidMaterialPath = "project/smoke/csg_visible/materials/solid";
-static constexpr AStringView s_SmokeBxdfSurfaceMaterialInterface = "project/shaders/smoke_bxdf_surface";
+static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 namespace CsgVisibleShapeSlot{
 enum Enum : usize{
@@ -104,7 +104,7 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
         arena,
         s_CubeMeshPath,
         s_SolidMaterialPath,
-        s_SmokeBxdfSurfaceMaterialInterface,
+        s_SmokeSurfaceMaterialInterface,
         colorTint,
         position,
         scale

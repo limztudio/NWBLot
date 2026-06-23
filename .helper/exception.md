@@ -1,6 +1,6 @@
 # Dependency Inversion Exceptions
 
-Updated: 2026-05-25
+Updated: 2026-06-23
 
 Read this before changing code for the dependency-inversion cleanup schedule.
 
@@ -8,11 +8,11 @@ Read this before changing code for the dependency-inversion cleanup schedule.
 
 Project-owned assets may implement an engine-defined runtime contract without being treated as dependency inversion.
 
-BxDF material policy is project-owned. Do not move BxDF shader stages, BxDF shader includes, BxDF material interfaces, or BxDF material metadata selectors into `impl/assets` or any `engine/...` virtual asset path. Each project or test asset tree that needs BxDF must own its own project-local BxDF material interface, such as `project/shaders/bxdf_surface`, and `project/shaders/bxdf*` assets.
+Project material + BXDF policy is project-owned. Do not move a project's material shader stages (the surface/geometry mesh + pixel shaders), material shader includes (the surface material interface + color helpers), per-material BXDF lighting models, or material metadata selectors into `impl/assets` or any `engine/...` virtual asset path. Each project or test asset tree that needs materials must own its own project-local material interface, such as `project/shaders/surface`, its `project/shaders/surface*` / `project/shaders/material*` stage + helper assets, and its per-material BXDF lighting models (e.g. `project/shaders/lambert_bxdf`) selected via the material `bxdf` field. (Note: "BXDF" means only the deferred lighting shading model; the G-buffer-writing surface/geometry pipeline is "surface"/"material", not "bxdf".)
 
-This includes project material/shader assets, such as BxDF shader stages under a project asset tree, being referenced by project material metadata and consumed by the engine through typed asset references, virtual asset paths, or declared shader-stage contracts.
+This includes project material/shader assets, such as the surface/geometry shader stages + the per-material BXDF lighting models under a project asset tree, being referenced by project material metadata and consumed by the engine through typed asset references, virtual asset paths, or declared shader-stage contracts.
 
-It also includes engine render-pass shaders declaring a project include root for a named project shader hook, such as a project-owned BxDF lighting include, when that include is the project's implementation of the material/lighting contract.
+It also includes engine render-pass shaders declaring a project include root for a project shader hook, such as the deferred lighting harness consuming the cook-generated per-material BXDF dispatch module (assembled from each material's project-owned BXDF), when that hook is the project's implementation of the material/lighting contract.
 
 The ownership direction is:
 
@@ -37,8 +37,8 @@ Do not use this exception to justify these shapes:
 
 - Core modules including or linking implementation/project modules.
 - Compatibility aliases in `core/*` that expose implementation ECS types.
-- Engine default assets owning project-specific BxDF/material policy.
-- BxDF shader stages, BxDF includes, BxDF material interfaces, or BxDF material metadata selectors placed under `impl/assets` or referenced as `engine/...`.
+- Engine default assets owning project-specific material/BXDF policy (the engine ships no default BXDF; every material declares its own).
+- Material/surface shader stages, material includes, material interfaces, per-material BXDF lighting models, or material metadata selectors placed under `impl/assets` or referenced as `engine/...`.
 - Project-specific shader or material implementations placed under `impl/assets/graphics/` or `impl/assets/shaders/` only because an engine path needs a default.
 - Engine shaders depending on arbitrary project shader internals instead of a narrow declared hook.
 - Hardcoded engine lookups of one project asset when the project should provide metadata or typed `AssetRef<T>` selection.

@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_SMOKE_BXDF_SLANGI
-#define NWB_SMOKE_BXDF_SLANGI
+#ifndef NWB_MATERIAL_COLOR_SLANGI
+#define NWB_MATERIAL_COLOR_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,39 +15,37 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_SMOKE_BXDF_COLOR_TRANSFORM
-#error "NWB_SMOKE_BXDF_COLOR_TRANSFORM must be defined by shader metadata"
+#ifndef NWB_MATERIAL_COLOR_TRANSFORM
+#error "NWB_MATERIAL_COLOR_TRANSFORM must be defined by shader metadata"
 #endif
 
-#ifndef NWB_SMOKE_BXDF_VERTEX_TINT
-#error "NWB_SMOKE_BXDF_VERTEX_TINT must be defined by shader metadata"
+#ifndef NWB_MATERIAL_VERTEX_TINT
+#error "NWB_MATERIAL_VERTEX_TINT must be defined by shader metadata"
 #endif
 
-float3 nwbSmokeBxdfApplyColorTransform(float3 color){
-#if NWB_SMOKE_BXDF_COLOR_TRANSFORM == 0
+float3 nwbMaterialApplyColorTransform(float3 color){
+#if NWB_MATERIAL_COLOR_TRANSFORM == 0
     return color;
-#elif NWB_SMOKE_BXDF_COLOR_TRANSFORM == 1
+#elif NWB_MATERIAL_COLOR_TRANSFORM == 1
     return sqrt(max(color, float3(0.0)));
 #else
-#error "unsupported NWB_SMOKE_BXDF_COLOR_TRANSFORM value"
-#endif
-}
-
-float3 nwbSmokeBxdfApplyVertexTint(float3 color){
-#if NWB_SMOKE_BXDF_VERTEX_TINT == 1
-    return color * float3(1.0, 0.92, 0.85);
-#elif NWB_SMOKE_BXDF_VERTEX_TINT == 0
     return color;
-#else
-#error "unsupported NWB_SMOKE_BXDF_VERTEX_TINT value"
 #endif
 }
 
-float3 nwbSmokeBxdfVertexColor(float3 color){
-    return clamp(nwbSmokeBxdfApplyVertexTint(nwbSmokeBxdfApplyColorTransform(color)), float3(0.0), float3(1.0));
+float3 nwbMaterialApplyVertexTint(float3 color){
+#if NWB_MATERIAL_VERTEX_TINT == 1
+    return color * float3(1.0, 0.92, 0.85);
+#else
+    return color;
+#endif
 }
 
-float3 nwbSmokeBxdfPixelColor(float3 color){
+float3 nwbMaterialVertexColor(float3 color){
+    return clamp(nwbMaterialApplyVertexTint(nwbMaterialApplyColorTransform(color)), float3(0.0), float3(1.0));
+}
+
+float3 nwbMaterialPixelColor(float3 color){
     return color;
 }
 

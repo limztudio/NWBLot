@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "bxdf.slangi"
+#include "material_color.slangi"
 #include "mesh/gbuffer_io.slangi"
 
 
@@ -25,6 +25,8 @@ NwbMeshGBufferOutput main(NwbMeshPixelInput input){
     nwbLoadMeshPixelInput(input);
 
     const float3 baseColor = nwbProjectUvDebug(inUv0) * inColor.rgb;
+    // The shading model is data-driven: this material's `bxdf` (lighting bxdf) declaration determines which BXDF the deferred
+    // lighting pass invokes for these pixels. The PS just writes the surface; the renderer delivers the id.
     nwbWriteMeshGBuffer(baseColor, inNormal, inWorldPosition);
 
     return nwbBuildMeshGBufferOutput();

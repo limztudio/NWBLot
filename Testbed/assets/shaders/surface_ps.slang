@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "bxdf.slangi"
+#include "material_color.slangi"
 #include "mesh/gbuffer_io.slangi"
 
 
@@ -12,7 +12,7 @@
 NwbMeshGBufferOutput main(NwbMeshPixelInput input){
     nwbLoadMeshPixelInput(input);
 
-    nwbWriteMeshGBuffer(nwbBxdfPixelColor(inColor.rgb), inNormal, inWorldPosition);
+    nwbWriteMeshGBuffer(nwbMaterialPixelColor(inColor.rgb), inNormal, inWorldPosition);
 
     return nwbBuildMeshGBufferOutput();
 }

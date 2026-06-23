@@ -251,12 +251,30 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     ))
         return false;
 
+    // Assign each material its deferred shading-model id from the unique set of `bxdf` declarations, then
+    // generate the deferred lighting BXDF dispatch module the engine harness includes. Both run before
+    // shader preparation (so the harness picks up the module + the dependency checksum covers each BXDF) and
+    // before the materials are built (so the id is baked into each cooked material).
+    if(!AssignMaterialShadingModelIds(materialEntries, context.scratchArena))
+        return false;
+
+    Path deferredBxdfIncludeRoot(context.arena);
+    if(!EmitDeferredBxdfDispatchModule(
+        context.resolvedPaths.cacheDirectory,
+        context.configurationSafeName,
+        materialEntries,
+        deferredBxdfIncludeRoot,
+        context.scratchArena
+    ))
+        return false;
+
     if(!AssetsGraphicsCookDetail::PrepareShaderEntriesForCook(
         context.arena,
         graphicsMetadata.shaderCook,
         context.resolvedPaths,
         materialBindIncludeRoot,
         csgShapeIncludeRoot,
+        deferredBxdfIncludeRoot,
         graphicsMetadata.includeMetadata,
         graphicsMetadata.shaderEntries,
         materialEntries,

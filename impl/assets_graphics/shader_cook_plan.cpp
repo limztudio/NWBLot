@@ -368,6 +368,7 @@ bool PrepareShaderEntriesForCook(
     const ResolvedCookPaths& resolvedPaths,
     const Path& materialBindIncludeRoot,
     const Path& csgShapeIncludeRoot,
+    const Path& deferredBxdfIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
     const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
@@ -403,6 +404,8 @@ bool PrepareShaderEntriesForCook(
     usize implicitIncludeRootCount = 0u;
     if(!materialBindIncludeRoot.empty())
         ++implicitIncludeRootCount;
+    if(!deferredBxdfIncludeRoot.empty())
+        ++implicitIncludeRootCount;
     if(!csgShapeIncludeRoot.empty()){
         ++implicitIncludeRootCount;
         if(implicitIncludeRootCount > Limit<usize>::s_Max - resolvedPaths.assetRoots.size()){
@@ -414,6 +417,8 @@ bool PrepareShaderEntriesForCook(
     implicitIncludeRoots.reserve(implicitIncludeRootCount);
     if(!materialBindIncludeRoot.empty())
         implicitIncludeRoots.push_back(materialBindIncludeRoot);
+    if(!deferredBxdfIncludeRoot.empty())
+        implicitIncludeRoots.push_back(deferredBxdfIncludeRoot);
     if(!csgShapeIncludeRoot.empty()){
         implicitIncludeRoots.push_back(csgShapeIncludeRoot);
         for(const Path& assetRoot : resolvedPaths.assetRoots)

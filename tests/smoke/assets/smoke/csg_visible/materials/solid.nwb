@@ -1,14 +1,15 @@
 material asset;
 
-asset.interface = "project/shaders/smoke_bxdf_surface";
+asset.interface = "project/shaders/smoke_surface";
+asset.bxdf = "shaders/smoke_lambert_bxdf.slangi";
 
 asset.shaders = {
-    "ps": "project/shaders/smoke_bxdf_ps",
-    "mesh": "project/shaders/smoke_bxdf_ms",
+    "ps": "project/shaders/smoke_surface_ps",
+    "mesh": "project/shaders/smoke_surface_ms",
 };
 asset.shader_variant = [
-    "NWB_SMOKE_BXDF_COLOR_TRANSFORM=0",
-    "NWB_SMOKE_BXDF_VERTEX_TINT=0",
+    "NWB_SMOKE_MATERIAL_COLOR_TRANSFORM=0",
+    "NWB_SMOKE_MATERIAL_VERTEX_TINT=0",
 ];
 asset.parameters = {
     "surface": {

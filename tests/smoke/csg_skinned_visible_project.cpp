@@ -54,7 +54,7 @@ static constexpr AStringView s_ReceiverMaterialPath = "project/smoke/transparent
 #else
 static constexpr AStringView s_ReceiverMaterialPath = "project/smoke/csg_visible/materials/solid";
 #endif
-static constexpr AStringView s_SmokeBxdfSurfaceMaterialInterface = "project/shaders/smoke_bxdf_surface";
+static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 static constexpr Name s_ReceiverGroup("project/smoke/csg_skinned_visible/female_receiver");
 static constexpr Name s_ModelMeshObject("mesh");
 static constexpr Name s_CutterAnchorBoneName("hip");
@@ -164,7 +164,7 @@ private:
         auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
         renderer.material = material;
 
-        const Name materialInterface(s_SmokeBxdfSurfaceMaterialInterface);
+        const Name materialInterface(s_SmokeSurfaceMaterialInterface);
         entity.addComponent<NWB::Impl::MaterialInstanceComponent>(m_context.objectArena, materialInterface);
         if(!NWB::Impl::SetMaterialMutableFloat4(
             *m_world,

@@ -3,14 +3,19 @@
 
 
 #include "lighting_framework.slangi"
+// Cook-generated dispatch module: assembled from every material's `bxdf` declaration (see the asset cooker's
+// EmitDeferredBxdfDispatchModule). It defines nwbDeferredDispatchBxdf(shadingModel, surface, shadowMask),
+// which routes each pixel to the BXDF the owning material authored. The engine ships no BXDF of its own.
+#include "deferred/generated/bxdf_dispatch.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Engine default deferred lighting shader: load the surface the geometry pass packed into the G-buffer and
-// shade it with the engine's built-in whole-surface model (shading model 0). A project overrides this shader
-// (built on the same framework) to dispatch on surface.shadingModel to its own per-material BXDFs.
+// Deferred lighting harness. The engine provides only the frame: unpack the surface the geometry pass packed
+// into the G-buffer, pass through the background, then invoke the material-authored BXDF by its shading-model
+// id. All shading lives in the per-material BXDFs the cook assembled into the dispatch module above; nothing
+// here hard-codes a model, and there is no default (an unknown id renders magenta).
 NwbDeferredLightingPixelOutput main(NwbDeferredLightingPixelInput input){
     NwbDeferredLightingPixelOutput output;
 
@@ -22,7 +27,7 @@ NwbDeferredLightingPixelOutput main(NwbDeferredLightingPixelInput input){
 
     const uint shadowMask = nwbBxdfLoadShadowMask(int2(input.position.xy));
     const float3 shadedColor = clamp(
-        nwbSceneApplyLighting(surface.baseColor, surface.normal, float4(0.0, 0.0, 0.0, 1.0), surface.worldPosition, shadowMask),
+        nwbDeferredDispatchBxdf(surface.shadingModel, surface, shadowMask),
         float3(0.0),
         float3(1.0)
     );

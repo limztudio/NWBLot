@@ -1,5 +1,5 @@
 package: comgr_utils
 version: rdts-2026-06-11 (commit c99b131128d50bca3d76f0a4cde7993cfc947741)
-updated_utc: 2026-06-20T15:40:47Z
+updated_utc: 2026-06-23T16:02:45Z
 source: https://github.com/GPUOpen-Tools/comgr_utils/releases/tag/rdts-2026-06-11
-notes: Static helper over amd_comgr (single TU source/comgr_utils.cpp). amd_comgr.h flattened to top-level 3rd_parties/comgr. The amd_comgr runtime lib is dlopen/dlsym loaded, not linked. CMake rewritten (no FetchContent).
+notes: Static helper over amd_comgr (single TU source/comgr_utils.cpp). amd_comgr.h flattened to top-level 3rd_parties/comgr and consumed via nwb::comgr_headers. The amd_comgr runtime lib is dlopen/dlsym loaded, not linked. CMake rewritten (no FetchContent).

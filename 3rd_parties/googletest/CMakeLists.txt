@@ -9,7 +9,7 @@ add_library(gtest STATIC "${CMAKE_CURRENT_LIST_DIR}/src/gtest-all.cc")
 add_library(nwb::gtest ALIAS gtest)
 
 target_include_directories(gtest
-    PUBLIC  "${CMAKE_CURRENT_LIST_DIR}/include"
+    SYSTEM PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include"
     PRIVATE "${CMAKE_CURRENT_LIST_DIR}")   # gtest-all.cc pulls in "src/..." relative to the package root
 
 find_package(Threads QUIET)

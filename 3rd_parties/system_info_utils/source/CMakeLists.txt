@@ -29,6 +29,7 @@ endif()
 target_include_directories(${PROJECT_NAME}
         PUBLIC .)
 target_link_libraries(${PROJECT_NAME} PRIVATE nwb::rapidjson)
+nwb_disable_vendor_warnings(${PROJECT_NAME})
 
 if (SYSTEM_INFO_ENABLE_PACKAGING)
     install(TARGETS ${PROJECT_NAME}

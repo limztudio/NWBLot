@@ -549,6 +549,7 @@ bool PrepareShaderEntriesForCook(
             preparedEntry.dependencies,
             {
                 { resolvedPaths.repoRoot, "repo" },
+                { resolvedPaths.cacheDirectory, "generated_cache" },
                 { materialBindIncludeRoot, MaterialBindNames::GeneratedIncludeCacheDirectoryText() },
                 { csgShapeIncludeRoot, "csg_modules" }
             },

@@ -1,5 +1,5 @@
 package: isa_spec_manager
 version: 1.2.0
-updated_utc: 2026-06-20
+updated_utc: 2026-06-23T16:02:45Z
 source: https://github.com/GPUOpen-Tools/isa_spec_manager
-notes: Only the isa_decoder static lib is built (source/isa_decoder + source/common subset + top-level tinyxml2). Bundled third_party flattened (tinyxml2/cxxopts lifted, duplicate json deleted). Pruned dead: source/common/logger.{cpp,h}, include/amdisa/isa_explorer.h, the bypassed package CMakeLists, README/RELEASE_NOTES, _clang-format, .gitignore.
+notes: Top-level CMake wrapper builds only the isa_decoder static lib (source/isa_decoder + source/common subset + top-level nwb::tinyxml2). Bundled third_party flattened (tinyxml2/cxxopts lifted, duplicate json deleted). Pruned dead: source/common/logger.{cpp,h}, include/amdisa/isa_explorer.h, the bypassed package CMakeLists, README/RELEASE_NOTES, _clang-format, .gitignore.

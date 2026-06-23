@@ -7,3 +7,5 @@ if(UNIX)
     find_package(Threads REQUIRED)
     target_link_libraries(zstd PRIVATE Threads::Threads)
 endif()
+
+nwb_disable_vendor_warnings(zstd)

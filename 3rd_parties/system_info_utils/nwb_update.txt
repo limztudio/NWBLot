@@ -1,5 +1,5 @@
 package: system_info_utils
 version: 2.3
-updated_utc: 2026-06-20T15:40:47Z
+updated_utc: 2026-06-23T16:02:45Z
 source: https://github.com/GPUOpen-Tools/system_info_utils/releases/tag/v2.3
-notes: system_info static lib (source/{system_info_reader,driver_overrides_reader}.cpp). nlohmann json from shared nwb::nlohmann_json; bundled third_party dependencies remain flattened/unused. Built via source/CMakeLists directly.
+notes: Top-level CMake wrapper builds the system_info static lib (source/{system_info_reader,driver_overrides_reader}.cpp). nlohmann json from shared nwb::nlohmann_json; bundled third_party dependencies remain flattened/unused. Built with vendor warnings suppressed.

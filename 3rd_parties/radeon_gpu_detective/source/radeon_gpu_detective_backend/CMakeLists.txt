@@ -30,7 +30,7 @@ target_include_directories(rgd_backend PRIVATE
 # nwb::nlohmann_json provides <nlohmann/json.hpp> (the single shared vendored copy); rgd_data_types.h pulls it
 # into the PUBLIC headers, so the link is PUBLIC.
 target_link_libraries(rgd_backend
-    PUBLIC amdrdf system_info AMD::ComgrUtils nwb::miniz nwb::nlohmann_json
+    PUBLIC amdrdf system_info AMD::ComgrUtils nwb::miniz nwb::nlohmann_json nwb::dev_driver_headers
     PRIVATE isa_decoder RmvBackend)
 if(WIN32)
     target_link_libraries(rgd_backend PRIVATE pix_events_decoder)

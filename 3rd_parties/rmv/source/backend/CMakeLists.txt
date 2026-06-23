@@ -30,6 +30,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 target_link_libraries(RmvBackend PUBLIC RmvParser system_info amdrdf)
+target_link_libraries(RmvBackend PRIVATE nwb::pevents_headers)
 
 set_target_properties(RmvBackend PROPERTIES
     CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON

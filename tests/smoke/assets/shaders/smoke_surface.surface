@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Solid smoke surface hook fragment. The cook wraps it with the engine pixel-shader authoring + this material's
+// typed .bind to generate the G-buffer pixel shader.
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbSmokeSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
+    const float3 baseColor = clamp((surface.base_color * runtime.color_tint).rgb, float3(0.0), float3(1.0));
+    return nwbMakeMeshSurface(baseColor, inNormal);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

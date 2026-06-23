@@ -165,6 +165,7 @@ struct MaterialSurfaceInfo{
     MaterialTypedLayoutFieldVector typedLayoutFields;
     MaterialTypedByteVector constantTypedBytes;
     MaterialTypedByteVector mutableDefaultTypedBytes;
+    u32 shadingModelId = 0u;
     bool transparent = false;
     bool twoSided = false;
 

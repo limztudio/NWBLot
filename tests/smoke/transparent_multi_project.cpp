@@ -48,7 +48,7 @@ static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr AStringView s_CubeMeshPath = "project/meshes/cube";
-static constexpr AStringView s_SmokeBxdfSurfaceMaterialInterface = "project/shaders/smoke_bxdf_surface";
+static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 static constexpr AStringView s_TransparentSharedMaterialPath = "project/smoke/transparent_multi/materials/shared";
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
@@ -125,7 +125,7 @@ static void ApplyTransparentCsgRotation(
         arena,
         meshPath,
         materialPath,
-        s_SmokeBxdfSurfaceMaterialInterface,
+        s_SmokeSurfaceMaterialInterface,
         colorTint,
         position,
         scale

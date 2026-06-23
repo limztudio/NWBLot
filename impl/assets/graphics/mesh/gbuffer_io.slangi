@@ -5,7 +5,12 @@
 #ifndef NWB_GRAPHICS_MESH_GBUFFER_IO_SLANGI
 #define NWB_GRAPHICS_MESH_GBUFFER_IO_SLANGI
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "pixel_input.slangi"
+#include "material_typed_bindings.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,12 +53,62 @@ float3 nwbGBufferEncodeNormal(float3 normal){
     return normalVector * 0.5 + 0.5;
 }
 
-void nwbWriteMeshGBuffer(float3 baseColor, float3 normal, float3 worldPosition){
-    outGBufferBaseColor = float4(clamp(baseColor, float3(0.0), float3(1.0)), 1.0);
-    outGBufferNormal = float4(nwbGBufferEncodeNormal(normal), 1.0);
-    outGBufferWorldPosition = float4(worldPosition, 1.0);
+// The owning material's shading-model id is data-driven: the renderer packs it into the high bits of the
+// per-draw dispatch word, which the pixel shader reads back here. A material never hard-codes its id in
+// shader source -- it declares a `bxdf`, and the cook assigns + delivers the id. The push constant is reached
+// differently depending on whether CSG injected its own per-draw block, or the mesh runtime is in scope.
+#if NWB_CSG_ENABLED
+uint nwbMeshShadingModelId(){
+    return (g_NwbCsgMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
 }
+uint nwbMeshInstanceIndex(){
+    return g_NwbCsgMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
+}
+uint nwbMeshMaterialConstantByteOffset(){
+    return g_NwbCsgMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET];
+}
+NwbMeshInstanceData nwbMeshLoadInstance(){
+    return g_NwbMeshInstances[nwbMeshInstanceIndex()];
+}
+#elif defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI)
+uint nwbMeshShadingModelId(){
+    return (g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
+}
+#else
+struct NwbMeshGBufferDrawConstants{
+    uint4 dispatch;
+    float4 viewportRect;
+    float4 scissorRect;
+};
+[[vk::push_constant]]
+ConstantBuffer<NwbMeshGBufferDrawConstants> g_NwbMeshGBufferDrawConstants;
+uint nwbMeshShadingModelId(){
+    return (g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
+}
+// The pixel stage reads the same per-draw push constant the mesh stage saw (it is visible to amplification,
+// mesh, and pixel), so a material's surface hook can load its typed .bind constants per-pixel via the instance
+// index + material-constant byte offset, exactly as the mesh runtime does.
+uint nwbMeshInstanceIndex(){
+    return g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
+}
+uint nwbMeshMaterialConstantByteOffset(){
+    return g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET];
+}
+NwbMeshInstanceData nwbMeshLoadInstance(){
+    return g_NwbMeshInstances[nwbMeshInstanceIndex()];
+}
+#endif
 
+// Full G-buffer write: the three RGBA16F targets carry, in their otherwise-unused alpha channels, the
+// shading-model id (base-color.a, delivered as data by the renderer) + two user BXDF parameters (normal.a,
+// world.a). The deferred lighting framework unpacks these into the surface the material BXDF reads, so a
+// material chooses what those two scalars mean (e.g. roughness / metallic) while its shading model is fixed
+// by its `bxdf` declaration.
+void nwbWriteMeshGBufferParams(float3 baseColor, float3 normal, float3 worldPosition, float param0, float param1){
+    outGBufferBaseColor = float4(clamp(baseColor, float3(0.0), float3(1.0)), float(nwbMeshShadingModelId()));
+    outGBufferNormal = float4(nwbGBufferEncodeNormal(normal), param0);
+    outGBufferWorldPosition = float4(worldPosition, param1);
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

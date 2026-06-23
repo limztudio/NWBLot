@@ -2,8 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "bxdf.slangi"
-#include "mesh/gbuffer_io.slangi"
+// Surface hook fragment. Defines this material's nwbMaterialSurface(); the cook wraps it with the engine
+// pixel-shader authoring + this material's typed .bind to generate the G-buffer pixel shader. Modulates a
+// procedural UV checker by the material's base color.
+#include "material_color.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,15 +23,13 @@ float3 nwbProjectUvDebug(const float2 uv0){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NwbMeshGBufferOutput main(NwbMeshPixelInput input){
-    nwbLoadMeshPixelInput(input);
-
-    const float3 baseColor = nwbProjectUvDebug(inUv0) * inColor.rgb;
-    nwbWriteMeshGBuffer(baseColor, inNormal, inWorldPosition);
-
-    return nwbBuildMeshGBufferOutput();
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const NwbRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
+    const float3 baseColor = (surface.base_color * runtime.color_tint).rgb;
+    return nwbMakeMeshSurface(nwbProjectUvDebug(inUv0) * nwbMaterialVertexColor(baseColor), inNormal);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -35,7 +35,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     NWB::Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialCookScratchArena);
     EXPECT_TRUE(shaderCook.gatherShaderDependencies(
-        root / "assets" / "shaders" / "material_mesh.slang",
+        root / "assets" / "shaders" / "material_ps.slang",
         includeDirectories,
         dependencies,
         scratchArena
@@ -64,7 +64,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
 
     Path halfRoot(testArena.arena);
     Path halfOutputDirectory(testArena.arena);
-    EXPECT_TRUE(CookMaterialBindMaterialIntegrationWithMeshSource(
+    EXPECT_TRUE(CookMaterialBindMaterialIntegrationWithPixelSource(
         s_HalfMaterialBindSource,
         s_HalfMaterialMeta,
         s_HalfMaterialBindShaderProbeSource,
@@ -100,7 +100,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
 
     Path compactRoot(testArena.arena);
     Path compactOutputDirectory(testArena.arena);
-    EXPECT_TRUE(CookMaterialBindMaterialIntegrationWithMeshSource(
+    EXPECT_TRUE(CookMaterialBindMaterialIntegrationWithPixelSource(
         s_CompactIntegerMaterialBindSource,
         s_CompactIntegerMaterialMeta,
         s_CompactIntegerMaterialBindShaderProbeSource,
@@ -227,21 +227,6 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     errorCode.clear();
     EXPECT_TRUE(RemoveAllIfExists(unsupportedFieldRoot, errorCode));
 
-    Path missingShaderVariantRoot(testArena.arena);
-    Path missingShaderVariantOutputDirectory(testArena.arena);
-    EXPECT_FALSE(CookMaterialBindMaterialIntegration(
-        s_MinimalMaterialBindSource,
-        s_MissingShaderVariantMaterialMeta,
-        "material_bind_missing_shader_variant",
-        testArena,
-        missingShaderVariantRoot,
-        missingShaderVariantOutputDirectory
-    ));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("field 'shader_variant' is required")));
-
-    errorCode.clear();
-    EXPECT_TRUE(RemoveAllIfExists(missingShaderVariantRoot, errorCode));
-
     Path incompleteBindRoot(testArena.arena);
     Path incompleteBindOutputDirectory(testArena.arena);
     EXPECT_FALSE(CookMaterialBindMaterialIntegration(
@@ -268,7 +253,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         interfaceShaderMismatchOutputDirectory
     ));
     const Path interfaceShaderMismatchAssetRoot = interfaceShaderMismatchRoot / "assets";
-    EXPECT_TRUE(WriteMaterialBindMaterialIntegrationAssetsWithMeshSource(
+    EXPECT_TRUE(WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
         interfaceShaderMismatchAssetRoot,
         s_MinimalMaterialBindSource,
@@ -295,7 +280,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         interfaceIdentityMismatchOutputDirectory
     ));
     const Path interfaceIdentityMismatchAssetRoot = interfaceIdentityMismatchRoot / "assets";
-    EXPECT_TRUE(WriteMaterialBindMaterialIntegrationAssetsWithMeshSource(
+    EXPECT_TRUE(WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
         interfaceIdentityMismatchAssetRoot,
         s_MinimalMaterialBindSource,
@@ -337,7 +322,7 @@ TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
         outputDirectory
     ));
     const Path assetRoot = root / "assets";
-    EXPECT_TRUE(WriteMaterialBindMaterialIntegrationAssetsWithMeshSource(
+    EXPECT_TRUE(WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
         assetRoot,
         s_MinimalMaterialBindSource,
@@ -404,12 +389,12 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
 
     NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
     EXPECT_TRUE(LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
-    u64 initialMeshSourceChecksum = 0u;
+    u64 initialPixelSourceChecksum = 0u;
     EXPECT_TRUE(FindShaderArchiveSourceChecksum(
         records,
-        Name("project/shaders/material_mesh"),
-        Name("mesh"),
-        initialMeshSourceChecksum
+        Name("project/shaders/material_ps"),
+        Name("ps"),
+        initialPixelSourceChecksum
     ));
 
     EXPECT_TRUE(WriteTextFile(
@@ -443,14 +428,14 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
 
     records.clear();
     EXPECT_TRUE(LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
-    u64 updatedMeshSourceChecksum = 0u;
+    u64 updatedPixelSourceChecksum = 0u;
     EXPECT_TRUE(FindShaderArchiveSourceChecksum(
         records,
-        Name("project/shaders/material_mesh"),
-        Name("mesh"),
-        updatedMeshSourceChecksum
+        Name("project/shaders/material_ps"),
+        Name("ps"),
+        updatedPixelSourceChecksum
     ));
-    EXPECT_NE(updatedMeshSourceChecksum, initialMeshSourceChecksum);
+    EXPECT_NE(updatedPixelSourceChecksum, initialPixelSourceChecksum);
     EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;

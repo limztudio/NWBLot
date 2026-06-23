@@ -1,15 +1,8 @@
 material asset;
 
-asset.interface = "project/shaders/bxdf_surface";
-
-asset.shaders = {
-    "ps": "project/shaders/uv_debug_ps",
-    "mesh": "project/shaders/bxdf_ms",
-};
-asset.shader_variant = [
-    "NWB_BXDF_COLOR_TRANSFORM=0",
-    "NWB_BXDF_VERTEX_TINT=0",
-];
+asset.interface = "project/shaders/surface.bind";
+asset.surface = "project/shaders/uv_debug.surface";
+asset.bxdf = "project/shaders/toon.bxdf";
 asset.parameters = {
     "surface": {
         "base_color": "float4(0.78, 0.35, 1.0, 1.0)",

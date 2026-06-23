@@ -88,12 +88,7 @@ NwbMeshGeneratedVertex nwbMeshBuildGeneratedVertex(
     );
 }
 
-struct NwbMeshInstanceData{
-    float4 rotation;
-    float3 translation;
-    uint materialMutableByteOffset;
-    float4 scale;
-};
+#include "material_typed_bindings.slangi"
 
 [[vk::binding(NWB_MESH_BINDING_POSITION, NWB_MESH_SET)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbMeshPositions;
 [[vk::binding(NWB_MESH_BINDING_NORMAL, NWB_MESH_SET)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbMeshNormals;
@@ -101,13 +96,11 @@ struct NwbMeshInstanceData{
 [[vk::binding(NWB_MESH_BINDING_UV0, NWB_MESH_SET)]] StructuredBuffer<NwbMeshUv0, Std430DataLayout> g_NwbMeshUv0;
 [[vk::binding(NWB_MESH_BINDING_COLOR, NWB_MESH_SET)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbMeshColors;
 [[vk::binding(NWB_MESH_BINDING_MESHLET_DESC, NWB_MESH_SET)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbMeshlets;
-[[vk::binding(NWB_MESH_BINDING_MATERIAL_TYPED, NWB_MESH_SET)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMaterialTypedWords;
 [[vk::binding(NWB_MESH_BINDING_MESHLET_BOUNDS, NWB_MESH_SET)]] ByteAddressBuffer g_NwbMeshletBounds;
 [[vk::binding(NWB_MESH_BINDING_MESHLET_POSITION_REFS, NWB_MESH_SET)]] ByteAddressBuffer g_NwbMeshletPositionRefDeltas;
 [[vk::binding(NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS, NWB_MESH_SET)]] ByteAddressBuffer g_NwbMeshletAttributeRefDeltas;
 [[vk::binding(NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS, NWB_MESH_SET)]] StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbMeshletLocalVertexRefs;
 [[vk::binding(NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES, NWB_MESH_SET)]] ByteAddressBuffer g_NwbMeshletPrimitiveIndices;
-[[vk::binding(NWB_MESH_BINDING_INSTANCE, NWB_MESH_SET)]] StructuredBuffer<NwbMeshInstanceData, Std430DataLayout> g_NwbMeshInstances;
 
 struct NwbMeshPushConstants{
     uint4 dispatch;

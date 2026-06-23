@@ -368,6 +368,7 @@ bool PrepareShaderEntriesForCook(
     const ResolvedCookPaths& resolvedPaths,
     const Path& materialBindIncludeRoot,
     const Path& csgShapeIncludeRoot,
+    const Path& deferredBxdfIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
     const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
@@ -403,6 +404,8 @@ bool PrepareShaderEntriesForCook(
     usize implicitIncludeRootCount = 0u;
     if(!materialBindIncludeRoot.empty())
         ++implicitIncludeRootCount;
+    if(!deferredBxdfIncludeRoot.empty())
+        ++implicitIncludeRootCount;
     if(!csgShapeIncludeRoot.empty()){
         ++implicitIncludeRootCount;
         if(implicitIncludeRootCount > Limit<usize>::s_Max - resolvedPaths.assetRoots.size()){
@@ -414,6 +417,8 @@ bool PrepareShaderEntriesForCook(
     implicitIncludeRoots.reserve(implicitIncludeRootCount);
     if(!materialBindIncludeRoot.empty())
         implicitIncludeRoots.push_back(materialBindIncludeRoot);
+    if(!deferredBxdfIncludeRoot.empty())
+        implicitIncludeRoots.push_back(deferredBxdfIncludeRoot);
     if(!csgShapeIncludeRoot.empty()){
         implicitIncludeRoots.push_back(csgShapeIncludeRoot);
         for(const Path& assetRoot : resolvedPaths.assetRoots)
@@ -527,7 +532,12 @@ bool PrepareShaderEntriesForCook(
             scratchArena
         ))
             return false;
-        preparedEntry.usesMaterialTypedBinding = preparedEntry.entry.archiveStage.view() == "mesh" && preparedEntry.materialTypedBindingInterface;
+        // The mesh shader is now generic + interface-free; the per-material PIXEL shader is the stage that reads
+        // the typed .bind material constants (the material's surface hook), so the pixel stage also receives the
+        // typed binding when it depends on a material interface.
+        preparedEntry.usesMaterialTypedBinding =
+            (preparedEntry.entry.archiveStage.view() == "mesh" || preparedEntry.entry.archiveStage.view() == "ps")
+            && preparedEntry.materialTypedBindingInterface;
         preparedEntry.materialTypedBindingInterfacePath = Move(materialTypedBindingInterfaceText);
         if(preparedEntry.usesMaterialTypedBinding && !__hidden_shader_cook_plan::SetShaderImplicitDefine(
             preparedEntry.entry,

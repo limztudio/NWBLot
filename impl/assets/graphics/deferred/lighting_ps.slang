@@ -2,65 +2,32 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "binding_slots.h"
-#include "../scene/binding_slots.h"
-
-#define NWB_SCENE_SHADING_SET NWB_DEFERRED_LIGHTING_SET
-#define NWB_SCENE_SHADING_BINDING NWB_DEFERRED_LIGHTING_BINDING_SCENE_SHADING
-#define NWB_SCENE_LIGHT_LIST_SET NWB_DEFERRED_LIGHTING_SET
-#define NWB_SCENE_LIGHT_LIST_BINDING NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST
-
-#include "../scene/lighting.slangi"
+#include "lighting_framework.slangi"
+// Cook-generated dispatch module: assembled from every material's `bxdf` declaration (see the asset cooker's
+// EmitDeferredBxdfDispatchModule). It defines nwbDeferredDispatchBxdf(shadingModel, surface, shadowMask),
+// which routes each pixel to the BXDF the owning material authored. The engine ships no BXDF of its own.
+#include "deferred/generated/bxdf_dispatch.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferBaseColor;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_NORMAL, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferNormal;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferWorldPosition;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferDepth;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, NWB_DEFERRED_LIGHTING_SET)]] SamplerState g_DeferredSampler;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<uint> g_NwbShadowVisibility;
-
-struct NwbDeferredLightingPixelInput{
-    float4 position : SV_Position;
-    [[vk::location(NWB_DEFERRED_FULLSCREEN_UV_LOCATION)]] float2 uv : TEXCOORD0;
-};
-
-struct NwbDeferredLightingPixelOutput{
-    [[vk::location(NWB_DEFERRED_COLOR_TARGET_LOCATION)]] float4 color : SV_Target0;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-float3 nwbDeferredDecodeNormal(float3 value){
-    return nwbSafeNormalize(value * 2.0 - 1.0, float3(0.0, 0.0, 1.0));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+// Deferred lighting harness. The engine provides only the frame: unpack the surface the geometry pass packed
+// into the G-buffer, pass through the background, then invoke the material-authored BXDF by its shading-model
+// id. All shading lives in the per-material BXDFs the cook assembled into the dispatch module above; nothing
+// here hard-codes a model, and there is no default (an unknown id renders magenta).
 NwbDeferredLightingPixelOutput main(NwbDeferredLightingPixelInput input){
     NwbDeferredLightingPixelOutput output;
 
-    const float3 baseColor = g_GBufferBaseColor.Sample(g_DeferredSampler, input.uv).rgb;
-    const float depth = g_GBufferDepth.Sample(g_DeferredSampler, input.uv).r;
-    if(depth >= 0.999999){
-        output.color = float4(baseColor, 1.0);
+    const NwbBxdfSurface surface = nwbBxdfLoadSurface(input.uv);
+    if(surface.isBackground){
+        output.color = float4(surface.baseColor, 1.0);
         return output;
     }
 
-    const float3 normal = nwbDeferredDecodeNormal(g_GBufferNormal.Sample(g_DeferredSampler, input.uv).rgb);
-    const float3 worldPosition = g_GBufferWorldPosition.Sample(g_DeferredSampler, input.uv).xyz;
-    // The shadow pass writes one visibility bit per light per pixel; the lighting framebuffer is 1:1
-    // with the G-buffer, so the fragment coordinate indexes the matching visibility texel directly.
-    const uint shadowMask = g_NwbShadowVisibility.Load(int3(int2(input.position.xy), 0));
+    const uint shadowMask = nwbBxdfLoadShadowMask(int2(input.position.xy));
     const float3 shadedColor = clamp(
-        nwbSceneApplyLighting(baseColor, normal, float4(0.0, 0.0, 0.0, 1.0), worldPosition, shadowMask),
+        nwbDeferredDispatchBxdf(surface.shadingModel, surface, shadowMask),
         float3(0.0),
         float3(1.0)
     );
@@ -71,4 +38,3 @@ NwbDeferredLightingPixelOutput main(NwbDeferredLightingPixelInput input){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

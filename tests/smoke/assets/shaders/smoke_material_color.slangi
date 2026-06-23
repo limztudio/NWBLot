@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_BXDF_SLANGI
-#define NWB_BXDF_SLANGI
+#ifndef NWB_SMOKE_MATERIAL_COLOR_SLANGI
+#define NWB_SMOKE_MATERIAL_COLOR_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,38 +15,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_BXDF_COLOR_TRANSFORM
-#error "NWB_BXDF_COLOR_TRANSFORM must be defined by shader metadata"
-#endif
-
-#ifndef NWB_BXDF_VERTEX_TINT
-#error "NWB_BXDF_VERTEX_TINT must be defined by shader metadata"
-#endif
-
-float3 nwbBxdfApplyColorTransform(float3 color){
-#if NWB_BXDF_COLOR_TRANSFORM == 0
-    return color;
-#elif NWB_BXDF_COLOR_TRANSFORM == 1
+// Color helpers a smoke material's surface hook may apply. These were compile-time variant toggles; they are
+// now plain functions a hook calls (or not): the transparent material applies the transform + tint, the solid
+// materials use the base color directly.
+float3 nwbSmokeMaterialApplyColorTransform(float3 color){
     return sqrt(max(color, float3(0.0)));
-#else
-    return color;
-#endif
 }
 
-float3 nwbBxdfApplyVertexTint(float3 color){
-#if NWB_BXDF_VERTEX_TINT == 1
+float3 nwbSmokeMaterialApplyVertexTint(float3 color){
     return color * float3(1.0, 0.92, 0.85);
-#else
-    return color;
-#endif
 }
 
-float3 nwbBxdfVertexColor(float3 color){
-    return clamp(nwbBxdfApplyVertexTint(nwbBxdfApplyColorTransform(color)), float3(0.0), float3(1.0));
-}
-
-float3 nwbBxdfPixelColor(float3 color){
-    return color;
+float3 nwbSmokeMaterialVertexColor(float3 color){
+    return clamp(nwbSmokeMaterialApplyVertexTint(nwbSmokeMaterialApplyColorTransform(color)), float3(0.0), float3(1.0));
 }
 
 

@@ -2,25 +2,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_GRAPHICS_MESH_PIXEL_IO_SLANGI
-#define NWB_GRAPHICS_MESH_PIXEL_IO_SLANGI
-
-#include "pixel_input.slangi"
+#ifndef NWB_MATERIAL_COLOR_SLANGI
+#define NWB_MATERIAL_COLOR_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct NwbMeshColorOutput{
-    [[vk::location(NWB_MESH_COLOR_TARGET_LOCATION)]] float4 color : SV_Target0;
-};
+#include <common/math.slangi>
 
-static float4 outColor;
 
-NwbMeshColorOutput nwbBuildMeshColorOutput(){
-    NwbMeshColorOutput output;
-    output.color = outColor;
-    return output;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Clamps a material's computed surface color to the displayable [0,1] range. A material that wants a color
+// transform applies it directly in its surface hook (the engine has no compile-time color variant).
+float3 nwbMaterialVertexColor(float3 color){
+    return clamp(color, float3(0.0), float3(1.0));
 }
 
 

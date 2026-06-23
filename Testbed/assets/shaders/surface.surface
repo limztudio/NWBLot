@@ -1,0 +1,23 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Surface hook fragment. Defines this material's nwbMaterialSurface(); the cook wraps it with the engine
+// pixel-shader authoring + this material's typed .bind to generate the G-buffer pixel shader. base color comes
+// from the typed material constants (base_color x color_tint), read per-pixel.
+#include "material_color.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const NwbRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
+    const float3 baseColor = (surface.base_color * runtime.color_tint).rgb;
+    return nwbMakeMeshSurface(nwbMaterialVertexColor(baseColor), inNormal);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

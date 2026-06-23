@@ -160,7 +160,7 @@ function(nwb_microhttpd_generate_config output_file)
         int main(void)
         {
             const char *name = __func__;
-            return name[0] == '\\0';
+            return name[0] == 0;
         }
     " HAVE___FUNC__)
     check_c_source_compiles("

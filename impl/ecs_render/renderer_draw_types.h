@@ -22,6 +22,7 @@ struct MaterialPassDrawItem{
     MaterialPipelineKey pipelineKey;
     u32 instanceIndex = 0;
     u32 materialConstantByteOffset = 0u;
+    u32 shadingModelId = 0u;
     bool meshletConeCullScaleSafe = false;
 };
 

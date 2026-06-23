@@ -23,13 +23,9 @@
 #define NWB_CSG_ENABLED 0
 #endif
 
-#ifndef NWB_MATERIAL_TYPED_BINDING
-#error "mesh material shaders must include a generated .bind material interface"
-#endif
-
-#if NWB_MATERIAL_TYPED_BINDING != NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE
-#error "mesh material shaders require NWB_MATERIAL_TYPED_BINDING to match NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE"
-#endif
+// The mesh shader is engine-owned + generic (shared_ms.slang): it does not read typed material data, so it
+// requires no .bind interface. A material's constants are read per-pixel in its surface hook (see
+// material_ps_authoring.slangi); the typed-binding contract now gates the pixel shader, not the mesh shader.
 
 #include "runtime.slangi"
 #include "encoding.slangi"

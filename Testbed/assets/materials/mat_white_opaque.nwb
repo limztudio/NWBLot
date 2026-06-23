@@ -1,15 +1,8 @@
 material asset;
 
-asset.interface = "project/shaders/bxdf_surface";
-
-asset.shaders = {
-    "ps": "project/shaders/solid_ps",
-    "mesh": "project/shaders/bxdf_ms",
-};
-asset.shader_variant = [
-    "NWB_BXDF_COLOR_TRANSFORM=0",
-    "NWB_BXDF_VERTEX_TINT=0",
-];
+asset.interface = "project/shaders/surface.bind";
+asset.surface = "project/shaders/surface.surface";
+asset.bxdf = "project/shaders/lambert.bxdf";
 asset.parameters = {
     "surface": {
         "base_color": "float4(1.0, 1.0, 1.0, 1.0)",

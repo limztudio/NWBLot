@@ -251,12 +251,112 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     ))
         return false;
 
+    // Resolve each material's `bxdf` + `surface` virtual paths (project/...; .bxdf / .surface) to absolute
+    // sources against the asset roots -- only known here, in the cross-asset phase. Each resolved path becomes a
+    // verbatim #include in a generated shader (the BXDF dispatch module / the per-material pixel shader) covered
+    // by the dependency checksum's repo alias; this mirrors how a material's `interface` resolves to a discovered
+    // .bind. ResolveVirtualAssetPath preserves the asset-root case + canonicalizes the appended components
+    // (matching the on-disk lowercase shader file names).
+    const auto resolveMaterialVirtualSource = [&context](auto& virtualSource, const AStringView label, const AStringView materialName) -> bool {
+        if(virtualSource.empty())
+            return true;
+
+        Path resolvedSource(context.arena);
+        if(!Core::Assets::ResolveVirtualAssetPath(
+            context.resolvedPaths.assetRoots,
+            AStringView(virtualSource),
+            resolvedSource,
+            context.scratchArena
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: material '{}' {} '{}' does not resolve against any asset root")
+                , StringConvert(materialName)
+                , StringConvert(label)
+                , StringConvert(virtualSource.c_str())
+            );
+            return false;
+        }
+
+        auto resolvedText = PathToString(context.scratchArena, resolvedSource);
+        for(auto& ch : resolvedText){
+            if(ch == '\\')
+                ch = '/';
+        }
+        virtualSource.assign(AStringView(resolvedText));
+        return true;
+    };
+    for(auto& materialEntry : materialEntries){
+        const AStringView materialName(materialEntry.virtualPath.c_str());
+        if(!resolveMaterialVirtualSource(materialEntry.bxdfSource, AStringView("bxdf"), materialName))
+            return false;
+        if(!resolveMaterialVirtualSource(materialEntry.surfaceSource, AStringView("surface"), materialName))
+            return false;
+    }
+
+    // Assign each material its deferred shading-model id from the unique set of `bxdf` declarations, then
+    // generate the deferred lighting BXDF dispatch module the engine harness includes. Both run before
+    // shader preparation (so the harness picks up the module + the dependency checksum covers each BXDF) and
+    // before the materials are built (so the id is baked into each cooked material).
+    if(!AssignMaterialShadingModelIds(materialEntries, context.scratchArena))
+        return false;
+
+    Path deferredBxdfIncludeRoot(context.arena);
+    if(!EmitDeferredBxdfDispatchModule(
+        context.resolvedPaths.cacheDirectory,
+        context.configurationSafeName,
+        materialEntries,
+        deferredBxdfIncludeRoot,
+        context.scratchArena
+    ))
+        return false;
+
+    // Generate each material's G-buffer pixel shader from its `surface` hook (when it omits explicit `shaders`),
+    // assigning its stage shaders (pixel = generated PS, mesh = the shared engine mesh shader). Then synthesize a
+    // shader entry per generated PS so it is prepared + cooked like any authored shader. Runs before shader prep
+    // (so the entries are cooked) and before ValidateMaterials (so each material's stage shaders are populated).
+    auto& materialCookArena = materialEntries.get_allocator().arena();
+    MaterialCookVector<GeneratedMaterialPixelShader> generatedPixelShaders(materialCookArena);
+    if(!EmitMaterialPixelShaders(
+        materialCookArena,
+        context.resolvedPaths.cacheDirectory,
+        context.configurationSafeName,
+        AStringView("engine/graphics/mesh/shared_ms"),
+        materialEntries,
+        generatedPixelShaders,
+        context.scratchArena
+    ))
+        return false;
+
+    auto& shaderCookArena = graphicsMetadata.shaderEntries.get_allocator().arena();
+    for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedPixelShaders){
+        ShaderCook::ShaderEntry pixelShaderEntry(shaderCookArena);
+        pixelShaderEntry.name.assign(AStringView(generatedPixelShader.name));
+        pixelShaderEntry.stage.assign(AStringView("ps"));
+        pixelShaderEntry.archiveStage.assign(AStringView("ps"));
+        pixelShaderEntry.targetProfile.assign(AStringView("spirv_1_5"));
+        pixelShaderEntry.source.assign(AStringView(generatedPixelShader.source));
+        pixelShaderEntry.includeRoots.push_back(ShaderCook::CookString(AStringView("engine/graphics"), shaderCookArena));
+        pixelShaderEntry.emitMeshComputeShadow = false;
+
+        const AssetsGraphicsCookDetail::PreparedShaderKey shaderIdentityKey{
+            ToName(pixelShaderEntry.name),
+            ToName(pixelShaderEntry.archiveStage.view())
+        };
+        if(!graphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate generated pixel shader identity '{}'")
+                , StringConvert(pixelShaderEntry.name)
+            );
+            return false;
+        }
+        graphicsMetadata.shaderEntries.push_back(Move(pixelShaderEntry));
+    }
+
     if(!AssetsGraphicsCookDetail::PrepareShaderEntriesForCook(
         context.arena,
         graphicsMetadata.shaderCook,
         context.resolvedPaths,
         materialBindIncludeRoot,
         csgShapeIncludeRoot,
+        deferredBxdfIncludeRoot,
         graphicsMetadata.includeMetadata,
         graphicsMetadata.shaderEntries,
         materialEntries,

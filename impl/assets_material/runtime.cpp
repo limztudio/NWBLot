@@ -272,6 +272,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
 
     m_shaderVariant.clear();
     m_materialInterface = NAME_NONE;
+    m_shadingModelId = 0u;
     m_typedLayoutHash = 0u;
     m_typedLayoutBlocks.clear();
     m_typedLayoutFields.clear();
@@ -380,6 +381,11 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     }
     m_transparent = (materialFlags & MaterialBinaryPayload::s_MaterialFlagTransparent) != 0u;
     m_twoSided = (materialFlags & MaterialBinaryPayload::s_MaterialFlagTwoSided) != 0u;
+
+    if(!ReadPOD(binary, cursor, m_shadingModelId)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shading model id"));
+        return false;
+    }
 
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: trailing bytes detected"));

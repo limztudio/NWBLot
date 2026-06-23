@@ -76,6 +76,9 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
     if(!m_renderer.shaderSystem().loadDeferredCompositeVertexShader())
         return false;
 
+    // The deferred lighting shader is the engine harness; it includes the cook-generated BXDF dispatch module
+    // assembled from every material's `bxdf`. The engine ships no default BXDF and projects do not select a
+    // lighting shader -- shading is entirely material-driven (see EmitDeferredBxdfDispatchModule).
     if(!m_renderer.shaderSystem().loadShader(
         deferredState().m_lightingPixelShader,
         AssetsGraphicsDeferred::s_LightingPixelShaderName,

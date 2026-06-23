@@ -1927,7 +1927,7 @@ static bool EmitDeferredBxdfDispatchModuleImpl(
         source += "\n\n";
     }
 
-    source += "float3 nwbDeferredDispatchBxdf(uint shadingModel, NwbBxdfSurface surface, uint shadowMask){\n";
+    source += "float3 nwbDeferredDispatchBxdf(uint shadingModel, NwbBxdfSurface surface, int2 pixel){\n";
     source += "    switch(shadingModel){\n";
     for(usize id = 0u; id < sourceById.size(); ++id){
         if(sourceById[id].empty())
@@ -1940,7 +1940,7 @@ static bool EmitDeferredBxdfDispatchModuleImpl(
         source += "u: return ";
         source += s_DeferredBxdfModelPrefix;
         source += idView;
-        source += "(surface, shadowMask);\n";
+        source += "(surface, pixel);\n";
     }
     source += "    default: return float3(1.0, 0.0, 1.0); // no engine default BXDF: an unknown id shows magenta\n";
     source += "    }\n";

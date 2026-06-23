@@ -576,17 +576,19 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
 }
 
 bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& targets){
-    // The shadow-visibility image is the shared output of the shadow subsystem: hardware ray tracing
-    // writes a per-light visibility mask here, and the software distance-field fallback will write the
-    // same image. The deferred lighting pass always samples it, so it is allocated unconditionally and
-    // cleared to "all lit" each frame (then overwritten by whichever backend runs) to keep a single
-    // binding/shader path regardless of ray-tracing support.
-    targets.shadowVisibilityFormat = Core::Format::R32_UINT;
+    // The shadow-visibility image is the shared output of the shadow subsystem: both the hardware ray-traced
+    // and the software-BVH backends write per-light colored transmittance into it, one Texture2DArray layer
+    // per shadow slot (NWB_SCENE_SHADOW_SLOT_COUNT). The deferred lighting pass always samples it, so it is
+    // allocated unconditionally and cleared to "all lit" (white) each frame (then overwritten by whichever
+    // backend runs) to keep a single binding/shader path regardless of ray-tracing support.
+    targets.shadowVisibilityFormat = Core::Format::RGBA16_FLOAT;
 
     Core::TextureDesc visibilityDesc;
     visibilityDesc
         .setWidth(targets.width)
         .setHeight(targets.height)
+        .setArraySize(NWB_SCENE_SHADOW_SLOT_COUNT)
+        .setDimension(Core::TextureDimension::Texture2DArray)
         .setFormat(targets.shadowVisibilityFormat)
         .setInUAV(true)
         .setName("engine/shadow/visibility")
@@ -628,12 +630,13 @@ void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandL
     if(!targets.shadowVisibility)
         return;
 
-    // 0xFFFFFFFF = every per-light bit set = fully lit. This is the default the deferred lighting pass
-    // samples whenever no shadow backend wrote the image this frame (ray tracing unavailable, no
-    // trace-able geometry, or a trace that could not be dispatched).
-    commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    // White (full transmittance) across every slot layer = fully lit. This is the default the deferred
+    // lighting pass samples whenever no shadow backend wrote the image this frame (ray tracing unavailable,
+    // no trace-able geometry, or a trace that could not be dispatched), and the value every light without a
+    // shadow slot keeps.
+    commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
-    commandList.clearTextureUInt(targets.shadowVisibility.get(), ECSRenderDetail::s_FramebufferSubresources, 0xFFFFFFFFu);
+    commandList.clearTextureFloat(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 
 bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
@@ -900,8 +903,8 @@ bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targ
         NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT,
         targets.shadowVisibility.get(),
         targets.shadowVisibilityFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
     ));
 
     auto* device = graphics().getDevice();
@@ -1027,8 +1030,8 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
         NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT,
         targets.shadowVisibility.get(),
         targets.shadowVisibilityFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
     ));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_INSTANCES, instanceBuffer));
 

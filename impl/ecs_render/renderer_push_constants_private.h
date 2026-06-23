@@ -63,8 +63,8 @@ struct SceneLightGpuData{
     Float4 direction = Float4(0.f, 0.f, -1.f, 1.f);
     // xyz = color, w = intensity.
     Float4 colorIntensity = Float4(1.f, 1.f, 1.f, 1.f);
-    // x = range, y = light type, zw reserved.
-    Float4 params = Float4(0.f, 0.f, 0.f, 0.f);
+    // x = range, y = light type, z = shadow slot (negative = no slot), w reserved.
+    Float4 params = Float4(0.f, 0.f, -1.f, 0.f);
 };
 
 static_assert(sizeof(ShaderDrivenPushConstants) == NWB_MESH_PUSH_CONSTANT_BYTE_SIZE, "ShaderDrivenPushConstants layout must stay stable");

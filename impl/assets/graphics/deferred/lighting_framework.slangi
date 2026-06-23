@@ -34,6 +34,12 @@
 #ifndef NWB_SCENE_LIGHT_LIST_BINDING
 #define NWB_SCENE_LIGHT_LIST_BINDING NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST
 #endif
+#ifndef NWB_SCENE_SHADOW_VISIBILITY_SET
+#define NWB_SCENE_SHADOW_VISIBILITY_SET NWB_DEFERRED_LIGHTING_SET
+#endif
+#ifndef NWB_SCENE_SHADOW_VISIBILITY_BINDING
+#define NWB_SCENE_SHADOW_VISIBILITY_BINDING NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY
+#endif
 
 // Brings common/math (nwbSafeNormalize, frame helpers), scene/buffer (g_NwbSceneLights, nwbSceneLightCount,
 // g_NwbSceneCameraPosition, nwbSceneResolveLight) and the engine's default BRDF lobe (nwbSceneShadeLight) +
@@ -49,7 +55,6 @@
 [[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferWorldPosition;
 [[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferDepth;
 [[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, NWB_DEFERRED_LIGHTING_SET)]] SamplerState g_DeferredSampler;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<uint> g_NwbShadowVisibility;
 
 struct NwbDeferredLightingPixelInput{
     float4 position : SV_Position;
@@ -99,19 +104,6 @@ NwbBxdfSurface nwbBxdfLoadSurface(float2 uv){
     surface.viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - surface.worldPosition, float3(0.0, 0.0, 1.0));
     surface.isBackground = depth >= 0.999999;
     return surface;
-}
-
-// The shadow pass packs one visibility bit per light into the R32_UINT mask, 1:1 with the framebuffer.
-uint nwbBxdfLoadShadowMask(int2 pixel){
-    return g_NwbShadowVisibility.Load(int3(pixel, 0));
-}
-
-// 1.0 = lit, 0.0 = shadowed. Lights beyond the 32-bit mask (and the all-lit 0xFFFFFFFF clear) stay lit.
-float nwbBxdfLightVisibility(uint shadowMask, uint lightIndex){
-    return (lightIndex < NWB_SCENE_SHADOW_VISIBILITY_LIGHT_COUNT)
-        ? (((shadowMask >> lightIndex) & 1u) != 0u ? 1.0 : 0.0)
-        : 1.0
-    ;
 }
 
 // Default Reinhard tonemap the engine model uses; a project BXDF may reuse or replace it.

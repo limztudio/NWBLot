@@ -76,21 +76,25 @@ void main(){
 
     // Background (no geometry) is fully lit; the lighting pass ignores it anyway.
     if(g_NwbShadowGBufferDepth.Load(texel).r >= 0.999999){
-        g_NwbShadowVisibility[pixel] = 0xFFFFFFFFu;
+        for(uint slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot)
+            g_NwbShadowVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
         return;
     }
 
     const float3 worldPosition = g_NwbShadowGBufferWorldPosition.Load(texel).xyz;
     const float3 normal = normalize(g_NwbShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
 
-    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_SHADOW_VISIBILITY_LIGHT_COUNT);
-    uint visibilityMask = 0u;
+    // Trace only the lights that hold a shadow slot (params.z >= 0); write each light's visibility into its
+    // own slot layer. Lights without a slot are left at the cleared "all lit" white default.
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint i = 0u; i < lightCount; ++i){
-        if(nwbShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]))
-            visibilityMask |= (1u << i);
-    }
+        const float slot = g_NwbSceneLights[i].params.z;
+        if(slot < 0.0)
+            continue;
 
-    g_NwbShadowVisibility[pixel] = visibilityMask;
+        const float visibility = nwbShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]) ? 1.0 : 0.0;
+        g_NwbShadowVisibility[uint3(pixel, uint(slot))] = float4(visibility, visibility, visibility, 1.0);
+    }
 }
 
 

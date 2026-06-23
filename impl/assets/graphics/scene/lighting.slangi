@@ -16,6 +16,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_SCENE_SHADOW_VISIBILITY_SET
+#define NWB_SCENE_SHADOW_VISIBILITY_SET NWB_SCENE_SHADOW_VISIBILITY_DEFAULT_SET
+#endif
+
+#ifndef NWB_SCENE_SHADOW_VISIBILITY_BINDING
+#define NWB_SCENE_SHADOW_VISIBILITY_BINDING NWB_SCENE_SHADOW_VISIBILITY_DEFAULT_BINDING
+#endif
+
+// Per-light shadow visibility: float3 transmittance (1 = lit, 0 = fully shadowed, tinted by colored
+// transparent occluders), one Texture2DArray layer per shadow slot. The shadow producers write a light's
+// transmittance into its slot layer; a light's slot index lives in its light record (params.z).
+[[vk::binding(NWB_SCENE_SHADOW_VISIBILITY_BINDING, NWB_SCENE_SHADOW_VISIBILITY_SET)]]
+Texture2DArray<float4> g_NwbShadowVisibility;
+
+// 1 (white) = lit, 0 = shadowed, tint = colored transmittance. Reads the light's shadow-slot layer; a light
+// with no slot (params.z < 0 -- the clear default, or a light the slot allocator did not reach) is fully lit.
+float3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
+    const float slot = g_NwbSceneLights[lightIndex].params.z;
+    if(slot < 0.0)
+        return float3(1.0, 1.0, 1.0);
+
+    return g_NwbShadowVisibility.Load(int4(pixel, int(slot), 0)).rgb;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 lightVector, out float3 radiance){
     const float3 baseRadiance = clamp(light.colorIntensity.xyz, float3(0.0), float3(1.5)) * min(max(light.colorIntensity.w, 0.0), 2.0);
     const float lightType = light.params.y;
@@ -74,7 +102,7 @@ float3 nwbSceneShadeLight(NwbSceneLight light, float3 baseColor, float3 normalVe
     return diffuse + specularColor + rimColor + frameCue + backLightCue;
 }
 
-float3 nwbSceneApplyLighting(float3 baseColor, float3 normal, float4 tangent, float3 worldPosition, uint shadowMask){
+float3 nwbSceneApplyLighting(float3 baseColor, float3 normal, float4 tangent, float3 worldPosition, int2 pixel){
     const float3 normalVector = nwbSafeNormalize(normal, float3(0.0, 0.0, 1.0));
     const float3 tangentVector = nwbFrameOrthonormalTangent(tangent.xyz, normalVector);
     const float tangentSign = tangent.w < 0.0 ? -1.0 : 1.0;
@@ -91,11 +119,10 @@ float3 nwbSceneApplyLighting(float3 baseColor, float3 normal, float4 tangent, fl
     float3 litColor = baseColor * hemiAmbient;
     const uint lightCount = nwbSceneLightCount();
     for(uint i = 0u; i < lightCount; ++i){
-        // The shadow visibility mask packs one lit-bit per light; a 32-bit word covers the first 32
-        // lights and any beyond that stay fully lit. 0xFFFFFFFF (written by the clear / software
-        // fallback and passed by callers without shadows) leaves every light unshadowed.
-        const float visibility = (i < NWB_SCENE_SHADOW_VISIBILITY_LIGHT_COUNT) ? (((shadowMask >> i) & 1u) != 0u ? 1.0 : 0.0) : 1.0;
-        litColor += visibility * nwbSceneShadeLight(g_NwbSceneLights[i], baseColor, normalVector, tangentVector, bitangentVector, viewVector, ndotv, worldPosition);
+        // Per-light colored transmittance (1 = lit, 0 = shadowed, tint = colored transparent occluder);
+        // a light without a shadow slot reads white (fully lit).
+        const float3 transmittance = nwbBxdfLightTransmittance(pixel, i);
+        litColor += transmittance * nwbSceneShadeLight(g_NwbSceneLights[i], baseColor, normalVector, tangentVector, bitangentVector, viewVector, ndotv, worldPosition);
     }
 
     return litColor / (litColor + float3(0.65));

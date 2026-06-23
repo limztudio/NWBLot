@@ -35,7 +35,7 @@ Texture2D<float4> g_NwbShadowGBufferNormal;
 Texture2D<float4> g_NwbShadowGBufferDepth;
 
 [[vk::binding(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, NWB_SHADOW_RT_SET)]]
-RWTexture2D<uint> g_NwbShadowVisibility;
+RWTexture2DArray<float4> g_NwbShadowVisibility;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

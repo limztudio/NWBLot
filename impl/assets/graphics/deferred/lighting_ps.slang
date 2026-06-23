@@ -4,7 +4,7 @@
 
 #include "lighting_framework.slangi"
 // Cook-generated dispatch module: assembled from every material's `bxdf` declaration (see the asset cooker's
-// EmitDeferredBxdfDispatchModule). It defines nwbDeferredDispatchBxdf(shadingModel, surface, shadowMask),
+// EmitDeferredBxdfDispatchModule). It defines nwbDeferredDispatchBxdf(shadingModel, surface, pixel),
 // which routes each pixel to the BXDF the owning material authored. The engine ships no BXDF of its own.
 #include "deferred/generated/bxdf_dispatch.slangi"
 
@@ -25,9 +25,9 @@ NwbDeferredLightingPixelOutput main(NwbDeferredLightingPixelInput input){
         return output;
     }
 
-    const uint shadowMask = nwbBxdfLoadShadowMask(int2(input.position.xy));
+    const int2 pixel = int2(input.position.xy);
     const float3 shadedColor = clamp(
-        nwbDeferredDispatchBxdf(surface.shadingModel, surface, shadowMask),
+        nwbDeferredDispatchBxdf(surface.shadingModel, surface, pixel),
         float3(0.0),
         float3(1.0)
     );

@@ -29,7 +29,7 @@ Texture2D<float4> g_NwbSwShadowGBufferDepth;
 StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbSwShadowSceneNodes;
 
 [[vk::binding(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, NWB_SW_SHADOW_SET)]]
-RWTexture2D<uint> g_NwbSwShadowVisibility;
+RWTexture2DArray<float4> g_NwbSwShadowVisibility;
 
 // Per-instance record: the affine world->object transform (3 rows) + the slot into the parallel per-mesh
 // descriptor arrays. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes).
@@ -256,21 +256,25 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     // Background (no geometry) is fully lit; the lighting pass ignores it anyway.
     if(g_NwbSwShadowGBufferDepth.Load(texel).r >= 0.999999){
-        g_NwbSwShadowVisibility[pixel] = 0xFFFFFFFFu;
+        for(uint slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot)
+            g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
         return;
     }
 
     const float3 worldPosition = g_NwbSwShadowGBufferWorldPosition.Load(texel).xyz;
     const float3 normal = normalize(g_NwbSwShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
 
-    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_SHADOW_VISIBILITY_LIGHT_COUNT);
-    uint visibilityMask = 0u;
+    // Trace only the lights that hold a shadow slot (params.z >= 0); write each light's visibility into its
+    // own slot layer. Lights without a slot are left at the cleared "all lit" white default.
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint i = 0u; i < lightCount; ++i){
-        if(nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]))
-            visibilityMask |= (1u << i);
-    }
+        const float slot = g_NwbSceneLights[i].params.z;
+        if(slot < 0.0)
+            continue;
 
-    g_NwbSwShadowVisibility[pixel] = visibilityMask;
+        const float visibility = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]) ? 1.0 : 0.0;
+        g_NwbSwShadowVisibility[uint3(pixel, uint(slot))] = float4(visibility, visibility, visibility, 1.0);
+    }
 }
 
 

@@ -2,8 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "mesh/material_ps_authoring.slangi"
+#include "project/shaders/surface.bind"
 #include "material_color.slangi"
-#include "mesh/gbuffer_ps.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,9 +26,12 @@ float3 nwbProjectUvDebug(const float2 uv0){
 // describes the surface. The shading model is data-driven from the material's `bxdf` (lighting) declaration,
 // delivered by the engine -- it is not chosen here.
 NwbMeshSurface nwbMaterialSurface(){
-    return nwbMakeMeshSurface(nwbProjectUvDebug(inUv0) * inColor.rgb, inNormal);
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const NwbRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
+    const float3 baseColor = (surface.base_color * runtime.color_tint).rgb;
+    return nwbMakeMeshSurface(nwbProjectUvDebug(inUv0) * nwbMaterialVertexColor(baseColor), inNormal);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

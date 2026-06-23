@@ -5,7 +5,12 @@
 #ifndef NWB_GRAPHICS_MESH_GBUFFER_IO_SLANGI
 #define NWB_GRAPHICS_MESH_GBUFFER_IO_SLANGI
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "pixel_input.slangi"
+#include "material_typed_bindings.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,6 +61,15 @@ float3 nwbGBufferEncodeNormal(float3 normal){
 uint nwbMeshShadingModelId(){
     return (g_NwbCsgMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
 }
+uint nwbMeshInstanceIndex(){
+    return g_NwbCsgMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
+}
+uint nwbMeshMaterialConstantByteOffset(){
+    return g_NwbCsgMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET];
+}
+NwbMeshInstanceData nwbMeshLoadInstance(){
+    return g_NwbMeshInstances[nwbMeshInstanceIndex()];
+}
 #elif defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI)
 uint nwbMeshShadingModelId(){
     return (g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
@@ -70,6 +84,18 @@ struct NwbMeshGBufferDrawConstants{
 ConstantBuffer<NwbMeshGBufferDrawConstants> g_NwbMeshGBufferDrawConstants;
 uint nwbMeshShadingModelId(){
     return (g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
+}
+// The pixel stage reads the same per-draw push constant the mesh stage saw (it is visible to amplification,
+// mesh, and pixel), so a material's surface hook can load its typed .bind constants per-pixel via the instance
+// index + material-constant byte offset, exactly as the mesh runtime does.
+uint nwbMeshInstanceIndex(){
+    return g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
+}
+uint nwbMeshMaterialConstantByteOffset(){
+    return g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET];
+}
+NwbMeshInstanceData nwbMeshLoadInstance(){
+    return g_NwbMeshInstances[nwbMeshInstanceIndex()];
 }
 #endif
 

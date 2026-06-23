@@ -532,7 +532,12 @@ bool PrepareShaderEntriesForCook(
             scratchArena
         ))
             return false;
-        preparedEntry.usesMaterialTypedBinding = preparedEntry.entry.archiveStage.view() == "mesh" && preparedEntry.materialTypedBindingInterface;
+        // The mesh shader is now generic + interface-free; the per-material PIXEL shader is the stage that reads
+        // the typed .bind material constants (the material's surface hook), so the pixel stage also receives the
+        // typed binding when it depends on a material interface.
+        preparedEntry.usesMaterialTypedBinding =
+            (preparedEntry.entry.archiveStage.view() == "mesh" || preparedEntry.entry.archiveStage.view() == "ps")
+            && preparedEntry.materialTypedBindingInterface;
         preparedEntry.materialTypedBindingInterfacePath = Move(materialTypedBindingInterfaceText);
         if(preparedEntry.usesMaterialTypedBinding && !__hidden_shader_cook_plan::SetShaderImplicitDefine(
             preparedEntry.entry,

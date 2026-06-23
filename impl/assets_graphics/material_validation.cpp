@@ -107,7 +107,7 @@ bool ValidateMaterials(
 
     for(const MaterialCookEntry& materialEntry : materialEntries){
         bool hasShaderStage = false;
-        bool hasMeshShader = false;
+        bool hasInterfaceStage = false;
 
         for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
             hasShaderStage = true;
@@ -126,12 +126,15 @@ bool ValidateMaterials(
             if(!__hidden_material_validation::ValidateMaterialVariant(shaderCook, materialEntry, *foundShader.value(), stageName, scratchArena))
                 return false;
 
-            if(shaderType == Core::ShaderType::MeshStage){
-                hasMeshShader = true;
+            // The pixel stage is the one that reads typed material constants (the material's surface hook), so it
+            // is the stage that must include the material's generated bind interface. The mesh stage is the shared
+            // engine geometry shader and carries no interface.
+            if(shaderType == Core::ShaderType::PixelStage){
+                hasInterfaceStage = true;
                 const Name shaderMaterialInterface = foundShader.value()->materialTypedBindingInterface;
                 const CookString& shaderMaterialInterfacePath = foundShader.value()->materialTypedBindingInterfacePath;
                 if(!shaderMaterialInterface){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but mesh shader '{}' "
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but pixel shader '{}' "
                         "does not include a generated material bind")
                         , StringConvert(materialEntry.virtualPath.c_str())
                         , StringConvert(materialEntry.materialInterface.c_str())
@@ -140,7 +143,7 @@ bool ValidateMaterials(
                     return false;
                 }
                 if(shaderMaterialInterface != materialEntry.materialInterface){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but mesh shader '{}' "
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but pixel shader '{}' "
                         "includes generated material bind interface '{}'")
                         , StringConvert(materialEntry.virtualPath.c_str())
                         , StringConvert(materialEntry.materialInterface.c_str())
@@ -159,8 +162,8 @@ bool ValidateMaterials(
             return false;
         }
 
-        if(!hasMeshShader){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but has no mesh shader stage")
+        if(!hasInterfaceStage){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but has no pixel shader stage")
                 , StringConvert(materialEntry.virtualPath.c_str())
                 , StringConvert(materialEntry.materialInterface.c_str())
             );

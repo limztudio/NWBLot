@@ -15,12 +15,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// These were a compile-time variant demo; the material color path is now hook-driven, so they default off.
+// A material that wants a transform applies it directly in its surface hook rather than toggling a define.
 #ifndef NWB_MATERIAL_COLOR_TRANSFORM
-#error "NWB_MATERIAL_COLOR_TRANSFORM must be defined by shader metadata"
+#define NWB_MATERIAL_COLOR_TRANSFORM 0
 #endif
 
 #ifndef NWB_MATERIAL_VERTEX_TINT
-#error "NWB_MATERIAL_VERTEX_TINT must be defined by shader metadata"
+#define NWB_MATERIAL_VERTEX_TINT 0
 #endif
 
 float3 nwbMaterialApplyColorTransform(float3 color){

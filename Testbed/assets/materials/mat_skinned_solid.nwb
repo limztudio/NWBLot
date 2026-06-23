@@ -5,12 +5,9 @@ asset.bxdf = "shaders/lambert_bxdf.slangi";
 
 asset.shaders = {
     "ps": "project/shaders/surface_ps",
-    "mesh": "project/shaders/surface_ms",
+    "mesh": "engine/graphics/mesh/shared_ms",
 };
-asset.shader_variant = [
-    "NWB_MATERIAL_COLOR_TRANSFORM=0",
-    "NWB_MATERIAL_VERTEX_TINT=0",
-];
+asset.shader_variant = "default";
 asset.parameters = {
     "surface": {
         "base_color": "float4(0.78, 0.35, 1.0, 1.0)",

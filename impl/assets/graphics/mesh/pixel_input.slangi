@@ -5,6 +5,10 @@
 #ifndef NWB_GRAPHICS_MESH_PIXEL_INPUT_SLANGI
 #define NWB_GRAPHICS_MESH_PIXEL_INPUT_SLANGI
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "raster_fields.slangi"
 
 #ifndef NWB_CSG_ENABLED
@@ -21,6 +25,10 @@
 #define NWB_MESH_SET NWB_CSG_INTERVAL_SAMPLE_SET
 #include "../csg/interval_sample.slangi"
 #undef NWB_MESH_SET
+// Restore the mesh descriptor set. binding_slots.h established NWB_MESH_SET = 0, but the temporary override
+// above undef'd it and binding_slots.h's include guard prevents re-establishing its default -- so any mesh-set
+// binding declared later in the pixel stage (e.g. the typed material binding a surface hook reads) needs it back.
+#define NWB_MESH_SET 0
 #undef NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
 #endif
 #endif

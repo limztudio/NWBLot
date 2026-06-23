@@ -27,6 +27,11 @@ namespace VulkanDetail{
 
 
 static constexpr AStringView s_PipelineCacheVirtualPath = "vulkan/pipeline_cache.bin";
+// A single, fixed runtime pipeline-cache volume (NOT keyed by device identity). The header UUID/vendor/device
+// check in ValidatePipelineCacheData already rejects data from a different GPU/driver, so a device or driver
+// change simply starts empty + overwrites this same volume on save -- no per-identity orphan volumes ever
+// accumulate on disk (which the old identity-hashed volume name caused on every driver update).
+static constexpr AStringView s_PipelineCacheVolumeName = "runtime_pipeline_cache";
 static constexpr u64 s_PipelineCacheVolumeSegmentSize = 16ull * 1024ull * 1024ull;
 static constexpr u64 s_PipelineCacheVolumeMetadataSize = 4ull * 1024ull;
 static constexpr usize s_PipelineCacheDataMaxAttempts = 4;
@@ -43,31 +48,6 @@ static const char* GpuCrashAvailabilityText(const bool available){
     return available ? "available" : "unavailable";
 }
 
-
-template<typename T>
-static u64 UpdateFnv64Value(const u64 hash, const T& value){
-    return UpdateFnv64(hash, reinterpret_cast<const u8*>(&value), sizeof(T));
-}
-
-static u64 ComputePipelineCacheIdentityHash(const VkPhysicalDeviceProperties& properties){
-    u64 hash = FNV64_OFFSET_BASIS;
-    static constexpr AStringView s_Tag = "nwb.vulkan.pipeline_cache.v1";
-    hash = UpdateFnv64(hash, reinterpret_cast<const u8*>(s_Tag.data()), s_Tag.size());
-    hash = UpdateFnv64Value(hash, properties.apiVersion);
-    hash = UpdateFnv64Value(hash, properties.driverVersion);
-    hash = UpdateFnv64Value(hash, properties.vendorID);
-    hash = UpdateFnv64Value(hash, properties.deviceID);
-    hash = UpdateFnv64(hash, properties.pipelineCacheUUID, VK_UUID_SIZE);
-    return hash;
-}
-
-static GraphicsString MakePipelineCacheVolumeName(GraphicsArena& arena, const VkPhysicalDeviceProperties& properties){
-    GraphicsString volumeName{arena};
-    volumeName.reserve(14u + 16u);
-    volumeName += "runtime_cache_";
-    AppendHexU64<char, GraphicsArena>(ComputePipelineCacheIdentityHash(properties), volumeName);
-    return volumeName;
-}
 
 static bool RuntimeCacheVolumeExists(const Path& directory, const AStringView volumeName){
     if(directory.empty())
@@ -203,7 +183,7 @@ Device::Device(const DeviceDesc& desc)
 
     vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
     vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
-    m_pipelineCacheVolumeName = VulkanDetail::MakePipelineCacheVolumeName(m_context.objectArena, m_context.physicalDeviceProperties);
+    m_pipelineCacheVolumeName.assign(VulkanDetail::s_PipelineCacheVolumeName);
 
     m_context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
     m_context.extensions.KHR_dynamic_rendering = desc.dynamicRenderingSupported;

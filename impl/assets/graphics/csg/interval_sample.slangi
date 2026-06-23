@@ -62,6 +62,7 @@ struct NwbCsgIntervalCapPixel{
     float depth;
     float3 normal;
     float3 worldPosition;
+    uint receiverIndex;
 };
 
 
@@ -201,6 +202,7 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestRemovedIntervalCapAtPixel(const uint2 
     result.depth = 1e30;
     result.normal = float3(0.0, 0.0, 1.0);
     result.worldPosition = float3(0.0, 0.0, 0.0);
+    result.receiverIndex = 0u;
     if(!nwbCsgIntervalSamplePixelInWorkRect(int2(intervalPixel)))
         return result;
 
@@ -227,6 +229,7 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestRemovedIntervalCapAtPixel(const uint2 
         result.depth = capDepth;
         result.normal = nwbCsgIntervalSampleVisibleCapNormal(g_NwbCsgRemovedIntervalCapNormal.Load(texel).xyz, capWorldPosition);
         result.worldPosition = capWorldPosition;
+        result.receiverIndex = intervalData.x;
     }
 
     return result;
@@ -369,6 +372,10 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPositio
     return result;
 }
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #endif
 

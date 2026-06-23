@@ -34,14 +34,12 @@ struct NwbCsgBounds{
 };
 
 struct NwbCsgReceiverRange{
-    uint firstCutter;
-    uint cutterCount;
-    uint flags;
-    uint padding0;
+    uint4 rangeInfo;    // x: firstCutter, y: cutterCount, z: flags, w: shadingModelId
     float4 worldToReceiverRow0;
     float4 worldToReceiverRow1;
     float4 worldToReceiverRow2;
     NwbCsgBounds localBounds;
+    float4 baseColor;
 };
 
 struct NwbCsgSample{
@@ -257,8 +255,8 @@ bool nwbCsgReceiverPixelDiscardWithWorldTolerance(
 ){
     const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
     const float safeWorldDistanceTolerance = max(worldDistanceTolerance, 0.0);
-    for(uint cutterIndex = 0u; cutterIndex < receiverRange.cutterCount; ++cutterIndex){
-        const NwbCsgCutter cutter = g_NwbCsgCutters[receiverRange.firstCutter + cutterIndex];
+    for(uint cutterIndex = 0u; cutterIndex < receiverRange.rangeInfo.y; ++cutterIndex){
+        const NwbCsgCutter cutter = g_NwbCsgCutters[receiverRange.rangeInfo.x + cutterIndex];
 
         const float shapeDistanceTolerance = safeWorldDistanceTolerance * cutter.worldToShapeScaleBound;
         if(nwbCsgEvaluateDistance(worldPosition, cutter) <= shapeDistanceTolerance)
@@ -271,8 +269,8 @@ bool nwbCsgReceiverPixelDiscardWithWorldTolerance(
 uint nwbCsgClassifyMeshlet(const float3 center, const float radius){
     const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[nwbCsgMeshInstanceIndex()];
     bool intersectsAny = false;
-    for(uint cutterIndex = 0u; cutterIndex < receiverRange.cutterCount; ++cutterIndex){
-        const NwbCsgCutter cutter = g_NwbCsgCutters[receiverRange.firstCutter + cutterIndex];
+    for(uint cutterIndex = 0u; cutterIndex < receiverRange.rangeInfo.y; ++cutterIndex){
+        const NwbCsgCutter cutter = g_NwbCsgCutters[receiverRange.rangeInfo.x + cutterIndex];
 
         const float distance = nwbCsgEvaluateDistance(center, cutter);
         const float radiusShape = radius * cutter.worldToShapeScaleBound;

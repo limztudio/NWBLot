@@ -30,10 +30,6 @@ float3 nwbSmokeMaterialVertexColor(float3 color){
     return clamp(nwbSmokeMaterialApplyVertexTint(nwbSmokeMaterialApplyColorTransform(color)), float3(0.0), float3(1.0));
 }
 
-float3 nwbSmokeMaterialPixelColor(float3 color){
-    return color;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

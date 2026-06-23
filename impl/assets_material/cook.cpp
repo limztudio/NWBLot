@@ -205,11 +205,11 @@ static bool ParseVariantField(
 
     const auto* variantValue = asset.findField(fieldName);
     if(!variantValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' is required")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
+        // Optional: a material with no explicit variant uses the default variant (valid only when its shaders
+        // declare no defines). Cook-generated shaders declare none; an explicit-`shaders` material may opt into a
+        // specific variant.
+        outVariant = Core::ShaderArchive::s_DefaultVariant;
+        return true;
     }
 
     CookString rawVariant{arena};
@@ -358,10 +358,9 @@ static bool ParseMaterialStageShaders(
     outStageShaders.clear();
 
     const auto* shadersValue = asset.findField(MaterialAssetMetadataSchema::s_ShadersField);
-    if(!shadersValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shaders is required"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
+    if(!shadersValue)
+        return true;  // optional: when omitted, the cross-asset phase generates the pixel shader from `surface`
+                      // and assigns the shared engine mesh shader.
     if(!shadersValue->isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shaders must be a map"), PathToString<tchar>(nwbFilePath));
         return false;
@@ -519,7 +518,8 @@ static bool ParseMaterialParameters(
 static bool ParseMaterialInterface(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    Name& outMaterialInterface
+    Name& outMaterialInterface,
+    ScratchArena& scratchArena
 ){
     outMaterialInterface = NAME_NONE;
 
@@ -534,13 +534,39 @@ static bool ParseMaterialInterface(
     }
 
     const Core::Metascript::MStringView interfaceText = interfaceValue->asString();
-    const AStringView interfacePath(interfaceText.data(), interfaceText.size());
-    if(TrimView(interfacePath).empty()){
+    const AStringView interfacePath = TrimView(AStringView(interfaceText.data(), interfaceText.size()));
+    if(interfacePath.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must not be empty"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
-    outMaterialInterface = Name(interfacePath);
+    if(!Core::Assets::HasReservedAssetVirtualRoot(interfacePath, scratchArena)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must be a project/- or engine/-rooted virtual path "
+            "(e.g. 'project/shaders/surface.bind')")
+            , PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    // The interface names a `.bind` carrying the extension explicitly (like `surface`/`bxdf`). Validate it, then
+    // strip the extension: the stored interface name must match the discovered .bind's virtual path, which is
+    // derived with the extension removed.
+    ::Path<ScratchArena> interfacePathPath(scratchArena, interfacePath);
+    ScratchString extension = PathToString(scratchArena, interfacePathPath.extension());
+    CanonicalizeTextInPlace(extension);
+    if(AStringView(extension) != AStringView(".bind")){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must reference a .bind file"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    interfacePathPath.replace_extension();
+    ScratchString strippedInterface = PathToString(scratchArena, interfacePathPath);
+    for(char& ch : strippedInterface){
+        if(ch == '\\')
+            ch = '/';
+    }
+
+    outMaterialInterface = Name(AStringView(strippedInterface));
     if(!outMaterialInterface){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface '{}' is invalid")
             , PathToString<tchar>(nwbFilePath)
@@ -552,69 +578,97 @@ static bool ParseMaterialInterface(
     return true;
 }
 
+// Parses an optional material field whose value is a `project/`/`engine/`-rooted virtual path carrying a
+// dedicated extension (e.g. `bxdf` -> ".bxdf", `surface` -> ".surface"), mirroring how `interface` names a
+// `.bind`. Parse only validates the format + stores the virtual path verbatim (forward slashes, original case);
+// the cross-asset phase (volume_prepare) resolves it to an absolute source against all asset roots (only known
+// there). Existence is enforced there / by the dependency-checksum, so parse stays filesystem-light.
+static bool ParseMaterialVirtualAssetField(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    const AStringView fieldName,
+    const AStringView requiredExtension,
+    CookString& outVirtualPath,
+    ScratchArena& scratchArena
+){
+    outVirtualPath.clear();
+
+    const auto* fieldValue = asset.findField(fieldName);
+    if(!fieldValue)
+        return true;
+    if(!fieldValue->isString()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a string")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    const Core::Metascript::MStringView fieldText = fieldValue->asString();
+    const AStringView virtualPath = TrimView(AStringView(fieldText.data(), fieldText.size()));
+    if(virtualPath.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must not be empty")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    if(!Core::Assets::HasReservedAssetVirtualRoot(virtualPath, scratchArena)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a project/- or engine/-rooted virtual path "
+            "(e.g. 'project/shaders/name{}')")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+            , StringConvert(requiredExtension)
+        );
+        return false;
+    }
+
+    const ::Path<ScratchArena> virtualPathPath(scratchArena, virtualPath);
+    ScratchString extension = PathToString(scratchArena, virtualPathPath.extension());
+    CanonicalizeTextInPlace(extension);
+    if(AStringView(extension) != requiredExtension){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must reference a {} file")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+            , StringConvert(requiredExtension)
+        );
+        return false;
+    }
+
+    ScratchString normalized(virtualPath, scratchArena);
+    for(char& ch : normalized){
+        if(ch == '\\')
+            ch = '/';
+    }
+    outVirtualPath.assign(AStringView(normalized));
+    return true;
+}
+
+// Optional at parse; required at cook (AssignMaterialShadingModelIds rejects any material lacking a bxdf -- the
+// engine ships no default).
 static bool ParseMaterialBxdf(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     CookString& outBxdfSource,
     ScratchArena& scratchArena
 ){
-    outBxdfSource.clear();
+    return ParseMaterialVirtualAssetField(
+        nwbFilePath, asset, MaterialAssetMetadataSchema::s_BxdfField, ".bxdf", outBxdfSource, scratchArena
+    );
+}
 
-    // Optional at parse; required at cook. The value is a `project/`- or `engine/`-rooted virtual path with the
-    // dedicated `.bxdf` extension (e.g. "project/shaders/lambert.bxdf"), mirroring how `interface` names a
-    // `.bind`. Parse only validates + stores the virtual path; the cross-asset phase (volume_prepare) resolves it
-    // to an absolute source against all asset roots (only known there), and AssignMaterialShadingModelIds rejects
-    // any material lacking a bxdf -- so every material in a real deferred-lit cook still authors its own.
-    const auto* bxdfValue = asset.findField(MaterialAssetMetadataSchema::s_BxdfField);
-    if(!bxdfValue)
-        return true;
-    if(!bxdfValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a string")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(MaterialAssetMetadataSchema::s_BxdfField)
-        );
-        return false;
-    }
-
-    const Core::Metascript::MStringView bxdfText = bxdfValue->asString();
-    const AStringView bxdfVirtualPath = TrimView(AStringView(bxdfText.data(), bxdfText.size()));
-    if(bxdfVirtualPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must not be empty")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(MaterialAssetMetadataSchema::s_BxdfField)
-        );
-        return false;
-    }
-
-    if(!Core::Assets::HasReservedAssetVirtualRoot(bxdfVirtualPath, scratchArena)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a project/- or engine/-rooted virtual path "
-            "(e.g. 'project/shaders/lambert.bxdf')")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(MaterialAssetMetadataSchema::s_BxdfField)
-        );
-        return false;
-    }
-
-    const ::Path<ScratchArena> bxdfVirtualPathPath(scratchArena, bxdfVirtualPath);
-    ScratchString extension = PathToString(scratchArena, bxdfVirtualPathPath.extension());
-    CanonicalizeTextInPlace(extension);
-    if(AStringView(extension) != AStringView(".bxdf")){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must reference a .bxdf file")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(MaterialAssetMetadataSchema::s_BxdfField)
-        );
-        return false;
-    }
-
-    // Store the virtual path verbatim (forward slashes, original case). The cross-asset phase resolves it to an
-    // absolute source; existence is enforced there / by the dependency-checksum, so parse stays filesystem-light.
-    ScratchString normalized(bxdfVirtualPath, scratchArena);
-    for(char& ch : normalized){
-        if(ch == '\\')
-            ch = '/';
-    }
-    outBxdfSource.assign(AStringView(normalized));
-    return true;
+// Optional. When present (and `shaders` is omitted), the cross-asset phase generates this material's G-buffer
+// pixel shader from this surface hook fragment.
+static bool ParseMaterialSurface(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    CookString& outSurfaceSource,
+    ScratchArena& scratchArena
+){
+    return ParseMaterialVirtualAssetField(
+        nwbFilePath, asset, MaterialAssetMetadataSchema::s_SurfaceField, ".surface", outSurfaceSource, scratchArena
+    );
 }
 
 static bool ParseMaterialBoolProperty(
@@ -1707,9 +1761,11 @@ static bool ParseMaterialMeta(
         scratchArena
     ))
         return false;
-    if(!ParseMaterialInterface(nwbFilePath, asset, outEntry.materialInterface))
+    if(!ParseMaterialInterface(nwbFilePath, asset, outEntry.materialInterface, scratchArena))
         return false;
     if(!ParseMaterialBxdf(nwbFilePath, asset, outEntry.bxdfSource, scratchArena))
+        return false;
+    if(!ParseMaterialSurface(nwbFilePath, asset, outEntry.surfaceSource, scratchArena))
         return false;
     if(!ParseMaterialRenderProperties(nwbFilePath, asset, outEntry))
         return false;
@@ -1912,6 +1968,137 @@ static bool EmitDeferredBxdfDispatchModuleImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static bool EmitMaterialPixelShadersImpl(
+    CookArena& arena,
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    const AStringView sharedMeshShaderName,
+    CookVector<MaterialCookEntry>& materialEntries,
+    CookVector<GeneratedMaterialPixelShader>& outGenerated,
+    ScratchArena& scratchArena
+){
+    outGenerated.clear();
+
+    const Name sharedMeshShaderNameId = ToName(sharedMeshShaderName);
+    if(!sharedMeshShaderNameId){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: invalid shared mesh shader name '{}'")
+            , StringConvert(sharedMeshShaderName)
+        );
+        return false;
+    }
+
+    ScratchString configurationName(configurationSafeName, scratchArena);
+    const Path generatedRoot = cacheDirectory / configurationName.c_str() / "generated" / "material_pixel_shaders";
+    ErrorCode errorCode;
+    if(!RemoveAllIfExists(generatedRoot, errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: failed to clear generated directory '{}': {}")
+            , PathToString<tchar>(generatedRoot)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    for(MaterialCookEntry& entry : materialEntries){
+        const bool hasExplicitShaders = !entry.stageShaders.empty();
+        const bool hasSurface = !entry.surfaceSource.empty();
+        if(hasExplicitShaders){
+            if(hasSurface){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' declares both 'surface' and 'shaders'; declare exactly one")
+                    , StringConvert(entry.virtualPath.c_str())
+                );
+                return false;
+            }
+            continue;
+        }
+        if(!hasSurface){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' declares neither 'surface' nor 'shaders'")
+                , StringConvert(entry.virtualPath.c_str())
+            );
+            return false;
+        }
+        if(!entry.materialInterface){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' needs an interface to generate its pixel shader")
+                , StringConvert(entry.virtualPath.c_str())
+            );
+            return false;
+        }
+
+        // The generated pixel shader: engine PS authoring + this material's typed .bind (by interface virtual
+        // path) + its resolved surface hook (by absolute path). Mesh stage is the shared engine mesh shader.
+        CookString generatedSource(arena);
+        generatedSource += "// limztudio@gmail.com\n";
+        generatedSource += "// Generated per-material G-buffer pixel shader: engine pixel-shader authoring + this material's\n";
+        generatedSource += "// typed .bind + its surface hook. The material declares only its 'surface' fragment; the cook\n";
+        generatedSource += "// assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
+        generatedSource += "#include \"mesh/material_ps_authoring.slangi\"\n";
+        generatedSource += "#include \"";
+        generatedSource += entry.materialInterface.c_str();
+        generatedSource += ".bind\"\n";
+        generatedSource += "#include \"";
+        generatedSource += entry.surfaceSource.c_str();
+        generatedSource += "\"\n";
+
+        CookString relativeFile(arena);
+        relativeFile += entry.virtualPath.c_str();
+        relativeFile += ".slang";
+        const Path outputPath = generatedRoot / relativeFile.c_str();
+        errorCode.clear();
+        if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: failed to create generated parent '{}': {}")
+                , PathToString<tchar>(outputPath.parent_path())
+                , StringConvert(errorCode.message())
+            );
+            return false;
+        }
+        if(!WriteTextFile(outputPath, AStringView(generatedSource))){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: failed to write generated pixel shader '{}'")
+                , PathToString<tchar>(outputPath)
+            );
+            return false;
+        }
+
+        GeneratedMaterialPixelShader generated(arena);
+        generated.name += "generated/material_ps/";
+        generated.name += entry.virtualPath.c_str();
+        {
+            ScratchString sourceText = PathToString(scratchArena, outputPath);
+            for(char& ch : sourceText){
+                if(ch == '\\')
+                    ch = '/';
+            }
+            generated.source += sourceText.c_str();
+        }
+
+        const Name pixelShaderName = ToName(AStringView(generated.name));
+        if(!pixelShaderName){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: generated pixel shader name is invalid for material '{}'")
+                , StringConvert(entry.virtualPath.c_str())
+            );
+            return false;
+        }
+
+        Core::Assets::AssetRef<Shader> pixelShaderRef;
+        pixelShaderRef.virtualPath = pixelShaderName;
+        Core::Assets::AssetRef<Shader> meshShaderRef;
+        meshShaderRef.virtualPath = sharedMeshShaderNameId;
+        if(!entry.stageShaders.emplace(Core::ShaderType::PixelStage, pixelShaderRef).second
+            || !entry.stageShaders.emplace(Core::ShaderType::MeshStage, meshShaderRef).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign generated stage shaders for material '{}'")
+                , StringConvert(entry.virtualPath.c_str())
+            );
+            return false;
+        }
+
+        outGenerated.push_back(Move(generated));
+    }
+
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -2056,6 +2243,26 @@ bool EmitDeferredBxdfDispatchModule(
         configurationSafeName,
         materialEntries,
         outIncludeRoot,
+        scratchArena
+    );
+}
+
+bool EmitMaterialPixelShaders(
+    MaterialCookArena& arena,
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    const AStringView sharedMeshShaderName,
+    MaterialCookVector<MaterialCookEntry>& materialEntries,
+    MaterialCookVector<GeneratedMaterialPixelShader>& outGenerated,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    return __hidden_cook::EmitMaterialPixelShadersImpl(
+        arena,
+        cacheDirectory,
+        configurationSafeName,
+        sharedMeshShaderName,
+        materialEntries,
+        outGenerated,
         scratchArena
     );
 }

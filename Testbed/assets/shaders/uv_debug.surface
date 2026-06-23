@@ -2,8 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "mesh/material_ps_authoring.slangi"
-#include "project/shaders/surface.bind"
+// Surface hook fragment. Defines this material's nwbMaterialSurface(); the cook wraps it with the engine
+// pixel-shader authoring + this material's typed .bind to generate the G-buffer pixel shader. Modulates a
+// procedural UV checker by the material's base color.
 #include "material_color.slangi"
 
 
@@ -22,9 +23,6 @@ float3 nwbProjectUvDebug(const float2 uv0){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// This material's surface hook. The engine owns the pixel-shader entry + the G-buffer write; this only
-// describes the surface. The shading model is data-driven from the material's `bxdf` (lighting) declaration,
-// delivered by the engine -- it is not chosen here.
 NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);

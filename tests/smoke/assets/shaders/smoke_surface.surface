@@ -2,16 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "mesh/material_ps_authoring.slangi"
-#include "project/shaders/smoke_surface.bind"
-#include "smoke_material_color.slangi"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Solid smoke surface hook. The engine owns the pixel-shader entry + the G-buffer write; this only describes
-// the surface: base color from the typed material constants (base_color x color_tint), read per-pixel.
+// Solid smoke surface hook fragment. The cook wraps it with the engine pixel-shader authoring + this material's
+// typed .bind to generate the G-buffer pixel shader.
 NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbSmokeSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);

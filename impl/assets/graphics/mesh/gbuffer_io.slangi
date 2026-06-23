@@ -110,12 +110,6 @@ void nwbWriteMeshGBufferParams(float3 baseColor, float3 normal, float3 worldPosi
     outGBufferWorldPosition = float4(worldPosition, param1);
 }
 
-// Convenience for materials that need no extra BXDF parameters.
-void nwbWriteMeshGBuffer(float3 baseColor, float3 normal, float3 worldPosition){
-    nwbWriteMeshGBufferParams(baseColor, normal, worldPosition, 0.0, 0.0);
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

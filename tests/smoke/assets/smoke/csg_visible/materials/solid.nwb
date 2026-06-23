@@ -1,13 +1,8 @@
 material asset;
 
-asset.interface = "project/shaders/smoke_surface";
+asset.interface = "project/shaders/smoke_surface.bind";
+asset.surface = "project/shaders/smoke_surface.surface";
 asset.bxdf = "project/shaders/smoke_lambert.bxdf";
-
-asset.shaders = {
-    "ps": "project/shaders/smoke_surface_ps",
-    "mesh": "engine/graphics/mesh/shared_ms",
-};
-asset.shader_variant = "default";
 asset.parameters = {
     "surface": {
         "base_color": "float4(1.0, 1.0, 1.0, 1.0)",

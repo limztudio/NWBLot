@@ -47,6 +47,11 @@ struct MaterialCookEntry{
     // it to an absolute, canonical (forward-slash) path against all asset roots, then dedups by it, assigns
     // shadingModelId, and generates the deferred lighting dispatch module.
     MaterialCookString bxdfSource;
+    // This material's surface hook. Parse stores the `project/`/`engine/`-rooted virtual path (`.surface`) from
+    // the optional `surface` field; the cross-asset phase resolves it to an absolute path and (when `shaders` is
+    // omitted) generates this material's G-buffer pixel shader by wrapping it with the engine PS authoring + the
+    // material's `.bind`. Empty when the material declares explicit `shaders` instead.
+    MaterialCookString surfaceSource;
     u32 shadingModelId = 0u;
     StageShaderMap stageShaders;
     ParameterMap parameters;
@@ -59,6 +64,7 @@ struct MaterialCookEntry{
         , typedBlockBytes(arena)
         , shaderVariant(arena)
         , bxdfSource(arena)
+        , surfaceSource(arena)
         , stageShaders(0, Hasher<Core::ShaderType::Enum>(), EqualTo<Core::ShaderType::Enum>(), arena)
         , parameters(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), arena)
     {}
@@ -72,12 +78,29 @@ struct MaterialCookEntry{
         typedBlockBytes.clear();
         shaderVariant.clear();
         bxdfSource.clear();
+        surfaceSource.clear();
         shadingModelId = 0u;
         stageShaders.clear();
         parameters.clear();
         transparent = false;
         twoSided = false;
     }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// A pixel shader the cook generated for a material that declared `surface` instead of explicit `shaders`.
+// The caller (graphics volume prepare) synthesizes a shader entry from these so it cooks like any other shader.
+struct GeneratedMaterialPixelShader{
+    MaterialCookString name;    // shader virtual name (identity), e.g. "generated/material_ps/<material path>"
+    MaterialCookString source;  // absolute, forward-slash path of the generated .slang source in the cook cache
+
+    explicit GeneratedMaterialPixelShader(MaterialCookArena& arena)
+        : name(arena)
+        , source(arena)
+    {}
 };
 
 
@@ -138,6 +161,22 @@ struct MaterialCookEntry{
     AStringView configurationSafeName,
     const MaterialCookVector<MaterialCookEntry>& materialEntries,
     Path& outIncludeRoot,
+    Core::Alloc::ScratchArena& scratchArena
+);
+
+// For each material that omits explicit `shaders`, generate its G-buffer pixel shader (engine pixel-shader
+// authoring + the material's typed `.bind` + its resolved `surface` hook) under a `generated/` directory in the
+// cook cache, set the material's stage shaders (pixel = the generated PS, mesh = `sharedMeshShaderName`), and
+// append a (name, source) record so the caller can synthesize the shader entry. Errors if a material declares
+// both `surface` and `shaders`, or neither, or omits the interface needed to generate. Materials with explicit
+// `shaders` are left untouched. `bxdfSource`/`surfaceSource` must already be resolved to absolute paths.
+[[nodiscard]] bool EmitMaterialPixelShaders(
+    MaterialCookArena& arena,
+    const Path& cacheDirectory,
+    AStringView configurationSafeName,
+    AStringView sharedMeshShaderName,
+    MaterialCookVector<MaterialCookEntry>& materialEntries,
+    MaterialCookVector<GeneratedMaterialPixelShader>& outGenerated,
     Core::Alloc::ScratchArena& scratchArena
 );
 

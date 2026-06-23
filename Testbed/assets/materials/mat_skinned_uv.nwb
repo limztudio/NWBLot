@@ -1,13 +1,8 @@
 material asset;
 
-asset.interface = "project/shaders/surface";
+asset.interface = "project/shaders/surface.bind";
+asset.surface = "project/shaders/uv_debug.surface";
 asset.bxdf = "project/shaders/toon.bxdf";
-
-asset.shaders = {
-    "ps": "project/shaders/uv_debug_ps",
-    "mesh": "engine/graphics/mesh/shared_ms",
-};
-asset.shader_variant = "default";
 asset.parameters = {
     "surface": {
         "base_color": "float4(0.78, 0.35, 1.0, 1.0)",

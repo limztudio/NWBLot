@@ -2,17 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "mesh/material_ps_authoring.slangi"
-#include "project/shaders/smoke_surface.bind"
+// Transparent smoke surface hook fragment. Demonstrates a per-material color transform expressed as a hook (not
+// a compile-time variant): the base color is square-root transformed and warm-tinted. The cook wraps it with the
+// engine pixel-shader authoring + this material's typed .bind to generate the G-buffer pixel shader.
 #include "smoke_material_color.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Transparent smoke surface hook. Demonstrates a per-material color transform expressed as a hook (not a
-// compile-time variant): the base color is square-root transformed and warm-tinted, read per-pixel from the
-// typed material constants.
 NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbSmokeSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);

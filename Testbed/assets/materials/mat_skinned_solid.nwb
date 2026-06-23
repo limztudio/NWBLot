@@ -1,13 +1,8 @@
 material asset;
 
-asset.interface = "project/shaders/surface";
+asset.interface = "project/shaders/surface.bind";
+asset.surface = "project/shaders/surface.surface";
 asset.bxdf = "project/shaders/lambert.bxdf";
-
-asset.shaders = {
-    "ps": "project/shaders/surface_ps",
-    "mesh": "engine/graphics/mesh/shared_ms",
-};
-asset.shader_variant = "default";
 asset.parameters = {
     "surface": {
         "base_color": "float4(0.78, 0.35, 1.0, 1.0)",

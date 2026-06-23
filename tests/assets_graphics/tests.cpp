@@ -316,157 +316,7 @@ NwbTestRuntimeMaterial runtime;
 
 )NWB_BIND";
 
-static constexpr AStringView s_MaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/authoring.slangi"
-#include "project/material_interfaces/test_surface.bind"
-
-NwbMeshGeneratedVertex nwbMeshBuildVertex(
-    uint triangleIndex,
-    uint corner,
-    NwbMeshSourceVertex source,
-    const NwbMeshInstanceData instance
-){
-    NwbMeshGeneratedVertex generatedVertex;
-    const uint2 materialLayoutHash = NWB_MATERIAL_BIND_LAYOUT_HASH;
-    const uint2 materialInterfaceHash0 = NWB_MATERIAL_BIND_INTERFACE_HASH_0;
-    const bool materialBindConstantsValid =
-        materialLayoutHash.x != 0u
-        && materialInterfaceHash0.x != 0u
-        && NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE == 44u
-        && NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE == 4u
-        && NWB_MATERIAL_BIND_RUNTIME_STORAGE == NWB_MATERIAL_BIND_STORAGE_MUTABLE
-        && NWB_MATERIAL_BIND_RUNTIME_BYTE_OFFSET == 0u
-        && NWB_MATERIAL_BIND_RUNTIME_BYTE_SIZE == 4u
-        && NWB_MATERIAL_BIND_SURFACE_STORAGE == NWB_MATERIAL_BIND_STORAGE_CONSTANT
-        && NWB_MATERIAL_BIND_SURFACE_BYTE_OFFSET == 0u
-        && NWB_MATERIAL_BIND_SURFACE_BYTE_SIZE == 44u;
-    const float3 worldPosition = nwbMeshTransformPosition(source.position, instance);
-    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    generatedVertex.position = nwbMeshTransformWorldToClip(worldPosition);
-    generatedVertex.normal = nwbMeshTransformDirection(source.normal, instance);
-    generatedVertex.padding0 = materialBindConstantsValid ? 0.0 : 1.0;
-    generatedVertex.tangent = float4(nwbMeshTransformDirection(source.tangent.xyz, instance), source.tangent.w);
-    generatedVertex.uv0 = source.uv0;
-    generatedVertex.padding1 = float2(0.0);
-    generatedVertex.color = surface.base_color;
-    generatedVertex.worldPosition = float4(worldPosition, 1.0);
-    return generatedVertex;
-}
-
-)NWB_SLANG";
-
-static constexpr AStringView s_HalfMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/authoring.slangi"
-#include "project/material_interfaces/test_surface.bind"
-
-NwbMeshGeneratedVertex nwbMeshBuildVertex(
-    uint triangleIndex,
-    uint corner,
-    NwbMeshSourceVertex source,
-    const NwbMeshInstanceData instance
-){
-    NwbMeshGeneratedVertex generatedVertex;
-    const bool materialBindConstantsValid =
-        NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE == 20u
-        && NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE == 0u
-        && NWB_MATERIAL_BIND_SURFACE_STORAGE == NWB_MATERIAL_BIND_STORAGE_CONSTANT
-        && NWB_MATERIAL_BIND_SURFACE_BYTE_OFFSET == 0u
-        && NWB_MATERIAL_BIND_SURFACE_BYTE_SIZE == 20u
-        && NWB_MATERIAL_BIND_SURFACE_ROUGHNESS_BYTE_OFFSET == 0u
-        && NWB_MATERIAL_BIND_SURFACE_RANGE_BYTE_OFFSET == 2u
-        && NWB_MATERIAL_BIND_SURFACE_TINT_BYTE_OFFSET == 6u
-        && NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET == 12u;
-    const float3 worldPosition = nwbMeshTransformPosition(source.position, instance);
-    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    generatedVertex.position = nwbMeshTransformWorldToClip(worldPosition);
-    generatedVertex.normal = nwbMeshTransformDirection(source.normal, instance);
-    generatedVertex.padding0 = materialBindConstantsValid ? float(surface.roughness) : -1.0;
-    generatedVertex.tangent = float4(float(surface.tint.x), float(surface.tint.y), float(surface.tint.z), 1.0);
-    generatedVertex.uv0 = source.uv0;
-    generatedVertex.padding1 = float2(float(surface.range.x), float(surface.range.y));
-    generatedVertex.color = float4(
-        float(surface.base_color.x),
-        float(surface.base_color.y),
-        float(surface.base_color.z),
-        float(surface.base_color.w)
-    );
-    generatedVertex.worldPosition = float4(worldPosition, 1.0);
-    return generatedVertex;
-}
-
-)NWB_SLANG";
-
-static constexpr AStringView s_CompactIntegerMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/authoring.slangi"
-#include "project/material_interfaces/test_surface.bind"
-
-NwbMeshGeneratedVertex nwbMeshBuildVertex(
-    uint triangleIndex,
-    uint corner,
-    NwbMeshSourceVertex source,
-    const NwbMeshInstanceData instance
-){
-    NwbMeshGeneratedVertex generatedVertex;
-    const bool materialBindConstantsValid =
-        NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE == 20u
-        && NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE == 0u
-        && NWB_MATERIAL_BIND_SURFACE_STORAGE == NWB_MATERIAL_BIND_STORAGE_CONSTANT
-        && NWB_MATERIAL_BIND_SURFACE_BYTE_OFFSET == 0u
-        && NWB_MATERIAL_BIND_SURFACE_BYTE_SIZE == 20u
-        && NWB_MATERIAL_BIND_SURFACE_ENABLED_BYTE_OFFSET == 0u
-        && NWB_MATERIAL_BIND_SURFACE_SIGNED_BYTES_BYTE_OFFSET == 4u
-        && NWB_MATERIAL_BIND_SURFACE_BYTES_BYTE_OFFSET == 8u
-        && NWB_MATERIAL_BIND_SURFACE_SIGNED_WORDS_BYTE_OFFSET == 12u
-        && NWB_MATERIAL_BIND_SURFACE_WORDS_BYTE_OFFSET == 16u;
-    const float3 worldPosition = nwbMeshTransformPosition(source.position, instance);
-    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    generatedVertex.position = nwbMeshTransformWorldToClip(worldPosition);
-    generatedVertex.normal = nwbMeshTransformDirection(source.normal, instance);
-    generatedVertex.padding0 = materialBindConstantsValid
-        ? float(surface.signed_bytes.x) + float(surface.bytes.y) + float(surface.signed_words.x)
-        : -1.0
-    ;
-    generatedVertex.tangent = float4(nwbMeshTransformDirection(source.tangent.xyz, instance), source.tangent.w);
-    generatedVertex.uv0 = source.uv0;
-    generatedVertex.padding1 = float2(float(surface.words.x), surface.enabled.y ? 1.0 : 0.0);
-    generatedVertex.color = float4(
-        surface.enabled.x ? 1.0 : 0.0,
-        float(surface.bytes.z) / 255.0,
-        float(surface.signed_words.y) / 32767.0,
-        1.0
-    );
-    generatedVertex.worldPosition = float4(worldPosition, 1.0);
-    return generatedVertex;
-}
-
-)NWB_SLANG";
-
-#if defined(NWB_FINAL)
-static constexpr AStringView s_OtherMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/authoring.slangi"
-#include "project/material_interfaces/other_surface.bind"
-
-NwbMeshGeneratedVertex nwbMeshBuildVertex(
-    uint triangleIndex,
-    uint corner,
-    NwbMeshSourceVertex source,
-    const NwbMeshInstanceData instance
-){
-    NwbMeshGeneratedVertex generatedVertex;
-    const float3 worldPosition = nwbMeshTransformPosition(source.position, instance);
-    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    generatedVertex.position = nwbMeshTransformWorldToClip(worldPosition);
-    generatedVertex.normal = nwbMeshTransformDirection(source.normal, instance);
-    generatedVertex.padding0 = 0.0;
-    generatedVertex.tangent = float4(nwbMeshTransformDirection(source.tangent.xyz, instance), source.tangent.w);
-    generatedVertex.uv0 = source.uv0;
-    generatedVertex.padding1 = float2(0.0);
-    generatedVertex.color = surface.base_color;
-    generatedVertex.worldPosition = float4(worldPosition, 1.0);
-    return generatedVertex;
-}
-
-)NWB_SLANG";
-#endif
-
-#if defined(NWB_FINAL)
-static constexpr AStringView s_UnboundMaterialShaderProbeSource = R"NWB_SLANG(#include "mesh/authoring.slangi"
+static constexpr AStringView s_MaterialBindMeshSource = R"NWB_SLANG(#include "mesh/authoring.slangi"
 
 NwbMeshGeneratedVertex nwbMeshBuildVertex(
     uint triangleIndex,
@@ -488,32 +338,138 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
 }
 
 )NWB_SLANG";
-#endif
 
-static constexpr AStringView s_MaterialBindPixelShaderProbeSource =
-    "#define NWB_MESH_RASTER_COLOR_LOCATION " NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(NWB_MESH_RASTER_COLOR_LOCATION) "\n"
-    "#define NWB_MESH_COLOR_TARGET_LOCATION " NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(NWB_MESH_COLOR_TARGET_LOCATION) "\n"
-    R"NWB_SLANG(
-struct NwbMaterialBindPixelInput{
-    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
-};
+static constexpr AStringView s_MaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
+#include "project/material_interfaces/test_surface.bind"
 
-struct NwbMaterialBindPixelOutput{
-    [[vk::location(NWB_MESH_COLOR_TARGET_LOCATION)]] float4 color : SV_Target0;
-};
-
-NwbMaterialBindPixelOutput main(NwbMaterialBindPixelInput input){
-    NwbMaterialBindPixelOutput output;
-    output.color = input.color;
-    return output;
+NwbMeshSurface nwbMaterialSurface(){
+    const uint2 materialLayoutHash = NWB_MATERIAL_BIND_LAYOUT_HASH;
+    const uint2 materialInterfaceHash0 = NWB_MATERIAL_BIND_INTERFACE_HASH_0;
+    const bool materialBindConstantsValid =
+        materialLayoutHash.x != 0u
+        && materialInterfaceHash0.x != 0u
+        && NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE == 44u
+        && NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE == 4u
+        && NWB_MATERIAL_BIND_RUNTIME_STORAGE == NWB_MATERIAL_BIND_STORAGE_MUTABLE
+        && NWB_MATERIAL_BIND_RUNTIME_BYTE_OFFSET == 0u
+        && NWB_MATERIAL_BIND_RUNTIME_BYTE_SIZE == 4u
+        && NWB_MATERIAL_BIND_SURFACE_STORAGE == NWB_MATERIAL_BIND_STORAGE_CONSTANT
+        && NWB_MATERIAL_BIND_SURFACE_BYTE_OFFSET == 0u
+        && NWB_MATERIAL_BIND_SURFACE_BYTE_SIZE == 44u;
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    return nwbMakeMeshSurface(
+        materialBindConstantsValid ? surface.base_color.rgb : float3(1.0, 0.0, 1.0),
+        inNormal
+    );
 }
 
 )NWB_SLANG";
 
+static constexpr AStringView s_HalfMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
+#include "project/material_interfaces/test_surface.bind"
+
+NwbMeshSurface nwbMaterialSurface(){
+    const bool materialBindConstantsValid =
+        NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE == 20u
+        && NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE == 0u
+        && NWB_MATERIAL_BIND_SURFACE_STORAGE == NWB_MATERIAL_BIND_STORAGE_CONSTANT
+        && NWB_MATERIAL_BIND_SURFACE_BYTE_OFFSET == 0u
+        && NWB_MATERIAL_BIND_SURFACE_BYTE_SIZE == 20u
+        && NWB_MATERIAL_BIND_SURFACE_ROUGHNESS_BYTE_OFFSET == 0u
+        && NWB_MATERIAL_BIND_SURFACE_RANGE_BYTE_OFFSET == 2u
+        && NWB_MATERIAL_BIND_SURFACE_TINT_BYTE_OFFSET == 6u
+        && NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET == 12u;
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const float3 baseColor = float3(
+        float(surface.base_color.x),
+        float(surface.base_color.y),
+        float(surface.base_color.z)
+    );
+    return nwbMakeMeshSurface(
+        materialBindConstantsValid ? baseColor : float3(1.0, 0.0, 1.0),
+        inNormal
+    );
+}
+
+)NWB_SLANG";
+
+static constexpr AStringView s_CompactIntegerMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
+#include "project/material_interfaces/test_surface.bind"
+
+NwbMeshSurface nwbMaterialSurface(){
+    const bool materialBindConstantsValid =
+        NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE == 20u
+        && NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE == 0u
+        && NWB_MATERIAL_BIND_SURFACE_STORAGE == NWB_MATERIAL_BIND_STORAGE_CONSTANT
+        && NWB_MATERIAL_BIND_SURFACE_BYTE_OFFSET == 0u
+        && NWB_MATERIAL_BIND_SURFACE_BYTE_SIZE == 20u
+        && NWB_MATERIAL_BIND_SURFACE_ENABLED_BYTE_OFFSET == 0u
+        && NWB_MATERIAL_BIND_SURFACE_SIGNED_BYTES_BYTE_OFFSET == 4u
+        && NWB_MATERIAL_BIND_SURFACE_BYTES_BYTE_OFFSET == 8u
+        && NWB_MATERIAL_BIND_SURFACE_SIGNED_WORDS_BYTE_OFFSET == 12u
+        && NWB_MATERIAL_BIND_SURFACE_WORDS_BYTE_OFFSET == 16u;
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const float3 baseColor = float3(
+        surface.enabled.x ? 1.0 : 0.0,
+        float(surface.bytes.z) / 255.0,
+        float(surface.signed_words.y) / 32767.0
+    );
+    return nwbMakeMeshSurface(
+        materialBindConstantsValid ? baseColor : float3(1.0, 0.0, 1.0),
+        inNormal
+    );
+}
+
+)NWB_SLANG";
+
+#if defined(NWB_FINAL)
+static constexpr AStringView s_OtherMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
+#include "project/material_interfaces/other_surface.bind"
+
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    return nwbMakeMeshSurface(surface.base_color.rgb, inNormal);
+}
+
+)NWB_SLANG";
+#endif
+
+#if defined(NWB_FINAL)
+// A standalone G-buffer pixel shader that does NOT include the material's generated `.bind`. Because it omits
+// the bind (and therefore NWB_MATERIAL_TYPED_BINDING), it cannot include mesh/material_ps_authoring.slangi
+// (that header hard-errors without the typed binding), so it writes the three G-buffer render targets directly
+// using the engine target locations. This exercises the PIXEL interface validation ("does not include a
+// generated material bind").
+static constexpr AStringView s_UnboundMaterialShaderProbeSource =
+    "#define NWB_MESH_GBUFFER_BASE_COLOR_LOCATION " NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION) "\n"
+    "#define NWB_MESH_GBUFFER_NORMAL_LOCATION " NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(NWB_MESH_GBUFFER_NORMAL_LOCATION) "\n"
+    "#define NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION " NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION) "\n"
+    R"NWB_SLANG(
+struct NwbUnboundMaterialPixelOutput{
+    [[vk::location(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION)]] float4 baseColor : SV_Target0;
+    [[vk::location(NWB_MESH_GBUFFER_NORMAL_LOCATION)]] float4 normal : SV_Target1;
+    [[vk::location(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION)]] float4 worldPosition : SV_Target2;
+};
+
+NwbUnboundMaterialPixelOutput main(){
+    NwbUnboundMaterialPixelOutput output;
+    output.baseColor = float4(1.0, 1.0, 1.0, 0.0);
+    output.normal = float4(0.5, 0.5, 1.0, 0.0);
+    output.worldPosition = float4(0.0, 0.0, 0.0, 0.0);
+    return output;
+}
+
+)NWB_SLANG";
+#endif
+
 static constexpr AStringView s_BlockScopedMaterialMeta = R"NWB_META(material asset;
 
-asset.interface = "project/material_interfaces/test_surface";
-asset.bxdf = "shaders/material_bxdf.slangi";
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -535,8 +491,8 @@ asset.parameters = {
 
 static constexpr AStringView s_HalfMaterialMeta = R"NWB_META(material asset;
 
-asset.interface = "project/material_interfaces/test_surface";
-asset.bxdf = "shaders/material_bxdf.slangi";
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -557,7 +513,8 @@ asset.parameters = {
 
 static constexpr AStringView s_MixedHalfMaterialMeta = R"NWB_META(material asset;
 
-asset.interface = "project/material_interfaces/test_surface";
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -579,8 +536,8 @@ asset.parameters = {
 
 static constexpr AStringView s_CompactIntegerMaterialMeta = R"NWB_META(material asset;
 
-asset.interface = "project/material_interfaces/test_surface";
-asset.bxdf = "shaders/material_bxdf.slangi";
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -602,7 +559,8 @@ asset.parameters = {
 
 static constexpr AStringView s_TransparentMaterialMeta = R"NWB_META(material asset;
 
-asset.interface = "project/material_interfaces/test_surface";
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
 asset.transparent = 1;
 
 asset.shaders = {
@@ -625,7 +583,8 @@ asset.parameters = {
 
 static constexpr AStringView s_TwoSidedMaterialMeta = R"NWB_META(material asset;
 
-asset.interface = "project/material_interfaces/test_surface";
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
 asset.two_sided = 1;
 
 asset.shaders = {
@@ -663,7 +622,7 @@ asset.parameters = {
 
 static constexpr AStringView s_UnsupportedMaterialFieldMeta = R"NWB_META(material asset;
 
-asset.interface = "project/material_interfaces/test_surface";
+asset.interface = "project/material_interfaces/test_surface.bind";
 asset.compiler = "unsupported";
 
 asset.shaders = {
@@ -673,23 +632,13 @@ asset.shaders = {
 asset.shader_variant = "default";
 
 )NWB_META";
-
-static constexpr AStringView s_MissingShaderVariantMaterialMeta = R"NWB_META(material asset;
-
-asset.interface = "project/material_interfaces/test_surface";
-
-asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-};
-
-)NWB_META";
 #endif
 
 #if defined(NWB_FINAL)
 static constexpr AStringView s_UnknownInterfaceParameterMaterialMeta = R"NWB_META(material asset;
 
-asset.interface = "project/material_interfaces/test_surface";
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -707,7 +656,8 @@ asset.parameters = {
 
 static constexpr AStringView s_FlatInterfaceParameterMaterialMeta = R"NWB_META(material asset;
 
-asset.interface = "project/material_interfaces/test_surface";
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -723,7 +673,8 @@ asset.parameters = {
 
 static constexpr AStringView s_UntypedMaterialParameterMeta = R"NWB_META(material asset;
 
-asset.interface = "project/material_interfaces/test_surface";
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -741,7 +692,8 @@ asset.parameters = {
 
 static constexpr AStringView s_VectorAliasMaterialParameterMeta = R"NWB_META(material asset;
 
-asset.interface = "project/material_interfaces/test_surface";
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -1205,9 +1157,13 @@ static bool CookDuplicateGeneratedMaterialBindIncludePath(
 }
 #endif
 
-static bool WriteMaterialBindMeshShaderProbeSource(
+// Writes a shader `.nwb` + source pair. Both the mesh and pixel material shaders include engine graphics
+// headers (mesh/authoring.slangi, mesh/material_ps_authoring.slangi), so the meta always declares the engine
+// graphics include root.
+static bool WriteMaterialBindShaderProbeSource(
     TestArena& testArena,
     const Path& assetRoot,
+    const char* stage,
     const char* metaFilename,
     const char* sourceFilename,
     const AStringView sourceText
@@ -1217,38 +1173,24 @@ static bool WriteMaterialBindMeshShaderProbeSource(
         testArena.arena,
         engineGraphicsIncludeRoot
     );
-    NWB::Impl::ShaderCook::CookString meshShaderMeta(testArena.arena);
-    meshShaderMeta +=
-        "shader asset;\n\n"
-        "asset.stage = \"mesh\";\n"
+    NWB::Impl::ShaderCook::CookString shaderMeta(testArena.arena);
+    shaderMeta += "shader asset;\n\nasset.stage = \"";
+    shaderMeta += stage;
+    shaderMeta +=
+        "\";\n"
         "asset.target_profile = \"spirv_1_5\";\n"
         "asset.entry_point = \"main\";\n"
         "asset.include_roots = [\""
     ;
-    meshShaderMeta += engineGraphicsIncludeRootText;
-    meshShaderMeta += "\"];\n";
+    shaderMeta += engineGraphicsIncludeRootText;
+    shaderMeta += "\"];\n";
 
     if(!WriteTextFile(
         assetRoot / "shaders" / metaFilename,
-        AStringView(meshShaderMeta.data(), meshShaderMeta.size())
+        AStringView(shaderMeta.data(), shaderMeta.size())
     ))
         return false;
     return WriteTextFile(assetRoot / "shaders" / sourceFilename, sourceText);
-}
-
-static bool WriteMaterialBindMeshShaderProbe(
-    TestArena& testArena,
-    const Path& assetRoot,
-    const char* metaFilename,
-    const char* sourceFilename
-){
-    return WriteMaterialBindMeshShaderProbeSource(
-        testArena,
-        assetRoot,
-        metaFilename,
-        sourceFilename,
-        s_MaterialBindShaderProbeSource
-    );
 }
 
 static bool CookMaterialBindShaderProbe(
@@ -1264,38 +1206,56 @@ static bool CookMaterialBindShaderProbe(
     const Path assetRoot = outRoot / "assets";
     if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
         return false;
-    if(!WriteMaterialBindMeshShaderProbe(testArena, assetRoot, "bind_probe.nwb", "bind_probe.slang"))
+    // The typed-binding probe is now a pixel shader (it reads typed material data + includes the generated bind).
+    if(!WriteMaterialBindShaderProbeSource(
+        testArena,
+        assetRoot,
+        "ps",
+        "bind_probe.nwb",
+        "bind_probe.slang",
+        s_MaterialBindShaderProbeSource
+    ))
         return false;
 
     return CookPreparedGraphicsAssetRoots(testArena, outRoot, outOutputDirectory, { assetRoot });
 }
 
-static bool WriteMaterialBindMaterialIntegrationAssetsWithMeshSource(
+// Minimal deferred-lighting BXDF fragment (the deferred lighting framework is in scope; the fragment includes
+// nothing). Required at cook for every material.
+static constexpr AStringView s_MaterialBindBxdfSource =
+    "float3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, uint shadowMask){ return surface.baseColor; }\n";
+
+// Writes the full material-integration asset set: a fixed generic mesh shader (material_mesh), a varying pixel
+// shader (material_ps, which reads the typed .bind), the required bxdf fragment, the .bind interface, and the
+// material. The pixel source varies per test (it carries the typed-binding constant assertions).
+static bool WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
     TestArena& testArena,
     const Path& assetRoot,
     const AStringView bindText,
     const AStringView materialText,
-    const AStringView meshSourceText
+    const AStringView pixelSourceText
 ){
     if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
         return false;
-    if(!WriteMaterialBindMeshShaderProbeSource(
+    if(!WriteMaterialBindShaderProbeSource(
         testArena,
         assetRoot,
+        "mesh",
         "material_mesh.nwb",
         "material_mesh.slang",
-        meshSourceText
+        s_MaterialBindMeshSource
     ))
         return false;
-    if(!WriteTextFile(
-        assetRoot / "shaders" / "material_ps.nwb",
-        "shader asset;\n\n"
-        "asset.stage = \"ps\";\n"
-        "asset.target_profile = \"spirv_1_5\";\n"
-        "asset.entry_point = \"main\";\n"
+    if(!WriteMaterialBindShaderProbeSource(
+        testArena,
+        assetRoot,
+        "ps",
+        "material_ps.nwb",
+        "material_ps.slang",
+        pixelSourceText
     ))
         return false;
-    if(!WriteTextFile(assetRoot / "shaders" / "material_ps.slang", s_MaterialBindPixelShaderProbeSource))
+    if(!WriteTextFile(assetRoot / "shaders" / "material_bxdf.bxdf", s_MaterialBindBxdfSource))
         return false;
     return WriteTextFile(assetRoot / "materials" / "test_material.nwb", materialText);
 }
@@ -1306,7 +1266,7 @@ static bool WriteMaterialBindMaterialIntegrationAssets(
     const AStringView bindText,
     const AStringView materialText
 ){
-    return WriteMaterialBindMaterialIntegrationAssetsWithMeshSource(
+    return WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
         assetRoot,
         bindText,
@@ -1315,10 +1275,10 @@ static bool WriteMaterialBindMaterialIntegrationAssets(
     );
 }
 
-static bool CookMaterialBindMaterialIntegrationWithMeshSource(
+static bool CookMaterialBindMaterialIntegrationWithPixelSource(
     const AStringView bindText,
     const AStringView materialText,
-    const AStringView meshSourceText,
+    const AStringView pixelSourceText,
     const AStringView caseName,
     TestArena& testArena,
     Path& outRoot,
@@ -1328,12 +1288,12 @@ static bool CookMaterialBindMaterialIntegrationWithMeshSource(
         return false;
 
     const Path assetRoot = outRoot / "assets";
-    if(!WriteMaterialBindMaterialIntegrationAssetsWithMeshSource(
+    if(!WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
         assetRoot,
         bindText,
         materialText,
-        meshSourceText
+        pixelSourceText
     ))
         return false;
 
@@ -1348,7 +1308,7 @@ static bool CookMaterialBindMaterialIntegration(
     Path& outRoot,
     Path& outOutputDirectory
 ){
-    return CookMaterialBindMaterialIntegrationWithMeshSource(
+    return CookMaterialBindMaterialIntegrationWithPixelSource(
         bindText,
         materialText,
         s_MaterialBindShaderProbeSource,

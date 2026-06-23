@@ -227,6 +227,20 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
 }
 
+// A self-contained pixel shader that includes no material bind interface (this test exercises cooking a shader
+// without any generated material_bind_includes root).
+static constexpr AStringView s_StandaloneShaderProbeSource = R"NWB_SLANG(struct NwbStandalonePixelOutput{
+    float4 color : SV_Target0;
+};
+
+NwbStandalonePixelOutput main(){
+    NwbStandalonePixelOutput output;
+    output.color = float4(1.0, 1.0, 1.0, 1.0);
+    return output;
+}
+
+)NWB_SLANG";
+
 static bool WriteStandaloneShaderProbe(const Path& assetRoot){
     if(!WriteTextFile(
         assetRoot / "shaders" / "standalone_ps.nwb",
@@ -237,7 +251,7 @@ static bool WriteStandaloneShaderProbe(const Path& assetRoot){
     ))
         return false;
 
-    return WriteTextFile(assetRoot / "shaders" / "standalone_ps.slang", s_MaterialBindPixelShaderProbeSource);
+    return WriteTextFile(assetRoot / "shaders" / "standalone_ps.slang", s_StandaloneShaderProbeSource);
 }
 
 TEST(AssetsGraphics, ShaderCookWithoutMaterialBindIncludes){

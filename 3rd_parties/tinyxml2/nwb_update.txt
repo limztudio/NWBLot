@@ -1,5 +1,5 @@
 package: tinyxml2
 version: 11.0.0
-updated_utc: 2026-06-20T15:40:47Z
+updated_utc: 2026-06-23T16:02:45Z
 source: https://github.com/leethomason/tinyxml2/releases/tag/11.0.0
-notes: Single-file XML parser. Flattened out of isa_spec_manager/source/third_party to top-level. Compiled directly into the isa_decoder target.
+notes: Single-file XML parser. Flattened out of isa_spec_manager/source/third_party to top-level and registered as nwb::tinyxml2. Compiled into isa_decoder via the top-level target.

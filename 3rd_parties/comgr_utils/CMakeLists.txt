@@ -17,12 +17,13 @@ add_library(${PROJECT_NAME} STATIC "source/comgr_utils.cpp")
 add_library(AMD::ComgrUtils ALIAS ${PROJECT_NAME})
 
 target_include_directories(${PROJECT_NAME} PUBLIC
-    "${PROJECT_SOURCE_DIR}/source"
-    "${CMAKE_SOURCE_DIR}/3rd_parties/comgr/include")   # amd_comgr.h, flattened out of external/comgr to top-level
+    "${PROJECT_SOURCE_DIR}/source")
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC COMGR_DYNAMIC_LINKING)
+target_link_libraries(${PROJECT_NAME} PUBLIC nwb::comgr_headers)
 if (NOT WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${CMAKE_DL_LIBS})
 endif()
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)
+nwb_disable_vendor_warnings(${PROJECT_NAME})

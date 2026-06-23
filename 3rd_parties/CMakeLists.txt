@@ -27,8 +27,10 @@ function(nwb_match_engine_runtime target)
 endfunction()
 
 add_subdirectory(CLI11)
+add_subdirectory(cxxopts)
 add_subdirectory(tsl)
 add_subdirectory(miniz)
+add_subdirectory(tinyxml2)
 add_subdirectory(nlohmann_json)
 add_subdirectory(rapidjson)
 add_subdirectory(zlib)
@@ -42,22 +44,25 @@ add_subdirectory(libmicrohttpd)
 add_subdirectory(oneTBB)
 add_subdirectory(googletest)                       # unit-test framework (gtest) for the engine test suites
 nwb_match_engine_runtime(gtest)
+add_subdirectory(wmi)
 
 # Radeon GPU Detective (RGD) in-process .rgd decoder + its vendored dependencies.
 add_subdirectory(zstd)                             # rdf's compression backend (flattened out of rdf/imported)
 add_subdirectory(rdf)
+add_subdirectory(comgr)
 # system_info gates its rdf::ChunkFile / rdfChunkFile* Parse overloads (and the amdrdf link that supplies the
 # rdf C++ bindings) behind this flag — upstream's top-level sets it; our flattened wiring must too, or RGD and
 # the RMT backend reference SystemInfoReader::Parse / DriverOverridesReader::Parse overloads that were compiled
 # out of system_info.lib.
 set(SYSTEM_INFO_BUILD_RDF_INTERFACES ON)
-add_subdirectory(system_info_utils/source)
-add_subdirectory(isa_spec_manager/source/isa_decoder)
+add_subdirectory(system_info_utils)
+add_subdirectory(isa_spec_manager)
 add_subdirectory(comgr_utils)
+add_subdirectory(dev_driver)
+add_subdirectory(pevents)
 add_subdirectory(pix_events)
-add_subdirectory(rmv/source/parser)                # RMT parser  (page-fault resource history)
-add_subdirectory(rmv/source/backend)               # RMT backend (page-fault resource history)
-add_subdirectory(radeon_gpu_detective/source/radeon_gpu_detective_backend)
+add_subdirectory(rmv)                              # RMT parser/backend (page-fault resource history)
+add_subdirectory(radeon_gpu_detective)
 
 # Align every RGD-stack static lib's CRT + debug iterator level with the engine's (see nwb_match_engine_runtime).
 foreach(_nwb_rgd_target amdrdf zstd system_info isa_decoder ComgrUtils pix_events_decoder RmvParser RmvBackend rgd_backend)

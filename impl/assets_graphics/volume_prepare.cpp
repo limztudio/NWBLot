@@ -330,10 +330,13 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedPixelShaders){
         ShaderCook::ShaderEntry pixelShaderEntry(shaderCookArena);
         pixelShaderEntry.name.assign(AStringView(generatedPixelShader.name));
-        pixelShaderEntry.stage.assign(AStringView("ps"));
-        pixelShaderEntry.archiveStage.assign(AStringView("ps"));
-        pixelShaderEntry.targetProfile.assign(AStringView("spirv_1_5"));
         pixelShaderEntry.source.assign(AStringView(generatedPixelShader.source));
+        if(!pixelShaderEntry.stage.assign(AStringView("ps")) ||
+           !pixelShaderEntry.archiveStage.assign(AStringView("ps")) ||
+           !pixelShaderEntry.targetProfile.assign(AStringView("spirv_1_5"))){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to allocate generated pixel shader entry"));
+            return false;
+        }
         pixelShaderEntry.includeRoots.push_back(ShaderCook::CookString(AStringView("engine/graphics"), shaderCookArena));
         pixelShaderEntry.emitMeshComputeShadow = false;
 

@@ -6,11 +6,16 @@ set (SRC_DIR ../../source)
 set (INC_DIR ../../include)
 
 # Control the path of tinyxml2. NWB: tinyxml2 was flattened out of the bundled isa_spec_manager/source/third_party
-# into top-level 3rd_parties/tinyxml2 (see .helper/3rd_parties.md); isa_decoder still compiles it directly.
+# into top-level 3rd_parties/tinyxml2 (see .helper/3rd_parties.md).
 set (TINYXML_DIR ${CMAKE_SOURCE_DIR}/3rd_parties/tinyxml2)
+set (_NWB_USE_TINYXML2_TARGET OFF)
+if (TARGET nwb::tinyxml2)
+    set (_NWB_USE_TINYXML2_TARGET ON)
+endif()
 if (TINYXML_SRC_PATH)
     message("-- IsaDecoder: Overwritting default tinyxml2 source files with ${TINYXML_SRC_PATH}")
     set (TINYXML_DIR ${TINYXML_SRC_PATH})
+    set (_NWB_USE_TINYXML2_TARGET OFF)
 endif()
 
 # Redirect to single build output location
@@ -47,9 +52,10 @@ set (ALL_CPP
     ${SRC_DIR}/common/amdisa_structures.cpp
     ${SRC_DIR}/common/isa_xml_reader.cpp
 
-    # Third party source files.
-    ${TINYXML_DIR}/tinyxml2.cpp
 )
+if (NOT _NWB_USE_TINYXML2_TARGET)
+    list(APPEND ALL_CPP ${TINYXML_DIR}/tinyxml2.cpp)
+endif()
 
 # Adding target.
 # Static Library
@@ -60,6 +66,10 @@ target_include_directories(isa_decoder PRIVATE
     PUBLIC
     ${INC_DIR}
 )
+if (_NWB_USE_TINYXML2_TARGET)
+    target_link_libraries(isa_decoder PRIVATE nwb::tinyxml2)
+endif()
+nwb_disable_vendor_warnings(isa_decoder)
 
 # Dynamic Library
 add_library(isa_decoder_dynamic SHARED ${ALL_CPP})
@@ -69,6 +79,10 @@ target_include_directories(isa_decoder_dynamic PRIVATE
     PUBLIC
     ${INC_DIR}
 )
+if (_NWB_USE_TINYXML2_TARGET)
+    target_link_libraries(isa_decoder_dynamic PRIVATE nwb::tinyxml2)
+endif()
+nwb_disable_vendor_warnings(isa_decoder_dynamic)
 
 # install public headers
 install(DIRECTORY ${INC_DIR}/amdisa DESTINATION include COMPONENT dev)

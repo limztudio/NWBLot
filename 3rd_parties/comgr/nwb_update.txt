@@ -1,5 +1,5 @@
 package: comgr
 version: AMD_COMGR_INTERFACE_VERSION 3.0 (COMGR windows build 93)
-updated_utc: 2026-06-20
+updated_utc: 2026-06-23T16:02:45Z
 source: https://github.com/GPUOpen-Tools/comgr_utils
-notes: amd_comgr.h header only (the ~135MB amd_comgr LLVM runtime lib is dlopen'd, not linked). Flattened out of comgr_utils/external to top-level; comgr_utils includes it from here.
+notes: amd_comgr.h header only (the ~135MB amd_comgr LLVM runtime lib is dlopen'd, not linked). Flattened out of comgr_utils/external to top-level; registered as nwb::comgr_headers for consumers.

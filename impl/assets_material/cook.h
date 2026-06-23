@@ -42,9 +42,10 @@ struct MaterialCookEntry{
     Material::TypedLayoutFieldVector typedLayoutFields;
     Material::TypedBlockByteVector typedBlockBytes;
     MaterialCookString shaderVariant;
-    // Absolute, canonical (forward-slash) path of the .slangi authoring this material's deferred lighting BXDF,
-    // resolved from the required `bxdf` field against the material's asset root at parse time. The cross-asset
-    // phase dedups by this path, assigns shadingModelId, and generates the deferred lighting dispatch module.
+    // This material's deferred lighting BXDF source. Parse stores the `project/`- or `engine/`-rooted virtual
+    // path (with the dedicated `.bxdf` extension) from the required `bxdf` field; the cross-asset phase resolves
+    // it to an absolute, canonical (forward-slash) path against all asset roots, then dedups by it, assigns
+    // shadingModelId, and generates the deferred lighting dispatch module.
     MaterialCookString bxdfSource;
     u32 shadingModelId = 0u;
     StageShaderMap stageShaders;

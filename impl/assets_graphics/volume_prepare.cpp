@@ -251,6 +251,37 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     ))
         return false;
 
+    // Resolve each material's `bxdf` virtual path (project/...; .bxdf) to an absolute source against the asset
+    // roots -- only known here, in the cross-asset phase. The resolved path becomes a verbatim #include in the
+    // generated dispatch module and is covered by the dependency checksum's repo alias; this mirrors how a
+    // material's `interface` resolves to a discovered .bind. ResolveVirtualAssetPath preserves the asset-root
+    // case + canonicalizes the appended components (matching the on-disk lowercase shader file names).
+    for(auto& materialEntry : materialEntries){
+        if(materialEntry.bxdfSource.empty())
+            continue;
+
+        Path resolvedBxdf(context.arena);
+        if(!Core::Assets::ResolveVirtualAssetPath(
+            context.resolvedPaths.assetRoots,
+            AStringView(materialEntry.bxdfSource),
+            resolvedBxdf,
+            context.scratchArena
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: material '{}' bxdf '{}' does not resolve against any asset root")
+                , StringConvert(materialEntry.virtualPath.c_str())
+                , StringConvert(materialEntry.bxdfSource.c_str())
+            );
+            return false;
+        }
+
+        auto resolvedBxdfText = PathToString(context.scratchArena, resolvedBxdf);
+        for(auto& ch : resolvedBxdfText){
+            if(ch == '\\')
+                ch = '/';
+        }
+        materialEntry.bxdfSource.assign(AStringView(resolvedBxdfText));
+    }
+
     // Assign each material its deferred shading-model id from the unique set of `bxdf` declarations, then
     // generate the deferred lighting BXDF dispatch module the engine harness includes. Both run before
     // shader preparation (so the harness picks up the module + the dependency checksum covers each BXDF) and

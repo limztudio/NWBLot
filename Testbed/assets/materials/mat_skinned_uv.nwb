@@ -1,7 +1,7 @@
 material asset;
 
 asset.interface = "project/shaders/surface";
-asset.bxdf = "shaders/toon_bxdf.slangi";
+asset.bxdf = "project/shaders/toon.bxdf";
 
 asset.shaders = {
     "ps": "project/shaders/uv_debug_ps",

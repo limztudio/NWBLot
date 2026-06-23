@@ -553,7 +553,6 @@ static bool ParseMaterialInterface(
 }
 
 static bool ParseMaterialBxdf(
-    const Path& assetRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     CookString& outBxdfSource,
@@ -561,9 +560,11 @@ static bool ParseMaterialBxdf(
 ){
     outBxdfSource.clear();
 
-    // Optional at parse; required at cook. A material with no `bxdf` parses fine (parse-only consumers such as
-    // typed-layout tests do not need one), but the cross-asset phase (AssignMaterialShadingModelIds) rejects any
-    // material lacking a bxdf, so every material in a real deferred-lit cook still authors its own.
+    // Optional at parse; required at cook. The value is a `project/`- or `engine/`-rooted virtual path with the
+    // dedicated `.bxdf` extension (e.g. "project/shaders/lambert.bxdf"), mirroring how `interface` names a
+    // `.bind`. Parse only validates + stores the virtual path; the cross-asset phase (volume_prepare) resolves it
+    // to an absolute source against all asset roots (only known there), and AssignMaterialShadingModelIds rejects
+    // any material lacking a bxdf -- so every material in a real deferred-lit cook still authors its own.
     const auto* bxdfValue = asset.findField(MaterialAssetMetadataSchema::s_BxdfField);
     if(!bxdfValue)
         return true;
@@ -576,8 +577,8 @@ static bool ParseMaterialBxdf(
     }
 
     const Core::Metascript::MStringView bxdfText = bxdfValue->asString();
-    const AStringView bxdfRelative = TrimView(AStringView(bxdfText.data(), bxdfText.size()));
-    if(bxdfRelative.empty()){
+    const AStringView bxdfVirtualPath = TrimView(AStringView(bxdfText.data(), bxdfText.size()));
+    if(bxdfVirtualPath.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(MaterialAssetMetadataSchema::s_BxdfField)
@@ -585,49 +586,34 @@ static bool ParseMaterialBxdf(
         return false;
     }
 
-    ScratchString bxdfRelativeStr(bxdfRelative, scratchArena);
-    const ::Path<ScratchArena> bxdfRelativePath(scratchArena, AStringView(bxdfRelativeStr));
-    if(bxdfRelativePath.is_absolute()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a path relative to the asset root")
+    if(!Core::Assets::HasReservedAssetVirtualRoot(bxdfVirtualPath, scratchArena)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a project/- or engine/-rooted virtual path "
+            "(e.g. 'project/shaders/lambert.bxdf')")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(MaterialAssetMetadataSchema::s_BxdfField)
         );
         return false;
     }
 
-    ErrorCode errorCode;
-    const Path absoluteBxdf = AbsolutePath(assetRoot / bxdfRelativeStr.c_str(), errorCode).lexically_normal();
-    if(errorCode){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': failed to resolve bxdf '{}': {}")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(bxdfRelative)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    ScratchString extension = PathToString(scratchArena, absoluteBxdf.extension());
+    const ::Path<ScratchArena> bxdfVirtualPathPath(scratchArena, bxdfVirtualPath);
+    ScratchString extension = PathToString(scratchArena, bxdfVirtualPathPath.extension());
     CanonicalizeTextInPlace(extension);
-    if(AStringView(extension) != AStringView(".slangi")){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must reference a .slangi file")
+    if(AStringView(extension) != AStringView(".bxdf")){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must reference a .bxdf file")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(MaterialAssetMetadataSchema::s_BxdfField)
         );
         return false;
     }
-    // Existence is enforced later, by the real cook: EmitDeferredBxdfDispatchModule emits a verbatim #include
-    // of this path, and the dependency-checksum reads each dependency file (a missing bxdf fails there / at
-    // slang compile). Parse stays filesystem-light so it does not couple to where the file is mounted.
 
-    // Store the absolute path with forward slashes but original case: it becomes a verbatim #include in the
-    // generated dispatch module, and the cook's dependency-checksum matches it case-sensitively against the
-    // repo-root alias (lowercasing it would push it "outside" the declared roots).
-    ScratchString resolved = PathToString(scratchArena, absoluteBxdf);
-    for(char& ch : resolved){
+    // Store the virtual path verbatim (forward slashes, original case). The cross-asset phase resolves it to an
+    // absolute source; existence is enforced there / by the dependency-checksum, so parse stays filesystem-light.
+    ScratchString normalized(bxdfVirtualPath, scratchArena);
+    for(char& ch : normalized){
         if(ch == '\\')
             ch = '/';
     }
-    outBxdfSource.assign(AStringView(resolved));
+    outBxdfSource.assign(AStringView(normalized));
     return true;
 }
 
@@ -1723,7 +1709,7 @@ static bool ParseMaterialMeta(
         return false;
     if(!ParseMaterialInterface(nwbFilePath, asset, outEntry.materialInterface))
         return false;
-    if(!ParseMaterialBxdf(assetRoot, nwbFilePath, asset, outEntry.bxdfSource, scratchArena))
+    if(!ParseMaterialBxdf(nwbFilePath, asset, outEntry.bxdfSource, scratchArena))
         return false;
     if(!ParseMaterialRenderProperties(nwbFilePath, asset, outEntry))
         return false;

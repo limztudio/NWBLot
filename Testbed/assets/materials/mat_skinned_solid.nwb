@@ -1,7 +1,7 @@
 material asset;
 
 asset.interface = "project/shaders/surface";
-asset.bxdf = "shaders/lambert_bxdf.slangi";
+asset.bxdf = "project/shaders/lambert.bxdf";
 
 asset.shaders = {
     "ps": "project/shaders/surface_ps",

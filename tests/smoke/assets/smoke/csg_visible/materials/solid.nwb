@@ -1,7 +1,7 @@
 material asset;
 
 asset.interface = "project/shaders/smoke_surface";
-asset.bxdf = "shaders/smoke_lambert_bxdf.slangi";
+asset.bxdf = "project/shaders/smoke_lambert.bxdf";
 
 asset.shaders = {
     "ps": "project/shaders/smoke_surface_ps",

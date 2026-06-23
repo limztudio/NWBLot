@@ -209,11 +209,6 @@ public:
         const DefineCombo& combo,
         Core::Alloc::ScratchArena& scratchArena
     );
-    bool canonicalizeVariantSignature(
-        AStringView variantSignature,
-        CookString& outCanonical,
-        Core::Alloc::ScratchArena& scratchArena
-    );
 
     bool computeDependencyChecksum(
         const CookVector<Path>& dependencies,

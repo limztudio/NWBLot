@@ -3,18 +3,16 @@
 
 
 #include "material_color.slangi"
-#include "mesh/gbuffer_io.slangi"
+#include "mesh/gbuffer_ps.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NwbMeshGBufferOutput main(NwbMeshPixelInput input){
-    nwbLoadMeshPixelInput(input);
-
-    nwbWriteMeshGBuffer(nwbMaterialPixelColor(inColor.rgb), inNormal, inWorldPosition);
-
-    return nwbBuildMeshGBufferOutput();
+// This material's surface hook. The engine owns the pixel-shader entry + the G-buffer write; this only
+// describes the surface: base color from the per-vertex material color.
+NwbMeshSurface nwbMaterialSurface(){
+    return nwbMakeMeshSurface(nwbMaterialPixelColor(inColor.rgb), inNormal);
 }
 
 

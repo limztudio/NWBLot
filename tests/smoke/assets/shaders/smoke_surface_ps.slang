@@ -3,19 +3,17 @@
 
 
 #include "smoke_material_color.slangi"
-#include "mesh/gbuffer_io.slangi"
+#include "mesh/gbuffer_ps.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NwbMeshGBufferOutput main(NwbMeshPixelInput input){
-    nwbLoadMeshPixelInput(input);
-
+// This material's surface hook. The engine owns the pixel-shader entry + the G-buffer write; this only
+// describes the surface.
+NwbMeshSurface nwbMaterialSurface(){
     const float3 baseColor = clamp(nwbSmokeMaterialPixelColor(inColor.rgb), float3(0.0), float3(1.0));
-    nwbWriteMeshGBuffer(baseColor, inNormal, inWorldPosition);
-
-    return nwbBuildMeshGBufferOutput();
+    return nwbMakeMeshSurface(baseColor, inNormal);
 }
 
 

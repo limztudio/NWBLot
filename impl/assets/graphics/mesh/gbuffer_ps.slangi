@@ -1,0 +1,59 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_MESH_GBUFFER_PS_SLANGI
+#define NWB_GRAPHICS_MESH_GBUFFER_PS_SLANGI
+
+#include "gbuffer_io.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Engine-owned G-buffer pixel-shader entry. Mirrors the mesh shader: the engine owns the entry point + the
+// G-buffer write (the three targets + the shading-model id), and each material provides ONLY a surface hook,
+// nwbMaterialSurface(), that fills the surface below from the interpolated pixel inputs (inColor / inNormal /
+// inTangent / inUv0 / inWorldPosition) and its own logic. A material never writes the G-buffer targets or the
+// model-id packing, and cannot get the target layout wrong.
+struct NwbMeshSurface{
+    float3 baseColor;
+    float3 normal;       // world space; the engine encodes it into the normal target
+    float  param0;       // user BXDF parameter, packed into normal.a (e.g. roughness)
+    float  param1;       // user BXDF parameter, packed into world.a (e.g. metallic)
+};
+
+NwbMeshSurface nwbMakeMeshSurface(float3 baseColor, float3 normal, float param0, float param1){
+    NwbMeshSurface surface;
+    surface.baseColor = baseColor;
+    surface.normal = normal;
+    surface.param0 = param0;
+    surface.param1 = param1;
+    return surface;
+}
+
+// Convenience for materials with no extra BXDF parameters.
+NwbMeshSurface nwbMakeMeshSurface(float3 baseColor, float3 normal){
+    return nwbMakeMeshSurface(baseColor, normal, 0.0, 0.0);
+}
+
+// Required per-material hook: every material's pixel shader MUST define nwbMaterialSurface(). There is no
+// engine default -- a material that omits it fails to link (the entry below references it). The world position
+// written to the G-buffer is the interpolated geometry position, owned by the engine.
+NwbMeshGBufferOutput main(NwbMeshPixelInput input){
+    nwbLoadMeshPixelInput(input);
+
+    const NwbMeshSurface surface = nwbMaterialSurface();
+    nwbWriteMeshGBufferParams(surface.baseColor, surface.normal, inWorldPosition, surface.param0, surface.param1);
+
+    return nwbBuildMeshGBufferOutput();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

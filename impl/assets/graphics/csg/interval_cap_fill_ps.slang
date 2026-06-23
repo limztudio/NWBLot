@@ -13,6 +13,33 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Receiver-range view. The cap-fill PS only reads the receiver material info written by the CPU per
+// removed-interval; the layout must stay byte-identical to NwbCsgReceiverRange in runtime.slangi
+// (and to CsgReceiverRangeGpuData on the C++ side). The bind layout matches the CSG clip set bound
+// alongside the interval-sample set in renderCsgIntervalCaps.
+struct NwbCsgCapFillBounds{
+    float3 minBounds;
+    int minFlags;
+    float3 maxBounds;
+    int maxFlags;
+};
+
+struct NwbCsgCapFillReceiverRange{
+    uint4 rangeInfo;    // x: firstCutter, y: cutterCount, z: flags, w: shadingModelId
+    float4 worldToReceiverRow0;
+    float4 worldToReceiverRow1;
+    float4 worldToReceiverRow2;
+    NwbCsgCapFillBounds localBounds;
+    float4 baseColor;
+};
+
+[[vk::binding(NWB_CSG_BINDING_RECEIVER_RANGES, NWB_CSG_CLIP_SET)]]
+StructuredBuffer<NwbCsgCapFillReceiverRange, Std430DataLayout> g_NwbCsgCapFillReceiverRanges;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct NwbCsgIntervalCapFillPixelInput{
     float4 position : SV_Position;
     [[vk::location(NWB_DEFERRED_FULLSCREEN_UV_LOCATION)]] float2 uv : TEXCOORD0;
@@ -47,10 +74,16 @@ NwbCsgIntervalCapFillPixelOutput main(const NwbCsgIntervalCapFillPixelInput inpu
     if(!cap.visible)
         discard;
 
+    const NwbCsgCapFillReceiverRange receiver = g_NwbCsgCapFillReceiverRanges[cap.receiverIndex];
+
     NwbCsgIntervalCapFillPixelOutput output;
-    output.baseColor = float4(0.78, 0.72, 0.76, 1.0);
-    output.normal = float4(nwbCsgCapFillEncodeNormal(cap.normal), 1.0);
-    output.worldPosition = float4(cap.worldPosition, 1.0);
+    // baseColor.rgb = receiver base color, baseColor.a = receiver cook-assigned shading-model id so
+    // the carved cap is lit + shadowed by the same per-material BXDF as the receiver surface.
+    output.baseColor = float4(receiver.baseColor.rgb, float(receiver.rangeInfo.w));
+    // The mesh G-buffer PS packs spare BXDF params into normal.a / worldPosition.a; lambert/toon ignore
+    // them, so 0.0 keeps default parameters for the carved cap.
+    output.normal = float4(nwbCsgCapFillEncodeNormal(cap.normal), 0.0);
+    output.worldPosition = float4(cap.worldPosition, 0.0);
     output.depth = cap.depth;
     return output;
 }

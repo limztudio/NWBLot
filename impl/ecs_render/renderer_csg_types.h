@@ -48,12 +48,15 @@ using CsgReceiverCpuBounds = CsgBoundsGpuData;
 }
 
 struct CsgReceiverRangeGpuData{
+    // The CSG shaders pack these four scalars as a single uint4 (rangeInfo):
+    //   x = firstCutter, y = cutterCount, z = flags, w = shadingModelId.
     u32 firstCutter = 0u;
     u32 cutterCount = 0u;
     u32 flags = 0u;
-    u32 padding0 = 0u;
+    u32 shadingModelId = 0u;
     Float34 worldToReceiver = MakeIdentityCsgMatrix();
     CsgBoundsGpuData localBounds;
+    Float4 baseColor = Float4(0.78f, 0.72f, 0.76f, 1.0f);
 };
 
 struct CsgCutterGpuData{
@@ -66,7 +69,7 @@ struct CsgCutterGpuData{
     Float4 parameter1 = Float4(0.f, 0.f, 0.f, 0.f);
 };
 
-static_assert(sizeof(CsgReceiverRangeGpuData) == sizeof(u32) * 4u + sizeof(Float34) + sizeof(CsgBoundsGpuData), "CsgReceiverRangeGpuData layout must match the CSG shader");
+static_assert(sizeof(CsgReceiverRangeGpuData) == sizeof(u32) * 4u + sizeof(Float34) + sizeof(CsgBoundsGpuData) + sizeof(Float4), "CsgReceiverRangeGpuData layout must match the CSG shader");
 static_assert(sizeof(CsgCutterGpuData) == sizeof(Float4) + sizeof(Float34) + sizeof(Float4) * 2u, "CsgCutterGpuData layout must match the CSG shader");
 static_assert(alignof(CsgReceiverRangeGpuData) >= alignof(Float4), "CsgReceiverRangeGpuData must stay SIMD-aligned");
 static_assert(alignof(CsgCutterGpuData) >= alignof(Float4), "CsgCutterGpuData must stay SIMD-aligned");

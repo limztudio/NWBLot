@@ -345,8 +345,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     for(uint receiverIndex = 0u; receiverIndex < receiverCount; ++receiverIndex){
         const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
         [loop]
-        for(uint localCutterIndex = 0u; localCutterIndex < receiverRange.cutterCount; ++localCutterIndex){
-            const uint cutterIndex = receiverRange.firstCutter + localCutterIndex;
+        for(uint localCutterIndex = 0u; localCutterIndex < receiverRange.rangeInfo.y; ++localCutterIndex){
+            const uint cutterIndex = receiverRange.rangeInfo.x + localCutterIndex;
             NwbCsgIntervalPeelEntry entry;
             if(nwbCsgFindCutterIntervalOnRay(rayBegin, rayEnd, receiverIndex, cutterIndex, entry))
                 nwbCsgInsertIntervalPeelEntry(entries, entry);

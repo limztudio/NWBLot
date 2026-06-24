@@ -1,0 +1,16 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Frost surface hook fragment with a DISTINCT interface (NwbFrostSurfaceMaterial/NwbFrostRuntimeMaterial). The cook
+// wraps it with the engine pixel-shader authoring + this material's typed .bind to generate the G-buffer pixel shader.
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbFrostSurfaceMaterial frost = nwbMaterialBindLoadFrost(instance);
+    const NwbFrostRuntimeMaterial sparkle = nwbMaterialBindLoadSparkle(instance);
+    const float3 baseColor = clamp(frost.frost_albedo.rgb * sparkle.sparkle_tint, float3(0.0), float3(1.0));
+    return nwbMakeMeshSurface(baseColor, inNormal, frost.roughness_value, 0.0);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

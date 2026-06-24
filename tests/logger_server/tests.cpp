@@ -160,7 +160,13 @@ NWB_LOGSERVER_TEST_NOINLINE static void LinuxForceAssertFalseForCrashObservation
 #endif
     _exit(120);
 }
+#endif
 
+// CaptureRecoverableErrorForCrashObservation is used by RecoverableErrorDiagnosticProducesObservableLoggerReport
+// on Windows AND Linux, so it must live OUTSIDE the Linux-only block above (it only uses cross-platform
+// CaptureDiagnosticEvent). Guard it with that test's own platform condition so it is not defined-but-unused on
+// Android (where the test is compiled out).
+#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
 NWB_LOGSERVER_TEST_NOINLINE static void CaptureRecoverableErrorForCrashObservation(const AStringView message){
     CaptureDiagnosticEvent(DiagnosticEventRecord{
         .event = DiagnosticEventName::s_Error,

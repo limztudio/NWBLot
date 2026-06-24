@@ -27,8 +27,8 @@ NwbMeshSurface nwbMaterialSurface(){
     // the per-cube tint so the opacity matches the base color. The shadow trace supplies inIncidentDirection (the
     // shadow ray); the rasterizer/AVBOIT passes supply a documented dummy (those discard transmittance anyway).
     const float ior = 1.5;
-    const float thickness = 1.0;
-    const float3 transmission = saturate(baseColor.rgb) * 0.9;
+    const float thickness = 0.5;
+    const float3 transmission = saturate(baseColor.rgb) * 0.8;
     const float3 transmittance = nwbShadowRefractiveTransmittance(ior, thickness, transmission, inIncidentDirection, inNormal);
     NwbMeshSurface result = nwbMakeMeshSurface(baseColor, inNormal, 0.0, 0.0, transmittance);
     result.alpha = 1.0 - nwbLuminance(transmission);

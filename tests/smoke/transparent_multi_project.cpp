@@ -49,7 +49,7 @@ static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
 static constexpr f32 s_TransparentSceneRotationSpeed = 0.55f;
-static constexpr AStringView s_CubeMeshPath = "project/meshes/cube";
+static constexpr AStringView s_TransparentShapeMeshPath = "project/meshes/tetrahedron";
 static constexpr AStringView s_ShadowPlaneMeshPath = "project/meshes/shadow_plane";
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 static constexpr AStringView s_TransparentSharedMaterialPath = "project/smoke/transparent_multi/materials/shared";
@@ -76,15 +76,15 @@ static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_m
 }
 
 
-[[nodiscard]] static Float4 TransparentLeftCubeBasePosition(){
+[[nodiscard]] static Float4 TransparentLeftShapeBasePosition(){
     return Float4(-0.68f, s_CameraTargetY, 0.02f, 0.0f);
 }
 
-[[nodiscard]] static Float4 TransparentCenterCubeBasePosition(){
+[[nodiscard]] static Float4 TransparentCenterShapeBasePosition(){
     return Float4(0.0f, s_CameraTargetY, 0.0f, 0.0f);
 }
 
-[[nodiscard]] static Float4 TransparentRightCubeBasePosition(){
+[[nodiscard]] static Float4 TransparentRightShapeBasePosition(){
     return Float4(0.68f, s_CameraTargetY, 0.04f, 0.0f);
 }
 
@@ -124,7 +124,7 @@ static void ApplyTransparentCsgSceneTransform(
     const SIMDVector sceneRotation,
     const SIMDVector localRotation
 ){
-    const SIMDVector receiverPosition = RotateTransparentBasePosition(TransparentCenterCubeBasePosition(), sceneRotation);
+    const SIMDVector receiverPosition = RotateTransparentBasePosition(TransparentCenterShapeBasePosition(), sceneRotation);
     const SIMDVector receiverRotation = QuaternionNormalize(QuaternionMultiply(sceneRotation, localRotation));
 
     if(auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiverEntity)){
@@ -238,7 +238,7 @@ public:
             *m_world,
             Float4(0.0f, s_CameraTargetY, -s_CameraStartDepth)
         );
-        // Shadow-check key light: a single directional source makes the transparent CSG cubes cast a readable
+        // Shadow-check key light: a single directional source makes the transparent CSG tetrahedra cast a readable
         // tinted transmittance shadow onto the receiver plane below.
         NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
@@ -249,37 +249,37 @@ public:
             s_DefaultDirectionalLightIntensity
         );
 
-        const auto cubeEntity = CreateTransparentStaticMeshEntity(
+        const auto shapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_CubeMeshPath,
+            s_TransparentShapeMeshPath,
             s_TransparentSharedMaterialPath,
             Float4(1.0f, 0.42f, 0.20f, 0.42f),
-            TransparentLeftCubeBasePosition(),
+            TransparentLeftShapeBasePosition(),
             Float4(0.62f, 0.62f, 0.62f)
         );
-        const auto centerCubeEntity = CreateTransparentStaticMeshEntity(
+        const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_CubeMeshPath,
+            s_TransparentShapeMeshPath,
             s_TransparentSharedMaterialPath,
             Float4(0.10f, 1.0f, 0.45f, 0.42f),
-            TransparentCenterCubeBasePosition(),
+            TransparentCenterShapeBasePosition(),
             Float4(0.78f, 0.78f, 0.78f),
             TransparentCenterCsgReceiverGroup()
         );
-        const auto rightCubeEntity = CreateTransparentStaticMeshEntity(
+        const auto rightShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_CubeMeshPath,
+            s_TransparentShapeMeshPath,
             s_TransparentSharedMaterialPath,
             Float4(0.12f, 0.44f, 1.0f, 0.42f),
-            TransparentRightCubeBasePosition(),
+            TransparentRightShapeBasePosition(),
             Float4(0.68f, 0.68f, 0.68f)
         );
 
-        // Opaque ground-plane receiver beneath the transparent cubes. The colored transmittance each transparent
-        // cube casts toward the directional light lands here as a tinted
+        // Opaque ground-plane receiver beneath the transparent shapes. The colored transmittance each transparent
+        // tetrahedron casts toward the directional light lands here as a tinted
         // shadow -- the visible payoff of Phase 6 colored/transmittance shadows.
         const auto shadowPlaneEntity = CreateTintedStaticMeshEntity(
             *m_world,
@@ -294,17 +294,17 @@ public:
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
         const auto cutterEntity = CreateTransparentCsgPlaneCutter(*m_world, m_context.objectArena);
         const bool csgEntitiesValid = cutterEntity.valid();
-        m_csgReceiver = centerCubeEntity;
+        m_csgReceiver = centerShapeEntity;
         m_csgCutter = cutterEntity;
 #else
         const bool csgEntitiesValid = true;
 #endif
-        m_leftCube = cubeEntity;
-        m_centerCube = centerCubeEntity;
-        m_rightCube = rightCubeEntity;
+        m_leftShape = shapeEntity;
+        m_centerShape = centerShapeEntity;
+        m_rightShape = rightShapeEntity;
         updateTransparentSceneTransforms();
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.camera.valid() && cubeEntity.valid() && centerCubeEntity.valid() && rightCubeEntity.valid() && shadowPlaneEntity.valid() && csgEntitiesValid,
+            activeCamera.camera.valid() && shapeEntity.valid() && centerShapeEntity.valid() && rightShapeEntity.valid() && shadowPlaneEntity.valid() && csgEntitiesValid,
             NWB_TEXT("TransparentMultiSmokeProject failed to create all scene entities")
         );
 
@@ -330,21 +330,21 @@ public:
 private:
     void updateTransparentSceneTransforms(){
         const SIMDVector sceneRotation = BuildTransparentSceneRotation(m_animationTime);
-        ApplyTransparentSceneTransform(*m_world, m_leftCube, TransparentLeftCubeBasePosition(), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_leftShape, TransparentLeftShapeBasePosition(), sceneRotation, QuaternionIdentity());
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
         ApplyTransparentCsgSceneTransform(*m_world, m_csgReceiver, m_csgCutter, sceneRotation, BuildTransparentCsgRotation(m_animationTime));
 #else
-        ApplyTransparentSceneTransform(*m_world, m_centerCube, TransparentCenterCubeBasePosition(), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_centerShape, TransparentCenterShapeBasePosition(), sceneRotation, QuaternionIdentity());
 #endif
-        ApplyTransparentSceneTransform(*m_world, m_rightCube, TransparentRightCubeBasePosition(), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_rightShape, TransparentRightShapeBasePosition(), sceneRotation, QuaternionIdentity());
     }
 
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ TransparentMultiFpsLabel() };
-    NWB::Core::ECS::EntityID m_leftCube = {};
-    NWB::Core::ECS::EntityID m_centerCube = {};
-    NWB::Core::ECS::EntityID m_rightCube = {};
+    NWB::Core::ECS::EntityID m_leftShape = {};
+    NWB::Core::ECS::EntityID m_centerShape = {};
+    NWB::Core::ECS::EntityID m_rightShape = {};
     f32 m_animationTime = 0.0f;
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     NWB::Core::ECS::EntityID m_csgReceiver = {};

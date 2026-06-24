@@ -528,12 +528,14 @@ bool PrepareShaderEntriesForCook(
             return false;
 
         CookString materialTypedBindingInterfaceText{cookArena};
+        bool preparedEntryDependsOnMaterialBind = false;
         if(!ResolveMaterialBindDependencyInterface(
             AStringView(preparedEntry.entry.name),
             materialBindIncludeRoot,
             preparedEntry.dependencies,
             materialTypedBindingInterfaceText,
             preparedEntry.materialTypedBindingInterface,
+            preparedEntryDependsOnMaterialBind,
             scratchArena
         ))
             return false;
@@ -555,7 +557,7 @@ bool PrepareShaderEntriesForCook(
         ;
         preparedEntry.usesMaterialTypedBinding =
             preparedEntryStageReadsTypedMaterial
-            && preparedEntry.materialTypedBindingInterface;
+            && preparedEntryDependsOnMaterialBind;
         preparedEntry.materialTypedBindingInterfacePath = Move(materialTypedBindingInterfaceText);
         if(preparedEntry.usesMaterialTypedBinding && !__hidden_shader_cook_plan::SetShaderImplicitDefine(
             preparedEntry.entry,

@@ -154,6 +154,7 @@ struct GeneratedMaterialPixelShader{
     const MaterialCookVector<Path>& dependencies,
     MaterialCookString& outInterfacePath,
     Name& outInterfaceName,
+    bool& outDependsOnMaterialBind,
     Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMaterial);

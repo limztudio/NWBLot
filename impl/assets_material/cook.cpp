@@ -131,10 +131,12 @@ static bool ResolveMaterialBindDependencyInterface(
     const CookVector<Path>& dependencies,
     CookString& outInterfacePath,
     Name& outInterfaceName,
+    bool& outDependsOnMaterialBind,
     ScratchArena& scratchArena
 ){
     outInterfacePath.clear();
     outInterfaceName = NAME_NONE;
+    outDependsOnMaterialBind = false;
 
     Path normalizedMaterialBindIncludeRoot(materialBindIncludeRoot.arena());
     if(!materialBindIncludeRoot.empty()){
@@ -151,6 +153,7 @@ static bool ResolveMaterialBindDependencyInterface(
 
     CookArena& arena = outInterfacePath.get_allocator().arena();
     CookString dependencyInterfacePath{arena};
+    bool dependsOnMultipleInterfaces = false;
     for(const Path& dependency : dependencies){
         if(!TryResolveMaterialBindDependencyInterface(
             normalizedMaterialBindIncludeRoot,
@@ -172,6 +175,12 @@ static bool ResolveMaterialBindDependencyInterface(
             return false;
         }
 
+        // The shader depends on at least one material's generated `.bind` interface, so it reads the typed
+        // material constants and must receive the typed binding.
+        outDependsOnMaterialBind = true;
+        if(dependsOnMultipleInterfaces)
+            continue;
+
         if(!outInterfaceName){
             outInterfacePath = dependencyInterfacePath;
             outInterfaceName = dependencyInterfaceName;
@@ -179,13 +188,16 @@ static bool ResolveMaterialBindDependencyInterface(
         }
 
         if(outInterfaceName != dependencyInterfaceName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: shader '{}' includes multiple generated "
-                "material bind interfaces ('{}' and '{}')")
-                , StringConvert(shaderName)
-                , StringConvert(outInterfacePath)
-                , StringConvert(dependencyInterfacePath)
-            );
-            return false;
+            // More than one DISTINCT interface: this is a generic consumer of a cook-generated dispatch module,
+            // not a per-material shader. The shadow-transmittance dispatch (included by shadow_ahit and the
+            // software traversal CS) #includes every surface material's `.bind` -- namespace-isolated by
+            // EmitShadowTransmittanceDispatchModule, so there is no symbol collision -- to evaluate each occluder's
+            // transmittance hook by shading-model id. Such a shader still reads the typed binding (above) but has
+            // NO single owning interface; only per-material pixel shaders (exactly one interface) carry one for
+            // material_validation to match against the material's declaration.
+            outInterfacePath.clear();
+            outInterfaceName = NAME_NONE;
+            dependsOnMultipleInterfaces = true;
         }
     }
 
@@ -2532,6 +2544,7 @@ bool ResolveMaterialBindDependencyInterface(
     const MaterialCookVector<Path>& dependencies,
     MaterialCookString& outInterfacePath,
     Name& outInterfaceName,
+    bool& outDependsOnMaterialBind,
     Core::Alloc::ScratchArena& scratchArena
 ){
     return __hidden_cook::ResolveMaterialBindDependencyInterface(
@@ -2540,6 +2553,7 @@ bool ResolveMaterialBindDependencyInterface(
         dependencies,
         outInterfacePath,
         outInterfaceName,
+        outDependsOnMaterialBind,
         scratchArena
     );
 }

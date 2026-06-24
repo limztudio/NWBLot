@@ -241,6 +241,39 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     ))
         return false;
 
+    // Resolve each CSG shape's `eval` virtual path (engine/...; .slangi) to its absolute hand-written source
+    // against the asset roots -- only known here, in the cross-asset phase. The resolved path becomes the verbatim
+    // #include the generated CSG module emits for each shape's evaluator, mirroring how a material's `.surface`
+    // virtual path resolves to its absolute source before the per-material pixel shader #includes it. Runs before
+    // EmitCsgShapeModuleIncludes (which writes the generated module that #includes these resolved sources) and is
+    // covered by the dependency checksum's repo alias. ResolveVirtualAssetPath preserves the asset-root case +
+    // canonicalizes the appended components (matching the on-disk lowercase eval file names).
+    for(auto& csgShapeEntry : graphicsMetadata.csgShapeEntries){
+        if(csgShapeEntry.evalInclude.empty())
+            continue;
+
+        Path resolvedEvalSource(context.arena);
+        if(!Core::Assets::ResolveVirtualAssetPath(
+            context.resolvedPaths.assetRoots,
+            AStringView(csgShapeEntry.evalInclude),
+            resolvedEvalSource,
+            context.scratchArena
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: CSG shape '{}' eval '{}' does not resolve against any asset root")
+                , StringConvert(csgShapeEntry.shapeName.c_str())
+                , StringConvert(csgShapeEntry.evalInclude.c_str())
+            );
+            return false;
+        }
+
+        auto resolvedEvalText = PathToString(context.scratchArena, resolvedEvalSource);
+        for(auto& ch : resolvedEvalText){
+            if(ch == '\\')
+                ch = '/';
+        }
+        csgShapeEntry.evalInclude.assign(AStringView(resolvedEvalText));
+    }
+
     Path csgShapeIncludeRoot(context.arena);
     if(!AssetsCsgCook::EmitCsgShapeModuleIncludes(
         context.resolvedPaths.cacheDirectory,

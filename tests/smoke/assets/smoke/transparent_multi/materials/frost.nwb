@@ -1,5 +1,11 @@
 material asset;
 
+// Heterogeneous-interface regression asset. A SECOND surface-authored material in the transparent_multi volume
+// whose interface (frost_surface.bind: NwbFrostSurfaceMaterial/NwbFrostRuntimeMaterial) is DISTINCT from
+// shared.nwb's (smoke_surface.bind). Cooking the volume with two distinct .bind interfaces exercises the
+// shadow-transmittance dispatch's per-interface namespace isolation + the multi-interface shader-dependency path
+// (the cook would otherwise collide/abort). Intentionally NOT instantiated by the scene -- its coverage is at cook
+// time, so do not delete it as "unused".
 asset.interface = "project/shaders/frost_surface.bind";
 asset.surface = "project/shaders/frost.surface";
 asset.bxdf = "project/shaders/smoke_lambert.bxdf";

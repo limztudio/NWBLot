@@ -193,6 +193,28 @@ static constexpr AStringView s_EvalShapeIdDefineName = "NWB_CSG_EVAL_SHAPE_ID";
     return extension == s_SlangIncludeExtension;
 }
 
+// Both `eval` and `module_include` are `engine/`/`project/`-rooted virtual paths (matching `shape`/`module` and
+// the material asset's `interface`/`surface`/`bxdf`). The `eval` virtual path names a hand-written source resolved
+// to its absolute file in the cross-asset phase (mirroring a material's `.surface`); the `module_include` virtual
+// path is the generated module written under the CSG shape include root at this virtual-prefixed sub-path (the
+// dispatch shader #includes it -- mirroring a material's generated `.bind`).
+[[nodiscard]] static bool ValidateReservedVirtualRoot(
+    const Path& nwbFilePath,
+    const AStringView fieldName,
+    const AStringView includePath,
+    ScratchArena& scratchArena
+){
+    if(!Core::Assets::HasReservedAssetVirtualRoot(includePath, scratchArena)){
+        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must be a project/- or engine/-rooted virtual path "
+            "(e.g. 'engine/csg/box/eval.slangi')")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+    return true;
+}
+
 [[nodiscard]] static Path BuildCsgShapeIncludeRoot(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
@@ -296,7 +318,7 @@ static constexpr AStringView s_EvalShapeIdDefineName = "NWB_CSG_EVAL_SHAPE_ID";
 }
 
 [[nodiscard]] static bool WriteEmptyDefaultModuleInclude(const Path& includeRoot){
-    const Path outputPath = includeRoot / "csg" / "generated" / "built_in.slangi";
+    const Path outputPath = includeRoot / "engine" / "csg" / "generated" / "built_in.slangi";
 
     ErrorCode errorCode;
     if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
@@ -413,6 +435,10 @@ bool ParseCsgShapeCookMetadata(
         );
         return false;
     }
+    if(!ValidateReservedVirtualRoot(nwbFilePath, s_EvalField, AStringView(outEntry.evalInclude), scratchArena))
+        return false;
+    if(!ValidateReservedVirtualRoot(nwbFilePath, s_ModuleIncludeField, AStringView(outEntry.moduleInclude), scratchArena))
+        return false;
     return true;
 }
 

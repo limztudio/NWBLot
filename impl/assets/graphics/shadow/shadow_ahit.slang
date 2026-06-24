@@ -3,6 +3,7 @@
 
 
 #include "occlusion.slangi"
+#include "../common/math.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,12 +60,16 @@ void main(inout NwbShadowOcclusionPayload payload, in BuiltInTriangleIntersectio
 
         // Evaluate this material's per-hit transmittance hook. The hook reads the interpolated normal/uv0 + the
         // material-constants context carried by the instance record; dispatched by shadowTransmittanceModelId.
-        // The interpolated normal is object space; transform it to world (the surface contract) with the inverse-
-        // transpose of object->world, which is the transpose of WorldToObject3x4() -- expressed as the row-vector
-        // product mul(objectNormal, (float3x3)WorldToObject3x4()) -- so a non-identity instance rotation/scale
-        // matches the rasterizer's world-space normal.
+        // The interpolated normal is object space; transform it to world space (the surface contract --
+        // NwbMeshSurface.normal is world space) with the inverse-transpose of object->world, i.e. the transpose of
+        // WorldToObject3x4(), expressed as the row-vector product mul(objectNormal, (float3x3)WorldToObject3x4()).
+        // This is the geometrically-correct normal transform; it equals the rasterizer's world-space normal under
+        // uniform instance scale (the common case) and diverges in direction only under NON-uniform scale (where
+        // the rasterizer applies the forward object->world map via nwbMeshTransformDirection) -- latent for any
+        // transmittance hook that does not read the normal. nwbSafeNormalize guards the degenerate (near-zero /
+        // non-finite) result, matching the engine's normal handling elsewhere.
         const float3 objectNormal = a0.normal * weights.x + a1.normal * weights.y + a2.normal * weights.z;
-        const float3 worldNormal = normalize(mul(objectNormal, (float3x3)WorldToObject3x4()));
+        const float3 worldNormal = nwbSafeNormalize(mul(objectNormal, (float3x3)WorldToObject3x4()), float3(0.0, 0.0, 1.0));
 
         NwbShadowHit hit;
         hit.meshInstanceIndex = material.meshInstanceIndex;

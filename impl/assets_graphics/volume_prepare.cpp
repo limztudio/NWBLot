@@ -341,8 +341,23 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     ))
         return false;
 
+    // The transparent-pass twin: generate each TRANSPARENT material's AVBOIT accumulate pixel shader from the
+    // SAME `surface` hook (its color now comes from the material's surface + BXDF, not the old fixed
+    // vertex-color + hard-coded lambert). The renderer binds it for the transparent draw, keyed by the material.
+    // Runs alongside the G-buffer PS generation (before shader prep + before ValidateMaterials).
+    MaterialCookVector<GeneratedMaterialPixelShader> generatedAvboitAccumulatePixelShaders(materialCookArena);
+    if(!EmitMaterialAvboitAccumulatePixelShaders(
+        materialCookArena,
+        context.resolvedPaths.cacheDirectory,
+        context.configurationSafeName,
+        materialEntries,
+        generatedAvboitAccumulatePixelShaders,
+        context.scratchArena
+    ))
+        return false;
+
     auto& shaderCookArena = graphicsMetadata.shaderEntries.get_allocator().arena();
-    for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedPixelShaders){
+    const auto appendGeneratedPixelShaderEntry = [&](const GeneratedMaterialPixelShader& generatedPixelShader) -> bool{
         ShaderCook::ShaderEntry pixelShaderEntry(shaderCookArena);
         pixelShaderEntry.name.assign(AStringView(generatedPixelShader.name));
         pixelShaderEntry.source.assign(AStringView(generatedPixelShader.source));
@@ -366,6 +381,15 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
             return false;
         }
         graphicsMetadata.shaderEntries.push_back(Move(pixelShaderEntry));
+        return true;
+    };
+    for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedPixelShaders){
+        if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
+            return false;
+    }
+    for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedAvboitAccumulatePixelShaders){
+        if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
+            return false;
     }
 
     if(!AssetsGraphicsCookDetail::PrepareShaderEntriesForCook(

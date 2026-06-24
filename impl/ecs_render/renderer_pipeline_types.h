@@ -160,6 +160,10 @@ struct MaterialSurfaceInfo{
     Core::GraphicsString shaderVariant;
     Core::Assets::AssetRef<Shader> pixelShader;
     Core::Assets::AssetRef<Shader> meshShader;
+    // The cook-generated per-material AVBOIT accumulate pixel shader (transparent-pass twin of pixelShader),
+    // valid only for a surface-authored transparent material; the transparent draw binds it. Invalid otherwise
+    // (the draw then uses the engine's fixed accumulate PS).
+    Core::Assets::AssetRef<Shader> avboitAccumulatePixelShader;
     u64 typedLayoutHash = 0u;
     MaterialTypedLayoutBlockVector typedLayoutBlocks;
     MaterialTypedLayoutFieldVector typedLayoutFields;

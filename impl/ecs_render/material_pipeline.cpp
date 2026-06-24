@@ -323,8 +323,17 @@ bool RendererMaterialSystem::createRendererPipeline(
     case MaterialPipelinePass::AvboitAccumulate:
         if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
-        passPixelShader = avboitState().m_accumulatePixelShader;
-        passPixelShaderName = AssetsGraphicsAvboit::s_AccumulatePixelShaderName;
+        // Mirror the opaque G-buffer draw: bind this material's cook-generated per-material accumulate PS (so the
+        // transparent fragment is shaded by the material's own surface hook + BXDF, matching the colored shadow it
+        // casts). A material without one -- a transparent material authored with explicit `shaders` -- falls back
+        // to the engine's fixed accumulate PS.
+        if(materialInfo.avboitAccumulatePixelShader.valid()){
+            passPixelShaderName = materialInfo.avboitAccumulatePixelShader.name();
+        }
+        else{
+            passPixelShader = avboitState().m_accumulatePixelShader;
+            passPixelShaderName = AssetsGraphicsAvboit::s_AccumulatePixelShaderName;
+        }
         passPixelShaderDebugName = "ECSRender_AvboitAccumulatePS";
         break;
     default:
@@ -355,6 +364,12 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
         else if(avboitCsgClipPipeline){
             if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
+                return false;
+        }
+        else if(!passPixelShader){
+            // No preloaded pass pixel shader: a cook-generated per-material pass PS (the AVBOIT accumulate PS) the
+            // material selected by name -- load it at its default variant, mirroring the opaque per-material PS load.
+            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Pixel, passPixelShaderDebugName))
                 return false;
         }
         else
@@ -415,6 +430,12 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
         else if(avboitCsgClipPipeline){
             if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
+                return false;
+        }
+        else if(!passPixelShader){
+            // No preloaded pass pixel shader: a cook-generated per-material pass PS (the AVBOIT accumulate PS) the
+            // material selected by name -- load it at its default variant, mirroring the opaque per-material PS load.
+            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Pixel, passPixelShaderDebugName))
                 return false;
         }
         else{

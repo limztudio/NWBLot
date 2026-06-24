@@ -18,6 +18,7 @@
 
 
 #include "binding_slots.h"
+#include "bxdf_surface.slangi"
 #include "../scene/binding_slots.h"
 
 // The scene shading cbuffer + light list live in the deferred lighting binding set; point scene/buffer.slangi
@@ -65,19 +66,8 @@ struct NwbDeferredLightingPixelOutput{
     [[vk::location(NWB_DEFERRED_COLOR_TARGET_LOCATION)]] float4 color : SV_Target0;
 };
 
-// The surface a deferred lighting shader receives, unpacked from the G-buffer. The two params are whatever
-// the material's pixel shader packed into the normal/world alpha channels (e.g. roughness / metallic);
-// shadingModel selects which BXDF the lighting shader dispatches to.
-struct NwbBxdfSurface{
-    float3 baseColor;
-    float3 normal;          // world space, normalized
-    float3 worldPosition;
-    float3 viewVector;      // normalized, surface -> camera
-    uint   shadingModel;
-    float  param0;
-    float  param1;
-    bool   isBackground;    // no geometry at this pixel (sky); lighting shaders pass the base color through
-};
+// NwbBxdfSurface (the BXDF parameter type) is shared with the transparent / AVBOIT accumulate path; it lives
+// in deferred/bxdf_surface.slangi, included above.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -259,6 +259,7 @@ public:
     void setAvboitAccumulatePixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset){ m_avboitAccumulatePixelShader = shaderAsset; }
     void setTransparent(const bool transparent){ m_transparent = transparent; }
     void setTwoSided(const bool twoSided){ m_twoSided = twoSided; }
+    void setRefractive(const bool refractive){ m_refractive = refractive; }
     void setTypedLayout(
         u64 layoutHash,
         const TypedLayoutBlockVector& blocks,
@@ -288,6 +289,10 @@ public:
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitAccumulatePixelShader()const{ return m_avboitAccumulatePixelShader; }
     [[nodiscard]] bool transparent()const{ return m_transparent; }
     [[nodiscard]] bool twoSided()const{ return m_twoSided; }
+    // The dedicated refractive-caster classification flag (SEPARATE from `transparent`). The material decides only
+    // this boolean; the refraction VALUES (ior/thickness/transmission) are shader-side, returned by the `.surface`
+    // hook via NwbMeshSurface. Default false (not a refractive caster) -- a material declaring none is unchanged.
+    [[nodiscard]] bool refractive()const{ return m_refractive; }
 
 
 private:
@@ -308,6 +313,7 @@ private:
     Core::Assets::AssetRef<Shader> m_avboitAccumulatePixelShader;
     bool m_transparent = false;
     bool m_twoSided = false;
+    bool m_refractive = false;
 };
 
 

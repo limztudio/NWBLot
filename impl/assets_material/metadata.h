@@ -40,6 +40,12 @@ static constexpr AStringView s_ShaderVariantField = "shader_variant";
 static constexpr AStringView s_ParametersField = "parameters";
 static constexpr AStringView s_TransparentField = "transparent";
 static constexpr AStringView s_TwoSidedField = "two_sided";
+// The dedicated refractive-caster classification flag (SEPARATE from `transparent`). Authored exactly like
+// `transparent`/`two_sided` as a bare 0/1 flag (`asset.refractive = 1;`). The material decides ONLY this boolean;
+// the actual refraction VALUES (ior/thickness/transmission) are shader-side -- the `.surface` hook returns them
+// via NwbMeshSurface -- mirroring how the colored-shadow transmittance is shader-decided. Default 0 (not a
+// refractive caster), so a material declaring none behaves identically to today.
+static constexpr AStringView s_RefractiveField = "refractive";
 // Required (at cook): a `project/`/`engine/`-rooted virtual path with the dedicated `.bxdf` extension (e.g.
 // "project/shaders/lambert.bxdf") authoring the deferred lighting BXDF for this material's surfaces. The cook
 // resolves it, assigns each unique BXDF a shading-model id, generates the deferred lighting dispatch module from
@@ -54,6 +60,7 @@ static constexpr AStringView s_AllowedAssetFields[] = {
     s_ParametersField,
     s_TransparentField,
     s_TwoSidedField,
+    s_RefractiveField,
     s_BxdfField,
 };
 

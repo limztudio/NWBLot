@@ -727,6 +727,8 @@ static bool ParseMaterialRenderProperties(
         return false;
     if(!ParseMaterialBoolProperty(nwbFilePath, asset, MaterialAssetMetadataSchema::s_TwoSidedField, outEntry.twoSided))
         return false;
+    if(!ParseMaterialBoolProperty(nwbFilePath, asset, MaterialAssetMetadataSchema::s_RefractiveField, outEntry.refractive))
+        return false;
 
     return true;
 }
@@ -2158,7 +2160,9 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
     // first id's `using`, so the shared-interface case keeps working. The surface hook itself is still renamed to
     // a unique per-id name (nwbShadowSurfaceModel<id>) so multiple hooks coexist; the wrapper sets the trace
     // material context from the hit + loads the surface-input statics (inlining nwbMaterialSurfaceAt) before
-    // invoking the renamed hook, then returns the hook's transmittance.
+    // invoking the renamed hook, then returns the hook's full NwbMeshSurface (the engine reads transmittance for a
+    // non-refractive occluder, or ior/thickness/transmission for the Fresnel/Beer-Lambert physics gated by the
+    // instance record's FLAG_REFRACTIVE bit).
     for(usize id = 0u; id < surfaceById.size(); ++id){
         if(surfaceById[id].empty())
             continue;
@@ -2185,7 +2189,7 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
         source += "\"\n#undef ";
         source += s_ShadowTransmittanceSurfaceMacro;
         source += "\n";
-        source += "float3 ";
+        source += "NwbMeshSurface ";
         source += s_ShadowTransmittanceWrapperPrefix;
         source += idView;
         source += "(NwbShadowHit hit){\n";
@@ -2195,11 +2199,11 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
         source += "    return ";
         source += s_ShadowTransmittanceModelPrefix;
         source += idView;
-        source += "().transmittance;\n";
+        source += "();\n";
         source += "}\n\n";
     }
 
-    source += "float3 nwbShadowDispatchTransmittance(uint shadingModel, NwbShadowHit hit){\n";
+    source += "NwbMeshSurface nwbShadowDispatchSurface(uint shadingModel, NwbShadowHit hit){\n";
     source += "    switch(shadingModel){\n";
     for(usize id = 0u; id < surfaceById.size(); ++id){
         if(surfaceById[id].empty())
@@ -2214,7 +2218,9 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
         source += idView;
         source += "(hit);\n";
     }
-    source += "    default: return float3(1.0, 1.0, 1.0); // unknown id: untinted -- the occluder passes all light\n";
+    // Unknown id: a fully-transmissive neutral surface -- transmittance float3(1) (no shadow), ior 1, thickness 0,
+    // transmission float3(1) -- so a no-match occluder behaves as the prior untinted/all-light default.
+    source += "    default: return nwbMakeMeshSurface(float3(0.0, 0.0, 0.0), hit.worldNormal, 0.0, 0.0, float3(1.0, 1.0, 1.0));\n";
     source += "    }\n";
     source += "}\n\n#endif\n";
 
@@ -2598,6 +2604,7 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
     }
     outMaterial.setTransparent(materialEntry.transparent);
     outMaterial.setTwoSided(materialEntry.twoSided);
+    outMaterial.setRefractive(materialEntry.refractive);
     outMaterial.setTypedLayout(
         materialEntry.typedLayoutHash,
         materialEntry.typedLayoutBlocks,
@@ -2840,9 +2847,11 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
 
     u32 materialFlags = 0u;
     if(material.transparent())
-        materialFlags |= MaterialBinaryPayload::s_MaterialFlagTransparent;
+        materialFlags |= MaterialBinaryPayload::MaterialFlag::Transparent;
     if(material.twoSided())
-        materialFlags |= MaterialBinaryPayload::s_MaterialFlagTwoSided;
+        materialFlags |= MaterialBinaryPayload::MaterialFlag::TwoSided;
+    if(material.refractive())
+        materialFlags |= MaterialBinaryPayload::MaterialFlag::Refractive;
     AppendPOD(outBinary, materialFlags);
     AppendPOD(outBinary, material.shadingModelId());
     AppendPOD(outBinary, material.shadowTransmittanceModelId());

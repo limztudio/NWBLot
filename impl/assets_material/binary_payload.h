@@ -27,9 +27,21 @@ namespace MaterialBinaryPayload{
 
 inline constexpr u32 s_MaterialMagic = 0x4D544C34u; // MTL4
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
-inline constexpr u32 s_MaterialFlagTransparent = 1u << 0u;
-inline constexpr u32 s_MaterialFlagTwoSided = 1u << 1u;
-inline constexpr u32 s_MaterialFlagMask = s_MaterialFlagTransparent | s_MaterialFlagTwoSided;
+// Material render-property flags packed into the serialized materialFlags word (decoded in Material::loadBinary),
+// mirroring the authored `transparent`/`two_sided`/`refractive` booleans. `Refractive` is the dedicated
+// refractive-caster classification (SEPARATE from `Transparent`); it rides the existing flags word -- no POD
+// layout change, so the MTL4 format stays backward-compatible (older data has bit2 = 0 = not refractive). The
+// refraction VALUES (ior/thickness/transmission) are shader-side (NwbMeshSurface), not in this payload. `All` is
+// the mask of supported bits; loadBinary rejects any bit outside it.
+namespace MaterialFlag{
+    enum Mask : u32{
+        None = 0u,
+        Transparent = 1u << 0u,
+        TwoSided = 1u << 1u,
+        Refractive = 1u << 2u,
+        All = Transparent | TwoSided | Refractive,
+    };
+}
 
 static_assert(sizeof(Core::ShaderType::Enum) == sizeof(u8), "Material shader stage indices must stay byte-sized");
 

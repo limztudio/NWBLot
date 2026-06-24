@@ -282,6 +282,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     m_avboitAccumulatePixelShader.reset();
     m_transparent = false;
     m_twoSided = false;
+    m_refractive = false;
 
     usize cursor = 0;
     u32 magic = 0;
@@ -377,12 +378,13 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing material flags"));
         return false;
     }
-    if((materialFlags & ~MaterialBinaryPayload::s_MaterialFlagMask) != 0u){
+    if((materialFlags & ~MaterialBinaryPayload::MaterialFlag::All) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material flags contain unsupported bits {}"), materialFlags);
         return false;
     }
-    m_transparent = (materialFlags & MaterialBinaryPayload::s_MaterialFlagTransparent) != 0u;
-    m_twoSided = (materialFlags & MaterialBinaryPayload::s_MaterialFlagTwoSided) != 0u;
+    m_transparent = (materialFlags & MaterialBinaryPayload::MaterialFlag::Transparent) != 0u;
+    m_twoSided = (materialFlags & MaterialBinaryPayload::MaterialFlag::TwoSided) != 0u;
+    m_refractive = (materialFlags & MaterialBinaryPayload::MaterialFlag::Refractive) != 0u;
 
     if(!ReadPOD(binary, cursor, m_shadingModelId)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shading model id"));

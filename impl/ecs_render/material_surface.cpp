@@ -170,6 +170,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     createdInfo.shadowTransmittanceModelId = material.shadowTransmittanceModelId();
     createdInfo.transparent = material.transparent();
     createdInfo.twoSided = material.twoSided();
+    createdInfo.refractive = material.refractive();
 
     auto result = materialState().m_surfaceInfos.try_emplace(materialPath, Move(createdInfo));
     auto it = result.first;

@@ -29,6 +29,10 @@ struct NwbRtInstanceMaterial{
 };
 
 #define NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT 0x1u
+// flags bit1 = isRefractive: the material asset's `refractive` classification. Gates the trace's Fresnel/
+// Beer-Lambert refraction physics; the refraction VALUES (ior/thickness/transmission) come from the per-hit
+// surface hook (NwbMeshSurface), NOT this record.
+#define NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE 0x2u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

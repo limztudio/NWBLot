@@ -605,6 +605,31 @@ asset.parameters = {
 
 )NWB_META";
 
+static constexpr AStringView s_RefractiveMaterialMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 1;
+asset.refractive = 1;
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+asset.parameters = {
+    "surface": {
+        "base_color": "float4(0.25, 0.5, 0.75, 1.0)",
+        "roughness": "float(0.25)",
+    },
+    "runtime": {
+        "fade_alpha": "float(0.75)",
+    },
+};
+
+)NWB_META";
+
 #if defined(NWB_FINAL)
 static constexpr AStringView s_MissingInterfaceMaterialMeta = R"NWB_META(material asset;
 

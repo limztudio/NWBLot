@@ -79,9 +79,16 @@ struct BvhBuildPushConstants{
 };
 static_assert(sizeof(BvhBuildPushConstants) == sizeof(u32) * 4u + sizeof(Float4) * 2u, "BvhBuildPushConstants must match the shader NwbBvhBuildPushConstants layout");
 
-// Leaf-flag / sentinel mirrors of the bvh_common.slangi shader constants (CPU-side BVH validation + clears).
-inline constexpr u32 s_BvhLeafFlag = 0x80000000u;
-inline constexpr u32 s_BvhInvalidIndex = 0xFFFFFFFFu;
+// BVH node child-link encoding, mirroring the bvh_common.slangi shader constants (NWB_BVH_LEAF_FLAG /
+// NWB_BVH_INVALID) for CPU-side BVH build + validation + clears: a leaf sets `LeafFlag` on its leftChild and packs
+// the primitive index in the low bits; `Invalid` is the empty parent/child sentinel. (`Invalid` is the all-bits
+// sentinel rather than a maskable bit, grouped here as part of the one node-index encoding.)
+namespace BvhNodeIndex{
+    enum Mask : u32{
+        LeafFlag = 0x80000000u,
+        Invalid = 0xFFFFFFFFu,
+    };
+}
 
 // Initial scene/instance BVH instance capacity; grows by doubling like the hardware TLAS.
 inline constexpr usize s_SceneBvhInitialInstanceCapacity = 64u;
@@ -117,8 +124,17 @@ struct NwbRtInstanceMaterialGpu{
 };
 static_assert(sizeof(NwbRtInstanceMaterialGpu) == 32u, "NwbRtInstanceMaterialGpu must match the shader NwbRtInstanceMaterial std430 layout (8 x uint)");
 
-// flags bit0 = isTransparent (mirrors NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT).
-inline constexpr u32 s_RtInstanceMaterialFlagTransparent = 0x1u;
+// Per-instance shadow-occluder flags (NwbRtInstanceMaterialGpu.flags), mirroring the shader-side
+// NWB_RT_INSTANCE_MATERIAL_FLAG_* defines: `Transparent` = evaluate the per-hit transmittance hook; `Refractive` =
+// the material asset's `refractive` classification, gating the trace's refraction physics (the refraction VALUES
+// come from the per-hit surface hook, not this record).
+namespace RtInstanceMaterialFlag{
+    enum Mask : u32{
+        None = 0u,
+        Transparent = 1u << 0u,
+        Refractive = 1u << 1u,
+    };
+}
 
 // Initial element capacity of the per-frame instance-material table; grows by doubling like the TLAS/scene BVH.
 inline constexpr usize s_ShadowInstanceMaterialInitialCapacity = 128u;
@@ -170,7 +186,7 @@ u32 BuildSceneBvhNode(
         SceneBvhNodeBuildData& node = nodes[nodeIndex];
         node.aabbMin = instanceAabbMin[instance];
         node.aabbMax = instanceAabbMax[instance];
-        node.leftChild = s_BvhLeafFlag | instance;
+        node.leftChild = BvhNodeIndex::LeafFlag | instance;
         node.rightChild = 1u;
         return nodeIndex;
     }
@@ -227,7 +243,9 @@ u32 BuildSceneBvhNode(
 ){
     NwbRtInstanceMaterialGpu material;
     material.shadowTransmittanceModelId = materialInfo.shadowTransmittanceModelId;
-    material.flags = materialInfo.transparent ? s_RtInstanceMaterialFlagTransparent : 0u;
+    material.flags =
+        (materialInfo.transparent ? RtInstanceMaterialFlag::Transparent : RtInstanceMaterialFlag::None)
+        | (materialInfo.refractive ? RtInstanceMaterialFlag::Refractive : RtInstanceMaterialFlag::None);
     material.meshSlot = meshSlot;
     material.materialConstantByteOffset = materialConstantByteOffset;
     material.meshInstanceIndex = meshInstanceIndex;
@@ -1748,7 +1766,7 @@ bool RendererRayTracingSystem::buildMeshSwBvh(
     commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.clearBufferUInt(keysBuffer, 0xFFFFFFFFu);
-    commandList.clearBufferUInt(meshParentBuffer, s_BvhInvalidIndex);
+    commandList.clearBufferUInt(meshParentBuffer, BvhNodeIndex::Invalid);
     commandList.clearBufferUInt(visitCounterBuffer, 0u);
 
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
@@ -2310,11 +2328,11 @@ void RendererRayTracingSystem::runBvhBuildSelfTest(){
     bool primitiveSeen[triangleCount] = {};
     for(u32 leaf = 0u; valid && leaf < triangleCount; ++leaf){
         const NwbBvhNodeGpu& node = nodes[internalCount + leaf];
-        if((node.aabbMinLeftChild.w & s_BvhLeafFlag) == 0u){
+        if((node.aabbMinLeftChild.w & BvhNodeIndex::LeafFlag) == 0u){
             valid = false;
             break;
         }
-        const u32 primitive = node.aabbMinLeftChild.w & ~s_BvhLeafFlag;
+        const u32 primitive = node.aabbMinLeftChild.w & ~BvhNodeIndex::LeafFlag;
         if(primitive >= triangleCount || primitiveSeen[primitive]){
             valid = false;
             break;
@@ -2471,10 +2489,10 @@ void RendererRayTracingSystem::runSceneBvhSelfTest(){
     u32 leafCount = 0u;
     for(u32 i = 0u; valid && i < nodes.size(); ++i){
         const u32 leftChild = nodes[i].leftChild;
-        if((leftChild & s_BvhLeafFlag) == 0u)
+        if((leftChild & BvhNodeIndex::LeafFlag) == 0u)
             continue;
         ++leafCount;
-        const u32 instance = leftChild & ~s_BvhLeafFlag;
+        const u32 instance = leftChild & ~BvhNodeIndex::LeafFlag;
         if(instance >= instanceCount || instanceSeen[instance]){
             valid = false;
             break;
@@ -2501,7 +2519,7 @@ void RendererRayTracingSystem::runSceneBvhSelfTest(){
     // (3) Every internal node references valid children and its box contains both child boxes.
     for(u32 i = 0u; valid && i < nodes.size(); ++i){
         const u32 leftChild = nodes[i].leftChild;
-        if((leftChild & s_BvhLeafFlag) != 0u)
+        if((leftChild & BvhNodeIndex::LeafFlag) != 0u)
             continue;
         const u32 rightChild = nodes[i].rightChild;
         if(leftChild >= nodes.size() || rightChild >= nodes.size()){

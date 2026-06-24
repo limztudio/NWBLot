@@ -24,8 +24,9 @@
 #include "instance_material.slangi"
 
 // The shadow trace's material-constants context (NwbShadowHit + the per-invocation accessors + the surface
-// contract) + the cook-generated per-hit transmittance dispatch (nwbShadowDispatchTransmittance), which #includes
-// each transparent material's .bind + .surface and routes by shadowTransmittanceModelId.
+// contract + the engine refraction physics nwbShadowRefractiveTransmittance) + the cook-generated per-hit surface
+// dispatch (nwbShadowDispatchSurface), which #includes each transparent material's .bind + .surface and routes by
+// shadowTransmittanceModelId.
 #include "shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 
@@ -289,7 +290,19 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 hit.worldPosition = worldOrigin + worldDirection * triangleHit.t;
                 hit.rayDirection = worldDirection;
 
-                transmittance *= nwbShadowDispatchTransmittance(material.shadowTransmittanceModelId, hit);
+                // Resolve the hit's full surface, then fold its per-occluder transmittance into the running
+                // transmittance. A `refractive` occluder (instance record FLAG_REFRACTIVE) applies engine-generic
+                // Fresnel + Beer-Lambert physics over the surface-supplied ior/thickness/transmission; a
+                // non-refractive occluder uses the flat colored-shadow tint exactly as before. Same flag accessor +
+                // math as the hardware any-hit.
+                const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
+                float3 occluderTransmittance;
+                if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u)
+                    occluderTransmittance = nwbShadowRefractiveTransmittance(surface.ior, surface.thickness, surface.transmission, hit.rayDirection, hit.worldNormal);
+                else
+                    occluderTransmittance = surface.transmittance;
+
+                transmittance *= occluderTransmittance;
                 if(max(max(transmittance.x, transmittance.y), transmittance.z) < NWB_SW_SHADOW_TRANSMITTANCE_EPSILON){
                     transmittance = float3(0.0, 0.0, 0.0);
                     return;

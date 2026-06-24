@@ -1015,6 +1015,9 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     EXPECT_FALSE(material.transparent());
     EXPECT_EQ(material.materialInterface(), Name("project/material_interfaces/test_surface"));
 
+    // A material declaring no `refractive` flag keeps the backward-compatible default (not a refractive caster).
+    EXPECT_FALSE(material.refractive());
+
     NWB::Impl::Material transparentMaterial(testArena.arena);
     EXPECT_TRUE(BuildMaterialFromBindAndMeta(
         s_MinimalMaterialBindSource,
@@ -1037,6 +1040,18 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     ));
     EXPECT_TRUE(twoSidedMaterial.twoSided());
     EXPECT_FALSE(twoSidedMaterial.transparent());
+
+    NWB::Impl::Material refractiveMaterial(testArena.arena);
+    EXPECT_TRUE(BuildMaterialFromBindAndMeta(
+        s_MinimalMaterialBindSource,
+        s_RefractiveMaterialMeta,
+        "material_meta_explicit_refractive",
+        testArena,
+        refractiveMaterial,
+        scratchArena
+    ));
+    EXPECT_TRUE(refractiveMaterial.transparent());
+    EXPECT_TRUE(refractiveMaterial.refractive());
 
     EXPECT_EQ(logger.errorCount(), 0u);
 }
@@ -1063,6 +1078,7 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
             return;
 
         material.setTransparent(true);
+        material.setRefractive(true);
 
         NWB::Impl::MaterialAssetCodec codec;
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
@@ -1071,6 +1087,7 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
             EXPECT_EQ(loadedMaterial.materialInterface(), material.materialInterface());
             EXPECT_EQ(loadedMaterial.typedLayoutHash(), material.typedLayoutHash());
             EXPECT_TRUE(loadedMaterial.transparent());
+            EXPECT_TRUE(loadedMaterial.refractive());
             CheckMinimalMaterialTypedLayout(loadedMaterial);
             CheckMinimalMaterialTypedBlockBytes(loadedMaterial);
         }

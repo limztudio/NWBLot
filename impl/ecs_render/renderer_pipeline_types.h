@@ -171,8 +171,12 @@ struct MaterialSurfaceInfo{
     MaterialTypedByteVector mutableDefaultTypedBytes;
     u32 shadingModelId = 0u;
     u32 shadowTransmittanceModelId = 0u;
+    // The dedicated refractive-caster classification flag, copied from the cooked Material. The RT instance
+    // occluder record (U0-2) reads it. The refraction VALUES (ior/thickness/transmission) are shader-side
+    // (NwbMeshSurface), not here. Default false (not a refractive caster) -- a material declaring none is unchanged.
     bool transparent = false;
     bool twoSided = false;
+    bool refractive = false;
 
     explicit MaterialSurfaceInfo(Core::Alloc::GlobalArena& arena)
         : shaderVariant(arena)

@@ -68,6 +68,11 @@ struct MaterialCookEntry{
     ParameterMap parameters;
     bool transparent = false;
     bool twoSided = false;
+    // The dedicated refractive-caster classification flag (SEPARATE from `transparent`), parsed by
+    // ParseMaterialRenderProperties from the bare `refractive` field and threaded through BuildMaterialAsset into
+    // the cooked Material. The material decides only this boolean; the refraction VALUES are shader-side
+    // (NwbMeshSurface). Default false (not a refractive caster).
+    bool refractive = false;
 
     explicit MaterialCookEntry(MaterialCookArena& arena)
         : typedLayoutBlocks(arena)
@@ -98,6 +103,7 @@ struct MaterialCookEntry{
         parameters.clear();
         transparent = false;
         twoSided = false;
+        refractive = false;
     }
 };
 

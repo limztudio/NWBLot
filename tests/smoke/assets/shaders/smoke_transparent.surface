@@ -15,8 +15,10 @@ NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbSmokeSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
     const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
-    const float3 baseColor = nwbSmokeMaterialVertexColor((surface.base_color * runtime.color_tint).rgb);
-    return nwbMakeMeshSurface(baseColor, inNormal);
+    const float4 tinted = surface.base_color * runtime.color_tint;
+    const float3 baseColor = nwbSmokeMaterialVertexColor(tinted.rgb);
+    const float3 transmittance = nwbSmokeMaterialTransmittance(tinted.rgb, tinted.a);
+    return nwbMakeMeshSurface(baseColor, inNormal, 0.0, 0.0, transmittance);
 }
 
 

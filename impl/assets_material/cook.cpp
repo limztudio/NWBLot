@@ -20,6 +20,7 @@
 #include <core/metascript/parser.h>
 #include <global/hash_utils.h>
 #include <global/text_utils.h>
+#include <global/math/convert.h>
 #include <core/common/log.h>
 
 
@@ -1829,6 +1830,49 @@ static bool AssignMaterialShadingModelIdsImpl(
             return false;
         }
     }
+
+    // Assign each material a separate shadow-transmittance id deduped over the unique `.surface` sources (the
+    // surface hook computes the per-hit transmittance the shadow trace returns). A material that declares
+    // explicit `shaders` instead of a `surface` keeps id 0 (it never contributes a transmittance hook).
+    Vector<AStringView, ScratchArena> uniqueSurfaces(scratchArena);
+    uniqueSurfaces.reserve(materialEntries.size());
+    for(const MaterialCookEntry& entry : materialEntries){
+        if(!entry.surfaceSource.empty())
+            uniqueSurfaces.push_back(AStringView(entry.surfaceSource));
+    }
+    Sort(uniqueSurfaces.begin(), uniqueSurfaces.end(), [](const AStringView lhs, const AStringView rhs){ return lhs < rhs; });
+
+    usize uniqueSurfaceCount = 0u;
+    for(usize i = 0u; i < uniqueSurfaces.size(); ++i){
+        if(i == 0u || uniqueSurfaces[i] != uniqueSurfaces[uniqueSurfaceCount - 1u])
+            uniqueSurfaces[uniqueSurfaceCount++] = uniqueSurfaces[i];
+    }
+    uniqueSurfaces.resize(uniqueSurfaceCount);
+    if(uniqueSurfaceCount > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: too many unique shadow transmittance surfaces"));
+        return false;
+    }
+
+    for(MaterialCookEntry& entry : materialEntries){
+        if(entry.surfaceSource.empty()){
+            entry.shadowTransmittanceModelId = 0u;
+            continue;
+        }
+
+        const AStringView surface(entry.surfaceSource);
+        bool assigned = false;
+        for(usize id = 0u; id < uniqueSurfaces.size(); ++id){
+            if(uniqueSurfaces[id] == surface){
+                entry.shadowTransmittanceModelId = static_cast<u32>(id);
+                assigned = true;
+                break;
+            }
+        }
+        if(!assigned){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign shadow transmittance id for '{}'"), StringConvert(entry.virtualPath.c_str()));
+            return false;
+        }
+    }
     return true;
 }
 
@@ -1957,6 +2001,187 @@ static bool EmitDeferredBxdfDispatchModuleImpl(
     }
     if(!WriteTextFile(outputPath, AStringView(source))){
         NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to write generated include '{}'")
+            , PathToString<tchar>(outputPath)
+        );
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// shadow transmittance dispatch (per-material surface id + generated dispatch module)
+
+
+static constexpr AStringView s_ShadowTransmittanceSurfaceMacro = "nwbMaterialSurface";
+static constexpr AStringView s_ShadowTransmittanceModelPrefix = "nwbShadowSurfaceModel";
+static constexpr AStringView s_ShadowTransmittanceWrapperPrefix = "nwbShadowTransmittanceModel";
+static constexpr AStringView s_ShadowTransmittanceModuleSubPath = "shadow/generated/transmittance_dispatch.slangi";
+
+static Path BuildShadowTransmittanceIncludeRoot(
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    ScratchArena& scratchArena
+){
+    ScratchString configurationName(configurationSafeName, scratchArena);
+    return cacheDirectory / configurationName.c_str() / "shadow_modules";
+}
+
+static bool PrepareShadowTransmittanceIncludeRoot(const Path& includeRoot){
+    ErrorCode errorCode;
+    if(!RemoveAllIfExists(includeRoot, errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: failed to clear generated include directory '{}': {}")
+            , PathToString<tchar>(includeRoot)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    errorCode.clear();
+    if(!EnsureDirectories(includeRoot, errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: failed to create generated include directory '{}': {}")
+            , PathToString<tchar>(includeRoot)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    return true;
+}
+
+static bool EmitShadowTransmittanceDispatchModuleImpl(
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    const CookVector<MaterialCookEntry>& materialEntries,
+    Path& outIncludeRoot,
+    ScratchArena& scratchArena
+){
+    outIncludeRoot.clear();
+    outIncludeRoot = BuildShadowTransmittanceIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
+    if(!PrepareShadowTransmittanceIncludeRoot(outIncludeRoot))
+        return false;
+
+    // Build a dense shadowTransmittanceModelId -> (surface source, .bind interface) table from the (already
+    // assigned) materials. Each unique surface appears at exactly one id; materials sharing a surface share the
+    // slot. The interface is carried alongside because the surface hook reads its typed `.bind` accessors by
+    // fixed name -- materials sharing a surface therefore share the interface.
+    u32 maxId = 0u;
+    bool anySurface = false;
+    for(const MaterialCookEntry& entry : materialEntries){
+        if(entry.surfaceSource.empty())
+            continue;
+        anySurface = true;
+        if(entry.shadowTransmittanceModelId > maxId)
+            maxId = entry.shadowTransmittanceModelId;
+    }
+
+    Vector<AStringView, ScratchArena> surfaceById(scratchArena);
+    Vector<AStringView, ScratchArena> interfaceById(scratchArena);
+    if(anySurface){
+        surfaceById.resize(static_cast<usize>(maxId) + 1u);
+        interfaceById.resize(static_cast<usize>(maxId) + 1u);
+    }
+    for(const MaterialCookEntry& entry : materialEntries){
+        if(entry.surfaceSource.empty())
+            continue;
+
+        const AStringView surface(entry.surfaceSource);
+        AStringView& surfaceSlot = surfaceById[entry.shadowTransmittanceModelId];
+        if(!surfaceSlot.empty() && surfaceSlot != surface){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: model id {} maps to multiple surface sources"), entry.shadowTransmittanceModelId);
+            return false;
+        }
+        surfaceSlot = surface;
+
+        const AStringView interfaceName(entry.materialInterface.c_str());
+        AStringView& interfaceSlot = interfaceById[entry.shadowTransmittanceModelId];
+        if(!interfaceSlot.empty() && interfaceSlot != interfaceName){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: model id {} maps to multiple material interfaces"), entry.shadowTransmittanceModelId);
+            return false;
+        }
+        interfaceSlot = interfaceName;
+    }
+
+    CookArena& arena = materialEntries.get_allocator().arena();
+    CookString source(arena);
+    source += "// Generated by AssetVolumeCooker from material `surface` declarations. Do not edit.\n";
+    source += "#ifndef NWB_GRAPHICS_SHADOW_GENERATED_TRANSMITTANCE_DISPATCH_SLANGI\n";
+    source += "#define NWB_GRAPHICS_SHADOW_GENERATED_TRANSMITTANCE_DISPATCH_SLANGI\n\n";
+
+    // The trace material-constants context (NwbShadowHit + the per-invocation accessors the surface hooks read
+    // -- nwbMeshLoadInstance / nwbMeshMaterialConstantByteOffset / ... -- + the surface contract) is supplied by
+    // the includer BEFORE this module, exactly as the deferred BXDF dispatch relies on lighting_ps to bring in the
+    // framework first. The includer (each shadow trace shader) #includes shadow/shadow_surface.slangi -- where it
+    // also points the material-constants buffers at its own binding set -- then this module; emitting the framework
+    // include here instead would force a virtual engine/ path that the shader -I roots do not resolve.
+
+    // Per-id surface hook, macro-isolated: rename the material's nwbMaterialSurface() to a unique per-id name so
+    // multiple materials' hooks coexist in one module, then include its `.bind` + `.surface` (same order the
+    // per-material pixel shader uses). The wrapper sets the trace material context from the hit + loads the
+    // surface-input statics (inlining nwbMaterialSurfaceAt) before invoking the renamed hook, then returns the
+    // hook's transmittance.
+    for(usize id = 0u; id < surfaceById.size(); ++id){
+        if(surfaceById[id].empty())
+            continue;
+
+        char idText[32] = {};
+        const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
+        source += "#define ";
+        source += s_ShadowTransmittanceSurfaceMacro;
+        source += ' ';
+        source += s_ShadowTransmittanceModelPrefix;
+        source += idView;
+        source += "\n#include \"";
+        source += interfaceById[id];
+        source += ".bind\"\n#include \"";
+        source += surfaceById[id];
+        source += "\"\n#undef ";
+        source += s_ShadowTransmittanceSurfaceMacro;
+        source += "\n";
+        source += "float3 ";
+        source += s_ShadowTransmittanceWrapperPrefix;
+        source += idView;
+        source += "(NwbShadowHit hit){\n";
+        source += "    nwbShadowSetMaterialContext(hit);\n";
+        source += "    NwbMeshSurfaceInputs in = nwbShadowBuildSurfaceInputs(hit);\n";
+        source += "    nwbLoadMeshSurfaceInputs(in);\n";
+        source += "    return ";
+        source += s_ShadowTransmittanceModelPrefix;
+        source += idView;
+        source += "().transmittance;\n";
+        source += "}\n\n";
+    }
+
+    source += "float3 nwbShadowDispatchTransmittance(uint shadingModel, NwbShadowHit hit){\n";
+    source += "    switch(shadingModel){\n";
+    for(usize id = 0u; id < surfaceById.size(); ++id){
+        if(surfaceById[id].empty())
+            continue;
+
+        char idText[32] = {};
+        const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
+        source += "    case ";
+        source += idView;
+        source += "u: return ";
+        source += s_ShadowTransmittanceWrapperPrefix;
+        source += idView;
+        source += "(hit);\n";
+    }
+    source += "    default: return float3(1.0, 1.0, 1.0); // unknown id: untinted -- the occluder passes all light\n";
+    source += "    }\n";
+    source += "}\n\n#endif\n";
+
+    const Path outputPath = outIncludeRoot / s_ShadowTransmittanceModuleSubPath.data();
+    ErrorCode errorCode;
+    if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: failed to create generated include parent '{}': {}")
+            , PathToString<tchar>(outputPath.parent_path())
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+    if(!WriteTextFile(outputPath, AStringView(source))){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: failed to write generated include '{}'")
             , PathToString<tchar>(outputPath)
         );
         return false;
@@ -2201,6 +2426,7 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
     outMaterial.setShaderVariant(materialEntry.shaderVariant);
     outMaterial.setMaterialInterface(materialEntry.materialInterface);
     outMaterial.setShadingModelId(materialEntry.shadingModelId);
+    outMaterial.setShadowTransmittanceModelId(materialEntry.shadowTransmittanceModelId);
     outMaterial.setTransparent(materialEntry.transparent);
     outMaterial.setTwoSided(materialEntry.twoSided);
     outMaterial.setTypedLayout(
@@ -2239,6 +2465,22 @@ bool EmitDeferredBxdfDispatchModule(
     Core::Alloc::ScratchArena& scratchArena
 ){
     return __hidden_cook::EmitDeferredBxdfDispatchModuleImpl(
+        cacheDirectory,
+        configurationSafeName,
+        materialEntries,
+        outIncludeRoot,
+        scratchArena
+    );
+}
+
+bool EmitShadowTransmittanceDispatchModule(
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    const MaterialCookVector<MaterialCookEntry>& materialEntries,
+    Path& outIncludeRoot,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    return __hidden_cook::EmitShadowTransmittanceDispatchModuleImpl(
         cacheDirectory,
         configurationSafeName,
         materialEntries,
@@ -2350,6 +2592,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         && AddBinaryRepeatedReserveBytes(reserveBytes, material.stageShaderCount(), MaterialBinaryPayload::s_ShaderEntryBytes)
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // material flags
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // shading model id
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // shadow transmittance model id
     ;
 
     outBinary.clear();
@@ -2413,6 +2656,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         materialFlags |= MaterialBinaryPayload::s_MaterialFlagTwoSided;
     AppendPOD(outBinary, materialFlags);
     AppendPOD(outBinary, material.shadingModelId());
+    AppendPOD(outBinary, material.shadowTransmittanceModelId());
 
     return true;
 }

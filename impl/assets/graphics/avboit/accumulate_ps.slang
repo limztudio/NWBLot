@@ -101,7 +101,10 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input, float4 
 
     const float3 baseColor = clamp(inColor.rgb, float3(0.0), float3(1.0));
     const float3 shadedColor = clamp(
-        nwbSceneApplyLighting(baseColor, inNormal, inTangent, inWorldPosition, 0xFFFFFFFFu),
+        // Transparent fragments are not in the opaque G-buffer the screen-space shadow visibility was traced
+        // from, so pass the negative-pixel sentinel: nwbSceneApplyLighting skips shadow sampling and treats
+        // every light as fully visible (the pre-colored-shadow transparent behaviour).
+        nwbSceneApplyLighting(baseColor, inNormal, inTangent, inWorldPosition, int2(-1, -1)),
         float3(0.0),
         float3(1.0)
     );

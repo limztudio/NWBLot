@@ -1,0 +1,112 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_SURFACE_SLANGI
+#define NWB_GRAPHICS_SHADOW_SURFACE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The shadow trace's material-constants context. A material's surface hook reads its typed `.bind` constants
+// through nwbMeshMaterialConstantByteOffset() / nwbMeshInstanceIndex() / nwbMeshShadingModelId() +
+// nwbMeshLoadInstance() -- which the rasterizer serves from its per-draw push constant. The shadow trace has no
+// per-draw push constant; it instead supplies these from the current ray hit's NwbShadowHit via per-invocation
+// globals. Declaring NWB_MESH_MATERIAL_CONTEXT_PROVIDED tells gbuffer_io.slangi / runtime.slangi to NOT define
+// those accessors (this header owns them), so the SAME authored surface hook evaluates identically here and in
+// the rasterizer. material_typed_bindings.slangi declares the shared buffers (g_NwbMaterialTypedWords +
+// g_NwbMeshInstances) the accessors read.
+#define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
+#include "../mesh/material_typed_bindings.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// One ray hit, fully resolved to the inputs a material surface hook needs. The trace fills it from the hit's
+// per-vertex attributes (PrimitiveIndex + barycentrics) + the per-instance occluder record: meshInstanceIndex
+// indexes g_NwbMeshInstances (the mutable material storage offset), shadowTransmittanceModelId routes the
+// dispatch, materialConstantByteOffset locates this material's constant block in g_NwbMaterialTypedWords.
+struct NwbShadowHit{
+    uint meshInstanceIndex;
+    uint shadowTransmittanceModelId;
+    uint materialConstantByteOffset;
+    float2 uv0;
+    float3 objectNormal;
+    float3 worldPosition;
+    float3 rayDirection;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Per-invocation material context, set from the hit being shaded. A ray hit is shaded by a single dispatch call,
+// so static globals per invocation are sufficient: the dispatch sets the context, then evaluates the hook, which
+// reads it back through the accessors below (the same names the rasterizer defines from its push constant).
+static uint g_NwbShadowMaterialConstantByteOffset = 0u;
+static uint g_NwbShadowMeshInstanceIndex = 0u;
+static uint g_NwbShadowShadingModelId = 0u;
+
+void nwbShadowSetMaterialContext(NwbShadowHit hit){
+    g_NwbShadowMaterialConstantByteOffset = hit.materialConstantByteOffset;
+    g_NwbShadowMeshInstanceIndex = hit.meshInstanceIndex;
+    g_NwbShadowShadingModelId = hit.shadowTransmittanceModelId;
+}
+
+uint nwbMeshMaterialConstantByteOffset(){
+    return g_NwbShadowMaterialConstantByteOffset;
+}
+
+uint nwbMeshInstanceIndex(){
+    return g_NwbShadowMeshInstanceIndex;
+}
+
+uint nwbMeshShadingModelId(){
+    return g_NwbShadowShadingModelId;
+}
+
+NwbMeshInstanceData nwbMeshLoadInstance(){
+    return g_NwbMeshInstances[nwbMeshInstanceIndex()];
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The typed-word load families the generated .bind accessors build on. Pulled in AFTER the context accessors so
+// the Constant-storage loads (which expand nwbMeshMaterialConstantByteOffset()) + the instance type resolve to
+// this header's definitions. surface.slangi brings the surface contract (NwbMeshSurface / nwbMakeMeshSurface) +
+// the surface-input statics (NwbMeshSurfaceInputs / nwbLoadMeshSurfaceInputs) a hook reads, exactly as the
+// rasterizer pixel shader sees them; the NWB_MESH_MATERIAL_CONTEXT_PROVIDED set above suppresses surface.slangi's
+// single-material nwbMaterialSurfaceAt (the trace stitches many materials' hooks under per-id renames, with no
+// global nwbMaterialSurface(), and the generated dispatch wrapper inlines that entry's two steps instead).
+#include "../mesh/material_typed_accessors.slangi"
+#include "../mesh/surface.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Builds the surface-input bundle a hook reads from a ray hit. v1 sources uv0 / normal / worldPosition from the
+// hit; color + tangent are neutral defaults (the trace interpolates only uv0 + normal for now -- a hook that
+// needs vertex color or tangent in its shadow path is a later unit).
+NwbMeshSurfaceInputs nwbShadowBuildSurfaceInputs(NwbShadowHit hit){
+    NwbMeshSurfaceInputs inputs;
+    inputs.color = float4(1.0, 1.0, 1.0, 1.0);
+    inputs.normal = hit.objectNormal;
+    inputs.tangent = float4(1.0, 0.0, 0.0, 1.0);
+    inputs.uv0 = hit.uv0;
+    inputs.worldPosition = hit.worldPosition;
+    return inputs;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

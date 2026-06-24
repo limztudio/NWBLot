@@ -309,6 +309,21 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     ))
         return false;
 
+    // Generate the shadow-transmittance dispatch module the shadow trace includes (routes each material's
+    // shadowTransmittanceModelId to its surface hook). Runs alongside the BXDF dispatch -- before shader
+    // preparation (so its include root is registered + each `.surface` it #includes is covered by the
+    // dependency checksum) and after the surface ids are assigned. The trace shaders #include it in a later
+    // unit; emitting it now keeps the cook + the rasterizer unchanged.
+    Path shadowTransmittanceIncludeRoot(context.arena);
+    if(!EmitShadowTransmittanceDispatchModule(
+        context.resolvedPaths.cacheDirectory,
+        context.configurationSafeName,
+        materialEntries,
+        shadowTransmittanceIncludeRoot,
+        context.scratchArena
+    ))
+        return false;
+
     // Generate each material's G-buffer pixel shader from its `surface` hook (when it omits explicit `shaders`),
     // assigning its stage shaders (pixel = generated PS, mesh = the shared engine mesh shader). Then synthesize a
     // shader entry per generated PS so it is prepared + cooked like any authored shader. Runs before shader prep
@@ -360,6 +375,7 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
         materialBindIncludeRoot,
         csgShapeIncludeRoot,
         deferredBxdfIncludeRoot,
+        shadowTransmittanceIncludeRoot,
         graphicsMetadata.includeMetadata,
         graphicsMetadata.shaderEntries,
         materialEntries,

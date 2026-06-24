@@ -30,6 +30,14 @@ float3 nwbSmokeMaterialVertexColor(float3 color){
     return clamp(nwbSmokeMaterialApplyVertexTint(nwbSmokeMaterialApplyColorTransform(color)), float3(0.0), float3(1.0));
 }
 
+// Per-hit shadow transmittance a transparent smoke material returns from its surface hook. Coverage drives how
+// much of the tinted color tints the shadow: clear glass (coverage 0) lets white light through, full coverage
+// reaches the material's tinted color. This replaces what used to be a static asset.transmittance constant --
+// it is now shader-computed from the SAME typed .bind constants the base color reads.
+float3 nwbSmokeMaterialTransmittance(float3 tintedColor, float coverage){
+    return clamp(lerp(float3(1.0), clamp(tintedColor, float3(0.0), float3(1.0)), clamp(coverage, 0.0, 1.0)), float3(0.0), float3(1.0));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -273,6 +273,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     m_shaderVariant.clear();
     m_materialInterface = NAME_NONE;
     m_shadingModelId = 0u;
+    m_shadowTransmittanceModelId = 0u;
     m_typedLayoutHash = 0u;
     m_typedLayoutBlocks.clear();
     m_typedLayoutFields.clear();
@@ -384,6 +385,11 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
 
     if(!ReadPOD(binary, cursor, m_shadingModelId)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shading model id"));
+        return false;
+    }
+
+    if(!ReadPOD(binary, cursor, m_shadowTransmittanceModelId)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shadow transmittance model id"));
         return false;
     }
 

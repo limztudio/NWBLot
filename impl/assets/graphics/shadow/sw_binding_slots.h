@@ -11,9 +11,11 @@
 
 // Software (compute) shadow traversal pass — the no-hardware-ray-tracing fallback. One thread per pixel
 // reads the G-buffer, casts one occlusion ray per light through the software scene/instance BVH (and, in
-// the per-mesh stage, each instance's triangle BVH), and packs a visible-bit per light into the R32_UINT
-// visibility mask the deferred lighting pass already samples. Slots 0-6 are the scene-level pass; slots
-// 7-10 add the per-mesh triangle traversal (instances + parallel per-mesh node/position/index arrays).
+// the per-mesh stage, each instance's triangle BVH), and writes per-light colored transmittance into the
+// shadow-visibility Texture2DArray the deferred lighting pass samples. Slots 0-6 are the scene-level pass;
+// slots 8-11 add the per-mesh triangle traversal (parallel per-mesh node/position/index/attribute arrays);
+// slots 13-14 bring in the material-constants context (typed words + mesh instances) the per-hit
+// transmittance dispatch reads.
 #define NWB_SW_SHADOW_SET 0
 
 #define NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION 0
@@ -24,9 +26,20 @@
 #define NWB_SW_SHADOW_BINDING_SCENE_NODES 5
 #define NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT 6
 #define NWB_SW_SHADOW_BINDING_SCENE_INSTANCES 7
+// Parallel per-mesh descriptor arrays (slot k = mesh k), kept contiguous: triangle BVH nodes + raw position /
+// index byte buffers + the per-vertex shadow-trace attribute buffer (normal/uv0 the dispatch interpolates).
 #define NWB_SW_SHADOW_BINDING_MESH_NODES 8
 #define NWB_SW_SHADOW_BINDING_MESH_POSITIONS 9
 #define NWB_SW_SHADOW_BINDING_MESH_INDICES 10
+#define NWB_SW_SHADOW_BINDING_MESH_ATTRIBUTES 11
+// Per-instance occluder material table (NwbRtInstanceMaterial), indexed by the scene-BVH leaf instance index;
+// built lockstep with the scene-instance buffer so the array slot matches the traversal's instanceIndex.
+#define NWB_SW_SHADOW_BINDING_INSTANCE_MATERIAL 12
+// The shared material-constants context the per-hit transmittance dispatch reads (same buffers the rasterizer
+// binds at NWB_MESH_BINDING_MATERIAL_TYPED / NWB_MESH_BINDING_INSTANCE, pointed here for this pass): the typed
+// material-constant words + the per-instance mutable-storage records.
+#define NWB_SW_SHADOW_BINDING_MATERIAL_TYPED 13
+#define NWB_SW_SHADOW_BINDING_MESH_INSTANCES 14
 
 // 8x8 = 64 threads per group (one thread per pixel).
 #define NWB_SW_SHADOW_GROUP_SIZE 8

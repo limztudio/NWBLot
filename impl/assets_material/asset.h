@@ -255,6 +255,7 @@ public:
     void setShaderVariant(AStringView variantName){ m_shaderVariant.assign(variantName); }
     void setMaterialInterface(const Name& materialInterface){ m_materialInterface = materialInterface; }
     void setShadingModelId(const u32 shadingModelId){ m_shadingModelId = shadingModelId; }
+    void setShadowTransmittanceModelId(const u32 shadowTransmittanceModelId){ m_shadowTransmittanceModelId = shadowTransmittanceModelId; }
     void setTransparent(const bool transparent){ m_transparent = transparent; }
     void setTwoSided(const bool twoSided){ m_twoSided = twoSided; }
     void setTypedLayout(
@@ -271,6 +272,7 @@ public:
     [[nodiscard]] const Core::Assets::AssetString& shaderVariant()const{ return m_shaderVariant; }
     [[nodiscard]] const Name& materialInterface()const{ return m_materialInterface; }
     [[nodiscard]] u32 shadingModelId()const{ return m_shadingModelId; }
+    [[nodiscard]] u32 shadowTransmittanceModelId()const{ return m_shadowTransmittanceModelId; }
     [[nodiscard]] u64 typedLayoutHash()const{ return m_typedLayoutHash; }
     [[nodiscard]] const TypedLayoutBlockVector& typedLayoutBlocks()const{ return m_typedLayoutBlocks; }
     [[nodiscard]] const TypedLayoutFieldVector& typedLayoutFields()const{ return m_typedLayoutFields; }
@@ -289,6 +291,7 @@ private:
     Core::Assets::AssetString m_shaderVariant;
     Name m_materialInterface = NAME_NONE;
     u32 m_shadingModelId = 0u;
+    u32 m_shadowTransmittanceModelId = 0u;
     u64 m_typedLayoutHash = 0u;
     TypedLayoutBlockVector m_typedLayoutBlocks;
     TypedLayoutFieldVector m_typedLayoutFields;

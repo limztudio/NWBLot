@@ -44,12 +44,13 @@ using NWB::Tests::Smoke::AssignCsgCutterTransform;
 
 static constexpr f32 s_CameraStartDepth = 2.2f;
 static constexpr f32 s_CameraTargetY = 0.85f;
-static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
+static constexpr f32 s_DefaultDirectionalLightPitch = 0.9f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr AStringView s_CubeMeshPath = "project/meshes/cube";
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 static constexpr AStringView s_TransparentSharedMaterialPath = "project/smoke/transparent_multi/materials/shared";
+static constexpr AStringView s_GroundMaterialPath = "project/smoke/transparent_multi/materials/ground";
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
 static constexpr f32 s_TransparentCsgRotationSpeed = 0.55f;
@@ -231,6 +232,20 @@ public:
             Float4(0.68f, s_CameraTargetY, 0.04f),
             Float4(0.68f, 0.68f, 0.68f)
         );
+
+        // Opaque ground-plane receiver beneath the transparent cubes (a flattened cube). The colored
+        // transmittance each transparent cube casts toward the directional light lands here as a tinted
+        // shadow -- the visible payoff of Phase 6 colored/transmittance shadows.
+        const auto groundEntity = CreateTintedStaticMeshEntity(
+            *m_world,
+            m_context.objectArena,
+            s_CubeMeshPath,
+            s_GroundMaterialPath,
+            s_SmokeSurfaceMaterialInterface,
+            Float4(1.0f, 1.0f, 1.0f, 1.0f),
+            Float4(0.0f, -0.05f, 0.0f),
+            Float4(2.6f, 0.05f, 2.6f)
+        );
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
         const auto cutterEntity = CreateTransparentCsgPlaneCutter(*m_world, m_context.objectArena);
         const bool csgEntitiesValid = cutterEntity.valid();
@@ -241,7 +256,7 @@ public:
         const bool csgEntitiesValid = true;
 #endif
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.camera.valid() && cubeEntity.valid() && centerCubeEntity.valid() && rightCubeEntity.valid() && csgEntitiesValid,
+            activeCamera.camera.valid() && cubeEntity.valid() && centerCubeEntity.valid() && rightCubeEntity.valid() && groundEntity.valid() && csgEntitiesValid,
             NWB_TEXT("TransparentMultiSmokeProject failed to create all scene entities")
         );
 

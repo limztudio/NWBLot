@@ -33,6 +33,11 @@ Texture2DArray<float4> g_NwbShadowVisibility;
 // 1 (white) = lit, 0 = shadowed, tint = colored transmittance. Reads the light's shadow-slot layer; a light
 // with no slot (params.z < 0 -- the clear default, or a light the slot allocator did not reach) is fully lit.
 float3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
+    // Negative pixel = "skip screen-space shadow sampling" sentinel for the forward / AVBOIT transparent pass
+    // (transparent fragments are not in the opaque G-buffer the visibility was traced from) -- treat as lit.
+    if(pixel.x < 0)
+        return float3(1.0, 1.0, 1.0);
+
     const float slot = g_NwbSceneLights[lightIndex].params.z;
     if(slot < 0.0)
         return float3(1.0, 1.0, 1.0);

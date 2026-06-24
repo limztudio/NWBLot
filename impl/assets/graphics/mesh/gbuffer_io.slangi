@@ -57,7 +57,13 @@ float3 nwbGBufferEncodeNormal(float3 normal){
 // per-draw dispatch word, which the pixel shader reads back here. A material never hard-codes its id in
 // shader source -- it declares a `bxdf`, and the cook assigns + delivers the id. The push constant is reached
 // differently depending on whether CSG injected its own per-draw block, or the mesh runtime is in scope.
-#if NWB_CSG_ENABLED
+// When NWB_MESH_MATERIAL_CONTEXT_PROVIDED is defined the includer (the shadow trace's material-context header)
+// supplies nwbMeshShadingModelId()/nwbMeshInstanceIndex()/nwbMeshMaterialConstantByteOffset()/nwbMeshLoadInstance()
+// from per-invocation globals it set from the ray hit, so this file defines none of them (the rasterizer never
+// defines NWB_MESH_MATERIAL_CONTEXT_PROVIDED, so its branches below are byte-for-byte unchanged).
+#if defined(NWB_MESH_MATERIAL_CONTEXT_PROVIDED)
+// provided by includer
+#elif NWB_CSG_ENABLED
 uint nwbMeshShadingModelId(){
     return (g_NwbCsgMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
 }

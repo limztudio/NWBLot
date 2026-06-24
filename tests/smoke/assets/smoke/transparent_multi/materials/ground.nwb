@@ -1,0 +1,13 @@
+material asset;
+
+asset.interface = "project/shaders/smoke_surface.bind";
+asset.surface = "project/shaders/smoke_surface.surface";
+asset.bxdf = "project/shaders/smoke_lambert.bxdf";
+asset.parameters = {
+    "surface": {
+        "base_color": "float4(0.85, 0.85, 0.85, 1.0)",
+    },
+    "runtime": {
+        "color_tint": "float4(1.0, 1.0, 1.0, 1.0)",
+    },
+};

@@ -56,6 +56,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     Name meshName = NAME_NONE;
     Core::BufferHandle emulationVertexBuffer;
     Core::BufferHandle triangleIndexBuffer;
+    Core::BufferHandle attributeBuffer;     // RT-only flat per-vertex shadow-trace attributes (positionStream-indexed); null when ray tracing is unsupported
     Core::RayTracingAccelStructHandle blas;
     Core::BindingSetHandle meshBindingSet;
     Core::BindingSetHandle computeBindingSet;

@@ -166,6 +166,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         return false;
 
     createdInfo.shadingModelId = material.shadingModelId();
+    createdInfo.shadowTransmittanceModelId = material.shadowTransmittanceModelId();
     createdInfo.transparent = material.transparent();
     createdInfo.twoSided = material.twoSided();
 

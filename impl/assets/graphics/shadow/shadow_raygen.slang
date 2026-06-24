@@ -17,8 +17,9 @@
 // Per light: cast one occlusion ray from the surface toward the light. Directional lights aim along the
 // toward-light axis to "infinity"; point/spot lights aim at the light position with tMax = the distance,
 // so geometry past the light does not shadow the surface. Bias along the geometric normal + a small tMin
-// avoids self-intersection acne.
-bool nwbShadowLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light){
+// avoids self-intersection acne. Returns the per-channel transmittance accumulated by the any-hit stage:
+// float3(1) when fully lit, tinted toward zero through transparent occluders, zero behind an opaque one.
+float3 nwbShadowLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light){
     float3 toLight;
     float tMax;
     if(light.params.y < 0.5){
@@ -38,7 +39,7 @@ bool nwbShadowLightVisible(const float3 worldPosition, const float3 normal, cons
     const float tMin = 0.001;
     const float tEnd = tMax - 0.002;
     if(tEnd <= tMin)
-        return true;
+        return float3(1.0, 1.0, 1.0);
 
     RayDesc ray;
     ray.Origin = worldPosition + normal * tMin;
@@ -46,11 +47,14 @@ bool nwbShadowLightVisible(const float3 worldPosition, const float3 normal, cons
     ray.TMin = tMin;
     ray.TMax = tEnd;
 
+    // Seed full transmittance; the any-hit stage multiplies in each transparent occluder's tint and an opaque
+    // hit zeroes it + ends the search. The miss stage is a no-op, so whatever survives is the answer. The trace
+    // must visit every occluder, so it cannot skip the any-hit or accept the first hit.
     NwbShadowOcclusionPayload payload;
-    payload.visibility = 0.0;
+    payload.transmittance = float3(1.0, 1.0, 1.0);
     TraceRay(
         g_NwbShadowTlas,
-        RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
+        RAY_FLAG_NONE,
         0xFFu,
         0u,
         0u,
@@ -58,7 +62,7 @@ bool nwbShadowLightVisible(const float3 worldPosition, const float3 normal, cons
         ray,
         payload
     );
-    return payload.visibility > 0.5;
+    return payload.transmittance;
 }
 
 
@@ -92,8 +96,8 @@ void main(){
         if(slot < 0.0)
             continue;
 
-        const float visibility = nwbShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]) ? 1.0 : 0.0;
-        g_NwbShadowVisibility[uint3(pixel, uint(slot))] = float4(visibility, visibility, visibility, 1.0);
+        const float3 transmittance = nwbShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
+        g_NwbShadowVisibility[uint3(pixel, uint(slot))] = float4(transmittance, 1.0);
     }
 }
 

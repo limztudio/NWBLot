@@ -48,6 +48,7 @@ static float3 inNormal;
 static float4 inTangent;
 static float2 inUv0;
 static float3 inWorldPosition;
+static float3 inIncidentDirection;
 static float inPixelDepth;
 
 // Rasterizer-independent surface inputs a material's surface hook reads (via the statics below). The rasterizer
@@ -60,6 +61,11 @@ struct NwbMeshSurfaceInputs{
     float4 tangent;
     float2 uv0;
     float3 worldPosition;
+    // World-space direction of the ray arriving at this surface, for a refractive hook's Fresnel/Snell term. The
+    // shadow trace fills it from the occlusion ray (NwbShadowHit.rayDirection); the rasterizer has no view buffer
+    // in the G-buffer pass, so it supplies a documented dummy (-inNormal) -- harmless, since the G-buffer discards
+    // transmittance (the only value that reads this), so it is consumed only by the shadow trace.
+    float3 incidentDirection;
 };
 
 // Loads the surface-input statics a hook reads. Both the rasterizer (nwbLoadMeshPixelInput) and the shadow
@@ -70,6 +76,7 @@ void nwbLoadMeshSurfaceInputs(NwbMeshSurfaceInputs inputs){
     inTangent = inputs.tangent;
     inUv0 = inputs.uv0;
     inWorldPosition = inputs.worldPosition;
+    inIncidentDirection = inputs.incidentDirection;
 }
 
 void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
@@ -79,6 +86,11 @@ void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
     inputs.tangent = input.tangent;
     inputs.uv0 = input.uv0;
     inputs.worldPosition = input.worldPosition.xyz;
+    // No view buffer is bound in the G-buffer pass, so the true view direction (normalize(worldPosition -
+    // cameraPosition)) is unavailable here. Use the documented dummy -normal: the G-buffer discards transmittance
+    // (the only value any refractive hook computes from this), so the dummy is harmless in the rasterizer; the
+    // shadow trace supplies the real ray direction for the value that actually matters.
+    inputs.incidentDirection = -input.normal;
     nwbLoadMeshSurfaceInputs(inputs);
     inPixelDepth = input.position.z;
 #if NWB_CSG_ENABLED

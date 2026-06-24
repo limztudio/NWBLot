@@ -29,9 +29,10 @@ struct NwbRtInstanceMaterial{
 };
 
 #define NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT 0x1u
-// flags bit1 = isRefractive: the material asset's `refractive` classification. Gates the trace's Fresnel/
-// Beer-Lambert refraction physics; the refraction VALUES (ior/thickness/transmission) come from the per-hit
-// surface hook (NwbMeshSurface), NOT this record.
+// flags bit1 = isRefractive: the material asset's `refractive` classification, plumbed to the GPU instance record
+// as groundwork for the future caustic producer. The shadow trace does NOT read this -- transmittance is unified
+// (each material's surface hook always owns the final value, a refractive hook computing it via the engine helper
+// nwbShadowRefractiveTransmittance, and the engine just multiplies). This flag is the producer's classification.
 #define NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE 0x2u
 
 

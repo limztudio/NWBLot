@@ -104,36 +104,10 @@ NwbMeshSurfaceInputs nwbShadowBuildSurfaceInputs(NwbShadowHit hit){
     inputs.tangent = float4(1.0, 0.0, 0.0, 1.0);
     inputs.uv0 = hit.uv0;
     inputs.worldPosition = hit.worldPosition;
+    // The shadow ray's world-space direction, for a refractive material's hook (its Fresnel/Snell term via
+    // nwbShadowRefractiveTransmittance). Already carried on the hit by both trace backends.
+    inputs.incidentDirection = hit.rayDirection;
     return inputs;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Engine-generic refraction physics for a `refractive` occluder, applied by BOTH shadow backends (hardware
-// any-hit + software traversal) on the per-hit transmittance, using ONLY Slang built-ins so the two paths are
-// byte-identical. The material asset classifies the occluder as refractive (the FLAG_REFRACTIVE bit); the
-// per-hit surface hook supplies the values (ior / thickness / transmission). Fresnel (Schlick, air<->medium)
-// gives the fraction of light that refracts through rather than reflecting off; Snell gives the refracted path
-// length through the slab; Beer-Lambert tints that path by the transmission absorption color. thickness = 0
-// leaves only the Fresnel term (no absorption); ior = 1 leaves the surface fully transmissive.
-float3 nwbShadowRefractiveTransmittance(float ior, float thickness, float3 transmission, float3 rayDirection, float3 worldNormal){
-    // Incident cosine at the glass interface (both normalized).
-    const float cosI = saturate(abs(dot(rayDirection, worldNormal)));
-    // Fresnel reflectance (Schlick), air<->medium.
-    const float r0base = (ior - 1.0) / (ior + 1.0);
-    const float r0 = r0base * r0base;
-    const float fresnelReflect = r0 + (1.0 - r0) * pow(1.0 - cosI, 5.0);
-    const float transmittedFraction = 1.0 - fresnelReflect;
-    // Refracted cosine (Snell; ior>1 entering a denser medium has no TIR) for the Beer-Lambert path length.
-    const float sinI = sqrt(max(0.0, 1.0 - cosI * cosI));
-    const float sinT = sinI / max(ior, 1e-3);
-    const float cosT = sqrt(max(0.0, 1.0 - sinT * sinT));
-    const float pathLength = thickness / max(cosT, 1e-3);
-    // Beer-Lambert: the per-channel transmission color over the refracted path (thickness=0 -> no absorption).
-    const float3 absorption = pow(saturate(transmission), float3(pathLength, pathLength, pathLength));
-    return saturate(transmittedFraction * absorption);
 }
 
 

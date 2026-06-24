@@ -389,6 +389,31 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     ))
         return false;
 
+    // The occupancy/extinction twins: each transparent material gets its own occupancy + extinction PS too, so all
+    // three AVBOIT passes read this material's SAME shader-decided surface.alpha (an accumulate-only change would
+    // desync the extinction-built volume from the accumulate color-weight). The renderer binds them per material.
+    MaterialCookVector<GeneratedMaterialPixelShader> generatedAvboitOccupancyPixelShaders(materialCookArena);
+    if(!EmitMaterialAvboitOccupancyPixelShaders(
+        materialCookArena,
+        context.resolvedPaths.cacheDirectory,
+        context.configurationSafeName,
+        materialEntries,
+        generatedAvboitOccupancyPixelShaders,
+        context.scratchArena
+    ))
+        return false;
+
+    MaterialCookVector<GeneratedMaterialPixelShader> generatedAvboitExtinctionPixelShaders(materialCookArena);
+    if(!EmitMaterialAvboitExtinctionPixelShaders(
+        materialCookArena,
+        context.resolvedPaths.cacheDirectory,
+        context.configurationSafeName,
+        materialEntries,
+        generatedAvboitExtinctionPixelShaders,
+        context.scratchArena
+    ))
+        return false;
+
     auto& shaderCookArena = graphicsMetadata.shaderEntries.get_allocator().arena();
     const auto appendGeneratedPixelShaderEntry = [&](const GeneratedMaterialPixelShader& generatedPixelShader) -> bool{
         ShaderCook::ShaderEntry pixelShaderEntry(shaderCookArena);
@@ -421,6 +446,14 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
             return false;
     }
     for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedAvboitAccumulatePixelShaders){
+        if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
+            return false;
+    }
+    for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedAvboitOccupancyPixelShaders){
+        if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
+            return false;
+    }
+    for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedAvboitExtinctionPixelShaders){
         if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
             return false;
     }

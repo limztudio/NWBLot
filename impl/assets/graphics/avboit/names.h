@@ -37,6 +37,13 @@ inline constexpr Name s_AccumulatePixelShaderName("engine/graphics/avboit/accumu
 // name "<prefix><material virtual path>"; the renderer derives the SAME name from the material to bind it for
 // the transparent draw (material_pipeline.cpp, AvboitAccumulate pass). Keep both sites in sync via this prefix.
 inline constexpr AStringView s_AccumulatePixelShaderGeneratedPrefix("generated/avboit_accumulate_ps/");
+// The occupancy/extinction twins of s_AccumulatePixelShaderGeneratedPrefix. The cook generates one per
+// `surface`-authored transparent material (EmitMaterialAvboitOccupancyPixelShaders /
+// EmitMaterialAvboitExtinctionPixelShaders), so all three AVBOIT passes read the SAME shader-decided
+// surface.alpha; the renderer derives these names to bind them for the transparent draw's occupancy/extinction
+// passes (material_pipeline.cpp, AvboitOccupancy / AvboitExtinction). Keep each in sync via its prefix.
+inline constexpr AStringView s_OccupancyPixelShaderGeneratedPrefix("generated/avboit_occupancy_ps/");
+inline constexpr AStringView s_ExtinctionPixelShaderGeneratedPrefix("generated/avboit_extinction_ps/");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

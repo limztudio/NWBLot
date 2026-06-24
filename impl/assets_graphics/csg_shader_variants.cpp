@@ -86,12 +86,15 @@ void CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>
     InsertShaderKey(outShaderKeys, AssetsGraphicsAvboit::s_ExtinctionPixelShaderName, pixelStageName);
     InsertShaderKey(outShaderKeys, AssetsGraphicsAvboit::s_AccumulatePixelShaderName, pixelStageName);
 
-    // Each transparent material's cook-generated AVBOIT accumulate PS replaces the fixed one for that material's
-    // transparent draw, so it needs the SAME AVBOIT CSG clip variants the fixed accumulate PS gets.
+    // Each transparent material's cook-generated AVBOIT accumulate/occupancy/extinction PS replaces the fixed one
+    // for that material's transparent draw, so each needs the SAME AVBOIT CSG clip variants the fixed PS gets.
     for(const MaterialCookEntry& materialEntry : materialEntries){
-        if(materialEntry.avboitAccumulatePixelShaderName.empty())
-            continue;
-        InsertShaderKey(outShaderKeys, ToName(AStringView(materialEntry.avboitAccumulatePixelShaderName)), pixelStageName);
+        if(!materialEntry.avboitAccumulatePixelShaderName.empty())
+            InsertShaderKey(outShaderKeys, ToName(AStringView(materialEntry.avboitAccumulatePixelShaderName)), pixelStageName);
+        if(!materialEntry.avboitOccupancyPixelShaderName.empty())
+            InsertShaderKey(outShaderKeys, ToName(AStringView(materialEntry.avboitOccupancyPixelShaderName)), pixelStageName);
+        if(!materialEntry.avboitExtinctionPixelShaderName.empty())
+            InsertShaderKey(outShaderKeys, ToName(AStringView(materialEntry.avboitExtinctionPixelShaderName)), pixelStageName);
     }
 }
 

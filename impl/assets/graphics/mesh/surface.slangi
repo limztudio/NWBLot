@@ -15,28 +15,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The per-material surface contract, shared by the G-buffer pixel shader (gbuffer_ps.slangi) and the shadow
-// trace (shadow/shadow_surface.slangi). Each material provides ONLY a surface hook, nwbMaterialSurface(), that
-// fills the surface below from the surface-input statics (inColor / inNormal / inTangent / inUv0 /
-// inWorldPosition) and its own logic. A material never writes the G-buffer targets or the model-id packing, and
-// cannot get the target layout wrong; the same hook also feeds the shadow trace its per-hit transmittance.
+// The per-material surface contract, shared by the G-buffer pixel shader (gbuffer_ps.slangi), the shadow trace
+// (shadow/shadow_surface.slangi), and the AVBOIT transparent passes. Each material provides ONLY a surface hook,
+// nwbMaterialSurface(), that fills the surface below from the surface-input statics (inColor / inNormal /
+// inTangent / inUv0 / inWorldPosition / inIncidentDirection) and its own logic. A material never writes the
+// G-buffer targets or the model-id packing, and cannot get the target layout wrong. The surface carries each
+// consumer's PER-PIXEL OUTPUT: `transmittance` is the shadow trace's per-hit output, `alpha` is the AVBOIT
+// transparent passes' per-pixel opacity -- the hook decides each, exactly as it decides the shaded base color.
+// The refraction INPUTS (ior / thickness / transmission) are NOT surface fields: a refractive hook keeps them as
+// its own LOCAL material constants and passes them to nwbShadowRefractiveTransmittance(...) to produce
+// `transmittance` (and may derive `alpha` from them too). They never need to leave the hook, so the surface stays
+// `{ baseColor, normal, param0, param1, transmittance, alpha }`.
 struct NwbMeshSurface{
     float3 baseColor;
     float3 normal;          // world space; the engine encodes it into the normal target
     float  param0;          // user BXDF parameter, packed into normal.a (e.g. roughness)
     float  param1;          // user BXDF parameter, packed into world.a (e.g. metallic)
     float3 transmittance;   // per-hit shadow transmittance the material computes from its own logic; the
-                            // rasterizer G-buffer write discards it, the shadow trace evaluates + returns it
-    // Refraction values the material's surface hook decides (the material asset decides only the `refractive`
-    // boolean classification). Neutral by default: ior = 1 (no bending), thickness = 0 (no absorption), and
-    // transmission = float3(1,1,1) (no Beer-Lambert tint). NOTHING reads these yet -- the shadow-dispatch return
-    // + the Fresnel/Beer-Lambert physics arrive in later units; this unit only lets the contract carry them, so
-    // the G-buffer packing (baseColor/normal/param0/param1/transmittance only) is unaffected. `transmission` is
-    // the refractive Beer-Lambert absorption color and is distinct from `transmittance` (the flat colored-shadow
-    // tint of a non-refractive occluder).
-    float  ior;
-    float  thickness;
-    float3 transmission;
+                            // rasterizer G-buffer write discards it, the shadow trace evaluates + multiplies it.
+                            // A refractive material's hook fills this by calling the engine helper
+                            // nwbShadowRefractiveTransmittance(...) itself (Fresnel + Beer-Lambert), so the engine
+                            // applies transmittance ONE way -- the hook always owns the final value, and the trace
+                            // never branches on a refractive flag.
+    float  alpha;           // AVBOIT per-pixel opacity the material's hook decides, the transparent-pass analog of
+                            // `transmittance`. Default 1.0 (fully opaque): an opaque material leaves it, and the
+                            // rasterizer G-buffer + shadow trace ignore it. ALL THREE AVBOIT passes (occupancy,
+                            // extinction, accumulate) read it so the extinction-built volume and the accumulate
+                            // color-weight share the IDENTICAL shader-decided alpha. A transparent material's hook
+                            // sets it (e.g. 1 - nwbLuminance(transmission)).
 };
 
 NwbMeshSurface nwbMakeMeshSurface(float3 baseColor, float3 normal, float param0, float param1, float3 transmittance){
@@ -46,9 +52,7 @@ NwbMeshSurface nwbMakeMeshSurface(float3 baseColor, float3 normal, float param0,
     surface.param0 = param0;
     surface.param1 = param1;
     surface.transmittance = transmittance;
-    surface.ior = 1.0;
-    surface.thickness = 0.0;
-    surface.transmission = float3(1.0, 1.0, 1.0);
+    surface.alpha = 1.0;
     return surface;
 }
 
@@ -62,6 +66,45 @@ NwbMeshSurface nwbMakeMeshSurface(float3 baseColor, float3 normal, float param0,
 NwbMeshSurface nwbMakeMeshSurface(float3 baseColor, float3 normal){
     return nwbMakeMeshSurface(baseColor, normal, 0.0, 0.0, float3(0.0, 0.0, 0.0));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Engine-generic refraction physics LIBRARY helper a refractive material's surface hook CALLS to compute its OWN
+// per-hit shadow transmittance (it then stores the result on NwbMeshSurface.transmittance). It lives on the shared
+// surface contract -- not the shadow trace -- so the SAME hook resolves it in BOTH contexts that compile a hook: the
+// rasterizer G-buffer pixel shader (which discards transmittance, so the result is harmless there) and the shadow
+// trace's transmittance dispatch. Uses ONLY Slang built-ins, so a hook that calls it evaluates byte-identically
+// across both shadow backends (hardware any-hit + software traversal) -- preserving the HW/SW lockstep mandate. This
+// makes transmittance application unified: the hook always owns the final value (refraction physics here, or a flat
+// tint when not refractive) and the engine multiplies it ONE way, with no refractive branch in the trace. The
+// material asset's `refractive` classification (the GPU instance record's FLAG_REFRACTIVE bit) is groundwork for the
+// future caustic producer and is NOT read by the shadow trace. Fresnel (Schlick, air<->medium) gives the fraction of
+// light that refracts through rather than reflecting off; Snell gives the refracted path length through the slab;
+// Beer-Lambert tints that path by the transmission absorption color. thickness = 0 leaves only the Fresnel term (no
+// absorption); ior = 1 leaves the surface fully transmissive.
+float3 nwbShadowRefractiveTransmittance(float ior, float thickness, float3 transmission, float3 rayDirection, float3 worldNormal){
+    // Incident cosine at the glass interface (both normalized).
+    const float cosI = saturate(abs(dot(rayDirection, worldNormal)));
+    // Fresnel reflectance (Schlick), air<->medium.
+    const float r0base = (ior - 1.0) / (ior + 1.0);
+    const float r0 = r0base * r0base;
+    const float fresnelReflect = r0 + (1.0 - r0) * pow(1.0 - cosI, 5.0);
+    const float transmittedFraction = 1.0 - fresnelReflect;
+    // Refracted cosine (Snell; ior>1 entering a denser medium has no TIR) for the Beer-Lambert path length.
+    const float sinI = sqrt(max(0.0, 1.0 - cosI * cosI));
+    const float sinT = sinI / max(ior, 1e-3);
+    const float cosT = sqrt(max(0.0, 1.0 - sinT * sinT));
+    const float pathLength = thickness / max(cosT, 1e-3);
+    // Beer-Lambert: the per-channel transmission color over the refracted path (thickness=0 -> no absorption).
+    const float3 absorption = pow(saturate(transmission), float3(pathLength, pathLength, pathLength));
+    return saturate(transmittedFraction * absorption);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // Surface hook callable WITHOUT the rasterizer pixel-input plumbing: builds the surface-input statics
 // (inColor / inNormal / inUv0 / inWorldPosition) from a supplied NwbMeshSurfaceInputs bundle, then invokes the

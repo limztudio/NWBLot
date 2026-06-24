@@ -126,8 +126,10 @@ static_assert(sizeof(NwbRtInstanceMaterialGpu) == 32u, "NwbRtInstanceMaterialGpu
 
 // Per-instance shadow-occluder flags (NwbRtInstanceMaterialGpu.flags), mirroring the shader-side
 // NWB_RT_INSTANCE_MATERIAL_FLAG_* defines: `Transparent` = evaluate the per-hit transmittance hook; `Refractive` =
-// the material asset's `refractive` classification, gating the trace's refraction physics (the refraction VALUES
-// come from the per-hit surface hook, not this record).
+// the material asset's `refractive` classification, plumbed to the GPU instance record as groundwork for the future
+// caustic producer. The shadow trace does NOT gate on `Refractive` -- transmittance is unified (each material's
+// surface hook owns the final value, a refractive hook computing it via the engine helper). This is the producer's
+// classification.
 namespace RtInstanceMaterialFlag{
     enum Mask : u32{
         None = 0u,

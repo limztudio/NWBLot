@@ -152,22 +152,30 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     surfaceInputs.tangent = input.tangent;
     surfaceInputs.uv0 = input.uv0;
     surfaceInputs.worldPosition = input.worldPosition.xyz;
+    // The view direction (surface toward camera, reversed): the AVBOIT pass binds the scene shading buffer, so a
+    // refractive hook's Fresnel/Snell term reads a real incident direction (unlike the rasterizer dummy).
+    surfaceInputs.incidentDirection = nwbSafeNormalize(input.worldPosition.xyz - g_NwbSceneCameraPosition.xyz, float3(0.0, 0.0, 1.0));
     nwbLoadMeshSurfaceInputs(surfaceInputs);
 #if NWB_CSG_ENABLED
     if(nwbAvboitCsgPixelDiscard(input.position, input.worldPosition))
         discard;
 #endif
 
-    const float alpha = nwbAvboitResolveFragmentAlpha(input.color);
+    // The material's surface hook decides the per-pixel surface (base color + normal + BXDF params) the same way
+    // the G-buffer pixel shader does, AND the AVBOIT opacity (surface.alpha). Run it before the alpha gate so the
+    // accumulate color-weight uses the SAME shader-decided alpha the occupancy/extinction passes built the volume
+    // from -- an opaque material leaves the default 1.0, a transparent material's hook sets it.
+    const NwbMeshSurface surface = nwbMaterialSurface();
+
+    const float alpha = clamp(surface.alpha, 0.0, 1.0);
     if(alpha <= 0.0)
         discard;
 
-    const float transmittance = nwbAvboitLinearBiasedTransmittance(input.position.xy, input.position.z);
-    const float weightedAlpha = alpha * transmittance;
+    // volumeTransmittance is the AVBOIT self-occlusion volume sample (NOT the material's transmittance): it is the
+    // accumulated front-to-back transmittance up to this fragment, used to weight its color contribution.
+    const float volumeTransmittance = nwbAvboitLinearBiasedTransmittance(input.position.xy, input.position.z);
+    const float weightedAlpha = alpha * volumeTransmittance;
 
-    // The material's surface hook fills the per-pixel surface (base color + normal + BXDF params) the same way
-    // the G-buffer pixel shader does; build the BXDF surface from it.
-    const NwbMeshSurface surface = nwbMaterialSurface();
     NwbBxdfSurface bxdfSurface;
     bxdfSurface.baseColor = surface.baseColor;
     bxdfSurface.normal = nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0));

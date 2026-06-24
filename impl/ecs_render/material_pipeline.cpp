@@ -309,15 +309,31 @@ bool RendererMaterialSystem::createRendererPipeline(
     case MaterialPipelinePass::AvboitOccupancy:
         if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
-        passPixelShader = avboitState().m_occupancyPixelShader;
-        passPixelShaderName = AssetsGraphicsAvboit::s_OccupancyPixelShaderName;
+        // Mirror the accumulate pass: bind this material's cook-generated per-material occupancy PS so the coverage
+        // it marks comes from the material's own surface.alpha (the SAME alpha the extinction + accumulate passes
+        // read). A material without one falls back to the engine's fixed occupancy PS (vertex-alpha).
+        if(materialInfo.avboitOccupancyPixelShader.valid()){
+            passPixelShaderName = materialInfo.avboitOccupancyPixelShader.name();
+        }
+        else{
+            passPixelShader = avboitState().m_occupancyPixelShader;
+            passPixelShaderName = AssetsGraphicsAvboit::s_OccupancyPixelShaderName;
+        }
         passPixelShaderDebugName = "ECSRender_AvboitOccupancyPS";
         break;
     case MaterialPipelinePass::AvboitExtinction:
         if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
-        passPixelShader = avboitState().m_extinctionPixelShader;
-        passPixelShaderName = AssetsGraphicsAvboit::s_ExtinctionPixelShaderName;
+        // Mirror the accumulate pass: bind this material's cook-generated per-material extinction PS so the volume
+        // it splats comes from the material's own surface.alpha (the SAME alpha the occupancy + accumulate passes
+        // read). A material without one falls back to the engine's fixed extinction PS (vertex-alpha).
+        if(materialInfo.avboitExtinctionPixelShader.valid()){
+            passPixelShaderName = materialInfo.avboitExtinctionPixelShader.name();
+        }
+        else{
+            passPixelShader = avboitState().m_extinctionPixelShader;
+            passPixelShaderName = AssetsGraphicsAvboit::s_ExtinctionPixelShaderName;
+        }
         passPixelShaderDebugName = "ECSRender_AvboitExtinctionPS";
         break;
     case MaterialPipelinePass::AvboitAccumulate:
@@ -367,8 +383,9 @@ bool RendererMaterialSystem::createRendererPipeline(
                 return false;
         }
         else if(!passPixelShader){
-            // No preloaded pass pixel shader: a cook-generated per-material pass PS (the AVBOIT accumulate PS) the
-            // material selected by name -- load it at its default variant, mirroring the opaque per-material PS load.
+            // No preloaded pass pixel shader: a cook-generated per-material pass PS (an AVBOIT accumulate/occupancy/
+            // extinction PS) the material selected by name -- load it at its default variant, mirroring the opaque
+            // per-material PS load.
             if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Pixel, passPixelShaderDebugName))
                 return false;
         }
@@ -433,8 +450,9 @@ bool RendererMaterialSystem::createRendererPipeline(
                 return false;
         }
         else if(!passPixelShader){
-            // No preloaded pass pixel shader: a cook-generated per-material pass PS (the AVBOIT accumulate PS) the
-            // material selected by name -- load it at its default variant, mirroring the opaque per-material PS load.
+            // No preloaded pass pixel shader: a cook-generated per-material pass PS (an AVBOIT accumulate/occupancy/
+            // extinction PS) the material selected by name -- load it at its default variant, mirroring the opaque
+            // per-material PS load.
             if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Pixel, passPixelShaderDebugName))
                 return false;
         }

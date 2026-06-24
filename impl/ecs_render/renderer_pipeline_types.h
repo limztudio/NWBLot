@@ -164,6 +164,11 @@ struct MaterialSurfaceInfo{
     // valid only for a surface-authored transparent material; the transparent draw binds it. Invalid otherwise
     // (the draw then uses the engine's fixed accumulate PS).
     Core::Assets::AssetRef<Shader> avboitAccumulatePixelShader;
+    // The occupancy/extinction twins, bound for those AVBOIT passes so all three read the material's SAME
+    // shader-decided surface.alpha. Valid only for a surface-authored transparent material; invalid otherwise
+    // (the pass then uses the engine's fixed occupancy/extinction PS).
+    Core::Assets::AssetRef<Shader> avboitOccupancyPixelShader;
+    Core::Assets::AssetRef<Shader> avboitExtinctionPixelShader;
     u64 typedLayoutHash = 0u;
     MaterialTypedLayoutBlockVector typedLayoutBlocks;
     MaterialTypedLayoutFieldVector typedLayoutFields;

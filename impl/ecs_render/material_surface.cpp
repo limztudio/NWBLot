@@ -110,6 +110,8 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     const bool hasPixelShader = material.findShaderForStage(Core::ShaderType::PixelStage, createdInfo.pixelShader);
     const bool hasMeshShader = material.findShaderForStage(Core::ShaderType::MeshStage, createdInfo.meshShader);
     createdInfo.avboitAccumulatePixelShader = material.avboitAccumulatePixelShader();
+    createdInfo.avboitOccupancyPixelShader = material.avboitOccupancyPixelShader();
+    createdInfo.avboitExtinctionPixelShader = material.avboitExtinctionPixelShader();
     if(!hasMeshShader){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing required mesh shader")
             , StringConvert(materialPath.c_str())

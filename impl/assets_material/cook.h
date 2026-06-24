@@ -65,6 +65,12 @@ struct MaterialCookEntry{
     // shader) this is not a stage; the renderer binds it for the transparent draw via the same name. Used by the
     // CSG clip-variant collector so the generated accumulate PS receives AVBOIT CSG clip variants.
     MaterialCookString avboitAccumulatePixelShaderName;
+    // The occupancy/extinction twins of avboitAccumulatePixelShaderName, set by
+    // EmitMaterialAvboitOccupancyPixelShaders / EmitMaterialAvboitExtinctionPixelShaders. So all three AVBOIT passes
+    // read this material's SAME shader-decided surface.alpha, each transparent `surface`-authored material gets its
+    // own occupancy + extinction PS too (not only the accumulate PS). Same lifecycle/usage as the accumulate name.
+    MaterialCookString avboitOccupancyPixelShaderName;
+    MaterialCookString avboitExtinctionPixelShaderName;
     ParameterMap parameters;
     bool transparent = false;
     bool twoSided = false;
@@ -83,6 +89,8 @@ struct MaterialCookEntry{
         , surfaceSource(arena)
         , stageShaders(0, Hasher<Core::ShaderType::Enum>(), EqualTo<Core::ShaderType::Enum>(), arena)
         , avboitAccumulatePixelShaderName(arena)
+        , avboitOccupancyPixelShaderName(arena)
+        , avboitExtinctionPixelShaderName(arena)
         , parameters(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), arena)
     {}
 
@@ -100,6 +108,8 @@ struct MaterialCookEntry{
         shadowTransmittanceModelId = 0u;
         stageShaders.clear();
         avboitAccumulatePixelShaderName.clear();
+        avboitOccupancyPixelShaderName.clear();
+        avboitExtinctionPixelShaderName.clear();
         parameters.clear();
         transparent = false;
         twoSided = false;
@@ -226,6 +236,29 @@ struct GeneratedMaterialPixelShader{
 // transparent draw. Opaque materials + transparent materials with explicit `shaders` are skipped.
 // `surfaceSource` must already be resolved to an absolute path.
 [[nodiscard]] bool EmitMaterialAvboitAccumulatePixelShaders(
+    MaterialCookArena& arena,
+    const Path& cacheDirectory,
+    AStringView configurationSafeName,
+    MaterialCookVector<MaterialCookEntry>& materialEntries,
+    MaterialCookVector<GeneratedMaterialPixelShader>& outGenerated,
+    Core::Alloc::ScratchArena& scratchArena
+);
+
+// The occupancy/extinction twins of EmitMaterialAvboitAccumulatePixelShaders: for each TRANSPARENT material
+// authored with a `surface`, generate its AVBOIT occupancy / extinction pixel shader (engine AVBOIT
+// occupancy/extinction authoring + the material's typed `.bind` + its resolved `surface` hook), so all three
+// AVBOIT passes read this material's SAME shader-decided surface.alpha. Like the accumulate PS these are NOT
+// material stage shaders; the renderer derives each PS's identity from the material name + the matching prefix to
+// bind it for the transparent draw's occupancy/extinction pass. `surfaceSource` must already be resolved.
+[[nodiscard]] bool EmitMaterialAvboitOccupancyPixelShaders(
+    MaterialCookArena& arena,
+    const Path& cacheDirectory,
+    AStringView configurationSafeName,
+    MaterialCookVector<MaterialCookEntry>& materialEntries,
+    MaterialCookVector<GeneratedMaterialPixelShader>& outGenerated,
+    Core::Alloc::ScratchArena& scratchArena
+);
+[[nodiscard]] bool EmitMaterialAvboitExtinctionPixelShaders(
     MaterialCookArena& arena,
     const Path& cacheDirectory,
     AStringView configurationSafeName,

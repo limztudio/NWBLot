@@ -257,6 +257,8 @@ public:
     void setShadingModelId(const u32 shadingModelId){ m_shadingModelId = shadingModelId; }
     void setShadowTransmittanceModelId(const u32 shadowTransmittanceModelId){ m_shadowTransmittanceModelId = shadowTransmittanceModelId; }
     void setAvboitAccumulatePixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset){ m_avboitAccumulatePixelShader = shaderAsset; }
+    void setAvboitOccupancyPixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset){ m_avboitOccupancyPixelShader = shaderAsset; }
+    void setAvboitExtinctionPixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset){ m_avboitExtinctionPixelShader = shaderAsset; }
     void setTransparent(const bool transparent){ m_transparent = transparent; }
     void setTwoSided(const bool twoSided){ m_twoSided = twoSided; }
     void setRefractive(const bool refractive){ m_refractive = refractive; }
@@ -287,6 +289,11 @@ public:
     // PS). Unlike the stage shaders this is not a graphics stage -- a material has a single pixel stage (the
     // G-buffer PS); this is a second, transparent-only pixel shader the renderer selects by pass.
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitAccumulatePixelShader()const{ return m_avboitAccumulatePixelShader; }
+    // The occupancy/extinction twins of avboitAccumulatePixelShader, bound for this material's transparent draw so
+    // all three AVBOIT passes read the material's SAME shader-decided surface.alpha. Valid only for a transparent
+    // material authored with a `surface`; invalid otherwise (the draw then uses the engine's fixed pass PS).
+    [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitOccupancyPixelShader()const{ return m_avboitOccupancyPixelShader; }
+    [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitExtinctionPixelShader()const{ return m_avboitExtinctionPixelShader; }
     [[nodiscard]] bool transparent()const{ return m_transparent; }
     [[nodiscard]] bool twoSided()const{ return m_twoSided; }
     // The dedicated refractive-caster classification flag (SEPARATE from `transparent`). The material decides only
@@ -311,6 +318,8 @@ private:
     StageShaderArray m_stageShaders;
     u32 m_stageShaderCount = 0;
     Core::Assets::AssetRef<Shader> m_avboitAccumulatePixelShader;
+    Core::Assets::AssetRef<Shader> m_avboitOccupancyPixelShader;
+    Core::Assets::AssetRef<Shader> m_avboitExtinctionPixelShader;
     bool m_transparent = false;
     bool m_twoSided = false;
     bool m_refractive = false;

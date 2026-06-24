@@ -80,18 +80,12 @@ void main(inout NwbShadowOcclusionPayload payload, in BuiltInTriangleIntersectio
         hit.worldPosition = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
         hit.rayDirection = WorldRayDirection();
 
-        // Resolve the hit's full surface, then fold its per-occluder transmittance into the running transmittance.
-        // A `refractive` occluder (instance record FLAG_REFRACTIVE) applies engine-generic Fresnel + Beer-Lambert
-        // physics over the surface-supplied ior/thickness/transmission; a non-refractive occluder uses the flat
-        // colored-shadow tint exactly as before. Same flag accessor + math as the software traversal.
-        const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
-        float3 occluderTransmittance;
-        if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u)
-            occluderTransmittance = nwbShadowRefractiveTransmittance(surface.ior, surface.thickness, surface.transmission, hit.rayDirection, hit.worldNormal);
-        else
-            occluderTransmittance = surface.transmittance;
-
-        payload.transmittance *= occluderTransmittance;
+        // Fold this occluder's per-hit transmittance into the running transmittance the ONE unified way: the
+        // material's surface hook (routed by shadowTransmittanceModelId) always produces the final transmittance.
+        // A refractive material's hook computes it by calling the engine helper nwbShadowRefractiveTransmittance(...)
+        // itself; a plain material returns its tint. The engine never branches on a refractive flag here -- it just
+        // multiplies. Same dispatch + math as the software traversal.
+        payload.transmittance *= nwbShadowDispatchTransmittance(material.shadowTransmittanceModelId, hit);
         if(max(max(payload.transmittance.x, payload.transmittance.y), payload.transmittance.z) < NWB_SHADOW_RT_TRANSMITTANCE_EPSILON){
             payload.transmittance = float3(0.0, 0.0, 0.0);
             AcceptHitAndEndSearch();

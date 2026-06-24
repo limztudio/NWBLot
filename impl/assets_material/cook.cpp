@@ -2160,9 +2160,10 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
     // first id's `using`, so the shared-interface case keeps working. The surface hook itself is still renamed to
     // a unique per-id name (nwbShadowSurfaceModel<id>) so multiple hooks coexist; the wrapper sets the trace
     // material context from the hit + loads the surface-input statics (inlining nwbMaterialSurfaceAt) before
-    // invoking the renamed hook, then returns the hook's full NwbMeshSurface (the engine reads transmittance for a
-    // non-refractive occluder, or ior/thickness/transmission for the Fresnel/Beer-Lambert physics gated by the
-    // instance record's FLAG_REFRACTIVE bit).
+    // invoking the renamed hook, then returns the hook's final transmittance (NwbMeshSurface.transmittance). The
+    // transmittance application is unified: the hook always owns the value -- a refractive material's hook computes
+    // it by calling the engine helper nwbShadowRefractiveTransmittance(...) itself; a plain material returns its
+    // tint -- and the engine multiplies it ONE way, with no refractive branch in the trace.
     for(usize id = 0u; id < surfaceById.size(); ++id){
         if(surfaceById[id].empty())
             continue;
@@ -2189,7 +2190,7 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
         source += "\"\n#undef ";
         source += s_ShadowTransmittanceSurfaceMacro;
         source += "\n";
-        source += "NwbMeshSurface ";
+        source += "float3 ";
         source += s_ShadowTransmittanceWrapperPrefix;
         source += idView;
         source += "(NwbShadowHit hit){\n";
@@ -2199,11 +2200,11 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
         source += "    return ";
         source += s_ShadowTransmittanceModelPrefix;
         source += idView;
-        source += "();\n";
+        source += "().transmittance;\n";
         source += "}\n\n";
     }
 
-    source += "NwbMeshSurface nwbShadowDispatchSurface(uint shadingModel, NwbShadowHit hit){\n";
+    source += "float3 nwbShadowDispatchTransmittance(uint shadingModel, NwbShadowHit hit){\n";
     source += "    switch(shadingModel){\n";
     for(usize id = 0u; id < surfaceById.size(); ++id){
         if(surfaceById[id].empty())
@@ -2218,9 +2219,9 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
         source += idView;
         source += "(hit);\n";
     }
-    // Unknown id: a fully-transmissive neutral surface -- transmittance float3(1) (no shadow), ior 1, thickness 0,
-    // transmission float3(1) -- so a no-match occluder behaves as the prior untinted/all-light default.
-    source += "    default: return nwbMakeMeshSurface(float3(0.0, 0.0, 0.0), hit.worldNormal, 0.0, 0.0, float3(1.0, 1.0, 1.0));\n";
+    // Unknown id: fully transmissive (float3(1)) -- a no-match occluder behaves as the prior untinted/all-light
+    // default.
+    source += "    default: return float3(1.0, 1.0, 1.0);\n";
     source += "    }\n";
     source += "}\n\n#endif\n";
 
@@ -2304,7 +2305,6 @@ static bool EmitMaterialPixelShadersImpl(
         // The generated pixel shader: engine PS authoring + this material's typed .bind (by interface virtual
         // path) + its resolved surface hook (by absolute path). Mesh stage is the shared engine mesh shader.
         CookString generatedSource(arena);
-        generatedSource += "// limztudio@gmail.com\n";
         generatedSource += "// Generated per-material G-buffer pixel shader: engine pixel-shader authoring + this material's\n";
         generatedSource += "// typed .bind + its surface hook. The material declares only its 'surface' fragment; the cook\n";
         generatedSource += "// assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
@@ -2377,10 +2377,23 @@ static bool EmitMaterialPixelShadersImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool EmitMaterialAvboitAccumulatePixelShadersImpl(
+// Shared body for the three per-material AVBOIT pass-PS generators (accumulate / occupancy / extinction). All three
+// generate ONE PS per TRANSPARENT `surface`-authored material that includes the engine pass-authoring header + the
+// material's typed .bind + its resolved surface hook, so all three read this material's SAME shader-decided
+// surface.alpha. They differ only in the generated-directory leaf, the included authoring header, the log label,
+// the generated-name prefix, and which entry name field records the identity -- threaded through here. Unlike the
+// G-buffer PS these are NOT material stage shaders; the renderer derives each PS's identity from the material name
+// + the matching prefix to bind it for the transparent draw. Opaque materials + transparent materials with explicit
+// `shaders` are skipped (the latter fall back to the fixed pass PS).
+static bool EmitMaterialAvboitPassPixelShadersImpl(
     CookArena& arena,
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
+    const AStringView generatedDirectoryLeaf,
+    const AStringView authoringHeaderInclude,
+    const AStringView passLabel,
+    const AStringView generatedNamePrefix,
+    MaterialCookString MaterialCookEntry::* entryShaderNameField,
     CookVector<MaterialCookEntry>& materialEntries,
     CookVector<GeneratedMaterialPixelShader>& outGenerated,
     ScratchArena& scratchArena
@@ -2388,43 +2401,41 @@ static bool EmitMaterialAvboitAccumulatePixelShadersImpl(
     outGenerated.clear();
 
     ScratchString configurationName(configurationSafeName, scratchArena);
-    const Path generatedRoot = cacheDirectory / configurationName.c_str() / "generated" / "material_avboit_accumulate_pixel_shaders";
+    const Path generatedRoot = cacheDirectory / configurationName.c_str() / "generated" / ScratchString(generatedDirectoryLeaf, scratchArena).c_str();
     ErrorCode errorCode;
     if(!RemoveAllIfExists(generatedRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT accumulate pixel shader generation: failed to clear generated directory '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to clear generated directory '{}': {}")
+            , StringConvert(passLabel)
             , PathToString<tchar>(generatedRoot)
             , StringConvert(errorCode.message())
         );
         return false;
     }
 
-    // The transparent-pass twin of EmitMaterialPixelShadersImpl: generate the per-material AVBOIT accumulate
-    // pixel shader (engine AVBOIT-accumulate authoring + this material's typed .bind + its surface hook) for each
-    // TRANSPARENT material authored with a `surface`. Unlike the G-buffer PS, this is NOT a material stage shader
-    // (the material has a single pixel stage, the G-buffer PS); the renderer derives this PS's identity from the
-    // material name + the shared accumulate-PS prefix to bind it for the transparent draw. Opaque materials +
-    // transparent materials with explicit `shaders` are skipped (the latter fall back to the fixed accumulate PS).
     for(MaterialCookEntry& entry : materialEntries){
         if(!entry.transparent)
             continue;
         if(entry.surfaceSource.empty())
             continue;
         if(!entry.materialInterface){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: transparent material '{}' needs an interface to generate its AVBOIT accumulate pixel shader")
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: transparent material '{}' needs an interface to generate its AVBOIT {} pixel shader")
                 , StringConvert(entry.virtualPath.c_str())
+                , StringConvert(passLabel)
             );
             return false;
         }
 
-        // The generated accumulate pixel shader: engine AVBOIT-accumulate authoring + this material's typed
-        // .bind (by interface virtual path) + its resolved surface hook (by absolute path) -- the same .bind +
-        // .surface pair the G-buffer PS uses, so the transparent shaded color matches the opaque one.
+        // The generated pass pixel shader: engine AVBOIT pass authoring + this material's typed .bind (by interface
+        // virtual path) + its resolved surface hook (by absolute path) -- the same .bind + .surface pair the
+        // G-buffer PS uses, so the transparent pass reads the material's own shader-decided surface.alpha.
         CookString generatedSource(arena);
         generatedSource += "// limztudio@gmail.com\n";
-        generatedSource += "// Generated per-material AVBOIT accumulate pixel shader: engine AVBOIT-accumulate authoring + this\n";
-        generatedSource += "// material's typed .bind + its surface hook. The material declares only its 'surface' fragment; the\n";
-        generatedSource += "// cook assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
-        generatedSource += "#include \"avboit/accumulate_ps_authoring.slangi\"\n";
+        generatedSource += "// Generated per-material AVBOIT pass pixel shader: engine AVBOIT pass authoring + this material's\n";
+        generatedSource += "// typed .bind + its surface hook. The material declares only its 'surface' fragment; the cook\n";
+        generatedSource += "// assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
+        generatedSource += "#include \"";
+        generatedSource += authoringHeaderInclude;
+        generatedSource += "\"\n";
         generatedSource += "#include \"";
         generatedSource += entry.materialInterface.c_str();
         generatedSource += ".bind\"\n";
@@ -2438,21 +2449,23 @@ static bool EmitMaterialAvboitAccumulatePixelShadersImpl(
         const Path outputPath = generatedRoot / relativeFile.c_str();
         errorCode.clear();
         if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT accumulate pixel shader generation: failed to create generated parent '{}': {}")
+            NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to create generated parent '{}': {}")
+                , StringConvert(passLabel)
                 , PathToString<tchar>(outputPath.parent_path())
                 , StringConvert(errorCode.message())
             );
             return false;
         }
         if(!WriteTextFile(outputPath, AStringView(generatedSource))){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT accumulate pixel shader generation: failed to write generated pixel shader '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to write generated pixel shader '{}'")
+                , StringConvert(passLabel)
                 , PathToString<tchar>(outputPath)
             );
             return false;
         }
 
         GeneratedMaterialPixelShader generated(arena);
-        generated.name += AssetsGraphicsAvboit::s_AccumulatePixelShaderGeneratedPrefix;
+        generated.name += generatedNamePrefix;
         generated.name += entry.virtualPath.c_str();
         {
             ScratchString sourceText = PathToString(scratchArena, outputPath);
@@ -2465,7 +2478,8 @@ static bool EmitMaterialAvboitAccumulatePixelShadersImpl(
 
         const Name pixelShaderName = ToName(AStringView(generated.name));
         if(!pixelShaderName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: generated AVBOIT accumulate pixel shader name is invalid for material '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: generated AVBOIT {} pixel shader name is invalid for material '{}'")
+                , StringConvert(passLabel)
                 , StringConvert(entry.virtualPath.c_str())
             );
             return false;
@@ -2473,12 +2487,81 @@ static bool EmitMaterialAvboitAccumulatePixelShadersImpl(
 
         // Record the generated PS identity so the CSG clip-variant collector can give it AVBOIT CSG clip variants
         // and the renderer can bind it for the transparent draw, both keyed by the SAME name.
-        entry.avboitAccumulatePixelShaderName.assign(AStringView(generated.name));
+        (entry.*entryShaderNameField).assign(AStringView(generated.name));
 
         outGenerated.push_back(Move(generated));
     }
 
     return true;
+}
+
+static bool EmitMaterialAvboitAccumulatePixelShadersImpl(
+    CookArena& arena,
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    CookVector<MaterialCookEntry>& materialEntries,
+    CookVector<GeneratedMaterialPixelShader>& outGenerated,
+    ScratchArena& scratchArena
+){
+    return EmitMaterialAvboitPassPixelShadersImpl(
+        arena,
+        cacheDirectory,
+        configurationSafeName,
+        AStringView("material_avboit_accumulate_pixel_shaders"),
+        AStringView("avboit/accumulate_ps_authoring.slangi"),
+        AStringView("accumulate"),
+        AssetsGraphicsAvboit::s_AccumulatePixelShaderGeneratedPrefix,
+        &MaterialCookEntry::avboitAccumulatePixelShaderName,
+        materialEntries,
+        outGenerated,
+        scratchArena
+    );
+}
+
+static bool EmitMaterialAvboitOccupancyPixelShadersImpl(
+    CookArena& arena,
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    CookVector<MaterialCookEntry>& materialEntries,
+    CookVector<GeneratedMaterialPixelShader>& outGenerated,
+    ScratchArena& scratchArena
+){
+    return EmitMaterialAvboitPassPixelShadersImpl(
+        arena,
+        cacheDirectory,
+        configurationSafeName,
+        AStringView("material_avboit_occupancy_pixel_shaders"),
+        AStringView("avboit/occupancy_ps_authoring.slangi"),
+        AStringView("occupancy"),
+        AssetsGraphicsAvboit::s_OccupancyPixelShaderGeneratedPrefix,
+        &MaterialCookEntry::avboitOccupancyPixelShaderName,
+        materialEntries,
+        outGenerated,
+        scratchArena
+    );
+}
+
+static bool EmitMaterialAvboitExtinctionPixelShadersImpl(
+    CookArena& arena,
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    CookVector<MaterialCookEntry>& materialEntries,
+    CookVector<GeneratedMaterialPixelShader>& outGenerated,
+    ScratchArena& scratchArena
+){
+    return EmitMaterialAvboitPassPixelShadersImpl(
+        arena,
+        cacheDirectory,
+        configurationSafeName,
+        AStringView("material_avboit_extinction_pixel_shaders"),
+        AStringView("avboit/extinction_ps_authoring.slangi"),
+        AStringView("extinction"),
+        AssetsGraphicsAvboit::s_ExtinctionPixelShaderGeneratedPrefix,
+        &MaterialCookEntry::avboitExtinctionPixelShaderName,
+        materialEntries,
+        outGenerated,
+        scratchArena
+    );
 }
 
 
@@ -2602,6 +2685,30 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
         avboitAccumulatePixelShaderRef.virtualPath = avboitAccumulatePixelShaderName;
         outMaterial.setAvboitAccumulatePixelShader(avboitAccumulatePixelShaderRef);
     }
+    if(!materialEntry.avboitOccupancyPixelShaderName.empty()){
+        const Name avboitOccupancyPixelShaderName = ToName(AStringView(materialEntry.avboitOccupancyPixelShaderName));
+        if(!avboitOccupancyPixelShaderName){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT occupancy pixel shader name")
+                , StringConvert(materialEntry.virtualPath.c_str())
+            );
+            return false;
+        }
+        Core::Assets::AssetRef<Shader> avboitOccupancyPixelShaderRef;
+        avboitOccupancyPixelShaderRef.virtualPath = avboitOccupancyPixelShaderName;
+        outMaterial.setAvboitOccupancyPixelShader(avboitOccupancyPixelShaderRef);
+    }
+    if(!materialEntry.avboitExtinctionPixelShaderName.empty()){
+        const Name avboitExtinctionPixelShaderName = ToName(AStringView(materialEntry.avboitExtinctionPixelShaderName));
+        if(!avboitExtinctionPixelShaderName){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT extinction pixel shader name")
+                , StringConvert(materialEntry.virtualPath.c_str())
+            );
+            return false;
+        }
+        Core::Assets::AssetRef<Shader> avboitExtinctionPixelShaderRef;
+        avboitExtinctionPixelShaderRef.virtualPath = avboitExtinctionPixelShaderName;
+        outMaterial.setAvboitExtinctionPixelShader(avboitExtinctionPixelShaderRef);
+    }
     outMaterial.setTransparent(materialEntry.transparent);
     outMaterial.setTwoSided(materialEntry.twoSided);
     outMaterial.setRefractive(materialEntry.refractive);
@@ -2703,6 +2810,42 @@ bool EmitMaterialAvboitAccumulatePixelShaders(
     );
 }
 
+bool EmitMaterialAvboitOccupancyPixelShaders(
+    MaterialCookArena& arena,
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    MaterialCookVector<MaterialCookEntry>& materialEntries,
+    MaterialCookVector<GeneratedMaterialPixelShader>& outGenerated,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    return __hidden_cook::EmitMaterialAvboitOccupancyPixelShadersImpl(
+        arena,
+        cacheDirectory,
+        configurationSafeName,
+        materialEntries,
+        outGenerated,
+        scratchArena
+    );
+}
+
+bool EmitMaterialAvboitExtinctionPixelShaders(
+    MaterialCookArena& arena,
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    MaterialCookVector<MaterialCookEntry>& materialEntries,
+    MaterialCookVector<GeneratedMaterialPixelShader>& outGenerated,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    return __hidden_cook::EmitMaterialAvboitExtinctionPixelShadersImpl(
+        arena,
+        cacheDirectory,
+        configurationSafeName,
+        materialEntries,
+        outGenerated,
+        scratchArena
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2789,6 +2932,10 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // shadow transmittance model id
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // AVBOIT accumulate pixel shader presence flag
         && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash)) // optional AVBOIT accumulate pixel shader name
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // AVBOIT occupancy pixel shader presence flag
+        && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash)) // optional AVBOIT occupancy pixel shader name
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // AVBOIT extinction pixel shader presence flag
+        && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash)) // optional AVBOIT extinction pixel shader name
     ;
 
     outBinary.clear();
@@ -2856,16 +3003,22 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     AppendPOD(outBinary, material.shadingModelId());
     AppendPOD(outBinary, material.shadowTransmittanceModelId());
 
-    // Optional per-material AVBOIT accumulate pixel shader: a presence flag + the shader name hash, mirroring a
-    // stage-shader entry. Present only for a surface-authored transparent material; loadBinary reads it back.
-    const Core::Assets::AssetRef<Shader>& avboitAccumulatePixelShader = material.avboitAccumulatePixelShader();
-    if(avboitAccumulatePixelShader.valid()){
-        AppendPOD(outBinary, static_cast<u32>(1u));
-        AppendPOD(outBinary, avboitAccumulatePixelShader.name().hash());
-    }
-    else{
-        AppendPOD(outBinary, static_cast<u32>(0u));
-    }
+    // Optional per-material AVBOIT pass pixel shaders: accumulate, then occupancy, then extinction -- each a
+    // presence flag + the shader name hash, mirroring a stage-shader entry. Present only for a surface-authored
+    // transparent material; loadBinary reads them back in this order. All three carry the material's SAME
+    // shader-decided surface.alpha, so the renderer can bind a per-material PS for every AVBOIT pass.
+    const auto appendOptionalAvboitPixelShader = [&outBinary](const Core::Assets::AssetRef<Shader>& shaderRef){
+        if(shaderRef.valid()){
+            AppendPOD(outBinary, static_cast<u32>(1u));
+            AppendPOD(outBinary, shaderRef.name().hash());
+        }
+        else{
+            AppendPOD(outBinary, static_cast<u32>(0u));
+        }
+    };
+    appendOptionalAvboitPixelShader(material.avboitAccumulatePixelShader());
+    appendOptionalAvboitPixelShader(material.avboitOccupancyPixelShader());
+    appendOptionalAvboitPixelShader(material.avboitExtinctionPixelShader());
 
     return true;
 }

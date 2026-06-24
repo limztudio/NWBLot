@@ -21,9 +21,9 @@
 #define NWB_MESH_BINDING_INSTANCE NWB_SHADOW_RT_BINDING_MESH_INSTANCES
 
 // The shadow trace's material-constants context (NwbShadowHit + the per-invocation accessors + the surface
-// contract + the engine refraction physics nwbShadowRefractiveTransmittance) + the cook-generated per-hit surface
-// dispatch (nwbShadowDispatchSurface), which #includes each transparent material's .bind + .surface and routes by
-// shadowTransmittanceModelId.
+// contract + the engine refraction physics LIBRARY helper nwbShadowRefractiveTransmittance the hooks may call) +
+// the cook-generated per-hit transmittance dispatch (nwbShadowDispatchTransmittance), which #includes each
+// transparent material's .bind + .surface and routes by shadowTransmittanceModelId.
 #include "shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 

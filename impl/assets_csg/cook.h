@@ -36,7 +36,7 @@ namespace AssetsCsgCook{
 
 
 inline constexpr Name s_CsgShapeAssetTypeName("csg_shape");
-inline constexpr AStringView s_DefaultGeneratedIncludeDirectory = "csg/generated";
+inline constexpr AStringView s_DefaultGeneratedIncludeDirectory = "engine/csg/generated";
 
 using CookArena = Core::Alloc::GlobalArena;
 using CookString = AString<CookArena>;

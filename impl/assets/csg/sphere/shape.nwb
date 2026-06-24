@@ -2,5 +2,5 @@ csg_shape asset;
 
 asset.shape = "engine/csg/sphere";
 asset.module = "engine/csg/built_in";
-asset.module_include = "csg/generated/built_in.slangi";
-asset.eval = "csg/sphere/eval.slangi";
+asset.module_include = "engine/csg/generated/built_in.slangi";
+asset.eval = "engine/csg/sphere/eval.slangi";

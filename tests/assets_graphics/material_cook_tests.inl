@@ -20,7 +20,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
 
     const Path generatedIncludePath = root / "cache" / "tests" / "material_bind_includes" / "project" / "material_interfaces" / "test_surface.bind";
     const Path generatedCsgIncludeRoot = root / "cache" / "tests" / "csg_modules";
-    const Path generatedCsgBuiltInIncludePath = generatedCsgIncludeRoot / "csg" / "generated" / "built_in.slangi";
+    const Path generatedCsgBuiltInIncludePath = generatedCsgIncludeRoot / "engine" / "csg" / "generated" / "built_in.slangi";
     NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
     EXPECT_TRUE(ReadTextFile(generatedIncludePath, generatedSource));
     CheckGeneratedMaterialBindSource(AStringView(generatedSource.data(), generatedSource.size()));

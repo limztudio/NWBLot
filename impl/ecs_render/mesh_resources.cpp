@@ -369,8 +369,9 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
 
     // Flat per-vertex shadow-trace attribute buffer, positionStream-indexed in lockstep with the reconstructed
     // triangle index buffer above, so a trace can interpolate normal/uv0 with the SAME i0/i1/i2 it loads for
-    // positions. Both shadow backends read it as a ByteAddressBuffer (HW any-hit and the software fallback), so
-    // it carries a raw view; the structured stride also exposes a plain SRV. RT-only, gated on shadow tracing.
+    // positions. Built unconditionally alongside the index buffer (neither backend is known at mesh-creation
+    // time); both shadow backends read it as a ByteAddressBuffer (the HW any-hit and the software fallback), so
+    // it always carries a raw view; the structured stride also exposes a plain SRV.
     {
         const usize positionCount = mesh.positionStream().size();
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RayTracingAttributeArena, positionCount * sizeof(AttribGpu) + 4096u);

@@ -373,14 +373,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     );
     materialTypedRangeCache.reserve(rendererCapacity);
 
-    using MaterialTypedByteContentRangeMap = HashMap<
-        ECSRenderDetail::MaterialTypedByteContentKey,
-        ECSRenderDetail::MaterialTypedByteRange,
-        ECSRenderDetail::MaterialTypedByteContentKeyHasher,
-        EqualTo<ECSRenderDetail::MaterialTypedByteContentKey>,
-        Core::Alloc::ScratchArena
-    >;
-    MaterialTypedByteContentRangeMap mutableMaterialTypedRanges(
+    ECSRenderDetail::MaterialTypedByteContentRangeMap mutableMaterialTypedRanges(
         0,
         ECSRenderDetail::MaterialTypedByteContentKeyHasher(),
         EqualTo<ECSRenderDetail::MaterialTypedByteContentKey>(),

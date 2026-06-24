@@ -59,12 +59,19 @@ void main(inout NwbShadowOcclusionPayload payload, in BuiltInTriangleIntersectio
 
         // Evaluate this material's per-hit transmittance hook. The hook reads the interpolated normal/uv0 + the
         // material-constants context carried by the instance record; dispatched by shadowTransmittanceModelId.
+        // The interpolated normal is object space; transform it to world (the surface contract) with the inverse-
+        // transpose of object->world, which is the transpose of WorldToObject3x4() -- expressed as the row-vector
+        // product mul(objectNormal, (float3x3)WorldToObject3x4()) -- so a non-identity instance rotation/scale
+        // matches the rasterizer's world-space normal.
+        const float3 objectNormal = a0.normal * weights.x + a1.normal * weights.y + a2.normal * weights.z;
+        const float3 worldNormal = normalize(mul(objectNormal, (float3x3)WorldToObject3x4()));
+
         NwbShadowHit hit;
         hit.meshInstanceIndex = material.meshInstanceIndex;
         hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
         hit.materialConstantByteOffset = material.materialConstantByteOffset;
         hit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
-        hit.objectNormal = a0.normal * weights.x + a1.normal * weights.y + a2.normal * weights.z;
+        hit.worldNormal = worldNormal;
         hit.worldPosition = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
         hit.rayDirection = WorldRayDirection();
 

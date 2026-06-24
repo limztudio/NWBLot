@@ -5,7 +5,7 @@
 // Project deferred lighting BXDF: smooth diffuse + spec + rim (the engine's built-in whole-surface model,
 // offered to projects as a library). This file is pulled into the cook-generated deferred lighting dispatch
 // module, which #defines NWB_DEFERRED_BXDF_FUNCTION to this model's unique entry name before including it. The
-// deferred lighting framework (NwbBxdfSurface, the scene light list, nwbBxdfLightVisibility, the engine BRDF
+// deferred lighting framework (NwbBxdfSurface, the scene light list, nwbBxdfLightTransmittance, the engine BRDF
 // helpers) is already in scope; a BXDF does not include anything itself.
 float3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     return nwbSceneApplyLighting(

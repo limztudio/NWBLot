@@ -342,8 +342,22 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     // Per-instance occluder material, built lockstep with `instances` (one record per push, same order) so the
     // uploaded table indexes by the hardware InstanceID() the shadow any-hit reads.
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
+    // Shadow-OWNED combined material-constants context, built lockstep with `instances`: the per-occluder
+    // InstanceGpuData (g_NwbMeshInstances for the trace; index == InstanceID()) + the combined typed bytes
+    // (g_NwbMaterialTypedWords for the trace; each occluder's constant + mutable block). The draw pass's buffers
+    // hold only the opaque set at trace time, so the trace cannot use them -- see ensureShadowBindingSet.
+    InstanceGpuDataVector shadowInstanceData{ scratchArena };
+    MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
+    ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(
+        0,
+        ECSRenderDetail::MaterialTypedByteContentKeyHasher(),
+        EqualTo<ECSRenderDetail::MaterialTypedByteContentKey>(),
+        scratchArena
+    );
     instances.reserve(rendererView.candidateCount());
     instanceMaterials.reserve(rendererView.candidateCount());
+    shadowInstanceData.reserve(rendererView.candidateCount());
+    shadowMutableTypedRanges.reserve(rendererView.candidateCount());
 
     // Reset the per-frame distinct-mesh table; the gather repopulates it (slot k -> mesh k's index/attribute
     // buffers) for the per-mesh descriptor arrays the any-hit indexes by material.meshSlot.
@@ -397,7 +411,8 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         instanceDesc.setInstanceID(static_cast<u32>(instances.size()));
         instanceDesc.setInstanceMask(0xFFu);
 
-        if(const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity)){
+        const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+        if(transform){
             // Compose object->world (T * R(quat) * S) and store it as the instance's row-major 3x4 transform;
             // the engine's column-vector SIMDMatrix rows map directly onto AffineTransform (= Float34).
             const SIMDMatrix instanceWorld = MatrixAffineTransformation(
@@ -410,21 +425,34 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         }
 
         // Resolve the occluder material (transmittance-model id + transparent flag) + the per-mesh attribute slot
-        // + the material-constants context the any-hit's per-hit dispatch reads: the constant block lives in
-        // g_NwbMaterialTypedWords (the draw pass's typed buffer, bound to this pass) and the mutable storage offset
-        // is reached through g_NwbMeshInstances[meshInstanceIndex]. The draw pass and this builder walk the SAME
-        // world().view<RendererComponent>() in the SAME order with the same visibility filter, so the TLAS
-        // instance push index lines up with the draw pass's g_NwbMeshInstances index; the constant block is
-        // deduplicated per material, so a constant offset of 0 addresses the first material's block. An unresolved
-        // material falls back to a fully-opaque record so the instance still casts a (colorless) shadow.
+        // + the material-constants context the any-hit's per-hit dispatch reads. That context is packed into the
+        // SHADOW-OWNED combined buffers (NOT the draw pass's, which hold only one transparency class at trace
+        // time): appendShadowOccluderMaterialContext appends this occluder's constant block (its real byte offset
+        // -> materialConstantByteOffset) + its per-instance mutable block (offset packed into the InstanceGpuData
+        // pushed lockstep below). meshInstanceIndex == the combined-instance push index == InstanceID(). An
+        // unresolved material falls back to a fully-opaque record (still a colorless shadow) + a default instance.
         const u32 meshInstanceIndex = static_cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
+        InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(m_renderer.materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo))
-            instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, 0u, meshInstanceIndex);
+        if(m_renderer.materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo)){
+            u32 materialConstantByteOffset = 0u;
+            if(!m_renderer.materialSystem().appendShadowOccluderMaterialContext(
+                entity,
+                *materialInfo,
+                transform,
+                shadowMaterialTypedBytes,
+                shadowMutableTypedRanges,
+                shadowInstance,
+                materialConstantByteOffset
+            ))
+                return false;
+            instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
+        }
 
         instances.push_back(instanceDesc);
         instanceMaterials.push_back(instanceMaterial);
+        shadowInstanceData.push_back(shadowInstance);
     }
 
     if(instances.empty()){
@@ -474,6 +502,13 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     commandList.writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
     commandList.setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
+
+    // Upload the shadow-owned combined material-constants context the any-hit's per-hit transmittance dispatch
+    // reads. A word of padding keeps the typed buffer valid when no occluder contributed any typed bytes.
+    if(shadowMaterialTypedBytes.empty())
+        shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
+    if(!uploadShadowMaterialContextBuffers(commandList, shadowInstanceData, shadowMaterialTypedBytes))
+        return false;
     return true;
 }
 
@@ -499,11 +534,25 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     // Per-instance occluder material, built lockstep with `instances` (same push order) so the uploaded table
     // indexes by the scene-BVH leaf instance index the software traversal reads.
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
+    // Shadow-OWNED combined material-constants context, built lockstep with `instances` (see buildSceneTlas): the
+    // per-occluder InstanceGpuData (g_NwbMeshInstances for the trace) + the combined typed bytes
+    // (g_NwbMaterialTypedWords for the trace). The draw pass's buffers hold only one transparency class at trace
+    // time, so the software traversal binds these instead -- see ensureSwShadowBindingSet.
+    InstanceGpuDataVector shadowInstanceData{ scratchArena };
+    MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
+    ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(
+        0,
+        ECSRenderDetail::MaterialTypedByteContentKeyHasher(),
+        EqualTo<ECSRenderDetail::MaterialTypedByteContentKey>(),
+        scratchArena
+    );
     instances.reserve(candidateCount);
     instanceAabbMin.reserve(candidateCount);
     instanceAabbMax.reserve(candidateCount);
     instanceCentroid.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
+    shadowInstanceData.reserve(candidateCount);
+    shadowMutableTypedRanges.reserve(candidateCount);
 
     // Reset the per-frame distinct-mesh table; the gather repopulates it (slot k -> mesh k's buffers) for the
     // per-mesh descriptor arrays the traversal binds.
@@ -557,8 +606,9 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         }
 
         // object->world from the decomposed transform (identity when absent), matching buildSceneTlas.
+        const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         SIMDMatrix objectToWorld = MatrixIdentity();
-        if(const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity)){
+        if(transform){
             objectToWorld = MatrixAffineTransformation(
                 LoadFloat(transform->scale),
                 VectorZero(),
@@ -594,25 +644,38 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         instance.primitiveCount = mesh->meshletPrimitiveIndexCount / 3u;
 
         // Resolve the occluder material (transmittance-model id + transparent flag) + the material-constants
-        // context the surface hook reads in the trace: the constant block lives in g_NwbMaterialTypedWords (the
-        // draw pass's typed buffer, bound to this pass) and the mutable storage offset is reached through
-        // g_NwbMeshInstances[meshInstanceIndex]. The draw pass and this builder walk the SAME
-        // world().view<RendererComponent>() in the SAME order with the same visibility filter, so the
-        // scene-BVH instance push index lines up with the draw pass's g_NwbMeshInstances index for a scene whose
-        // visible renderables all flow through one pass; the constant block is deduplicated per material, so id 0
-        // (a constant offset of 0) addresses the first material's block. An unresolved material falls back to a
-        // fully-opaque record so the instance still casts a (colorless) shadow.
+        // context the surface hook reads in the trace. That context is packed into the SHADOW-OWNED combined
+        // buffers (NOT the draw pass's, which hold only one transparency class at trace time):
+        // appendShadowOccluderMaterialContext appends this occluder's constant block (real byte offset ->
+        // materialConstantByteOffset) + its per-instance mutable block (offset packed into the InstanceGpuData
+        // pushed lockstep below). meshInstanceIndex == the combined-instance push index == the scene-BVH leaf
+        // index the traversal reads. An unresolved material falls back to a fully-opaque record (still a colorless
+        // shadow) + a default instance.
         const u32 meshInstanceIndex = static_cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
+        InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(m_renderer.materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo))
-            instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, 0u, meshInstanceIndex);
+        if(m_renderer.materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo)){
+            u32 materialConstantByteOffset = 0u;
+            if(!m_renderer.materialSystem().appendShadowOccluderMaterialContext(
+                entity,
+                *materialInfo,
+                transform,
+                shadowMaterialTypedBytes,
+                shadowMutableTypedRanges,
+                shadowInstance,
+                materialConstantByteOffset
+            ))
+                return false;
+            instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
+        }
 
         instances.push_back(instance);
         instanceAabbMin.push_back(worldMin);
         instanceAabbMax.push_back(worldMax);
         instanceCentroid.push_back(VectorScale(VectorAdd(worldMin, worldMax), 0.5f));
         instanceMaterials.push_back(instanceMaterial);
+        shadowInstanceData.push_back(shadowInstance);
     }
 
     const u32 instanceCount = static_cast<u32>(instances.size());
@@ -666,6 +729,13 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     commandList.setBufferState(instanceBuffer, Core::ResourceStates::ShaderResource);
     commandList.setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
+
+    // Upload the shadow-owned combined material-constants context the software traversal's per-hit transmittance
+    // dispatch reads. A word of padding keeps the typed buffer valid when no occluder contributed any typed bytes.
+    if(shadowMaterialTypedBytes.empty())
+        shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
+    if(!uploadShadowMaterialContextBuffers(commandList, shadowInstanceData, shadowMaterialTypedBytes))
+        return false;
 
     rayTracingState().m_sceneBvhInstanceCount = instanceCount;
     return true;
@@ -745,15 +815,15 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
 
     // The per-mesh index/attribute byte buffers the any-hit reads were last touched as accel-struct build inputs
     // (positions/indices) or are otherwise resident; move each distinct mesh's index + attribute buffers to
-    // ShaderResource for the per-hit transmittance dispatch, alongside the draw pass's material-context buffers
-    // (uploaded earlier this frame). setResourceStatesForBindingSet then derives the rest (TLAS read, G-buffer
-    // SRVs, scene/light buffers, the visibility UAV).
+    // ShaderResource for the per-hit transmittance dispatch, alongside the shadow-owned material-context buffers
+    // (built + uploaded by buildSceneTlas on the shadow-prepare command list). setResourceStatesForBindingSet
+    // then derives the rest (TLAS read, G-buffer SRVs, scene/light buffers, the visibility UAV).
     for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
         commandList.setBufferState(rayTracingState().m_shadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
     }
-    commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setResourceStatesForBindingSet(rayTracingState().m_shadowBindingSet.get());
     commandList.commitBarriers();
 
@@ -807,10 +877,11 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         commandList.setBufferState(rayTracingState().m_swShadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_swShadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
     }
-    // The per-hit transmittance dispatch reads the draw pass's material-context buffers (uploaded earlier this
-    // frame as shader resources); move them explicitly alongside the per-mesh geometry before traversal.
-    commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    // The per-hit transmittance dispatch reads the shadow-owned material-context buffers (built + uploaded by
+    // buildSceneSwBvh on the shadow-prepare command list); move them explicitly alongside the per-mesh geometry
+    // before traversal.
+    commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setResourceStatesForBindingSet(rayTracingState().m_swShadowBindingSet.get());
     commandList.commitBarriers();
 
@@ -1025,21 +1096,22 @@ bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targ
     NWB_ASSERT(targets.shadowVisibility);
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
     NWB_ASSERT(deferredState().m_lightBuffer);
-    // The material-constants context the per-hit transmittance dispatch reads is the SAME pair of buffers the
-    // rasterizer binds (g_NwbMaterialTypedWords + g_NwbMeshInstances). prepareMaterialPassResources reserves both
-    // earlier in this frame's prepare phase (before this pass), so the handles are resident here.
-    NWB_ASSERT(drawState().m_materialTypedBuffer);
-    NWB_ASSERT(drawState().m_instanceBuffer);
+    // The material-constants context the per-hit transmittance dispatch reads (g_NwbMaterialTypedWords +
+    // g_NwbMeshInstances) is the SHADOW-OWNED combined pair built by buildSceneTlas over ALL gathered occluders,
+    // NOT the draw pass's buffers (those hold only the opaque set at trace time, so the transparent occluders'
+    // tint/constants would be absent). buildSceneTlas uploads both before this binding set is created.
+    NWB_ASSERT(rayTracingState().m_shadowMaterialTypedBuffer);
+    NWB_ASSERT(rayTracingState().m_shadowInstanceBuffer);
 
     // Rebuild when any binding input that can change without a full invalidate changes: the TLAS (recreated when
     // the live instance count outgrows its capacity), the instance-material table, the distinct-mesh count (the
-    // per-mesh descriptor arrays repopulate when the set of traced meshes changes), and the draw-pass
+    // per-mesh descriptor arrays repopulate when the set of traced meshes changes), and the shadow-owned
     // material-context buffers (recreated when they outgrow their capacity). A resize resets the set via
     // resetDeferredFrameTargets, so the target inputs need no separate key.
     const Core::RayTracingAccelStruct* tlas = rayTracingState().m_tlas.get();
     const Core::Buffer* instanceMaterialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-    Core::Buffer* materialTypedBuffer = drawState().m_materialTypedBuffer.get();
-    Core::Buffer* meshInstanceBuffer = drawState().m_instanceBuffer.get();
+    Core::Buffer* materialTypedBuffer = rayTracingState().m_shadowMaterialTypedBuffer.get();
+    Core::Buffer* meshInstanceBuffer = rayTracingState().m_shadowInstanceBuffer.get();
     const u32 meshCount = rayTracingState().m_shadowMeshCount;
     if(
         rayTracingState().m_shadowBindingSet
@@ -1184,22 +1256,23 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
     NWB_ASSERT(targets.shadowVisibility);
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
     NWB_ASSERT(deferredState().m_lightBuffer);
-    // The material-constants context the per-hit transmittance dispatch reads is the SAME pair of buffers the
-    // rasterizer binds (g_NwbMaterialTypedWords + g_NwbMeshInstances). prepareMaterialPassResources reserves both
-    // earlier in this frame's prepare phase (before this pass), so the handles are resident here.
-    NWB_ASSERT(drawState().m_materialTypedBuffer);
-    NWB_ASSERT(drawState().m_instanceBuffer);
+    // The material-constants context the per-hit transmittance dispatch reads (g_NwbMaterialTypedWords +
+    // g_NwbMeshInstances) is the SHADOW-OWNED combined pair built by buildSceneSwBvh over ALL gathered occluders,
+    // NOT the draw pass's buffers (those hold only one transparency class at trace time). buildSceneSwBvh uploads
+    // both before this binding set is created.
+    NWB_ASSERT(rayTracingState().m_shadowMaterialTypedBuffer);
+    NWB_ASSERT(rayTracingState().m_shadowInstanceBuffer);
 
     // Rebuild when any binding input that can change without a full invalidate changes: the scene node /
     // instance buffers (recreated when they outgrow their capacity), the visibility target (recreated on
     // resize, which also resets this set via resetDeferredFrameTargets), the distinct-mesh count (the per-mesh
-    // descriptor arrays repopulate when the set of traced meshes changes), and the draw-pass material-context
+    // descriptor arrays repopulate when the set of traced meshes changes), and the shadow-owned material-context
     // buffers (recreated when they outgrow their capacity).
     Core::Buffer* sceneNodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
     Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
     Core::Buffer* instanceMaterialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-    Core::Buffer* materialTypedBuffer = drawState().m_materialTypedBuffer.get();
-    Core::Buffer* meshInstanceBuffer = drawState().m_instanceBuffer.get();
+    Core::Buffer* materialTypedBuffer = rayTracingState().m_shadowMaterialTypedBuffer.get();
+    Core::Buffer* meshInstanceBuffer = rayTracingState().m_shadowInstanceBuffer.get();
     const Core::Texture* visibilityTarget = targets.shadowVisibility.get();
     const u32 meshCount = rayTracingState().m_swShadowMeshCount;
     if(
@@ -1918,6 +1991,91 @@ bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instance
         return false;
     }
     rayTracingState().m_shadowInstanceMaterialCapacity = capacity;
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceCount){
+    // Shadow-owned combined instance buffer (g_NwbMeshInstances for the trace): InstanceGpuData per occluder,
+    // structured SRV, grows by doubling like the draw pass's instance buffer. Built each frame over ALL gathered
+    // occluders so the trace's surface hook can resolve the mutable storage offset that lives in translation.w.
+    if(instanceCount == 0u)
+        return true;
+    if(rayTracingState().m_shadowInstanceBuffer && rayTracingState().m_shadowInstanceCapacity >= instanceCount)
+        return true;
+
+    const usize capacity = ECSRenderDetail::NextGrowingCapacity(rayTracingState().m_shadowInstanceCapacity, instanceCount);
+    Core::BufferDesc instanceBufferDesc;
+    instanceBufferDesc
+        .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
+        .setStructStride(sizeof(InstanceGpuData))
+        .setDebugName(Name("shadow_instance_context"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    rayTracingState().m_shadowInstanceBuffer = graphics().createBuffer(instanceBufferDesc);
+    if(!rayTracingState().m_shadowInstanceBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow instance context buffer"));
+        return false;
+    }
+    rayTracingState().m_shadowInstanceCapacity = capacity;
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
+    // Shadow-owned combined material-typed buffer (g_NwbMaterialTypedWords for the trace): each occluder's
+    // constant + mutable typed blocks, word-strided structured SRV, grows by doubling like the draw pass's typed
+    // buffer. Always at least one word so the binding is valid even with no transparent occluders.
+    usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
+    requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));
+    if(rayTracingState().m_shadowMaterialTypedBuffer && rayTracingState().m_shadowMaterialTypedCapacity >= requiredByteCount)
+        return true;
+
+    const usize capacity = ECSRenderDetail::NextGrowingCapacity(rayTracingState().m_shadowMaterialTypedCapacity, requiredByteCount);
+    Core::BufferDesc materialTypedBufferDesc;
+    materialTypedBufferDesc
+        .setByteSize(static_cast<u64>(capacity))
+        .setStructStride(sizeof(u32))
+        .setDebugName(Name("shadow_material_typed"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    rayTracingState().m_shadowMaterialTypedBuffer = graphics().createBuffer(materialTypedBufferDesc);
+    if(!rayTracingState().m_shadowMaterialTypedBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow material typed buffer"));
+        return false;
+    }
+    rayTracingState().m_shadowMaterialTypedCapacity = capacity;
+    return true;
+}
+
+bool RendererRayTracingSystem::uploadShadowMaterialContextBuffers(
+    Core::CommandList& commandList,
+    const InstanceGpuDataVector& instanceData,
+    const MaterialTypedByteDataVector& materialTypedBytes
+){
+    // The combined typed buffer always has content (at minimum the padded word reserved below) so the trace's
+    // material-context binding is always valid; the instance buffer may be empty only when no occluder resolved a
+    // material, in which case the trace never indexes it (no transparent hit dispatches).
+    usize uploadBytes = 0u;
+    if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadBytes))
+        return false;
+
+    if(!ensureShadowInstanceContextBuffer(instanceData.size()) || !ensureShadowMaterialTypedBuffer(uploadBytes))
+        return false;
+
+    if(!instanceData.empty()){
+        Core::Buffer* instanceBuffer = rayTracingState().m_shadowInstanceBuffer.get();
+        commandList.setBufferState(instanceBuffer, Core::ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.writeBuffer(instanceBuffer, instanceData.data(), instanceData.size() * sizeof(InstanceGpuData));
+        commandList.setBufferState(instanceBuffer, Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
+    }
+
+    Core::Buffer* materialTypedBuffer = rayTracingState().m_shadowMaterialTypedBuffer.get();
+    commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(materialTypedBuffer, materialTypedBytes.data(), uploadBytes);
+    commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::ShaderResource);
+    commandList.commitBarriers();
     return true;
 }
 

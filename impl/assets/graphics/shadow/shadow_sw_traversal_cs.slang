@@ -139,6 +139,20 @@ float3 nwbSwShadowTransformVector(const NwbSwShadowInstance instance, const floa
     );
 }
 
+// Transforms an object-space normal to world space for the surface hook (the contract NwbMeshSurface.normal +
+// the rasterizer both use world space). The normal transform is the inverse-transpose of object->world, which is
+// the transpose of the world->object rotation carried in the instance rows; that transpose's i-th component is
+// the dot of object normal with the i-th COLUMN of the world->object 3x3 (the i-th components of the three rows).
+// Normalized so a hook reading the normal sees a unit vector even under non-uniform instance scale.
+float3 nwbSwShadowTransformNormal(const NwbSwShadowInstance instance, const float3 objectNormal){
+    const float3 worldNormal = float3(
+        dot(float3(instance.worldToObjectRow0.x, instance.worldToObjectRow1.x, instance.worldToObjectRow2.x), objectNormal),
+        dot(float3(instance.worldToObjectRow0.y, instance.worldToObjectRow1.y, instance.worldToObjectRow2.y), objectNormal),
+        dot(float3(instance.worldToObjectRow0.z, instance.worldToObjectRow1.z, instance.worldToObjectRow2.z), objectNormal)
+    );
+    return normalize(worldNormal);
+}
+
 // Result of a ray/triangle test: whether the ray crossed the triangle inside (tMin, tMax) + the hit's
 // barycentrics. (u, v) are the Moeller-Trumbore parameters (weights of v1, v2); w = 1 - u - v is v0's weight, so
 // an attribute interpolates as a*w + b*u + c*v. t is the world/object ray parameter at the hit.
@@ -257,12 +271,17 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 const NwbSwShadowVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(meshIndex, i1);
                 const NwbSwShadowVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(meshIndex, i2);
 
+                // Interpolate the object-space normal, then transform it to world space (the surface contract) with
+                // the inverse-transpose of object->world carried in the instance's world->object rows, so a
+                // non-identity instance rotation/scale matches the rasterizer's world-space normal.
+                const float3 objectNormal = a0.normal * triangleHit.w + a1.normal * triangleHit.u + a2.normal * triangleHit.v;
+
                 NwbShadowHit hit;
                 hit.meshInstanceIndex = material.meshInstanceIndex;
                 hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
                 hit.materialConstantByteOffset = material.materialConstantByteOffset;
                 hit.uv0 = a0.uv0 * triangleHit.w + a1.uv0 * triangleHit.u + a2.uv0 * triangleHit.v;
-                hit.objectNormal = a0.normal * triangleHit.w + a1.normal * triangleHit.u + a2.normal * triangleHit.v;
+                hit.worldNormal = nwbSwShadowTransformNormal(instance, objectNormal);
                 hit.worldPosition = worldOrigin + worldDirection * triangleHit.t;
                 hit.rayDirection = worldDirection;
 

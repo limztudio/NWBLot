@@ -1789,6 +1789,13 @@ static constexpr AStringView s_DeferredBxdfFunctionMacro = "NWB_DEFERRED_BXDF_FU
 static constexpr AStringView s_DeferredBxdfModelPrefix = "nwbDeferredBxdfModel";
 static constexpr AStringView s_DeferredBxdfModuleSubPath = "deferred/generated/bxdf_dispatch.slangi";
 
+// Sentinel shadow-transmittance id for a material that contributes NO surface hook (it declares explicit
+// `shaders` instead of a `.surface`). The dense surface-authored ids start at 0, so a surface-less material must
+// NOT reuse 0 (that aliases the first real surface hook). This reserved id is never emitted as a `case` in the
+// generated dispatch switch, so a hit on such an occluder falls through to `default: return float3(1)` -- the
+// occluder passes all light untinted, the only correct behavior for a material with no transmittance hook.
+static constexpr u32 s_ShadowTransmittanceNoSurfaceModelId = Limit<u32>::s_Max;
+
 static bool AssignMaterialShadingModelIdsImpl(
     CookVector<MaterialCookEntry>& materialEntries,
     ScratchArena& scratchArena
@@ -1835,7 +1842,9 @@ static bool AssignMaterialShadingModelIdsImpl(
 
     // Assign each material a separate shadow-transmittance id deduped over the unique `.surface` sources (the
     // surface hook computes the per-hit transmittance the shadow trace returns). A material that declares
-    // explicit `shaders` instead of a `surface` keeps id 0 (it never contributes a transmittance hook).
+    // explicit `shaders` instead of a `surface` gets the reserved no-surface sentinel id (NOT 0, which is the
+    // first real surface hook); the generated dispatch routes that sentinel to its `default` -> float3(1), so a
+    // transparent surface-less occluder passes all light untinted instead of evaluating an unrelated material.
     Vector<AStringView, ScratchArena> uniqueSurfaces(scratchArena);
     uniqueSurfaces.reserve(materialEntries.size());
     for(const MaterialCookEntry& entry : materialEntries){
@@ -1857,7 +1866,7 @@ static bool AssignMaterialShadingModelIdsImpl(
 
     for(MaterialCookEntry& entry : materialEntries){
         if(entry.surfaceSource.empty()){
-            entry.shadowTransmittanceModelId = 0u;
+            entry.shadowTransmittanceModelId = s_ShadowTransmittanceNoSurfaceModelId;
             continue;
         }
 
@@ -2018,6 +2027,10 @@ static bool EmitDeferredBxdfDispatchModuleImpl(
 static constexpr AStringView s_ShadowTransmittanceSurfaceMacro = "nwbMaterialSurface";
 static constexpr AStringView s_ShadowTransmittanceModelPrefix = "nwbShadowSurfaceModel";
 static constexpr AStringView s_ShadowTransmittanceWrapperPrefix = "nwbShadowTransmittanceModel";
+// Per-id Slang namespace that isolates each material's `.bind` file-scope symbols in the dispatch module (the one
+// TU that concatenates multiple `.bind` files) so distinct interfaces' fixed-named layout constants/structs/
+// accessors do not collide; a `using namespace` then exposes them to the global-scope surface hook.
+static constexpr AStringView s_ShadowTransmittanceBindNamespacePrefix = "nwbShadowBindModel";
 static constexpr AStringView s_ShadowTransmittanceModuleSubPath = "shadow/generated/transmittance_dispatch.slangi";
 
 static Path BuildShadowTransmittanceIncludeRoot(
@@ -2117,25 +2130,45 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
     // also points the material-constants buffers at its own binding set -- then this module; emitting the framework
     // include here instead would force a virtual engine/ path that the shader -I roots do not resolve.
 
-    // Per-id surface hook, macro-isolated: rename the material's nwbMaterialSurface() to a unique per-id name so
-    // multiple materials' hooks coexist in one module, then include its `.bind` + `.surface` (same order the
-    // per-material pixel shader uses). The wrapper sets the trace material context from the hit + loads the
-    // surface-input statics (inlining nwbMaterialSurfaceAt) before invoking the renamed hook, then returns the
-    // hook's transmittance.
+    // Per-id surface hook. This is the ONE translation unit that pulls MULTIPLE materials' `.bind` files together
+    // (the per-material G-buffer PS pulls only its own one `.bind`), and a generated `.bind` emits file-scope
+    // symbols with FIXED, non-interface-qualified names -- the layout constants (NWB_MATERIAL_BIND_LAYOUT_HASH /
+    // _BLOCK_COUNT / _FIELD_COUNT / _INTERFACE_HASH_n / per-field _KEY/_DEFAULT/_BYTE_OFFSET) are byte-identical
+    // names across ANY two distinct `.bind` files, so concatenating two distinct interfaces would redefine them.
+    // Isolation: wrap each id's `.bind` body in its own Slang namespace (nwbShadowBindModel<id>) so its file-scope
+    // symbols + structs + accessors are namespace-qualified and never collide across interfaces, then bring that
+    // namespace into scope with `using namespace` so the (global-scope) surface hook -- which references the bind
+    // accessors/structs by their fixed unqualified names -- still resolves them. The `.surface` is included at
+    // global scope (after the using) so any shared helper headers it pulls in stay global + guarded (one copy
+    // across ids); the surface's lookups for global framework symbols (nwbMeshLoadInstance / nwbMakeMeshSurface /
+    // inNormal) are unaffected. Two ids that share an interface collapse to one `.bind` body via its per-path
+    // include guard (the second namespace is empty); the shared interface's symbols stay reachable through the
+    // first id's `using`, so the shared-interface case keeps working. The surface hook itself is still renamed to
+    // a unique per-id name (nwbShadowSurfaceModel<id>) so multiple hooks coexist; the wrapper sets the trace
+    // material context from the hit + loads the surface-input statics (inlining nwbMaterialSurfaceAt) before
+    // invoking the renamed hook, then returns the hook's transmittance.
     for(usize id = 0u; id < surfaceById.size(); ++id){
         if(surfaceById[id].empty())
             continue;
 
         char idText[32] = {};
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
+        source += "namespace ";
+        source += s_ShadowTransmittanceBindNamespacePrefix;
+        source += idView;
+        source += "{\n#include \"";
+        source += interfaceById[id];
+        source += ".bind\"\n}\n";
+        source += "using namespace ";
+        source += s_ShadowTransmittanceBindNamespacePrefix;
+        source += idView;
+        source += ";\n";
         source += "#define ";
         source += s_ShadowTransmittanceSurfaceMacro;
         source += ' ';
         source += s_ShadowTransmittanceModelPrefix;
         source += idView;
         source += "\n#include \"";
-        source += interfaceById[id];
-        source += ".bind\"\n#include \"";
         source += surfaceById[id];
         source += "\"\n#undef ";
         source += s_ShadowTransmittanceSurfaceMacro;

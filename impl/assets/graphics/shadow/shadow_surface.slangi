@@ -27,13 +27,16 @@
 // One ray hit, fully resolved to the inputs a material surface hook needs. The trace fills it from the hit's
 // per-vertex attributes (PrimitiveIndex + barycentrics) + the per-instance occluder record: meshInstanceIndex
 // indexes g_NwbMeshInstances (the mutable material storage offset), shadowTransmittanceModelId routes the
-// dispatch, materialConstantByteOffset locates this material's constant block in g_NwbMaterialTypedWords.
+// dispatch, materialConstantByteOffset locates this material's constant block in g_NwbMaterialTypedWords. The
+// normal is in WORLD space, matching the surface contract (NwbMeshSurface.normal, surface.slangi) and the
+// rasterizer (shared_ms.slang feeds nwbMeshTransformDirection's world-space normal into the same hook slot); each
+// trace backend transforms its interpolated object-space attribute to world space before filling this.
 struct NwbShadowHit{
     uint meshInstanceIndex;
     uint shadowTransmittanceModelId;
     uint materialConstantByteOffset;
     float2 uv0;
-    float3 objectNormal;
+    float3 worldNormal;
     float3 worldPosition;
     float3 rayDirection;
 };
@@ -91,11 +94,12 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
 
 // Builds the surface-input bundle a hook reads from a ray hit. v1 sources uv0 / normal / worldPosition from the
 // hit; color + tangent are neutral defaults (the trace interpolates only uv0 + normal for now -- a hook that
-// needs vertex color or tangent in its shadow path is a later unit).
+// needs vertex color or tangent in its shadow path is a later unit). normal is world space (the contract the
+// rasterizer also satisfies), supplied already-transformed by the trace backend that filled the hit.
 NwbMeshSurfaceInputs nwbShadowBuildSurfaceInputs(NwbShadowHit hit){
     NwbMeshSurfaceInputs inputs;
     inputs.color = float4(1.0, 1.0, 1.0, 1.0);
-    inputs.normal = hit.objectNormal;
+    inputs.normal = hit.worldNormal;
     inputs.tangent = float4(1.0, 0.0, 0.0, 1.0);
     inputs.uv0 = hit.uv0;
     inputs.worldPosition = hit.worldPosition;

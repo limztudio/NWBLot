@@ -246,6 +246,48 @@ bool RendererMaterialSystem::resolveMaterialInstanceMutableTypedBytes(
     return true;
 }
 
+bool RendererMaterialSystem::appendShadowOccluderMaterialContext(
+    const Core::ECS::EntityID entity,
+    const MaterialSurfaceInfo& materialInfo,
+    const NWB::Impl::Scene::TransformComponent* transform,
+    MaterialTypedByteDataVector& inOutMaterialTypedBytes,
+    ECSRenderDetail::MaterialTypedByteContentRangeMap& inOutMutableRanges,
+    InstanceGpuData& outInstance,
+    u32& outConstantByteOffset
+){
+    outInstance = InstanceGpuData{};
+    outConstantByteOffset = 0u;
+
+    // Constant block: appended raw (its content is per-material, not deduped against other materials' blocks),
+    // exactly as the draw pass's appendConstantMaterialTypedBytes does, so its byte offset locates this
+    // occluder's constant block in the combined buffer.
+    ECSRenderDetail::MaterialTypedInstanceRanges typedRanges;
+    if(!ECSRenderDetail::AppendMaterialTypedByteRange(
+        inOutMaterialTypedBytes,
+        materialInfo.constantTypedBytes,
+        typedRanges.constantRange
+    ))
+        return false;
+
+    // Mutable block: the per-instance override bytes (or the material default), content-deduped so instances
+    // sharing identical mutable storage share one appended range -- mirroring the draw pass.
+    const MaterialInstanceComponent* materialInstance = world().tryGetComponent<MaterialInstanceComponent>(entity);
+    const MaterialTypedByteVector* mutableTypedBytes = nullptr;
+    if(!resolveMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes))
+        return false;
+    if(!ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
+        inOutMaterialTypedBytes,
+        inOutMutableRanges,
+        *mutableTypedBytes,
+        typedRanges.mutableRange
+    ))
+        return false;
+
+    outInstance = ECSRenderDetail::BuildInstanceGpuData(transform, typedRanges);
+    outConstantByteOffset = typedRanges.constantRange.byteOffset;
+    return true;
+}
+
 void RendererMaterialSystem::pruneMaterialInstanceMutableCache(){
     const u64 componentMutationVersion = world().componentMutationVersion<MaterialInstanceComponent>();
     if(componentMutationVersion == materialState().m_instanceMutableCacheComponentMutationVersion)

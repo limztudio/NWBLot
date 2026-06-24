@@ -285,6 +285,17 @@ private:
     // shadow instance id. Grows by doubling, never shrinks.
     Core::BufferHandle m_shadowInstanceMaterialBuffer;
     usize m_shadowInstanceMaterialCapacity = 0u;
+    // Shadow-OWNED combined material-constants context the per-hit transmittance dispatch reads (g_NwbMeshInstances
+    // + g_NwbMaterialTypedWords). The draw passes' equivalents hold only ONE transparency class at trace time (the
+    // opaque set is resident; the transparent occluders' blocks are uploaded after the trace), so the trace builds
+    // its own combined buffers over ALL gathered occluders (both transparency classes) lockstep with the shadow
+    // instances. m_shadowInstanceBuffer = InstanceGpuData per occluder (mutable byte offset in translation.w);
+    // m_shadowMaterialTypedBuffer = each occluder's constant + mutable typed blocks (constant offset stored in the
+    // instance-material record). Both grow by doubling, never shrink, and only the shadow trace binds them.
+    Core::BufferHandle m_shadowInstanceBuffer;
+    Core::BufferHandle m_shadowMaterialTypedBuffer;
+    usize m_shadowInstanceCapacity = 0u;
+    usize m_shadowMaterialTypedCapacity = 0u;
     // Per-frame distinct meshes referenced by the TLAS (filled by buildSceneTlas); the per-mesh descriptor arrays
     // bind these (parallel: slot k = mesh k's index/attribute buffers, indexed by material.meshSlot). The HW BLAS
     // owns the positions, so only the index + attribute buffers are tracked here. Sized by the shared shader cap

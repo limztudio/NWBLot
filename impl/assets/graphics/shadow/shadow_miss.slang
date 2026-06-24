@@ -8,8 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reached the light: no-op. The any-hit stage already folded every occluder into payload.transmittance
-// (full white when nothing was hit), so the miss stage leaves the accumulated value untouched.
+// Reached the light: no-op. The any-hit stage already folded every occluder into payload.transmittance +
+// payload.opticalDepth (full white / zero when nothing was hit), so the miss stage leaves both accumulators
+// untouched; the raygen finalizes them into the visibility.
 [shader("miss")]
 void main(inout NwbShadowOcclusionPayload payload){
 }

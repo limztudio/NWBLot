@@ -24,9 +24,10 @@
 #include "instance_material.slangi"
 
 // The shadow trace's material-constants context (NwbShadowHit + the per-invocation accessors + the surface
-// contract + the engine refraction physics LIBRARY helper nwbShadowRefractiveTransmittance the hooks may call) +
-// the cook-generated per-hit transmittance dispatch (nwbShadowDispatchTransmittance), which #includes each
-// transparent material's .bind + .surface and routes by shadowTransmittanceModelId.
+// contract + the engine-side shadow physics helpers nwbShadowFresnelTransmittedFraction /
+// nwbShadowAbsorptionCoefficient the trace calls) + the cook-generated per-hit surface dispatch
+// (nwbShadowDispatchSurface), which #includes each transparent material's .bind + .surface and routes by
+// shadowTransmittanceModelId to return that occluder's optical params (ior / transmission).
 #include "shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 
@@ -232,9 +233,10 @@ NwbSwShadowVertexAttrib nwbSwShadowLoadVertexAttrib(const uint meshIndex, const 
 #define NWB_SW_SHADOW_TRANSMITTANCE_EPSILON 1e-3
 
 // Per-instance occlusion: push the world ray into the instance's object space, then walk that mesh's
-// triangle BVH. Each triangle the ray crosses multiplies the running transmittance by that instance's tint
-// (transparent occluder) or zeroes it and stops (opaque occluder). transmittance accumulates across hits.
-void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout float3 transmittance){
+// triangle BVH. Each triangle the ray crosses integrates one surface crossing into the running visibility (Fresnel
+// into transmittance + signed Beer-Lambert into opticalDepth) for a transparent occluder, or zeroes the
+// transmittance and stops for an opaque occluder. Both accumulators carry across hits.
+void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout float3 transmittance, inout float3 opticalDepth){
     const NwbSwShadowInstance instance = g_NwbSwShadowInstances[instanceIndex];
     const NwbRtInstanceMaterial material = g_NwbSwShadowInstanceMaterial[instanceIndex];
     const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
@@ -269,9 +271,10 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                     transmittance = float3(0.0, 0.0, 0.0);
                     return;
                 }
-                // Transparent occluder: evaluate this material's per-hit transmittance hook and tint the surviving
-                // light, then keep tracing for further occluders. The hook reads the interpolated normal/uv0 + the
-                // material-constants context carried by the instance record; dispatched by shadowTransmittanceModelId.
+                // Transparent occluder: evaluate this material's surface hook for its optical params and integrate
+                // this surface crossing into the running visibility, then keep tracing for further occluders. The
+                // hook reads the interpolated normal/uv0 + the material-constants context carried by the instance
+                // record; dispatched by shadowTransmittanceModelId.
                 const NwbSwShadowVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(meshIndex, i0);
                 const NwbSwShadowVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(meshIndex, i1);
                 const NwbSwShadowVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(meshIndex, i2);
@@ -290,12 +293,21 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 hit.worldPosition = worldOrigin + worldDirection * triangleHit.t;
                 hit.rayDirection = worldDirection;
 
-                // Fold this occluder's per-hit transmittance into the running transmittance the ONE unified way:
-                // the material's surface hook (routed by shadowTransmittanceModelId) always produces the final
-                // transmittance. A refractive material's hook computes it by calling the engine helper
-                // nwbShadowRefractiveTransmittance(...) itself; a plain material returns its tint. The engine never
-                // branches on a refractive flag here -- it just multiplies. Same dispatch + math as the HW any-hit.
-                transmittance *= nwbShadowDispatchTransmittance(material.shadowTransmittanceModelId, hit);
+                // Integrate this surface crossing into the running visibility the engine way: per-crossing Fresnel
+                // folds into transmittance, and a signed Beer-Lambert optical depth telescopes the real inside path
+                // length. The hook supplies only the optical params (ior / transmission); the engine -- which sees
+                // both faces of an occluder -- owns the integration. faceSign is +1 on an exit face (ray leaving
+                // along the normal) and -1 on an entry face, so the signed-t sum collapses to the true path length
+                // through each volume. Same surface, cosI/faceSign, helpers, and accumulation as the HW any-hit; only
+                // the t source differs (triangleHit.t here vs RayTCurrent() there). worldDirection (toLight) is
+                // normalized, so triangleHit.t is the same world distance RayTCurrent() gives -- the two backends
+                // integrate identical optical depths.
+                const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
+                const float ndotd = dot(hit.rayDirection, hit.worldNormal);
+                const float cosI = saturate(abs(ndotd));
+                const float faceSign = (ndotd >= 0.0) ? 1.0 : -1.0;
+                transmittance *= nwbShadowFresnelTransmittedFraction(surface.ior, cosI);
+                opticalDepth += nwbShadowAbsorptionCoefficient(surface.transmission) * triangleHit.t * faceSign;
                 if(max(max(transmittance.x, transmittance.y), transmittance.z) < NWB_SW_SHADOW_TRANSMITTANCE_EPSILON){
                     transmittance = float3(0.0, 0.0, 0.0);
                     return;
@@ -318,8 +330,8 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
 
 // Scene-level occlusion: walk the software scene/instance BVH; each leaf is an instance whose world AABB the
 // ray crossed, so refine it with the exact per-mesh triangle traversal and fold its contribution into the
-// running transmittance. Stops as soon as the transmittance reaches zero (an opaque hit).
-void nwbSwShadowOccluded(const float3 origin, const float3 direction, const float tMin, const float tMax, inout float3 transmittance){
+// running visibility (transmittance + opticalDepth). Stops as soon as the transmittance reaches zero (an opaque hit).
+void nwbSwShadowOccluded(const float3 origin, const float3 direction, const float tMin, const float tMax, inout float3 transmittance, inout float3 opticalDepth){
     if(g_NwbSwShadowPushConstants.instanceCount == 0u)
         return;
 
@@ -336,7 +348,7 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
             continue;
 
         if(nwbBvhNodeIsLeaf(node)){
-            nwbSwShadowInstanceOccluded(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax, transmittance);
+            nwbSwShadowInstanceOccluded(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax, transmittance, opticalDepth);
             if(max(max(transmittance.x, transmittance.y), transmittance.z) < NWB_SW_SHADOW_TRANSMITTANCE_EPSILON)
                 return;
         }
@@ -377,8 +389,11 @@ float3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, 
 
     const float3 origin = worldPosition + normal * tMin;
     float3 transmittance = float3(1.0, 1.0, 1.0);
-    nwbSwShadowOccluded(origin, toLight, tMin, tEnd, transmittance);
-    return transmittance;
+    float3 opticalDepth = float3(0.0, 0.0, 0.0);
+    nwbSwShadowOccluded(origin, toLight, tMin, tEnd, transmittance, opticalDepth);
+    // Finalize: the Fresnel-transmitted product times the Beer-Lambert attenuation integrated over the true
+    // entry->exit path. Matches the HW raygen finalize (transmittance * exp(-opticalDepth)) exactly.
+    return transmittance * exp(-opticalDepth);
 }
 
 

@@ -35,11 +35,12 @@ NwbShadowRtVertexAttrib nwbShadowRtLoadVertexAttrib(const uint meshIndex, const 
 // Colored-shadow any-hit. Each occluder the ray crosses looks up its per-instance material (indexed by
 // InstanceID(), built lockstep with the TLAS instances). A transparent occluder fetches its hit triangle's
 // vertex attributes (index buffer by PrimitiveIndex + the per-mesh attribute buffer at material.meshSlot),
-// interpolates uv0/normal at the hit barycentrics, evaluates the material's per-hit transmittance hook (routed
-// by shadowTransmittanceModelId) and multiplies the running transmittance by the result, then ignores the hit so
-// the ray keeps gathering further occluders -- ending the search early once the light is effectively blocked. An
-// opaque occluder zeroes the transmittance and ends the search. Geometry is built non-opaque with
-// NoDuplicateAnyHitInvocation so this fires exactly once per occluder.
+// interpolates uv0/normal at the hit barycentrics, evaluates the material's surface hook (routed by
+// shadowTransmittanceModelId) for its optical params, and integrates this surface crossing into the running
+// visibility -- per-crossing Fresnel into payload.transmittance + a signed Beer-Lambert optical depth into
+// payload.opticalDepth -- then ignores the hit so the ray keeps gathering further occluders, ending the search
+// early once the Fresnel product is effectively zero. An opaque occluder zeroes the transmittance and ends the
+// search. Geometry is built non-opaque with NoDuplicateAnyHitInvocation so this fires exactly once per occluder.
 [shader("anyhit")]
 void main(inout NwbShadowOcclusionPayload payload, in BuiltInTriangleIntersectionAttributes attributes){
     const NwbRtInstanceMaterial material = g_NwbShadowInstanceMaterial[InstanceID()];
@@ -58,8 +59,8 @@ void main(inout NwbShadowOcclusionPayload payload, in BuiltInTriangleIntersectio
         const NwbShadowRtVertexAttrib a1 = nwbShadowRtLoadVertexAttrib(material.meshSlot, i1);
         const NwbShadowRtVertexAttrib a2 = nwbShadowRtLoadVertexAttrib(material.meshSlot, i2);
 
-        // Evaluate this material's per-hit transmittance hook. The hook reads the interpolated normal/uv0 + the
-        // material-constants context carried by the instance record; dispatched by shadowTransmittanceModelId.
+        // Evaluate this material's surface hook for its optical params. The hook reads the interpolated normal/uv0 +
+        // the material-constants context carried by the instance record; dispatched by shadowTransmittanceModelId.
         // The interpolated normal is object space; transform it to world space (the surface contract --
         // NwbMeshSurface.normal is world space) with the inverse-transpose of object->world, i.e. the transpose of
         // WorldToObject3x4(), expressed as the row-vector product mul(objectNormal, (float3x3)WorldToObject3x4()).
@@ -80,12 +81,20 @@ void main(inout NwbShadowOcclusionPayload payload, in BuiltInTriangleIntersectio
         hit.worldPosition = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
         hit.rayDirection = WorldRayDirection();
 
-        // Fold this occluder's per-hit transmittance into the running transmittance the ONE unified way: the
-        // material's surface hook (routed by shadowTransmittanceModelId) always produces the final transmittance.
-        // A refractive material's hook computes it by calling the engine helper nwbShadowRefractiveTransmittance(...)
-        // itself; a plain material returns its tint. The engine never branches on a refractive flag here -- it just
-        // multiplies. Same dispatch + math as the software traversal.
-        payload.transmittance *= nwbShadowDispatchTransmittance(material.shadowTransmittanceModelId, hit);
+        // Integrate this surface crossing into the running visibility the engine way: per-crossing Fresnel folds
+        // into transmittance, and a signed Beer-Lambert optical depth telescopes the real inside path length. The
+        // hook supplies only the optical params (ior / transmission); the engine -- which sees both the entry and
+        // exit faces of an occluder -- owns the integration. faceSign is +1 on an exit face (ray leaving along the
+        // normal) and -1 on an entry face, so the signed-t sum collapses to the true path length through each
+        // volume. Same surface, cosI/faceSign, helpers, and accumulation as the software traversal; only the t source
+        // differs (RayTCurrent() here vs the SW triangleHit.t). worldNormal is the shading normal -- correct for the
+        // flat-shaded octahedron; a geometric-normal refinement would harden faceSign/cosI for smooth meshes.
+        const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
+        const float ndotd = dot(hit.rayDirection, hit.worldNormal);
+        const float cosI = saturate(abs(ndotd));
+        const float faceSign = (ndotd >= 0.0) ? 1.0 : -1.0;
+        payload.transmittance *= nwbShadowFresnelTransmittedFraction(surface.ior, cosI);
+        payload.opticalDepth += nwbShadowAbsorptionCoefficient(surface.transmission) * RayTCurrent() * faceSign;
         if(max(max(payload.transmittance.x, payload.transmittance.y), payload.transmittance.z) < NWB_SHADOW_RT_TRANSMITTANCE_EPSILON){
             payload.transmittance = float3(0.0, 0.0, 0.0);
             AcceptHitAndEndSearch();

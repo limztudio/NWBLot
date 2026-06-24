@@ -17,8 +17,9 @@
 // Per light: cast one occlusion ray from the surface toward the light. Directional lights aim along the
 // toward-light axis to "infinity"; point/spot lights aim at the light position with tMax = the distance,
 // so geometry past the light does not shadow the surface. Bias along the geometric normal + a small tMin
-// avoids self-intersection acne. Returns the per-channel transmittance accumulated by the any-hit stage:
-// float3(1) when fully lit, tinted toward zero through transparent occluders, zero behind an opaque one.
+// avoids self-intersection acne. Returns the per-channel visibility the engine integrates over the volume path
+// (transmittance * exp(-opticalDepth)): float3(1) when fully lit, tinted toward zero through transparent
+// occluders, zero behind an opaque one.
 float3 nwbShadowLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light){
     float3 toLight;
     float tMax;
@@ -47,11 +48,13 @@ float3 nwbShadowLightVisible(const float3 worldPosition, const float3 normal, co
     ray.TMin = tMin;
     ray.TMax = tEnd;
 
-    // Seed full transmittance; the any-hit stage multiplies in each transparent occluder's tint and an opaque
-    // hit zeroes it + ends the search. The miss stage is a no-op, so whatever survives is the answer. The trace
-    // must visit every occluder, so it cannot skip the any-hit or accept the first hit.
+    // Seed full visibility: the any-hit stage folds in each transparent surface crossing (Fresnel into
+    // transmittance + signed Beer-Lambert into opticalDepth) and an opaque hit zeroes the transmittance + ends the
+    // search. The miss stage is a no-op, so whatever survives is the answer. The trace must visit every occluder, so
+    // it cannot skip the any-hit or accept the first hit.
     NwbShadowOcclusionPayload payload;
     payload.transmittance = float3(1.0, 1.0, 1.0);
+    payload.opticalDepth = float3(0.0, 0.0, 0.0);
     TraceRay(
         g_NwbShadowTlas,
         RAY_FLAG_NONE,
@@ -62,7 +65,9 @@ float3 nwbShadowLightVisible(const float3 worldPosition, const float3 normal, co
         ray,
         payload
     );
-    return payload.transmittance;
+    // Finalize: the Fresnel-transmitted product times the Beer-Lambert attenuation integrated over the true
+    // entry->exit path. Matches the SW finalize (transmittance * exp(-opticalDepth)) exactly.
+    return payload.transmittance * exp(-payload.opticalDepth);
 }
 
 

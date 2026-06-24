@@ -85,8 +85,8 @@ void main(NwbAvboitOccupancyPixelInput input){
     surfaceInputs.uv0 = input.uv0;
     surfaceInputs.worldPosition = input.worldPosition.xyz;
     // This pass binds no scene shading buffer, so the true view direction is unavailable; use the documented dummy
-    // -normal exactly as the rasterizer G-buffer does. It feeds only the hook's transmittance (which this pass
-    // discards), so it is harmless here -- the only value this pass reads is surface.alpha.
+    // -normal exactly as the rasterizer G-buffer does. It is harmless here -- this pass reads only surface.alpha
+    // (the optical params ior/transmission are read only by the shadow trace).
     surfaceInputs.incidentDirection = -input.normal;
     nwbLoadMeshSurfaceInputs(surfaceInputs);
 #if NWB_CSG_ENABLED

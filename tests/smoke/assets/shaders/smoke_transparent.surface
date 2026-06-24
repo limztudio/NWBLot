@@ -17,21 +17,16 @@ NwbMeshSurface nwbMaterialSurface(){
     const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
     const float4 tinted = surface.base_color * runtime.color_tint;
     const float3 baseColor = nwbSmokeMaterialVertexColor(tinted.rgb);
-    // Unified surface contract: this hook DECIDES each consumer's per-pixel output. The refraction INPUTS
-    // (ior/thickness/transmission) are the hook's OWN local material constants -- they never leave the hook. From
-    // them it computes `transmittance` (the shadow trace's per-hit output, via the engine Fresnel + Beer-Lambert
-    // helper) AND `alpha` (the AVBOIT transparent passes' per-pixel opacity), so all of AVBOIT's occupancy,
-    // extinction, and accumulate passes use the IDENTICAL shader-decided alpha. The base color stays the rasterized
-    // appearance (the G-buffer discards transmittance + alpha). Hardcoded test values; the production path authors
-    // them as typed .bind constants. ior 1.5 = glass; thickness drives the Beer-Lambert path; transmission follows
-    // the per-cube tint so the opacity matches the base color. The shadow trace supplies inIncidentDirection (the
-    // shadow ray); the rasterizer/AVBOIT passes supply a documented dummy (those discard transmittance anyway).
-    const float ior = 1.5;
-    const float thickness = 0.5;
-    const float3 transmission = saturate(baseColor.rgb) * 0.8;
-    const float3 transmittance = nwbShadowRefractiveTransmittance(ior, thickness, transmission, inIncidentDirection, inNormal);
-    NwbMeshSurface result = nwbMakeMeshSurface(baseColor, inNormal, 0.0, 0.0, transmittance);
-    result.alpha = 1.0 - nwbLuminance(transmission);
+    // The hook supplies only the optical PARAMS; the ENGINE integrates the shadow visibility over the true
+    // entry->exit volume path (per-crossing Fresnel + signed Beer-Lambert optical depth), since only the trace sees
+    // both faces of an occluder. ior 1.5 = glass (Fresnel); transmission is the per-unit absorption color, tracking
+    // the per-cube tint so the cast shadow matches the base color. alpha (the AVBOIT opacity all three passes read)
+    // is still hook-decided. The base color stays the rasterized appearance (the G-buffer discards ior/transmission
+    // + alpha). Hardcoded test values; the production path authors them as typed .bind constants.
+    NwbMeshSurface result = nwbMakeMeshSurface(baseColor, inNormal, 0.0, 0.0);
+    result.ior = 1.5;
+    result.transmission = saturate(baseColor.rgb) * 0.7;
+    result.alpha = 1.0 - nwbLuminance(result.transmission);
     return result;
 }
 

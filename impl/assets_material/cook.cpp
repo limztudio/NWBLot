@@ -2160,10 +2160,10 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
     // first id's `using`, so the shared-interface case keeps working. The surface hook itself is still renamed to
     // a unique per-id name (nwbShadowSurfaceModel<id>) so multiple hooks coexist; the wrapper sets the trace
     // material context from the hit + loads the surface-input statics (inlining nwbMaterialSurfaceAt) before
-    // invoking the renamed hook, then returns the hook's final transmittance (NwbMeshSurface.transmittance). The
-    // transmittance application is unified: the hook always owns the value -- a refractive material's hook computes
-    // it by calling the engine helper nwbShadowRefractiveTransmittance(...) itself; a plain material returns its
-    // tint -- and the engine multiplies it ONE way, with no refractive branch in the trace.
+    // invoking the renamed hook, then returns the hook's whole NwbMeshSurface (its optical params -- ior /
+    // transmission -- plus base color / normal). The hook supplies only the params; the ENGINE integrates the shadow
+    // visibility over the true entry->exit volume path (per-crossing Fresnel + signed Beer-Lambert optical depth),
+    // since only the trace sees both faces of an occluder. There is no per-hit transmittance for the hook to own.
     for(usize id = 0u; id < surfaceById.size(); ++id){
         if(surfaceById[id].empty())
             continue;
@@ -2190,7 +2190,7 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
         source += "\"\n#undef ";
         source += s_ShadowTransmittanceSurfaceMacro;
         source += "\n";
-        source += "float3 ";
+        source += "NwbMeshSurface ";
         source += s_ShadowTransmittanceWrapperPrefix;
         source += idView;
         source += "(NwbShadowHit hit){\n";
@@ -2200,11 +2200,11 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
         source += "    return ";
         source += s_ShadowTransmittanceModelPrefix;
         source += idView;
-        source += "().transmittance;\n";
+        source += "();\n";
         source += "}\n\n";
     }
 
-    source += "float3 nwbShadowDispatchTransmittance(uint shadingModel, NwbShadowHit hit){\n";
+    source += "NwbMeshSurface nwbShadowDispatchSurface(uint shadingModel, NwbShadowHit hit){\n";
     source += "    switch(shadingModel){\n";
     for(usize id = 0u; id < surfaceById.size(); ++id){
         if(surfaceById[id].empty())
@@ -2219,9 +2219,9 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
         source += idView;
         source += "(hit);\n";
     }
-    // Unknown id: fully transmissive (float3(1)) -- a no-match occluder behaves as the prior untinted/all-light
-    // default.
-    source += "    default: return float3(1.0, 1.0, 1.0);\n";
+    // Unknown id: a neutral surface (ior = 1, transmission = white -> no Fresnel attenuation, no absorption), so a
+    // no-match occluder behaves as the prior all-light default.
+    source += "    default: return nwbMakeMeshSurface(float3(0.0, 0.0, 0.0), hit.worldNormal, 0.0, 0.0);\n";
     source += "    }\n";
     source += "}\n\n#endif\n";
 

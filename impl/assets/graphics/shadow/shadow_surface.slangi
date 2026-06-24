@@ -104,8 +104,8 @@ NwbMeshSurfaceInputs nwbShadowBuildSurfaceInputs(NwbShadowHit hit){
     inputs.tangent = float4(1.0, 0.0, 0.0, 1.0);
     inputs.uv0 = hit.uv0;
     inputs.worldPosition = hit.worldPosition;
-    // The shadow ray's world-space direction, for a refractive material's hook (its Fresnel/Snell term via
-    // nwbShadowRefractiveTransmittance). Already carried on the hit by both trace backends.
+    // The shadow ray's world-space direction. Carried on the hit by both trace backends; a hook may read it (via
+    // the inIncidentDirection static), and the engine uses it directly for the per-crossing Fresnel cosI/faceSign.
     inputs.incidentDirection = hit.rayDirection;
     return inputs;
 }

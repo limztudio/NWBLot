@@ -12,6 +12,8 @@
 #include "metadata.h"
 #include "binary_payload.h"
 
+#include <impl/assets/graphics/avboit/names.h>
+
 #include <core/alloc/scratch.h>
 #include <core/assets/paths.h>
 #include <core/filesystem/module.h>
@@ -20,6 +22,7 @@
 #include <core/metascript/parser.h>
 #include <global/hash_utils.h>
 #include <global/text_utils.h>
+#include <global/math/convert.h>
 #include <core/common/log.h>
 
 
@@ -1786,6 +1789,13 @@ static constexpr AStringView s_DeferredBxdfFunctionMacro = "NWB_DEFERRED_BXDF_FU
 static constexpr AStringView s_DeferredBxdfModelPrefix = "nwbDeferredBxdfModel";
 static constexpr AStringView s_DeferredBxdfModuleSubPath = "deferred/generated/bxdf_dispatch.slangi";
 
+// Sentinel shadow-transmittance id for a material that contributes NO surface hook (it declares explicit
+// `shaders` instead of a `.surface`). The dense surface-authored ids start at 0, so a surface-less material must
+// NOT reuse 0 (that aliases the first real surface hook). This reserved id is never emitted as a `case` in the
+// generated dispatch switch, so a hit on such an occluder falls through to `default: return float3(1)` -- the
+// occluder passes all light untinted, the only correct behavior for a material with no transmittance hook.
+static constexpr u32 s_ShadowTransmittanceNoSurfaceModelId = Limit<u32>::s_Max;
+
 static bool AssignMaterialShadingModelIdsImpl(
     CookVector<MaterialCookEntry>& materialEntries,
     ScratchArena& scratchArena
@@ -1826,6 +1836,51 @@ static bool AssignMaterialShadingModelIdsImpl(
         }
         if(!assigned){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign shading model id for '{}'"), StringConvert(entry.virtualPath.c_str()));
+            return false;
+        }
+    }
+
+    // Assign each material a separate shadow-transmittance id deduped over the unique `.surface` sources (the
+    // surface hook computes the per-hit transmittance the shadow trace returns). A material that declares
+    // explicit `shaders` instead of a `surface` gets the reserved no-surface sentinel id (NOT 0, which is the
+    // first real surface hook); the generated dispatch routes that sentinel to its `default` -> float3(1), so a
+    // transparent surface-less occluder passes all light untinted instead of evaluating an unrelated material.
+    Vector<AStringView, ScratchArena> uniqueSurfaces(scratchArena);
+    uniqueSurfaces.reserve(materialEntries.size());
+    for(const MaterialCookEntry& entry : materialEntries){
+        if(!entry.surfaceSource.empty())
+            uniqueSurfaces.push_back(AStringView(entry.surfaceSource));
+    }
+    Sort(uniqueSurfaces.begin(), uniqueSurfaces.end(), [](const AStringView lhs, const AStringView rhs){ return lhs < rhs; });
+
+    usize uniqueSurfaceCount = 0u;
+    for(usize i = 0u; i < uniqueSurfaces.size(); ++i){
+        if(i == 0u || uniqueSurfaces[i] != uniqueSurfaces[uniqueSurfaceCount - 1u])
+            uniqueSurfaces[uniqueSurfaceCount++] = uniqueSurfaces[i];
+    }
+    uniqueSurfaces.resize(uniqueSurfaceCount);
+    if(uniqueSurfaceCount > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: too many unique shadow transmittance surfaces"));
+        return false;
+    }
+
+    for(MaterialCookEntry& entry : materialEntries){
+        if(entry.surfaceSource.empty()){
+            entry.shadowTransmittanceModelId = s_ShadowTransmittanceNoSurfaceModelId;
+            continue;
+        }
+
+        const AStringView surface(entry.surfaceSource);
+        bool assigned = false;
+        for(usize id = 0u; id < uniqueSurfaces.size(); ++id){
+            if(uniqueSurfaces[id] == surface){
+                entry.shadowTransmittanceModelId = static_cast<u32>(id);
+                assigned = true;
+                break;
+            }
+        }
+        if(!assigned){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign shadow transmittance id for '{}'"), StringConvert(entry.virtualPath.c_str()));
             return false;
         }
     }
@@ -1927,7 +1982,7 @@ static bool EmitDeferredBxdfDispatchModuleImpl(
         source += "\n\n";
     }
 
-    source += "float3 nwbDeferredDispatchBxdf(uint shadingModel, NwbBxdfSurface surface, uint shadowMask){\n";
+    source += "float3 nwbDeferredDispatchBxdf(uint shadingModel, NwbBxdfSurface surface, int2 pixel){\n";
     source += "    switch(shadingModel){\n";
     for(usize id = 0u; id < sourceById.size(); ++id){
         if(sourceById[id].empty())
@@ -1940,7 +1995,7 @@ static bool EmitDeferredBxdfDispatchModuleImpl(
         source += "u: return ";
         source += s_DeferredBxdfModelPrefix;
         source += idView;
-        source += "(surface, shadowMask);\n";
+        source += "(surface, pixel);\n";
     }
     source += "    default: return float3(1.0, 0.0, 1.0); // no engine default BXDF: an unknown id shows magenta\n";
     source += "    }\n";
@@ -1957,6 +2012,211 @@ static bool EmitDeferredBxdfDispatchModuleImpl(
     }
     if(!WriteTextFile(outputPath, AStringView(source))){
         NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to write generated include '{}'")
+            , PathToString<tchar>(outputPath)
+        );
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// shadow transmittance dispatch (per-material surface id + generated dispatch module)
+
+
+static constexpr AStringView s_ShadowTransmittanceSurfaceMacro = "nwbMaterialSurface";
+static constexpr AStringView s_ShadowTransmittanceModelPrefix = "nwbShadowSurfaceModel";
+static constexpr AStringView s_ShadowTransmittanceWrapperPrefix = "nwbShadowTransmittanceModel";
+// Per-id Slang namespace that isolates each material's `.bind` file-scope symbols in the dispatch module (the one
+// TU that concatenates multiple `.bind` files) so distinct interfaces' fixed-named layout constants/structs/
+// accessors do not collide; a `using namespace` then exposes them to the global-scope surface hook.
+static constexpr AStringView s_ShadowTransmittanceBindNamespacePrefix = "nwbShadowBindModel";
+static constexpr AStringView s_ShadowTransmittanceModuleSubPath = "shadow/generated/transmittance_dispatch.slangi";
+
+static Path BuildShadowTransmittanceIncludeRoot(
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    ScratchArena& scratchArena
+){
+    ScratchString configurationName(configurationSafeName, scratchArena);
+    return cacheDirectory / configurationName.c_str() / "shadow_modules";
+}
+
+static bool PrepareShadowTransmittanceIncludeRoot(const Path& includeRoot){
+    ErrorCode errorCode;
+    if(!RemoveAllIfExists(includeRoot, errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: failed to clear generated include directory '{}': {}")
+            , PathToString<tchar>(includeRoot)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    errorCode.clear();
+    if(!EnsureDirectories(includeRoot, errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: failed to create generated include directory '{}': {}")
+            , PathToString<tchar>(includeRoot)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    return true;
+}
+
+static bool EmitShadowTransmittanceDispatchModuleImpl(
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    const CookVector<MaterialCookEntry>& materialEntries,
+    Path& outIncludeRoot,
+    ScratchArena& scratchArena
+){
+    outIncludeRoot.clear();
+    outIncludeRoot = BuildShadowTransmittanceIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
+    if(!PrepareShadowTransmittanceIncludeRoot(outIncludeRoot))
+        return false;
+
+    // Build a dense shadowTransmittanceModelId -> (surface source, .bind interface) table from the (already
+    // assigned) materials. Each unique surface appears at exactly one id; materials sharing a surface share the
+    // slot. The interface is carried alongside because the surface hook reads its typed `.bind` accessors by
+    // fixed name -- materials sharing a surface therefore share the interface.
+    u32 maxId = 0u;
+    bool anySurface = false;
+    for(const MaterialCookEntry& entry : materialEntries){
+        if(entry.surfaceSource.empty())
+            continue;
+        anySurface = true;
+        if(entry.shadowTransmittanceModelId > maxId)
+            maxId = entry.shadowTransmittanceModelId;
+    }
+
+    Vector<AStringView, ScratchArena> surfaceById(scratchArena);
+    Vector<AStringView, ScratchArena> interfaceById(scratchArena);
+    if(anySurface){
+        surfaceById.resize(static_cast<usize>(maxId) + 1u);
+        interfaceById.resize(static_cast<usize>(maxId) + 1u);
+    }
+    for(const MaterialCookEntry& entry : materialEntries){
+        if(entry.surfaceSource.empty())
+            continue;
+
+        const AStringView surface(entry.surfaceSource);
+        AStringView& surfaceSlot = surfaceById[entry.shadowTransmittanceModelId];
+        if(!surfaceSlot.empty() && surfaceSlot != surface){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: model id {} maps to multiple surface sources"), entry.shadowTransmittanceModelId);
+            return false;
+        }
+        surfaceSlot = surface;
+
+        const AStringView interfaceName(entry.materialInterface.c_str());
+        AStringView& interfaceSlot = interfaceById[entry.shadowTransmittanceModelId];
+        if(!interfaceSlot.empty() && interfaceSlot != interfaceName){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: model id {} maps to multiple material interfaces"), entry.shadowTransmittanceModelId);
+            return false;
+        }
+        interfaceSlot = interfaceName;
+    }
+
+    CookArena& arena = materialEntries.get_allocator().arena();
+    CookString source(arena);
+    source += "// Generated by AssetVolumeCooker from material `surface` declarations. Do not edit.\n";
+    source += "#ifndef NWB_GRAPHICS_SHADOW_GENERATED_TRANSMITTANCE_DISPATCH_SLANGI\n";
+    source += "#define NWB_GRAPHICS_SHADOW_GENERATED_TRANSMITTANCE_DISPATCH_SLANGI\n\n";
+
+    // The trace material-constants context (NwbShadowHit + the per-invocation accessors the surface hooks read
+    // -- nwbMeshLoadInstance / nwbMeshMaterialConstantByteOffset / ... -- + the surface contract) is supplied by
+    // the includer BEFORE this module, exactly as the deferred BXDF dispatch relies on lighting_ps to bring in the
+    // framework first. The includer (each shadow trace shader) #includes shadow/shadow_surface.slangi -- where it
+    // also points the material-constants buffers at its own binding set -- then this module; emitting the framework
+    // include here instead would force a virtual engine/ path that the shader -I roots do not resolve.
+
+    // Per-id surface hook. This is the ONE translation unit that pulls MULTIPLE materials' `.bind` files together
+    // (the per-material G-buffer PS pulls only its own one `.bind`), and a generated `.bind` emits file-scope
+    // symbols with FIXED, non-interface-qualified names -- the layout constants (NWB_MATERIAL_BIND_LAYOUT_HASH /
+    // _BLOCK_COUNT / _FIELD_COUNT / _INTERFACE_HASH_n / per-field _KEY/_DEFAULT/_BYTE_OFFSET) are byte-identical
+    // names across ANY two distinct `.bind` files, so concatenating two distinct interfaces would redefine them.
+    // Isolation: wrap each id's `.bind` body in its own Slang namespace (nwbShadowBindModel<id>) so its file-scope
+    // symbols + structs + accessors are namespace-qualified and never collide across interfaces, then bring that
+    // namespace into scope with `using namespace` so the (global-scope) surface hook -- which references the bind
+    // accessors/structs by their fixed unqualified names -- still resolves them. The `.surface` is included at
+    // global scope (after the using) so any shared helper headers it pulls in stay global + guarded (one copy
+    // across ids); the surface's lookups for global framework symbols (nwbMeshLoadInstance / nwbMakeMeshSurface /
+    // inNormal) are unaffected. Two ids that share an interface collapse to one `.bind` body via its per-path
+    // include guard (the second namespace is empty); the shared interface's symbols stay reachable through the
+    // first id's `using`, so the shared-interface case keeps working. The surface hook itself is still renamed to
+    // a unique per-id name (nwbShadowSurfaceModel<id>) so multiple hooks coexist; the wrapper sets the trace
+    // material context from the hit + loads the surface-input statics (inlining nwbMaterialSurfaceAt) before
+    // invoking the renamed hook, then returns the hook's transmittance.
+    for(usize id = 0u; id < surfaceById.size(); ++id){
+        if(surfaceById[id].empty())
+            continue;
+
+        char idText[32] = {};
+        const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
+        source += "namespace ";
+        source += s_ShadowTransmittanceBindNamespacePrefix;
+        source += idView;
+        source += "{\n#include \"";
+        source += interfaceById[id];
+        source += ".bind\"\n}\n";
+        source += "using namespace ";
+        source += s_ShadowTransmittanceBindNamespacePrefix;
+        source += idView;
+        source += ";\n";
+        source += "#define ";
+        source += s_ShadowTransmittanceSurfaceMacro;
+        source += ' ';
+        source += s_ShadowTransmittanceModelPrefix;
+        source += idView;
+        source += "\n#include \"";
+        source += surfaceById[id];
+        source += "\"\n#undef ";
+        source += s_ShadowTransmittanceSurfaceMacro;
+        source += "\n";
+        source += "float3 ";
+        source += s_ShadowTransmittanceWrapperPrefix;
+        source += idView;
+        source += "(NwbShadowHit hit){\n";
+        source += "    nwbShadowSetMaterialContext(hit);\n";
+        source += "    NwbMeshSurfaceInputs in = nwbShadowBuildSurfaceInputs(hit);\n";
+        source += "    nwbLoadMeshSurfaceInputs(in);\n";
+        source += "    return ";
+        source += s_ShadowTransmittanceModelPrefix;
+        source += idView;
+        source += "().transmittance;\n";
+        source += "}\n\n";
+    }
+
+    source += "float3 nwbShadowDispatchTransmittance(uint shadingModel, NwbShadowHit hit){\n";
+    source += "    switch(shadingModel){\n";
+    for(usize id = 0u; id < surfaceById.size(); ++id){
+        if(surfaceById[id].empty())
+            continue;
+
+        char idText[32] = {};
+        const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
+        source += "    case ";
+        source += idView;
+        source += "u: return ";
+        source += s_ShadowTransmittanceWrapperPrefix;
+        source += idView;
+        source += "(hit);\n";
+    }
+    source += "    default: return float3(1.0, 1.0, 1.0); // unknown id: untinted -- the occluder passes all light\n";
+    source += "    }\n";
+    source += "}\n\n#endif\n";
+
+    const Path outputPath = outIncludeRoot / s_ShadowTransmittanceModuleSubPath.data();
+    ErrorCode errorCode;
+    if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: failed to create generated include parent '{}': {}")
+            , PathToString<tchar>(outputPath.parent_path())
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+    if(!WriteTextFile(outputPath, AStringView(source))){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: failed to write generated include '{}'")
             , PathToString<tchar>(outputPath)
         );
         return false;
@@ -2099,6 +2359,114 @@ static bool EmitMaterialPixelShadersImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static bool EmitMaterialAvboitAccumulatePixelShadersImpl(
+    CookArena& arena,
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    CookVector<MaterialCookEntry>& materialEntries,
+    CookVector<GeneratedMaterialPixelShader>& outGenerated,
+    ScratchArena& scratchArena
+){
+    outGenerated.clear();
+
+    ScratchString configurationName(configurationSafeName, scratchArena);
+    const Path generatedRoot = cacheDirectory / configurationName.c_str() / "generated" / "material_avboit_accumulate_pixel_shaders";
+    ErrorCode errorCode;
+    if(!RemoveAllIfExists(generatedRoot, errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT accumulate pixel shader generation: failed to clear generated directory '{}': {}")
+            , PathToString<tchar>(generatedRoot)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    // The transparent-pass twin of EmitMaterialPixelShadersImpl: generate the per-material AVBOIT accumulate
+    // pixel shader (engine AVBOIT-accumulate authoring + this material's typed .bind + its surface hook) for each
+    // TRANSPARENT material authored with a `surface`. Unlike the G-buffer PS, this is NOT a material stage shader
+    // (the material has a single pixel stage, the G-buffer PS); the renderer derives this PS's identity from the
+    // material name + the shared accumulate-PS prefix to bind it for the transparent draw. Opaque materials +
+    // transparent materials with explicit `shaders` are skipped (the latter fall back to the fixed accumulate PS).
+    for(MaterialCookEntry& entry : materialEntries){
+        if(!entry.transparent)
+            continue;
+        if(entry.surfaceSource.empty())
+            continue;
+        if(!entry.materialInterface){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: transparent material '{}' needs an interface to generate its AVBOIT accumulate pixel shader")
+                , StringConvert(entry.virtualPath.c_str())
+            );
+            return false;
+        }
+
+        // The generated accumulate pixel shader: engine AVBOIT-accumulate authoring + this material's typed
+        // .bind (by interface virtual path) + its resolved surface hook (by absolute path) -- the same .bind +
+        // .surface pair the G-buffer PS uses, so the transparent shaded color matches the opaque one.
+        CookString generatedSource(arena);
+        generatedSource += "// limztudio@gmail.com\n";
+        generatedSource += "// Generated per-material AVBOIT accumulate pixel shader: engine AVBOIT-accumulate authoring + this\n";
+        generatedSource += "// material's typed .bind + its surface hook. The material declares only its 'surface' fragment; the\n";
+        generatedSource += "// cook assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
+        generatedSource += "#include \"avboit/accumulate_ps_authoring.slangi\"\n";
+        generatedSource += "#include \"";
+        generatedSource += entry.materialInterface.c_str();
+        generatedSource += ".bind\"\n";
+        generatedSource += "#include \"";
+        generatedSource += entry.surfaceSource.c_str();
+        generatedSource += "\"\n";
+
+        CookString relativeFile(arena);
+        relativeFile += entry.virtualPath.c_str();
+        relativeFile += ".slang";
+        const Path outputPath = generatedRoot / relativeFile.c_str();
+        errorCode.clear();
+        if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT accumulate pixel shader generation: failed to create generated parent '{}': {}")
+                , PathToString<tchar>(outputPath.parent_path())
+                , StringConvert(errorCode.message())
+            );
+            return false;
+        }
+        if(!WriteTextFile(outputPath, AStringView(generatedSource))){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT accumulate pixel shader generation: failed to write generated pixel shader '{}'")
+                , PathToString<tchar>(outputPath)
+            );
+            return false;
+        }
+
+        GeneratedMaterialPixelShader generated(arena);
+        generated.name += AssetsGraphicsAvboit::s_AccumulatePixelShaderGeneratedPrefix;
+        generated.name += entry.virtualPath.c_str();
+        {
+            ScratchString sourceText = PathToString(scratchArena, outputPath);
+            for(char& ch : sourceText){
+                if(ch == '\\')
+                    ch = '/';
+            }
+            generated.source += sourceText.c_str();
+        }
+
+        const Name pixelShaderName = ToName(AStringView(generated.name));
+        if(!pixelShaderName){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: generated AVBOIT accumulate pixel shader name is invalid for material '{}'")
+                , StringConvert(entry.virtualPath.c_str())
+            );
+            return false;
+        }
+
+        // Record the generated PS identity so the CSG clip-variant collector can give it AVBOIT CSG clip variants
+        // and the renderer can bind it for the transparent draw, both keyed by the SAME name.
+        entry.avboitAccumulatePixelShaderName.assign(AStringView(generated.name));
+
+        outGenerated.push_back(Move(generated));
+    }
+
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -2201,6 +2569,19 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
     outMaterial.setShaderVariant(materialEntry.shaderVariant);
     outMaterial.setMaterialInterface(materialEntry.materialInterface);
     outMaterial.setShadingModelId(materialEntry.shadingModelId);
+    outMaterial.setShadowTransmittanceModelId(materialEntry.shadowTransmittanceModelId);
+    if(!materialEntry.avboitAccumulatePixelShaderName.empty()){
+        const Name avboitAccumulatePixelShaderName = ToName(AStringView(materialEntry.avboitAccumulatePixelShaderName));
+        if(!avboitAccumulatePixelShaderName){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT accumulate pixel shader name")
+                , StringConvert(materialEntry.virtualPath.c_str())
+            );
+            return false;
+        }
+        Core::Assets::AssetRef<Shader> avboitAccumulatePixelShaderRef;
+        avboitAccumulatePixelShaderRef.virtualPath = avboitAccumulatePixelShaderName;
+        outMaterial.setAvboitAccumulatePixelShader(avboitAccumulatePixelShaderRef);
+    }
     outMaterial.setTransparent(materialEntry.transparent);
     outMaterial.setTwoSided(materialEntry.twoSided);
     outMaterial.setTypedLayout(
@@ -2247,6 +2628,22 @@ bool EmitDeferredBxdfDispatchModule(
     );
 }
 
+bool EmitShadowTransmittanceDispatchModule(
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    const MaterialCookVector<MaterialCookEntry>& materialEntries,
+    Path& outIncludeRoot,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    return __hidden_cook::EmitShadowTransmittanceDispatchModuleImpl(
+        cacheDirectory,
+        configurationSafeName,
+        materialEntries,
+        outIncludeRoot,
+        scratchArena
+    );
+}
+
 bool EmitMaterialPixelShaders(
     MaterialCookArena& arena,
     const Path& cacheDirectory,
@@ -2261,6 +2658,24 @@ bool EmitMaterialPixelShaders(
         cacheDirectory,
         configurationSafeName,
         sharedMeshShaderName,
+        materialEntries,
+        outGenerated,
+        scratchArena
+    );
+}
+
+bool EmitMaterialAvboitAccumulatePixelShaders(
+    MaterialCookArena& arena,
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    MaterialCookVector<MaterialCookEntry>& materialEntries,
+    MaterialCookVector<GeneratedMaterialPixelShader>& outGenerated,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    return __hidden_cook::EmitMaterialAvboitAccumulatePixelShadersImpl(
+        arena,
+        cacheDirectory,
+        configurationSafeName,
         materialEntries,
         outGenerated,
         scratchArena
@@ -2350,6 +2765,9 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         && AddBinaryRepeatedReserveBytes(reserveBytes, material.stageShaderCount(), MaterialBinaryPayload::s_ShaderEntryBytes)
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // material flags
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // shading model id
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // shadow transmittance model id
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // AVBOIT accumulate pixel shader presence flag
+        && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash)) // optional AVBOIT accumulate pixel shader name
     ;
 
     outBinary.clear();
@@ -2413,6 +2831,18 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         materialFlags |= MaterialBinaryPayload::s_MaterialFlagTwoSided;
     AppendPOD(outBinary, materialFlags);
     AppendPOD(outBinary, material.shadingModelId());
+    AppendPOD(outBinary, material.shadowTransmittanceModelId());
+
+    // Optional per-material AVBOIT accumulate pixel shader: a presence flag + the shader name hash, mirroring a
+    // stage-shader entry. Present only for a surface-authored transparent material; loadBinary reads it back.
+    const Core::Assets::AssetRef<Shader>& avboitAccumulatePixelShader = material.avboitAccumulatePixelShader();
+    if(avboitAccumulatePixelShader.valid()){
+        AppendPOD(outBinary, static_cast<u32>(1u));
+        AppendPOD(outBinary, avboitAccumulatePixelShader.name().hash());
+    }
+    else{
+        AppendPOD(outBinary, static_cast<u32>(0u));
+    }
 
     return true;
 }

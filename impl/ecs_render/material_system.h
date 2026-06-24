@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "material_typed_private.h"
 #include "subsystem_base.h"
 
 
@@ -95,6 +96,23 @@ public:
         const MaterialSurfaceInfo& materialInfo,
         const MaterialInstanceComponent* materialInstance,
         const MaterialTypedByteVector*& outMutableTypedBytes
+    );
+    // Packs one shadow occluder's material-constants context into a shadow-OWNED combined typed buffer (the draw
+    // passes' g_NwbMaterialTypedWords / g_NwbMeshInstances hold only one pass's transparency class at trace time,
+    // so the trace cannot read them). Appends this occluder's constant block + its per-instance mutable block into
+    // inOutMaterialTypedBytes (mutable blocks deduped through inOutMutableRanges), builds the matching
+    // InstanceGpuData (the mutable byte offset packs into translation.w, exactly as the draw pass does), and
+    // returns the constant block's byte offset for the instance record's materialConstantByteOffset. Mirrors the
+    // draw pass's per-instance packing (gatherMaterialPassDrawItems) so the trace's surface hook reads the same
+    // bytes it would in the rasterizer.
+    [[nodiscard]] bool appendShadowOccluderMaterialContext(
+        Core::ECS::EntityID entity,
+        const MaterialSurfaceInfo& materialInfo,
+        const NWB::Impl::Scene::TransformComponent* transform,
+        MaterialTypedByteDataVector& inOutMaterialTypedBytes,
+        ECSRenderDetail::MaterialTypedByteContentRangeMap& inOutMutableRanges,
+        InstanceGpuData& outInstance,
+        u32& outConstantByteOffset
     );
     void pruneMaterialInstanceMutableCache();
     [[nodiscard]] bool materialPassDrawResourcesReady(const MeshResources& mesh)const;

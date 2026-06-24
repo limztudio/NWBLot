@@ -6,6 +6,7 @@
 #include "arena_names.h"
 
 #include <impl/assets_mesh/meshlet_triangle_indices.h>
+#include <impl/assets_mesh/meshlet_vertex_attributes.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 
@@ -366,6 +367,47 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         createdMesh.swBvhBuildPending = swShadow;
     }
 
+    // Flat per-vertex shadow-trace attribute buffer, positionStream-indexed in lockstep with the reconstructed
+    // triangle index buffer above, so a trace can interpolate normal/uv0 with the SAME i0/i1/i2 it loads for
+    // positions. Built unconditionally alongside the index buffer (neither backend is known at mesh-creation
+    // time); both shadow backends read it as a ByteAddressBuffer (the HW any-hit and the software fallback), so
+    // it always carries a raw view; the structured stride also exposes a plain SRV.
+    {
+        const usize positionCount = mesh.positionStream().size();
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RayTracingAttributeArena, positionCount * sizeof(AttribGpu) + 4096u);
+        Vector<AttribGpu, Core::Alloc::ScratchArena> vertexAttributes{ scratchArena };
+        if(!BuildMeshletVertexAttributes(mesh, vertexAttributes)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace vertex attributes for mesh '{}'")
+                , StringConvert(meshPath.c_str())
+            );
+            return false;
+        }
+
+        const Name attributeBufferName = DeriveName(meshPath, AStringView(":rt_vertex_attributes"));
+        if(!attributeBufferName){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace attribute buffer name for mesh '{}'")
+                , StringConvert(meshPath.c_str())
+            );
+            return false;
+        }
+
+        RuntimeMeshBufferUpload::BufferFlags attributeFlags;
+        attributeFlags.canHaveRawViews = true;
+        const RuntimeMeshBufferUpload::BufferSetupFailure::Enum attributeFailure = RuntimeMeshBufferUpload::SetupRequiredBuffer<AttribGpu>(
+            graphics(),
+            attributeBufferName,
+            vertexAttributes,
+            attributeFlags,
+            createdMesh.attributeBuffer
+        );
+        if(attributeFailure != RuntimeMeshBufferUpload::BufferSetupFailure::None){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace attribute buffer for mesh '{}'")
+                , StringConvert(meshPath.c_str())
+            );
+            return false;
+        }
+    }
+
     NWB_ASSERT(createdMesh.valid());
 
     auto result = meshState().m_meshes.try_emplace(meshPath, Move(createdMesh));
@@ -429,6 +471,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     createdMesh.meshletLocalVertexRefBuffer = desc.meshletLocalVertexRefBuffer;
     createdMesh.meshletPrimitiveIndexBuffer = desc.meshletPrimitiveIndexBuffer;
     createdMesh.triangleIndexBuffer = desc.triangleIndexBuffer;
+    createdMesh.attributeBuffer = desc.attributeBuffer;
     createdMesh.blasBuildPending = (desc.triangleIndexBuffer != nullptr);
     createdMesh.meshletCount = desc.meshletCount;
     createdMesh.runtimeMesh = true;

@@ -255,6 +255,8 @@ public:
     void setShaderVariant(AStringView variantName){ m_shaderVariant.assign(variantName); }
     void setMaterialInterface(const Name& materialInterface){ m_materialInterface = materialInterface; }
     void setShadingModelId(const u32 shadingModelId){ m_shadingModelId = shadingModelId; }
+    void setShadowTransmittanceModelId(const u32 shadowTransmittanceModelId){ m_shadowTransmittanceModelId = shadowTransmittanceModelId; }
+    void setAvboitAccumulatePixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset){ m_avboitAccumulatePixelShader = shaderAsset; }
     void setTransparent(const bool transparent){ m_transparent = transparent; }
     void setTwoSided(const bool twoSided){ m_twoSided = twoSided; }
     void setTypedLayout(
@@ -271,12 +273,19 @@ public:
     [[nodiscard]] const Core::Assets::AssetString& shaderVariant()const{ return m_shaderVariant; }
     [[nodiscard]] const Name& materialInterface()const{ return m_materialInterface; }
     [[nodiscard]] u32 shadingModelId()const{ return m_shadingModelId; }
+    [[nodiscard]] u32 shadowTransmittanceModelId()const{ return m_shadowTransmittanceModelId; }
     [[nodiscard]] u64 typedLayoutHash()const{ return m_typedLayoutHash; }
     [[nodiscard]] const TypedLayoutBlockVector& typedLayoutBlocks()const{ return m_typedLayoutBlocks; }
     [[nodiscard]] const TypedLayoutFieldVector& typedLayoutFields()const{ return m_typedLayoutFields; }
     [[nodiscard]] const TypedBlockByteVector& typedBlockBytes()const{ return m_typedBlockBytes; }
     [[nodiscard]] const StageShaderArray& stageShaders()const{ return m_stageShaders; }
     [[nodiscard]] u32 stageShaderCount()const{ return m_stageShaderCount; }
+    // The cook-generated per-material AVBOIT accumulate pixel shader bound for this material's transparent draw
+    // (the transparent-pass twin of the G-buffer pixel shader). Valid only for a transparent material authored
+    // with a `surface`; invalid otherwise (the transparent draw then falls back to the engine's fixed accumulate
+    // PS). Unlike the stage shaders this is not a graphics stage -- a material has a single pixel stage (the
+    // G-buffer PS); this is a second, transparent-only pixel shader the renderer selects by pass.
+    [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitAccumulatePixelShader()const{ return m_avboitAccumulatePixelShader; }
     [[nodiscard]] bool transparent()const{ return m_transparent; }
     [[nodiscard]] bool twoSided()const{ return m_twoSided; }
 
@@ -289,12 +298,14 @@ private:
     Core::Assets::AssetString m_shaderVariant;
     Name m_materialInterface = NAME_NONE;
     u32 m_shadingModelId = 0u;
+    u32 m_shadowTransmittanceModelId = 0u;
     u64 m_typedLayoutHash = 0u;
     TypedLayoutBlockVector m_typedLayoutBlocks;
     TypedLayoutFieldVector m_typedLayoutFields;
     TypedBlockByteVector m_typedBlockBytes;
     StageShaderArray m_stageShaders;
     u32 m_stageShaderCount = 0;
+    Core::Assets::AssetRef<Shader> m_avboitAccumulatePixelShader;
     bool m_transparent = false;
     bool m_twoSided = false;
 };

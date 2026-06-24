@@ -1,0 +1,74 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_MESH_SURFACE_SLANGI
+#define NWB_GRAPHICS_MESH_SURFACE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "pixel_input.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The per-material surface contract, shared by the G-buffer pixel shader (gbuffer_ps.slangi) and the shadow
+// trace (shadow/shadow_surface.slangi). Each material provides ONLY a surface hook, nwbMaterialSurface(), that
+// fills the surface below from the surface-input statics (inColor / inNormal / inTangent / inUv0 /
+// inWorldPosition) and its own logic. A material never writes the G-buffer targets or the model-id packing, and
+// cannot get the target layout wrong; the same hook also feeds the shadow trace its per-hit transmittance.
+struct NwbMeshSurface{
+    float3 baseColor;
+    float3 normal;          // world space; the engine encodes it into the normal target
+    float  param0;          // user BXDF parameter, packed into normal.a (e.g. roughness)
+    float  param1;          // user BXDF parameter, packed into world.a (e.g. metallic)
+    float3 transmittance;   // per-hit shadow transmittance the material computes from its own logic; the
+                            // rasterizer G-buffer write discards it, the shadow trace evaluates + returns it
+};
+
+NwbMeshSurface nwbMakeMeshSurface(float3 baseColor, float3 normal, float param0, float param1, float3 transmittance){
+    NwbMeshSurface surface;
+    surface.baseColor = baseColor;
+    surface.normal = normal;
+    surface.param0 = param0;
+    surface.param1 = param1;
+    surface.transmittance = transmittance;
+    return surface;
+}
+
+// Opaque convention: an unspecified transmittance is black -- no light survives the occluder, so an opaque
+// caster yields a black shadow (the shadow trace's opaque flag branch terminates before reading it anyway).
+NwbMeshSurface nwbMakeMeshSurface(float3 baseColor, float3 normal, float param0, float param1){
+    return nwbMakeMeshSurface(baseColor, normal, param0, param1, float3(0.0, 0.0, 0.0));
+}
+
+// Convenience for materials with no extra BXDF parameters.
+NwbMeshSurface nwbMakeMeshSurface(float3 baseColor, float3 normal){
+    return nwbMakeMeshSurface(baseColor, normal, 0.0, 0.0, float3(0.0, 0.0, 0.0));
+}
+
+// Surface hook callable WITHOUT the rasterizer pixel-input plumbing: builds the surface-input statics
+// (inColor / inNormal / inUv0 / inWorldPosition) from a supplied NwbMeshSurfaceInputs bundle, then invokes the
+// material's authored nwbMaterialSurface(). An authored hook therefore needs no change: it keeps reading the
+// statics. Only the single-material context (the rasterizer pixel shader) emits this, where exactly one
+// nwbMaterialSurface() is in scope. The shadow trace supplies NWB_MESH_MATERIAL_CONTEXT_PROVIDED and stitches
+// many materials' hooks into one module under per-id renames (no global nwbMaterialSurface()), inlining these two
+// steps in its per-id wrapper; emitting this generic entry there would reference an undefined nwbMaterialSurface().
+#ifndef NWB_MESH_MATERIAL_CONTEXT_PROVIDED
+NwbMeshSurface nwbMaterialSurfaceAt(NwbMeshSurfaceInputs inputs){
+    nwbLoadMeshSurfaceInputs(inputs);
+    return nwbMaterialSurface();
+}
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

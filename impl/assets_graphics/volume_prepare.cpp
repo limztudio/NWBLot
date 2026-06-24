@@ -309,6 +309,21 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     ))
         return false;
 
+    // Generate the shadow-transmittance dispatch module the shadow trace includes (routes each material's
+    // shadowTransmittanceModelId to its surface hook). Runs alongside the BXDF dispatch -- before shader
+    // preparation (so its include root is registered + each `.surface` it #includes is covered by the
+    // dependency checksum) and after the surface ids are assigned. The trace shaders #include it in a later
+    // unit; emitting it now keeps the cook + the rasterizer unchanged.
+    Path shadowTransmittanceIncludeRoot(context.arena);
+    if(!EmitShadowTransmittanceDispatchModule(
+        context.resolvedPaths.cacheDirectory,
+        context.configurationSafeName,
+        materialEntries,
+        shadowTransmittanceIncludeRoot,
+        context.scratchArena
+    ))
+        return false;
+
     // Generate each material's G-buffer pixel shader from its `surface` hook (when it omits explicit `shaders`),
     // assigning its stage shaders (pixel = generated PS, mesh = the shared engine mesh shader). Then synthesize a
     // shader entry per generated PS so it is prepared + cooked like any authored shader. Runs before shader prep
@@ -326,8 +341,23 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     ))
         return false;
 
+    // The transparent-pass twin: generate each TRANSPARENT material's AVBOIT accumulate pixel shader from the
+    // SAME `surface` hook (its color now comes from the material's surface + BXDF, not the old fixed
+    // vertex-color + hard-coded lambert). The renderer binds it for the transparent draw, keyed by the material.
+    // Runs alongside the G-buffer PS generation (before shader prep + before ValidateMaterials).
+    MaterialCookVector<GeneratedMaterialPixelShader> generatedAvboitAccumulatePixelShaders(materialCookArena);
+    if(!EmitMaterialAvboitAccumulatePixelShaders(
+        materialCookArena,
+        context.resolvedPaths.cacheDirectory,
+        context.configurationSafeName,
+        materialEntries,
+        generatedAvboitAccumulatePixelShaders,
+        context.scratchArena
+    ))
+        return false;
+
     auto& shaderCookArena = graphicsMetadata.shaderEntries.get_allocator().arena();
-    for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedPixelShaders){
+    const auto appendGeneratedPixelShaderEntry = [&](const GeneratedMaterialPixelShader& generatedPixelShader) -> bool{
         ShaderCook::ShaderEntry pixelShaderEntry(shaderCookArena);
         pixelShaderEntry.name.assign(AStringView(generatedPixelShader.name));
         pixelShaderEntry.source.assign(AStringView(generatedPixelShader.source));
@@ -351,6 +381,15 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
             return false;
         }
         graphicsMetadata.shaderEntries.push_back(Move(pixelShaderEntry));
+        return true;
+    };
+    for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedPixelShaders){
+        if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
+            return false;
+    }
+    for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedAvboitAccumulatePixelShaders){
+        if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
+            return false;
     }
 
     if(!AssetsGraphicsCookDetail::PrepareShaderEntriesForCook(
@@ -360,6 +399,7 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
         materialBindIncludeRoot,
         csgShapeIncludeRoot,
         deferredBxdfIncludeRoot,
+        shadowTransmittanceIncludeRoot,
         graphicsMetadata.includeMetadata,
         graphicsMetadata.shaderEntries,
         materialEntries,

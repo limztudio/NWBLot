@@ -8,10 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reached the light without hitting geometry: the surface is lit for this light.
+// Reached the light: no-op. The any-hit stage already folded every occluder into payload.transmittance
+// (full white when nothing was hit), so the miss stage leaves the accumulated value untouched.
 [shader("miss")]
 void main(inout NwbShadowOcclusionPayload payload){
-    payload.visibility = 1.0;
 }
 
 

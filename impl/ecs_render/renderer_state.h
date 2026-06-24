@@ -11,6 +11,7 @@
 
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
+#include <impl/assets/graphics/shadow/binding_slots.h>
 #include <impl/assets/graphics/shadow/sw_binding_slots.h>
 
 #include <global/generic.h>
@@ -105,6 +106,7 @@ class RendererDrawState final : NoCopy{
     friend class RendererCsgSystem;
     friend class RendererDeferredSystem;
     friend class RendererAvboitSystem;
+    friend class RendererRayTracingSystem;
 
 public:
     RendererDrawState() = default;
@@ -274,6 +276,34 @@ private:
     Core::RayTracingShaderTableHandle m_shadowShaderTable;
     Core::BindingSetHandle m_shadowBindingSet;
     const Core::RayTracingAccelStruct* m_shadowBindingSetTlas = nullptr;
+    const Core::Buffer* m_shadowBindingSetInstanceMaterial = nullptr;
+    const Core::Buffer* m_shadowBindingSetMaterialTyped = nullptr;
+    const Core::Buffer* m_shadowBindingSetMeshInstances = nullptr;
+    u32 m_shadowBindingSetMeshCount = 0u;
+    // Per-frame instance-material table (NwbRtInstanceMaterialGpu), shared by the hardware any-hit and the
+    // software traversal; built lockstep with the TLAS / scene-instance buffer so the array index matches the
+    // shadow instance id. Grows by doubling, never shrinks.
+    Core::BufferHandle m_shadowInstanceMaterialBuffer;
+    usize m_shadowInstanceMaterialCapacity = 0u;
+    // Shadow-OWNED combined material-constants context the per-hit transmittance dispatch reads (g_NwbMeshInstances
+    // + g_NwbMaterialTypedWords). The draw passes' equivalents hold only ONE transparency class at trace time (the
+    // opaque set is resident; the transparent occluders' blocks are uploaded after the trace), so the trace builds
+    // its own combined buffers over ALL gathered occluders (both transparency classes) lockstep with the shadow
+    // instances. m_shadowInstanceBuffer = InstanceGpuData per occluder (mutable byte offset in translation.w);
+    // m_shadowMaterialTypedBuffer = each occluder's constant + mutable typed blocks (constant offset stored in the
+    // instance-material record). Both grow by doubling, never shrink, and only the shadow trace binds them.
+    Core::BufferHandle m_shadowInstanceBuffer;
+    Core::BufferHandle m_shadowMaterialTypedBuffer;
+    usize m_shadowInstanceCapacity = 0u;
+    usize m_shadowMaterialTypedCapacity = 0u;
+    // Per-frame distinct meshes referenced by the TLAS (filled by buildSceneTlas); the per-mesh descriptor arrays
+    // bind these (parallel: slot k = mesh k's index/attribute buffers, indexed by material.meshSlot). The HW BLAS
+    // owns the positions, so only the index + attribute buffers are tracked here. Sized by the shared shader cap
+    // so the C++ arrays and the shader's `[NWB_SHADOW_RT_MAX_MESHES]` stay one definition.
+    Core::Buffer* m_shadowMeshIndexBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
+    Core::Buffer* m_shadowMeshAttributeBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
+    u32 m_shadowMeshCount = 0u;
+    bool m_shadowMeshCapReported = false;
     Core::BindingLayoutHandle m_bvhSortBindingLayout;
     Core::ShaderHandle m_bvhSortShader;
     Core::ComputePipelineHandle m_bvhSortPipeline;
@@ -291,17 +321,20 @@ private:
     Core::ComputePipelineHandle m_bvhFitPipeline;
     Core::BufferHandle m_bvhVisitCounterBuffer;
     usize m_bvhBuildCapacity = 0u;
-    Core::BufferHandle m_sceneBvhNodeBuffer;   // CPU-built scene/instance LBVH (TLAS-analog), uploaded each frame
-    Core::BufferHandle m_sceneInstanceBuffer;  // per-instance world->object transform + per-mesh refs
+    Core::BufferHandle m_sceneBvhNodeBuffer;  // CPU-built scene/instance LBVH (TLAS-analog), uploaded each frame
+    Core::BufferHandle m_sceneInstanceBuffer; // per-instance world->object transform + per-mesh refs
     usize m_sceneBvhNodeCapacity = 0u;
     usize m_sceneInstanceCapacity = 0u;
     u32 m_sceneBvhInstanceCount = 0u;
-    Core::BindingLayoutHandle m_swShadowBindingLayout;          // software (compute) shadow traversal pass
+    Core::BindingLayoutHandle m_swShadowBindingLayout; // software (compute) shadow traversal pass
     Core::ShaderHandle m_swShadowShader;
     Core::ComputePipelineHandle m_swShadowPipeline;
     Core::BindingSetHandle m_swShadowBindingSet;
     const Core::Buffer* m_swShadowBindingSetSceneNodes = nullptr;
     const Core::Buffer* m_swShadowBindingSetInstances = nullptr;
+    const Core::Buffer* m_swShadowBindingSetInstanceMaterial = nullptr;
+    const Core::Buffer* m_swShadowBindingSetMaterialTyped = nullptr;
+    const Core::Buffer* m_swShadowBindingSetMeshInstances = nullptr;
     const Core::Texture* m_swShadowBindingSetVisibility = nullptr;
     u32 m_swShadowBindingSetMeshCount = 0u;
     // Per-frame distinct meshes referenced by the software scene BVH (filled by buildSceneSwBvh); the per-mesh
@@ -310,6 +343,7 @@ private:
     Core::Buffer* m_swShadowMeshNodeBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
     Core::Buffer* m_swShadowMeshPositionBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
     Core::Buffer* m_swShadowMeshIndexBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
+    Core::Buffer* m_swShadowMeshAttributeBuffers[NWB_SW_SHADOW_MAX_MESHES] = {}; // U2 per-vertex normal/uv0 for the per-hit transmittance dispatch
     u32 m_swShadowMeshCount = 0u;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;

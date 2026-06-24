@@ -27,6 +27,7 @@ inline constexpr Name s_PrepareRuntimeArena("impl/ecs_mesh/skinning_prepare");
 inline constexpr Name s_DispatchRuntimeArena("impl/ecs_mesh/skinning_dispatch");
 inline constexpr Name s_ZippedPayloadArena("impl/ecs_mesh/skinning_zipped_payload");
 inline constexpr Name s_RuntimeBlasIndexArena("impl/ecs_mesh/skinning_runtime_blas_index");
+inline constexpr Name s_RuntimeBlasAttributeArena("impl/ecs_mesh/skinning_runtime_blas_attribute");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

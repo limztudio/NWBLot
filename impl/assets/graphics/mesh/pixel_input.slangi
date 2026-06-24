@@ -50,12 +50,36 @@ static float2 inUv0;
 static float3 inWorldPosition;
 static float inPixelDepth;
 
+// Rasterizer-independent surface inputs a material's surface hook reads (via the statics below). The rasterizer
+// fills it from the interpolated NwbMeshPixelInput; the shadow trace fills it from a ray hit's per-vertex
+// attributes (PrimitiveIndex + barycentrics). It carries exactly the attributes a hook may consult -- it is NOT
+// SV_-decorated, so a non-rasterizer stage (the trace) can construct + supply it without rasterizer plumbing.
+struct NwbMeshSurfaceInputs{
+    float4 color;
+    float3 normal;
+    float4 tangent;
+    float2 uv0;
+    float3 worldPosition;
+};
+
+// Loads the surface-input statics a hook reads. Both the rasterizer (nwbLoadMeshPixelInput) and the shadow
+// trace (nwbMaterialSurfaceAt) route through here so the hook sees the same statics regardless of stage.
+void nwbLoadMeshSurfaceInputs(NwbMeshSurfaceInputs inputs){
+    inColor = inputs.color;
+    inNormal = inputs.normal;
+    inTangent = inputs.tangent;
+    inUv0 = inputs.uv0;
+    inWorldPosition = inputs.worldPosition;
+}
+
 void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
-    inColor = input.color;
-    inNormal = input.normal;
-    inTangent = input.tangent;
-    inUv0 = input.uv0;
-    inWorldPosition = input.worldPosition.xyz;
+    NwbMeshSurfaceInputs inputs;
+    inputs.color = input.color;
+    inputs.normal = input.normal;
+    inputs.tangent = input.tangent;
+    inputs.uv0 = input.uv0;
+    inputs.worldPosition = input.worldPosition.xyz;
+    nwbLoadMeshSurfaceInputs(inputs);
     inPixelDepth = input.position.z;
 #if NWB_CSG_ENABLED
     const uint receiverIndex = nwbCsgMeshInstanceIndex();

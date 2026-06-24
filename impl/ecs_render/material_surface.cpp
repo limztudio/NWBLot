@@ -109,6 +109,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
 
     const bool hasPixelShader = material.findShaderForStage(Core::ShaderType::PixelStage, createdInfo.pixelShader);
     const bool hasMeshShader = material.findShaderForStage(Core::ShaderType::MeshStage, createdInfo.meshShader);
+    createdInfo.avboitAccumulatePixelShader = material.avboitAccumulatePixelShader();
     if(!hasMeshShader){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing required mesh shader")
             , StringConvert(materialPath.c_str())
@@ -166,6 +167,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         return false;
 
     createdInfo.shadingModelId = material.shadingModelId();
+    createdInfo.shadowTransmittanceModelId = material.shadowTransmittanceModelId();
     createdInfo.transparent = material.transparent();
     createdInfo.twoSided = material.twoSided();
 

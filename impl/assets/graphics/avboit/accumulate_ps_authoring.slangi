@@ -1,0 +1,204 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_AVBOIT_ACCUMULATE_PS_AUTHORING_SLANGI
+#define NWB_GRAPHICS_AVBOIT_ACCUMULATE_PS_AUTHORING_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Engine-owned authoring header for a material's AVBOIT-accumulate pixel shader. It is the transparent-pass
+// twin of mesh/material_ps_authoring.slangi: a material's accumulate pixel shader includes this + its `.bind`
+// interface + its surface hook, and the engine owns the entry (the main below), the AVBOIT compositing math,
+// and the shaded-color path. The transparent fragment's color now comes from the SAME per-material surface hook
+// + BXDF dispatch the opaque deferred path uses (nwbMaterialSurface -> NwbBxdfSurface -> nwbDeferredDispatchBxdf)
+// instead of the old fixed vertex-color + hard-coded lambert, so a cube shows its real material color and
+// matches the colored shadow it casts. Only the shaded-color SOURCE changes; the AVBOIT accumulate targets +
+// alpha / weighted-alpha / extinction math are byte-identical to the previous fixed accumulate_ps.slang.
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "binding_slots.h"
+#include "../scene/binding_slots.h"
+#include "../mesh/runtime_constants.h"
+
+#define NWB_SCENE_SHADING_SET NWB_AVBOIT_TRANSPARENT_SET
+#define NWB_SCENE_SHADING_BINDING NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING
+#define NWB_SCENE_LIGHT_LIST_SET NWB_AVBOIT_TRANSPARENT_SET
+#define NWB_SCENE_LIGHT_LIST_BINDING NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST
+
+// The AVBOIT draw push constant (g_NwbAvboitDraw, declared by avboit/common.slangi) carries the per-draw mesh
+// dispatch (nwbMeshDispatch[]) -- the same layout the rasterizer reads from its own per-draw push constant. The
+// material surface hook reads its typed `.bind` constants through nwbMeshShadingModelId() / nwbMeshInstanceIndex()
+// / nwbMeshMaterialConstantByteOffset() + nwbMeshLoadInstance(); declaring NWB_MESH_MATERIAL_CONTEXT_PROVIDED tells
+// gbuffer_io.slangi to NOT define those accessors (this header serves them from g_NwbAvboitDraw, below), so the
+// SAME authored hook evaluates identically here and in the rasterizer.
+#define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
+
+// common.slangi declares g_NwbAvboitDraw (the per-draw push constant) + the AVBOIT helpers; scene/lighting.slangi
+// brings the scene light list + the engine shading model the BXDFs build on. gbuffer_io.slangi brings the mesh
+// pixel-input plumbing + the shared typed/instance buffers (g_NwbMaterialTypedWords / g_NwbMeshInstances /
+// NwbMeshInstanceData) the surface hook reads; NWB_MESH_MATERIAL_CONTEXT_PROVIDED (above) tells it NOT to declare
+// its own per-draw push constant or the material-context accessors -- this header serves those from g_NwbAvboitDraw.
+#include "common.slangi"
+#include "../scene/lighting.slangi"
+#include "../mesh/gbuffer_io.slangi"
+
+// Per-draw material context from the AVBOIT draw push constant -- the transparent-pass equivalent of the
+// rasterizer accessors gbuffer_io.slangi defines from its own push constant (suppressed above). Defined before
+// material_typed_accessors.slangi so its Constant-storage load family expands these definitions.
+uint nwbMeshShadingModelId(){
+    return (g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
+}
+uint nwbMeshInstanceIndex(){
+    return g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
+}
+uint nwbMeshMaterialConstantByteOffset(){
+    return g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET];
+}
+NwbMeshInstanceData nwbMeshLoadInstance(){
+    return g_NwbMeshInstances[nwbMeshInstanceIndex()];
+}
+
+// The typed-word load families the generated .bind accessors build on, then the surface contract (NwbMeshSurface
+// / nwbMaterialSurface). The NWB_MESH_MATERIAL_CONTEXT_PROVIDED set above suppresses surface.slangi's
+// single-material nwbMaterialSurfaceAt (unused here); the AVBOIT main loads the surface-input statics + invokes
+// nwbMaterialSurface() directly. Finally the BXDF surface type + the cook-generated BXDF dispatch
+// (nwbDeferredDispatchBxdf), the same module lighting_ps.slang pulls, so the transparent fragment is shaded by
+// the material's own BXDF by its shading-model id.
+#include "../mesh/material_typed_accessors.slangi"
+#include "../mesh/surface.slangi"
+#include "../deferred/bxdf_surface.slangi"
+// The cook-generated dispatch lives in its OWN include root (deferredBxdfIncludeRoot), not under engine/graphics,
+// so it is included by its include-root-relative path (exactly as lighting_ps.slang does) -- NOT a `../` path,
+// which would (mis)resolve under engine/graphics where the generated file does not exist.
+#include "deferred/generated/bxdf_dispatch.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_TRANSMITTANCE, NWB_AVBOIT_TRANSPARENT_SET)]] Texture3D<float4> g_Transmittance;
+[[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER, NWB_AVBOIT_TRANSPARENT_SET)]] SamplerState g_LinearSampler;
+[[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, NWB_AVBOIT_TRANSPARENT_SET)]] StructuredBuffer<uint, Std430DataLayout> g_DepthWarp;
+[[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, NWB_AVBOIT_TRANSPARENT_SET)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
+
+struct NwbAvboitAccumulatePixelInput{
+    float4 position : SV_Position;
+    bool frontFace : SV_IsFrontFace;
+    NWB_MESH_RASTER_PAYLOAD_FIELDS
+};
+
+struct NwbAvboitAccumulatePixelOutput{
+    [[vk::location(NWB_AVBOIT_ACCUM_COLOR_LOCATION)]] float4 accumColor : SV_Target0;
+    [[vk::location(NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION)]] float4 accumExtinction : SV_Target1;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbAvboitActivePhysicalSliceCount(){
+    return clamp(g_Control[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES], 1u, nwbAvboitPhysicalSliceCount());
+}
+
+float nwbAvboitWarpedPhysicalSliceFromVirtualSlice(uint virtualSlice){
+    const uint clampedVirtualSlice = min(virtualSlice, nwbAvboitVirtualSliceCount() - 1u);
+    return float(min(g_DepthWarp[clampedVirtualSlice], nwbAvboitActivePhysicalSliceCount() - 1u));
+}
+
+float nwbAvboitPhysicalSliceFromVirtualSampleSlice(float sampleSlice){
+    const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
+    const float sliceBase = floor(sampleSlice);
+    const uint virtualSlice0 = uint(sliceBase);
+    const uint virtualSlice1 = min(virtualSlice0 + 1u, virtualSliceCount - 1u);
+    const float physicalSlice0 = nwbAvboitWarpedPhysicalSliceFromVirtualSlice(virtualSlice0);
+    const float physicalSlice1 = nwbAvboitWarpedPhysicalSliceFromVirtualSlice(virtualSlice1);
+    return lerp(physicalSlice0, physicalSlice1, sampleSlice - sliceBase);
+}
+
+float nwbAvboitLinearBiasedTransmittance(float2 fragCoord, float depth){
+    const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
+    const float virtualSliceMax = max(float(virtualSliceCount) - 1.0, 0.0);
+    const float sampleSlice = clamp(
+        depth * float(virtualSliceCount) - nwbAvboitSelfOcclusionSliceBias(),
+        0.0,
+        virtualSliceMax
+    );
+    const float physicalSlice = nwbAvboitPhysicalSliceFromVirtualSampleSlice(sampleSlice);
+    const float physicalSliceUv = (physicalSlice + 0.5) / max(float(nwbAvboitPhysicalSliceCount()), 1.0);
+    return g_Transmittance.Sample(
+        g_LinearSampler,
+        float3(nwbAvboitFullUvFromFragCoord(fragCoord), clamp(physicalSliceUv, 0.0, 1.0))
+    ).r;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Engine-owned AVBOIT-accumulate pixel-shader entry. Mirrors the G-buffer pixel shader: the engine owns the
+// entry, the surface load, and the compositing; each material provides ONLY a surface hook, nwbMaterialSurface().
+// The hook fills the surface from the interpolated pixel inputs + this material's typed `.bind` constants; the
+// engine builds a NwbBxdfSurface from it and shades it through the material's BXDF, then runs the AVBOIT math.
+NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
+    NwbMeshSurfaceInputs surfaceInputs;
+    surfaceInputs.color = input.color;
+    surfaceInputs.normal = input.normal;
+    surfaceInputs.tangent = input.tangent;
+    surfaceInputs.uv0 = input.uv0;
+    surfaceInputs.worldPosition = input.worldPosition.xyz;
+    nwbLoadMeshSurfaceInputs(surfaceInputs);
+#if NWB_CSG_ENABLED
+    if(nwbAvboitCsgPixelDiscard(input.position, input.worldPosition))
+        discard;
+#endif
+
+    const float alpha = nwbAvboitResolveFragmentAlpha(input.color);
+    if(alpha <= 0.0)
+        discard;
+
+    const float transmittance = nwbAvboitLinearBiasedTransmittance(input.position.xy, input.position.z);
+    const float weightedAlpha = alpha * transmittance;
+
+    // The material's surface hook fills the per-pixel surface (base color + normal + BXDF params) the same way
+    // the G-buffer pixel shader does; build the BXDF surface from it.
+    const NwbMeshSurface surface = nwbMaterialSurface();
+    NwbBxdfSurface bxdfSurface;
+    bxdfSurface.baseColor = surface.baseColor;
+    bxdfSurface.normal = nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0));
+    bxdfSurface.worldPosition = inWorldPosition;
+    bxdfSurface.viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - inWorldPosition, float3(0.0, 0.0, 1.0));
+    bxdfSurface.shadingModel = nwbMeshShadingModelId();
+    bxdfSurface.param0 = surface.param0;
+    bxdfSurface.param1 = surface.param1;
+    bxdfSurface.isBackground = false;
+
+    // Shade through the material's own BXDF, by its shading-model id. Pass the negative-pixel sentinel: a
+    // transparent fragment is not in the opaque G-buffer the screen-space shadow visibility was traced from, so
+    // nwbBxdfLightTransmittance skips shadow sampling and treats every light as fully visible -- matching the
+    // pre-colored-shadow transparent behaviour the fixed accumulate_ps.slang used.
+    const float3 shadedColor = clamp(
+        nwbDeferredDispatchBxdf(bxdfSurface.shadingModel, bxdfSurface, int2(-1, -1)),
+        float3(0.0),
+        float3(1.0)
+    );
+
+    NwbAvboitAccumulatePixelOutput output;
+    output.accumColor = float4(shadedColor * weightedAlpha, weightedAlpha);
+    output.accumExtinction = float4(nwbAvboitExtinctionFromAlpha(alpha), 0.0, 0.0, 0.0);
+    return output;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -17,8 +17,9 @@
 // Per light: cast one occlusion ray from the surface toward the light. Directional lights aim along the
 // toward-light axis to "infinity"; point/spot lights aim at the light position with tMax = the distance,
 // so geometry past the light does not shadow the surface. Bias along the geometric normal + a small tMin
-// avoids self-intersection acne.
-bool nwbShadowLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light){
+// avoids self-intersection acne. Returns the per-channel transmittance accumulated by the any-hit stage:
+// float3(1) when fully lit, tinted toward zero through transparent occluders, zero behind an opaque one.
+float3 nwbShadowLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light){
     float3 toLight;
     float tMax;
     if(light.params.y < 0.5){
@@ -38,7 +39,7 @@ bool nwbShadowLightVisible(const float3 worldPosition, const float3 normal, cons
     const float tMin = 0.001;
     const float tEnd = tMax - 0.002;
     if(tEnd <= tMin)
-        return true;
+        return float3(1.0, 1.0, 1.0);
 
     RayDesc ray;
     ray.Origin = worldPosition + normal * tMin;
@@ -46,11 +47,14 @@ bool nwbShadowLightVisible(const float3 worldPosition, const float3 normal, cons
     ray.TMin = tMin;
     ray.TMax = tEnd;
 
+    // Seed full transmittance; the any-hit stage multiplies in each transparent occluder's tint and an opaque
+    // hit zeroes it + ends the search. The miss stage is a no-op, so whatever survives is the answer. The trace
+    // must visit every occluder, so it cannot skip the any-hit or accept the first hit.
     NwbShadowOcclusionPayload payload;
-    payload.visibility = 0.0;
+    payload.transmittance = float3(1.0, 1.0, 1.0);
     TraceRay(
         g_NwbShadowTlas,
-        RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
+        RAY_FLAG_NONE,
         0xFFu,
         0u,
         0u,
@@ -58,7 +62,7 @@ bool nwbShadowLightVisible(const float3 worldPosition, const float3 normal, cons
         ray,
         payload
     );
-    return payload.visibility > 0.5;
+    return payload.transmittance;
 }
 
 
@@ -76,21 +80,25 @@ void main(){
 
     // Background (no geometry) is fully lit; the lighting pass ignores it anyway.
     if(g_NwbShadowGBufferDepth.Load(texel).r >= 0.999999){
-        g_NwbShadowVisibility[pixel] = 0xFFFFFFFFu;
+        for(uint slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot)
+            g_NwbShadowVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
         return;
     }
 
     const float3 worldPosition = g_NwbShadowGBufferWorldPosition.Load(texel).xyz;
     const float3 normal = normalize(g_NwbShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
 
-    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_SHADOW_VISIBILITY_LIGHT_COUNT);
-    uint visibilityMask = 0u;
+    // Trace only the lights that hold a shadow slot (params.z >= 0); write each light's visibility into its
+    // own slot layer. Lights without a slot are left at the cleared "all lit" white default.
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint i = 0u; i < lightCount; ++i){
-        if(nwbShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]))
-            visibilityMask |= (1u << i);
-    }
+        const float slot = g_NwbSceneLights[i].params.z;
+        if(slot < 0.0)
+            continue;
 
-    g_NwbShadowVisibility[pixel] = visibilityMask;
+        const float3 transmittance = nwbShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
+        g_NwbShadowVisibility[uint3(pixel, uint(slot))] = float4(transmittance, 1.0);
+    }
 }
 
 

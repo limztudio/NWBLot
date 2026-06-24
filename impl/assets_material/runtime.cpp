@@ -273,11 +273,13 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     m_shaderVariant.clear();
     m_materialInterface = NAME_NONE;
     m_shadingModelId = 0u;
+    m_shadowTransmittanceModelId = 0u;
     m_typedLayoutHash = 0u;
     m_typedLayoutBlocks.clear();
     m_typedLayoutFields.clear();
     m_typedBlockBytes.clear();
     clearStageShaders();
+    m_avboitAccumulatePixelShader.reset();
     m_transparent = false;
     m_twoSided = false;
 
@@ -385,6 +387,37 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!ReadPOD(binary, cursor, m_shadingModelId)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shading model id"));
         return false;
+    }
+
+    if(!ReadPOD(binary, cursor, m_shadowTransmittanceModelId)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shadow transmittance model id"));
+        return false;
+    }
+
+    // Optional per-material AVBOIT accumulate pixel shader (present only for surface-authored transparent
+    // materials): a presence flag followed by the shader name hash, mirroring how a stage shader is stored.
+    u32 hasAvboitAccumulatePixelShader = 0u;
+    if(!ReadPOD(binary, cursor, hasAvboitAccumulatePixelShader)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing AVBOIT accumulate pixel shader presence flag"));
+        return false;
+    }
+    if(hasAvboitAccumulatePixelShader > 1u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: invalid AVBOIT accumulate pixel shader presence flag {}"), hasAvboitAccumulatePixelShader);
+        return false;
+    }
+    if(hasAvboitAccumulatePixelShader == 1u){
+        NameHash avboitAccumulatePixelShaderNameHash = {};
+        if(!ReadPOD(binary, cursor, avboitAccumulatePixelShaderNameHash)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing AVBOIT accumulate pixel shader name"));
+            return false;
+        }
+        Core::Assets::AssetRef<Shader> avboitAccumulatePixelShaderRef;
+        avboitAccumulatePixelShaderRef.virtualPath = Name(avboitAccumulatePixelShaderNameHash);
+        if(!avboitAccumulatePixelShaderRef.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: AVBOIT accumulate pixel shader name is empty"));
+            return false;
+        }
+        m_avboitAccumulatePixelShader = avboitAccumulatePixelShaderRef;
     }
 
     if(cursor != binary.size()){

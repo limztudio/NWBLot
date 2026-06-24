@@ -187,6 +187,18 @@ void RendererRayTracingState::invalidateResources(){
     m_shadowBindingLayout.reset();
     m_shadowBindingSet.reset();
     m_shadowBindingSetTlas = nullptr;
+    m_shadowBindingSetInstanceMaterial = nullptr;
+    m_shadowBindingSetMaterialTyped = nullptr;
+    m_shadowBindingSetMeshInstances = nullptr;
+    m_shadowBindingSetMeshCount = 0u;
+    m_shadowMeshCount = 0u;
+    m_shadowMeshCapReported = false;
+    m_shadowInstanceMaterialBuffer.reset();
+    m_shadowInstanceMaterialCapacity = 0u;
+    m_shadowInstanceBuffer.reset();
+    m_shadowMaterialTypedBuffer.reset();
+    m_shadowInstanceCapacity = 0u;
+    m_shadowMaterialTypedCapacity = 0u;
     m_bvhSortBindingLayout.reset();
     m_bvhSortShader.reset();
     m_bvhSortPipeline.reset();
@@ -215,6 +227,9 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowBindingSet.reset();
     m_swShadowBindingSetSceneNodes = nullptr;
     m_swShadowBindingSetInstances = nullptr;
+    m_swShadowBindingSetInstanceMaterial = nullptr;
+    m_swShadowBindingSetMaterialTyped = nullptr;
+    m_swShadowBindingSetMeshInstances = nullptr;
     m_swShadowBindingSetVisibility = nullptr;
     m_swShadowBindingSetMeshCount = 0u;
     m_swShadowMeshCount = 0u;

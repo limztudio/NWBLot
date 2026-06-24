@@ -12,6 +12,7 @@
 #include <core/graphics/module.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_triangle_indices.h>
+#include <impl/assets_mesh/meshlet_vertex_attributes.h>
 #include <impl/assets_mesh/payload_validation.h>
 #include <impl/assets_mesh/skin_validation.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
@@ -473,6 +474,43 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             NWB_TEXT("rt triangle index"),
             swShadow,
             rtSupported
+        ) && uploaded;
+    }
+
+    // Flat per-vertex shadow-trace attribute buffer, positionStream-indexed in lockstep with the reconstructed
+    // triangle index buffer above, so a trace can interpolate normal/uv0 with the SAME i0/i1/i2 it loads for
+    // positions. Built from the BIND-POSE streams: uv0 is pose-invariant; normal uses the rest normal (skinned
+    // normal re-derivation is deferred, acceptable for smooth transmittance). Both shadow backends read it as a
+    // ByteAddressBuffer (HW any-hit and the software fallback), so it carries a raw view.
+    if(uploaded){
+        const usize positionCount = instance.restPositions.size();
+        Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_RuntimeBlasAttributeArena, positionCount * sizeof(AttribGpu) + 4096u);
+        Vector<AttribGpu, Core::Alloc::ScratchArena> vertexAttributes{ scratchArena };
+        if(!BuildMeshletVertexAttributes(
+            instance.meshlets,
+            instance.meshletLocalVertexRefs,
+            instance.meshletPositionRefDeltas,
+            instance.meshletAttributeRefDeltas,
+            instance.restNormals,
+            instance.uv0,
+            instance.restPositions.size(),
+            vertexAttributes
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace vertex attributes for runtime mesh '{}'")
+                , instance.handle.value
+            );
+            return false;
+        }
+
+        uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<AttribGpu>(
+            m_graphics,
+            instance,
+            instance.attributeBuffer,
+            AStringView("rt_vertex_attributes"),
+            vertexAttributes,
+            false,
+            NWB_TEXT("rt vertex attribute"),
+            true
         ) && uploaded;
     }
 

@@ -442,8 +442,12 @@ Device::Device(const DeviceDesc& desc)
     }
 
     GraphicsBytes pipelineCacheInitialData{m_context.objectArena};
+    // loadPipelineCacheData logs the genuine failures (corrupt / incompatible data, mount/read errors) itself
+    // and returns false with empty data for the expected "no cache yet" case -- the first run, or any prior run
+    // that exited without its graceful destructor save (e.g. killed / crashed). That cold start is normal, so it
+    // is an INFO breadcrumb rather than a warning: the empty-data path below builds a fresh cache.
     if(!loadPipelineCacheData(pipelineCacheInitialData))
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to load pipeline cache data; starting with an empty cache."));
+        NWB_LOGGER_INFO(NWB_TEXT("Vulkan: No usable pipeline cache found; starting with an empty cache."));
 
     auto cacheInfo = VulkanDetail::MakeVkStruct<VkPipelineCacheCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
     if(!pipelineCacheInitialData.empty()){

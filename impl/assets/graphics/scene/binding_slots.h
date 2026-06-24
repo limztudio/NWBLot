@@ -23,10 +23,16 @@
 #define NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT 16u
 #define NWB_SCENE_MAX_LIGHTS 64u
 
-// Hard shadows pack one visibility bit per light into a single R32_UINT, so the first 32 lights can be
-// individually shadowed and any beyond that stay fully lit. This is the width of the visibility mask
-// word: the shadow producer (raygen / software fallback) and the lighting consumer MUST share it.
-#define NWB_SCENE_SHADOW_VISIBILITY_LIGHT_COUNT 32u
+// Colored shadows store per-light float3 transmittance in a Texture2DArray with one layer per shadow slot.
+// A bounded pool of slots is assigned per frame to the most important lights (the shadow-slot allocator);
+// lights without a slot stay fully lit. The shadow producers (raygen / software fallback) and the lighting
+// consumer MUST share this slot count (the array depth).
+#define NWB_SCENE_SHADOW_SLOT_COUNT 8u
+
+// Fallback set/binding for the shadow-visibility SRV when a consumer includes scene/lighting.slangi without
+// selecting its own (the real consumer -- deferred lighting -- points these at its own slot map).
+#define NWB_SCENE_SHADOW_VISIBILITY_DEFAULT_SET 0
+#define NWB_SCENE_SHADOW_VISIBILITY_DEFAULT_BINDING 7
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

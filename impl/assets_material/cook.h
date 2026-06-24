@@ -53,7 +53,18 @@ struct MaterialCookEntry{
     // material's `.bind`. Empty when the material declares explicit `shaders` instead.
     MaterialCookString surfaceSource;
     u32 shadingModelId = 0u;
+    // This material's shadow-transmittance dispatch id, deduped over the `surface` SOURCE set (NOT the bxdf id:
+    // the surface hook computes the per-hit transmittance the shadow trace returns). Materials sharing a
+    // `.surface` share an id. Assigned by AssignMaterialShadingModelIds (alongside shadingModelId) and consumed
+    // by EmitShadowTransmittanceDispatchModule, which routes this id to the material's transmittance hook.
+    u32 shadowTransmittanceModelId = 0u;
     StageShaderMap stageShaders;
+    // The identity (shader virtual name) of this material's cook-generated AVBOIT accumulate pixel shader, set by
+    // EmitMaterialAvboitAccumulatePixelShaders for a transparent material authored with a `surface`. Empty for an
+    // opaque material or a transparent material with explicit `shaders`. Unlike the G-buffer PS (a material stage
+    // shader) this is not a stage; the renderer binds it for the transparent draw via the same name. Used by the
+    // CSG clip-variant collector so the generated accumulate PS receives AVBOIT CSG clip variants.
+    MaterialCookString avboitAccumulatePixelShaderName;
     ParameterMap parameters;
     bool transparent = false;
     bool twoSided = false;
@@ -66,6 +77,7 @@ struct MaterialCookEntry{
         , bxdfSource(arena)
         , surfaceSource(arena)
         , stageShaders(0, Hasher<Core::ShaderType::Enum>(), EqualTo<Core::ShaderType::Enum>(), arena)
+        , avboitAccumulatePixelShaderName(arena)
         , parameters(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), arena)
     {}
 
@@ -80,7 +92,9 @@ struct MaterialCookEntry{
         bxdfSource.clear();
         surfaceSource.clear();
         shadingModelId = 0u;
+        shadowTransmittanceModelId = 0u;
         stageShaders.clear();
+        avboitAccumulatePixelShaderName.clear();
         parameters.clear();
         transparent = false;
         twoSided = false;
@@ -144,9 +158,11 @@ struct GeneratedMaterialPixelShader{
 );
 [[nodiscard]] bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMaterial);
 
-// Assigns each material a deferred shading-model id from the unique set of `bxdf` sources (sorted for
-// deterministic ids; materials sharing a bxdf share an id). Must run before the material assets are built
-// (so the id is baked into each cooked material) and before EmitDeferredBxdfDispatchModule.
+// Assigns each material a deferred shading-model id from the unique set of `bxdf` sources AND a separate
+// shadow-transmittance id from the unique set of `surface` sources (both sorted for deterministic ids;
+// materials sharing a bxdf / a surface share the respective id). Must run before the material assets are built
+// (so the ids are baked into each cooked material) and before EmitDeferredBxdfDispatchModule /
+// EmitShadowTransmittanceDispatchModule.
 [[nodiscard]] bool AssignMaterialShadingModelIds(
     MaterialCookVector<MaterialCookEntry>& materialEntries,
     Core::Alloc::ScratchArena& scratchArena
@@ -157,6 +173,20 @@ struct GeneratedMaterialPixelShader{
 // The engine's deferred lighting harness includes this module. Always writes the module (empty dispatch if
 // no materials declare a bxdf). Run after AssignMaterialShadingModelIds + before PrepareShaderEntriesForCook.
 [[nodiscard]] bool EmitDeferredBxdfDispatchModule(
+    const Path& cacheDirectory,
+    AStringView configurationSafeName,
+    const MaterialCookVector<MaterialCookEntry>& materialEntries,
+    Path& outIncludeRoot,
+    Core::Alloc::ScratchArena& scratchArena
+);
+
+// Generates the shadow-transmittance dispatch module (shadow/generated/transmittance_dispatch.slangi) under the
+// returned include root. The module includes each unique `.surface` (with its `.bind`, macro-isolated per id) +
+// a switch dispatch keyed by shadowTransmittanceModelId that routes a hit to that material's surface hook and
+// returns its transmittance; an unknown id resolves to float3(1) (untinted/lit -- no engine default tint). The
+// shadow trace (a later unit) includes this module. Always writes the module (empty dispatch if no materials
+// declare a surface). Run after AssignMaterialShadingModelIds + before PrepareShaderEntriesForCook.
+[[nodiscard]] bool EmitShadowTransmittanceDispatchModule(
     const Path& cacheDirectory,
     AStringView configurationSafeName,
     const MaterialCookVector<MaterialCookEntry>& materialEntries,
@@ -175,6 +205,23 @@ struct GeneratedMaterialPixelShader{
     const Path& cacheDirectory,
     AStringView configurationSafeName,
     AStringView sharedMeshShaderName,
+    MaterialCookVector<MaterialCookEntry>& materialEntries,
+    MaterialCookVector<GeneratedMaterialPixelShader>& outGenerated,
+    Core::Alloc::ScratchArena& scratchArena
+);
+
+// The transparent-pass twin of EmitMaterialPixelShaders: for each TRANSPARENT material authored with a
+// `surface`, generate its AVBOIT accumulate pixel shader (engine AVBOIT-accumulate authoring + the material's
+// typed `.bind` + its resolved `surface` hook) under a `generated/` directory in the cook cache, and append a
+// (name, source) record so the caller can synthesize the shader entry. Unlike the G-buffer PS this is NOT
+// assigned as a material stage shader (the material's single pixel stage is the G-buffer PS); the renderer
+// derives this PS's identity from the material name + the shared accumulate-PS prefix to bind it for the
+// transparent draw. Opaque materials + transparent materials with explicit `shaders` are skipped.
+// `surfaceSource` must already be resolved to an absolute path.
+[[nodiscard]] bool EmitMaterialAvboitAccumulatePixelShaders(
+    MaterialCookArena& arena,
+    const Path& cacheDirectory,
+    AStringView configurationSafeName,
     MaterialCookVector<MaterialCookEntry>& materialEntries,
     MaterialCookVector<GeneratedMaterialPixelShader>& outGenerated,
     Core::Alloc::ScratchArena& scratchArena

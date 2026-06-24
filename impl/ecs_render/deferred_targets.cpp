@@ -420,8 +420,8 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY,
         createdTargets.shadowVisibility.get(),
         createdTargets.shadowVisibilityFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
     ));
     createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, deferredState().m_lightingBindingLayout);
     if(!createdTargets.lightingBindingSet){

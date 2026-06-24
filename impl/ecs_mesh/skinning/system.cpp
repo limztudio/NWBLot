@@ -189,6 +189,7 @@ bool MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Ru
     outMesh.meshletLocalVertexRefBuffer = instance->meshletLocalVertexRefBuffer;
     outMesh.meshletPrimitiveIndexBuffer = instance->meshletPrimitiveIndexBuffer;
     outMesh.triangleIndexBuffer = instance->triangleIndexBuffer;
+    outMesh.attributeBuffer = instance->attributeBuffer;
     outMesh.localBounds = instance->localBounds;
     outMesh.meshletCount = static_cast<u32>(instance->meshlets.size());
     outMesh.version = instance->editRevision;

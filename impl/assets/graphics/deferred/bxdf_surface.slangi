@@ -1,0 +1,36 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_DEFERRED_BXDF_SURFACE_SLANGI
+#define NWB_GRAPHICS_DEFERRED_BXDF_SURFACE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The surface a material BXDF receives. The deferred path (lighting_framework.slangi) unpacks it from the
+// G-buffer (nwbBxdfLoadSurface); the transparent / AVBOIT accumulate path builds it directly from the
+// material's surface hook (avboit/accumulate_ps_authoring.slangi). Both feed the SAME cook-generated BXDF
+// dispatch (nwbDeferredDispatchBxdf), so the BXDF parameter type lives here -- shared by both consumers --
+// rather than in either consumer's own header. The two params are whatever the material packed into the
+// normal/world alpha channels (e.g. roughness / metallic); shadingModel selects which BXDF dispatches.
+struct NwbBxdfSurface{
+    float3 baseColor;
+    float3 normal;          // world space, normalized
+    float3 worldPosition;
+    float3 viewVector;      // normalized, surface -> camera
+    uint   shadingModel;
+    float  param0;
+    float  param1;
+    bool   isBackground;    // no geometry at this pixel (sky); lighting shaders pass the base color through
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

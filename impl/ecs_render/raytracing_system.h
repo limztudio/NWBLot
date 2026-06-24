@@ -56,6 +56,14 @@ private:
     [[nodiscard]] bool refitMeshSwBvh(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
     [[nodiscard]] bool updateMeshSwBvh(Core::CommandList& commandList, MeshResources& meshResources);
     [[nodiscard]] bool ensureSceneBvhBuffers(u32 instanceCount);
+    [[nodiscard]] bool ensureShadowInstanceMaterialBuffer(usize instanceCount);
+    [[nodiscard]] bool uploadShadowMaterialContextBuffers(
+        Core::CommandList& commandList,
+        const InstanceGpuDataVector& instanceData,
+        const MaterialTypedByteDataVector& materialTypedBytes
+    );
+    [[nodiscard]] bool ensureShadowInstanceContextBuffer(usize instanceCount);
+    [[nodiscard]] bool ensureShadowMaterialTypedBuffer(usize byteCount);
 
 #if defined(NWB_DEBUG)
 private:

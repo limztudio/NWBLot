@@ -6,6 +6,9 @@
 #include "runtime_constants.h"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct NwbMeshEmulationVertexInput{
     [[vk::location(NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION)]] float4 position : POSITION0;
     [[vk::location(NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION)]] float3 normal : NORMAL0;

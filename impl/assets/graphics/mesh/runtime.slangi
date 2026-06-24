@@ -125,6 +125,11 @@ uint nwbMeshletCount(){
     return g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_MESHLET_COUNT];
 }
 
+// When NWB_MESH_MATERIAL_CONTEXT_PROVIDED is defined the includer (the shadow trace's material-context header)
+// supplies nwbMeshInstanceIndex()/nwbMeshMaterialConstantByteOffset() from per-invocation globals it set from
+// the ray hit; this mesh runtime then defines neither (the rasterizer never defines the macro, so its
+// definitions below are byte-for-byte unchanged).
+#if !defined(NWB_MESH_MATERIAL_CONTEXT_PROVIDED)
 uint nwbMeshInstanceIndex(){
     return g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
 }
@@ -132,6 +137,7 @@ uint nwbMeshInstanceIndex(){
 uint nwbMeshMaterialConstantByteOffset(){
     return g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET];
 }
+#endif
 
 uint nwbMeshDispatchFlags(){
     return g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS];
@@ -204,9 +210,16 @@ NwbMeshSourceVertex nwbMeshLoadSourceVertex(
     return sourceVertex;
 }
 
+// Guarded like nwbMeshInstanceIndex()/nwbMeshMaterialConstantByteOffset() above: when a material-context provider
+// (the shadow trace's material-context header, or the AVBOIT accumulate authoring header) defines
+// NWB_MESH_MATERIAL_CONTEXT_PROVIDED it owns nwbMeshLoadInstance(), so this mesh runtime must NOT also define it
+// (otherwise the includer's definition collides with this one). The rasterizer never defines the macro, so its
+// definition below is byte-for-byte unchanged.
+#if !defined(NWB_MESH_MATERIAL_CONTEXT_PROVIDED)
 NwbMeshInstanceData nwbMeshLoadInstance(){
     return g_NwbMeshInstances[nwbMeshInstanceIndex()];
 }
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -369,6 +369,7 @@ bool PrepareShaderEntriesForCook(
     const Path& materialBindIncludeRoot,
     const Path& csgShapeIncludeRoot,
     const Path& deferredBxdfIncludeRoot,
+    const Path& shadowTransmittanceIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
     const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
@@ -406,6 +407,8 @@ bool PrepareShaderEntriesForCook(
         ++implicitIncludeRootCount;
     if(!deferredBxdfIncludeRoot.empty())
         ++implicitIncludeRootCount;
+    if(!shadowTransmittanceIncludeRoot.empty())
+        ++implicitIncludeRootCount;
     if(!csgShapeIncludeRoot.empty()){
         ++implicitIncludeRootCount;
         if(implicitIncludeRootCount > Limit<usize>::s_Max - resolvedPaths.assetRoots.size()){
@@ -419,6 +422,8 @@ bool PrepareShaderEntriesForCook(
         implicitIncludeRoots.push_back(materialBindIncludeRoot);
     if(!deferredBxdfIncludeRoot.empty())
         implicitIncludeRoots.push_back(deferredBxdfIncludeRoot);
+    if(!shadowTransmittanceIncludeRoot.empty())
+        implicitIncludeRoots.push_back(shadowTransmittanceIncludeRoot);
     if(!csgShapeIncludeRoot.empty()){
         implicitIncludeRoots.push_back(csgShapeIncludeRoot);
         for(const Path& assetRoot : resolvedPaths.assetRoots)
@@ -534,9 +539,22 @@ bool PrepareShaderEntriesForCook(
             return false;
         // The mesh shader is now generic + interface-free; the per-material PIXEL shader is the stage that reads
         // the typed .bind material constants (the material's surface hook), so the pixel stage also receives the
-        // typed binding when it depends on a material interface.
+        // typed binding when it depends on a material interface. The shadow trace evaluates the SAME surface hooks
+        // per hit through the cook-generated transmittance dispatch module (which #includes each material's .bind),
+        // so the compute stage that runs the software fallback (and any ray-tracing stage that runs the hardware
+        // path) likewise receives the typed binding when it depends on a material interface.
+        const AStringView preparedEntryArchiveStage = preparedEntry.entry.archiveStage.view();
+        const bool preparedEntryStageReadsTypedMaterial =
+            preparedEntryArchiveStage == "mesh"
+            || preparedEntryArchiveStage == "ps"
+            || preparedEntryArchiveStage == "cs"
+            || preparedEntryArchiveStage == "rgen"
+            || preparedEntryArchiveStage == "rahit"
+            || preparedEntryArchiveStage == "rchit"
+            || preparedEntryArchiveStage == "rmiss"
+        ;
         preparedEntry.usesMaterialTypedBinding =
-            (preparedEntry.entry.archiveStage.view() == "mesh" || preparedEntry.entry.archiveStage.view() == "ps")
+            preparedEntryStageReadsTypedMaterial
             && preparedEntry.materialTypedBindingInterface;
         preparedEntry.materialTypedBindingInterfacePath = Move(materialTypedBindingInterfaceText);
         if(preparedEntry.usesMaterialTypedBinding && !__hidden_shader_cook_plan::SetShaderImplicitDefine(

@@ -10,16 +10,32 @@
 
 
 #include "binding_slots.h"
+#include "instance_material.slangi"
+
+// Point the surface hook's material-constants context (g_NwbMaterialTypedWords + g_NwbMeshInstances, declared in
+// mesh/material_typed_bindings.slangi at NWB_MESH_SET / NWB_MESH_BINDING_*) at this pass's binding set so the
+// per-hit transmittance dispatch reads them here -- mirroring the software traversal's redirect. The mesh-set
+// defaults (slots 6/12) collide with this set's other slots, so they are moved onto the shadow-RT slot map.
+#define NWB_MESH_SET NWB_SHADOW_RT_SET
+#define NWB_MESH_BINDING_MATERIAL_TYPED NWB_SHADOW_RT_BINDING_MATERIAL_TYPED
+#define NWB_MESH_BINDING_INSTANCE NWB_SHADOW_RT_BINDING_MESH_INSTANCES
+
+// The shadow trace's material-constants context (NwbShadowHit + the per-invocation accessors + the surface
+// contract) + the cook-generated per-hit transmittance dispatch (nwbShadowDispatchTransmittance), which #includes
+// each transparent material's .bind + .surface and routes by shadowTransmittanceModelId.
+#include "shadow_surface.slangi"
+#include "shadow/generated/transmittance_dispatch.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Occlusion ray payload shared by the raygen, miss, and closest-hit stages. visibility = 1 when the ray
-// reached the light unobstructed (set by the miss stage); 0 means an occluder was hit (the default the
-// raygen seeds before tracing, so a terminated-on-first-hit trace that skips the closest hit stays 0).
+// Occlusion ray payload shared by the raygen, miss, and any-hit stages. transmittance accumulates the per-
+// channel fraction of light still reaching the light source: the raygen seeds it to float3(1), each
+// transparent any-hit multiplies it by that occluder's tint, and any opaque hit zeroes it and ends the search.
+// The miss stage is a no-op (whatever survived the any-hits is the answer).
 struct NwbShadowOcclusionPayload{
-    float visibility;
+    float3 transmittance;
 };
 
 [[vk::binding(NWB_SHADOW_RT_BINDING_TLAS, NWB_SHADOW_RT_SET)]]
@@ -35,7 +51,22 @@ Texture2D<float4> g_NwbShadowGBufferNormal;
 Texture2D<float4> g_NwbShadowGBufferDepth;
 
 [[vk::binding(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, NWB_SHADOW_RT_SET)]]
-RWTexture2D<uint> g_NwbShadowVisibility;
+RWTexture2DArray<float4> g_NwbShadowVisibility;
+
+[[vk::binding(NWB_SHADOW_RT_BINDING_INSTANCE_MATERIAL, NWB_SHADOW_RT_SET)]]
+StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbShadowInstanceMaterial;
+
+// Parallel per-mesh arrays (slot k = mesh k = material.meshSlot): raw triangle index byte buffer (the any-hit
+// loads i0/i1/i2 by PrimitiveIndex) + the per-vertex shadow-trace attribute byte buffer. The HW BLAS owns the
+// positions; only indices + attributes are needed to interpolate uv0/normal at the hit barycentrics.
+[[vk::binding(NWB_SHADOW_RT_BINDING_MESH_INDICES, NWB_SHADOW_RT_SET)]]
+ByteAddressBuffer g_NwbShadowMeshIndices[NWB_SHADOW_RT_MAX_MESHES];
+
+// Per-vertex shadow-trace attributes (AttribGpu = Half4U normal @ +0 (8B) + Float2U uv0 @ +8 (8B), 16B stride),
+// positionStream-indexed in lockstep with the BLAS position stream, so a triangle hit interpolates normal/uv0
+// with the SAME i0/i1/i2 it loaded from the index buffer.
+[[vk::binding(NWB_SHADOW_RT_BINDING_MESH_ATTRIBUTES, NWB_SHADOW_RT_SET)]]
+ByteAddressBuffer g_NwbShadowMeshAttributes[NWB_SHADOW_RT_MAX_MESHES];
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -20,6 +20,7 @@
 
 #include "../scene/buffer.slangi"
 #include "../bvh/bvh_common.slangi"
+#include "../common/math.slangi"
 #include "instance_material.slangi"
 
 // The shadow trace's material-constants context (NwbShadowHit + the per-invocation accessors + the surface
@@ -139,18 +140,21 @@ float3 nwbSwShadowTransformVector(const NwbSwShadowInstance instance, const floa
     );
 }
 
-// Transforms an object-space normal to world space for the surface hook (the contract NwbMeshSurface.normal +
-// the rasterizer both use world space). The normal transform is the inverse-transpose of object->world, which is
-// the transpose of the world->object rotation carried in the instance rows; that transpose's i-th component is
-// the dot of object normal with the i-th COLUMN of the world->object 3x3 (the i-th components of the three rows).
-// Normalized so a hook reading the normal sees a unit vector even under non-uniform instance scale.
+// Transforms an object-space normal to world space for the surface hook (NwbMeshSurface.normal is world space).
+// The normal transform is the inverse-transpose of object->world -- the transpose of the world->object 3x3 carried
+// in the instance rows; that transpose's i-th component is the dot of the object normal with the i-th COLUMN of the
+// world->object 3x3 (the i-th components of the three rows). This matches the hardware any-hit and is the
+// geometrically-correct transform; it equals the rasterizer's world-space normal under uniform instance scale (the
+// common case) and diverges in direction only under NON-uniform scale (where the rasterizer applies the forward
+// map instead) -- latent for transmittance hooks that don't read the normal. nwbSafeNormalize guards the
+// degenerate (near-zero / non-finite, e.g. a singular instance transform) result, matching the engine pattern.
 float3 nwbSwShadowTransformNormal(const NwbSwShadowInstance instance, const float3 objectNormal){
     const float3 worldNormal = float3(
         dot(float3(instance.worldToObjectRow0.x, instance.worldToObjectRow1.x, instance.worldToObjectRow2.x), objectNormal),
         dot(float3(instance.worldToObjectRow0.y, instance.worldToObjectRow1.y, instance.worldToObjectRow2.y), objectNormal),
         dot(float3(instance.worldToObjectRow0.z, instance.worldToObjectRow1.z, instance.worldToObjectRow2.z), objectNormal)
     );
-    return normalize(worldNormal);
+    return nwbSafeNormalize(worldNormal, float3(0.0, 0.0, 1.0));
 }
 
 // Result of a ray/triangle test: whether the ray crossed the triangle inside (tMin, tMax) + the hit's

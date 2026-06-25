@@ -25,6 +25,7 @@ namespace MeshSkinningGpuTimingScope{
 
 inline constexpr Name s_Skinning("mesh_skinning.skinning");
 inline constexpr Name s_MeshletBounds("mesh_skinning.meshlet_bounds");
+inline constexpr Name s_RepackNormals("mesh_skinning.repack_normals");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

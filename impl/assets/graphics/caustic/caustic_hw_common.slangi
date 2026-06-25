@@ -69,8 +69,8 @@ struct NwbCausticHwView{
     float4 frustumPlanes[6];
 };
 
-// Per-dispatch constants -- byte-identical to the SW producer's SwCausticPushConstants so the photon grid / flux /
-// emission / jitter all match the SW reference exactly.
+// Per-dispatch constants -- byte-identical to the SW producer's push constants (CPU mirror CausticPhotonPushConstants)
+// so the photon grid / flux / emission / jitter all match the SW reference exactly.
 struct NwbCausticHwPushConstants{
     uint width;
     uint height;
@@ -78,8 +78,7 @@ struct NwbCausticHwPushConstants{
     uint photonCount;
     uint emissionTargetCount;
     uint frameIndex;
-    float totalEmittedPower;
-    float pad0;
+    uint gridSide; // sqrt(photonCount): the emission grid side, runtime so C++ can scale the photon density per build config
 };
 
 

@@ -25,7 +25,7 @@ NwbMeshSurface nwbMaterialSurface(){
     // + alpha). Hardcoded test values; the production path authors them as typed .bind constants.
     NwbMeshSurface result = nwbMakeMeshSurface(baseColor, inNormal, 0.0, 0.0);
     result.ior = 1.5;
-    result.transmission = saturate(baseColor.rgb) * 0.7;
+    result.transmission = saturate(tinted.rgb) * 0.7;
     result.alpha = 1.0 - nwbLuminance(result.transmission);
     return result;
 }

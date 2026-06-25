@@ -92,6 +92,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
         || resources.skinCount != skinCount
         || resources.jointCount != jointCount
         || !resources.boundsBindingSet
+        || (instance.attributeBuffer && !resources.repackBindingSet)
         || (hasActiveSkin && (!resources.skinBuffer || !resources.jointPaletteBuffer || !resources.skinningBindingSet))
         || (!hasActiveSkin && resources.usesSkinning())
     ;
@@ -175,6 +176,25 @@ bool MeshSkinningSystem::ensureRuntimeResources(
     if(!rebuilt.boundsBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bounds binding set for runtime mesh '{}'"), instance.handle.value);
         return false;
+    }
+
+    // Per-frame skinned-normal repack set (RT only): writes the deformed normals into the position-stream-indexed RT
+    // attribute buffer so the shadow/caustic traces bend on the live pose. Built only when the mesh has an RT
+    // attribute buffer (ray tracing supported); m_repackBindingLayout is created by ensureRepackPipeline() in
+    // prepareRuntimeMeshResources alongside the bounds pipeline.
+    if(instance.attributeBuffer && m_repackBindingLayout){
+        Core::BindingSetDesc repackBindingSetDesc(m_arena);
+        repackBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_MESHLET_DESC, instance.meshletDescBuffer.get()));
+        repackBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_POSITION_REF_DELTAS, instance.meshletPositionRefDeltaBuffer.get()));
+        repackBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_ATTRIBUTE_REF_DELTAS, instance.meshletAttributeRefDeltaBuffer.get()));
+        repackBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_LOCAL_VERTEX_REFS, instance.meshletLocalVertexRefBuffer.get()));
+        repackBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_SKINNED_NORMALS, instance.skinnedNormalBuffer.get()));
+        repackBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_UAV(NWB_SKINNED_MESH_REPACK_BINDING_ATTRIBUTE_BUFFER, instance.attributeBuffer.get()));
+        rebuilt.repackBindingSet = device->createBindingSet(repackBindingSetDesc, m_repackBindingLayout);
+        if(!rebuilt.repackBindingSet){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create repack binding set for runtime mesh '{}'"), instance.handle.value);
+            return false;
+        }
     }
 
     resources = Move(rebuilt);

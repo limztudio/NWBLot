@@ -297,6 +297,9 @@ void MeshSkinningSystem::invalidateResources(){
     m_boundsBindingLayout.reset();
     m_boundsComputeShader.reset();
     m_boundsComputePipeline.reset();
+    m_repackBindingLayout.reset();
+    m_repackComputeShader.reset();
+    m_repackComputePipeline.reset();
 }
 
 

@@ -344,6 +344,13 @@ private:
     u32 m_causticLightCount = 0u;
     Float4 m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
+    // Previous-frame caustic motion signal (the combined refractive-instance world AABB + the refractive count): when
+    // it changes, a refractive occluder moved, so the screen-space temporal caustic history is stale -- reset the
+    // frame counter (re-seed) so the resolve does NOT blend the moving caustic into ghost-comb trails. A static scene
+    // never triggers it, so it still converges. (Camera motion is a separate signal; the smoke camera is fixed.)
+    Float4 m_causticPrevTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
+    Float4 m_causticPrevTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
+    u32 m_causticPrevRefractiveInstanceCount = 0u;
     bool m_causticEmissionGateLogged = false;
     Core::BindingLayoutHandle m_swShadowBindingLayout; // software (compute) shadow traversal pass
     Core::ShaderHandle m_swShadowShader;
@@ -381,6 +388,7 @@ private:
     const Core::Buffer* m_swCausticBindingSetEmissionTargets = nullptr;
     const Core::Buffer* m_swCausticBindingSetView = nullptr;
     const Core::Texture* m_swCausticBindingSetDepth = nullptr;
+    const Core::Texture* m_swCausticBindingSetWorldPosition = nullptr;
     const Core::Texture* m_swCausticBindingSetAccumulator = nullptr;
     u32 m_swCausticBindingSetMeshCount = 0u;
     // Hardware ray-traced caustic photon producer (P4) -- the byte-parallel sibling of the SW producer. Mirrors the

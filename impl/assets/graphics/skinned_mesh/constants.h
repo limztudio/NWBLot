@@ -28,6 +28,10 @@
 #define NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT 0u
 #define NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE 16u
 
+#define NWB_SKINNED_MESH_REPACK_GROUP_SIZE_X 64
+#define NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT 0u
+#define NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE 16u
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

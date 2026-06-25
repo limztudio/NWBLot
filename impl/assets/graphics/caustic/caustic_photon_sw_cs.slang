@@ -109,8 +109,7 @@ struct NwbCausticSwPushConstants{
     uint photonCount;
     uint emissionTargetCount;
     uint frameIndex;
-    float totalEmittedPower;
-    float pad0;
+    uint gridSide; // sqrt(photonCount): the emission grid side, runtime so C++ can scale the photon density per build config
 };
 
 [[vk::push_constant]]
@@ -243,10 +242,11 @@ NwbCausticSwVertexAttrib nwbCausticSwLoadVertexAttrib(const uint meshIndex, cons
 
 // Per-instance closest-hit refinement: push the world ray into the instance's object space, walk that mesh's
 // triangle BVH, and keep the NEAREST triangle crossing (smallest t). Updates the running closest hit in `closest`
-// (its .t is the current min). On a closer hit it records the world-space hit point, the GEOMETRIC face world
-// normal (cross(v1-v0, v2-v0), the parity-mandated bend normal -- NOT the interpolated shading normal), the
-// refractive flag, and -- for a refractive crossing -- the optical params (ior / transmission) from the occluder's
-// surface hook, evaluated through the SAME dispatch the shadow trace uses.
+// (its .t is the current min). On a closer hit it records the world-space hit point, the interpolated SHADING world
+// normal (a0*w + a1*u + a2*v transformed by the inverse-transpose -- smooth across the mesh -> smooth caustic; the
+// HW closest-hit interpolates the SAME way for parity), the refractive flag, and -- for a refractive crossing -- the
+// optical params (ior / transmission) from the occluder's surface hook, evaluated through the SAME dispatch the
+// shadow trace uses.
 void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbCausticHit closest){
     const NwbCausticSwInstance instance = g_NwbCausticSwInstances[instanceIndex];
     const NwbRtInstanceMaterial material = g_NwbCausticSwInstanceMaterial[instanceIndex];
@@ -498,32 +498,42 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // 0 (directional) or 2 (spot); point lights are excluded upstream (no caustic slot assigned).
     const float3 lightDir = nwbSafeNormalize(-light.direction.xyz, float3(0.0, 0.0, -1.0));
 
-    // Per-target emission (the make-or-break aim): round-robin photons across the refractive targets and aim each
-    // at ONE target's world AABB. Aiming at the COMBINED box over the spread tetrahedra centres the domain in the
-    // GAP between them and wastes most photons on empty space; aiming per-target keeps the domain tight on actual
-    // glass so a photon is guaranteed to pass through (or graze) its target.
-    const uint targetIndex = photonIndex % g_NwbCausticSwPushConstants.emissionTargetCount;
+    // Per-target emission (the make-or-break aim): assign each photon to ONE refractive target and aim it at that
+    // target's world AABB. Aiming at the COMBINED box over the spread tetrahedra centres the domain in the GAP between
+    // them and wastes most photons on empty space; per-target keeps the domain tight on actual glass so a photon is
+    // guaranteed to pass through (or graze) its target. The target is picked by a HASH of photonIndex, NOT
+    // photonIndex % count: the cell (column,row) below is also photonIndex-derived, so a plain modulo correlates the
+    // target with the grid -- e.g. with 3 targets on a 512-wide grid (512 == 2 mod 3) each target gets the cells where
+    // col == row + k (mod 3), a DIAGONAL-STRIPED 1/3 subset that the refractor images into diagonal caustic streaks
+    // shooting far across the receiver (invisible when sparse, glaring once dense). The hash decorrelates target from
+    // cell, so each target gets a uniformly-scattered subset of the stratified grid -> no stripes, caustic stays put.
+    const uint targetIndex = nwbCausticHashU32(photonIndex) % g_NwbCausticSwPushConstants.emissionTargetCount;
     const float3 targetAabbMin = g_NwbCausticSwEmissionTargets[targetIndex].aabbMin.xyz;
     const float3 targetAabbMax = g_NwbCausticSwEmissionTargets[targetIndex].aabbMax.xyz;
 
-    // Per-photon grid cell in [0,1)^2 with per-frame R2 jitter (P5): the photon index maps to a (column, row) on a
-    // square grid, and a frame-indexed low-discrepancy offset dithers the sample WITHIN each cell so successive
-    // frames deposit at different sub-cell points. The temporal accumulator (the resolve EMA) then averages the
-    // jittered splats into a smooth caustic instead of the fixed emission lattice. frame 0 -> (0.5,0.5) = the cell
-    // center, so the un-accumulated first frame matches the pre-jitter aim. Shared with the HW producer (parity).
-    const uint column = photonIndex % NWB_CAUSTIC_SW_GRID_SIDE;
-    const uint row = (photonIndex / NWB_CAUSTIC_SW_GRID_SIDE) % NWB_CAUSTIC_SW_GRID_SIDE;
-    const float2 jitter = nwbCausticR2Jitter(g_NwbCausticSwPushConstants.frameIndex);
-    const float2 cell = (float2(column, row) + jitter) / (float)NWB_CAUSTIC_SW_GRID_SIDE;
+    // Per-photon grid cell in [0,1)^2 with a PER-PHOTON, per-frame stratified jitter (P5): the photon index maps to
+    // a (column, row) on a square grid, and each cell is sampled at its OWN random sub-point. Per-photon (not just
+    // per-frame) is what keeps a single frame's splat from being a rigid lattice -- a flat refractor maps a rigid
+    // lattice to visible stripes, whereas stratified noise reads as honest grain the resolve blur smooths; it also
+    // still converges under temporal accumulation on static scenes. Shared with the HW producer (parity).
+    const uint gridSide = max(g_NwbCausticSwPushConstants.gridSide, 1u);
+    const uint column = photonIndex % gridSide;
+    const uint row = (photonIndex / gridSide) % gridSide;
+    const float2 jitter = nwbCausticEmissionJitter(photonIndex, g_NwbCausticSwPushConstants.frameIndex);
+    const float2 cell = (float2(column, row) + jitter) / (float)gridSide;
 
     const NwbCausticEmission emission = nwbCausticEmitPhotonAtTarget(lightDir, targetAabbMin, targetAabbMax, cell);
     if(!emission.valid)
         return;
 
-    // Flux = totalEmittedPower / photonCount, tinted by the light color (energy-conservation invariant: doubling
-    // photonCount halves per-photon flux, so the converged image is unchanged).
+    // PHYSICAL per-photon flux (energy conservation): the power through this target's emission domain is
+    // lightIrradiance * domainArea, carried by the ~photonCount/emissionTargetCount photons aimed at it, so
+    // perPhoton = lightColor * domainArea * emissionTargetCount / photonCount. Doubling photonCount halves per-photon
+    // flux (converged image unchanged); the loose domain cancels (dropped photons carry their share). No fudge
+    // constant -- the focused caustic is physically bright while sparse far prism-scatter falls below the exposure
+    // floor. Byte-identical to the HW raygen (shared emission.domainArea + the same push fields).
     const float3 lightColor = clamp(light.colorIntensity.xyz, float3(0.0), float3(1.5)) * min(max(light.colorIntensity.w, 0.0), 2.0);
-    const float perPhoton = g_NwbCausticSwPushConstants.totalEmittedPower / (float)max(g_NwbCausticSwPushConstants.photonCount, 1u);
+    const float perPhoton = emission.domainArea * (float)g_NwbCausticSwPushConstants.emissionTargetCount / (float)max(g_NwbCausticSwPushConstants.photonCount, 1u);
 
     NwbCausticPhoton photon;
     photon.origin = emission.origin;

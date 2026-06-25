@@ -177,6 +177,10 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
         return false;
     if(!ensureBoundsPipeline())
         return false;
+    // The RT attribute buffer exists only when ray tracing is supported; build the repack pipeline only then so the
+    // binding set (ensureRuntimeResources) has its layout, and so no-RT runs do not pay for an unused pipeline.
+    if(instance.attributeBuffer && !ensureRepackPipeline())
+        return false;
 
     RuntimeResources* resources = nullptr;
     bool resourcesRebuilt = false;
@@ -305,6 +309,11 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     );
     if(!dispatchMeshletBounds(commandList, instance, *resources))
         return false;
+    // Re-derive the RT attribute buffer's shading normals from this frame's deformed normals so the shadow + caustic
+    // traces bend on the live pose. Only in the active-skin branch: the !hasActiveSkin path leaves skinned==rest and
+    // the attribute buffer already holds bind-pose normals, so a repack there would be a no-op.
+    if(!dispatchRepackNormals(commandList, instance, *resources))
+        return false;
 
     instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
         instance.dirtyFlags & ~(RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)
@@ -375,6 +384,47 @@ bool MeshSkinningSystem::dispatchMeshletBounds(
     }
 
     commandList.setBufferState(instance.meshletBoundsBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.commitBarriers();
+    return true;
+}
+
+bool MeshSkinningSystem::dispatchRepackNormals(
+    Core::CommandList& commandList,
+    MeshSkinningRuntimeInstance& instance,
+    const RuntimeResources& resources
+){
+    // RT unsupported (no attribute buffer) -> nothing to repack; not an error. Only reached from the active-skin
+    // branch, so skinnedNormalBuffer already holds this frame's deformed normals (set ShaderResource at the end of
+    // the skinning dispatch). This pass overwrites the position-stream normal slot of attributeBuffer in place; the
+    // single-instance buffer is safe to write here because the frame-begin fence retires all prior in-flight frames
+    // before this command list records, and the renderer's RT reads run later (skinning render pass precedes the
+    // renderer pass), exactly as for the skinned position/normal buffers.
+    if(!instance.attributeBuffer || !resources.repackBindingSet || !m_repackComputePipeline)
+        return true;
+
+    commandList.setBufferState(instance.skinnedNormalBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instance.meshletDescBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instance.meshletPositionRefDeltaBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instance.meshletAttributeRefDeltaBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instance.meshletLocalVertexRefBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instance.attributeBuffer.get(), Core::ResourceStates::UnorderedAccess);
+    commandList.commitBarriers();
+
+    Core::ComputeState computeState;
+    computeState.setPipeline(m_repackComputePipeline.get());
+    computeState.addBindingSet(resources.repackBindingSet.get());
+    commandList.setComputeState(computeState);
+
+    MeshletRepackPushConstants pushConstants;
+    pushConstants.meshletCount = static_cast<u32>(instance.meshlets.size());
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+    {
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_RepackNormals, m_graphics.getDevice(), commandList);
+
+        commandList.dispatch(pushConstants.meshletCount, 1, 1);
+    }
+
+    commandList.setBufferState(instance.attributeBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
     return true;
 }

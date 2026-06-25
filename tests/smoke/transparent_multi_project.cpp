@@ -49,13 +49,23 @@ static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-// Static scene: the caustic temporal accumulator (P5b) needs the glass + light fixed so the jittered photon splat
-// averages over frames into a smooth crescent. A zero rotation speed freezes the scene through the same animation path.
-static constexpr f32 s_TransparentSceneRotationSpeed = 0.0f;
 static constexpr AStringView s_TransparentShapeMeshPath = "project/meshes/caustic_sphere";
 #else
-static constexpr f32 s_TransparentSceneRotationSpeed = 0.55f;
 static constexpr AStringView s_TransparentShapeMeshPath = "project/meshes/tetrahedron";
+#endif
+// Scene rotation. Tetrahedra (plain + CSG) SPIN; the glass sphere is STATIC (its lens focus converges via the EMA into
+// the clean money-shot). NOTE on the spinning tetra caustic: a flat tetra is a PRISM -- spinning sweeps it through
+// steep orientations that DEVIATE the caustic away from the shadow (a prism separates caustic+shadow; a lens keeps them
+// together). This residual displacement is correct prism PHYSICS and cannot be removed without freezing the prism.
+// Two SAMPLING artifacts on top of it were diagnosed + fixed: (1) the diagonal-stripe artifact (dense-photon sampling)
+// via the hash-decorrelated per-target emission in caustic_photon_sw_cs.slang; (2) the far bright patches FLUNG across
+// the receiver, caused by photons chaining through the 3 overlapping tetrahedra (each crossing compounds the prism
+// deviation) -- bounded by the caustic specular-depth cap (NWB_CAUSTIC_MAX_BOUNCES in caustic_trace.slangi), which
+// keeps each tetra's caustic local. Kept spinning for inspection; freeze (rotation 0) for the cleanest converged look.
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+static constexpr f32 s_TransparentSceneRotationSpeed = 0.0f;
+#else
+static constexpr f32 s_TransparentSceneRotationSpeed = 0.55f;
 #endif
 static constexpr AStringView s_ShadowPlaneMeshPath = "project/meshes/shadow_plane";
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";

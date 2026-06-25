@@ -52,25 +52,28 @@
 #define NWB_CAUSTIC_SW_GROUP_SIZE 64
 
 // Must equal the shadow SW cap (the caustic kernel reuses the SAME per-mesh buffers + the SAME meshSlot indices the
-// SW shadow scene BVH produced) so the descriptor-array sizes and the C++ buffer arrays stay one definition.
-#define NWB_CAUSTIC_SW_MAX_MESHES 64
+// SW shadow scene BVH produced) so the descriptor-array sizes and the C++ buffer arrays stay one definition. Alias it
+// directly to the shadow cap so the equality is enforced by the compiler, not just a comment.
+#include "../shadow/sw_binding_slots.h"
+#define NWB_CAUSTIC_SW_MAX_MESHES NWB_SW_SHADOW_MAX_MESHES
 
 // Per-thread traversal stack depths (mirroring the SW shadow trace). The scene/instance BVH is shallow; the
 // per-mesh triangle BVH is deeper. A deeper subtree is conservatively treated as a hit-blocker rather than skipped.
 #define NWB_CAUSTIC_SW_SCENE_STACK_SIZE 32
 #define NWB_CAUSTIC_SW_MESH_STACK_SIZE 64
 
-// Photon budget per dispatch (the energy-conservation tunable): each photon carries flux = totalEmittedPower /
-// photonCount, so doubling this leaves the converged image unchanged. A 1D dispatch of this many threads.
-// DBG-SAFE DEFAULT: each photon does heavy work (per-mesh BVH descent + Moeller-Trumbore + the per-hit surface
-// dispatch, per bounce), so an UNOPTIMIZED debug build at the full 262144 (512^2) overran the GPU watchdog (TDR /
-// device-lost). 16384 (128^2) is the dbg-safe budget; the full density needs an opt/fin build or a kernel
-// optimization (e.g. splitting the dispatch across frames, or a coarser early-out). Keep PHOTON_COUNT == GRID_SIDE^2.
+// DBG-SAFE REFERENCE photon budget. The ACTUAL per-frame count is config-scaled in C++ (s_CausticPhotonGridSide,
+// raytracing_system.cpp) and rides the gridSide push constant -- the shaders read the grid side at runtime, so they
+// are config-agnostic. Energy-conserving (flux = domainArea*targetCount/photonCount), so a higher count only DENSIFIES the
+// splat (the fix for a sparse moving caustic). dbg stays here: each photon does heavy work (per-mesh BVH descent +
+// Moeller-Trumbore + the per-hit surface dispatch, per bounce), so an UNOPTIMIZED debug build at the full 262144
+// (512^2) overran the GPU watchdog (TDR); opt/fin run the full density. The C++ dbg branch references this value.
+// Keep PHOTON_COUNT == GRID_SIDE^2.
 #define NWB_CAUSTIC_SW_PHOTON_COUNT 16384u
 
 // Photons are laid out on a square grid over the emission domain; the per-photon cell index decomposes into a 2D
-// (column, row) coordinate via this side length. PHOTON_COUNT must be GRID_SIDE^2 so every grid cell gets exactly
-// one photon (128^2 = 16384).
+// (column, row) coordinate via this side length. PHOTON_COUNT must be GRID_SIDE^2 (128^2 = 16384). This is the
+// dbg-safe reference; the runtime grid side is the gridSide push constant (config-scaled in C++).
 #define NWB_CAUSTIC_SW_GRID_SIDE 128u
 
 

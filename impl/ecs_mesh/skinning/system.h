@@ -87,6 +87,15 @@ private:
     static_assert(sizeof(MeshletBoundsPushConstants) == NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning bounds push constants layout must match the shader ABI");
     static_assert(offsetof(MeshletBoundsPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT, "MeshSkinning bounds meshlet-count push offset drifted");
 
+    struct MeshletRepackPushConstants{
+        u32 meshletCount = 0;
+        u32 padding0 = 0;
+        u32 padding1 = 0;
+        u32 padding2 = 0;
+    };
+    static_assert(sizeof(MeshletRepackPushConstants) == NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning repack push constants layout must match the shader ABI");
+    static_assert(offsetof(MeshletRepackPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT, "MeshSkinning repack meshlet-count push offset drifted");
+
     struct RuntimeResources{
         RuntimeMeshHandle handle;
         u32 editRevision = 0;
@@ -99,6 +108,7 @@ private:
         Core::BufferHandle jointPaletteBuffer;
         Core::BindingSetHandle skinningBindingSet;
         Core::BindingSetHandle boundsBindingSet;
+        Core::BindingSetHandle repackBindingSet; // RT-only: per-frame skinned-normal -> RT attribute buffer repack (null when ray tracing is unsupported)
 
         [[nodiscard]] bool usesSkinning()const{ return skinCount != 0u && jointCount != 0u && skinningBindingSet != nullptr; }
     };
@@ -143,6 +153,7 @@ public:
 private:
     [[nodiscard]] bool ensureSkinningPipeline();
     [[nodiscard]] bool ensureBoundsPipeline();
+    [[nodiscard]] bool ensureRepackPipeline();
     [[nodiscard]] bool dispatchRuntimeMesh(
         Core::CommandList& commandList,
         MeshSkinningRuntimeInstance& instance,
@@ -156,6 +167,11 @@ private:
     );
     [[nodiscard]] bool copyRestToSkinned(Core::CommandList& commandList, MeshSkinningRuntimeInstance& instance);
     [[nodiscard]] bool dispatchMeshletBounds(
+        Core::CommandList& commandList,
+        MeshSkinningRuntimeInstance& instance,
+        const RuntimeResources& resources
+    );
+    [[nodiscard]] bool dispatchRepackNormals(
         Core::CommandList& commandList,
         MeshSkinningRuntimeInstance& instance,
         const RuntimeResources& resources
@@ -185,6 +201,9 @@ private:
     Core::BindingLayoutHandle m_boundsBindingLayout;
     Core::ShaderHandle m_boundsComputeShader;
     Core::ComputePipelineHandle m_boundsComputePipeline;
+    Core::BindingLayoutHandle m_repackBindingLayout;
+    Core::ShaderHandle m_repackComputeShader;
+    Core::ComputePipelineHandle m_repackComputePipeline;
     Core::CommandListHandle m_renderCommandList;
 };
 

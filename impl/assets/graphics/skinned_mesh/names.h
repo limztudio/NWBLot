@@ -27,6 +27,7 @@ namespace AssetsGraphicsSkinnedMesh{
 
 inline constexpr Name s_SkinningComputeShaderName("engine/graphics/skinned_mesh/skinning_cs");
 inline constexpr Name s_MeshletBoundsComputeShaderName("engine/graphics/skinned_mesh/meshlet_bounds_cs");
+inline constexpr Name s_RepackNormalsComputeShaderName("engine/graphics/skinned_mesh/repack_normals_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

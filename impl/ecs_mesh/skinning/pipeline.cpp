@@ -151,6 +151,49 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
     return false;
 }
 
+bool MeshSkinningSystem::ensureRepackPipeline(){
+    auto* device = m_graphics.getDevice();
+
+    if(!m_repackBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_MESHLET_DESC, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_POSITION_REF_DELTAS, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_ATTRIBUTE_REF_DELTAS, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_LOCAL_VERTEX_REFS, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_SKINNED_NORMALS, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_UAV(NWB_SKINNED_MESH_REPACK_BINDING_ATTRIBUTE_BUFFER, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshletRepackPushConstants)));
+
+        m_repackBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!m_repackBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create repack binding layout"));
+            return false;
+        }
+    }
+
+    if(!__hidden_pipeline::LoadComputeShader(
+        m_graphics,
+        m_assetManager,
+        m_shaderPathResolver,
+        m_repackComputeShader,
+        AssetsGraphicsSkinnedMesh::s_RepackNormalsComputeShaderName,
+        Name("ECSMeshSkinning_RepackNormalsCS")
+    ))
+        return false;
+
+    if(Core::CreateComputePipelineIfNeeded(
+        *device,
+        m_repackComputePipeline,
+        m_repackComputeShader,
+        m_repackBindingLayout
+    ))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create repack compute pipeline"));
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

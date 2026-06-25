@@ -18,11 +18,15 @@
 // the resolve pass can read the scale WITHOUT pulling in the full transport layer (caustic_trace.slangi declares
 // the backend closest-hit hook nwbCausticTraceClosest, which only a producer defines).
 //
-// The scale is conservative: per-photon flux is < 1.0 after the 1/photonCount energy normalization, so a single
-// deposit is a few hundred-to-thousand fixed-point units; even a deep focal pile-up of tens of thousands of photons
-// stays far under the 2^32 accumulator wrap. NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX saturates one deposit so a
-// degenerate (NaN/inf) flux can never inject a wrap-inducing value.
-#define NWB_CAUSTIC_FIXED_POINT_SCALE 4096.0
+// The scale must be large enough that the SMALLEST per-photon deposit still registers as a non-zero integer: a deposit
+// is uint(fluxChannel * SCALE), and fluxChannel = (domainArea*targetCount/photonCount) * lightColor * Fresnel * Beer. At the
+// HW full density (262144 photons) that per-photon flux is ~4e-5, so SCALE must keep flux*SCALE >> 1 or the deposit
+// TRUNCATES TO ZERO and the caustic energy is silently lost (a sparse splat would just vanish, a focus would go dim).
+// 2^20 gives ~40 units/photon at the full density (and ~600 at the dbg 16384 count -- recovering the truncation the
+// old 4096 scale lost there too). The resolve divides the SAME scale back out, so this is precision-only: brightness
+// is unchanged. Overflow-safe: even all 262144 photons in one pixel is ~1e7, far under the 2^32 accumulator wrap.
+// NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX saturates one deposit so a degenerate (NaN/inf) flux can never inject a wrap.
+#define NWB_CAUSTIC_FIXED_POINT_SCALE 1048576.0
 #define NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX 0x10000000u
 
 

@@ -167,18 +167,19 @@ struct SwShadowPushConstants{
 };
 static_assert(sizeof(SwShadowPushConstants) == sizeof(u32) * 4u, "SwShadowPushConstants must match the shader push-constant layout");
 
-// CPU mirror of the software caustic photon producer push constants (caustic/caustic_photon_sw_cs.slang).
-struct SwCausticPushConstants{
+// CPU mirror of the caustic photon producer push constants, shared by BOTH the software compute producer
+// (caustic/caustic_photon_sw_cs.slang) and the hardware ray-traced producer (caustic/caustic_photon_hw_raygen.slang).
+// The byte-identical layout across the two backends is a parity invariant (same photon grid / flux / frame index).
+struct CausticPhotonPushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 instanceCount = 0u;
     u32 photonCount = 0u;
     u32 emissionTargetCount = 0u;
     u32 frameIndex = 0u;
-    f32 totalEmittedPower = 0.f;
-    f32 pad0 = 0.f;
+    u32 gridSide = 0u; // sqrt(photonCount): runtime so the photon density scales per build config (dbg vs opt/fin)
 };
-static_assert(sizeof(SwCausticPushConstants) == sizeof(u32) * 6u + sizeof(f32) * 2u, "SwCausticPushConstants must match the shader push-constant layout");
+static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 7u, "CausticPhotonPushConstants must match the shader push-constant layout");
 
 // CPU mirror of the caustic resolve push constants (caustic/caustic_resolve_cs.slang).
 struct CausticResolvePushConstants{
@@ -191,15 +192,34 @@ struct CausticResolvePushConstants{
 };
 static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 4u + sizeof(f32) * 2u, "CausticResolvePushConstants must match the shader push-constant layout");
 
-// Total radiant power the caustic photon budget carries each frame (the per-photon flux is this / photonCount, so
-// doubling the photon count leaves the converged image unchanged -- the energy-conservation invariant). A unit
-// budget; the final look is scaled by s_CausticIntensity in the resolve. The photon count is the shared shader
-// constant NWB_CAUSTIC_SW_PHOTON_COUNT.
-inline constexpr f32 s_CausticTotalEmittedPower = 20.0f;
+// Per-frame photon budget. Energy-conserving (per-photon flux = lightColor*emissionDomainArea*targetCount/photonCount,
+// so it scales 1/photonCount), so a higher count only
+// DENSIFIES the splat without changing the converged brightness -- the fix for a sparse moving (skinned/dynamic)
+// caustic, which cannot lean on temporal convergence and so needs a dense single-frame splat. The HARDWARE ray-traced
+// producer handles the full density even in an unoptimized dbg build (hardware RT is fast), so it ALWAYS runs the full
+// count -> a dense, coherent caustic in every build. The SOFTWARE-compute producer does heavy per-photon work (per-mesh
+// BVH descent + Moeller-Trumbore + the per-hit surface dispatch, per bounce) that overruns the GPU watchdog (TDR) at
+// the full count in dbg, so it is config-scaled: dbg-safe in dbg, full density in opt/fin. The two counts are
+// independent because the math is per-photon identical and energy-conserving -> both converge to the SAME image
+// (the HW/SW parity A/B holds). The grid side rides the push constant (gridSide), so the shaders stay config-agnostic.
+// PHOTON_COUNT must stay == GRID_SIDE^2.
+inline constexpr u32 s_CausticHwPhotonGridSide = 512u;
+inline constexpr u32 s_CausticHwPhotonCount = s_CausticHwPhotonGridSide * s_CausticHwPhotonGridSide;
+#if defined(NDEBUG)
+inline constexpr u32 s_CausticSwPhotonGridSide = 512u;                      // opt/fin: the full density (262144 photons)
+#else
+inline constexpr u32 s_CausticSwPhotonGridSide = NWB_CAUSTIC_SW_GRID_SIDE;  // dbg-safe (128 -> 16384; the SW path TDRs above this unoptimized)
+#endif
+inline constexpr u32 s_CausticSwPhotonCount = s_CausticSwPhotonGridSide * s_CausticSwPhotonGridSide;
 
-// Artist multiplier applied in the resolve after the physical density->irradiance (flux / receiver-area-per-pixel)
-// conversion. Scales the focused caustic toward a visible brightness for the v1 single-glass scene.
-inline constexpr f32 s_CausticIntensity = 10.0f;
+// Single exposure knob (the only caustic brightness gain), applied in the resolve after the PHYSICAL flux->irradiance
+// conversion (per-photon flux = lightColor * emissionDomainArea * targetCount / photonCount in the producer, divided
+// by the receiver area-per-pixel in the resolve). Because the producer flux is now physical + energy-conserving (no
+// fudge constant -- the old s_CausticTotalEmittedPower=20 / s_CausticIntensity=10 pair is gone), the caustic has a
+// MEANINGFUL dynamic range: the DENSE focused caustic stays bright at a low exposure while the SPARSE far prism-
+// scatter falls below the visible floor. ~2 is a unit-ish exposure for the demo lighting (light intensity 2.0);
+// doubling the photon count leaves the converged image unchanged (the energy-conservation invariant still holds).
+inline constexpr f32 s_CausticIntensity = 2.0f;
 
 // Radius (in pixels) of the resolve-side edge-aware bilateral gather that denoises the sparse photon splat (P5): the
 // (2R+1)^2 neighbourhood is blended per output pixel, world-distance-edge-stopped so the caustic does not bleed
@@ -208,10 +228,18 @@ inline constexpr f32 s_CausticIntensity = 10.0f;
 inline constexpr u32 s_CausticResolveBlurRadius = 3u;
 
 // Temporal EMA blend weight for the caustic accumulator (P5): accumulated = lerp(history, current, alpha). Smaller =
-// more frames averaged = smoother + slower convergence. Because the emission jitters per frame (nwbCausticR2Jitter),
-// successive frames are independent samples of the same static caustic, so the EMA converges the sparse per-frame
-// splat to a smooth caustic over ~1/alpha frames (here ~12). The first producer frame seeds the history directly.
+// more frames averaged = smoother + slower convergence. Because the emission jitters per photon + per frame
+// (nwbCausticEmissionJitter), successive frames are independent stratified samples of the same static caustic, so the
+// EMA converges the sparse per-frame splat to a smooth caustic over ~1/alpha frames (here ~12). The first producer
+// frame seeds the history directly; the motion-reject (prepareCausticEmissionTargets) re-seeds it on occluder motion.
 inline constexpr f32 s_CausticTemporalAlpha = 0.08f;
+
+// Photon-aim slack for DEFORMING (runtime/skinned) refractors. Their emission AABB is derived from the bind-pose
+// (rest) bounds -- there is no per-frame CPU deformed bound (the per-frame bounds live only in the GPU meshlet-bounds
+// buffer). A skinned pose can push the surface past the rest extent, so the rest-bounds world AABB is inflated about
+// its center by this factor for runtime instances, keeping the photon emission domain over the deformed surface.
+// Matches the engine's skinned meshlet-bounds radius inflation precedent (NWB_SKINNED_MESH_BOUNDS_RADIUS_INFLATION).
+inline constexpr f32 s_CausticRuntimeBoundsInflation = 1.25f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -847,6 +875,13 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
     SIMDVector combinedMin = VectorReplicate(1e30f);
     SIMDVector combinedMax = VectorReplicate(-1e30f);
 
+    // A runtime (skinned/procedural) refractor can DEFORM in place -- its world AABB stays roughly stable while the
+    // surface (and its bend normals) change every frame, which the combined-AABB motion-reject below cannot see. The
+    // structural runtime version is not a per-frame pose counter, so presence of any runtime refractor is the correct
+    // conservative deform signal: it forces a temporal re-seed so the EMA never smears a stale caustic across the
+    // animation (an animating refractor cannot temporally converge anyway -> honest per-frame splat).
+    bool anyRuntimeRefractive = false;
+
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
             continue;
@@ -873,6 +908,8 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
         if(!materialInfo || !materialInfo->refractive)
             continue;
 
+        anyRuntimeRefractive = anyRuntimeRefractive || resolvedMesh.runtime;
+
         // object->world from the decomposed transform (identity when absent), matching buildSceneSwBvh.
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         SIMDMatrix objectToWorld = MatrixIdentity();
@@ -886,8 +923,17 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
         }
 
         // World AABB = bounds of the 8 object-space corners transformed to world space (exact under rotation).
-        const SIMDVector localMin = LoadFloatInt(mesh->csgLocalBounds.minBounds);
-        const SIMDVector localMax = LoadFloatInt(mesh->csgLocalBounds.maxBounds);
+        SIMDVector localMin = LoadFloatInt(mesh->csgLocalBounds.minBounds);
+        SIMDVector localMax = LoadFloatInt(mesh->csgLocalBounds.maxBounds);
+        if(resolvedMesh.runtime){
+            // Inflate the bind-pose extent about its center (component-wise, in SIMD) for a deforming refractor (no
+            // per-frame CPU bound exists); keeps the photon emission domain over a skinned pose that reaches past the
+            // rest bounds. center = (min+max)/2; half = (max-min)/2 * inflation; [min,max] = center -+ half.
+            const SIMDVector center = VectorMultiply(VectorAdd(localMin, localMax), VectorReplicate(0.5f));
+            const SIMDVector half = VectorMultiply(VectorSubtract(localMax, localMin), VectorReplicate(0.5f * s_CausticRuntimeBoundsInflation));
+            localMin = VectorSubtract(center, half);
+            localMax = VectorAdd(center, half);
+        }
         const f32 minX = VectorGetX(localMin), minY = VectorGetY(localMin), minZ = VectorGetZ(localMin);
         const f32 maxX = VectorGetX(localMax), maxY = VectorGetY(localMax), maxZ = VectorGetZ(localMax);
         SIMDVector worldMin = VectorReplicate(1e30f);
@@ -938,6 +984,29 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
     StoreFloat(combinedMin, &rayTracingState().m_causticTargetBoundsMin);
     StoreFloat(combinedMax, &rayTracingState().m_causticTargetBoundsMax);
     rayTracingState().m_causticRefractiveInstanceCount = targetCount;
+
+    // Temporal motion-reject: if a refractive occluder moved this frame (its world AABB -> the combined emission
+    // bounds changed) or the refractive-instance count changed, the screen-space caustic accumulated over the prior
+    // frames is stale. Blending it would smear the moving caustic into ghost-comb trails (the EMA stacking shifted
+    // copies of a per-frame caustic). Reset the frame counter so the resolve SEEDS this frame (a fresh per-frame
+    // caustic) instead of blending; a static scene never triggers this, so it still converges over ~1/alpha frames.
+    {
+        const Float4& boundsMin = rayTracingState().m_causticTargetBoundsMin;
+        const Float4& boundsMax = rayTracingState().m_causticTargetBoundsMax;
+        const Float4& prevMin = rayTracingState().m_causticPrevTargetBoundsMin;
+        const Float4& prevMax = rayTracingState().m_causticPrevTargetBoundsMax;
+        const auto componentMoved = [](const f32 a, const f32 b)->bool{ const f32 d = a - b; return (d < 0.f ? -d : d) > 1e-4f; };
+        const bool occluderMoved =
+            anyRuntimeRefractive // a deforming (skinned/runtime) refractor changes its surface every frame -> always re-seed
+            || componentMoved(boundsMin.x, prevMin.x) || componentMoved(boundsMin.y, prevMin.y) || componentMoved(boundsMin.z, prevMin.z)
+            || componentMoved(boundsMax.x, prevMax.x) || componentMoved(boundsMax.y, prevMax.y) || componentMoved(boundsMax.z, prevMax.z)
+            || rayTracingState().m_causticPrevRefractiveInstanceCount != targetCount;
+        if(occluderMoved)
+            rayTracingState().m_causticFrameIndex = 0u;
+        rayTracingState().m_causticPrevTargetBoundsMin = boundsMin;
+        rayTracingState().m_causticPrevTargetBoundsMax = boundsMax;
+        rayTracingState().m_causticPrevRefractiveInstanceCount = targetCount;
+    }
     return true;
 }
 
@@ -1287,21 +1356,21 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         commandList.setResourceStatesForBindingSet(rayTracingState().m_swCausticBindingSet.get());
         commandList.commitBarriers();
 
-        SwCausticPushConstants pushConstants;
+        CausticPhotonPushConstants pushConstants;
         pushConstants.width = targets.width;
         pushConstants.height = targets.height;
         pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-        pushConstants.photonCount = NWB_CAUSTIC_SW_PHOTON_COUNT;
+        pushConstants.photonCount = s_CausticSwPhotonCount;
         pushConstants.emissionTargetCount = rayTracingState().m_causticRefractiveInstanceCount;
-        pushConstants.frameIndex = rayTracingState().m_causticFrameIndex; // drives the per-frame R2 emission jitter (P5)
-        pushConstants.totalEmittedPower = s_CausticTotalEmittedPower;
+        pushConstants.frameIndex = rayTracingState().m_causticFrameIndex; // drives the per-photon stratified hash emission jitter + the temporal EMA seed
+        pushConstants.gridSide = s_CausticSwPhotonGridSide;
 
         Core::ComputeState computeState;
         computeState.setPipeline(rayTracingState().m_swCausticPipeline.get());
         computeState.addBindingSet(rayTracingState().m_swCausticBindingSet.get());
         commandList.setComputeState(computeState);
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-        commandList.dispatch(DivideUp(static_cast<u32>(NWB_CAUSTIC_SW_PHOTON_COUNT), static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
+        commandList.dispatch(DivideUp(s_CausticSwPhotonCount, static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
     }
 
     {
@@ -1340,7 +1409,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
     if(!rayTracingState().m_swCausticDispatchLogged){
         rayTracingState().m_swCausticDispatchLogged = true;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: dispatched software caustic producer ({} photons, {} caustic lights, {} refractive instances)")
-            , static_cast<u64>(NWB_CAUSTIC_SW_PHOTON_COUNT)
+            , static_cast<u64>(s_CausticSwPhotonCount)
             , static_cast<u64>(rayTracingState().m_causticLightCount)
             , static_cast<u64>(rayTracingState().m_causticRefractiveInstanceCount)
         );
@@ -1820,7 +1889,7 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_SW_BINDING_GBUFFER_DEPTH, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_SW_BINDING_GBUFFER_WORLD_POSITION, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_SW_BINDING_ACCUMULATOR, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwCausticPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticPhotonPushConstants)));
 
         rayTracingState().m_swCausticBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_swCausticBindingLayout){
@@ -1879,6 +1948,7 @@ bool RendererRayTracingSystem::ensureSwCausticBindingSet(DeferredFrameTargets& t
     Core::Buffer* emissionTargetBuffer = rayTracingState().m_causticEmissionTargetBuffer.get();
     Core::Buffer* viewBuffer = drawState().m_meshViewBuffer.get();
     const Core::Texture* depthTarget = targets.depth.get();
+    const Core::Texture* worldPositionTarget = targets.worldPosition.get();
     const Core::Texture* accumulatorTarget = targets.causticAccumulator.get();
     const u32 meshCount = rayTracingState().m_swShadowMeshCount;
     if(
@@ -1891,6 +1961,7 @@ bool RendererRayTracingSystem::ensureSwCausticBindingSet(DeferredFrameTargets& t
         && rayTracingState().m_swCausticBindingSetEmissionTargets == emissionTargetBuffer
         && rayTracingState().m_swCausticBindingSetView == viewBuffer
         && rayTracingState().m_swCausticBindingSetDepth == depthTarget
+        && rayTracingState().m_swCausticBindingSetWorldPosition == worldPositionTarget
         && rayTracingState().m_swCausticBindingSetAccumulator == accumulatorTarget
         && rayTracingState().m_swCausticBindingSetMeshCount == meshCount
     )
@@ -1951,6 +2022,7 @@ bool RendererRayTracingSystem::ensureSwCausticBindingSet(DeferredFrameTargets& t
         rayTracingState().m_swCausticBindingSetEmissionTargets = nullptr;
         rayTracingState().m_swCausticBindingSetView = nullptr;
         rayTracingState().m_swCausticBindingSetDepth = nullptr;
+        rayTracingState().m_swCausticBindingSetWorldPosition = nullptr;
         rayTracingState().m_swCausticBindingSetAccumulator = nullptr;
         rayTracingState().m_swCausticBindingSetMeshCount = 0u;
         return false;
@@ -1963,6 +2035,7 @@ bool RendererRayTracingSystem::ensureSwCausticBindingSet(DeferredFrameTargets& t
     rayTracingState().m_swCausticBindingSetEmissionTargets = emissionTargetBuffer;
     rayTracingState().m_swCausticBindingSetView = viewBuffer;
     rayTracingState().m_swCausticBindingSetDepth = depthTarget;
+    rayTracingState().m_swCausticBindingSetWorldPosition = worldPositionTarget;
     rayTracingState().m_swCausticBindingSetAccumulator = accumulatorTarget;
     rayTracingState().m_swCausticBindingSetMeshCount = meshCount;
     return true;
@@ -2130,7 +2203,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RT_BINDING_ACCUMULATOR, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_INDICES, NWB_CAUSTIC_RT_MAX_MESHES));
         layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_ATTRIBUTES, NWB_CAUSTIC_RT_MAX_MESHES));
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwCausticPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticPhotonPushConstants)));
 
         rayTracingState().m_hwCausticBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_hwCausticBindingLayout){
@@ -2377,14 +2450,14 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         // Push constants byte-identical to the SW producer (same struct + same constants) so the photon grid / flux /
         // emission / jitter match the SW reference exactly. instanceCount is the live TLAS instance count (the SW
         // scene-BVH count is zero on the HW path), used only as the raygen's non-zero geometry guard.
-        SwCausticPushConstants pushConstants;
+        CausticPhotonPushConstants pushConstants;
         pushConstants.width = targets.width;
         pushConstants.height = targets.height;
         pushConstants.instanceCount = rayTracingState().m_tlasInstanceCount;
-        pushConstants.photonCount = NWB_CAUSTIC_SW_PHOTON_COUNT;
+        pushConstants.photonCount = s_CausticHwPhotonCount;
         pushConstants.emissionTargetCount = rayTracingState().m_causticRefractiveInstanceCount;
         pushConstants.frameIndex = rayTracingState().m_causticFrameIndex;
-        pushConstants.totalEmittedPower = s_CausticTotalEmittedPower;
+        pushConstants.gridSide = s_CausticHwPhotonGridSide;
 
         Core::RayTracingState rayTracingPassState;
         rayTracingPassState.setShaderTable(rayTracingState().m_hwCausticShaderTable.get());
@@ -2392,10 +2465,11 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         commandList.setRayTracingState(rayTracingPassState);
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
-        // Dispatch one ray per photon over a GRID_SIDE x GRID_SIDE grid == the SW 128x128 = 16384 photon grid, so the
-        // raygen's photonIndex (y*W + x) equals the SW SV_DispatchThreadID index per photon.
+        // Dispatch one ray per photon over a gridSide x gridSide grid == the SW photon grid, so the raygen's
+        // photonIndex (y*W + x) equals the SW SV_DispatchThreadID index per photon. The grid side scales per build
+        // config (dbg 128 / opt+fin 512) -- the producer is energy-conserving, so the higher count just densifies.
         Core::RayTracingDispatchRaysArguments dispatchArgs;
-        dispatchArgs.setDimensions(static_cast<u32>(NWB_CAUSTIC_SW_GRID_SIDE), static_cast<u32>(NWB_CAUSTIC_SW_GRID_SIDE), 1u);
+        dispatchArgs.setDimensions(s_CausticHwPhotonGridSide, s_CausticHwPhotonGridSide, 1u);
         commandList.dispatchRays(dispatchArgs);
     }
 
@@ -2435,7 +2509,7 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
     if(!rayTracingState().m_hwCausticDispatchLogged){
         rayTracingState().m_hwCausticDispatchLogged = true;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: dispatched hardware caustic producer ({} photons, {} caustic lights, {} refractive instances)")
-            , static_cast<u64>(NWB_CAUSTIC_SW_PHOTON_COUNT)
+            , static_cast<u64>(s_CausticHwPhotonCount)
             , static_cast<u64>(rayTracingState().m_causticLightCount)
             , static_cast<u64>(rayTracingState().m_causticRefractiveInstanceCount)
         );

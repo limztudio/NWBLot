@@ -49,13 +49,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reuse the shadow per-mesh cap so the C++ slot arrays + the shader's [N] descriptor arrays stay one definition, and
-// the SW producer's photon grid so the HW raygen's DispatchRays grid decomposes the photon index byte-identically.
+// Reuse the shadow per-mesh cap so the C++ slot arrays + the shader's [N] descriptor arrays stay one definition. The
+// photon grid side is no longer a compile-time constant here -- the HW raygen reads it from the gridSide push constant
+// (config-scaled in C++, byte-identical to the SW producer), so the grid decomposes the photon index the same way.
 #include "../shadow/binding_slots.h"
 #include "sw_binding_slots.h"
 
 #define NWB_CAUSTIC_RT_MAX_MESHES NWB_SHADOW_RT_MAX_MESHES
-#define NWB_CAUSTIC_RT_GRID_SIDE NWB_CAUSTIC_SW_GRID_SIDE
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

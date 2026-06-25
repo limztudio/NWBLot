@@ -536,6 +536,70 @@ if(Python3_Interpreter_FOUND)
             TIMEOUT 300
         )
 
+        # Skinned-glass caustic validation: a SKINNED refractor whose skeleton pose deforms every frame, over an opaque
+        # ground under one light. Validates the per-frame skinned-normal repack (repack_normals_cs / dispatchRepackNormals)
+        # -- the RT shadow + caustic must bend on the LIVE deformed normals. Reuses the benchmark's cooked assets (same
+        # impl/assets + tests/smoke/assets cook; the body.nwb model + the new engine repack shader).
+        nwb_declare_executable(nwb_skinned_caustic_smoke)
+        target_sources(nwb_skinned_caustic_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_project.cpp"
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_skinned_caustic_smoke
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_skinned_caustic_smoke nwb_skinning_culling_benchmark_assets)
+
+        # Forced-software-emulation sibling: the SW shadow + caustic path runs even on RT hardware, for the HW-vs-SW
+        # parity A/B (both paths read the same per-frame repacked attribute buffer).
+        nwb_declare_executable(nwb_skinned_caustic_sw_smoke)
+        target_sources(nwb_skinned_caustic_sw_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_project.cpp"
+        )
+        target_compile_definitions(nwb_skinned_caustic_sw_smoke PRIVATE
+            NWB_SKINNED_CAUSTIC_FORCE_RT_EMULATION=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_skinned_caustic_sw_smoke
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_skinned_caustic_sw_smoke nwb_skinning_culling_benchmark_assets)
+
+        nwb_add_window_capture_smoke(
+            nwb_skinned_caustic_capture_early_smoke
+            skinned_caustic_capture_early.bmp
+            "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
+            "${_nwb_skinning_culling_runtime_root}"
+            "NWB Skinned Caustic Smoke"
+            "--settle-seconds" "0.75"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+        nwb_add_window_capture_smoke(
+            nwb_skinned_caustic_capture_mid_smoke
+            skinned_caustic_capture_mid.bmp
+            "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
+            "${_nwb_skinning_culling_runtime_root}"
+            "NWB Skinned Caustic Smoke"
+            "--settle-seconds" "2.0"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+        nwb_add_window_capture_smoke(
+            nwb_skinned_caustic_capture_late_smoke
+            skinned_caustic_capture_late.bmp
+            "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
+            "${_nwb_skinning_culling_runtime_root}"
+            "NWB Skinned Caustic Smoke"
+            "--settle-seconds" "4.0"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
         unset(_nwb_skinning_culling_asset_stamp)
         unset(_nwb_skinning_culling_model_nwb)
         unset(_nwb_skinning_culling_runtime_root)

@@ -479,9 +479,11 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
 
     // Flat per-vertex shadow-trace attribute buffer, positionStream-indexed in lockstep with the reconstructed
     // triangle index buffer above, so a trace can interpolate normal/uv0 with the SAME i0/i1/i2 it loads for
-    // positions. Built from the BIND-POSE streams: uv0 is pose-invariant; normal uses the rest normal (skinned
-    // normal re-derivation is deferred, acceptable for smooth transmittance). Both shadow backends read it as a
-    // ByteAddressBuffer (HW any-hit and the software fallback), so it carries a raw view.
+    // positions. SEEDED from the BIND-POSE streams (uv0 is pose-invariant; normal is the rest normal); for an
+    // actively-skinned mesh the normal half is then OVERWRITTEN per frame from the deformed normals by the repack
+    // compute pass (repack_normals_cs.slang, dispatchRepackNormals), so the RT shadow + caustic traces bend on the
+    // live pose. Both shadow backends read it as a ByteAddressBuffer (HW any-hit and the software fallback), so it
+    // carries a raw view; canHaveUavs lets the repack pass write it as a raw UAV in place.
     if(uploaded){
         const usize positionCount = instance.restPositions.size();
         Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_RuntimeBlasAttributeArena, positionCount * sizeof(AttribGpu) + 4096u);
@@ -508,7 +510,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             instance.attributeBuffer,
             AStringView("rt_vertex_attributes"),
             vertexAttributes,
-            false,
+            true, // canHaveUavs: the per-frame skinned-normal repack pass writes this buffer as a raw UAV in place
             NWB_TEXT("rt vertex attribute"),
             true
         ) && uploaded;

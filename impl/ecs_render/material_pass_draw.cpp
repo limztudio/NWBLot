@@ -455,7 +455,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
                 .setOffset(0)
         );
         if(usesAvboit){
-            graphicsState.addBindingSet(csgBindingUse.clip ? drawState().m_emulationViewBindingSet.get() : nullptr);
+            graphicsState.addBindingSet(pipelineResources.emulationGraphicsUsesMeshFrameSet ? drawState().m_emulationViewBindingSet.get() : nullptr);
             graphicsState.addBindingSet(context.passBindingSet);
             __hidden_material_pass_draw::AddCsgGraphicsBindingSets(graphicsState, csgBindingUse, csgBindingSets);
         }

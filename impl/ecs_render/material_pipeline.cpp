@@ -212,6 +212,10 @@ bool RendererMaterialSystem::createRendererPipeline(
         MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
     const bool csgClipPipeline = csgBindingUse.clip;
     const bool avboitCsgClipPipeline = csgBindingUse.avboitClip;
+    const bool materialDrivenAvboitAccumulate =
+        pass == MaterialPipelinePass::AvboitAccumulate
+        && materialInfo.avboitAccumulatePixelShader.valid()
+    ;
     ACompactString csgProjectEvaluatorModuleInclude;
     Core::GraphicsString csgProjectEvaluatorModuleAssignment(arena());
     AStringView materialProjectEvaluatorModuleAssignmentToAdd;
@@ -327,7 +331,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         // transparent fragment is shaded by the material's own surface hook + BXDF, matching the colored shadow it
         // casts). A material without one -- a transparent material authored with explicit `shaders` -- falls back
         // to the engine's fixed accumulate PS.
-        if(materialInfo.avboitAccumulatePixelShader.valid()){
+        if(materialDrivenAvboitAccumulate){
             passPixelShaderName = materialInfo.avboitAccumulatePixelShader.name();
         }
         else{
@@ -460,17 +464,26 @@ bool RendererMaterialSystem::createRendererPipeline(
         emulationDesc.setVertexShader(drawState().m_emulationVertexShader);
         emulationDesc.setPixelShader(resources.pixelShader);
         emulationDesc.setRenderState(renderState);
+        const bool emulationGraphicsUsesMeshFrameSet =
+            !MaterialPipelinePassUsesRendererAvboit(pass)
+            || csgClipPipeline
+            || materialDrivenAvboitAccumulate
+        ;
+        const Core::BindingLayoutHandle& avboitViewBindingLayout = emulationGraphicsUsesMeshFrameSet
+            ? drawState().m_emulationViewBindingLayout
+            : avboitState().m_emptyBindingLayout
+        ;
         switch(pass){
         case MaterialPipelinePass::AvboitOccupancy:
-            emulationDesc.addBindingLayout(csgClipPipeline ? drawState().m_emulationViewBindingLayout : avboitState().m_emptyBindingLayout);
+            emulationDesc.addBindingLayout(avboitViewBindingLayout);
             emulationDesc.addBindingLayout(avboitState().m_occupancyBindingLayout);
             break;
         case MaterialPipelinePass::AvboitExtinction:
-            emulationDesc.addBindingLayout(csgClipPipeline ? drawState().m_emulationViewBindingLayout : avboitState().m_emptyBindingLayout);
+            emulationDesc.addBindingLayout(avboitViewBindingLayout);
             emulationDesc.addBindingLayout(avboitState().m_extinctionBindingLayout);
             break;
         case MaterialPipelinePass::AvboitAccumulate:
-            emulationDesc.addBindingLayout(csgClipPipeline ? drawState().m_emulationViewBindingLayout : avboitState().m_emptyBindingLayout);
+            emulationDesc.addBindingLayout(avboitViewBindingLayout);
             emulationDesc.addBindingLayout(avboitState().m_accumulateBindingLayout);
             break;
         case MaterialPipelinePass::Opaque:
@@ -488,6 +501,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
 
         resources.renderPath = RenderPath::ComputeEmulation;
+        resources.emulationGraphicsUsesMeshFrameSet = emulationGraphicsUsesMeshFrameSet;
         return true;
     };
 

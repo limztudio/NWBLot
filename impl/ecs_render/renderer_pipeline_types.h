@@ -191,6 +191,7 @@ struct MaterialPipelineResources{
     Core::ShaderHandle pixelShader;
     Core::ShaderHandle meshShader;
     Core::ShaderHandle computeShader;
+    bool emulationGraphicsUsesMeshFrameSet = false;
 };
 
 

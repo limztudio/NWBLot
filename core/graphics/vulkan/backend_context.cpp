@@ -726,7 +726,6 @@ bool BackendContext::createVulkanInstance(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Debug callback
 
 
 void BackendContext::installDebugCallback(){
@@ -1914,9 +1913,7 @@ bool BackendContext::createDevice(){
     }
 
 #if defined(NWB_GPU_FAULT_INJECTION)
-    // DEBUG / TEST ONLY (compiled only when NWB_ENABLE_GPU_FAULT_INJECTION is configured): once the device is
-    // created, deterministically fault the GPU to exercise the device-lost -> GPU crash capture path. Done here
-    // rather than per-frame so it does not depend on the render loop running.
+    // DEBUG / TEST ONLY: fault once after device creation so the capture path does not depend on the render loop.
     u64 faultDeviceAddress = 0u;
     if(VulkanDetail::ReadGpuFaultInjectionValue(faultDeviceAddress))
         m_rhiDevice->debugTriggerGpuFault(faultDeviceAddress);

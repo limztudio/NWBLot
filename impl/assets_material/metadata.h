@@ -33,8 +33,8 @@ static constexpr AStringView s_InterfaceField = "interface";
 // engine mesh shader. A material declares either `surface` (cook generates its shaders) or `shaders` (explicit),
 // not both.
 static constexpr AStringView s_SurfaceField = "surface";
-// Optional/legacy. Explicit stage->shader virtual-name map. When omitted, the cook generates the pixel shader
-// from `surface` and assigns the shared engine mesh shader.
+// Optional. Explicit stage->shader virtual-name map. When omitted, the cook generates the pixel shader from
+// `surface` and assigns the shared engine mesh shader.
 static constexpr AStringView s_ShadersField = "shaders";
 static constexpr AStringView s_ShaderVariantField = "shader_variant";
 static constexpr AStringView s_ParametersField = "parameters";

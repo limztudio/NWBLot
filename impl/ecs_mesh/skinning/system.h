@@ -133,6 +133,7 @@ public:
 
 public:
     virtual void update(Core::ECS::World& world, f32 delta)override;
+    virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
     virtual void render(Core::Framebuffer* framebuffer)override;
     virtual void invalidateResources()override;
@@ -141,6 +142,7 @@ public:
     virtual bool containsRuntimeMesh(const Name& meshKey, u64 version)override;
 
 private:
+    [[nodiscard]] bool ensureFrameCommandList();
     [[nodiscard]] bool ensureSkinningPipeline();
     [[nodiscard]] bool ensureBoundsPipeline();
     [[nodiscard]] bool dispatchRuntimeMesh(

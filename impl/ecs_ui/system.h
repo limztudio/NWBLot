@@ -97,6 +97,7 @@ private:
     void setCurrentContext()const;
     void beginFrame(f32 delta);
     void finishFrame();
+    [[nodiscard]] bool ensureFrameCommandLists();
     [[nodiscard]] bool ensureRenderResources(Core::Framebuffer* framebuffer);
     [[nodiscard]] bool ensureShadersLoaded();
     [[nodiscard]] bool ensureInputLayout();
@@ -130,6 +131,7 @@ private:
     Core::GraphicsPipelineHandle m_pipeline;
     Core::BufferHandle m_vertexBuffer;
     Core::BufferHandle m_indexBuffer;
+    Core::CommandListHandle m_prepareCommandList;
     Core::CommandListHandle m_renderCommandList;
     UiTextureResourceVector m_textures;
     UiTextureUploadVector m_textureUploadScratch;

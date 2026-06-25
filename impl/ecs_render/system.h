@@ -102,6 +102,7 @@ public:
     [[nodiscard]] const CsgShapeRegistry& csgShapeRegistry()const{ return m_csgShapeRegistry; }
 
 private:
+    [[nodiscard]] bool ensureFrameCommandLists();
     [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
     [[nodiscard]] Core::ECS::World& world()noexcept{ return m_world; }
     [[nodiscard]] Core::Graphics& graphics()noexcept{ return m_graphics; }
@@ -139,6 +140,7 @@ private:
     RendererRayTracingState m_rayTracingState;
     CsgFrameState m_preparedCsgFrameState;
     Core::CommandListHandle m_renderCommandList;
+    Core::CommandListHandle m_shadowPrepareCommandList;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedShadowVisibilityReady = false;
 

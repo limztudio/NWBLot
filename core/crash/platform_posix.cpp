@@ -3,8 +3,8 @@
 
 
 #include "internal.h"
-#include "io_posix.h"
 
+#include <global/blocking_io.h>
 #include <global/process_execution.h>
 
 #include <exception>
@@ -283,7 +283,7 @@ static void __hidden_open_android_emergency_file(){
 }
 
 [[nodiscard]] static bool __hidden_send_all_socket_no_sigpipe(const int fd, const void* const data, const usize byteCount)noexcept{
-    return Detail::TransferAllPosix(
+    return TransferAllPosix(
         static_cast<const u8*>(data),
         byteCount,
         [fd](const u8* const cursor, const usize remaining)noexcept{
@@ -340,7 +340,7 @@ static void __hidden_drain_pending_acks(const int ackReadFd)noexcept{
             return;
 
         Detail::CrashAck ignoredAck;
-        if(!Detail::ReadAllFd(ackReadFd, &ignoredAck, sizeof(ignoredAck)))
+        if(!ReadAllFileDescriptor(ackReadFd, &ignoredAck, sizeof(ignoredAck)))
             return;
     }
 }
@@ -380,7 +380,7 @@ static void __hidden_drain_pending_acks(const int ackReadFd)noexcept{
         }
 
         Detail::CrashAck ack;
-        if(!Detail::ReadAllFd(ackReadFd, &ack, sizeof(ack)))
+        if(!ReadAllFileDescriptor(ackReadFd, &ack, sizeof(ack)))
             return Detail::CrashDumpTransportStatus::Failed;
         if(__hidden_ack_matches_request(ack, request))
             return ack.packageWritten
@@ -460,7 +460,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;
 #if defined(NWB_PLATFORM_ANDROID)
     if(g_State.emergencyWriteFd >= 0)
-        status = Detail::WriteAllFd(g_State.emergencyWriteFd, &request, sizeof(request))
+        status = WriteAllFileDescriptor(g_State.emergencyWriteFd, &request, sizeof(request))
             ? CrashDumpTransportStatus::Sent
             : CrashDumpTransportStatus::Failed
         ;

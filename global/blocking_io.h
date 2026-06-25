@@ -5,25 +5,17 @@
 #pragma once
 
 
-#include "internal.h"
+#include "limit.h"
+#include "platform.h"
+#include "type.h"
 
-#if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <windows.h>
+#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
 #include <errno.h>
 #include <sys/types.h>
 #include <unistd.h>
 #endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CRASH_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Detail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,7 +41,7 @@ template<typename PointerT, typename OperationT>
     return true;
 }
 
-[[nodiscard]] inline bool ReadAllFd(const int fd, void* const data, const usize byteCount)noexcept{
+[[nodiscard]] inline bool ReadAllFileDescriptor(const int fd, void* const data, const usize byteCount)noexcept{
     return TransferAllPosix(
         static_cast<u8*>(data),
         byteCount,
@@ -59,7 +51,7 @@ template<typename PointerT, typename OperationT>
     );
 }
 
-[[nodiscard]] inline bool WriteAllFd(const int fd, const void* const data, const usize byteCount)noexcept{
+[[nodiscard]] inline bool WriteAllFileDescriptor(const int fd, const void* const data, const usize byteCount)noexcept{
     return TransferAllPosix(
         static_cast<const u8*>(data),
         byteCount,
@@ -74,13 +66,43 @@ template<typename PointerT, typename OperationT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+#if defined(NWB_PLATFORM_WINDOWS)
+[[nodiscard]] inline bool ReadAllWin32Handle(const HANDLE handle, void* const data, const usize byteCount)noexcept{
+    u8* cursor = static_cast<u8*>(data);
+    usize remaining = byteCount;
+    while(remaining > 0u){
+        DWORD bytesRead = 0u;
+        const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max)
+            ? Limit<DWORD>::s_Max
+            : static_cast<DWORD>(remaining)
+        ;
+        if(!ReadFile(handle, cursor, requestSize, &bytesRead, nullptr) || bytesRead == 0u)
+            return false;
 
+        cursor += bytesRead;
+        remaining -= bytesRead;
+    }
+    return true;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+[[nodiscard]] inline bool WriteAllWin32Handle(const HANDLE handle, const void* const data, const usize byteCount)noexcept{
+    const u8* cursor = static_cast<const u8*>(data);
+    usize remaining = byteCount;
+    while(remaining > 0u){
+        DWORD bytesWritten = 0u;
+        const DWORD requestSize = remaining > static_cast<usize>(Limit<DWORD>::s_Max)
+            ? Limit<DWORD>::s_Max
+            : static_cast<DWORD>(remaining)
+        ;
+        if(!WriteFile(handle, cursor, requestSize, &bytesWritten, nullptr) || bytesWritten == 0u)
+            return false;
 
-
-NWB_CRASH_END
+        cursor += bytesWritten;
+        remaining -= bytesWritten;
+    }
+    return true;
+}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

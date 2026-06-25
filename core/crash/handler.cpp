@@ -7,13 +7,13 @@
 #include <cstdlib>
 
 #if defined(NWB_PLATFORM_WINDOWS)
-#include "io_win32.h"
+#include <global/blocking_io.h>
 #if defined(_MSC_VER) && !defined(NDEBUG)
 #include <crtdbg.h>
 #endif
 #include <windows.h>
 #elif defined(NWB_PLATFORM_LINUX)
-#include "io_posix.h"
+#include <global/blocking_io.h>
 #include <signal.h>
 #endif
 
@@ -120,7 +120,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
 
     for(;;){
         Detail::CrashRequest request;
-        if(!Detail::ReadAllWin32(requestReadHandle, &request, sizeof(request)))
+        if(!ReadAllWin32Handle(requestReadHandle, &request, sizeof(request)))
             break;
         // Defensive: reject a corrupt/interleaved request (writer serialization should prevent this).
         if(request.magic != Detail::s_RequestMagic || request.version != Detail::s_RequestVersion)
@@ -129,7 +129,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         const bool packageWritten = Detail::WriteCrashPackage(request);
         if(ackWriteHandle != INVALID_HANDLE_VALUE){
             const Detail::CrashAck ack = __hidden_crash_handler::__hidden_make_ack(request, packageWritten);
-            [[maybe_unused]] const bool ackWritten = Detail::WriteAllWin32(ackWriteHandle, &ack, sizeof(ack));
+            [[maybe_unused]] const bool ackWritten = WriteAllWin32Handle(ackWriteHandle, &ack, sizeof(ack));
         }
         if(ackEvent)
             SetEvent(ackEvent);
@@ -154,7 +154,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
 
     for(;;){
         Detail::CrashRequest request;
-        if(!Detail::ReadAllFd(requestReadFd, &request, sizeof(request)))
+        if(!ReadAllFileDescriptor(requestReadFd, &request, sizeof(request)))
             break;
         // Defensive: reject a corrupt/interleaved request (writer serialization should prevent this).
         if(request.magic != Detail::s_RequestMagic || request.version != Detail::s_RequestVersion)
@@ -163,7 +163,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         const bool packageWritten = Detail::WriteCrashPackage(request);
         if(ackWriteFd >= 0){
             const Detail::CrashAck ack = __hidden_crash_handler::__hidden_make_ack(request, packageWritten);
-            [[maybe_unused]] const bool ackWritten = Detail::WriteAllFd(ackWriteFd, &ack, sizeof(ack));
+            [[maybe_unused]] const bool ackWritten = WriteAllFileDescriptor(ackWriteFd, &ack, sizeof(ack));
         }
         if(packageWritten){
             [[maybe_unused]] const bool reportsFlushed = Detail::FlushCrashReportsForRequest(request);

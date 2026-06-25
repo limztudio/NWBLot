@@ -558,17 +558,6 @@ bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
     return true;
 }
 
-AString EscapeMetadataString(AStringView text){
-    AString escaped;
-    escaped.reserve(text.size());
-    for(const char c : text){
-        if(c == '\\' || c == '"')
-            escaped.push_back('\\');
-        escaped.push_back(c);
-    }
-    return escaped;
-}
-
 AString NodeName(const ufbx_node* node, const usize fallbackIndex){
     AString name;
     if(node && node->name.data && node->name.length != 0u)
@@ -653,7 +642,7 @@ AString BuildVirtualBasePath(const Path& outputPath, AString virtualRoot){
 template<typename Stream>
 void WriteReferenceValue(Stream& file, const AStringView value, const bool quote){
     if(quote)
-        file << "\"" << EscapeMetadataString(value) << "\"";
+        file << "\"" << MakeJsonEscapedText<AString>(value) << "\"";
     else
         file << value;
 }
@@ -675,11 +664,12 @@ void WriteSkeletonAssetBody(
 
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         file << "    {\n";
-        file << "        \"name\": \"" << EscapeMetadataString(jointNames[jointIndex]) << "\",\n";
+        file << "        \"name\": \"" << MakeJsonEscapedText<AString>(AStringView(jointNames[jointIndex].data(), jointNames[jointIndex].size())) << "\",\n";
         if(joints[jointIndex] && joints[jointIndex]->parent){
             const auto foundParent = jointLookup.find(joints[jointIndex]->parent);
             if(foundParent != jointLookup.end()){
-                file << "        \"parent\": \"" << EscapeMetadataString(jointNames[foundParent.value()]) << "\",\n";
+                const AString& parentName = jointNames[foundParent.value()];
+                file << "        \"parent\": \"" << MakeJsonEscapedText<AString>(AStringView(parentName.data(), parentName.size())) << "\",\n";
             }
         }
         file << "        \"local_bind_pose\": ";

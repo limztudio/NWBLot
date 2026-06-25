@@ -128,14 +128,15 @@ bool RecordTextLog(
     const u64 frameIndex,
     const u32 streamId
 ){
-    if(!recorder.enabled(EventKind::TextLog))
-        return false;
-
-    TelemetryBytes payload(recorder.arena());
-    if(!BuildTextLogPayload(recorder.arena(), type, message, payload))
-        return false;
-
-    return recorder.recordBinary(EventKind::TextLog, frameIndex, payload.data(), payload.size(), streamId);
+    return Detail::RecordBuiltPayload(
+        recorder,
+        EventKind::TextLog,
+        frameIndex,
+        streamId,
+        [type, message](TelemetryArena& arena, TelemetryBytes& payload){
+            return BuildTextLogPayload(arena, type, message, payload);
+        }
+    );
 }
 
 

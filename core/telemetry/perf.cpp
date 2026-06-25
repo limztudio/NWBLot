@@ -224,14 +224,15 @@ bool RecordPerfTiming(
     const Perf::TimingStats& stats,
     const u32 streamId
 ){
-    if(!recorder.enabled(EventKind::PerfFrame))
-        return false;
-
-    TelemetryBytes payload(recorder.arena());
-    if(!BuildPerfTimingPayload(recorder.arena(), source, scopeName, stats, payload))
-        return false;
-
-    return recorder.recordBinary(EventKind::PerfFrame, stats.publishFrameIndex, payload.data(), payload.size(), streamId);
+    return Detail::RecordBuiltPayload(
+        recorder,
+        EventKind::PerfFrame,
+        stats.publishFrameIndex,
+        streamId,
+        [source, &scopeName, &stats](TelemetryArena& arena, TelemetryBytes& payload){
+            return BuildPerfTimingPayload(arena, source, scopeName, stats, payload);
+        }
+    );
 }
 
 bool BuildPerfMemoryPayload(
@@ -346,14 +347,15 @@ bool RecordPerfMemory(
     const Perf::MemoryDelta& delta,
     const u32 streamId
 ){
-    if(!recorder.enabled(EventKind::MemoryFrame))
-        return false;
-
-    TelemetryBytes payload(recorder.arena());
-    if(!BuildPerfMemoryPayload(recorder.arena(), scopeName, snapshot, delta, payload))
-        return false;
-
-    return recorder.recordBinary(EventKind::MemoryFrame, snapshot.frameIndex, payload.data(), payload.size(), streamId);
+    return Detail::RecordBuiltPayload(
+        recorder,
+        EventKind::MemoryFrame,
+        snapshot.frameIndex,
+        streamId,
+        [&scopeName, &snapshot, &delta](TelemetryArena& arena, TelemetryBytes& payload){
+            return BuildPerfMemoryPayload(arena, scopeName, snapshot, delta, payload);
+        }
+    );
 }
 
 PerfSessionRecordResult RecordPerfSessionReport(

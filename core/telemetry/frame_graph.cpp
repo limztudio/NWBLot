@@ -263,14 +263,15 @@ bool RecordFrameGraph(
     const FrameGraphEdgeDescs& edges,
     const u32 streamId
 ){
-    if(!recorder.enabled(EventKind::FrameGraphFrame))
-        return false;
-
-    TelemetryBytes payload(recorder.arena());
-    if(!BuildFrameGraphPayload(recorder.arena(), frameIndex, nodes, edges, payload))
-        return false;
-
-    return recorder.recordBinary(EventKind::FrameGraphFrame, frameIndex, payload.data(), payload.size(), streamId);
+    return Detail::RecordBuiltPayload(
+        recorder,
+        EventKind::FrameGraphFrame,
+        frameIndex,
+        streamId,
+        [frameIndex, &nodes, &edges](TelemetryArena& arena, TelemetryBytes& payload){
+            return BuildFrameGraphPayload(arena, frameIndex, nodes, edges, payload);
+        }
+    );
 }
 
 

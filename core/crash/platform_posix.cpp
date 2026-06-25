@@ -3,6 +3,7 @@
 
 
 #include "internal.h"
+#include "io_posix.h"
 
 #include <global/process_execution.h>
 
@@ -56,27 +57,6 @@ struct FramePointerRecord{
     const void* returnAddress = nullptr;
 };
 
-
-#if defined(NWB_PLATFORM_ANDROID)
-[[nodiscard]] static bool __hidden_write_all_fd(const int fd, const void* const data, const usize byteCount)noexcept{
-    const u8* cursor = static_cast<const u8*>(data);
-    usize remaining = byteCount;
-    while(remaining > 0u){
-        const ssize_t bytesWritten = write(fd, cursor, remaining);
-        if(bytesWritten < 0){
-            if(errno == EINTR)
-                continue;
-            return false;
-        }
-        if(bytesWritten == 0)
-            return false;
-
-        cursor += static_cast<usize>(bytesWritten);
-        remaining -= static_cast<usize>(bytesWritten);
-    }
-    return true;
-}
-#endif
 
 [[nodiscard]] static bool __hidden_is_aligned_pointer(const u64 address)noexcept{
     return (address & (sizeof(void*) - 1u)) == 0u;
@@ -303,22 +283,13 @@ static void __hidden_open_android_emergency_file(){
 }
 
 [[nodiscard]] static bool __hidden_send_all_socket_no_sigpipe(const int fd, const void* const data, const usize byteCount)noexcept{
-    const u8* cursor = static_cast<const u8*>(data);
-    usize remaining = byteCount;
-    while(remaining > 0u){
-        const ssize_t bytesSent = send(fd, cursor, remaining, MSG_NOSIGNAL);
-        if(bytesSent < 0){
-            if(errno == EINTR)
-                continue;
-            return false;
+    return Detail::TransferAllPosix(
+        static_cast<const u8*>(data),
+        byteCount,
+        [fd](const u8* const cursor, const usize remaining)noexcept{
+            return send(fd, cursor, remaining, MSG_NOSIGNAL);
         }
-        if(bytesSent == 0)
-            return false;
-
-        cursor += static_cast<usize>(bytesSent);
-        remaining -= static_cast<usize>(bytesSent);
-    }
-    return true;
+    );
 }
 
 static void __hidden_redirect_stdio_to_null()noexcept{
@@ -341,25 +312,6 @@ static void __hidden_silence_child_process(int& requestReadFd, int& ackWriteFd)n
 
     [[maybe_unused]] const pid_t sessionId = setsid();
     __hidden_redirect_stdio_to_null();
-}
-
-[[nodiscard]] static bool __hidden_read_all_fd(const int fd, void* const data, const usize byteCount)noexcept{
-    u8* cursor = static_cast<u8*>(data);
-    usize remaining = byteCount;
-    while(remaining > 0u){
-        const ssize_t bytesRead = read(fd, cursor, remaining);
-        if(bytesRead < 0){
-            if(errno == EINTR)
-                continue;
-            return false;
-        }
-        if(bytesRead == 0)
-            return false;
-
-        cursor += static_cast<usize>(bytesRead);
-        remaining -= static_cast<usize>(bytesRead);
-    }
-    return true;
 }
 
 [[nodiscard]] static bool __hidden_ack_matches_request(
@@ -388,7 +340,7 @@ static void __hidden_drain_pending_acks(const int ackReadFd)noexcept{
             return;
 
         Detail::CrashAck ignoredAck;
-        if(!__hidden_read_all_fd(ackReadFd, &ignoredAck, sizeof(ignoredAck)))
+        if(!Detail::ReadAllFd(ackReadFd, &ignoredAck, sizeof(ignoredAck)))
             return;
     }
 }
@@ -428,7 +380,7 @@ static void __hidden_drain_pending_acks(const int ackReadFd)noexcept{
         }
 
         Detail::CrashAck ack;
-        if(!__hidden_read_all_fd(ackReadFd, &ack, sizeof(ack)))
+        if(!Detail::ReadAllFd(ackReadFd, &ack, sizeof(ack)))
             return Detail::CrashDumpTransportStatus::Failed;
         if(__hidden_ack_matches_request(ack, request))
             return ack.packageWritten
@@ -508,7 +460,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;
 #if defined(NWB_PLATFORM_ANDROID)
     if(g_State.emergencyWriteFd >= 0)
-        status = __hidden_crash_posix::__hidden_write_all_fd(g_State.emergencyWriteFd, &request, sizeof(request))
+        status = Detail::WriteAllFd(g_State.emergencyWriteFd, &request, sizeof(request))
             ? CrashDumpTransportStatus::Sent
             : CrashDumpTransportStatus::Failed
         ;

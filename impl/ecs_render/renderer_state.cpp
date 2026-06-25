@@ -255,6 +255,20 @@ void RendererRayTracingState::invalidateResources(){
     m_swCausticBindingSetDepth = nullptr;
     m_swCausticBindingSetAccumulator = nullptr;
     m_swCausticBindingSetMeshCount = 0u;
+    m_hwCausticBindingLayout.reset();
+    m_hwCausticPipeline.reset();
+    m_hwCausticShaderTable.reset();
+    m_hwCausticBindingSet.reset();
+    m_hwCausticBindingSetTlas = nullptr;
+    m_hwCausticBindingSetInstanceMaterial = nullptr;
+    m_hwCausticBindingSetMaterialTyped = nullptr;
+    m_hwCausticBindingSetMeshInstances = nullptr;
+    m_hwCausticBindingSetEmissionTargets = nullptr;
+    m_hwCausticBindingSetView = nullptr;
+    m_hwCausticBindingSetDepth = nullptr;
+    m_hwCausticBindingSetWorldPosition = nullptr;
+    m_hwCausticBindingSetAccumulator = nullptr;
+    m_hwCausticBindingSetMeshCount = 0u;
     m_causticResolveBindingLayout.reset();
     m_causticResolveShader.reset();
     m_causticResolvePipeline.reset();
@@ -273,6 +287,8 @@ void RendererRayTracingState::invalidateResources(){
     m_swCausticPipelineFailed = false;
     m_causticResolvePipelineFailed = false;
     m_swCausticDispatchLogged = false;
+    m_hwCausticPipelineFailed = false;
+    m_hwCausticDispatchLogged = false;
 }
 
 

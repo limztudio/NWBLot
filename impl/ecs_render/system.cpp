@@ -352,15 +352,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         // when there is caustic work.
         m_raytracingSystem.clearCausticTargets(*commandList, deferredTargets);
 
-        // Software caustic producer (P3) -- only the no-hardware-ray-tracing path runs it (the HW producer is P4),
-        // and only when there is >=1 caustic light AND >=1 refractive instance (hasCausticWork). It emits photons
-        // into the just-cleared R32_UINT accumulators, then resolves them into the RGBA16F irradiance buffer the
-        // lighting pass adds pre-tonemap. Runs BEFORE renderDeferredLighting so the lighting read sees the resolve.
-        if(m_preparedShadowVisibilityReady && !m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
+        // Caustic producer -- EXACTLY ONE backend runs per frame, mirroring the shadow backend split above: the
+        // hardware ray-traced producer (P4) on the HW path, the software-BVH producer (P3) otherwise. Both emit
+        // photons into the just-cleared R32_UINT accumulators, then resolve them into the RGBA16F irradiance buffer
+        // the lighting pass adds pre-tonemap. Each runs only when there is >=1 caustic light AND >=1 refractive
+        // instance (has*CausticWork, checked inside); else the black-cleared buffer is the additive no-op. Runs
+        // BEFORE renderDeferredLighting so the lighting read sees the resolve.
+        if(m_preparedShadowVisibilityReady){
             // false = no caustic work this frame (the common case: no caustic light or no refractive instance) or a
-            // pipeline-build failure already logged inside; either way the black-cleared buffer is the additive
-            // no-op, so there is nothing to act on here.
-            [[maybe_unused]] const bool causticsDispatched = m_raytracingSystem.renderGpuBvhCaustics(*commandList, deferredTargets);
+            // pipeline-build failure already logged inside; either way the black-cleared buffer is the additive no-op.
+            if(m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
+                [[maybe_unused]] const bool causticsDispatched = m_raytracingSystem.renderHwCaustics(*commandList, deferredTargets);
+            }
+            else{
+                [[maybe_unused]] const bool causticsDispatched = m_raytracingSystem.renderGpuBvhCaustics(*commandList, deferredTargets);
+            }
         }
 
         commandListReady = m_deferredSystem.renderDeferredLighting(*commandList, deferredTargets);

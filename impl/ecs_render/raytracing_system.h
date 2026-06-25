@@ -42,6 +42,12 @@ public:
     [[nodiscard]] bool prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasCausticWork()const noexcept;
+    // Hardware ray-traced caustic photon producer (P4) -- the byte-parallel sibling of the SW producer above, run on
+    // the HW branch (RayTracingAccelStruct supported). Reuses the TLAS + the shadow material/geometry buffers + the
+    // shared R32_UINT accumulator + resolve; adds only a per-mesh position SRV array for the geometric face normal.
+    [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);
+    [[nodiscard]] bool renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    [[nodiscard]] bool hasHwCausticWork()const noexcept;
 
 
 private:
@@ -54,6 +60,8 @@ private:
     [[nodiscard]] bool ensureSwCausticBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureCausticResolvePipeline();
     [[nodiscard]] bool ensureCausticResolveBindingSet(DeferredFrameTargets& targets);
+    [[nodiscard]] bool ensureCausticRtPipeline();
+    [[nodiscard]] bool ensureCausticRtBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureBvhSortPipeline();
     [[nodiscard]] bool ensureBvhSortBuffers(usize paddedCount);
     [[nodiscard]] bool bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount);

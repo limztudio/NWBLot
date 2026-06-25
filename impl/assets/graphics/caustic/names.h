@@ -25,10 +25,13 @@ namespace AssetsGraphicsCaustic{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The software caustic photon producer (P3) + the resolve pass shader virtual paths. The hardware ray-traced
-// producer (P4) adds its own raygen/closest-hit/miss names alongside.
+// The software caustic photon producer (P3) + the resolve pass shader virtual paths, and the hardware ray-traced
+// producer (P4) raygen / closest-hit / miss virtual paths. The HW producer shares the resolve with the SW path.
 inline constexpr Name s_SwPhotonShaderName("engine/graphics/caustic/caustic_photon_sw_cs");
 inline constexpr Name s_ResolveShaderName("engine/graphics/caustic/caustic_resolve_cs");
+inline constexpr Name s_HwRaygenShaderName("engine/graphics/caustic/caustic_photon_hw_raygen");
+inline constexpr Name s_HwClosestHitShaderName("engine/graphics/caustic/caustic_photon_hw_chit");
+inline constexpr Name s_HwMissShaderName("engine/graphics/caustic/caustic_photon_hw_miss");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

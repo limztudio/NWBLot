@@ -1,0 +1,258 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CAUSTIC_HW_COMMON_SLANGI
+#define NWB_GRAPHICS_CAUSTIC_HW_COMMON_SLANGI
+
+
+#include "hw_binding_slots.h"
+
+// Point the scene + the surface hook's material-constants context (g_NwbSceneLights + g_NwbMaterialTypedWords +
+// g_NwbMeshInstances) at THIS pass's binding set, exactly as the SW caustic kernel + the shadow trace do, so the
+// per-hit surface dispatch (which supplies a refractive occluder's ior / transmission) reads the SAME shadow-owned
+// material buffers and resolves IDENTICALLY to the SW path.
+#define NWB_SCENE_SHADING_SET NWB_CAUSTIC_RT_SET
+#define NWB_SCENE_SHADING_BINDING NWB_CAUSTIC_RT_BINDING_SCENE_SHADING
+#define NWB_SCENE_LIGHT_LIST_SET NWB_CAUSTIC_RT_SET
+#define NWB_SCENE_LIGHT_LIST_BINDING NWB_CAUSTIC_RT_BINDING_LIGHT_LIST
+#define NWB_MESH_SET NWB_CAUSTIC_RT_SET
+#define NWB_MESH_BINDING_MATERIAL_TYPED NWB_CAUSTIC_RT_BINDING_MATERIAL_TYPED
+#define NWB_MESH_BINDING_INSTANCE NWB_CAUSTIC_RT_BINDING_MESH_INSTANCES
+
+#include "../scene/buffer.slangi"
+#include "../common/math.slangi"
+#include "../shadow/instance_material.slangi"
+
+// The shadow trace's material-constants context (NwbShadowHit + the surface contract + the engine shadow physics
+// helpers) + the cook-generated per-hit surface dispatch (nwbShadowDispatchSurface), routed by
+// shadowTransmittanceModelId -- the SAME dispatch the SW caustic kernel + the shadow trace evaluate, so a glass's
+// optical params (ior / transmission) agree across all three.
+#include "../shadow/shadow_surface.slangi"
+#include "shadow/generated/transmittance_dispatch.slangi"
+
+// The fixed-point splat conversion (nwbCausticFluxToFixedPoint) the deposit shares with the SW path. NOT the full
+// transport (caustic_trace.slangi) -- only the raygen needs the bounce loop, so the closest-hit/miss stay free of
+// the backend hook + TraceRay.
+#include "splat_constants.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The closest-hit payload. Carries exactly the NwbCausticHit fields (caustic_trace.slangi) the shared bounce loop
+// consumes; the two bool fields ride as uint for stable HLSL payload packing. The closest-hit fills every field, the
+// miss clears `hit`, and the raygen hook converts it back to NwbCausticHit. 52 bytes -> declare MaxPayloadSize 64.
+struct NwbCausticHwPayload{
+    float3 worldPos;
+    float3 geomNormal;
+    float3 transmission;
+    float t;
+    float ior;
+    uint hit;
+    uint isRefractive;
+};
+
+// One caustic emission target (P1): the world-space AABB of a refractive instance. Mirrors the C++
+// NwbCausticEmissionTargetGpu (32 bytes) + the SW kernel's NwbCausticEmissionTarget (the w lanes are padding).
+struct NwbCausticEmissionTarget{
+    float4 aabbMin;
+    float4 aabbMax;
+};
+
+// Camera view buffer: only worldToClip is read (to project the receiver hit to a screen pixel for the splat).
+// Std140 layout matching the C++ MeshViewGpuData / the SW kernel's NwbCausticSwView.
+struct NwbCausticHwView{
+    row_major float4x4 worldToClip;
+    row_major float4x4 clipToWorld;
+    float4 cameraPosition;
+    float4 frustumPlanes[6];
+};
+
+// Per-dispatch constants -- byte-identical to the SW producer's SwCausticPushConstants so the photon grid / flux /
+// emission / jitter all match the SW reference exactly.
+struct NwbCausticHwPushConstants{
+    uint width;
+    uint height;
+    uint instanceCount;
+    uint photonCount;
+    uint emissionTargetCount;
+    uint frameIndex;
+    float totalEmittedPower;
+    float pad0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[vk::binding(NWB_CAUSTIC_RT_BINDING_TLAS, NWB_CAUSTIC_RT_SET)]]
+RaytracingAccelerationStructure g_NwbCausticHwTlas;
+
+[[vk::binding(NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL, NWB_CAUSTIC_RT_SET)]]
+StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticHwInstanceMaterial;
+
+// Per-mesh descriptor arrays (slot k = mesh k = material.meshSlot): the raw triangle index byte buffer, the
+// per-vertex attribute byte buffer (Half4U normal @ +0 / Float2U uv0 @ +8), and -- the HW addition -- the raw
+// object-space position byte buffer (the closest-hit reads v0/v1/v2 for the geometric face normal).
+[[vk::binding(NWB_CAUSTIC_RT_BINDING_MESH_INDICES, NWB_CAUSTIC_RT_SET)]]
+ByteAddressBuffer g_NwbCausticHwMeshIndices[NWB_CAUSTIC_RT_MAX_MESHES];
+
+[[vk::binding(NWB_CAUSTIC_RT_BINDING_MESH_ATTRIBUTES, NWB_CAUSTIC_RT_SET)]]
+ByteAddressBuffer g_NwbCausticHwMeshAttributes[NWB_CAUSTIC_RT_MAX_MESHES];
+
+[[vk::binding(NWB_CAUSTIC_RT_BINDING_MESH_POSITIONS, NWB_CAUSTIC_RT_SET)]]
+ByteAddressBuffer g_NwbCausticHwMeshPositions[NWB_CAUSTIC_RT_MAX_MESHES];
+
+[[vk::binding(NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS, NWB_CAUSTIC_RT_SET)]]
+StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbCausticHwEmissionTargets;
+
+[[vk::binding(NWB_CAUSTIC_RT_BINDING_VIEW, NWB_CAUSTIC_RT_SET)]]
+ConstantBuffer<NwbCausticHwView, Std140DataLayout> g_NwbCausticHwView;
+
+[[vk::binding(NWB_CAUSTIC_RT_BINDING_GBUFFER_DEPTH, NWB_CAUSTIC_RT_SET)]]
+Texture2D<float4> g_NwbCausticHwGBufferDepth;
+
+[[vk::binding(NWB_CAUSTIC_RT_BINDING_GBUFFER_WORLD_POSITION, NWB_CAUSTIC_RT_SET)]]
+Texture2D<float4> g_NwbCausticHwGBufferWorldPosition;
+
+[[vk::binding(NWB_CAUSTIC_RT_BINDING_ACCUMULATOR, NWB_CAUSTIC_RT_SET)]]
+RWTexture2DArray<uint> g_NwbCausticHwAccumulator;
+
+[[vk::push_constant]]
+ConstantBuffer<NwbCausticHwPushConstants> g_NwbCausticHwPushConstants;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Per-vertex attribute load -- identical layout to the SW kernel's nwbCausticSwLoadVertexAttrib + the shadow trace's
+// nwbShadowRtLoadVertexAttrib (Half4U normal @ +0, Float2U uv0 @ +8, 16B stride), so the closest-hit interpolates
+// the SAME inputs into the per-hit surface dispatch.
+struct NwbCausticHwVertexAttrib{
+    float3 normal;
+    float2 uv0;
+};
+
+NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint meshIndex, const uint vertexIndex){
+    const uint base = vertexIndex * 16u;
+    const uint2 packedNormal = g_NwbCausticHwMeshAttributes[meshIndex].Load2(base);
+    NwbCausticHwVertexAttrib attrib;
+    attrib.normal = float3(
+        nwbUnpackHalf2x16(packedNormal.x),
+        nwbUnpackHalf2x16(packedNormal.y).x
+    );
+    attrib.uv0 = asfloat(g_NwbCausticHwMeshAttributes[meshIndex].Load2(base + 8u));
+    return attrib;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Deposits one fixed-point value into the accumulator pixel + channel. Guarded so out-of-bounds pixels are no-ops.
+// Byte-identical to the SW kernel's nwbCausticSwAccumulate (the SAME R32_UINT accumulator, the SAME InterlockedAdd).
+void nwbCausticHwAccumulate(const int2 pixel, const uint channel, const uint value){
+    if(value == 0u)
+        return;
+    if(pixel.x < 0 || pixel.y < 0 || pixel.x >= (int)g_NwbCausticHwPushConstants.width || pixel.y >= (int)g_NwbCausticHwPushConstants.height)
+        return;
+    InterlockedAdd(g_NwbCausticHwAccumulator[uint3(uint2(pixel), channel)], value);
+}
+
+// Splats the surviving flux at the receiver world hit -- a VERBATIM copy of the SW kernel's nwbCausticSwSplat (only
+// the bound-resource handle names differ), so the two producers deposit byte-identically: same worldToClip
+// projection, same NDC cull, same world-distance screen-leak reject (1-texel-x spacing tolerance), same 2x2 tent,
+// same fixed-point conversion + InterlockedAdd into the SAME accumulator.
+void nwbCausticHwSplat(const float3 worldPos, const float3 flux){
+    const float4 clip = mul(g_NwbCausticHwView.worldToClip, float4(worldPos, 1.0));
+    if(clip.w <= 1e-6)
+        return;
+
+    const float3 ndc = clip.xyz / clip.w;
+    if(ndc.x < -1.0 || ndc.x > 1.0 || ndc.y < -1.0 || ndc.y > 1.0)
+        return;
+    if(ndc.z < 0.0 || ndc.z > 1.0)
+        return;
+
+    const float2 uv = float2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    const float2 screen = uv * float2((float)g_NwbCausticHwPushConstants.width, (float)g_NwbCausticHwPushConstants.height) - 0.5;
+
+    const int2 baseTexel = int2(floor(screen));
+    if(baseTexel.x < 0 || baseTexel.y < 0 || baseTexel.x >= (int)g_NwbCausticHwPushConstants.width || baseTexel.y >= (int)g_NwbCausticHwPushConstants.height)
+        return;
+
+    const float sceneDepth = g_NwbCausticHwGBufferDepth.Load(int3(baseTexel, 0)).r;
+    if(sceneDepth >= 0.999999)
+        return; // background pixel (no receiver)
+
+    const float3 sceneWorldPos = g_NwbCausticHwGBufferWorldPosition.Load(int3(baseTexel, 0)).xyz;
+    const int2 rightTexel = int2(min(baseTexel.x + 1, (int)g_NwbCausticHwPushConstants.width - 1), baseTexel.y);
+    const float3 sceneWorldPosRight = g_NwbCausticHwGBufferWorldPosition.Load(int3(rightTexel, 0)).xyz;
+    const float pixelWorldSpacing = length(sceneWorldPosRight - sceneWorldPos);
+    const float rejectTolerance = max(pixelWorldSpacing * 4.0, 0.05);
+    if(length(worldPos - sceneWorldPos) > rejectTolerance)
+        return;
+
+    const float2 frac = screen - float2(baseTexel);
+    const float w00 = (1.0 - frac.x) * (1.0 - frac.y);
+    const float w10 = frac.x * (1.0 - frac.y);
+    const float w01 = (1.0 - frac.x) * frac.y;
+    const float w11 = frac.x * frac.y;
+
+    const int2 t00 = baseTexel;
+    const int2 t10 = baseTexel + int2(1, 0);
+    const int2 t01 = baseTexel + int2(0, 1);
+    const int2 t11 = baseTexel + int2(1, 1);
+
+    for(uint channel = 0u; channel < 3u; ++channel){
+        const float fluxChannel = flux[channel];
+        nwbCausticHwAccumulate(t00, channel, nwbCausticFluxToFixedPoint(fluxChannel * w00));
+        nwbCausticHwAccumulate(t10, channel, nwbCausticFluxToFixedPoint(fluxChannel * w10));
+        nwbCausticHwAccumulate(t01, channel, nwbCausticFluxToFixedPoint(fluxChannel * w01));
+        nwbCausticHwAccumulate(t11, channel, nwbCausticFluxToFixedPoint(fluxChannel * w11));
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Picks the caustic light for this photon -- a VERBATIM copy of the SW kernel's nwbCausticSwPickLight: round-robin
+// across the lights that hold a caustic slot (params.w >= 0). Returns false when no caustic light exists.
+bool nwbCausticHwPickLight(const uint photonIndex, out NwbSceneLight outLight){
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
+    uint causticLightCount = 0u;
+    for(uint i = 0u; i < lightCount; ++i){
+        if(g_NwbSceneLights[i].params.w >= 0.0)
+            ++causticLightCount;
+    }
+    if(causticLightCount == 0u){
+        outLight = g_NwbSceneLights[0];
+        return false;
+    }
+
+    const uint pick = photonIndex % causticLightCount;
+    uint seen = 0u;
+    for(uint i = 0u; i < lightCount; ++i){
+        if(g_NwbSceneLights[i].params.w < 0.0)
+            continue;
+        if(seen == pick){
+            outLight = g_NwbSceneLights[i];
+            return true;
+        }
+        ++seen;
+    }
+    outLight = g_NwbSceneLights[0];
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

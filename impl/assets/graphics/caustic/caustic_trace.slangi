@@ -276,7 +276,7 @@ NwbCausticEmission nwbCausticEmitPhoton(float3 lightDir, float3 domainCenter, fl
     float3 up;
     nwbCausticEmissionBasis(axis, right, up);
 
-    // Map the [0,1) cell to [-extent, +extent] on each plane axis: the target point on the emission plane.
+    // Map the [0,1] cell to [-extent, +extent] on each plane axis: the target point on the emission plane.
     const float2 offset = (cell * 2.0 - 1.0) * domainExtent;
     const float3 target = domainCenter + right * offset.x + up * offset.y;
 
@@ -286,20 +286,6 @@ NwbCausticEmission nwbCausticEmitPhoton(float3 lightDir, float3 domainCenter, fl
     emission.direction = axis;
     emission.valid = true;
     return emission;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Converts a per-channel flux value to the saturating fixed-point integer the splat InterlockedAdds into the
-// R32_UINT accumulators. Guards NaN/inf and clamps to NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX so no single deposit can
-// wrap the accumulator.
-uint nwbCausticFluxToFixedPoint(float fluxChannel){
-    if(!nwbFiniteFloat(fluxChannel) || fluxChannel <= 0.0)
-        return 0u;
-    const float scaled = fluxChannel * NWB_CAUSTIC_FIXED_POINT_SCALE;
-    return (uint)min(scaled, (float)NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX);
 }
 
 

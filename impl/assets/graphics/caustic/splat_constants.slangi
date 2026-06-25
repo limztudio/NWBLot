@@ -6,6 +6,9 @@
 #define NWB_GRAPHICS_CAUSTIC_SPLAT_CONSTANTS_SLANGI
 
 
+#include "../common/math.slangi"
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -21,6 +24,22 @@
 // degenerate (NaN/inf) flux can never inject a wrap-inducing value.
 #define NWB_CAUSTIC_FIXED_POINT_SCALE 4096.0
 #define NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX 0x10000000u
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Converts a per-channel flux value to the saturating fixed-point integer the splat InterlockedAdds into the
+// R32_UINT accumulators. Guards NaN/inf and clamps to NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX so no single deposit can
+// wrap the accumulator. Shared by the SW (P3) and HW (P4) producer splats -- both deposit into the SAME accumulator
+// the resolve un-scales by the SAME factor, so the two paths are byte-identical at the deposit. Lives here (not in
+// the transport header) so the HW closest-hit/miss can pull the splat without the bounce-loop transport.
+uint nwbCausticFluxToFixedPoint(float fluxChannel){
+    if(!nwbFiniteFloat(fluxChannel) || fluxChannel <= 0.0)
+        return 0u;
+    const float scaled = fluxChannel * NWB_CAUSTIC_FIXED_POINT_SCALE;
+    return (uint)min(scaled, (float)NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

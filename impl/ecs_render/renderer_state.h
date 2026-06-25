@@ -273,6 +273,7 @@ private:
     Core::RayTracingAccelStructHandle m_tlas;
     usize m_tlasMaxInstances = 0u;
     u64 m_tlasDeviceAddress = 0u;
+    u32 m_tlasInstanceCount = 0u; // live TLAS instance count (set by buildSceneTlas); the HW caustic raygen's non-zero guard
     Core::BindingLayoutHandle m_shadowBindingLayout;
     Core::RayTracingPipelineHandle m_shadowPipeline;
     Core::RayTracingShaderTableHandle m_shadowShaderTable;
@@ -382,6 +383,30 @@ private:
     const Core::Texture* m_swCausticBindingSetDepth = nullptr;
     const Core::Texture* m_swCausticBindingSetAccumulator = nullptr;
     u32 m_swCausticBindingSetMeshCount = 0u;
+    // Hardware ray-traced caustic photon producer (P4) -- the byte-parallel sibling of the SW producer. Mirrors the
+    // shadow RT pipeline and REUSES m_tlas + the shadow instance-material / material-context / per-mesh
+    // index+attribute buffers; the ONE structural addition is the per-mesh object-space POSITION buffers, so the
+    // closest-hit can compute the geometric face normal (the BLAS owns positions for the trace but does not expose
+    // them). Feeds the SAME R32_UINT accumulator + the SAME resolve the SW path uses. m_causticMeshPositionBuffers is
+    // filled in buildSceneTlas lockstep with the shadow per-mesh arrays (slot k = material.meshSlot). The binding set
+    // is rebuilt when any cached input changes, mirroring the shadow set.
+    Core::Buffer* m_causticMeshPositionBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
+    Core::BindingLayoutHandle m_hwCausticBindingLayout;
+    Core::RayTracingPipelineHandle m_hwCausticPipeline;
+    Core::RayTracingShaderTableHandle m_hwCausticShaderTable;
+    Core::BindingSetHandle m_hwCausticBindingSet;
+    const Core::RayTracingAccelStruct* m_hwCausticBindingSetTlas = nullptr;
+    const Core::Buffer* m_hwCausticBindingSetInstanceMaterial = nullptr;
+    const Core::Buffer* m_hwCausticBindingSetMaterialTyped = nullptr;
+    const Core::Buffer* m_hwCausticBindingSetMeshInstances = nullptr;
+    const Core::Buffer* m_hwCausticBindingSetEmissionTargets = nullptr;
+    const Core::Buffer* m_hwCausticBindingSetView = nullptr;
+    const Core::Texture* m_hwCausticBindingSetDepth = nullptr;
+    const Core::Texture* m_hwCausticBindingSetWorldPosition = nullptr;
+    const Core::Texture* m_hwCausticBindingSetAccumulator = nullptr;
+    u32 m_hwCausticBindingSetMeshCount = 0u;
+    bool m_hwCausticPipelineFailed = false;
+    bool m_hwCausticDispatchLogged = false;
     // Caustic resolve pass (P3): converts the R32_UINT accumulators to RGBA16F irradiance (area-normalized). Its
     // binding set is rebuilt when the accumulator / G-buffer / irradiance targets change (on resize).
     Core::BindingLayoutHandle m_causticResolveBindingLayout;

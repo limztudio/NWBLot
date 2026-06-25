@@ -210,10 +210,14 @@ private:
             throw RuntimeException("TransparentMultiSmokeProject initialization failed");
         }
 
-        // TEMP (P3 SW caustic visual gate): force ray-tracing emulation so the software photon producer runs. REVERT.
+        // Force ray-tracing emulation so the SOFTWARE caustic producer (P3) runs even on RT-capable hardware -- the
+        // knob for A/B-ing the SW path against the hardware ray-traced producer (P4). Default OFF: the demo runs the
+        // HW caustic producer (the real-hardware path). Define NWB_TRANSPARENT_MULTI_FORCE_RT_EMULATION to force SW.
+#if defined(NWB_TRANSPARENT_MULTI_FORCE_RT_EMULATION)
         context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingAccelStruct, true);
         context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingPipeline, true);
         context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayQuery, true);
+#endif
 
         AddSmokeRenderSystems(*world, context);
         if(!world->getSystem<NWB::Impl::MeshSystem>()){

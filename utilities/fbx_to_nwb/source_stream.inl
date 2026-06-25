@@ -229,22 +229,44 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     };
 }
 
-[[nodiscard]] TriangleAreaNormal64 BuildTriangleAreaNormal64(const Vec3& a, const Vec3& b, const Vec3& c){
+template<typename Vector3Like>
+[[nodiscard]] TriangleAreaNormal64 BuildTriangleAreaNormal64(const Vector3Like& a, const Vector3Like& b, const Vector3Like& c){
     const f64 abX = static_cast<f64>(b.x) - static_cast<f64>(a.x);
     const f64 abY = static_cast<f64>(b.y) - static_cast<f64>(a.y);
     const f64 abZ = static_cast<f64>(b.z) - static_cast<f64>(a.z);
     const f64 acX = static_cast<f64>(c.x) - static_cast<f64>(a.x);
     const f64 acY = static_cast<f64>(c.y) - static_cast<f64>(a.y);
     const f64 acZ = static_cast<f64>(c.z) - static_cast<f64>(a.z);
+#if defined(NWB_HAS_SSE4)
+    const __m128d xy = _mm_sub_pd(
+        _mm_mul_pd(_mm_set_pd(abZ, abY), _mm_set_pd(acX, acZ)),
+        _mm_mul_pd(_mm_set_pd(abX, abZ), _mm_set_pd(acZ, acY))
+    );
+    const __m128d zProducts = _mm_mul_pd(_mm_set_pd(abY, abX), _mm_set_pd(acX, acY));
+    const __m128d z = _mm_sub_sd(zProducts, _mm_unpackhi_pd(zProducts, zProducts));
+    return TriangleAreaNormal64{
+        _mm_cvtsd_f64(xy),
+        _mm_cvtsd_f64(_mm_unpackhi_pd(xy, xy)),
+        _mm_cvtsd_f64(z),
+    };
+#else
     return TriangleAreaNormal64{
         abY * acZ - abZ * acY,
         abZ * acX - abX * acZ,
         abX * acY - abY * acX,
     };
+#endif
 }
 
 [[nodiscard]] f64 TriangleAreaNormalLengthSquared(const TriangleAreaNormal64& areaNormal){
+#if defined(NWB_HAS_SSE4)
+    const __m128d xy = _mm_set_pd(areaNormal.y, areaNormal.x);
+    const __m128d xySquared = _mm_mul_pd(xy, xy);
+    const __m128d xySum = _mm_add_sd(xySquared, _mm_unpackhi_pd(xySquared, xySquared));
+    return _mm_cvtsd_f64(xySum) + areaNormal.z * areaNormal.z;
+#else
     return areaNormal.x * areaNormal.x + areaNormal.y * areaNormal.y + areaNormal.z * areaNormal.z;
+#endif
 }
 
 [[nodiscard]] bool TriangleHasArea(
@@ -358,28 +380,15 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
 [[nodiscard]] bool IsFiniteSourceTriangleCorner(const SourceTriangleCorner& corner, const bool wantsSkinning){
     if(
-        !IsFinite(corner.position.x)
-        || !IsFinite(corner.position.y)
-        || !IsFinite(corner.position.z)
-        || !IsFinite(corner.normal.x)
-        || !IsFinite(corner.normal.y)
-        || !IsFinite(corner.normal.z)
-        || !IsFinite(corner.uv0.x)
-        || !IsFinite(corner.uv0.y)
-        || !IsFinite(corner.color.x)
-        || !IsFinite(corner.color.y)
-        || !IsFinite(corner.color.z)
-        || !IsFinite(corner.color.w)
+        !VectorIsFinite(LoadFloat(corner.position), 0x7u)
+        || !VectorIsFinite(LoadFloat(corner.normal), 0x7u)
+        || !VectorIsFinite(LoadFloat(corner.uv0), 0x3u)
+        || !VectorIsFinite(LoadFloat(corner.color), 0xFu)
     )
         return false;
     if(
         corner.hasTangent
-        && (
-            !IsFinite(corner.tangent.x)
-            || !IsFinite(corner.tangent.y)
-            || !IsFinite(corner.tangent.z)
-            || !IsFinite(corner.tangent.w)
-        )
+        && !VectorIsFinite(LoadFloat(corner.tangent), 0xFu)
     )
         return false;
     return !wantsSkinning || IsFiniteSkinInfluence(corner.skin);
@@ -461,11 +470,7 @@ template<typename Value, typename Lookup>
         const Float4& p0 = rebuildVertices[i0].position;
         const Float4& p1 = rebuildVertices[i1].position;
         const Float4& p2 = rebuildVertices[i2].position;
-        const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(
-            Vec3(p0.x, p0.y, p0.z),
-            Vec3(p1.x, p1.y, p1.z),
-            Vec3(p2.x, p2.y, p2.z)
-        );
+        const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(p0, p1, p2);
         const f64 areaLengthSquared = TriangleAreaNormalLengthSquared(areaNormal);
         if(!IsFinite(areaLengthSquared) || areaLengthSquared <= static_cast<f64>(Core::Mesh::s_FrameDirectionEpsilon))
             continue;
@@ -493,12 +498,12 @@ template<typename Value, typename Lookup>
         const Vec3& storedNormal = mesh.normals[ref.normal];
         const Float4& storedTangent = rebuildVertices[vertexRefIndex].tangent;
         const SIMDVector normal = Core::Mesh::FrameNormalizeDirection(
-            VectorSet(storedNormal.x, storedNormal.y, storedNormal.z, 0.0f),
+            LoadFloat(storedNormal),
             VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
         );
         const SIMDVector tangent = Core::Mesh::FrameResolveTangent(
             normal,
-            VectorSet(storedTangent.x, storedTangent.y, storedTangent.z, 0.0f),
+            VectorSetW(LoadFloat(storedTangent), 0.0f),
             Core::Mesh::FrameFallbackTangent(normal)
         );
         if(!Core::Mesh::FrameValidDirection(tangent)){
@@ -507,12 +512,8 @@ template<typename Value, typename Lookup>
         }
 
         const f32 handedness = Core::Mesh::FrameTangentHandedness(rebuildVertices[vertexRefIndex].tangent.w, 1.0f);
-        const Vec4 generatedTangent(
-            VectorGetX(tangent),
-            VectorGetY(tangent),
-            VectorGetZ(tangent),
-            handedness
-        );
+        Vec4 generatedTangent;
+        StoreFloat(VectorSetW(tangent, handedness), &generatedTangent);
         if(!InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, "tangent", ref.tangent))
             return false;
     }

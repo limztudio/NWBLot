@@ -459,11 +459,9 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             ? m_renderer.meshSystem().findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
             : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
         ;
-        // The BLAS owns the positions; the any-hit still needs the index buffer (3 vertex indices by PrimitiveIndex)
-        // + the U2 attribute buffer (normal/uv0 for the per-hit dispatch). The HW caustic closest-hit ALSO needs the
-        // object-space positions (for the geometric face normal), so require the position buffer too -- it is always
-        // resident (the BLAS was built from it), and gating here keeps the per-mesh position array never half-filled.
-        if(!meshReady || !mesh || !mesh->blas || !mesh->triangleIndexBuffer || !mesh->attributeBuffer || !mesh->positionBuffer)
+        // The BLAS owns the positions; the any-hit still needs the index buffer (3 vertex indices by
+        // PrimitiveIndex) + the U2 attribute buffer (normal/uv0 for the per-hit dispatch), so require both.
+        if(!meshReady || !mesh || !mesh->blas || !mesh->triangleIndexBuffer || !mesh->attributeBuffer)
             continue;
 
         // Dedupe to a per-mesh descriptor-array slot: instances sharing a mesh share its index/attribute
@@ -489,10 +487,6 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             meshSlot = rayTracingState().m_shadowMeshCount++;
             rayTracingState().m_shadowMeshIndexBuffers[meshSlot] = meshIndexBuffer;
             rayTracingState().m_shadowMeshAttributeBuffers[meshSlot] = mesh->attributeBuffer.get();
-            // The HW caustic producer (P4) reads the object-space positions for the geometric face normal; track them
-            // lockstep with the index/attribute arrays (slot k = material.meshSlot) so the caustic closest-hit's
-            // g_NwbCausticHwMeshPositions[meshSlot] matches the indices/attributes at the same slot.
-            rayTracingState().m_causticMeshPositionBuffers[meshSlot] = mesh->positionBuffer.get();
         }
 
         Core::RayTracingInstanceDesc instanceDesc;
@@ -2119,8 +2113,8 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     if(!rayTracingState().m_hwCausticBindingLayout){
         // Mirrors the shadow RT layout (TLAS + scene/light + instance-material + material-context + per-mesh
         // index/attribute arrays) and adds the caustic I/O (emission targets, view, G-buffer depth + world position
-        // for the splat, the R32_UINT accumulator UAV) + the ONE structural delta: the per-mesh POSITION array for
-        // the geometric face normal. Plus the push constants (byte-identical to the SW producer's).
+        // for the splat, the R32_UINT accumulator UAV) + the push constants (byte-identical to the SW producer's).
+        // No per-mesh position array: the refraction bends on the interpolated shading normal (from the attributes).
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::AllRayTracing);
         layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_CAUSTIC_RT_BINDING_TLAS, 1));
@@ -2136,7 +2130,6 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RT_BINDING_ACCUMULATOR, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_INDICES, NWB_CAUSTIC_RT_MAX_MESHES));
         layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_ATTRIBUTES, NWB_CAUSTIC_RT_MAX_MESHES));
-        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_POSITIONS, NWB_CAUSTIC_RT_MAX_MESHES));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwCausticPushConstants)));
 
         rayTracingState().m_hwCausticBindingLayout = device->createBindingLayout(layoutDesc);
@@ -2275,13 +2268,12 @@ bool RendererRayTracingSystem::ensureCausticRtBindingSet(DeferredFrameTargets& t
     ));
 
     // Per-mesh descriptor arrays: bind every slot (the closest-hit only indexes meshSlot < meshCount). Unused tail
-    // slots are padded with the last real mesh so the non-bindless arrays have no unbound descriptors. The POSITION
-    // array is the HW-only addition (the geometric face normal source).
+    // slots are padded with the last real mesh so the non-bindless arrays have no unbound descriptors. The caustic
+    // reuses the shadow per-mesh index + attribute buffers verbatim (the shading-normal bend needs no positions).
     for(u32 slot = 0u; slot < NWB_CAUSTIC_RT_MAX_MESHES; ++slot){
         const u32 source = (slot < meshCount) ? slot : (meshCount - 1u);
         bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_INDICES, rayTracingState().m_shadowMeshIndexBuffers[source]).setArrayElement(slot));
         bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_ATTRIBUTES, rayTracingState().m_shadowMeshAttributeBuffers[source]).setArrayElement(slot));
-        bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_POSITIONS, rayTracingState().m_causticMeshPositionBuffers[source]).setArrayElement(slot));
     }
 
     auto* device = graphics().getDevice();
@@ -2375,7 +2367,6 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
             commandList.setBufferState(rayTracingState().m_shadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
             commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(rayTracingState().m_causticMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
         }
         commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);

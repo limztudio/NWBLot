@@ -183,6 +183,20 @@ if(Python3_Interpreter_FOUND)
             "--reject-log-message" "failed to resolve shader"
         )
 
+        # Forced-software-emulation sibling of the caustic sphere demo: identical scene, but the SOFTWARE caustic
+        # producer (P3) runs even on RT hardware, so the two can be captured + diffed to verify the HW (P4) and SW
+        # producers converge to the same caustic (the byte-parallel parity gate).
+        nwb_declare_executable(nwb_caustic_sphere_sw_smoke)
+        target_sources(nwb_caustic_sphere_sw_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
+        )
+        target_compile_definitions(nwb_caustic_sphere_sw_smoke PRIVATE
+            NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE=1
+            NWB_TRANSPARENT_MULTI_FORCE_RT_EMULATION=1
+        )
+        nwb_configure_runtime_smoke_target(nwb_caustic_sphere_sw_smoke "${_nwb_transparent_multi_runtime_root}")
+        add_dependencies(nwb_caustic_sphere_sw_smoke nwb_transparent_multi_smoke_assets)
+
         unset(_nwb_transparent_multi_asset_stamp)
         unset(_nwb_transparent_multi_runtime_root)
         unset(_nwb_transparent_multi_asset_inputs)

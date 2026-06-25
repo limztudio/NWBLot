@@ -385,12 +385,9 @@ private:
     u32 m_swCausticBindingSetMeshCount = 0u;
     // Hardware ray-traced caustic photon producer (P4) -- the byte-parallel sibling of the SW producer. Mirrors the
     // shadow RT pipeline and REUSES m_tlas + the shadow instance-material / material-context / per-mesh
-    // index+attribute buffers; the ONE structural addition is the per-mesh object-space POSITION buffers, so the
-    // closest-hit can compute the geometric face normal (the BLAS owns positions for the trace but does not expose
-    // them). Feeds the SAME R32_UINT accumulator + the SAME resolve the SW path uses. m_causticMeshPositionBuffers is
-    // filled in buildSceneTlas lockstep with the shadow per-mesh arrays (slot k = material.meshSlot). The binding set
-    // is rebuilt when any cached input changes, mirroring the shadow set.
-    Core::Buffer* m_causticMeshPositionBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
+    // index+attribute buffers verbatim (the refraction bends on the interpolated SHADING normal from the attribute
+    // buffer, so no per-mesh position array is needed). Feeds the SAME R32_UINT accumulator + the SAME resolve the SW
+    // path uses. The binding set is rebuilt when any cached input changes, mirroring the shadow set.
     Core::BindingLayoutHandle m_hwCausticBindingLayout;
     Core::RayTracingPipelineHandle m_hwCausticPipeline;
     Core::RayTracingShaderTableHandle m_hwCausticShaderTable;

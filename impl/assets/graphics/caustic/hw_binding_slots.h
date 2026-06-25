@@ -15,9 +15,9 @@
 // emission AABBs, runs the SHARED iterative bounce loop (caustic_trace.slangi nwbCausticTracePhoton -- recursion
 // stays 1, a fresh TraceRay per segment via the backend hook), and splats the surviving flux at the opaque receiver
 // into the R32_UINT accumulators the resolve consumes. The set mirrors the shadow-RT geometry/material plumbing
-// (so the per-hit surface dispatch resolves ior/transmission IDENTICALLY) and adds the ONE structural delta the HW
-// path needs: a per-mesh MESH_POSITIONS descriptor array, because the closest-hit must read the three object-space
-// vertices to compute the GEOMETRIC face normal (the BLAS owns positions for the trace but does not expose them).
+// (so the per-hit surface dispatch resolves ior/transmission IDENTICALLY). The refraction bends on the interpolated
+// SHADING normal (from the per-vertex normals in the attribute buffer), so -- unlike a geometric-normal bend -- it
+// needs NO object-space position array; the world hit point comes from WorldRayOrigin()+RayTCurrent()*direction.
 #define NWB_CAUSTIC_RT_SET 0
 
 // Singletons.
@@ -38,14 +38,12 @@
 #define NWB_CAUSTIC_RT_BINDING_GBUFFER_WORLD_POSITION 9
 #define NWB_CAUSTIC_RT_BINDING_ACCUMULATOR 10
 
-// Parallel per-mesh descriptor arrays (slot k of the array = mesh k = material.meshSlot), kept contiguous: the raw
-// triangle index byte buffer (the closest-hit loads i0/i1/i2 by PrimitiveIndex), the per-vertex attribute byte
-// buffer (normal/uv0 the surface dispatch interpolates), and -- the HW addition -- the raw object-space position
-// byte buffer (v0/v1/v2 for the geometric face normal). Each is ONE binding holding NWB_CAUSTIC_RT_MAX_MESHES array
-// elements (NOT three consecutive slots).
+// Parallel per-mesh descriptor arrays (slot k of the array = mesh k = material.meshSlot): the raw triangle index
+// byte buffer (the closest-hit loads i0/i1/i2 by PrimitiveIndex) + the per-vertex attribute byte buffer (normal/uv0
+// the closest-hit interpolates into the SHADING normal the refraction bends on + the per-hit surface dispatch). Each
+// is ONE binding holding NWB_CAUSTIC_RT_MAX_MESHES array elements (NOT consecutive slots).
 #define NWB_CAUSTIC_RT_BINDING_MESH_INDICES 11
 #define NWB_CAUSTIC_RT_BINDING_MESH_ATTRIBUTES 12
-#define NWB_CAUSTIC_RT_BINDING_MESH_POSITIONS 13
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

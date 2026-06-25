@@ -26,7 +26,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 
     NwbCausticHwPayload p;
     p.worldPos = float3(0.0, 0.0, 0.0);
-    p.geomNormal = float3(0.0, 0.0, 1.0);
+    p.shadingNormal = float3(0.0, 0.0, 1.0);
     p.transmission = float3(1.0, 1.0, 1.0);
     p.t = tMax;
     p.ior = 1.0;
@@ -41,7 +41,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     hit.t = p.t;
     hit.ior = p.ior;
     hit.worldPos = p.worldPos;
-    hit.geomNormal = p.geomNormal;
+    hit.shadingNormal = p.shadingNormal;
     hit.transmission = p.transmission;
     return hit;
 }

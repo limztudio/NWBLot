@@ -283,9 +283,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                 closest.t = triangleHit.t;
                 closest.isRefractive = refractive;
                 closest.worldPos = worldOrigin + worldDirection * triangleHit.t;
-                // GEOMETRIC face normal in object space, then to world via the inverse-transpose (parity bend).
-                const float3 objectGeomNormal = cross(v1 - v0, v2 - v0);
-                closest.geomNormal = nwbCausticSwTransformNormal(instance, objectGeomNormal);
+                closest.shadingNormal = float3(0.0, 0.0, 1.0); // filled with the real interpolated normal for a refractive hit below
                 closest.ior = 1.0;
                 closest.transmission = float3(1.0, 1.0, 1.0);
 
@@ -297,12 +295,17 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                     const NwbCausticSwVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(meshIndex, i2);
                     const float3 objectShadingNormal = a0.normal * triangleHit.w + a1.normal * triangleHit.u + a2.normal * triangleHit.v;
 
+                    // The interpolated SHADING normal in world space (inverse-transpose of object->world). This is the
+                    // bend normal (smooth across the mesh -> smooth caustic) AND the surface-dispatch normal.
+                    const float3 worldShadingNormal = nwbSafeNormalize(nwbCausticSwTransformNormal(instance, objectShadingNormal), float3(0.0, 0.0, 1.0));
+                    closest.shadingNormal = worldShadingNormal;
+
                     NwbShadowHit hit;
                     hit.meshInstanceIndex = material.meshInstanceIndex;
                     hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
                     hit.materialConstantByteOffset = material.materialConstantByteOffset;
                     hit.uv0 = a0.uv0 * triangleHit.w + a1.uv0 * triangleHit.u + a2.uv0 * triangleHit.v;
-                    hit.worldNormal = nwbSafeNormalize(nwbCausticSwTransformNormal(instance, objectShadingNormal), float3(0.0, 0.0, 1.0));
+                    hit.worldNormal = worldShadingNormal;
                     hit.worldPosition = closest.worldPos;
                     hit.rayDirection = worldDirection;
 
@@ -331,7 +334,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     closest.t = tMax;
     closest.ior = 1.0;
     closest.worldPos = float3(0.0, 0.0, 0.0);
-    closest.geomNormal = float3(0.0, 0.0, 1.0);
+    closest.shadingNormal = float3(0.0, 0.0, 1.0);
     closest.transmission = float3(1.0, 1.0, 1.0);
 
     if(g_NwbCausticSwPushConstants.instanceCount == 0u)

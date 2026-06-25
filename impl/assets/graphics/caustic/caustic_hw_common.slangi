@@ -45,7 +45,7 @@
 // miss clears `hit`, and the raygen hook converts it back to NwbCausticHit. 52 bytes -> declare MaxPayloadSize 64.
 struct NwbCausticHwPayload{
     float3 worldPos;
-    float3 geomNormal;
+    float3 shadingNormal;
     float3 transmission;
     float t;
     float ior;
@@ -92,17 +92,16 @@ RaytracingAccelerationStructure g_NwbCausticHwTlas;
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL, NWB_CAUSTIC_RT_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticHwInstanceMaterial;
 
-// Per-mesh descriptor arrays (slot k = mesh k = material.meshSlot): the raw triangle index byte buffer, the
-// per-vertex attribute byte buffer (Half4U normal @ +0 / Float2U uv0 @ +8), and -- the HW addition -- the raw
-// object-space position byte buffer (the closest-hit reads v0/v1/v2 for the geometric face normal).
+// Per-mesh descriptor arrays (slot k = mesh k = material.meshSlot): the raw triangle index byte buffer (the
+// closest-hit loads i0/i1/i2 by PrimitiveIndex) + the per-vertex attribute byte buffer (Half4U normal @ +0 /
+// Float2U uv0 @ +8), interpolated into the SHADING normal the refraction bends on + the per-hit surface dispatch.
+// (No position array: bending on the interpolated shading normal needs only the vertex normals, not the positions --
+// the world hit point comes from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().)
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_MESH_INDICES, NWB_CAUSTIC_RT_SET)]]
 ByteAddressBuffer g_NwbCausticHwMeshIndices[NWB_CAUSTIC_RT_MAX_MESHES];
 
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_MESH_ATTRIBUTES, NWB_CAUSTIC_RT_SET)]]
 ByteAddressBuffer g_NwbCausticHwMeshAttributes[NWB_CAUSTIC_RT_MAX_MESHES];
-
-[[vk::binding(NWB_CAUSTIC_RT_BINDING_MESH_POSITIONS, NWB_CAUSTIC_RT_SET)]]
-ByteAddressBuffer g_NwbCausticHwMeshPositions[NWB_CAUSTIC_RT_MAX_MESHES];
 
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS, NWB_CAUSTIC_RT_SET)]]
 StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbCausticHwEmissionTargets;

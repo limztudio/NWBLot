@@ -43,8 +43,14 @@
 // The single shared closest-hit hook contract. Each backend fills this for a ray segment (origin + normalized
 // direction over (tMin, tMax)). `hit` is false when the segment escapes to infinity (a miss). On a hit:
 //   - worldPos     = the world-space intersection point (origin + t * direction).
-//   - geomNormal   = the GEOMETRIC face normal in world space (cross(v1-v0, v2-v0), NOT the shading normal), so the
-//                    two intersectors bend refraction identically. UN-oriented (the loop re-orients it per crossing).
+//   - shadingNormal= the interpolated SHADING normal in world space (the per-vertex normals interpolated at the hit),
+//                    smooth ACROSS the mesh. The bounce loop bends on THIS (after normalizing it), so a tessellated
+//                    sphere yields a SMOOTH caustic matching the surface it approximates -- bending on the per-facet
+//                    geometric normal instead would amplify the triangulation into facet artifacts. Need not be
+//                    pre-normalized; the loop normalizes via nwbCausticOrientNormal. UN-oriented (the loop orients it).
+//                    Cost: the barycentric weights differ ~ULPs between the HW + SW intersectors, so the shading
+//                    normal (hence the refraction) drifts at the ULP level -- accepted within the converged-image
+//                    Monte-Carlo A/B tolerance (the same relaxation the RayTCurrent vs Moeller-Trumbore t already has).
 //   - ior          = the surface's index of refraction (from the occluder's surface hook, == the shadow trace's).
 //   - transmission = the per-unit Beer-Lambert transmission color (from the same surface hook).
 //   - isRefractive = true when the hit instance carries NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE (a glass crossing);
@@ -56,7 +62,7 @@ struct NwbCausticHit{
     float t;
     float ior;
     float3 worldPos;
-    float3 geomNormal;
+    float3 shadingNormal;
     float3 transmission;
 };
 
@@ -92,13 +98,17 @@ struct NwbCausticSplat{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Re-orients a geometric face normal to point AGAINST the incident ray (the convention nwbCausticRefract / RefractV
-// expect: incident points into the surface, normal points back out toward the incident side). Returns the oriented
-// normal and the |cos| of incidence in `outCosI`.
-float3 nwbCausticOrientNormal(float3 incident, float3 geomNormal, out float outCosI){
-    const float ndotd = dot(incident, geomNormal);
+// Re-orients a surface normal to point AGAINST the incident ray (the convention nwbCausticRefract / RefractV expect:
+// incident points into the surface, normal points back out toward the incident side) and returns the |cos| of
+// incidence in `outCosI`. NORMALIZES the input first: nwbCausticRefract + the Fresnel cosI both REQUIRE a unit
+// normal (the Snell formula scales by |normal|), so an un-normalized normal (e.g. a raw cross(v1-v0,v2-v0), whose
+// magnitude is 2x the triangle area) would make the bend magnitude depend on tessellation density rather than
+// physics. Normalizing here makes the refraction correct for any normal the backend hands in (geometric or shading).
+float3 nwbCausticOrientNormal(float3 incident, float3 surfaceNormal, out float outCosI){
+    const float3 n = nwbSafeNormalize(surfaceNormal, float3(0.0, 0.0, 1.0));
+    const float ndotd = dot(incident, n);
     outCosI = saturate(abs(ndotd));
-    return (ndotd <= 0.0) ? geomNormal : -geomNormal;
+    return (ndotd <= 0.0) ? n : -n;
 }
 
 // The iterative bounce loop, identical on both backends. From an emitted photon it: traces to the first surface;
@@ -149,9 +159,10 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
             return splat;
         }
 
-        // Refractive crossing. Bend on the GEOMETRIC face normal (parity), oriented against the incident ray.
+        // Refractive crossing. Bend on the interpolated SHADING normal (smooth across the mesh -> smooth caustic;
+        // nwbCausticOrientNormal normalizes it), oriented against the incident ray.
         float cosI;
-        const float3 normal = nwbCausticOrientNormal(direction, hit.geomNormal, cosI);
+        const float3 normal = nwbCausticOrientNormal(direction, hit.shadingNormal, cosI);
 
         // eta for THIS crossing: entering a medium uses 1/ior (air->glass), leaving uses ior (glass->air). `inside`
         // before the crossing selects which face this is.

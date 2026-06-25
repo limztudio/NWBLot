@@ -149,15 +149,17 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     return EnvironmentFlagEnabled(s_StaticPreviewEnv);
 }
 
-[[nodiscard]] static NWB::Impl::SkeletonJointMatrix BuildAnimatedJointMatrix(
-    const NWB::Impl::SkeletonJointMatrix& bindJoint,
+static void BuildAnimatedJointMatrix(
+    const SIMDMatrix& bindJoint,
     const u32 jointIndex,
     const u32 characterIndex,
     const f32 timeSeconds,
-    const bool staticPreview
+    const bool staticPreview,
+    SIMDMatrix& outMatrix
 ){
+    outMatrix = bindJoint;
     if(!ShouldAnimateJoint(jointIndex, characterIndex, staticPreview))
-        return bindJoint;
+        return;
 
     const u32 seed = RandomJointSeed(jointIndex, characterIndex);
     const f32 seedPhase = static_cast<f32>(seed & 255u) * 0.0245436926f;
@@ -183,13 +185,11 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
         angle * (0.58f + static_cast<f32>((seed >> 6u) & 3u) * 0.04f),
         secondary * (rollBase + static_cast<f32>((seed >> 9u) & 3u) * rollJitter)
     );
-    matrix = NWB::Impl::SkeletonRuntime::MultiplyJointMatrices(LoadFloat(bindJoint), matrix);
+    matrix = NWB::Impl::SkeletonRuntime::MultiplyJointMatrices(bindJoint, matrix);
     if(!NWB::Impl::SkeletonRuntime::IsInvertibleAffineJointMatrix(matrix))
-        return bindJoint;
+        return;
 
-    NWB::Impl::SkeletonJointMatrix stored{};
-    StoreFloat(matrix, &stored);
-    return stored;
+    outMatrix = matrix;
 }
 
 
@@ -446,14 +446,18 @@ private:
             if(!pose)
                 continue;
 
-            for(u32 jointIndex = 0u; jointIndex < pose->localJoints.size(); ++jointIndex)
-                pose->localJoints[jointIndex] = BuildAnimatedJointMatrix(
-                    m_bindJoints[jointIndex],
+            for(u32 jointIndex = 0u; jointIndex < pose->localJoints.size(); ++jointIndex){
+                SIMDMatrix animatedJoint;
+                BuildAnimatedJointMatrix(
+                    LoadFloat(m_bindJoints[jointIndex]),
                     jointIndex,
                     static_cast<u32>(entityIndex),
                     timeSeconds,
-                    m_staticPreview
+                    m_staticPreview,
+                    animatedJoint
                 );
+                StoreFloat(animatedJoint, &pose->localJoints[jointIndex]);
+            }
         }
     }
 

@@ -26,6 +26,15 @@ Vec4 ToVec4(const ufbx_vec4 value){
     };
 }
 
+SIMDVector ToVector(const ufbx_vec3 value, const f32 w = 0.0f){
+    return VectorSet(
+        static_cast<f32>(value.x),
+        static_cast<f32>(value.y),
+        static_cast<f32>(value.z),
+        w
+    );
+}
+
 struct SourceTriangleCorner{
     Vec3 position;
     Vec3 normal;
@@ -281,7 +290,7 @@ template<typename Vector3Like>
     return areaLengthSquared > triangleAreaLengthSquaredEpsilon;
 }
 
-[[nodiscard]] Vec3 LoadCornerOutputPosition(
+[[nodiscard]] SIMDVector BuildCornerOutputPositionVector(
     const ufbx_mesh& mesh,
     const ufbx_node& node,
     const ImportOptions& options,
@@ -301,12 +310,10 @@ template<typename Vector3Like>
         position = ufbx_get_vertex_vec3(&mesh.vertex_position, cornerIndex);
     }
 
-    Vec3 outputPosition = ToVec3(position);
-    StoreFloat(VectorScale(LoadFloat(outputPosition), static_cast<f32>(options.scale)), &outputPosition);
-    return outputPosition;
+    return VectorScale(ToVector(position), static_cast<f32>(options.scale));
 }
 
-[[nodiscard]] Vec3 LoadCornerOutputNormal(
+[[nodiscard]] SIMDVector BuildCornerOutputNormalVector(
     const ufbx_mesh& mesh,
     const ufbx_matrix& normalToWorld,
     const ImportOptions& options,
@@ -326,20 +333,20 @@ template<typename Vector3Like>
         normal = ufbx_get_vertex_vec3(&mesh.vertex_normal, cornerIndex);
     }
 
-    Vec3 outputNormal = ToVec3(normal);
-    if(!Normalize(outputNormal))
-        outputNormal = Vec3{ 0.0f, 0.0f, 1.0f };
+    SIMDVector outputNormal;
+    if(!Normalize(ToVector(normal), outputNormal))
+        outputNormal = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
     return outputNormal;
 }
 
-[[nodiscard]] bool LoadCornerOutputTangent(
+[[nodiscard]] bool BuildCornerOutputTangentVector(
     const ufbx_mesh& mesh,
     const ufbx_matrix& normalToWorld,
     const ImportOptions& options,
     const bool wantsSkinning,
     const u32 cornerIndex,
-    const Vec3& normal,
-    Vec4& outTangent
+    const SIMDVector normal,
+    SIMDVector& outTangent
 ){
     if(!mesh.vertex_tangent.exists)
         return false;
@@ -348,8 +355,8 @@ template<typename Vector3Like>
     if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
         tangent = ufbx_transform_direction(&normalToWorld, tangent);
 
-    Vec3 outputTangent = ToVec3(tangent);
-    if(!Normalize(outputTangent))
+    SIMDVector outputTangent;
+    if(!Normalize(ToVector(tangent), outputTangent))
         return false;
 
     f32 sign = 1.0f;
@@ -358,15 +365,15 @@ template<typename Vector3Like>
         if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
             bitangent = ufbx_transform_direction(&normalToWorld, bitangent);
 
-        Vec3 outputBitangent = ToVec3(bitangent);
-        if(Normalize(outputBitangent)){
-            const SIMDVector tangentSpaceBitangent = Vector3Cross(LoadFloat(normal), LoadFloat(outputTangent));
-            const SIMDVector bitangentDot = Vector3Dot(tangentSpaceBitangent, LoadFloat(outputBitangent));
+        SIMDVector outputBitangent;
+        if(Normalize(ToVector(bitangent), outputBitangent)){
+            const SIMDVector tangentSpaceBitangent = Vector3Cross(normal, outputTangent);
+            const SIMDVector bitangentDot = Vector3Dot(tangentSpaceBitangent, outputBitangent);
             sign = VectorGetX(bitangentDot) < 0.0f ? -1.0f : 1.0f;
         }
     }
 
-    outTangent = Vec4{ outputTangent.x, outputTangent.y, outputTangent.z, sign };
+    outTangent = VectorSetW(outputTangent, sign);
     return true;
 }
 
@@ -380,15 +387,28 @@ template<typename Vector3Like>
 
 [[nodiscard]] bool IsFiniteSourceTriangleCorner(const SourceTriangleCorner& corner, const bool wantsSkinning){
     if(
-        !VectorIsFinite(LoadFloat(corner.position), 0x7u)
-        || !VectorIsFinite(LoadFloat(corner.normal), 0x7u)
-        || !VectorIsFinite(LoadFloat(corner.uv0), 0x3u)
-        || !VectorIsFinite(LoadFloat(corner.color), 0xFu)
+        !IsFinite(corner.position.x)
+        || !IsFinite(corner.position.y)
+        || !IsFinite(corner.position.z)
+        || !IsFinite(corner.normal.x)
+        || !IsFinite(corner.normal.y)
+        || !IsFinite(corner.normal.z)
+        || !IsFinite(corner.uv0.x)
+        || !IsFinite(corner.uv0.y)
+        || !IsFinite(corner.color.x)
+        || !IsFinite(corner.color.y)
+        || !IsFinite(corner.color.z)
+        || !IsFinite(corner.color.w)
     )
         return false;
     if(
         corner.hasTangent
-        && !VectorIsFinite(LoadFloat(corner.tangent), 0xFu)
+        && (
+            !IsFinite(corner.tangent.x)
+            || !IsFinite(corner.tangent.y)
+            || !IsFinite(corner.tangent.z)
+            || !IsFinite(corner.tangent.w)
+        )
     )
         return false;
     return !wantsSkinning || IsFiniteSkinInfluence(corner.skin);

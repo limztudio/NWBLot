@@ -12,8 +12,6 @@
 #include "metadata.h"
 #include "binary_payload.h"
 
-#include <impl/assets/graphics/avboit/names.h>
-
 #include <core/alloc/scratch.h>
 #include <core/assets/paths.h>
 #include <core/filesystem/module.h>
@@ -51,6 +49,8 @@ template<typename T>
 using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, ScratchArena>;
 template<typename T>
 using CookHashSet = MaterialCookHashSet<T>;
+
+static constexpr AStringView s_AvboitAccumulatePixelShaderGeneratedPrefix("generated/avboit_accumulate_ps/");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2446,7 +2446,7 @@ static bool EmitMaterialAvboitAccumulatePixelShadersImpl(
         }
 
         GeneratedMaterialPixelShader generated(arena);
-        generated.name += AssetsGraphicsAvboit::s_AccumulatePixelShaderGeneratedPrefix;
+        generated.name += s_AvboitAccumulatePixelShaderGeneratedPrefix;
         generated.name += entry.virtualPath.c_str();
         {
             ScratchString sourceText = PathToString(scratchArena, outputPath);

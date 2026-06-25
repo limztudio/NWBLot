@@ -32,11 +32,6 @@ inline constexpr Name s_IntegrateComputeShaderName("engine/graphics/avboit/integ
 // Fallback fixed accumulate PS, used by a transparent material that declares explicit `shaders` instead of a
 // `surface` (the per-material accumulate PS generation covers `surface`-authored transparent materials).
 inline constexpr Name s_AccumulatePixelShaderName("engine/graphics/avboit/accumulate_ps");
-// Shared identity prefix for the cook-generated per-material AVBOIT accumulate PS. The cook generates one such
-// PS per `surface`-authored transparent material (cook.cpp EmitMaterialAvboitAccumulatePixelShaders) under the
-// name "<prefix><material virtual path>"; the renderer derives the SAME name from the material to bind it for
-// the transparent draw (material_pipeline.cpp, AvboitAccumulate pass). Keep both sites in sync via this prefix.
-inline constexpr AStringView s_AccumulatePixelShaderGeneratedPrefix("generated/avboit_accumulate_ps/");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

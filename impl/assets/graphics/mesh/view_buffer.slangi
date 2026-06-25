@@ -15,6 +15,11 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+#ifndef NWB_MESH_VIEW_SET
+#define NWB_MESH_VIEW_SET NWB_MESH_SET
+#define NWB_MESH_VIEW_SET_DEFAULTED_BY_VIEW_BUFFER 1
+#endif
+
 
 struct NwbMeshViewBuffer{
     row_major float4x4 g_NwbMeshWorldToClip;
@@ -23,13 +28,18 @@ struct NwbMeshViewBuffer{
     float4 g_NwbMeshFrustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
 };
 
-[[vk::binding(NWB_MESH_BINDING_VIEW, NWB_MESH_SET)]]
+[[vk::binding(NWB_MESH_BINDING_VIEW, NWB_MESH_VIEW_SET)]]
 ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> g_NwbMeshViewBuffer;
 
 #define g_NwbMeshWorldToClip g_NwbMeshViewBuffer.g_NwbMeshWorldToClip
 #define g_NwbMeshClipToWorld g_NwbMeshViewBuffer.g_NwbMeshClipToWorld
 #define g_NwbMeshCameraPosition g_NwbMeshViewBuffer.g_NwbMeshCameraPosition
 #define g_NwbMeshFrustumPlanes g_NwbMeshViewBuffer.g_NwbMeshFrustumPlanes
+
+#ifdef NWB_MESH_VIEW_SET_DEFAULTED_BY_VIEW_BUFFER
+#undef NWB_MESH_VIEW_SET
+#undef NWB_MESH_VIEW_SET_DEFAULTED_BY_VIEW_BUFFER
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

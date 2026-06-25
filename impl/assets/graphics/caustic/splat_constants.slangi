@@ -1,0 +1,33 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CAUSTIC_SPLAT_CONSTANTS_SLANGI
+#define NWB_GRAPHICS_CAUSTIC_SPLAT_CONSTANTS_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Fixed-point conversion shared by the splat (producer) and the resolve. Photon flux is deposited as
+// uint(flux.channel * NWB_CAUSTIC_FIXED_POINT_SCALE) via InterlockedAdd into the R32_UINT accumulators (no float
+// image atomics exist on the backend); the resolve divides the same scale back out. Kept in its own tiny header so
+// the resolve pass can read the scale WITHOUT pulling in the full transport layer (caustic_trace.slangi declares
+// the backend closest-hit hook nwbCausticTraceClosest, which only a producer defines).
+//
+// The scale is conservative: per-photon flux is < 1.0 after the 1/photonCount energy normalization, so a single
+// deposit is a few hundred-to-thousand fixed-point units; even a deep focal pile-up of tens of thousands of photons
+// stays far under the 2^32 accumulator wrap. NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX saturates one deposit so a
+// degenerate (NaN/inf) flux can never inject a wrap-inducing value.
+#define NWB_CAUSTIC_FIXED_POINT_SCALE 4096.0
+#define NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX 0x10000000u
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

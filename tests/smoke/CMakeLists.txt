@@ -162,6 +162,27 @@ if(Python3_Interpreter_FOUND)
             "--reject-log-message" "failed to resolve shader"
         )
 
+        nwb_declare_executable(nwb_caustic_sphere_smoke)
+        target_sources(nwb_caustic_sphere_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
+        )
+        target_compile_definitions(nwb_caustic_sphere_smoke PRIVATE
+            NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE=1
+        )
+        nwb_configure_runtime_smoke_target(nwb_caustic_sphere_smoke "${_nwb_transparent_multi_runtime_root}")
+        add_dependencies(nwb_caustic_sphere_smoke nwb_transparent_multi_smoke_assets)
+
+        nwb_add_window_capture_smoke(
+            nwb_caustic_sphere_capture_smoke
+            caustic_sphere_capture.bmp
+            "$<TARGET_FILE:nwb_caustic_sphere_smoke>"
+            "${_nwb_transparent_multi_runtime_root}"
+            "NWB Caustic Sphere Smoke"
+            "--settle-seconds" "3.0"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
         unset(_nwb_transparent_multi_asset_stamp)
         unset(_nwb_transparent_multi_runtime_root)
         unset(_nwb_transparent_multi_asset_inputs)

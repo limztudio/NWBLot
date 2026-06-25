@@ -31,11 +31,17 @@ public:
     [[nodiscard]] bool buildPendingMeshSwBvh(Core::CommandList& commandList);
     [[nodiscard]] bool buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool buildSceneSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool prepareCausticEmissionTargets(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
+    [[nodiscard]] bool createCausticTargets(DeferredFrameTargets& targets);
     [[nodiscard]] bool prepareShadowVisibilityResources(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena, bool& outBackendReady);
     [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    void clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    [[nodiscard]] bool prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
+    [[nodiscard]] bool renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    [[nodiscard]] bool hasCausticWork()const noexcept;
 
 
 private:
@@ -44,6 +50,10 @@ private:
     [[nodiscard]] bool ensureShadowBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureSwShadowPipeline();
     [[nodiscard]] bool ensureSwShadowBindingSet(DeferredFrameTargets& targets);
+    [[nodiscard]] bool ensureSwCausticPipeline();
+    [[nodiscard]] bool ensureSwCausticBindingSet(DeferredFrameTargets& targets);
+    [[nodiscard]] bool ensureCausticResolvePipeline();
+    [[nodiscard]] bool ensureCausticResolveBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureBvhSortPipeline();
     [[nodiscard]] bool ensureBvhSortBuffers(usize paddedCount);
     [[nodiscard]] bool bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount);
@@ -56,6 +66,7 @@ private:
     [[nodiscard]] bool refitMeshSwBvh(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
     [[nodiscard]] bool updateMeshSwBvh(Core::CommandList& commandList, MeshResources& meshResources);
     [[nodiscard]] bool ensureSceneBvhBuffers(u32 instanceCount);
+    [[nodiscard]] bool ensureCausticEmissionTargetBuffer(usize targetCount);
     [[nodiscard]] bool ensureShadowInstanceMaterialBuffer(usize instanceCount);
     [[nodiscard]] bool uploadShadowMaterialContextBuffers(
         Core::CommandList& commandList,

@@ -101,6 +101,9 @@ struct DeferredFrameTargets{
     Core::Format::Enum opaqueColorFormat = Core::Format::UNKNOWN;
     Core::Format::Enum depthFormat = Core::Format::UNKNOWN;
     Core::Format::Enum shadowVisibilityFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum causticIrradianceFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum causticAccumulatorFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum causticHistoryFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgCapNormalFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgIntervalDepthFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgIntervalIdFormat = Core::Format::UNKNOWN;
@@ -133,6 +136,13 @@ struct DeferredFrameTargets{
     Core::TextureHandle opaqueColor;
     Core::TextureHandle depth;
     Core::TextureHandle shadowVisibility;
+    // Caustic producer targets (additive, inverted lifecycle vs shadowVisibility): the RGBA16F resolved irradiance
+    // the deferred lighting pass adds pre-tonemap, the R32_UINT splat accumulators (one Texture2DArray layer per
+    // RGB channel) the producer's fixed-point InterlockedAdd lands in, and the RGBA16F temporal history (P5). All
+    // cleared to BLACK each frame (additive identity), so an empty buffer is a no-op. No producer writes them yet.
+    Core::TextureHandle causticIrradiance;
+    Core::TextureHandle causticAccumulator;
+    Core::TextureHandle causticHistory;
     Core::FramebufferHandle framebuffer;
     Core::FramebufferHandle opaqueLightingFramebuffer;
     Core::BindingSetHandle lightingBindingSet;

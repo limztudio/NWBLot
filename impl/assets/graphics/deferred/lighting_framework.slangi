@@ -41,6 +41,12 @@
 #ifndef NWB_SCENE_SHADOW_VISIBILITY_BINDING
 #define NWB_SCENE_SHADOW_VISIBILITY_BINDING NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY
 #endif
+#ifndef NWB_SCENE_CAUSTIC_IRRADIANCE_SET
+#define NWB_SCENE_CAUSTIC_IRRADIANCE_SET NWB_DEFERRED_LIGHTING_SET
+#endif
+#ifndef NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING
+#define NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING NWB_DEFERRED_LIGHTING_BINDING_CAUSTIC_IRRADIANCE
+#endif
 
 // Brings common/math (nwbSafeNormalize, frame helpers), scene/buffer (g_NwbSceneLights, nwbSceneLightCount,
 // g_NwbSceneCameraPosition, nwbSceneResolveLight) and the engine's default BRDF lobe (nwbSceneShadeLight) +

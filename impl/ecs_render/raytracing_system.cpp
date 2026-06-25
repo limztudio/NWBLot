@@ -10,6 +10,9 @@
 #include <impl/assets/graphics/shadow/binding_slots.h>
 #include <impl/assets/graphics/shadow/sw_binding_slots.h>
 #include <impl/assets/graphics/shadow/names.h>
+#include <impl/assets/graphics/caustic/sw_binding_slots.h>
+#include <impl/assets/graphics/caustic/resolve_binding_slots.h>
+#include <impl/assets/graphics/caustic/names.h>
 #include <impl/assets/graphics/bvh/binding_slots.h>
 #include <impl/assets/graphics/bvh/names.h>
 
@@ -105,6 +108,19 @@ struct SceneSwBvhInstanceGpu{
 };
 static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
 
+// Initial capacity (in records) of the per-frame caustic emission-target buffer; grows by doubling.
+inline constexpr usize s_CausticEmissionTargetInitialCapacity = 32u;
+
+// CPU/GPU record of one caustic emission target (P1): the world-space AABB of a refractive instance. The future
+// caustic photon producer aims its light-side emission domain at these boxes; for v1 a single global list (all
+// caustic lights share it). A tight 32-byte std430-friendly record ({ float4 aabbMin; float4 aabbMax; }); the w
+// lanes are unused padding (kept for SIMD-friendly 16-byte lanes / std430 float4 alignment).
+struct NwbCausticEmissionTargetGpu{
+    Float4 aabbMin = Float4(0.f, 0.f, 0.f, 0.f);
+    Float4 aabbMax = Float4(0.f, 0.f, 0.f, 0.f);
+};
+static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCausticEmissionTargetGpu must stay a tight 32-byte std430 record");
+
 // CPU mirror of the shader NwbRtInstanceMaterial (shadow/instance_material.slangi, 32 bytes / two float4 lanes,
 // std430): the per-instance shadow-occluder transmittance-model id + flags + per-mesh attribute slot + the
 // material-constants context the surface hook needs (the constant block byte offset into g_NwbMaterialTypedWords
@@ -149,6 +165,52 @@ struct SwShadowPushConstants{
     u32 pad0 = 0u;
 };
 static_assert(sizeof(SwShadowPushConstants) == sizeof(u32) * 4u, "SwShadowPushConstants must match the shader push-constant layout");
+
+// CPU mirror of the software caustic photon producer push constants (caustic/caustic_photon_sw_cs.slang).
+struct SwCausticPushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 instanceCount = 0u;
+    u32 photonCount = 0u;
+    u32 emissionTargetCount = 0u;
+    u32 frameIndex = 0u;
+    f32 totalEmittedPower = 0.f;
+    f32 pad0 = 0.f;
+};
+static_assert(sizeof(SwCausticPushConstants) == sizeof(u32) * 6u + sizeof(f32) * 2u, "SwCausticPushConstants must match the shader push-constant layout");
+
+// CPU mirror of the caustic resolve push constants (caustic/caustic_resolve_cs.slang).
+struct CausticResolvePushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    f32 causticIntensity = 0.f;
+    u32 blurRadius = 0u;
+    u32 frameIndex = 0u;
+    f32 temporalAlpha = 0.f;
+};
+static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 4u + sizeof(f32) * 2u, "CausticResolvePushConstants must match the shader push-constant layout");
+
+// Total radiant power the caustic photon budget carries each frame (the per-photon flux is this / photonCount, so
+// doubling the photon count leaves the converged image unchanged -- the energy-conservation invariant). A unit
+// budget; the final look is scaled by s_CausticIntensity in the resolve. The photon count is the shared shader
+// constant NWB_CAUSTIC_SW_PHOTON_COUNT.
+inline constexpr f32 s_CausticTotalEmittedPower = 20.0f;
+
+// Artist multiplier applied in the resolve after the physical density->irradiance (flux / receiver-area-per-pixel)
+// conversion. Scales the focused caustic toward a visible brightness for the v1 single-glass scene.
+inline constexpr f32 s_CausticIntensity = 10.0f;
+
+// Radius (in pixels) of the resolve-side edge-aware bilateral gather that denoises the sparse photon splat (P5): the
+// (2R+1)^2 neighbourhood is blended per output pixel, world-distance-edge-stopped so the caustic does not bleed
+// across silhouettes. 0 disables the blur (the raw single-tap splat, for an A/B). Kept modest so the full-screen
+// gather stays cheap in an unoptimized debug build.
+inline constexpr u32 s_CausticResolveBlurRadius = 3u;
+
+// Temporal EMA blend weight for the caustic accumulator (P5): accumulated = lerp(history, current, alpha). Smaller =
+// more frames averaged = smoother + slower convergence. Because the emission jitters per frame (nwbCausticR2Jitter),
+// successive frames are independent samples of the same static caustic, so the EMA converges the sparse per-frame
+// splat to a smooth caustic over ~1/alpha frames (here ~12). The first producer frame seeds the history directly.
+inline constexpr f32 s_CausticTemporalAlpha = 0.08f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -761,6 +823,122 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     return true;
 }
 
+bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
+    // Caustic emission-target gather (P1, CPU only): collect the world-space AABB of every refractive instance in
+    // the scene -- the domain the future caustic photon producer aims at. Runs once per frame regardless of the
+    // shadow backend (HW TLAS or SW BVH); mirrors buildSceneSwBvh's mesh/transform resolve + 8-corner world AABB
+    // but does NOT require a software BVH and keeps ONLY instances whose material is refractive. The count gates
+    // caustic-light assignment (see ResolveCausticLights): zero refractive instances -> zero caustic lights. No
+    // consumer reads the uploaded buffer yet.
+    rayTracingState().m_causticRefractiveInstanceCount = 0u;
+
+    auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
+    if(!meshSystem)
+        return true;
+
+    auto rendererView = world().view<RendererComponent>();
+    const usize candidateCount = rendererView.candidateCount();
+
+    Vector<NwbCausticEmissionTargetGpu, Core::Alloc::ScratchArena> targets{ scratchArena };
+    targets.reserve(candidateCount);
+
+    SIMDVector combinedMin = VectorReplicate(1e30f);
+    SIMDVector combinedMax = VectorReplicate(-1e30f);
+
+    for(auto&& [entity, renderer] : rendererView){
+        if(!renderer.visible)
+            continue;
+
+        RenderableMeshDesc resolvedMesh;
+        if(!meshSystem->resolveRenderableMesh(entity, resolvedMesh))
+            continue;
+
+        MeshResources* mesh = nullptr;
+        const bool meshReady = resolvedMesh.runtime
+            ? m_renderer.meshSystem().findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
+            : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
+        ;
+        // Need valid object-space bounds to build a world AABB; the per-mesh BVH / position buffers (required by
+        // the SW shadow trace) are NOT required here -- the emission target is geometry-agnostic.
+        if(!meshReady || !mesh || !mesh->csgLocalBounds.valid())
+            continue;
+
+        // Only refractive instances are emission targets (the producer's classification, mirroring buildSceneTlas
+        // / buildSceneSwBvh's MaterialSurfaceInfo.refractive read).
+        MaterialSurfaceInfo* materialInfo = nullptr;
+        if(!m_renderer.materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo))
+            continue;
+        if(!materialInfo || !materialInfo->refractive)
+            continue;
+
+        // object->world from the decomposed transform (identity when absent), matching buildSceneSwBvh.
+        const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+        SIMDMatrix objectToWorld = MatrixIdentity();
+        if(transform){
+            objectToWorld = MatrixAffineTransformation(
+                LoadFloat(transform->scale),
+                VectorZero(),
+                LoadFloat(transform->rotation),
+                LoadFloat(transform->position)
+            );
+        }
+
+        // World AABB = bounds of the 8 object-space corners transformed to world space (exact under rotation).
+        const SIMDVector localMin = LoadFloatInt(mesh->csgLocalBounds.minBounds);
+        const SIMDVector localMax = LoadFloatInt(mesh->csgLocalBounds.maxBounds);
+        const f32 minX = VectorGetX(localMin), minY = VectorGetY(localMin), minZ = VectorGetZ(localMin);
+        const f32 maxX = VectorGetX(localMax), maxY = VectorGetY(localMax), maxZ = VectorGetZ(localMax);
+        SIMDVector worldMin = VectorReplicate(1e30f);
+        SIMDVector worldMax = VectorReplicate(-1e30f);
+        for(u32 corner = 0u; corner < 8u; ++corner){
+            const SIMDVector localCorner = VectorSet(
+                (corner & 1u) != 0u ? maxX : minX,
+                (corner & 2u) != 0u ? maxY : minY,
+                (corner & 4u) != 0u ? maxZ : minZ,
+                1.0f
+            );
+            const SIMDVector worldCorner = Vector3TransformCoord(localCorner, objectToWorld);
+            worldMin = VectorMin(worldMin, worldCorner);
+            worldMax = VectorMax(worldMax, worldCorner);
+        }
+
+        combinedMin = VectorMin(combinedMin, worldMin);
+        combinedMax = VectorMax(combinedMax, worldMax);
+
+        NwbCausticEmissionTargetGpu target;
+        StoreFloat(worldMin, &target.aabbMin);
+        StoreFloat(worldMax, &target.aabbMax);
+        target.aabbMin.w = 0.f;
+        target.aabbMax.w = 0.f;
+        targets.push_back(target);
+    }
+
+    const u32 targetCount = static_cast<u32>(targets.size());
+    if(targetCount == 0u){
+        // No refractive instances: leave the resident buffer untouched, keep the count zero (every light's
+        // caustic slot stays -1 downstream), and reset the combined extent.
+        rayTracingState().m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
+        rayTracingState().m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
+        rayTracingState().m_causticRefractiveInstanceCount = 0u;
+        return true;
+    }
+
+    if(!ensureCausticEmissionTargetBuffer(targetCount))
+        return false;
+
+    Core::Buffer* targetBuffer = rayTracingState().m_causticEmissionTargetBuffer.get();
+    commandList.setBufferState(targetBuffer, Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(targetBuffer, targets.data(), targets.size() * sizeof(NwbCausticEmissionTargetGpu));
+    commandList.setBufferState(targetBuffer, Core::ResourceStates::ShaderResource);
+    commandList.commitBarriers();
+
+    StoreFloat(combinedMin, &rayTracingState().m_causticTargetBoundsMin);
+    StoreFloat(combinedMax, &rayTracingState().m_causticTargetBoundsMax);
+    rayTracingState().m_causticRefractiveInstanceCount = targetCount;
+    return true;
+}
+
 bool RendererRayTracingSystem::prepareShadowVisibilityResources(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -770,6 +948,12 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
     outBackendReady = false;
     if(!targets.shadowVisibility)
         return false;
+
+    // Caustic emission-target gather (P1) runs once per frame regardless of the shadow backend; it populates the
+    // refractive-instance world AABBs the caustic producer will aim at and the count that gates caustic-light
+    // assignment in updateSceneShadingBuffer. A failure here is non-fatal to shadows (no consumer reads it yet).
+    if(!prepareCausticEmissionTargets(commandList, scratchArena))
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic emission-target gather failed"));
 
     if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
         if(!buildPendingMeshBlas(commandList))
@@ -796,6 +980,12 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         return true;
 
     outBackendReady = ensureSwShadowPipeline() && ensureSwShadowBindingSet(targets);
+
+    // Build the software caustic producer + resolve resources alongside the SW shadow resources (same SW scene BVH +
+    // per-mesh geometry). Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op).
+    if(!prepareGpuBvhCausticResources(targets))
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic producer resource preparation failed"));
+
     return true;
 }
 
@@ -820,6 +1010,69 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     targets.shadowVisibility = graphics().createTexture(visibilityDesc);
     if(!targets.shadowVisibility){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow visibility target"));
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& targets){
+    // Additive caustic producer targets, the inverted-lifecycle sibling of the shadow visibility target. The
+    // deferred lighting pass always samples the resolved irradiance (nwbBxdfCausticIrradiance), so it is allocated
+    // unconditionally and cleared to BLACK each frame (the additive identity, vs the shadow buffer's white) to keep
+    // a single binding/shader path regardless of whether a caustic producer ran. No producer writes them yet (P2):
+    //  - causticIrradiance:  RGBA16F single image, the resolve output the lighting pass adds pre-tonemap.
+    //  - causticAccumulator: R32_UINT, one Texture2DArray layer per RGB channel, the fixed-point splat target the
+    //                        producer InterlockedAdds into (no float image atomics exist on the backend).
+    //  - causticHistory:     RGBA16F single image, the temporal accumulation history (P5).
+    // Fresh targets -> restart the temporal accumulation: the new history buffer is uninitialized, so frameIndex 0
+    // must seed it on the first producer frame (writing the raw frame without reading the garbage) instead of blending.
+    rayTracingState().m_causticFrameIndex = 0u;
+
+    targets.causticIrradianceFormat = Core::Format::RGBA16_FLOAT;
+    targets.causticAccumulatorFormat = Core::Format::R32_UINT;
+    targets.causticHistoryFormat = Core::Format::RGBA16_FLOAT;
+
+    Core::TextureDesc irradianceDesc;
+    irradianceDesc
+        .setWidth(targets.width)
+        .setHeight(targets.height)
+        .setFormat(targets.causticIrradianceFormat)
+        .setInUAV(true)
+        .setName("engine/caustic/irradiance")
+    ;
+    targets.causticIrradiance = graphics().createTexture(irradianceDesc);
+    if(!targets.causticIrradiance){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic irradiance target"));
+        return false;
+    }
+
+    Core::TextureDesc accumulatorDesc;
+    accumulatorDesc
+        .setWidth(targets.width)
+        .setHeight(targets.height)
+        .setArraySize(ECSRenderDetail::s_CausticAccumulatorChannelCount)
+        .setDimension(Core::TextureDimension::Texture2DArray)
+        .setFormat(targets.causticAccumulatorFormat)
+        .setInUAV(true)
+        .setName("engine/caustic/accumulator")
+    ;
+    targets.causticAccumulator = graphics().createTexture(accumulatorDesc);
+    if(!targets.causticAccumulator){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic accumulator target"));
+        return false;
+    }
+
+    Core::TextureDesc historyDesc;
+    historyDesc
+        .setWidth(targets.width)
+        .setHeight(targets.height)
+        .setFormat(targets.causticHistoryFormat)
+        .setInUAV(true)
+        .setName("engine/caustic/history")
+    ;
+    targets.causticHistory = graphics().createTexture(historyDesc);
+    if(!targets.causticHistory){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic history target"));
         return false;
     }
     return true;
@@ -869,6 +1122,24 @@ void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandL
     commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.clearTextureFloat(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
+}
+
+void RendererRayTracingSystem::clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    if(!targets.causticIrradiance || !targets.causticAccumulator || !targets.causticHistory)
+        return;
+
+    // Per-frame reset of the additive caustic targets, EXCEPT the temporal history. Black = the additive identity
+    // (the inverse of the shadow buffer's white default): the value the deferred lighting samples whenever no caustic
+    // producer wrote the irradiance this frame, so the additive term is a pixel-identical no-op. The accumulators are
+    // the per-frame splat target (integer R32_UINT, one layer per RGB channel, cleared to 0 with clearTextureUInt);
+    // the irradiance is the float image the lighting reads (cleared to 0). The temporal HISTORY is deliberately NOT
+    // cleared here -- it is the EMA accumulator the resolve persists across frames (seeded on the first producer
+    // frame, frameIndex == 0), so clearing it every frame would defeat the temporal accumulation (P5).
+    commandList.setTextureState(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.clearTextureFloat(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+    commandList.clearTextureUInt(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, 0u);
 }
 
 bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
@@ -927,6 +1198,142 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             , static_cast<u64>(targets.width)
             , static_cast<u64>(targets.height)
             , static_cast<u64>(rayTracingState().m_sceneBvhInstanceCount)
+        );
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::hasCausticWork()const noexcept{
+    // The software caustic producer runs only on the no-hardware-ray-tracing path, and only when the scene holds at
+    // least one caustic light AND at least one refractive instance (else the black-cleared irradiance buffer is the
+    // additive no-op). The SW scene BVH must also have been built (it is the same geometry the photons trace).
+    return
+        !graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+        && rayTracingState().m_causticLightCount > 0u
+        && rayTracingState().m_causticRefractiveInstanceCount > 0u
+        && rayTracingState().m_sceneBvhInstanceCount > 0u
+        && rayTracingState().m_swShadowMeshCount > 0u
+        && rayTracingState().m_causticEmissionTargetBuffer
+    ;
+}
+
+bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTargets& targets){
+    // Build the producer + resolve pipelines and their binding sets, mirroring the SW shadow prepare. Called from
+    // the render-prepare path after the SW scene BVH + caustic emission targets are ready. Gated on the prepare-time
+    // facts (refractive instances gathered + the SW scene BVH built + the emission-target buffer resident); the
+    // caustic-LIGHT gate lives in renderGpuBvhCaustics (the light count is resolved later, in the render pass). This
+    // keeps the binding sets ready the same frame the gate first opens. A failure leaves the producer idle (the
+    // black-cleared caustic buffer remains the additive no-op).
+    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+        return true;
+    if(
+        rayTracingState().m_causticRefractiveInstanceCount == 0u
+        || rayTracingState().m_sceneBvhInstanceCount == 0u
+        || rayTracingState().m_swShadowMeshCount == 0u
+        || !rayTracingState().m_causticEmissionTargetBuffer
+    )
+        return true;
+    if(!targets.causticAccumulator || !targets.causticIrradiance || !drawState().m_meshViewBuffer)
+        return true;
+
+    const bool producerReady = ensureSwCausticPipeline() && ensureSwCausticBindingSet(targets);
+    const bool resolveReady = ensureCausticResolvePipeline() && ensureCausticResolveBindingSet(targets);
+    return producerReady && resolveReady;
+}
+
+bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    // Software caustic photon producer + resolve — the no-hardware-ray-tracing fallback (P3). Dispatched in the
+    // SW-fallback branch right after the SW shadow pass and BEFORE deferred lighting (which reads the resolved
+    // irradiance). The accumulators were already cleared to black by clearCausticTargets this frame. Runs only when
+    // hasCausticWork() holds (>=1 caustic light AND >=1 refractive instance), so an empty buffer = additive no-op.
+
+    if(!hasCausticWork())
+        return false;
+    if(
+        !rayTracingState().m_swCausticPipeline
+        || !rayTracingState().m_swCausticBindingSet
+        || !rayTracingState().m_causticResolvePipeline
+        || !rayTracingState().m_causticResolveBindingSet
+    )
+        return false;
+    if(!targets.causticAccumulator || !targets.causticIrradiance)
+        return false;
+
+    {
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, graphics().getDevice(), commandList);
+
+        // The per-mesh BVH node + geometry buffers were left in ShaderResource by the SW shadow pass; re-assert the
+        // state for every traced mesh, plus the shadow-owned material-context buffers (for the per-hit surface
+        // dispatch) and the caustic emission-target buffer. setResourceStatesForBindingSet derives the rest (the
+        // scene buffers, the view buffer, the G-buffer depth SRV, the accumulator UAV).
+        for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
+            commandList.setBufferState(rayTracingState().m_swShadowMeshNodeBuffers[slot], Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(rayTracingState().m_swShadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(rayTracingState().m_swShadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(rayTracingState().m_swShadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
+        }
+        commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_swCausticBindingSet.get());
+        commandList.commitBarriers();
+
+        SwCausticPushConstants pushConstants;
+        pushConstants.width = targets.width;
+        pushConstants.height = targets.height;
+        pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+        pushConstants.photonCount = NWB_CAUSTIC_SW_PHOTON_COUNT;
+        pushConstants.emissionTargetCount = rayTracingState().m_causticRefractiveInstanceCount;
+        pushConstants.frameIndex = rayTracingState().m_causticFrameIndex; // drives the per-frame R2 emission jitter (P5)
+        pushConstants.totalEmittedPower = s_CausticTotalEmittedPower;
+
+        Core::ComputeState computeState;
+        computeState.setPipeline(rayTracingState().m_swCausticPipeline.get());
+        computeState.addBindingSet(rayTracingState().m_swCausticBindingSet.get());
+        commandList.setComputeState(computeState);
+        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        commandList.dispatch(DivideUp(static_cast<u32>(NWB_CAUSTIC_SW_PHOTON_COUNT), static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
+    }
+
+    {
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticResolve, graphics().getDevice(), commandList);
+
+        // The producer wrote the accumulators as a UAV; move them to ShaderResource for the resolve read, alongside
+        // the resolve's G-buffer SRVs + the irradiance UAV (setResourceStatesForBindingSet derives these).
+        commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_causticResolveBindingSet.get());
+        commandList.commitBarriers();
+
+        CausticResolvePushConstants resolvePush;
+        resolvePush.width = targets.width;
+        resolvePush.height = targets.height;
+        resolvePush.causticIntensity = s_CausticIntensity;
+        resolvePush.blurRadius = s_CausticResolveBlurRadius;
+        resolvePush.frameIndex = rayTracingState().m_causticFrameIndex; // EMA seed (==0) vs blend; matches the producer jitter
+        resolvePush.temporalAlpha = s_CausticTemporalAlpha;
+
+        Core::ComputeState computeState;
+        computeState.setPipeline(rayTracingState().m_causticResolvePipeline.get());
+        computeState.addBindingSet(rayTracingState().m_causticResolveBindingSet.get());
+        commandList.setComputeState(computeState);
+        commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
+        commandList.dispatch(
+            DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)),
+            DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)),
+            1u
+        );
+    }
+
+    // Advance the caustic frame counter: the next producer frame jitters its emission to a new sub-cell offset and
+    // the resolve switches from the seed (frameIndex == 0) to the EMA blend, accumulating the static caustic.
+    ++rayTracingState().m_causticFrameIndex;
+
+    if(!rayTracingState().m_swCausticDispatchLogged){
+        rayTracingState().m_swCausticDispatchLogged = true;
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: dispatched software caustic producer ({} photons, {} caustic lights, {} refractive instances)")
+            , static_cast<u64>(NWB_CAUSTIC_SW_PHOTON_COUNT)
+            , static_cast<u64>(rayTracingState().m_causticLightCount)
+            , static_cast<u64>(rayTracingState().m_causticRefractiveInstanceCount)
         );
     }
     return true;
@@ -1374,6 +1781,311 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
     rayTracingState().m_swShadowBindingSetMeshInstances = meshInstanceBuffer;
     rayTracingState().m_swShadowBindingSetVisibility = visibilityTarget;
     rayTracingState().m_swShadowBindingSetMeshCount = meshCount;
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSwCausticPipeline(){
+    if(rayTracingState().m_swCausticPipeline)
+        return true;
+    if(rayTracingState().m_swCausticPipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_swCausticBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_SCENE_SHADING, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_LIGHT_LIST, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_NODES, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_INSTANCES, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_NODES, NWB_CAUSTIC_SW_MAX_MESHES));
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_POSITIONS, NWB_CAUSTIC_SW_MAX_MESHES));
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_INDICES, NWB_CAUSTIC_SW_MAX_MESHES));
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_ATTRIBUTES, NWB_CAUSTIC_SW_MAX_MESHES));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MATERIAL_TYPED, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_INSTANCES, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_VIEW, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_SW_BINDING_GBUFFER_DEPTH, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_SW_BINDING_GBUFFER_WORLD_POSITION, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_SW_BINDING_ACCUMULATOR, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwCausticPushConstants)));
+
+        rayTracingState().m_swCausticBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_swCausticBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software caustic binding layout"));
+            rayTracingState().m_swCausticPipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_swCausticShader,
+        AssetsGraphicsCaustic::s_SwPhotonShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_SwCausticPhotons"
+    )){
+        rayTracingState().m_swCausticPipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_swCausticShader)
+        .addBindingLayout(rayTracingState().m_swCausticBindingLayout)
+    ;
+    rayTracingState().m_swCausticPipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_swCausticPipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software caustic compute pipeline"));
+        rayTracingState().m_swCausticPipelineFailed = true;
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSwCausticBindingSet(DeferredFrameTargets& targets){
+    NWB_ASSERT(rayTracingState().m_swCausticBindingLayout);
+    NWB_ASSERT(rayTracingState().m_sceneBvhNodeBuffer);
+    NWB_ASSERT(rayTracingState().m_sceneInstanceBuffer);
+    NWB_ASSERT(rayTracingState().m_shadowInstanceMaterialBuffer);
+    NWB_ASSERT(rayTracingState().m_swShadowMeshCount > 0u);
+    NWB_ASSERT(rayTracingState().m_causticEmissionTargetBuffer);
+    NWB_ASSERT(targets.causticAccumulator);
+    NWB_ASSERT(targets.depth);
+    NWB_ASSERT(targets.worldPosition);
+    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
+    NWB_ASSERT(deferredState().m_lightBuffer);
+    NWB_ASSERT(drawState().m_meshViewBuffer);
+    NWB_ASSERT(rayTracingState().m_shadowMaterialTypedBuffer);
+    NWB_ASSERT(rayTracingState().m_shadowInstanceBuffer);
+
+    Core::Buffer* sceneNodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
+    Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
+    Core::Buffer* instanceMaterialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
+    Core::Buffer* materialTypedBuffer = rayTracingState().m_shadowMaterialTypedBuffer.get();
+    Core::Buffer* meshInstanceBuffer = rayTracingState().m_shadowInstanceBuffer.get();
+    Core::Buffer* emissionTargetBuffer = rayTracingState().m_causticEmissionTargetBuffer.get();
+    Core::Buffer* viewBuffer = drawState().m_meshViewBuffer.get();
+    const Core::Texture* depthTarget = targets.depth.get();
+    const Core::Texture* accumulatorTarget = targets.causticAccumulator.get();
+    const u32 meshCount = rayTracingState().m_swShadowMeshCount;
+    if(
+        rayTracingState().m_swCausticBindingSet
+        && rayTracingState().m_swCausticBindingSetSceneNodes == sceneNodeBuffer
+        && rayTracingState().m_swCausticBindingSetInstances == instanceBuffer
+        && rayTracingState().m_swCausticBindingSetInstanceMaterial == instanceMaterialBuffer
+        && rayTracingState().m_swCausticBindingSetMaterialTyped == materialTypedBuffer
+        && rayTracingState().m_swCausticBindingSetMeshInstances == meshInstanceBuffer
+        && rayTracingState().m_swCausticBindingSetEmissionTargets == emissionTargetBuffer
+        && rayTracingState().m_swCausticBindingSetView == viewBuffer
+        && rayTracingState().m_swCausticBindingSetDepth == depthTarget
+        && rayTracingState().m_swCausticBindingSetAccumulator == accumulatorTarget
+        && rayTracingState().m_swCausticBindingSetMeshCount == meshCount
+    )
+        return true;
+
+    Core::BindingSetDesc bindingSetDesc(arena());
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_NODES, sceneNodeBuffer));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_INSTANCES, instanceBuffer));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL, instanceMaterialBuffer));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MATERIAL_TYPED, materialTypedBuffer));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_INSTANCES, meshInstanceBuffer));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS, emissionTargetBuffer));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_VIEW, viewBuffer));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CAUSTIC_SW_BINDING_GBUFFER_DEPTH,
+        targets.depth.get(),
+        targets.depthFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CAUSTIC_SW_BINDING_GBUFFER_WORLD_POSITION,
+        targets.worldPosition.get(),
+        targets.worldPositionFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_CAUSTIC_SW_BINDING_ACCUMULATOR,
+        targets.causticAccumulator.get(),
+        targets.causticAccumulatorFormat,
+        ECSRenderDetail::s_CausticAccumulatorSubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+
+    // Per-mesh descriptor arrays: bind every slot (the shader only indexes meshIndex < meshCount). Unused tail
+    // slots are padded with the last real mesh, exactly as the SW shadow set does. The caustic producer reuses the
+    // SAME per-mesh buffers the SW shadow scene BVH populated (meshSlot indices match), so no separate gather.
+    for(u32 slot = 0u; slot < NWB_CAUSTIC_SW_MAX_MESHES; ++slot){
+        const u32 source = (slot < meshCount) ? slot : (meshCount - 1u);
+        bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_NODES, rayTracingState().m_swShadowMeshNodeBuffers[source]).setArrayElement(slot));
+        bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_POSITIONS, rayTracingState().m_swShadowMeshPositionBuffers[source]).setArrayElement(slot));
+        bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_INDICES, rayTracingState().m_swShadowMeshIndexBuffers[source]).setArrayElement(slot));
+        bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_ATTRIBUTES, rayTracingState().m_swShadowMeshAttributeBuffers[source]).setArrayElement(slot));
+    }
+
+    auto* device = graphics().getDevice();
+    rayTracingState().m_swCausticBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_swCausticBindingLayout);
+    if(!rayTracingState().m_swCausticBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software caustic binding set"));
+        rayTracingState().m_swCausticBindingSetSceneNodes = nullptr;
+        rayTracingState().m_swCausticBindingSetInstances = nullptr;
+        rayTracingState().m_swCausticBindingSetInstanceMaterial = nullptr;
+        rayTracingState().m_swCausticBindingSetMaterialTyped = nullptr;
+        rayTracingState().m_swCausticBindingSetMeshInstances = nullptr;
+        rayTracingState().m_swCausticBindingSetEmissionTargets = nullptr;
+        rayTracingState().m_swCausticBindingSetView = nullptr;
+        rayTracingState().m_swCausticBindingSetDepth = nullptr;
+        rayTracingState().m_swCausticBindingSetAccumulator = nullptr;
+        rayTracingState().m_swCausticBindingSetMeshCount = 0u;
+        return false;
+    }
+    rayTracingState().m_swCausticBindingSetSceneNodes = sceneNodeBuffer;
+    rayTracingState().m_swCausticBindingSetInstances = instanceBuffer;
+    rayTracingState().m_swCausticBindingSetInstanceMaterial = instanceMaterialBuffer;
+    rayTracingState().m_swCausticBindingSetMaterialTyped = materialTypedBuffer;
+    rayTracingState().m_swCausticBindingSetMeshInstances = meshInstanceBuffer;
+    rayTracingState().m_swCausticBindingSetEmissionTargets = emissionTargetBuffer;
+    rayTracingState().m_swCausticBindingSetView = viewBuffer;
+    rayTracingState().m_swCausticBindingSetDepth = depthTarget;
+    rayTracingState().m_swCausticBindingSetAccumulator = accumulatorTarget;
+    rayTracingState().m_swCausticBindingSetMeshCount = meshCount;
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
+    if(rayTracingState().m_causticResolvePipeline)
+        return true;
+    if(rayTracingState().m_causticResolvePipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_causticResolveBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_WORLD_POSITION, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RESOLVE_BINDING_IRRADIANCE, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RESOLVE_BINDING_HISTORY, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticResolvePushConstants)));
+
+        rayTracingState().m_causticResolveBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_causticResolveBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve binding layout"));
+            rayTracingState().m_causticResolvePipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_causticResolveShader,
+        AssetsGraphicsCaustic::s_ResolveShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_CausticResolve"
+    )){
+        rayTracingState().m_causticResolvePipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_causticResolveShader)
+        .addBindingLayout(rayTracingState().m_causticResolveBindingLayout)
+    ;
+    rayTracingState().m_causticResolvePipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_causticResolvePipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve compute pipeline"));
+        rayTracingState().m_causticResolvePipelineFailed = true;
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTargets& targets){
+    NWB_ASSERT(rayTracingState().m_causticResolveBindingLayout);
+    NWB_ASSERT(targets.causticAccumulator);
+    NWB_ASSERT(targets.worldPosition);
+    NWB_ASSERT(targets.depth);
+    NWB_ASSERT(targets.causticIrradiance);
+    NWB_ASSERT(targets.causticHistory);
+
+    const Core::Texture* accumulatorTarget = targets.causticAccumulator.get();
+    const Core::Texture* worldPositionTarget = targets.worldPosition.get();
+    const Core::Texture* depthTarget = targets.depth.get();
+    const Core::Texture* irradianceTarget = targets.causticIrradiance.get();
+    const Core::Texture* historyTarget = targets.causticHistory.get();
+    if(
+        rayTracingState().m_causticResolveBindingSet
+        && rayTracingState().m_causticResolveBindingSetAccumulator == accumulatorTarget
+        && rayTracingState().m_causticResolveBindingSetWorldPosition == worldPositionTarget
+        && rayTracingState().m_causticResolveBindingSetDepth == depthTarget
+        && rayTracingState().m_causticResolveBindingSetIrradiance == irradianceTarget
+        && rayTracingState().m_causticResolveBindingSetHistory == historyTarget
+    )
+        return true;
+
+    Core::BindingSetDesc bindingSetDesc(arena());
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR,
+        targets.causticAccumulator.get(),
+        targets.causticAccumulatorFormat,
+        ECSRenderDetail::s_CausticAccumulatorSubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_WORLD_POSITION,
+        targets.worldPosition.get(),
+        targets.worldPositionFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH,
+        targets.depth.get(),
+        targets.depthFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_CAUSTIC_RESOLVE_BINDING_IRRADIANCE,
+        targets.causticIrradiance.get(),
+        targets.causticIrradianceFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_CAUSTIC_RESOLVE_BINDING_HISTORY,
+        targets.causticHistory.get(),
+        targets.causticHistoryFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+
+    auto* device = graphics().getDevice();
+    rayTracingState().m_causticResolveBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_causticResolveBindingLayout);
+    if(!rayTracingState().m_causticResolveBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve binding set"));
+        rayTracingState().m_causticResolveBindingSetAccumulator = nullptr;
+        rayTracingState().m_causticResolveBindingSetWorldPosition = nullptr;
+        rayTracingState().m_causticResolveBindingSetDepth = nullptr;
+        rayTracingState().m_causticResolveBindingSetIrradiance = nullptr;
+        rayTracingState().m_causticResolveBindingSetHistory = nullptr;
+        return false;
+    }
+    rayTracingState().m_causticResolveBindingSetAccumulator = accumulatorTarget;
+    rayTracingState().m_causticResolveBindingSetWorldPosition = worldPositionTarget;
+    rayTracingState().m_causticResolveBindingSetDepth = depthTarget;
+    rayTracingState().m_causticResolveBindingSetIrradiance = irradianceTarget;
+    rayTracingState().m_causticResolveBindingSetHistory = historyTarget;
     return true;
 }
 
@@ -1981,6 +2693,38 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
             , static_cast<u64>(capacity)
         );
     }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCount){
+    // The caustic emission-target list is CPU-written each frame and (eventually) read by the caustic producer,
+    // so it is a structured SRV (no UAV) that grows by doubling like the scene-BVH / instance-material buffers.
+    if(rayTracingState().m_causticEmissionTargetBuffer && rayTracingState().m_causticEmissionTargetCapacity >= targetCount)
+        return true;
+
+    usize capacity = rayTracingState().m_causticEmissionTargetCapacity > 0u
+        ? rayTracingState().m_causticEmissionTargetCapacity
+        : s_CausticEmissionTargetInitialCapacity
+    ;
+    while(capacity < targetCount)
+        capacity *= 2u;
+
+    Core::BufferDesc targetBufferDesc;
+    targetBufferDesc
+        .setByteSize(static_cast<u64>(sizeof(NwbCausticEmissionTargetGpu) * capacity))
+        .setStructStride(sizeof(NwbCausticEmissionTargetGpu))
+        .setDebugName(Name("caustic_emission_targets"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    rayTracingState().m_causticEmissionTargetBuffer = graphics().createBuffer(targetBufferDesc);
+    if(!rayTracingState().m_causticEmissionTargetBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic emission-target buffer"));
+        return false;
+    }
+    rayTracingState().m_causticEmissionTargetCapacity = capacity;
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created caustic emission-target buffer (capacity {} targets)")
+        , static_cast<u64>(capacity)
+    );
     return true;
 }
 

@@ -1,0 +1,313 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CAUSTIC_TRACE_SLANGI
+#define NWB_GRAPHICS_CAUSTIC_TRACE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../common/math.slangi"
+#include "../mesh/surface.slangi"
+#include "refract.slangi"
+#include "splat_constants.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shared caustic photon-transport layer. ALL per-bounce physics (Snell refraction, Fresnel transmitted fraction,
+// Beer-Lambert absorption, flux update, eta flip) + the photon emission aim + the iterative bounce loop + the splat
+// math live here using ONLY Slang built-ins, so the software-BVH photon kernel (P3) and the hardware ray-traced
+// producer (P4) #include the IDENTICAL text and lower to byte-identical arithmetic (the HW/SW parity mandate). Each
+// backend provides ONLY the closest-hit geometry hook (nwbCausticTraceClosest) -- HW via TraceRay + closest-hit, SW
+// via the explicit-stack BVH descent -- and this shared loop does all the arithmetic + the deposit. The bounce bends
+// on the GEOMETRIC face normal the hook returns (not the interpolated shading normal), so the two intersectors agree.
+
+
+// Maximum refractive crossings (entry + exit per volume) before a photon is abandoned, bounding the iterative
+// loop on both backends. A single solid glass object is two crossings (enter + leave); the budget covers a few
+// nested/stacked refractors. Kept here so HW and SW share the one bound.
+#define NWB_CAUSTIC_MAX_BOUNCES 8u
+
+// Below this max-channel flux a photon carries too little energy to matter; the loop drops it early. Shared so
+// both backends terminate identically.
+#define NWB_CAUSTIC_FLUX_EPSILON 1e-6
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The single shared closest-hit hook contract. Each backend fills this for a ray segment (origin + normalized
+// direction over (tMin, tMax)). `hit` is false when the segment escapes to infinity (a miss). On a hit:
+//   - worldPos     = the world-space intersection point (origin + t * direction).
+//   - geomNormal   = the GEOMETRIC face normal in world space (cross(v1-v0, v2-v0), NOT the shading normal), so the
+//                    two intersectors bend refraction identically. UN-oriented (the loop re-orients it per crossing).
+//   - ior          = the surface's index of refraction (from the occluder's surface hook, == the shadow trace's).
+//   - transmission = the per-unit Beer-Lambert transmission color (from the same surface hook).
+//   - isRefractive = true when the hit instance carries NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE (a glass crossing);
+//                    false = an OPAQUE receiver, the splat point that terminates the loop.
+//   - t            = the ray parameter at the hit (world distance, since direction is normalized).
+struct NwbCausticHit{
+    bool hit;
+    bool isRefractive;
+    float t;
+    float ior;
+    float3 worldPos;
+    float3 geomNormal;
+    float3 transmission;
+};
+
+// Backend-provided. The shared loop calls it; HW + SW each define it over their own geometry fetch.
+NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin, float tMax);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// One photon in flight: a world-space ray carrying per-channel flux (radiant power / photonCount) and the medium
+// state. `eta` is the relative IOR for the NEXT refractive crossing (air->glass = 1/ior, glass->air = ior); v1
+// assumes photons start in air, so it begins at the air-side value and flips on each crossing. `inside` tracks
+// whether the photon is currently within a refractive medium so the exit crossing flips eta back and the Beer-
+// Lambert path length is integrated only over the interior segment.
+struct NwbCausticPhoton{
+    float3 origin;
+    float3 direction;
+    float3 flux;
+    bool inside;
+};
+
+// A photon's terminal landing: the world-space opaque-receiver hit point + the surviving per-channel flux to
+// deposit, or `valid == false` when the photon was dropped (TIR, escaped to infinity, flux underflow, or the bounce
+// budget ran out before reaching an opaque receiver).
+struct NwbCausticSplat{
+    bool valid;
+    float3 worldPos;
+    float3 flux;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Re-orients a geometric face normal to point AGAINST the incident ray (the convention nwbCausticRefract / RefractV
+// expect: incident points into the surface, normal points back out toward the incident side). Returns the oriented
+// normal and the |cos| of incidence in `outCosI`.
+float3 nwbCausticOrientNormal(float3 incident, float3 geomNormal, out float outCosI){
+    const float ndotd = dot(incident, geomNormal);
+    outCosI = saturate(abs(ndotd));
+    return (ndotd <= 0.0) ? geomNormal : -geomNormal;
+}
+
+// The iterative bounce loop, identical on both backends. From an emitted photon it: traces to the first surface;
+// at a refractive crossing it refracts on the geometric normal (Snell via nwbCausticRefract), attenuates by the
+// Fresnel-transmitted fraction (nwbShadowFresnelTransmittedFraction) and, when leaving a medium, by Beer-Lambert
+// over the interior path (nwbShadowAbsorptionCoefficient), flips eta, re-seeds the ray, and continues; at an OPAQUE
+// receiver it returns the splat. TIR (nwbCausticRefract returns float3(0)) drops the photon in v1 (documented).
+// Loops until an opaque receiver is hit, OR NWB_CAUSTIC_MAX_BOUNCES refractive crossings, OR flux underflows.
+NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
+    NwbCausticSplat splat;
+    splat.valid = false;
+    splat.worldPos = float3(0.0, 0.0, 0.0);
+    splat.flux = float3(0.0, 0.0, 0.0);
+
+    float3 origin = photon.origin;
+    float3 direction = photon.direction;
+    float3 flux = photon.flux;
+    bool inside = photon.inside;
+    // Count real glass transmissions. A caustic is, by definition, light that was BENT by refraction; a photon that
+    // reaches the opaque receiver with ZERO crossings is un-refracted DIRECT light (emitted over the occluder's AABB
+    // but missing the glass) and must NOT be deposited as caustic -- that is the AABB box artifact, and the direct
+    // term is already handled by deferred direct lighting. Geometry-agnostic (any refractor shape) + parity-safe
+    // (this shared loop is the single deposit chokepoint for both the SW and the future HW producer).
+    uint refractiveCrossings = 0u;
+
+    // tMin nudges the ray off the surface it just left so the next trace does not re-hit the same triangle.
+    const float tMin = 1e-3;
+    const float tMax = 1e7;
+
+    for(uint bounce = 0u; bounce < NWB_CAUSTIC_MAX_BOUNCES; ++bounce){
+        if(max(max(flux.x, flux.y), flux.z) < NWB_CAUSTIC_FLUX_EPSILON)
+            return splat;
+
+        const NwbCausticHit hit = nwbCausticTraceClosest(origin, direction, tMin, tMax);
+        if(!hit.hit)
+            return splat; // escaped to infinity -> dropped
+
+        if(!hit.isRefractive){
+            // Opaque receiver. Splat ONLY if the photon actually transmitted through glass at least once -- that is
+            // what makes the deposit a caustic. A zero-crossing photon is un-refracted direct light (it missed the
+            // occluder within its emission AABB); depositing it paints a box-shaped direct-light sheet on the ground
+            // (the AABB artifact) that the deferred direct-lighting pass already accounts for, so drop it.
+            if(refractiveCrossings == 0u)
+                return splat;
+            splat.valid = true;
+            splat.worldPos = hit.worldPos;
+            splat.flux = flux;
+            return splat;
+        }
+
+        // Refractive crossing. Bend on the GEOMETRIC face normal (parity), oriented against the incident ray.
+        float cosI;
+        const float3 normal = nwbCausticOrientNormal(direction, hit.geomNormal, cosI);
+
+        // eta for THIS crossing: entering a medium uses 1/ior (air->glass), leaving uses ior (glass->air). `inside`
+        // before the crossing selects which face this is.
+        const float eta = inside ? hit.ior : (1.0 / max(hit.ior, 1e-4));
+
+        const float3 refracted = nwbCausticRefract(direction, normal, eta);
+        if(dot(refracted, refracted) < 1e-12)
+            return splat; // total internal reflection -> dropped in v1 (documented)
+
+        // A real glass transmission happened (passed the TIR early-out), so this photon now carries a caustic: mark
+        // it so the opaque-receiver branch keeps its deposit (vs dropping un-refracted direct light).
+        ++refractiveCrossings;
+
+        // Fresnel-transmitted fraction at this interface (same helper + cosI the shadow trace uses).
+        flux *= nwbShadowFresnelTransmittedFraction(hit.ior, cosI);
+
+        // Beer-Lambert over the interior path: applied on the EXIT crossing, where hit.t is the distance the photon
+        // travelled THROUGH the medium since entering (origin was the entry point, so hit.t is the interior length).
+        if(inside)
+            flux *= exp(-nwbShadowAbsorptionCoefficient(hit.transmission) * hit.t);
+
+        origin = hit.worldPos;
+        direction = nwbSafeNormalize(refracted, direction);
+        inside = !inside;
+    }
+
+    // Bounce budget exhausted before reaching an opaque receiver -> dropped.
+    return splat;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// A single emitter ray for one photon, aimed by projecting the refractive-instance emission AABBs onto the plane
+// perpendicular to the light's principal direction (tight occluder-projected domain = focus). Carries the emission
+// origin + the (normalized) direction toward the domain so the caller seeds a NwbCausticPhoton.
+struct NwbCausticEmission{
+    bool valid;
+    float3 origin;
+    float3 direction;
+};
+
+// Builds an orthonormal basis (right, up) for the plane perpendicular to `axis` (the light's principal direction).
+void nwbCausticEmissionBasis(float3 axis, out float3 right, out float3 up){
+    const float3 reference = abs(axis.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(0.0, 1.0, 0.0);
+    right = nwbSafeNormalize(cross(reference, axis), float3(1.0, 0.0, 0.0));
+    up = nwbSafeNormalize(cross(axis, right), float3(0.0, 1.0, 0.0));
+}
+
+// Projects a world AABB (min/max) onto the plane perpendicular to `axis` and returns the plane-space half-extent
+// (the support of the box along `right` and `up`). The support of an AABB along a unit direction d is
+// sum(|d_i| * halfExtent_i), so this is exact for an axis-aligned box.
+float2 nwbCausticProjectAabbExtent(float3 aabbMin, float3 aabbMax, float3 right, float3 up){
+    const float3 halfExtent = (aabbMax - aabbMin) * 0.5;
+    return float2(
+        abs(right.x) * halfExtent.x + abs(right.y) * halfExtent.y + abs(right.z) * halfExtent.z,
+        abs(up.x) * halfExtent.x + abs(up.y) * halfExtent.y + abs(up.z) * halfExtent.z
+    );
+}
+
+// A per-frame low-discrepancy 2D offset in [0,1)^2 (the R2 additive-recurrence sequence on the plastic constant).
+// Added to each photon's emission grid cell so successive frames sample DIFFERENT sub-cell points; the temporal
+// accumulator then averages the jittered splats into a smooth caustic instead of a fixed lattice of dots.
+// Deterministic in the frame index so the HW (P4) and SW producers jitter IDENTICALLY (the parity mandate). On
+// frame 0 it returns (0.5, 0.5) -- the cell center -- so the un-accumulated first frame matches the pre-jitter aim.
+float2 nwbCausticR2Jitter(uint frameIndex){
+    // a_i = 1 / g^i with g = 1.32471795724474602596 (the plastic constant); frac(0.5 + n * a_i) is one of the
+    // lowest-discrepancy 2D sequences (Roberts 2018: "The Unreasonable Effectiveness of Quasirandom Sequences").
+    const float2 alpha = float2(0.7548776662466927, 0.5698402909980532);
+    return frac(0.5 + alpha * (float)frameIndex);
+}
+
+// Aims one photon at ONE refractive target's world AABB (per-target emission -- the make-or-break aim). Aiming each
+// photon at a SINGLE target's box (round-robined across targets by the caller) keeps the domain tight on actual
+// glass: a COMBINED box over several spread refractors centres the domain in the GAP between them and wastes most
+// photons on empty space (the convergence-killing failure mode). `lightDir` is the light's travel direction (FROM
+// the light, normalized). `cell` is the photon's deterministic [0,1)^2 grid coordinate. The emitter is placed one
+// box-radius back along -lightDir from the aimed point on the plane through the box centre, and the ray aims along
+// the light axis through the box -- so every photon is guaranteed to pass through (or graze) its target's box.
+NwbCausticEmission nwbCausticEmitPhotonAtTarget(float3 lightDir, float3 aabbMin, float3 aabbMax, float2 cell){
+    NwbCausticEmission emission;
+    emission.valid = false;
+    emission.origin = float3(0.0, 0.0, 0.0);
+    emission.direction = lightDir;
+
+    const float3 axis = nwbSafeNormalize(lightDir, float3(0.0, 0.0, -1.0));
+    float3 right;
+    float3 up;
+    nwbCausticEmissionBasis(axis, right, up);
+
+    const float3 center = (aabbMin + aabbMax) * 0.5;
+    const float2 extent = nwbCausticProjectAabbExtent(aabbMin, aabbMax, right, up);
+
+    // Map the [0,1) cell to [-extent, +extent] on each plane axis: the aimed point on the plane through the centre.
+    const float2 offset = (cell * 2.0 - 1.0) * extent;
+    const float3 target = center + right * offset.x + up * offset.y;
+
+    // Back the emitter off the plane along -axis past the box so the photon enters from outside. Use the full box
+    // diagonal as the backoff so the emitter is always outside the box regardless of orientation.
+    const float backoff = length(aabbMax - aabbMin) + 1.0;
+    emission.origin = target - axis * backoff;
+    emission.direction = axis;
+    emission.valid = true;
+    return emission;
+}
+
+// Aims one photon at the emission domain. `domainCenter` + `domainExtent` are the emission AABB's center + the
+// half-extent projected onto the (right, up) plane (computed by the caller from the world AABB). `lightDir` is the
+// light's principal travel direction (FROM the light, normalized). `cell` is the photon's deterministic 2D grid
+// coordinate in [0,1)^2 (v1: a fixed per-photon offset within the grid, NO temporal jitter -- that is P5). The
+// emitter is placed one domain-radius back along -lightDir from the target point, and the ray aims at that point;
+// a tighter domain converges more photons into a smaller receiver area => a brighter, more focused caustic.
+NwbCausticEmission nwbCausticEmitPhoton(float3 lightDir, float3 domainCenter, float2 domainExtent, float2 cell){
+    NwbCausticEmission emission;
+    emission.valid = false;
+    emission.origin = float3(0.0, 0.0, 0.0);
+    emission.direction = lightDir;
+
+    const float3 axis = nwbSafeNormalize(lightDir, float3(0.0, 0.0, -1.0));
+    float3 right;
+    float3 up;
+    nwbCausticEmissionBasis(axis, right, up);
+
+    // Map the [0,1) cell to [-extent, +extent] on each plane axis: the target point on the emission plane.
+    const float2 offset = (cell * 2.0 - 1.0) * domainExtent;
+    const float3 target = domainCenter + right * offset.x + up * offset.y;
+
+    // Back the emitter off the plane along -axis by the domain radius so the photon enters the AABB from outside.
+    const float backoff = max(max(domainExtent.x, domainExtent.y), 1.0) * 2.0;
+    emission.origin = target - axis * backoff;
+    emission.direction = axis;
+    emission.valid = true;
+    return emission;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Converts a per-channel flux value to the saturating fixed-point integer the splat InterlockedAdds into the
+// R32_UINT accumulators. Guards NaN/inf and clamps to NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX so no single deposit can
+// wrap the accumulator.
+uint nwbCausticFluxToFixedPoint(float fluxChannel){
+    if(!nwbFiniteFloat(fluxChannel) || fluxChannel <= 0.0)
+        return 0u;
+    const float scaled = fluxChannel * NWB_CAUSTIC_FIXED_POINT_SCALE;
+    return (uint)min(scaled, (float)NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

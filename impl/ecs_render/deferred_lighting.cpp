@@ -60,6 +60,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_SCENE_SHADING, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_CAUSTIC_IRRADIANCE, 1));
 
         deferredState().m_lightingBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!deferredState().m_lightingBindingLayout){
@@ -126,6 +127,15 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
     ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS];
     const u32 lightCount = ECSRenderDetail::ResolveSceneLights(world(), lightData, NWB_SCENE_MAX_LIGHTS);
 
+    // Caustic-light classification (P1): rank the directional/spot lights and assign a caustic slot into each
+    // chosen light's params.w, gated on the scene holding at least one refractive instance (gathered earlier this
+    // frame by prepareCausticEmissionTargets into the ray-tracing state). params.w uploads with the light buffer
+    // below; nothing consumes it yet (the caustic producer is a later unit).
+    const u32 refractiveInstanceCount = rayTracingState().m_causticRefractiveInstanceCount;
+    const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(lightData, lightCount, refractiveInstanceCount);
+    rayTracingState().m_causticLightCount = causticLightCount;
+    logCausticClassificationOnce(lightData, lightCount, causticLightCount, refractiveInstanceCount);
+
     commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.writeBuffer(deferredState().m_lightBuffer.get(), lightData, static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData));
@@ -180,6 +190,47 @@ bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandLi
     commandList.draw(drawArgs);
     commandList.endRenderPass();
     return true;
+}
+
+void RendererDeferredSystem::logCausticClassificationOnce(
+    const ECSRenderDetail::SceneLightGpuData* lights,
+    const u32 lightCount,
+    const u32 causticLightCount,
+    const u32 refractiveInstanceCount
+){
+    // P1 gate observable: emit ONCE (rate-limited by the ray-tracing-state flag, not per-frame spam) the chosen
+    // caustic lights + the refractive emission targets, so a smoke run can confirm the classification + the
+    // gather without any rendering change. Reports the caustic-light count, the refractive emission-target AABB
+    // count + their combined world extent, then one line per chosen caustic light (slot, light index, type).
+    if(rayTracingState().m_causticEmissionGateLogged)
+        return;
+    rayTracingState().m_causticEmissionGateLogged = true;
+
+    const Float4& boundsMin = rayTracingState().m_causticTargetBoundsMin;
+    const Float4& boundsMax = rayTracingState().m_causticTargetBoundsMax;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- {} caustic light(s); {} refractive emission target(s), combined extent min ({}, {}, {}) max ({}, {}, {})")
+        , causticLightCount
+        , refractiveInstanceCount
+        , boundsMin.x
+        , boundsMin.y
+        , boundsMin.z
+        , boundsMax.x
+        , boundsMax.y
+        , boundsMax.z
+    );
+
+    for(u32 i = 0u; i < lightCount; ++i){
+        if(lights[i].params.w < 0.f)
+            continue;
+        // params.y carries the light type (Directional=0, Point=1, Spot=2); point lights are excluded so only
+        // directional/spot reach here.
+        const bool directional = lights[i].params.y < 0.5f;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- caustic slot {} -> light index {} ({})")
+            , static_cast<u32>(lights[i].params.w)
+            , i
+            , directional ? NWB_TEXT("directional") : NWB_TEXT("spot")
+        );
+    }
 }
 
 

@@ -346,6 +346,23 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!shadowVisibilityWritten)
             m_raytracingSystem.clearShadowVisibility(*commandList, deferredTargets);
 
+        // The deferred lighting pass always samples the caustic irradiance image (additive). Clear the caustic
+        // targets to BLACK unconditionally so the additive term is a no-op and the buffers are always a valid black
+        // input -- the inverse of the shadow buffer's all-lit white default. The producer below overwrites them only
+        // when there is caustic work.
+        m_raytracingSystem.clearCausticTargets(*commandList, deferredTargets);
+
+        // Software caustic producer (P3) -- only the no-hardware-ray-tracing path runs it (the HW producer is P4),
+        // and only when there is >=1 caustic light AND >=1 refractive instance (hasCausticWork). It emits photons
+        // into the just-cleared R32_UINT accumulators, then resolves them into the RGBA16F irradiance buffer the
+        // lighting pass adds pre-tonemap. Runs BEFORE renderDeferredLighting so the lighting read sees the resolve.
+        if(m_preparedShadowVisibilityReady && !m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
+            // false = no caustic work this frame (the common case: no caustic light or no refractive instance) or a
+            // pipeline-build failure already logged inside; either way the black-cleared buffer is the additive
+            // no-op, so there is nothing to act on here.
+            [[maybe_unused]] const bool causticsDispatched = m_raytracingSystem.renderGpuBvhCaustics(*commandList, deferredTargets);
+        }
+
         commandListReady = m_deferredSystem.renderDeferredLighting(*commandList, deferredTargets);
         if(commandListReady){
             const bool hasTransparentRenderers = m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly);

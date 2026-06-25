@@ -29,10 +29,24 @@
 // consumer MUST share this slot count (the array depth).
 #define NWB_SCENE_SHADOW_SLOT_COUNT 8u
 
+// Caustic-light slots: a bounded pool assigned per frame to the most important directional/spot lights that
+// illuminate a scene containing at least one refractive instance (the caustic-slot allocator). The chosen
+// slot index rides NwbSceneLight.params.w (negative = no slot). The caustic producer (a later unit) and any
+// caustic consumer MUST share this count. Point lights are excluded (omnidirectional emission = far too many
+// photons in v1).
+#define NWB_SCENE_CAUSTIC_SLOT_COUNT 4u
+
 // Fallback set/binding for the shadow-visibility SRV when a consumer includes scene/lighting.slangi without
 // selecting its own (the real consumer -- deferred lighting -- points these at its own slot map).
 #define NWB_SCENE_SHADOW_VISIBILITY_DEFAULT_SET 0
 #define NWB_SCENE_SHADOW_VISIBILITY_DEFAULT_BINDING 7
+
+// Fallback set/binding for the additive caustic-irradiance SRV (RGBA16F) when a consumer includes
+// scene/lighting.slangi without selecting its own (the real consumer -- deferred lighting -- points these at its
+// own slot map). Unlike the multiplicative shadow visibility, this is additive scene-referred irradiance the
+// caustic producer focuses onto receivers; an unwritten / black buffer is the additive identity (no-op).
+#define NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_SET 0
+#define NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_BINDING 8
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

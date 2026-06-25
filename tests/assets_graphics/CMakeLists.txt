@@ -2,6 +2,7 @@ nwb_declare_gtest_executable(nwb_assets_graphics_tests)
 target_sources(nwb_assets_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/acceptance_tests.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/caustic_refract_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/codec_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/material_cook_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/material_tests.inl"

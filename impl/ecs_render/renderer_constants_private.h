@@ -40,6 +40,10 @@ inline constexpr u32 s_MeshDispatchFlagMeshletConeCull = NWB_MESH_DISPATCH_FLAG_
 inline constexpr u32 s_MeshDispatchFlagCsgMeshletFullyRemovedCull = NWB_MESH_DISPATCH_FLAG_CSG_MESHLET_FULLY_REMOVED_CULL;
 inline constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
 inline constexpr Core::TextureSubresourceSet s_ShadowVisibilitySubresources = Core::TextureSubresourceSet(0, 1, 0, NWB_SCENE_SHADOW_SLOT_COUNT);
+// The caustic splat accumulators are fixed-point R32_UINT (no float image atomics on the backend), one layer per
+// RGB channel that the producer InterlockedAdds into; the resolve pass converts them to the RGBA16F irradiance.
+inline constexpr u32 s_CausticAccumulatorChannelCount = 3u;
+inline constexpr Core::TextureSubresourceSet s_CausticAccumulatorSubresources = Core::TextureSubresourceSet(0, 1, 0, s_CausticAccumulatorChannelCount);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

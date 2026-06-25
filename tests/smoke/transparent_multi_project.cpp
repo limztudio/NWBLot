@@ -48,8 +48,15 @@ static constexpr f32 s_DefaultDirectionalLightPitch = 0.9f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+// Static scene: the caustic temporal accumulator (P5b) needs the glass + light fixed so the jittered photon splat
+// averages over frames into a smooth crescent. A zero rotation speed freezes the scene through the same animation path.
+static constexpr f32 s_TransparentSceneRotationSpeed = 0.0f;
+static constexpr AStringView s_TransparentShapeMeshPath = "project/meshes/caustic_sphere";
+#else
 static constexpr f32 s_TransparentSceneRotationSpeed = 0.55f;
 static constexpr AStringView s_TransparentShapeMeshPath = "project/meshes/tetrahedron";
+#endif
 static constexpr AStringView s_ShadowPlaneMeshPath = "project/meshes/shadow_plane";
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 static constexpr AStringView s_TransparentSharedMaterialPath = "project/smoke/transparent_multi/materials/shared";
@@ -61,13 +68,15 @@ static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_m
 [[nodiscard]] static const tchar* TransparentMultiFpsLabel(){
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     return NWB_TEXT("TransparentCsgSmokeProject");
+#elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+    return NWB_TEXT("CausticSphereSmokeProject");
 #else
     return NWB_TEXT("TransparentMultiSmokeProject");
 #endif
 }
 
 
-[[nodiscard]] static Name TransparentCenterCsgReceiverGroup(){
+[[nodiscard, maybe_unused]] static Name TransparentCenterCsgReceiverGroup(){
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     return s_TransparentCsgReceiverGroup;
 #else
@@ -201,6 +210,11 @@ private:
             throw RuntimeException("TransparentMultiSmokeProject initialization failed");
         }
 
+        // TEMP (P3 SW caustic visual gate): force ray-tracing emulation so the software photon producer runs. REVERT.
+        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingAccelStruct, true);
+        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingPipeline, true);
+        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayQuery, true);
+
         AddSmokeRenderSystems(*world, context);
         if(!world->getSystem<NWB::Impl::MeshSystem>()){
             NWB_LOGGER_FATAL(NWB_TEXT("TransparentMultiSmokeProject initialization failed: mesh system is missing"));
@@ -249,6 +263,22 @@ public:
             s_DefaultDirectionalLightIntensity
         );
 
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+        // Single STATIC glass sphere centered above the ground. A sphere lens CONVERGES the directional light into a
+        // focused caustic on the receiver (a faceted tetrahedron only deviates light), and a static scene lets the
+        // temporal accumulator (P5b) average the jittered photon splat into a smooth crescent instead of a grid of dots.
+        const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
+            *m_world,
+            m_context.objectArena,
+            s_TransparentShapeMeshPath,
+            s_TransparentSharedMaterialPath,
+            Float4(0.55f, 0.78f, 1.0f, 0.30f),
+            TransparentCenterShapeBasePosition(),
+            Float4(0.70f, 0.70f, 0.70f)
+        );
+        m_centerShape = centerShapeEntity;
+        const bool shapesValid = centerShapeEntity.valid();
+#else
         const auto shapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -277,10 +307,15 @@ public:
             TransparentRightShapeBasePosition(),
             Float4(0.68f, 0.68f, 0.68f)
         );
+        m_leftShape = shapeEntity;
+        m_centerShape = centerShapeEntity;
+        m_rightShape = rightShapeEntity;
+        const bool shapesValid = shapeEntity.valid() && centerShapeEntity.valid() && rightShapeEntity.valid();
+#endif
 
-        // Opaque ground-plane receiver beneath the transparent shapes. The colored transmittance each transparent
-        // tetrahedron casts toward the directional light lands here as a tinted
-        // shadow -- the visible payoff of Phase 6 colored/transmittance shadows.
+        // Opaque ground-plane receiver beneath the transparent shape(s). The colored transmittance each transparent
+        // shape casts toward the directional light lands here as a tinted shadow (Phase 6 colored/transmittance
+        // shadows); the additive refracted caustic lands here too (the producer's payoff).
         const auto shadowPlaneEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -299,12 +334,9 @@ public:
 #else
         const bool csgEntitiesValid = true;
 #endif
-        m_leftShape = shapeEntity;
-        m_centerShape = centerShapeEntity;
-        m_rightShape = rightShapeEntity;
         updateTransparentSceneTransforms();
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.camera.valid() && shapeEntity.valid() && centerShapeEntity.valid() && rightShapeEntity.valid() && shadowPlaneEntity.valid() && csgEntitiesValid,
+            activeCamera.camera.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid,
             NWB_TEXT("TransparentMultiSmokeProject failed to create all scene entities")
         );
 
@@ -370,6 +402,8 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 const tchar* NWB::QueryProjectWindowTitle(){
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     return NWB_TEXT("NWB Transparent CSG Smoke");
+#elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+    return NWB_TEXT("NWB Caustic Sphere Smoke");
 #else
     return NWB_TEXT("NWB Transparent Multi Smoke");
 #endif

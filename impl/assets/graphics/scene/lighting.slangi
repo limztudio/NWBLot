@@ -24,11 +24,33 @@
 #define NWB_SCENE_SHADOW_VISIBILITY_BINDING NWB_SCENE_SHADOW_VISIBILITY_DEFAULT_BINDING
 #endif
 
+#ifndef NWB_SCENE_CAUSTIC_IRRADIANCE_SET
+#define NWB_SCENE_CAUSTIC_IRRADIANCE_SET NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_SET
+#endif
+
+#ifndef NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING
+#define NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_BINDING
+#endif
+
+// Debug toggle for the visual gate: when 1, nwbBxdfCausticIrradiance returns a small constant grey instead of
+// sampling the buffer, so the additive caustic path can be confirmed (every receiver brightens additively and
+// uniformly) without a producer running. Default 0 samples the (black-cleared) buffer = additive no-op.
+#ifndef NWB_CAUSTIC_DEBUG_FORCE_GREY
+#define NWB_CAUSTIC_DEBUG_FORCE_GREY 0
+#endif
+
 // Per-light shadow visibility: float3 transmittance (1 = lit, 0 = fully shadowed, tinted by colored
 // transparent occluders), one Texture2DArray layer per shadow slot. The shadow producers write a light's
 // transmittance into its slot layer; a light's slot index lives in its light record (params.z).
 [[vk::binding(NWB_SCENE_SHADOW_VISIBILITY_BINDING, NWB_SCENE_SHADOW_VISIBILITY_SET)]]
 Texture2DArray<float4> g_NwbShadowVisibility;
+
+// Additive caustic irradiance (RGBA16F, screen space): the focused light the caustic producer splats onto opaque
+// receivers, already tinted by the glass it passed through. Unlike the multiplicative per-light shadow visibility
+// this is a single screen-space buffer (all caustic lights accumulate into it) and is ADDED to the lit color
+// pre-tonemap. Cleared to black each frame -- black is the additive identity, so an unwritten buffer is a no-op.
+[[vk::binding(NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING, NWB_SCENE_CAUSTIC_IRRADIANCE_SET)]]
+Texture2D<float4> g_NwbCausticIrradiance;
 
 // 1 (white) = lit, 0 = shadowed, tint = colored transmittance. Reads the light's shadow-slot layer; a light
 // with no slot (params.z < 0 -- the clear default, or a light the slot allocator did not reach) is fully lit.
@@ -43,6 +65,20 @@ float3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
         return float3(1.0, 1.0, 1.0);
 
     return g_NwbShadowVisibility.Load(int4(pixel, int(slot), 0)).rgb;
+}
+
+// Additive caustic irradiance at the receiver pixel (scene-referred, pre-tonemap). Black = no caustic. The
+// negative-pixel sentinel (forward / AVBOIT transparent fragments, which are not in the opaque G-buffer the
+// producer splats onto) returns zero so the additive term drops out, mirroring nwbBxdfLightTransmittance.
+float3 nwbBxdfCausticIrradiance(int2 pixel){
+#if NWB_CAUSTIC_DEBUG_FORCE_GREY
+    return float3(0.15, 0.15, 0.15);
+#else
+    if(pixel.x < 0)
+        return float3(0.0, 0.0, 0.0);
+
+    return g_NwbCausticIrradiance.Load(int3(pixel, 0)).rgb;
+#endif
 }
 
 
@@ -129,6 +165,11 @@ float3 nwbSceneApplyLighting(float3 baseColor, float3 normal, float4 tangent, fl
         const float3 transmittance = nwbBxdfLightTransmittance(pixel, i);
         litColor += transmittance * nwbSceneShadeLight(g_NwbSceneLights[i], baseColor, normalVector, tangentVector, bitangentVector, viewVector, ndotv, worldPosition);
     }
+
+    // Additive caustic, scene-referred and pre-tonemap: a focused caustic is real incident irradiance and must
+    // roll off through the same Reinhard tonemap as direct light (so it can saturate toward white). Multiply by
+    // baseColor to reflect it off the receiver albedo; the glass tint already rides inside the irradiance.
+    litColor += nwbBxdfCausticIrradiance(pixel) * baseColor;
 
     return litColor / (litColor + float3(0.65));
 }

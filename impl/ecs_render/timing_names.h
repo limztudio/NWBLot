@@ -28,6 +28,8 @@ inline constexpr Name s_Raster("render.raster");
 inline constexpr Name s_Frame("render.frame");
 inline constexpr Name s_DeferredClear("render.deferred_clear");
 inline constexpr Name s_ShadowVisibility("render.shadow_visibility");
+inline constexpr Name s_CausticPhotons("render.caustic_photons");
+inline constexpr Name s_CausticResolve("render.caustic_resolve");
 inline constexpr Name s_DeferredLighting("render.deferred_lighting");
 inline constexpr Name s_DeferredComposite("render.deferred_composite");
 inline constexpr Name s_MaterialUpload("render.material_upload");

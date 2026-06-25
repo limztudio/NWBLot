@@ -221,6 +221,13 @@ void RendererRayTracingState::invalidateResources(){
     m_sceneBvhNodeCapacity = 0u;
     m_sceneInstanceCapacity = 0u;
     m_sceneBvhInstanceCount = 0u;
+    m_causticEmissionTargetBuffer.reset();
+    m_causticEmissionTargetCapacity = 0u;
+    m_causticRefractiveInstanceCount = 0u;
+    m_causticLightCount = 0u;
+    m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
+    m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
+    m_causticEmissionGateLogged = false;
     m_swShadowBindingLayout.reset();
     m_swShadowShader.reset();
     m_swShadowPipeline.reset();
@@ -234,11 +241,38 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowBindingSetMeshCount = 0u;
     m_swShadowMeshCount = 0u;
     m_swShadowMeshCapReported = false;
+    m_swCausticBindingLayout.reset();
+    m_swCausticShader.reset();
+    m_swCausticPipeline.reset();
+    m_swCausticBindingSet.reset();
+    m_swCausticBindingSetSceneNodes = nullptr;
+    m_swCausticBindingSetInstances = nullptr;
+    m_swCausticBindingSetInstanceMaterial = nullptr;
+    m_swCausticBindingSetMaterialTyped = nullptr;
+    m_swCausticBindingSetMeshInstances = nullptr;
+    m_swCausticBindingSetEmissionTargets = nullptr;
+    m_swCausticBindingSetView = nullptr;
+    m_swCausticBindingSetDepth = nullptr;
+    m_swCausticBindingSetAccumulator = nullptr;
+    m_swCausticBindingSetMeshCount = 0u;
+    m_causticResolveBindingLayout.reset();
+    m_causticResolveShader.reset();
+    m_causticResolvePipeline.reset();
+    m_causticResolveBindingSet.reset();
+    m_causticResolveBindingSetAccumulator = nullptr;
+    m_causticResolveBindingSetWorldPosition = nullptr;
+    m_causticResolveBindingSetDepth = nullptr;
+    m_causticResolveBindingSetIrradiance = nullptr;
+    m_causticResolveBindingSetHistory = nullptr;
+    m_causticFrameIndex = 0u;
     m_shadowPipelineFailed = false;
     m_bvhSortPipelineFailed = false;
     m_bvhBuildPipelineFailed = false;
     m_swShadowPipelineFailed = false;
     m_swShadowDispatchLogged = false;
+    m_swCausticPipelineFailed = false;
+    m_causticResolvePipelineFailed = false;
+    m_swCausticDispatchLogged = false;
 }
 
 

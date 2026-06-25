@@ -1,0 +1,43 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CAUSTIC_REFRACT_SLANGI
+#define NWB_GRAPHICS_CAUSTIC_REFRACT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shared Snell refraction primitive for the caustic photon producer. A faithful, line-for-line port of
+// SIMDVectorDetail::RefractV (global/math/vector.h) -- the same one Vector3Refract calls -- so the CPU math and the
+// GPU producer agree, and so the hardware ray-traced and the software-BVH photon traces lower to byte-identical
+// arithmetic (the HW/SW parity mandate). It uses ONLY Slang built-ins (dot/sqrt/max), NOT the HLSL refract()
+// intrinsic, because refract() is free to lower differently per backend.
+//
+// Convention (matches RefractV / Vector3Refract exactly):
+//   - `incident` is the ray's travel direction (normalized), pointing INTO the surface.
+//   - `normal` is the surface normal (normalized), oriented against the incident ray.
+//   - `eta` is the ratio of indices of refraction n_from / n_to (e.g. air->glass = 1/ior, glass->air = ior).
+//   - dot = dot(incident, normal). The CPU reference computes the same Vector3Dot(incident, normal).
+//
+// TIR branch: identical to RefractV's VectorSelect(result, VectorZero(), totalInternalReflection) and matched in
+// Vector3Refract -- when the discriminant k < 0 the refracted ray does not exist (total internal reflection), and
+// the result is float3(0). The caustic producer reads a zero result as "drop this photon" in v1.
+float3 nwbCausticRefract(float3 incident, float3 normal, float eta){
+    const float cosI = dot(incident, normal);
+    const float k = 1.0 - eta * eta * (1.0 - cosI * cosI);
+    if(k < 0.0)
+        return float3(0.0, 0.0, 0.0);
+    return eta * incident - (eta * cosI + sqrt(k)) * normal;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

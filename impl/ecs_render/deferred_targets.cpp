@@ -384,6 +384,9 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     if(!m_renderer.raytracingSystem().createShadowVisibilityTarget(createdTargets))
         return false;
 
+    if(!m_renderer.raytracingSystem().createCausticTargets(createdTargets))
+        return false;
+
     Core::BindingSetDesc lightingBindingSetDesc(arena());
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR,
@@ -422,6 +425,13 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         createdTargets.shadowVisibilityFormat,
         ECSRenderDetail::s_ShadowVisibilitySubresources,
         Core::TextureDimension::Texture2DArray
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_CAUSTIC_IRRADIANCE,
+        createdTargets.causticIrradiance.get(),
+        createdTargets.causticIrradianceFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
     ));
     createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, deferredState().m_lightingBindingLayout);
     if(!createdTargets.lightingBindingSet){

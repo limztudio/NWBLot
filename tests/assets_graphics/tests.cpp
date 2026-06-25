@@ -36,6 +36,9 @@
 #include <global/filesystem.h>
 #include <global/hash_utils.h>
 #include <global/math/convert.h>
+#include <global/simdmath.h>
+
+#include <cmath>
 
 #include <core/common/log.h>
 
@@ -1463,6 +1466,8 @@ static bool FindShaderArchiveSourceChecksum(
 #include "shader_tests.inl"
 #include "meshlet_ref_codec_tests.inl"
 #include "codec_tests.inl"
+
+#include "caustic_refract_tests.inl"
 
 #include "material_tests.inl"
 #include "material_cook_tests.inl"

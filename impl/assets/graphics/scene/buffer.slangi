@@ -52,7 +52,7 @@ struct NwbSceneLight{
     float4 direction;
     // xyz = color, w = intensity.
     float4 colorIntensity;
-    // x = range, y = light type, z = shadow slot (negative = none), w reserved.
+    // x = range, y = light type, z = shadow slot (negative = none), w = caustic slot (negative = none).
     float4 params;
 };
 

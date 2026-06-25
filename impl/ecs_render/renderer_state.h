@@ -13,6 +13,8 @@
 #include <impl/assets/graphics/scene/binding_slots.h>
 #include <impl/assets/graphics/shadow/binding_slots.h>
 #include <impl/assets/graphics/shadow/sw_binding_slots.h>
+#include <impl/assets/graphics/caustic/sw_binding_slots.h>
+#include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 
 #include <global/generic.h>
 
@@ -326,6 +328,22 @@ private:
     usize m_sceneBvhNodeCapacity = 0u;
     usize m_sceneInstanceCapacity = 0u;
     u32 m_sceneBvhInstanceCount = 0u;
+    // Caustic emission targets (P1): per-frame world-space AABBs of every refractive instance, the domain the
+    // future caustic photon producer aims at. A single global list (all caustic lights share it). Resident
+    // structured SRV ({ float4 aabbMin; float4 aabbMax; }), CPU-written each frame, grows by doubling, never
+    // shrinks; the count gates caustic-light assignment (zero refractive instances -> zero caustic lights). No
+    // consumer reads this yet -- a later unit's producer will. m_causticTargetBoundsMin/Max hold the combined
+    // extent over all targets (for the P1 gate log); m_causticEmissionGateLogged rate-limits that log.
+    Core::BufferHandle m_causticEmissionTargetBuffer;
+    usize m_causticEmissionTargetCapacity = 0u;
+    u32 m_causticRefractiveInstanceCount = 0u;
+    // Caustic-light count assigned this frame by ResolveCausticLights (cached in updateSceneShadingBuffer). Gates
+    // the software caustic producer dispatch: the producer runs only when this AND m_causticRefractiveInstanceCount
+    // are both > 0 (else the black-cleared irradiance buffer is the additive no-op).
+    u32 m_causticLightCount = 0u;
+    Float4 m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
+    Float4 m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
+    bool m_causticEmissionGateLogged = false;
     Core::BindingLayoutHandle m_swShadowBindingLayout; // software (compute) shadow traversal pass
     Core::ShaderHandle m_swShadowShader;
     Core::ComputePipelineHandle m_swShadowPipeline;
@@ -345,6 +363,39 @@ private:
     Core::Buffer* m_swShadowMeshIndexBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
     Core::Buffer* m_swShadowMeshAttributeBuffers[NWB_SW_SHADOW_MAX_MESHES] = {}; // U2 per-vertex normal/uv0 for the per-hit transmittance dispatch
     u32 m_swShadowMeshCount = 0u;
+    // Software caustic photon producer (P3) — the no-hardware-ray-tracing fallback. It reuses the same software
+    // scene/instance + per-mesh BVH buffers the SW shadow trace builds (NWB_CAUSTIC_SW_MAX_MESHES ==
+    // NWB_SW_SHADOW_MAX_MESHES, so the m_swShadowMesh* arrays serve both), and adds the caustic-specific inputs
+    // (the P1 emission-target buffer, the camera view buffer, the G-buffer depth) + output (the R32_UINT
+    // accumulators). The binding set is rebuilt when any cached input changes, mirroring the SW shadow set.
+    Core::BindingLayoutHandle m_swCausticBindingLayout;
+    Core::ShaderHandle m_swCausticShader;
+    Core::ComputePipelineHandle m_swCausticPipeline;
+    Core::BindingSetHandle m_swCausticBindingSet;
+    const Core::Buffer* m_swCausticBindingSetSceneNodes = nullptr;
+    const Core::Buffer* m_swCausticBindingSetInstances = nullptr;
+    const Core::Buffer* m_swCausticBindingSetInstanceMaterial = nullptr;
+    const Core::Buffer* m_swCausticBindingSetMaterialTyped = nullptr;
+    const Core::Buffer* m_swCausticBindingSetMeshInstances = nullptr;
+    const Core::Buffer* m_swCausticBindingSetEmissionTargets = nullptr;
+    const Core::Buffer* m_swCausticBindingSetView = nullptr;
+    const Core::Texture* m_swCausticBindingSetDepth = nullptr;
+    const Core::Texture* m_swCausticBindingSetAccumulator = nullptr;
+    u32 m_swCausticBindingSetMeshCount = 0u;
+    // Caustic resolve pass (P3): converts the R32_UINT accumulators to RGBA16F irradiance (area-normalized). Its
+    // binding set is rebuilt when the accumulator / G-buffer / irradiance targets change (on resize).
+    Core::BindingLayoutHandle m_causticResolveBindingLayout;
+    Core::ShaderHandle m_causticResolveShader;
+    Core::ComputePipelineHandle m_causticResolvePipeline;
+    Core::BindingSetHandle m_causticResolveBindingSet;
+    const Core::Texture* m_causticResolveBindingSetAccumulator = nullptr;
+    const Core::Texture* m_causticResolveBindingSetWorldPosition = nullptr;
+    const Core::Texture* m_causticResolveBindingSetDepth = nullptr;
+    const Core::Texture* m_causticResolveBindingSetIrradiance = nullptr;
+    const Core::Texture* m_causticResolveBindingSetHistory = nullptr;
+    // Producer-frame counter since the caustic targets were (re)created: frameIndex 0 seeds the temporal history +
+    // centers the emission jitter; later frames jitter + EMA-blend. Reset in createCausticTargets (fresh history).
+    u32 m_causticFrameIndex = 0u;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;
     bool m_bvhSortPipelineFailed = false;
@@ -355,6 +406,9 @@ private:
     bool m_swShadowPipelineFailed = false;
     bool m_swShadowDispatchLogged = false;
     bool m_swShadowMeshCapReported = false;
+    bool m_swCausticPipelineFailed = false;
+    bool m_causticResolvePipelineFailed = false;
+    bool m_swCausticDispatchLogged = false;
 };
 
 

@@ -79,10 +79,7 @@ bool BuildMesh(
     UtilityVector<u32> triangleIndices;
     FbxSkinDetail::ExportContext skinContext;
     for(const usize instanceIndex : selection){
-        if(instanceIndex >= instances.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected mesh index is out of range"));
-            return false;
-        }
+        NWB_ASSERT(instanceIndex < instances.size());
         if(
             !__hidden_import::AppendInstanceMesh(
                 instances[instanceIndex],

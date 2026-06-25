@@ -447,22 +447,16 @@ template<typename Value, typename Lookup>
     using RebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
 
     outTangentReport = SourceTangentReport{};
-    if(mesh.vertexRefs.empty() || mesh.indices.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh has no source vertices for tangent generation"));
-        return false;
-    }
-    if((mesh.indices.size() % 3u) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh index stream must contain whole triangles for tangent generation"));
-        return false;
-    }
+    NWB_ASSERT(!mesh.vertexRefs.empty());
+    NWB_ASSERT(!mesh.indices.empty());
+    NWB_ASSERT((mesh.indices.size() % 3u) == 0u);
 
     UtilityVector<RebuildVertex> rebuildVertices;
     rebuildVertices.reserve(mesh.vertexRefs.size());
     for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(ref.position >= mesh.positions.size() || ref.normal >= mesh.normals.size() || ref.uv0 >= mesh.uv0.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh vertex_ref references an out-of-range stream while generating tangents"));
-            return false;
-        }
+        NWB_ASSERT(ref.position < mesh.positions.size());
+        NWB_ASSERT(ref.normal < mesh.normals.size());
+        NWB_ASSERT(ref.uv0 < mesh.uv0.size());
 
         const Vec3& position = mesh.positions[ref.position];
         const Vec3& normal = mesh.normals[ref.normal];
@@ -480,10 +474,9 @@ template<typename Value, typename Lookup>
         const u32 i0 = mesh.indices[indexBase + 0u];
         const u32 i1 = mesh.indices[indexBase + 1u];
         const u32 i2 = mesh.indices[indexBase + 2u];
-        if(i0 >= rebuildVertices.size() || i1 >= rebuildVertices.size() || i2 >= rebuildVertices.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh index stream references an out-of-range vertex_ref while generating tangents"));
-            return false;
-        }
+        NWB_ASSERT(i0 < rebuildVertices.size());
+        NWB_ASSERT(i1 < rebuildVertices.size());
+        NWB_ASSERT(i2 < rebuildVertices.size());
         if(i0 == i1 || i0 == i2 || i1 == i2)
             continue;
 

@@ -33,10 +33,7 @@ template<typename VisitTriangle>
                 Swap(cornerIndices[1], cornerIndices[2]);
 
             for(const u32 cornerIndex : cornerIndices){
-                if(cornerIndex >= mesh.vertex_indices.count){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh corner references an out-of-range logical vertex"));
-                    return false;
-                }
+                NWB_ASSERT(cornerIndex < mesh.vertex_indices.count);
             }
 
             if(!visitTriangle(cornerIndices))
@@ -119,10 +116,8 @@ bool AppendInstanceMesh(
 ){
     ufbx_mesh* mesh = instance.mesh;
     ufbx_node* node = instance.node;
-    if(!mesh || !node){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: internal mesh instance is null"));
-        return false;
-    }
+    NWB_ASSERT(mesh != nullptr);
+    NWB_ASSERT(node != nullptr);
     if(!mesh->vertex_position.exists){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh is missing positions"));
         return false;
@@ -267,8 +262,7 @@ bool EstimateSelectedTriangleCorners(
         }
 
         const ufbx_mesh* const mesh = instances[instanceIndex].mesh;
-        if(!mesh)
-            continue;
+        NWB_ASSERT(mesh != nullptr);
         if(mesh->num_triangles > (Limit<usize>::s_Max - outTriangleCorners) / 3u){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes have too many triangle corners"));
             return false;

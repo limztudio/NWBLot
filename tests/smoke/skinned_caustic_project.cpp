@@ -22,6 +22,7 @@
 #include <impl/ecs_mesh/skinning/module.h>
 
 #include "fps_probe.h"
+#include "gpu_pass_timing_probe.h"
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
@@ -218,6 +219,10 @@ public:
 
 public:
     virtual bool onStartup()override{
+        // Opt into per-pass GPU timing so m_gpuPassTimingProbe can report the caustic photon/resolve + shadow +
+        // skinning pass GPU times each interval (flips the GPU-timing double gate via the Frame).
+        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+
         if(!loadSkeletonBindJoints())
             return false;
 
@@ -278,6 +283,7 @@ public:
     virtual bool onUpdate(const f32 delta)override{
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
+        m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
         m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_PoseAnimationSpeed;
         animatePoses();
         m_world->tick(safeDelta);
@@ -293,6 +299,7 @@ private:
     NWB::Core::ECS::EntityID m_character = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_skeletonEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("SkinnedCausticSmokeProject") };
+    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("SkinnedCausticSmokeProject") };
     f64 m_animationTime = 0.0;
 };
 

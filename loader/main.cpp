@@ -334,6 +334,8 @@ static int RunProjectRuntime(
             frame.projectJobSystem(),
             assetManager,
             frame.frameGraphRegistry(),
+            frame.perfSession(),
+            {},
             {},
             {},
             {},
@@ -353,6 +355,9 @@ static int RunProjectRuntime(
         };
         context.telemetryUploadFlush = [&frame](const bool clearAfterUpload){
             return frame.flushTelemetryUpload(clearAfterUpload);
+        };
+        context.perfCapture = [&frame](const NWB::Core::Perf::CaptureOptions& options){
+            frame.setPerfCapture(options);
         };
         context.requestQuit = [&frame](){
             frame.requestQuit();

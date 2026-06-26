@@ -17,6 +17,7 @@
 #include <impl/ecs_render/material_instance.h>
 
 #include "fps_probe.h"
+#include "gpu_pass_timing_probe.h"
 #include "smoke_scene_helpers.h"
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 #include "csg_smoke_helpers.h"
@@ -269,6 +270,10 @@ public:
 
 public:
     virtual bool onStartup()override{
+        // Opt into per-pass GPU timing: flips the GPU-timing double gate (perf-session sink + graphics query
+        // recorder) so m_gpuPassTimingProbe can read each pass's GPU time from the timing view every frame.
+        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+
         auto activeCameraEntity = m_world->createEntity();
         auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
         activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(
@@ -379,6 +384,7 @@ public:
     virtual bool onUpdate(const f32 delta)override{
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
+        m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
         m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * effectiveRotationSpeed();
         updateTransparentSceneTransforms();
         m_world->tick(safeDelta);
@@ -415,6 +421,7 @@ private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ TransparentMultiFpsLabel() };
+    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ TransparentMultiFpsLabel() };
     NWB::Core::ECS::EntityID m_leftShape = {};
     NWB::Core::ECS::EntityID m_centerShape = {};
     NWB::Core::ECS::EntityID m_rightShape = {};

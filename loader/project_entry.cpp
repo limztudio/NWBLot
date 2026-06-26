@@ -24,6 +24,11 @@ bool ProjectRuntimeContext::flushTelemetryUpload(const bool clearAfterUpload){
     return telemetryUploadFlush ? telemetryUploadFlush(clearAfterUpload) : false;
 }
 
+void ProjectRuntimeContext::setPerfCapture(const Core::Perf::CaptureOptions& options){
+    if(perfCapture)
+        perfCapture(options);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

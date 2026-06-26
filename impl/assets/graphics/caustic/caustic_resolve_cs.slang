@@ -59,6 +59,13 @@ struct NwbCausticResolvePushConstants{
 [[vk::push_constant]]
 ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
 
+// Groupshared (LDS) tile for the small-dilation wavelet passes: the group cooperatively loads its tile + halo here once,
+// then every thread taps from LDS instead of re-Loading the G-buffer + color textures per tap (eliminating the heavy
+// inter-thread redundant Loads of the dense early passes). Sized for the largest LDS-tiled step (24x24 = 576 texels).
+groupshared float3 s_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
+groupshared float3 s_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
+groupshared uint   s_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -94,54 +101,117 @@ float3 nwbCausticResolveSampleInput(const int2 texel){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[numthreads(NWB_CAUSTIC_RESOLVE_GROUP_SIZE, NWB_CAUSTIC_RESOLVE_GROUP_SIZE, 1)]
-void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    const uint2 pixel = dispatchThreadID.xy;
-    if(pixel.x >= g_NwbCausticResolvePushConstants.width || pixel.y >= g_NwbCausticResolvePushConstants.height)
-        return;
+// 5x5 B-spline a-trous kernel (separable [1,4,6,4,1]/16), sampled at +-{1,2}*step. Edge-AVOIDING: each tap is weighted
+// by the spatial kernel AND a world-distance edge-stop so the caustic never bleeds across a depth/silhouette
+// discontinuity (the receiver edge), while the sparse inter-photon gaps fill into a smooth caustic. No luminance
+// edge-stop: the sparse splat's bright deposits ARE the noise to remove, so preserving them would defeat the denoise;
+// the focused caustic STRUCTURE survives as the low-frequency content the wavelet preserves.
+static const float s_NwbCausticResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0 };
 
-    const int2 texel = int2(pixel);
+[numthreads(NWB_CAUSTIC_RESOLVE_GROUP_SIZE, NWB_CAUSTIC_RESOLVE_GROUP_SIZE, 1)]
+void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
+    const uint2 pixel = dispatchThreadID.xy;
     const int w = (int)g_NwbCausticResolvePushConstants.width;
     const int h = (int)g_NwbCausticResolvePushConstants.height;
+    const int2 texel = int2(pixel);
+    const bool inBounds = (pixel.x < g_NwbCausticResolvePushConstants.width && pixel.y < g_NwbCausticResolvePushConstants.height);
 
-    // Background (no receiver) carries no caustic. Write black so the additive lighting term is a no-op and a pixel
-    // that later becomes a receiver starts from black.
+    // PREPARE pass (isFirstPass, uniform across the dispatch): un-scale the per-channel fixed-point accumulator,
+    // area-normalize (flux density -> irradiance via the per-pixel screen->receiver area Jacobian) and apply the
+    // exposure -- ONCE per pixel into the float buffer the subsequent wavelet passes read (so the wavelet never
+    // re-normalizes per tap). No LDS / no wavelet here; all threads return.
+    if(g_NwbCausticResolvePushConstants.isFirstPass != 0u){
+        if(inBounds){
+            if(g_NwbCausticResolveGBufferDepth.Load(int3(texel, 0)).r >= 0.999999){
+                g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0); // background: additive no-op
+            }
+            else{
+                const float3 flux = float3(
+                    (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 0, 0)).r,
+                    (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 1, 0)).r,
+                    (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 2, 0)).r
+                ) / NWB_CAUSTIC_FIXED_POINT_SCALE;
+                const float area = nwbCausticResolvePixelArea(texel);
+                g_NwbCausticResolveOutput[pixel] = float4(flux / area * g_NwbCausticResolvePushConstants.causticIntensity, 1.0);
+            }
+        }
+        return;
+    }
+
+    const int step = (int)max(g_NwbCausticResolvePushConstants.stepWidth, 1u);
+
+    // SMALL-dilation wavelet passes (uniform branch): cooperatively load the group tile + 2*step halo into LDS once,
+    // then tap from LDS. ALL threads must reach the cooperative load + barrier before any per-pixel early-out.
+    if(step <= NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP){
+        const int tileW = NWB_CAUSTIC_RESOLVE_GROUP_SIZE + 4 * step; // group + 2*step halo each side
+        const int2 tileOrigin = int2(groupID.xy) * NWB_CAUSTIC_RESOLVE_GROUP_SIZE - int2(2 * step, 2 * step);
+        const uint threadCount = NWB_CAUSTIC_RESOLVE_GROUP_SIZE * NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
+        const uint threadIndex = groupThreadID.y * NWB_CAUSTIC_RESOLVE_GROUP_SIZE + groupThreadID.x;
+        const uint tileTexels = (uint)(tileW * tileW);
+        for(uint i = threadIndex; i < tileTexels; i += threadCount){
+            const int2 t = tileOrigin + int2((int)(i % (uint)tileW), (int)(i / (uint)tileW));
+            float3 tapColor = float3(0.0, 0.0, 0.0);
+            float3 tapWorld = float3(0.0, 0.0, 0.0);
+            uint tapValid = 0u;
+            // Only receiver texels inside the image contribute (matches the texture path's OOB + background skips).
+            if(t.x >= 0 && t.y >= 0 && t.x < w && t.y < h){
+                if(g_NwbCausticResolveGBufferDepth.Load(int3(t, 0)).r < 0.999999){
+                    tapColor = g_NwbCausticResolveInputColor.Load(int3(t, 0)).rgb;
+                    tapWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(t, 0)).xyz;
+                    tapValid = 1u;
+                }
+            }
+            s_NwbCausticResolveTileColor[i] = tapColor;
+            s_NwbCausticResolveTileWorld[i] = tapWorld;
+            s_NwbCausticResolveTileValid[i] = tapValid;
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        if(!inBounds)
+            return;
+        if(g_NwbCausticResolveGBufferDepth.Load(int3(texel, 0)).r >= 0.999999){
+            g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }
+
+        const float3 centerWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(texel, 0)).xyz;
+        const int2 rightTexel = int2(min(texel.x + 1, w - 1), texel.y);
+        const float pixelSpacing = max(length(g_NwbCausticResolveGBufferWorldPosition.Load(int3(rightTexel, 0)).xyz - centerWorld), 1e-4);
+        const float sigmaWorld = pixelSpacing * (float)step * 2.0;
+        const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
+
+        float3 sum = float3(0.0, 0.0, 0.0);
+        float weightSum = 0.0;
+        [unroll] for(int ky = -2; ky <= 2; ++ky){
+            [unroll] for(int kx = -2; kx <= 2; ++kx){
+                // Tap LDS coord = local thread + (k+2)*step (tile is offset by the 2*step halo). Always in [0, tileW).
+                const uint idx = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileW + (int(groupThreadID.x) + (kx + 2) * step));
+                if(s_NwbCausticResolveTileValid[idx] == 0u)
+                    continue;
+                const float3 d = s_NwbCausticResolveTileWorld[idx] - centerWorld;
+                const float weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * exp(-dot(d, d) * invTwoSigmaWorldSq);
+                sum += weight * s_NwbCausticResolveTileColor[idx];
+                weightSum += weight;
+            }
+        }
+        g_NwbCausticResolveOutput[pixel] = (weightSum > 0.0) ? float4(sum / weightSum, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
+    // LARGE-dilation wavelet passes (step 8,16): the taps are far apart -> no inter-thread reuse to cache in LDS, so
+    // tap the textures directly. Identical math to the LDS path.
+    if(!inBounds)
+        return;
     if(g_NwbCausticResolveGBufferDepth.Load(int3(texel, 0)).r >= 0.999999){
         g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
         return;
     }
 
-    // PREPARE pass (isFirstPass): un-scale the per-channel fixed-point accumulator, area-normalize (flux density ->
-    // irradiance via the per-pixel screen->receiver area Jacobian) and apply the exposure -- ONCE per pixel, into the
-    // float buffer the subsequent wavelet passes read. This replaces re-normalizing per wavelet tap (the old first pass
-    // did the normalize for all 25 taps -> ~25x the accumulator/area Loads); the wavelet output is identical because
-    // the wavelet then operates on exactly these normalized values.
-    if(g_NwbCausticResolvePushConstants.isFirstPass != 0u){
-        const float3 flux = float3(
-            (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 0, 0)).r,
-            (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 1, 0)).r,
-            (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 2, 0)).r
-        ) / NWB_CAUSTIC_FIXED_POINT_SCALE;
-        const float area = nwbCausticResolvePixelArea(texel);
-        g_NwbCausticResolveOutput[pixel] = float4(flux / area * g_NwbCausticResolvePushConstants.causticIntensity, 1.0);
-        return;
-    }
-
     const float3 centerWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(texel, 0)).xyz;
-    // Per-pixel world spacing (one texel right) -> the geometry edge-stop sigma is scene-scale relative AND grows with
-    // the wavelet dilation, so each coarser pass smooths over a proportionally wider receiver-world neighbourhood.
     const int2 rightTexel = int2(min(texel.x + 1, w - 1), texel.y);
     const float pixelSpacing = max(length(g_NwbCausticResolveGBufferWorldPosition.Load(int3(rightTexel, 0)).xyz - centerWorld), 1e-4);
-    const int step = (int)max(g_NwbCausticResolvePushConstants.stepWidth, 1u);
     const float sigmaWorld = pixelSpacing * (float)step * 2.0;
     const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
-
-    // 5x5 B-spline a-trous kernel (separable [1,4,6,4,1]/16), sampled at +-{1,2}*step. Edge-AVOIDING: each tap is
-    // weighted by the spatial kernel AND a world-distance edge-stop so the caustic never bleeds across a depth /
-    // silhouette discontinuity (the receiver edge), while the sparse inter-photon gaps fill into a smooth caustic.
-    // No luminance edge-stop: the sparse splat's bright deposits ARE the noise to remove, so preserving them would
-    // defeat the denoise; the focused caustic STRUCTURE survives as the low-frequency content the wavelet preserves.
-    const float kernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0 };
 
     float3 sum = float3(0.0, 0.0, 0.0);
     float weightSum = 0.0;
@@ -152,18 +222,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 continue;
             if(g_NwbCausticResolveGBufferDepth.Load(int3(tap, 0)).r >= 0.999999)
                 continue; // background tap: no receiver -> skip so the dark surround cannot dilute the caustic edge
-            const float3 tapWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(tap, 0)).xyz;
-            const float3 d = tapWorld - centerWorld;
-            const float wWorld = exp(-dot(d, d) * invTwoSigmaWorldSq);
-            const float wSpatial = kernel[kx + 2] * kernel[ky + 2];
-            const float weight = wSpatial * wWorld;
+            const float3 d = g_NwbCausticResolveGBufferWorldPosition.Load(int3(tap, 0)).xyz - centerWorld;
+            const float weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * exp(-dot(d, d) * invTwoSigmaWorldSq);
             sum += weight * nwbCausticResolveSampleInput(tap);
             weightSum += weight;
         }
     }
 
-    const float3 result = (weightSum > 0.0) ? (sum / weightSum) : float3(0.0, 0.0, 0.0);
-    g_NwbCausticResolveOutput[pixel] = float4(result, 1.0);
+    g_NwbCausticResolveOutput[pixel] = (weightSum > 0.0) ? float4(sum / weightSum, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
 }
 
 

@@ -35,11 +35,20 @@
 // 8x8 = 64 threads per group (one thread per pixel).
 #define NWB_CAUSTIC_RESOLVE_GROUP_SIZE 8
 
-// A-trous wavelet pass count. Pass 0 normalizes the accumulator + does the step-1 wavelet; passes 1..N-1 run the
-// wavelet at dilation 2,4,8,... giving an effective support of ~2^(N+1) px with only 25 taps per pass. 5 passes ->
-// ~32px support, enough to fill the inter-photon gaps into a smooth caustic. Odd count so the final write lands in the
-// irradiance buffer (pass 0 -> irradiance, then alternate scratch/irradiance, ending in irradiance).
+// A-trous wavelet pass count (the dispatch runs a PREPARE pass first, then this many wavelet passes at dilation
+// 1,2,4,8,16). 25 taps/pass; the largest dilation sets the ~32px support, enough to fill the inter-photon gaps into a
+// smooth caustic. Odd count so, with the prepare pass writing the scratch buffer, the ping-pong ends in the irradiance
+// buffer the lighting samples.
 #define NWB_CAUSTIC_RESOLVE_PASS_COUNT 5
+
+// LDS (groupshared) tiling for the wavelet: passes with dilation stepWidth <= LDS_MAX_STEP cooperatively load the
+// group's tile + 2*stepWidth halo into groupshared ONCE, then tap from LDS instead of re-Loading textures per tap
+// (the small-dilation passes have heavy neighbour reuse). Larger-dilation passes tap textures directly (their taps are
+// far apart -> negligible reuse, and the tile would exceed LDS). Tile side = GROUP_SIZE + 2*halo = GROUP_SIZE +
+// 4*stepWidth; the groupshared arrays are sized for the largest LDS-tiled step (8 + 4*4 = 24 -> 576 texels, ~20 KB).
+#define NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP 4
+#define NWB_CAUSTIC_RESOLVE_TILE_SIDE (NWB_CAUSTIC_RESOLVE_GROUP_SIZE + 4 * NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP)
+#define NWB_CAUSTIC_RESOLVE_TILE_TEXELS (NWB_CAUSTIC_RESOLVE_TILE_SIDE * NWB_CAUSTIC_RESOLVE_TILE_SIDE)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -9,6 +9,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Caustic resolve = an EDGE-AVOIDING A-TROUS WAVELET denoise (Dammertz et al.), run as N ping-pong compute passes. This
+// REPLACES the temporal-EMA + variance-clamp + motion-vector reprojection path. Rationale: a refractor's caustic moves
+// NON-RIGIDLY (a spinning flat prism MORPHS its caustic), so no motion vector tracks it and any temporal accumulation
+// trails it (the ghost). A-trous denoises each frame PURELY SPATIALLY -> the sparse photon splat smooths to a clean
+// caustic with NO history -> ghost-free by construction, for any caustic motion. The producer's per-photon emission is
+// a deterministic stratified distribution (no per-frame jitter), so a static scene is flicker-free without temporal
+// averaging, and the wavelet's geometry edge-stop keeps the smoothing bounded to the receiver surface.
+//
+// First pass (stepWidth==1 carries isFirstPass): reads the R32_UINT splat accumulator, un-scales it, AREA-NORMALIZES
+// (flux density -> irradiance: divide by the receiver area subtended per pixel, the density->brightness conversion) and
+// applies the single causticIntensity exposure, then performs the wavelet step. Later passes read the previous pass's
+// RGBA16F color and only perform the wavelet step at a doubled dilation (stepWidth 2,4,8,16). The ping-pong is driven
+// from C++: input/output binding sets swap each pass; the FINAL pass lands in the irradiance buffer the lighting adds.
+
 [[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR, NWB_CAUSTIC_RESOLVE_SET)]]
 Texture2DArray<uint> g_NwbCausticResolveAccumulator;
 
@@ -18,19 +32,26 @@ Texture2D<float4> g_NwbCausticResolveGBufferWorldPosition;
 [[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH, NWB_CAUSTIC_RESOLVE_SET)]]
 Texture2D<float4> g_NwbCausticResolveGBufferDepth;
 
-[[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_IRRADIANCE, NWB_CAUSTIC_RESOLVE_SET)]]
-RWTexture2D<float4> g_NwbCausticResolveIrradiance;
+// The wavelet pass output (UAV). On the final pass this is the caustic irradiance the deferred lighting adds; on
+// earlier passes it is whichever ping-pong buffer the next pass reads as the input color (the C++ swaps the sets).
+[[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT, NWB_CAUSTIC_RESOLVE_SET)]]
+RWTexture2D<float4> g_NwbCausticResolveOutput;
 
-[[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_HISTORY, NWB_CAUSTIC_RESOLVE_SET)]]
-RWTexture2D<float4> g_NwbCausticResolveHistory;
+// The previous pass's color (SRV). Unused on the first pass (which reads the accumulator instead); bound to the other
+// ping-pong buffer so the descriptor is always valid.
+[[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_INPUT_COLOR, NWB_CAUSTIC_RESOLVE_SET)]]
+Texture2D<float4> g_NwbCausticResolveInputColor;
 
 struct NwbCausticResolvePushConstants{
+    // All-scalar -> 8 x 4 = 32 bytes, no alignment padding; matches the C++ mirror NwbCausticResolvePushConstants.
     uint width;
     uint height;
-    float causticIntensity;
-    uint blurRadius;
-    uint frameIndex;
-    float temporalAlpha;
+    float causticIntensity; // exposure, applied once during the area-normalize on the first pass
+    uint stepWidth;         // a-trous dilation for this pass (1,2,4,8,16); taps sit at +-{1,2}*stepWidth
+    uint isFirstPass;       // 1 => read+normalize the accumulator; 0 => read the previous pass's input color
+    uint passPad0;          // pad the tail to a 16B multiple (32) so C++ + shader sizes match exactly
+    uint passPad1;
+    uint passPad2;
 };
 
 [[vk::push_constant]]
@@ -59,65 +80,22 @@ float nwbCausticResolvePixelArea(const int2 pixel){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Un-scales the per-channel fixed-point accumulator at one texel back to floating-point flux.
-float3 nwbCausticResolveLoadFlux(const int2 texel){
-    return float3(
-        (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 0, 0)).r,
-        (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 1, 0)).r,
-        (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 2, 0)).r
-    ) / NWB_CAUSTIC_FIXED_POINT_SCALE;
-}
-
-// Edge-aware bilateral gather of the splat accumulator -- the resolve-side caustic denoise (P5). A sparse photon
-// splat reads as speckle (isolated bright deposits with dark gaps between them); this blends the per-channel flux
-// over a (2R+1)^2 neighbourhood weighted by a spatial Gaussian AND a world-distance edge-stop, so the inter-photon
-// gaps fill into a smooth caustic while flux never bleeds across a depth/silhouette discontinuity (the edge term
-// collapses the weight where the receiver world position jumps). Background taps (no receiver) are skipped. The
-// world sigma scales with the receiver's per-pixel world spacing, so the filter is scene-scale robust at any grazing
-// angle. Returns the blended flux as a weight-normalized AVERAGE (a low-pass that preserves the local mean), NOT yet
-// area-normalized; the caller divides by the receiver area to get irradiance. blurRadius 0 = no blur (the raw
-// single-tap flux), for an A/B against the un-denoised splat.
-float3 nwbCausticResolveGatherFlux(const int2 center){
-    const int radius = (int)g_NwbCausticResolvePushConstants.blurRadius;
-    if(radius <= 0)
-        return nwbCausticResolveLoadFlux(center);
-
-    const int width = (int)g_NwbCausticResolvePushConstants.width;
-    const int height = (int)g_NwbCausticResolvePushConstants.height;
-    const float3 centerWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(center, 0)).xyz;
-    // World spacing one texel right -> the edge-stop sigma tracks the receiver's per-pixel world size.
-    const int2 rightTexel = int2(min(center.x + 1, width - 1), center.y);
-    const float pixelSpacing = max(length(g_NwbCausticResolveGBufferWorldPosition.Load(int3(rightTexel, 0)).xyz - centerWorld), 1e-4);
-
-    const float sigmaSpatial = max((float)radius * 0.5, 0.5);
-    const float sigmaWorld = pixelSpacing * ((float)radius + 1.0);
-    const float invTwoSigmaSpatialSq = 1.0 / (2.0 * sigmaSpatial * sigmaSpatial);
-    const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
-
-    float3 sumFlux = float3(0.0, 0.0, 0.0);
-    float sumWeight = 0.0;
-    const int radiusSq = radius * radius;
-    for(int dy = -radius; dy <= radius; ++dy){
-        for(int dx = -radius; dx <= radius; ++dx){
-            // Circular kernel support: drop taps outside the inscribed disc so an isolated bright deposit smooths to
-            // a ROUND blob. A square (2R+1)^2 box with a hard corner cutoff leaves faint blocky corners on a hot
-            // texel (the spatial Gaussian is still ~exp(-4) at the square corner) -- which reads as the blocky look.
-            const int spatialSqI = dx * dx + dy * dy;
-            if(spatialSqI > radiusSq)
-                continue;
-            const int2 tap = int2(clamp(center.x + dx, 0, width - 1), clamp(center.y + dy, 0, height - 1));
-            // Skip background taps (no receiver) so the sky cannot dilute the edge of a ground caustic.
-            if(g_NwbCausticResolveGBufferDepth.Load(int3(tap, 0)).r >= 0.999999)
-                continue;
-            const float3 worldDelta = g_NwbCausticResolveGBufferWorldPosition.Load(int3(tap, 0)).xyz - centerWorld;
-            const float spatialSq = (float)spatialSqI;
-            const float worldSq = dot(worldDelta, worldDelta);
-            const float weight = exp(-spatialSq * invTwoSigmaSpatialSq) * exp(-worldSq * invTwoSigmaWorldSq);
-            sumFlux += weight * nwbCausticResolveLoadFlux(tap);
-            sumWeight += weight;
-        }
+// Per-pixel caustic irradiance for the wavelet input. First pass: un-scale the per-channel fixed-point accumulator,
+// area-normalize (flux density -> irradiance) and apply the exposure. Later passes: read the previous pass's color.
+// Background pixels (no receiver) carry no caustic -> zero.
+float3 nwbCausticResolveSampleInput(const int2 texel){
+    if(g_NwbCausticResolveGBufferDepth.Load(int3(texel, 0)).r >= 0.999999)
+        return float3(0.0, 0.0, 0.0);
+    if(g_NwbCausticResolvePushConstants.isFirstPass != 0u){
+        const float3 flux = float3(
+            (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 0, 0)).r,
+            (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 1, 0)).r,
+            (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 2, 0)).r
+        ) / NWB_CAUSTIC_FIXED_POINT_SCALE;
+        const float area = nwbCausticResolvePixelArea(texel);
+        return flux / area * g_NwbCausticResolvePushConstants.causticIntensity;
     }
-    return (sumWeight > 0.0) ? (sumFlux / sumWeight) : float3(0.0, 0.0, 0.0);
+    return g_NwbCausticResolveInputColor.Load(int3(texel, 0)).rgb;
 }
 
 
@@ -131,35 +109,54 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     const int2 texel = int2(pixel);
+    const int w = (int)g_NwbCausticResolvePushConstants.width;
+    const int h = (int)g_NwbCausticResolvePushConstants.height;
 
-    // Background pixels (no receiver) carry no caustic. Zero BOTH the sampled irradiance and the temporal history so
-    // a pixel that later becomes a receiver starts its accumulation from black rather than stale flux.
+    // Background (no receiver) carries no caustic. Write black so the additive lighting term is a no-op and a pixel
+    // that later becomes a receiver starts from black.
     if(g_NwbCausticResolveGBufferDepth.Load(int3(texel, 0)).r >= 0.999999){
-        g_NwbCausticResolveIrradiance[pixel] = float4(0.0, 0.0, 0.0, 1.0);
-        g_NwbCausticResolveHistory[pixel] = float4(0.0, 0.0, 0.0, 1.0);
+        g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
         return;
     }
 
-    // Edge-aware bilateral gather of the splat accumulator (the resolve-side spatial denoise), then convert the
-    // blended flux density to this-frame irradiance: divide by the receiver area subtended per pixel (density ->
-    // brightness, so a focused pile-up spikes) and scale by the artist multiplier.
-    const float3 blendedFlux = nwbCausticResolveGatherFlux(texel);
-    const float area = nwbCausticResolvePixelArea(texel);
-    const float3 current = blendedFlux / area * g_NwbCausticResolvePushConstants.causticIntensity;
+    const float3 centerWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(texel, 0)).xyz;
+    // Per-pixel world spacing (one texel right) -> the geometry edge-stop sigma is scene-scale relative AND grows with
+    // the wavelet dilation, so each coarser pass smooths over a proportionally wider receiver-world neighbourhood.
+    const int2 rightTexel = int2(min(texel.x + 1, w - 1), texel.y);
+    const float pixelSpacing = max(length(g_NwbCausticResolveGBufferWorldPosition.Load(int3(rightTexel, 0)).xyz - centerWorld), 1e-4);
+    const int step = (int)max(g_NwbCausticResolvePushConstants.stepWidth, 1u);
+    const float sigmaWorld = pixelSpacing * (float)step * 2.0;
+    const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
 
-    // Temporal accumulation (the primary denoise): exponential-moving-average the jittered per-frame splat into the
-    // persistent history. Because the emission jitters each frame, successive frames are independent samples of the
-    // same static caustic, so the EMA converges the sparse splat to a smooth result over ~1/temporalAlpha frames.
-    // Frame 0 seeds the history with the raw frame (no read of the uninitialized buffer -> no NaN propagation).
-    const float3 accumulated =
-        (g_NwbCausticResolvePushConstants.frameIndex == 0u)
-            ? current
-            : lerp(g_NwbCausticResolveHistory[pixel].rgb, current, g_NwbCausticResolvePushConstants.temporalAlpha);
+    // 5x5 B-spline a-trous kernel (separable [1,4,6,4,1]/16), sampled at +-{1,2}*step. Edge-AVOIDING: each tap is
+    // weighted by the spatial kernel AND a world-distance edge-stop so the caustic never bleeds across a depth /
+    // silhouette discontinuity (the receiver edge), while the sparse inter-photon gaps fill into a smooth caustic.
+    // No luminance edge-stop: the sparse splat's bright deposits ARE the noise to remove, so preserving them would
+    // defeat the denoise; the focused caustic STRUCTURE survives as the low-frequency content the wavelet preserves.
+    const float kernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0 };
 
-    g_NwbCausticResolveHistory[pixel] = float4(accumulated, 1.0);
-    g_NwbCausticResolveIrradiance[pixel] = float4(accumulated, 1.0);
+    float3 sum = float3(0.0, 0.0, 0.0);
+    float weightSum = 0.0;
+    [unroll] for(int ky = -2; ky <= 2; ++ky){
+        [unroll] for(int kx = -2; kx <= 2; ++kx){
+            const int2 tap = int2(texel.x + kx * step, texel.y + ky * step);
+            if(tap.x < 0 || tap.y < 0 || tap.x >= w || tap.y >= h)
+                continue;
+            if(g_NwbCausticResolveGBufferDepth.Load(int3(tap, 0)).r >= 0.999999)
+                continue; // background tap: no receiver -> skip so the dark surround cannot dilute the caustic edge
+            const float3 tapWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(tap, 0)).xyz;
+            const float3 d = tapWorld - centerWorld;
+            const float wWorld = exp(-dot(d, d) * invTwoSigmaWorldSq);
+            const float wSpatial = kernel[kx + 2] * kernel[ky + 2];
+            const float weight = wSpatial * wWorld;
+            sum += weight * nwbCausticResolveSampleInput(tap);
+            weightSum += weight;
+        }
+    }
+
+    const float3 result = (weightSum > 0.0) ? (sum / weightSum) : float3(0.0, 0.0, 0.0);
+    g_NwbCausticResolveOutput[pixel] = float4(result, 1.0);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

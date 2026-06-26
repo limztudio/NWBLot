@@ -22,6 +22,9 @@
 #include "csg_smoke_helpers.h"
 #endif
 
+#include <global/environment.h> // ReadEnvironmentVariableBuffer -- the NWB_TRANSPARENT_MULTI_SPIN_SPEED diagnostic override
+#include <cstdlib>               // std::atof
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -51,7 +54,13 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 static constexpr AStringView s_TransparentShapeMeshPath = "project/meshes/caustic_sphere";
 #else
-static constexpr AStringView s_TransparentShapeMeshPath = "project/meshes/tetrahedron";
+// Three DISTINCT spinning glass refractors (left/center/right): a cylinder, an octahedron, and a cone. The cylinder
+// + cone have SMOOTH curved-surface normals (a cylinder focuses light into a line caustic, a cone into a curved
+// caustic), while the octahedron is faceted (8 flat prism faces) -- a variety of caustic behaviours vs the old
+// identical tetrahedra. Generated procedurally (scratchpad gen_shapes.py) into tests/smoke/assets/meshes.
+static constexpr AStringView s_TransparentLeftMeshPath = "project/meshes/cylinder";
+static constexpr AStringView s_TransparentCenterMeshPath = "project/meshes/octahedron";
+static constexpr AStringView s_TransparentRightMeshPath = "project/meshes/cone";
 #endif
 // Scene rotation. Tetrahedra (plain + CSG) SPIN; the glass sphere is STATIC (its lens focus converges via the EMA into
 // the clean money-shot). NOTE on the spinning tetra caustic: a flat tetra is a PRISM -- spinning sweeps it through
@@ -296,7 +305,7 @@ public:
         const auto shapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentShapeMeshPath,
+            s_TransparentLeftMeshPath, // cylinder
             s_TransparentSharedMaterialPath,
             Float4(1.0f, 0.42f, 0.20f, 0.42f),
             TransparentLeftShapeBasePosition(),
@@ -305,7 +314,7 @@ public:
         const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentShapeMeshPath,
+            s_TransparentCenterMeshPath, // octahedron
             s_TransparentSharedMaterialPath,
             Float4(0.10f, 1.0f, 0.45f, 0.42f),
             TransparentCenterShapeBasePosition(),
@@ -315,7 +324,7 @@ public:
         const auto rightShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentShapeMeshPath,
+            s_TransparentRightMeshPath, // cone
             s_TransparentSharedMaterialPath,
             Float4(0.12f, 0.44f, 1.0f, 0.42f),
             TransparentRightShapeBasePosition(),
@@ -336,7 +345,11 @@ public:
             s_ShadowPlaneMeshPath,
             s_GroundMaterialPath,
             s_SmokeSurfaceMaterialInterface,
-            Float4(1.0f, 1.0f, 1.0f, 1.0f),
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+            Float4(1.0f, 1.0f, 1.0f, 1.0f),    // sphere money-shot keeps the original light ground (the validated look)
+#else
+            Float4(0.08f, 0.08f, 0.08f, 1.0f), // dark ground for the tetra so the caustic + any stray sparkles read clearly (caustic is *baseColor in lighting.slangi, so the Reinhard tonemap separates sparkle from a dark ground better)
+#endif
             Float4(0.0f, -0.08f, 0.08f),
             Float4(1.75f, 1.0f, 1.55f)
         );
@@ -366,10 +379,24 @@ public:
     virtual bool onUpdate(const f32 delta)override{
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
-        m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_TransparentSceneRotationSpeed;
+        m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * effectiveRotationSpeed();
         updateTransparentSceneTransforms();
         m_world->tick(safeDelta);
         return true;
+    }
+
+    // Diagnostic override (read once): NWB_TRANSPARENT_MULTI_SPIN_SPEED replaces the compile-time rotation speed, so a
+    // verification harness can sweep static (0) / slow / fast spin from a single build (e.g. to A/B the caustic motion-
+    // vector reprojection across a rotation). Unset / unparseable keeps s_TransparentSceneRotationSpeed.
+    static f32 effectiveRotationSpeed(){
+        static const f32 s_speed = [](){
+            char value[32] = {};
+            if(!ReadEnvironmentVariableBuffer("NWB_TRANSPARENT_MULTI_SPIN_SPEED", value, sizeof(value)))
+                return s_TransparentSceneRotationSpeed;
+            const f32 parsed = static_cast<f32>(::std::atof(value));
+            return IsFinite(parsed) && (parsed >= 0.0f) ? parsed : s_TransparentSceneRotationSpeed;
+        }();
+        return s_speed;
     }
 
 

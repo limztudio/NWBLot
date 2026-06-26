@@ -227,11 +227,6 @@ void RendererRayTracingState::invalidateResources(){
     m_causticLightCount = 0u;
     m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
     m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
-    // Reset the temporal motion-reject PREV state too: a stale prev-bounds that happens to match fresh bounds after a
-    // reload would skip the re-seed and blend uninitialized history. Keep these in lockstep with the current bounds.
-    m_causticPrevTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
-    m_causticPrevTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
-    m_causticPrevRefractiveInstanceCount = 0u;
     m_causticEmissionGateLogged = false;
     m_swShadowBindingLayout.reset();
     m_swShadowShader.reset();
@@ -278,12 +273,13 @@ void RendererRayTracingState::invalidateResources(){
     m_causticResolveBindingLayout.reset();
     m_causticResolveShader.reset();
     m_causticResolvePipeline.reset();
-    m_causticResolveBindingSet.reset();
+    m_causticResolveBindingSetOutputIrradiance.reset();
+    m_causticResolveBindingSetOutputScratch.reset();
     m_causticResolveBindingSetAccumulator = nullptr;
     m_causticResolveBindingSetWorldPosition = nullptr;
     m_causticResolveBindingSetDepth = nullptr;
     m_causticResolveBindingSetIrradiance = nullptr;
-    m_causticResolveBindingSetHistory = nullptr;
+    m_causticResolveBindingSetScratch = nullptr;
     m_causticFrameIndex = 0u;
     m_shadowPipelineFailed = false;
     m_bvhSortPipelineFailed = false;

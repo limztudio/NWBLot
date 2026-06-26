@@ -108,7 +108,8 @@ struct NwbCausticSwPushConstants{
     uint instanceCount;
     uint photonCount;
     uint emissionTargetCount;
-    uint frameIndex;
+    uint frameIndex; // the per-photon emission distribution is frame-INDEPENDENT (deterministic, flicker-free under the
+                     // spatial a-trous resolve); frameIndex is retained for diagnostics but no longer perturbs emission
     uint gridSide; // sqrt(photonCount): the emission grid side, runtime so C++ can scale the photon density per build config
 };
 
@@ -519,7 +520,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint gridSide = max(g_NwbCausticSwPushConstants.gridSide, 1u);
     const uint column = photonIndex % gridSide;
     const uint row = (photonIndex / gridSide) % gridSide;
-    const float2 jitter = nwbCausticEmissionJitter(photonIndex, g_NwbCausticSwPushConstants.frameIndex);
+    const float2 jitter = nwbCausticEmissionJitter(photonIndex);
     const float2 cell = (float2(column, row) + jitter) / (float)gridSide;
 
     const NwbCausticEmission emission = nwbCausticEmitPhotonAtTarget(lightDir, targetAabbMin, targetAabbMax, cell);

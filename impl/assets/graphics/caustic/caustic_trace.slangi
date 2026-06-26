@@ -271,16 +271,16 @@ uint nwbCausticHashU32(uint x){
     return x;
 }
 
-// A per-PHOTON, per-frame jittered 2D offset in [0,1)^2 for the emission grid cell. Crucially per-PHOTON (not just
-// per-frame): within a SINGLE frame each cell is sampled at its OWN random sub-point (a jittered/stratified grid),
-// so the per-frame splat is stratified NOISE -- not a rigid lattice. A flat refractor (e.g. a tetrahedron face)
-// maps a rigid lattice straight onto the receiver as visible parallel STRIPES; stratified noise instead reads as
-// honest caustic grain that the resolve blur smooths. Also varies per frame, so the temporal accumulator still
-// averages it to a smooth caustic on static scenes (where it converges) -- while on a moving scene the per-frame
-// stratified splat has no lattice structure to begin with. Deterministic in (photonIndex, frameIndex) so the HW
-// (P4) and SW producers jitter IDENTICALLY for the same photon (the parity mandate).
-float2 nwbCausticEmissionJitter(uint photonIndex, uint frameIndex){
-    const uint h0 = nwbCausticHashU32(photonIndex * 0x9E3779B9u + frameIndex * 0x85EBCA6Bu);
+// A per-PHOTON deterministic jittered 2D offset in [0,1)^2 for the emission grid cell. Crucially per-PHOTON: each grid
+// cell is sampled at its OWN fixed sub-point (a stratified grid), so the splat is stratified NOISE -- not a rigid
+// lattice. A flat refractor (e.g. a tetrahedron face) maps a rigid lattice straight onto the receiver as visible
+// parallel STRIPES; stratified noise instead reads as honest caustic grain the spatial a-trous resolve smooths.
+// FRAME-INDEPENDENT (no frameIndex term): the per-frame splat is byte-identical every frame, so a static scene is
+// FLICKER-FREE under the spatial-only resolve (which no longer temporally averages) and a moving scene presents a
+// stable caustic shape each frame. Deterministic in photonIndex so the HW (P4) and SW producers jitter IDENTICALLY
+// for the same photon (the parity mandate).
+float2 nwbCausticEmissionJitter(uint photonIndex){
+    const uint h0 = nwbCausticHashU32(photonIndex * 0x9E3779B9u + 0x85EBCA6Bu);
     const uint h1 = nwbCausticHashU32(h0 ^ 0x68E31DA4u);
     // Top 24 bits -> [0,1); float has 24-bit mantissa, so this is exact + uniform.
     return float2((float)(h0 >> 8) * (1.0 / 16777216.0), (float)(h1 >> 8) * (1.0 / 16777216.0));

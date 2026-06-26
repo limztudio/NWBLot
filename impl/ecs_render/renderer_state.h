@@ -344,13 +344,9 @@ private:
     u32 m_causticLightCount = 0u;
     Float4 m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
-    // Previous-frame caustic motion signal (the combined refractive-instance world AABB + the refractive count): when
-    // it changes, a refractive occluder moved, so the screen-space temporal caustic history is stale -- reset the
-    // frame counter (re-seed) so the resolve does NOT blend the moving caustic into ghost-comb trails. A static scene
-    // never triggers it, so it still converges. (Camera motion is a separate signal; the smoke camera is fixed.)
-    Float4 m_causticPrevTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
-    Float4 m_causticPrevTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
-    u32 m_causticPrevRefractiveInstanceCount = 0u;
+    // The caustic resolve is a purely SPATIAL a-trous wavelet denoise -- no temporal history, no motion vectors, no
+    // motion-reject reseed (a moving caustic is ghost-free by construction). m_causticFrameIndex is a diagnostic frame
+    // counter only (the producer emission is deterministic + frame-independent).
     bool m_causticEmissionGateLogged = false;
     Core::BindingLayoutHandle m_swShadowBindingLayout; // software (compute) shadow traversal pass
     Core::ShaderHandle m_swShadowShader;
@@ -412,19 +408,22 @@ private:
     u32 m_hwCausticBindingSetMeshCount = 0u;
     bool m_hwCausticPipelineFailed = false;
     bool m_hwCausticDispatchLogged = false;
-    // Caustic resolve pass (P3): converts the R32_UINT accumulators to RGBA16F irradiance (area-normalized). Its
-    // binding set is rebuilt when the accumulator / G-buffer / irradiance targets change (on resize).
+    // Caustic resolve pass (P3): an N-pass edge-avoiding a-trous wavelet denoise. The single compute pipeline is
+    // dispatched per pass with two ping-pong binding sets that swap the (output UAV, input-color SRV) pair: one outputs
+    // the irradiance buffer, the other the scratch buffer; the loop alternates so the final pass writes irradiance.
+    // Both sets share the accumulator + G-buffer SRVs; they are rebuilt when any of those targets change (on resize).
     Core::BindingLayoutHandle m_causticResolveBindingLayout;
     Core::ShaderHandle m_causticResolveShader;
     Core::ComputePipelineHandle m_causticResolvePipeline;
-    Core::BindingSetHandle m_causticResolveBindingSet;
+    Core::BindingSetHandle m_causticResolveBindingSetOutputIrradiance; // output=irradiance, input=scratch (even passes)
+    Core::BindingSetHandle m_causticResolveBindingSetOutputScratch;    // output=scratch,    input=irradiance (odd passes)
     const Core::Texture* m_causticResolveBindingSetAccumulator = nullptr;
     const Core::Texture* m_causticResolveBindingSetWorldPosition = nullptr;
     const Core::Texture* m_causticResolveBindingSetDepth = nullptr;
     const Core::Texture* m_causticResolveBindingSetIrradiance = nullptr;
-    const Core::Texture* m_causticResolveBindingSetHistory = nullptr;
-    // Producer-frame counter since the caustic targets were (re)created: frameIndex 0 seeds the temporal history +
-    // centers the emission jitter; later frames jitter + EMA-blend. Reset in createCausticTargets (fresh history).
+    const Core::Texture* m_causticResolveBindingSetScratch = nullptr;
+    // Diagnostic producer-frame counter (the emission is deterministic + frame-independent and the resolve is purely
+    // spatial, so this no longer affects the image). Reset in createCausticTargets.
     u32 m_causticFrameIndex = 0u;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;

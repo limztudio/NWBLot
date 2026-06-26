@@ -17,7 +17,6 @@
 #include <impl/assets/graphics/bvh/binding_slots.h>
 #include <impl/assets/graphics/bvh/names.h>
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -176,21 +175,26 @@ struct CausticPhotonPushConstants{
     u32 instanceCount = 0u;
     u32 photonCount = 0u;
     u32 emissionTargetCount = 0u;
-    u32 frameIndex = 0u;
-    u32 gridSide = 0u; // sqrt(photonCount): runtime so the photon density scales per build config (dbg vs opt/fin)
+    u32 frameIndex = 0u; // retained for diagnostics; the per-photon emission is frame-independent (no flicker, no temporal)
+    u32 gridSide = 0u;   // sqrt(photonCount): runtime so the photon density scales per build config (dbg vs opt/fin)
 };
 static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 7u, "CausticPhotonPushConstants must match the shader push-constant layout");
 
-// CPU mirror of the caustic resolve push constants (caustic/caustic_resolve_cs.slang).
+// CPU mirror of the caustic resolve push constants (caustic/caustic_resolve_cs.slang). The resolve is an N-pass
+// edge-avoiding a-trous wavelet denoise: per pass it carries the wavelet dilation (stepWidth) and whether this is the
+// first pass (read+normalize the accumulator vs read the previous pass's color). All-scalar -> 32 bytes (no padding
+// mismatch); the trailing pads keep it a clean 16B multiple matching the shader struct.
 struct CausticResolvePushConstants{
     u32 width = 0u;
     u32 height = 0u;
-    f32 causticIntensity = 0.f;
-    u32 blurRadius = 0u;
-    u32 frameIndex = 0u;
-    f32 temporalAlpha = 0.f;
+    f32 causticIntensity = 0.f; // exposure, applied once during the first-pass area-normalize
+    u32 stepWidth = 1u;         // a-trous dilation for this pass (1,2,4,8,16)
+    u32 isFirstPass = 0u;       // 1 => read+area-normalize the accumulator; 0 => read the previous pass's color
+    u32 passPad0 = 0u;
+    u32 passPad1 = 0u;
+    u32 passPad2 = 0u;
 };
-static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 4u + sizeof(f32) * 2u, "CausticResolvePushConstants must match the shader push-constant layout");
+static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 7u + sizeof(f32), "CausticResolvePushConstants must match the shader push-constant layout");
 
 // Per-frame photon budget. Energy-conserving (per-photon flux = lightColor*emissionDomainArea*targetCount/photonCount,
 // so it scales 1/photonCount), so a higher count only
@@ -221,18 +225,9 @@ inline constexpr u32 s_CausticSwPhotonCount = s_CausticSwPhotonGridSide * s_Caus
 // doubling the photon count leaves the converged image unchanged (the energy-conservation invariant still holds).
 inline constexpr f32 s_CausticIntensity = 2.0f;
 
-// Radius (in pixels) of the resolve-side edge-aware bilateral gather that denoises the sparse photon splat (P5): the
-// (2R+1)^2 neighbourhood is blended per output pixel, world-distance-edge-stopped so the caustic does not bleed
-// across silhouettes. 0 disables the blur (the raw single-tap splat, for an A/B). Kept modest so the full-screen
-// gather stays cheap in an unoptimized debug build.
-inline constexpr u32 s_CausticResolveBlurRadius = 3u;
-
-// Temporal EMA blend weight for the caustic accumulator (P5): accumulated = lerp(history, current, alpha). Smaller =
-// more frames averaged = smoother + slower convergence. Because the emission jitters per photon + per frame
-// (nwbCausticEmissionJitter), successive frames are independent stratified samples of the same static caustic, so the
-// EMA converges the sparse per-frame splat to a smooth caustic over ~1/alpha frames (here ~12). The first producer
-// frame seeds the history directly; the motion-reject (prepareCausticEmissionTargets) re-seeds it on occluder motion.
-inline constexpr f32 s_CausticTemporalAlpha = 0.08f;
+// The caustic resolve denoise is an N-pass edge-avoiding a-trous wavelet (purely spatial, NO temporal accumulation ->
+// ghost-free for a moving caustic). The pass count + wavelet kernel live in the shader (NWB_CAUSTIC_RESOLVE_PASS_COUNT,
+// resolve_binding_slots.h); there is no longer a single-pass blur radius or a temporal-EMA blend weight.
 
 // Photon-aim slack for DEFORMING (runtime/skinned) refractors. Their emission AABB is derived from the bind-pose
 // (rest) bounds -- there is no per-frame CPU deformed bound (the per-frame bounds live only in the GPU meshlet-bounds
@@ -875,13 +870,6 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
     SIMDVector combinedMin = VectorReplicate(1e30f);
     SIMDVector combinedMax = VectorReplicate(-1e30f);
 
-    // A runtime (skinned/procedural) refractor can DEFORM in place -- its world AABB stays roughly stable while the
-    // surface (and its bend normals) change every frame, which the combined-AABB motion-reject below cannot see. The
-    // structural runtime version is not a per-frame pose counter, so presence of any runtime refractor is the correct
-    // conservative deform signal: it forces a temporal re-seed so the EMA never smears a stale caustic across the
-    // animation (an animating refractor cannot temporally converge anyway -> honest per-frame splat).
-    bool anyRuntimeRefractive = false;
-
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
             continue;
@@ -907,8 +895,6 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
             continue;
         if(!materialInfo || !materialInfo->refractive)
             continue;
-
-        anyRuntimeRefractive = anyRuntimeRefractive || resolvedMesh.runtime;
 
         // object->world from the decomposed transform (identity when absent), matching buildSceneSwBvh.
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
@@ -985,28 +971,9 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
     StoreFloat(combinedMax, &rayTracingState().m_causticTargetBoundsMax);
     rayTracingState().m_causticRefractiveInstanceCount = targetCount;
 
-    // Temporal motion-reject: if a refractive occluder moved this frame (its world AABB -> the combined emission
-    // bounds changed) or the refractive-instance count changed, the screen-space caustic accumulated over the prior
-    // frames is stale. Blending it would smear the moving caustic into ghost-comb trails (the EMA stacking shifted
-    // copies of a per-frame caustic). Reset the frame counter so the resolve SEEDS this frame (a fresh per-frame
-    // caustic) instead of blending; a static scene never triggers this, so it still converges over ~1/alpha frames.
-    {
-        const Float4& boundsMin = rayTracingState().m_causticTargetBoundsMin;
-        const Float4& boundsMax = rayTracingState().m_causticTargetBoundsMax;
-        const Float4& prevMin = rayTracingState().m_causticPrevTargetBoundsMin;
-        const Float4& prevMax = rayTracingState().m_causticPrevTargetBoundsMax;
-        const auto componentMoved = [](const f32 a, const f32 b)->bool{ const f32 d = a - b; return (d < 0.f ? -d : d) > 1e-4f; };
-        const bool occluderMoved =
-            anyRuntimeRefractive // a deforming (skinned/runtime) refractor changes its surface every frame -> always re-seed
-            || componentMoved(boundsMin.x, prevMin.x) || componentMoved(boundsMin.y, prevMin.y) || componentMoved(boundsMin.z, prevMin.z)
-            || componentMoved(boundsMax.x, prevMax.x) || componentMoved(boundsMax.y, prevMax.y) || componentMoved(boundsMax.z, prevMax.z)
-            || rayTracingState().m_causticPrevRefractiveInstanceCount != targetCount;
-        if(occluderMoved)
-            rayTracingState().m_causticFrameIndex = 0u;
-        rayTracingState().m_causticPrevTargetBoundsMin = boundsMin;
-        rayTracingState().m_causticPrevTargetBoundsMax = boundsMax;
-        rayTracingState().m_causticPrevRefractiveInstanceCount = targetCount;
-    }
+    // No temporal motion-reject / reprojection: the resolve is a purely SPATIAL a-trous wavelet denoise (no history),
+    // so a moving (even non-rigidly morphing) caustic is ghost-free by construction -- nothing here needs to track or
+    // reseed on refractor motion.
     return true;
 }
 
@@ -1097,13 +1064,12 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     // Additive caustic producer targets, the inverted-lifecycle sibling of the shadow visibility target. The
     // deferred lighting pass always samples the resolved irradiance (nwbBxdfCausticIrradiance), so it is allocated
     // unconditionally and cleared to BLACK each frame (the additive identity, vs the shadow buffer's white) to keep
-    // a single binding/shader path regardless of whether a caustic producer ran. No producer writes them yet (P2):
-    //  - causticIrradiance:  RGBA16F single image, the resolve output the lighting pass adds pre-tonemap.
+    // a single binding/shader path regardless of whether a caustic producer ran:
+    //  - causticIrradiance:  RGBA16F single image, the resolve's FINAL a-trous pass output the lighting adds pre-tonemap.
     //  - causticAccumulator: R32_UINT, one Texture2DArray layer per RGB channel, the fixed-point splat target the
     //                        producer InterlockedAdds into (no float image atomics exist on the backend).
-    //  - causticHistory:     RGBA16F single image, the temporal accumulation history (P5).
-    // Fresh targets -> restart the temporal accumulation: the new history buffer is uninitialized, so frameIndex 0
-    // must seed it on the first producer frame (writing the raw frame without reading the garbage) instead of blending.
+    //  - causticHistory:     RGBA16F scratch for the a-trous wavelet ping-pong (alternated with irradiance per pass).
+    // frameIndex is a diagnostic counter only (the resolve is purely spatial -- no temporal accumulation to seed).
     rayTracingState().m_causticFrameIndex = 0u;
 
     targets.causticIrradianceFormat = Core::Format::RGBA16_FLOAT;
@@ -1146,11 +1112,11 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setHeight(targets.height)
         .setFormat(targets.causticHistoryFormat)
         .setInUAV(true)
-        .setName("engine/caustic/history")
+        .setName("engine/caustic/atrous_scratch")
     ;
     targets.causticHistory = graphics().createTexture(historyDesc);
     if(!targets.causticHistory){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic history target"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic a-trous scratch target"));
         return false;
     }
     return true;
@@ -1203,21 +1169,59 @@ void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandL
 }
 
 void RendererRayTracingSystem::clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    if(!targets.causticIrradiance || !targets.causticAccumulator || !targets.causticHistory)
+    if(!targets.causticIrradiance || !targets.causticAccumulator)
         return;
 
-    // Per-frame reset of the additive caustic targets, EXCEPT the temporal history. Black = the additive identity
-    // (the inverse of the shadow buffer's white default): the value the deferred lighting samples whenever no caustic
-    // producer wrote the irradiance this frame, so the additive term is a pixel-identical no-op. The accumulators are
-    // the per-frame splat target (integer R32_UINT, one layer per RGB channel, cleared to 0 with clearTextureUInt);
-    // the irradiance is the float image the lighting reads (cleared to 0). The temporal HISTORY is deliberately NOT
-    // cleared here -- it is the EMA accumulator the resolve persists across frames (seeded on the first producer
-    // frame, frameIndex == 0), so clearing it every frame would defeat the temporal accumulation (P5).
+    // Per-frame reset of the additive caustic targets. Black irradiance = the additive identity (the inverse of the
+    // shadow buffer's white default): the value the deferred lighting samples whenever no caustic producer ran this
+    // frame, so the additive term is a pixel-identical no-op. The accumulators are the per-frame splat target (integer
+    // R32_UINT, one layer per RGB channel, cleared to 0). The a-trous scratch (causticHistory) needs NO clear -- every
+    // wavelet pass fully overwrites it; the resolve is purely spatial (no persistent state across frames).
     commandList.setTextureState(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.clearTextureFloat(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
     commandList.clearTextureUInt(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, 0u);
+}
+
+void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticResolve, graphics().getDevice(), commandList);
+
+    // The producer wrote the accumulator as a UAV; move it to ShaderResource for the resolve to read (the first pass
+    // un-scales + area-normalizes it). setResourceStatesForBindingSet derives the rest each pass (G-buffer SRVs + the
+    // ping-pong UAV/SRV roles of the irradiance + scratch buffers as they swap).
+    commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource);
+
+    const u32 groupsX = DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+    const u32 groupsY = DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+
+    // Edge-avoiding a-trous: pass 0 outputs the irradiance buffer (reading the accumulator); subsequent passes ping-pong
+    // (scratch, irradiance, scratch, ...) at a doubling dilation. Even passes use the OutputIrradiance set, odd passes
+    // the OutputScratch set, so the FINAL pass (PASS_COUNT odd) lands in the irradiance buffer the lighting samples.
+    for(u32 pass = 0u; pass < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT); ++pass){
+        const bool evenPass = (pass % 2u) == 0u;
+        Core::BindingSet* const bindingSet = evenPass
+            ? rayTracingState().m_causticResolveBindingSetOutputIrradiance.get()
+            : rayTracingState().m_causticResolveBindingSetOutputScratch.get()
+        ;
+
+        commandList.setResourceStatesForBindingSet(bindingSet);
+        commandList.commitBarriers();
+
+        CausticResolvePushConstants resolvePush;
+        resolvePush.width = targets.width;
+        resolvePush.height = targets.height;
+        resolvePush.causticIntensity = s_CausticIntensity;
+        resolvePush.stepWidth = 1u << pass; // 1, 2, 4, 8, 16
+        resolvePush.isFirstPass = (pass == 0u) ? 1u : 0u;
+
+        Core::ComputeState computeState;
+        computeState.setPipeline(rayTracingState().m_causticResolvePipeline.get());
+        computeState.addBindingSet(bindingSet);
+        commandList.setComputeState(computeState);
+        commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
+        commandList.dispatch(groupsX, groupsY, 1u);
+    }
 }
 
 bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
@@ -1331,10 +1335,11 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         !rayTracingState().m_swCausticPipeline
         || !rayTracingState().m_swCausticBindingSet
         || !rayTracingState().m_causticResolvePipeline
-        || !rayTracingState().m_causticResolveBindingSet
+        || !rayTracingState().m_causticResolveBindingSetOutputIrradiance
+        || !rayTracingState().m_causticResolveBindingSetOutputScratch
     )
         return false;
-    if(!targets.causticAccumulator || !targets.causticIrradiance)
+    if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory)
         return false;
 
     {
@@ -1362,7 +1367,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
         pushConstants.photonCount = s_CausticSwPhotonCount;
         pushConstants.emissionTargetCount = rayTracingState().m_causticRefractiveInstanceCount;
-        pushConstants.frameIndex = rayTracingState().m_causticFrameIndex; // drives the per-photon stratified hash emission jitter + the temporal EMA seed
+        pushConstants.frameIndex = rayTracingState().m_causticFrameIndex; // diagnostic only; emission is frame-independent
         pushConstants.gridSide = s_CausticSwPhotonGridSide;
 
         Core::ComputeState computeState;
@@ -1373,37 +1378,9 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         commandList.dispatch(DivideUp(s_CausticSwPhotonCount, static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
     }
 
-    {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticResolve, graphics().getDevice(), commandList);
+    dispatchCausticResolve(commandList, targets);
 
-        // The producer wrote the accumulators as a UAV; move them to ShaderResource for the resolve read, alongside
-        // the resolve's G-buffer SRVs + the irradiance UAV (setResourceStatesForBindingSet derives these).
-        commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_causticResolveBindingSet.get());
-        commandList.commitBarriers();
-
-        CausticResolvePushConstants resolvePush;
-        resolvePush.width = targets.width;
-        resolvePush.height = targets.height;
-        resolvePush.causticIntensity = s_CausticIntensity;
-        resolvePush.blurRadius = s_CausticResolveBlurRadius;
-        resolvePush.frameIndex = rayTracingState().m_causticFrameIndex; // EMA seed (==0) vs blend; matches the producer jitter
-        resolvePush.temporalAlpha = s_CausticTemporalAlpha;
-
-        Core::ComputeState computeState;
-        computeState.setPipeline(rayTracingState().m_causticResolvePipeline.get());
-        computeState.addBindingSet(rayTracingState().m_causticResolveBindingSet.get());
-        commandList.setComputeState(computeState);
-        commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
-        commandList.dispatch(
-            DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)),
-            DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)),
-            1u
-        );
-    }
-
-    // Advance the caustic frame counter: the next producer frame jitters its emission to a new sub-cell offset and
-    // the resolve switches from the seed (frameIndex == 0) to the EMA blend, accumulating the static caustic.
+    // Diagnostic frame counter (no longer affects the image -- the resolve is purely spatial).
     ++rayTracingState().m_causticFrameIndex;
 
     if(!rayTracingState().m_swCausticDispatchLogged){
@@ -2055,8 +2032,8 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_WORLD_POSITION, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RESOLVE_BINDING_IRRADIANCE, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RESOLVE_BINDING_HISTORY, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_INPUT_COLOR, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticResolvePushConstants)));
 
         rayTracingState().m_causticResolveBindingLayout = device->createBindingLayout(layoutDesc);
@@ -2100,74 +2077,89 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
     NWB_ASSERT(targets.causticIrradiance);
     NWB_ASSERT(targets.causticHistory);
 
-    const Core::Texture* accumulatorTarget = targets.causticAccumulator.get();
-    const Core::Texture* worldPositionTarget = targets.worldPosition.get();
-    const Core::Texture* depthTarget = targets.depth.get();
-    const Core::Texture* irradianceTarget = targets.causticIrradiance.get();
-    const Core::Texture* historyTarget = targets.causticHistory.get();
+    // Non-const (BindingSetItem needs a mutable Texture*); the const cache fields still compare/assign fine.
+    Core::Texture* accumulatorTarget = targets.causticAccumulator.get();
+    Core::Texture* worldPositionTarget = targets.worldPosition.get();
+    Core::Texture* depthTarget = targets.depth.get();
+    Core::Texture* irradianceTarget = targets.causticIrradiance.get();
+    Core::Texture* scratchTarget = targets.causticHistory.get();
     if(
-        rayTracingState().m_causticResolveBindingSet
+        rayTracingState().m_causticResolveBindingSetOutputIrradiance
+        && rayTracingState().m_causticResolveBindingSetOutputScratch
         && rayTracingState().m_causticResolveBindingSetAccumulator == accumulatorTarget
         && rayTracingState().m_causticResolveBindingSetWorldPosition == worldPositionTarget
         && rayTracingState().m_causticResolveBindingSetDepth == depthTarget
         && rayTracingState().m_causticResolveBindingSetIrradiance == irradianceTarget
-        && rayTracingState().m_causticResolveBindingSetHistory == historyTarget
+        && rayTracingState().m_causticResolveBindingSetScratch == scratchTarget
     )
         return true;
 
-    Core::BindingSetDesc bindingSetDesc(arena());
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR,
-        targets.causticAccumulator.get(),
-        targets.causticAccumulatorFormat,
-        ECSRenderDetail::s_CausticAccumulatorSubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_WORLD_POSITION,
-        targets.worldPosition.get(),
-        targets.worldPositionFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH,
-        targets.depth.get(),
-        targets.depthFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
-        NWB_CAUSTIC_RESOLVE_BINDING_IRRADIANCE,
-        targets.causticIrradiance.get(),
-        targets.causticIrradianceFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
-        NWB_CAUSTIC_RESOLVE_BINDING_HISTORY,
-        targets.causticHistory.get(),
-        targets.causticHistoryFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-
     auto* device = graphics().getDevice();
-    rayTracingState().m_causticResolveBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_causticResolveBindingLayout);
-    if(!rayTracingState().m_causticResolveBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve binding set"));
+
+    // Two ping-pong binding sets for the a-trous passes. They share the accumulator + G-buffer SRVs and only swap the
+    // (output UAV, input-color SRV) pair: set "OutputIrradiance" writes the irradiance buffer reading the scratch; set
+    // "OutputScratch" writes the scratch reading the irradiance. The pass loop alternates them so the FINAL pass writes
+    // the irradiance buffer the lighting samples (pass 0 -> irradiance, then scratch/irradiance/..., ending irradiance).
+    const auto buildSet = [&](Core::Texture* outputTex, Core::Format::Enum outputFormat, Core::Texture* inputTex, Core::Format::Enum inputFormat) -> Core::BindingSetHandle {
+        Core::BindingSetDesc desc(arena());
+        desc.addItem(Core::BindingSetItem::Texture_SRV(
+            NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR,
+            accumulatorTarget,
+            targets.causticAccumulatorFormat,
+            ECSRenderDetail::s_CausticAccumulatorSubresources,
+            Core::TextureDimension::Texture2DArray
+        ));
+        desc.addItem(Core::BindingSetItem::Texture_SRV(
+            NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_WORLD_POSITION,
+            worldPositionTarget,
+            targets.worldPositionFormat,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture2D
+        ));
+        desc.addItem(Core::BindingSetItem::Texture_SRV(
+            NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH,
+            depthTarget,
+            targets.depthFormat,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture2D
+        ));
+        desc.addItem(Core::BindingSetItem::Texture_UAV(
+            NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT,
+            outputTex,
+            outputFormat,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture2D
+        ));
+        desc.addItem(Core::BindingSetItem::Texture_SRV(
+            NWB_CAUSTIC_RESOLVE_BINDING_INPUT_COLOR,
+            inputTex,
+            inputFormat,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture2D
+        ));
+        return device->createBindingSet(desc, rayTracingState().m_causticResolveBindingLayout);
+    };
+
+    Core::BindingSetHandle outputIrradiance = buildSet(irradianceTarget, targets.causticIrradianceFormat, scratchTarget, targets.causticHistoryFormat);
+    Core::BindingSetHandle outputScratch    = buildSet(scratchTarget, targets.causticHistoryFormat, irradianceTarget, targets.causticIrradianceFormat);
+    if(!outputIrradiance || !outputScratch){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve a-trous binding sets"));
+        rayTracingState().m_causticResolveBindingSetOutputIrradiance = nullptr;
+        rayTracingState().m_causticResolveBindingSetOutputScratch = nullptr;
         rayTracingState().m_causticResolveBindingSetAccumulator = nullptr;
         rayTracingState().m_causticResolveBindingSetWorldPosition = nullptr;
         rayTracingState().m_causticResolveBindingSetDepth = nullptr;
         rayTracingState().m_causticResolveBindingSetIrradiance = nullptr;
-        rayTracingState().m_causticResolveBindingSetHistory = nullptr;
+        rayTracingState().m_causticResolveBindingSetScratch = nullptr;
         return false;
     }
+    rayTracingState().m_causticResolveBindingSetOutputIrradiance = Move(outputIrradiance);
+    rayTracingState().m_causticResolveBindingSetOutputScratch = Move(outputScratch);
     rayTracingState().m_causticResolveBindingSetAccumulator = accumulatorTarget;
     rayTracingState().m_causticResolveBindingSetWorldPosition = worldPositionTarget;
     rayTracingState().m_causticResolveBindingSetDepth = depthTarget;
     rayTracingState().m_causticResolveBindingSetIrradiance = irradianceTarget;
-    rayTracingState().m_causticResolveBindingSetHistory = historyTarget;
+    rayTracingState().m_causticResolveBindingSetScratch = scratchTarget;
     return true;
 }
 
@@ -2425,10 +2417,11 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         || !rayTracingState().m_hwCausticShaderTable
         || !rayTracingState().m_hwCausticBindingSet
         || !rayTracingState().m_causticResolvePipeline
-        || !rayTracingState().m_causticResolveBindingSet
+        || !rayTracingState().m_causticResolveBindingSetOutputIrradiance
+        || !rayTracingState().m_causticResolveBindingSetOutputScratch
     )
         return false;
-    if(!targets.causticAccumulator || !targets.causticIrradiance)
+    if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory)
         return false;
 
     {
@@ -2456,7 +2449,7 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         pushConstants.instanceCount = rayTracingState().m_tlasInstanceCount;
         pushConstants.photonCount = s_CausticHwPhotonCount;
         pushConstants.emissionTargetCount = rayTracingState().m_causticRefractiveInstanceCount;
-        pushConstants.frameIndex = rayTracingState().m_causticFrameIndex;
+        pushConstants.frameIndex = rayTracingState().m_causticFrameIndex; // diagnostic only; emission is frame-independent
         pushConstants.gridSide = s_CausticHwPhotonGridSide;
 
         Core::RayTracingState rayTracingPassState;
@@ -2473,37 +2466,10 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         commandList.dispatchRays(dispatchArgs);
     }
 
-    {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticResolve, graphics().getDevice(), commandList);
+    // Identical resolve to the SW path (the SAME pipeline + ping-pong binding sets): the shared a-trous wavelet denoise.
+    dispatchCausticResolve(commandList, targets);
 
-        // Identical resolve to the SW path (the SAME pipeline + binding set + push constants): un-scale the
-        // accumulator, area-normalize, edge-aware blur, temporal EMA -> the irradiance the lighting adds pre-tonemap.
-        commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_causticResolveBindingSet.get());
-        commandList.commitBarriers();
-
-        CausticResolvePushConstants resolvePush;
-        resolvePush.width = targets.width;
-        resolvePush.height = targets.height;
-        resolvePush.causticIntensity = s_CausticIntensity;
-        resolvePush.blurRadius = s_CausticResolveBlurRadius;
-        resolvePush.frameIndex = rayTracingState().m_causticFrameIndex;
-        resolvePush.temporalAlpha = s_CausticTemporalAlpha;
-
-        Core::ComputeState computeState;
-        computeState.setPipeline(rayTracingState().m_causticResolvePipeline.get());
-        computeState.addBindingSet(rayTracingState().m_causticResolveBindingSet.get());
-        commandList.setComputeState(computeState);
-        commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
-        commandList.dispatch(
-            DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)),
-            DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)),
-            1u
-        );
-    }
-
-    // Advance the shared caustic frame counter (same as the SW path): the next frame jitters its emission + the
-    // resolve switches from the seed to the EMA blend.
+    // Diagnostic frame counter (no longer affects the image -- the resolve is purely spatial).
     ++rayTracingState().m_causticFrameIndex;
 
     if(!rayTracingState().m_hwCausticDispatchLogged){

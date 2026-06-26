@@ -142,6 +142,8 @@ struct DeferredFrameTargets{
     // cleared to BLACK each frame (additive identity), so an empty buffer is a no-op. No producer writes them yet.
     Core::TextureHandle causticIrradiance;
     Core::TextureHandle causticAccumulator;
+    // RGBA16F scratch buffer for the resolve's a-trous wavelet ping-pong (the wavelet alternates writing this and the
+    // irradiance buffer across its passes; the final pass lands in irradiance). No longer a persistent temporal history.
     Core::TextureHandle causticHistory;
     Core::FramebufferHandle framebuffer;
     Core::FramebufferHandle opaqueLightingFramebuffer;

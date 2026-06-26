@@ -77,7 +77,7 @@ struct NwbCausticHwPushConstants{
     uint instanceCount;
     uint photonCount;
     uint emissionTargetCount;
-    uint frameIndex;
+    uint frameIndex; // retained for diagnostics; the per-photon emission distribution is frame-INDEPENDENT (flicker-free)
     uint gridSide; // sqrt(photonCount): the emission grid side, runtime so C++ can scale the photon density per build config
 };
 

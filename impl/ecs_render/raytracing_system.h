@@ -60,6 +60,11 @@ private:
     [[nodiscard]] bool ensureSwCausticBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureCausticResolvePipeline();
     [[nodiscard]] bool ensureCausticResolveBindingSet(DeferredFrameTargets& targets);
+    // Runs the N-pass edge-avoiding a-trous wavelet resolve (shared by the SW + HW caustic paths): converts the splat
+    // accumulator to denoised irradiance, ping-ponging the irradiance + scratch buffers so the final pass lands in
+    // irradiance. The accumulator must already hold this frame's splat (producer dispatched). Assumes the resolve
+    // pipeline + both ping-pong binding sets are ready (ensureCausticResolvePipeline/BindingSet).
+    void dispatchCausticResolve(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureCausticRtPipeline();
     [[nodiscard]] bool ensureCausticRtBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureBvhSortPipeline();

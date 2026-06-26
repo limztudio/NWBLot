@@ -85,7 +85,7 @@ void main(){
     const uint gridSide = max(g_NwbCausticHwPushConstants.gridSide, 1u);
     const uint column = photonIndex % gridSide;
     const uint row = (photonIndex / gridSide) % gridSide;
-    const float2 jitter = nwbCausticEmissionJitter(photonIndex, g_NwbCausticHwPushConstants.frameIndex);
+    const float2 jitter = nwbCausticEmissionJitter(photonIndex);
     const float2 cell = (float2(column, row) + jitter) / (float)gridSide;
 
     const NwbCausticEmission emission = nwbCausticEmitPhotonAtTarget(lightDir, targetAabbMin, targetAabbMax, cell);

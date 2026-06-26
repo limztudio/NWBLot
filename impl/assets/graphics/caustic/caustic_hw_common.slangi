@@ -132,14 +132,15 @@ struct NwbCausticHwVertexAttrib{
 };
 
 NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint meshIndex, const uint vertexIndex){
-    const uint base = vertexIndex * 16u;
-    const uint2 packedNormal = g_NwbCausticHwMeshAttributes[meshIndex].Load2(base);
+    // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- one request instead of two
+    // dependent Load2s (bit-identical; mirrors the SW producer).
+    const uint4 packed = g_NwbCausticHwMeshAttributes[meshIndex].Load4(vertexIndex * 16u);
     NwbCausticHwVertexAttrib attrib;
     attrib.normal = float3(
-        nwbUnpackHalf2x16(packedNormal.x),
-        nwbUnpackHalf2x16(packedNormal.y).x
+        nwbUnpackHalf2x16(packed.x),
+        nwbUnpackHalf2x16(packed.y).x
     );
-    attrib.uv0 = asfloat(g_NwbCausticHwMeshAttributes[meshIndex].Load2(base + 8u));
+    attrib.uv0 = asfloat(packed.zw);
     return attrib;
 }
 

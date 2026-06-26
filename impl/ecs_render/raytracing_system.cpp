@@ -1182,24 +1182,15 @@ void RendererRayTracingSystem::clearCausticTargets(Core::CommandList& commandLis
 void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& commandList, DeferredFrameTargets& targets){
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticResolve, graphics().getDevice(), commandList);
 
-    // The producer wrote the accumulator as a UAV; move it to ShaderResource for the resolve to read (the first pass
-    // un-scales + area-normalizes it). setResourceStatesForBindingSet derives the rest each pass (G-buffer SRVs + the
-    // ping-pong UAV/SRV roles of the irradiance + scratch buffers as they swap).
+    // The producer wrote the accumulator as a UAV; move it to ShaderResource for the PREPARE pass to read (un-scale +
+    // area-normalize). setResourceStatesForBindingSet derives the rest each pass (G-buffer SRVs + the ping-pong UAV/SRV
+    // roles of the irradiance + scratch buffers as they swap).
     commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource);
 
     const u32 groupsX = DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const u32 groupsY = DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
 
-    // Edge-avoiding a-trous: pass 0 outputs the irradiance buffer (reading the accumulator); subsequent passes ping-pong
-    // (scratch, irradiance, scratch, ...) at a doubling dilation. Even passes use the OutputIrradiance set, odd passes
-    // the OutputScratch set, so the FINAL pass (PASS_COUNT odd) lands in the irradiance buffer the lighting samples.
-    for(u32 pass = 0u; pass < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT); ++pass){
-        const bool evenPass = (pass % 2u) == 0u;
-        Core::BindingSet* const bindingSet = evenPass
-            ? rayTracingState().m_causticResolveBindingSetOutputIrradiance.get()
-            : rayTracingState().m_causticResolveBindingSetOutputScratch.get()
-        ;
-
+    const auto runPass = [&](Core::BindingSet* const bindingSet, const u32 stepWidth, const u32 isFirstPass){
         commandList.setResourceStatesForBindingSet(bindingSet);
         commandList.commitBarriers();
 
@@ -1207,8 +1198,8 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
         resolvePush.width = targets.width;
         resolvePush.height = targets.height;
         resolvePush.causticIntensity = s_CausticIntensity;
-        resolvePush.stepWidth = 1u << pass; // 1, 2, 4, 8, 16
-        resolvePush.isFirstPass = (pass == 0u) ? 1u : 0u;
+        resolvePush.stepWidth = stepWidth;
+        resolvePush.isFirstPass = isFirstPass;
 
         Core::ComputeState computeState;
         computeState.setPipeline(rayTracingState().m_causticResolvePipeline.get());
@@ -1216,6 +1207,23 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
         commandList.setComputeState(computeState);
         commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
         commandList.dispatch(groupsX, groupsY, 1u);
+    };
+
+    // PREPARE pass: un-scale + area-normalize the accumulator ONCE per pixel into the scratch buffer (NO wavelet), so the
+    // wavelet passes never re-normalize per tap. Uses the OutputScratch set (output=scratch; its irradiance input is
+    // unread on this pass).
+    runPass(rayTracingState().m_causticResolveBindingSetOutputScratch.get(), 1u, 1u);
+
+    // Edge-avoiding a-trous wavelet passes at a doubling dilation, reading the prepared float buffer. They ping-pong
+    // scratch<->irradiance: wavelet 0 reads scratch -> irradiance, then alternate, so the FINAL pass (PASS_COUNT odd)
+    // lands in the irradiance buffer the lighting samples.
+    for(u32 pass = 0u; pass < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT); ++pass){
+        const bool outputIrradiance = (pass % 2u) == 0u;
+        Core::BindingSet* const bindingSet = outputIrradiance
+            ? rayTracingState().m_causticResolveBindingSetOutputIrradiance.get()
+            : rayTracingState().m_causticResolveBindingSetOutputScratch.get()
+        ;
+        runPass(bindingSet, 1u << pass, 0u);
     }
 }
 

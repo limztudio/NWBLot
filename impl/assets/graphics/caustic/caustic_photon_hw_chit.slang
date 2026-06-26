@@ -36,9 +36,11 @@ void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttri
 
         const uint prim = PrimitiveIndex();
         const uint indexBase = prim * 3u;
-        const uint i0 = g_NwbCausticHwMeshIndices[material.meshSlot].Load(indexBase * 4u);
-        const uint i1 = g_NwbCausticHwMeshIndices[material.meshSlot].Load((indexBase + 1u) * 4u);
-        const uint i2 = g_NwbCausticHwMeshIndices[material.meshSlot].Load((indexBase + 2u) * 4u);
+        // Contiguous triangle indices -> one Load3 (bit-identical to three Loads; mirrors the SW producer).
+        const uint3 triIndices = g_NwbCausticHwMeshIndices[material.meshSlot].Load3(indexBase * 4u);
+        const uint i0 = triIndices.x;
+        const uint i1 = triIndices.y;
+        const uint i2 = triIndices.z;
 
         const NwbCausticHwVertexAttrib a0 = nwbCausticHwLoadVertexAttrib(material.meshSlot, i0);
         const NwbCausticHwVertexAttrib a1 = nwbCausticHwLoadVertexAttrib(material.meshSlot, i1);

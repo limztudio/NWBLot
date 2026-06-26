@@ -224,14 +224,15 @@ struct NwbCausticSwVertexAttrib{
 };
 
 NwbCausticSwVertexAttrib nwbCausticSwLoadVertexAttrib(const uint meshIndex, const uint vertexIndex){
-    const uint base = vertexIndex * 16u;
-    const uint2 packedNormal = g_NwbCausticSwMeshAttributes[meshIndex].Load2(base);
+    // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- a single memory request
+    // instead of two dependent Load2s (bit-identical result, lower latency in the refractive-hit path).
+    const uint4 packed = g_NwbCausticSwMeshAttributes[meshIndex].Load4(vertexIndex * 16u);
     NwbCausticSwVertexAttrib attrib;
     attrib.normal = float3(
-        nwbUnpackHalf2x16(packedNormal.x),
-        nwbUnpackHalf2x16(packedNormal.y).x
+        nwbUnpackHalf2x16(packed.x),
+        nwbUnpackHalf2x16(packed.y).x
     );
-    attrib.uv0 = asfloat(g_NwbCausticSwMeshAttributes[meshIndex].Load2(base + 8u));
+    attrib.uv0 = asfloat(packed.zw);
     return attrib;
 }
 
@@ -269,9 +270,11 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
         if(nwbBvhNodeIsLeaf(node)){
             const uint triangle = nwbBvhLeafPrimitive(node);
             const uint indexBase = triangle * 3u;
-            const uint i0 = g_NwbCausticSwMeshIndices[meshIndex].Load(indexBase * 4u);
-            const uint i1 = g_NwbCausticSwMeshIndices[meshIndex].Load((indexBase + 1u) * 4u);
-            const uint i2 = g_NwbCausticSwMeshIndices[meshIndex].Load((indexBase + 2u) * 4u);
+            // The 3 triangle indices are contiguous -> one Load3 instead of three Loads (bit-identical, one request).
+            const uint3 triIndices = g_NwbCausticSwMeshIndices[meshIndex].Load3(indexBase * 4u);
+            const uint i0 = triIndices.x;
+            const uint i1 = triIndices.y;
+            const uint i2 = triIndices.z;
             const float3 v0 = asfloat(g_NwbCausticSwMeshPositions[meshIndex].Load3(i0 * 12u));
             const float3 v1 = asfloat(g_NwbCausticSwMeshPositions[meshIndex].Load3(i1 * 12u));
             const float3 v2 = asfloat(g_NwbCausticSwMeshPositions[meshIndex].Load3(i2 * 12u));

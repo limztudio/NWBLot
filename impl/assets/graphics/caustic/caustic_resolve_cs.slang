@@ -17,11 +17,13 @@
 // a deterministic stratified distribution (no per-frame jitter), so a static scene is flicker-free without temporal
 // averaging, and the wavelet's geometry edge-stop keeps the smoothing bounded to the receiver surface.
 //
-// First pass (stepWidth==1 carries isFirstPass): reads the R32_UINT splat accumulator, un-scales it, AREA-NORMALIZES
-// (flux density -> irradiance: divide by the receiver area subtended per pixel, the density->brightness conversion) and
-// applies the single causticIntensity exposure, then performs the wavelet step. Later passes read the previous pass's
-// RGBA16F color and only perform the wavelet step at a doubled dilation (stepWidth 2,4,8,16). The ping-pong is driven
-// from C++: input/output binding sets swap each pass; the FINAL pass lands in the irradiance buffer the lighting adds.
+// Pass 0 (isFirstPass = the PREPARE pass): reads the R32_UINT splat accumulator, un-scales it, AREA-NORMALIZES (flux
+// density -> irradiance: divide by the receiver area subtended per pixel, the density->brightness conversion) and applies
+// the single causticIntensity exposure -- ONCE per pixel into the float buffer (NO wavelet here). The N wavelet passes
+// then read the previous pass's RGBA16F color and perform the edge-avoiding wavelet step at a doubling dilation
+// (stepWidth 1,2,4,8,16). Splitting the normalize out of the wavelet avoids re-normalizing the accumulator for every one
+// of the wavelet's 25 taps (the old fused first pass did). The ping-pong is driven from C++: input/output binding sets
+// swap each pass; the FINAL wavelet pass lands in the irradiance buffer the lighting adds.
 
 [[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR, NWB_CAUSTIC_RESOLVE_SET)]]
 Texture2DArray<uint> g_NwbCausticResolveAccumulator;
@@ -80,21 +82,11 @@ float nwbCausticResolvePixelArea(const int2 pixel){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-pixel caustic irradiance for the wavelet input. First pass: un-scale the per-channel fixed-point accumulator,
-// area-normalize (flux density -> irradiance) and apply the exposure. Later passes: read the previous pass's color.
-// Background pixels (no receiver) carry no caustic -> zero.
+// The wavelet input at a tap = the previous pass's (already area-normalized) float color. The PREPARE pass (main, when
+// isFirstPass) did the un-scale + area-normalize + exposure once per pixel into this buffer, so the wavelet only reads
+// it -- no per-tap re-normalize, no per-tap accumulator/depth Loads. Callers (the tap loop) already skip background taps
+// via the depth test, so this reads only receiver taps whose buffer value is the normalized irradiance.
 float3 nwbCausticResolveSampleInput(const int2 texel){
-    if(g_NwbCausticResolveGBufferDepth.Load(int3(texel, 0)).r >= 0.999999)
-        return float3(0.0, 0.0, 0.0);
-    if(g_NwbCausticResolvePushConstants.isFirstPass != 0u){
-        const float3 flux = float3(
-            (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 0, 0)).r,
-            (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 1, 0)).r,
-            (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 2, 0)).r
-        ) / NWB_CAUSTIC_FIXED_POINT_SCALE;
-        const float area = nwbCausticResolvePixelArea(texel);
-        return flux / area * g_NwbCausticResolvePushConstants.causticIntensity;
-    }
     return g_NwbCausticResolveInputColor.Load(int3(texel, 0)).rgb;
 }
 
@@ -116,6 +108,22 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // that later becomes a receiver starts from black.
     if(g_NwbCausticResolveGBufferDepth.Load(int3(texel, 0)).r >= 0.999999){
         g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
+    // PREPARE pass (isFirstPass): un-scale the per-channel fixed-point accumulator, area-normalize (flux density ->
+    // irradiance via the per-pixel screen->receiver area Jacobian) and apply the exposure -- ONCE per pixel, into the
+    // float buffer the subsequent wavelet passes read. This replaces re-normalizing per wavelet tap (the old first pass
+    // did the normalize for all 25 taps -> ~25x the accumulator/area Loads); the wavelet output is identical because
+    // the wavelet then operates on exactly these normalized values.
+    if(g_NwbCausticResolvePushConstants.isFirstPass != 0u){
+        const float3 flux = float3(
+            (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 0, 0)).r,
+            (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 1, 0)).r,
+            (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 2, 0)).r
+        ) / NWB_CAUSTIC_FIXED_POINT_SCALE;
+        const float area = nwbCausticResolvePixelArea(texel);
+        g_NwbCausticResolveOutput[pixel] = float4(flux / area * g_NwbCausticResolvePushConstants.causticIntensity, 1.0);
         return;
     }
 

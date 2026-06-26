@@ -57,9 +57,13 @@
 #include "../shadow/sw_binding_slots.h"
 #define NWB_CAUSTIC_SW_MAX_MESHES NWB_SW_SHADOW_MAX_MESHES
 
-// Per-thread traversal stack depths (mirroring the SW shadow trace). The scene/instance BVH is shallow; the
-// per-mesh triangle BVH is deeper. A deeper subtree is conservatively treated as a hit-blocker rather than skipped.
-#define NWB_CAUSTIC_SW_SCENE_STACK_SIZE 32
+// Per-thread traversal stack depths. With the FRONT-TO-BACK ordered descent (caustic_photon_sw_cs.slang) only the
+// deferred FAR child is pushed per internal node, so the live stack depth is <= the BVH tree depth. The scene/instance
+// BVH is shallow -- depth ~log2(instanceCount), so 16 covers ~65k instances with headroom (down from 32 -> 64 fewer
+// bytes/thread). The per-mesh triangle BVH stays 64: it must cover the deepest mesh (e.g. the 77706-tri skinned char,
+// + LBVH imbalance headroom up to the 256K-tri cap); if a subtree ever over-runs, the far child is dropped (a missed
+// hit, never a corruption).
+#define NWB_CAUSTIC_SW_SCENE_STACK_SIZE 16
 #define NWB_CAUSTIC_SW_MESH_STACK_SIZE 64
 
 // DBG-SAFE REFERENCE photon budget. The ACTUAL per-frame count is config-scaled in C++ (s_CausticPhotonGridSide,

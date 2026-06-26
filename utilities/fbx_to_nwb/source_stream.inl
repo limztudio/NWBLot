@@ -26,6 +26,15 @@ Vec4 ToVec4(const ufbx_vec4 value){
     };
 }
 
+SIMDVector ToVector(const ufbx_vec3 value, const f32 w = 0.0f){
+    return VectorSet(
+        static_cast<f32>(value.x),
+        static_cast<f32>(value.y),
+        static_cast<f32>(value.z),
+        w
+    );
+}
+
 struct SourceTriangleCorner{
     Vec3 position;
     Vec3 normal;
@@ -229,22 +238,44 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     };
 }
 
-[[nodiscard]] TriangleAreaNormal64 BuildTriangleAreaNormal64(const Vec3& a, const Vec3& b, const Vec3& c){
+template<typename Vector3Like>
+[[nodiscard]] TriangleAreaNormal64 BuildTriangleAreaNormal64(const Vector3Like& a, const Vector3Like& b, const Vector3Like& c){
     const f64 abX = static_cast<f64>(b.x) - static_cast<f64>(a.x);
     const f64 abY = static_cast<f64>(b.y) - static_cast<f64>(a.y);
     const f64 abZ = static_cast<f64>(b.z) - static_cast<f64>(a.z);
     const f64 acX = static_cast<f64>(c.x) - static_cast<f64>(a.x);
     const f64 acY = static_cast<f64>(c.y) - static_cast<f64>(a.y);
     const f64 acZ = static_cast<f64>(c.z) - static_cast<f64>(a.z);
+#if defined(NWB_HAS_SSE4)
+    const __m128d xy = _mm_sub_pd(
+        _mm_mul_pd(_mm_set_pd(abZ, abY), _mm_set_pd(acX, acZ)),
+        _mm_mul_pd(_mm_set_pd(abX, abZ), _mm_set_pd(acZ, acY))
+    );
+    const __m128d zProducts = _mm_mul_pd(_mm_set_pd(abY, abX), _mm_set_pd(acX, acY));
+    const __m128d z = _mm_sub_sd(zProducts, _mm_unpackhi_pd(zProducts, zProducts));
+    return TriangleAreaNormal64{
+        _mm_cvtsd_f64(xy),
+        _mm_cvtsd_f64(_mm_unpackhi_pd(xy, xy)),
+        _mm_cvtsd_f64(z),
+    };
+#else
     return TriangleAreaNormal64{
         abY * acZ - abZ * acY,
         abZ * acX - abX * acZ,
         abX * acY - abY * acX,
     };
+#endif
 }
 
 [[nodiscard]] f64 TriangleAreaNormalLengthSquared(const TriangleAreaNormal64& areaNormal){
+#if defined(NWB_HAS_SSE4)
+    const __m128d xy = _mm_set_pd(areaNormal.y, areaNormal.x);
+    const __m128d xySquared = _mm_mul_pd(xy, xy);
+    const __m128d xySum = _mm_add_sd(xySquared, _mm_unpackhi_pd(xySquared, xySquared));
+    return _mm_cvtsd_f64(xySum) + areaNormal.z * areaNormal.z;
+#else
     return areaNormal.x * areaNormal.x + areaNormal.y * areaNormal.y + areaNormal.z * areaNormal.z;
+#endif
 }
 
 [[nodiscard]] bool TriangleHasArea(
@@ -259,7 +290,7 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     return areaLengthSquared > triangleAreaLengthSquaredEpsilon;
 }
 
-[[nodiscard]] Vec3 LoadCornerOutputPosition(
+[[nodiscard]] SIMDVector BuildCornerOutputPositionVector(
     const ufbx_mesh& mesh,
     const ufbx_node& node,
     const ImportOptions& options,
@@ -279,12 +310,10 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
         position = ufbx_get_vertex_vec3(&mesh.vertex_position, cornerIndex);
     }
 
-    Vec3 outputPosition = ToVec3(position);
-    StoreFloat(VectorScale(LoadFloat(outputPosition), static_cast<f32>(options.scale)), &outputPosition);
-    return outputPosition;
+    return VectorScale(ToVector(position), static_cast<f32>(options.scale));
 }
 
-[[nodiscard]] Vec3 LoadCornerOutputNormal(
+[[nodiscard]] SIMDVector BuildCornerOutputNormalVector(
     const ufbx_mesh& mesh,
     const ufbx_matrix& normalToWorld,
     const ImportOptions& options,
@@ -304,20 +333,20 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
         normal = ufbx_get_vertex_vec3(&mesh.vertex_normal, cornerIndex);
     }
 
-    Vec3 outputNormal = ToVec3(normal);
-    if(!Normalize(outputNormal))
-        outputNormal = Vec3{ 0.0f, 0.0f, 1.0f };
+    SIMDVector outputNormal;
+    if(!Normalize(ToVector(normal), outputNormal))
+        outputNormal = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
     return outputNormal;
 }
 
-[[nodiscard]] bool LoadCornerOutputTangent(
+[[nodiscard]] bool BuildCornerOutputTangentVector(
     const ufbx_mesh& mesh,
     const ufbx_matrix& normalToWorld,
     const ImportOptions& options,
     const bool wantsSkinning,
     const u32 cornerIndex,
-    const Vec3& normal,
-    Vec4& outTangent
+    const SIMDVector normal,
+    SIMDVector& outTangent
 ){
     if(!mesh.vertex_tangent.exists)
         return false;
@@ -326,8 +355,8 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
         tangent = ufbx_transform_direction(&normalToWorld, tangent);
 
-    Vec3 outputTangent = ToVec3(tangent);
-    if(!Normalize(outputTangent))
+    SIMDVector outputTangent;
+    if(!Normalize(ToVector(tangent), outputTangent))
         return false;
 
     f32 sign = 1.0f;
@@ -336,15 +365,15 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
         if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
             bitangent = ufbx_transform_direction(&normalToWorld, bitangent);
 
-        Vec3 outputBitangent = ToVec3(bitangent);
-        if(Normalize(outputBitangent)){
-            const SIMDVector tangentSpaceBitangent = Vector3Cross(LoadFloat(normal), LoadFloat(outputTangent));
-            const SIMDVector bitangentDot = Vector3Dot(tangentSpaceBitangent, LoadFloat(outputBitangent));
+        SIMDVector outputBitangent;
+        if(Normalize(ToVector(bitangent), outputBitangent)){
+            const SIMDVector tangentSpaceBitangent = Vector3Cross(normal, outputTangent);
+            const SIMDVector bitangentDot = Vector3Dot(tangentSpaceBitangent, outputBitangent);
             sign = VectorGetX(bitangentDot) < 0.0f ? -1.0f : 1.0f;
         }
     }
 
-    outTangent = Vec4{ outputTangent.x, outputTangent.y, outputTangent.z, sign };
+    outTangent = VectorSetW(outputTangent, sign);
     return true;
 }
 
@@ -418,22 +447,16 @@ template<typename Value, typename Lookup>
     using RebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
 
     outTangentReport = SourceTangentReport{};
-    if(mesh.vertexRefs.empty() || mesh.indices.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh has no source vertices for tangent generation"));
-        return false;
-    }
-    if((mesh.indices.size() % 3u) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh index stream must contain whole triangles for tangent generation"));
-        return false;
-    }
+    NWB_ASSERT(!mesh.vertexRefs.empty());
+    NWB_ASSERT(!mesh.indices.empty());
+    NWB_ASSERT((mesh.indices.size() % 3u) == 0u);
 
     UtilityVector<RebuildVertex> rebuildVertices;
     rebuildVertices.reserve(mesh.vertexRefs.size());
     for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(ref.position >= mesh.positions.size() || ref.normal >= mesh.normals.size() || ref.uv0 >= mesh.uv0.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh vertex_ref references an out-of-range stream while generating tangents"));
-            return false;
-        }
+        NWB_ASSERT(ref.position < mesh.positions.size());
+        NWB_ASSERT(ref.normal < mesh.normals.size());
+        NWB_ASSERT(ref.uv0 < mesh.uv0.size());
 
         const Vec3& position = mesh.positions[ref.position];
         const Vec3& normal = mesh.normals[ref.normal];
@@ -451,21 +474,16 @@ template<typename Value, typename Lookup>
         const u32 i0 = mesh.indices[indexBase + 0u];
         const u32 i1 = mesh.indices[indexBase + 1u];
         const u32 i2 = mesh.indices[indexBase + 2u];
-        if(i0 >= rebuildVertices.size() || i1 >= rebuildVertices.size() || i2 >= rebuildVertices.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh index stream references an out-of-range vertex_ref while generating tangents"));
-            return false;
-        }
+        NWB_ASSERT(i0 < rebuildVertices.size());
+        NWB_ASSERT(i1 < rebuildVertices.size());
+        NWB_ASSERT(i2 < rebuildVertices.size());
         if(i0 == i1 || i0 == i2 || i1 == i2)
             continue;
 
         const Float4& p0 = rebuildVertices[i0].position;
         const Float4& p1 = rebuildVertices[i1].position;
         const Float4& p2 = rebuildVertices[i2].position;
-        const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(
-            Vec3(p0.x, p0.y, p0.z),
-            Vec3(p1.x, p1.y, p1.z),
-            Vec3(p2.x, p2.y, p2.z)
-        );
+        const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(p0, p1, p2);
         const f64 areaLengthSquared = TriangleAreaNormalLengthSquared(areaNormal);
         if(!IsFinite(areaLengthSquared) || areaLengthSquared <= static_cast<f64>(Core::Mesh::s_FrameDirectionEpsilon))
             continue;
@@ -493,12 +511,12 @@ template<typename Value, typename Lookup>
         const Vec3& storedNormal = mesh.normals[ref.normal];
         const Float4& storedTangent = rebuildVertices[vertexRefIndex].tangent;
         const SIMDVector normal = Core::Mesh::FrameNormalizeDirection(
-            VectorSet(storedNormal.x, storedNormal.y, storedNormal.z, 0.0f),
+            LoadFloat(storedNormal),
             VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
         );
         const SIMDVector tangent = Core::Mesh::FrameResolveTangent(
             normal,
-            VectorSet(storedTangent.x, storedTangent.y, storedTangent.z, 0.0f),
+            VectorSetW(LoadFloat(storedTangent), 0.0f),
             Core::Mesh::FrameFallbackTangent(normal)
         );
         if(!Core::Mesh::FrameValidDirection(tangent)){
@@ -507,12 +525,8 @@ template<typename Value, typename Lookup>
         }
 
         const f32 handedness = Core::Mesh::FrameTangentHandedness(rebuildVertices[vertexRefIndex].tangent.w, 1.0f);
-        const Vec4 generatedTangent(
-            VectorGetX(tangent),
-            VectorGetY(tangent),
-            VectorGetZ(tangent),
-            handedness
-        );
+        Vec4 generatedTangent;
+        StoreFloat(VectorSetW(tangent, handedness), &generatedTangent);
         if(!InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, "tangent", ref.tangent))
             return false;
     }

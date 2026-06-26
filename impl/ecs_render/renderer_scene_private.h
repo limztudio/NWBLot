@@ -42,20 +42,27 @@ NWB_INLINE f32 ResolveFramebufferAspectRatio(const Core::FramebufferInfoEx& fram
 // local lights are weighted by their influence range relative to the camera distance (a squared proxy --
 // monotonic, no sqrt). Higher = more worth a scarce shadow slot.
 inline f32 ShadowSlotImportance(const SceneLightGpuData& light, const Float4& cameraPosition){
-    const f32 luminance = 0.2126f * light.colorIntensity.x + 0.7152f * light.colorIntensity.y + 0.0722f * light.colorIntensity.z;
-    const f32 intensity = light.colorIntensity.w > 0.f ? light.colorIntensity.w : 0.f;
-    const f32 radiantImportance = luminance * intensity;
+    const SIMDVector colorIntensity = LoadFloat(light.colorIntensity);
+    const SIMDVector params = LoadFloat(light.params);
+    const SIMDVector luminance = Vector3Dot(colorIntensity, VectorSet(0.2126f, 0.7152f, 0.0722f, 0.0f));
+    const SIMDVector intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
+    const SIMDVector radiantImportance = VectorMultiply(luminance, intensity);
 
-    if(light.params.y < 0.5f)
-        return radiantImportance * 4.f + 1.f;
+    if(VectorGetY(params) < 0.5f)
+        return VectorGetX(VectorMultiplyAdd(radiantImportance, VectorReplicate(4.0f), s_SIMDOne));
 
-    const f32 dx = light.position.x - cameraPosition.x;
-    const f32 dy = light.position.y - cameraPosition.y;
-    const f32 dz = light.position.z - cameraPosition.z;
-    const f32 distanceSquared = dx * dx + dy * dy + dz * dz;
-    const f32 range = light.params.x > 0.f ? light.params.x : 0.f;
-    const f32 coverageSquared = (distanceSquared > 1e-4f) ? ((range * range) / distanceSquared) : 1.f;
-    return radiantImportance * (coverageSquared < 1.f ? coverageSquared : 1.f);
+    const SIMDVector delta = VectorSubtract(LoadFloat(light.position), LoadFloat(cameraPosition));
+    const SIMDVector distanceSquared = Vector3LengthSq(delta);
+    const SIMDVector range = VectorMax(VectorSplatX(params), VectorZero());
+    const SIMDVector rangeSquared = VectorMultiply(range, range);
+    const SIMDVector hasDistance = VectorGreater(distanceSquared, VectorReplicate(1e-4f));
+    const SIMDVector safeDistanceSquared = VectorSelect(s_SIMDOne, distanceSquared, hasDistance);
+    const SIMDVector coverageSquared = VectorSelect(
+        s_SIMDOne,
+        VectorDivide(rangeSquared, safeDistanceSquared),
+        hasDistance
+    );
+    return VectorGetX(VectorMultiply(radiantImportance, VectorMin(coverageSquared, s_SIMDOne)));
 }
 
 inline u32 ResolveSceneLights(Core::ECS::World& world, SceneLightGpuData* outLights, const u32 maxLights){

@@ -3,7 +3,8 @@
 
 
 #include "internal.h"
-#include "io_win32.h"
+
+#include <global/blocking_io.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -52,7 +53,7 @@ static void __hidden_drain_pending_acks(const HANDLE ackReadHandle)noexcept{
             return;
 
         Detail::CrashAck ignoredAck;
-        if(!Detail::ReadAllWin32(ackReadHandle, &ignoredAck, sizeof(ignoredAck)))
+        if(!ReadAllWin32Handle(ackReadHandle, &ignoredAck, sizeof(ignoredAck)))
             return;
     }
 }
@@ -191,7 +192,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
         if(g_State.crashHandledEvent)
             ResetEvent(g_State.crashHandledEvent);
 
-        if(!Detail::WriteAllWin32(g_State.requestWriteHandle, &request, sizeof(request))){
+        if(!WriteAllWin32Handle(g_State.requestWriteHandle, &request, sizeof(request))){
             status = CrashDumpTransportStatus::Failed;
             break;
         }
@@ -208,7 +209,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
         const DWORD waitResult = WaitForMultipleObjects(waitCount, waitHandles, FALSE, waitMilliseconds);
         if(waitResult == WAIT_OBJECT_0){
             CrashAck ack;
-            if(!Detail::ReadAllWin32(g_State.ackReadHandle, &ack, sizeof(ack))){
+            if(!ReadAllWin32Handle(g_State.ackReadHandle, &ack, sizeof(ack))){
                 status = CrashDumpTransportStatus::Failed;
                 break;
             }

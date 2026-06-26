@@ -103,9 +103,32 @@ void MeshSkinningSystem::update(Core::ECS::World& world, const f32 delta){
     static_cast<void>(delta);
 }
 
+bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
+    static_cast<void>(sampleCount);
+    if(width == 0 || height == 0)
+        return true;
+
+    return ensureFrameCommandList();
+}
+
+bool MeshSkinningSystem::ensureFrameCommandList(){
+    auto* device = m_graphics.getDevice();
+    if(!device)
+        return false;
+
+    if(!m_renderCommandList){
+        m_renderCommandList = device->createCommandList();
+        if(!m_renderCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create render command list"));
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
-    m_renderCommandList.reset();
 
     m_runtimeMeshCache.prepareResources(m_world);
     pruneRuntimeResources();
@@ -141,13 +164,8 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     if(!ready || !hasRenderWork)
         return ready;
 
-    auto* device = m_graphics.getDevice();
-    if(!device)
-        return false;
-
-    m_renderCommandList = device->createCommandList();
     if(!m_renderCommandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create prepared render command list"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: render command list was not validated"));
         return false;
     }
 
@@ -228,7 +246,7 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
 
     auto* device = m_graphics.getDevice();
-    Core::CommandListHandle commandList = Move(m_renderCommandList);
+    Core::CommandList* commandList = m_renderCommandList.get();
     if(!commandList)
         return;
 
@@ -265,7 +283,7 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
     commandList->close();
 
     if(submittedWork){
-        Core::CommandList* commandLists[] = { commandList.get() };
+        Core::CommandList* commandLists[] = { commandList };
         device->executeCommandLists(commandLists, 1);
     }
 }

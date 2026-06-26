@@ -52,9 +52,7 @@ ConstantBuffer<NwbAvboitDrawPushConstants> g_NwbAvboitDraw;
 #include "../csg/pixel_runtime.slangi"
 #if NWB_CSG_INTERVAL_SAMPLE_ENABLED
 #define NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED 1
-#define NWB_MESH_SET NWB_CSG_INTERVAL_SAMPLE_SET
 #include "../csg/interval_sample.slangi"
-#undef NWB_MESH_SET
 #undef NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
 #endif
 #undef NWB_CSG_MESH_INSTANCE_INDEX

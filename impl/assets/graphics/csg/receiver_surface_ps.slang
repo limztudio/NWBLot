@@ -6,9 +6,7 @@
 #include "pixel_runtime.slangi"
 
 #define NWB_CSG_RECEIVER_EVENTS_WRITABLE 1
-#define NWB_MESH_SET NWB_CSG_INTERVAL_SAMPLE_SET
 #include "interval_sample.slangi"
-#undef NWB_MESH_SET
 #undef NWB_CSG_RECEIVER_EVENTS_WRITABLE
 
 

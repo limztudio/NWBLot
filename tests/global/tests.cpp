@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <global/binary.h>
+#include <global/blocking_io.h>
 #include <global/compile.h>
 #include <global/containers.h>
 #include <global/diagnostics.h>
@@ -215,6 +216,19 @@ TEST(Global, TextUtilityHelpers){
     EXPECT_FALSE(StartsWith(AStringView("alpha"), AStringView("beta")));
     EXPECT_FALSE(StartsWith(AStringView("al"), AStringView("alpha")));
 
+    AString jsonText;
+    AppendJsonQuotedText(jsonText, AStringView("a\"b\\c\n\t"));
+    EXPECT_EQ(jsonText, AString("\"a\\\"b\\\\c\\n\\t\""));
+    EXPECT_EQ(MakeJsonEscapedText<AString>(AStringView("a\rb")), AString("a\\rb"));
+
+    AString csvCell;
+    AppendCsvCell(csvCell, AStringView("alpha,b\"eta"));
+    EXPECT_EQ(csvCell, AString("\"alpha,b\"\"eta\""));
+
+    AString dotText;
+    AppendDotQuotedText(dotText, AStringView("node\"\\\n"));
+    EXPECT_EQ(dotText, AString("\"node\\\"\\\\\\n\""));
+
     u64 value = 0u;
     EXPECT_TRUE(ParseVariableHexU64(AStringView("0x10"), value));
     EXPECT_EQ(value, 16u);
@@ -235,6 +249,23 @@ TEST(Global, TextUtilityHelpers){
     EXPECT_TRUE(FindLineKeyValueU64(s_KeyValueText, "beta", value));
     EXPECT_EQ(value, 42u);
 }
+
+#if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+TEST(Global, BlockingFileDescriptorRoundTrip){
+    int fds[2] = { -1, -1 };
+    ASSERT_EQ(::pipe(fds), 0);
+
+    const char written[] = "global blocking io";
+    char read[sizeof(written)] = {};
+
+    EXPECT_TRUE(WriteAllFileDescriptor(fds[1], written, sizeof(written)));
+    EXPECT_TRUE(ReadAllFileDescriptor(fds[0], read, sizeof(read)));
+    EXPECT_EQ(AStringView(read, sizeof(read)), AStringView(written, sizeof(written)));
+
+    ::close(fds[0]);
+    ::close(fds[1]);
+}
+#endif
 
 TEST(Global, FilesystemMovePathToDirectory){
     NWB::Tests::TestArena<> testArena;

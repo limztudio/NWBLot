@@ -7,15 +7,14 @@
 #include <cstdlib>
 
 #if defined(NWB_PLATFORM_WINDOWS)
-#include "io_win32.h"
+#include <global/blocking_io.h>
 #if defined(_MSC_VER) && !defined(NDEBUG)
 #include <crtdbg.h>
 #endif
 #include <windows.h>
 #elif defined(NWB_PLATFORM_LINUX)
-#include <errno.h>
+#include <global/blocking_io.h>
 #include <signal.h>
-#include <unistd.h>
 #endif
 
 
@@ -72,46 +71,6 @@ static Detail::CrashAck __hidden_make_ack(const Detail::CrashRequest& request, c
     return ack;
 }
 
-#if defined(NWB_PLATFORM_LINUX)
-[[nodiscard]] static bool __hidden_read_all(const int fd, void* const data, const usize byteCount)noexcept{
-    u8* cursor = static_cast<u8*>(data);
-    usize remaining = byteCount;
-    while(remaining > 0u){
-        const ssize_t bytesRead = read(fd, cursor, remaining);
-        if(bytesRead < 0){
-            if(errno == EINTR)
-                continue;
-            return false;
-        }
-        if(bytesRead == 0)
-            return false;
-
-        cursor += static_cast<usize>(bytesRead);
-        remaining -= static_cast<usize>(bytesRead);
-    }
-    return true;
-}
-
-[[nodiscard]] static bool __hidden_write_all(const int fd, const void* const data, const usize byteCount)noexcept{
-    const u8* cursor = static_cast<const u8*>(data);
-    usize remaining = byteCount;
-    while(remaining > 0u){
-        const ssize_t bytesWritten = write(fd, cursor, remaining);
-        if(bytesWritten < 0){
-            if(errno == EINTR)
-                continue;
-            return false;
-        }
-        if(bytesWritten == 0)
-            return false;
-
-        cursor += static_cast<usize>(bytesWritten);
-        remaining -= static_cast<usize>(bytesWritten);
-    }
-    return true;
-}
-#endif
-
 static void __hidden_silence_process()noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
@@ -161,7 +120,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
 
     for(;;){
         Detail::CrashRequest request;
-        if(!Detail::ReadAllWin32(requestReadHandle, &request, sizeof(request)))
+        if(!ReadAllWin32Handle(requestReadHandle, &request, sizeof(request)))
             break;
         // Defensive: reject a corrupt/interleaved request (writer serialization should prevent this).
         if(request.magic != Detail::s_RequestMagic || request.version != Detail::s_RequestVersion)
@@ -170,7 +129,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         const bool packageWritten = Detail::WriteCrashPackage(request);
         if(ackWriteHandle != INVALID_HANDLE_VALUE){
             const Detail::CrashAck ack = __hidden_crash_handler::__hidden_make_ack(request, packageWritten);
-            [[maybe_unused]] const bool ackWritten = Detail::WriteAllWin32(ackWriteHandle, &ack, sizeof(ack));
+            [[maybe_unused]] const bool ackWritten = WriteAllWin32Handle(ackWriteHandle, &ack, sizeof(ack));
         }
         if(ackEvent)
             SetEvent(ackEvent);
@@ -195,7 +154,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
 
     for(;;){
         Detail::CrashRequest request;
-        if(!__hidden_crash_handler::__hidden_read_all(requestReadFd, &request, sizeof(request)))
+        if(!ReadAllFileDescriptor(requestReadFd, &request, sizeof(request)))
             break;
         // Defensive: reject a corrupt/interleaved request (writer serialization should prevent this).
         if(request.magic != Detail::s_RequestMagic || request.version != Detail::s_RequestVersion)
@@ -204,7 +163,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         const bool packageWritten = Detail::WriteCrashPackage(request);
         if(ackWriteFd >= 0){
             const Detail::CrashAck ack = __hidden_crash_handler::__hidden_make_ack(request, packageWritten);
-            [[maybe_unused]] const bool ackWritten = __hidden_crash_handler::__hidden_write_all(ackWriteFd, &ack, sizeof(ack));
+            [[maybe_unused]] const bool ackWritten = WriteAllFileDescriptor(ackWriteFd, &ack, sizeof(ack));
         }
         if(packageWritten){
             [[maybe_unused]] const bool reportsFlushed = Detail::FlushCrashReportsForRequest(request);

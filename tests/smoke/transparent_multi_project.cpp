@@ -120,8 +120,8 @@ static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_m
     return QuaternionRotationRollPitchYaw(0.0f, time, 0.0f);
 }
 
-[[nodiscard]] static SIMDVector RotateTransparentBasePosition(const Float4& basePosition, const SIMDVector sceneRotation){
-    return Vector3Rotate(LoadFloat(basePosition), sceneRotation);
+[[nodiscard]] static SIMDVector RotateTransparentBasePosition(const SIMDVector basePosition, const SIMDVector sceneRotation){
+    return Vector3Rotate(basePosition, sceneRotation);
 }
 
 static void ApplyTransparentSceneTransform(
@@ -135,7 +135,7 @@ static void ApplyTransparentSceneTransform(
     if(!transform)
         return;
 
-    StoreFloat(RotateTransparentBasePosition(basePosition, sceneRotation), &transform->position);
+    StoreFloat(RotateTransparentBasePosition(LoadFloat(basePosition), sceneRotation), &transform->position);
     StoreFloat(QuaternionNormalize(QuaternionMultiply(sceneRotation, localRotation)), &transform->rotation);
 }
 
@@ -152,7 +152,7 @@ static void ApplyTransparentCsgSceneTransform(
     const SIMDVector sceneRotation,
     const SIMDVector localRotation
 ){
-    const SIMDVector receiverPosition = RotateTransparentBasePosition(TransparentCenterShapeBasePosition(), sceneRotation);
+    const SIMDVector receiverPosition = RotateTransparentBasePosition(LoadFloat(TransparentCenterShapeBasePosition()), sceneRotation);
     const SIMDVector receiverRotation = QuaternionNormalize(QuaternionMultiply(sceneRotation, localRotation));
 
     if(auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiverEntity)){

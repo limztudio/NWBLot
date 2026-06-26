@@ -33,10 +33,7 @@ template<typename VisitTriangle>
                 Swap(cornerIndices[1], cornerIndices[2]);
 
             for(const u32 cornerIndex : cornerIndices){
-                if(cornerIndex >= mesh.vertex_indices.count){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh corner references an out-of-range logical vertex"));
-                    return false;
-                }
+                NWB_ASSERT(cornerIndex < mesh.vertex_indices.count);
             }
 
             if(!visitTriangle(cornerIndices))
@@ -60,13 +57,13 @@ template<typename VisitTriangle>
     if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[3]){
         Vec3 positions[3] = {};
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < 3u; ++triangleCornerIndex){
-            positions[triangleCornerIndex] = LoadCornerOutputPosition(
+            StoreFloat(BuildCornerOutputPositionVector(
                 mesh,
                 node,
                 options,
                 wantsSkinning,
                 cornerIndices[triangleCornerIndex]
-            );
+            ), &positions[triangleCornerIndex]);
         }
 
         const TriangleAreaNormal64 areaNormal64 = BuildTriangleAreaNormal64(positions[0u], positions[1u], positions[2u]);
@@ -84,7 +81,9 @@ template<typename VisitTriangle>
             auto result = outNormals.emplace(key, areaNormal);
             if(!result.second){
                 Vec3& normal = result.first.value();
-                StoreFloat(VectorAdd(LoadFloat(normal), LoadFloat(areaNormal)), &normal);
+                normal.x += areaNormal.x;
+                normal.y += areaNormal.y;
+                normal.z += areaNormal.z;
             }
         }
         return true;
@@ -92,8 +91,12 @@ template<typename VisitTriangle>
         return false;
 
     for(auto it = outNormals.begin(); it != outNormals.end(); ++it){
-        if(!Normalize(it.value()))
+        SIMDVector normal;
+        if(!Normalize(LoadFloat(it.value()), normal)){
             NWB_LOGGER_WARNING(NWB_TEXT("Mesh build: degenerate accumulated vertex normal left un-normalized"));
+            continue;
+        }
+        StoreFloat(normal, &it.value());
     }
     return true;
 }
@@ -113,10 +116,8 @@ bool AppendInstanceMesh(
 ){
     ufbx_mesh* mesh = instance.mesh;
     ufbx_node* node = instance.node;
-    if(!mesh || !node){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: internal mesh instance is null"));
-        return false;
-    }
+    NWB_ASSERT(mesh != nullptr);
+    NWB_ASSERT(node != nullptr);
     if(!mesh->vertex_position.exists){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh is missing positions"));
         return false;
@@ -153,9 +154,12 @@ bool AppendInstanceMesh(
             const u32 logicalVertex = mesh->vertex_indices.data[cornerIndex];
 
             SourceTriangleCorner corner;
-            corner.position = LoadCornerOutputPosition(*mesh, *node, options, wantsSkinning, cornerIndex);
+            const SIMDVector position = BuildCornerOutputPositionVector(*mesh, *node, options, wantsSkinning, cornerIndex);
+            StoreFloat(position, &corner.position);
+
+            SIMDVector normal = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
             if(normalMode == NormalMode::Imported){
-                corner.normal = LoadCornerOutputNormal(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
+                normal = BuildCornerOutputNormalVector(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
             }
             else if(normalMode == NormalMode::Smooth){
                 auto foundNormal = smoothNormals.find(MakePositionKey(corner.position));
@@ -163,16 +167,12 @@ bool AppendInstanceMesh(
                     NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
-                Vec3 smoothNormal = foundNormal.value();
-                if(!Normalize(smoothNormal)){
+                if(!Normalize(LoadFloat(foundNormal.value()), normal)){
                     NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
-                corner.normal = smoothNormal;
             }
-            else{
-                corner.normal = Vec3{ 0.0f, 0.0f, 1.0f };
-            }
+            StoreFloat(normal, &corner.normal);
 
             if(importUvs){
                 corner.uv0 = ToVec2(ufbx_get_vertex_vec2(&mesh->vertex_uv, cornerIndex));
@@ -189,15 +189,18 @@ bool AppendInstanceMesh(
             }
 
             if(importTangents){
-                corner.hasTangent = LoadCornerOutputTangent(
+                SIMDVector tangent;
+                corner.hasTangent = BuildCornerOutputTangentVector(
                     *mesh,
                     normalToWorld,
                     options,
                     wantsSkinning,
                     cornerIndex,
-                    corner.normal,
-                    corner.tangent
+                    normal,
+                    tangent
                 );
+                if(corner.hasTangent)
+                    StoreFloat(tangent, &corner.tangent);
             }
 
             if(wantsSkinning){
@@ -227,12 +230,13 @@ bool AppendInstanceMesh(
                 static_cast<f32>(faceNormal64.y),
                 static_cast<f32>(faceNormal64.z),
             };
-            if(!Normalize(faceNormal)){
+            SIMDVector normalizedFaceNormal;
+            if(!Normalize(LoadFloat(faceNormal), normalizedFaceNormal)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to regenerate mesh face normal"));
                 return false;
             }
             for(SourceTriangleCorner& corner : triangleCorners)
-                corner.normal = faceNormal;
+                StoreFloat(normalizedFaceNormal, &corner.normal);
         }
 
         for(const SourceTriangleCorner& corner : triangleCorners){
@@ -258,8 +262,7 @@ bool EstimateSelectedTriangleCorners(
         }
 
         const ufbx_mesh* const mesh = instances[instanceIndex].mesh;
-        if(!mesh)
-            continue;
+        NWB_ASSERT(mesh != nullptr);
         if(mesh->num_triangles > (Limit<usize>::s_Max - outTriangleCorners) / 3u){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes have too many triangle corners"));
             return false;

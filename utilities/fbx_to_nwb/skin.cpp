@@ -64,10 +64,15 @@ JointMatrix ToJointMatrix(const ufbx_matrix& matrix){
 
 bool NearlyEqualJointMatrix(const JointMatrix& lhs, const JointMatrix& rhs){
     static constexpr f32 s_Epsilon = 0.0001f;
-    const SIMDVector epsilon = VectorReplicate(s_Epsilon);
     for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
-        const SIMDVector delta = VectorAbs(VectorSubtract(LoadFloat(lhs.rows[rowIndex]), LoadFloat(rhs.rows[rowIndex])));
-        if(!Vector4LessOrEqual(delta, epsilon))
+        const Vec4& lhsRow = lhs.rows[rowIndex];
+        const Vec4& rhsRow = rhs.rows[rowIndex];
+        if(
+            Abs(lhsRow.x - rhsRow.x) > s_Epsilon
+            || Abs(lhsRow.y - rhsRow.y) > s_Epsilon
+            || Abs(lhsRow.z - rhsRow.z) > s_Epsilon
+            || Abs(lhsRow.w - rhsRow.w) > s_Epsilon
+        )
             return false;
     }
     return true;
@@ -128,10 +133,8 @@ bool FindOrAddJoint(
     auto foundJoint = context.jointLookup.find(cluster->bone_node);
     if(foundJoint != context.jointLookup.end()){
         const usize jointIndex = static_cast<usize>(foundJoint.value());
-        if(jointIndex >= context.inverseBindMatrices.size() || jointIndex >= context.bindPoseMatrices.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: internal skeleton joint lookup is out of range"));
-            return false;
-        }
+        NWB_ASSERT(jointIndex < context.inverseBindMatrices.size());
+        NWB_ASSERT(jointIndex < context.bindPoseMatrices.size());
         if(!NearlyEqualJointMatrix(context.inverseBindMatrices[jointIndex], convertedMatrix)){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices")
                 , StringConvert(NodeDisplayName(cluster->bone_node))

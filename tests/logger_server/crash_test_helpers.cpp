@@ -112,7 +112,7 @@ void BeginArchiveWithManifest(
     const AStringView event,
     const AStringView reasonKind,
     const u64 reasonCode,
-    const ManifestEventField eventField,
+    const ManifestEventField::Enum eventField,
     const ManifestTriggerFields& trigger
 ){
     archive += CrashNames::s_ArchiveHeaderText;
@@ -127,7 +127,7 @@ CrashTestText BuildManifest(
     const AStringView event,
     const AStringView reasonKind,
     const u64 reasonCode,
-    const ManifestEventField eventField,
+    const ManifestEventField::Enum eventField,
     const ManifestTriggerFields& trigger
 ){
     CrashTestText manifest(arena);

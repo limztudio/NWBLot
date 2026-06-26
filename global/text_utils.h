@@ -214,6 +214,97 @@ inline std::ios_base& StreamHex(std::ios_base& stream){ return std::hex(stream);
 inline std::ios_base& StreamDec(std::ios_base& stream){ return std::dec(stream); }
 
 
+template<typename StringT>
+inline void AppendJsonEscapedText(StringT& out, const AStringView text){
+    for(const char ch : text){
+        switch(ch){
+        case '"':
+            out += "\\\"";
+            break;
+        case '\\':
+            out += "\\\\";
+            break;
+        case '\b':
+            out += "\\b";
+            break;
+        case '\f':
+            out += "\\f";
+            break;
+        case '\n':
+            out += "\\n";
+            break;
+        case '\r':
+            out += "\\r";
+            break;
+        case '\t':
+            out += "\\t";
+            break;
+        default:
+            if(static_cast<unsigned char>(ch) < 0x20u)
+                out += '?';
+            else
+                out += ch;
+            break;
+        }
+    }
+}
+
+template<typename StringT>
+inline void AppendJsonQuotedText(StringT& out, const AStringView text){
+    out += '"';
+    AppendJsonEscapedText(out, text);
+    out += '"';
+}
+
+template<typename StringT>
+[[nodiscard]] inline StringT MakeJsonEscapedText(const AStringView text){
+    StringT out;
+    out.reserve(text.size());
+    AppendJsonEscapedText(out, text);
+    return out;
+}
+
+template<typename StringT>
+inline void AppendCsvCell(StringT& out, const AStringView text){
+    bool quote = false;
+    for(const char ch : text){
+        if(ch == ',' || ch == '"' || ch == '\n' || ch == '\r'){
+            quote = true;
+            break;
+        }
+    }
+
+    if(!quote){
+        out.append(text.data(), text.size());
+        return;
+    }
+
+    out += '"';
+    for(const char ch : text){
+        if(ch == '"')
+            out += "\"\"";
+        else
+            out += ch;
+    }
+    out += '"';
+}
+
+template<typename StringT>
+inline void AppendDotQuotedText(StringT& out, const AStringView text){
+    out += '"';
+    for(const char ch : text){
+        if(ch == '\n'){
+            out += "\\n";
+            continue;
+        }
+        if(ch == '"' || ch == '\\')
+            out += '\\';
+        out += ch;
+    }
+    out += '"';
+}
+
+
 template<typename CharT, typename Traits, typename AllocatorT>
 [[nodiscard]] inline bool ReadTextLine(std::basic_istream<CharT, Traits>& stream, std::basic_string<CharT, Traits, AllocatorT>& outLine){
     return static_cast<bool>(std::getline(stream, outLine));

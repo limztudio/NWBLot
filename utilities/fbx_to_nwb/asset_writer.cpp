@@ -112,38 +112,23 @@ bool InvertJointMatrix(const SIMDMatrix& matrix, SIMDMatrix& outInverse){
 }
 
 bool BuildLocalBindPoseMatrix(
-    const JointMatrix& globalBindPose,
-    const JointMatrix* parentGlobalBindPose,
-    JointMatrix& outLocalBindPose
+    const SIMDMatrix& globalBindPose,
+    const SIMDMatrix* parentGlobalBindPose,
+    SIMDMatrix& outLocalBindPose
 ){
     if(!parentGlobalBindPose){
         outLocalBindPose = globalBindPose;
         return true;
     }
 
-    SIMDMatrix globalBindPoseMatrix{};
-    globalBindPoseMatrix.v[0u] = LoadFloat(globalBindPose.rows[0u]);
-    globalBindPoseMatrix.v[1u] = LoadFloat(globalBindPose.rows[1u]);
-    globalBindPoseMatrix.v[2u] = LoadFloat(globalBindPose.rows[2u]);
-    globalBindPoseMatrix.v[3u] = s_SIMDIdentityR3;
-
-    SIMDMatrix parentGlobalBindPoseMatrix{};
-    parentGlobalBindPoseMatrix.v[0u] = LoadFloat(parentGlobalBindPose->rows[0u]);
-    parentGlobalBindPoseMatrix.v[1u] = LoadFloat(parentGlobalBindPose->rows[1u]);
-    parentGlobalBindPoseMatrix.v[2u] = LoadFloat(parentGlobalBindPose->rows[2u]);
-    parentGlobalBindPoseMatrix.v[3u] = s_SIMDIdentityR3;
-
     SIMDMatrix parentInverse;
-    if(!InvertJointMatrix(parentGlobalBindPoseMatrix, parentInverse))
+    if(!InvertJointMatrix(*parentGlobalBindPose, parentInverse))
         return false;
 
-    const SIMDMatrix localBindPose = MatrixMultiply(parentInverse, globalBindPoseMatrix);
-    if(MatrixIsNaN(localBindPose) || MatrixIsInfinite(localBindPose))
+    outLocalBindPose = MatrixMultiply(parentInverse, globalBindPose);
+    if(MatrixIsNaN(outLocalBindPose) || MatrixIsInfinite(outLocalBindPose))
         return false;
 
-    StoreFloat(localBindPose.v[0u], &outLocalBindPose.rows[0u]);
-    StoreFloat(localBindPose.v[1u], &outLocalBindPose.rows[1u]);
-    StoreFloat(localBindPose.v[2u], &outLocalBindPose.rows[2u]);
     return true;
 }
 
@@ -387,11 +372,31 @@ bool BuildSkeletonOutputData(
             ? &bindPoseMatrices[parentIndex]
             : nullptr
         ;
-        JointMatrix localBindPose;
-        if(!BuildLocalBindPoseMatrix(bindPoseMatrices[oldJointIndex], parentGlobalBindPose, localBindPose)){
+        SIMDMatrix globalBindPoseMatrix{};
+        globalBindPoseMatrix.v[0u] = LoadFloat(bindPoseMatrices[oldJointIndex].rows[0u]);
+        globalBindPoseMatrix.v[1u] = LoadFloat(bindPoseMatrices[oldJointIndex].rows[1u]);
+        globalBindPoseMatrix.v[2u] = LoadFloat(bindPoseMatrices[oldJointIndex].rows[2u]);
+        globalBindPoseMatrix.v[3u] = s_SIMDIdentityR3;
+
+        SIMDMatrix parentGlobalBindPoseMatrix{};
+        const SIMDMatrix* parentGlobalBindPoseMatrixPtr = nullptr;
+        if(parentGlobalBindPose){
+            parentGlobalBindPoseMatrix.v[0u] = LoadFloat(parentGlobalBindPose->rows[0u]);
+            parentGlobalBindPoseMatrix.v[1u] = LoadFloat(parentGlobalBindPose->rows[1u]);
+            parentGlobalBindPoseMatrix.v[2u] = LoadFloat(parentGlobalBindPose->rows[2u]);
+            parentGlobalBindPoseMatrix.v[3u] = s_SIMDIdentityR3;
+            parentGlobalBindPoseMatrixPtr = &parentGlobalBindPoseMatrix;
+        }
+
+        SIMDMatrix localBindPoseMatrix;
+        if(!BuildLocalBindPoseMatrix(globalBindPoseMatrix, parentGlobalBindPoseMatrixPtr, localBindPoseMatrix)){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed to build local bind pose for joint '{}'"), StringConvert(sortNames[oldJointIndex]));
             return false;
         }
+        JointMatrix localBindPose;
+        StoreFloat(localBindPoseMatrix.v[0u], &localBindPose.rows[0u]);
+        StoreFloat(localBindPoseMatrix.v[1u], &localBindPose.rows[1u]);
+        StoreFloat(localBindPoseMatrix.v[2u], &localBindPose.rows[2u]);
 
         outData.oldToNewJointIndices[oldJointIndex] = static_cast<u16>(outData.joints.size());
         outData.joints.push_back(joints[oldJointIndex]);
@@ -553,17 +558,6 @@ bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
     return true;
 }
 
-AString EscapeMetadataString(AStringView text){
-    AString escaped;
-    escaped.reserve(text.size());
-    for(const char c : text){
-        if(c == '\\' || c == '"')
-            escaped.push_back('\\');
-        escaped.push_back(c);
-    }
-    return escaped;
-}
-
 AString NodeName(const ufbx_node* node, const usize fallbackIndex){
     AString name;
     if(node && node->name.data && node->name.length != 0u)
@@ -648,7 +642,7 @@ AString BuildVirtualBasePath(const Path& outputPath, AString virtualRoot){
 template<typename Stream>
 void WriteReferenceValue(Stream& file, const AStringView value, const bool quote){
     if(quote)
-        file << "\"" << EscapeMetadataString(value) << "\"";
+        file << "\"" << MakeJsonEscapedText<AString>(value) << "\"";
     else
         file << value;
 }
@@ -670,11 +664,12 @@ void WriteSkeletonAssetBody(
 
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         file << "    {\n";
-        file << "        \"name\": \"" << EscapeMetadataString(jointNames[jointIndex]) << "\",\n";
+        file << "        \"name\": \"" << MakeJsonEscapedText<AString>(AStringView(jointNames[jointIndex].data(), jointNames[jointIndex].size())) << "\",\n";
         if(joints[jointIndex] && joints[jointIndex]->parent){
             const auto foundParent = jointLookup.find(joints[jointIndex]->parent);
             if(foundParent != jointLookup.end()){
-                file << "        \"parent\": \"" << EscapeMetadataString(jointNames[foundParent.value()]) << "\",\n";
+                const AString& parentName = jointNames[foundParent.value()];
+                file << "        \"parent\": \"" << MakeJsonEscapedText<AString>(AStringView(parentName.data(), parentName.size())) << "\",\n";
             }
         }
         file << "        \"local_bind_pose\": ";

@@ -12,7 +12,20 @@
 #include "binding_slots.h"
 #include "constants.h"
 
+#ifndef NWB_CSG_INTERVAL_SAMPLE_MESH_VIEW_SET
+#define NWB_CSG_INTERVAL_SAMPLE_MESH_VIEW_SET NWB_CSG_INTERVAL_SAMPLE_SET
+#endif
+
+// Interval sampling shares the mesh camera view buffer, but binds it in the interval-sample descriptor set.
+#ifndef NWB_MESH_VIEW_SET
+#define NWB_MESH_VIEW_SET NWB_CSG_INTERVAL_SAMPLE_MESH_VIEW_SET
+#define NWB_CSG_INTERVAL_SAMPLE_DEFAULTED_MESH_VIEW_SET 1
+#endif
 #include "../mesh/view_buffer.slangi"
+#ifdef NWB_CSG_INTERVAL_SAMPLE_DEFAULTED_MESH_VIEW_SET
+#undef NWB_MESH_VIEW_SET
+#undef NWB_CSG_INTERVAL_SAMPLE_DEFAULTED_MESH_VIEW_SET
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

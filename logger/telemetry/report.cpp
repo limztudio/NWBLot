@@ -23,66 +23,6 @@ namespace __hidden_telemetry_report{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendJsonString(AString<TelemetryArena>& out, const AStringView text){
-    out += '"';
-    for(const char ch : text){
-        switch(ch){
-        case '"':
-            out += "\\\"";
-            break;
-        case '\\':
-            out += "\\\\";
-            break;
-        case '\b':
-            out += "\\b";
-            break;
-        case '\f':
-            out += "\\f";
-            break;
-        case '\n':
-            out += "\\n";
-            break;
-        case '\r':
-            out += "\\r";
-            break;
-        case '\t':
-            out += "\\t";
-            break;
-        default:
-            if(static_cast<unsigned char>(ch) < 0x20u)
-                out += '?';
-            else
-                out += ch;
-            break;
-        }
-    }
-    out += '"';
-}
-
-void AppendCsvCell(AString<TelemetryArena>& out, const AStringView text){
-    bool quote = false;
-    for(const char ch : text){
-        if(ch == ',' || ch == '"' || ch == '\n' || ch == '\r'){
-            quote = true;
-            break;
-        }
-    }
-
-    if(!quote){
-        out.append(text.data(), text.size());
-        return;
-    }
-
-    out += '"';
-    for(const char ch : text){
-        if(ch == '"')
-            out += "\"\"";
-        else
-            out += ch;
-    }
-    out += '"';
-}
-
 template<typename... Args>
 void AppendFormat(TelemetryArena& arena, AString<TelemetryArena>& out, AFormatString<Args...> fmt, Args&&... args){
     out += StringFormat(arena, fmt, Forward<Args>(args)...);
@@ -176,20 +116,6 @@ void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphP
 
 using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, TelemetryArena>;
 
-void AppendDotQuoted(AString<TelemetryArena>& out, const AStringView text){
-    out += '"';
-    for(const char ch : text){
-        if(ch == '\n'){
-            out += "\\n";
-            continue;
-        }
-        if(ch == '"' || ch == '\\')
-            out += '\\';
-        out += ch;
-    }
-    out += '"';
-}
-
 [[nodiscard]] const char* FrameGraphNodeShape(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
     switch(kind){
     case Telemetry::FrameGraphNodeKind::Resource:
@@ -237,13 +163,13 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
         }
 
         AppendFormat(arena, out, "  n{} [shape={}, label=", i, FrameGraphNodeShape(node.kind));
-        AppendDotQuoted(out, AStringView(label.data(), label.size()));
+        AppendDotQuotedText(out, AStringView(label.data(), label.size()));
         out += "];\n";
     }
 
     for(const Telemetry::FrameGraphEdgePayload& edge : graph.edges){
         AppendFormat(arena, out, "  n{} -> n{} [label=", edge.fromNodeIndex, edge.toNodeIndex);
-        AppendDotQuoted(out, AStringView(FrameGraphEdgeLabel(edge.kind)));
+        AppendDotQuotedText(out, AStringView(FrameGraphEdgeLabel(edge.kind)));
         out += "];\n";
     }
 
@@ -263,7 +189,7 @@ void BuildJson(TelemetryArena& arena, const TelemetryReportSummary& summary, ASt
     out += "  \"events\": {\n";
     for(usize i = 0u; i < s_TelemetryReportEventKindCount; ++i){
         out += "    ";
-        AppendJsonString(out, EventKindText(static_cast<Telemetry::EventKind::Enum>(i)));
+        AppendJsonQuotedText(out, EventKindText(static_cast<Telemetry::EventKind::Enum>(i)));
         AppendFormat(arena, out, ": {}{}", summary.eventKindCounts[i], i + 1u == s_TelemetryReportEventKindCount ? "\n" : ",\n");
     }
     out += "  },\n";

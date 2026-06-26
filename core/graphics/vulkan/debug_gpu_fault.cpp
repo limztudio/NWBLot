@@ -8,10 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// DEBUG / TEST ONLY. Deliberately faults the GPU to exercise the device-lost -> GPU crash capture path
-// (vendor-neutral diagnostics + NVIDIA Aftermath dump). Gated at the call site by the
-// NWB_DEBUG_GPU_FAULT_INJECTION environment value; never runs in normal execution. Remove this file
-// (and Device::debugTriggerGpuFault) to drop the hook entirely.
+// DEBUG / TEST ONLY. Deliberately faults the GPU to exercise the device-lost -> GPU crash capture path.
 #include "backend.h"
 
 #include <core/common/log.h>

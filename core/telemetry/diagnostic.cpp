@@ -159,14 +159,15 @@ bool RecordDiagnostic(
     const u64 frameIndex,
     const u32 streamId
 ){
-    if(!recorder.enabled(EventKind::Diagnostic))
-        return false;
-
-    TelemetryBytes payload(recorder.arena());
-    if(!BuildDiagnosticPayload(recorder.arena(), record, payload))
-        return false;
-
-    return recorder.recordBinary(EventKind::Diagnostic, frameIndex, payload.data(), payload.size(), streamId);
+    return Detail::RecordBuiltPayload(
+        recorder,
+        EventKind::Diagnostic,
+        frameIndex,
+        streamId,
+        [&record](TelemetryArena& arena, TelemetryBytes& payload){
+            return BuildDiagnosticPayload(arena, record, payload);
+        }
+    );
 }
 
 

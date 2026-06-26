@@ -22,7 +22,6 @@
 // surface.slangi) from the interpolated pixel inputs (inColor / inNormal / inTangent / inUv0 / inWorldPosition)
 // and its own logic. A material never writes the G-buffer targets or the model-id packing, and cannot get the
 // target layout wrong.
-//
 // Required per-material hook: every material's pixel shader MUST define nwbMaterialSurface(). There is no
 // engine default -- a material that omits it fails to link (the entry below references it). The world position
 // written to the G-buffer is the interpolated geometry position, owned by the engine.
@@ -43,3 +42,4 @@ NwbMeshGBufferOutput main(NwbMeshPixelInput input){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

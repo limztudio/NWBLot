@@ -45,36 +45,6 @@ static bool WriteCrashTextFile(const ::Path<ArenaT>& path, const CrashStringT<Ar
     return WriteTextFile(path, AStringView(text.data(), text.size()));
 }
 
-template<typename ArenaT>
-static void AppendJsonEscaped(CrashStringT<ArenaT>& out, const char* text){
-    out.push_back('"');
-    if(text){
-        for(const char* p = text; *p; ++p){
-            switch(*p){
-            case '\\':
-                out += "\\\\";
-                break;
-            case '"':
-                out += "\\\"";
-                break;
-            case '\n':
-                out += "\\n";
-                break;
-            case '\r':
-                out += "\\r";
-                break;
-            case '\t':
-                out += "\\t";
-                break;
-            default:
-                out.push_back(*p);
-                break;
-            }
-        }
-    }
-    out.push_back('"');
-}
-
 static const char* ArtifactStrategyName(const CrashRequest& request){
     switch(request.platform){
     case PlatformKind::Windows:
@@ -97,19 +67,19 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     manifest += PackageNames::s_ManifestFormatValue;
     manifest += "\",\n";
     manifest += "  \"crash_id\": ";
-    AppendJsonEscaped(manifest, request.crashId);
+    AppendJsonQuotedText(manifest, request.crashId);
     manifest += ",\n  \"application\": ";
-    AppendJsonEscaped(manifest, request.applicationName);
+    AppendJsonQuotedText(manifest, request.applicationName);
     manifest += ",\n  \"version\": ";
-    AppendJsonEscaped(manifest, request.versionText);
+    AppendJsonQuotedText(manifest, request.versionText);
     manifest += ",\n  \"build_id\": ";
-    AppendJsonEscaped(manifest, request.buildId);
+    AppendJsonQuotedText(manifest, request.buildId);
     manifest += ",\n  \"abi\": ";
-    AppendJsonEscaped(manifest, request.abi);
+    AppendJsonQuotedText(manifest, request.abi);
     manifest += ",\n  \"platform\": ";
-    AppendJsonEscaped(manifest, PlatformKindName(request.platform));
+    AppendJsonQuotedText(manifest, PlatformKindName(request.platform));
     manifest += ",\n  \"reason_kind\": ";
-    AppendJsonEscaped(manifest, ReasonKindName(request.reasonKind));
+    AppendJsonQuotedText(manifest, ReasonKindName(request.reasonKind));
     manifest += ",\n  \"reason_code\": ";
     AppendUnsignedText(manifest, request.reasonCode);
     manifest += ",\n  \"process_id\": ";
@@ -127,23 +97,23 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     manifest += ",\n  \"frame_pointer\": ";
     AppendUnsignedText(manifest, request.framePointer);
     manifest += ",\n  \"event\": ";
-    AppendJsonEscaped(manifest, request.event);
+    AppendJsonQuotedText(manifest, request.event);
     manifest += ",\n  \"trigger_category\": ";
-    AppendJsonEscaped(manifest, request.triggerCategory);
+    AppendJsonQuotedText(manifest, request.triggerCategory);
     manifest += ",\n  \"trigger_expression\": ";
-    AppendJsonEscaped(manifest, request.triggerExpression);
+    AppendJsonQuotedText(manifest, request.triggerExpression);
     manifest += ",\n  \"trigger_message\": ";
-    AppendJsonEscaped(manifest, request.triggerMessage);
+    AppendJsonQuotedText(manifest, request.triggerMessage);
     manifest += ",\n  \"trigger_file\": ";
-    AppendJsonEscaped(manifest, request.triggerFile);
+    AppendJsonQuotedText(manifest, request.triggerFile);
     manifest += ",\n  \"trigger_line\": ";
     AppendUnsignedText(manifest, request.triggerLine);
     manifest += ",\n  \"dump_detail_mode\": ";
-    AppendJsonEscaped(manifest, request.dumpDetailMode == DumpDetailMode::Full ? "full" : "small");
+    AppendJsonQuotedText(manifest, request.dumpDetailMode == DumpDetailMode::Full ? "full" : "small");
     manifest += ",\n  \"artifact_strategy\": ";
-    AppendJsonEscaped(manifest, ArtifactStrategyName(request));
+    AppendJsonQuotedText(manifest, ArtifactStrategyName(request));
     manifest += ",\n  \"handler_lifetime\": ";
-    AppendJsonEscaped(manifest, "client_ipc_lifetime");
+    AppendJsonQuotedText(manifest, "client_ipc_lifetime");
     manifest += "\n}\n";
     return manifest;
 }

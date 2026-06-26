@@ -12,8 +12,6 @@
 #include "metadata.h"
 #include "binary_payload.h"
 
-#include <impl/assets/graphics/avboit/names.h>
-
 #include <core/alloc/scratch.h>
 #include <core/assets/paths.h>
 #include <core/filesystem/module.h>
@@ -51,6 +49,14 @@ template<typename T>
 using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, ScratchArena>;
 template<typename T>
 using CookHashSet = MaterialCookHashSet<T>;
+
+// Cook-private NAME PREFIXES for the generated per-material AVBOIT accumulate/occupancy/extinction pixel shaders
+// (kept here, not in the graphics avboit/names.h, so the material cook does not depend on the graphics-asset header).
+// The cook builds "<prefix><material virtual path>" + stores the resolved Name on the cooked material; the renderer
+// binds via that stored Name (materialInfo.avboit{Accumulate,Occupancy,Extinction}PixelShader), never re-deriving here.
+static constexpr AStringView s_AvboitAccumulatePixelShaderGeneratedPrefix("generated/avboit_accumulate_ps/");
+static constexpr AStringView s_AvboitOccupancyPixelShaderGeneratedPrefix("generated/avboit_occupancy_ps/");
+static constexpr AStringView s_AvboitExtinctionPixelShaderGeneratedPrefix("generated/avboit_extinction_ps/");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2429,7 +2435,6 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
         // virtual path) + its resolved surface hook (by absolute path) -- the same .bind + .surface pair the
         // G-buffer PS uses, so the transparent pass reads the material's own shader-decided surface.alpha.
         CookString generatedSource(arena);
-        generatedSource += "// limztudio@gmail.com\n";
         generatedSource += "// Generated per-material AVBOIT pass pixel shader: engine AVBOIT pass authoring + this material's\n";
         generatedSource += "// typed .bind + its surface hook. The material declares only its 'surface' fragment; the cook\n";
         generatedSource += "// assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
@@ -2510,7 +2515,7 @@ static bool EmitMaterialAvboitAccumulatePixelShadersImpl(
         AStringView("material_avboit_accumulate_pixel_shaders"),
         AStringView("avboit/accumulate_ps_authoring.slangi"),
         AStringView("accumulate"),
-        AssetsGraphicsAvboit::s_AccumulatePixelShaderGeneratedPrefix,
+        s_AvboitAccumulatePixelShaderGeneratedPrefix,
         &MaterialCookEntry::avboitAccumulatePixelShaderName,
         materialEntries,
         outGenerated,
@@ -2533,7 +2538,7 @@ static bool EmitMaterialAvboitOccupancyPixelShadersImpl(
         AStringView("material_avboit_occupancy_pixel_shaders"),
         AStringView("avboit/occupancy_ps_authoring.slangi"),
         AStringView("occupancy"),
-        AssetsGraphicsAvboit::s_OccupancyPixelShaderGeneratedPrefix,
+        s_AvboitOccupancyPixelShaderGeneratedPrefix,
         &MaterialCookEntry::avboitOccupancyPixelShaderName,
         materialEntries,
         outGenerated,
@@ -2556,7 +2561,7 @@ static bool EmitMaterialAvboitExtinctionPixelShadersImpl(
         AStringView("material_avboit_extinction_pixel_shaders"),
         AStringView("avboit/extinction_ps_authoring.slangi"),
         AStringView("extinction"),
-        AssetsGraphicsAvboit::s_ExtinctionPixelShaderGeneratedPrefix,
+        s_AvboitExtinctionPixelShaderGeneratedPrefix,
         &MaterialCookEntry::avboitExtinctionPixelShaderName,
         materialEntries,
         outGenerated,

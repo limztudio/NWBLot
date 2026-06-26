@@ -22,9 +22,11 @@ namespace __hidden_csg_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum class CsgClipCutterResolveResult{
+namespace CsgClipCutterResolveResult{
+enum Enum : u8{
     Skipped,
     Ready
+};
 };
 
 struct CsgResolvedClipCutter{
@@ -230,7 +232,7 @@ static void BuildResolvedClipCutterGpuData(
     return true;
 }
 
-[[nodiscard]] static CsgClipCutterResolveResult ResolveReceiverClipCutter(
+[[nodiscard]] static CsgClipCutterResolveResult::Enum ResolveReceiverClipCutter(
     const CsgShapeRegistry& shapeRegistry,
     const CsgCutterComponent& cutter,
     const SIMDMatrix& cutterShapeToWorld,
@@ -312,7 +314,7 @@ template<typename CutterHandler>
             const SIMDMatrix cutterShapeToWorld = LoadFloat(cutter.shapeToWorld);
             const SIMDMatrix cutterWorldToShape = LoadFloat(cutter.worldToShape);
             CsgResolvedClipCutter resolvedCutter;
-            const CsgClipCutterResolveResult resolveResult = ResolveReceiverClipCutter(
+            const CsgClipCutterResolveResult::Enum resolveResult = ResolveReceiverClipCutter(
                 shapeRegistry,
                 cutter,
                 cutterShapeToWorld,

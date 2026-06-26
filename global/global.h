@@ -23,6 +23,7 @@
 #include "command_line.h"
 #include "environment.h"
 #include "process.h"
+#include "blocking_io.h"
 #include "compact_string.h"
 #include "binary.h"
 #include "hash_utils.h"

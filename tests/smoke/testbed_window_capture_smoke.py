@@ -323,14 +323,27 @@ def analyze_transparent_csg_rows(rows_rgb):
         return TransparentCsgAnalysis(0, 0, 0, 0)
 
     background = estimate_background_rgb(rows_rgb, width, height)
-    cut_region = normalized_region(width, height, 0.42, 0.31, 0.56, 0.45)
+    # The transparent CSG smoke samples three deterministic animation poses; the clipped void moves across them.
+    cut_regions = (
+        normalized_region(width, height, 0.372, 0.311, 0.544, 0.489),
+        normalized_region(width, height, 0.200, 0.444, 0.372, 0.622),
+        normalized_region(width, height, 0.606, 0.467, 0.747, 0.644),
+    )
     remaining_region = normalized_region(width, height, 0.40, 0.52, 0.56, 0.68)
 
-    cut_void_pixels = count_background_like_pixels(rows_rgb, background, cut_region)
+    cut_void_pixels = 0
+    cut_region_pixels = 0
+    for cut_region in cut_regions:
+        candidate_pixels = region_pixel_count(cut_region)
+        candidate_void_pixels = count_background_like_pixels(rows_rgb, background, cut_region)
+        if cut_region_pixels == 0 or candidate_void_pixels * cut_region_pixels > cut_void_pixels * candidate_pixels:
+            cut_void_pixels = candidate_void_pixels
+            cut_region_pixels = candidate_pixels
+
     remaining_center_pixels = count_foreground_pixels_in_region(rows_rgb, background, remaining_region)
     return TransparentCsgAnalysis(
         cut_void_pixels,
-        region_pixel_count(cut_region),
+        cut_region_pixels,
         remaining_center_pixels,
         region_pixel_count(remaining_region),
     )

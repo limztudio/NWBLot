@@ -121,17 +121,12 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
 }
 
 bool RendererMaterialSystem::createEmulationViewResources(){
-    if(!drawState().m_meshViewBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: emulation view resources require a mesh view buffer"));
-        return false;
-    }
-
     auto* device = graphics().getDevice();
     if(!drawState().m_emulationViewBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Vertex | Core::ShaderType::Pixel);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(s_MeshViewBindingSlot, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
+        RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
 
         drawState().m_emulationViewBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!drawState().m_emulationViewBindingLayout){
@@ -142,9 +137,11 @@ bool RendererMaterialSystem::createEmulationViewResources(){
 
     if(drawState().m_emulationViewBindingSet)
         return true;
+    if(!drawState().m_instanceBuffer || !drawState().m_meshViewBuffer || !drawState().m_materialTypedBuffer)
+        return true;
 
     Core::BindingSetDesc bindingSetDesc(arena());
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(s_MeshViewBindingSlot, drawState().m_meshViewBuffer.get()));
+    m_renderer.meshSystem().addMeshFrameBindingItems(bindingSetDesc);
 
     drawState().m_emulationViewBindingSet = device->createBindingSet(bindingSetDesc, drawState().m_emulationViewBindingLayout);
     if(!drawState().m_emulationViewBindingSet){

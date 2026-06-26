@@ -31,9 +31,11 @@ using CrashTestPath = ::Path<Core::Alloc::GlobalArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum class ManifestEventField{
+namespace ManifestEventField{
+enum Enum : u8{
     Include,
     Omit,
+};
 };
 
 struct ManifestTriggerFields{
@@ -70,7 +72,7 @@ void BeginArchiveWithManifest(
     AStringView event,
     AStringView reasonKind,
     u64 reasonCode,
-    ManifestEventField eventField = ManifestEventField::Include,
+    ManifestEventField::Enum eventField = ManifestEventField::Include,
     const ManifestTriggerFields& trigger = ManifestTriggerFields{}
 );
 [[nodiscard]] CrashTestText BuildManifest(
@@ -80,7 +82,7 @@ void BeginArchiveWithManifest(
     AStringView event,
     AStringView reasonKind,
     u64 reasonCode,
-    ManifestEventField eventField = ManifestEventField::Include,
+    ManifestEventField::Enum eventField = ManifestEventField::Include,
     const ManifestTriggerFields& trigger = ManifestTriggerFields{}
 );
 [[nodiscard]] bool WriteArchive(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, const CrashTestText& archive);

@@ -7,6 +7,9 @@
 #include "arena_names.h"
 #include "renderer_private.h"
 
+#include <impl/ecs_scene/camera.h>
+#include <impl/ecs_scene/components.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -63,6 +66,9 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     if(width == 0 || height == 0)
         return true;
 
+    if(!ensureFrameCommandLists())
+        return false;
+
     DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
     bool targetsReady = deferredTargets.valid() && deferredTargets.width == width && deferredTargets.height == height;
     if(!targetsReady)
@@ -92,6 +98,7 @@ void RendererSystem::invalidateResources(){
     m_preparedCsgFrameStateValid = false;
     m_preparedShadowVisibilityReady = false;
     m_renderCommandList.reset();
+    m_shadowPrepareCommandList.reset();
     m_meshState.invalidateResources();
     m_materialState.invalidateResources();
     m_drawState.invalidateResources();
@@ -107,8 +114,31 @@ void RendererSystem::update(Core::ECS::World& world, f32 delta){
     m_materialSystem.pruneMaterialInstanceMutableCache();
 }
 
+bool RendererSystem::ensureFrameCommandLists(){
+    auto* device = m_graphics.getDevice();
+    if(!device)
+        return false;
+
+    if(!m_renderCommandList){
+        m_renderCommandList = device->createCommandList();
+        if(!m_renderCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create render command list"));
+            return false;
+        }
+    }
+
+    if(!m_shadowPrepareCommandList){
+        m_shadowPrepareCommandList = device->createCommandList();
+        if(!m_shadowPrepareCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow preparation command list"));
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
-    m_renderCommandList.reset();
     m_preparedShadowVisibilityReady = false;
 
     if(!framebuffer)
@@ -147,34 +177,32 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     )
         return false;
 
+    if(!m_renderCommandList){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: render command list was not validated"));
+        return false;
+    }
+
+    if(!m_shadowPrepareCommandList){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow preparation command list was not validated"));
+        return false;
+    }
+
     auto* device = m_graphics.getDevice();
     if(!device)
         return false;
 
-    m_renderCommandList = device->createCommandList();
-    if(!m_renderCommandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create prepared render command list"));
-        return false;
-    }
-
-    Core::CommandListHandle shadowPrepareCommandList = device->createCommandList();
-    if(!shadowPrepareCommandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow preparation command list"));
-        return false;
-    }
-
-    shadowPrepareCommandList->open();
+    m_shadowPrepareCommandList->open();
     const bool shadowResourcesPrepared = m_raytracingSystem.prepareShadowVisibilityResources(
-        *shadowPrepareCommandList,
+        *m_shadowPrepareCommandList,
         deferredTargets,
         scratchArena,
         m_preparedShadowVisibilityReady
     );
-    shadowPrepareCommandList->close();
+    m_shadowPrepareCommandList->close();
     if(!shadowResourcesPrepared)
         return false;
 
-    Core::CommandList* shadowPrepareCommandLists[] = { shadowPrepareCommandList.get() };
+    Core::CommandList* shadowPrepareCommandLists[] = { m_shadowPrepareCommandList.get() };
     device->executeCommandLists(shadowPrepareCommandLists, 1);
 
     return true;
@@ -198,7 +226,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
         return;
     auto* device = m_graphics.getDevice();
-    Core::CommandListHandle commandList = Move(m_renderCommandList);
+    Core::CommandList* commandList = m_renderCommandList.get();
     if(!commandList){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: render command list was not prepared"));
         return;
@@ -389,7 +417,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!commandListReady)
         return;
 
-    Core::CommandList* commandLists[] = { commandList.get() };
+    Core::CommandList* commandLists[] = { commandList };
     device->executeCommandLists(commandLists, 1);
 }
 

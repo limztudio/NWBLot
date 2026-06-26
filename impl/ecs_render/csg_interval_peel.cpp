@@ -112,16 +112,18 @@ static void DispatchCsgIntervalCompute(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum class CsgTextureAccess{
+namespace CsgTextureAccess{
+enum Enum : u8{
     None,
     SRV,
     UAV
+};
 };
 
 static void AddCsgTextureBindingLayoutItem(
     Core::BindingLayoutDesc& bindingLayoutDesc,
     u32 slot,
-    CsgTextureAccess access
+    CsgTextureAccess::Enum access
 ){
     switch(access){
     case CsgTextureAccess::None:
@@ -141,7 +143,7 @@ static void AddCsgTextureBindingSetItem(
     Core::Texture* texture,
     Core::Format::Enum format,
     const Core::TextureSubresourceSet& subresources,
-    CsgTextureAccess access
+    CsgTextureAccess::Enum access
 ){
     switch(access){
     case CsgTextureAccess::None:
@@ -169,7 +171,7 @@ static void AddCsgTextureBindingSetItem(
 
 static void AddCsgIntervalTargetLayoutItems(
     Core::BindingLayoutDesc& bindingLayoutDesc,
-    CsgTextureAccess access
+    CsgTextureAccess::Enum access
 ){
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_DEPTH, access);
@@ -178,7 +180,7 @@ static void AddCsgIntervalTargetLayoutItems(
 
 static void AddCsgReceiverEventLayoutItems(
     Core::BindingLayoutDesc& bindingLayoutDesc,
-    CsgTextureAccess access
+    CsgTextureAccess::Enum access
 ){
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DATA, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_COUNT, access);
@@ -186,7 +188,7 @@ static void AddCsgReceiverEventLayoutItems(
 
 static void AddCsgReceiverSpanLayoutItems(
     Core::BindingLayoutDesc& bindingLayoutDesc,
-    CsgTextureAccess access
+    CsgTextureAccess::Enum access
 ){
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_DATA, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_COUNT, access);
@@ -194,7 +196,7 @@ static void AddCsgReceiverSpanLayoutItems(
 
 static void AddCsgRemovedIntervalLayoutItems(
     Core::BindingLayoutDesc& bindingLayoutDesc,
-    CsgTextureAccess access
+    CsgTextureAccess::Enum access
 ){
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DEPTH, access);
     AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_CAP_NORMAL, access);
@@ -206,7 +208,7 @@ static void AddCsgIntervalTargetBindingSetItems(
     Core::BindingSetDesc& bindingSetDesc,
     const DeferredFrameTargets& targets,
     const Core::TextureSubresourceSet& subresources,
-    CsgTextureAccess access
+    CsgTextureAccess::Enum access
 ){
     AddCsgTextureBindingSetItem(
         bindingSetDesc,
@@ -239,7 +241,7 @@ static void AddCsgReceiverEventBindingSetItems(
     const DeferredFrameTargets& targets,
     const Core::TextureSubresourceSet& eventSubresources,
     const Core::TextureSubresourceSet& eventCounterSubresources,
-    CsgTextureAccess access
+    CsgTextureAccess::Enum access
 ){
     AddCsgTextureBindingSetItem(
         bindingSetDesc,
@@ -264,7 +266,7 @@ static void AddCsgReceiverSpanBindingSetItems(
     const DeferredFrameTargets& targets,
     const Core::TextureSubresourceSet& spanSubresources,
     const Core::TextureSubresourceSet& spanCounterSubresources,
-    CsgTextureAccess access
+    CsgTextureAccess::Enum access
 ){
     AddCsgTextureBindingSetItem(
         bindingSetDesc,
@@ -289,7 +291,7 @@ static void AddCsgRemovedIntervalBindingSetItems(
     const DeferredFrameTargets& targets,
     const Core::TextureSubresourceSet& removedIntervalSubresources,
     const Core::TextureSubresourceSet& removedIntervalCounterSubresources,
-    CsgTextureAccess access
+    CsgTextureAccess::Enum access
 ){
     AddCsgTextureBindingSetItem(
         bindingSetDesc,
@@ -330,9 +332,9 @@ static void AddCsgRemovedIntervalBindingSetItems(
     Core::Device& device,
     Core::BindingLayoutHandle& layout,
     Core::ShaderType::Mask visibility,
-    CsgTextureAccess intervalAccess,
-    CsgTextureAccess receiverEventAccess,
-    CsgTextureAccess removedIntervalAccess
+    CsgTextureAccess::Enum intervalAccess,
+    CsgTextureAccess::Enum receiverEventAccess,
+    CsgTextureAccess::Enum removedIntervalAccess
 ){
     if(layout)
         return true;
@@ -362,9 +364,9 @@ static void AddCsgRemovedIntervalBindingSetItems(
     Core::Buffer* sampleStateBuffer,
     Core::BindingLayout* layout,
     Core::BindingSetHandle& bindingSet,
-    CsgTextureAccess intervalAccess,
-    CsgTextureAccess receiverEventAccess,
-    CsgTextureAccess removedIntervalAccess
+    CsgTextureAccess::Enum intervalAccess,
+    CsgTextureAccess::Enum receiverEventAccess,
+    CsgTextureAccess::Enum removedIntervalAccess
 ){
     if(bindingSet)
         return true;

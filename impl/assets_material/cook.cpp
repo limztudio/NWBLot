@@ -540,9 +540,11 @@ static bool ParseMaterialInterface(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     Name& outMaterialInterface,
+    MaterialCookString& outMaterialInterfaceText,
     ScratchArena& scratchArena
 ){
     outMaterialInterface = NAME_NONE;
+    outMaterialInterfaceText.clear();
 
     const auto* interfaceValue = asset.findField(MaterialAssetMetadataSchema::s_InterfaceField);
     if(!interfaceValue){
@@ -595,6 +597,9 @@ static bool ParseMaterialInterface(
         );
         return false;
     }
+    // Keep the readable interface path text the Name was hashed from: the generated PS `#include`s it + the
+    // shadow-transmittance dispatch dedups by it, neither of which can use the lossy (hash-only off opt) Name.
+    outMaterialInterfaceText.assign(AStringView(strippedInterface));
 
     return true;
 }
@@ -1760,14 +1765,18 @@ static bool ParseMaterialMeta(
         return false;
     }
 
-    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(
-        assetRoot,
-        virtualRoot,
-        nwbFilePath,
-        outEntry.virtualPath,
-        scratchArena
-    ))
+    // Derive the material's virtual path as both the Name identity (framework dedup keys on its hash) and the
+    // readable text (the cook builds generated-shader file paths / identities from it, which must stay readable off
+    // opt). BuildDerivedAssetVirtualPath's text overload yields the exact string the Name is hashed from.
+    ScratchString derivedVirtualPath(scratchArena);
+    if(!Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, derivedVirtualPath))
         return false;
+    outEntry.virtualPath = Name(AStringView(derivedVirtualPath));
+    if(!outEntry.virtualPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': failed to derive a valid virtual path"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+    outEntry.virtualPathText.assign(AStringView(derivedVirtualPath));
     if(!Core::Assets::ValidateMetadataAssetFields(
         nwbFilePath,
         asset,
@@ -1784,7 +1793,7 @@ static bool ParseMaterialMeta(
         scratchArena
     ))
         return false;
-    if(!ParseMaterialInterface(nwbFilePath, asset, outEntry.materialInterface, scratchArena))
+    if(!ParseMaterialInterface(nwbFilePath, asset, outEntry.materialInterface, outEntry.materialInterfaceText, scratchArena))
         return false;
     if(!ParseMaterialBxdf(nwbFilePath, asset, outEntry.bxdfSource, scratchArena))
         return false;
@@ -2128,7 +2137,7 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
         }
         surfaceSlot = surface;
 
-        const AStringView interfaceName(entry.materialInterface.c_str());
+        const AStringView interfaceName(entry.materialInterfaceText);
         AStringView& interfaceSlot = interfaceById[entry.shadowTransmittanceModelId];
         if(!interfaceSlot.empty() && interfaceSlot != interfaceName){
             NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: model id {} maps to multiple material interfaces"), entry.shadowTransmittanceModelId);
@@ -2316,14 +2325,14 @@ static bool EmitMaterialPixelShadersImpl(
         generatedSource += "// assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
         generatedSource += "#include \"mesh/material_ps_authoring.slangi\"\n";
         generatedSource += "#include \"";
-        generatedSource += entry.materialInterface.c_str();
+        generatedSource += entry.materialInterfaceText.c_str();
         generatedSource += ".bind\"\n";
         generatedSource += "#include \"";
         generatedSource += entry.surfaceSource.c_str();
         generatedSource += "\"\n";
 
         CookString relativeFile(arena);
-        relativeFile += entry.virtualPath.c_str();
+        relativeFile += entry.virtualPathText.c_str();
         relativeFile += ".slang";
         const Path outputPath = generatedRoot / relativeFile.c_str();
         errorCode.clear();
@@ -2343,7 +2352,7 @@ static bool EmitMaterialPixelShadersImpl(
 
         GeneratedMaterialPixelShader generated(arena);
         generated.name += "generated/material_ps/";
-        generated.name += entry.virtualPath.c_str();
+        generated.name += entry.virtualPathText.c_str();
         {
             ScratchString sourceText = PathToString(scratchArena, outputPath);
             for(char& ch : sourceText){
@@ -2442,14 +2451,14 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
         generatedSource += authoringHeaderInclude;
         generatedSource += "\"\n";
         generatedSource += "#include \"";
-        generatedSource += entry.materialInterface.c_str();
+        generatedSource += entry.materialInterfaceText.c_str();
         generatedSource += ".bind\"\n";
         generatedSource += "#include \"";
         generatedSource += entry.surfaceSource.c_str();
         generatedSource += "\"\n";
 
         CookString relativeFile(arena);
-        relativeFile += entry.virtualPath.c_str();
+        relativeFile += entry.virtualPathText.c_str();
         relativeFile += ".slang";
         const Path outputPath = generatedRoot / relativeFile.c_str();
         errorCode.clear();
@@ -2471,7 +2480,7 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
 
         GeneratedMaterialPixelShader generated(arena);
         generated.name += generatedNamePrefix;
-        generated.name += entry.virtualPath.c_str();
+        generated.name += entry.virtualPathText.c_str();
         {
             ScratchString sourceText = PathToString(scratchArena, outputPath);
             for(char& ch : sourceText){

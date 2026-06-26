@@ -35,8 +35,17 @@ struct MaterialCookEntry{
     using StageShaderMap = MaterialCookMap<Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>;
     using ParameterMap = MaterialBindParameterMap;
 
+    // The material's own derived virtual path and the `.bind` interface it references, as Names: the generic cook
+    // framework dedups entries by virtualPath.hash(), and the interface is compared / looked up / cooked as a Name
+    // identity. But a Name keeps ONLY a hash -- in an opt build Name::c_str() returns a 136-char hash, not the
+    // readable text -- so building generated-shader file paths / `#include`s / identities from it (or deduping by it)
+    // produced garbage / dangling views off opt. Each Name therefore carries a companion TEXT string holding the
+    // source path it was hashed from, used wherever real readable text is structurally required. This mirrors the
+    // Shader asset's materialTypedBindingInterface (Name) + materialTypedBindingInterfacePath (text) pair.
     Name virtualPath = NAME_NONE;
+    MaterialCookString virtualPathText;
     Name materialInterface = NAME_NONE;
+    MaterialCookString materialInterfaceText;
     u64 typedLayoutHash = 0u;
     Material::TypedLayoutBlockVector typedLayoutBlocks;
     Material::TypedLayoutFieldVector typedLayoutFields;
@@ -81,7 +90,9 @@ struct MaterialCookEntry{
     bool refractive = false;
 
     explicit MaterialCookEntry(MaterialCookArena& arena)
-        : typedLayoutBlocks(arena)
+        : virtualPathText(arena)
+        , materialInterfaceText(arena)
+        , typedLayoutBlocks(arena)
         , typedLayoutFields(arena)
         , typedBlockBytes(arena)
         , shaderVariant(arena)
@@ -96,7 +107,9 @@ struct MaterialCookEntry{
 
     void reset(){
         virtualPath = NAME_NONE;
+        virtualPathText.clear();
         materialInterface = NAME_NONE;
+        materialInterfaceText.clear();
         typedLayoutHash = 0u;
         typedLayoutBlocks.clear();
         typedLayoutFields.clear();

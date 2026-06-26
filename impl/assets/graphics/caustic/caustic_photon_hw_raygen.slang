@@ -79,9 +79,9 @@ void main(){
     const float3 targetAabbMin = g_NwbCausticHwEmissionTargets[targetIndex].aabbMin.xyz;
     const float3 targetAabbMax = g_NwbCausticHwEmissionTargets[targetIndex].aabbMax.xyz;
 
-    // Per-photon grid cell with a PER-PHOTON, per-frame stratified jitter (shared with the SW path so the two stay
+    // Per-photon grid cell with a PER-PHOTON deterministic stratified jitter (shared with the SW path so the two stay
     // byte-parallel per photon). Per-photon keeps a single frame's splat from being a rigid lattice (which a flat
-    // refractor maps to visible stripes); it still converges under temporal accumulation on static scenes.
+    // refractor maps to visible stripes); frame-independent, so a static scene is flicker-free without temporal averaging.
     const uint gridSide = max(g_NwbCausticHwPushConstants.gridSide, 1u);
     const uint column = photonIndex % gridSide;
     const uint row = (photonIndex / gridSide) % gridSide;

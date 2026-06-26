@@ -108,8 +108,6 @@ struct NwbCausticSwPushConstants{
     uint instanceCount;
     uint photonCount;
     uint emissionTargetCount;
-    uint frameIndex; // the per-photon emission distribution is frame-INDEPENDENT (deterministic, flicker-free under the
-                     // spatial a-trous resolve); frameIndex is retained for diagnostics but no longer perturbs emission
     uint gridSide; // sqrt(photonCount): the emission grid side, runtime so C++ can scale the photon density per build config
 };
 
@@ -512,11 +510,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 targetAabbMin = g_NwbCausticSwEmissionTargets[targetIndex].aabbMin.xyz;
     const float3 targetAabbMax = g_NwbCausticSwEmissionTargets[targetIndex].aabbMax.xyz;
 
-    // Per-photon grid cell in [0,1)^2 with a PER-PHOTON, per-frame stratified jitter (P5): the photon index maps to
-    // a (column, row) on a square grid, and each cell is sampled at its OWN random sub-point. Per-photon (not just
-    // per-frame) is what keeps a single frame's splat from being a rigid lattice -- a flat refractor maps a rigid
-    // lattice to visible stripes, whereas stratified noise reads as honest grain the resolve blur smooths; it also
-    // still converges under temporal accumulation on static scenes. Shared with the HW producer (parity).
+    // Per-photon grid cell in [0,1)^2 with a PER-PHOTON deterministic stratified jitter: the photon index maps to a
+    // (column, row) on a square grid, and each cell is sampled at its OWN fixed sub-point. Per-photon keeps a single
+    // frame's splat from being a rigid lattice -- a flat refractor maps a rigid lattice to visible stripes, whereas
+    // stratified noise reads as honest grain the spatial a-trous resolve smooths. Frame-INDEPENDENT (no per-frame
+    // variation), so a static scene is flicker-free without temporal averaging. Shared with the HW producer (parity).
     const uint gridSide = max(g_NwbCausticSwPushConstants.gridSide, 1u);
     const uint column = photonIndex % gridSide;
     const uint row = (photonIndex / gridSide) % gridSide;
@@ -530,8 +528,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // PHYSICAL per-photon flux (energy conservation): the power through this target's emission domain is
     // lightIrradiance * domainArea, carried by the ~photonCount/emissionTargetCount photons aimed at it, so
     // perPhoton = lightColor * domainArea * emissionTargetCount / photonCount. Doubling photonCount halves per-photon
-    // flux (converged image unchanged); the loose domain cancels (dropped photons carry their share). No fudge
-    // constant -- the focused caustic is physically bright while sparse far prism-scatter falls below the exposure
+    // flux (per-frame image brightness unchanged); the loose domain cancels (dropped photons carry their share). No
+    // fudge constant -- the focused caustic is physically bright while sparse far prism-scatter falls below the exposure
     // floor. Byte-identical to the HW raygen (shared emission.domainArea + the same push fields).
     const float3 lightColor = clamp(light.colorIntensity.xyz, float3(0.0), float3(1.5)) * min(max(light.colorIntensity.w, 0.0), 2.0);
     const float perPhoton = emission.domainArea * (float)g_NwbCausticSwPushConstants.emissionTargetCount / (float)max(g_NwbCausticSwPushConstants.photonCount, 1u);

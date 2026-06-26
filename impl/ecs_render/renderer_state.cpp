@@ -280,7 +280,6 @@ void RendererRayTracingState::invalidateResources(){
     m_causticResolveBindingSetDepth = nullptr;
     m_causticResolveBindingSetIrradiance = nullptr;
     m_causticResolveBindingSetScratch = nullptr;
-    m_causticFrameIndex = 0u;
     m_shadowPipelineFailed = false;
     m_bvhSortPipelineFailed = false;
     m_bvhBuildPipelineFailed = false;

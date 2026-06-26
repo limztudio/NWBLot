@@ -168,17 +168,16 @@ static_assert(sizeof(SwShadowPushConstants) == sizeof(u32) * 4u, "SwShadowPushCo
 
 // CPU mirror of the caustic photon producer push constants, shared by BOTH the software compute producer
 // (caustic/caustic_photon_sw_cs.slang) and the hardware ray-traced producer (caustic/caustic_photon_hw_raygen.slang).
-// The byte-identical layout across the two backends is a parity invariant (same photon grid / flux / frame index).
+// The byte-identical layout across the two backends is a parity invariant (same photon grid / flux).
 struct CausticPhotonPushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 instanceCount = 0u;
     u32 photonCount = 0u;
     u32 emissionTargetCount = 0u;
-    u32 frameIndex = 0u; // retained for diagnostics; the per-photon emission is frame-independent (no flicker, no temporal)
-    u32 gridSide = 0u;   // sqrt(photonCount): runtime so the photon density scales per build config (dbg vs opt/fin)
+    u32 gridSide = 0u; // sqrt(photonCount): runtime so the photon density scales per build config (dbg vs opt/fin)
 };
-static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 7u, "CausticPhotonPushConstants must match the shader push-constant layout");
+static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 6u, "CausticPhotonPushConstants must match the shader push-constant layout");
 
 // CPU mirror of the caustic resolve push constants (caustic/caustic_resolve_cs.slang). The resolve is an N-pass
 // edge-avoiding a-trous wavelet denoise: per pass it carries the wavelet dilation (stepWidth) and whether this is the
@@ -197,16 +196,15 @@ struct CausticResolvePushConstants{
 static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 7u + sizeof(f32), "CausticResolvePushConstants must match the shader push-constant layout");
 
 // Per-frame photon budget. Energy-conserving (per-photon flux = lightColor*emissionDomainArea*targetCount/photonCount,
-// so it scales 1/photonCount), so a higher count only
-// DENSIFIES the splat without changing the converged brightness -- the fix for a sparse moving (skinned/dynamic)
-// caustic, which cannot lean on temporal convergence and so needs a dense single-frame splat. The HARDWARE ray-traced
-// producer handles the full density even in an unoptimized dbg build (hardware RT is fast), so it ALWAYS runs the full
-// count -> a dense, coherent caustic in every build. The SOFTWARE-compute producer does heavy per-photon work (per-mesh
-// BVH descent + Moeller-Trumbore + the per-hit surface dispatch, per bounce) that overruns the GPU watchdog (TDR) at
-// the full count in dbg, so it is config-scaled: dbg-safe in dbg, full density in opt/fin. The two counts are
-// independent because the math is per-photon identical and energy-conserving -> both converge to the SAME image
-// (the HW/SW parity A/B holds). The grid side rides the push constant (gridSide), so the shaders stay config-agnostic.
-// PHOTON_COUNT must stay == GRID_SIDE^2.
+// so it scales 1/photonCount), so a higher count only DENSIFIES the splat without changing its per-frame brightness.
+// Density matters because the resolve is spatial-only (a-trous, no temporal accumulation): each frame must be dense
+// enough on its own. The HARDWARE ray-traced producer handles the full density even in an unoptimized dbg build
+// (hardware RT is fast), so it ALWAYS runs the full count -> a dense, coherent caustic in every build. The SOFTWARE-
+// compute producer does heavy per-photon work (per-mesh BVH descent + Moeller-Trumbore + the per-hit surface dispatch,
+// per bounce) that overruns the GPU watchdog (TDR) at the full count in dbg, so it is config-scaled: dbg-safe in dbg,
+// full density in opt/fin. The two counts are independent because the math is per-photon identical and energy-
+// conserving -> both produce the SAME image (the HW/SW parity A/B holds). The grid side rides the push constant
+// (gridSide), so the shaders stay config-agnostic. PHOTON_COUNT must stay == GRID_SIDE^2.
 inline constexpr u32 s_CausticHwPhotonGridSide = 512u;
 inline constexpr u32 s_CausticHwPhotonCount = s_CausticHwPhotonGridSide * s_CausticHwPhotonGridSide;
 #if defined(NDEBUG)
@@ -222,7 +220,7 @@ inline constexpr u32 s_CausticSwPhotonCount = s_CausticSwPhotonGridSide * s_Caus
 // fudge constant -- the old s_CausticTotalEmittedPower=20 / s_CausticIntensity=10 pair is gone), the caustic has a
 // MEANINGFUL dynamic range: the DENSE focused caustic stays bright at a low exposure while the SPARSE far prism-
 // scatter falls below the visible floor. ~2 is a unit-ish exposure for the demo lighting (light intensity 2.0);
-// doubling the photon count leaves the converged image unchanged (the energy-conservation invariant still holds).
+// doubling the photon count leaves the per-frame image brightness unchanged (the energy-conservation invariant holds).
 inline constexpr f32 s_CausticIntensity = 2.0f;
 
 // The caustic resolve denoise is an N-pass edge-avoiding a-trous wavelet (purely spatial, NO temporal accumulation ->
@@ -1069,9 +1067,6 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     //  - causticAccumulator: R32_UINT, one Texture2DArray layer per RGB channel, the fixed-point splat target the
     //                        producer InterlockedAdds into (no float image atomics exist on the backend).
     //  - causticHistory:     RGBA16F scratch for the a-trous wavelet ping-pong (alternated with irradiance per pass).
-    // frameIndex is a diagnostic counter only (the resolve is purely spatial -- no temporal accumulation to seed).
-    rayTracingState().m_causticFrameIndex = 0u;
-
     targets.causticIrradianceFormat = Core::Format::RGBA16_FLOAT;
     targets.causticAccumulatorFormat = Core::Format::R32_UINT;
     targets.causticHistoryFormat = Core::Format::RGBA16_FLOAT;
@@ -1367,7 +1362,6 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
         pushConstants.photonCount = s_CausticSwPhotonCount;
         pushConstants.emissionTargetCount = rayTracingState().m_causticRefractiveInstanceCount;
-        pushConstants.frameIndex = rayTracingState().m_causticFrameIndex; // diagnostic only; emission is frame-independent
         pushConstants.gridSide = s_CausticSwPhotonGridSide;
 
         Core::ComputeState computeState;
@@ -1379,9 +1373,6 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
     }
 
     dispatchCausticResolve(commandList, targets);
-
-    // Diagnostic frame counter (no longer affects the image -- the resolve is purely spatial).
-    ++rayTracingState().m_causticFrameIndex;
 
     if(!rayTracingState().m_swCausticDispatchLogged){
         rayTracingState().m_swCausticDispatchLogged = true;
@@ -2449,7 +2440,6 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         pushConstants.instanceCount = rayTracingState().m_tlasInstanceCount;
         pushConstants.photonCount = s_CausticHwPhotonCount;
         pushConstants.emissionTargetCount = rayTracingState().m_causticRefractiveInstanceCount;
-        pushConstants.frameIndex = rayTracingState().m_causticFrameIndex; // diagnostic only; emission is frame-independent
         pushConstants.gridSide = s_CausticHwPhotonGridSide;
 
         Core::RayTracingState rayTracingPassState;
@@ -2468,9 +2458,6 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
 
     // Identical resolve to the SW path (the SAME pipeline + ping-pong binding sets): the shared a-trous wavelet denoise.
     dispatchCausticResolve(commandList, targets);
-
-    // Diagnostic frame counter (no longer affects the image -- the resolve is purely spatial).
-    ++rayTracingState().m_causticFrameIndex;
 
     if(!rayTracingState().m_hwCausticDispatchLogged){
         rayTracingState().m_hwCausticDispatchLogged = true;

@@ -345,8 +345,8 @@ private:
     Float4 m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
     // The caustic resolve is a purely SPATIAL a-trous wavelet denoise -- no temporal history, no motion vectors, no
-    // motion-reject reseed (a moving caustic is ghost-free by construction). m_causticFrameIndex is a diagnostic frame
-    // counter only (the producer emission is deterministic + frame-independent).
+    // motion-reject reseed (a moving caustic is ghost-free by construction) and the producer emission is deterministic +
+    // frame-independent, so NO per-frame caustic state is needed.
     bool m_causticEmissionGateLogged = false;
     Core::BindingLayoutHandle m_swShadowBindingLayout; // software (compute) shadow traversal pass
     Core::ShaderHandle m_swShadowShader;
@@ -422,9 +422,6 @@ private:
     const Core::Texture* m_causticResolveBindingSetDepth = nullptr;
     const Core::Texture* m_causticResolveBindingSetIrradiance = nullptr;
     const Core::Texture* m_causticResolveBindingSetScratch = nullptr;
-    // Diagnostic producer-frame counter (the emission is deterministic + frame-independent and the resolve is purely
-    // spatial, so this no longer affects the image). Reset in createCausticTargets.
-    u32 m_causticFrameIndex = 0u;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;
     bool m_bvhSortPipelineFailed = false;

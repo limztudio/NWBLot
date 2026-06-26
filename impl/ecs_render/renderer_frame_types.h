@@ -137,9 +137,10 @@ struct DeferredFrameTargets{
     Core::TextureHandle depth;
     Core::TextureHandle shadowVisibility;
     // Caustic producer targets (additive, inverted lifecycle vs shadowVisibility): the RGBA16F resolved irradiance
-    // the deferred lighting pass adds pre-tonemap, the R32_UINT splat accumulators (one Texture2DArray layer per
-    // RGB channel) the producer's fixed-point InterlockedAdd lands in, and the RGBA16F temporal history (P5). All
-    // cleared to BLACK each frame (additive identity), so an empty buffer is a no-op. No producer writes them yet.
+    // the deferred lighting pass adds pre-tonemap, the R32_UINT splat accumulators (one Texture2DArray layer per RGB
+    // channel) the producer's fixed-point InterlockedAdd lands in, and the RGBA16F a-trous wavelet scratch buffer.
+    // The irradiance + accumulator are cleared to BLACK each frame (additive identity), so when no producer runs the
+    // additive caustic term is a pixel-identical no-op.
     Core::TextureHandle causticIrradiance;
     Core::TextureHandle causticAccumulator;
     // RGBA16F scratch buffer for the resolve's a-trous wavelet ping-pong (the wavelet alternates writing this and the

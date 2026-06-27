@@ -7,6 +7,7 @@
 
 #include "module.h"
 #include "arena_names.h"
+#include "name_symbols.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,16 +28,41 @@ namespace ApplicationEntryDetail{
 using UnicodeEntryPointFn = int(*)(isize, wchar**, void*);
 using AnsiEntryPointFn = int(*)(isize, char**, void*);
 
+// RAII so the Name record/resolve callbacks are detached on EVERY exit path (normal return, init-failure, exception)
+// before static teardown, preventing a use-after-free if a Name is resolved/recorded during shutdown. WriteDefaultFile
+// reads the RuntimeRegistry directly (not via the callbacks), so it still works after the scope uninstalls.
+class ScopedNameSymbolRegistry final{
+public:
+    ScopedNameSymbolRegistry(){ NameSymbols::InstallRuntimeRegistry(); }
+    ~ScopedNameSymbolRegistry(){ NameSymbols::UninstallRuntimeRegistry(); }
+
+    ScopedNameSymbolRegistry(const ScopedNameSymbolRegistry&) = delete;
+    ScopedNameSymbolRegistry& operator=(const ScopedNameSymbolRegistry&) = delete;
+};
+
 template<typename Invoke>
 [[nodiscard]] inline int InvokeWithInitializedCommon(Invoke&& invoke){
     try{
-        InitializerGuard commonInitializerGuard;
-        if(!commonInitializerGuard.initialize())
-            return -1;
+        const ScopedNameSymbolRegistry nameSymbolRegistry;
 
-        return Forward<Invoke>(invoke)();
+        InitializerGuard commonInitializerGuard;
+        if(!commonInitializerGuard.initialize()){
+#if defined(NWB_BUILDMODE)
+            [[maybe_unused]] const bool wroteNameSymbols = NameSymbols::WriteDefaultFile();
+#endif
+            return -1;
+        }
+
+        const int result = Forward<Invoke>(invoke)();
+#if defined(NWB_BUILDMODE)
+        [[maybe_unused]] const bool wroteNameSymbols = NameSymbols::WriteDefaultFile();
+#endif
+        return result;
     }
     catch(...){
+#if defined(NWB_BUILDMODE)
+        [[maybe_unused]] const bool wroteNameSymbols = NameSymbols::WriteDefaultFile();
+#endif
         return -1;
     }
 }

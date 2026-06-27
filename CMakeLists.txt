@@ -6,6 +6,7 @@ include("${PROJECT_SOURCE_DIR}/configuration/Project.cmake")
 include("${PROJECT_SOURCE_DIR}/configuration/Dependencies.cmake")
 include("${PROJECT_SOURCE_DIR}/configuration/InternalHeaders.cmake")
 include("${PROJECT_SOURCE_DIR}/configuration/Targets.cmake")
+include("${PROJECT_SOURCE_DIR}/configuration/NameSymbols.cmake")
 
 nwb_configure_project()
 
@@ -29,6 +30,7 @@ option(NWB_BUILD_LOADER "Build the loader static library." ${NWB_BUILD_LOADER_DE
 option(NWB_BUILD_TESTBED "Build the testbed app." ${WIN32})
 option(NWB_BUILD_TESTS "Build internal validation executables." OFF)
 option(NWB_ENABLE_WAYLAND "Build the native Wayland backend on Linux when dependencies are available." ${NWB_ENABLE_WAYLAND_DEFAULT})
+option(NWB_BUILDMODE "Generate build-mode Name symbol sidecars next to each variant output." OFF)
 # DEBUG / TEST ONLY: compiles the deliberate GPU fault-injection hook (Device::debugTriggerGpuFault). At runtime,
 # NWB_DEBUG_GPU_FAULT_INJECTION=0 or unset disables it; any nonzero value is used as the faulting GPU address.
 # Off by default; never enable in shipping builds.
@@ -37,6 +39,7 @@ option(NWB_ENABLE_GPU_FAULT_INJECTION "Compile the debug GPU fault-injection hoo
 add_subdirectory(3rd_parties)
 nwb_configure_external_dependencies()
 nwb_configure_internal_headers()
+nwb_configure_name_symbols()
 
 add_subdirectory(core)
 add_subdirectory(logger/telemetry)
@@ -74,6 +77,10 @@ if(NWB_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+# On-demand "nwb_namesym" target: build-mode run -> .namesym sidecars bundled next to this configuration's logserver,
+# which loads them at startup to decode opt/fin client log hashes. No-op inside the build-mode variant itself.
+nwb_add_name_symbol_target()
 
 message(STATUS "Configured NWBLot for ${CMAKE_SYSTEM_NAME} (${NWB_OUTPUT_ARCH}) with ${NWB_COMPILER_DESCRIPTION}")
 message(STATUS "Artifact output root: ${NWB_OUTPUT_ROOT}")

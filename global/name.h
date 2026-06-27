@@ -7,6 +7,7 @@
 
 #include "hash_utils.h"
 #include <functional>
+#include <type_traits>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,6 +17,13 @@ struct NameHash{
     u64 qwords[8];
 };
 static_assert(sizeof(NameHash) == 64, "NameHash size must stay stable");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using NameSymbolRecordCallback = void(*)(const NameHash& hash, AStringView text, void* userData);
+using NameSymbolResolveCallback = bool(*)(const NameHash& hash, char* outText, usize outTextSize, void* userData);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -136,6 +144,149 @@ inline constexpr bool IsZeroHash(const NameHash& hash){
     return true;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NameSymbolRecorderState{
+    NameSymbolRecordCallback callback = nullptr;
+    void* userData = nullptr;
+};
+
+struct NameSymbolResolverState{
+    NameSymbolResolveCallback callback = nullptr;
+    void* userData = nullptr;
+};
+
+
+[[nodiscard]] inline NameSymbolRecorderState& SymbolRecorderState(){
+    static NameSymbolRecorderState state;
+    return state;
+}
+
+[[nodiscard]] inline NameSymbolResolverState& SymbolResolverState(){
+    static NameSymbolResolverState state;
+    return state;
+}
+
+[[nodiscard]] inline bool& SymbolRecordInProgress(){
+    thread_local static bool inProgress = false;
+    return inProgress;
+}
+
+[[nodiscard]] inline bool& SymbolResolveInProgress(){
+    thread_local static bool inProgress = false;
+    return inProgress;
+}
+
+class ScopedSymbolCallbackFlag final{
+public:
+    explicit ScopedSymbolCallbackFlag(bool& flag)
+        : m_flag(flag)
+    {
+        m_flag = true;
+    }
+    ~ScopedSymbolCallbackFlag(){
+        m_flag = false;
+    }
+
+    ScopedSymbolCallbackFlag(const ScopedSymbolCallbackFlag&) = delete;
+    ScopedSymbolCallbackFlag& operator=(const ScopedSymbolCallbackFlag&) = delete;
+
+
+private:
+    bool& m_flag;
+};
+
+// Rotating thread_local scratch buffers backing Name::c_str()/logText() in opt/fin (where there is no per-object
+// m_debugName). A single shared buffer would alias when two Name text results are live in one expression (e.g. two
+// Names in one log call), silently returning two pointers to the same last-written text. Rotating across a small ring
+// lets up to s_SymbolTextBufferCount results coexist on a thread. Still bounded: more simultaneously-live results
+// than the ring size will alias (acceptable -- this is a diagnostic/log path, not a value carrier).
+inline constexpr usize s_SymbolTextBufferLength = 1024u; // keep == NameSymbols::s_MaxResolvedTextLength
+inline constexpr usize s_SymbolTextBufferCount = 8u;
+[[nodiscard]] inline char* NextSymbolTextBuffer(){
+    thread_local static char buffers[s_SymbolTextBufferCount][s_SymbolTextBufferLength];
+    thread_local static usize next = 0u;
+    char* const buffer = buffers[next];
+    next = (next + 1u) % s_SymbolTextBufferCount;
+    return buffer;
+}
+
+inline void SetNameSymbolRecordCallback(const NameSymbolRecordCallback callback, void* const userData){
+    NameSymbolRecorderState& state = SymbolRecorderState();
+    state.callback = callback;
+    state.userData = userData;
+}
+
+inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callback, void* const userData){
+    NameSymbolResolverState& state = SymbolResolverState();
+    state.callback = callback;
+    state.userData = userData;
+}
+
+[[nodiscard]] inline bool ResolveNameSymbolText(const NameHash& hash, char* const outText, const usize outTextSize){
+    if(IsZeroHash(hash) || outText == nullptr || outTextSize == 0u)
+        return false;
+
+    NameSymbolResolverState& state = SymbolResolverState();
+    if(!state.callback)
+        return false;
+
+    bool& inProgress = SymbolResolveInProgress();
+    if(inProgress)
+        return false;
+    ScopedSymbolCallbackFlag resolveFlag(inProgress);
+
+    return state.callback(hash, outText, outTextSize, state.userData);
+}
+
+template<typename CharT>
+inline void RecordNameSymbolText(
+    const NameHash& hash,
+    const BasicStringView<CharT> text
+){
+    if(IsZeroHash(hash))
+        return;
+
+    NameSymbolRecorderState& state = SymbolRecorderState();
+    if(!state.callback)
+        return;
+
+    bool& inProgress = SymbolRecordInProgress();
+    if(inProgress)
+        return;
+    ScopedSymbolCallbackFlag recordFlag(inProgress);
+
+    if constexpr(IsSame_V<CharT, char>){
+        if(HasEmbeddedNull(text))
+            return;
+        state.callback(hash, AStringView(text.data(), text.size()), state.userData);
+    }
+    else{
+        // Wide -> narrow by per-code-unit byte truncation, NOT UTF-8: ComputeNameHash hashes each wchar as
+        // static_cast<u8>(Canonicalize(ch)), so the recorded text must use those same truncated bytes to round-trip
+        // back to the Name's hash. Emitting real UTF-8 here would make the symbol text hash to a DIFFERENT NameHash.
+        // Names are effectively ASCII identifiers/paths in this engine; a non-ASCII wide Name records as truncated
+        // bytes (consistent with its hash, just not human-readable) -- acceptable given no non-ASCII Names exist.
+        char narrowText[1024] = {};
+        usize copiedCount = 0u;
+        for(const CharT ch : text){
+            if(ch == CharT{})
+                return;
+            if((copiedCount + 1u) < sizeof(narrowText)){
+                narrowText[copiedCount] = static_cast<char>(ch);
+                ++copiedCount;
+            }
+        }
+        state.callback(hash, AStringView(narrowText, copiedCount), state.userData);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr usize HashValue(const NameHash& hash){
     usize seed = static_cast<usize>(hash.qwords[0]);
     for(u32 i = 1; i < s_HashLaneCount; ++i){
@@ -175,7 +326,7 @@ inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstS
     *writeCursor = CharT{};
 }
 
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
 template<typename CharT>
 inline void CopyDebugName(const BasicStringView<CharT> text, char* dst, const usize dstSize){
     if(dstSize == 0)
@@ -197,6 +348,26 @@ inline void CopyDebugName(const BasicStringView<CharT> text, char* dst, const us
 }
 #endif
 
+#if defined(NWB_BUILDMODE)
+inline void RecordStoredNameSymbolText(
+    const NameHash& hash,
+    const char* const text,
+    const usize textCapacity,
+    const bool hasText
+){
+    if(!hasText || text == nullptr || textCapacity == 0u || IsZeroHash(hash))
+        return;
+
+    usize textSize = 0u;
+    while(textSize < textCapacity && text[textSize] != '\0')
+        ++textSize;
+    if(textSize == textCapacity)
+        return;
+
+    RecordNameSymbolText(hash, AStringView(text, textSize));
+}
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -206,6 +377,14 @@ inline void CopyDebugName(const BasicStringView<CharT> text, char* dst, const us
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+inline void SetNameSymbolRecordCallback(const NameSymbolRecordCallback callback, void* const userData = nullptr){
+    NameDetail::SetNameSymbolRecordCallback(callback, userData);
+}
+
+inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callback, void* const userData = nullptr){
+    NameDetail::SetNameSymbolResolveCallback(callback, userData);
+}
 
 inline constexpr bool operator==(const NameHash& a, const NameHash& b){
     return NameDetail::EqualHash(a, b);
@@ -226,40 +405,55 @@ class Name{
 public:
     constexpr Name()
         : m_hash{}
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         , m_debugName{}
+#endif
+#if defined(NWB_BUILDMODE)
+        , m_hasSymbolText(false)
 #endif
     {}
     constexpr Name(std::nullptr_t)
         : m_hash{}
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         , m_debugName{}
+#endif
+#if defined(NWB_BUILDMODE)
+        , m_hasSymbolText(false)
 #endif
     {}
     constexpr Name(const char* str)
         : m_hash(ComputeNameHash(str))
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         , m_debugName{}
 #endif
+#if defined(NWB_BUILDMODE)
+        , m_hasSymbolText(str != nullptr)
+#endif
     {
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         CopyCanonical(m_debugName, 256, str);
 #endif
     }
     constexpr Name(const wchar* str)
         : m_hash(ComputeNameHash(str))
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         , m_debugName{}
 #endif
+#if defined(NWB_BUILDMODE)
+        , m_hasSymbolText(str != nullptr)
+#endif
     {
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         CopyCanonical(m_debugName, 256, str);
 #endif
     }
     explicit Name(const NameHash& hash)
         : m_hash(hash)
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         , m_debugName{}
+#endif
+#if defined(NWB_BUILDMODE)
+        , m_hasSymbolText(false)
 #endif
     {
 #if defined(NWB_DEBUG)
@@ -268,53 +462,99 @@ public:
     }
     explicit Name(const AStringView text)
         : m_hash(ComputeNameHash(text))
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         , m_debugName{}
 #endif
+#if defined(NWB_BUILDMODE)
+        , m_hasSymbolText(true)
+#endif
     {
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         NameDetail::CopyDebugName(text, m_debugName, 256);
 #endif
+        NameDetail::RecordNameSymbolText(m_hash, text);
     }
     explicit Name(const WStringView text)
         : m_hash(ComputeNameHash(text))
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         , m_debugName{}
 #endif
+#if defined(NWB_BUILDMODE)
+        , m_hasSymbolText(true)
+#endif
     {
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         NameDetail::CopyDebugName(text, m_debugName, 256);
 #endif
+        NameDetail::RecordNameSymbolText(m_hash, text);
     }
 
 
 public:
     [[nodiscard]] constexpr explicit operator bool()const{
-        return !NameDetail::IsZeroHash(m_hash);
+        return !NameDetail::IsZeroHash(hash());
     }
-    [[nodiscard]] constexpr const NameHash& hash()const{ return m_hash; }
+    [[nodiscard]] constexpr const NameHash& hash()const{
+#if defined(NWB_BUILDMODE)
+        recordBuildModeSymbolText();
+#endif
+        return m_hash;
+    }
 
     [[nodiscard]] const char* c_str()const{
+#if defined(NWB_BUILDMODE)
+        recordBuildModeSymbolText();
+#endif
 #if defined(NWB_DEBUG)
         return m_debugName;
 #else
-        thread_local static char buf[(16 * NameDetail::s_HashLaneCount) + (NameDetail::s_HashLaneCount - 1) + 1];
-        NameDetail::HashToDebugString(m_hash, buf, sizeof(buf));
+        char* const buf = NameDetail::NextSymbolTextBuffer();
+        if(NameDetail::ResolveNameSymbolText(m_hash, buf, NameDetail::s_SymbolTextBufferLength))
+            return buf;
+
+        NameDetail::HashToDebugString(m_hash, buf, NameDetail::s_SymbolTextBufferLength);
+        return buf;
+#endif
+    }
+
+    // Non-resolving textual form for cheap breadcrumbs (arena allocation logging, crash markers): the readable debug
+    // name where one exists (dbg/buildmode), else the raw hash hex -- WITHOUT consulting the runtime symbol resolver.
+    // c_str() (which DOES resolve) must never run on the allocator path: resolving allocates from a GlobalArena, and
+    // that arena's allocate() logs its own name, which re-enters the resolver -- the source of the opt stack overflow.
+    // Use this anywhere a Name is logged from inside the allocator.
+    [[nodiscard]] const char* logText()const{
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
+        return m_debugName;
+#else
+        char* const buf = NameDetail::NextSymbolTextBuffer();
+        NameDetail::HashToDebugString(m_hash, buf, NameDetail::s_SymbolTextBufferLength);
         return buf;
 #endif
     }
 
 
 private:
+#if defined(NWB_BUILDMODE)
+    constexpr void recordBuildModeSymbolText()const{
+        if(!std::is_constant_evaluated())
+            NameDetail::RecordStoredNameSymbolText(m_hash, m_debugName, sizeof(m_debugName), m_hasSymbolText);
+    }
+#endif
+
+
+private:
     NameHash m_hash;
-#if defined(NWB_DEBUG)
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
     char m_debugName[256];
+#endif
+#if defined(NWB_BUILDMODE)
+    bool m_hasSymbolText;
 #endif
 };
 
 
 inline constexpr bool operator==(const Name& a, const Name& b){
-    return a.m_hash == b.m_hash;
+    return a.hash() == b.hash();
 }
 inline constexpr bool operator!=(const Name& a, const Name& b){
     return !(a == b);
@@ -481,7 +721,7 @@ namespace std{
 template<>
 struct hash<Name>{
     usize operator()(const Name& name)const{
-        return NameDetail::HashValue(name.m_hash);
+        return NameDetail::HashValue(name.hash());
     }
 };
 

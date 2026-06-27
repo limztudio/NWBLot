@@ -26,6 +26,7 @@ using MessageQueue = ParallelQueue<MessageType, LogArena>;
 using LogBytes = Vector<u8, LogArena>;
 
 inline constexpr const char* s_TelemetryUploadEndpoint = "/telemetry";
+inline constexpr const char* s_NameSymbolUploadEndpoint = "/namesym";
 
 [[nodiscard]] inline MessageType MakeMessageType(LogArena& arena){
     return MakeTuple(Timer{}, Type::Info, LogString(arena));

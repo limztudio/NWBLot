@@ -137,9 +137,46 @@ def wait_for_log_message(directory, baseline, pattern, needle, timeout_seconds):
     raise SmokeFailure(f"timed out waiting for log message '{needle}'\n{last_text}")
 
 
+def request_windows_graceful_exit(pid):
+    # Post WM_CLOSE to every top-level window the process owns. This drives the app's normal shutdown
+    # (WM_CLOSE -> DestroyWindow -> WM_DESTROY -> PostQuitMessage -> message loop returns -> main returns), so its
+    # graceful-exit work runs -- notably the NWB_BUILDMODE Name-symbol sidecar write (WriteDefaultFile), which a hard
+    # TerminateProcess would skip. Returns True if at least one window was signalled.
+    user32 = ctypes.windll.user32
+    wm_close = 0x0010
+    targets = []
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    def _enum(hwnd, _lparam):
+        owner_pid = ctypes.c_ulong(0)
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner_pid))
+        if owner_pid.value == pid:
+            targets.append(hwnd)
+        return True
+
+    user32.EnumWindows(_enum, 0)
+    for hwnd in targets:
+        user32.PostMessageW(hwnd, wm_close, 0, 0)
+    return bool(targets)
+
+
 def terminate_process(process, name):
     if process is None or process.poll() is not None:
         return
+
+    # Prefer a graceful shutdown so the app's normal exit path runs (e.g. the NWB_BUILDMODE Name-symbol sidecar write);
+    # a hard terminate() (TerminateProcess on Windows) would skip it. The window capture has already happened by the
+    # time we tear down, so this never affects what was captured -- only how the app exits.
+    if platform.system() == "Windows":
+        try:
+            if request_windows_graceful_exit(process.pid):
+                try:
+                    process.wait(timeout=10.0)
+                    return
+                except subprocess.TimeoutExpired:
+                    write_status(f"{name}: did not exit after WM_CLOSE; terminating")
+        except OSError as error:
+            write_status(f"{name}: graceful WM_CLOSE failed ({error}); terminating")
 
     process.terminate()
     try:

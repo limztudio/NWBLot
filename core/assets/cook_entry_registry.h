@@ -132,6 +132,25 @@ namespace CookEntryRegistryDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Resolves a cook entry's `virtualPath` member to a Name regardless of how the entry stores it. Most asset entries
+// store `virtualPath` as a Name -- this overload is a zero-cost identity pass-through, so their dedup/output is
+// unchanged. An entry that instead keeps the readable source TEXT (e.g. the material entry, which needs the text for
+// generated-shader file paths / `#include`s / identities -- Name::c_str() is only a hash off debug) stores a string
+// `virtualPath`; this overload hashes it to the Name on demand. Either way the framework keys dedup + cooked output
+// by the same Name. Logging keeps using entry.virtualPath.c_str() directly (Name and string both provide it).
+[[nodiscard]] inline const Name& ToCookEntryName(const Name& virtualPath){
+    return virtualPath;
+}
+template<typename StringT>
+    requires requires(const StringT& text){ text.data(); text.size(); }
+[[nodiscard]] inline Name ToCookEntryName(const StringT& virtualPath){
+    return ToName(virtualPath);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline bool RegisterParsedVirtualPath(
     const tchar* assetKind,
     const Name& virtualPath,
@@ -280,7 +299,7 @@ public:
         for(EntryT& entry : m_entries){
             if(!CookEntryRegistryDetail::RegisterCookedVirtualPath(
                 m_assetKindText,
-                entry.virtualPath,
+                CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath),
                 context.seenVirtualPathHashes
             ))
                 return false;
@@ -298,7 +317,7 @@ public:
 
             if(!context.writer.writeCookedAsset(
                 m_assetKindText,
-                entry.virtualPath,
+                CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath),
                 asset,
                 codec
             ))
@@ -312,7 +331,7 @@ private:
     bool appendParsedEntry(EntryT&& entry, CookEntryParseContext& context){
         if(!CookEntryRegistryDetail::RegisterParsedVirtualPath(
             m_assetKindText,
-            entry.virtualPath,
+            CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath),
             context.seenVirtualPathHashes
         ))
             return false;

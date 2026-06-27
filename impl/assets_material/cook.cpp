@@ -539,12 +539,10 @@ static bool ParseMaterialParameters(
 static bool ParseMaterialInterface(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    Name& outMaterialInterface,
-    MaterialCookString& outMaterialInterfaceText,
+    MaterialCookString& outMaterialInterface,
     ScratchArena& scratchArena
 ){
-    outMaterialInterface = NAME_NONE;
-    outMaterialInterfaceText.clear();
+    outMaterialInterface.clear();
 
     const auto* interfaceValue = asset.findField(MaterialAssetMetadataSchema::s_InterfaceField);
     if(!interfaceValue){
@@ -589,17 +587,16 @@ static bool ParseMaterialInterface(
             ch = '/';
     }
 
-    outMaterialInterface = Name(AStringView(strippedInterface));
-    if(!outMaterialInterface){
+    // Store the readable interface path text; the Name it hashes to is produced on demand (bind lookup / identity
+    // compare / cooked Material). Validate that the text forms a valid Name first, failing early with a clear message.
+    if(!Name(AStringView(strippedInterface))){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface '{}' is invalid")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(interfacePath)
         );
         return false;
     }
-    // Keep the readable interface path text the Name was hashed from: the generated PS `#include`s it + the
-    // shadow-transmittance dispatch dedups by it, neither of which can use the lossy (hash-only off opt) Name.
-    outMaterialInterfaceText.assign(AStringView(strippedInterface));
+    outMaterialInterface.assign(AStringView(strippedInterface));
 
     return true;
 }
@@ -1696,14 +1693,16 @@ static bool ValidateMaterialCookInterfaces(
         materialEntry.typedLayoutFields.clear();
         materialEntry.typedBlockBytes.clear();
 
-        if(!materialEntry.materialInterface){
+        if(materialEntry.materialInterface.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' is missing required material interface")
                 , StringConvert(materialEntry.virtualPath.c_str())
             );
             return false;
         }
 
-        const auto bindEntryIt = materialBindLookup.find(materialEntry.materialInterface);
+        // The interface is stored as text; build the Name hash key the bind lookup + typed-layout machinery need.
+        const Name materialInterfaceName(AStringView(materialEntry.materialInterface));
+        const auto bindEntryIt = materialBindLookup.find(materialInterfaceName);
         if(bindEntryIt == materialBindLookup.end()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' references unknown material interface '{}'")
                 , StringConvert(materialEntry.virtualPath.c_str())
@@ -1715,7 +1714,7 @@ static bool ValidateMaterialCookInterfaces(
 
         const MaterialBindTypedLayout* layout = nullptr;
         if(!FindOrBuildMaterialBindTypedLayout(
-            materialEntry.materialInterface,
+            materialInterfaceName,
             *bindEntry,
             layoutCache,
             layout,
@@ -1739,7 +1738,7 @@ static bool ValidateMaterialCookInterfaces(
         );
         if(!ApplyMaterialBindTypedLayoutParameters(
             *layout,
-            materialEntry.virtualPath,
+            Name(AStringView(materialEntry.virtualPath)),
             materialEntry.parameters,
             materialEntry.typedBlockBytes
         ))
@@ -1765,18 +1764,17 @@ static bool ParseMaterialMeta(
         return false;
     }
 
-    // Derive the material's virtual path as both the Name identity (framework dedup keys on its hash) and the
-    // readable text (the cook builds generated-shader file paths / identities from it, which must stay readable off
-    // opt). BuildDerivedAssetVirtualPath's text overload yields the exact string the Name is hashed from.
+    // Derive the material's virtual path as readable text (stored verbatim; the cook builds generated-shader file
+    // paths / identities from it, and the framework dedups by the Name it hashes to via ToCookEntryName). Validate
+    // it forms a valid Name before storing.
     ScratchString derivedVirtualPath(scratchArena);
     if(!Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, derivedVirtualPath))
         return false;
-    outEntry.virtualPath = Name(AStringView(derivedVirtualPath));
-    if(!outEntry.virtualPath){
+    if(!Name(AStringView(derivedVirtualPath))){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': failed to derive a valid virtual path"), PathToString<tchar>(nwbFilePath));
         return false;
     }
-    outEntry.virtualPathText.assign(AStringView(derivedVirtualPath));
+    outEntry.virtualPath.assign(AStringView(derivedVirtualPath));
     if(!Core::Assets::ValidateMetadataAssetFields(
         nwbFilePath,
         asset,
@@ -1793,7 +1791,7 @@ static bool ParseMaterialMeta(
         scratchArena
     ))
         return false;
-    if(!ParseMaterialInterface(nwbFilePath, asset, outEntry.materialInterface, outEntry.materialInterfaceText, scratchArena))
+    if(!ParseMaterialInterface(nwbFilePath, asset, outEntry.materialInterface, scratchArena))
         return false;
     if(!ParseMaterialBxdf(nwbFilePath, asset, outEntry.bxdfSource, scratchArena))
         return false;
@@ -2137,7 +2135,7 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
         }
         surfaceSlot = surface;
 
-        const AStringView interfaceName(entry.materialInterfaceText);
+        const AStringView interfaceName(entry.materialInterface);
         AStringView& interfaceSlot = interfaceById[entry.shadowTransmittanceModelId];
         if(!interfaceSlot.empty() && interfaceSlot != interfaceName){
             NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: model id {} maps to multiple material interfaces"), entry.shadowTransmittanceModelId);
@@ -2310,7 +2308,7 @@ static bool EmitMaterialPixelShadersImpl(
             );
             return false;
         }
-        if(!entry.materialInterface){
+        if(entry.materialInterface.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' needs an interface to generate its pixel shader")
                 , StringConvert(entry.virtualPath.c_str())
             );
@@ -2325,14 +2323,14 @@ static bool EmitMaterialPixelShadersImpl(
         generatedSource += "// assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
         generatedSource += "#include \"mesh/material_ps_authoring.slangi\"\n";
         generatedSource += "#include \"";
-        generatedSource += entry.materialInterfaceText.c_str();
+        generatedSource += entry.materialInterface.c_str();
         generatedSource += ".bind\"\n";
         generatedSource += "#include \"";
         generatedSource += entry.surfaceSource.c_str();
         generatedSource += "\"\n";
 
         CookString relativeFile(arena);
-        relativeFile += entry.virtualPathText.c_str();
+        relativeFile += entry.virtualPath.c_str();
         relativeFile += ".slang";
         const Path outputPath = generatedRoot / relativeFile.c_str();
         errorCode.clear();
@@ -2352,7 +2350,7 @@ static bool EmitMaterialPixelShadersImpl(
 
         GeneratedMaterialPixelShader generated(arena);
         generated.name += "generated/material_ps/";
-        generated.name += entry.virtualPathText.c_str();
+        generated.name += entry.virtualPath.c_str();
         {
             ScratchString sourceText = PathToString(scratchArena, outputPath);
             for(char& ch : sourceText){
@@ -2432,7 +2430,7 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
             continue;
         if(entry.surfaceSource.empty())
             continue;
-        if(!entry.materialInterface){
+        if(entry.materialInterface.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: transparent material '{}' needs an interface to generate its AVBOIT {} pixel shader")
                 , StringConvert(entry.virtualPath.c_str())
                 , StringConvert(passLabel)
@@ -2451,14 +2449,14 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
         generatedSource += authoringHeaderInclude;
         generatedSource += "\"\n";
         generatedSource += "#include \"";
-        generatedSource += entry.materialInterfaceText.c_str();
+        generatedSource += entry.materialInterface.c_str();
         generatedSource += ".bind\"\n";
         generatedSource += "#include \"";
         generatedSource += entry.surfaceSource.c_str();
         generatedSource += "\"\n";
 
         CookString relativeFile(arena);
-        relativeFile += entry.virtualPathText.c_str();
+        relativeFile += entry.virtualPath.c_str();
         relativeFile += ".slang";
         const Path outputPath = generatedRoot / relativeFile.c_str();
         errorCode.clear();
@@ -2480,7 +2478,7 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
 
         GeneratedMaterialPixelShader generated(arena);
         generated.name += generatedNamePrefix;
-        generated.name += entry.virtualPathText.c_str();
+        generated.name += entry.virtualPath.c_str();
         {
             ScratchString sourceText = PathToString(scratchArena, outputPath);
             for(char& ch : sourceText){
@@ -2663,7 +2661,7 @@ bool ResolveMaterialBindDependencyInterface(
 
 bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMaterial){
     Core::Assets::AssetArena& arena = materialEntry.shaderVariant.get_allocator().arena();
-    if(!materialEntry.materialInterface){
+    if(materialEntry.materialInterface.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing required material interface")
             , StringConvert(materialEntry.virtualPath.c_str())
         );
@@ -2682,9 +2680,9 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
         return false;
     }
 
-    outMaterial = Material(arena, materialEntry.virtualPath);
+    outMaterial = Material(arena, Name(AStringView(materialEntry.virtualPath)));
     outMaterial.setShaderVariant(materialEntry.shaderVariant);
-    outMaterial.setMaterialInterface(materialEntry.materialInterface);
+    outMaterial.setMaterialInterface(Name(AStringView(materialEntry.materialInterface)));
     outMaterial.setShadingModelId(materialEntry.shadingModelId);
     outMaterial.setShadowTransmittanceModelId(materialEntry.shadowTransmittanceModelId);
     if(!materialEntry.avboitAccumulatePixelShaderName.empty()){

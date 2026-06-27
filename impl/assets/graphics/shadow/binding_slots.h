@@ -41,6 +41,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Shadow UPSAMPLE pass (its own compute pipeline): the ray-traced shadow visibility is computed at HALF resolution
+// (1/4 the rays), then this pass edge-aware (world-distance bilateral) upsamples it into the full-res shadow-visibility
+// Texture2DArray the deferred lighting samples. Weighting each half-res tap by similarity to the full-res receiver +
+// dropping background taps keeps the shadow confined to its surface (no bleed across silhouettes).
+#define NWB_SHADOW_UPSAMPLE_SET 0
+#define NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_WORLD_POSITION 0
+#define NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_DEPTH 1
+#define NWB_SHADOW_UPSAMPLE_BINDING_HALF_VISIBILITY 2   // half-res Texture2DArray SRV (input)
+#define NWB_SHADOW_UPSAMPLE_BINDING_FULL_VISIBILITY 3   // full-res Texture2DArray UAV (output, lighting reads this)
+#define NWB_SHADOW_UPSAMPLE_GROUP_SIZE 8
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 

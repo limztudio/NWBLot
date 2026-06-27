@@ -134,6 +134,9 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
     const u32 refractiveInstanceCount = rayTracingState().m_causticRefractiveInstanceCount;
     const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(lightData, lightCount, refractiveInstanceCount);
     rayTracingState().m_causticLightCount = causticLightCount;
+    // Active shadow slots = the importance-ranked pool ResolveSceneLights filled (slots 0..min(lightCount,N)-1); the
+    // half-res shadow upsample reads this so it only reconstructs the slots that hold a light.
+    rayTracingState().m_shadowSlotCount = (lightCount < NWB_SCENE_SHADOW_SLOT_COUNT) ? lightCount : NWB_SCENE_SHADOW_SLOT_COUNT;
     logCausticClassificationOnce(lightData, lightCount, causticLightCount, refractiveInstanceCount);
 
     commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::CopyDest);

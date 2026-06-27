@@ -136,6 +136,10 @@ struct DeferredFrameTargets{
     Core::TextureHandle opaqueColor;
     Core::TextureHandle depth;
     Core::TextureHandle shadowVisibility;
+    // Half-res shadow visibility the hardware ray-traced backend writes (1 occlusion ray per half-res pixel, 1/4 the
+    // rays); shadow_upsample_cs edge-aware upsamples it into the full-res shadowVisibility the lighting samples. Same
+    // RGBA16F format + NWB_SCENE_SHADOW_SLOT_COUNT layers, half the spatial extent.
+    Core::TextureHandle shadowVisibilityHalf;
     // Caustic producer targets (additive, inverted lifecycle vs shadowVisibility): the RGBA16F resolved irradiance
     // the deferred lighting pass adds pre-tonemap, the R32_UINT splat accumulators (one Texture2DArray layer per RGB
     // channel) the producer's fixed-point InterlockedAdd lands in, and the RGBA16F a-trous wavelet scratch buffer.

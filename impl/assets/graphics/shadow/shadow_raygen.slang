@@ -76,12 +76,16 @@ float3 nwbShadowLightVisible(const float3 worldPosition, const float3 normal, co
 
 [shader("raygeneration")]
 void main(){
+    // HALF-RESOLUTION dispatch: one occlusion ray per half-res pixel (1/4 the rays). `pixel` is a half-res coord and the
+    // visibility buffer bound here is the half-res Texture2DArray; the G-buffer is full-res, so each half-res pixel reads
+    // its representative surface at the top-left of its 2x2 full-res block. The shadow_upsample_cs pass then edge-aware
+    // upsamples this into the full-res visibility buffer the lighting samples.
     const uint2 pixel = DispatchRaysIndex().xy;
     const uint2 dimensions = DispatchRaysDimensions().xy;
     if(pixel.x >= dimensions.x || pixel.y >= dimensions.y)
         return;
 
-    const int3 texel = int3(int2(pixel), 0);
+    const int3 texel = int3(int2(pixel) * 2, 0);
 
     // Background (no geometry) is fully lit; the lighting pass ignores it anyway.
     if(g_NwbShadowGBufferDepth.Load(texel).r >= 0.999999){

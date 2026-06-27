@@ -10,6 +10,7 @@
 
 #include <core/crash/package_names.h>
 #include <core/alloc/standalone_runtime.h>
+#include <core/common/name_symbols.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -371,7 +372,6 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
     const bool isCrashUpload = NWB_STRCMP(url, Core::Crash::PackageNames::s_CrashUploadEndpoint) == 0;
     const bool isTelemetryUpload = NWB_STRCMP(url, s_TelemetryUploadEndpoint) == 0;
-    using ConnectionInfo = __hidden_logger_server::ConnectionInfo;
     const auto uploadKind = isCrashUpload
         ? __hidden_logger_server::ConnectionUploadKind::Crash
         : isTelemetryUpload
@@ -515,6 +515,7 @@ bool Server::internalInit(
         m_crashIngestConfig.symbolication.symbolStoreDirectory = crashSymbolStoreDirectory;
     m_crashIngestConfig.retention = crashRetentionConfig;
     m_crashUploadToken.assign(crashUploadToken.data(), crashUploadToken.size());
+    [[maybe_unused]] const bool loadedNameSymbols = Core::Common::NameSymbols::LoadDefaultFile(BaseType::arena());
 
     if(logFileNameBase.empty()){
         if(!m_processedMsgFile.openByExecutableName())
@@ -574,7 +575,8 @@ bool Server::internalUpdate(){
     MessageType msg = MakeMessageType(BaseType::arena());
     while(tryDequeue(msg)){
         const auto type = Get<1>(msg);
-        const LogString formattedMessage = FormatMessageForProcessing(BaseType::arena(), msg);
+        LogString formattedMessage = FormatMessageForProcessing(BaseType::arena(), msg);
+        [[maybe_unused]] const bool decodedNameSymbols = Core::Common::NameSymbols::DecodeHashTokens(BaseType::arena(), formattedMessage);
 
         Frame::print(formattedMessage, type);
         m_processedMsgFile.writeLine(formattedMessage);

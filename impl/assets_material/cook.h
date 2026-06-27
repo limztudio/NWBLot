@@ -35,17 +35,13 @@ struct MaterialCookEntry{
     using StageShaderMap = MaterialCookMap<Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>;
     using ParameterMap = MaterialBindParameterMap;
 
-    // The material's own derived virtual path and the `.bind` interface it references, as Names: the generic cook
-    // framework dedups entries by virtualPath.hash(), and the interface is compared / looked up / cooked as a Name
-    // identity. But a Name keeps ONLY a hash -- in an opt build Name::c_str() returns a 136-char hash, not the
-    // readable text -- so building generated-shader file paths / `#include`s / identities from it (or deduping by it)
-    // produced garbage / dangling views off opt. Each Name therefore carries a companion TEXT string holding the
-    // source path it was hashed from, used wherever real readable text is structurally required. This mirrors the
-    // Shader asset's materialTypedBindingInterface (Name) + materialTypedBindingInterfacePath (text) pair.
-    Name virtualPath = NAME_NONE;
-    MaterialCookString virtualPathText;
-    Name materialInterface = NAME_NONE;
-    MaterialCookString materialInterfaceText;
+    // The material's own derived virtual path and the `.bind` interface it references, stored as the readable source
+    // TEXT (not a Name): the cook builds generated-shader file paths / `#include`s / identities + dedup keys from it,
+    // which a Name cannot give back off debug (Name::c_str() is a 136-char hash). The Name each hashes to is produced
+    // ON DEMAND -- the generic cook framework resolves virtualPath via ToCookEntryName (dedups by that hash), and the
+    // bind lookup / material_validation compare / cooked Material build the interface/path Name where needed.
+    MaterialCookString virtualPath;
+    MaterialCookString materialInterface;
     u64 typedLayoutHash = 0u;
     Material::TypedLayoutBlockVector typedLayoutBlocks;
     Material::TypedLayoutFieldVector typedLayoutFields;
@@ -90,8 +86,8 @@ struct MaterialCookEntry{
     bool refractive = false;
 
     explicit MaterialCookEntry(MaterialCookArena& arena)
-        : virtualPathText(arena)
-        , materialInterfaceText(arena)
+        : virtualPath(arena)
+        , materialInterface(arena)
         , typedLayoutBlocks(arena)
         , typedLayoutFields(arena)
         , typedBlockBytes(arena)
@@ -106,10 +102,8 @@ struct MaterialCookEntry{
     {}
 
     void reset(){
-        virtualPath = NAME_NONE;
-        virtualPathText.clear();
-        materialInterface = NAME_NONE;
-        materialInterfaceText.clear();
+        virtualPath.clear();
+        materialInterface.clear();
         typedLayoutHash = 0u;
         typedLayoutBlocks.clear();
         typedLayoutFields.clear();

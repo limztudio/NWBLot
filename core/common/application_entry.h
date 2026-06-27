@@ -7,6 +7,7 @@
 
 #include "module.h"
 #include "arena_names.h"
+#include "name_symbols.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,13 +31,26 @@ using AnsiEntryPointFn = int(*)(isize, char**, void*);
 template<typename Invoke>
 [[nodiscard]] inline int InvokeWithInitializedCommon(Invoke&& invoke){
     try{
-        InitializerGuard commonInitializerGuard;
-        if(!commonInitializerGuard.initialize())
-            return -1;
+        NameSymbols::InstallRuntimeRegistry();
 
-        return Forward<Invoke>(invoke)();
+        InitializerGuard commonInitializerGuard;
+        if(!commonInitializerGuard.initialize()){
+#if defined(NWB_BUILDMODE)
+            [[maybe_unused]] const bool wroteNameSymbols = NameSymbols::WriteDefaultFile();
+#endif
+            return -1;
+        }
+
+        const int result = Forward<Invoke>(invoke)();
+#if defined(NWB_BUILDMODE)
+        [[maybe_unused]] const bool wroteNameSymbols = NameSymbols::WriteDefaultFile();
+#endif
+        return result;
     }
     catch(...){
+#if defined(NWB_BUILDMODE)
+        [[maybe_unused]] const bool wroteNameSymbols = NameSymbols::WriteDefaultFile();
+#endif
         return -1;
     }
 }

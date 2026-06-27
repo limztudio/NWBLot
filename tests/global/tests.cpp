@@ -17,6 +17,8 @@
 #include <global/limit.h>
 #include <global/text_utils.h>
 
+#include <core/common/name_symbols.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,6 +29,7 @@ namespace __hidden_global_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 using CapturingLogger = NWB::Tests::CapturingLogger;
 using AString = NWB::Tests::TestAString;
+using NameSymbolTestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
 template<typename T>
 using Vector = NWB::Tests::TestVector<T>;
 
@@ -124,6 +127,50 @@ TEST(Global, PodRoundTrip){
     readValue = 0u;
     EXPECT_TRUE(ReadPOD(byteView, cursor, readValue));
     EXPECT_EQ(readValue, writtenValue);
+}
+
+TEST(Global, RuntimeNameSymbolsRecordStringViewNames){
+    NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
+    NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
+
+    const Name runtimeName(AStringView("Runtime\\Generated"));
+    char resolvedText[64] = {};
+    EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(runtimeName.hash(), resolvedText, sizeof(resolvedText)));
+    EXPECT_STREQ(resolvedText, "runtime/generated");
+
+    const Name literalName("Literal\\Name");
+    EXPECT_FALSE(NWB::Core::Common::NameSymbols::Resolve(literalName.hash(), resolvedText, sizeof(resolvedText)));
+}
+
+TEST(Global, NameSymbolsWriteDefaultFile){
+    NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
+    NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
+
+    const Name runtimeName(AStringView("Write\\Default\\Namesym"));
+    static_cast<void>(runtimeName.hash());
+
+    NWB::Core::Alloc::GlobalArena pathArena(NWB::Tests::s_TestArena);
+
+    NameSymbolTestPath executableDirectory(pathArena);
+    ASSERT_TRUE(GetExecutableDirectory(executableDirectory));
+
+    NameSymbolTestPath executableName(pathArena);
+    ASSERT_TRUE(GetExecutableName(executableName));
+
+    NameSymbolTestPath namesymPath = executableDirectory / executableName;
+    namesymPath.replace_extension(NWB_TEXT(".namesym"));
+
+    ErrorCode removeError;
+    [[maybe_unused]] const bool removedOldNamesym = RemoveFile(namesymPath, removeError);
+
+    EXPECT_TRUE(NWB::Core::Common::NameSymbols::WriteDefaultFile());
+
+    AString namesymText;
+    ASSERT_TRUE(ReadTextFile(namesymPath, namesymText));
+    EXPECT_NE(namesymText.find("nwb_namesym_v1"), AString::npos);
+    EXPECT_NE(namesymText.find("write/default/namesym"), AString::npos);
+
+    [[maybe_unused]] const bool removedNamesym = RemoveFile(namesymPath, removeError);
 }
 
 TEST(Global, LengthPrefixedStringRoundTrip){

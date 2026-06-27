@@ -142,7 +142,7 @@ bool ValidateMaterials(
                     );
                     return false;
                 }
-                if(shaderMaterialInterface != materialEntry.materialInterface){
+                if(shaderMaterialInterface != Name(AStringView(materialEntry.materialInterface))){
                     NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but pixel shader '{}' "
                         "includes generated material bind interface '{}'")
                         , StringConvert(materialEntry.virtualPath.c_str())

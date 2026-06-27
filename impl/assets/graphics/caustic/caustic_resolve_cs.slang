@@ -120,29 +120,58 @@ static const float s_NwbCausticResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const uint stage = g_NwbCausticResolvePushConstants.stage;
 
-    // UPSAMPLE (stage 2, FULL-res dispatch): bilinearly resample the final half-res caustic into the full-res irradiance
-    // buffer. Background pixels (no receiver) write zero so the additive lighting term is a pixel-identical no-op there.
+    // UPSAMPLE (stage 2, FULL-res dispatch): EDGE-AWARE (joint-bilateral) resample of the final half-res caustic into the
+    // full-res irradiance buffer. A plain bilinear upsample would blend the 4 surrounding half-res taps regardless of what
+    // surface they sit on, smearing the caustic ~1 full pixel PAST a silhouette onto the wrong receiver (or into a
+    // shadowed neighbour) -- the caustic "exceeds" its region. Instead each tap is weighted by the bilinear weight AND a
+    // world-distance edge-stop to THIS full-res pixel's receiver, and background taps are dropped, so the caustic stays
+    // confined to the surface it belongs to. On a flat receiver all taps pass -> it degrades to plain bilinear.
     if(stage == 2u){
         const uint2 pixel = dispatchThreadID.xy;
         if(pixel.x >= g_NwbCausticResolvePushConstants.width || pixel.y >= g_NwbCausticResolvePushConstants.height)
             return;
-        if(g_NwbCausticResolveGBufferDepth.Load(int3(int2(pixel), 0)).r >= 0.999999){
-            g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
+
+        const int fw = (int)g_NwbCausticResolvePushConstants.width;
+        const int fh = (int)g_NwbCausticResolvePushConstants.height;
+        const int2 fullTexel = int2(pixel);
+        if(g_NwbCausticResolveGBufferDepth.Load(int3(fullTexel, 0)).r >= 0.999999){
+            g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0); // background: additive no-op
             return;
         }
+
+        // Edge-stop sigma from the full-res pixel's own world spacing (max of +x / +y to handle foreshortening on a
+        // grazing receiver); a few pixels of tolerance keeps same-surface taps while rejecting a silhouette jump.
+        const float3 centerWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(fullTexel, 0)).xyz;
+        const int2 rightFull = int2(min(fullTexel.x + 1, fw - 1), fullTexel.y);
+        const int2 downFull = int2(fullTexel.x, min(fullTexel.y + 1, fh - 1));
+        const float3 dxWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(rightFull, 0)).xyz - centerWorld;
+        const float3 dyWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(downFull, 0)).xyz - centerWorld;
+        const float spacing = max(max(length(dxWorld), length(dyWorld)), 1e-4);
+        const float sigmaWorld = spacing * 3.0;
+        const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
 
         const int hw = (int)g_NwbCausticResolvePushConstants.halfWidth;
         const int hh = (int)g_NwbCausticResolvePushConstants.halfHeight;
         const float2 src = (float2(pixel) + 0.5) * 0.5 - 0.5; // full pixel centre -> half-res texel-centre space
         const int2 baseTexel = int2(floor(src));
         const float2 lerpFrac = src - float2(baseTexel);
-        const int2 c00 = int2(clamp(baseTexel.x, 0, hw - 1), clamp(baseTexel.y, 0, hh - 1));
-        const int2 c10 = int2(clamp(baseTexel.x + 1, 0, hw - 1), clamp(baseTexel.y, 0, hh - 1));
-        const int2 c01 = int2(clamp(baseTexel.x, 0, hw - 1), clamp(baseTexel.y + 1, 0, hh - 1));
-        const int2 c11 = int2(clamp(baseTexel.x + 1, 0, hw - 1), clamp(baseTexel.y + 1, 0, hh - 1));
-        const float3 top = lerp(g_NwbCausticResolveInputColor.Load(int3(c00, 0)).rgb, g_NwbCausticResolveInputColor.Load(int3(c10, 0)).rgb, lerpFrac.x);
-        const float3 bottom = lerp(g_NwbCausticResolveInputColor.Load(int3(c01, 0)).rgb, g_NwbCausticResolveInputColor.Load(int3(c11, 0)).rgb, lerpFrac.x);
-        g_NwbCausticResolveOutput[pixel] = float4(lerp(top, bottom, lerpFrac.y), 1.0);
+
+        float3 sum = float3(0.0, 0.0, 0.0);
+        float weightSum = 0.0;
+        [unroll] for(int j = 0; j < 2; ++j){
+            [unroll] for(int i = 0; i < 2; ++i){
+                const int2 tap = int2(clamp(baseTexel.x + i, 0, hw - 1), clamp(baseTexel.y + j, 0, hh - 1));
+                if(nwbCausticResolveDepthAtHalf(tap) >= 0.999999)
+                    continue; // tap sits on background -> no receiver, would bleed the dark surround
+                const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
+                const float3 d = nwbCausticResolveWorldAtHalf(tap) - centerWorld;
+                const float weight = bilinearWeight * exp(-dot(d, d) * invTwoSigmaWorldSq);
+                sum += weight * g_NwbCausticResolveInputColor.Load(int3(tap, 0)).rgb;
+                weightSum += weight;
+            }
+        }
+        // All four taps rejected (an isolated full-res receiver sliver between half-res background taps): no caustic.
+        g_NwbCausticResolveOutput[pixel] = (weightSum > 0.0) ? float4(sum / weightSum, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
         return;
     }
 

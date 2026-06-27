@@ -87,24 +87,30 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const int hw = (int)g_NwbShadowUpsamplePushConstants.halfWidth;
     const int hh = (int)g_NwbShadowUpsamplePushConstants.halfHeight;
     const float2 src = (float2(pixel) + 0.5) * 0.5 - 0.5; // full pixel centre -> half-res texel-centre space
-    const int2 baseTexel = int2(floor(src));
-    const float2 lerpFrac = src - float2(baseTexel);
+    const int2 baseTexel = int2(round(src)); // nearest half texel; gather a 3x3 neighbourhood around it
+    const float spatialSigma = 1.0;          // in half-res texels
+    const float invTwoSpatialSq = 1.0 / (2.0 * spatialSigma * spatialSigma);
 
-    // One geometry weight set, reused for all slots.
-    float weights[4];
-    int2 taps[4];
+    // 3x3 edge-aware GAUSSIAN reconstruction (denoise + upsample in one): the ray-traced shadow carries sharp
+    // grazing-Fresnel dark detail at refractor silhouettes (present at full-res too, just finer) that reads as dark
+    // speckle -- worst where two refractors' silhouette projections overlap. A small geometry-stopped Gaussian over the
+    // half-res neighbourhood smooths those dark outliers, while the world-distance edge-stop + background-tap drop keep
+    // it confined to the receiver (no bleed across silhouettes; degrades to a plain blur on a flat receiver). One weight
+    // set, reused for every slot.
+    float weights[9];
+    int2 taps[9];
     float weightSum = 0.0;
-    [unroll] for(int j = 0; j < 2; ++j){
-        [unroll] for(int i = 0; i < 2; ++i){
-            const int idx = j * 2 + i;
+    [unroll] for(int j = -1; j <= 1; ++j){
+        [unroll] for(int i = -1; i <= 1; ++i){
+            const int idx = (j + 1) * 3 + (i + 1);
             const int2 tap = int2(clamp(baseTexel.x + i, 0, hw - 1), clamp(baseTexel.y + j, 0, hh - 1));
             taps[idx] = tap;
             const int2 tapFull = nwbShadowUpsampleHalfToFull(tap);
             float weight = 0.0;
             if(g_NwbShadowUpsampleDepth.Load(int3(tapFull, 0)).r < 0.999999){ // skip background taps
-                const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
+                const float2 spatial = float2(tap) - src;
                 const float3 d = g_NwbShadowUpsampleWorldPosition.Load(int3(tapFull, 0)).xyz - centerWorld;
-                weight = bilinearWeight * exp(-dot(d, d) * invTwoSigmaWorldSq);
+                weight = exp(-dot(spatial, spatial) * invTwoSpatialSq) * exp(-dot(d, d) * invTwoSigmaWorldSq);
             }
             weights[idx] = weight;
             weightSum += weight;
@@ -121,7 +127,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float invWeightSum = 1.0 / weightSum;
     for(uint slot = 0u; slot < slotCount; ++slot){
         float3 sum = float3(0.0, 0.0, 0.0);
-        [unroll] for(int k = 0; k < 4; ++k){
+        [unroll] for(int k = 0; k < 9; ++k){
             if(weights[k] > 0.0)
                 sum += weights[k] * g_NwbShadowUpsampleHalfVisibility.Load(int4(taps[k], (int)slot, 0)).rgb;
         }

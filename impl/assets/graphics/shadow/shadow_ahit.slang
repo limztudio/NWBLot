@@ -84,26 +84,55 @@ void main(inout NwbShadowOcclusionPayload payload, in BuiltInTriangleIntersectio
         // Integrate this surface crossing into the running visibility the engine way: per-crossing Fresnel folds
         // into transmittance, and a signed Beer-Lambert optical depth telescopes the real inside path length. The
         // hook supplies only the optical params (ior / transmission); the engine -- which sees both the entry and
-        // exit faces of an occluder -- owns the integration. faceSign is +1 on an exit face (ray leaving along the
-        // normal) and -1 on an entry face, so the signed-t sum collapses to the true path length through each
-        // volume. Same surface, cosI/faceSign, helpers, and accumulation as the software traversal; only the t source
-        // differs (RayTCurrent() here vs the SW triangleHit.t). worldNormal is the shading normal -- correct for the
-        // flat-shaded octahedron; a geometric-normal refinement would harden faceSign/cosI for smooth meshes.
+        // exit faces of an occluder -- owns the integration. worldNormal (above) stays the SHADING normal the hook
+        // reads; the per-crossing PHYSICS below uses the GEOMETRIC face normal instead.
         const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
-        const float ndotd = dot(hit.rayDirection, hit.worldNormal);
-        const float cosI = saturate(abs(ndotd));
-        // faceSign MUST come from the GEOMETRIC face orientation, not the shading normal: on smooth meshes (cylinder /
-        // cone) the interpolated shading normal disagrees with the true face near silhouettes, so sign(dot(rayDir,
-        // shadingNormal)) flips wrongly there -> the signed Beer-Lambert path telescopes incorrectly (an entry counted
-        // as an exit) -> wrong attenuation -> dark speckle where refractor shadows overlap (rays graze both silhouettes).
-        // HitKind() is the robust geometric front/back test: a FRONT face is an entry (-1), a back face an exit (+1).
-        const float faceSign = (HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE) ? -1.0 : 1.0;
-        payload.transmittance *= nwbShadowFresnelTransmittedFraction(surface.ior, cosI);
-        payload.opticalDepth += nwbShadowAbsorptionCoefficient(surface.transmission) * RayTCurrent() * faceSign;
-        if(max(max(payload.transmittance.x, payload.transmittance.y), payload.transmittance.z) < NWB_SHADOW_RT_TRANSMITTANCE_EPSILON){
-            payload.transmittance = float3(0.0, 0.0, 0.0);
+
+        // Per-crossing faceSign + cosI from the GEOMETRIC face normal, NOT the interpolated shading normal. The
+        // shading normal varies smoothly across a triangle, so near a smooth mesh's silhouette (cylinder / cone)
+        // it sweeps front<->back over a WIDE band and flips sign(dot(rayDir, normal)) -- which inverts faceSign (an
+        // entry counted as an exit) and craters cosI. A sign-flipped face is catastrophic here: the optical-depth
+        // term is absorptionCoeff * t * faceSign with t the ABSOLUTE ray distance from the receiver (>> the chord
+        // through the volume), so one wrong sign turns exp(-opticalDepth) into a near-black -- or, clamped from a
+        // negative partial, an over-bright -- speckle exactly where two refractors' shadows overlap. The per-triangle
+        // geometric normal cross(p1-p0, p2-p0) is constant over the face, so it only grazes at the measure-zero
+        // tangent line (where the chord, hence the contribution, is ~0). Derived in OBJECT space from the BLAS-
+        // matching positions + ObjectRayDirection(), making it byte-identical to the software traversal; under
+        // uniform instance scale the object-space incidence angle equals world space (the rasterizer's case).
+        const float3 p0 = asfloat(g_NwbShadowMeshPositions[material.meshSlot].Load3(i0 * 12u));
+        const float3 p1 = asfloat(g_NwbShadowMeshPositions[material.meshSlot].Load3(i1 * 12u));
+        const float3 p2 = asfloat(g_NwbShadowMeshPositions[material.meshSlot].Load3(i2 * 12u));
+        const float3 geometricNormal = cross(p1 - p0, p2 - p0);
+        const float3 objectRayDirection = ObjectRayDirection();
+        const float ndotd = dot(objectRayDirection, geometricNormal);
+        // faceSign: +1 on an exit face (ray leaving along the outward normal), -1 on an entry face, so the signed-t
+        // sum telescopes to the true inside path length per volume.
+        const float faceSign = (ndotd >= 0.0) ? 1.0 : -1.0;
+        // cosI = |cos| of incidence against the geometric face (normalize both operands).
+        const float cosI = saturate(abs(ndotd) * rsqrt(max(dot(geometricNormal, geometricNormal), 1e-20)) * rsqrt(max(dot(objectRayDirection, objectRayDirection), 1e-20)));
+        const float t = RayTCurrent();
+        const float3 absorptionCoeff = nwbShadowAbsorptionCoefficient(surface.transmission);
+        // Fresnel: fade to a NO-OP at grazing. A tangential silhouette clip is a phantom hit on the faceted
+        // approximation of a smooth surface; an unfaded Schlick term there (cosI -> 0 -> transmitted fraction -> 0)
+        // would spuriously darken it. Fading the factor toward 1 makes the clip the no-op the smooth surface would
+        // be; a real near-silhouette pair just gets a slightly lighter rim. (Fresnel only attenuates -> never brightens.)
+        const float grazeWeight = smoothstep(0.0, 0.25, cosI);
+        payload.transmittance *= lerp(1.0, nwbShadowFresnelTransmittedFraction(surface.ior, cosI), grazeWeight);
+        // Signed Beer-Lambert optical depth + the absolute-t bias-correction accumulators (see the payload doc and the
+        // raygen finalize). The optical depth itself is deliberately NOT grazing-weighted: weighting it would unbalance
+        // a near-silhouette pair (one face kept, one faded) into a spike of the OPPOSITE sign. Instead the coeff-
+        // weighted face-sign sum + crossing stats let the finalize subtract tBias * sign -- inert for balanced
+        // occluders, exact cancellation for an unbalanced clip, with no threshold.
+        payload.opticalDepth += absorptionCoeff * t * faceSign;
+        payload.opticalDepthSign += absorptionCoeff * faceSign;
+        payload.crossingTSum += t;
+        payload.crossingCount += 1.0;
+        // Early-out ONLY as a cost safeguard for deeply-stacked transparency: end the search but KEEP the accumulated
+        // (already near-zero) value -- do NOT hard-snap it to pure black. The old `= 0` was order-dependent (any-hit
+        // fires in arbitrary order), so a single grazing crossing firing first manufactured a hard-black pixel, and
+        // different rays snapped at different times -> the structural blur-surviving dark speckle in the overlap.
+        if(max(max(payload.transmittance.x, payload.transmittance.y), payload.transmittance.z) < NWB_SHADOW_RT_TRANSMITTANCE_EPSILON)
             AcceptHitAndEndSearch();
-        }
         IgnoreHit();
     }
     else{

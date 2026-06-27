@@ -236,7 +236,7 @@ NwbSwShadowVertexAttrib nwbSwShadowLoadVertexAttrib(const uint meshIndex, const 
 // triangle BVH. Each triangle the ray crosses integrates one surface crossing into the running visibility (Fresnel
 // into transmittance + signed Beer-Lambert into opticalDepth) for a transparent occluder, or zeroes the
 // transmittance and stops for an opaque occluder. Both accumulators carry across hits.
-void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout float3 transmittance, inout float3 opticalDepth){
+void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout float3 transmittance, inout float3 opticalDepth, inout float3 opticalDepthSign, inout float crossingTSum, inout float crossingCount){
     const NwbSwShadowInstance instance = g_NwbSwShadowInstances[instanceIndex];
     const NwbRtInstanceMaterial material = g_NwbSwShadowInstanceMaterial[instanceIndex];
     const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
@@ -303,15 +303,31 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 // normalized, so triangleHit.t is the same world distance RayTCurrent() gives -- the two backends
                 // integrate identical optical depths.
                 const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
-                const float ndotd = dot(hit.rayDirection, hit.worldNormal);
-                const float cosI = saturate(abs(ndotd));
+                // Per-crossing faceSign + cosI from the GEOMETRIC face normal, NOT the interpolated shading normal --
+                // identical to the HW any-hit (see shadow_ahit.slang for the full reasoning: the shading normal flips
+                // over a wide band at a smooth-mesh silhouette and a sign flip blows the absolute-t optical-depth term
+                // into a black / over-bright speckle in a two-refractor overlap). v0/v1/v2 + the object-space ray
+                // `direction` are already in hand, so this is the same object-space math the hardware path now runs.
+                // hit.worldNormal stays the SHADING normal for any hook that reads it; the physics uses geometry only.
+                const float3 geometricNormal = cross(v1 - v0, v2 - v0);
+                const float ndotd = dot(direction, geometricNormal);
                 const float faceSign = (ndotd >= 0.0) ? 1.0 : -1.0;
-                transmittance *= nwbShadowFresnelTransmittedFraction(surface.ior, cosI);
-                opticalDepth += nwbShadowAbsorptionCoefficient(surface.transmission) * triangleHit.t * faceSign;
-                if(max(max(transmittance.x, transmittance.y), transmittance.z) < NWB_SW_SHADOW_TRANSMITTANCE_EPSILON){
-                    transmittance = float3(0.0, 0.0, 0.0);
+                const float cosI = saturate(abs(ndotd) * rsqrt(max(dot(geometricNormal, geometricNormal), 1e-20)) * rsqrt(max(dot(direction, direction), 1e-20)));
+                const float3 absorptionCoeff = nwbShadowAbsorptionCoefficient(surface.transmission);
+                // Fresnel faded to a no-op at grazing (a phantom tangential silhouette clip); the optical depth is via
+                // the signed sum + the absolute-t bias-correction accumulators (coeff-weighted face-sign sum + crossing
+                // stats), NOT grazing-weighted -- identical to the HW any-hit (see shadow_ahit.slang for the reasoning).
+                const float grazeWeight = smoothstep(0.0, 0.25, cosI);
+                transmittance *= lerp(1.0, nwbShadowFresnelTransmittedFraction(surface.ior, cosI), grazeWeight);
+                opticalDepth += absorptionCoeff * triangleHit.t * faceSign;
+                opticalDepthSign += absorptionCoeff * faceSign;
+                crossingTSum += triangleHit.t;
+                crossingCount += 1.0;
+                // Cost safeguard for deeply-stacked transparency: stop once effectively opaque, but KEEP the
+                // accumulated (near-zero) value -- the finalize applies the same Beer-Lambert term. Hard-zeroing here
+                // was order-dependent and could snap an overlap pixel to pure black; matches the HW soft early-out.
+                if(max(max(transmittance.x, transmittance.y), transmittance.z) < NWB_SW_SHADOW_TRANSMITTANCE_EPSILON)
                     return;
-                }
             }
         }
         else{
@@ -331,7 +347,7 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
 // Scene-level occlusion: walk the software scene/instance BVH; each leaf is an instance whose world AABB the
 // ray crossed, so refine it with the exact per-mesh triangle traversal and fold its contribution into the
 // running visibility (transmittance + opticalDepth). Stops as soon as the transmittance reaches zero (an opaque hit).
-void nwbSwShadowOccluded(const float3 origin, const float3 direction, const float tMin, const float tMax, inout float3 transmittance, inout float3 opticalDepth){
+void nwbSwShadowOccluded(const float3 origin, const float3 direction, const float tMin, const float tMax, inout float3 transmittance, inout float3 opticalDepth, inout float3 opticalDepthSign, inout float crossingTSum, inout float crossingCount){
     if(g_NwbSwShadowPushConstants.instanceCount == 0u)
         return;
 
@@ -348,7 +364,7 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
             continue;
 
         if(nwbBvhNodeIsLeaf(node)){
-            nwbSwShadowInstanceOccluded(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax, transmittance, opticalDepth);
+            nwbSwShadowInstanceOccluded(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax, transmittance, opticalDepth, opticalDepthSign, crossingTSum, crossingCount);
             if(max(max(transmittance.x, transmittance.y), transmittance.z) < NWB_SW_SHADOW_TRANSMITTANCE_EPSILON)
                 return;
         }
@@ -390,12 +406,18 @@ float3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, 
     const float3 origin = worldPosition + normal * tMin;
     float3 transmittance = float3(1.0, 1.0, 1.0);
     float3 opticalDepth = float3(0.0, 0.0, 0.0);
-    nwbSwShadowOccluded(origin, toLight, tMin, tEnd, transmittance, opticalDepth);
+    float3 opticalDepthSign = float3(0.0, 0.0, 0.0);
+    float crossingTSum = 0.0;
+    float crossingCount = 0.0;
+    nwbSwShadowOccluded(origin, toLight, tMin, tEnd, transmittance, opticalDepth, opticalDepthSign, crossingTSum, crossingCount);
     // Finalize: the Fresnel-transmitted product times the Beer-Lambert attenuation integrated over the true
-    // entry->exit path. Clamp the integrated optical depth to >= 0 (a physical path length is non-negative; an
-    // early-terminated trace can leave a negative partial -> exp = Inf -> 0*Inf = NaN where two refractors' shadows
-    // overlap). max(.,0) keeps it finite; saturate guards [0,1]. Matches the HW raygen finalize exactly.
-    return saturate(transmittance * exp(-max(opticalDepth, float3(0.0, 0.0, 0.0))));
+    // entry->exit path, with the absolute-t bias correction (subtract tBias * opticalDepthSign to cancel an
+    // unbalanced silhouette clip's spike; inert for balanced occluders). max(.,0) clamps a residual negative partial
+    // (physical path length is non-negative; an early-terminated trace can leave one -> exp = Inf -> 0*Inf = NaN);
+    // saturate guards [0,1]. Matches the HW raygen finalize exactly.
+    const float tBias = (crossingCount > 0.0) ? (crossingTSum / crossingCount) : 0.0;
+    const float3 correctedOpticalDepth = opticalDepth - tBias * opticalDepthSign;
+    return saturate(transmittance * exp(-max(correctedOpticalDepth, float3(0.0, 0.0, 0.0))));
 }
 
 

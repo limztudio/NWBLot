@@ -55,6 +55,9 @@ float3 nwbShadowLightVisible(const float3 worldPosition, const float3 normal, co
     NwbShadowOcclusionPayload payload;
     payload.transmittance = float3(1.0, 1.0, 1.0);
     payload.opticalDepth = float3(0.0, 0.0, 0.0);
+    payload.opticalDepthSign = float3(0.0, 0.0, 0.0);
+    payload.crossingTSum = 0.0;
+    payload.crossingCount = 0.0;
     TraceRay(
         g_NwbShadowTlas,
         RAY_FLAG_NONE,
@@ -66,12 +69,16 @@ float3 nwbShadowLightVisible(const float3 worldPosition, const float3 normal, co
         payload
     );
     // Finalize: the Fresnel-transmitted product times the Beer-Lambert attenuation integrated over the true
-    // entry->exit path. Clamp the integrated optical depth to >= 0: a physical path length inside the refractors is
-    // non-negative, but an EARLY-TERMINATED trace (transmittance fell below epsilon mid-shape, before all exit faces were
-    // folded into the signed sum) can leave a negative partial -> exp(-veryNegative) = Inf -> transmittance(~0)*Inf = NaN,
-    // which surfaces as magenta speckle where two refractors' shadows overlap. max(.,0) keeps it finite; saturate guards
-    // [0,1]. Matches the SW finalize exactly.
-    return saturate(payload.transmittance * exp(-max(payload.opticalDepth, float3(0.0, 0.0, 0.0))));
+    // entry->exit path. The signed-t optical depth carries an absolute-t bias from any UNBALANCED crossing (a
+    // tangential silhouette clip with no matching face); subtract tBias * opticalDepthSign to cancel it. The
+    // correction is INERT for balanced occluders (opticalDepthSign == 0 there, so the chord is untouched) and
+    // removes an unbalanced clip's coeff*t spike (exactly for a lone clip; bounded by the crossing spread for a
+    // clip riding alongside real crossings). tBias is the mean crossing distance. max(.,0) then clamps a residual
+    // negative partial (a physical path length is non-negative; an early-terminated trace can leave one, which
+    // would make exp(-veryNegative)=Inf -> 0*Inf=NaN -> magenta); saturate guards [0,1]. Matches the SW finalize.
+    const float tBias = (payload.crossingCount > 0.0) ? (payload.crossingTSum / payload.crossingCount) : 0.0;
+    const float3 opticalDepth = payload.opticalDepth - tBias * payload.opticalDepthSign;
+    return saturate(payload.transmittance * exp(-max(opticalDepth, float3(0.0, 0.0, 0.0))));
 }
 
 

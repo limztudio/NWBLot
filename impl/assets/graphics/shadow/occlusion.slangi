@@ -33,18 +33,29 @@
 
 
 // Occlusion ray payload shared by the raygen, miss, and any-hit stages. The engine integrates the shadow
-// visibility over the true volume path across two accumulators the raygen combines after the trace
+// visibility over the true volume path across accumulators the raygen combines after the trace
 // (visibility = transmittance * exp(-opticalDepth)):
 //   transmittance -- the per-channel Fresnel-transmitted product: the raygen seeds it to float3(1), each
 //     transparent surface crossing multiplies in nwbShadowFresnelTransmittedFraction(ior), an opaque hit zeroes
 //     it and ends the search.
 //   opticalDepth -- the per-channel signed Beer-Lambert optical depth: seeded to float3(0), each crossing adds
 //     absorptionCoeff(transmission) * t * faceSign (+1 exit / -1 entry), so the signed-t sum telescopes to the
-//     real inside path length per occluder (robust for convex, concave, and overlapping volumes).
+//     real inside path length per occluder.
+//   opticalDepthSign / crossingTSum / crossingCount -- the absolute-t bias-correction accumulators. The signed-t
+//     telescoping above is exact ONLY when every entry has a matching exit; a faceted silhouette breaks that with
+//     tangential clips (a single unbalanced crossing), and since t is the ABSOLUTE ray distance (>> the chord) the
+//     leftover absorptionCoeff * t is a black / over-bright speckle in a multi-refractor overlap. opticalDepthSign
+//     accumulates absorptionCoeff * faceSign (the coeff-weighted entry/exit imbalance -- exactly zero for any
+//     balanced occluder), and crossingTSum/Count give the mean crossing distance tBias; the raygen subtracts
+//     tBias * opticalDepthSign at finalize, which is inert for balanced occluders (chord stays exact) and cancels
+//     an unbalanced clip's spike (exactly for a lone clip, bounded by the crossing spread otherwise).
 // The miss stage is a no-op (whatever survived the any-hits is the answer).
 struct NwbShadowOcclusionPayload{
     float3 transmittance;
     float3 opticalDepth;
+    float3 opticalDepthSign;
+    float crossingTSum;
+    float crossingCount;
 };
 
 [[vk::binding(NWB_SHADOW_RT_BINDING_TLAS, NWB_SHADOW_RT_SET)]]
@@ -76,6 +87,13 @@ ByteAddressBuffer g_NwbShadowMeshIndices[NWB_SHADOW_RT_MAX_MESHES];
 // with the SAME i0/i1/i2 it loaded from the index buffer.
 [[vk::binding(NWB_SHADOW_RT_BINDING_MESH_ATTRIBUTES, NWB_SHADOW_RT_SET)]]
 ByteAddressBuffer g_NwbShadowMeshAttributes[NWB_SHADOW_RT_MAX_MESHES];
+
+// Per-mesh raw object-space positions (float3 at vertexIndex * 12), positionStream-indexed in lockstep with the
+// index/attribute buffers. The any-hit reads the hit triangle's three positions to derive its GEOMETRIC face
+// normal for the per-crossing faceSign/cosI (robust at smooth-mesh silhouettes where the interpolated shading
+// normal flips). Same data the software traversal loads, so the two backends integrate identical physics.
+[[vk::binding(NWB_SHADOW_RT_BINDING_MESH_POSITIONS, NWB_SHADOW_RT_SET)]]
+ByteAddressBuffer g_NwbShadowMeshPositions[NWB_SHADOW_RT_MAX_MESHES];
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

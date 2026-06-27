@@ -314,11 +314,13 @@ private:
     usize m_shadowInstanceCapacity = 0u;
     usize m_shadowMaterialTypedCapacity = 0u;
     // Per-frame distinct meshes referenced by the TLAS (filled by buildSceneTlas); the per-mesh descriptor arrays
-    // bind these (parallel: slot k = mesh k's index/attribute buffers, indexed by material.meshSlot). The HW BLAS
-    // owns the positions, so only the index + attribute buffers are tracked here. Sized by the shared shader cap
-    // so the C++ arrays and the shader's `[NWB_SHADOW_RT_MAX_MESHES]` stay one definition.
+    // bind these (parallel: slot k = mesh k's index/attribute/position buffers, indexed by material.meshSlot). The
+    // HW BLAS owns the positions it traces, but the any-hit ALSO needs the raw positions to derive the geometric
+    // face normal for the per-crossing faceSign/cosI, so the position buffer is tracked here too. Sized by the
+    // shared shader cap so the C++ arrays and the shader's `[NWB_SHADOW_RT_MAX_MESHES]` stay one definition.
     Core::Buffer* m_shadowMeshIndexBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
     Core::Buffer* m_shadowMeshAttributeBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
+    Core::Buffer* m_shadowMeshPositionBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
     u32 m_shadowMeshCount = 0u;
     bool m_shadowMeshCapReported = false;
     Core::BindingLayoutHandle m_bvhSortBindingLayout;

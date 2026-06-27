@@ -510,9 +510,10 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             ? m_renderer.meshSystem().findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
             : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
         ;
-        // The BLAS owns the positions; the any-hit still needs the index buffer (3 vertex indices by
-        // PrimitiveIndex) + the U2 attribute buffer (normal/uv0 for the per-hit dispatch), so require both.
-        if(!meshReady || !mesh || !mesh->blas || !mesh->triangleIndexBuffer || !mesh->attributeBuffer)
+        // The BLAS owns the positions it traces, but the any-hit still needs the index buffer (3 vertex indices by
+        // PrimitiveIndex) + the U2 attribute buffer (normal/uv0 for the per-hit dispatch) + the raw position buffer
+        // (the geometric face normal for the per-crossing faceSign/cosI), so require all three.
+        if(!meshReady || !mesh || !mesh->blas || !mesh->triangleIndexBuffer || !mesh->attributeBuffer || !mesh->positionBuffer)
             continue;
 
         // Dedupe to a per-mesh descriptor-array slot: instances sharing a mesh share its index/attribute
@@ -538,6 +539,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             meshSlot = rayTracingState().m_shadowMeshCount++;
             rayTracingState().m_shadowMeshIndexBuffers[meshSlot] = meshIndexBuffer;
             rayTracingState().m_shadowMeshAttributeBuffers[meshSlot] = mesh->attributeBuffer.get();
+            rayTracingState().m_shadowMeshPositionBuffers[meshSlot] = mesh->positionBuffer.get();
         }
 
         Core::RayTracingInstanceDesc instanceDesc;
@@ -1226,6 +1228,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
         commandList.setBufferState(rayTracingState().m_shadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_shadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
     }
     commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -1675,14 +1678,15 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_LIGHT_LIST, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_INSTANCE_MATERIAL, 1));
-        // Per-mesh descriptor arrays (index + attribute byte buffers) the any-hit indexes by material.meshSlot,
-        // plus the shared material-constants context buffers the per-hit transmittance dispatch reads. The
-        // bounded SRV arrays mirror the software traversal's compute path; this is the HW-pipeline feasibility
-        // probe -- createBindingLayout / createRayTracingPipeline must accept count>1 SRV arrays here.
+        // Per-mesh descriptor arrays (index + attribute + position byte buffers) the any-hit indexes by
+        // material.meshSlot, plus the shared material-constants context buffers the per-hit transmittance dispatch
+        // reads. The bounded SRV arrays mirror the software traversal's compute path; this is the HW-pipeline
+        // feasibility probe -- createBindingLayout / createRayTracingPipeline must accept count>1 SRV arrays here.
         layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INDICES, NWB_SHADOW_RT_MAX_MESHES));
         layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_ATTRIBUTES, NWB_SHADOW_RT_MAX_MESHES));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INSTANCES, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_POSITIONS, NWB_SHADOW_RT_MAX_MESHES));
 
         rayTracingState().m_shadowBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_shadowBindingLayout){
@@ -1823,6 +1827,7 @@ bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targ
         const u32 source = (slot < meshCount) ? slot : (meshCount - 1u);
         bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INDICES, rayTracingState().m_shadowMeshIndexBuffers[source]).setArrayElement(slot));
         bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_ATTRIBUTES, rayTracingState().m_shadowMeshAttributeBuffers[source]).setArrayElement(slot));
+        bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_POSITIONS, rayTracingState().m_shadowMeshPositionBuffers[source]).setArrayElement(slot));
     }
 
     auto* device = graphics().getDevice();

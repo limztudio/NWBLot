@@ -58,6 +58,11 @@ function(nwb_add_name_symbol_target)
     set(_namesym_cook_cache "${PROJECT_SOURCE_DIR}/__build_obj/asset_cache/${_namesym_output_platform}/${NWB_OUTPUT_ARCH}/namesym")
     set(_namesym_cook_run "resource_cooker|||--repo-root|||${PROJECT_SOURCE_DIR}|||--asset-root|||impl/assets|||--asset-root|||tests/smoke/assets|||--output-directory|||${_namesym_cook_out}|||--cache-directory|||${_namesym_cook_cache}|||--configuration|||$<CONFIG>")
 
+    # GUI workloads (need a display): the window-capture harness runs each, captures, then shuts it down GRACEFULLY
+    # (posts WM_CLOSE) so the app's NWB_BUILDMODE exit writes its sidecar -- a hard kill would skip it. The testbed
+    # covers the base render path; the skinned-caustic smoke adds the shadow / caustic / AVBOIT / skinning scopes the
+    # testbed scene never exercises. On a headless host these ctest runs skip (warned, not fatal) and only the cook
+    # sidecar is produced. --expect-sidecar surfaces a capture that silently produced nothing.
     add_custom_target(nwb_namesym
         COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/configuration/generate_name_symbols.py"
             --source-dir "${PROJECT_SOURCE_DIR}"
@@ -71,6 +76,9 @@ function(nwb_add_name_symbol_target)
             --mkdir "${_namesym_cook_cache}"
             --run "${_namesym_cook_run}"
             --ctest-regex "nwb_testbed_window_capture_smoke"
+            --ctest-regex "nwb_skinned_caustic_capture_late_smoke"
+            --expect-sidecar "resource_cooker.namesym"
+            --expect-sidecar "testbed.namesym"
         VERBATIM
         USES_TERMINAL
         COMMENT "nwb_namesym: capturing Name symbols from a build-mode run -> ${_namesym_release_dest}"

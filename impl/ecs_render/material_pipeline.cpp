@@ -212,9 +212,22 @@ bool RendererMaterialSystem::createRendererPipeline(
         MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
     const bool csgClipPipeline = csgBindingUse.clip;
     const bool avboitCsgClipPipeline = csgBindingUse.avboitClip;
+    const bool materialDrivenAvboitOccupancy =
+        pass == MaterialPipelinePass::AvboitOccupancy
+        && materialInfo.avboitOccupancyPixelShader.valid()
+    ;
+    const bool materialDrivenAvboitExtinction =
+        pass == MaterialPipelinePass::AvboitExtinction
+        && materialInfo.avboitExtinctionPixelShader.valid()
+    ;
     const bool materialDrivenAvboitAccumulate =
         pass == MaterialPipelinePass::AvboitAccumulate
         && materialInfo.avboitAccumulatePixelShader.valid()
+    ;
+    const bool materialDrivenAvboitPass =
+        materialDrivenAvboitOccupancy
+        || materialDrivenAvboitExtinction
+        || materialDrivenAvboitAccumulate
     ;
     ACompactString csgProjectEvaluatorModuleInclude;
     Core::GraphicsString csgProjectEvaluatorModuleAssignment(arena());
@@ -316,7 +329,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         // Mirror the accumulate pass: bind this material's cook-generated per-material occupancy PS so the coverage
         // it marks comes from the material's own surface.alpha (the SAME alpha the extinction + accumulate passes
         // read). A material without one falls back to the engine's fixed occupancy PS (vertex-alpha).
-        if(materialInfo.avboitOccupancyPixelShader.valid()){
+        if(materialDrivenAvboitOccupancy){
             passPixelShaderName = materialInfo.avboitOccupancyPixelShader.name();
         }
         else{
@@ -331,7 +344,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         // Mirror the accumulate pass: bind this material's cook-generated per-material extinction PS so the volume
         // it splats comes from the material's own surface.alpha (the SAME alpha the occupancy + accumulate passes
         // read). A material without one falls back to the engine's fixed extinction PS (vertex-alpha).
-        if(materialInfo.avboitExtinctionPixelShader.valid()){
+        if(materialDrivenAvboitExtinction){
             passPixelShaderName = materialInfo.avboitExtinctionPixelShader.name();
         }
         else{
@@ -485,7 +498,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         const bool emulationGraphicsUsesMeshFrameSet =
             !MaterialPipelinePassUsesRendererAvboit(pass)
             || csgClipPipeline
-            || materialDrivenAvboitAccumulate
+            || materialDrivenAvboitPass
         ;
         const Core::BindingLayoutHandle& avboitViewBindingLayout = emulationGraphicsUsesMeshFrameSet
             ? drawState().m_emulationViewBindingLayout

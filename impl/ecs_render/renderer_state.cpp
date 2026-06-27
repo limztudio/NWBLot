@@ -191,6 +191,16 @@ void RendererRayTracingState::invalidateResources(){
     m_shadowBindingSetMaterialTyped = nullptr;
     m_shadowBindingSetMeshInstances = nullptr;
     m_shadowBindingSetMeshCount = 0u;
+    m_shadowUpsampleBindingLayout.reset();
+    m_shadowUpsampleShader.reset();
+    m_shadowUpsamplePipeline.reset();
+    m_shadowUpsampleBindingSet.reset();
+    m_shadowUpsampleBindingSetWorldPosition = nullptr;
+    m_shadowUpsampleBindingSetDepth = nullptr;
+    m_shadowUpsampleBindingSetHalf = nullptr;
+    m_shadowUpsampleBindingSetFull = nullptr;
+    m_shadowUpsamplePipelineFailed = false;
+    m_shadowSlotCount = 0u;
     m_shadowMeshCount = 0u;
     m_shadowMeshCapReported = false;
     m_shadowInstanceMaterialBuffer.reset();

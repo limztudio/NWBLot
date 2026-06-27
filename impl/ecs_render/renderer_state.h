@@ -283,6 +283,20 @@ private:
     const Core::Buffer* m_shadowBindingSetMaterialTyped = nullptr;
     const Core::Buffer* m_shadowBindingSetMeshInstances = nullptr;
     u32 m_shadowBindingSetMeshCount = 0u;
+    // Half-res shadow upsample pass (its own compute pipeline): edge-aware bilateral upsample of the half-res ray-traced
+    // shadow visibility into the full-res buffer the lighting samples.
+    Core::BindingLayoutHandle m_shadowUpsampleBindingLayout;
+    Core::ShaderHandle m_shadowUpsampleShader;
+    Core::ComputePipelineHandle m_shadowUpsamplePipeline;
+    Core::BindingSetHandle m_shadowUpsampleBindingSet;
+    const Core::Texture* m_shadowUpsampleBindingSetWorldPosition = nullptr;
+    const Core::Texture* m_shadowUpsampleBindingSetDepth = nullptr;
+    const Core::Texture* m_shadowUpsampleBindingSetHalf = nullptr;
+    const Core::Texture* m_shadowUpsampleBindingSetFull = nullptr;
+    bool m_shadowUpsamplePipelineFailed = false;
+    // Active shadow slots this frame (= min(lightCount, NWB_SCENE_SHADOW_SLOT_COUNT)), set during the light upload and
+    // read by the half-res shadow upsample so it only processes the slots that hold a light.
+    u32 m_shadowSlotCount = 0u;
     // Per-frame instance-material table (NwbRtInstanceMaterialGpu), shared by the hardware any-hit and the
     // software traversal; built lockstep with the TLAS / scene-instance buffer so the array index matches the
     // shadow instance id. Grows by doubling, never shrinks.

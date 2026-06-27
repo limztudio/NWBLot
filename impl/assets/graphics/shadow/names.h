@@ -29,6 +29,8 @@ inline constexpr Name s_RaygenShaderName("engine/graphics/shadow/shadow_raygen")
 inline constexpr Name s_MissShaderName("engine/graphics/shadow/shadow_miss");
 inline constexpr Name s_AnyHitShaderName("engine/graphics/shadow/shadow_ahit");
 inline constexpr Name s_SwTraversalShaderName("engine/graphics/shadow/shadow_sw_traversal_cs");
+// Edge-aware upsample of the half-res ray-traced shadow visibility into the full-res buffer the lighting samples.
+inline constexpr Name s_UpsampleShaderName("engine/graphics/shadow/shadow_upsample_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -58,6 +58,9 @@ private:
     [[nodiscard]] bool ensureSwShadowBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureSwCausticPipeline();
     [[nodiscard]] bool ensureSwCausticBindingSet(DeferredFrameTargets& targets);
+    // Half-res shadow upsample: edge-aware bilateral upsample of the half-res ray-traced visibility into the full-res buffer.
+    [[nodiscard]] bool ensureShadowUpsamplePipeline();
+    [[nodiscard]] bool ensureShadowUpsampleBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureCausticResolvePipeline();
     [[nodiscard]] bool ensureCausticResolveBindingSet(DeferredFrameTargets& targets);
     // Geometry downsample pre-pass: fills the half-res geometry cache (world + receiver validity) the resolve reads.

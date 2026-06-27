@@ -273,13 +273,15 @@ void RendererRayTracingState::invalidateResources(){
     m_causticResolveBindingLayout.reset();
     m_causticResolveShader.reset();
     m_causticResolvePipeline.reset();
-    m_causticResolveBindingSetOutputIrradiance.reset();
-    m_causticResolveBindingSetOutputScratch.reset();
+    m_causticResolveBindingSetOutputHalfA.reset();
+    m_causticResolveBindingSetOutputHalfB.reset();
+    m_causticResolveBindingSetUpsample.reset();
     m_causticResolveBindingSetAccumulator = nullptr;
     m_causticResolveBindingSetWorldPosition = nullptr;
     m_causticResolveBindingSetDepth = nullptr;
     m_causticResolveBindingSetIrradiance = nullptr;
-    m_causticResolveBindingSetScratch = nullptr;
+    m_causticResolveBindingSetHalfA = nullptr;
+    m_causticResolveBindingSetHalfB = nullptr;
     m_shadowPipelineFailed = false;
     m_bvhSortPipelineFailed = false;
     m_bvhBuildPipelineFailed = false;

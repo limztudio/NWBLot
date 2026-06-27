@@ -143,9 +143,12 @@ struct DeferredFrameTargets{
     // additive caustic term is a pixel-identical no-op.
     Core::TextureHandle causticIrradiance;
     Core::TextureHandle causticAccumulator;
-    // RGBA16F scratch buffer for the resolve's a-trous wavelet ping-pong (the wavelet alternates writing this and the
-    // irradiance buffer across its passes; the final pass lands in irradiance). No longer a persistent temporal history.
+    // The two HALF-res RGBA16F ping-pong buffers for the half-res a-trous wavelet (caustic_resolve_cs.slang): the prepare
+    // pass writes causticHistory (half-A), the wavelet alternates causticHistory <-> causticResolveHalf, and the final
+    // half-res result is bilinearly UPSAMPLED into the full-res causticIrradiance the lighting samples. Both are half the
+    // full render extent (1/4 the pixels) and need no clear (every pass fully overwrites; the resolve is purely spatial).
     Core::TextureHandle causticHistory;
+    Core::TextureHandle causticResolveHalf;
     Core::FramebufferHandle framebuffer;
     Core::FramebufferHandle opaqueLightingFramebuffer;
     Core::BindingSetHandle lightingBindingSet;

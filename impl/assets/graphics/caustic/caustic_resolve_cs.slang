@@ -9,21 +9,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Caustic resolve = an EDGE-AVOIDING A-TROUS WAVELET denoise (Dammertz et al.), run as N ping-pong compute passes. This
-// REPLACES the temporal-EMA + variance-clamp + motion-vector reprojection path. Rationale: a refractor's caustic moves
-// NON-RIGIDLY (a spinning flat prism MORPHS its caustic), so no motion vector tracks it and any temporal accumulation
-// trails it (the ghost). A-trous denoises each frame PURELY SPATIALLY -> the sparse photon splat smooths to a clean
-// caustic with NO history -> ghost-free by construction, for any caustic motion. The producer's per-photon emission is
-// a deterministic stratified distribution (no per-frame jitter), so a static scene is flicker-free without temporal
-// averaging, and the wavelet's geometry edge-stop keeps the smoothing bounded to the receiver surface.
+// Caustic resolve = an EDGE-AVOIDING A-TROUS WAVELET denoise (Dammertz et al.), run at HALF RESOLUTION as N ping-pong
+// compute passes, bracketed by a 2x2 downsample (the prepare pass) and a bilinear upsample. This REPLACES the temporal-
+// EMA + variance-clamp + motion-vector path: a refractor's caustic moves NON-RIGIDLY (a spinning prism MORPHS its
+// caustic), so no motion vector tracks it and any temporal accumulation trails it (the ghost). A-trous denoises each
+// frame PURELY SPATIALLY -> the sparse photon splat smooths to a clean caustic with NO history -> ghost-free for any
+// caustic motion. The producer's per-photon emission is a deterministic stratified distribution (no per-frame jitter),
+// so a static scene is flicker-free without temporal averaging, and the wavelet's geometry edge-stop keeps the
+// smoothing bounded to the receiver surface.
 //
-// Pass 0 (isFirstPass = the PREPARE pass): reads the R32_UINT splat accumulator, un-scales it, AREA-NORMALIZES (flux
-// density -> irradiance: divide by the receiver area subtended per pixel, the density->brightness conversion) and applies
-// the single causticIntensity exposure -- ONCE per pixel into the float buffer (NO wavelet here). The N wavelet passes
-// then read the previous pass's RGBA16F color and perform the edge-avoiding wavelet step at a doubling dilation
-// (stepWidth 1,2,4,8,16). Splitting the normalize out of the wavelet avoids re-normalizing the accumulator for every one
-// of the wavelet's 25 taps (the old fused first pass did). The ping-pong is driven from C++: input/output binding sets
-// swap each pass; the FINAL wavelet pass lands in the irradiance buffer the lighting adds.
+// HALF-RES PIPELINE (3 stages, selected by pushConstants.stage):
+//   stage 0 PREPARE+DOWNSAMPLE (half-res dispatch): each half-res pixel sums the 2x2 full-res R32_UINT splat-accumulator
+//     block it covers, un-scales the fixed point, AREA-NORMALIZES by the half-res pixel's receiver area (flux density ->
+//     irradiance) and applies the causticIntensity exposure ONCE, writing the half-res prepared buffer (half-A). Summing
+//     2x2 flux / (4x larger half-res area) == the full-res average irradiance, so brightness is preserved.
+//   stage 1 WAVELET (half-res dispatch): edge-avoiding a-trous step at dilation stepWidth (1,2,4 half-res texels). Reads
+//     the previous half-res color (half-A/half-B ping-pong) + the FULL-res G-buffer sampled at the half pixel's 2x
+//     location for the world-distance edge-stop. Each half-res dilation reaches 2x the world extent of the same full-res
+//     dilation, so 3 half-res passes match the old 5 full-res passes' support at a quarter the per-pass pixel count.
+//   stage 2 UPSAMPLE (full-res dispatch): bilinearly samples the final half-res caustic into the full-res irradiance
+//     buffer the deferred lighting adds; background pixels (no receiver) write zero (the additive no-op).
 
 [[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR, NWB_CAUSTIC_RESOLVE_SET)]]
 Texture2DArray<uint> g_NwbCausticResolveAccumulator;
@@ -34,34 +39,34 @@ Texture2D<float4> g_NwbCausticResolveGBufferWorldPosition;
 [[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH, NWB_CAUSTIC_RESOLVE_SET)]]
 Texture2D<float4> g_NwbCausticResolveGBufferDepth;
 
-// The wavelet pass output (UAV). On the final pass this is the caustic irradiance the deferred lighting adds; on
-// earlier passes it is whichever ping-pong buffer the next pass reads as the input color (the C++ swaps the sets).
+// The pass output (UAV). For PREPARE + WAVELET this is a HALF-res ping-pong buffer (half-A / half-B); for UPSAMPLE this
+// is the FULL-res caustic irradiance buffer the deferred lighting adds. The C++ swaps the bound textures per pass.
 [[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT, NWB_CAUSTIC_RESOLVE_SET)]]
 RWTexture2D<float4> g_NwbCausticResolveOutput;
 
-// The previous pass's color (SRV). Unused on the first pass (which reads the accumulator instead); bound to the other
-// ping-pong buffer so the descriptor is always valid.
+// The input color (SRV). For WAVELET this is the previous pass's HALF-res color (the other ping-pong buffer); for
+// UPSAMPLE it is the final half-res caustic. Unused on PREPARE (which reads the accumulator) but always bound.
 [[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_INPUT_COLOR, NWB_CAUSTIC_RESOLVE_SET)]]
 Texture2D<float4> g_NwbCausticResolveInputColor;
 
 struct NwbCausticResolvePushConstants{
-    // All-scalar -> 8 x 4 = 32 bytes, no alignment padding; matches the C++ mirror NwbCausticResolvePushConstants.
-    uint width;
-    uint height;
-    float causticIntensity; // exposure, applied once during the area-normalize on the first pass
-    uint stepWidth;         // a-trous dilation for this pass (1,2,4,8,16); taps sit at +-{1,2}*stepWidth
-    uint isFirstPass;       // 1 => read+normalize the accumulator; 0 => read the previous pass's input color
-    uint passPad0;          // pad the tail to a 16B multiple (32) so C++ + shader sizes match exactly
-    uint passPad1;
-    uint passPad2;
+    // All-scalar -> 8 x 4 = 32 bytes, no alignment padding; matches the C++ mirror CausticResolvePushConstants.
+    uint width;             // FULL-res width (G-buffer dim; UPSAMPLE dispatch/output dim)
+    uint height;            // FULL-res height
+    uint halfWidth;         // HALF-res width (the resolve buffers; PREPARE/WAVELET dispatch dim)
+    uint halfHeight;        // HALF-res height
+    float causticIntensity; // exposure, applied once during the area-normalize on the PREPARE pass
+    uint stepWidth;         // a-trous dilation for this wavelet pass (1,2,4), in HALF-res texels
+    uint stage;             // 0 = PREPARE+DOWNSAMPLE, 1 = WAVELET (half-res), 2 = UPSAMPLE (-> full-res irradiance)
+    uint pad;               // pad the tail to a 16B multiple (32) so C++ + shader sizes match exactly
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
 
-// Groupshared (LDS) tile for the small-dilation wavelet passes: the group cooperatively loads its tile + halo here once,
-// then every thread taps from LDS instead of re-Loading the G-buffer + color textures per tap (eliminating the heavy
-// inter-thread redundant Loads of the dense early passes). Sized for the largest LDS-tiled step (24x24 = 576 texels).
+// Groupshared (LDS) tile for the small-dilation wavelet passes: the group cooperatively loads its half-res tile + halo
+// here once, then every thread taps from LDS instead of re-Loading the G-buffer + color textures per tap. Sized for the
+// largest LDS-tiled step (24x24 = 576 texels).
 groupshared float3 s_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared float3 s_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   s_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
@@ -70,31 +75,35 @@ groupshared uint   s_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS]
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Estimates the world-space receiver area subtended by one pixel from the screen-space spacing of the G-buffer
-// world position to the +x / +y neighbours (the area Jacobian of the screen->receiver map). This is what converts
-// photon DENSITY into physical BRIGHTNESS: dividing accumulated flux by this area yields irradiance, so where the
-// lens focuses many photons into a small receiver area the irradiance spikes (the bright crescent). Clamped away
-// from zero so a degenerate (silhouette / coincident-neighbour) pixel cannot divide-by-zero.
-float nwbCausticResolvePixelArea(const int2 pixel){
-    const float3 center = g_NwbCausticResolveGBufferWorldPosition.Load(int3(pixel, 0)).xyz;
-    const int2 right = int2(min(pixel.x + 1, (int)g_NwbCausticResolvePushConstants.width - 1), pixel.y);
-    const int2 down = int2(pixel.x, min(pixel.y + 1, (int)g_NwbCausticResolvePushConstants.height - 1));
-    const float3 dx = g_NwbCausticResolveGBufferWorldPosition.Load(int3(right, 0)).xyz - center;
-    const float3 dy = g_NwbCausticResolveGBufferWorldPosition.Load(int3(down, 0)).xyz - center;
-    const float area = length(cross(dx, dy));
-    return max(area, 1e-4);
+// Maps a HALF-res texel to the FULL-res G-buffer texel it samples (the top-left of its 2x2 block, clamped in bounds).
+// The resolve runs at half-res but the G-buffer (world position / depth) is full-res, so every geometry lookup the
+// half-res passes do goes through this 2x point sample.
+int2 nwbCausticResolveHalfToFull(const int2 halfTexel){
+    return int2(
+        min(halfTexel.x * 2, (int)g_NwbCausticResolvePushConstants.width - 1),
+        min(halfTexel.y * 2, (int)g_NwbCausticResolvePushConstants.height - 1)
+    );
 }
 
+float3 nwbCausticResolveWorldAtHalf(const int2 halfTexel){
+    return g_NwbCausticResolveGBufferWorldPosition.Load(int3(nwbCausticResolveHalfToFull(halfTexel), 0)).xyz;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+float nwbCausticResolveDepthAtHalf(const int2 halfTexel){
+    return g_NwbCausticResolveGBufferDepth.Load(int3(nwbCausticResolveHalfToFull(halfTexel), 0)).r;
+}
 
-
-// The wavelet input at a tap = the previous pass's (already area-normalized) float color. The PREPARE pass (main, when
-// isFirstPass) did the un-scale + area-normalize + exposure once per pixel into this buffer, so the wavelet only reads
-// it -- no per-tap re-normalize, no per-tap accumulator/depth Loads. Callers (the tap loop) already skip background taps
-// via the depth test, so this reads only receiver taps whose buffer value is the normalized irradiance.
-float3 nwbCausticResolveSampleInput(const int2 texel){
-    return g_NwbCausticResolveInputColor.Load(int3(texel, 0)).rgb;
+// The world-space receiver area subtended by one HALF-res pixel, from the screen-space spacing of the half-res world
+// position to the +x / +y half-res neighbours (the area Jacobian of the screen->receiver map at half resolution). This
+// converts photon DENSITY into physical BRIGHTNESS; since a half-res pixel subtends ~4x a full-res pixel's area and the
+// prepare pass sums the 2x2 (~4x) flux, the resulting irradiance matches the full-res average. Clamped away from zero.
+float nwbCausticResolveHalfPixelArea(const int2 halfTexel){
+    const float3 center = nwbCausticResolveWorldAtHalf(halfTexel);
+    const int2 right = int2(min(halfTexel.x + 1, (int)g_NwbCausticResolvePushConstants.halfWidth - 1), halfTexel.y);
+    const int2 down = int2(halfTexel.x, min(halfTexel.y + 1, (int)g_NwbCausticResolvePushConstants.halfHeight - 1));
+    const float3 dx = nwbCausticResolveWorldAtHalf(right) - center;
+    const float3 dy = nwbCausticResolveWorldAtHalf(down) - center;
+    return max(length(cross(dx, dy)), 1e-4);
 }
 
 
@@ -103,44 +112,82 @@ float3 nwbCausticResolveSampleInput(const int2 texel){
 
 // 5x5 B-spline a-trous kernel (separable [1,4,6,4,1]/16), sampled at +-{1,2}*step. Edge-AVOIDING: each tap is weighted
 // by the spatial kernel AND a world-distance edge-stop so the caustic never bleeds across a depth/silhouette
-// discontinuity (the receiver edge), while the sparse inter-photon gaps fill into a smooth caustic. No luminance
-// edge-stop: the sparse splat's bright deposits ARE the noise to remove, so preserving them would defeat the denoise;
-// the focused caustic STRUCTURE survives as the low-frequency content the wavelet preserves.
+// discontinuity, while the sparse inter-photon gaps fill into a smooth caustic. No luminance edge-stop: the sparse
+// splat's bright deposits ARE the noise to remove.
 static const float s_NwbCausticResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0 };
 
 [numthreads(NWB_CAUSTIC_RESOLVE_GROUP_SIZE, NWB_CAUSTIC_RESOLVE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
-    const uint2 pixel = dispatchThreadID.xy;
-    const int w = (int)g_NwbCausticResolvePushConstants.width;
-    const int h = (int)g_NwbCausticResolvePushConstants.height;
-    const int2 texel = int2(pixel);
-    const bool inBounds = (pixel.x < g_NwbCausticResolvePushConstants.width && pixel.y < g_NwbCausticResolvePushConstants.height);
+    const uint stage = g_NwbCausticResolvePushConstants.stage;
 
-    // PREPARE pass (isFirstPass, uniform across the dispatch): un-scale the per-channel fixed-point accumulator,
-    // area-normalize (flux density -> irradiance via the per-pixel screen->receiver area Jacobian) and apply the
-    // exposure -- ONCE per pixel into the float buffer the subsequent wavelet passes read (so the wavelet never
-    // re-normalizes per tap). No LDS / no wavelet here; all threads return.
-    if(g_NwbCausticResolvePushConstants.isFirstPass != 0u){
+    // UPSAMPLE (stage 2, FULL-res dispatch): bilinearly resample the final half-res caustic into the full-res irradiance
+    // buffer. Background pixels (no receiver) write zero so the additive lighting term is a pixel-identical no-op there.
+    if(stage == 2u){
+        const uint2 pixel = dispatchThreadID.xy;
+        if(pixel.x >= g_NwbCausticResolvePushConstants.width || pixel.y >= g_NwbCausticResolvePushConstants.height)
+            return;
+        if(g_NwbCausticResolveGBufferDepth.Load(int3(int2(pixel), 0)).r >= 0.999999){
+            g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }
+
+        const int hw = (int)g_NwbCausticResolvePushConstants.halfWidth;
+        const int hh = (int)g_NwbCausticResolvePushConstants.halfHeight;
+        const float2 src = (float2(pixel) + 0.5) * 0.5 - 0.5; // full pixel centre -> half-res texel-centre space
+        const int2 baseTexel = int2(floor(src));
+        const float2 lerpFrac = src - float2(baseTexel);
+        const int2 c00 = int2(clamp(baseTexel.x, 0, hw - 1), clamp(baseTexel.y, 0, hh - 1));
+        const int2 c10 = int2(clamp(baseTexel.x + 1, 0, hw - 1), clamp(baseTexel.y, 0, hh - 1));
+        const int2 c01 = int2(clamp(baseTexel.x, 0, hw - 1), clamp(baseTexel.y + 1, 0, hh - 1));
+        const int2 c11 = int2(clamp(baseTexel.x + 1, 0, hw - 1), clamp(baseTexel.y + 1, 0, hh - 1));
+        const float3 top = lerp(g_NwbCausticResolveInputColor.Load(int3(c00, 0)).rgb, g_NwbCausticResolveInputColor.Load(int3(c10, 0)).rgb, lerpFrac.x);
+        const float3 bottom = lerp(g_NwbCausticResolveInputColor.Load(int3(c01, 0)).rgb, g_NwbCausticResolveInputColor.Load(int3(c11, 0)).rgb, lerpFrac.x);
+        g_NwbCausticResolveOutput[pixel] = float4(lerp(top, bottom, lerpFrac.y), 1.0);
+        return;
+    }
+
+    // PREPARE + WAVELET both run at HALF resolution.
+    const uint2 pixel = dispatchThreadID.xy;
+    const int hw = (int)g_NwbCausticResolvePushConstants.halfWidth;
+    const int hh = (int)g_NwbCausticResolvePushConstants.halfHeight;
+    const int2 texel = int2(pixel);
+    const bool inBounds = (pixel.x < g_NwbCausticResolvePushConstants.halfWidth && pixel.y < g_NwbCausticResolvePushConstants.halfHeight);
+
+    // PREPARE+DOWNSAMPLE (stage 0): sum the 2x2 full-res accumulator block, un-scale, area-normalize (flux density ->
+    // irradiance via the half-res screen->receiver area Jacobian) and apply the exposure -- ONCE per half-res pixel into
+    // the buffer the wavelet passes read. No LDS / no wavelet here; all threads return.
+    if(stage == 0u){
         if(inBounds){
-            if(g_NwbCausticResolveGBufferDepth.Load(int3(texel, 0)).r >= 0.999999){
+            if(nwbCausticResolveDepthAtHalf(texel) >= 0.999999){
                 g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0); // background: additive no-op
             }
             else{
-                const float3 flux = float3(
-                    (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 0, 0)).r,
-                    (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 1, 0)).r,
-                    (float)g_NwbCausticResolveAccumulator.Load(int4(texel, 2, 0)).r
-                ) / NWB_CAUSTIC_FIXED_POINT_SCALE;
-                const float area = nwbCausticResolvePixelArea(texel);
+                const int fw = (int)g_NwbCausticResolvePushConstants.width;
+                const int fh = (int)g_NwbCausticResolvePushConstants.height;
+                const int2 base = int2(texel.x * 2, texel.y * 2);
+                float3 flux = float3(0.0, 0.0, 0.0);
+                [unroll] for(int oy = 0; oy < 2; ++oy){
+                    [unroll] for(int ox = 0; ox < 2; ++ox){
+                        const int2 fpx = int2(min(base.x + ox, fw - 1), min(base.y + oy, fh - 1));
+                        flux += float3(
+                            (float)g_NwbCausticResolveAccumulator.Load(int4(fpx, 0, 0)).r,
+                            (float)g_NwbCausticResolveAccumulator.Load(int4(fpx, 1, 0)).r,
+                            (float)g_NwbCausticResolveAccumulator.Load(int4(fpx, 2, 0)).r
+                        );
+                    }
+                }
+                flux /= NWB_CAUSTIC_FIXED_POINT_SCALE;
+                const float area = nwbCausticResolveHalfPixelArea(texel);
                 g_NwbCausticResolveOutput[pixel] = float4(flux / area * g_NwbCausticResolvePushConstants.causticIntensity, 1.0);
             }
         }
         return;
     }
 
+    // WAVELET (stage 1), at HALF resolution. step is in half-res texels.
     const int step = (int)max(g_NwbCausticResolvePushConstants.stepWidth, 1u);
 
-    // SMALL-dilation wavelet passes (uniform branch): cooperatively load the group tile + 2*step halo into LDS once,
+    // SMALL-dilation passes (uniform branch): cooperatively load the group's half-res tile + 2*step halo into LDS once,
     // then tap from LDS. ALL threads must reach the cooperative load + barrier before any per-pixel early-out.
     if(step <= NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP){
         const int tileW = NWB_CAUSTIC_RESOLVE_GROUP_SIZE + 4 * step; // group + 2*step halo each side
@@ -153,11 +200,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             float3 tapColor = float3(0.0, 0.0, 0.0);
             float3 tapWorld = float3(0.0, 0.0, 0.0);
             uint tapValid = 0u;
-            // Only receiver texels inside the image contribute (matches the texture path's OOB + background skips).
-            if(t.x >= 0 && t.y >= 0 && t.x < w && t.y < h){
-                if(g_NwbCausticResolveGBufferDepth.Load(int3(t, 0)).r < 0.999999){
+            // Only receiver texels inside the half-res image contribute (matches the texture path's OOB + background skips).
+            if(t.x >= 0 && t.y >= 0 && t.x < hw && t.y < hh){
+                if(nwbCausticResolveDepthAtHalf(t) < 0.999999){
                     tapColor = g_NwbCausticResolveInputColor.Load(int3(t, 0)).rgb;
-                    tapWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(t, 0)).xyz;
+                    tapWorld = nwbCausticResolveWorldAtHalf(t);
                     tapValid = 1u;
                 }
             }
@@ -169,14 +216,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
         if(!inBounds)
             return;
-        if(g_NwbCausticResolveGBufferDepth.Load(int3(texel, 0)).r >= 0.999999){
+        if(nwbCausticResolveDepthAtHalf(texel) >= 0.999999){
             g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
             return;
         }
 
-        const float3 centerWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(texel, 0)).xyz;
-        const int2 rightTexel = int2(min(texel.x + 1, w - 1), texel.y);
-        const float pixelSpacing = max(length(g_NwbCausticResolveGBufferWorldPosition.Load(int3(rightTexel, 0)).xyz - centerWorld), 1e-4);
+        const float3 centerWorld = nwbCausticResolveWorldAtHalf(texel);
+        const int2 rightTexel = int2(min(texel.x + 1, hw - 1), texel.y);
+        const float pixelSpacing = max(length(nwbCausticResolveWorldAtHalf(rightTexel) - centerWorld), 1e-4);
         const float sigmaWorld = pixelSpacing * (float)step * 2.0;
         const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
 
@@ -198,18 +245,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         return;
     }
 
-    // LARGE-dilation wavelet passes (step 8,16): the taps are far apart -> no inter-thread reuse to cache in LDS, so
-    // tap the textures directly. Identical math to the LDS path.
+    // LARGE-dilation passes (step > LDS max): taps far apart -> no LDS reuse, tap the half-res textures directly. Dead
+    // for the 3-pass (1,2,4) config but kept general. Identical math to the LDS path.
     if(!inBounds)
         return;
-    if(g_NwbCausticResolveGBufferDepth.Load(int3(texel, 0)).r >= 0.999999){
+    if(nwbCausticResolveDepthAtHalf(texel) >= 0.999999){
         g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
         return;
     }
 
-    const float3 centerWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(texel, 0)).xyz;
-    const int2 rightTexel = int2(min(texel.x + 1, w - 1), texel.y);
-    const float pixelSpacing = max(length(g_NwbCausticResolveGBufferWorldPosition.Load(int3(rightTexel, 0)).xyz - centerWorld), 1e-4);
+    const float3 centerWorld = nwbCausticResolveWorldAtHalf(texel);
+    const int2 rightTexel = int2(min(texel.x + 1, hw - 1), texel.y);
+    const float pixelSpacing = max(length(nwbCausticResolveWorldAtHalf(rightTexel) - centerWorld), 1e-4);
     const float sigmaWorld = pixelSpacing * (float)step * 2.0;
     const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
 
@@ -218,13 +265,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     [unroll] for(int ky = -2; ky <= 2; ++ky){
         [unroll] for(int kx = -2; kx <= 2; ++kx){
             const int2 tap = int2(texel.x + kx * step, texel.y + ky * step);
-            if(tap.x < 0 || tap.y < 0 || tap.x >= w || tap.y >= h)
+            if(tap.x < 0 || tap.y < 0 || tap.x >= hw || tap.y >= hh)
                 continue;
-            if(g_NwbCausticResolveGBufferDepth.Load(int3(tap, 0)).r >= 0.999999)
+            if(nwbCausticResolveDepthAtHalf(tap) >= 0.999999)
                 continue; // background tap: no receiver -> skip so the dark surround cannot dilute the caustic edge
-            const float3 d = g_NwbCausticResolveGBufferWorldPosition.Load(int3(tap, 0)).xyz - centerWorld;
+            const float3 d = nwbCausticResolveWorldAtHalf(tap) - centerWorld;
             const float weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * exp(-dot(d, d) * invTwoSigmaWorldSq);
-            sum += weight * nwbCausticResolveSampleInput(tap);
+            sum += weight * g_NwbCausticResolveInputColor.Load(int3(tap, 0)).rgb;
             weightSum += weight;
         }
     }

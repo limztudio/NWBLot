@@ -149,6 +149,10 @@ struct DeferredFrameTargets{
     // full render extent (1/4 the pixels) and need no clear (every pass fully overwrites; the resolve is purely spatial).
     Core::TextureHandle causticHistory;
     Core::TextureHandle causticResolveHalf;
+    // Half-res geometry cache (RGBA16F: xyz = world position, w = receiver validity) the geometry downsample pre-pass
+    // fills once per frame so the resolve's wavelet passes tap one half-res texel instead of re-reading the full-res
+    // world-position + depth G-buffer per a-trous tap (a read-bandwidth cut on the half-res dispatch).
+    Core::TextureHandle causticResolveGeometry;
     Core::FramebufferHandle framebuffer;
     Core::FramebufferHandle opaqueLightingFramebuffer;
     Core::BindingSetHandle lightingBindingSet;

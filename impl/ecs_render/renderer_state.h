@@ -424,6 +424,17 @@ private:
     const Core::Texture* m_causticResolveBindingSetIrradiance = nullptr;
     const Core::Texture* m_causticResolveBindingSetHalfA = nullptr;
     const Core::Texture* m_causticResolveBindingSetHalfB = nullptr;
+    const Core::Texture* m_causticResolveBindingSetGeometry = nullptr;
+    // Geometry downsample pre-pass (its own pipeline): fills the half-res geometry cache (world + receiver validity) the
+    // resolve passes read, so they tap one half-res texel instead of re-reading the full-res world/depth G-buffer per tap.
+    Core::BindingLayoutHandle m_causticGeometryDownsampleBindingLayout;
+    Core::ShaderHandle m_causticGeometryDownsampleShader;
+    Core::ComputePipelineHandle m_causticGeometryDownsamplePipeline;
+    Core::BindingSetHandle m_causticGeometryDownsampleBindingSet;
+    const Core::Texture* m_causticGeometryDownsampleWorldPosition = nullptr;
+    const Core::Texture* m_causticGeometryDownsampleDepth = nullptr;
+    const Core::Texture* m_causticGeometryDownsampleGeometry = nullptr;
+    bool m_causticGeometryDownsamplePipelineFailed = false;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;
     bool m_bvhSortPipelineFailed = false;

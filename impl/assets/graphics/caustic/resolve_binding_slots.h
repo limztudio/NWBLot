@@ -31,6 +31,19 @@
 // The previous pass's RGBA16F color, read as an SRV (the OTHER ping-pong buffer). Unused on the first pass (which reads
 // the accumulator instead) but always bound so the descriptor is valid.
 #define NWB_CAUSTIC_RESOLVE_BINDING_INPUT_COLOR 4
+// Half-res GEOMETRY CACHE SRV (RGBA16F: xyz = world position, w = receiver validity 1/0), produced once by the geometry
+// downsample pre-pass. The PREPARE + WAVELET passes read this single half-res texel per tap for the area Jacobian +
+// world-distance edge-stop + background skip, instead of re-reading the full-res world-position + depth G-buffer at the
+// half pixel's 2x location every tap -- a big read-bandwidth cut on the half-res dispatch (the full-res world/depth SRVs
+// above are then only consumed by the full-res UPSAMPLE's own centre pixel).
+#define NWB_CAUSTIC_RESOLVE_BINDING_GEOMETRY 5
+
+// Geometry downsample pre-pass (its own pipeline + binding layout): reads the full-res G-buffer world position + depth,
+// writes the half-res geometry cache above.
+#define NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_SET 0
+#define NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION 0
+#define NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH 1
+#define NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT 2
 
 // 8x8 = 64 threads per group (one thread per pixel).
 #define NWB_CAUSTIC_RESOLVE_GROUP_SIZE 8

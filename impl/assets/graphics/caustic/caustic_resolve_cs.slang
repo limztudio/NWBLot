@@ -49,6 +49,12 @@ RWTexture2D<float4> g_NwbCausticResolveOutput;
 [[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_INPUT_COLOR, NWB_CAUSTIC_RESOLVE_SET)]]
 Texture2D<float4> g_NwbCausticResolveInputColor;
 
+// Half-res geometry cache (xyz = world position, w = receiver validity 1/0), produced once by the geometry downsample
+// pre-pass. The PREPARE + WAVELET passes read this single half-res texel for the edge-stop geometry + area + background
+// skip, instead of re-reading the full-res world-position + depth G-buffer at the half pixel's 2x location every tap.
+[[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_GEOMETRY, NWB_CAUSTIC_RESOLVE_SET)]]
+Texture2D<float4> g_NwbCausticResolveGeometry;
+
 struct NwbCausticResolvePushConstants{
     // All-scalar -> 8 x 4 = 32 bytes, no alignment padding; matches the C++ mirror CausticResolvePushConstants.
     uint width;             // FULL-res width (G-buffer dim; UPSAMPLE dispatch/output dim)
@@ -75,22 +81,14 @@ groupshared uint   s_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS]
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Maps a HALF-res texel to the FULL-res G-buffer texel it samples (the top-left of its 2x2 block, clamped in bounds).
-// The resolve runs at half-res but the G-buffer (world position / depth) is full-res, so every geometry lookup the
-// half-res passes do goes through this 2x point sample.
-int2 nwbCausticResolveHalfToFull(const int2 halfTexel){
-    return int2(
-        min(halfTexel.x * 2, (int)g_NwbCausticResolvePushConstants.width - 1),
-        min(halfTexel.y * 2, (int)g_NwbCausticResolvePushConstants.height - 1)
-    );
-}
-
+// Half-res receiver geometry, read from the precomputed cache (one half-res texel, vs the old per-tap full-res world +
+// depth re-reads). xyz = world position (the 2x point sample of the full-res G-buffer), w = receiver validity (1/0).
 float3 nwbCausticResolveWorldAtHalf(const int2 halfTexel){
-    return g_NwbCausticResolveGBufferWorldPosition.Load(int3(nwbCausticResolveHalfToFull(halfTexel), 0)).xyz;
+    return g_NwbCausticResolveGeometry.Load(int3(halfTexel, 0)).xyz;
 }
 
-float nwbCausticResolveDepthAtHalf(const int2 halfTexel){
-    return g_NwbCausticResolveGBufferDepth.Load(int3(nwbCausticResolveHalfToFull(halfTexel), 0)).r;
+bool nwbCausticResolveValidAtHalf(const int2 halfTexel){
+    return g_NwbCausticResolveGeometry.Load(int3(halfTexel, 0)).w > 0.5;
 }
 
 // The world-space receiver area subtended by one HALF-res pixel, from the screen-space spacing of the half-res world
@@ -161,7 +159,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         [unroll] for(int j = 0; j < 2; ++j){
             [unroll] for(int i = 0; i < 2; ++i){
                 const int2 tap = int2(clamp(baseTexel.x + i, 0, hw - 1), clamp(baseTexel.y + j, 0, hh - 1));
-                if(nwbCausticResolveDepthAtHalf(tap) >= 0.999999)
+                if(!nwbCausticResolveValidAtHalf(tap))
                     continue; // tap sits on background -> no receiver, would bleed the dark surround
                 const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
                 const float3 d = nwbCausticResolveWorldAtHalf(tap) - centerWorld;
@@ -187,7 +185,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     // the buffer the wavelet passes read. No LDS / no wavelet here; all threads return.
     if(stage == 0u){
         if(inBounds){
-            if(nwbCausticResolveDepthAtHalf(texel) >= 0.999999){
+            if(!nwbCausticResolveValidAtHalf(texel)){
                 g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0); // background: additive no-op
             }
             else{
@@ -231,7 +229,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             uint tapValid = 0u;
             // Only receiver texels inside the half-res image contribute (matches the texture path's OOB + background skips).
             if(t.x >= 0 && t.y >= 0 && t.x < hw && t.y < hh){
-                if(nwbCausticResolveDepthAtHalf(t) < 0.999999){
+                if(nwbCausticResolveValidAtHalf(t)){
                     tapColor = g_NwbCausticResolveInputColor.Load(int3(t, 0)).rgb;
                     tapWorld = nwbCausticResolveWorldAtHalf(t);
                     tapValid = 1u;
@@ -245,7 +243,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
         if(!inBounds)
             return;
-        if(nwbCausticResolveDepthAtHalf(texel) >= 0.999999){
+        if(!nwbCausticResolveValidAtHalf(texel)){
             g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
             return;
         }
@@ -278,7 +276,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     // for the 3-pass (1,2,4) config but kept general. Identical math to the LDS path.
     if(!inBounds)
         return;
-    if(nwbCausticResolveDepthAtHalf(texel) >= 0.999999){
+    if(!nwbCausticResolveValidAtHalf(texel)){
         g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
         return;
     }
@@ -296,7 +294,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             const int2 tap = int2(texel.x + kx * step, texel.y + ky * step);
             if(tap.x < 0 || tap.y < 0 || tap.x >= hw || tap.y >= hh)
                 continue;
-            if(nwbCausticResolveDepthAtHalf(tap) >= 0.999999)
+            if(!nwbCausticResolveValidAtHalf(tap))
                 continue; // background tap: no receiver -> skip so the dark surround cannot dilute the caustic edge
             const float3 d = nwbCausticResolveWorldAtHalf(tap) - centerWorld;
             const float weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * exp(-dot(d, d) * invTwoSigmaWorldSq);

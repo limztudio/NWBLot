@@ -92,7 +92,12 @@ void main(inout NwbShadowOcclusionPayload payload, in BuiltInTriangleIntersectio
         const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
         const float ndotd = dot(hit.rayDirection, hit.worldNormal);
         const float cosI = saturate(abs(ndotd));
-        const float faceSign = (ndotd >= 0.0) ? 1.0 : -1.0;
+        // faceSign MUST come from the GEOMETRIC face orientation, not the shading normal: on smooth meshes (cylinder /
+        // cone) the interpolated shading normal disagrees with the true face near silhouettes, so sign(dot(rayDir,
+        // shadingNormal)) flips wrongly there -> the signed Beer-Lambert path telescopes incorrectly (an entry counted
+        // as an exit) -> wrong attenuation -> dark speckle where refractor shadows overlap (rays graze both silhouettes).
+        // HitKind() is the robust geometric front/back test: a FRONT face is an entry (-1), a back face an exit (+1).
+        const float faceSign = (HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE) ? -1.0 : 1.0;
         payload.transmittance *= nwbShadowFresnelTransmittedFraction(surface.ior, cosI);
         payload.opticalDepth += nwbShadowAbsorptionCoefficient(surface.transmission) * RayTCurrent() * faceSign;
         if(max(max(payload.transmittance.x, payload.transmittance.y), payload.transmittance.z) < NWB_SHADOW_RT_TRANSMITTANCE_EPSILON){

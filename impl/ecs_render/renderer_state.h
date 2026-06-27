@@ -415,13 +415,15 @@ private:
     Core::BindingLayoutHandle m_causticResolveBindingLayout;
     Core::ShaderHandle m_causticResolveShader;
     Core::ComputePipelineHandle m_causticResolvePipeline;
-    Core::BindingSetHandle m_causticResolveBindingSetOutputIrradiance; // output=irradiance, input=scratch (even passes)
-    Core::BindingSetHandle m_causticResolveBindingSetOutputScratch;    // output=scratch,    input=irradiance (odd passes)
+    Core::BindingSetHandle m_causticResolveBindingSetOutputHalfA; // output=half-A, input=half-B (prepare + odd wavelet passes)
+    Core::BindingSetHandle m_causticResolveBindingSetOutputHalfB; // output=half-B, input=half-A (even wavelet passes)
+    Core::BindingSetHandle m_causticResolveBindingSetUpsample;    // output=full-res irradiance, input=half-B (final upsample)
     const Core::Texture* m_causticResolveBindingSetAccumulator = nullptr;
     const Core::Texture* m_causticResolveBindingSetWorldPosition = nullptr;
     const Core::Texture* m_causticResolveBindingSetDepth = nullptr;
     const Core::Texture* m_causticResolveBindingSetIrradiance = nullptr;
-    const Core::Texture* m_causticResolveBindingSetScratch = nullptr;
+    const Core::Texture* m_causticResolveBindingSetHalfA = nullptr;
+    const Core::Texture* m_causticResolveBindingSetHalfB = nullptr;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;
     bool m_bvhSortPipelineFailed = false;

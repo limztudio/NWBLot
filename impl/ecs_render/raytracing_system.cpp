@@ -184,16 +184,25 @@ static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 6u, "CausticPh
 // first pass (read+normalize the accumulator vs read the previous pass's color). All-scalar -> 32 bytes (no padding
 // mismatch); the trailing pads keep it a clean 16B multiple matching the shader struct.
 struct CausticResolvePushConstants{
-    u32 width = 0u;
-    u32 height = 0u;
-    f32 causticIntensity = 0.f; // exposure, applied once during the first-pass area-normalize
-    u32 stepWidth = 1u;         // a-trous dilation for this pass (1,2,4,8,16)
-    u32 isFirstPass = 0u;       // 1 => read+area-normalize the accumulator; 0 => read the previous pass's color
-    u32 passPad0 = 0u;
-    u32 passPad1 = 0u;
-    u32 passPad2 = 0u;
+    u32 width = 0u;             // FULL-res width (G-buffer dim; UPSAMPLE dispatch/output dim)
+    u32 height = 0u;            // FULL-res height
+    u32 halfWidth = 0u;         // HALF-res width (the resolve buffers; PREPARE/WAVELET dispatch dim)
+    u32 halfHeight = 0u;        // HALF-res height
+    f32 causticIntensity = 0.f; // exposure, applied once during the PREPARE-pass area-normalize
+    u32 stepWidth = 1u;         // a-trous dilation for this wavelet pass (1,2,4), in HALF-res texels
+    u32 stage = 0u;             // 0 = PREPARE+DOWNSAMPLE, 1 = WAVELET (half-res), 2 = UPSAMPLE (-> full-res irradiance)
+    u32 pad = 0u;
 };
 static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 7u + sizeof(f32), "CausticResolvePushConstants must match the shader push-constant layout");
+
+// Caustic resolve stages, kept in lockstep with caustic_resolve_cs.slang's pushConstants.stage switch.
+namespace CausticResolveStage{
+    enum Enum : u32{
+        PrepareDownsample = 0u,
+        Wavelet = 1u,
+        Upsample = 2u,
+    };
+};
 
 // Per-frame photon budget. Energy-conserving (per-photon flux = lightColor*emissionDomainArea*targetCount/photonCount,
 // so it scales 1/photonCount), so a higher count only DENSIFIES the splat without changing its per-frame brightness.
@@ -1063,13 +1072,19 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     // deferred lighting pass always samples the resolved irradiance (nwbBxdfCausticIrradiance), so it is allocated
     // unconditionally and cleared to BLACK each frame (the additive identity, vs the shadow buffer's white) to keep
     // a single binding/shader path regardless of whether a caustic producer ran:
-    //  - causticIrradiance:  RGBA16F single image, the resolve's FINAL a-trous pass output the lighting adds pre-tonemap.
-    //  - causticAccumulator: R32_UINT, one Texture2DArray layer per RGB channel, the fixed-point splat target the
+    //  - causticIrradiance:  RGBA16F FULL-res, the resolve's UPSAMPLE output the lighting adds pre-tonemap.
+    //  - causticAccumulator: R32_UINT FULL-res, one Texture2DArray layer per RGB channel, the fixed-point splat target the
     //                        producer InterlockedAdds into (no float image atomics exist on the backend).
-    //  - causticHistory:     RGBA16F scratch for the a-trous wavelet ping-pong (alternated with irradiance per pass).
+    //  - causticHistory / causticResolveHalf: the two HALF-res RGBA16F ping-pong buffers for the half-res a-trous wavelet
+    //                        (the prepare pass writes causticHistory, the wavelet alternates the two, the final lands in
+    //                        whichever the upsample reads back to the full-res irradiance). Half-res = 1/4 the pixels.
     targets.causticIrradianceFormat = Core::Format::RGBA16_FLOAT;
     targets.causticAccumulatorFormat = Core::Format::R32_UINT;
     targets.causticHistoryFormat = Core::Format::RGBA16_FLOAT;
+
+    // Round UP so a half-res pixel always covers its 2x2 full-res block even for odd extents.
+    const u32 halfWidth = (targets.width + 1u) / 2u;
+    const u32 halfHeight = (targets.height + 1u) / 2u;
 
     Core::TextureDesc irradianceDesc;
     irradianceDesc
@@ -1103,15 +1118,29 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
 
     Core::TextureDesc historyDesc;
     historyDesc
-        .setWidth(targets.width)
-        .setHeight(targets.height)
+        .setWidth(halfWidth)
+        .setHeight(halfHeight)
         .setFormat(targets.causticHistoryFormat)
         .setInUAV(true)
-        .setName("engine/caustic/atrous_scratch")
+        .setName("engine/caustic/atrous_half_a")
     ;
     targets.causticHistory = graphics().createTexture(historyDesc);
     if(!targets.causticHistory){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic a-trous scratch target"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic a-trous half-A target"));
+        return false;
+    }
+
+    Core::TextureDesc halfBDesc;
+    halfBDesc
+        .setWidth(halfWidth)
+        .setHeight(halfHeight)
+        .setFormat(targets.causticHistoryFormat)
+        .setInUAV(true)
+        .setName("engine/caustic/atrous_half_b")
+    ;
+    targets.causticResolveHalf = graphics().createTexture(halfBDesc);
+    if(!targets.causticResolveHalf){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic a-trous half-B target"));
         return false;
     }
     return true;
@@ -1187,19 +1216,26 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     // roles of the irradiance + scratch buffers as they swap).
     commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource);
 
-    const u32 groupsX = DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
-    const u32 groupsY = DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+    // The resolve runs at HALF resolution (1/4 the pixels); only the final UPSAMPLE dispatches at full res.
+    const u32 halfWidth = (targets.width + 1u) / 2u;
+    const u32 halfHeight = (targets.height + 1u) / 2u;
+    const u32 halfGroupsX = DivideUp(halfWidth, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+    const u32 halfGroupsY = DivideUp(halfHeight, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+    const u32 fullGroupsX = DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+    const u32 fullGroupsY = DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
 
-    const auto runPass = [&](Core::BindingSet* const bindingSet, const u32 stepWidth, const u32 isFirstPass){
+    const auto runPass = [&](Core::BindingSet* const bindingSet, const u32 stepWidth, const CausticResolveStage::Enum stage, const u32 groupsX, const u32 groupsY){
         commandList.setResourceStatesForBindingSet(bindingSet);
         commandList.commitBarriers();
 
         CausticResolvePushConstants resolvePush;
         resolvePush.width = targets.width;
         resolvePush.height = targets.height;
+        resolvePush.halfWidth = halfWidth;
+        resolvePush.halfHeight = halfHeight;
         resolvePush.causticIntensity = s_CausticIntensity;
         resolvePush.stepWidth = stepWidth;
-        resolvePush.isFirstPass = isFirstPass;
+        resolvePush.stage = static_cast<u32>(stage);
 
         Core::ComputeState computeState;
         computeState.setPipeline(rayTracingState().m_causticResolvePipeline.get());
@@ -1209,22 +1245,26 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
         commandList.dispatch(groupsX, groupsY, 1u);
     };
 
-    // PREPARE pass: un-scale + area-normalize the accumulator ONCE per pixel into the scratch buffer (NO wavelet), so the
-    // wavelet passes never re-normalize per tap. Uses the OutputScratch set (output=scratch; its irradiance input is
-    // unread on this pass).
-    runPass(rayTracingState().m_causticResolveBindingSetOutputScratch.get(), 1u, 1u);
+    // PREPARE+DOWNSAMPLE (half-res): sum each half-res pixel's 2x2 accumulator block, un-scale + area-normalize ONCE into
+    // half-A (the buffer the wavelet reads). Uses the OutputHalfA set (output=half-A; its half-B input is unread here).
+    runPass(rayTracingState().m_causticResolveBindingSetOutputHalfA.get(), 1u, CausticResolveStage::PrepareDownsample, halfGroupsX, halfGroupsY);
 
-    // Edge-avoiding a-trous wavelet passes at a doubling dilation, reading the prepared float buffer. They ping-pong
-    // scratch<->irradiance: wavelet 0 reads scratch -> irradiance, then alternate, so the FINAL pass (PASS_COUNT odd)
-    // lands in the irradiance buffer the lighting samples.
+    // Half-res edge-avoiding a-trous wavelet passes at a doubling dilation. PREPARE wrote half-A, so wavelet 0 writes
+    // half-B and they alternate (pass even -> OutputHalfB, pass odd -> OutputHalfA). PASS_COUNT is odd so the FINAL pass
+    // lands in half-B, which the upsample reads.
+    static_assert((NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2) == 1, "PASS_COUNT must be odd so the half-res ping-pong ends in half-B (the upsample input)");
     for(u32 pass = 0u; pass < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT); ++pass){
-        const bool outputIrradiance = (pass % 2u) == 0u;
-        Core::BindingSet* const bindingSet = outputIrradiance
-            ? rayTracingState().m_causticResolveBindingSetOutputIrradiance.get()
-            : rayTracingState().m_causticResolveBindingSetOutputScratch.get()
+        const bool outputHalfB = (pass % 2u) == 0u;
+        Core::BindingSet* const bindingSet = outputHalfB
+            ? rayTracingState().m_causticResolveBindingSetOutputHalfB.get()
+            : rayTracingState().m_causticResolveBindingSetOutputHalfA.get()
         ;
-        runPass(bindingSet, 1u << pass, 0u);
+        runPass(bindingSet, 1u << pass, CausticResolveStage::Wavelet, halfGroupsX, halfGroupsY);
     }
+
+    // UPSAMPLE (full-res): bilinearly resample the final half-res caustic (half-B) into the full-res irradiance buffer
+    // the deferred lighting adds.
+    runPass(rayTracingState().m_causticResolveBindingSetUpsample.get(), 1u, CausticResolveStage::Upsample, fullGroupsX, fullGroupsY);
 }
 
 bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
@@ -1338,11 +1378,12 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         !rayTracingState().m_swCausticPipeline
         || !rayTracingState().m_swCausticBindingSet
         || !rayTracingState().m_causticResolvePipeline
-        || !rayTracingState().m_causticResolveBindingSetOutputIrradiance
-        || !rayTracingState().m_causticResolveBindingSetOutputScratch
+        || !rayTracingState().m_causticResolveBindingSetOutputHalfA
+        || !rayTracingState().m_causticResolveBindingSetOutputHalfB
+        || !rayTracingState().m_causticResolveBindingSetUpsample
     )
         return false;
-    if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory)
+    if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory || !targets.causticResolveHalf)
         return false;
 
     {
@@ -2075,30 +2116,36 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
     NWB_ASSERT(targets.depth);
     NWB_ASSERT(targets.causticIrradiance);
     NWB_ASSERT(targets.causticHistory);
+    NWB_ASSERT(targets.causticResolveHalf);
 
     // Non-const (BindingSetItem needs a mutable Texture*); the const cache fields still compare/assign fine.
     Core::Texture* accumulatorTarget = targets.causticAccumulator.get();
     Core::Texture* worldPositionTarget = targets.worldPosition.get();
     Core::Texture* depthTarget = targets.depth.get();
     Core::Texture* irradianceTarget = targets.causticIrradiance.get();
-    Core::Texture* scratchTarget = targets.causticHistory.get();
+    Core::Texture* halfATarget = targets.causticHistory.get();
+    Core::Texture* halfBTarget = targets.causticResolveHalf.get();
     if(
-        rayTracingState().m_causticResolveBindingSetOutputIrradiance
-        && rayTracingState().m_causticResolveBindingSetOutputScratch
+        rayTracingState().m_causticResolveBindingSetOutputHalfA
+        && rayTracingState().m_causticResolveBindingSetOutputHalfB
+        && rayTracingState().m_causticResolveBindingSetUpsample
         && rayTracingState().m_causticResolveBindingSetAccumulator == accumulatorTarget
         && rayTracingState().m_causticResolveBindingSetWorldPosition == worldPositionTarget
         && rayTracingState().m_causticResolveBindingSetDepth == depthTarget
         && rayTracingState().m_causticResolveBindingSetIrradiance == irradianceTarget
-        && rayTracingState().m_causticResolveBindingSetScratch == scratchTarget
+        && rayTracingState().m_causticResolveBindingSetHalfA == halfATarget
+        && rayTracingState().m_causticResolveBindingSetHalfB == halfBTarget
     )
         return true;
 
     auto* device = graphics().getDevice();
 
-    // Two ping-pong binding sets for the a-trous passes. They share the accumulator + G-buffer SRVs and only swap the
-    // (output UAV, input-color SRV) pair: set "OutputIrradiance" writes the irradiance buffer reading the scratch; set
-    // "OutputScratch" writes the scratch reading the irradiance. The pass loop alternates them so the FINAL pass writes
-    // the irradiance buffer the lighting samples (pass 0 -> irradiance, then scratch/irradiance/..., ending irradiance).
+    // Three binding sets. All share the accumulator + G-buffer SRVs and only swap the (output UAV, input-color SRV) pair:
+    //  - OutputHalfA: writes half-A reading half-B (the PREPARE pass + the odd wavelet passes),
+    //  - OutputHalfB: writes half-B reading half-A (the even wavelet passes),
+    //  - Upsample:    writes the FULL-res irradiance reading the final half-res caustic (half-B).
+    // The half buffers are half-res and the irradiance is full-res, but the sets are dimensionless (the bound textures
+    // carry the extent), so the same layout serves all three.
     const auto buildSet = [&](Core::Texture* outputTex, Core::Format::Enum outputFormat, Core::Texture* inputTex, Core::Format::Enum inputFormat) -> Core::BindingSetHandle {
         Core::BindingSetDesc desc(arena());
         desc.addItem(Core::BindingSetItem::Texture_SRV(
@@ -2139,26 +2186,31 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
         return device->createBindingSet(desc, rayTracingState().m_causticResolveBindingLayout);
     };
 
-    Core::BindingSetHandle outputIrradiance = buildSet(irradianceTarget, targets.causticIrradianceFormat, scratchTarget, targets.causticHistoryFormat);
-    Core::BindingSetHandle outputScratch    = buildSet(scratchTarget, targets.causticHistoryFormat, irradianceTarget, targets.causticIrradianceFormat);
-    if(!outputIrradiance || !outputScratch){
+    Core::BindingSetHandle outputHalfA = buildSet(halfATarget, targets.causticHistoryFormat, halfBTarget, targets.causticHistoryFormat);
+    Core::BindingSetHandle outputHalfB = buildSet(halfBTarget, targets.causticHistoryFormat, halfATarget, targets.causticHistoryFormat);
+    Core::BindingSetHandle upsample    = buildSet(irradianceTarget, targets.causticIrradianceFormat, halfBTarget, targets.causticHistoryFormat);
+    if(!outputHalfA || !outputHalfB || !upsample){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve a-trous binding sets"));
-        rayTracingState().m_causticResolveBindingSetOutputIrradiance = nullptr;
-        rayTracingState().m_causticResolveBindingSetOutputScratch = nullptr;
+        rayTracingState().m_causticResolveBindingSetOutputHalfA = nullptr;
+        rayTracingState().m_causticResolveBindingSetOutputHalfB = nullptr;
+        rayTracingState().m_causticResolveBindingSetUpsample = nullptr;
         rayTracingState().m_causticResolveBindingSetAccumulator = nullptr;
         rayTracingState().m_causticResolveBindingSetWorldPosition = nullptr;
         rayTracingState().m_causticResolveBindingSetDepth = nullptr;
         rayTracingState().m_causticResolveBindingSetIrradiance = nullptr;
-        rayTracingState().m_causticResolveBindingSetScratch = nullptr;
+        rayTracingState().m_causticResolveBindingSetHalfA = nullptr;
+        rayTracingState().m_causticResolveBindingSetHalfB = nullptr;
         return false;
     }
-    rayTracingState().m_causticResolveBindingSetOutputIrradiance = Move(outputIrradiance);
-    rayTracingState().m_causticResolveBindingSetOutputScratch = Move(outputScratch);
+    rayTracingState().m_causticResolveBindingSetOutputHalfA = Move(outputHalfA);
+    rayTracingState().m_causticResolveBindingSetOutputHalfB = Move(outputHalfB);
+    rayTracingState().m_causticResolveBindingSetUpsample = Move(upsample);
     rayTracingState().m_causticResolveBindingSetAccumulator = accumulatorTarget;
     rayTracingState().m_causticResolveBindingSetWorldPosition = worldPositionTarget;
     rayTracingState().m_causticResolveBindingSetDepth = depthTarget;
     rayTracingState().m_causticResolveBindingSetIrradiance = irradianceTarget;
-    rayTracingState().m_causticResolveBindingSetScratch = scratchTarget;
+    rayTracingState().m_causticResolveBindingSetHalfA = halfATarget;
+    rayTracingState().m_causticResolveBindingSetHalfB = halfBTarget;
     return true;
 }
 
@@ -2416,11 +2468,12 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         || !rayTracingState().m_hwCausticShaderTable
         || !rayTracingState().m_hwCausticBindingSet
         || !rayTracingState().m_causticResolvePipeline
-        || !rayTracingState().m_causticResolveBindingSetOutputIrradiance
-        || !rayTracingState().m_causticResolveBindingSetOutputScratch
+        || !rayTracingState().m_causticResolveBindingSetOutputHalfA
+        || !rayTracingState().m_causticResolveBindingSetOutputHalfB
+        || !rayTracingState().m_causticResolveBindingSetUpsample
     )
         return false;
-    if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory)
+    if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory || !targets.causticResolveHalf)
         return false;
 
     {

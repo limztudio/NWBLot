@@ -1246,24 +1246,29 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     };
 
     // PREPARE+DOWNSAMPLE (half-res): sum each half-res pixel's 2x2 accumulator block, un-scale + area-normalize ONCE into
-    // half-A (the buffer the wavelet reads). Uses the OutputHalfA set (output=half-A; its half-B input is unread here).
-    runPass(rayTracingState().m_causticResolveBindingSetOutputHalfA.get(), 1u, CausticResolveStage::PrepareDownsample, halfGroupsX, halfGroupsY);
+    // the prepared buffer the wavelet reads. The target is seeded by parity so the ping-pong always ENDS in half-B (the
+    // upsample input) regardless of PASS_COUNT: an even count starts in half-B, an odd count in half-A.
+    const bool prepareToHalfB = (static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) % 2u) == 0u;
+    runPass(
+        prepareToHalfB ? rayTracingState().m_causticResolveBindingSetOutputHalfB.get() : rayTracingState().m_causticResolveBindingSetOutputHalfA.get(),
+        1u, CausticResolveStage::PrepareDownsample, halfGroupsX, halfGroupsY
+    );
 
-    // Half-res edge-avoiding a-trous wavelet passes at a doubling dilation. PREPARE wrote half-A, so wavelet 0 writes
-    // half-B and they alternate (pass even -> OutputHalfB, pass odd -> OutputHalfA). PASS_COUNT is odd so the FINAL pass
-    // lands in half-B, which the upsample reads.
-    static_assert((NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2) == 1, "PASS_COUNT must be odd so the half-res ping-pong ends in half-B (the upsample input)");
+    // Half-res edge-avoiding a-trous wavelet passes at a doubling dilation. Each pass writes the buffer NOT holding its
+    // input (OutputHalfA reads half-B + writes half-A; OutputHalfB reads half-A + writes half-B). srcIsHalfB tracks where
+    // the latest result lives, seeded from the prepare target so after PASS_COUNT passes the final result is in half-B.
+    bool srcIsHalfB = prepareToHalfB;
     for(u32 pass = 0u; pass < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT); ++pass){
-        const bool outputHalfB = (pass % 2u) == 0u;
-        Core::BindingSet* const bindingSet = outputHalfB
-            ? rayTracingState().m_causticResolveBindingSetOutputHalfB.get()
-            : rayTracingState().m_causticResolveBindingSetOutputHalfA.get()
+        Core::BindingSet* const bindingSet = srcIsHalfB
+            ? rayTracingState().m_causticResolveBindingSetOutputHalfA.get()
+            : rayTracingState().m_causticResolveBindingSetOutputHalfB.get()
         ;
         runPass(bindingSet, 1u << pass, CausticResolveStage::Wavelet, halfGroupsX, halfGroupsY);
+        srcIsHalfB = !srcIsHalfB;
     }
 
-    // UPSAMPLE (full-res): bilinearly resample the final half-res caustic (half-B) into the full-res irradiance buffer
-    // the deferred lighting adds.
+    // UPSAMPLE (full-res): edge-aware bilateral resample of the final half-res caustic (half-B) into the full-res
+    // irradiance buffer the deferred lighting adds.
     runPass(rayTracingState().m_causticResolveBindingSetUpsample.get(), 1u, CausticResolveStage::Upsample, fullGroupsX, fullGroupsY);
 }
 

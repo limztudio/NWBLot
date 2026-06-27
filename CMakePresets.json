@@ -50,6 +50,22 @@
       }
     },
     {
+      "name": "output-namesym",
+      "hidden": true,
+      "cacheVariables": {
+        "NWB_OUTPUT_DOMAIN": "namesym"
+      }
+    },
+    {
+      "name": "variant-namesym",
+      "hidden": true,
+      "cacheVariables": {
+        "NWB_BUILDMODE": "ON",
+        "NWB_BUILD_TESTBED": "ON",
+        "NWB_BUILD_TESTS": "ON"
+      }
+    },
+    {
       "name": "windows-clang-base",
       "hidden": true,
       "inherits": [
@@ -102,6 +118,14 @@
       ]
     },
     {
+      "name": "windows-clang-namesym-x64",
+      "inherits": [
+        "windows-clang-base",
+        "variant-namesym",
+        "output-namesym"
+      ]
+    },
+    {
       "name": "linux-clang-x64",
       "inherits": [
         "linux-clang-base",
@@ -123,6 +147,14 @@
         "linux-clang-base",
         "variant-testbed",
         "output-testbed"
+      ]
+    },
+    {
+      "name": "linux-clang-namesym-x64",
+      "inherits": [
+        "linux-clang-base",
+        "variant-namesym",
+        "output-namesym"
       ]
     }
   ],
@@ -173,6 +205,21 @@
       "configuration": "fin"
     },
     {
+      "name": "windows-clang-namesym-dbg",
+      "configurePreset": "windows-clang-namesym-x64",
+      "configuration": "dbg"
+    },
+    {
+      "name": "windows-clang-namesym-opt",
+      "configurePreset": "windows-clang-namesym-x64",
+      "configuration": "opt"
+    },
+    {
+      "name": "windows-clang-namesym-fin",
+      "configurePreset": "windows-clang-namesym-x64",
+      "configuration": "fin"
+    },
+    {
       "name": "linux-clang-dbg",
       "configurePreset": "linux-clang-x64",
       "configuration": "dbg"
@@ -215,6 +262,21 @@
     {
       "name": "linux-clang-testbed-fin",
       "configurePreset": "linux-clang-testbed-x64",
+      "configuration": "fin"
+    },
+    {
+      "name": "linux-clang-namesym-dbg",
+      "configurePreset": "linux-clang-namesym-x64",
+      "configuration": "dbg"
+    },
+    {
+      "name": "linux-clang-namesym-opt",
+      "configurePreset": "linux-clang-namesym-x64",
+      "configuration": "opt"
+    },
+    {
+      "name": "linux-clang-namesym-fin",
+      "configurePreset": "linux-clang-namesym-x64",
       "configuration": "fin"
     }
   ]

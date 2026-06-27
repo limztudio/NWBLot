@@ -392,8 +392,10 @@ float3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, 
     float3 opticalDepth = float3(0.0, 0.0, 0.0);
     nwbSwShadowOccluded(origin, toLight, tMin, tEnd, transmittance, opticalDepth);
     // Finalize: the Fresnel-transmitted product times the Beer-Lambert attenuation integrated over the true
-    // entry->exit path. Matches the HW raygen finalize (transmittance * exp(-opticalDepth)) exactly.
-    return transmittance * exp(-opticalDepth);
+    // entry->exit path. Clamp the integrated optical depth to >= 0 (a physical path length is non-negative; an
+    // early-terminated trace can leave a negative partial -> exp = Inf -> 0*Inf = NaN where two refractors' shadows
+    // overlap). max(.,0) keeps it finite; saturate guards [0,1]. Matches the HW raygen finalize exactly.
+    return saturate(transmittance * exp(-max(opticalDepth, float3(0.0, 0.0, 0.0))));
 }
 
 

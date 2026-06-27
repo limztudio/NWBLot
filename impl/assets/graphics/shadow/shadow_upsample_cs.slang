@@ -125,7 +125,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             if(weights[k] > 0.0)
                 sum += weights[k] * g_NwbShadowUpsampleHalfVisibility.Load(int4(taps[k], (int)slot, 0)).rgb;
         }
-        g_NwbShadowUpsampleFullVisibility[uint3(pixel, slot)] = float4(sum * invWeightSum, 1.0);
+        g_NwbShadowUpsampleFullVisibility[uint3(pixel, slot)] = float4(saturate(sum * invWeightSum), 1.0);
     }
 }
 

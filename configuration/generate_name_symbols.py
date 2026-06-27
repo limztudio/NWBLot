@@ -51,8 +51,10 @@ def parse_arguments(argv):
     parser.add_argument("--config", required=True, help="Build configuration (dbg/opt/fin).")
     parser.add_argument("--buildmode-bin-dir", required=True, help="Directory where buildmode exes + .namesym land.")
     parser.add_argument("--dest", action="append", default=[], help="Destination dir for the sidecars (repeatable).")
+    parser.add_argument("--mkdir", action="append", default=[], help="Directory to create before running workloads (repeatable).")
     parser.add_argument("--run", action="append", default=[], help='Headless run spec "exe|||arg|||arg" (repeatable).')
     parser.add_argument("--ctest-regex", action="append", default=[], help="ctest -R regex for GUI targets (repeatable).")
+    parser.add_argument("--expect-sidecar", action="append", default=[], help="Sidecar basename that MUST be produced; warn if missing (repeatable).")
     parser.add_argument("--skip-configure", action="store_true", help="Skip the buildmode configure step.")
     parser.add_argument("--skip-build", action="store_true", help="Skip the buildmode configure + build steps.")
     return parser.parse_args(argv)
@@ -75,26 +77,55 @@ def configure_and_build(arguments):
     return True
 
 
+def clean_stale_sidecars(arguments):
+    # A capture must reflect THIS run only. WriteDefaultFile writes "<exe>.namesym" into the (persistent) buildmode bin
+    # dir, so a workload that crashes or is hard-killed before its graceful exit would otherwise leave a PRIOR run's
+    # sidecar in place -- which collect would then copy as if freshly captured. Clearing first makes a post-run empty
+    # glob correctly hard-fail, and prevents a silent stale/partial-stale mix from reaching the release logserver.
+    removed = 0
+    for old in glob.glob(os.path.join(arguments.buildmode_bin_dir, "*.namesym")):
+        try:
+            os.remove(old)
+            removed += 1
+        except OSError as error:
+            log("WARNING: could not remove stale sidecar {}: {}".format(old, error))
+    if removed:
+        log("cleared {} stale sidecar(s) from {}".format(removed, arguments.buildmode_bin_dir))
+
+
 def run_workloads(arguments):
-    # Individual workload failures are not fatal: a crashed/timed-out run still writes whatever it recorded before
-    # exiting, and a partial table beats no table. We only hard-fail later if nothing at all was produced.
+    for directory in arguments.mkdir:
+        os.makedirs(directory, exist_ok=True)
+
+    # Headless runs. A nonzero exit is only a warning: a run can still write its sidecar on a non-clean exit (the app
+    # entry also writes it on init-failure / exception), and a partial table beats none. The post-run collect against a
+    # freshly-cleaned dir is what actually decides whether anything was produced.
     for spec in arguments.run:
         parts = spec.split("|||")
+        if not parts or not parts[0]:
+            log("WARNING: empty --run spec, skipping")
+            continue
+
         exe = executable_path(arguments.buildmode_bin_dir, parts[0])
         if not os.path.isfile(exe):
             log("WARNING: headless target not found, skipping: {}".format(exe))
             continue
 
         if run_command([exe] + parts[1:], cwd=arguments.buildmode_bin_dir) != 0:
-            log("WARNING: headless run returned nonzero (sidecar still captured if it reached exit): {}".format(parts[0]))
+            log("WARNING: headless run returned nonzero (sidecar still captured if it reached an exit handler): {}".format(parts[0]))
 
+    # GUI runs via ctest. IMPORTANT: a window-capture test that HARD-KILLS its app (TerminateProcess) prevents the
+    # app's graceful-exit sidecar write -- such a target must support a graceful / auto-quit shutdown to contribute
+    # symbols (otherwise this run produces nothing and is caught by --expect-sidecar below).
     for regex in arguments.ctest_regex:
-        # ctest launches the window-capture harness, which runs each matched GUI target and tears it down. Needs a
-        # display; on a headless host the tests skip (return code 77) rather than fail.
-        run_command(
+        rc = run_command(
             ["ctest", "--test-dir", arguments.build_dir, "-C", arguments.config, "-R", regex, "--output-on-failure"],
             cwd=arguments.source_dir,
         )
+        if rc == 8:
+            log("WARNING: ctest found NO tests matching '{}' (GUI sidecars will be missing)".format(regex))
+        elif rc != 0:
+            log("WARNING: ctest returned {} for '{}' (GUI run failed/skipped; its sidecars may be missing)".format(rc, regex))
 
 
 def collect_sidecars(arguments):
@@ -103,20 +134,23 @@ def collect_sidecars(arguments):
         log("ERROR: no .namesym sidecars were produced under {}".format(arguments.buildmode_bin_dir))
         return False
 
-    log("captured {} sidecar(s): {}".format(len(produced), ", ".join(os.path.basename(p) for p in produced)))
+    names = [os.path.basename(path) for path in produced]
+    log("captured {} sidecar(s): {}".format(len(produced), ", ".join(names)))
 
-    copied_any = False
+    for expected in arguments.expect_sidecar:
+        if expected not in names:
+            log("WARNING: expected sidecar '{}' was NOT produced -- its workload likely failed or was hard-killed before a graceful exit; those symbols will stay as hashes".format(expected))
+
     for dest in arguments.dest:
         os.makedirs(dest, exist_ok=True)
         for sidecar in produced:
             shutil.copy2(sidecar, os.path.join(dest, os.path.basename(sidecar)))
-            copied_any = True
-        log("bundled sidecars into {}".format(dest))
+        log("bundled {} sidecar(s) into {}".format(len(produced), dest))
 
     if not arguments.dest:
         log("WARNING: no --dest given; sidecars left in the buildmode output only")
 
-    return copied_any or not arguments.dest
+    return True
 
 
 def main(argv):
@@ -124,6 +158,10 @@ def main(argv):
 
     if not configure_and_build(arguments):
         return 1
+
+    # Only clear when we will actually regenerate sidecars; a pure collect (no workloads) must keep what is there.
+    if arguments.run or arguments.ctest_regex:
+        clean_stale_sidecars(arguments)
 
     run_workloads(arguments)
 

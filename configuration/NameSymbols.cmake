@@ -51,6 +51,13 @@ function(nwb_add_name_symbol_target)
     set(_namesym_buildmode_bin_dir "${PROJECT_SOURCE_DIR}/__exec/${_namesym_output_platform}/${NWB_OUTPUT_ARCH}/namesym/$<CONFIG>")
     set(_namesym_release_dest "${NWB_OUTPUT_ROOT}/$<CONFIG>")
 
+    # Headless workload: a real cook (mirrors the smoke-asset cook in tests/smoke/CMakeLists.txt) so the cooker records
+    # its full pipeline + asset-id literals -- not just startup symbols. Output/cache live under the build-mode tree so
+    # the release asset cache is untouched. This run needs no display, so it is the graceful path on headless hosts.
+    set(_namesym_cook_out "${_namesym_build_dir}/namesym_cook/res")
+    set(_namesym_cook_cache "${PROJECT_SOURCE_DIR}/__build_obj/asset_cache/${_namesym_output_platform}/${NWB_OUTPUT_ARCH}/namesym")
+    set(_namesym_cook_run "resource_cooker|||--repo-root|||${PROJECT_SOURCE_DIR}|||--asset-root|||impl/assets|||--asset-root|||tests/smoke/assets|||--output-directory|||${_namesym_cook_out}|||--cache-directory|||${_namesym_cook_cache}|||--configuration|||$<CONFIG>")
+
     add_custom_target(nwb_namesym
         COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/configuration/generate_name_symbols.py"
             --source-dir "${PROJECT_SOURCE_DIR}"
@@ -60,7 +67,9 @@ function(nwb_add_name_symbol_target)
             --config "$<CONFIG>"
             --buildmode-bin-dir "${_namesym_buildmode_bin_dir}"
             --dest "${_namesym_release_dest}"
-            --run "resource_cooker"
+            --mkdir "${_namesym_cook_out}"
+            --mkdir "${_namesym_cook_cache}"
+            --run "${_namesym_cook_run}"
             --ctest-regex "nwb_testbed_window_capture_smoke"
         VERBATIM
         USES_TERMINAL

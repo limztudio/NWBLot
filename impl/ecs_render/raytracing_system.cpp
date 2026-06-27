@@ -204,6 +204,16 @@ namespace CausticResolveStage{
     };
 };
 
+// Mirror of caustic_geometry_downsample_cs.slang's NwbCausticGeometryDownsamplePushConstants (the half-res geometry
+// cache pre-pass): full-res G-buffer dims + the half-res output dims.
+struct CausticGeometryDownsamplePushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 halfWidth = 0u;
+    u32 halfHeight = 0u;
+};
+static_assert(sizeof(CausticGeometryDownsamplePushConstants) == sizeof(u32) * 4u, "CausticGeometryDownsamplePushConstants must match the shader push-constant layout");
+
 // Per-frame photon budget. Energy-conserving (per-photon flux = lightColor*emissionDomainArea*targetCount/photonCount,
 // so it scales 1/photonCount), so a higher count only DENSIFIES the splat without changing its per-frame brightness.
 // Density matters because the resolve is spatial-only (a-trous, no temporal accumulation): each frame must be dense
@@ -1143,6 +1153,21 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic a-trous half-B target"));
         return false;
     }
+
+    // Half-res geometry cache (xyz = world, w = receiver validity) for the resolve's per-tap edge-stop geometry.
+    Core::TextureDesc geometryDesc;
+    geometryDesc
+        .setWidth(halfWidth)
+        .setHeight(halfHeight)
+        .setFormat(targets.causticHistoryFormat)
+        .setInUAV(true)
+        .setName("engine/caustic/resolve_geometry")
+    ;
+    targets.causticResolveGeometry = graphics().createTexture(geometryDesc);
+    if(!targets.causticResolveGeometry){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve geometry cache target"));
+        return false;
+    }
     return true;
 }
 
@@ -1223,6 +1248,28 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     const u32 halfGroupsY = DivideUp(halfHeight, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const u32 fullGroupsX = DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const u32 fullGroupsY = DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+
+    // Geometry downsample pre-pass: fill the half-res geometry cache (world position + receiver validity) ONCE, so the
+    // PREPARE + WAVELET passes tap one half-res texel for the edge-stop geometry instead of re-reading the full-res
+    // world-position + depth G-buffer at the half pixel's 2x location every a-trous tap. The framework transitions the
+    // cache UAV(write here) -> SRV(read in the resolve passes).
+    {
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_causticGeometryDownsampleBindingSet.get());
+        commandList.commitBarriers();
+
+        CausticGeometryDownsamplePushConstants geometryPush;
+        geometryPush.width = targets.width;
+        geometryPush.height = targets.height;
+        geometryPush.halfWidth = halfWidth;
+        geometryPush.halfHeight = halfHeight;
+
+        Core::ComputeState geometryState;
+        geometryState.setPipeline(rayTracingState().m_causticGeometryDownsamplePipeline.get());
+        geometryState.addBindingSet(rayTracingState().m_causticGeometryDownsampleBindingSet.get());
+        commandList.setComputeState(geometryState);
+        commandList.setPushConstants(&geometryPush, sizeof(geometryPush));
+        commandList.dispatch(halfGroupsX, halfGroupsY, 1u);
+    }
 
     const auto runPass = [&](Core::BindingSet* const bindingSet, const u32 stepWidth, const CausticResolveStage::Enum stage, const u32 groupsX, const u32 groupsY){
         commandList.setResourceStatesForBindingSet(bindingSet);
@@ -1367,7 +1414,12 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
         return true;
 
     const bool producerReady = ensureSwCausticPipeline() && ensureSwCausticBindingSet(targets);
-    const bool resolveReady = ensureCausticResolvePipeline() && ensureCausticResolveBindingSet(targets);
+    const bool resolveReady =
+        ensureCausticGeometryDownsamplePipeline()
+        && ensureCausticGeometryDownsampleBindingSet(targets)
+        && ensureCausticResolvePipeline()
+        && ensureCausticResolveBindingSet(targets)
+    ;
     return producerReady && resolveReady;
 }
 
@@ -1386,9 +1438,11 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         || !rayTracingState().m_causticResolveBindingSetOutputHalfA
         || !rayTracingState().m_causticResolveBindingSetOutputHalfB
         || !rayTracingState().m_causticResolveBindingSetUpsample
+        || !rayTracingState().m_causticGeometryDownsamplePipeline
+        || !rayTracingState().m_causticGeometryDownsampleBindingSet
     )
         return false;
-    if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory || !targets.causticResolveHalf)
+    if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory || !targets.causticResolveHalf || !targets.causticResolveGeometry)
         return false;
 
     {
@@ -2079,6 +2133,7 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_INPUT_COLOR, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_GEOMETRY, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticResolvePushConstants)));
 
         rayTracingState().m_causticResolveBindingLayout = device->createBindingLayout(layoutDesc);
@@ -2122,6 +2177,7 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
     NWB_ASSERT(targets.causticIrradiance);
     NWB_ASSERT(targets.causticHistory);
     NWB_ASSERT(targets.causticResolveHalf);
+    NWB_ASSERT(targets.causticResolveGeometry);
 
     // Non-const (BindingSetItem needs a mutable Texture*); the const cache fields still compare/assign fine.
     Core::Texture* accumulatorTarget = targets.causticAccumulator.get();
@@ -2130,6 +2186,7 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
     Core::Texture* irradianceTarget = targets.causticIrradiance.get();
     Core::Texture* halfATarget = targets.causticHistory.get();
     Core::Texture* halfBTarget = targets.causticResolveHalf.get();
+    Core::Texture* geometryTarget = targets.causticResolveGeometry.get();
     if(
         rayTracingState().m_causticResolveBindingSetOutputHalfA
         && rayTracingState().m_causticResolveBindingSetOutputHalfB
@@ -2140,6 +2197,7 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
         && rayTracingState().m_causticResolveBindingSetIrradiance == irradianceTarget
         && rayTracingState().m_causticResolveBindingSetHalfA == halfATarget
         && rayTracingState().m_causticResolveBindingSetHalfB == halfBTarget
+        && rayTracingState().m_causticResolveBindingSetGeometry == geometryTarget
     )
         return true;
 
@@ -2188,6 +2246,13 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
             ECSRenderDetail::s_FramebufferSubresources,
             Core::TextureDimension::Texture2D
         ));
+        desc.addItem(Core::BindingSetItem::Texture_SRV(
+            NWB_CAUSTIC_RESOLVE_BINDING_GEOMETRY,
+            geometryTarget,
+            targets.causticHistoryFormat,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture2D
+        ));
         return device->createBindingSet(desc, rayTracingState().m_causticResolveBindingLayout);
     };
 
@@ -2205,6 +2270,7 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
         rayTracingState().m_causticResolveBindingSetIrradiance = nullptr;
         rayTracingState().m_causticResolveBindingSetHalfA = nullptr;
         rayTracingState().m_causticResolveBindingSetHalfB = nullptr;
+        rayTracingState().m_causticResolveBindingSetGeometry = nullptr;
         return false;
     }
     rayTracingState().m_causticResolveBindingSetOutputHalfA = Move(outputHalfA);
@@ -2216,6 +2282,114 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
     rayTracingState().m_causticResolveBindingSetIrradiance = irradianceTarget;
     rayTracingState().m_causticResolveBindingSetHalfA = halfATarget;
     rayTracingState().m_causticResolveBindingSetHalfB = halfBTarget;
+    rayTracingState().m_causticResolveBindingSetGeometry = geometryTarget;
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
+    if(rayTracingState().m_causticGeometryDownsamplePipeline)
+        return true;
+    if(rayTracingState().m_causticGeometryDownsamplePipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_causticGeometryDownsampleBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticGeometryDownsamplePushConstants)));
+
+        rayTracingState().m_causticGeometryDownsampleBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_causticGeometryDownsampleBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic geometry downsample binding layout"));
+            rayTracingState().m_causticGeometryDownsamplePipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_causticGeometryDownsampleShader,
+        AssetsGraphicsCaustic::s_GeometryDownsampleShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_CausticGeometryDownsample"
+    )){
+        rayTracingState().m_causticGeometryDownsamplePipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_causticGeometryDownsampleShader)
+        .addBindingLayout(rayTracingState().m_causticGeometryDownsampleBindingLayout)
+    ;
+    rayTracingState().m_causticGeometryDownsamplePipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_causticGeometryDownsamplePipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic geometry downsample compute pipeline"));
+        rayTracingState().m_causticGeometryDownsamplePipelineFailed = true;
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureCausticGeometryDownsampleBindingSet(DeferredFrameTargets& targets){
+    NWB_ASSERT(rayTracingState().m_causticGeometryDownsampleBindingLayout);
+    NWB_ASSERT(targets.worldPosition);
+    NWB_ASSERT(targets.depth);
+    NWB_ASSERT(targets.causticResolveGeometry);
+
+    Core::Texture* worldPositionTarget = targets.worldPosition.get();
+    Core::Texture* depthTarget = targets.depth.get();
+    Core::Texture* geometryTarget = targets.causticResolveGeometry.get();
+    if(
+        rayTracingState().m_causticGeometryDownsampleBindingSet
+        && rayTracingState().m_causticGeometryDownsampleWorldPosition == worldPositionTarget
+        && rayTracingState().m_causticGeometryDownsampleDepth == depthTarget
+        && rayTracingState().m_causticGeometryDownsampleGeometry == geometryTarget
+    )
+        return true;
+
+    auto* device = graphics().getDevice();
+
+    Core::BindingSetDesc desc(arena());
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION,
+        worldPositionTarget,
+        targets.worldPositionFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH,
+        depthTarget,
+        targets.depthFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT,
+        geometryTarget,
+        targets.causticHistoryFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+
+    Core::BindingSetHandle bindingSet = device->createBindingSet(desc, rayTracingState().m_causticGeometryDownsampleBindingLayout);
+    if(!bindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic geometry downsample binding set"));
+        rayTracingState().m_causticGeometryDownsampleBindingSet = nullptr;
+        rayTracingState().m_causticGeometryDownsampleWorldPosition = nullptr;
+        rayTracingState().m_causticGeometryDownsampleDepth = nullptr;
+        rayTracingState().m_causticGeometryDownsampleGeometry = nullptr;
+        return false;
+    }
+    rayTracingState().m_causticGeometryDownsampleBindingSet = Move(bindingSet);
+    rayTracingState().m_causticGeometryDownsampleWorldPosition = worldPositionTarget;
+    rayTracingState().m_causticGeometryDownsampleDepth = depthTarget;
+    rayTracingState().m_causticGeometryDownsampleGeometry = geometryTarget;
     return true;
 }
 
@@ -2457,7 +2631,12 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
         return true;
 
     const bool producerReady = ensureCausticRtPipeline() && ensureCausticRtBindingSet(targets);
-    const bool resolveReady = ensureCausticResolvePipeline() && ensureCausticResolveBindingSet(targets);
+    const bool resolveReady =
+        ensureCausticGeometryDownsamplePipeline()
+        && ensureCausticGeometryDownsampleBindingSet(targets)
+        && ensureCausticResolvePipeline()
+        && ensureCausticResolveBindingSet(targets)
+    ;
     return producerReady && resolveReady;
 }
 
@@ -2476,9 +2655,11 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         || !rayTracingState().m_causticResolveBindingSetOutputHalfA
         || !rayTracingState().m_causticResolveBindingSetOutputHalfB
         || !rayTracingState().m_causticResolveBindingSetUpsample
+        || !rayTracingState().m_causticGeometryDownsamplePipeline
+        || !rayTracingState().m_causticGeometryDownsampleBindingSet
     )
         return false;
-    if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory || !targets.causticResolveHalf)
+    if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory || !targets.causticResolveHalf || !targets.causticResolveGeometry)
         return false;
 
     {

@@ -26,6 +26,14 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ClientPayloadKind{
+    enum Enum : u8{
+        Message,
+        Telemetry,
+        NameSymbol,
+    };
+};
+
 inline constexpr tchar CLIENT_NAME[] = NWB_TEXT("Client");
 class Client final : public IClient, public BaseUpdateIfQueued<Client, CLIENT_NAME>{
     template<typename, const tchar*> friend class Base;
@@ -56,6 +64,12 @@ protected:
     bool internalInit(NotNull<const char*> url);
     bool internalUpdate();
 
+private:
+    // Selects the runtime symbol table as the pending upload payload (to /namesym) when it has grown since the last
+    // upload, rate-limited. BUILDMODE-only: only a buildmode client holds the full hash->text table; an opt client
+    // resolves its runtime names in-message and has nothing the server can't already read, so this is a no-op there.
+    [[nodiscard]] bool pickNameSymbolPayload();
+
 protected:
     inline void enqueue(MessageType&& data){
         this->m_msgQueue.emplace(Move(data));
@@ -77,12 +91,19 @@ protected:
 
 
 private:
+    static constexpr f32 s_NameSymbolUploadIntervalSeconds = 2.0f;
+
+private:
     void* m_curl;
     Vector<u8, LogArena> m_pendingPayload;
     AString<LogArena> m_messageUrl;
     AString<LogArena> m_telemetryUrl;
+    AString<LogArena> m_namesymUrl;
     bool m_hasPendingPayload;
-    bool m_pendingPayloadIsTelemetry;
+    ClientPayloadKind::Enum m_pendingPayloadKind;
+    usize m_namesymUploadedCount;
+    usize m_pendingNamesymCount;
+    Timer m_lastNamesymUploadTime;
 
 private:
     Atomic<usize> m_msgCount;

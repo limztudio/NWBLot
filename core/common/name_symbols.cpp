@@ -104,6 +104,10 @@ public:
         m_symbols.clear();
     }
 
+    [[nodiscard]] usize size()const{
+        return m_symbols.size();
+    }
+
     void appendFileText(SymbolArena& arena, SymbolString& outText)const{
         Vector<SymbolRecordView, SymbolArena> records(arena);
         records.reserve(m_symbols.size());
@@ -153,6 +157,14 @@ public:
 
     void clear(){
         m_symbols.clear();
+    }
+
+    [[nodiscard]] usize size()const{
+        return m_symbols.size();
+    }
+
+    void serialize(SymbolString& outText){
+        m_symbols.appendFileText(m_arena, outText);
     }
 
     [[nodiscard]] bool writeDefaultFile(){
@@ -310,10 +322,23 @@ bool Resolve(const NameHash& hash, char* const outText, const usize outTextSize)
     return __hidden_common_name_symbols::Registry().resolve(hash, outText, outTextSize);
 }
 
+usize EntryCount(){
+    return __hidden_common_name_symbols::Registry().size();
+}
+
+void Serialize(AString<Alloc::GlobalArena>& outText){
+    __hidden_common_name_symbols::Registry().serialize(outText);
+}
+
 void InstallRuntimeRegistry(){
     __hidden_common_name_symbols::RuntimeRegistry& registry = __hidden_common_name_symbols::Registry();
     SetNameSymbolRecordCallback(&__hidden_common_name_symbols::RecordSymbol, &registry);
     SetNameSymbolResolveCallback(&__hidden_common_name_symbols::ResolveSymbol, &registry);
+}
+
+void UninstallRuntimeRegistry(){
+    SetNameSymbolRecordCallback(nullptr, nullptr);
+    SetNameSymbolResolveCallback(nullptr, nullptr);
 }
 
 void ClearRuntimeSymbols(){

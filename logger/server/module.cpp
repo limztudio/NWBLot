@@ -46,6 +46,7 @@ namespace ConnectionUploadKind{
         LogMessage,
         Crash,
         Telemetry,
+        NameSymbol,
     };
 };
 
@@ -141,6 +142,8 @@ static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept;
 
 inline constexpr usize s_MaxTelemetryUploadMebibytes = 64u;
 inline constexpr usize s_MaxTelemetryUploadBytes = s_MaxTelemetryUploadMebibytes * s_BytesPerMebibyte;
+inline constexpr usize s_MaxNameSymbolUploadMebibytes = 16u;
+inline constexpr usize s_MaxNameSymbolUploadBytes = s_MaxNameSymbolUploadMebibytes * s_BytesPerMebibyte;
 
 [[nodiscard]] static usize UploadSizeLimit(const ConnectionUploadKind::Enum uploadKind)noexcept{
     switch(uploadKind){
@@ -148,6 +151,8 @@ inline constexpr usize s_MaxTelemetryUploadBytes = s_MaxTelemetryUploadMebibytes
         return s_MaxCrashPackageUploadBytes;
     case ConnectionUploadKind::Telemetry:
         return s_MaxTelemetryUploadBytes;
+    case ConnectionUploadKind::NameSymbol:
+        return s_MaxNameSymbolUploadBytes;
     case ConnectionUploadKind::LogMessage:
     default:
         return s_MaxLogMessageUploadBytes;
@@ -372,11 +377,14 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
     const bool isCrashUpload = NWB_STRCMP(url, Core::Crash::PackageNames::s_CrashUploadEndpoint) == 0;
     const bool isTelemetryUpload = NWB_STRCMP(url, s_TelemetryUploadEndpoint) == 0;
+    const bool isNameSymbolUpload = NWB_STRCMP(url, s_NameSymbolUploadEndpoint) == 0;
     const auto uploadKind = isCrashUpload
         ? __hidden_logger_server::ConnectionUploadKind::Crash
         : isTelemetryUpload
             ? __hidden_logger_server::ConnectionUploadKind::Telemetry
-            : __hidden_logger_server::ConnectionUploadKind::LogMessage
+            : isNameSymbolUpload
+                ? __hidden_logger_server::ConnectionUploadKind::NameSymbol
+                : __hidden_logger_server::ConnectionUploadKind::LogMessage
     ;
 
     if(!conCls){
@@ -462,6 +470,12 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
             thisPtr->m_telemetryIngestConfig
         );
         thisPtr->enqueue(Move(result.message), result.type);
+    }
+    else if(info->uploadKind == __hidden_logger_server::ConnectionUploadKind::NameSymbol){
+        // Ingest a remote client's uploaded symbol table into the server registry so DecodeHashTokens can rewrite
+        // that client's debug-hash tokens back to readable names. Silent: symbol pushes are routine, not log-worthy.
+        const AStringView nameSymbolBody(reinterpret_cast<const char*>(info->buffer), info->size);
+        [[maybe_unused]] const bool loadedNameSymbols = Core::Common::NameSymbols::LoadFromMemory(nameSymbolBody);
     }
     else{
         MessageType message = MakeMessageType(thisPtr->arena());

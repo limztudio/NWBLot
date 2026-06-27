@@ -173,6 +173,30 @@ TEST(Global, NameSymbolsWriteDefaultFile){
     [[maybe_unused]] const bool removedNamesym = RemoveFile(namesymPath, removeError);
 }
 
+TEST(Global, NameSymbolsSerializeRoundTrip){
+    // Exercises the cross-process transport path in one process: the client Serialize() the registry, the server
+    // LoadFromMemory()s those exact bytes into a (here, wiped) registry, then resolves.
+    NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
+    NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
+
+    const Name runtimeName(AStringView("RoundTrip\\Symbol"));
+    static_cast<void>(runtimeName.hash());
+    EXPECT_GE(NWB::Core::Common::NameSymbols::EntryCount(), 1u);
+
+    NWB::Core::Alloc::GlobalArena serializeArena(NWB::Tests::s_TestArena);
+    ::AString<NWB::Core::Alloc::GlobalArena> namesymText(serializeArena);
+    NWB::Core::Common::NameSymbols::Serialize(namesymText);
+    EXPECT_NE(namesymText.find("roundtrip/symbol"), decltype(namesymText)::npos);
+
+    NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
+    char resolvedText[64] = {};
+    EXPECT_FALSE(NWB::Core::Common::NameSymbols::Resolve(runtimeName.hash(), resolvedText, sizeof(resolvedText)));
+
+    EXPECT_TRUE(NWB::Core::Common::NameSymbols::LoadFromMemory(AStringView(namesymText.data(), namesymText.size())));
+    EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(runtimeName.hash(), resolvedText, sizeof(resolvedText)));
+    EXPECT_STREQ(resolvedText, "roundtrip/symbol");
+}
+
 TEST(Global, LengthPrefixedStringRoundTrip){
     Vector<u8> binary;
     const AString source("alpha");

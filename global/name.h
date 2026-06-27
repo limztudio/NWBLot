@@ -198,6 +198,21 @@ private:
     bool& m_flag;
 };
 
+// Rotating thread_local scratch buffers backing Name::c_str()/logText() in opt/fin (where there is no per-object
+// m_debugName). A single shared buffer would alias when two Name text results are live in one expression (e.g. two
+// Names in one log call), silently returning two pointers to the same last-written text. Rotating across a small ring
+// lets up to s_SymbolTextBufferCount results coexist on a thread. Still bounded: more simultaneously-live results
+// than the ring size will alias (acceptable -- this is a diagnostic/log path, not a value carrier).
+inline constexpr usize s_SymbolTextBufferLength = 1024u; // keep == NameSymbols::s_MaxResolvedTextLength
+inline constexpr usize s_SymbolTextBufferCount = 8u;
+[[nodiscard]] inline char* NextSymbolTextBuffer(){
+    thread_local static char buffers[s_SymbolTextBufferCount][s_SymbolTextBufferLength];
+    thread_local static usize next = 0u;
+    char* const buffer = buffers[next];
+    next = (next + 1u) % s_SymbolTextBufferCount;
+    return buffer;
+}
+
 inline void SetNameSymbolRecordCallback(const NameSymbolRecordCallback callback, void* const userData){
     NameSymbolRecorderState& state = SymbolRecorderState();
     state.callback = callback;
@@ -249,6 +264,11 @@ inline void RecordNameSymbolText(
         state.callback(hash, AStringView(text.data(), text.size()), state.userData);
     }
     else{
+        // Wide -> narrow by per-code-unit byte truncation, NOT UTF-8: ComputeNameHash hashes each wchar as
+        // static_cast<u8>(Canonicalize(ch)), so the recorded text must use those same truncated bytes to round-trip
+        // back to the Name's hash. Emitting real UTF-8 here would make the symbol text hash to a DIFFERENT NameHash.
+        // Names are effectively ASCII identifiers/paths in this engine; a non-ASCII wide Name records as truncated
+        // bytes (consistent with its hash, just not human-readable) -- acceptable given no non-ASCII Names exist.
         char narrowText[1024] = {};
         usize copiedCount = 0u;
         for(const CharT ch : text){
@@ -488,11 +508,26 @@ public:
 #if defined(NWB_DEBUG)
         return m_debugName;
 #else
-        thread_local static char buf[1024];
-        if(NameDetail::ResolveNameSymbolText(m_hash, buf, sizeof(buf)))
+        char* const buf = NameDetail::NextSymbolTextBuffer();
+        if(NameDetail::ResolveNameSymbolText(m_hash, buf, NameDetail::s_SymbolTextBufferLength))
             return buf;
 
-        NameDetail::HashToDebugString(m_hash, buf, sizeof(buf));
+        NameDetail::HashToDebugString(m_hash, buf, NameDetail::s_SymbolTextBufferLength);
+        return buf;
+#endif
+    }
+
+    // Non-resolving textual form for cheap breadcrumbs (arena allocation logging, crash markers): the readable debug
+    // name where one exists (dbg/buildmode), else the raw hash hex -- WITHOUT consulting the runtime symbol resolver.
+    // c_str() (which DOES resolve) must never run on the allocator path: resolving allocates from a GlobalArena, and
+    // that arena's allocate() logs its own name, which re-enters the resolver -- the source of the opt stack overflow.
+    // Use this anywhere a Name is logged from inside the allocator.
+    [[nodiscard]] const char* logText()const{
+#if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
+        return m_debugName;
+#else
+        char* const buf = NameDetail::NextSymbolTextBuffer();
+        NameDetail::HashToDebugString(m_hash, buf, NameDetail::s_SymbolTextBufferLength);
         return buf;
 #endif
     }

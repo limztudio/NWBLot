@@ -4,6 +4,8 @@
 
 #include "module.h"
 
+#include <core/common/name_symbols.h>
+
 #include <curl/curl.h>
 
 
@@ -65,8 +67,12 @@ Client::Client()
     , m_pendingPayload(BaseType::arena())
     , m_messageUrl(BaseType::arena())
     , m_telemetryUrl(BaseType::arena())
+    , m_namesymUrl(BaseType::arena())
     , m_hasPendingPayload(false)
-    , m_pendingPayloadIsTelemetry(false)
+    , m_pendingPayloadKind(ClientPayloadKind::Message)
+    , m_namesymUploadedCount(0)
+    , m_pendingNamesymCount(0)
+    , m_lastNamesymUploadTime{}
     , m_msgCount(0)
     , m_telemetryCount(0)
     , m_telemetryQueue(BaseType::arena())
@@ -83,6 +89,7 @@ Client::~Client(){
 bool Client::internalInit(NotNull<const char*> url){
     m_messageUrl = AStringView(url.get());
     m_telemetryUrl = __hidden_log_client::UrlWithEndpoint(BaseType::arena(), AStringView(url.get()), AStringView(s_TelemetryUploadEndpoint));
+    m_namesymUrl = __hidden_log_client::UrlWithEndpoint(BaseType::arena(), AStringView(url.get()), AStringView(s_NameSymbolUploadEndpoint));
 
     m_curl = curl_easy_init();
     if(!m_curl){
@@ -133,12 +140,19 @@ bool Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
 }
 bool Client::internalUpdate(){
     if(!m_hasPendingPayload){
-        if(m_telemetryCount.load(MemoryOrder::relaxed)){
+        // Symbol table first (buildmode-only, growth-gated): the server must learn a hash->text mapping before the
+        // log lines that reference it arrive, so it can decode them live.
+        if(pickNameSymbolPayload()){
+            m_pendingPayloadKind = ClientPayloadKind::NameSymbol;
+            m_hasPendingPayload = true;
+        }
+
+        if(!m_hasPendingPayload && m_telemetryCount.load(MemoryOrder::relaxed)){
             LogBytes upload(BaseType::arena());
             if(m_telemetryQueue.try_pop(upload)){
                 m_telemetryCount.fetch_sub(1u, MemoryOrder::relaxed);
                 m_pendingPayload = Move(upload);
-                m_pendingPayloadIsTelemetry = true;
+                m_pendingPayloadKind = ClientPayloadKind::Telemetry;
                 m_hasPendingPayload = true;
             }
         }
@@ -160,7 +174,7 @@ bool Client::internalUpdate(){
                 if(!BuildMessagePayload(fallbackMsg, m_pendingPayload))
                     return true;
             }
-            m_pendingPayloadIsTelemetry = false;
+            m_pendingPayloadKind = ClientPayloadKind::Message;
             m_hasPendingPayload = true;
         }
     }
@@ -187,7 +201,11 @@ bool Client::internalUpdate(){
     ret = curl_easy_setopt(
         curlHandle,
         CURLOPT_URL,
-        m_pendingPayloadIsTelemetry ? m_telemetryUrl.c_str() : m_messageUrl.c_str()
+        m_pendingPayloadKind == ClientPayloadKind::NameSymbol
+            ? m_namesymUrl.c_str()
+            : m_pendingPayloadKind == ClientPayloadKind::Telemetry
+                ? m_telemetryUrl.c_str()
+                : m_messageUrl.c_str()
     );
     if(ret != CURLE_OK){
         scheduleRetry();
@@ -214,8 +232,37 @@ bool Client::internalUpdate(){
 
     m_pendingPayload.clear();
     m_hasPendingPayload = false;
-    m_pendingPayloadIsTelemetry = false;
+    if(m_pendingPayloadKind == ClientPayloadKind::NameSymbol)
+        m_namesymUploadedCount = m_pendingNamesymCount;
+    m_pendingPayloadKind = ClientPayloadKind::Message;
     return true;
+}
+
+bool Client::pickNameSymbolPayload(){
+#if defined(NWB_BUILDMODE)
+    const usize count = Core::Common::NameSymbols::EntryCount();
+    if(count <= m_namesymUploadedCount)
+        return false;
+
+    // Rate-limit re-uploads as the table grows (the very first upload passes since m_lastNamesymUploadTime is the
+    // epoch). On POST failure the count is not advanced, so the next eligible window retries.
+    const Timer now = TimerNow();
+    if(DurationInSeconds<f32>(now, m_lastNamesymUploadTime) < s_NameSymbolUploadIntervalSeconds)
+        return false;
+
+    AString<LogArena> text(BaseType::arena());
+    Core::Common::NameSymbols::Serialize(text);
+    if(text.empty())
+        return false;
+
+    m_pendingPayload.resize(text.size());
+    NWB_MEMCPY(m_pendingPayload.data(), m_pendingPayload.size(), text.data(), text.size());
+    m_pendingNamesymCount = count;
+    m_lastNamesymUploadTime = now;
+    return true;
+#else
+    return false;
+#endif
 }
 
 

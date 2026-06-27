@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <core/alloc/general.h>
+
 #include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
 #include <global/name.h>
@@ -83,17 +85,26 @@ template<typename CharT>
 [[nodiscard]] bool Resolve(const NameHash& hash, char* outText, usize outTextSize);
 
 void InstallRuntimeRegistry();
+// Detaches the record/resolve callbacks from name.h so no Name::c_str()/ctor reaches the RuntimeRegistry afterwards.
+// Must run before the RuntimeRegistry's function-local static is destroyed at process exit -- otherwise a Name
+// resolved/recorded during static teardown would dereference the destroyed registry (use-after-free).
+void UninstallRuntimeRegistry();
 void ClearRuntimeSymbols();
 
 [[nodiscard]] bool LoadLine(AStringView line);
 [[nodiscard]] bool WriteDefaultFile();
 
-template<typename ArenaT>
-[[nodiscard]] inline bool LoadFile(const ::Path<ArenaT>& path){
-    AString<ArenaT> text(path.arena());
-    if(!::ReadTextFile(path, text))
-        return false;
+// Number of symbols currently in the runtime registry. A client uses this as a cheap "grew since last upload" gate
+// for the cross-process symbol upload.
+[[nodiscard]] usize EntryCount();
+// Serializes the whole runtime registry to the `.namesym` text format (same bytes WriteDefaultFile would write),
+// appended to outText. Used to push the symbol table to a remote log server over the wire.
+void Serialize(AString<Alloc::GlobalArena>& outText);
 
+// Ingest a whole `.namesym` document (newline-separated) into the runtime registry. The transport (file or wire)
+// only differs in where the bytes come from; both feed each line to LoadLine. Used by LoadFile + the server's
+// /namesym upload handler.
+[[nodiscard]] inline bool LoadFromMemory(const AStringView text){
     bool loadedAny = false;
     usize lineBegin = 0u;
     while(lineBegin < text.size()){
@@ -111,6 +122,15 @@ template<typename ArenaT>
     }
 
     return loadedAny;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline bool LoadFile(const ::Path<ArenaT>& path){
+    AString<ArenaT> text(path.arena());
+    if(!::ReadTextFile(path, text))
+        return false;
+
+    return LoadFromMemory(AStringView(text.data(), text.size()));
 }
 
 template<typename ArenaT>

@@ -28,10 +28,22 @@ namespace ApplicationEntryDetail{
 using UnicodeEntryPointFn = int(*)(isize, wchar**, void*);
 using AnsiEntryPointFn = int(*)(isize, char**, void*);
 
+// RAII so the Name record/resolve callbacks are detached on EVERY exit path (normal return, init-failure, exception)
+// before static teardown, preventing a use-after-free if a Name is resolved/recorded during shutdown. WriteDefaultFile
+// reads the RuntimeRegistry directly (not via the callbacks), so it still works after the scope uninstalls.
+class ScopedNameSymbolRegistry final{
+public:
+    ScopedNameSymbolRegistry(){ NameSymbols::InstallRuntimeRegistry(); }
+    ~ScopedNameSymbolRegistry(){ NameSymbols::UninstallRuntimeRegistry(); }
+
+    ScopedNameSymbolRegistry(const ScopedNameSymbolRegistry&) = delete;
+    ScopedNameSymbolRegistry& operator=(const ScopedNameSymbolRegistry&) = delete;
+};
+
 template<typename Invoke>
 [[nodiscard]] inline int InvokeWithInitializedCommon(Invoke&& invoke){
     try{
-        NameSymbols::InstallRuntimeRegistry();
+        const ScopedNameSymbolRegistry nameSymbolRegistry;
 
         InitializerGuard commonInitializerGuard;
         if(!commonInitializerGuard.initialize()){

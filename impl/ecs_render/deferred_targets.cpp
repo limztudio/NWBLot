@@ -142,6 +142,9 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     csgState().m_intervalSampleBindingSet.reset();
     rayTracingState().m_shadowBindingSet.reset();
     rayTracingState().m_shadowBindingSetTlas = nullptr;
+    rayTracingState().m_shadowResolveBindingSet.reset();
+    rayTracingState().m_shadowResolveBindingSetHalf = nullptr;
+    rayTracingState().m_shadowResolveBindingSetFull = nullptr;
 
     deferredState().m_targets.framebuffer.reset();
     deferredState().m_targets.opaqueLightingFramebuffer.reset();
@@ -163,6 +166,7 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     deferredState().m_targets.opaqueColor.reset();
     deferredState().m_targets.depth.reset();
     deferredState().m_targets.shadowVisibility.reset();
+    deferredState().m_targets.shadowVisibilityHalf.reset();
 
     deferredState().m_targets = DeferredFrameTargets{};
 }
@@ -474,7 +478,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, AVBOIT color {}, extinction {}, transmittance {})")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, shadow visibility {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, AVBOIT color {}, extinction {}, transmittance {})")
         , deferredState().m_targets.width
         , deferredState().m_targets.height
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.albedoFormat).name)
@@ -482,6 +486,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.worldPositionFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.opaqueColorFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.depthFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.shadowVisibilityFormat).name)
         , deferredState().m_targets.csgPeelLayerCount
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgCapNormalFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgIntervalDepthFormat).name)

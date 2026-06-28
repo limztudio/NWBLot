@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 
 // Reconstructs a flat positionStream-space triangle index buffer (u32, 3 per triangle) from the meshlet-packed
 // streams. Decode chain mirrors nwbMeshBuildMeshletVertex: primitive u8 -> meshletLocalVertexRef.localDeformedPosition
-// -> DecodeMeshletPositionRef -> global position index. Output count equals the meshlet primitive index count.
+// -> DecodeMeshletPositionRef -> global position index. Output count/order equals the meshlet primitive index count.
 // Takes the raw streams so it works for both the cooked asset payload and the runtime/skinned mesh instance.
 template<
     typename MeshletContainer,
@@ -41,6 +41,8 @@ template<
     const usize deltaByteCount = positionRefDeltas.size();
     const usize localVertexRefCount = localVertexRefs.size();
     const usize primitiveIndexCount = primitiveIndices.size();
+
+    outIndices.assign(primitiveIndexCount, 0u);
 
     for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
         const MeshletDesc& meshlet = meshlets[meshletIndex];
@@ -67,7 +69,7 @@ template<
                 if(static_cast<usize>(positionRef.position) >= positionCount)
                     return false;
 
-                outIndices.push_back(positionRef.position);
+                outIndices[primitiveByte] = positionRef.position;
             }
         }
     }

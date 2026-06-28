@@ -158,7 +158,7 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_MESHLET_DESC, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_POSITION_REF_DELTAS, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_PRIMITIVE_INDICES, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_ATTRIBUTE_REF_DELTAS, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_LOCAL_VERTEX_REFS, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_SKINNED_NORMALS, 1));

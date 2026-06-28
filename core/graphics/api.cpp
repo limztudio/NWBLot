@@ -555,8 +555,7 @@ ResolvedMarker GpuCrashMarkerTracker::getEventString(usize hash){
 
 
 GpuCrashTracker::GpuCrashTracker(GraphicsArena& arena)
-    : m_arena(arena)
-    , m_markerTrackers(arena)
+    : m_markerTrackers(arena)
     , m_destroyedMarkerTrackers(arena)
 {}
 

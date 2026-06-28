@@ -32,13 +32,13 @@
 #define NWB_SKINNED_MESH_BOUNDS_BINDING_PRIMITIVE_INDICES 4
 #define NWB_SKINNED_MESH_BOUNDS_BINDING_DYNAMIC_BOUNDS 5
 
-// Per-frame skinned-normal repack into the RT attribute buffer: re-derives the position-stream-indexed shading
-// normal from the current-frame deformed (attribute-stream) skinned normals so the RT shadow + caustic traces bend
-// on the live pose, not the bind pose. Reproduces BuildMeshletVertexAttributes (meshlet_vertex_attributes.h) on the GPU.
+// Per-frame skinned-normal repack into the RT attribute buffer: re-derives the triangle-corner shading normals from
+// the current-frame deformed (attribute-stream) skinned normals so the RT shadow + caustic traces bend on the live
+// pose, not the bind pose. Reproduces BuildMeshletTriangleAttributes (meshlet_vertex_attributes.h) on the GPU.
 #define NWB_SKINNED_MESH_REPACK_SET 0
 
 #define NWB_SKINNED_MESH_REPACK_BINDING_MESHLET_DESC 0
-#define NWB_SKINNED_MESH_REPACK_BINDING_POSITION_REF_DELTAS 1
+#define NWB_SKINNED_MESH_REPACK_BINDING_PRIMITIVE_INDICES 1
 #define NWB_SKINNED_MESH_REPACK_BINDING_ATTRIBUTE_REF_DELTAS 2
 #define NWB_SKINNED_MESH_REPACK_BINDING_LOCAL_VERTEX_REFS 3
 #define NWB_SKINNED_MESH_REPACK_BINDING_SKINNED_NORMALS 4

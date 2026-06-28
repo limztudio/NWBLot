@@ -57,21 +57,18 @@ RWTexture2DArray<float4> g_NwbShadowVisibility;
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbShadowInstanceMaterial;
 
 // Parallel per-mesh arrays (slot k = mesh k = material.meshSlot): raw triangle index byte buffer (the any-hit
-// loads i0/i1/i2 by PrimitiveIndex) + the per-vertex shadow-trace attribute byte buffer. The HW BLAS owns the
-// positions; only indices + attributes are needed to interpolate uv0/normal at the hit barycentrics.
+// loads i0/i1/i2 by PrimitiveIndex) + the per-triangle-corner shadow-trace attribute byte buffer.
 [[vk::binding(NWB_SHADOW_RT_BINDING_MESH_INDICES, NWB_SHADOW_RT_SET)]]
 ByteAddressBuffer g_NwbShadowMeshIndices[NWB_SHADOW_RT_MAX_MESHES];
 
-// Per-vertex shadow-trace attributes (AttribGpu = Half4U normal @ +0 (8B) + Float2U uv0 @ +8 (8B), 16B stride),
-// positionStream-indexed in lockstep with the BLAS position stream, so a triangle hit interpolates normal/uv0
-// with the SAME i0/i1/i2 it loaded from the index buffer.
+// Per-triangle-corner shadow-trace attributes (AttribGpu = Half4U normal @ +0 (8B) + Float2U uv0 @ +8 (8B), 16B
+// stride), indexed as PrimitiveIndex*3+corner so normal/uv0 match the raster mesh's hard/soft edge semantics.
 [[vk::binding(NWB_SHADOW_RT_BINDING_MESH_ATTRIBUTES, NWB_SHADOW_RT_SET)]]
 ByteAddressBuffer g_NwbShadowMeshAttributes[NWB_SHADOW_RT_MAX_MESHES];
 
 // Per-mesh raw object-space positions (float3 at vertexIndex * 12), positionStream-indexed in lockstep with the
-// index/attribute buffers. The any-hit reads the hit triangle's three positions to derive its GEOMETRIC face
-// normal for the per-crossing faceSign/cosI (robust at smooth-mesh silhouettes where the interpolated shading
-// normal flips). Same data the software traversal loads, so the two backends integrate identical physics.
+// index buffer. The any-hit reads the hit triangle's three positions to derive its GEOMETRIC face normal. Same data
+// the software traversal loads, so the two backends integrate identical physics.
 [[vk::binding(NWB_SHADOW_RT_BINDING_MESH_POSITIONS, NWB_SHADOW_RT_SET)]]
 ByteAddressBuffer g_NwbShadowMeshPositions[NWB_SHADOW_RT_MAX_MESHES];
 

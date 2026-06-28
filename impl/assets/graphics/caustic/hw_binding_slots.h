@@ -39,9 +39,9 @@
 #define NWB_CAUSTIC_RT_BINDING_ACCUMULATOR 10
 
 // Parallel per-mesh descriptor arrays (slot k of the array = mesh k = material.meshSlot): the raw triangle index
-// byte buffer (the closest-hit loads i0/i1/i2 by PrimitiveIndex) + the per-vertex attribute byte buffer (normal/uv0
-// the closest-hit interpolates into the SHADING normal the refraction bends on + the per-hit surface dispatch). Each
-// is ONE binding holding NWB_CAUSTIC_RT_MAX_MESHES array elements (NOT consecutive slots).
+// byte buffer + the per-triangle-corner attribute byte buffer (normal/uv0 the closest-hit interpolates into the
+// SHADING normal the refraction bends on + the per-hit surface dispatch). Each is ONE binding holding
+// NWB_CAUSTIC_RT_MAX_MESHES array elements (NOT consecutive slots).
 #define NWB_CAUSTIC_RT_BINDING_MESH_INDICES 11
 #define NWB_CAUSTIC_RT_BINDING_MESH_ATTRIBUTES 12
 

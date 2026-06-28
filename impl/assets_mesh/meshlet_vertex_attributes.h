@@ -18,11 +18,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Flat per-vertex shadow-trace attribute record, parallel to the reconstructed positionStream-space triangle index
-// buffer (see BuildMeshletTriangleIndices). Element[p] holds the attributes of the vertex whose deformed position
-// resolves to global position index p, so a trace can fetch + barycentric-interpolate normal/uv0 with the SAME
-// i0/i1/i2 it already loads for positions. normal copies the packed Half4U normal stream; uv0 copies the Float2U
-// uv0 stream (both streams already arrive in these formats, so packing is a lossless copy).
+// Flat per-triangle-corner shadow/caustic trace attribute record, parallel to the reconstructed triangle index buffer
+// (see BuildMeshletTriangleIndices). Element[primitive * 3 + corner] holds the exact normal/uv0 corner attribute that
+// rasterization would use for that primitive corner. That preserves smooth edges (shared normal refs) and hard edges
+// (same position with distinct normal refs) instead of collapsing them into one position-indexed normal.
 struct AttribGpu{
     Half4U normal;
     Float2U uv0;
@@ -36,71 +35,67 @@ static_assert(sizeof(AttribGpu) == 16u, "AttribGpu must stay 16 bytes for the sh
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reconstructs a flat positionStream-space per-vertex attribute buffer (AttribGpu, one per position) from the
-// meshlet-packed streams. Decode chain mirrors nwbMeshBuildMeshletVertex / BuildMeshletTriangleIndices: each
-// meshletLocalVertexRef pairs localDeformedPosition -> DecodeMeshletPositionRef -> global position index p with
-// localAttribute -> DecodeMeshletAttributeRef -> normal/uv0 stream indices; the resolved normal+uv0 are gathered
-// into attributeOut[p]. Output count equals positionCount. UV seams (multiple attributes per position) resolve to
-// the last writer, which is acceptable for smooth transmittance. Takes the raw streams so it works for both the
-// cooked asset payload and the runtime/skinned mesh instance.
+// Reconstructs a flat per-triangle-corner attribute buffer (AttribGpu, one per triangle index) from the meshlet-packed
+// streams. Decode chain mirrors BuildMeshletTriangleIndices: primitive u8 -> meshletLocalVertexRef.localAttribute ->
+// DecodeMeshletAttributeRef -> global normal/uv0 stream indices. Output count/order equals the meshlet primitive
+// index count, so shaders can fetch attributes with PrimitiveIndex * 3 + corner. Takes the raw streams so it works for
+// both the cooked asset payload and the runtime/skinned mesh instance.
 template<
     typename MeshletContainer,
     typename LocalVertexRefContainer,
-    typename PositionDeltaContainer,
     typename AttributeDeltaContainer,
+    typename PrimitiveContainer,
     typename NormalContainer,
     typename Uv0Container,
     typename AttributeOutContainer
 >
-[[nodiscard]] bool BuildMeshletVertexAttributes(
+[[nodiscard]] bool BuildMeshletTriangleAttributes(
     const MeshletContainer& meshlets,
     const LocalVertexRefContainer& localVertexRefs,
-    const PositionDeltaContainer& positionRefDeltas,
     const AttributeDeltaContainer& attributeRefDeltas,
+    const PrimitiveContainer& primitiveIndices,
     const NormalContainer& normalStream,
     const Uv0Container& uv0Stream,
-    const usize positionCount,
     AttributeOutContainer& outAttributes
 ){
-    const u8* const positionDeltaBytes = positionRefDeltas.data();
-    const usize positionDeltaByteCount = positionRefDeltas.size();
     const u8* const attributeDeltaBytes = attributeRefDeltas.data();
     const usize attributeDeltaByteCount = attributeRefDeltas.size();
     const usize localVertexRefCount = localVertexRefs.size();
+    const usize primitiveIndexCount = primitiveIndices.size();
     const usize normalCount = normalStream.size();
     const usize uv0Count = uv0Stream.size();
 
-    outAttributes.assign(positionCount, AttribGpu{});
+    outAttributes.assign(primitiveIndexCount, AttribGpu{});
 
     for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
         const MeshletDesc& meshlet = meshlets[meshletIndex];
-        const u32 vertexCount = MeshletVertexCount(meshlet);
-        const bool skinRequired = meshlet.skinBase != s_MeshMissingStreamIndex;
+        const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
 
-        for(u32 localVertex = 0u; localVertex < vertexCount; ++localVertex){
-            const usize localVertexRefIndex = static_cast<usize>(meshlet.localVertexOffset) + localVertex;
-            if(localVertexRefIndex >= localVertexRefCount)
-                return false;
+        for(u32 primitive = 0u; primitive < primitiveCount; ++primitive){
+            const usize primitiveBase = static_cast<usize>(meshlet.primitiveOffset) + static_cast<usize>(primitive) * NWB_MESHLET_TRIANGLE_INDEX_COUNT;
 
-            const MeshletLocalVertexRef& localVertexRef = localVertexRefs[localVertexRefIndex];
+            for(u32 corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner){
+                const usize primitiveByte = primitiveBase + corner;
+                if(primitiveByte >= primitiveIndexCount)
+                    return false;
 
-            const u32 localPositionIndex = static_cast<u32>(localVertexRef.localDeformedPosition);
-            MeshletPositionStreamRef positionRef;
-            if(!DecodeMeshletPositionRef(positionDeltaBytes, positionDeltaByteCount, meshlet, localPositionIndex, skinRequired, positionRef))
-                return false;
-            if(static_cast<usize>(positionRef.position) >= positionCount)
-                return false;
+                const u32 localVertexIndex = static_cast<u32>(primitiveIndices[primitiveByte]);
+                const usize localVertexRefIndex = static_cast<usize>(meshlet.localVertexOffset) + localVertexIndex;
+                if(localVertexRefIndex >= localVertexRefCount)
+                    return false;
 
-            const u32 localAttributeIndex = static_cast<u32>(localVertexRef.localAttribute);
-            MeshletAttributeStreamRef attributeRef;
-            if(!DecodeMeshletAttributeRef(attributeDeltaBytes, attributeDeltaByteCount, meshlet, localAttributeIndex, attributeRef))
-                return false;
-            if(static_cast<usize>(attributeRef.normal) >= normalCount || static_cast<usize>(attributeRef.uv0) >= uv0Count)
-                return false;
+                const MeshletLocalVertexRef& localVertexRef = localVertexRefs[localVertexRefIndex];
+                const u32 localAttributeIndex = static_cast<u32>(localVertexRef.localAttribute);
+                MeshletAttributeStreamRef attributeRef;
+                if(!DecodeMeshletAttributeRef(attributeDeltaBytes, attributeDeltaByteCount, meshlet, localAttributeIndex, attributeRef))
+                    return false;
+                if(static_cast<usize>(attributeRef.normal) >= normalCount || static_cast<usize>(attributeRef.uv0) >= uv0Count)
+                    return false;
 
-            AttribGpu& attribute = outAttributes[static_cast<usize>(positionRef.position)];
-            attribute.normal = normalStream[attributeRef.normal];
-            attribute.uv0 = uv0Stream[attributeRef.uv0];
+                AttribGpu& attribute = outAttributes[primitiveByte];
+                attribute.normal = normalStream[attributeRef.normal];
+                attribute.uv0 = uv0Stream[attributeRef.uv0];
+            }
         }
     }
 
@@ -108,15 +103,14 @@ template<
 }
 
 template<typename AttributeOutContainer>
-[[nodiscard]] bool BuildMeshletVertexAttributes(const MeshGeometryPayload& payload, AttributeOutContainer& outAttributes){
-    return BuildMeshletVertexAttributes(
+[[nodiscard]] bool BuildMeshletTriangleAttributes(const MeshGeometryPayload& payload, AttributeOutContainer& outAttributes){
+    return BuildMeshletTriangleAttributes(
         payload.meshlets(),
         payload.meshletLocalVertexRefs(),
-        payload.meshletPositionRefDeltas(),
         payload.meshletAttributeRefDeltas(),
+        payload.meshletPrimitiveIndices(),
         payload.normalStream(),
         payload.uv0Stream(),
-        payload.positionStream().size(),
         outAttributes
     );
 }

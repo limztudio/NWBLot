@@ -76,21 +76,31 @@ bool nwbShadowCrossingMatchesEndpoint(const float t, const float endpointT){
     return abs(t - endpointT) <= nwbShadowCrossingMergeEpsilon(max(abs(t), abs(endpointT)));
 }
 
+float nwbShadowCosineToRay(const float3 normal, const float3 rayDirection){
+    return saturate(abs(dot(rayDirection, normal)) * rsqrt(max(dot(normal, normal), 1e-20)) * rsqrt(max(dot(rayDirection, rayDirection), 1e-20)));
+}
+
+float nwbShadowSmoothNormalWeight(const float3 n0, const float3 n1, const float3 n2){
+    const float spread = max(max(dot(n0 - n1, n0 - n1), dot(n1 - n2, n1 - n2)), dot(n2 - n0, n2 - n0));
+    return smoothstep(1e-5, 2e-3, spread);
+}
+
 // Fold ONE transparent surface crossing into the running visibility. The caller supplies the crossing's occluder id
 // + the occluder's optical params (ior / transmission, from its surface hook) + the crossing geometry: geometricNormal
 // and rayDirection MUST be in the SAME space (object space in both backends -> invariant to the instance transform and
-// identical HW vs SW), and t is the WORLD ray distance to the hit.
+// identical HW vs SW), shadingNormal is the interpolated triangle-corner normal in that same space, and t is the WORLD
+// ray distance to the hit.
 //
-// GEOMETRIC face normal (not the interpolated shading normal, which sweeps front<->back over a wide band at a smooth
-// silhouette and would flip faceSign / crater cosI) is constant over the face, so it only grazes at the measure-zero
-// tangent line.
+// Transparent shadow visibility uses Beer-Lambert absorption through the paired chord plus a stable normal-incidence
+// Fresnel loss on flat/hard faces. Smooth triangles can opt into vertex-normal Fresnel with smoothNormalWeight, so
+// vertex-normal authored meshes keep their soft transition while hard/faceted meshes do not imprint face-normal
+// speckles into the receiver shadow. Directional refractive focusing belongs in the caustic path.
 //
-// Fresnel is stored per bin and applied only during finalize when the bin has a real chord. Optical depth is BINNED
-// PER OCCLUDER by instance id, and each bin keeps merged hit distances; same-occluder crossings at the same t are
-// collapsed because edge/diagonal hits can report two triangles sharing one physical surface.
-void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const uint instanceId, const float ior, const float3 transmission, const float3 geometricNormal, const float3 rayDirection, const float t){
-    const float ndotd = dot(rayDirection, geometricNormal);
-    const float cosI = saturate(abs(ndotd) * rsqrt(max(dot(geometricNormal, geometricNormal), 1e-20)) * rsqrt(max(dot(rayDirection, rayDirection), 1e-20)));
+// Optical depth is BINNED PER OCCLUDER by instance id, and each bin keeps merged hit distances; same-occluder
+// crossings at the same t are collapsed because edge/diagonal hits can report two triangles sharing one physical
+// surface.
+void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const uint instanceId, const float ior, const float3 transmission, const float3 geometricNormal, const float3 shadingNormal, const float smoothNormalWeight, const float3 rayDirection, const float t){
+    const float cosI = nwbShadowCosineToRay(geometricNormal, rayDirection);
 
     int slot = -1;
     for(uint i = 0u; i < acc.binCount; ++i){
@@ -121,7 +131,9 @@ void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const 
         return;
 
     const float grazeWeight = smoothstep(0.0, 0.2, cosI);
-    acc.bins[slot].interfaceTransmittance *= lerp(1.0, nwbShadowFresnelTransmittedFraction(ior, cosI), grazeWeight);
+    const float shadingCosI = nwbShadowCosineToRay(shadingNormal, rayDirection);
+    const float fresnelCosI = lerp(1.0, shadingCosI, saturate(smoothNormalWeight));
+    acc.bins[slot].interfaceTransmittance *= nwbShadowFresnelTransmittedFraction(ior, fresnelCosI);
     acc.bins[slot].singletonFallbackChord = max(acc.bins[slot].singletonFallbackChord, NWB_SHADOW_SINGLETON_FALLBACK_CHORD * grazeWeight);
 
     acc.bins[slot].tMin = min(acc.bins[slot].tMin, t);

@@ -35,16 +35,10 @@ void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttri
         const float3 weights = float3(1.0 - bary.x - bary.y, bary.x, bary.y);
 
         const uint prim = PrimitiveIndex();
-        const uint indexBase = prim * 3u;
-        // Contiguous triangle indices -> one Load3 (bit-identical to three Loads; mirrors the SW producer).
-        const uint3 triIndices = g_NwbCausticHwMeshIndices[material.meshSlot].Load3(indexBase * 4u);
-        const uint i0 = triIndices.x;
-        const uint i1 = triIndices.y;
-        const uint i2 = triIndices.z;
-
-        const NwbCausticHwVertexAttrib a0 = nwbCausticHwLoadVertexAttrib(material.meshSlot, i0);
-        const NwbCausticHwVertexAttrib a1 = nwbCausticHwLoadVertexAttrib(material.meshSlot, i1);
-        const NwbCausticHwVertexAttrib a2 = nwbCausticHwLoadVertexAttrib(material.meshSlot, i2);
+        const uint attributeBase = prim * 3u;
+        const NwbCausticHwVertexAttrib a0 = nwbCausticHwLoadVertexAttrib(material.meshSlot, attributeBase);
+        const NwbCausticHwVertexAttrib a1 = nwbCausticHwLoadVertexAttrib(material.meshSlot, attributeBase + 1u);
+        const NwbCausticHwVertexAttrib a2 = nwbCausticHwLoadVertexAttrib(material.meshSlot, attributeBase + 2u);
         const float3 objectShadingNormal = a0.normal * weights.x + a1.normal * weights.y + a2.normal * weights.z;
 
         // The interpolated SHADING normal in world space (inverse-transpose of object->world == mul(n,

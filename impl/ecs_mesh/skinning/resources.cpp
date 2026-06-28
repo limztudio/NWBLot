@@ -178,14 +178,14 @@ bool MeshSkinningSystem::ensureRuntimeResources(
         return false;
     }
 
-    // Per-frame skinned-normal repack set (RT only): writes the deformed normals into the position-stream-indexed RT
+    // Per-frame skinned-normal repack set (RT only): writes the deformed normals into the triangle-corner RT
     // attribute buffer so the shadow/caustic traces bend on the live pose. Built only when the mesh has an RT
     // attribute buffer (ray tracing supported); m_repackBindingLayout is created by ensureRepackPipeline() in
     // prepareRuntimeMeshResources alongside the bounds pipeline.
     if(instance.attributeBuffer && m_repackBindingLayout){
         Core::BindingSetDesc repackBindingSetDesc(m_arena);
         repackBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_MESHLET_DESC, instance.meshletDescBuffer.get()));
-        repackBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_POSITION_REF_DELTAS, instance.meshletPositionRefDeltaBuffer.get()));
+        repackBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_PRIMITIVE_INDICES, instance.meshletPrimitiveIndexBuffer.get()));
         repackBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_ATTRIBUTE_REF_DELTAS, instance.meshletAttributeRefDeltaBuffer.get()));
         repackBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_LOCAL_VERTEX_REFS, instance.meshletLocalVertexRefBuffer.get()));
         repackBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_REPACK_BINDING_SKINNED_NORMALS, instance.skinnedNormalBuffer.get()));

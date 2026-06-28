@@ -59,6 +59,22 @@ struct SourceMeshStreams{
     UtilityVector<u32> indices;
 };
 
+struct SourceMeshStreamCounts{
+    usize positions = 0u;
+    usize normals = 0u;
+    usize tangents = 0u;
+    usize uv0 = 0u;
+    usize colors = 0u;
+    usize skin = 0u;
+    usize vertexRefs = 0u;
+    usize indices = 0u;
+};
+
+struct SourceMeshCanonicalizeReport{
+    SourceMeshStreamCounts before;
+    SourceMeshStreamCounts after;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -117,6 +133,7 @@ struct ImportOptions{
     bool importColors = true;
     bool flipWinding = false;
     bool separateAssets = false;
+    bool refreshNwb = false;
     bool forceOverwrite = false;
     bool acceptDefaults = false;
     bool listMeshes = false;
@@ -177,6 +194,7 @@ bool BuildMesh(
     const ImportOptions& options,
     bool wantsSkinning,
     const Vec4& defaultColor,
+    Core::Alloc::ThreadPool& threadPool,
     SourceMeshStreams& outMesh,
     UtilityVector<ufbx_node*>& outSkeletonJoints,
     UtilityVector<JointMatrix>& outSkeletonBindPoseMatrices,
@@ -185,6 +203,10 @@ bool BuildMesh(
     bool& outSawVertexUvs,
     SourceTangentReport& outTangentReport
 );
+
+[[nodiscard]] SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh);
+[[nodiscard]] bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::Alloc::ThreadPool& threadPool, SourceMeshCanonicalizeReport* outReport);
+[[nodiscard]] bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Alloc::ThreadPool& threadPool, SourceMeshCanonicalizeReport& outReport);
 
 bool WriteNwbAsset(
     const Path& outputPath,
@@ -197,7 +219,7 @@ bool WriteNwbAsset(
     const UtilityVector<JointMatrix>& inverseBindMatrices
 );
 
-int Run(int argc, char** argv, bool& prompted);
+int Run(int argc, char** argv, Core::Alloc::ThreadPool& threadPool, bool& prompted);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

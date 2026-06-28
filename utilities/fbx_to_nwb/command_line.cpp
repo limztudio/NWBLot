@@ -39,6 +39,7 @@ struct OptionPresence{
     bool ignoreColors = false;
     bool flipWinding = false;
     bool separateAssets = false;
+    bool refreshNwb = false;
 };
 
 
@@ -144,13 +145,13 @@ bool ValidateOutputOverwrite(const Path& outputPath, const ImportOptions& option
 bool ConfigurePromptsBeforeLoad(ImportOptions& options, const OptionPresence& presence, bool& prompted){
     if(options.inputPath.empty()){
         if(options.acceptDefaults){
-            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX path is required."));
+            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
             return false;
         }
 
         AString input;
-        if(!PromptString("Input FBX path", AString(), input, prompted)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX path is required."));
+        if(!PromptString("Input FBX or NWB path", AString(), input, prompted)){
+            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
             return false;
         }
         options.inputPath = input;
@@ -268,6 +269,68 @@ bool AssetTypeCanUseSkinning(const OutputAssetType::Enum assetType){
     ;
 }
 
+AString LowerPathExtension(const AString& pathText){
+    const Path path = PathFromUtf8(pathText);
+    return ToAsciiLowerCopy(PathToUtf8(path.extension()));
+}
+
+bool IsNwbRefreshMode(const ImportOptions& options){
+    return options.refreshNwb || LowerPathExtension(options.inputPath) == ".nwb";
+}
+
+void WriteRefreshCount(AStringStream& report, const char* name, const usize before, const usize after){
+    report << "  " << name << ": " << before << " -> " << after << "\n";
+}
+
+void WriteCanonicalizeReport(AStringStream& report, const SourceMeshCanonicalizeReport& canonicalizeReport){
+    WriteRefreshCount(report, "positions", canonicalizeReport.before.positions, canonicalizeReport.after.positions);
+    WriteRefreshCount(report, "normals", canonicalizeReport.before.normals, canonicalizeReport.after.normals);
+    WriteRefreshCount(report, "tangents", canonicalizeReport.before.tangents, canonicalizeReport.after.tangents);
+    WriteRefreshCount(report, "uv0", canonicalizeReport.before.uv0, canonicalizeReport.after.uv0);
+    WriteRefreshCount(report, "colors", canonicalizeReport.before.colors, canonicalizeReport.after.colors);
+    WriteRefreshCount(report, "skin", canonicalizeReport.before.skin, canonicalizeReport.after.skin);
+    WriteRefreshCount(report, "vertex_refs", canonicalizeReport.before.vertexRefs, canonicalizeReport.after.vertexRefs);
+    WriteRefreshCount(report, "indices", canonicalizeReport.before.indices, canonicalizeReport.after.indices);
+}
+
+int RunNwbRefresh(ImportOptions& options, const OptionPresence& presence, Core::Alloc::ThreadPool& threadPool, bool& prompted){
+    if(options.listMeshes){
+        NWB_LOGGER_WARNING(NWB_TEXT("--list-meshes is only valid for FBX input."));
+        return 1;
+    }
+
+    if(!presence.output && !options.acceptDefaults){
+        AString output;
+        PromptString("Output .nwb path", options.inputPath, output, prompted);
+        options.outputPath = output;
+    }
+    if(options.outputPath.empty())
+        options.outputPath = options.inputPath;
+    options.outputPath = UnquoteMatchingAsciiQuotes(Move(options.outputPath));
+
+    const Path outputPath = PathFromUtf8(options.outputPath);
+    if(outputPath.empty()){
+        NWB_LOGGER_WARNING(NWB_TEXT("Output path is empty."));
+        return 1;
+    }
+    if(!ValidateOutputOverwrite(outputPath, options, prompted))
+        return 1;
+
+    SourceMeshCanonicalizeReport canonicalizeReport;
+    const Path inputPath = PathFromUtf8(options.inputPath);
+    if(!RefreshNwbMeshAsset(inputPath, outputPath, threadPool, canonicalizeReport))
+        return 1;
+
+    AStringStream report;
+    report
+        << "Refreshed " << PathToUtf8(outputPath) << "\n"
+        << "  input: " << PathToUtf8(inputPath) << "\n"
+    ;
+    WriteCanonicalizeReport(report, canonicalizeReport);
+    NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
+    return 0;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -278,7 +341,7 @@ bool AssetTypeCanUseSkinning(const OutputAssetType::Enum assetType){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int Run(int argc, char** argv, bool& prompted){
+int Run(int argc, char** argv, Core::Alloc::ThreadPool& threadPool, bool& prompted){
     ImportOptions options;
     __hidden_command_line::OptionPresence presence;
 
@@ -322,6 +385,7 @@ int Run(int argc, char** argv, bool& prompted){
     CLI::Option* ignoreColorsOption = app.add_flag("--ignore-colors", ignoreColors, "Use the default color instead of FBX vertex colors");
     CLI::Option* flipWindingOption = app.add_flag("--flip-winding", options.flipWinding, "Swap the second and third index of every triangle");
     CLI::Option* separateAssetsOption = app.add_flag("--separate-assets", options.separateAssets, "Write a model package as separate .nwb files instead of one asset bunch");
+    CLI::Option* refreshNwbOption = app.add_flag("--refresh-nwb", options.refreshNwb, "Read a mesh .nwb, canonicalize mesh streams, and rewrite it");
     app.add_flag("--force", options.forceOverwrite, "Overwrite an existing output file");
     app.add_flag("-y,--yes", options.acceptDefaults, "Use defaults for any import options that were not supplied");
     app.add_flag("--list-meshes", options.listMeshes, "List importable mesh instances and exit");
@@ -356,6 +420,7 @@ int Run(int argc, char** argv, bool& prompted){
     presence.ignoreColors = ignoreColorsOption->count() > 0u;
     presence.flipWinding = flipWindingOption->count() > 0u;
     presence.separateAssets = separateAssetsOption->count() > 0u;
+    presence.refreshNwb = refreshNwbOption->count() > 0u;
 
     if(!__hidden_command_line::ConfigurePromptsBeforeLoad(options, presence, prompted))
         return 1;
@@ -376,9 +441,12 @@ int Run(int argc, char** argv, bool& prompted){
         return 1;
     }
     if(!inputIsRegularFile){
-        NWB_LOGGER_WARNING(NWB_TEXT("Input FBX file was not found: {}"), StringConvert(options.inputPath));
+        NWB_LOGGER_WARNING(NWB_TEXT("Input file was not found: {}"), StringConvert(options.inputPath));
         return 1;
     }
+
+    if(__hidden_command_line::IsNwbRefreshMode(options))
+        return __hidden_command_line::RunNwbRefresh(options, presence, threadPool, prompted);
 
     SceneHandle scene;
     if(!LoadScene(options, scene))
@@ -456,6 +524,7 @@ int Run(int argc, char** argv, bool& prompted){
         options,
         wantsSkinning,
         defaultColor,
+        threadPool,
         mesh,
         skeletonJoints,
         skeletonBindPoseMatrices,

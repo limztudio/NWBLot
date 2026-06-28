@@ -18,6 +18,7 @@
 #include <global/type.h>
 
 #include <core/alloc/module.h>
+#include <core/alloc/thread.h>
 
 #include <ufbx.h>
 

@@ -11,12 +11,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-float3 nwbProjectUvDebug(const float2 uv0){
+half3 nwbProjectUvDebug(const float2 uv0){
     const float2 wrappedUv = frac(uv0);
     const float2 checkerCell = floor(wrappedUv * 8.0);
     const float checker = fmod(checkerCell.x + checkerCell.y, 2.0);
-    const float3 uvColor = float3(wrappedUv, 1.0 - wrappedUv.x);
-    return lerp(uvColor * 0.55, uvColor, checker);
+    const half3 uvColor = half3(wrappedUv, 1.0 - wrappedUv.x);
+    return lerp(uvColor * half(0.55), uvColor, half(checker));
 }
 
 
@@ -27,7 +27,7 @@ NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
     const NwbRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
-    const float3 baseColor = (surface.base_color * runtime.color_tint).rgb;
+    const half3 baseColor = half3((surface.base_color * runtime.color_tint).rgb);
     return nwbMakeMeshSurface(nwbProjectUvDebug(inUv0) * nwbMaterialVertexColor(baseColor), inNormal);
 }
 

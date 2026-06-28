@@ -25,8 +25,8 @@ struct NwbMeshGBufferOutput{
 #endif
 };
 
-static float4 outGBufferBaseColor;
-static float4 outGBufferNormal;
+static half4 outGBufferBaseColor;
+static half4 outGBufferNormal;
 static float4 outGBufferWorldPosition;
 
 NwbMeshGBufferOutput nwbBuildMeshGBufferOutput(){
@@ -44,13 +44,13 @@ NwbMeshGBufferOutput nwbBuildMeshGBufferOutput(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-float3 nwbGBufferEncodeNormal(float3 normal){
+half3 nwbGBufferEncodeNormal(float3 normal){
     const float lengthSquared = dot(normal, normal);
     const float3 normalVector = lengthSquared > 0.000001
         ? normal * rsqrt(lengthSquared)
         : float3(0.0, 0.0, 1.0)
     ;
-    return normalVector * 0.5 + 0.5;
+    return half3(normalVector * 0.5 + 0.5);
 }
 
 // The owning material's shading-model id is data-driven: the renderer packs it into the high bits of the
@@ -110,9 +110,9 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
 // world.a). The deferred lighting framework unpacks these into the surface the material BXDF reads, so a
 // material chooses what those two scalars mean (e.g. roughness / metallic) while its shading model is fixed
 // by its `bxdf` declaration.
-void nwbWriteMeshGBufferParams(float3 baseColor, float3 normal, float3 worldPosition, float param0, float param1){
-    outGBufferBaseColor = float4(clamp(baseColor, float3(0.0), float3(1.0)), float(nwbMeshShadingModelId()));
-    outGBufferNormal = float4(nwbGBufferEncodeNormal(normal), param0);
+void nwbWriteMeshGBufferParams(half3 baseColor, float3 normal, float3 worldPosition, half param0, half param1){
+    outGBufferBaseColor = half4(clamp(baseColor, half3(0.0), half3(1.0)), half(float(nwbMeshShadingModelId())));
+    outGBufferNormal = half4(nwbGBufferEncodeNormal(normal), half(param0));
     outGBufferWorldPosition = float4(worldPosition, param1);
 }
 

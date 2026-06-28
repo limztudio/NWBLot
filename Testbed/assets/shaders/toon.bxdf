@@ -7,21 +7,21 @@
 // BXDF dispatch is visible at a glance. Pulled into the cook-generated deferred lighting dispatch module,
 // which #defines NWB_DEFERRED_BXDF_FUNCTION to this model's unique entry name. The deferred lighting framework
 // (NwbBxdfSurface, the scene light list, the shadow accessor) is already in scope.
-float3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
+half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     const float3 normal = nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0));
 
-    float3 color = surface.baseColor * float3(0.22, 0.24, 0.30); // ambient floor
+    half3 color = surface.baseColor * half3(0.22, 0.24, 0.30); // ambient floor
     const uint lightCount = nwbSceneLightCount();
     for(uint i = 0u; i < lightCount; ++i){
         float3 lightVector;
-        float3 radiance;
+        half3 radiance;
         nwbSceneResolveLight(g_NwbSceneLights[i], surface.worldPosition, lightVector, radiance);
-        if(all(radiance <= float3(0.0)))
+        if(all(radiance <= half3(0.0)))
             continue;
 
         const float ndotl = max(dot(normal, lightVector), 0.0);
-        const float band = ndotl > 0.6 ? 1.0 : (ndotl > 0.25 ? 0.55 : 0.18); // 3 toon bands
-        const float3 visibility = nwbBxdfLightTransmittance(pixel, i);
+        const half band = ndotl > 0.6 ? half(1.0) : (ndotl > 0.25 ? half(0.55) : half(0.18)); // 3 toon bands
+        const half3 visibility = nwbBxdfLightTransmittance(pixel, i);
         color += surface.baseColor * radiance * (band * visibility);
     }
     return color;

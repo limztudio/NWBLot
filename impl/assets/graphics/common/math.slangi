@@ -9,8 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-float nwbLuminance(const float3 color){
-    return dot(color, float3(0.2126, 0.7152, 0.0722));
+half nwbLuminance(const half3 color){
+    return dot(color, half3(0.2126, 0.7152, 0.0722));
 }
 
 uint nwbPackHalf2x16(float2 value){

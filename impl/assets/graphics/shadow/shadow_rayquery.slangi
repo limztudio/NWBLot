@@ -59,7 +59,7 @@ NwbShadowRqVertexAttrib nwbShadowRqLoadVertexAttrib(const uint meshIndex, const 
 // LOCAL per-occluder accumulator and stops at an opaque hit. Identical for the half-res trace and a full-res edge
 // retrace -- only the worldPosition/normal the caller feeds (half-res representative texel vs the pixel's own full-res
 // G-buffer) differ, which is exactly what makes the retraced edge crisp.
-float3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light){
+half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light){
     float3 toLight;
     float tMax;
     if(light.params.y < 0.5){
@@ -75,7 +75,7 @@ float3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, 
     const float tMin = 0.001;
     const float tEnd = tMax - 0.002;
     if(tEnd <= tMin)
-        return float3(1.0, 1.0, 1.0);
+        return half3(1.0, 1.0, 1.0);
 
     RayDesc ray;
     ray.Origin = worldPosition + normal * tMin;
@@ -95,7 +95,7 @@ float3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, 
         const NwbRtInstanceMaterial material = g_NwbShadowInstanceMaterial[instanceId];
         if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) == 0u){
             // Opaque occluder: fully blocked, end the search.
-            acc.transmittance = float3(0.0, 0.0, 0.0);
+            acc.transmittance = half3(0.0, 0.0, 0.0);
             query.Abort();
             break;
         }

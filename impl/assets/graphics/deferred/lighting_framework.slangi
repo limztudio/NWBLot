@@ -91,20 +91,20 @@ NwbBxdfSurface nwbBxdfLoadSurface(float2 uv){
     const float depth = g_GBufferDepth.Sample(g_DeferredSampler, uv).r;
 
     NwbBxdfSurface surface;
-    surface.baseColor = baseColorSample.rgb;
+    surface.baseColor = half3(baseColorSample.rgb);
     surface.shadingModel = uint(baseColorSample.a + 0.5);
     surface.normal = nwbDeferredDecodeNormal(normalSample.rgb);
-    surface.param0 = normalSample.a;
+    surface.param0 = half(normalSample.a);
     surface.worldPosition = worldSample.xyz;
-    surface.param1 = worldSample.a;
+    surface.param1 = half(worldSample.a);
     surface.viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - surface.worldPosition, float3(0.0, 0.0, 1.0));
     surface.isBackground = depth >= 0.999999;
     return surface;
 }
 
 // Default Reinhard tonemap the engine model uses; a project BXDF may reuse or replace it.
-float3 nwbBxdfTonemap(float3 color){
-    return color / (color + float3(0.65));
+half3 nwbBxdfTonemap(half3 color){
+    return color / (color + half3(0.65));
 }
 
 

@@ -8,8 +8,8 @@ NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbFrostSurfaceMaterial frost = nwbMaterialBindLoadFrost(instance);
     const NwbFrostRuntimeMaterial sparkle = nwbMaterialBindLoadSparkle(instance);
-    const float3 baseColor = clamp(frost.frost_albedo.rgb * sparkle.sparkle_tint, float3(0.0), float3(1.0));
-    return nwbMakeMeshSurface(baseColor, inNormal, frost.roughness_value, 0.0);
+    const half3 baseColor = half3(clamp(frost.frost_albedo.rgb * sparkle.sparkle_tint, float3(0.0), float3(1.0)));
+    return nwbMakeMeshSurface(baseColor, inNormal, half(frost.roughness_value), half(0.0));
 }
 
 

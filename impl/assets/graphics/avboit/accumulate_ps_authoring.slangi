@@ -147,7 +147,7 @@ float nwbAvboitLinearBiasedTransmittance(float2 fragCoord, float depth){
 // engine builds a NwbBxdfSurface from it and shades it through the material's BXDF, then runs the AVBOIT math.
 NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     NwbMeshSurfaceInputs surfaceInputs;
-    surfaceInputs.color = input.color;
+    surfaceInputs.color = half4(input.color);
     surfaceInputs.normal = input.normal;
     surfaceInputs.tangent = input.tangent;
     surfaceInputs.uv0 = input.uv0;
@@ -167,14 +167,14 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     // from -- an opaque material leaves the default 1.0, a transparent material's hook sets it.
     const NwbMeshSurface surface = nwbMaterialSurface();
 
-    const float alpha = clamp(surface.alpha, 0.0, 1.0);
+    const half alpha = half(clamp(surface.alpha, 0.0, 1.0));
     if(alpha <= 0.0)
         discard;
 
     // volumeTransmittance is the AVBOIT self-occlusion volume sample (NOT the material's transmittance): it is the
     // accumulated front-to-back transmittance up to this fragment, used to weight its color contribution.
-    const float volumeTransmittance = nwbAvboitLinearBiasedTransmittance(input.position.xy, input.position.z);
-    const float weightedAlpha = alpha * volumeTransmittance;
+    const half volumeTransmittance = half(nwbAvboitLinearBiasedTransmittance(input.position.xy, input.position.z));
+    const half weightedAlpha = alpha * volumeTransmittance;
 
     NwbBxdfSurface bxdfSurface;
     bxdfSurface.baseColor = surface.baseColor;
@@ -190,10 +190,10 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     // transparent fragment is not in the opaque G-buffer the screen-space shadow visibility was traced from, so
     // nwbBxdfLightTransmittance skips shadow sampling and treats every light as fully visible -- matching the
     // pre-colored-shadow transparent behaviour the fixed accumulate_ps.slang used.
-    const float3 shadedColor = clamp(
+    const half3 shadedColor = clamp(
         nwbDeferredDispatchBxdf(bxdfSurface.shadingModel, bxdfSurface, int2(-1, -1)),
-        float3(0.0),
-        float3(1.0)
+        half3(0.0),
+        half3(1.0)
     );
 
     NwbAvboitAccumulatePixelOutput output;

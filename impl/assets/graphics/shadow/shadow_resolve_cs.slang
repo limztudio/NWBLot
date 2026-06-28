@@ -143,13 +143,13 @@ void nwbShadowResolveRetrace(const uint2 pixel, const int2 fullTexel, const uint
         const float slot = g_NwbSceneLights[i].params.z;
         if(slot < 0.0 || (uint)slot >= slotCount)
             continue;
-        float3 transmittance = float3(0.0, 0.0, 0.0);
+        half3 transmittance = half3(0.0, 0.0, 0.0);
         [unroll] for(uint sampleIndex = 0u; sampleIndex < 4u; ++sampleIndex){
             const float2 offset = offsets[sampleIndex];
             const float3 sampleWorldPosition = basis.worldPosition + basis.dxWorld * offset.x + basis.dyWorld * offset.y;
             transmittance += nwbShadowRqLightVisible(sampleWorldPosition, basis.normal, g_NwbSceneLights[i]);
         }
-        g_NwbShadowVisibility[uint3(pixel, uint(slot))] = float4(saturate(transmittance * 0.25), 1.0);
+        g_NwbShadowVisibility[uint3(pixel, uint(slot))] = float4(saturate(transmittance * half(0.25)), 1.0);
     }
 }
 
@@ -277,12 +277,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const float invWeightSum = 1.0 / weightSum;
     for(uint slot = 0u; slot < slotCount; ++slot){
-        float3 sum = float3(0.0, 0.0, 0.0);
+        half3 sum = half3(0.0, 0.0, 0.0);
         [unroll] for(int k = 0; k < 4; ++k){
             if(weights[k] > 0.0)
-                sum += weights[k] * g_NwbShadowHalfVisibility.Load(int4(taps[k], (int)slot, 0)).rgb;
+                sum += half(weights[k]) * half3(g_NwbShadowHalfVisibility.Load(int4(taps[k], (int)slot, 0)).rgb);
         }
-        g_NwbShadowVisibility[uint3(pixel, slot)] = float4(saturate(sum * invWeightSum), 1.0);
+        g_NwbShadowVisibility[uint3(pixel, slot)] = float4(saturate(sum * half(invWeightSum)), 1.0);
     }
 }
 

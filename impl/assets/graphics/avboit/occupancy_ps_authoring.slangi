@@ -79,7 +79,7 @@ struct NwbAvboitOccupancyPixelInput{
 
 void main(NwbAvboitOccupancyPixelInput input){
     NwbMeshSurfaceInputs surfaceInputs;
-    surfaceInputs.color = input.color;
+    surfaceInputs.color = half4(input.color);
     surfaceInputs.normal = input.normal;
     surfaceInputs.tangent = input.tangent;
     surfaceInputs.uv0 = input.uv0;
@@ -101,7 +101,7 @@ void main(NwbAvboitOccupancyPixelInput input){
     // accumulate passes read, so the coverage this pass marks matches the volume they build.
     const NwbMeshSurface surface = nwbMaterialSurface();
 
-    const float alpha = clamp(surface.alpha, 0.0, 1.0);
+    const half alpha = half(clamp(surface.alpha, 0.0, 1.0));
     uint virtualSlice;
     if(!nwbAvboitAcceptLowDepthFragment(g_OpaqueDepth, g_PointSampler, input.position, alpha, virtualSlice))
         discard;

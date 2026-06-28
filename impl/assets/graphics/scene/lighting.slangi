@@ -39,7 +39,7 @@
 #define NWB_CAUSTIC_DEBUG_FORCE_GREY 0
 #endif
 
-// Per-light shadow visibility: float3 transmittance (1 = lit, 0 = fully shadowed, tinted by colored
+// Per-light shadow visibility: half3 transmittance (1 = lit, 0 = fully shadowed, tinted by colored
 // transparent occluders), one Texture2DArray layer per shadow slot. The shadow producers write a light's
 // transmittance into its slot layer; a light's slot index lives in its light record (params.z).
 [[vk::binding(NWB_SCENE_SHADOW_VISIBILITY_BINDING, NWB_SCENE_SHADOW_VISIBILITY_SET)]]
@@ -54,30 +54,30 @@ Texture2D<float4> g_NwbCausticIrradiance;
 
 // 1 (white) = lit, 0 = shadowed, tint = colored transmittance. Reads the light's shadow-slot layer; a light
 // with no slot (params.z < 0 -- the clear default, or a light the slot allocator did not reach) is fully lit.
-float3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
+half3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
     // Negative pixel = "skip screen-space shadow sampling" sentinel for the forward / AVBOIT transparent pass
     // (transparent fragments are not in the opaque G-buffer the visibility was traced from) -- treat as lit.
     if(pixel.x < 0)
-        return float3(1.0, 1.0, 1.0);
+        return half3(1.0, 1.0, 1.0);
 
     const float slot = g_NwbSceneLights[lightIndex].params.z;
     if(slot < 0.0)
-        return float3(1.0, 1.0, 1.0);
+        return half3(1.0, 1.0, 1.0);
 
-    return g_NwbShadowVisibility.Load(int4(pixel, int(slot), 0)).rgb;
+    return half3(g_NwbShadowVisibility.Load(int4(pixel, int(slot), 0)).rgb);
 }
 
 // Additive caustic irradiance at the receiver pixel (scene-referred, pre-tonemap). Black = no caustic. The
 // negative-pixel sentinel (forward / AVBOIT transparent fragments, which are not in the opaque G-buffer the
 // producer splats onto) returns zero so the additive term drops out, mirroring nwbBxdfLightTransmittance.
-float3 nwbBxdfCausticIrradiance(int2 pixel){
+half3 nwbBxdfCausticIrradiance(int2 pixel){
 #if NWB_CAUSTIC_DEBUG_FORCE_GREY
-    return float3(0.15, 0.15, 0.15);
+    return half3(0.15, 0.15, 0.15);
 #else
     if(pixel.x < 0)
-        return float3(0.0, 0.0, 0.0);
+        return half3(0.0, 0.0, 0.0);
 
-    return g_NwbCausticIrradiance.Load(int3(pixel, 0)).rgb;
+    return half3(g_NwbCausticIrradiance.Load(int3(pixel, 0)).rgb);
 #endif
 }
 
@@ -85,8 +85,8 @@ float3 nwbBxdfCausticIrradiance(int2 pixel){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 lightVector, out float3 radiance){
-    const float3 baseRadiance = clamp(light.colorIntensity.xyz, float3(0.0), float3(1.5)) * min(max(light.colorIntensity.w, 0.0), 2.0);
+void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 lightVector, out half3 radiance){
+    const half3 baseRadiance = half3(clamp(light.colorIntensity.xyz, float3(0.0), float3(1.5)) * min(max(light.colorIntensity.w, 0.0), 2.0));
     const float lightType = light.params.y;
 
     if(lightType < 0.5){
@@ -109,15 +109,15 @@ void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 
         attenuation *= smoothstep(outerConeCos, innerConeCos, dot(-lightVector, emission));
     }
 
-    radiance = baseRadiance * attenuation;
+    radiance = baseRadiance * half(attenuation);
 }
 
-float3 nwbSceneShadeLight(NwbSceneLight light, float3 baseColor, float3 normalVector, float3 tangentVector, float3 bitangentVector, float3 viewVector, float ndotv, float3 worldPosition){
+half3 nwbSceneShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVector, float3 tangentVector, float3 bitangentVector, float3 viewVector, half ndotv, float3 worldPosition){
     float3 lightVector;
-    float3 lightRadiance;
+    half3 lightRadiance;
     nwbSceneResolveLight(light, worldPosition, lightVector, lightRadiance);
-    if(all(lightRadiance <= float3(0.0)))
-        return float3(0.0);
+    if(all(lightRadiance <= half3(0.0)))
+        return half3(0.0);
 
     const float3 halfVector = nwbSafeNormalize(lightVector + viewVector, lightVector);
     const float ndotl = max(dot(normalVector, lightVector), 0.0);
@@ -130,20 +130,20 @@ float3 nwbSceneShadeLight(NwbSceneLight light, float3 baseColor, float3 normalVe
     const float bitangentLobe = pow(max(abs(dot(bitangentVector, halfVector)), 0.0), 18.0);
     const float backLight = max(dot(-normalVector, lightVector), 0.0);
 
-    const float3 specularTint = lerp(float3(0.78), float3(1.0, 0.9, 0.68), 0.65);
-    const float3 diffuse = baseColor * lightRadiance * (0.02 + 0.98 * keyDiffuse);
-    const float3 specularColor = lightRadiance * specularTint * (specular * (0.08 + 0.92 * ndotl) + viewSpecular);
-    const float3 rimColor = lerp(float3(0.12, 0.26, 0.52), lightRadiance, 0.25) * rim * (0.04 + 0.96 * ndotl);
-    const float3 frameCue = 0.16 * (
-        float3(1.0, 0.35, 0.2) * tangentLobe
-        + float3(0.2, 0.7, 1.0) * bitangentLobe
+    const half3 specularTint = half3(lerp(float3(0.78), float3(1.0, 0.9, 0.68), 0.65));
+    const half3 diffuse = baseColor * lightRadiance * half(0.02 + 0.98 * keyDiffuse);
+    const half3 specularColor = lightRadiance * specularTint * half(specular * (0.08 + 0.92 * ndotl) + viewSpecular);
+    const half3 rimColor = half3(lerp(float3(0.12, 0.26, 0.52), lightRadiance, 0.25)) * half(rim * (0.04 + 0.96 * ndotl));
+    const half3 frameCue = half(0.16) * (
+        half3(1.0, 0.35, 0.2) * half(tangentLobe)
+        + half3(0.2, 0.7, 1.0) * half(bitangentLobe)
     );
-    const float3 backLightCue = float3(0.012, 0.02, 0.04) * backLight;
+    const half3 backLightCue = half3(0.012, 0.02, 0.04) * half(backLight);
 
     return diffuse + specularColor + rimColor + frameCue + backLightCue;
 }
 
-float3 nwbSceneApplyLighting(float3 baseColor, float3 normal, float4 tangent, float3 worldPosition, int2 pixel){
+half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, float3 worldPosition, int2 pixel){
     const float3 normalVector = nwbSafeNormalize(normal, float3(0.0, 0.0, 1.0));
     const float3 tangentVector = nwbFrameOrthonormalTangent(tangent.xyz, normalVector);
     const float tangentSign = tangent.w < 0.0 ? -1.0 : 1.0;
@@ -153,16 +153,16 @@ float3 nwbSceneApplyLighting(float3 baseColor, float3 normal, float4 tangent, fl
     );
 
     const float3 viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - worldPosition, float3(0.0, 0.0, 1.0));
-    const float ndotv = max(dot(normalVector, viewVector), 0.0);
+    const half ndotv = half(max(dot(normalVector, viewVector), 0.0));
     const float skyAmount = normalVector.z * 0.5 + 0.5;
-    const float3 hemiAmbient = lerp(float3(0.008, 0.012, 0.02), float3(0.045, 0.055, 0.075), skyAmount);
+    const half3 hemiAmbient = half3(lerp(float3(0.008, 0.012, 0.02), float3(0.045, 0.055, 0.075), skyAmount));
 
-    float3 litColor = baseColor * hemiAmbient;
+    half3 litColor = baseColor * hemiAmbient;
     const uint lightCount = nwbSceneLightCount();
     for(uint i = 0u; i < lightCount; ++i){
         // Per-light colored transmittance (1 = lit, 0 = shadowed, tint = colored transparent occluder);
         // a light without a shadow slot reads white (fully lit).
-        const float3 transmittance = nwbBxdfLightTransmittance(pixel, i);
+        const half3 transmittance = nwbBxdfLightTransmittance(pixel, i);
         litColor += transmittance * nwbSceneShadeLight(g_NwbSceneLights[i], baseColor, normalVector, tangentVector, bitangentVector, viewVector, ndotv, worldPosition);
     }
 
@@ -171,7 +171,7 @@ float3 nwbSceneApplyLighting(float3 baseColor, float3 normal, float4 tangent, fl
     // baseColor to reflect it off the receiver albedo; the glass tint already rides inside the irradiance.
     litColor += nwbBxdfCausticIrradiance(pixel) * baseColor;
 
-    return litColor / (litColor + float3(0.65));
+    return litColor / (litColor + half3(0.65));
 }
 
 

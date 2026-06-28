@@ -43,6 +43,7 @@ struct alignas(Float4) LightComponent{
     f32 innerConeCos = 0.95f;
     f32 outerConeCos = 0.90f;
     LightType::Enum type = LightType::Directional;
+    bool enableCaustics = true;
 
     [[nodiscard]] Float4 color()const{
         return Float4(colorIntensity.x, colorIntensity.y, colorIntensity.z, 0.0f);
@@ -68,6 +69,7 @@ static_assert((offsetof(LightComponent, range) % alignof(f32)) == 0, "LightCompo
 static_assert((offsetof(LightComponent, innerConeCos) % alignof(f32)) == 0, "LightComponent::innerConeCos must stay aligned");
 static_assert((offsetof(LightComponent, outerConeCos) % alignof(f32)) == 0, "LightComponent::outerConeCos must stay aligned");
 static_assert((offsetof(LightComponent, type) % alignof(LightType::Enum)) == 0, "LightComponent::type must stay aligned");
+static_assert((offsetof(LightComponent, enableCaustics) % alignof(bool)) == 0, "LightComponent::enableCaustics must stay aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -114,6 +116,7 @@ struct alignas(Float4) SceneLight{
     Float4 colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
     f32 range = 0.0f;
     LightType::Enum type = LightType::Directional;
+    bool enableCaustics = true;
 };
 
 static_assert(IsStandardLayout_V<SceneLight>, "SceneLight must stay layout-stable");

@@ -127,10 +127,9 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
     ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS];
     const u32 lightCount = ECSRenderDetail::ResolveSceneLights(world(), lightData, NWB_SCENE_MAX_LIGHTS);
 
-    // Caustic-light classification (P1): rank the directional/spot lights and assign a caustic slot into each
-    // chosen light's params.w, gated on the scene holding at least one refractive instance (gathered earlier this
-    // frame by prepareCausticEmissionTargets into the ray-tracing state). params.w uploads with the light buffer
-    // below; nothing consumes it yet (the caustic producer is a later unit).
+    // Caustic-light classification (P1): rank the opted-in directional/spot lights and assign a caustic slot into
+    // each chosen light's params.w, gated on the scene holding at least one refractive instance (gathered earlier this
+    // frame by prepareCausticEmissionTargets into the ray-tracing state).
     const u32 refractiveInstanceCount = rayTracingState().m_causticRefractiveInstanceCount;
     const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(lightData, lightCount, refractiveInstanceCount);
     rayTracingState().m_causticLightCount = causticLightCount;
@@ -202,9 +201,9 @@ void RendererDeferredSystem::logCausticClassificationOnce(
     const u32 refractiveInstanceCount
 ){
     // P1 gate observable: emit ONCE (rate-limited by the ray-tracing-state flag, not per-frame spam) the chosen
-    // caustic lights + the refractive emission targets, so a smoke run can confirm the classification + the
-    // gather without any rendering change. Reports the caustic-light count, the refractive emission-target AABB
-    // count + their combined world extent, then one line per chosen caustic light (slot, light index, type).
+    // opted-in caustic lights + the refractive emission targets, so a smoke run can confirm the classification +
+    // gather without any rendering change. Reports the caustic-light count, the refractive emission-target AABB count
+    // + their combined world extent, then one line per chosen caustic light (slot, light index, type).
     if(rayTracingState().m_causticEmissionGateLogged)
         return;
     rayTracingState().m_causticEmissionGateLogged = true;

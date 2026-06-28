@@ -204,7 +204,9 @@ void RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
             continue;
 
         MaterialSurfaceInfo* materialInfo = nullptr;
-        static_cast<void>(createMaterialSurfaceInfo(renderer.material, materialInfo));
+        if(!createMaterialSurfaceInfo(renderer.material, materialInfo))
+            continue;
+        NWB_ASSERT(materialInfo);
     }
 }
 

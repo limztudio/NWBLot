@@ -147,7 +147,10 @@ TEST(Global, NameSymbolsWriteDefaultFile){
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
 
     const Name runtimeName(AStringView("Write\\Default\\Namesym"));
-    static_cast<void>(runtimeName.hash());
+    const NameHash& runtimeNameHash = runtimeName.hash();
+    char resolvedText[64] = {};
+    EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(runtimeNameHash, resolvedText, sizeof(resolvedText)));
+    EXPECT_STREQ(resolvedText, "write/default/namesym");
 
     NWB::Core::Alloc::GlobalArena pathArena(NWB::Tests::s_TestArena);
 
@@ -180,7 +183,7 @@ TEST(Global, NameSymbolsSerializeRoundTrip){
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
 
     const Name runtimeName(AStringView("RoundTrip\\Symbol"));
-    static_cast<void>(runtimeName.hash());
+    const NameHash& runtimeNameHash = runtimeName.hash();
     EXPECT_GE(NWB::Core::Common::NameSymbols::EntryCount(), 1u);
 
     NWB::Core::Alloc::GlobalArena serializeArena(NWB::Tests::s_TestArena);
@@ -190,10 +193,10 @@ TEST(Global, NameSymbolsSerializeRoundTrip){
 
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
     char resolvedText[64] = {};
-    EXPECT_FALSE(NWB::Core::Common::NameSymbols::Resolve(runtimeName.hash(), resolvedText, sizeof(resolvedText)));
+    EXPECT_FALSE(NWB::Core::Common::NameSymbols::Resolve(runtimeNameHash, resolvedText, sizeof(resolvedText)));
 
     EXPECT_TRUE(NWB::Core::Common::NameSymbols::LoadFromMemory(AStringView(namesymText.data(), namesymText.size())));
-    EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(runtimeName.hash(), resolvedText, sizeof(resolvedText)));
+    EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(runtimeNameHash, resolvedText, sizeof(resolvedText)));
     EXPECT_STREQ(resolvedText, "roundtrip/symbol");
 }
 

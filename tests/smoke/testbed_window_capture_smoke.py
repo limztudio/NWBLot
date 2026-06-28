@@ -349,7 +349,10 @@ def analyze_transparent_multi_rows(rows_rgb):
 
     left_pixels = count_foreground_pixels(rows_rgb, width, height, background, 0.16, 0.30, 0.43, 0.70)
     center_pixels = count_foreground_pixels(rows_rgb, width, height, background, 0.34, 0.27, 0.58, 0.70)
-    right_pixels = count_foreground_pixels(rows_rgb, width, height, background, 0.62, 0.30, 0.90, 0.70)
+    right_nominal_pixels = count_foreground_pixels(rows_rgb, width, height, background, 0.62, 0.30, 0.90, 0.70)
+    # The CSG smoke samples a late rotating pose where the right transparent mesh crosses the center/right boundary.
+    right_rotated_pixels = count_foreground_pixels(rows_rgb, width, height, background, 0.47, 0.28, 0.66, 0.64)
+    right_pixels = max(right_nominal_pixels, right_rotated_pixels)
     return TransparentMultiAnalysis(left_pixels, center_pixels, right_pixels)
 
 

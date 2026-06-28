@@ -1213,18 +1213,18 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
 bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.shadowVisibility || !targets.shadowVisibilityHalf)
         return false;
-    if(!rayTracingState().m_tlas || !rayTracingState().m_shadowPipeline || !rayTracingState().m_shadowShaderTable || !rayTracingState().m_shadowBindingSet)
+    if(!rayTracingState().m_tlas || !rayTracingState().m_shadowPipeline || !rayTracingState().m_shadowBindingSet)
         return false;
     if(!rayTracingState().m_shadowUpsamplePipeline || !rayTracingState().m_shadowUpsampleBindingSet)
         return false;
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
-    // The per-mesh index/attribute byte buffers the any-hit reads were last touched as accel-struct build inputs
-    // (positions/indices) or are otherwise resident; move each distinct mesh's index + attribute buffers to
-    // ShaderResource for the per-hit transmittance dispatch, alongside the shadow-owned material-context buffers
-    // (built + uploaded by buildSceneTlas on the shadow-prepare command list). setResourceStatesForBindingSet
-    // then derives the rest (TLAS read, G-buffer SRVs, scene/light buffers, the visibility UAV).
+    // The per-mesh index/attribute/position byte buffers the RayQuery trace reads were last touched as accel-struct
+    // build inputs (positions/indices) or are otherwise resident; move each distinct mesh's buffers to ShaderResource
+    // for the per-hit transmittance dispatch, alongside the shadow-owned material-context buffers (built + uploaded by
+    // buildSceneTlas on the shadow-prepare command list). setResourceStatesForBindingSet then derives the rest (TLAS
+    // read, G-buffer SRVs, scene/light buffers, the visibility UAV).
     for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
         commandList.setBufferState(rayTracingState().m_shadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
@@ -1235,17 +1235,20 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     commandList.setResourceStatesForBindingSet(rayTracingState().m_shadowBindingSet.get());
     commandList.commitBarriers();
 
-    Core::RayTracingState rayTracingPassState;
-    rayTracingPassState.setShaderTable(rayTracingState().m_shadowShaderTable.get());
-    rayTracingPassState.addBindingSet(rayTracingState().m_shadowBindingSet.get());
-    commandList.setRayTracingState(rayTracingPassState);
-
-    // HALF-resolution ray dispatch: one occlusion ray per half-res pixel (1/4 the rays) into shadowVisibilityHalf.
+    // HALF-resolution inline-RayQuery compute trace: one thread per half-res pixel (1/4 the rays) gathers each light's
+    // transparent crossings into shadowVisibilityHalf. The shader reads its dispatch bounds from the half-res output's
+    // own dimensions (g_NwbShadowVisibility.GetDimensions), so no push constant is needed here.
     const u32 shadowHalfWidth = (targets.width + 1u) / 2u;
     const u32 shadowHalfHeight = (targets.height + 1u) / 2u;
-    Core::RayTracingDispatchRaysArguments dispatchArgs;
-    dispatchArgs.setDimensions(shadowHalfWidth, shadowHalfHeight, 1u);
-    commandList.dispatchRays(dispatchArgs);
+    Core::ComputeState shadowState;
+    shadowState.setPipeline(rayTracingState().m_shadowPipeline.get());
+    shadowState.addBindingSet(rayTracingState().m_shadowBindingSet.get());
+    commandList.setComputeState(shadowState);
+    commandList.dispatch(
+        DivideUp(shadowHalfWidth, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
+        DivideUp(shadowHalfHeight, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
+        1u
+    );
 
     // Edge-aware upsample the half-res visibility into the full-res buffer the deferred lighting samples. Under the same
     // s_ShadowVisibility scope so the timing covers the whole shadow cost (rays + upsample). setResourceStatesForBindingSet
@@ -1660,7 +1663,9 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
         return true;
     if(rayTracingState().m_shadowPipelineFailed)
         return false;
-    if(!graphics().queryFeatureSupport(Core::Feature::RayTracingPipeline)){
+    // Hardware shadow trace is inline RayQuery in a COMPUTE shader (not the RT pipeline), so it needs RayQuery +
+    // the acceleration structure feature (the TLAS it queries).
+    if(!graphics().queryFeatureSupport(Core::Feature::RayQuery) || !graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
         rayTracingState().m_shadowPipelineFailed = true;
         return false;
     }
@@ -1669,8 +1674,8 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
 
     if(!rayTracingState().m_shadowBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
-        layoutDesc.setVisibility(Core::ShaderType::AllRayTracing);
-        layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, 1));
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, 1)); // inline RayQuery reads the TLAS from compute
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RT_BINDING_GBUFFER_WORLD_POSITION, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RT_BINDING_GBUFFER_NORMAL, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RT_BINDING_GBUFFER_DEPTH, 1));
@@ -1678,10 +1683,9 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_LIGHT_LIST, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_INSTANCE_MATERIAL, 1));
-        // Per-mesh descriptor arrays (index + attribute + position byte buffers) the any-hit indexes by
+        // Per-mesh descriptor arrays (index + attribute + position byte buffers) the RayQuery trace indexes by
         // material.meshSlot, plus the shared material-constants context buffers the per-hit transmittance dispatch
-        // reads. The bounded SRV arrays mirror the software traversal's compute path; this is the HW-pipeline
-        // feasibility probe -- createBindingLayout / createRayTracingPipeline must accept count>1 SRV arrays here.
+        // reads. The bounded SRV arrays mirror the software traversal's compute path.
         layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INDICES, NWB_SHADOW_RT_MAX_MESHES));
         layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_ATTRIBUTES, NWB_SHADOW_RT_MAX_MESHES));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, 1));
@@ -1696,55 +1700,30 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
         }
     }
 
-    Core::ShaderHandle raygenShader;
-    Core::ShaderHandle missShader;
-    Core::ShaderHandle anyHitShader;
-    if(
-        !m_renderer.shaderSystem().loadShader(raygenShader, AssetsGraphicsShadow::s_RaygenShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::RayGeneration, "ECSRender_ShadowRaygen")
-        || !m_renderer.shaderSystem().loadShader(missShader, AssetsGraphicsShadow::s_MissShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Miss, "ECSRender_ShadowMiss")
-        || !m_renderer.shaderSystem().loadShader(anyHitShader, AssetsGraphicsShadow::s_AnyHitShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::AnyHit, "ECSRender_ShadowAnyHit")
-    ){
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_shadowShader,
+        AssetsGraphicsShadow::s_RayQueryShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_ShadowRayQuery"
+    )){
         rayTracingState().m_shadowPipelineFailed = true;
         return false;
     }
 
-    Core::RayTracingPipelineDesc pipelineDesc(arena());
-    // Payload = float3 transmittance (12 bytes, rounded to 16). The any-hit accumulates colored transmittance.
-    pipelineDesc.setMaxPayloadSize(static_cast<u32>(sizeof(f32) * 4u));
-    pipelineDesc.setMaxRecursionDepth(1u);
-    pipelineDesc.addBindingLayout(rayTracingState().m_shadowBindingLayout);
-
-    Core::RayTracingPipelineShaderDesc raygenDesc(arena());
-    raygenDesc.setShader(raygenShader).setExportName("ShadowRayGen");
-    pipelineDesc.addShader(raygenDesc);
-
-    Core::RayTracingPipelineShaderDesc missDesc(arena());
-    missDesc.setShader(missShader).setExportName("ShadowMiss");
-    pipelineDesc.addShader(missDesc);
-
-    Core::RayTracingPipelineHitGroupDesc hitGroupDesc(arena());
-    hitGroupDesc.setAnyHitShader(anyHitShader).setExportName("ShadowHitGroup");
-    pipelineDesc.addHitGroup(hitGroupDesc);
-
-    rayTracingState().m_shadowPipeline = device->createRayTracingPipeline(pipelineDesc);
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_shadowShader)
+        .addBindingLayout(rayTracingState().m_shadowBindingLayout)
+    ;
+    rayTracingState().m_shadowPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowPipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RT shadow pipeline"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery shadow compute pipeline"));
         rayTracingState().m_shadowPipelineFailed = true;
         return false;
     }
 
-    Core::RayTracingShaderTableHandle shaderTable = rayTracingState().m_shadowPipeline->createShaderTable();
-    if(!shaderTable){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RT shadow shader table"));
-        rayTracingState().m_shadowPipelineFailed = true;
-        return false;
-    }
-    shaderTable->setRayGenerationShader("ShadowRayGen");
-    shaderTable->addMissShader("ShadowMiss");
-    shaderTable->addHitGroup("ShadowHitGroup");
-    rayTracingState().m_shadowShaderTable = Move(shaderTable);
-
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RT shadow pipeline + shader table"));
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RayQuery shadow compute pipeline"));
     return true;
 }
 
@@ -1861,6 +1840,7 @@ bool RendererRayTracingSystem::ensureShadowUpsamplePipeline(){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_WORLD_POSITION, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_NORMAL, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_DEPTH, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_UPSAMPLE_BINDING_HALF_VISIBILITY, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_UPSAMPLE_BINDING_FULL_VISIBILITY, 1));
@@ -1902,17 +1882,20 @@ bool RendererRayTracingSystem::ensureShadowUpsamplePipeline(){
 bool RendererRayTracingSystem::ensureShadowUpsampleBindingSet(DeferredFrameTargets& targets){
     NWB_ASSERT(rayTracingState().m_shadowUpsampleBindingLayout);
     NWB_ASSERT(targets.worldPosition);
+    NWB_ASSERT(targets.normal);
     NWB_ASSERT(targets.depth);
     NWB_ASSERT(targets.shadowVisibility);
     NWB_ASSERT(targets.shadowVisibilityHalf);
 
     Core::Texture* worldPositionTarget = targets.worldPosition.get();
+    Core::Texture* normalTarget = targets.normal.get();
     Core::Texture* depthTarget = targets.depth.get();
     Core::Texture* halfTarget = targets.shadowVisibilityHalf.get();
     Core::Texture* fullTarget = targets.shadowVisibility.get();
     if(
         rayTracingState().m_shadowUpsampleBindingSet
         && rayTracingState().m_shadowUpsampleBindingSetWorldPosition == worldPositionTarget
+        && rayTracingState().m_shadowUpsampleBindingSetNormal == normalTarget
         && rayTracingState().m_shadowUpsampleBindingSetDepth == depthTarget
         && rayTracingState().m_shadowUpsampleBindingSetHalf == halfTarget
         && rayTracingState().m_shadowUpsampleBindingSetFull == fullTarget
@@ -1926,6 +1909,13 @@ bool RendererRayTracingSystem::ensureShadowUpsampleBindingSet(DeferredFrameTarge
         NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_WORLD_POSITION,
         worldPositionTarget,
         targets.worldPositionFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_NORMAL,
+        normalTarget,
+        targets.normalFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
@@ -1956,6 +1946,7 @@ bool RendererRayTracingSystem::ensureShadowUpsampleBindingSet(DeferredFrameTarge
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow upsample binding set"));
         rayTracingState().m_shadowUpsampleBindingSet = nullptr;
         rayTracingState().m_shadowUpsampleBindingSetWorldPosition = nullptr;
+        rayTracingState().m_shadowUpsampleBindingSetNormal = nullptr;
         rayTracingState().m_shadowUpsampleBindingSetDepth = nullptr;
         rayTracingState().m_shadowUpsampleBindingSetHalf = nullptr;
         rayTracingState().m_shadowUpsampleBindingSetFull = nullptr;
@@ -1963,6 +1954,7 @@ bool RendererRayTracingSystem::ensureShadowUpsampleBindingSet(DeferredFrameTarge
     }
     rayTracingState().m_shadowUpsampleBindingSet = Move(bindingSet);
     rayTracingState().m_shadowUpsampleBindingSetWorldPosition = worldPositionTarget;
+    rayTracingState().m_shadowUpsampleBindingSetNormal = normalTarget;
     rayTracingState().m_shadowUpsampleBindingSetDepth = depthTarget;
     rayTracingState().m_shadowUpsampleBindingSetHalf = halfTarget;
     rayTracingState().m_shadowUpsampleBindingSetFull = fullTarget;

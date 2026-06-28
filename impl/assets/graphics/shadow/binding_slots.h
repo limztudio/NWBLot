@@ -39,9 +39,16 @@
 // geometric face-normal derivation; indexed by the same i0/i1/i2 the index buffer yields.
 #define NWB_SHADOW_RT_BINDING_MESH_POSITIONS 12
 
-// Maximum distinct meshes the per-mesh descriptor arrays can address in one frame (mirrors the software path's
-// NWB_SW_SHADOW_MAX_MESHES so the C++ slot arrays and the shader's `[NWB_SHADOW_RT_MAX_MESHES]` stay one cap).
-#define NWB_SHADOW_RT_MAX_MESHES 64
+// Maximum distinct meshes the per-mesh descriptor arrays (index + attribute + position) can address in one frame;
+// meshes beyond it cast a colorless (opaque) shadow that frame (logged once). The hardware shadow trace is now an
+// inline-RayQuery COMPUTE pass, and the compute pipeline's single-stage descriptor budget is tighter than the RT
+// pipeline's (which spread these three count-N SRV arrays across its raygen/miss/any-hit stages): 64 (3*64=192
+// array descriptors) corrupted the compute binding set + broke the following deferred pass, while 32 (3*32=96) is
+// stable. Kept at 32 for headroom; raising it needs the compute descriptor-set budget widened (a backend change).
+#define NWB_SHADOW_RT_MAX_MESHES 32
+
+// Workgroup size of the hardware RayQuery shadow trace (shadow_rayquery_cs): one thread per HALF-res shadow pixel.
+#define NWB_SHADOW_RT_GROUP_SIZE 8
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,9 +60,10 @@
 // dropping background taps keeps the shadow confined to its surface (no bleed across silhouettes).
 #define NWB_SHADOW_UPSAMPLE_SET 0
 #define NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_WORLD_POSITION 0
-#define NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_DEPTH 1
-#define NWB_SHADOW_UPSAMPLE_BINDING_HALF_VISIBILITY 2   // half-res Texture2DArray SRV (input)
-#define NWB_SHADOW_UPSAMPLE_BINDING_FULL_VISIBILITY 3   // full-res Texture2DArray UAV (output, lighting reads this)
+#define NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_NORMAL 1        // G-buffer normal: the plane/normal edge-stop (no blur across silhouettes)
+#define NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_DEPTH 2
+#define NWB_SHADOW_UPSAMPLE_BINDING_HALF_VISIBILITY 3   // half-res Texture2DArray SRV (input)
+#define NWB_SHADOW_UPSAMPLE_BINDING_FULL_VISIBILITY 4   // full-res Texture2DArray UAV (output, lighting reads this)
 #define NWB_SHADOW_UPSAMPLE_GROUP_SIZE 8
 
 

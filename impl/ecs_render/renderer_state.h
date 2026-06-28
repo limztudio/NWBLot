@@ -275,8 +275,10 @@ private:
     u64 m_tlasDeviceAddress = 0u;
     u32 m_tlasInstanceCount = 0u; // live TLAS instance count (set by buildSceneTlas); the HW caustic raygen's non-zero guard
     Core::BindingLayoutHandle m_shadowBindingLayout;
-    Core::RayTracingPipelineHandle m_shadowPipeline;
-    Core::RayTracingShaderTableHandle m_shadowShaderTable;
+    // Hardware shadow trace is an inline-RayQuery COMPUTE pass (shadow_rayquery_cs); the per-occluder optical-depth
+    // accumulator lives in a compute local, which a hardware ray payload could not index safely.
+    Core::ShaderHandle m_shadowShader;
+    Core::ComputePipelineHandle m_shadowPipeline;
     Core::BindingSetHandle m_shadowBindingSet;
     const Core::RayTracingAccelStruct* m_shadowBindingSetTlas = nullptr;
     const Core::Buffer* m_shadowBindingSetInstanceMaterial = nullptr;
@@ -290,6 +292,7 @@ private:
     Core::ComputePipelineHandle m_shadowUpsamplePipeline;
     Core::BindingSetHandle m_shadowUpsampleBindingSet;
     const Core::Texture* m_shadowUpsampleBindingSetWorldPosition = nullptr;
+    const Core::Texture* m_shadowUpsampleBindingSetNormal = nullptr;
     const Core::Texture* m_shadowUpsampleBindingSetDepth = nullptr;
     const Core::Texture* m_shadowUpsampleBindingSetHalf = nullptr;
     const Core::Texture* m_shadowUpsampleBindingSetFull = nullptr;

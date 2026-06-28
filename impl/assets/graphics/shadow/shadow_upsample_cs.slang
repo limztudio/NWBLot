@@ -10,14 +10,20 @@
 
 
 // Edge-aware upsample of the HALF-resolution ray-traced shadow visibility into the full-res Texture2DArray the deferred
-// lighting samples. The raygen now traces one occlusion ray per HALF-res pixel (1/4 the rays); this pass reconstructs the
-// full-res per-light visibility. A plain bilinear upsample would smear the shadow ~1 full pixel past a silhouette onto
-// the wrong receiver, so each of the 4 half-res taps is weighted by a world-distance edge-stop to THIS full-res pixel's
-// receiver and background taps are dropped -- the shadow stays confined to the surface it belongs to (degrades to plain
-// bilinear on a flat receiver). All NWB_SCENE_SHADOW_SLOT_COUNT light slots share the geometry weights, computed once.
+// lighting samples. The trace casts one occlusion ray per HALF-res pixel (1/4 the rays); this pass reconstructs the
+// full-res per-light visibility from the 2x2 half-res neighbourhood with a GEOMETRY-STOPPED BILINEAR blend: each tap's
+// bilinear weight is gated by world-distance + plane-distance + normal-similarity edge-stops, so the shadow stays
+// confined to its receiver (a plain bilinear would smear it ~1 full pixel past a silhouette onto the wrong surface).
+// The half-res trace is already clean per-ray (the RayQuery / SW per-occluder integration drops unbalanced silhouette
+// clips), so a smooth blend is the right reconstruction for these soft transparent shadows -- no best-tap/nearest pick
+// (which keeps an opaque 0/1 edge hard but reads as blocky half-res stair-steps on a soft overlap). All
+// NWB_SCENE_SHADOW_SLOT_COUNT light slots share the geometry weights, computed once.
 
 [[vk::binding(NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_WORLD_POSITION, NWB_SHADOW_UPSAMPLE_SET)]]
 Texture2D<float4> g_NwbShadowUpsampleWorldPosition;
+
+[[vk::binding(NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_NORMAL, NWB_SHADOW_UPSAMPLE_SET)]]
+Texture2D<float4> g_NwbShadowUpsampleNormal;
 
 [[vk::binding(NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_DEPTH, NWB_SHADOW_UPSAMPLE_SET)]]
 Texture2D<float4> g_NwbShadowUpsampleDepth;
@@ -52,6 +58,11 @@ int2 nwbShadowUpsampleHalfToFull(const int2 halfTexel){
     );
 }
 
+// G-buffer normal is stored (n * 0.5 + 0.5); decode + normalize (matches the trace's normal decode).
+float3 nwbShadowUpsampleDecodeNormal(const int2 texel){
+    return normalize(g_NwbShadowUpsampleNormal.Load(int3(texel, 0)).xyz * 2.0 - 1.0);
+}
+
 
 [numthreads(NWB_SHADOW_UPSAMPLE_GROUP_SIZE, NWB_SHADOW_UPSAMPLE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
@@ -71,53 +82,69 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    // Edge-stop sigma from the full-res pixel's own world spacing (max of +x / +y for foreshortening on a grazing
-    // receiver); a few pixels of tolerance keeps same-surface taps while rejecting a silhouette jump.
+    // Edge-stop sigmas from the full-res pixel's own world spacing (max of +x / +y for foreshortening on a grazing
+    // receiver). World distance rejects far taps; plane distance (along the normal) rejects a different parallel plane;
+    // the normal dot rejects a different orientation. Tighter than world distance alone so hard edges do not bleed.
     const int fw = (int)g_NwbShadowUpsamplePushConstants.width;
     const int fh = (int)g_NwbShadowUpsamplePushConstants.height;
     const float3 centerWorld = g_NwbShadowUpsampleWorldPosition.Load(int3(fullTexel, 0)).xyz;
+    const float3 centerNormal = nwbShadowUpsampleDecodeNormal(fullTexel);
     const int2 rightFull = int2(min(fullTexel.x + 1, fw - 1), fullTexel.y);
     const int2 downFull = int2(fullTexel.x, min(fullTexel.y + 1, fh - 1));
     const float3 dxWorld = g_NwbShadowUpsampleWorldPosition.Load(int3(rightFull, 0)).xyz - centerWorld;
     const float3 dyWorld = g_NwbShadowUpsampleWorldPosition.Load(int3(downFull, 0)).xyz - centerWorld;
     const float spacing = max(max(length(dxWorld), length(dyWorld)), 1e-4);
-    const float sigmaWorld = spacing * 3.0;
+    const float sigmaWorld = spacing * 2.0;
     const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
+    const float sigmaPlane = max(spacing * 0.75, 1e-4);
+    const float invTwoSigmaPlaneSq = 1.0 / (2.0 * sigmaPlane * sigmaPlane);
+    const float normalReject = 0.85;
 
     const int hw = (int)g_NwbShadowUpsamplePushConstants.halfWidth;
     const int hh = (int)g_NwbShadowUpsamplePushConstants.halfHeight;
     const float2 src = (float2(pixel) + 0.5) * 0.5 - 0.5; // full pixel centre -> half-res texel-centre space
-    const int2 baseTexel = int2(round(src)); // nearest half texel; gather a 3x3 neighbourhood around it
-    const float spatialSigma = 1.0;          // in half-res texels
-    const float invTwoSpatialSq = 1.0 / (2.0 * spatialSigma * spatialSigma);
+    const int2 baseTexel = int2(floor(src));              // top-left of the 2x2 half-res gather
+    const float2 lerpFrac = src - float2(baseTexel);      // bilinear fractions
 
-    // 3x3 edge-aware GAUSSIAN reconstruction (denoise + upsample in one): the ray-traced shadow carries sharp
-    // grazing-Fresnel dark detail at refractor silhouettes (present at full-res too, just finer) that reads as dark
-    // speckle -- worst where two refractors' silhouette projections overlap. A small geometry-stopped Gaussian over the
-    // half-res neighbourhood smooths those dark outliers, while the world-distance edge-stop + background-tap drop keep
-    // it confined to the receiver (no bleed across silhouettes; degrades to a plain blur on a flat receiver). One weight
-    // set, reused for every slot.
-    float weights[9];
-    int2 taps[9];
+    // 2x2 geometry-stopped bilinear weights. The half-res shadow is already clean per-ray (the RayQuery / SW trace
+    // drops unbalanced silhouette clips), so the upsample just needs a SMOOTH reconstruction: a bilinear weight per
+    // tap, gated by world-distance + plane-distance + normal-similarity edge-stops so it never blends across a
+    // silhouette onto the wrong receiver. (A "best tap / nearest" pick keeps a 0/1 opaque edge hard, but at half-res
+    // that reads as blocky stair-steps on these soft transparent-shadow overlaps -- the smooth blend is cleaner here.)
+    float weights[4];
+    int2 taps[4];
     float weightSum = 0.0;
-    [unroll] for(int j = -1; j <= 1; ++j){
-        [unroll] for(int i = -1; i <= 1; ++i){
-            const int idx = (j + 1) * 3 + (i + 1);
+    [unroll] for(int j = 0; j < 2; ++j){
+        [unroll] for(int i = 0; i < 2; ++i){
+            const int idx = j * 2 + i;
             const int2 tap = int2(clamp(baseTexel.x + i, 0, hw - 1), clamp(baseTexel.y + j, 0, hh - 1));
             taps[idx] = tap;
+
             const int2 tapFull = nwbShadowUpsampleHalfToFull(tap);
             float weight = 0.0;
             if(g_NwbShadowUpsampleDepth.Load(int3(tapFull, 0)).r < 0.999999){ // skip background taps
-                const float2 spatial = float2(tap) - src;
-                const float3 d = g_NwbShadowUpsampleWorldPosition.Load(int3(tapFull, 0)).xyz - centerWorld;
-                weight = exp(-dot(spatial, spatial) * invTwoSpatialSq) * exp(-dot(d, d) * invTwoSigmaWorldSq);
+                const float bilinearWeight =
+                    (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) *
+                    (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
+
+                const float3 tapWorld = g_NwbShadowUpsampleWorldPosition.Load(int3(tapFull, 0)).xyz;
+                const float3 tapNormal = nwbShadowUpsampleDecodeNormal(tapFull);
+                const float normalDot = dot(centerNormal, tapNormal);
+                if(normalDot > normalReject){
+                    const float3 d = tapWorld - centerWorld;
+                    const float planeDist = abs(dot(d, centerNormal));
+                    const float worldW = exp(-dot(d, d) * invTwoSigmaWorldSq);
+                    const float planeW = exp(-(planeDist * planeDist) * invTwoSigmaPlaneSq);
+                    const float normalW = pow(saturate(normalDot), 32.0);
+                    weight = bilinearWeight * worldW * planeW * normalW;
+                }
             }
             weights[idx] = weight;
             weightSum += weight;
         }
     }
 
-    // All four taps rejected (an isolated full-res receiver sliver between half-res background taps): leave it fully lit.
+    // All taps rejected (an isolated full-res receiver sliver between half-res background/other-plane taps): fully lit.
     if(weightSum <= 0.0){
         for(uint slot = 0u; slot < slotCount; ++slot)
             g_NwbShadowUpsampleFullVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
@@ -127,7 +154,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float invWeightSum = 1.0 / weightSum;
     for(uint slot = 0u; slot < slotCount; ++slot){
         float3 sum = float3(0.0, 0.0, 0.0);
-        [unroll] for(int k = 0; k < 9; ++k){
+        [unroll] for(int k = 0; k < 4; ++k){
             if(weights[k] > 0.0)
                 sum += weights[k] * g_NwbShadowUpsampleHalfVisibility.Load(int4(taps[k], (int)slot, 0)).rgb;
         }

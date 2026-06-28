@@ -1,0 +1,124 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_INTEGRATE_SLANGI
+#define NWB_GRAPHICS_SHADOW_INTEGRATE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// SHARED occlusion-ray volume-path integration for BOTH shadow trace backends -- the hardware RayQuery compute trace
+// (shadow_rayquery_cs.slang, t = CandidateTriangleRayT(), geometric normal from the bound position buffer +
+// CandidateObjectRayDirection()) and the software compute traversal (shadow_sw_traversal_cs.slang, t = triangleHit.t,
+// geometric normal from the loaded triangle positions + the object-space ray dir). Both run in compute, so the
+// accumulator lives as a LOCAL variable (its per-occluder bin array indexes safely -- unlike a hardware ray payload).
+// Centralising the per-crossing physics + finalize here means the two backends integrate byte-identical results from
+// ONE definition -- no lockstep edits, no drift.
+//
+// Must be included AFTER the surface helpers (shadow_surface.slangi -> mesh/surface.slangi), which define
+// nwbShadowFresnelTransmittedFraction / nwbShadowAbsorptionCoefficient (both backends already pull those in first).
+
+
+// Max distinct occluders one shadow ray accumulates PER-OCCLUDER. A ray crosses only the few refractors between it
+// and the light; a further occluder beyond this drops its (rare) contribution gracefully rather than mis-binning.
+#define NWB_SHADOW_MAX_OCCLUDER_BINS 8
+
+// Per-occluder optical-depth bin. The robust integration pairs each occluder's entry/exit faces INDEPENDENTLY: the
+// signed Beer-Lambert sum coeff*t*faceSign telescopes to coeff*chord ONLY when an occluder's entries and exits
+// balance. Binning by instance id lets the finalize keep balanced occluders and DROP an unbalanced one -- a faceted
+// silhouette's tangential clip is a single unmatched crossing whose absolute-t term would otherwise detonate into a
+// black / over-bright speckle in a refractor overlap. Dropping it is exact: a tangent clip carries ~0 true path.
+struct NwbShadowOccluderBin{
+    uint instanceId;     // the crossing's InstanceID() / scene-BVH instance index; unique per occluder
+    int faceBalance;     // sum of faceSign over this occluder's crossings: 0 == every entry matched by an exit
+    float3 opticalDepth; // sum of coeff*t*faceSign for this occluder == coeff*chord when balanced
+};
+
+// Running accumulators for one occlusion ray. Final visibility = transmittance * exp(-opticalDepth), where the
+// optical depth is summed over BALANCED occluder bins only (see nwbShadowFinalizeVisibility).
+//   transmittance -- per-channel Fresnel-transmitted product (seed 1); an opaque hit zeroes it.
+//   bins/binCount -- the per-occluder optical-depth bins (see NwbShadowOccluderBin).
+struct NwbShadowVisibilityAccumulator{
+    float3 transmittance;
+    uint binCount;
+    NwbShadowOccluderBin bins[NWB_SHADOW_MAX_OCCLUDER_BINS];
+};
+
+
+// Seed a fully-lit accumulator (no occluders yet). Bins are written on first use; binCount gates every read.
+NwbShadowVisibilityAccumulator nwbShadowVisibilityBegin(){
+    NwbShadowVisibilityAccumulator acc;
+    acc.transmittance = float3(1.0, 1.0, 1.0);
+    acc.binCount = 0u;
+    return acc;
+}
+
+
+// Fold ONE transparent surface crossing into the running visibility. The caller supplies the crossing's occluder id
+// + the occluder's optical params (ior / transmission, from its surface hook) + the crossing geometry: geometricNormal
+// and rayDirection MUST be in the SAME space (object space in both backends -> invariant to the instance transform and
+// identical HW vs SW), and t is the WORLD ray distance to the hit.
+//
+// GEOMETRIC face normal (not the interpolated shading normal, which sweeps front<->back over a wide band at a smooth
+// silhouette and would flip faceSign / crater cosI) is constant over the face, so it only grazes at the measure-zero
+// tangent line.
+//
+// Fresnel folds LIVE into transmittance (an order-independent product). grazeWeight (smoothstep on cosI) fades it
+// toward a no-op as a crossing approaches tangency, so a phantom silhouette clip cannot spuriously darken and a true
+// near-silhouette rim softens instead of cratering to black (Fresnel only attenuates -> never brightens).
+//
+// Optical depth is BINNED PER OCCLUDER by instance id (no grazing weight, no global telescoping): the finalize keeps
+// only balanced bins, so an unbalanced clip is dropped at the source rather than smeared across the total.
+void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const uint instanceId, const float ior, const float3 transmission, const float3 geometricNormal, const float3 rayDirection, const float t){
+    const float ndotd = dot(rayDirection, geometricNormal);
+    const float faceSign = (ndotd >= 0.0) ? 1.0 : -1.0;
+    const float cosI = saturate(abs(ndotd) * rsqrt(max(dot(geometricNormal, geometricNormal), 1e-20)) * rsqrt(max(dot(rayDirection, rayDirection), 1e-20)));
+
+    const float grazeWeight = smoothstep(0.0, 0.2, cosI);
+    acc.transmittance *= lerp(1.0, nwbShadowFresnelTransmittedFraction(ior, cosI), grazeWeight);
+
+    const float3 odTerm = nwbShadowAbsorptionCoefficient(transmission) * t * faceSign;
+    const int signInt = (faceSign >= 0.0) ? 1 : -1;
+    int slot = -1;
+    for(uint i = 0u; i < acc.binCount; ++i){
+        if(acc.bins[i].instanceId == instanceId){
+            slot = (int)i;
+            break;
+        }
+    }
+    if(slot < 0){
+        if(acc.binCount >= (uint)NWB_SHADOW_MAX_OCCLUDER_BINS)
+            return; // bin table full: drop this occluder's contribution (rare; a graceful slight lightening)
+        slot = (int)acc.binCount;
+        acc.bins[slot].instanceId = instanceId;
+        acc.bins[slot].faceBalance = 0;
+        acc.bins[slot].opticalDepth = float3(0.0, 0.0, 0.0);
+        acc.binCount += 1u;
+    }
+    acc.bins[slot].faceBalance += signInt;
+    acc.bins[slot].opticalDepth += odTerm;
+}
+
+
+// Combine into the final per-channel visibility: sum the optical depth of BALANCED occluders (faceBalance == 0,
+// every entry paired with an exit -> coeff*chord exact) and DROP unbalanced ones (an unmatched silhouette clip).
+// max(.,0) guards a tiny negative from float error; saturate guards [0,1].
+float3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){
+    float3 opticalDepth = float3(0.0, 0.0, 0.0);
+    for(uint i = 0u; i < acc.binCount; ++i){
+        if(acc.bins[i].faceBalance == 0)
+            opticalDepth += acc.bins[i].opticalDepth;
+    }
+    return saturate(acc.transmittance * exp(-max(opticalDepth, float3(0.0, 0.0, 0.0))));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -25,6 +25,7 @@
 
 #include <global/environment.h> // ReadEnvironmentVariableBuffer -- the NWB_TRANSPARENT_MULTI_SPIN_SPEED diagnostic override
 #include <cstdlib>               // std::atof
+#include <limits>                // std::numeric_limits -- the NWB_TRANSPARENT_MULTI_SPIN_ANGLE freeze sentinel
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -385,7 +386,13 @@ public:
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
-        m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * effectiveRotationSpeed();
+        // A fixed-angle override pins the scene to one orientation for deterministic A/B captures (e.g. comparing the
+        // half-res shadow upsample against the raw trace at the EXACT same frame); otherwise spin accumulates as usual.
+        const f32 frozenAngle = effectiveFrozenAngle();
+        if(IsFinite(frozenAngle))
+            m_animationTime = frozenAngle;
+        else
+            m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * effectiveRotationSpeed();
         updateTransparentSceneTransforms();
         m_world->tick(safeDelta);
         return true;
@@ -403,6 +410,19 @@ public:
             return IsFinite(parsed) && (parsed >= 0.0f) ? parsed : s_TransparentSceneRotationSpeed;
         }();
         return s_speed;
+    }
+
+    // Diagnostic override (read once): NWB_TRANSPARENT_MULTI_SPIN_ANGLE pins the scene rotation to a fixed yaw (radians)
+    // for deterministic frame-exact A/B captures. Returns a non-finite sentinel when unset so the normal spin runs.
+    static f32 effectiveFrozenAngle(){
+        static const f32 s_angle = [](){
+            char value[32] = {};
+            if(!ReadEnvironmentVariableBuffer("NWB_TRANSPARENT_MULTI_SPIN_ANGLE", value, sizeof(value)))
+                return std::numeric_limits<f32>::quiet_NaN();
+            const f32 parsed = static_cast<f32>(::std::atof(value));
+            return IsFinite(parsed) ? parsed : std::numeric_limits<f32>::quiet_NaN();
+        }();
+        return s_angle;
     }
 
 

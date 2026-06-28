@@ -91,10 +91,10 @@ float nwbShadowSmoothNormalWeight(const float3 n0, const float3 n1, const float3
 // identical HW vs SW), shadingNormal is the interpolated triangle-corner normal in that same space, and t is the WORLD
 // ray distance to the hit.
 //
-// Transparent shadow visibility uses Beer-Lambert absorption through the paired chord plus a stable normal-incidence
-// Fresnel loss on flat/hard faces. Smooth triangles can opt into vertex-normal Fresnel with smoothNormalWeight, so
-// vertex-normal authored meshes keep their soft transition while hard/faceted meshes do not imprint face-normal
-// speckles into the receiver shadow. Directional refractive focusing belongs in the caustic path.
+// Transparent shadow visibility uses Beer-Lambert absorption through the paired chord plus Fresnel loss at each
+// accepted interface. Hard/faceted triangles use the geometric face normal so their shadow keeps the authored hard
+// edge response; smooth vertex-normal triangles blend to the interpolated shading normal to match smooth meshes.
+// Directional refractive focusing belongs in the caustic path.
 //
 // Optical depth is BINNED PER OCCLUDER by instance id, and each bin keeps merged hit distances; same-occluder
 // crossings at the same t are collapsed because edge/diagonal hits can report two triangles sharing one physical
@@ -132,7 +132,7 @@ void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const 
 
     const float grazeWeight = smoothstep(0.0, 0.2, cosI);
     const float shadingCosI = nwbShadowCosineToRay(shadingNormal, rayDirection);
-    const float fresnelCosI = lerp(1.0, shadingCosI, saturate(smoothNormalWeight));
+    const float fresnelCosI = lerp(cosI, shadingCosI, saturate(smoothNormalWeight));
     acc.bins[slot].interfaceTransmittance *= nwbShadowFresnelTransmittedFraction(ior, fresnelCosI);
     acc.bins[slot].singletonFallbackChord = max(acc.bins[slot].singletonFallbackChord, NWB_SHADOW_SINGLETON_FALLBACK_CHORD * grazeWeight);
 

@@ -32,10 +32,8 @@ inline constexpr Name s_IntegrateComputeShaderName("engine/graphics/avboit/integ
 // Fallback fixed accumulate PS, used by a transparent material that declares explicit `shaders` instead of a
 // `surface` (the per-material accumulate PS generation covers `surface`-authored transparent materials).
 inline constexpr Name s_AccumulatePixelShaderName("engine/graphics/avboit/accumulate_ps");
-// NOTE: the cook-generated per-material AVBOIT accumulate/occupancy/extinction PS NAME PREFIXES are now cook-private
-// (impl/assets_material/cook.cpp) so the material cook no longer depends on this graphics-asset header (main's
-// dependency reduction). The renderer binds the generated PS via the resolved Name stored on the cooked material
-// (materialInfo.avboit{Accumulate,Occupancy,Extinction}PixelShader), not by re-deriving from a shared prefix.
+// Cook-generated per-material AVBOIT PS names are cook-private. The renderer binds them through the resolved Name
+// stored on the cooked material, not by re-deriving from a shared prefix.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

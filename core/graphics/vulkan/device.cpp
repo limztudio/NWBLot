@@ -29,8 +29,7 @@ namespace VulkanDetail{
 static constexpr AStringView s_PipelineCacheVirtualPath = "vulkan/pipeline_cache.bin";
 // A single, fixed runtime pipeline-cache volume (NOT keyed by device identity). The header UUID/vendor/device
 // check in ValidatePipelineCacheData already rejects data from a different GPU/driver, so a device or driver
-// change simply starts empty + overwrites this same volume on save -- no per-identity orphan volumes ever
-// accumulate on disk (which the old identity-hashed volume name caused on every driver update).
+// change simply starts empty + overwrites this same volume on save.
 static constexpr AStringView s_PipelineCacheVolumeName = "runtime_pipeline_cache";
 static constexpr u64 s_PipelineCacheVolumeSegmentSize = 16ull * 1024ull * 1024ull;
 static constexpr u64 s_PipelineCacheVolumeMetadataSize = 4ull * 1024ull;

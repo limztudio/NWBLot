@@ -353,12 +353,12 @@ private:
     usize m_sceneBvhNodeCapacity = 0u;
     usize m_sceneInstanceCapacity = 0u;
     u32 m_sceneBvhInstanceCount = 0u;
-    // Caustic emission targets (P1): per-frame world-space AABBs of every refractive instance, the domain the
-    // future caustic photon producer aims at. A single global list (all caustic lights share it). Resident
-    // structured SRV ({ float4 aabbMin; float4 aabbMax; }), CPU-written each frame, grows by doubling, never
-    // shrinks; the count gates caustic-light assignment together with per-light opt-in (zero refractive instances or
-    // zero opted-in lights -> zero caustic lights). m_causticTargetBoundsMin/Max hold the combined extent over all
-    // targets (for the P1 gate log); m_causticEmissionGateLogged rate-limits that log.
+    // Caustic emission targets (P1): per-frame world-space AABBs of every refractive instance, the domain the caustic
+    // photon producer aims at. A single global list is shared by all caustic lights. Resident structured SRV
+    // ({ float4 aabbMin; float4 aabbMax; }), CPU-written each frame, grows by doubling, never shrinks; the count gates
+    // caustic-light assignment together with per-light opt-in (zero refractive instances or zero opted-in lights ->
+    // zero caustic lights). m_causticTargetBoundsMin/Max hold the combined extent over all targets (for the P1 gate
+    // log); m_causticEmissionGateLogged rate-limits that log.
     Core::BufferHandle m_causticEmissionTargetBuffer;
     usize m_causticEmissionTargetCapacity = 0u;
     u32 m_causticRefractiveInstanceCount = 0u;

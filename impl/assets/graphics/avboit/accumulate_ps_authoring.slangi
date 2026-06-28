@@ -12,11 +12,10 @@
 // Engine-owned authoring header for a material's AVBOIT-accumulate pixel shader. It is the transparent-pass
 // twin of mesh/material_ps_authoring.slangi: a material's accumulate pixel shader includes this + its `.bind`
 // interface + its surface hook, and the engine owns the entry (the main below), the AVBOIT compositing math,
-// and the shaded-color path. The transparent fragment's color now comes from the SAME per-material surface hook
-// + BXDF dispatch the opaque deferred path uses (nwbMaterialSurface -> NwbBxdfSurface -> nwbDeferredDispatchBxdf)
-// instead of the old fixed vertex-color + hard-coded lambert, so a cube shows its real material color and
-// matches the colored shadow it casts. Only the shaded-color SOURCE changes; the AVBOIT accumulate targets +
-// alpha / weighted-alpha / extinction math are byte-identical to the previous fixed accumulate_ps.slang.
+// and the shaded-color path. The transparent fragment's color comes from the SAME per-material surface hook + BXDF
+// dispatch the opaque deferred path uses (nwbMaterialSurface -> NwbBxdfSurface -> nwbDeferredDispatchBxdf), so it
+// matches the colored shadow it casts. The AVBOIT accumulate targets + alpha / weighted-alpha / extinction math stay
+// owned by this header.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

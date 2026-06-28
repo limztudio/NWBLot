@@ -207,9 +207,9 @@ struct GeneratedMaterialPixelShader{
 // Generates the shadow-transmittance dispatch module (shadow/generated/transmittance_dispatch.slangi) under the
 // returned include root. The module includes each unique `.surface` (with its `.bind`, macro-isolated per id) +
 // a switch dispatch keyed by shadowTransmittanceModelId that routes a hit to that material's surface hook and
-// returns its transmittance; an unknown id resolves to float3(1) (untinted/lit -- no engine default tint). The
-// shadow trace (a later unit) includes this module. Always writes the module (empty dispatch if no materials
-// declare a surface). Run after AssignMaterialShadingModelIds + before PrepareShaderEntriesForCook.
+// returns its transmittance; an unknown id resolves to float3(1) (untinted/lit -- no engine default tint). The shadow
+// trace includes this module. Always writes the module (empty dispatch if no materials declare a surface). Run after
+// AssignMaterialShadingModelIds + before PrepareShaderEntriesForCook.
 [[nodiscard]] bool EmitShadowTransmittanceDispatchModule(
     const Path& cacheDirectory,
     AStringView configurationSafeName,

@@ -27,26 +27,29 @@ using __hidden_text_write::WriteFloat;
 using __hidden_text_write::WriteVec2;
 using __hidden_text_write::WriteVec3;
 using __hidden_text_write::WriteVec4;
+using __hidden_text_write::s_OutputFloatPrecision;
+
+static constexpr f32 s_InvertibleJointDeterminantEpsilon = 0.000000000001f;
 
 template<typename Stream>
 void WriteSkinJoints(Stream& out, const MeshSkinInfluence& skin){
-    out << "["
-        << skin.joint[0u] << ", "
-        << skin.joint[1u] << ", "
-        << skin.joint[2u] << ", "
-        << skin.joint[3u] << "]";
+    out << "[";
+    for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
+        if(i != 0u)
+            out << ", ";
+        out << skin.joint[i];
+    }
+    out << "]";
 }
 
 template<typename Stream>
 void WriteSkinWeights(Stream& out, const MeshSkinInfluence& skin){
     out << "[";
-    WriteFloat(out, skin.weight[0u]);
-    out << ", ";
-    WriteFloat(out, skin.weight[1u]);
-    out << ", ";
-    WriteFloat(out, skin.weight[2u]);
-    out << ", ";
-    WriteFloat(out, skin.weight[3u]);
+    for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
+        if(i != 0u)
+            out << ", ";
+        WriteFloat(out, skin.weight[i]);
+    }
     out << "]";
 }
 
@@ -67,7 +70,7 @@ bool InvertJointMatrix(const SIMDMatrix& matrix, SIMDMatrix& outInverse){
 
     const f32 scalarDeterminant = VectorGetX(determinant);
     return IsFinite(scalarDeterminant)
-        && Abs(scalarDeterminant) > 0.000000000001f
+        && Abs(scalarDeterminant) > s_InvertibleJointDeterminantEpsilon
         && !MatrixIsNaN(outInverse)
         && !MatrixIsInfinite(outInverse)
     ;
@@ -508,7 +511,7 @@ bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
-    file.precision(9);
+    file.precision(s_OutputFloatPrecision);
 
     file << "mesh asset;\n\n";
     WriteMeshAssetBody(file, mesh);
@@ -655,7 +658,7 @@ bool WriteSkeletonAsset(
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
-    file.precision(9);
+    file.precision(s_OutputFloatPrecision);
 
     file << "skeleton asset;\n\n";
     WriteSkeletonAssetBody(file, "asset", joints, bindPoseMatrices);
@@ -722,7 +725,7 @@ bool WriteSkinAsset(
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
-    file.precision(9);
+    file.precision(s_OutputFloatPrecision);
 
     file << "skin asset;\n\n";
     WriteSkinAssetBody(file, "asset", meshName, skeletonName, influences, inverseBindMatrices);
@@ -831,7 +834,7 @@ bool WriteModelAsset(
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
-    file.precision(9);
+    file.precision(s_OutputFloatPrecision);
 
     file << "model asset;\n\n";
     WriteModelAssetBody(file, "asset", meshName, skinName, skeletonName);
@@ -861,7 +864,7 @@ bool WriteAssetBunch(
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset bunch: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
-    file.precision(9);
+    file.precision(s_OutputFloatPrecision);
 
     file << "mesh mesh;\n\n";
     WriteMeshAssetBody(file, mesh, "mesh");

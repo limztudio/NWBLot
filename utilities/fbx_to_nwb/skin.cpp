@@ -22,9 +22,13 @@ namespace FbxSkinDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr f64 s_UniformScaleNumerator = 1.0;
+static constexpr f64 s_InvertibleMatrixDeterminantEpsilon = 0.00000001;
+static constexpr f32 s_JointMatrixRowEpsilon = 0.0001f;
+
 ufbx_matrix MakeInverseUniformScaleMatrix(const f64 scale){
     ufbx_matrix matrix = {};
-    const f64 inverseScale = 1.0 / scale;
+    const f64 inverseScale = s_UniformScaleNumerator / scale;
     matrix.m00 = inverseScale;
     matrix.m11 = inverseScale;
     matrix.m22 = inverseScale;
@@ -62,10 +66,9 @@ JointMatrix ToJointMatrix(const ufbx_matrix& matrix){
     return result;
 }
 
-bool NearlyEqualJointMatrixRows(const SIMDVector (&lhsRows)[3], const SIMDVector (&rhsRows)[3]){
-    static constexpr f32 s_Epsilon = 0.0001f;
-    const SIMDVector epsilon = VectorReplicate(s_Epsilon);
-    for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
+bool NearlyEqualJointMatrixRows(const SIMDVector (&lhsRows)[s_JointMatrixRowCount], const SIMDVector (&rhsRows)[s_JointMatrixRowCount]){
+    const SIMDVector epsilon = VectorReplicate(s_JointMatrixRowEpsilon);
+    for(usize rowIndex = 0u; rowIndex < s_JointMatrixRowCount; ++rowIndex){
         const SIMDVector difference = VectorAbs(VectorSubtract(lhsRows[rowIndex], rhsRows[rowIndex]));
         if(!Vector4LessOrEqual(difference, epsilon))
             return false;
@@ -113,7 +116,7 @@ bool FindOrAddJoint(
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster is missing a bone node"));
         return false;
     }
-    if(!FiniteUfbxMatrix(inverseBind) || Abs(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))) <= 0.00000001){
+    if(!FiniteUfbxMatrix(inverseBind) || Abs(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))) <= s_InvertibleMatrixDeterminantEpsilon){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster inverse bind matrix is not finite and invertible"));
         return false;
     }
@@ -130,12 +133,12 @@ bool FindOrAddJoint(
         const usize jointIndex = static_cast<usize>(foundJoint.value());
         NWB_ASSERT(jointIndex < context.inverseBindMatrices.size());
         NWB_ASSERT(jointIndex < context.bindPoseMatrices.size());
-        const SIMDVector existingInverseBindRows[3] = {
+        const SIMDVector existingInverseBindRows[s_JointMatrixRowCount] = {
             LoadFloat(context.inverseBindMatrices[jointIndex].rows[0u]),
             LoadFloat(context.inverseBindMatrices[jointIndex].rows[1u]),
             LoadFloat(context.inverseBindMatrices[jointIndex].rows[2u]),
         };
-        const SIMDVector convertedInverseBindRows[3] = {
+        const SIMDVector convertedInverseBindRows[s_JointMatrixRowCount] = {
             LoadFloat(convertedMatrix.rows[0u]),
             LoadFloat(convertedMatrix.rows[1u]),
             LoadFloat(convertedMatrix.rows[2u]),

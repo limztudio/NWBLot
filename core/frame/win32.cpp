@@ -40,6 +40,24 @@ namespace FrameDetail{
 // in windows, the frame is a singleton
 static Frame* s_Frame = nullptr;
 
+static constexpr isize s_PerMonitorAwareV2Context = -4;
+static constexpr UINT s_DefaultDpi = 96;
+static constexpr usize s_Win32ExtendedKeyBit = 24u;
+static constexpr usize s_Win32ScancodeShift = 16u;
+static constexpr usize s_Win32PreviousKeyStateBit = 30u;
+static constexpr usize s_Win32ScancodeMask = 0x1ffu;
+static constexpr usize s_Win32VirtualScancodeMask = 0xffu;
+static constexpr usize s_Win32WordMask = 0xffffu;
+static constexpr int s_Win32KeyDownMask = 0x8000;
+static constexpr int s_Win32KeyToggleMask = 0x0001;
+static constexpr u32 s_HighSurrogateStart = 0xd800u;
+static constexpr u32 s_HighSurrogateEnd = 0xdbffu;
+static constexpr u32 s_LowSurrogateStart = 0xdc00u;
+static constexpr u32 s_LowSurrogateEnd = 0xdfffu;
+static constexpr u32 s_SupplementaryPlaneCodePointBase = 0x10000u;
+static constexpr usize s_SurrogatePayloadBitCount = 10u;
+static constexpr u32 s_AnsiCharMask = 0xffu;
+
 
 static HMODULE GetUser32Module(){
     HMODULE module = GetModuleHandleW(L"user32.dll");
@@ -58,8 +76,7 @@ static void EnableProcessDpiAwareness(){
         reinterpret_cast<SetProcessDpiAwarenessContextFn>(GetProcAddress(user32, "SetProcessDpiAwarenessContext"))
     ;
     if(setProcessDpiAwarenessContext){
-        constexpr isize PerMonitorAwareV2 = -4;
-        if(setProcessDpiAwarenessContext(reinterpret_cast<HANDLE>(PerMonitorAwareV2)))
+        if(setProcessDpiAwarenessContext(reinterpret_cast<HANDLE>(s_PerMonitorAwareV2Context)))
             return;
     }
 
@@ -70,8 +87,6 @@ static void EnableProcessDpiAwareness(){
 }
 
 static UINT QueryInitialWindowDpi(){
-    constexpr UINT DefaultDpi = 96;
-
     HMODULE user32 = GetUser32Module();
     if(user32){
         using GetDpiForSystemFn = UINT(WINAPI*)();
@@ -85,12 +100,12 @@ static UINT QueryInitialWindowDpi(){
 
     HDC screenDc = GetDC(nullptr);
     if(!screenDc)
-        return DefaultDpi;
+        return s_DefaultDpi;
 
     const i32 dpi = GetDeviceCaps(screenDc, LOGPIXELSX);
     ReleaseDC(nullptr, screenDc);
 
-    return dpi > 0 ? static_cast<UINT>(dpi) : DefaultDpi;
+    return dpi > 0 ? static_cast<UINT>(dpi) : s_DefaultDpi;
 }
 
 static bool AdjustWindowRectForDpi(RECT& rect, DWORD style, BOOL hasMenu, DWORD styleEx, UINT dpi){
@@ -116,34 +131,34 @@ static u16 ClampInitialWindowDimension(const u16 requestedDimension, const i32 m
 }
 
 static bool IsExtendedKey(LPARAM lParam){
-    return (static_cast<usize>(lParam) & (static_cast<usize>(1) << 24)) != 0;
+    return (static_cast<usize>(lParam) & (static_cast<usize>(1) << s_Win32ExtendedKeyBit)) != 0;
 }
 
 static i32 TranslateScancode(LPARAM lParam){
-    return static_cast<i32>((static_cast<usize>(lParam) >> 16) & 0x1ffu);
+    return static_cast<i32>((static_cast<usize>(lParam) >> s_Win32ScancodeShift) & s_Win32ScancodeMask);
 }
 
 static i32 TranslateModifiers(){
     i32 mods = 0;
 
-    if(GetKeyState(VK_SHIFT) & 0x8000)
+    if(GetKeyState(VK_SHIFT) & s_Win32KeyDownMask)
         mods |= InputModifier::Shift;
-    if(GetKeyState(VK_CONTROL) & 0x8000)
+    if(GetKeyState(VK_CONTROL) & s_Win32KeyDownMask)
         mods |= InputModifier::Control;
-    if(GetKeyState(VK_MENU) & 0x8000)
+    if(GetKeyState(VK_MENU) & s_Win32KeyDownMask)
         mods |= InputModifier::Alt;
-    if((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x8000)
+    if((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & s_Win32KeyDownMask)
         mods |= InputModifier::Super;
-    if(GetKeyState(VK_CAPITAL) & 0x0001)
+    if(GetKeyState(VK_CAPITAL) & s_Win32KeyToggleMask)
         mods |= InputModifier::CapsLock;
-    if(GetKeyState(VK_NUMLOCK) & 0x0001)
+    if(GetKeyState(VK_NUMLOCK) & s_Win32KeyToggleMask)
         mods |= InputModifier::NumLock;
 
     return mods;
 }
 
 static i32 TranslateShiftKey(LPARAM lParam){
-    const UINT scancode = static_cast<UINT>((static_cast<usize>(lParam) >> 16) & 0xffu);
+    const UINT scancode = static_cast<UINT>((static_cast<usize>(lParam) >> s_Win32ScancodeShift) & s_Win32VirtualScancodeMask);
     switch(MapVirtualKeyW(scancode, MAPVK_VSC_TO_VK_EX)){
     case VK_RSHIFT:
         return Key::RightShift;
@@ -235,11 +250,11 @@ static i32 TranslateKey(WPARAM wParam, LPARAM lParam){
 }
 
 static i32 SignedLowWord(LPARAM value){
-    return static_cast<i32>(static_cast<i16>(static_cast<u16>(static_cast<usize>(value) & 0xffffu)));
+    return static_cast<i32>(static_cast<i16>(static_cast<u16>(static_cast<usize>(value) & s_Win32WordMask)));
 }
 
 static i32 SignedHighWord(LPARAM value){
-    return static_cast<i32>(static_cast<i16>(static_cast<u16>((static_cast<usize>(value) >> 16) & 0xffffu)));
+    return static_cast<i32>(static_cast<i16>(static_cast<u16>((static_cast<usize>(value) >> s_Win32ScancodeShift) & s_Win32WordMask)));
 }
 
 static i32 TranslateMouseButton(UINT message, WPARAM wParam){
@@ -283,11 +298,11 @@ static void ReleaseMouseIfNoButtonIsDown(HWND hwnd){
         return;
 
     if(
-        (GetKeyState(VK_LBUTTON) & 0x8000)
-        || (GetKeyState(VK_RBUTTON) & 0x8000)
-        || (GetKeyState(VK_MBUTTON) & 0x8000)
-        || (GetKeyState(VK_XBUTTON1) & 0x8000)
-        || (GetKeyState(VK_XBUTTON2) & 0x8000)
+        (GetKeyState(VK_LBUTTON) & s_Win32KeyDownMask)
+        || (GetKeyState(VK_RBUTTON) & s_Win32KeyDownMask)
+        || (GetKeyState(VK_MBUTTON) & s_Win32KeyDownMask)
+        || (GetKeyState(VK_XBUTTON1) & s_Win32KeyDownMask)
+        || (GetKeyState(VK_XBUTTON2) & s_Win32KeyDownMask)
     )
         return;
 
@@ -315,16 +330,16 @@ static void DispatchCharInput(Frame& frame, WPARAM wParam){
     static u16 highSurrogate = 0;
     const u32 codeUnit = static_cast<u32>(wParam);
 
-    if(codeUnit >= 0xd800u && codeUnit <= 0xdbffu){
+    if(codeUnit >= s_HighSurrogateStart && codeUnit <= s_HighSurrogateEnd){
         highSurrogate = static_cast<u16>(codeUnit);
         return;
     }
 
-    if(codeUnit >= 0xdc00u && codeUnit <= 0xdfffu){
+    if(codeUnit >= s_LowSurrogateStart && codeUnit <= s_LowSurrogateEnd){
         if(highSurrogate != 0){
-            const u32 unicode = 0x10000u
-                + ((static_cast<u32>(highSurrogate) - 0xd800u) << 10)
-                + (codeUnit - 0xdc00u)
+            const u32 unicode = s_SupplementaryPlaneCodePointBase
+                + ((static_cast<u32>(highSurrogate) - s_HighSurrogateStart) << s_SurrogatePayloadBitCount)
+                + (codeUnit - s_LowSurrogateStart)
             ;
             highSurrogate = 0;
             DispatchUnicodeInput(frame, unicode);
@@ -335,7 +350,7 @@ static void DispatchCharInput(Frame& frame, WPARAM wParam){
     highSurrogate = 0;
     DispatchUnicodeInput(frame, codeUnit);
 #else
-    DispatchUnicodeInput(frame, static_cast<u32>(wParam & 0xffu));
+    DispatchUnicodeInput(frame, static_cast<u32>(wParam & s_AnsiCharMask));
 #endif
 }
 
@@ -370,7 +385,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         return 0;
 
         case WM_KEYDOWN: {
-            const i32 action = (static_cast<usize>(lParam) & (static_cast<usize>(1) << 30))
+            const i32 action = (static_cast<usize>(lParam) & (static_cast<usize>(1) << s_Win32PreviousKeyStateBit))
                 ? InputAction::Repeat
                 : InputAction::Press
             ;
@@ -379,7 +394,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         return 0;
 
         case WM_SYSKEYDOWN: {
-            const i32 action = (static_cast<usize>(lParam) & (static_cast<usize>(1) << 30))
+            const i32 action = (static_cast<usize>(lParam) & (static_cast<usize>(1) << s_Win32PreviousKeyStateBit))
                 ? InputAction::Repeat
                 : InputAction::Press
             ;

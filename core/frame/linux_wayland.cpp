@@ -46,6 +46,21 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr i32 s_DefaultKeyRepeatRate = 25;
+static constexpr i32 s_DefaultKeyRepeatDelayMs = 600;
+static constexpr u32 s_TextInputControlCodePointLimit = 32u;
+static constexpr u32 s_TextInputDeleteCodePoint = 127u;
+static constexpr f64 s_WaylandScrollAxisUnit = 120.0;
+static constexpr i32 s_MillisecondsPerSecond = 1000;
+static constexpr i32 s_MinKeyRepeatStepMs = 1;
+static constexpr i32 s_InactivePollTimeoutMs = 10;
+static constexpr u32 s_WaylandCompositorBindVersion = 4u;
+static constexpr u32 s_WaylandOutputBindVersion = 2u;
+static constexpr u32 s_WaylandSeatBindVersion = 5u;
+static constexpr u32 s_WaylandWmBaseBindVersion = 1u;
+static constexpr u32 s_WaylandPointerFrameSeatVersion = 5u;
+static constexpr u32 s_InitialConfigureRoundtripLimit = 2u;
+
 struct WaylandContext{
     Frame* frame = nullptr;
 
@@ -73,8 +88,8 @@ struct WaylandContext{
     i32 bufferScale = 1;
     u32 seatVersion = 0;
 
-    i32 repeatRate = 25;
-    i32 repeatDelayMs = 600;
+    i32 repeatRate = s_DefaultKeyRepeatRate;
+    i32 repeatDelayMs = s_DefaultKeyRepeatDelayMs;
     u32 repeatKeycode = 0;
     i32 repeatKey = Key::Unknown;
     i32 repeatScancode = 0;
@@ -195,7 +210,7 @@ static void DispatchTextInput(InputDispatcher& input, const WaylandContext& cont
         return;
 
     const u32 unicode = xkb_state_key_get_utf32(context.xkbState, keycode);
-    if(unicode < 32 || unicode == 127)
+    if(unicode < s_TextInputControlCodePointLimit || unicode == s_TextInputDeleteCodePoint)
         return;
 
     input.keyboardCharInput(unicode, mods);
@@ -205,8 +220,8 @@ static void DispatchScroll(WaylandContext& context){
     if(!context.scrollPending || !context.frame)
         return;
 
-    f64 xoffset = context.scrollDiscreteX != 0 ? static_cast<f64>(context.scrollDiscreteX) : (context.scrollX / 120.0);
-    f64 yoffset = context.scrollDiscreteY != 0 ? -static_cast<f64>(context.scrollDiscreteY) : (-context.scrollY / 120.0);
+    f64 xoffset = context.scrollDiscreteX != 0 ? static_cast<f64>(context.scrollDiscreteX) : (context.scrollX / s_WaylandScrollAxisUnit);
+    f64 yoffset = context.scrollDiscreteY != 0 ? -static_cast<f64>(context.scrollDiscreteY) : (-context.scrollY / s_WaylandScrollAxisUnit);
 
     if(xoffset != 0.0 || yoffset != 0.0)
         context.frame->input().mouseScrollUpdate(xoffset, yoffset);
@@ -366,21 +381,21 @@ static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const 
     auto& context = *static_cast<WaylandContext*>(data);
 
     if(NWB_STRCMP(interface, wl_compositor_interface.name) == 0){
-        const u32 bindVersion = version < 4 ? version : 4;
+        const u32 bindVersion = version < s_WaylandCompositorBindVersion ? version : s_WaylandCompositorBindVersion;
         context.compositor = static_cast<wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, bindVersion));
     }
     else if(NWB_STRCMP(interface, wl_output_interface.name) == 0 && !context.output){
-        const u32 bindVersion = version < 2 ? version : 2;
+        const u32 bindVersion = version < s_WaylandOutputBindVersion ? version : s_WaylandOutputBindVersion;
         context.output = static_cast<wl_output*>(wl_registry_bind(registry, name, &wl_output_interface, bindVersion));
         wl_output_add_listener(context.output, &s_OutputListener, &context);
     }
     else if(NWB_STRCMP(interface, wl_seat_interface.name) == 0){
-        const u32 bindVersion = version < 5 ? version : 5;
+        const u32 bindVersion = version < s_WaylandSeatBindVersion ? version : s_WaylandSeatBindVersion;
         context.seat = static_cast<wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, bindVersion));
         context.seatVersion = bindVersion;
     }
     else if(NWB_STRCMP(interface, xdg_wm_base_interface.name) == 0){
-        const u32 bindVersion = version < 1 ? version : 1;
+        const u32 bindVersion = version < s_WaylandWmBaseBindVersion ? version : s_WaylandWmBaseBindVersion;
         context.wmBase = static_cast<xdg_wm_base*>(wl_registry_bind(registry, name, &xdg_wm_base_interface, bindVersion));
     }
 }
@@ -531,7 +546,7 @@ static void OnPointerAxis(void* data, wl_pointer* pointer, u32 time, u32 axis, w
     else if(axis == WL_POINTER_AXIS_VERTICAL_SCROLL)
         context.scrollY += delta;
 
-    if(context.seatVersion < 5)
+    if(context.seatVersion < s_WaylandPointerFrameSeatVersion)
         DispatchScroll(context);
 }
 
@@ -867,8 +882,9 @@ static void ProcessKeyRepeat(WaylandContext& context){
     if(now < context.nextRepeatTime)
         return;
 
+    const i32 candidateStepMs = context.repeatRate > 0 ? (s_MillisecondsPerSecond / context.repeatRate) : 0;
     const i32 stepMs = context.repeatRate > 0
-        ? ((1000 / context.repeatRate) > 0 ? (1000 / context.repeatRate) : 1)
+        ? (candidateStepMs > 0 ? candidateStepMs : s_MinKeyRepeatStepMs)
         : 0
     ;
     do{
@@ -984,7 +1000,7 @@ bool InitWaylandFrame(Frame& frame){
         return false;
     }
 
-    for(u32 i = 0; i < 2 && !context->configured; ++i){
+    for(u32 i = 0; i < s_InitialConfigureRoundtripLimit && !context->configured; ++i){
         if(!RoundtripDisplay(context->display, NWB_TEXT("initial configure roundtrip"))){
             CleanupWaylandFrame(frame);
             return false;
@@ -1025,10 +1041,10 @@ bool RunWaylandFrame(Frame& frame){
         bool windowVisible = context->visible && frameData.width() > 0 && frameData.height() > 0;
         bool windowIsInFocus = frameData.isActive();
 
-        i32 timeoutMs = (!windowVisible || !windowIsInFocus) ? 10 : 0;
+        i32 timeoutMs = (!windowVisible || !windowIsInFocus) ? s_InactivePollTimeoutMs : 0;
         if(context->repeatPending && timeoutMs > 0){
             const f64 secondsUntilRepeat = DurationInSeconds<f64>(context->nextRepeatTime, TimerNow());
-            const i32 repeatTimeoutMs = secondsUntilRepeat <= 0.0 ? 0 : static_cast<i32>(Ceil(secondsUntilRepeat * 1000.0));
+            const i32 repeatTimeoutMs = secondsUntilRepeat <= 0.0 ? 0 : static_cast<i32>(Ceil(secondsUntilRepeat * static_cast<f64>(s_MillisecondsPerSecond)));
             timeoutMs = timeoutMs < repeatTimeoutMs ? timeoutMs : repeatTimeoutMs;
         }
 

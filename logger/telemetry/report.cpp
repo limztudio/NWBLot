@@ -23,6 +23,8 @@ namespace __hidden_telemetry_report{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr f64 s_MillisecondsPerSecond = 1000.0;
+
 template<typename... Args>
 void AppendFormat(TelemetryArena& arena, AString<TelemetryArena>& out, AFormatString<Args...> fmt, Args&&... args){
     out += StringFormat(arena, fmt, Forward<Args>(args)...);
@@ -175,7 +177,7 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
             label.reserve(labelView.size() + 16u);
             label.append(labelView.data(), labelView.size());
             label += '\n';
-            label += StringFormat(arena, "{:.3f} ms", timed.value() * 1000.0);
+            label += StringFormat(arena, "{:.3f} ms", timed.value() * s_MillisecondsPerSecond);
 
             AppendDotQuotedText(out, AStringView(label.data(), label.size()));
         }

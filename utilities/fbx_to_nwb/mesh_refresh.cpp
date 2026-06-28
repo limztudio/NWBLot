@@ -28,6 +28,7 @@ using __hidden_text_write::WriteFloat;
 using __hidden_text_write::WriteVec2;
 using __hidden_text_write::WriteVec3;
 using __hidden_text_write::WriteVec4;
+using __hidden_text_write::s_OutputFloatPrecision;
 
 static constexpr AStringView s_MeshMetaKind = "Mesh";
 static constexpr usize s_DeduplicateParallelGrainSize = 4096u;
@@ -443,11 +444,12 @@ template<typename ElementT, usize ComponentCount>
     outVertexRefs.reserve(list.size());
     for(usize i = 0u; i < list.size(); ++i){
         const Core::Metascript::Value& value = list[i];
-        if(!value.isList() || value.asList().size() != 5u){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs[{}]' must contain 5 integer stream indices")
+        if(!value.isList() || value.asList().size() != s_AuthoredVertexRefComponentCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs[{}]' must contain {} integer stream indices")
                 , StringConvert(s_MeshMetaKind)
                 , PathToString<tchar>(nwbFilePath)
                 , i
+                , s_AuthoredVertexRefComponentCount
             );
             return false;
         }
@@ -461,7 +463,7 @@ template<typename ElementT, usize ComponentCount>
             &ref.uv0,
             &ref.color,
         };
-        for(usize componentIndex = 0u; componentIndex < 5u; ++componentIndex){
+        for(usize componentIndex = 0u; componentIndex < s_AuthoredVertexRefComponentCount; ++componentIndex){
             AStringStream label;
             label << "vertex_refs[" << i << "][" << componentIndex << "]";
             if(!ParseU32(nwbFilePath, components[componentIndex], label.str(), *componentValues[componentIndex]))
@@ -874,7 +876,7 @@ template<typename ElementT, usize ComponentCount>
 template<typename Value, typename WriteValue>
 [[nodiscard]] AString WriteValueList(const UtilityVector<Value>& values, WriteValue&& writeValue){
     AStringStream out;
-    out.precision(9);
+    out.precision(s_OutputFloatPrecision);
     out << "[\n";
     for(const Value& value : values){
         out << "    ";
@@ -887,9 +889,9 @@ template<typename Value, typename WriteValue>
 
 [[nodiscard]] AString WriteIndexList(const UtilityVector<u32>& indices){
     AStringStream out;
-    out.precision(9);
+    out.precision(s_OutputFloatPrecision);
     out << "[\n";
-    for(usize i = 0u; i < indices.size(); i += 3u)
+    for(usize i = 0u; i < indices.size(); i += s_TriangleIndexCount)
         out << "    [" << indices[i] << ", " << indices[i + 1u] << ", " << indices[i + 2u] << "],\n";
     out << "]";
     return out.str();
@@ -897,7 +899,7 @@ template<typename Value, typename WriteValue>
 
 [[nodiscard]] AString WriteVertexRefList(const UtilityVector<SourceVertexRef>& refs){
     AStringStream out;
-    out.precision(9);
+    out.precision(s_OutputFloatPrecision);
     out << "[\n";
     for(const SourceVertexRef& ref : refs){
         out
@@ -916,23 +918,21 @@ template<typename Value, typename WriteValue>
 
 [[nodiscard]] AString WriteSkinInfluenceList(const UtilityVector<MeshSkinInfluence>& influences){
     AStringStream out;
-    out.precision(9);
+    out.precision(s_OutputFloatPrecision);
     out << "[\n";
     for(const MeshSkinInfluence& influence : influences){
-        out
-            << "    { \"joints\": ["
-            << influence.joint[0u] << ", "
-            << influence.joint[1u] << ", "
-            << influence.joint[2u] << ", "
-            << influence.joint[3u] << "], \"weights\": ["
-        ;
-        WriteFloat(out, influence.weight[0u]);
-        out << ", ";
-        WriteFloat(out, influence.weight[1u]);
-        out << ", ";
-        WriteFloat(out, influence.weight[2u]);
-        out << ", ";
-        WriteFloat(out, influence.weight[3u]);
+        out << "    { \"joints\": [";
+        for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
+            if(i != 0u)
+                out << ", ";
+            out << influence.joint[i];
+        }
+        out << "], \"weights\": [";
+        for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
+            if(i != 0u)
+                out << ", ";
+            WriteFloat(out, influence.weight[i]);
+        }
         out << "] },\n";
     }
     out << "]";

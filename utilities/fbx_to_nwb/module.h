@@ -21,18 +21,24 @@ using Vec2 = Float2U;
 using Vec3 = Float3U;
 using Vec4 = Float4U;
 
+static constexpr usize s_Vector4ComponentCount = 4u;
+static constexpr usize s_MeshSkinInfluenceCount = s_Vector4ComponentCount;
+static constexpr usize s_JointMatrixRowCount = 3u;
+static constexpr usize s_TriangleIndexCount = 3u;
+static constexpr usize s_AuthoredVertexRefComponentCount = 5u;
+
 struct MeshSkinInfluence{
-    u16 joint[4] = {};
-    f32 weight[4] = {};
+    u16 joint[s_MeshSkinInfluenceCount] = {};
+    f32 weight[s_MeshSkinInfluenceCount] = {};
 };
-static_assert(sizeof(MeshSkinInfluence) == sizeof(u16) * 4u + sizeof(f32) * 4u);
+static_assert(sizeof(MeshSkinInfluence) == sizeof(u16) * s_MeshSkinInfluenceCount + sizeof(f32) * s_MeshSkinInfluenceCount);
 static_assert(alignof(MeshSkinInfluence) == alignof(f32));
 static_assert(IsTriviallyCopyable_V<MeshSkinInfluence>);
 
 struct JointMatrix{
-    Vec4 rows[3];
+    Vec4 rows[s_JointMatrixRowCount];
 };
-static_assert(sizeof(JointMatrix) == sizeof(f32) * 12u);
+static_assert(sizeof(JointMatrix) == sizeof(f32) * s_JointMatrixRowCount * s_Vector4ComponentCount);
 static_assert(alignof(JointMatrix) == alignof(f32));
 static_assert(IsTriviallyCopyable_V<JointMatrix>);
 
@@ -116,6 +122,7 @@ struct SourceTangentReport{
 
 
 static constexpr f64 s_DefaultTriangleAreaLengthSquaredEpsilon = 1.0e-20;
+static constexpr f64 s_DefaultImportScale = 1.0;
 
 struct ImportOptions{
     AString inputPath;
@@ -125,7 +132,7 @@ struct ImportOptions{
     AString meshSelector = "all";
     AString normalMode = "imported";
     AString defaultColorText = "1,1,1,1";
-    f64 scale = 1.0;
+    f64 scale = s_DefaultImportScale;
     f64 triangleAreaLengthSquaredEpsilon = s_DefaultTriangleAreaLengthSquaredEpsilon;
     bool preserveSpace = false;
     bool includeHidden = false;

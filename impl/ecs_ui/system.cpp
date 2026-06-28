@@ -25,6 +25,9 @@ namespace __hidden_ui{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr f32 s_FallbackDeltaSeconds = 1.0f / 60.0f;
+static constexpr f32 s_DefaultFramebufferScale = 1.0f;
+
 static void DrawCallbackResetRenderState(const ImDrawList*, const ImDrawCmd*){}
 
 static bool HasTextureRequests(const ImDrawData& drawData){
@@ -154,7 +157,7 @@ void UiSystem::beginFrame(const f32 delta){
     if(m_frameStarted && !m_frameFinished)
         finishFrame();
 
-    m_deltaSeconds = IsFinite(delta) && delta > 0.0f ? delta : (1.0f / 60.0f);
+    m_deltaSeconds = IsFinite(delta) && delta > 0.0f ? delta : __hidden_ui::s_FallbackDeltaSeconds;
 
     i32 windowWidth = 0;
     i32 windowHeight = 0;
@@ -165,7 +168,7 @@ void UiSystem::beginFrame(const f32 delta){
         static_cast<f32>(Max(windowWidth, 0)),
         static_cast<f32>(Max(windowHeight, 0))
     );
-    io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+    io.DisplayFramebufferScale = ImVec2(__hidden_ui::s_DefaultFramebufferScale, __hidden_ui::s_DefaultFramebufferScale);
     io.DeltaTime = m_deltaSeconds;
 
     ImGui::NewFrame();

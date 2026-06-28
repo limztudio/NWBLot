@@ -1585,8 +1585,10 @@ static bool FindOrBuildMaterialBindTypedLayoutImpl(
     const usize cacheIndex = inOutCache.entries.size();
     inOutCache.entries.emplace_back(inOutCache.entries.get_allocator().arena());
     MaterialBindTypedLayout& layout = inOutCache.entries.back();
-    if(!BuildMaterialBindTypedLayoutImpl(bindEntry, materialInterface, layout, scratchArena))
+    if(!BuildMaterialBindTypedLayoutImpl(bindEntry, materialInterface, layout, scratchArena)){
+        inOutCache.entries.pop_back();
         return false;
+    }
 
     if(!inOutCache.lookup.emplace(materialInterface, cacheIndex).second){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: duplicate cache entry for interface '{}'")

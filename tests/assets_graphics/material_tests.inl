@@ -1336,8 +1336,45 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'")));
 
+    const Name cacheInterface("project/material_interfaces/test_surface");
+    NWB::Impl::MaterialBindTypedLayoutCache layoutCache(testArena.arena);
+    const NWB::Impl::MaterialBindTypedLayout* cachedLayout = nullptr;
+    EXPECT_FALSE(NWB::Impl::FindOrBuildMaterialBindTypedLayout(
+        cacheInterface,
+        float1DefaultEntry,
+        layoutCache,
+        cachedLayout,
+        scratchArena
+    ));
+    EXPECT_EQ(cachedLayout, nullptr);
+    EXPECT_TRUE(layoutCache.entries.empty());
+    EXPECT_TRUE(layoutCache.lookup.empty());
+
+    Path validCacheRoot(testArena.arena);
+    NWB::Impl::MaterialBindEntry validCacheEntry(testArena.arena);
+    EXPECT_TRUE(ParseMaterialBindFromText(
+        testArena,
+        s_MinimalMaterialBindSource,
+        "material_bind_cache_valid_after_failed_layout",
+        validCacheEntry,
+        validCacheRoot,
+        scratchArena
+    ));
+    validCacheEntry.virtualPath = "project/material_interfaces/test_surface";
+    EXPECT_TRUE(NWB::Impl::FindOrBuildMaterialBindTypedLayout(
+        cacheInterface,
+        validCacheEntry,
+        layoutCache,
+        cachedLayout,
+        scratchArena
+    ));
+    EXPECT_NE(cachedLayout, nullptr);
+    EXPECT_EQ(layoutCache.entries.size(), 1u);
+    EXPECT_EQ(layoutCache.lookup.size(), 1u);
+
     ErrorCode removeErrorCode;
     EXPECT_TRUE(RemoveAllIfExists(float1DefaultRoot, removeErrorCode));
+    EXPECT_TRUE(RemoveAllIfExists(validCacheRoot, removeErrorCode));
 #endif
 }
 

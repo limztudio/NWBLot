@@ -38,6 +38,10 @@
 // Per-mesh raw object-space position byte buffer (slot k = mesh k, float3 at vertexIndex * 12), for the any-hit's
 // geometric face-normal derivation; indexed by the same i0/i1/i2 the index buffer yields.
 #define NWB_SHADOW_RT_BINDING_MESH_POSITIONS 12
+// The HALF-res ray-traced visibility, read as an SRV by the edge-adaptive resolve pass (shadow_resolve_cs) -- which
+// shares the whole trace binding set (it RE-TRACES silhouette pixels at full-res) and additionally reads this to
+// bilinear-fill the flat interior. ONLY the resolve binding layout/set declares this slot; the half-res trace does not.
+#define NWB_SHADOW_RT_BINDING_HALF_VISIBILITY 13
 
 // Maximum distinct meshes the per-mesh descriptor arrays (index + attribute + position) can address in one frame;
 // meshes beyond it cast a colorless (opaque) shadow that frame (logged once). The hardware shadow trace is now an
@@ -50,21 +54,8 @@
 // Workgroup size of the hardware RayQuery shadow trace (shadow_rayquery_cs): one thread per HALF-res shadow pixel.
 #define NWB_SHADOW_RT_GROUP_SIZE 8
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Shadow UPSAMPLE pass (its own compute pipeline): the ray-traced shadow visibility is computed at HALF resolution
-// (1/4 the rays), then this pass edge-aware (world-distance bilateral) upsamples it into the full-res shadow-visibility
-// Texture2DArray the deferred lighting samples. Weighting each half-res tap by similarity to the full-res receiver +
-// dropping background taps keeps the shadow confined to its surface (no bleed across silhouettes).
-#define NWB_SHADOW_UPSAMPLE_SET 0
-#define NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_WORLD_POSITION 0
-#define NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_NORMAL 1        // G-buffer normal: the plane/normal edge-stop (no blur across silhouettes)
-#define NWB_SHADOW_UPSAMPLE_BINDING_GBUFFER_DEPTH 2
-#define NWB_SHADOW_UPSAMPLE_BINDING_HALF_VISIBILITY 3   // half-res Texture2DArray SRV (input)
-#define NWB_SHADOW_UPSAMPLE_BINDING_FULL_VISIBILITY 4   // full-res Texture2DArray UAV (output, lighting reads this)
-#define NWB_SHADOW_UPSAMPLE_GROUP_SIZE 8
+// Workgroup size of the edge-adaptive shadow resolve (shadow_resolve_cs): one thread per FULL-res shadow pixel.
+#define NWB_SHADOW_RT_RESOLVE_GROUP_SIZE 8
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

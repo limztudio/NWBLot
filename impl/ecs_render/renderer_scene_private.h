@@ -143,9 +143,10 @@ inline bool CausticLightEnabled(const SceneLightGpuData& light){
 // uses, but WITHOUT the screen-coverage weighting (the caustic budget is aimed at the refractive occluders, not
 // the camera). Higher = more worth a scarce caustic slot.
 inline f32 CausticSlotImportance(const SceneLightGpuData& light){
-    const f32 luminance = 0.2126f * light.colorIntensity.x + 0.7152f * light.colorIntensity.y + 0.0722f * light.colorIntensity.z;
-    const f32 intensity = light.colorIntensity.w > 0.f ? light.colorIntensity.w : 0.f;
-    return luminance * intensity;
+    const SIMDVector colorIntensity = LoadFloat(light.colorIntensity);
+    const SIMDVector luminance = Vector3Dot(colorIntensity, VectorSet(0.2126f, 0.7152f, 0.0722f, 0.0f));
+    const SIMDVector intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
+    return VectorGetX(VectorMultiply(luminance, intensity));
 }
 
 // Assigns the bounded pool of NWB_SCENE_CAUSTIC_SLOT_COUNT caustic slots to the most important caustic-enabled,

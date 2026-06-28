@@ -59,19 +59,97 @@ float3 nwbShadowResolveDecodeNormal(const int2 texel){
     return normalize(g_NwbShadowGBufferNormal.Load(int3(texel, 0)).xyz * 2.0 - 1.0);
 }
 
+struct NwbShadowResolveSurfaceBasis{
+    float3 worldPosition;
+    float3 normal;
+    float3 dxWorld;
+    float3 dyWorld;
+};
+
+bool nwbShadowResolveNeighbourUsable(const int2 texel, const float3 centerNormal){
+    if(g_NwbShadowGBufferDepth.Load(int3(texel, 0)).r >= 0.999999)
+        return false;
+    return dot(centerNormal, nwbShadowResolveDecodeNormal(texel)) > 0.85;
+}
+
+// Estimate the receiver-plane world-space footprint of one full-res pixel from the local G-buffer. Edge retrace
+// anti-aliases by tracing a few subpixel positions through this basis; if a neighbour crosses a geometry edge, that
+// axis falls back to a one-sided or zero derivative so the samples stay tied to the current receiver.
+NwbShadowResolveSurfaceBasis nwbShadowResolveLoadSurfaceBasis(const int2 fullTexel){
+    const int fw = (int)g_NwbShadowResolvePushConstants.width;
+    const int fh = (int)g_NwbShadowResolvePushConstants.height;
+
+    NwbShadowResolveSurfaceBasis basis;
+    basis.worldPosition = g_NwbShadowGBufferWorldPosition.Load(int3(fullTexel, 0)).xyz;
+    basis.normal = nwbShadowResolveDecodeNormal(fullTexel);
+    basis.dxWorld = float3(0.0, 0.0, 0.0);
+    basis.dyWorld = float3(0.0, 0.0, 0.0);
+
+    const int2 leftTexel = int2(max(fullTexel.x - 1, 0), fullTexel.y);
+    const int2 rightTexel = int2(min(fullTexel.x + 1, fw - 1), fullTexel.y);
+    const int2 upTexel = int2(fullTexel.x, max(fullTexel.y - 1, 0));
+    const int2 downTexel = int2(fullTexel.x, min(fullTexel.y + 1, fh - 1));
+
+    const bool hasLeft = leftTexel.x != fullTexel.x && nwbShadowResolveNeighbourUsable(leftTexel, basis.normal);
+    const bool hasRight = rightTexel.x != fullTexel.x && nwbShadowResolveNeighbourUsable(rightTexel, basis.normal);
+    const bool hasUp = upTexel.y != fullTexel.y && nwbShadowResolveNeighbourUsable(upTexel, basis.normal);
+    const bool hasDown = downTexel.y != fullTexel.y && nwbShadowResolveNeighbourUsable(downTexel, basis.normal);
+
+    if(hasLeft && hasRight){
+        const float3 leftWorld = g_NwbShadowGBufferWorldPosition.Load(int3(leftTexel, 0)).xyz;
+        const float3 rightWorld = g_NwbShadowGBufferWorldPosition.Load(int3(rightTexel, 0)).xyz;
+        basis.dxWorld = (rightWorld - leftWorld) * 0.5;
+    }
+    else if(hasRight){
+        const float3 rightWorld = g_NwbShadowGBufferWorldPosition.Load(int3(rightTexel, 0)).xyz;
+        basis.dxWorld = rightWorld - basis.worldPosition;
+    }
+    else if(hasLeft){
+        const float3 leftWorld = g_NwbShadowGBufferWorldPosition.Load(int3(leftTexel, 0)).xyz;
+        basis.dxWorld = basis.worldPosition - leftWorld;
+    }
+
+    if(hasUp && hasDown){
+        const float3 upWorld = g_NwbShadowGBufferWorldPosition.Load(int3(upTexel, 0)).xyz;
+        const float3 downWorld = g_NwbShadowGBufferWorldPosition.Load(int3(downTexel, 0)).xyz;
+        basis.dyWorld = (downWorld - upWorld) * 0.5;
+    }
+    else if(hasDown){
+        const float3 downWorld = g_NwbShadowGBufferWorldPosition.Load(int3(downTexel, 0)).xyz;
+        basis.dyWorld = downWorld - basis.worldPosition;
+    }
+    else if(hasUp){
+        const float3 upWorld = g_NwbShadowGBufferWorldPosition.Load(int3(upTexel, 0)).xyz;
+        basis.dyWorld = basis.worldPosition - upWorld;
+    }
+
+    return basis;
+}
+
 // RE-TRACE this full-res pixel's occlusion ray for every active light slot and write the crisp colored visibility.
-// Uses the pixel's OWN full-res G-buffer surface (not the half-res representative texel), so the silhouette resolves on
-// the full-res grid. Identical physics to the half-res trace (shared nwbShadowRqLightVisible).
+// Uses the pixel's OWN full-res G-buffer surface (not the half-res representative texel), and averages four subpixel
+// receiver positions so transparent shadow silhouettes resolve as an anti-aliased full-res edge rather than a
+// point-sampled stair step. Identical physics to the half-res trace (shared nwbShadowRqLightVisible).
 void nwbShadowResolveRetrace(const uint2 pixel, const int2 fullTexel, const uint slotCount){
-    const float3 worldPosition = g_NwbShadowGBufferWorldPosition.Load(int3(fullTexel, 0)).xyz;
-    const float3 normal = nwbShadowResolveDecodeNormal(fullTexel);
+    const NwbShadowResolveSurfaceBasis basis = nwbShadowResolveLoadSurfaceBasis(fullTexel);
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
+    const float2 offsets[4] = {
+        float2(-0.25, -0.25),
+        float2( 0.25, -0.25),
+        float2(-0.25,  0.25),
+        float2( 0.25,  0.25)
+    };
     for(uint i = 0u; i < lightCount; ++i){
         const float slot = g_NwbSceneLights[i].params.z;
         if(slot < 0.0 || (uint)slot >= slotCount)
             continue;
-        const float3 transmittance = nwbShadowRqLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
-        g_NwbShadowVisibility[uint3(pixel, uint(slot))] = float4(transmittance, 1.0);
+        float3 transmittance = float3(0.0, 0.0, 0.0);
+        [unroll] for(uint sampleIndex = 0u; sampleIndex < 4u; ++sampleIndex){
+            const float2 offset = offsets[sampleIndex];
+            const float3 sampleWorldPosition = basis.worldPosition + basis.dxWorld * offset.x + basis.dyWorld * offset.y;
+            transmittance += nwbShadowRqLightVisible(sampleWorldPosition, basis.normal, g_NwbSceneLights[i]);
+        }
+        g_NwbShadowVisibility[uint3(pixel, uint(slot))] = float4(saturate(transmittance * 0.25), 1.0);
     }
 }
 

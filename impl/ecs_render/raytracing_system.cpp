@@ -1274,17 +1274,16 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         // Resolve only the slots that actually hold a light this frame (the rest stay at the cleared white default);
         // processing all NWB_SCENE_SHADOW_SLOT_COUNT layers would multiply the resolve's array reads ~8x.
         resolvePush.slotCount = rayTracingState().m_shadowSlotCount;
-        // Edge threshold: only half-res taps that disagree by MORE than this (per channel) re-trace at full-res. It
-        // must sit ABOVE the smooth colored-shadow BODY gradient (a few % per half-texel) but BELOW a true silhouette /
-        // colored-overlap transition (tens of %), so only the thin silhouette band re-traces -- keeping the full-res
-        // ray count (and GPU time) bounded. Too low -> nearly every shadow pixel re-traces (the whole receiver) and the
-        // pass balloons toward a full-res trace; too high -> the silhouette stays half-res-coarse.
+        // Edge threshold: only half-res taps that disagree by MORE than this (per channel) re-trace at full-res. Keep
+        // this low for transparent colored shadows: their silhouettes can be low-contrast after tint/tonemap, and a
+        // high threshold lets the half-res footprint remain visible. The resolve's retrace path now anti-aliases with
+        // four subpixel rays, so the extra edge coverage is a better trade than leaving blocky colored-shadow islands.
         static const f32 s_edgeThreshold = [](){
             char value[32] = {};
             if(!ReadEnvironmentVariableBuffer("NWB_SHADOW_RESOLVE_EDGE_THRESHOLD", value, sizeof(value)))
-                return 0.10f;
+                return 0.02f;
             const f32 parsed = static_cast<f32>(::std::atof(value));
-            return (parsed > 0.0f && parsed <= 1.0f) ? parsed : 0.10f;
+            return (parsed > 0.0f && parsed <= 1.0f) ? parsed : 0.02f;
         }();
         resolvePush.edgeThreshold = s_edgeThreshold;
 

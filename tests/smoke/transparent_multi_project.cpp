@@ -225,7 +225,7 @@ private:
 
         // Force ray-tracing emulation so the software shadow path runs even on RT-capable hardware; for caustic-focused
         // builds this also A/Bs the SW caustic producer against the hardware ray-traced producer.
-#if defined(NWB_TRANSPARENT_MULTI_FORCE_RT_EMULATION)
+#if defined(NWB_TRANSPARENT_MULTI_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
         context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingAccelStruct, true);
         context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingPipeline, true);
         context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayQuery, true);

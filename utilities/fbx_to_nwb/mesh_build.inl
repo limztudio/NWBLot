@@ -32,7 +32,7 @@ template<typename VisitTriangle>
             if(flipWinding)
                 Swap(cornerIndices[1], cornerIndices[2]);
 
-            for(const u32 cornerIndex : cornerIndices){
+            for([[maybe_unused]] const u32 cornerIndex : cornerIndices){
                 NWB_ASSERT(cornerIndex < mesh.vertex_indices.count);
             }
 

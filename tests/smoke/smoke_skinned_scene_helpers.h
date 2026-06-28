@@ -109,7 +109,7 @@ inline void DestroySmokeSkinnedRenderWorld(
 
     const Name materialInterface(materialInterfacePath);
     entity.addComponent<Impl::MaterialInstanceComponent>(arena, materialInterface);
-    const bool tintApplied = Impl::SetMaterialMutableFloat4(
+    const bool tintApplied = Impl::SetMaterialMutableHalf4(
         world,
         entity.id(),
         materialInterface,

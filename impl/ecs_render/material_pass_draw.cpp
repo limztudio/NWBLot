@@ -44,8 +44,8 @@ struct MaterialPassCsgBindingSets{
 }
 
 static void AssertCsgBindingSetsReady(
-    const MaterialPipelineCsgBindingUse& csgBindingUse,
-    const MaterialPassCsgBindingSets& bindingSets
+    [[maybe_unused]] const MaterialPipelineCsgBindingUse& csgBindingUse,
+    [[maybe_unused]] const MaterialPassCsgBindingSets& bindingSets
 ){
     NWB_ASSERT(!csgBindingUse.clip || bindingSets.clip);
     NWB_ASSERT(!csgBindingUse.receiverSurface || bindingSets.receiverSurface);

@@ -211,6 +211,22 @@ TEST(EcsGraphics, MaterialInstanceComponentSetters){
     EXPECT_EQ(materialInstance.overrides[1u].value.raw[1u], TestFloatBits(0.5f));
     EXPECT_EQ(materialInstance.overrides[1u].value.raw[2u], TestFloatBits(0.25f));
     EXPECT_EQ(materialInstance.overrides[1u].value.raw[3u], TestFloatBits(0.125f));
+
+    EXPECT_TRUE(NWB::Impl::SetMaterialMutableHalf4(
+        testWorld.world,
+        entity.id(),
+        materialInterface,
+        "runtime.color_tint",
+        Float4(1.0f, 0.5f, 0.25f, 0.125f)
+    ));
+    const NWB::Impl::MaterialInstanceParameter& half4Override = materialInstance.overrides[2u];
+    const Half4U expectedHalf4 = MakeHalf4U(1.0f, 0.5f, 0.25f, 0.125f);
+    EXPECT_EQ(materialInstance.overrides.size(), 3u);
+    EXPECT_EQ(materialInstance.revision, 4u);
+    EXPECT_EQ(half4Override.parameterName, Name("runtime.color_tint"));
+    EXPECT_EQ(half4Override.fieldType, NWB::Impl::MaterialLayoutFieldType::Half4);
+    EXPECT_EQ(half4Override.value.raw[0u], static_cast<u32>(expectedHalf4.x) | (static_cast<u32>(expectedHalf4.y) << 16u));
+    EXPECT_EQ(half4Override.value.raw[1u], static_cast<u32>(expectedHalf4.z) | (static_cast<u32>(expectedHalf4.w) << 16u));
 }
 
 TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){

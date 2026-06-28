@@ -116,6 +116,18 @@ void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphP
 
 using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, TelemetryArena>;
 
+[[nodiscard]] usize EstimatePerfCsvReserve(const usize eventCount)noexcept{
+    return 128u + eventCount * 128u;
+}
+
+[[nodiscard]] usize EstimateTimedGraphDotReserve(const Telemetry::FrameGraphPayload& graph)noexcept{
+    usize labelBytes = 0u;
+    for(const Telemetry::FrameGraphNodePayload& node : graph.nodes)
+        labelBytes += node.label.size();
+
+    return 96u + graph.nodes.size() * 64u + graph.edges.size() * 40u + labelBytes;
+}
+
 [[nodiscard]] const char* FrameGraphNodeShape(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
     switch(kind){
     case Telemetry::FrameGraphNodeKind::Resource:
@@ -147,6 +159,7 @@ using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, Telemetry
 // shared between graph nodes and perf-timing scopes) and emits a Graphviz DOT timed frame graph.
 void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayload& graph, const GraphTimingMap& timing, AString<TelemetryArena>& out){
     out.clear();
+    out.reserve(EstimateTimedGraphDotReserve(graph));
     out += "digraph frame_graph {\n";
     out += "  rankdir=LR;\n";
     out += "  node [shape=box, fontname=\"monospace\"];\n";
@@ -154,16 +167,20 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
     for(usize i = 0u; i < graph.nodes.size(); ++i){
         const Telemetry::FrameGraphNodePayload& node = graph.nodes[i];
 
-        AString<TelemetryArena> label(arena);
-        label.append(node.label.data(), node.label.size());
         const auto timed = timing.find(node.name);
+        const AStringView labelView(node.label.data(), node.label.size());
+        AppendFormat(arena, out, "  n{} [shape={}, label=", i, FrameGraphNodeShape(node.kind));
         if(timed != timing.end()){
+            AString<TelemetryArena> label(arena);
+            label.reserve(labelView.size() + 16u);
+            label.append(labelView.data(), labelView.size());
             label += '\n';
             label += StringFormat(arena, "{:.3f} ms", timed.value() * 1000.0);
-        }
 
-        AppendFormat(arena, out, "  n{} [shape={}, label=", i, FrameGraphNodeShape(node.kind));
-        AppendDotQuotedText(out, AStringView(label.data(), label.size()));
+            AppendDotQuotedText(out, AStringView(label.data(), label.size()));
+        }
+        else
+            AppendDotQuotedText(out, labelView);
         out += "];\n";
     }
 
@@ -178,6 +195,7 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
 
 void BuildJson(TelemetryArena& arena, const TelemetryReportSummary& summary, AString<TelemetryArena>& out){
     out.clear();
+    out.reserve(1024u);
     out += "{\n";
     AppendFormat(arena, out, "  \"eventCount\": {},\n", summary.eventCount);
     out += "  \"frameRange\": {";
@@ -262,6 +280,8 @@ const char* PerfTimingSourceText(const Telemetry::PerfTimingSource::Enum source)
 
 bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& events, TelemetryReport& outReport){
     outReport = TelemetryReport(arena);
+    if(events.valid())
+        outReport.perfCsv.reserve(__hidden_telemetry_report::EstimatePerfCsvReserve(events.eventCount()));
     __hidden_telemetry_report::AppendPerfCsvHeader(outReport.perfCsv);
 
     if(!events.valid())
@@ -270,6 +290,7 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
     outReport.summary.eventCount = events.eventCount();
 
     __hidden_telemetry_report::GraphTimingMap timingByScope(0, Hasher<Name>(), EqualTo<Name>(), arena);
+    timingByScope.reserve(events.eventCount());
     usize lastFrameGraphIndex = events.eventCount();
 
     for(usize i = 0u; i < events.eventCount(); ++i){

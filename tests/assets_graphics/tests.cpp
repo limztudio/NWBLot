@@ -1014,8 +1014,24 @@ static bool CookPreparedGraphicsAssetRoots(
     NWB::Core::Assets::AssetCookOptions options(testArena.arena, cookThreadPool);
     options.repoRoot = PathToString(testArena.arena, AssetsGraphicsTestRepoRoot(testArena));
     options.assetRoots.reserve(assetRoots.size());
-    for(const Path& assetRoot : assetRoots)
-        options.assetRoots.push_back(PathToString(testArena.arena, assetRoot));
+    for(const Path& assetRoot : assetRoots){
+        auto parentDirectoryName = PathToString(testArena.arena, assetRoot.lexically_normal().parent_path().filename());
+        CanonicalizeTextInPlace(parentDirectoryName);
+
+        ACompactString virtualRoot;
+        if(!virtualRoot.assign(parentDirectoryName == "impl"
+            ? NWB::Core::Assets::s_EngineVirtualRoot
+            : NWB::Core::Assets::s_ProjectVirtualRoot
+        ))
+            return false;
+
+        auto assetRootText = PathToString(testArena.arena, assetRoot);
+        options.assetRoots.emplace_back(
+            testArena.arena,
+            AStringView(assetRootText.data(), assetRootText.size()),
+            virtualRoot
+        );
+    }
     options.outputDirectory = PathToString(testArena.arena, outputDirectory);
     options.cacheDirectory = PathToString(testArena.arena, root / "cache");
     if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))

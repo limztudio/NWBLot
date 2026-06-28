@@ -51,26 +51,46 @@ bool ResolveCookPaths(
     }
 
     outPaths.assetRoots.reserve(options.assetRoots.size());
-    for(const AssetString& assetRoot : options.assetRoots){
+    for(const AssetCookRoot& assetRoot : options.assetRoots){
+        if(assetRoot.virtualRoot.view() != s_EngineVirtualRoot && assetRoot.virtualRoot.view() != s_ProjectVirtualRoot){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset root '{}' uses unsupported virtual root '{}'")
+                , StringConvert(assetRoot.path)
+                , StringConvert(assetRoot.virtualRoot.c_str())
+            );
+            outPaths.assetRoots.clear();
+            return false;
+        }
+
         Path resolvedAssetRoot(outPaths.repoRoot.arena());
-        const ScratchString assetRootText(assetRoot, scratchArena);
+        const ScratchString assetRootText(assetRoot.path, scratchArena);
         errorCode.clear();
         if(!ResolveAbsolutePath(outPaths.repoRoot, assetRootText, resolvedAssetRoot, errorCode)){
             if(errorCode){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to resolve asset root '{}': {}")
-                    , StringConvert(assetRoot)
+                    , StringConvert(assetRoot.path)
                     , StringConvert(errorCode.message())
                 );
             }
             else{
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset root is empty or invalid: '{}'")
-                    , StringConvert(assetRoot)
+                    , StringConvert(assetRoot.path)
                 );
             }
             outPaths.assetRoots.clear();
             return false;
         }
-        outPaths.assetRoots.push_back(Move(resolvedAssetRoot));
+
+        auto assetRootName = PathToString(scratchArena, resolvedAssetRoot.filename());
+        CanonicalizeTextInPlace(assetRootName);
+        if(assetRootName != s_AssetsDirectoryName){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset root must point to an 'assets' directory: '{}'")
+                , PathToString<tchar>(resolvedAssetRoot)
+            );
+            outPaths.assetRoots.clear();
+            return false;
+        }
+
+        outPaths.assetRoots.emplace_back(Move(resolvedAssetRoot), assetRoot.virtualRoot);
     }
 
     errorCode.clear();

@@ -29,7 +29,7 @@ NWB_ASSETS_BEGIN
 
 struct ResolvedCookPaths{
     Path repoRoot;
-    CookVector<Path> assetRoots;
+    CookVector<ResolvedAssetRoot> assetRoots;
     Path outputDirectory;
     Path cacheDirectory;
 

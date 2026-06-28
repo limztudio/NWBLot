@@ -25,9 +25,23 @@ struct AssetCookServices{
     {}
 };
 
+struct AssetCookRoot{
+    AssetString path;
+    ACompactString virtualRoot;
+
+    explicit AssetCookRoot(AssetArena& arena)
+        : path(arena)
+    {}
+
+    AssetCookRoot(AssetArena& arena, AStringView inPath, const ACompactString& inVirtualRoot)
+        : path(inPath, arena)
+        , virtualRoot(inVirtualRoot)
+    {}
+};
+
 struct AssetCookOptions{
     AssetString repoRoot;
-    AssetVector<AssetString> assetRoots;
+    AssetVector<AssetCookRoot> assetRoots;
     AssetString outputDirectory;
     AssetString cacheDirectory;
     ACompactString configuration;

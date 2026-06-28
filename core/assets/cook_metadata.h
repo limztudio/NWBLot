@@ -34,6 +34,20 @@ using ParsedMetadataExtensionMap = CookMap<Name, void*>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct ResolvedAssetRoot{
+    Path path;
+    ACompactString virtualRoot;
+
+    explicit ResolvedAssetRoot(CookArena& arena)
+        : path(arena)
+    {}
+
+    ResolvedAssetRoot(Path&& inPath, const ACompactString& inVirtualRoot)
+        : path(Move(inPath))
+        , virtualRoot(inVirtualRoot)
+    {}
+};
+
 struct DiscoveredNwbFile{
     Path assetRoot;
     Path filePath;
@@ -168,7 +182,7 @@ public:
 
 
 [[nodiscard]] bool DiscoverFilesWithExtension(
-    const CookVector<Path>& assetRoots,
+    const CookVector<ResolvedAssetRoot>& assetRoots,
     AStringView expectedExtension,
     DiscoveredNwbFileVector& outFiles,
     ScratchArena& scratchArena

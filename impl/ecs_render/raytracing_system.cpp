@@ -221,13 +221,15 @@ static_assert(sizeof(CausticGeometryDownsamplePushConstants) == sizeof(u32) * 4u
 // Mirror of shadow_resolve_cs.slang's NwbShadowResolvePushConstants (the edge-adaptive shadow resolve): full-res dims +
 // the half-res ray-traced visibility dims + the edge threshold (per-channel half-res tap spread above which a pixel
 // straddles the shadow silhouette and is RE-TRACED at full-res instead of bilinear-filled).
+inline constexpr f32 s_ShadowResolveDefaultEdgeThreshold = 0.005f;
+
 struct ShadowResolvePushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 halfWidth = 0u;
     u32 halfHeight = 0u;
     u32 slotCount = 0u;          // active shadow slots this frame; only these are resolved (the rest stay cleared white)
-    f32 edgeThreshold = 0.02f;   // 2% per-channel visibility spread across the 2x2 half-res taps -> "edge" -> re-trace
+    f32 edgeThreshold = s_ShadowResolveDefaultEdgeThreshold; // low visibility spread across nearby taps -> re-trace
 };
 static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 5u + sizeof(f32), "ShadowResolvePushConstants must match the shader push-constant layout");
 
@@ -433,9 +435,9 @@ bool RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandLi
 }
 
 bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandList){
-    // The software BVH is the shadow fallback for devices without hardware ray tracing. When accel structs
-    // are available buildPendingMeshBlas handles shadows and this path stays idle.
-    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+    // The software BVH is the shadow fallback for devices without the full RayQuery shadow path. Accel structs alone
+    // are not enough: the HW shadow shader is an inline-RayQuery compute pass.
+    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && graphics().queryFeatureSupport(Core::Feature::RayQuery))
         return false;
 
     bool allBuildsReady = true;
@@ -517,8 +519,8 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
         ;
         // The BLAS owns the positions it traces, but the any-hit still needs the index buffer (3 vertex indices by
-        // PrimitiveIndex) + the U2 attribute buffer (normal/uv0 for the per-hit dispatch) + the raw position buffer
-        // (the geometric face normal for the per-crossing faceSign/cosI), so require all three.
+        // PrimitiveIndex) + the U2 triangle-corner attribute buffer (normal/uv0 for the per-hit dispatch) + the raw
+        // position buffer (the geometric face normal for crossing pairing), so require all three.
         if(!meshReady || !mesh || !mesh->blas || !mesh->triangleIndexBuffer || !mesh->attributeBuffer || !mesh->positionBuffer)
             continue;
 
@@ -656,9 +658,9 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
 }
 
 bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
-    // Software scene/instance BVH (TLAS-analog) — only the no-hardware-ray-tracing fallback builds it; the
-    // hardware path uses buildSceneTlas instead.
-    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+    // Software scene/instance BVH (TLAS-analog) -- only the no-RayQuery-shadow fallback builds it; the hardware
+    // shadow path uses buildSceneTlas instead.
+    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && graphics().queryFeatureSupport(Core::Feature::RayQuery))
         return false;
 
     auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
@@ -743,8 +745,8 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             rayTracingState().m_swShadowMeshNodeBuffers[meshSlot] = meshNodeBuffer;
             rayTracingState().m_swShadowMeshPositionBuffers[meshSlot] = mesh->positionBuffer.get();
             rayTracingState().m_swShadowMeshIndexBuffers[meshSlot] = mesh->triangleIndexBuffer.get();
-            // The U2 per-vertex shadow-trace attribute buffer (positionStream-indexed normal/uv0), parallel to
-            // the position/index buffers above so the trace interpolates with the SAME i0/i1/i2.
+            // The U2 per-triangle-corner shadow-trace attribute buffer (normal/uv0), parallel to the triangle index
+            // buffer so the trace interpolates the exact raster corner attributes.
             rayTracingState().m_swShadowMeshAttributeBuffers[meshSlot] = mesh->attributeBuffer.get();
         }
 
@@ -1029,7 +1031,11 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
     if(!prepareCausticEmissionTargets(commandList, scratchArena))
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic emission-target gather failed"));
 
-    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
+    const bool hardwareShadowSupported =
+        graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+        && graphics().queryFeatureSupport(Core::Feature::RayQuery)
+    ;
+    if(hardwareShadowSupported){
         if(!buildPendingMeshBlas(commandList))
             return true;
 
@@ -1247,6 +1253,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     // own dimensions (g_NwbShadowVisibility.GetDimensions), so no push constant is needed here.
     const u32 shadowHalfWidth = (targets.width + 1u) / 2u;
     const u32 shadowHalfHeight = (targets.height + 1u) / 2u;
+
     Core::ComputeState shadowState;
     shadowState.setPipeline(rayTracingState().m_shadowPipeline.get());
     shadowState.addBindingSet(rayTracingState().m_shadowBindingSet.get());
@@ -1281,9 +1288,9 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         static const f32 s_edgeThreshold = [](){
             char value[32] = {};
             if(!ReadEnvironmentVariableBuffer("NWB_SHADOW_RESOLVE_EDGE_THRESHOLD", value, sizeof(value)))
-                return 0.02f;
+                return s_ShadowResolveDefaultEdgeThreshold;
             const f32 parsed = static_cast<f32>(::std::atof(value));
-            return (parsed > 0.0f && parsed <= 1.0f) ? parsed : 0.02f;
+            return (parsed > 0.0f && parsed <= 1.0f) ? parsed : s_ShadowResolveDefaultEdgeThreshold;
         }();
         resolvePush.edgeThreshold = s_edgeThreshold;
 
@@ -1422,10 +1429,10 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
 }
 
 bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    // Software shadow traversal — the no-hardware-ray-tracing fallback that consumes the per-frame software
-    // scene/instance BVH (buildSceneSwBvh) + the per-mesh BVHs. When hardware accel structs are available
+    // Software shadow traversal: the no-RayQuery-shadow fallback that consumes the per-frame software scene/instance
+    // BVH (buildSceneSwBvh) + the per-mesh BVHs. When the full HW RayQuery shadow path is available,
     // renderShadowVisibility handles shadows and this path stays idle.
-    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && graphics().queryFeatureSupport(Core::Feature::RayQuery))
         return false;
     if(!targets.shadowVisibility)
         return false;
@@ -1486,8 +1493,12 @@ bool RendererRayTracingSystem::hasCausticWork()const noexcept{
     // The software caustic producer runs only on the no-hardware-ray-tracing path, and only when the scene holds at
     // least one caustic light AND at least one refractive instance (else the black-cleared irradiance buffer is the
     // additive no-op). The SW scene BVH must also have been built (it is the same geometry the photons trace).
+    const bool hardwareShadowSupported =
+        graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+        && graphics().queryFeatureSupport(Core::Feature::RayQuery)
+    ;
     return
-        !graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+        !hardwareShadowSupported
         && rayTracingState().m_causticLightCount > 0u
         && rayTracingState().m_causticRefractiveInstanceCount > 0u
         && rayTracingState().m_sceneBvhInstanceCount > 0u
@@ -1503,7 +1514,7 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
     // caustic-LIGHT gate lives in renderGpuBvhCaustics (the light count is resolved later, in the render pass). This
     // keeps the binding sets ready the same frame the gate first opens. A failure leaves the producer idle (the
     // black-cleared caustic buffer remains the additive no-op).
-    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && graphics().queryFeatureSupport(Core::Feature::RayQuery))
         return true;
     if(
         rayTracingState().m_causticRefractiveInstanceCount == 0u

@@ -23,11 +23,9 @@
 #define NWB_SHADOW_RT_BINDING_INSTANCE_MATERIAL 7
 // Parallel per-mesh descriptor arrays (slot k = mesh k), built lockstep with the TLAS so material.meshSlot
 // indexes them: the raw triangle index buffer (the any-hit fetches the 3 vertex indices by PrimitiveIndex) +
-// the U2 per-vertex shadow-trace attribute buffer (normal/uv0 the per-hit dispatch interpolates) + the raw
-// object-space position buffer. The HW BLAS owns the positions it traces, but the any-hit ALSO needs them to
-// derive the GEOMETRIC face normal (cross of two edges) for the per-crossing faceSign/cosI -- the shading
-// normal flips over a wide band at a smooth-mesh silhouette and corrupts the signed Beer-Lambert telescoping,
-// while the per-triangle geometric normal is robust (mirrors the software traversal, which reads positions too).
+// the U2 per-triangle-corner shadow-trace attribute buffer (normal/uv0 the per-hit dispatch interpolates) +
+// the raw object-space position buffer. The HW BLAS owns the positions it traces, but the any-hit also needs
+// them to derive the geometric face normal (cross of two edges), mirroring the software traversal.
 #define NWB_SHADOW_RT_BINDING_MESH_INDICES 8
 #define NWB_SHADOW_RT_BINDING_MESH_ATTRIBUTES 9
 // The shared material-constants context the per-hit transmittance dispatch reads (same buffers the rasterizer

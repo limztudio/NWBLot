@@ -107,7 +107,7 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     Name meshKey = NAME_NONE;
     Core::BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported
-    Core::BufferHandle attributeBuffer;       // RT-only flat per-vertex shadow-trace attributes; null when ray tracing is unsupported
+    Core::BufferHandle attributeBuffer;       // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
     RuntimeMeshLocalBounds localBounds;
     u32 meshletCount = 0u;
     u64 version = 0u;

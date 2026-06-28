@@ -477,28 +477,26 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         ) && uploaded;
     }
 
-    // Flat per-vertex shadow-trace attribute buffer, positionStream-indexed in lockstep with the reconstructed
-    // triangle index buffer above, so a trace can interpolate normal/uv0 with the SAME i0/i1/i2 it loads for
-    // positions. SEEDED from the BIND-POSE streams (uv0 is pose-invariant; normal is the rest normal); for an
-    // actively-skinned mesh the normal half is then OVERWRITTEN per frame from the deformed normals by the repack
-    // compute pass (repack_normals_cs.slang, dispatchRepackNormals), so the RT shadow + caustic traces bend on the
-    // live pose. Both shadow backends read it as a ByteAddressBuffer (HW any-hit and the software fallback), so it
-    // carries a raw view; canHaveUavs lets the repack pass write it as a raw UAV in place.
+    // Flat per-triangle-corner shadow/caustic trace attribute buffer, indexed as primitive*3+corner in lockstep
+    // with the reconstructed triangle index buffer above. SEEDED from the BIND-POSE streams (uv0 is pose-invariant;
+    // normal is the rest normal); for an actively-skinned mesh the normal half is then OVERWRITTEN per frame from the
+    // deformed normals by the repack compute pass (repack_normals_cs.slang, dispatchRepackNormals), so RT traces bend
+    // on the live pose while preserving raster hard/soft edge semantics. Both shadow backends read it as a
+    // ByteAddressBuffer, so it carries a raw view; canHaveUavs lets the repack pass write it as a raw UAV in place.
     if(uploaded){
-        const usize positionCount = instance.restPositions.size();
-        Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_RuntimeBlasAttributeArena, positionCount * sizeof(AttribGpu) + 4096u);
-        Vector<AttribGpu, Core::Alloc::ScratchArena> vertexAttributes{ scratchArena };
-        if(!BuildMeshletVertexAttributes(
+        const usize attributeCount = instance.meshletPrimitiveIndices.size();
+        Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_RuntimeBlasAttributeArena, attributeCount * sizeof(AttribGpu) + 4096u);
+        Vector<AttribGpu, Core::Alloc::ScratchArena> triangleAttributes{ scratchArena };
+        if(!BuildMeshletTriangleAttributes(
             instance.meshlets,
             instance.meshletLocalVertexRefs,
-            instance.meshletPositionRefDeltas,
             instance.meshletAttributeRefDeltas,
+            instance.meshletPrimitiveIndices,
             instance.restNormals,
             instance.uv0,
-            instance.restPositions.size(),
-            vertexAttributes
+            triangleAttributes
         )){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace vertex attributes for runtime mesh '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'")
                 , instance.handle.value
             );
             return false;
@@ -508,10 +506,10 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             m_graphics,
             instance,
             instance.attributeBuffer,
-            AStringView("rt_vertex_attributes"),
-            vertexAttributes,
+            AStringView("rt_triangle_attributes"),
+            triangleAttributes,
             true, // canHaveUavs: the per-frame skinned-normal repack pass writes this buffer as a raw UAV in place
-            NWB_TEXT("rt vertex attribute"),
+            NWB_TEXT("rt triangle attribute"),
             true
         ) && uploaded;
     }

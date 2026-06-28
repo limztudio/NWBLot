@@ -193,9 +193,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
     }
 
-    // EDGE TEST: the largest per-channel spread of the half-res visibility across the valid 2x2 taps, over all active
-    // slots. A flat interior has ~0 spread (cheap bilinear); a silhouette straddle exceeds edgeThreshold (re-trace).
-    // A tap on background counts as an edge too (the neighbourhood mixes shadow + no-receiver).
+    // EDGE TEST: the largest per-channel spread of the half-res visibility across the nearby valid taps, over all
+    // active slots. A flat interior has ~0 spread (cheap bilinear); a silhouette straddle exceeds edgeThreshold
+    // (re-trace). The expanded neighbourhood grows the 2x2 bilinear footprint by one half texel, so low-contrast
+    // colored-shadow edges do not leak a visible half-res block.
     float maxSpread = 0.0;
     bool anyBackgroundTap = false;
     [unroll] for(int k = 0; k < 4; ++k)
@@ -203,11 +204,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     for(uint slot = 0u; slot < slotCount; ++slot){
         float3 lo = float3(1.0, 1.0, 1.0);
         float3 hi = float3(0.0, 0.0, 0.0);
-        [unroll] for(int k = 0; k < 4; ++k){
-            if(tapValid[k]){
-                const float3 v = g_NwbShadowHalfVisibility.Load(int4(taps[k], (int)slot, 0)).rgb;
-                lo = min(lo, v);
-                hi = max(hi, v);
+        for(int y = -1; y <= 2; ++y){
+            for(int x = -1; x <= 2; ++x){
+                const int2 tap = int2(clamp(baseTexel.x + x, 0, hw - 1), clamp(baseTexel.y + y, 0, hh - 1));
+                const int2 tapFull = nwbShadowResolveHalfToFull(tap);
+                if(g_NwbShadowGBufferDepth.Load(int3(tapFull, 0)).r < 0.999999){
+                    const float3 v = g_NwbShadowHalfVisibility.Load(int4(tap, (int)slot, 0)).rgb;
+                    lo = min(lo, v);
+                    hi = max(hi, v);
+                }
+                else{
+                    anyBackgroundTap = true;
+                }
             }
         }
         const float3 spread = hi - lo;

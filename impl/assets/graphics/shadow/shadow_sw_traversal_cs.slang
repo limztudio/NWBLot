@@ -40,6 +40,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#define NWB_SW_SHADOW_AABB_PADDING 1e-4
+#define NWB_SW_SHADOW_BARYCENTRIC_EPSILON 1e-5
+
+
 [[vk::binding(NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION, NWB_SW_SHADOW_SET)]]
 Texture2D<float4> g_NwbSwShadowGBufferWorldPosition;
 
@@ -83,9 +87,8 @@ ByteAddressBuffer g_NwbSwShadowMeshPositions[NWB_SW_SHADOW_MAX_MESHES];
 [[vk::binding(NWB_SW_SHADOW_BINDING_MESH_INDICES, NWB_SW_SHADOW_SET)]]
 ByteAddressBuffer g_NwbSwShadowMeshIndices[NWB_SW_SHADOW_MAX_MESHES];
 
-// Per-vertex shadow-trace attributes (AttribGpu = Half4U normal @ +0 (8B) + Float2U uv0 @ +8 (8B), 16B stride),
-// positionStream-indexed in lockstep with g_NwbSwShadowMeshPositions, so a triangle hit interpolates normal/uv0
-// with the SAME i0/i1/i2 it loaded for positions.
+// Per-triangle-corner shadow-trace attributes (AttribGpu = Half4U normal @ +0 (8B) + Float2U uv0 @ +8 (8B), 16B
+// stride), indexed as triangle*3+corner in lockstep with the triangle index buffer.
 [[vk::binding(NWB_SW_SHADOW_BINDING_MESH_ATTRIBUTES, NWB_SW_SHADOW_SET)]]
 ByteAddressBuffer g_NwbSwShadowMeshAttributes[NWB_SW_SHADOW_MAX_MESHES];
 
@@ -106,8 +109,8 @@ ConstantBuffer<NwbSwShadowPushConstants> g_NwbSwShadowPushConstants;
 // Slab ray/AABB overlap test over the [tMin, tMax] interval. invDir may contain +/-inf for axis-aligned
 // directions; the min/max ordering keeps that well-defined for all but the measure-zero on-slab case.
 bool nwbSwShadowRayAabb(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
-    const float3 t0 = (boxMin - origin) * invDir;
-    const float3 t1 = (boxMax - origin) * invDir;
+    const float3 t0 = (boxMin - NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
+    const float3 t1 = (boxMax + NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
     const float3 tSmall = min(t0, t1);
     const float3 tLarge = max(t0, t1);
     const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
@@ -195,12 +198,12 @@ NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 
     const float invDet = 1.0 / det;
     const float3 tVec = origin - v0;
     const float u = dot(tVec, pVec) * invDet;
-    if(u < 0.0 || u > 1.0)
+    if(u < -NWB_SW_SHADOW_BARYCENTRIC_EPSILON || u > 1.0 + NWB_SW_SHADOW_BARYCENTRIC_EPSILON)
         return result;
 
     const float3 qVec = cross(tVec, edge1);
     const float v = dot(direction, qVec) * invDet;
-    if(v < 0.0 || (u + v) > 1.0)
+    if(v < -NWB_SW_SHADOW_BARYCENTRIC_EPSILON || (u + v) > 1.0 + NWB_SW_SHADOW_BARYCENTRIC_EPSILON)
         return result;
 
     const float t = dot(edge2, qVec) * invDet;
@@ -215,15 +218,15 @@ NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 
     return result;
 }
 
-// Unpacks a per-vertex shadow-trace attribute (AttribGpu) from a per-mesh attribute byte buffer: Half4U normal
-// (two packed-half uints) at +0, Float2U uv0 (two floats) at +8. Returns object-space normal in .xyz, uv0 in .w*.
+// Unpacks a per-triangle-corner shadow-trace attribute (AttribGpu) from a per-mesh attribute byte buffer: Half4U
+// normal (two packed-half uints) at +0, Float2U uv0 (two floats) at +8. Returns object-space normal in .xyz, uv0.
 struct NwbSwShadowVertexAttrib{
     float3 normal;
     float2 uv0;
 };
 
-NwbSwShadowVertexAttrib nwbSwShadowLoadVertexAttrib(const uint meshIndex, const uint vertexIndex){
-    const uint base = vertexIndex * 16u;
+NwbSwShadowVertexAttrib nwbSwShadowLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
+    const uint base = attributeIndex * 16u;
     const uint2 packedNormal = g_NwbSwShadowMeshAttributes[meshIndex].Load2(base);
     NwbSwShadowVertexAttrib attrib;
     attrib.normal = float3(
@@ -280,9 +283,11 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 // this surface crossing into the running visibility, then keep tracing for further occluders. The
                 // hook reads the interpolated normal/uv0 + the material-constants context carried by the instance
                 // record; dispatched by shadowTransmittanceModelId.
-                const NwbSwShadowVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(meshIndex, i0);
-                const NwbSwShadowVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(meshIndex, i1);
-                const NwbSwShadowVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(meshIndex, i2);
+                const uint attributeBase = triangle * 3u;
+                const NwbSwShadowVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(meshIndex, attributeBase);
+                const NwbSwShadowVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(meshIndex, attributeBase + 1u);
+                const NwbSwShadowVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(meshIndex, attributeBase + 2u);
+                const float smoothNormalWeight = nwbShadowSmoothNormalWeight(a0.normal, a1.normal, a2.normal);
 
                 // Interpolate the object-space normal, then transform it to world space (the surface contract) with
                 // the inverse-transpose of object->world carried in the instance's world->object rows, so a
@@ -298,14 +303,15 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 hit.worldPosition = worldOrigin + worldDirection * triangleHit.t;
                 hit.rayDirection = worldDirection;
 
-                // Evaluate this material's surface hook for its optical params (ior / transmission), then fold the
-                // crossing into the running accumulator via the SHARED integrator -- byte-identical to the HW any-hit.
-                // The GEOMETRIC face normal cross(v1-v0,v2-v0) + the object-space ray `direction` are already in hand;
+                // Evaluate this material's surface hook for its optical params, then fold the crossing into the
+                // running accumulator via the SHARED integrator -- byte-identical to the HW any-hit. The GEOMETRIC face
+                // normal cross(v1-v0,v2-v0) + the object-space ray `direction` are already in hand;
                 // triangleHit.t is the world distance (the ray dir is left un-normalised so its t matches RayTCurrent()).
-                // hit.worldNormal stays the SHADING normal for any hook that reads it; the physics uses geometry only.
+                // hit.worldNormal stays the SHADING normal for any hook that reads it; the integrator uses geometry
+                // for crossing pairing and smooth author normals only for optional Fresnel.
                 const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
                 const float3 geometricNormal = cross(v1 - v0, v2 - v0);
-                nwbShadowIntegrateCrossing(acc, instanceIndex, surface.ior, surface.transmission, geometricNormal, direction, triangleHit.t);
+                nwbShadowIntegrateCrossing(acc, instanceIndex, surface.ior, surface.transmission, geometricNormal, objectNormal, smoothNormalWeight, direction, triangleHit.t);
                 // Cost safeguard for deeply-stacked transparency: stop once effectively opaque, but KEEP the
                 // accumulated (near-zero) value -- the finalize applies the same Beer-Lambert term. Hard-zeroing here
                 // was order-dependent and could snap an overlap pixel to pure black; matches the HW soft early-out.

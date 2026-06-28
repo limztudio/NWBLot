@@ -359,8 +359,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         commandList->endRenderPass();
 
+        const bool hardwareShadowSupported =
+            m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+            && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
+        ;
+
         bool shadowVisibilityWritten = false;
-        if(m_preparedShadowVisibilityReady && m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
+        if(m_preparedShadowVisibilityReady && hardwareShadowSupported){
             shadowVisibilityWritten = m_raytracingSystem.renderShadowVisibility(*commandList, deferredTargets);
             if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
@@ -389,7 +394,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(m_preparedShadowVisibilityReady){
             // false = no caustic work this frame (the common case: no caustic light or no refractive instance) or a
             // pipeline-build failure already logged inside; either way the black-cleared buffer is the additive no-op.
-            if(m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
+            if(hardwareShadowSupported){
                 [[maybe_unused]] const bool causticsDispatched = m_raytracingSystem.renderHwCaustics(*commandList, deferredTargets);
             }
             else{

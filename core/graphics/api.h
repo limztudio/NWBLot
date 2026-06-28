@@ -3071,7 +3071,6 @@ private:
     // Set/Deque could be mutated mid-iteration. (Per-tracker locking is impossible — destroyed trackers
     // are copied by value into m_destroyedMarkerTrackers, so GpuCrashMarkerTracker must stay copyable.)
     Futex m_mutex;
-    GraphicsArena& m_arena;
     GraphicsSet<GpuCrashMarkerTracker*> m_markerTrackers;
     // Command lists deleted on CPU could still be executing (and crashing) on GPU,
     // so keep a small number of recently destroyed marker trackers

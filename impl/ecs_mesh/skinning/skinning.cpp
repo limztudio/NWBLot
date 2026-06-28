@@ -395,7 +395,7 @@ bool MeshSkinningSystem::dispatchRepackNormals(
 ){
     // RT unsupported (no attribute buffer) -> nothing to repack; not an error. Only reached from the active-skin
     // branch, so skinnedNormalBuffer already holds this frame's deformed normals (set ShaderResource at the end of
-    // the skinning dispatch). This pass overwrites the position-stream normal slot of attributeBuffer in place; the
+    // the skinning dispatch). This pass overwrites the triangle-corner normal slots of attributeBuffer in place; the
     // single-instance buffer is safe to write here because the frame-begin fence retires all prior in-flight frames
     // before this command list records, and the renderer's RT reads run later (skinning render pass precedes the
     // renderer pass), exactly as for the skinned position/normal buffers.
@@ -404,7 +404,7 @@ bool MeshSkinningSystem::dispatchRepackNormals(
 
     commandList.setBufferState(instance.skinnedNormalBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(instance.meshletDescBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(instance.meshletPositionRefDeltaBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instance.meshletPrimitiveIndexBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(instance.meshletAttributeRefDeltaBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(instance.meshletLocalVertexRefBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(instance.attributeBuffer.get(), Core::ResourceStates::UnorderedAccess);

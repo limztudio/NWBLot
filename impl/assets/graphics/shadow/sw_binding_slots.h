@@ -27,7 +27,7 @@
 #define NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT 6
 #define NWB_SW_SHADOW_BINDING_SCENE_INSTANCES 7
 // Parallel per-mesh descriptor arrays (slot k = mesh k), kept contiguous: triangle BVH nodes + raw position /
-// index byte buffers + the per-vertex shadow-trace attribute buffer (normal/uv0 the dispatch interpolates).
+// index byte buffers + the per-triangle-corner shadow-trace attribute buffer (normal/uv0 the dispatch interpolates).
 #define NWB_SW_SHADOW_BINDING_MESH_NODES 8
 #define NWB_SW_SHADOW_BINDING_MESH_POSITIONS 9
 #define NWB_SW_SHADOW_BINDING_MESH_INDICES 10

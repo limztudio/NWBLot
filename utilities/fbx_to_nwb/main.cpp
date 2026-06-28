@@ -26,8 +26,12 @@ int Run(const int argc, char** argv){
     }
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
+    const u32 coreCount = NWB::Core::Alloc::QueryCoreCount(NWB::Core::Alloc::CoreAffinity::Any);
+    const u32 workerCount = coreCount > 1u ? coreCount - 1u : 0u;
+    NWB::Core::Alloc::ThreadPool threadPool(workerCount, NWB::Core::Alloc::CoreAffinity::Any);
+
     bool prompted = false;
-    const int result = NWB::FbxToNwb::Run(argc, argv, prompted);
+    const int result = NWB::FbxToNwb::Run(argc, argv, threadPool, prompted);
     if(prompted){
         NWB_COUT << "Press Enter to exit...";
         NWB::FbxToNwb::AString line;

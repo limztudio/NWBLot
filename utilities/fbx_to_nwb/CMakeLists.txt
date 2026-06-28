@@ -5,6 +5,7 @@ target_sources(nwb_fbx_to_nwb PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/scene.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/skin.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/common.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/main.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset_writer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
@@ -17,6 +18,7 @@ target_link_libraries(nwb_fbx_to_nwb PRIVATE
     nwb_common
     nwb_alloc
     nwb_mesh
+    nwb_metascript
     nwb_logclient
     nwb::ufbx
     nwb::cli11_headers

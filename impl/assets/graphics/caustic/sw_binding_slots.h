@@ -25,7 +25,7 @@
 #define NWB_CAUSTIC_SW_BINDING_SCENE_INSTANCES 3
 #define NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL 4
 // Parallel per-mesh descriptor arrays (slot k = mesh k), kept contiguous: triangle BVH nodes + raw position /
-// index byte buffers + the per-vertex attribute buffer (normal/uv0 the surface dispatch interpolates).
+// index byte buffers + the per-triangle-corner attribute buffer (normal/uv0 the surface dispatch interpolates).
 #define NWB_CAUSTIC_SW_BINDING_MESH_NODES 5
 #define NWB_CAUSTIC_SW_BINDING_MESH_POSITIONS 6
 #define NWB_CAUSTIC_SW_BINDING_MESH_INDICES 7

@@ -33,16 +33,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Unpacks a per-vertex shadow-trace attribute (AttribGpu) from a per-mesh attribute byte buffer: Half4U normal
-// (two packed-half uints) at +0, Float2U uv0 (two floats) at +8. Mirrors the software traversal's unpack so the
-// RayQuery trace and the compute fallback interpolate identical inputs.
+// Unpacks a per-triangle-corner shadow-trace attribute (AttribGpu) from a per-mesh attribute byte buffer: Half4U
+// normal (two packed-half uints) at +0, Float2U uv0 (two floats) at +8. Mirrors the software traversal's unpack so
+// the RayQuery trace and the compute fallback interpolate identical inputs.
 struct NwbShadowRqVertexAttrib{
     float3 normal;
     float2 uv0;
 };
 
-NwbShadowRqVertexAttrib nwbShadowRqLoadVertexAttrib(const uint meshIndex, const uint vertexIndex){
-    const uint base = vertexIndex * 16u;
+NwbShadowRqVertexAttrib nwbShadowRqLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
+    const uint base = attributeIndex * 16u;
     const uint2 packedNormal = g_NwbShadowMeshAttributes[meshIndex].Load2(base);
     NwbShadowRqVertexAttrib attrib;
     attrib.normal = float3(
@@ -109,9 +109,11 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
         const uint i0 = g_NwbShadowMeshIndices[material.meshSlot].Load(indexBase * 4u);
         const uint i1 = g_NwbShadowMeshIndices[material.meshSlot].Load((indexBase + 1u) * 4u);
         const uint i2 = g_NwbShadowMeshIndices[material.meshSlot].Load((indexBase + 2u) * 4u);
-        const NwbShadowRqVertexAttrib a0 = nwbShadowRqLoadVertexAttrib(material.meshSlot, i0);
-        const NwbShadowRqVertexAttrib a1 = nwbShadowRqLoadVertexAttrib(material.meshSlot, i1);
-        const NwbShadowRqVertexAttrib a2 = nwbShadowRqLoadVertexAttrib(material.meshSlot, i2);
+        const uint attributeBase = prim * 3u;
+        const NwbShadowRqVertexAttrib a0 = nwbShadowRqLoadVertexAttrib(material.meshSlot, attributeBase);
+        const NwbShadowRqVertexAttrib a1 = nwbShadowRqLoadVertexAttrib(material.meshSlot, attributeBase + 1u);
+        const NwbShadowRqVertexAttrib a2 = nwbShadowRqLoadVertexAttrib(material.meshSlot, attributeBase + 2u);
+        const float smoothNormalWeight = nwbShadowSmoothNormalWeight(a0.normal, a1.normal, a2.normal);
 
         // Interpolated SHADING normal -> world space (the surface contract the hook reads), via the candidate's
         // world->object 3x3 inverse-transpose, exactly as the any-hit did.
@@ -135,7 +137,7 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
         const float3 p1 = asfloat(g_NwbShadowMeshPositions[material.meshSlot].Load3(i1 * 12u));
         const float3 p2 = asfloat(g_NwbShadowMeshPositions[material.meshSlot].Load3(i2 * 12u));
         const float3 geometricNormal = cross(p1 - p0, p2 - p0);
-        nwbShadowIntegrateCrossing(acc, instanceId, surface.ior, surface.transmission, geometricNormal, query.CandidateObjectRayDirection(), query.CandidateTriangleRayT());
+        nwbShadowIntegrateCrossing(acc, instanceId, surface.ior, surface.transmission, geometricNormal, objectNormal, smoothNormalWeight, query.CandidateObjectRayDirection(), query.CandidateTriangleRayT());
     }
 
     return nwbShadowFinalizeVisibility(acc);

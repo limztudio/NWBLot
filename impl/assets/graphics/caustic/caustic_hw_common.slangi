@@ -90,11 +90,11 @@ RaytracingAccelerationStructure g_NwbCausticHwTlas;
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL, NWB_CAUSTIC_RT_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticHwInstanceMaterial;
 
-// Per-mesh descriptor arrays (slot k = mesh k = material.meshSlot): the raw triangle index byte buffer (the
-// closest-hit loads i0/i1/i2 by PrimitiveIndex) + the per-vertex attribute byte buffer (Half4U normal @ +0 /
-// Float2U uv0 @ +8), interpolated into the SHADING normal the refraction bends on + the per-hit surface dispatch.
-// (No position array: bending on the interpolated shading normal needs only the vertex normals, not the positions --
-// the world hit point comes from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().)
+// Per-mesh descriptor arrays (slot k = mesh k = material.meshSlot): the raw triangle index byte buffer + the
+// per-triangle-corner attribute byte buffer (Half4U normal @ +0 / Float2U uv0 @ +8), interpolated into the SHADING
+// normal the refraction bends on + the per-hit surface dispatch. (No position array: bending on the interpolated
+// shading normal needs only the corner normals, not the positions -- the world hit point comes from
+// WorldRayOrigin()+RayTCurrent()*WorldRayDirection().)
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_MESH_INDICES, NWB_CAUSTIC_RT_SET)]]
 ByteAddressBuffer g_NwbCausticHwMeshIndices[NWB_CAUSTIC_RT_MAX_MESHES];
 
@@ -123,18 +123,18 @@ ConstantBuffer<NwbCausticHwPushConstants> g_NwbCausticHwPushConstants;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-vertex attribute load -- identical layout to the SW kernel's nwbCausticSwLoadVertexAttrib + the shadow trace's
-// nwbShadowRtLoadVertexAttrib (Half4U normal @ +0, Float2U uv0 @ +8, 16B stride), so the closest-hit interpolates
-// the SAME inputs into the per-hit surface dispatch.
+// Per-triangle-corner attribute load -- identical layout to the SW kernel's nwbCausticSwLoadVertexAttrib + the
+// shadow trace's nwbShadowRtLoadVertexAttrib (Half4U normal @ +0, Float2U uv0 @ +8, 16B stride), so the closest-hit
+// interpolates the SAME inputs into the per-hit surface dispatch.
 struct NwbCausticHwVertexAttrib{
     float3 normal;
     float2 uv0;
 };
 
-NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint meshIndex, const uint vertexIndex){
+NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
     // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- one request instead of two
     // dependent Load2s (bit-identical; mirrors the SW producer).
-    const uint4 packed = g_NwbCausticHwMeshAttributes[meshIndex].Load4(vertexIndex * 16u);
+    const uint4 packed = g_NwbCausticHwMeshAttributes[meshIndex].Load4(attributeIndex * 16u);
     NwbCausticHwVertexAttrib attrib;
     attrib.normal = float3(
         nwbUnpackHalf2x16(packed.x),

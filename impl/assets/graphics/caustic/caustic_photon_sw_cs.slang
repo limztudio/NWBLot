@@ -237,10 +237,10 @@ struct NwbCausticSwVertexAttrib{
     float2 uv0;
 };
 
-NwbCausticSwVertexAttrib nwbCausticSwLoadVertexAttrib(const uint meshIndex, const uint vertexIndex){
+NwbCausticSwVertexAttrib nwbCausticSwLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
     // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- a single memory request
     // instead of two dependent Load2s (bit-identical result, lower latency in the refractive-hit path).
-    const uint4 packed = g_NwbCausticSwMeshAttributes[meshIndex].Load4(vertexIndex * 16u);
+    const uint4 packed = g_NwbCausticSwMeshAttributes[meshIndex].Load4(attributeIndex * 16u);
     NwbCausticSwVertexAttrib attrib;
     attrib.normal = float3(
         nwbUnpackHalf2x16(packed.x),
@@ -306,9 +306,10 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                 if(refractive){
                     // Evaluate this material's surface hook for its optical params, the SAME way the shadow trace
                     // does (interpolated normal/uv0 + the material-constants context the instance record carries).
-                    const NwbCausticSwVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(meshIndex, i0);
-                    const NwbCausticSwVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(meshIndex, i1);
-                    const NwbCausticSwVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(meshIndex, i2);
+                    const uint attributeBase = triangle * 3u;
+                    const NwbCausticSwVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(meshIndex, attributeBase);
+                    const NwbCausticSwVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(meshIndex, attributeBase + 1u);
+                    const NwbCausticSwVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(meshIndex, attributeBase + 2u);
                     const float3 objectShadingNormal = a0.normal * triangleHit.w + a1.normal * triangleHit.u + a2.normal * triangleHit.v;
 
                     // The interpolated SHADING normal in world space (inverse-transpose of object->world). This is the

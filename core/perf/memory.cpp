@@ -3,6 +3,7 @@
 
 
 #include "memory.h"
+#include "scope_registry.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,28 +40,14 @@ void MemoryRecorder::clear(){
 }
 
 MemoryScopeId MemoryRecorder::registerScope(const Name& scopeName){
-    if(!scopeName)
-        return {};
-
-    const auto found = m_scopeMap.find(scopeName);
-    if(found != m_scopeMap.end())
-        return found.value();
-
-    if(m_scopes.size() >= static_cast<usize>(Limit<u32>::s_Max))
-        return {};
-
-    ScopeRecordPtr scope = MakeGlobalUnique<ScopeRecord>(m_arena, scopeName);
-    if(!scope)
-        return {};
-
-    MemoryScopeId scopeId;
-    scopeId.index = static_cast<u32>(m_scopes.size());
-    scopeId.generation = m_generation;
-    scope->generation = m_generation;
-
-    m_scopes.push_back(Move(scope));
-    m_scopeMap.try_emplace(scopeName, scopeId);
-    return scopeId;
+    return RegisterNamedScope<MemoryScopeId>(
+        m_scopes,
+        m_scopeMap,
+        m_generation,
+        scopeName,
+        [&](const Name& name){ return MakeGlobalUnique<ScopeRecord>(m_arena, name); },
+        [](ScopeRecord& scope, const MemoryScopeId& scopeId){ scope.generation = scopeId.generation; }
+    );
 }
 
 void MemoryRecorder::recordSnapshot(

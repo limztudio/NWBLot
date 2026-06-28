@@ -3,6 +3,7 @@
 
 
 #include "timing.h"
+#include "scope_registry.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,29 +73,17 @@ void TimingRecorder::clear(){
 }
 
 TimingScopeId TimingRecorder::registerScope(const Name& scopeName){
-    if(!scopeName)
-        return {};
-
-    const auto found = m_scopeMap.find(scopeName);
-    if(found != m_scopeMap.end())
-        return found.value();
-
-    if(m_scopes.size() >= static_cast<usize>(Limit<u32>::s_Max))
-        return {};
-
-    ScopeRecordPtr scope = MakeGlobalUnique<ScopeRecord>(m_arena, scopeName);
-    if(!scope)
-        return {};
-
-    TimingScopeId scopeId;
-    scopeId.index = static_cast<u32>(m_scopes.size());
-    scopeId.generation = m_generation;
-    scope->generation = m_generation;
-    scope->accumulator.setEnabled(m_enabled);
-
-    m_scopes.push_back(Move(scope));
-    m_scopeMap.try_emplace(scopeName, scopeId);
-    return scopeId;
+    return RegisterNamedScope<TimingScopeId>(
+        m_scopes,
+        m_scopeMap,
+        m_generation,
+        scopeName,
+        [&](const Name& name){ return MakeGlobalUnique<ScopeRecord>(m_arena, name); },
+        [&](ScopeRecord& scope, const TimingScopeId& scopeId){
+            scope.generation = scopeId.generation;
+            scope.accumulator.setEnabled(m_enabled);
+        }
+    );
 }
 
 void TimingRecorder::recordSample(const TimingScopeId scope, const f64 seconds, const u64 sampleFrameIndex){

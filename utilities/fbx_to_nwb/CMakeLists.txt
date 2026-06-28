@@ -11,6 +11,7 @@ target_sources(nwb_fbx_to_nwb PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh_build.inl"
     "${CMAKE_CURRENT_LIST_DIR}/source_stream.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/text_write.h"
     "${CMAKE_CURRENT_LIST_DIR}/skin.h"
     "${CMAKE_CURRENT_LIST_DIR}/global.h"
 )

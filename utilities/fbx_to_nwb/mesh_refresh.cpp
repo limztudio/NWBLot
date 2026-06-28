@@ -3,6 +3,7 @@
 
 
 #include "module.h"
+#include "text_write.h"
 
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
@@ -22,6 +23,11 @@ namespace __hidden_mesh_refresh{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+using __hidden_text_write::WriteFloat;
+using __hidden_text_write::WriteVec2;
+using __hidden_text_write::WriteVec3;
+using __hidden_text_write::WriteVec4;
 
 static constexpr AStringView s_MeshMetaKind = "Mesh";
 static constexpr usize s_DeduplicateParallelGrainSize = 4096u;
@@ -863,50 +869,6 @@ template<typename ElementT, usize ComponentCount>
     }
 
     return false;
-}
-
-f32 CleanFloat(const f32 value){
-    if(Abs(value) < 0.00000001f)
-        return 0.0f;
-    return value;
-}
-
-template<typename Stream>
-void WriteFloat(Stream& out, const f32 value){
-    out << CleanFloat(value);
-}
-
-template<typename Stream>
-void WriteVec2(Stream& out, const Vec2& value){
-    out << "[";
-    WriteFloat(out, value.x);
-    out << ", ";
-    WriteFloat(out, value.y);
-    out << "]";
-}
-
-template<typename Stream>
-void WriteVec3(Stream& out, const Vec3& value){
-    out << "[";
-    WriteFloat(out, value.x);
-    out << ", ";
-    WriteFloat(out, value.y);
-    out << ", ";
-    WriteFloat(out, value.z);
-    out << "]";
-}
-
-template<typename Stream>
-void WriteVec4(Stream& out, const Vec4& value){
-    out << "[";
-    WriteFloat(out, value.x);
-    out << ", ";
-    WriteFloat(out, value.y);
-    out << ", ";
-    WriteFloat(out, value.z);
-    out << ", ";
-    WriteFloat(out, value.w);
-    out << "]";
 }
 
 template<typename Value, typename WriteValue>

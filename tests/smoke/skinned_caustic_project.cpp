@@ -36,10 +36,9 @@ namespace __hidden_skinned_caustic_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using SmokeModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
-using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
+using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::FindSpawnedModelObject;
 
@@ -164,34 +163,22 @@ private:
     }
 
     NWB::Core::ECS::EntityID createGlassCharacter(){
-        SmokeModelRef model;
-        model.virtualPath = Name(s_ModelPath);
-        SmokeMaterialRef material;
-        material.virtualPath = Name(s_GlassMaterialPath);
-
-        auto entity = m_world->createEntity();
-        auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
-        transform.position = Float4(0.0f, s_CharacterLift, 0.0f, 0.0f);
-        transform.scale = Float4(1.0f, 1.0f, 1.0f, 0.0f);
-
-        auto& modelComponent = entity.addComponent<NWB::Impl::ModelComponent>();
-        modelComponent.model = model;
-
-        auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
-        renderer.material = material;
-
-        const Name materialInterface(s_SmokeSurfaceMaterialInterface);
-        entity.addComponent<NWB::Impl::MaterialInstanceComponent>(m_context.objectArena, materialInterface);
-        if(!NWB::Impl::SetMaterialMutableFloat4(
+        bool tintApplied = false;
+        const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(
             *m_world,
-            entity.id(),
-            materialInterface,
-            "runtime.color_tint",
-            Float4(0.72f, 0.86f, 1.0f, 0.42f)
-        ))
+            m_context.objectArena,
+            s_ModelPath,
+            s_GlassMaterialPath,
+            s_SmokeSurfaceMaterialInterface,
+            Float4(0.72f, 0.86f, 1.0f, 0.42f),
+            Float4(0.0f, s_CharacterLift, 0.0f, 0.0f),
+            Float4(1.0f, 1.0f, 1.0f, 0.0f),
+            &tintApplied
+        );
+        if(!tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to set glass character tint"));
 
-        return entity.id();
+        return entity;
     }
 
     void animatePoses(){

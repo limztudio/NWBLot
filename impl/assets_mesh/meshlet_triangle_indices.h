@@ -7,6 +7,7 @@
 
 #include "geometry_payload.h"
 #include "meshlet_ref_decode.h"
+#include "meshlet_triangle_visit.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,42 +40,27 @@ template<
 ){
     const u8* const deltaBytes = positionRefDeltas.data();
     const usize deltaByteCount = positionRefDeltas.size();
-    const usize localVertexRefCount = localVertexRefs.size();
     const usize primitiveIndexCount = primitiveIndices.size();
 
     outIndices.assign(primitiveIndexCount, 0u);
 
-    for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
-        const MeshletDesc& meshlet = meshlets[meshletIndex];
-        const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
-        const bool skinRequired = meshlet.skinBase != s_MeshMissingStreamIndex;
+    return ForEachMeshletTriangleCorner(
+        meshlets,
+        localVertexRefs,
+        primitiveIndices,
+        [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef) -> bool {
+            const bool skinRequired = meshlet.skinBase != s_MeshMissingStreamIndex;
+            const u32 localPositionIndex = static_cast<u32>(localVertexRef.localDeformedPosition);
+            MeshletPositionStreamRef positionRef;
+            if(!DecodeMeshletPositionRef(deltaBytes, deltaByteCount, meshlet, localPositionIndex, skinRequired, positionRef))
+                return false;
+            if(static_cast<usize>(positionRef.position) >= positionCount)
+                return false;
 
-        for(u32 primitive = 0u; primitive < primitiveCount; ++primitive){
-            const usize primitiveBase = static_cast<usize>(meshlet.primitiveOffset) + static_cast<usize>(primitive) * NWB_MESHLET_TRIANGLE_INDEX_COUNT;
-
-            for(u32 corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner){
-                const usize primitiveByte = primitiveBase + corner;
-                if(primitiveByte >= primitiveIndexCount)
-                    return false;
-
-                const u32 localVertexIndex = static_cast<u32>(primitiveIndices[primitiveByte]);
-                const usize localVertexRefIndex = static_cast<usize>(meshlet.localVertexOffset) + localVertexIndex;
-                if(localVertexRefIndex >= localVertexRefCount)
-                    return false;
-
-                const u32 localPositionIndex = static_cast<u32>(localVertexRefs[localVertexRefIndex].localDeformedPosition);
-                MeshletPositionStreamRef positionRef;
-                if(!DecodeMeshletPositionRef(deltaBytes, deltaByteCount, meshlet, localPositionIndex, skinRequired, positionRef))
-                    return false;
-                if(static_cast<usize>(positionRef.position) >= positionCount)
-                    return false;
-
-                outIndices[primitiveByte] = positionRef.position;
-            }
+            outIndices[primitiveByte] = positionRef.position;
+            return true;
         }
-    }
-
-    return true;
+    );
 }
 
 template<typename IndexContainer>

@@ -7,6 +7,7 @@
 
 #include "geometry_payload.h"
 #include "meshlet_ref_decode.h"
+#include "meshlet_triangle_visit.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,46 +61,30 @@ template<
 ){
     const u8* const attributeDeltaBytes = attributeRefDeltas.data();
     const usize attributeDeltaByteCount = attributeRefDeltas.size();
-    const usize localVertexRefCount = localVertexRefs.size();
     const usize primitiveIndexCount = primitiveIndices.size();
     const usize normalCount = normalStream.size();
     const usize uv0Count = uv0Stream.size();
 
     outAttributes.assign(primitiveIndexCount, AttribGpu{});
 
-    for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
-        const MeshletDesc& meshlet = meshlets[meshletIndex];
-        const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
+    return ForEachMeshletTriangleCorner(
+        meshlets,
+        localVertexRefs,
+        primitiveIndices,
+        [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef) -> bool {
+            const u32 localAttributeIndex = static_cast<u32>(localVertexRef.localAttribute);
+            MeshletAttributeStreamRef attributeRef;
+            if(!DecodeMeshletAttributeRef(attributeDeltaBytes, attributeDeltaByteCount, meshlet, localAttributeIndex, attributeRef))
+                return false;
+            if(static_cast<usize>(attributeRef.normal) >= normalCount || static_cast<usize>(attributeRef.uv0) >= uv0Count)
+                return false;
 
-        for(u32 primitive = 0u; primitive < primitiveCount; ++primitive){
-            const usize primitiveBase = static_cast<usize>(meshlet.primitiveOffset) + static_cast<usize>(primitive) * NWB_MESHLET_TRIANGLE_INDEX_COUNT;
-
-            for(u32 corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner){
-                const usize primitiveByte = primitiveBase + corner;
-                if(primitiveByte >= primitiveIndexCount)
-                    return false;
-
-                const u32 localVertexIndex = static_cast<u32>(primitiveIndices[primitiveByte]);
-                const usize localVertexRefIndex = static_cast<usize>(meshlet.localVertexOffset) + localVertexIndex;
-                if(localVertexRefIndex >= localVertexRefCount)
-                    return false;
-
-                const MeshletLocalVertexRef& localVertexRef = localVertexRefs[localVertexRefIndex];
-                const u32 localAttributeIndex = static_cast<u32>(localVertexRef.localAttribute);
-                MeshletAttributeStreamRef attributeRef;
-                if(!DecodeMeshletAttributeRef(attributeDeltaBytes, attributeDeltaByteCount, meshlet, localAttributeIndex, attributeRef))
-                    return false;
-                if(static_cast<usize>(attributeRef.normal) >= normalCount || static_cast<usize>(attributeRef.uv0) >= uv0Count)
-                    return false;
-
-                AttribGpu& attribute = outAttributes[primitiveByte];
-                attribute.normal = normalStream[attributeRef.normal];
-                attribute.uv0 = uv0Stream[attributeRef.uv0];
-            }
+            AttribGpu& attribute = outAttributes[primitiveByte];
+            attribute.normal = normalStream[attributeRef.normal];
+            attribute.uv0 = uv0Stream[attributeRef.uv0];
+            return true;
         }
-    }
-
-    return true;
+    );
 }
 
 template<typename AttributeOutContainer>

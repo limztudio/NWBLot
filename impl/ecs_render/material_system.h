@@ -42,6 +42,7 @@ public:
     );
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
     [[nodiscard]] bool findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
+    void prepareVisibleMaterialSurfaceInfos();
     [[nodiscard]] bool createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer* framebuffer, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool findRendererPipeline(const MaterialPipelineKey& pipelineKey, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool hasTransparentRenderers(RendererResourceLookupMode::Enum lookupMode);

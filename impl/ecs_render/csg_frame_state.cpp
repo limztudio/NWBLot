@@ -155,7 +155,7 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
         NWB_ASSERT(mesh);
 
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(!m_renderer.materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo)){
+        if(!m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo)){
             frameStateCacheable = false;
             continue;
         }

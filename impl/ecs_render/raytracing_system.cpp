@@ -579,7 +579,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(m_renderer.materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo)){
+        if(m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo)){
             u32 materialConstantByteOffset = 0u;
             if(!m_renderer.materialSystem().appendShadowOccluderMaterialContext(
                 entity,
@@ -800,7 +800,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(m_renderer.materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo)){
+        if(m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo)){
             u32 materialConstantByteOffset = 0u;
             if(!m_renderer.materialSystem().appendShadowOccluderMaterialContext(
                 entity,
@@ -929,7 +929,7 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
         // Only refractive instances are emission targets (the producer's classification, mirroring buildSceneTlas
         // / buildSceneSwBvh's MaterialSurfaceInfo.refractive read).
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(!m_renderer.materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo))
+        if(!m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo))
             continue;
         if(!materialInfo || !materialInfo->refractive)
             continue;

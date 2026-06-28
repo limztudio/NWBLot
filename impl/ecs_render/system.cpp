@@ -145,6 +145,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
 
     m_meshSystem.pruneRuntimeMeshResources();
+    m_materialSystem.prepareVisibleMaterialSurfaceInfos();
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
 

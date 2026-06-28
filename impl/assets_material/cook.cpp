@@ -91,6 +91,14 @@ static bool BuildMaterialBindIncludeVirtualPathImpl(
     return true;
 }
 
+static bool HasProjectAssetVirtualRoot(const AStringView virtualPath, ScratchArena& scratchArena){
+    ACompactString virtualRoot;
+    if(!Core::Assets::AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, virtualRoot, scratchArena))
+        return false;
+
+    return virtualRoot.view() == Core::Assets::s_ProjectVirtualRoot;
+}
+
 static bool TryResolveMaterialBindDependencyInterface(
     const Path& normalizedMaterialBindIncludeRoot,
     const Path& dependency,
@@ -374,7 +382,8 @@ static bool ParseVariantField(
 static bool ParseMaterialStageShaders(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    MaterialCookEntry::StageShaderMap& outStageShaders
+    MaterialCookEntry::StageShaderMap& outStageShaders,
+    ScratchArena& scratchArena
 ){
     outStageShaders.clear();
 
@@ -398,9 +407,19 @@ static bool ParseMaterialStageShaders(
             return false;
         }
 
+        const Core::Metascript::MStringView shaderText = shaderValue.asString();
+        const AStringView shaderPath = TrimView(AStringView(shaderText.data(), shaderText.size()));
+        if(!HasProjectAssetVirtualRoot(shaderPath, scratchArena)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage '{}' must use the project/ virtual root")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(stageKeyText)
+            );
+            return false;
+        }
+
         const Core::ShaderType::Enum shaderType =
             Core::ShaderStageNames::ShaderTypeFromArchiveStageName(ToName(stageKeyText));
-        const Name shaderName = ToName(shaderValue.asString());
+        const Name shaderName = ToName(shaderPath);
         Core::Assets::AssetRef<Shader> shaderAsset;
         shaderAsset.virtualPath = shaderName;
         if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid()){
@@ -561,8 +580,8 @@ static bool ParseMaterialInterface(
         return false;
     }
 
-    if(!Core::Assets::HasReservedAssetVirtualRoot(interfacePath, scratchArena)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must be a project/- or engine/-rooted virtual path "
+    if(!HasProjectAssetVirtualRoot(interfacePath, scratchArena)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must use the project/ virtual root "
             "(e.g. 'project/shaders/surface.bind')")
             , PathToString<tchar>(nwbFilePath)
         );
@@ -601,7 +620,7 @@ static bool ParseMaterialInterface(
     return true;
 }
 
-// Parses an optional material field whose value is a `project/`/`engine/`-rooted virtual path carrying a
+// Parses an optional material field whose value is a `project/`-rooted virtual path carrying a
 // dedicated extension (e.g. `bxdf` -> ".bxdf", `surface` -> ".surface"), mirroring how `interface` names a
 // `.bind`. Parse only validates the format + stores the virtual path verbatim (forward slashes, original case);
 // the cross-asset phase (volume_prepare) resolves it to an absolute source against all asset roots (only known
@@ -637,8 +656,8 @@ static bool ParseMaterialVirtualAssetField(
         return false;
     }
 
-    if(!Core::Assets::HasReservedAssetVirtualRoot(virtualPath, scratchArena)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a project/- or engine/-rooted virtual path "
+    if(!HasProjectAssetVirtualRoot(virtualPath, scratchArena)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must use the project/ virtual root "
             "(e.g. 'project/shaders/name{}')")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -1799,7 +1818,7 @@ static bool ParseMaterialMeta(
         return false;
     if(!ParseMaterialRenderProperties(nwbFilePath, asset, outEntry))
         return false;
-    if(!ParseMaterialStageShaders(nwbFilePath, asset, outEntry.stageShaders))
+    if(!ParseMaterialStageShaders(nwbFilePath, asset, outEntry.stageShaders, scratchArena))
         return false;
     if(!ParseMaterialParameters(nwbFilePath, asset, outEntry.parameters))
         return false;

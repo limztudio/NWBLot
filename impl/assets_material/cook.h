@@ -47,12 +47,12 @@ struct MaterialCookEntry{
     Material::TypedLayoutFieldVector typedLayoutFields;
     Material::TypedBlockByteVector typedBlockBytes;
     MaterialCookString shaderVariant;
-    // This material's deferred lighting BXDF source. Parse stores the `project/`- or `engine/`-rooted virtual
+    // This material's deferred lighting BXDF source. Parse stores the `project/`-rooted virtual
     // path (with the dedicated `.bxdf` extension) from the required `bxdf` field; the cross-asset phase resolves
     // it to an absolute, canonical (forward-slash) path against all asset roots, then dedups by it, assigns
     // shadingModelId, and generates the deferred lighting dispatch module.
     MaterialCookString bxdfSource;
-    // This material's surface hook. Parse stores the `project/`/`engine/`-rooted virtual path (`.surface`) from
+    // This material's surface hook. Parse stores the `project/`-rooted virtual path (`.surface`) from
     // the optional `surface` field; the cross-asset phase resolves it to an absolute path and (when `shaders` is
     // omitted) generates this material's G-buffer pixel shader by wrapping it with the engine PS authoring + the
     // material's `.bind`. Empty when the material declares explicit `shaders` instead.

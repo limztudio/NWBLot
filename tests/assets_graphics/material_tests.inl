@@ -1056,6 +1056,74 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
+TEST(AssetsGraphics, MaterialMetadataRejectsEngineRootedPolicySelectors){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    static constexpr AStringView s_EngineRootedInterfaceMeta = R"NWB_META(material asset;
+
+asset.interface = "engine/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+)NWB_META";
+
+    static constexpr AStringView s_EngineRootedSurfaceMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.surface = "engine/shaders/surface.surface";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
+
+)NWB_META";
+
+    static constexpr AStringView s_EngineRootedBxdfMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "engine/shaders/material_bxdf.bxdf";
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+)NWB_META";
+
+    static constexpr AStringView s_EngineRootedStageShaderMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
+
+asset.shaders = {
+    "mesh": "engine/graphics/mesh/shared_ms",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+)NWB_META";
+
+    TestArena testArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
+    const auto expectRejected = [&](const AStringView metaText, const TStringView expectedError){
+        NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
+        EXPECT_FALSE(ParseMaterialEntryFromMetaText(metaText, testArena, materialEntry, scratchArena));
+        EXPECT_TRUE(logger.sawErrorContaining(expectedError));
+    };
+
+    expectRejected(s_EngineRootedInterfaceMeta, NWB_TEXT("interface must use the project/ virtual root"));
+    expectRejected(s_EngineRootedSurfaceMeta, NWB_TEXT("field 'surface' must use the project/ virtual root"));
+    expectRejected(s_EngineRootedBxdfMeta, NWB_TEXT("field 'bxdf' must use the project/ virtual root"));
+    expectRejected(s_EngineRootedStageShaderMeta, NWB_TEXT("shader stage 'mesh' must use the project/ virtual root"));
+    EXPECT_EQ(logger.errorCount(), 4u);
+#endif
+}
+
 TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
     TestArena testArena;
     NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);

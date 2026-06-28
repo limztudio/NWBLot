@@ -48,9 +48,12 @@ NWB_INLINE f32 ResolveFramebufferAspectRatio(const Core::FramebufferInfoEx& fram
 // screen coverage. Directional lights cover the whole frame (and always outrank comparable local lights);
 // local lights are weighted by their influence range relative to the camera distance (a squared proxy --
 // monotonic, no sqrt). Higher = more worth a scarce shadow slot.
-inline f32 ShadowSlotImportance(const SceneLightGpuData& light, const Float4& cameraPosition){
-    const SIMDVector colorIntensity = LoadFloat(light.colorIntensity);
-    const SIMDVector params = LoadFloat(light.params);
+inline f32 ShadowSlotImportance(
+    const SIMDVector colorIntensity,
+    const SIMDVector params,
+    const SIMDVector lightPosition,
+    const SIMDVector cameraPosition
+){
     const SIMDVector luminance = Vector3Dot(colorIntensity, VectorSet(0.2126f, 0.7152f, 0.0722f, 0.0f));
     const SIMDVector intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
     const SIMDVector radiantImportance = VectorMultiply(luminance, intensity);
@@ -58,7 +61,7 @@ inline f32 ShadowSlotImportance(const SceneLightGpuData& light, const Float4& ca
     if(VectorGetY(params) < 0.5f)
         return VectorGetX(VectorMultiplyAdd(radiantImportance, VectorReplicate(4.0f), s_SIMDOne));
 
-    const SIMDVector delta = VectorSubtract(LoadFloat(light.position), LoadFloat(cameraPosition));
+    const SIMDVector delta = VectorSubtract(lightPosition, cameraPosition);
     const SIMDVector distanceSquared = Vector3LengthSq(delta);
     const SIMDVector range = VectorMax(VectorSplatX(params), VectorZero());
     const SIMDVector rangeSquared = VectorMultiply(range, range);
@@ -103,9 +106,10 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, SceneLightGpuData* outLig
     // fully lit). A simple K-pass selection over <= NWB_SCENE_MAX_LIGHTS lights is trivially cheap.
     const u32 lightCount = static_cast<u32>(gatheredCount);
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, 1.0f);
-    Float4 cameraPosition(0.f, 0.f, 0.f, 0.f);
-    if(cameraView.valid())
-        StoreFloat(LoadFloat(cameraView.transform->position), &cameraPosition);
+    const SIMDVector cameraPosition = cameraView.valid()
+        ? LoadFloat(cameraView.transform->position)
+        : VectorZero()
+    ;
 
     const u32 slotCount = (lightCount < NWB_SCENE_SHADOW_SLOT_COUNT) ? lightCount : NWB_SCENE_SHADOW_SLOT_COUNT;
     for(u32 slot = 0u; slot < slotCount; ++slot){
@@ -114,7 +118,12 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, SceneLightGpuData* outLig
         for(u32 i = 0u; i < lightCount; ++i){
             if(outLights[i].params.z >= 0.f)
                 continue;
-            const f32 importance = ShadowSlotImportance(outLights[i], cameraPosition);
+            const f32 importance = ShadowSlotImportance(
+                LoadFloat(outLights[i].colorIntensity),
+                LoadFloat(outLights[i].params),
+                LoadFloat(outLights[i].position),
+                cameraPosition
+            );
             if(importance > bestImportance){
                 bestImportance = importance;
                 bestIndex = i;
@@ -142,8 +151,7 @@ inline bool CausticLightEnabled(const SceneLightGpuData& light){
 // Caustic importance: pure radiant power (luminance * intensity), the same energy proxy ShadowSlotImportance
 // uses, but WITHOUT the screen-coverage weighting (the caustic budget is aimed at the refractive occluders, not
 // the camera). Higher = more worth a scarce caustic slot.
-inline f32 CausticSlotImportance(const SceneLightGpuData& light){
-    const SIMDVector colorIntensity = LoadFloat(light.colorIntensity);
+inline f32 CausticSlotImportance(const SIMDVector colorIntensity){
     const SIMDVector luminance = Vector3Dot(colorIntensity, VectorSet(0.2126f, 0.7152f, 0.0722f, 0.0f));
     const SIMDVector intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
     return VectorGetX(VectorMultiply(luminance, intensity));
@@ -171,7 +179,7 @@ inline u32 ResolveCausticLights(SceneLightGpuData* outLights, const u32 lightCou
                 continue;
             if(!CausticLightEligible(outLights[i]))
                 continue;
-            const f32 importance = CausticSlotImportance(outLights[i]);
+            const f32 importance = CausticSlotImportance(LoadFloat(outLights[i].colorIntensity));
             if(importance > bestImportance){
                 bestImportance = importance;
                 bestIndex = i;

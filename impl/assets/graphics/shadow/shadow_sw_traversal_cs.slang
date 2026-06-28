@@ -273,7 +273,7 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
             if(triangleHit.hit){
                 if(!transparent){
                     // Opaque occluder: light is fully blocked, stop the whole traversal.
-                    acc.transmittance = float3(0.0, 0.0, 0.0);
+                    acc.transmittance = half3(0.0, 0.0, 0.0);
                     return;
                 }
                 // Transparent occluder: evaluate this material's surface hook for its optical params and integrate
@@ -318,7 +318,7 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
             // fully-opaque occluder rather than being skipped, so a pathologically unbalanced BVH over-darkens
             // at worst instead of leaking light through unvisited geometry.
             if((stackPointer + 2u) > NWB_SW_SHADOW_MESH_STACK_SIZE){
-                acc.transmittance = float3(0.0, 0.0, 0.0);
+                acc.transmittance = half3(0.0, 0.0, 0.0);
                 return;
             }
             stack[stackPointer++] = node.leftChild;
@@ -355,7 +355,7 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
             // Conservative on stack exhaustion (see nwbSwShadowInstanceOccluded): an over-deep scene tree is
             // treated as a fully-opaque occluder rather than dropping instances. Unreachable in practice.
             if((stackPointer + 2u) > NWB_SW_SHADOW_SCENE_STACK_SIZE){
-                acc.transmittance = float3(0.0, 0.0, 0.0);
+                acc.transmittance = half3(0.0, 0.0, 0.0);
                 return;
             }
             stack[stackPointer++] = node.leftChild;
@@ -368,7 +368,7 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
 // (directional aims along the toward-light axis to "infinity"; point/spot aim at the light with tMax = the
 // distance; geometric-normal bias + tMin avoids self-intersection; a light inside the bias shell is lit).
 // Returns the per-channel transmittance: float3(1) when fully lit, tinted toward zero through occluders.
-float3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light){
+half3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light){
     float3 toLight;
     float tMax;
     if(light.params.y < 0.5){
@@ -384,7 +384,7 @@ float3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, 
     const float tMin = 0.001;
     const float tEnd = tMax - 0.002;
     if(tEnd <= tMin)
-        return float3(1.0, 1.0, 1.0);
+        return half3(1.0, 1.0, 1.0);
 
     const float3 origin = worldPosition + normal * tMin;
     NwbShadowVisibilityAccumulator acc = nwbShadowVisibilityBegin();
@@ -424,7 +424,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         if(slot < 0.0)
             continue;
 
-        const float3 transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
+        const half3 transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
         g_NwbSwShadowVisibility[uint3(pixel, uint(slot))] = float4(transmittance, 1.0);
     }
 }

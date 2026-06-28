@@ -1251,7 +1251,7 @@ static bool CookMaterialBindShaderProbe(
 // Minimal deferred-lighting BXDF fragment (the deferred lighting framework is in scope; the fragment includes
 // nothing). Required at cook for every material.
 static constexpr AStringView s_MaterialBindBxdfSource =
-    "float3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){ return surface.baseColor; }\n";
+    "half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){ return surface.baseColor; }\n";
 
 // Writes the full material-integration asset set: a fixed generic mesh shader (material_mesh), a varying pixel
 // shader (material_ps, which reads the typed .bind), the required bxdf fragment, the .bind interface, and the

@@ -17,8 +17,8 @@
 
 // Clamps a material's computed surface color to the displayable [0,1] range. A material that wants a color
 // transform applies it directly in its surface hook (the engine has no compile-time color variant).
-float3 nwbMaterialVertexColor(float3 color){
-    return clamp(color, float3(0.0), float3(1.0));
+half3 nwbMaterialVertexColor(half3 color){
+    return clamp(color, half3(0.0), half3(1.0));
 }
 
 

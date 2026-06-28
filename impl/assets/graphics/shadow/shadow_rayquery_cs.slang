@@ -50,7 +50,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         if(slot < 0.0)
             continue;
 
-        const float3 transmittance = nwbShadowRqLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
+        const half3 transmittance = nwbShadowRqLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
         g_NwbShadowVisibility[uint3(pixel, uint(slot))] = float4(transmittance, 1.0);
     }
 }

@@ -26,10 +26,10 @@ NwbDeferredLightingPixelOutput main(NwbDeferredLightingPixelInput input){
     }
 
     const int2 pixel = int2(input.position.xy);
-    const float3 shadedColor = clamp(
+    const half3 shadedColor = clamp(
         nwbDeferredDispatchBxdf(surface.shadingModel, surface, pixel),
-        float3(0.0),
-        float3(1.0)
+        half3(0.0),
+        half3(1.0)
     );
 
     output.color = float4(shadedColor, 1.0);

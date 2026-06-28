@@ -21,7 +21,7 @@ struct NwbAvboitOccupancyPixelInput{
 #endif
 };
 
-static float4 inColor;
+static half4 inColor;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,7 +37,7 @@ void main(NwbAvboitOccupancyPixelInput input, float4 fragCoord : SV_Position){
         discard;
 #endif
 
-    const float alpha = nwbAvboitResolveFragmentAlpha(input.color);
+    const half alpha = nwbAvboitResolveFragmentAlpha(inColor);
     uint virtualSlice;
     if(!nwbAvboitAcceptLowDepthFragment(g_OpaqueDepth, g_PointSampler, fragCoord, alpha, virtualSlice))
         discard;

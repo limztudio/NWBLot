@@ -15,7 +15,7 @@ NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
     const NwbRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
-    const float3 baseColor = (surface.base_color * runtime.color_tint).rgb;
+    const half3 baseColor = half3((surface.base_color * runtime.color_tint).rgb);
     return nwbMakeMeshSurface(nwbMaterialVertexColor(baseColor), inNormal);
 }
 

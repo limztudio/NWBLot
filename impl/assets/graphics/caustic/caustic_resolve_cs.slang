@@ -73,7 +73,7 @@ ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
 // Groupshared (LDS) tile for the small-dilation wavelet passes: the group cooperatively loads its half-res tile + halo
 // here once, then every thread taps from LDS instead of re-Loading the G-buffer + color textures per tap. Sized for the
 // largest LDS-tiled step (24x24 = 576 texels).
-groupshared float3 s_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
+groupshared half3  s_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared float3 s_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   s_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 
@@ -224,13 +224,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const uint tileTexels = (uint)(tileW * tileW);
         for(uint i = threadIndex; i < tileTexels; i += threadCount){
             const int2 t = tileOrigin + int2((int)(i % (uint)tileW), (int)(i / (uint)tileW));
-            float3 tapColor = float3(0.0, 0.0, 0.0);
+            half3 tapColor = half3(0.0, 0.0, 0.0);
             float3 tapWorld = float3(0.0, 0.0, 0.0);
             uint tapValid = 0u;
             // Only receiver texels inside the half-res image contribute (matches the texture path's OOB + background skips).
             if(t.x >= 0 && t.y >= 0 && t.x < hw && t.y < hh){
                 if(nwbCausticResolveValidAtHalf(t)){
-                    tapColor = g_NwbCausticResolveInputColor.Load(int3(t, 0)).rgb;
+                    tapColor = half3(g_NwbCausticResolveInputColor.Load(int3(t, 0)).rgb);
                     tapWorld = nwbCausticResolveWorldAtHalf(t);
                     tapValid = 1u;
                 }
@@ -264,7 +264,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     continue;
                 const float3 d = s_NwbCausticResolveTileWorld[idx] - centerWorld;
                 const float weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * exp(-dot(d, d) * invTwoSigmaWorldSq);
-                sum += weight * s_NwbCausticResolveTileColor[idx];
+                sum += weight * float3(s_NwbCausticResolveTileColor[idx]);
                 weightSum += weight;
             }
         }

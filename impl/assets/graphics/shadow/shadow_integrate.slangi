@@ -53,7 +53,7 @@ struct NwbShadowOccluderBin{
 //   transmittance -- opaque-hit gate (seed 1; opaque hit zeroes it). Transparent Fresnel is held per bin until finalize so singleton edge hits cannot darken a pixel without a real volume chord.
 //   bins/binCount -- the per-occluder optical-depth bins (see NwbShadowOccluderBin).
 struct NwbShadowVisibilityAccumulator{
-    float3 transmittance;
+    half3 transmittance;
     uint binCount;
     NwbShadowOccluderBin bins[NWB_SHADOW_MAX_OCCLUDER_BINS];
 };
@@ -62,7 +62,7 @@ struct NwbShadowVisibilityAccumulator{
 // Seed a fully-lit accumulator (no occluders yet). Bins are written on first use; binCount gates every read.
 NwbShadowVisibilityAccumulator nwbShadowVisibilityBegin(){
     NwbShadowVisibilityAccumulator acc;
-    acc.transmittance = float3(1.0, 1.0, 1.0);
+    acc.transmittance = half3(1.0, 1.0, 1.0);
     acc.binCount = 0u;
     return acc;
 }
@@ -139,7 +139,7 @@ void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const 
 // Combine into the final per-channel visibility. Per occluder: sorted unique hit distances are paired into inside
 // intervals. An odd or overflowed crossing list falls back to the bounded crossing span (or a non-grazing singleton
 // fallback for the one-hit numerical-miss case), never to signed absolute t.
-float3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){
+half3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){
     float3 opticalDepth = float3(0.0, 0.0, 0.0);
     float interfaceTransmittance = 1.0;
     for(uint i = 0u; i < acc.binCount; ++i){
@@ -175,7 +175,7 @@ float3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){
         interfaceTransmittance *= lerp(1.0, acc.bins[i].interfaceTransmittance, interfaceWeight);
         opticalDepth += acc.bins[i].absorptionCoeff * chordLength;
     }
-    return saturate(acc.transmittance * interfaceTransmittance * exp(-max(opticalDepth, float3(0.0, 0.0, 0.0))));
+    return half3(saturate(float3(acc.transmittance) * interfaceTransmittance * exp(-max(opticalDepth, float3(0.0, 0.0, 0.0)))));
 }
 
 

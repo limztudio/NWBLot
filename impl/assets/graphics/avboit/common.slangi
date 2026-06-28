@@ -62,8 +62,8 @@ ConstantBuffer<NwbAvboitDrawPushConstants> g_NwbAvboitDraw;
 #include "push_constants.slangi"
 #undef NWB_AVBOIT_PUSH_CONSTANTS
 
-float nwbAvboitResolveFragmentAlpha(float4 color){
-    return clamp(color.a, 0.0, 1.0);
+half nwbAvboitResolveFragmentAlpha(half4 color){
+    return half(clamp(color.a, 0.0, 1.0));
 }
 
 #if NWB_CSG_ENABLED
@@ -171,8 +171,8 @@ float nwbAvboitOpaqueDepthFromLowFragCoord(Texture2D<float4> opaqueDepth, Sample
     return opaqueDepth.Sample(pointSampler, nwbAvboitFullUvFromLowFragCoord(fragCoord)).r;
 }
 
-float nwbAvboitExtinctionFromAlpha(float alpha){
-    return -log(max(1.0 - clamp(alpha, 0.0, 1.0), NWB_AVBOIT_ALPHA_EPSILON));
+float nwbAvboitExtinctionFromAlpha(half alpha){
+    return -log(max(1.0 - float(clamp(alpha, half(0.0), half(1.0))), NWB_AVBOIT_ALPHA_EPSILON));
 }
 
 uint nwbAvboitPackExtinctionByte(float extinction){
@@ -183,7 +183,7 @@ bool nwbAvboitAcceptLowDepthFragment(
     Texture2D<float4> opaqueDepth,
     SamplerState pointSampler,
     float4 fragCoord,
-    const float alpha,
+    const half alpha,
     out uint outVirtualSlice
 ){
     outVirtualSlice = 0u;

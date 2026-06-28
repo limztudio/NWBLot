@@ -1819,7 +1819,7 @@ static constexpr AStringView s_DeferredBxdfModuleSubPath = "deferred/generated/b
 // Sentinel shadow-transmittance id for a material that contributes NO surface hook (it declares explicit
 // `shaders` instead of a `.surface`). The dense surface-authored ids start at 0, so a surface-less material must
 // NOT reuse 0 (that aliases the first real surface hook). This reserved id is never emitted as a `case` in the
-// generated dispatch switch, so a hit on such an occluder falls through to `default: return float3(1)` -- the
+// generated dispatch switch, so a hit on such an occluder falls through to `default: return half3(1)` -- the
 // occluder passes all light untinted, the only correct behavior for a material with no transmittance hook.
 static constexpr u32 s_ShadowTransmittanceNoSurfaceModelId = Limit<u32>::s_Max;
 
@@ -2009,7 +2009,7 @@ static bool EmitDeferredBxdfDispatchModuleImpl(
         source += "\n\n";
     }
 
-    source += "float3 nwbDeferredDispatchBxdf(uint shadingModel, NwbBxdfSurface surface, int2 pixel){\n";
+    source += "half3 nwbDeferredDispatchBxdf(uint shadingModel, NwbBxdfSurface surface, int2 pixel){\n";
     source += "    switch(shadingModel){\n";
     for(usize id = 0u; id < sourceById.size(); ++id){
         if(sourceById[id].empty())
@@ -2024,7 +2024,7 @@ static bool EmitDeferredBxdfDispatchModuleImpl(
         source += idView;
         source += "(surface, pixel);\n";
     }
-    source += "    default: return float3(1.0, 0.0, 1.0); // no engine default BXDF: an unknown id shows magenta\n";
+    source += "    default: return half3(1.0, 0.0, 1.0); // no engine default BXDF: an unknown id shows magenta\n";
     source += "    }\n";
     source += "}\n\n#endif\n";
 
@@ -2234,7 +2234,7 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
     }
     // Unknown id: a neutral surface (ior = 1, transmission = white -> no Fresnel attenuation, no absorption), so a
     // no-match occluder behaves as the prior all-light default.
-    source += "    default: return nwbMakeMeshSurface(float3(0.0, 0.0, 0.0), hit.worldNormal, 0.0, 0.0);\n";
+    source += "    default: return nwbMakeMeshSurface(half3(0.0, 0.0, 0.0), hit.worldNormal, half(0.0), half(0.0));\n";
     source += "    }\n";
     source += "}\n\n#endif\n";
 

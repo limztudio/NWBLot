@@ -37,7 +37,7 @@ struct NwbMeshPixelInput{
     NWB_MESH_RASTER_PAYLOAD_FIELDS
 };
 
-static float4 inColor;
+static half4 inColor;
 static float3 inNormal;
 static float4 inTangent;
 static float2 inUv0;
@@ -50,7 +50,7 @@ static float inPixelDepth;
 // attributes (PrimitiveIndex + barycentrics). It carries exactly the attributes a hook may consult -- it is NOT
 // SV_-decorated, so a non-rasterizer stage (the trace) can construct + supply it without rasterizer plumbing.
 struct NwbMeshSurfaceInputs{
-    float4 color;
+    half4 color;
     float3 normal;
     float4 tangent;
     float2 uv0;
@@ -75,7 +75,7 @@ void nwbLoadMeshSurfaceInputs(NwbMeshSurfaceInputs inputs){
 
 void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
     NwbMeshSurfaceInputs inputs;
-    inputs.color = input.color;
+    inputs.color = half4(input.color);
     inputs.normal = input.normal;
     inputs.tangent = input.tangent;
     inputs.uv0 = input.uv0;

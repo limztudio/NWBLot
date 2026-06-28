@@ -18,16 +18,16 @@
 // Color helpers a smoke material's surface hook may apply. These were compile-time variant toggles; they are
 // now plain functions a hook calls (or not): the transparent material applies the transform + tint, the solid
 // materials use the base color directly.
-float3 nwbSmokeMaterialApplyColorTransform(float3 color){
-    return sqrt(max(color, float3(0.0)));
+half3 nwbSmokeMaterialApplyColorTransform(half3 color){
+    return sqrt(max(color, half3(0.0)));
 }
 
-float3 nwbSmokeMaterialApplyVertexTint(float3 color){
-    return color * float3(1.0, 0.92, 0.85);
+half3 nwbSmokeMaterialApplyVertexTint(half3 color){
+    return color * half3(1.0, 0.92, 0.85);
 }
 
-float3 nwbSmokeMaterialVertexColor(float3 color){
-    return clamp(nwbSmokeMaterialApplyVertexTint(nwbSmokeMaterialApplyColorTransform(color)), float3(0.0), float3(1.0));
+half3 nwbSmokeMaterialVertexColor(half3 color){
+    return clamp(nwbSmokeMaterialApplyVertexTint(nwbSmokeMaterialApplyColorTransform(color)), half3(0.0), half3(1.0));
 }
 
 

@@ -29,32 +29,32 @@
 // telescopes to the real inside path length. So the surface stays
 // `{ baseColor, normal, param0, param1, ior, transmission, alpha }`.
 struct NwbMeshSurface{
-    float3 baseColor;
+    half3  baseColor;
     float3 normal;          // world space; the engine encodes it into the normal target
-    float  param0;          // user BXDF parameter, packed into normal.a (e.g. roughness)
-    float  param1;          // user BXDF parameter, packed into world.a (e.g. metallic)
-    float  ior;             // index of refraction (Fresnel). 1.0 = no refraction (fully transmissive surface). The
+    half   param0;          // user BXDF parameter, packed into normal.a (e.g. roughness)
+    half   param1;          // user BXDF parameter, packed into world.a (e.g. metallic)
+    half   ior;             // index of refraction (Fresnel). 1.0 = no refraction (fully transmissive surface). The
                             // shadow trace applies per-crossing Fresnel from this; the rasterizer G-buffer write
                             // discards it. Groundwork for the future caustic producer too.
-    float3 transmission;    // per-unit Beer-Lambert absorption color (the fraction surviving ONE world unit of the
+    half3  transmission;    // per-unit Beer-Lambert absorption color (the fraction surviving ONE world unit of the
                             // medium). float3(1) = no absorption. The shadow trace integrates exp(-absorptionCoeff *
                             // pathLength) over the real entry->exit path; the rasterizer discards it.
-    float  alpha;           // AVBOIT per-pixel opacity the material's hook decides. Default 1.0 (fully opaque): an
+    half   alpha;           // AVBOIT per-pixel opacity the material's hook decides. Default 1.0 (fully opaque): an
                             // opaque material leaves it, and the rasterizer G-buffer + shadow trace ignore it. ALL
                             // THREE AVBOIT passes (occupancy, extinction, accumulate) read it so the extinction-built
                             // volume and the accumulate color-weight share the IDENTICAL shader-decided alpha. A
                             // transparent material's hook sets it (e.g. 1 - nwbLuminance(transmission)).
 };
 
-NwbMeshSurface nwbMakeMeshSurface(float3 baseColor, float3 normal, float param0, float param1){
+NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal, half param0, half param1){
     NwbMeshSurface surface;
     surface.baseColor = baseColor;
     surface.normal = normal;
     surface.param0 = param0;
     surface.param1 = param1;
-    surface.ior = 1.0;
-    surface.transmission = float3(1.0, 1.0, 1.0);
-    surface.alpha = 1.0;
+    surface.ior = half(1.0);
+    surface.transmission = half3(1.0, 1.0, 1.0);
+    surface.alpha = half(1.0);
     return surface;
 }
 
@@ -62,8 +62,8 @@ NwbMeshSurface nwbMakeMeshSurface(float3 baseColor, float3 normal, float param0,
 // trace zeroes an opaque occluder via the trace's opaque flag (it terminates before reading ior/transmission), so
 // the old "unspecified transmittance = black" convention is gone -- the defaults are the neutral, no-attenuation
 // optical params (ior = 1, transmission = white).
-NwbMeshSurface nwbMakeMeshSurface(float3 baseColor, float3 normal){
-    return nwbMakeMeshSurface(baseColor, normal, 0.0, 0.0);
+NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal){
+    return nwbMakeMeshSurface(baseColor, normal, half(0.0), half(0.0));
 }
 
 

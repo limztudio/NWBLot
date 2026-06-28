@@ -275,27 +275,35 @@ private:
     u64 m_tlasDeviceAddress = 0u;
     u32 m_tlasInstanceCount = 0u; // live TLAS instance count (set by buildSceneTlas); the HW caustic raygen's non-zero guard
     Core::BindingLayoutHandle m_shadowBindingLayout;
-    Core::RayTracingPipelineHandle m_shadowPipeline;
-    Core::RayTracingShaderTableHandle m_shadowShaderTable;
+    // Hardware shadow trace is an inline-RayQuery COMPUTE pass (shadow_rayquery_cs); the per-occluder optical-depth
+    // accumulator lives in a compute local, which a hardware ray payload could not index safely.
+    Core::ShaderHandle m_shadowShader;
+    Core::ComputePipelineHandle m_shadowPipeline;
     Core::BindingSetHandle m_shadowBindingSet;
     const Core::RayTracingAccelStruct* m_shadowBindingSetTlas = nullptr;
     const Core::Buffer* m_shadowBindingSetInstanceMaterial = nullptr;
     const Core::Buffer* m_shadowBindingSetMaterialTyped = nullptr;
     const Core::Buffer* m_shadowBindingSetMeshInstances = nullptr;
     u32 m_shadowBindingSetMeshCount = 0u;
-    // Half-res shadow upsample pass (its own compute pipeline): edge-aware bilateral upsample of the half-res ray-traced
-    // shadow visibility into the full-res buffer the lighting samples.
-    Core::BindingLayoutHandle m_shadowUpsampleBindingLayout;
-    Core::ShaderHandle m_shadowUpsampleShader;
-    Core::ComputePipelineHandle m_shadowUpsamplePipeline;
-    Core::BindingSetHandle m_shadowUpsampleBindingSet;
-    const Core::Texture* m_shadowUpsampleBindingSetWorldPosition = nullptr;
-    const Core::Texture* m_shadowUpsampleBindingSetDepth = nullptr;
-    const Core::Texture* m_shadowUpsampleBindingSetHalf = nullptr;
-    const Core::Texture* m_shadowUpsampleBindingSetFull = nullptr;
-    bool m_shadowUpsamplePipelineFailed = false;
+    // Edge-adaptive shadow resolve pass (its own compute pipeline): a full-res pass that bilinear-fills flat regions
+    // from the half-res ray-traced visibility and RE-TRACES the silhouette pixels at full-res, so the shadow edge
+    // matches the full-res scene geometry instead of reading ~2-3px coarser. Because it re-traces, its binding set is
+    // the full trace set (TLAS + per-mesh geometry + material context) PLUS the half-res visibility SRV input -- so its
+    // cache key mirrors the trace set's inputs alongside the half/full visibility targets.
+    Core::BindingLayoutHandle m_shadowResolveBindingLayout;
+    Core::ShaderHandle m_shadowResolveShader;
+    Core::ComputePipelineHandle m_shadowResolvePipeline;
+    Core::BindingSetHandle m_shadowResolveBindingSet;
+    const Core::RayTracingAccelStruct* m_shadowResolveBindingSetTlas = nullptr;
+    const Core::Buffer* m_shadowResolveBindingSetInstanceMaterial = nullptr;
+    const Core::Buffer* m_shadowResolveBindingSetMaterialTyped = nullptr;
+    const Core::Buffer* m_shadowResolveBindingSetMeshInstances = nullptr;
+    u32 m_shadowResolveBindingSetMeshCount = 0u;
+    const Core::Texture* m_shadowResolveBindingSetHalf = nullptr;
+    const Core::Texture* m_shadowResolveBindingSetFull = nullptr;
+    bool m_shadowResolvePipelineFailed = false;
     // Active shadow slots this frame (= min(lightCount, NWB_SCENE_SHADOW_SLOT_COUNT)), set during the light upload and
-    // read by the half-res shadow upsample so it only processes the slots that hold a light.
+    // read by the edge-adaptive shadow resolve so it only processes the slots that hold a light.
     u32 m_shadowSlotCount = 0u;
     // Per-frame instance-material table (NwbRtInstanceMaterialGpu), shared by the hardware any-hit and the
     // software traversal; built lockstep with the TLAS / scene-instance buffer so the array index matches the
@@ -314,11 +322,13 @@ private:
     usize m_shadowInstanceCapacity = 0u;
     usize m_shadowMaterialTypedCapacity = 0u;
     // Per-frame distinct meshes referenced by the TLAS (filled by buildSceneTlas); the per-mesh descriptor arrays
-    // bind these (parallel: slot k = mesh k's index/attribute buffers, indexed by material.meshSlot). The HW BLAS
-    // owns the positions, so only the index + attribute buffers are tracked here. Sized by the shared shader cap
-    // so the C++ arrays and the shader's `[NWB_SHADOW_RT_MAX_MESHES]` stay one definition.
+    // bind these (parallel: slot k = mesh k's index/attribute/position buffers, indexed by material.meshSlot). The
+    // HW BLAS owns the positions it traces, but the any-hit ALSO needs the raw positions to derive the geometric
+    // face normal for the per-crossing faceSign/cosI, so the position buffer is tracked here too. Sized by the
+    // shared shader cap so the C++ arrays and the shader's `[NWB_SHADOW_RT_MAX_MESHES]` stay one definition.
     Core::Buffer* m_shadowMeshIndexBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
     Core::Buffer* m_shadowMeshAttributeBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
+    Core::Buffer* m_shadowMeshPositionBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
     u32 m_shadowMeshCount = 0u;
     bool m_shadowMeshCapReported = false;
     Core::BindingLayoutHandle m_bvhSortBindingLayout;

@@ -54,13 +54,19 @@ private:
     [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
     [[nodiscard]] bool ensureShadowPipeline();
     [[nodiscard]] bool ensureShadowBindingSet(DeferredFrameTargets& targets);
+    // Shared hardware shadow-trace bindings (TLAS + G-buffer + scene/light + per-mesh geometry + material context),
+    // appended by BOTH the half-res trace pipeline/set AND the edge-adaptive resolve pipeline/set -- the resolve
+    // RE-TRACES silhouette pixels at full-res, so it carries the identical trace binding set (plus the half-res SRV).
+    void appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const;
+    void appendShadowTraceBindingSet(Core::BindingSetDesc& desc, DeferredFrameTargets& targets, Core::Texture* visibilityTarget)const;
     [[nodiscard]] bool ensureSwShadowPipeline();
     [[nodiscard]] bool ensureSwShadowBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureSwCausticPipeline();
     [[nodiscard]] bool ensureSwCausticBindingSet(DeferredFrameTargets& targets);
-    // Half-res shadow upsample: edge-aware bilateral upsample of the half-res ray-traced visibility into the full-res buffer.
-    [[nodiscard]] bool ensureShadowUpsamplePipeline();
-    [[nodiscard]] bool ensureShadowUpsampleBindingSet(DeferredFrameTargets& targets);
+    // Edge-adaptive shadow resolve: full-res pass that bilinear-fills flat regions from the half-res trace and
+    // RE-TRACES the silhouette pixels at full-res (so the shadow edge matches the full-res scene geometry).
+    [[nodiscard]] bool ensureShadowResolvePipeline();
+    [[nodiscard]] bool ensureShadowResolveBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureCausticResolvePipeline();
     [[nodiscard]] bool ensureCausticResolveBindingSet(DeferredFrameTargets& targets);
     // Geometry downsample pre-pass: fills the half-res geometry cache (world + receiver validity) the resolve reads.

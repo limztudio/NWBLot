@@ -25,12 +25,13 @@ namespace AssetsGraphicsShadow{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_RaygenShaderName("engine/graphics/shadow/shadow_raygen");
-inline constexpr Name s_MissShaderName("engine/graphics/shadow/shadow_miss");
-inline constexpr Name s_AnyHitShaderName("engine/graphics/shadow/shadow_ahit");
+// Hardware shadow trace: inline RayQuery compute (replaces the raygen/miss/any-hit RT pipeline so the per-occluder
+// optical-depth accumulator can live in a compute local instead of a hardware ray payload).
+inline constexpr Name s_RayQueryShaderName("engine/graphics/shadow/shadow_rayquery_cs");
 inline constexpr Name s_SwTraversalShaderName("engine/graphics/shadow/shadow_sw_traversal_cs");
-// Edge-aware upsample of the half-res ray-traced shadow visibility into the full-res buffer the lighting samples.
-inline constexpr Name s_UpsampleShaderName("engine/graphics/shadow/shadow_upsample_cs");
+// Edge-adaptive resolve of the half-res ray-traced shadow visibility into the full-res buffer the lighting samples:
+// bilinear in flat regions, full-res RE-TRACE at the shadow silhouette so the edge matches the full-res scene geometry.
+inline constexpr Name s_ResolveShaderName("engine/graphics/shadow/shadow_resolve_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

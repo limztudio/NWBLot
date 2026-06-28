@@ -3,7 +3,7 @@
 
 
 #include "module.h"
-#include "text_write.h"
+#include <global/text_write.h>
 
 #include <core/common/log.h>
 
@@ -23,11 +23,11 @@ namespace __hidden_asset_writer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using __hidden_text_write::WriteFloat;
-using __hidden_text_write::WriteVec2;
-using __hidden_text_write::WriteVec3;
-using __hidden_text_write::WriteVec4;
-using __hidden_text_write::s_OutputFloatPrecision;
+using TextWrite::WriteFloat;
+using TextWrite::WriteVec2;
+using TextWrite::WriteVec3;
+using TextWrite::WriteVec4;
+using TextWrite::s_OutputFloatPrecision;
 
 static constexpr f32 s_InvertibleJointDeterminantEpsilon = 0.000000000001f;
 

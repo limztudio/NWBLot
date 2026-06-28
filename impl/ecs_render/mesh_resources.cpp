@@ -482,12 +482,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     createdMesh.dynamicMeshletBoundsFresh = desc.dynamicMeshletBoundsFresh;
     createdMesh.dynamicMeshletConesFresh = desc.dynamicMeshletConesFresh;
     createdMesh.runtimeMeshVersion = desc.version;
-    if(!desc.localBounds.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has invalid CSG receiver bounds")
-            , StringConvert(desc.meshKey.c_str())
-        );
-        return false;
-    }
+    NWB_ASSERT(desc.localBounds.valid());
     createdMesh.csgLocalBounds.minBounds = desc.localBounds.minBounds;
     createdMesh.csgLocalBounds.maxBounds = desc.localBounds.maxBounds;
     createdMesh.csgLocalBounds.minBounds.w = s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag;
@@ -511,8 +506,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
 
 bool RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh){
     outMesh = nullptr;
-    if(!desc.valid())
-        return false;
+    NWB_ASSERT(desc.valid());
 
     const auto foundMesh = meshState().m_meshes.find(desc.meshKey);
     if(foundMesh == meshState().m_meshes.end())

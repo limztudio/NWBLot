@@ -102,7 +102,9 @@ void Frame::setTelemetryUploadCallback(TelemetryUploadCallback callback, void* u
     m_telemetryUploadUserData = userData;
 }
 bool Frame::flushTelemetryUpload(const bool clearAfterUpload){
-    if(!m_telemetryUploadCallback || m_telemetrySession.eventCount() == 0u)
+    if(m_telemetrySession.eventCount() == 0u)
+        return true;
+    if(!m_telemetryUploadCallback)
         return false;
 
     if(!Telemetry::EncodeEventStream(m_telemetrySession.view(), m_telemetryUploadBytes))

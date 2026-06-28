@@ -979,7 +979,7 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     if(!parsed)
         return;
 
-    EXPECT_EQ(materialEntry.materialInterface, Name("project/material_interfaces/test_surface"));
+    EXPECT_EQ(AStringView(materialEntry.materialInterface), AStringView("project/material_interfaces/test_surface"));
     EXPECT_EQ(materialEntry.parameters.size(), 3u);
 
     NWB::Impl::MaterialBindEntry bindEntry(testArena.arena);

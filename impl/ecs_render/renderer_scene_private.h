@@ -26,6 +26,13 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr f32 s_CausticSlotUnassigned = -1.f;
+inline constexpr f32 s_CausticSlotDisabled = -2.f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE f32 ResolveExtentAspectRatio(const u32 width, const u32 height){
     if(width != 0u && height != 0u)
         return static_cast<f32>(width) / static_cast<f32>(height);
@@ -83,7 +90,12 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, SceneLightGpuData* outLig
         dst.position = src.position;
         dst.direction = src.direction;
         dst.colorIntensity = src.colorIntensity;
-        dst.params = Float4(src.range, static_cast<f32>(src.type), -1.f, -1.f); // z = shadow slot, w = caustic slot, both assigned below
+        dst.params = Float4(
+            src.range,
+            static_cast<f32>(src.type),
+            -1.f,
+            src.enableCaustics ? s_CausticSlotUnassigned : s_CausticSlotDisabled
+        ); // z = shadow slot; w = caustic slot, or disabled when the light did not opt in
     }
 
     // Importance-ranked shadow-slot allocator: hand the bounded pool of NWB_SCENE_SHADOW_SLOT_COUNT slots to
@@ -123,6 +135,10 @@ inline bool CausticLightEligible(const SceneLightGpuData& light){
     return light.params.y < 0.5f || light.params.y > 1.5f;
 }
 
+inline bool CausticLightEnabled(const SceneLightGpuData& light){
+    return light.params.w >= (s_CausticSlotUnassigned - 0.5f);
+}
+
 // Caustic importance: pure radiant power (luminance * intensity), the same energy proxy ShadowSlotImportance
 // uses, but WITHOUT the screen-coverage weighting (the caustic budget is aimed at the refractive occluders, not
 // the camera). Higher = more worth a scarce caustic slot.
@@ -132,11 +148,11 @@ inline f32 CausticSlotImportance(const SceneLightGpuData& light){
     return luminance * intensity;
 }
 
-// Assigns the bounded pool of NWB_SCENE_CAUSTIC_SLOT_COUNT caustic slots to the most important caustic-eligible
-// lights, writing the chosen slot index into params.w (negative = no slot). Operates on the already-resolved
-// light array (call AFTER ResolveSceneLights). CRUCIAL GATE: caustics only exist when the scene holds at least
-// one refractive instance; a scene with refractiveInstanceCount == 0 assigns ZERO caustic slots (every params.w
-// stays -1). Returns the number of caustic slots assigned this frame.
+// Assigns the bounded pool of NWB_SCENE_CAUSTIC_SLOT_COUNT caustic slots to the most important caustic-enabled,
+// caustic-eligible lights, writing the chosen slot index into params.w (negative = no slot). Operates on the
+// already-resolved light array (call AFTER ResolveSceneLights). CRUCIAL GATE: caustics only exist when the scene
+// holds at least one refractive instance AND the light explicitly opted in; a normal transparent-shadow scene with
+// refractive materials therefore remains a shadow test, not a photon-caustic test.
 inline u32 ResolveCausticLights(SceneLightGpuData* outLights, const u32 lightCount, const u32 refractiveInstanceCount){
     if(refractiveInstanceCount == 0u || lightCount == 0u)
         return 0u;
@@ -149,6 +165,8 @@ inline u32 ResolveCausticLights(SceneLightGpuData* outLights, const u32 lightCou
         u32 bestIndex = lightCount;
         for(u32 i = 0u; i < lightCount; ++i){
             if(outLights[i].params.w >= 0.f)
+                continue;
+            if(!CausticLightEnabled(outLights[i]))
                 continue;
             if(!CausticLightEligible(outLights[i]))
                 continue;

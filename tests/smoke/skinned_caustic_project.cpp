@@ -232,7 +232,7 @@ public:
             *m_world,
             Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f)
         );
-        NWB::Impl::Scene::CreateDirectionalLightEntity(
+        const auto lightEntity = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DefaultDirectionalLightPitch,
             s_DefaultDirectionalLightYaw,
@@ -240,6 +240,8 @@ public:
             Float4(1.0f, 0.96f, 0.88f),
             s_DefaultDirectionalLightIntensity
         );
+        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(lightEntity))
+            light->enableCaustics = true;
 
         m_groundEntity = CreateTintedStaticMeshEntity(
             *m_world,

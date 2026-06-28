@@ -57,22 +57,14 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
 static constexpr AStringView s_TransparentShapeMeshPath = "project/meshes/caustic_sphere";
 #else
 // Three DISTINCT spinning glass refractors (left/center/right): a cylinder, an octahedron, and a cone. The cylinder
-// + cone have SMOOTH curved-surface normals (a cylinder focuses light into a line caustic, a cone into a curved
-// caustic), while the octahedron is faceted (8 flat prism faces) -- a variety of caustic behaviours vs the old
-// identical tetrahedra. Generated procedurally (scratchpad gen_shapes.py) into tests/smoke/assets/meshes.
+// + cone have smooth curved silhouettes while the octahedron is faceted, giving the transparent-shadow test a mix of
+// curved and hard-edged tinted occlusion without enabling the additive caustic photon pass.
 static constexpr AStringView s_TransparentLeftMeshPath = "project/meshes/cylinder";
 static constexpr AStringView s_TransparentCenterMeshPath = "project/meshes/octahedron";
 static constexpr AStringView s_TransparentRightMeshPath = "project/meshes/cone";
 #endif
-// Scene rotation. Tetrahedra (plain + CSG) SPIN; the glass sphere is STATIC (its lens focus converges via the EMA into
-// the clean money-shot). NOTE on the spinning tetra caustic: a flat tetra is a PRISM -- spinning sweeps it through
-// steep orientations that DEVIATE the caustic away from the shadow (a prism separates caustic+shadow; a lens keeps them
-// together). This residual displacement is correct prism PHYSICS and cannot be removed without freezing the prism.
-// Two SAMPLING artifacts on top of it were diagnosed + fixed: (1) the diagonal-stripe artifact (dense-photon sampling)
-// via the hash-decorrelated per-target emission in caustic_photon_sw_cs.slang; (2) the far bright patches FLUNG across
-// the receiver, caused by photons chaining through the 3 overlapping tetrahedra (each crossing compounds the prism
-// deviation) -- bounded by the caustic specular-depth cap (NWB_CAUSTIC_MAX_BOUNCES in caustic_trace.slangi), which
-// keeps each tetra's caustic local. Kept spinning for inspection; freeze (rotation 0) for the cleanest converged look.
+// Scene rotation. The plain transparent-shadow scene spins for overlap inspection; the caustic sphere stays static so
+// its focused photon result is easy to inspect.
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 static constexpr f32 s_TransparentSceneRotationSpeed = 0.0f;
 #else
@@ -231,9 +223,8 @@ private:
             throw RuntimeException("TransparentMultiSmokeProject initialization failed");
         }
 
-        // Force ray-tracing emulation so the SOFTWARE caustic producer (P3) runs even on RT-capable hardware -- the
-        // knob for A/B-ing the SW path against the hardware ray-traced producer (P4). Default OFF: the demo runs the
-        // HW caustic producer (the real-hardware path). Define NWB_TRANSPARENT_MULTI_FORCE_RT_EMULATION to force SW.
+        // Force ray-tracing emulation so the software shadow path runs even on RT-capable hardware; for caustic-focused
+        // builds this also A/Bs the SW caustic producer against the hardware ray-traced producer.
 #if defined(NWB_TRANSPARENT_MULTI_FORCE_RT_EMULATION)
         context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingAccelStruct, true);
         context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingPipeline, true);
@@ -283,7 +274,7 @@ public:
         );
         // Shadow-check key light: a single directional source makes the transparent CSG tetrahedra cast a readable
         // tinted transmittance shadow onto the receiver plane below.
-        NWB::Impl::Scene::CreateDirectionalLightEntity(
+        const auto lightEntity = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DefaultDirectionalLightPitch,
             s_DefaultDirectionalLightYaw,
@@ -291,6 +282,11 @@ public:
             Float4(1.0f, 0.96f, 0.88f),
             s_DefaultDirectionalLightIntensity
         );
+        static_cast<void>(lightEntity);
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(lightEntity))
+            light->enableCaustics = true;
+#endif
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         // Single STATIC glass sphere centered above the ground. A sphere lens CONVERGES the directional light into a
@@ -343,8 +339,8 @@ public:
 #endif
 
         // Opaque ground-plane receiver beneath the transparent shape(s). The colored transmittance each transparent
-        // shape casts toward the directional light lands here as a tinted shadow (Phase 6 colored/transmittance
-        // shadows); the additive refracted caustic lands here too (the producer's payoff).
+        // shape casts toward the directional light lands here as a tinted shadow; caustic-focused builds opt in to the
+        // additive photon pass and land that result here too.
         const auto shadowPlaneEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -354,7 +350,7 @@ public:
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
             Float4(1.0f, 1.0f, 1.0f, 1.0f),    // sphere money-shot keeps the original light ground (the validated look)
 #else
-            Float4(0.08f, 0.08f, 0.08f, 1.0f), // dark ground for the tetra so the caustic + any stray sparkles read clearly (caustic is *baseColor in lighting.slangi, so the Reinhard tonemap separates sparkle from a dark ground better)
+            Float4(0.08f, 0.08f, 0.08f, 1.0f), // dark ground keeps the overlapping colored transparent shadows readable
 #endif
             Float4(0.0f, -0.08f, 0.08f),
             Float4(1.75f, 1.0f, 1.55f)

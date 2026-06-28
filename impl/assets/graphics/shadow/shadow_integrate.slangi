@@ -24,28 +24,33 @@
 // Max distinct occluders one shadow ray accumulates PER-OCCLUDER. A ray crosses only the few refractors between it
 // and the light; a further occluder beyond this drops its (rare) contribution gracefully rather than mis-binning.
 #define NWB_SHADOW_MAX_OCCLUDER_BINS 8
+#define NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER 8
+#define NWB_SHADOW_CROSSING_MERGE_MIN_EPSILON 1e-4
+#define NWB_SHADOW_CROSSING_MERGE_REL_EPSILON 1e-5
+#define NWB_SHADOW_INTERFACE_FADE_DISTANCE 2e-3
+#define NWB_SHADOW_SINGLETON_FALLBACK_CHORD 0.20
 
 // Per-occluder optical-depth bin. Each occluder's crossings are accumulated INDEPENDENTLY (binned by instance id) so
-// one occluder's unbalanced crossing cannot corrupt the others. The signed Beer-Lambert sum coeff*t*faceSign
-// telescopes to coeff*chord ONLY when an occluder's entries and exits balance; when they DON'T (a faceted-silhouette
-// clip leaves an odd, unmatched crossing) that signed sum carries an absolute-t spike. Rather than DROP an unbalanced
-// occluder -- which removes its absorption entirely and renders the pixel fully lit (a bright "discarded" speck inside
-// the shadow at the octahedron's facet edges) -- the finalize falls back to the crossing SPAN (tMax - tMin), the true
-// body thickness the ray passed through: an internal facet-edge ray stays shadowed (span ~= body chord), while a true
-// silhouette graze stays lit (span ~= 0). No drop -> no bright discards; the span is bounded -> no absolute-t spike.
+// one occluder's unbalanced crossing cannot corrupt the others. For a closed volume the robust chord is the sum of
+// sorted hit-distance pairs (t1-t0, t3-t2, ...), not a face-sign telescope: at hard triangle edges the ray query can
+// report either adjacent face first and their geometric normals may disagree about entry/exit. Pairing merged hit
+// distances treats an edge hit as one physical boundary and avoids a real through-volume segment collapsing to zero.
 struct NwbShadowOccluderBin{
     uint instanceId;         // the crossing's InstanceID() / scene-BVH instance index; unique per occluder
-    int faceBalance;         // sum of faceSign over this occluder's crossings: 0 == every entry matched by an exit
+    uint crossingCount;      // merged unique boundary hits for this occluder
+    uint crossingOverflow;   // set when crossingT[] is full; finalize falls back to the bounded span
     float3 absorptionCoeff;  // the occluder's per-channel absorption coeff (constant per material; set on first hit)
-    float chordSigned;       // sum of t*faceSign (scalar): == the inside chord when this occluder is balanced
+    float interfaceTransmittance; // product of accepted Fresnel transmissions, applied only when the bin has volume
+    float singletonFallbackChord; // non-grazing one-sided crossing fallback for numerical edge misses
     float tMin;              // nearest crossing distance for this occluder (the span fallback when unbalanced)
     float tMax;              // farthest crossing distance for this occluder
+    float crossingT[NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER]; // unique boundary hit distances, sorted in finalize
 };
 
 // Running accumulators for one occlusion ray. Final visibility = transmittance * exp(-opticalDepth), where the
-// optical depth is summed across the per-occluder bins (exact chord when balanced, span fallback when not -- see
+// optical depth is summed across the per-occluder bins (paired unique hit distances, span fallback when needed -- see
 // nwbShadowFinalizeVisibility).
-//   transmittance -- per-channel Fresnel-transmitted product (seed 1); an opaque hit zeroes it.
+//   transmittance -- opaque-hit gate (seed 1; opaque hit zeroes it). Transparent Fresnel is held per bin until finalize so singleton edge hits cannot darken a pixel without a real volume chord.
 //   bins/binCount -- the per-occluder optical-depth bins (see NwbShadowOccluderBin).
 struct NwbShadowVisibilityAccumulator{
     float3 transmittance;
@@ -63,6 +68,14 @@ NwbShadowVisibilityAccumulator nwbShadowVisibilityBegin(){
 }
 
 
+float nwbShadowCrossingMergeEpsilon(const float t){
+    return max(NWB_SHADOW_CROSSING_MERGE_MIN_EPSILON, abs(t) * NWB_SHADOW_CROSSING_MERGE_REL_EPSILON);
+}
+
+bool nwbShadowCrossingMatchesEndpoint(const float t, const float endpointT){
+    return abs(t - endpointT) <= nwbShadowCrossingMergeEpsilon(max(abs(t), abs(endpointT)));
+}
+
 // Fold ONE transparent surface crossing into the running visibility. The caller supplies the crossing's occluder id
 // + the occluder's optical params (ior / transmission, from its surface hook) + the crossing geometry: geometricNormal
 // and rayDirection MUST be in the SAME space (object space in both backends -> invariant to the instance transform and
@@ -72,22 +85,13 @@ NwbShadowVisibilityAccumulator nwbShadowVisibilityBegin(){
 // silhouette and would flip faceSign / crater cosI) is constant over the face, so it only grazes at the measure-zero
 // tangent line.
 //
-// Fresnel folds LIVE into transmittance (an order-independent product). grazeWeight (smoothstep on cosI) fades it
-// toward a no-op as a crossing approaches tangency, so a phantom silhouette clip cannot spuriously darken and a true
-// near-silhouette rim softens instead of cratering to black (Fresnel only attenuates -> never brightens).
-//
-// Optical depth is BINNED PER OCCLUDER by instance id (no grazing weight, no global telescoping): per bin we keep the
-// signed chord sum, the face balance, and the crossing span, so the finalize can use the exact chord when balanced
-// and the bounded span when not -- never dropping an occluder (which would leave a bright discarded pixel).
+// Fresnel is stored per bin and applied only during finalize when the bin has a real chord. Optical depth is BINNED
+// PER OCCLUDER by instance id, and each bin keeps merged hit distances; same-occluder crossings at the same t are
+// collapsed because edge/diagonal hits can report two triangles sharing one physical surface.
 void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const uint instanceId, const float ior, const float3 transmission, const float3 geometricNormal, const float3 rayDirection, const float t){
     const float ndotd = dot(rayDirection, geometricNormal);
-    const float faceSign = (ndotd >= 0.0) ? 1.0 : -1.0;
     const float cosI = saturate(abs(ndotd) * rsqrt(max(dot(geometricNormal, geometricNormal), 1e-20)) * rsqrt(max(dot(rayDirection, rayDirection), 1e-20)));
 
-    const float grazeWeight = smoothstep(0.0, 0.2, cosI);
-    acc.transmittance *= lerp(1.0, nwbShadowFresnelTransmittedFraction(ior, cosI), grazeWeight);
-
-    const int signInt = (faceSign >= 0.0) ? 1 : -1;
     int slot = -1;
     for(uint i = 0u; i < acc.binCount; ++i){
         if(acc.bins[i].instanceId == instanceId){
@@ -100,32 +104,78 @@ void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const 
             return; // bin table full: drop this occluder's contribution (rare; a graceful slight lightening)
         slot = (int)acc.binCount;
         acc.bins[slot].instanceId = instanceId;
-        acc.bins[slot].faceBalance = 0;
+        acc.bins[slot].crossingCount = 0u;
+        acc.bins[slot].crossingOverflow = 0u;
         acc.bins[slot].absorptionCoeff = nwbShadowAbsorptionCoefficient(transmission);
-        acc.bins[slot].chordSigned = 0.0;
+        acc.bins[slot].interfaceTransmittance = 1.0;
+        acc.bins[slot].singletonFallbackChord = 0.0;
         acc.bins[slot].tMin = t;
         acc.bins[slot].tMax = t;
         acc.binCount += 1u;
     }
-    acc.bins[slot].faceBalance += signInt;
-    acc.bins[slot].chordSigned += t * faceSign;
+
+    bool alreadyAccepted = false;
+    for(uint i = 0u; i < acc.bins[slot].crossingCount; ++i)
+        alreadyAccepted = alreadyAccepted || nwbShadowCrossingMatchesEndpoint(t, acc.bins[slot].crossingT[i]);
+    if(alreadyAccepted)
+        return;
+
+    const float grazeWeight = smoothstep(0.0, 0.2, cosI);
+    acc.bins[slot].interfaceTransmittance *= lerp(1.0, nwbShadowFresnelTransmittedFraction(ior, cosI), grazeWeight);
+    acc.bins[slot].singletonFallbackChord = max(acc.bins[slot].singletonFallbackChord, NWB_SHADOW_SINGLETON_FALLBACK_CHORD * grazeWeight);
+
     acc.bins[slot].tMin = min(acc.bins[slot].tMin, t);
     acc.bins[slot].tMax = max(acc.bins[slot].tMax, t);
+    if(acc.bins[slot].crossingCount < (uint)NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER){
+        acc.bins[slot].crossingT[acc.bins[slot].crossingCount] = t;
+        acc.bins[slot].crossingCount += 1u;
+    }
+    else{
+        acc.bins[slot].crossingOverflow = 1u;
+    }
 }
 
 
-// Combine into the final per-channel visibility. Per occluder: a BALANCED bin (faceBalance == 0, every entry paired
-// with an exit) uses its exact signed chord; an UNBALANCED bin (an unmatched faceted-silhouette clip) falls back to
-// the crossing SPAN (tMax - tMin) -- the body thickness the ray traversed -- so it stays shadowed where the ray
-// really went through the volume and only goes lit at a true graze (span ~= 0), never a dropped/bright pixel and never
-// an absolute-t spike. max(.,0) guards float error; saturate guards [0,1].
+// Combine into the final per-channel visibility. Per occluder: sorted unique hit distances are paired into inside
+// intervals. An odd or overflowed crossing list falls back to the bounded crossing span (or a non-grazing singleton
+// fallback for the one-hit numerical-miss case), never to signed absolute t.
 float3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){
     float3 opticalDepth = float3(0.0, 0.0, 0.0);
+    float interfaceTransmittance = 1.0;
     for(uint i = 0u; i < acc.binCount; ++i){
-        const float chord = (acc.bins[i].faceBalance == 0) ? acc.bins[i].chordSigned : (acc.bins[i].tMax - acc.bins[i].tMin);
-        opticalDepth += acc.bins[i].absorptionCoeff * max(chord, 0.0);
+        float sortedT[NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER];
+        const uint crossingCount = min(acc.bins[i].crossingCount, (uint)NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER);
+        for(uint j = 0u; j < crossingCount; ++j)
+            sortedT[j] = acc.bins[i].crossingT[j];
+
+        for(uint j = 0u; j < crossingCount; ++j){
+            uint minIndex = j;
+            for(uint k = j + 1u; k < crossingCount; ++k){
+                if(sortedT[k] < sortedT[minIndex])
+                    minIndex = k;
+            }
+            const float tmp = sortedT[j];
+            sortedT[j] = sortedT[minIndex];
+            sortedT[minIndex] = tmp;
+        }
+
+        float chordLength = 0.0;
+        if(acc.bins[i].crossingOverflow != 0u){
+            chordLength = max(acc.bins[i].tMax - acc.bins[i].tMin, 0.0);
+        }
+        else{
+            for(uint j = 0u; (j + 1u) < crossingCount; j += 2u)
+                chordLength += max(sortedT[j + 1u] - sortedT[j], 0.0);
+
+            if((crossingCount & 1u) != 0u)
+                chordLength = max(chordLength, crossingCount == 1u ? acc.bins[i].singletonFallbackChord : max(acc.bins[i].tMax - acc.bins[i].tMin, 0.0));
+        }
+
+        const float interfaceWeight = smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chordLength);
+        interfaceTransmittance *= lerp(1.0, acc.bins[i].interfaceTransmittance, interfaceWeight);
+        opticalDepth += acc.bins[i].absorptionCoeff * chordLength;
     }
-    return saturate(acc.transmittance * exp(-max(opticalDepth, float3(0.0, 0.0, 0.0))));
+    return saturate(acc.transmittance * interfaceTransmittance * exp(-max(opticalDepth, float3(0.0, 0.0, 0.0))));
 }
 
 

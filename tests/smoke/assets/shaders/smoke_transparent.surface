@@ -24,8 +24,8 @@ NwbMeshSurface nwbMaterialSurface(){
     // is still hook-decided. The base color stays the rasterized appearance (the G-buffer discards ior/transmission
     // + alpha). Hardcoded test values; the production path authors them as typed .bind constants.
     NwbMeshSurface result = nwbMakeMeshSurface(baseColor, inNormal, half(0.0), half(0.0));
-    result.ior = 1.5;
-    result.transmission = saturate(tinted.rgb) * half(0.7);
+    result.ior = half(1.5);
+    result.transmission = clamp(tinted.rgb, half3(0.0), half3(1.0)) * half(0.7);
     result.alpha = half(1.0 - nwbLuminance(result.transmission));
     return result;
 }

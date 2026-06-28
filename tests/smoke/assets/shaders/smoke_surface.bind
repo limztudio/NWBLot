@@ -4,14 +4,14 @@
 
 [material_constant]
 struct NwbSmokeSurfaceMaterial{
-    [default("float4(1.0, 1.0, 1.0, 1.0)")]
-    float4 base_color;
+    [default("half4(1.0, 1.0, 1.0, 1.0)")]
+    half4 base_color;
 };
 
 [material_mutable]
 struct NwbSmokeRuntimeMaterial{
-    [default("float4(1.0, 1.0, 1.0, 1.0)")]
-    float4 color_tint;
+    [default("half4(1.0, 1.0, 1.0, 1.0)")]
+    half4 color_tint;
 };
 
 NwbSmokeSurfaceMaterial surface;

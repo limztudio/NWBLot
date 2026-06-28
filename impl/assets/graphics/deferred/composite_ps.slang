@@ -31,9 +31,10 @@ NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     const half4 transparentColorAccum = half4(g_AvboitAccumColor.Sample(g_DeferredSampler, input.uv));
     const float transparentExtinction = g_AvboitAccumExtinction.Sample(g_DeferredSampler, input.uv).r;
     const half totalTransmittance = half(exp(-min(transparentExtinction, NWB_AVBOIT_EXTINCTION_SATURATION)));
+    const half3 compositeColor = transparentColorAccum.rgb + opaqueColor * totalTransmittance;
 
     NwbDeferredCompositePixelOutput output;
-    output.color = float4(transparentColorAccum.rgb + opaqueColor * totalTransmittance, 1.0);
+    output.color = float4(compositeColor, 1.0);
     return output;
 }
 

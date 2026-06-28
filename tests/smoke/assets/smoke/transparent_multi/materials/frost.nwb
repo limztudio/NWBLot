@@ -11,10 +11,10 @@ asset.surface = "project/shaders/frost.surface";
 asset.bxdf = "project/shaders/smoke_lambert.bxdf";
 asset.parameters = {
     "frost": {
-        "frost_albedo": "float4(0.2, 0.4, 0.9, 1.0)",
-        "roughness_value": "float(0.5)",
+        "frost_albedo": "half4(0.2, 0.4, 0.9, 1.0)",
+        "roughness_value": "half(0.5)",
     },
     "sparkle": {
-        "sparkle_tint": "float3(1.0, 1.0, 1.0)",
+        "sparkle_tint": "half3(1.0, 1.0, 1.0)",
     },
 };

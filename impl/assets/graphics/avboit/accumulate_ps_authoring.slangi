@@ -168,7 +168,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     const NwbMeshSurface surface = nwbMaterialSurface();
 
     const half alpha = half(clamp(surface.alpha, 0.0, 1.0));
-    if(alpha <= 0.0)
+    if(alpha <= half(0.0))
         discard;
 
     // volumeTransmittance is the AVBOIT self-occlusion volume sample (NOT the material's transmittance): it is the

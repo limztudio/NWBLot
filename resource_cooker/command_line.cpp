@@ -148,7 +148,7 @@ CommandLineParseResult::Enum ParseCommandLine(
     CookOptions& outOptions,
     NWB::Core::Assets::AssetString& outError
 ){
-    (void)arena;
+    static_cast<void>(arena);
 
     outOptions.repoRoot.clear();
     outOptions.assetRoots.clear();
@@ -212,7 +212,7 @@ CommandLineParseResult::Enum ParseCommandLine(
 
 
 void PrintUsage(NWB::Core::Assets::AssetArena& arena){
-    (void)arena;
+    static_cast<void>(arena);
     __hidden_command_line::ParsedCookOptions options;
     CLI::App app{ "resource_cooker" };
     app.set_help_flag("-h,--help", "Show help");

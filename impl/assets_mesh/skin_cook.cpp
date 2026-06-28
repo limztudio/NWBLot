@@ -463,7 +463,7 @@ bool ParseSkinCookMetadata(
     Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_skin_cook;
-    (void)scratchArena;
+    static_cast<void>(scratchArena);
 
     outEntry = SkinCookEntry(outEntry.influences.get_allocator().arena());
 

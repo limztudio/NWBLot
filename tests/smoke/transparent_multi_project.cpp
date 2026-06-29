@@ -110,6 +110,16 @@ static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_m
     return Float4(0.68f, s_CameraTargetY, 0.04f, 0.0f);
 }
 
+// Two static-scale OPAQUE occluders, interleaved between the transparent shapes; they orbit with the same scene
+// rotation so their HARD (hardware) shadows sweep across -- and overlap -- the colored transparent shadows.
+[[nodiscard]] static Float4 OpaqueLeftShapeBasePosition(){
+    return Float4(-0.34f, s_CameraTargetY, 0.30f, 0.0f);
+}
+
+[[nodiscard]] static Float4 OpaqueRightShapeBasePosition(){
+    return Float4(0.34f, s_CameraTargetY, 0.30f, 0.0f);
+}
+
 [[nodiscard]] static SIMDVector BuildTransparentSceneRotation(const f32 time){
     return QuaternionRotationRollPitchYaw(0.0f, time, 0.0f);
 }
@@ -335,7 +345,38 @@ public:
         m_leftShape = shapeEntity;
         m_centerShape = centerShapeEntity;
         m_rightShape = rightShapeEntity;
-        const bool shapesValid = shapeEntity.valid() && centerShapeEntity.valid() && rightShapeEntity.valid();
+
+        // Two STATIC OPAQUE occluders (the octahedron + cone meshes with the OPAQUE ground material) to exercise the
+        // hybrid opaque-shadow path: opaque occluders cast a HARD (binary) shadow via the hardware RayQuery pass, while
+        // the spinning transparent shapes cast their colored shadow via the software pass. Placed between the
+        // transparent shapes so their fixed hard shadows OVERLAP the sweeping colored shadows -- verifying the
+        // multiplicative combine (opaque fully blocks: the receiver is black even under a colored tint).
+        const auto opaqueLeftEntity = CreateTintedStaticMeshEntity(
+            *m_world,
+            m_context.objectArena,
+            s_TransparentCenterMeshPath, // octahedron mesh, OPAQUE ground material
+            s_GroundMaterialPath,
+            s_SmokeSurfaceMaterialInterface,
+            Float4(0.66f, 0.66f, 0.70f, 1.0f),
+            OpaqueLeftShapeBasePosition(),
+            Float4(0.26f, 0.26f, 0.26f)
+        );
+        const auto opaqueRightEntity = CreateTintedStaticMeshEntity(
+            *m_world,
+            m_context.objectArena,
+            s_TransparentRightMeshPath, // cone mesh, OPAQUE ground material
+            s_GroundMaterialPath,
+            s_SmokeSurfaceMaterialInterface,
+            Float4(0.72f, 0.68f, 0.62f, 1.0f),
+            OpaqueRightShapeBasePosition(),
+            Float4(0.26f, 0.26f, 0.26f)
+        );
+        m_opaqueLeftShape = opaqueLeftEntity;
+        m_opaqueRightShape = opaqueRightEntity;
+
+        const bool shapesValid =
+            shapeEntity.valid() && centerShapeEntity.valid() && rightShapeEntity.valid()
+            && opaqueLeftEntity.valid() && opaqueRightEntity.valid();
 #endif
 
         // Opaque ground-plane receiver beneath the transparent shape(s). The colored transmittance each transparent
@@ -432,6 +473,11 @@ private:
         ApplyTransparentSceneTransform(*m_world, m_centerShape, TransparentCenterShapeBasePosition(), sceneRotation, QuaternionIdentity());
 #endif
         ApplyTransparentSceneTransform(*m_world, m_rightShape, TransparentRightShapeBasePosition(), sceneRotation, QuaternionIdentity());
+        // Opaque occluders orbit with the same scene rotation (no-op when invalid, e.g. the caustic-sphere build); their
+        // hard hardware shadows sweep across the colored transparent shadows so the multiplicative combine is exercised
+        // continuously, not just at one static overlap.
+        ApplyTransparentSceneTransform(*m_world, m_opaqueLeftShape, OpaqueLeftShapeBasePosition(), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_opaqueRightShape, OpaqueRightShapeBasePosition(), sceneRotation, QuaternionIdentity());
     }
 
     NWB::ProjectRuntimeContext& m_context;
@@ -441,6 +487,8 @@ private:
     NWB::Core::ECS::EntityID m_leftShape = {};
     NWB::Core::ECS::EntityID m_centerShape = {};
     NWB::Core::ECS::EntityID m_rightShape = {};
+    NWB::Core::ECS::EntityID m_opaqueLeftShape = {};
+    NWB::Core::ECS::EntityID m_opaqueRightShape = {};
     f32 m_animationTime = 0.0f;
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     NWB::Core::ECS::EntityID m_csgReceiver = {};

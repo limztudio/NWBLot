@@ -161,7 +161,7 @@ struct SwShadowPushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 instanceCount = 0u;
-    u32 pad0 = 0u;
+    u32 multiplyMode = 0u; // 0 = overwrite (standalone SW path); 1 = multiply onto the HW opaque mask (hybrid on RT HW)
 };
 static_assert(sizeof(SwShadowPushConstants) == sizeof(u32) * 4u, "SwShadowPushConstants must match the shader push-constant layout");
 
@@ -212,18 +212,6 @@ struct CausticGeometryDownsamplePushConstants{
     u32 halfHeight = 0u;
 };
 static_assert(sizeof(CausticGeometryDownsamplePushConstants) == sizeof(u32) * 4u, "CausticGeometryDownsamplePushConstants must match the shader push-constant layout");
-
-// Mirror of shadow_resolve_cs.slang's NwbShadowResolvePushConstants (the half-res visibility resolve): full-res dims +
-// the half-res ray-traced visibility dims + the active shadow slot count.
-struct ShadowResolvePushConstants{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 halfWidth = 0u;
-    u32 halfHeight = 0u;
-    u32 slotCount = 0u;          // active shadow slots this frame; only these are resolved (the rest stay cleared white)
-    u32 pad0 = 0u;
-};
-static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 6u, "ShadowResolvePushConstants must match the shader push-constant layout");
 
 // Per-frame photon budget. Energy-conserving (per-photon flux = lightColor*emissionDomainArea*targetCount/photonCount,
 // so it scales 1/photonCount), so a higher count only DENSIFIES the splat without changing its per-frame brightness.
@@ -440,11 +428,10 @@ bool RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandLi
 }
 
 bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandList){
-    // The software BVH is the shadow fallback for devices without the full RayQuery shadow path. Accel structs alone
-    // are not enough: the HW shadow shader is an inline-RayQuery compute pass.
-    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && graphics().queryFeatureSupport(Core::Feature::RayQuery))
-        return false;
-
+    // Builds/refits per-mesh software BVHs. Two callers gate WHEN it runs (it no longer self-gates on RT support):
+    //  - The no-RayQuery fallback prepare (the only shadow backend) -- builds every mesh.
+    //  - The hybrid prepare on RT hardware -- only when the scene has a TRANSPARENT occluder (whose colored shadow the
+    //    software pass must trace); opaque-only / no-transparent scenes never call this, so they pay no software cost.
     bool allBuildsReady = true;
     auto& meshes = meshState().m_meshes;
     for(auto it = meshes.begin(); it != meshes.end(); ++it){
@@ -509,6 +496,10 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     // Reset the per-frame distinct-mesh table; the gather repopulates it (slot k -> mesh k's index/attribute
     // buffers) for the per-mesh descriptor arrays the any-hit indexes by material.meshSlot.
     rayTracingState().m_shadowMeshCount = 0u;
+    // Whether any gathered occluder is transparent. On RT hardware this gates the hybrid software-transparent-shadow
+    // prepare: the HW pass casts only the opaque (binary) shadow, so the SW colored pass is needed only when a
+    // transparent occluder exists; opaque-only scenes skip the software BVH build entirely.
+    rayTracingState().m_sceneHasTransparentOccluder = false;
 
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
@@ -585,6 +576,8 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo)){
+            if(materialInfo->transparent)
+                rayTracingState().m_sceneHasTransparentOccluder = true;
             u32 materialConstantByteOffset = 0u;
             if(!m_renderer.materialSystem().appendShadowOccluderMaterialContext(
                 entity,
@@ -663,11 +656,12 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
 }
 
 bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
-    // Software scene/instance BVH (TLAS-analog) -- only the no-RayQuery-shadow fallback builds it; the hardware
-    // shadow path uses buildSceneTlas instead.
-    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && graphics().queryFeatureSupport(Core::Feature::RayQuery))
-        return false;
-
+    // Software scene/instance BVH (TLAS-analog) over ALL gathered occluders, plus the shadow-owned material context.
+    // Built by the no-RayQuery fallback prepare (the only shadow backend) AND, on RT hardware, by the hybrid prepare
+    // when the scene has a transparent occluder. The gather order matches buildSceneTlas's (same RendererComponent
+    // view, aligned conditions), so the scene-BVH leaf index equals the hardware InstanceID -- and the material context
+    // it rebuilds is byte-identical to buildSceneTlas's, so the HW caustic (which reads that context by InstanceID) is
+    // unaffected even though both write it. The caller gates WHEN this runs (it no longer self-gates on RT support).
     auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
     if(!meshSystem)
         return false;
@@ -1048,12 +1042,37 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         if(!sceneReady)
             return true;
 
+        // Hardware path casts the OPAQUE (binary) shadow via inline RayQuery.
         outBackendReady =
             ensureShadowPipeline()
             && ensureShadowBindingSet(targets)
-            && ensureShadowResolvePipeline()
-            && ensureShadowResolveBindingSet(targets)
         ;
+
+        // Hybrid TRANSPARENT shadow: when the scene holds a transparent occluder, also build the software scene/mesh
+        // BVH and traversal pipeline. Its gather matches buildSceneTlas's (same RendererComponent view, aligned
+        // conditions), so the scene-BVH leaf index equals the hardware InstanceID and the material context it rebuilds
+        // is byte-identical -- leaving the HW caustic (which reads that context by InstanceID) untouched. The render
+        // runs the SW traversal as a second pass that MULTIPLIES its colored transparent transmittance onto the opaque
+        // mask. Built BEFORE prepareHwCausticResources so the (idempotently) rebuilt context buffers are final before
+        // the caustic binding set captures them. Opaque-only scenes skip all of this and pay no software cost.
+        rayTracingState().m_hybridTransparentShadowReady = false;
+        if(outBackendReady && rayTracingState().m_sceneHasTransparentOccluder){
+            if(!buildPendingMeshSwBvh(commandList))
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent shadow per-mesh software BVH build failed"));
+            // Guard m_swShadowMeshCount > 0 before ensureSwShadowBindingSet (which asserts it): if no per-mesh software
+            // BVH was available this frame the software pass simply does not run (HW opaque-only), rather than aborting.
+            const bool swReady =
+                buildSceneSwBvh(commandList, scratchArena)
+                && rayTracingState().m_swShadowMeshCount > 0u
+                && rayTracingState().m_sceneBvhInstanceCount > 0u
+                && ensureSwShadowPipeline()
+                && ensureSwShadowBindingSet(targets)
+            ;
+            if(swReady)
+                rayTracingState().m_hybridTransparentShadowReady = true;
+            else
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow preparation failed; transparent shadows absent this frame"));
+        }
 
         // Build the hardware caustic producer resources alongside the shadow ones (same TLAS + per-mesh geometry +
         // material context). Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op),
@@ -1107,28 +1126,6 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     targets.shadowVisibility = graphics().createTexture(visibilityDesc);
     if(!targets.shadowVisibility){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow visibility target"));
-        return false;
-    }
-
-    // Half-res shadow visibility: the hardware ray-traced backend traces one occlusion ray per HALF-res pixel into this
-    // buffer (1/4 the rays), then shadow_resolve_cs edge-adaptively resolves it into the full-res buffer above (bilinear
-    // in flat regions, full-res re-trace at the silhouette). Round UP so a half pixel always covers its 2x2 full block.
-    // (The software fallback writes the full-res buffer directly.)
-    const u32 shadowHalfWidth = (targets.width + 1u) / 2u;
-    const u32 shadowHalfHeight = (targets.height + 1u) / 2u;
-    Core::TextureDesc visibilityHalfDesc;
-    visibilityHalfDesc
-        .setWidth(shadowHalfWidth)
-        .setHeight(shadowHalfHeight)
-        .setArraySize(NWB_SCENE_SHADOW_SLOT_COUNT)
-        .setDimension(Core::TextureDimension::Texture2DArray)
-        .setFormat(targets.shadowVisibilityFormat)
-        .setInUAV(true)
-        .setName("engine/shadow/visibility_half")
-    ;
-    targets.shadowVisibilityHalf = graphics().createTexture(visibilityHalfDesc);
-    if(!targets.shadowVisibilityHalf){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create half-res shadow visibility target"));
         return false;
     }
     return true;
@@ -1229,11 +1226,9 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
 }
 
 bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    if(!targets.shadowVisibility || !targets.shadowVisibilityHalf)
+    if(!targets.shadowVisibility)
         return false;
     if(!rayTracingState().m_tlas || !rayTracingState().m_shadowPipeline || !rayTracingState().m_shadowBindingSet)
-        return false;
-    if(!rayTracingState().m_shadowResolvePipeline || !rayTracingState().m_shadowResolveBindingSet)
         return false;
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
@@ -1253,51 +1248,20 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     commandList.setResourceStatesForBindingSet(rayTracingState().m_shadowBindingSet.get());
     commandList.commitBarriers();
 
-    // HALF-resolution inline-RayQuery compute trace: one thread per half-res pixel (1/4 the rays) gathers each light's
-    // transparent crossings into shadowVisibilityHalf. The shader reads its dispatch bounds from the half-res output's
-    // own dimensions (g_NwbShadowVisibility.GetDimensions), so no push constant is needed here.
-    const u32 shadowHalfWidth = (targets.width + 1u) / 2u;
-    const u32 shadowHalfHeight = (targets.height + 1u) / 2u;
-
+    // FULL-resolution inline-RayQuery compute trace: one occlusion ray per output pixel, written straight into the
+    // full-res visibility array the deferred lighting samples. This mirrors the software traversal (shadow_sw_traversal_cs)
+    // one-ray-per-pixel structure exactly, so the hardware and software shadow backends produce the same result -- no
+    // half-res trace + edge-adaptive resolve in between (that reconstruction surfaced per-ray differences as artifacts at
+    // the colored-overlap silhouettes). The shader reads its dispatch bounds from the output's own dimensions.
     Core::ComputeState shadowState;
     shadowState.setPipeline(rayTracingState().m_shadowPipeline.get());
     shadowState.addBindingSet(rayTracingState().m_shadowBindingSet.get());
     commandList.setComputeState(shadowState);
     commandList.dispatch(
-        DivideUp(shadowHalfWidth, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
-        DivideUp(shadowHalfHeight, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
+        DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
+        DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
         1u
     );
-
-    // Resolve the half-res visibility into the full-res buffer the deferred lighting samples: geometry-stopped bilinear
-    // in flat regions, with a rare full-res retrace only when the half-res neighbourhood is not representative.
-    // Under the same s_ShadowVisibility scope so the timing covers the whole shadow cost (half-res rays + resolve, which
-    // can retrace isolated receiver slivers). setResourceStatesForBindingSet transitions the half buffer UAV(trace) ->
-    // SRV(resolve read) and the full buffer -> UAV; the resolve set also re-binds the trace geometry/TLAS it re-traces.
-    {
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_shadowResolveBindingSet.get());
-        commandList.commitBarriers();
-
-        ShadowResolvePushConstants resolvePush;
-        resolvePush.width = targets.width;
-        resolvePush.height = targets.height;
-        resolvePush.halfWidth = shadowHalfWidth;
-        resolvePush.halfHeight = shadowHalfHeight;
-        // Resolve only the slots that actually hold a light this frame (the rest stay at the cleared white default);
-        // processing all NWB_SCENE_SHADOW_SLOT_COUNT layers would multiply the resolve's array reads ~8x.
-        resolvePush.slotCount = rayTracingState().m_shadowSlotCount;
-
-        Core::ComputeState resolveState;
-        resolveState.setPipeline(rayTracingState().m_shadowResolvePipeline.get());
-        resolveState.addBindingSet(rayTracingState().m_shadowResolveBindingSet.get());
-        commandList.setComputeState(resolveState);
-        commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
-        commandList.dispatch(
-            DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RT_RESOLVE_GROUP_SIZE)),
-            DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RT_RESOLVE_GROUP_SIZE)),
-            1u
-        );
-    }
     return true;
 }
 
@@ -1308,15 +1272,10 @@ void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandL
     // White (full transmittance) across every slot layer = fully lit. This is the default the deferred
     // lighting pass samples whenever no shadow backend wrote the image this frame (ray tracing unavailable,
     // no trace-able geometry, or a trace that could not be dispatched), and the value every light without a
-    // shadow slot keeps. The HALF-res buffer is cleared to the same default so the raygen's untouched slots
-    // (lights without a shadow slot) upsample to "lit" instead of garbage.
+    // shadow slot keeps.
     commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::CopyDest);
-    if(targets.shadowVisibilityHalf)
-        commandList.setTextureState(targets.shadowVisibilityHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.clearTextureFloat(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
-    if(targets.shadowVisibilityHalf)
-        commandList.clearTextureFloat(targets.shadowVisibilityHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 
 void RendererRayTracingSystem::clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets){
@@ -1421,12 +1380,14 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     runPass(rayTracingState().m_causticResolveBindingSetUpsample.get(), 1u, CausticResolveStage::Upsample, fullGroupsX, fullGroupsY);
 }
 
-bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    // Software shadow traversal: the no-RayQuery-shadow fallback that consumes the per-frame software scene/instance
-    // BVH (buildSceneSwBvh) + the per-mesh BVHs. When the full HW RayQuery shadow path is available,
-    // renderShadowVisibility handles shadows and this path stays idle.
-    if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && graphics().queryFeatureSupport(Core::Feature::RayQuery))
-        return false;
+bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets, bool multiplyOntoOpaque){
+    // Software shadow traversal. Two callers:
+    //  - No-RayQuery fallback (multiplyOntoOpaque=false): the only shadow backend; traces ALL occluders and OVERWRITES
+    //    the visibility (opaque blocks + transparent tints).
+    //  - Hybrid on RT hardware (multiplyOntoOpaque=true): the HW RayQuery pass (renderShadowVisibility) already wrote
+    //    the opaque binary mask; this traces the TRANSPARENT-ONLY scene BVH and MULTIPLIES its colored transmittance
+    //    onto that mask. Whether the SW scene BVH holds all occluders or only the transparent ones is decided by
+    //    buildSceneSwBvh; this pass only needs to know to multiply rather than overwrite.
     if(!targets.shadowVisibility)
         return false;
     // No software scene BVH this frame (no traceable instances) -> the caller clears the mask to all-lit.
@@ -1459,6 +1420,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     pushConstants.width = targets.width;
     pushConstants.height = targets.height;
     pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+    pushConstants.multiplyMode = multiplyOntoOpaque ? 1u : 0u;
 
     Core::ComputeState computeState;
     computeState.setPipeline(rayTracingState().m_swShadowPipeline.get());
@@ -1480,6 +1442,10 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         );
     }
     return true;
+}
+
+bool RendererRayTracingSystem::hybridTransparentShadowReady()const noexcept{
+    return rayTracingState().m_hybridTransparentShadowReady;
 }
 
 bool RendererRayTracingSystem::hasCausticWork()const noexcept{
@@ -1816,7 +1782,6 @@ bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targ
     NWB_ASSERT(rayTracingState().m_shadowInstanceMaterialBuffer);
     NWB_ASSERT(rayTracingState().m_shadowMeshCount > 0u);
     NWB_ASSERT(targets.shadowVisibility);
-    NWB_ASSERT(targets.shadowVisibilityHalf);
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
     NWB_ASSERT(deferredState().m_lightBuffer);
     // The material-constants context the per-hit transmittance dispatch reads (g_NwbMaterialTypedWords +
@@ -1847,10 +1812,9 @@ bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targ
         return true;
 
     Core::BindingSetDesc bindingSetDesc(arena());
-    // The half-res trace writes the HALF-res visibility (1 ray per half pixel) at NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT;
-    // shadow_resolve_cs then resolves it to full-res. The shared helper appends the TLAS + G-buffer + scene/light +
-    // per-mesh geometry + material context exactly as the resolve set does.
-    appendShadowTraceBindingSet(bindingSetDesc, targets, targets.shadowVisibilityHalf.get());
+    // The full-res trace writes the FULL-res visibility (one ray per output pixel) at NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT
+    // -- the same buffer the deferred lighting samples, mirroring the software traversal (no resolve pass in between).
+    appendShadowTraceBindingSet(bindingSetDesc, targets, targets.shadowVisibility.get());
 
     auto* device = graphics().getDevice();
     rayTracingState().m_shadowBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_shadowBindingLayout);
@@ -1868,130 +1832,6 @@ bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targ
     rayTracingState().m_shadowBindingSetMaterialTyped = materialTypedBuffer;
     rayTracingState().m_shadowBindingSetMeshInstances = meshInstanceBuffer;
     rayTracingState().m_shadowBindingSetMeshCount = meshCount;
-    return true;
-}
-
-bool RendererRayTracingSystem::ensureShadowResolvePipeline(){
-    if(rayTracingState().m_shadowResolvePipeline)
-        return true;
-    if(rayTracingState().m_shadowResolvePipelineFailed)
-        return false;
-
-    auto* device = graphics().getDevice();
-
-    if(!rayTracingState().m_shadowResolveBindingLayout){
-        // The resolve RE-TRACES silhouette pixels at full-res, so it carries the WHOLE trace binding layout (TLAS +
-        // per-mesh geometry + material context) PLUS the half-res visibility SRV it reads + the push constants. The
-        // shared trace-VISIBILITY_OUTPUT slot is the FULL-res UAV the resolve writes.
-        Core::BindingLayoutDesc layoutDesc(arena());
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        appendShadowTraceBindingLayout(layoutDesc);
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RT_BINDING_HALF_VISIBILITY, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowResolvePushConstants)));
-
-        rayTracingState().m_shadowResolveBindingLayout = device->createBindingLayout(layoutDesc);
-        if(!rayTracingState().m_shadowResolveBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow resolve binding layout"));
-            rayTracingState().m_shadowResolvePipelineFailed = true;
-            return false;
-        }
-    }
-
-    if(!m_renderer.shaderSystem().loadShader(
-        rayTracingState().m_shadowResolveShader,
-        AssetsGraphicsShadow::s_ResolveShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
-        "ECSRender_ShadowResolve"
-    )){
-        rayTracingState().m_shadowResolvePipelineFailed = true;
-        return false;
-    }
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(rayTracingState().m_shadowResolveShader)
-        .addBindingLayout(rayTracingState().m_shadowResolveBindingLayout)
-    ;
-    rayTracingState().m_shadowResolvePipeline = device->createComputePipeline(pipelineDesc);
-    if(!rayTracingState().m_shadowResolvePipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow resolve compute pipeline"));
-        rayTracingState().m_shadowResolvePipelineFailed = true;
-        return false;
-    }
-    return true;
-}
-
-bool RendererRayTracingSystem::ensureShadowResolveBindingSet(DeferredFrameTargets& targets){
-    NWB_ASSERT(rayTracingState().m_shadowResolveBindingLayout);
-    NWB_ASSERT(rayTracingState().m_tlas);
-    NWB_ASSERT(rayTracingState().m_shadowInstanceMaterialBuffer);
-    NWB_ASSERT(rayTracingState().m_shadowMeshCount > 0u);
-    NWB_ASSERT(rayTracingState().m_shadowMaterialTypedBuffer);
-    NWB_ASSERT(rayTracingState().m_shadowInstanceBuffer);
-    NWB_ASSERT(targets.worldPosition);
-    NWB_ASSERT(targets.normal);
-    NWB_ASSERT(targets.depth);
-    NWB_ASSERT(targets.shadowVisibility);
-    NWB_ASSERT(targets.shadowVisibilityHalf);
-    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
-    NWB_ASSERT(deferredState().m_lightBuffer);
-
-    // The resolve set re-binds the same trace inputs (so it can re-trace) plus the half-res SRV; its cache key mirrors
-    // the trace set's keys (TLAS / instance-material / material-context / mesh count) alongside the half + full targets.
-    const Core::RayTracingAccelStruct* tlas = rayTracingState().m_tlas.get();
-    const Core::Buffer* instanceMaterialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-    const Core::Buffer* materialTypedBuffer = rayTracingState().m_shadowMaterialTypedBuffer.get();
-    const Core::Buffer* meshInstanceBuffer = rayTracingState().m_shadowInstanceBuffer.get();
-    const u32 meshCount = rayTracingState().m_shadowMeshCount;
-    Core::Texture* halfTarget = targets.shadowVisibilityHalf.get();
-    Core::Texture* fullTarget = targets.shadowVisibility.get();
-    if(
-        rayTracingState().m_shadowResolveBindingSet
-        && rayTracingState().m_shadowResolveBindingSetTlas == tlas
-        && rayTracingState().m_shadowResolveBindingSetInstanceMaterial == instanceMaterialBuffer
-        && rayTracingState().m_shadowResolveBindingSetMaterialTyped == materialTypedBuffer
-        && rayTracingState().m_shadowResolveBindingSetMeshInstances == meshInstanceBuffer
-        && rayTracingState().m_shadowResolveBindingSetMeshCount == meshCount
-        && rayTracingState().m_shadowResolveBindingSetHalf == halfTarget
-        && rayTracingState().m_shadowResolveBindingSetFull == fullTarget
-    )
-        return true;
-
-    auto* device = graphics().getDevice();
-
-    Core::BindingSetDesc desc(arena());
-    // The VISIBILITY_OUTPUT slot is the FULL-res UAV the resolve writes; the half-res SRV is the extra input it reads.
-    appendShadowTraceBindingSet(desc, targets, fullTarget);
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_RT_BINDING_HALF_VISIBILITY,
-        halfTarget,
-        targets.shadowVisibilityFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
-
-    Core::BindingSetHandle bindingSet = device->createBindingSet(desc, rayTracingState().m_shadowResolveBindingLayout);
-    if(!bindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow resolve binding set"));
-        rayTracingState().m_shadowResolveBindingSet = nullptr;
-        rayTracingState().m_shadowResolveBindingSetTlas = nullptr;
-        rayTracingState().m_shadowResolveBindingSetInstanceMaterial = nullptr;
-        rayTracingState().m_shadowResolveBindingSetMaterialTyped = nullptr;
-        rayTracingState().m_shadowResolveBindingSetMeshInstances = nullptr;
-        rayTracingState().m_shadowResolveBindingSetMeshCount = 0u;
-        rayTracingState().m_shadowResolveBindingSetHalf = nullptr;
-        rayTracingState().m_shadowResolveBindingSetFull = nullptr;
-        return false;
-    }
-    rayTracingState().m_shadowResolveBindingSet = Move(bindingSet);
-    rayTracingState().m_shadowResolveBindingSetTlas = tlas;
-    rayTracingState().m_shadowResolveBindingSetInstanceMaterial = instanceMaterialBuffer;
-    rayTracingState().m_shadowResolveBindingSetMaterialTyped = materialTypedBuffer;
-    rayTracingState().m_shadowResolveBindingSetMeshInstances = meshInstanceBuffer;
-    rayTracingState().m_shadowResolveBindingSetMeshCount = meshCount;
-    rayTracingState().m_shadowResolveBindingSetHalf = halfTarget;
-    rayTracingState().m_shadowResolveBindingSetFull = fullTarget;
     return true;
 }
 

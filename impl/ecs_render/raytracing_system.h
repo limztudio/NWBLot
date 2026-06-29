@@ -38,7 +38,9 @@ public:
     [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    [[nodiscard]] bool renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    // Software-BVH shadow traversal. multiplyOntoOpaque=false: standalone no-RT path (opaque + transparent, overwrite).
+    // multiplyOntoOpaque=true: hybrid path on RT hardware -- traces the TRANSPARENT-only scene BVH and multiplies its colored transmittance onto the HW opaque binary mask already in the visibility buffer.
+    [[nodiscard]] bool renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets, bool multiplyOntoOpaque = false);
     [[nodiscard]] bool prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasCausticWork()const noexcept;
@@ -48,25 +50,24 @@ public:
     [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
+    // True when the prepare built the hybrid transparent-shadow software resources this frame (RT hardware + the scene
+    // has a transparent occluder). The render then runs renderGpuBvhShadowVisibility(..., multiplyOntoOpaque=true) after
+    // the HW opaque pass, folding the colored transparent shadow onto the binary opaque mask.
+    [[nodiscard]] bool hybridTransparentShadowReady()const noexcept;
 
 
 private:
     [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
     [[nodiscard]] bool ensureShadowPipeline();
     [[nodiscard]] bool ensureShadowBindingSet(DeferredFrameTargets& targets);
-    // Shared hardware shadow-trace bindings (TLAS + G-buffer + scene/light + per-mesh geometry + material context),
-    // appended by BOTH the half-res trace pipeline/set AND the edge-adaptive resolve pipeline/set -- the resolve
-    // RE-TRACES silhouette pixels at full-res, so it carries the identical trace binding set (plus the half-res SRV).
+    // Shared hardware opaque-shadow-trace bindings (TLAS + G-buffer + scene/light + per-mesh geometry + material
+    // context), appended by the trace pipeline/set. (Factored out for clarity; visibilityTarget is the full-res output.)
     void appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const;
     void appendShadowTraceBindingSet(Core::BindingSetDesc& desc, DeferredFrameTargets& targets, Core::Texture* visibilityTarget)const;
     [[nodiscard]] bool ensureSwShadowPipeline();
     [[nodiscard]] bool ensureSwShadowBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureSwCausticPipeline();
     [[nodiscard]] bool ensureSwCausticBindingSet(DeferredFrameTargets& targets);
-    // Edge-adaptive shadow resolve: full-res pass that bilinear-fills flat regions from the half-res trace and
-    // RE-TRACES the silhouette pixels at full-res (so the shadow edge matches the full-res scene geometry).
-    [[nodiscard]] bool ensureShadowResolvePipeline();
-    [[nodiscard]] bool ensureShadowResolveBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureCausticResolvePipeline();
     [[nodiscard]] bool ensureCausticResolveBindingSet(DeferredFrameTargets& targets);
     // Geometry downsample pre-pass: fills the half-res geometry cache (world + receiver validity) the resolve reads.

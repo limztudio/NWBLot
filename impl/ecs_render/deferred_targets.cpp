@@ -142,9 +142,6 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     csgState().m_intervalSampleBindingSet.reset();
     rayTracingState().m_shadowBindingSet.reset();
     rayTracingState().m_shadowBindingSetTlas = nullptr;
-    rayTracingState().m_shadowResolveBindingSet.reset();
-    rayTracingState().m_shadowResolveBindingSetHalf = nullptr;
-    rayTracingState().m_shadowResolveBindingSetFull = nullptr;
 
     deferredState().m_targets.framebuffer.reset();
     deferredState().m_targets.opaqueLightingFramebuffer.reset();
@@ -166,7 +163,6 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     deferredState().m_targets.opaqueColor.reset();
     deferredState().m_targets.depth.reset();
     deferredState().m_targets.shadowVisibility.reset();
-    deferredState().m_targets.shadowVisibilityHalf.reset();
 
     deferredState().m_targets = DeferredFrameTargets{};
 }

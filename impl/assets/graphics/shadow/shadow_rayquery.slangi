@@ -9,17 +9,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// SHARED hardware inline-RayQuery occlusion trace, used by BOTH shadow passes: the half-res trace (shadow_rayquery_cs,
-// one ray per half-res pixel) and the edge-adaptive resolve (shadow_resolve_cs, which RE-TRACES at full-res only the
-// pixels whose half-res neighbourhood straddles a shadow edge). Centralising the ray setup + Proceed() crossing loop
-// here means an edge-retraced full-res ray integrates byte-identical physics to the half-res ray it refines -- the
-// resolve's crisp edge is the SAME colored transmittance, just sampled at full-res. Include after binding_slots.h.
+// HARDWARE OPAQUE shadow occlusion via inline RayQuery. In the hybrid shadow split, the hardware path handles ONLY the
+// opaque occluders: a binary "any opaque hit -> fully shadowed" test. That is order-independent and needs no chord, so
+// the hardware ray-triangle intersector does it exactly as well as software (at most a sub-pixel hard-edge difference,
+// never a colored-chord error). The TRANSPARENT occluders -- whose colored Beer-Lambert shadow DOES depend on the exact
+// per-occluder crossing set -- are traced by the software traversal (shadow_sw_traversal_cs), and that colored result is
+// multiplied onto this opaque mask. So this trace gathers nothing and runs no integrator; it returns the first opaque
+// hit as fully-blocked. Centralising the opaque ray here keeps shadow_rayquery_cs thin.
 
 
 #include "binding_slots.h"
 
-// Point the surface hook's material-constants context + the scene shading / light list at the shadow-RT binding set
-// (both passes bind these at the same NWB_SHADOW_RT_* slots), so occlusion.slangi's includes resolve their bindings.
+// Point the surface hook's material-constants context + the scene shading / light list at the shadow-RT binding set, so
+// occlusion.slangi's includes resolve their bindings here (the opaque trace only actually reads the TLAS, the instance
+// material flags, the G-buffer, and the light list -- the surface/integrator machinery occlusion.slangi also pulls in is
+// unused on this path and compiles out).
 #define NWB_SCENE_SHADING_SET NWB_SHADOW_RT_SET
 #define NWB_SCENE_SHADING_BINDING NWB_SHADOW_RT_BINDING_SCENE_SHADING
 #define NWB_SCENE_LIGHT_LIST_SET NWB_SHADOW_RT_SET
@@ -27,38 +31,15 @@
 
 #include "occlusion.slangi"
 #include "../scene/buffer.slangi"
-#include "../common/math.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Unpacks a per-triangle-corner shadow-trace attribute (AttribGpu) from a per-mesh attribute byte buffer: Half4U
-// normal (two packed-half uints) at +0, Float2U uv0 (two floats) at +8. Mirrors the software traversal's unpack so
-// the RayQuery trace and the compute fallback interpolate identical inputs.
-struct NwbShadowRqVertexAttrib{
-    float3 normal;
-    float2 uv0;
-};
-
-NwbShadowRqVertexAttrib nwbShadowRqLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
-    const uint base = attributeIndex * 16u;
-    const uint2 packedNormal = g_NwbShadowMeshAttributes[meshIndex].Load2(base);
-    NwbShadowRqVertexAttrib attrib;
-    attrib.normal = float3(
-        nwbUnpackHalf2x16(packedNormal.x),
-        nwbUnpackHalf2x16(packedNormal.y).x
-    );
-    attrib.uv0 = asfloat(g_NwbShadowMeshAttributes[meshIndex].Load2(base + 8u));
-    return attrib;
-}
-
-
-// Per light: inline-trace one occlusion ray from worldPosition toward the light and integrate the colored visibility
-// over the volume path. The RayQuery loop gathers EVERY transparent crossing (Proceed() without committing) into a
-// LOCAL per-occluder accumulator and stops at an opaque hit. Identical for the half-res trace and a full-res edge
-// retrace -- only the worldPosition/normal the caller feeds (half-res representative texel vs the pixel's own full-res
-// G-buffer) differ, which is exactly what makes the retraced edge crisp.
+// Per light: inline-trace one occlusion ray from worldPosition toward the light. Returns 0 (fully shadowed) on the first
+// OPAQUE hit, else 1 (lit). Transparent occluders are skipped here -- the software traversal tints those and multiplies
+// its colored transmittance onto this mask. Mirrors the software path's ray setup (directional aims to "infinity";
+// point/spot aim at the light with tMax = distance; geometric-normal bias + tMin avoids self-intersection).
 half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light){
     float3 toLight;
     float tMax;
@@ -83,64 +64,20 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
     ray.TMin = tMin;
     ray.TMax = tEnd;
 
-    NwbShadowVisibilityAccumulator acc = nwbShadowVisibilityBegin();
-
     RayQuery<RAY_FLAG_NONE> query;
     query.TraceRayInline(g_NwbShadowTlas, RAY_FLAG_NONE, 0xFFu, ray);
     while(query.Proceed()){
         if(query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE)
             continue;
 
-        const uint instanceId = query.CandidateInstanceID();
-        const NwbRtInstanceMaterial material = g_NwbShadowInstanceMaterial[instanceId];
-        if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) == 0u){
-            // Opaque occluder: fully blocked, end the search.
-            acc.transmittance = half3(0.0, 0.0, 0.0);
-            query.Abort();
-            break;
-        }
-
-        // Transparent crossing: build the hit + integrate it, then keep gathering (never commit).
-        const float2 bary = query.CandidateTriangleBarycentrics();
-        const float3 weights = float3(1.0 - bary.x - bary.y, bary.x, bary.y);
-
-        const uint prim = query.CandidatePrimitiveIndex();
-        const uint indexBase = prim * 3u;
-        const uint i0 = g_NwbShadowMeshIndices[material.meshSlot].Load(indexBase * 4u);
-        const uint i1 = g_NwbShadowMeshIndices[material.meshSlot].Load((indexBase + 1u) * 4u);
-        const uint i2 = g_NwbShadowMeshIndices[material.meshSlot].Load((indexBase + 2u) * 4u);
-        const uint attributeBase = prim * 3u;
-        const NwbShadowRqVertexAttrib a0 = nwbShadowRqLoadVertexAttrib(material.meshSlot, attributeBase);
-        const NwbShadowRqVertexAttrib a1 = nwbShadowRqLoadVertexAttrib(material.meshSlot, attributeBase + 1u);
-        const NwbShadowRqVertexAttrib a2 = nwbShadowRqLoadVertexAttrib(material.meshSlot, attributeBase + 2u);
-        const float smoothNormalWeight = nwbShadowSmoothNormalWeight(a0.normal, a1.normal, a2.normal);
-
-        // Interpolated SHADING normal -> world space (the surface contract the hook reads), via the candidate's
-        // world->object 3x3 inverse-transpose, exactly as the any-hit did.
-        const float3 objectNormal = a0.normal * weights.x + a1.normal * weights.y + a2.normal * weights.z;
-        const float3 worldNormal = nwbSafeNormalize(mul(objectNormal, (float3x3)query.CandidateWorldToObject3x4()), float3(0.0, 0.0, 1.0));
-
-        NwbShadowHit hit;
-        hit.meshInstanceIndex = material.meshInstanceIndex;
-        hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
-        hit.materialConstantByteOffset = material.materialConstantByteOffset;
-        hit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
-        hit.worldNormal = worldNormal;
-        hit.worldPosition = ray.Origin + query.CandidateTriangleRayT() * ray.Direction;
-        hit.rayDirection = ray.Direction;
-
-        const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
-
-        // Object-space GEOMETRIC face normal from the hit triangle's positions + the candidate's object-space ray dir;
-        // the shared integrator owns the per-occluder, balance-checked optical-depth physics (see shadow_integrate.slangi).
-        const float3 p0 = asfloat(g_NwbShadowMeshPositions[material.meshSlot].Load3(i0 * 12u));
-        const float3 p1 = asfloat(g_NwbShadowMeshPositions[material.meshSlot].Load3(i1 * 12u));
-        const float3 p2 = asfloat(g_NwbShadowMeshPositions[material.meshSlot].Load3(i2 * 12u));
-        const float3 geometricNormal = cross(p1 - p0, p2 - p0);
-        nwbShadowIntegrateCrossing(acc, instanceId, surface.ior, surface.transmission, geometricNormal, objectNormal, smoothNormalWeight, query.CandidateObjectRayDirection(), query.CandidateTriangleRayT());
+        const NwbRtInstanceMaterial material = g_NwbShadowInstanceMaterial[query.CandidateInstanceID()];
+        // Opaque occluder: light is fully blocked along this ray -- any single opaque hit is enough, so stop here.
+        // Transparent occluders are ignored on the hardware path (the software traversal handles their colored shadow).
+        if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) == 0u)
+            return half3(0.0, 0.0, 0.0);
     }
 
-    return nwbShadowFinalizeVisibility(acc);
+    return half3(1.0, 1.0, 1.0);
 }
 
 
@@ -151,4 +88,3 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

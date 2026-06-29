@@ -56,7 +56,6 @@ static constexpr u32 s_LowSurrogateStart = 0xdc00u;
 static constexpr u32 s_LowSurrogateEnd = 0xdfffu;
 static constexpr u32 s_SupplementaryPlaneCodePointBase = 0x10000u;
 static constexpr usize s_SurrogatePayloadBitCount = 10u;
-static constexpr u32 s_AnsiCharMask = 0xffu;
 
 
 static HMODULE GetUser32Module(){

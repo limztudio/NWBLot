@@ -70,6 +70,15 @@ if(Python3_Interpreter_FOUND)
         )
         nwb_configure_runtime_smoke_target(nwb_transparent_multi_smoke "${_nwb_transparent_multi_runtime_root}")
 
+        nwb_declare_executable(nwb_transparent_multi_sw_smoke)
+        target_sources(nwb_transparent_multi_sw_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
+        )
+        target_compile_definitions(nwb_transparent_multi_sw_smoke PRIVATE
+            NWB_TRANSPARENT_MULTI_FORCE_RT_EMULATION=1
+        )
+        nwb_configure_runtime_smoke_target(nwb_transparent_multi_sw_smoke "${_nwb_transparent_multi_runtime_root}")
+
         file(GLOB_RECURSE _nwb_transparent_multi_asset_inputs
             CONFIGURE_DEPENDS
             LIST_DIRECTORIES false
@@ -99,6 +108,7 @@ if(Python3_Interpreter_FOUND)
         )
         add_custom_target(nwb_transparent_multi_smoke_assets DEPENDS "${_nwb_transparent_multi_asset_stamp}")
         add_dependencies(nwb_transparent_multi_smoke nwb_transparent_multi_smoke_assets)
+        add_dependencies(nwb_transparent_multi_sw_smoke nwb_transparent_multi_smoke_assets)
 
         nwb_declare_executable(nwb_transparent_csg_smoke)
         target_sources(nwb_transparent_csg_smoke PRIVATE
@@ -121,6 +131,18 @@ if(Python3_Interpreter_FOUND)
             "${_nwb_transparent_multi_runtime_root}"
             "NWB Transparent Multi Smoke"
             "--expect-transparent-multi"
+        )
+
+        nwb_add_window_capture_smoke(
+            nwb_transparent_multi_sw_capture_smoke
+            transparent_multi_sw_capture.bmp
+            "$<TARGET_FILE:nwb_transparent_multi_sw_smoke>"
+            "${_nwb_transparent_multi_runtime_root}"
+            "NWB Transparent Multi Smoke"
+            "--expect-transparent-multi"
+            "--expect-log-message" "RendererSystem: dispatched software shadow traversal"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
         )
 
         nwb_add_window_capture_smoke(

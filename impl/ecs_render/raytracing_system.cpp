@@ -262,6 +262,12 @@ inline constexpr f32 s_CausticIntensity = 2.0f;
 // Matches the engine's skinned meshlet-bounds radius inflation precedent (NWB_SKINNED_MESH_BOUNDS_RADIUS_INFLATION).
 inline constexpr f32 s_CausticRuntimeBoundsInflation = 1.25f;
 
+// Software transparent-shadow broad phase: the scene BVH is only an instance-level reject before the per-mesh BVH and
+// exact triangle tests. Keep this box slightly conservative so grazing half-res shadow rays are never dropped by the
+// top-level instance AABB when several transparent shadows overlap.
+inline constexpr f32 s_SwShadowSceneBoundsMinPadding = 0.25f;
+inline constexpr f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -275,6 +281,15 @@ namespace __hidden_raytracing_system{
 // Extracts the axis-th component (0=x, 1=y, 2=z) of a SIMD vector.
 [[nodiscard]] f32 SceneBvhAxisComponent(const SIMDVector value, const u32 axis)noexcept{
     return axis == 0u ? VectorGetX(value) : (axis == 1u ? VectorGetY(value) : VectorGetZ(value));
+}
+
+void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noexcept{
+    const SIMDVector extent = VectorSubtract(boundsMax, boundsMin);
+    const f32 maxExtent = Max(Max(VectorGetX(extent), VectorGetY(extent)), VectorGetZ(extent));
+    const f32 padding = Max(s_SwShadowSceneBoundsMinPadding, maxExtent * s_SwShadowSceneBoundsRelativePadding);
+    const SIMDVector paddingVector = VectorSet(padding, padding, padding, 0.0f);
+    boundsMin = VectorSubtract(boundsMin, paddingVector);
+    boundsMax = VectorAdd(boundsMax, paddingVector);
 }
 
 // Recursively builds a binary BVH over the [lo, hi) slice of the instance-index permutation, appending nodes
@@ -772,6 +787,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             worldMin = VectorMin(worldMin, worldCorner);
             worldMax = VectorMax(worldMax, worldCorner);
         }
+        __hidden_raytracing_system::InflateSwShadowSceneBounds(worldMin, worldMax);
 
         SceneSwBvhInstanceGpu instance;
         StoreFloat(worldToObject, &instance.worldToObject);

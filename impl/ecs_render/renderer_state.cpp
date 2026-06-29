@@ -191,18 +191,6 @@ void RendererRayTracingState::invalidateResources(){
     m_shadowBindingSetMaterialTyped = nullptr;
     m_shadowBindingSetMeshInstances = nullptr;
     m_shadowBindingSetMeshCount = 0u;
-    m_shadowResolveBindingLayout.reset();
-    m_shadowResolveShader.reset();
-    m_shadowResolvePipeline.reset();
-    m_shadowResolveBindingSet.reset();
-    m_shadowResolveBindingSetTlas = nullptr;
-    m_shadowResolveBindingSetInstanceMaterial = nullptr;
-    m_shadowResolveBindingSetMaterialTyped = nullptr;
-    m_shadowResolveBindingSetMeshInstances = nullptr;
-    m_shadowResolveBindingSetMeshCount = 0u;
-    m_shadowResolveBindingSetHalf = nullptr;
-    m_shadowResolveBindingSetFull = nullptr;
-    m_shadowResolvePipelineFailed = false;
     m_shadowSlotCount = 0u;
     m_shadowMeshCount = 0u;
     m_shadowMeshCapReported = false;

@@ -2,11 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hardware RayQuery (inline ray tracing) HALF-resolution shadow trace. One compute thread per half-res shadow pixel
-// inline-traces each light's occlusion ray against the TLAS (shared nwbShadowRqLightVisible), gathering the colored
-// transparent crossings into a LOCAL per-occluder accumulator and stopping at an opaque hit. Output is the half-res
-// visibility Texture2DArray that the edge-adaptive shadow_resolve_cs then reconstructs to full-res (re-tracing only
-// the silhouette pixels, so the cheap half-res interior + the crisp full-res edge share this exact trace).
+// Hardware RayQuery (inline ray tracing) FULL-resolution OPAQUE shadow trace. One compute thread per output pixel
+// inline-traces each light's occlusion ray against the TLAS (shared nwbShadowRqLightVisible) and writes a binary
+// "any opaque hit -> shadowed" mask straight into the full-res visibility array. The colored TRANSPARENT shadow is
+// cast separately by the software traversal (shadow_sw_traversal_cs) and multiplied onto this opaque mask -- the
+// hybrid split, because the hardware intersector and the software Moeller-Trumbore disagree by +/-1 crossing at
+// grazing silhouettes (invisible for a binary opaque test, but it corrupts the colored Beer-Lambert chord).
 
 
 #include "binding_slots.h"
@@ -18,19 +19,19 @@
 
 [numthreads(NWB_SHADOW_RT_GROUP_SIZE, NWB_SHADOW_RT_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    // HALF-RESOLUTION: one thread per half-res pixel; the output visibility array IS the half-res buffer, so its
-    // dimensions bound the dispatch. Each half-res pixel reads its representative full-res G-buffer surface at the
-    // top-left of its 2x2 block (pixel * 2). shadow_resolve_cs then edge-adaptively reconstructs to full-res.
-    uint halfWidth;
-    uint halfHeight;
+    // FULL-RESOLUTION: one inline-RayQuery occlusion ray per output pixel, written straight into the full-res
+    // visibility array the deferred lighting samples -- structurally identical to the software traversal's main()
+    // (shadow_sw_traversal_cs), so the hardware and software backends produce the same per-pixel result.
+    uint width;
+    uint height;
     uint slotElems;
-    g_NwbShadowVisibility.GetDimensions(halfWidth, halfHeight, slotElems);
+    g_NwbShadowVisibility.GetDimensions(width, height, slotElems);
 
     const uint2 pixel = dispatchThreadID.xy;
-    if(pixel.x >= halfWidth || pixel.y >= halfHeight)
+    if(pixel.x >= width || pixel.y >= height)
         return;
 
-    const int3 texel = int3(int2(pixel) * 2, 0);
+    const int3 texel = int3(int2(pixel), 0);
 
     // Background (no geometry) is fully lit; the lighting pass ignores it anyway.
     if(g_NwbShadowGBufferDepth.Load(texel).r >= 0.999999){

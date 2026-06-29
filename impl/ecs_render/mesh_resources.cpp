@@ -368,7 +368,11 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         );
 
         createdMesh.blasBuildPending = rtSupported;
-        createdMesh.swBvhBuildPending = swShadow;
+        // The software BVH is built for the no-RT fallback AND, on RT hardware, for the HYBRID transparent shadow (the
+        // HW pass casts opaque shadows; the SW traversal casts the colored transparent shadow). The positions/indices
+        // already carry raw views on RT hardware (as accel-struct build inputs), so only the build itself is gated here;
+        // buildPendingMeshSwBvh only actually runs on RT hardware when the scene holds a transparent occluder.
+        createdMesh.swBvhBuildPending = swShadow || rtSupported;
     }
 
     // Flat per-triangle-corner shadow/caustic trace attribute buffer, indexed as primitive*3+corner in lockstep

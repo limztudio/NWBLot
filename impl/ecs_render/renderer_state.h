@@ -285,23 +285,6 @@ private:
     const Core::Buffer* m_shadowBindingSetMaterialTyped = nullptr;
     const Core::Buffer* m_shadowBindingSetMeshInstances = nullptr;
     u32 m_shadowBindingSetMeshCount = 0u;
-    // Edge-adaptive shadow resolve pass (its own compute pipeline): a full-res pass that bilinear-fills flat regions
-    // from the half-res ray-traced visibility and RE-TRACES the silhouette pixels at full-res, so the shadow edge
-    // matches the full-res scene geometry instead of reading ~2-3px coarser. Because it re-traces, its binding set is
-    // the full trace set (TLAS + per-mesh geometry + material context) PLUS the half-res visibility SRV input -- so its
-    // cache key mirrors the trace set's inputs alongside the half/full visibility targets.
-    Core::BindingLayoutHandle m_shadowResolveBindingLayout;
-    Core::ShaderHandle m_shadowResolveShader;
-    Core::ComputePipelineHandle m_shadowResolvePipeline;
-    Core::BindingSetHandle m_shadowResolveBindingSet;
-    const Core::RayTracingAccelStruct* m_shadowResolveBindingSetTlas = nullptr;
-    const Core::Buffer* m_shadowResolveBindingSetInstanceMaterial = nullptr;
-    const Core::Buffer* m_shadowResolveBindingSetMaterialTyped = nullptr;
-    const Core::Buffer* m_shadowResolveBindingSetMeshInstances = nullptr;
-    u32 m_shadowResolveBindingSetMeshCount = 0u;
-    const Core::Texture* m_shadowResolveBindingSetHalf = nullptr;
-    const Core::Texture* m_shadowResolveBindingSetFull = nullptr;
-    bool m_shadowResolvePipelineFailed = false;
     // Active shadow slots this frame (= min(lightCount, NWB_SCENE_SHADOW_SLOT_COUNT)), set during the light upload and
     // read by the edge-adaptive shadow resolve so it only processes the slots that hold a light.
     u32 m_shadowSlotCount = 0u;
@@ -353,6 +336,12 @@ private:
     usize m_sceneBvhNodeCapacity = 0u;
     usize m_sceneInstanceCapacity = 0u;
     u32 m_sceneBvhInstanceCount = 0u;
+    // HYBRID shadow split (RT hardware): the HW RayQuery pass casts the binary OPAQUE shadow; when the scene holds a
+    // transparent occluder, the software traversal additionally casts the colored TRANSPARENT shadow and multiplies it
+    // onto the opaque mask. m_sceneHasTransparentOccluder (set by buildSceneTlas) gates building the software BVH on RT
+    // hardware; m_hybridTransparentShadowReady (set by the prepare) tells the render to run the SW multiply pass.
+    bool m_sceneHasTransparentOccluder = false;
+    bool m_hybridTransparentShadowReady = false;
     // Caustic emission targets (P1): per-frame world-space AABBs of every refractive instance, the domain the caustic
     // photon producer aims at. A single global list is shared by all caustic lights. Resident structured SRV
     // ({ float4 aabbMin; float4 aabbMax; }), CPU-written each frame, grows by doubling, never shrinks; the count gates

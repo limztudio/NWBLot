@@ -33,13 +33,9 @@
 // material-constant words + the per-instance mutable-storage records.
 #define NWB_SHADOW_RT_BINDING_MATERIAL_TYPED 10
 #define NWB_SHADOW_RT_BINDING_MESH_INSTANCES 11
-// Per-mesh raw object-space position byte buffer (slot k = mesh k, float3 at vertexIndex * 12), for the any-hit's
-// geometric face-normal derivation; indexed by the same i0/i1/i2 the index buffer yields.
+// Per-mesh raw object-space position byte buffer (slot k = mesh k, float3 at vertexIndex * 12), for deriving the
+// geometric face normal; indexed by the same i0/i1/i2 the index buffer yields.
 #define NWB_SHADOW_RT_BINDING_MESH_POSITIONS 12
-// The HALF-res ray-traced visibility, read as an SRV by the edge-adaptive resolve pass (shadow_resolve_cs) -- which
-// shares the whole trace binding set (it RE-TRACES silhouette pixels at full-res) and additionally reads this to
-// bilinear-fill the flat interior. ONLY the resolve binding layout/set declares this slot; the half-res trace does not.
-#define NWB_SHADOW_RT_BINDING_HALF_VISIBILITY 13
 
 // Maximum distinct meshes the per-mesh descriptor arrays (index + attribute + position) can address in one frame;
 // meshes beyond it cast a colorless (opaque) shadow that frame (logged once). The hardware shadow trace is now an
@@ -49,11 +45,8 @@
 // stable. Kept at 32 for headroom; raising it needs the compute descriptor-set budget widened (a backend change).
 #define NWB_SHADOW_RT_MAX_MESHES 32
 
-// Workgroup size of the hardware RayQuery shadow trace (shadow_rayquery_cs): one thread per HALF-res shadow pixel.
+// Workgroup size of the hardware RayQuery opaque shadow trace (shadow_rayquery_cs): one thread per FULL-res pixel.
 #define NWB_SHADOW_RT_GROUP_SIZE 8
-
-// Workgroup size of the edge-adaptive shadow resolve (shadow_resolve_cs): one thread per FULL-res shadow pixel.
-#define NWB_SHADOW_RT_RESOLVE_GROUP_SIZE 8
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

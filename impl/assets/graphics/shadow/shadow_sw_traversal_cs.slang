@@ -96,7 +96,11 @@ struct NwbSwShadowPushConstants{
     uint width;
     uint height;
     uint instanceCount;
-    uint pad0;
+    // 0 = OVERWRITE the visibility (standalone software path -- the only shadow backend, traces opaque + transparent).
+    // 1 = MULTIPLY into the visibility (hybrid path on RT hardware -- the HW pass already wrote the opaque binary mask
+    //     into the buffer; this pass traces ONLY the transparent occluders and multiplies its colored transmittance on
+    //     top, so final = opaque_binary * transparent_colored).
+    uint multiplyMode;
 };
 
 [[vk::push_constant]]
@@ -411,11 +415,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     const int3 texel = int3(int2(pixel), 0);
+    const bool multiply = g_NwbSwShadowPushConstants.multiplyMode != 0u;
 
-    // Background (no geometry) is fully lit; the lighting pass ignores it anyway.
+    // Background (no geometry) is fully lit; the lighting pass ignores it anyway. In multiply mode the HW opaque pass
+    // already wrote the (white) background, so leave it untouched rather than overwrite it.
     if(g_NwbSwShadowGBufferDepth.Load(texel).r >= 0.999999){
-        for(uint slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot)
-            g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
+        if(!multiply){
+            for(uint slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot)
+                g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
+        }
         return;
     }
 
@@ -431,7 +439,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             continue;
 
         const half3 transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
-        g_NwbSwShadowVisibility[uint3(pixel, uint(slot))] = float4(transmittance, 1.0);
+        if(multiply){
+            // Hybrid: fold the transparent transmittance onto the HW-written opaque binary mask already in the buffer.
+            const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(pixel, uint(slot))].rgb;
+            g_NwbSwShadowVisibility[uint3(pixel, uint(slot))] = float4(opaqueMask * float3(transmittance), 1.0);
+        }
+        else{
+            g_NwbSwShadowVisibility[uint3(pixel, uint(slot))] = float4(transmittance, 1.0);
+        }
     }
 }
 

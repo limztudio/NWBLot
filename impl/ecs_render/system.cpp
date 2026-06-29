@@ -367,9 +367,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         bool shadowVisibilityWritten = false;
         if(m_preparedShadowVisibilityReady && hardwareShadowSupported){
+            // Hybrid shadow split: the HW RayQuery pass casts the OPAQUE (binary) shadow into the visibility buffer...
             shadowVisibilityWritten = m_raytracingSystem.renderShadowVisibility(*commandList, deferredTargets);
             if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
+            // ...then, when the scene holds a transparent occluder, the software traversal casts the colored TRANSPARENT
+            // shadow and MULTIPLIES it onto that opaque mask (final = opaque_binary * transparent_colored). RayQuery's
+            // hardware intersector and the software Moeller-Trumbore disagree by +/-1 crossing at grazing silhouettes --
+            // invisible for the binary opaque test, but it corrupts the colored chord, so transparent shadows use SW.
+            else if(m_raytracingSystem.hybridTransparentShadowReady()){
+                if(!m_raytracingSystem.renderGpuBvhShadowVisibility(*commandList, deferredTargets, true))
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow pass failed"));
+            }
         }
         else if(m_preparedShadowVisibilityReady){
             // No hardware ray tracing: trace the same per-light occlusion against the software scene/instance

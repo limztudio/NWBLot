@@ -196,6 +196,20 @@ bool RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRe
     return true;
 }
 
+void RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
+    auto rendererView = world().view<RendererComponent>();
+    for(auto&& [entity, renderer] : rendererView){
+        static_cast<void>(entity);
+        if(!renderer.visible)
+            continue;
+
+        MaterialSurfaceInfo* materialInfo = nullptr;
+        if(!createMaterialSurfaceInfo(renderer.material, materialInfo))
+            continue;
+        NWB_ASSERT(materialInfo);
+    }
+}
+
 bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLookupMode::Enum lookupMode){
     auto materialIsTransparent = [&](const Core::Assets::AssetRef<Material>& material) -> bool{
         MaterialSurfaceInfo* materialInfo = nullptr;

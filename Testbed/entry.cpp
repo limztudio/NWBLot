@@ -20,7 +20,7 @@
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { 1280, 900 };
+    return { s_DefaultProjectFrameClientWidth, s_DefaultProjectFrameClientHeight };
 }
 
 

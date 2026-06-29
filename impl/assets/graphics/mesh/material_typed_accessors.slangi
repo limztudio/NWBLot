@@ -130,8 +130,9 @@ NWB_MATERIAL_TYPED_SCALAR_LOAD(Float, float, asfloat(nwbMaterialLoadRawUIntAtBas
 
 #undef NWB_MATERIAL_TYPED_SCALAR_LOAD
 
-float2 nwbMaterialLoadPackedHalf2AtBase(const uint storageByteOffset, const uint byteOffset){
-    return nwbUnpackHalf2x16(nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset));
+half2 nwbMaterialLoadPackedHalf2AtBase(const uint storageByteOffset, const uint byteOffset){
+    const float2 value = nwbUnpackHalf2x16(nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset));
+    return half2(half(value.x), half(value.y));
 }
 
 half nwbMaterialLoadHalfAtBase(const uint storageByteOffset, const uint byteOffset){
@@ -139,17 +140,16 @@ half nwbMaterialLoadHalfAtBase(const uint storageByteOffset, const uint byteOffs
     const uint word = g_NwbMaterialTypedWords[absoluteByteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT];
     const uint byteLane = absoluteByteOffset & NWB_MATERIAL_TYPED_BYTE_LANE_MASK;
     if(byteLane == 0u || byteLane == NWB_MATERIAL_TYPED_U16_BYTE_LANE_MASK){
-        const float2 value = nwbUnpackHalf2x16(word);
+        const float2 unpacked = nwbUnpackHalf2x16(word);
+        const half2 value = half2(half(unpacked.x), half(unpacked.y));
         return half(byteLane == 0u ? value.x : value.y);
     }
 
-    const float2 value = nwbUnpackHalf2x16(nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset));
-    return half(value.x);
+    return nwbMaterialLoadPackedHalf2AtBase(storageByteOffset, byteOffset).x;
 }
 
 half2 nwbMaterialLoadHalf2AtBase(const uint storageByteOffset, const uint byteOffset){
-    const float2 value = nwbMaterialLoadPackedHalf2AtBase(storageByteOffset, byteOffset);
-    return half2(half(value.x), half(value.y));
+    return nwbMaterialLoadPackedHalf2AtBase(storageByteOffset, byteOffset);
 }
 
 half3 nwbMaterialLoadHalf3AtBase(const uint storageByteOffset, const uint byteOffset){
@@ -158,9 +158,9 @@ half3 nwbMaterialLoadHalf3AtBase(const uint storageByteOffset, const uint byteOf
 }
 
 half4 nwbMaterialLoadHalf4AtBase(const uint storageByteOffset, const uint byteOffset){
-    const float2 xy = nwbMaterialLoadPackedHalf2AtBase(storageByteOffset, byteOffset);
-    const float2 zw = nwbMaterialLoadPackedHalf2AtBase(storageByteOffset, byteOffset + NWB_MATERIAL_TYPED_WORD_BYTES);
-    return half4(half(xy.x), half(xy.y), half(zw.x), half(zw.y));
+    const half2 xy = nwbMaterialLoadPackedHalf2AtBase(storageByteOffset, byteOffset);
+    const half2 zw = nwbMaterialLoadPackedHalf2AtBase(storageByteOffset, byteOffset + NWB_MATERIAL_TYPED_WORD_BYTES);
+    return half4(xy.x, xy.y, zw.x, zw.y);
 }
 
 NWB_MATERIAL_TYPED_NON_HALF_LOAD_FAMILIES(NWB_MATERIAL_TYPED_VECTOR_LOAD_FAMILY)

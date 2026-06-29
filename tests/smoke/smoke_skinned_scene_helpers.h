@@ -10,6 +10,7 @@
 
 #include "smoke_scene_helpers.h"
 
+#include <impl/assets_model/asset.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_model/module.h>
 #include <impl/ecs_render/model_renderer.h>
@@ -74,6 +75,51 @@ inline void DestroySmokeSkinnedRenderWorld(
     }
 
     FinishDestroyingSmokeWorld(context, world);
+}
+
+[[nodiscard]] inline Core::ECS::EntityID CreateTintedModelEntity(
+    Core::ECS::World& world,
+    Core::Alloc::GlobalArena& arena,
+    const AStringView modelPath,
+    const AStringView materialPath,
+    const AStringView materialInterfacePath,
+    const Float4& colorTint,
+    const Float4& position,
+    const Float4& scale,
+    bool* const outTintApplied = nullptr
+){
+    if(outTintApplied)
+        *outTintApplied = false;
+
+    Core::Assets::AssetRef<Impl::Model> model;
+    model.virtualPath = Name(modelPath);
+    Core::Assets::AssetRef<Impl::Material> material;
+    material.virtualPath = Name(materialPath);
+
+    auto entity = world.createEntity();
+    auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
+    transform.position = position;
+    transform.scale = scale;
+
+    auto& modelComponent = entity.addComponent<Impl::ModelComponent>();
+    modelComponent.model = model;
+
+    auto& renderer = entity.addComponent<Impl::RendererComponent>();
+    renderer.material = material;
+
+    const Name materialInterface(materialInterfacePath);
+    entity.addComponent<Impl::MaterialInstanceComponent>(arena, materialInterface);
+    const bool tintApplied = Impl::SetMaterialMutableHalf4(
+        world,
+        entity.id(),
+        materialInterface,
+        "runtime.color_tint",
+        colorTint
+    );
+    if(outTintApplied)
+        *outTintApplied = tintApplied;
+
+    return entity.id();
 }
 
 [[nodiscard]] inline Core::ECS::EntityID FindSpawnedModelObject(

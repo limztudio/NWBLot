@@ -35,7 +35,7 @@ struct NwbMeshSurface{
     half   param1;          // user BXDF parameter, packed into world.a (e.g. metallic)
     half   ior;             // index of refraction (Fresnel). 1.0 = no refraction (fully transmissive surface). The
                             // shadow trace applies per-crossing Fresnel from this; the rasterizer G-buffer write
-                            // discards it. Groundwork for the future caustic producer too.
+                            // discards it. The caustic producer uses it for refractive materials.
     half3  transmission;    // per-unit Beer-Lambert absorption color (the fraction surviving ONE world unit of the
                             // medium). float3(1) = no absorption. The shadow trace integrates exp(-absorptionCoeff *
                             // pathLength) over the real entry->exit path; the rasterizer discards it.
@@ -59,9 +59,8 @@ NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal, half param0, h
 }
 
 // Convenience for materials with no extra BXDF parameters. Opaque casters use these defaults unchanged: the shadow
-// trace zeroes an opaque occluder via the trace's opaque flag (it terminates before reading ior/transmission), so
-// the old "unspecified transmittance = black" convention is gone -- the defaults are the neutral, no-attenuation
-// optical params (ior = 1, transmission = white).
+// trace zeroes an opaque occluder via the trace's opaque flag (it terminates before reading ior/transmission), so the
+// defaults are neutral optical params (ior = 1, transmission = white).
 NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal){
     return nwbMakeMeshSurface(baseColor, normal, half(0.0), half(0.0));
 }

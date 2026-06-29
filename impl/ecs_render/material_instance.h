@@ -9,6 +9,7 @@
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>
+#include <global/math/convert.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,6 +76,15 @@ struct MaterialInstanceValueTraits<Float4>{
 
     [[nodiscard]] static UInt4U pack(const Float4& value){
         return PackMaterialInstanceBytes(value.raw, sizeof(f32) * 4u);
+    }
+};
+
+template<>
+struct MaterialInstanceValueTraits<Half4U>{
+    static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::Half4;
+
+    [[nodiscard]] static UInt4U pack(const Half4U& value){
+        return PackMaterialInstanceBytes(value.raw, sizeof(Half) * 4u);
     }
 };
 
@@ -225,6 +235,17 @@ template<typename TValue>
     const Float4& value
 ){
     return SetMaterialMutableValue(world, entity, materialInterface, parameterName, value);
+}
+
+[[nodiscard]] inline bool SetMaterialMutableHalf4(
+    Core::ECS::World& world,
+    const Core::ECS::EntityID entity,
+    const Name& materialInterface,
+    const AStringView parameterName,
+    const Float4& value
+){
+    const Half4U packedValue = MakeHalf4U(value.x, value.y, value.z, value.w);
+    return SetMaterialMutableValue(world, entity, materialInterface, parameterName, packedValue);
 }
 
 

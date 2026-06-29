@@ -24,15 +24,15 @@ template<typename VisitTriangle>
         );
 
         for(u32 triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
-            u32 cornerIndices[3] = {
-                inOutTriangleIndices[triangleIndex * 3u + 0u],
-                inOutTriangleIndices[triangleIndex * 3u + 1u],
-                inOutTriangleIndices[triangleIndex * 3u + 2u],
+            u32 cornerIndices[s_TriangleIndexCount] = {
+                inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 0u],
+                inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 1u],
+                inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 2u],
             };
             if(flipWinding)
                 Swap(cornerIndices[1], cornerIndices[2]);
 
-            for(const u32 cornerIndex : cornerIndices){
+            for([[maybe_unused]] const u32 cornerIndex : cornerIndices){
                 NWB_ASSERT(cornerIndex < mesh.vertex_indices.count);
             }
 
@@ -54,9 +54,9 @@ template<typename VisitTriangle>
     outNormals.clear();
     outNormals.reserve(mesh.num_vertices);
 
-    if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[3]){
-        Vec3 positions[3] = {};
-        for(usize triangleCornerIndex = 0u; triangleCornerIndex < 3u; ++triangleCornerIndex){
+    if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
+        Vec3 positions[s_TriangleIndexCount] = {};
+        for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex){
             StoreFloat(BuildCornerOutputPositionVector(
                 mesh,
                 node,
@@ -81,9 +81,7 @@ template<typename VisitTriangle>
             auto result = outNormals.emplace(key, areaNormal);
             if(!result.second){
                 Vec3& normal = result.first.value();
-                normal.x += areaNormal.x;
-                normal.y += areaNormal.y;
-                normal.z += areaNormal.z;
+                StoreFloat(VectorAdd(LoadFloat(normal), LoadFloat(areaNormal)), &normal);
             }
         }
         return true;
@@ -147,9 +145,9 @@ bool AppendInstanceMesh(
     if(normalMode == NormalMode::Smooth && !BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices, smoothNormals))
         return false;
 
-    return VisitTriangulatedMeshTriangles(*mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[3]){
-        SourceTriangleCorner triangleCorners[3] = {};
-        for(usize triangleCornerIndex = 0u; triangleCornerIndex < 3u; ++triangleCornerIndex){
+    return VisitTriangulatedMeshTriangles(*mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
+        SourceTriangleCorner triangleCorners[s_TriangleIndexCount] = {};
+        for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex){
             const u32 cornerIndex = cornerIndices[triangleCornerIndex];
             const u32 logicalVertex = mesh->vertex_indices.data[cornerIndex];
 

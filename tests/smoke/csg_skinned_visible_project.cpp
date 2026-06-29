@@ -35,12 +35,11 @@ namespace __hidden_csg_skinned_visible_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using SmokeModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
-using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 using NWB::Tests::Smoke::AddSkinnedCsgMeshReceiver;
 using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
 using NWB::Tests::Smoke::AssignCsgCutterParameters;
 using NWB::Tests::Smoke::AssignCsgCutterTransform;
+using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::FindSpawnedModelObject;
 
@@ -148,34 +147,22 @@ private:
     ){
         static_cast<void>(enableCsg);
 
-        SmokeModelRef model;
-        model.virtualPath = Name(s_ModelPath);
-        SmokeMaterialRef material;
-        material.virtualPath = Name(s_ReceiverMaterialPath);
-
-        auto entity = m_world->createEntity();
-        auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
-        transform.position = position;
-        transform.scale = Float4(1.0f, 1.0f, 1.0f, 0.0f);
-
-        auto& modelComponent = entity.addComponent<NWB::Impl::ModelComponent>();
-        modelComponent.model = model;
-
-        auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
-        renderer.material = material;
-
-        const Name materialInterface(s_SmokeSurfaceMaterialInterface);
-        entity.addComponent<NWB::Impl::MaterialInstanceComponent>(m_context.objectArena, materialInterface);
-        if(!NWB::Impl::SetMaterialMutableFloat4(
+        bool tintApplied = false;
+        const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(
             *m_world,
-            entity.id(),
-            materialInterface,
-            "runtime.color_tint",
-            colorTint
-        ))
+            m_context.objectArena,
+            s_ModelPath,
+            s_ReceiverMaterialPath,
+            s_SmokeSurfaceMaterialInterface,
+            colorTint,
+            position,
+            Float4(1.0f, 1.0f, 1.0f, 0.0f),
+            &tintApplied
+        );
+        if(!tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to set receiver material tint"));
 
-        return entity.id();
+        return entity;
     }
 
     [[nodiscard]] bool installCsgReceiverOnSpawnedModelObject(){

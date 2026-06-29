@@ -78,10 +78,10 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 
 
 // One photon in flight: a world-space ray carrying per-channel flux (radiant power / photonCount) and the medium
-// state. `eta` is the relative IOR for the NEXT refractive crossing (air->glass = 1/ior, glass->air = ior); v1
-// assumes photons start in air, so it begins at the air-side value and flips on each crossing. `inside` tracks
-// whether the photon is currently within a refractive medium so the exit crossing flips eta back and the Beer-
-// Lambert path length is integrated only over the interior segment.
+// state. `eta` is the relative IOR for the NEXT refractive crossing (air->glass = 1/ior, glass->air = ior); photons
+// start in air, so it begins at the air-side value and flips on each crossing. `inside` tracks whether the photon is
+// currently within a refractive medium so the exit crossing flips eta back and the Beer-Lambert path length is
+// integrated only over the interior segment.
 struct NwbCausticPhoton{
     float3 origin;
     float3 direction;
@@ -119,7 +119,7 @@ float3 nwbCausticOrientNormal(float3 incident, float3 surfaceNormal, out float o
 // at a refractive crossing it refracts on the geometric normal (Snell via nwbCausticRefract), attenuates by the
 // Fresnel-transmitted fraction (nwbShadowFresnelTransmittedFraction) and, when leaving a medium, by Beer-Lambert
 // over the interior path (nwbShadowAbsorptionCoefficient), flips eta, re-seeds the ray, and continues; at an OPAQUE
-// receiver it returns the splat. TIR (nwbCausticRefract returns float3(0)) drops the photon in v1 (documented).
+// receiver it returns the splat. TIR (nwbCausticRefract returns float3(0)) drops the photon.
 // Loops until an opaque receiver is hit, OR NWB_CAUSTIC_MAX_BOUNCES refractive crossings, OR flux underflows.
 NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
     NwbCausticSplat splat;
@@ -135,7 +135,7 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
     // reaches the opaque receiver with ZERO crossings is un-refracted DIRECT light (emitted over the occluder's AABB
     // but missing the glass) and must NOT be deposited as caustic -- that is the AABB box artifact, and the direct
     // term is already handled by deferred direct lighting. Geometry-agnostic (any refractor shape) + parity-safe
-    // (this shared loop is the single deposit chokepoint for both the SW and the future HW producer).
+    // (this shared loop is the single deposit chokepoint for both the SW and HW producers).
     uint refractiveCrossings = 0u;
 
     // tMin nudges the ray off the surface it just left so the next trace does not re-hit the same triangle.
@@ -276,9 +276,8 @@ uint nwbCausticHashU32(uint x){
 // lattice. A flat refractor (e.g. a tetrahedron face) maps a rigid lattice straight onto the receiver as visible
 // parallel STRIPES; stratified noise instead reads as honest caustic grain the spatial a-trous resolve smooths.
 // FRAME-INDEPENDENT (no frameIndex term): the per-frame splat is byte-identical every frame, so a static scene is
-// FLICKER-FREE under the spatial-only resolve (which no longer temporally averages) and a moving scene presents a
-// stable caustic shape each frame. Deterministic in photonIndex so the HW (P4) and SW producers jitter IDENTICALLY
-// for the same photon (the parity mandate).
+// FLICKER-FREE under the spatial-only resolve and a moving scene presents a stable caustic shape each frame.
+// Deterministic in photonIndex so the HW (P4) and SW producers jitter IDENTICALLY for the same photon.
 float2 nwbCausticEmissionJitter(uint photonIndex){
     const uint h0 = nwbCausticHashU32(photonIndex * 0x9E3779B9u + 0x85EBCA6Bu);
     const uint h1 = nwbCausticHashU32(h0 ^ 0x68E31DA4u);

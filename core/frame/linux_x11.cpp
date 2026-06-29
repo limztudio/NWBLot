@@ -43,6 +43,19 @@ namespace FrameDetail{
 
 
 static constexpr usize s_KeyStateCount = 256;
+static constexpr u32 s_X11ScrollUpButton = 4u;
+static constexpr u32 s_X11ScrollDownButton = 5u;
+static constexpr u32 s_X11ScrollLeftButton = 6u;
+static constexpr u32 s_X11ScrollRightButton = 7u;
+static constexpr u32 s_X11MouseButton4 = 8u;
+static constexpr u32 s_X11MouseButton5 = 9u;
+static constexpr u32 s_X11MouseButton6 = 10u;
+static constexpr u32 s_X11MouseButton7 = 11u;
+static constexpr u32 s_X11MouseButton8 = 12u;
+static constexpr f64 s_ScrollUnit = 1.0;
+static constexpr usize s_TextInputBufferSize = 64u;
+static constexpr u32 s_TextInputControlCodePointLimit = 32u;
+static constexpr u32 s_TextInputDeleteCodePoint = 127u;
 
 static bool s_DetectableAutoRepeat = false;
 static bool s_KeyStates[s_KeyStateCount] = {};
@@ -108,11 +121,11 @@ static i32 TranslateMouseButton(u32 button){
     case Button1: return MouseButton::Left;
     case Button2: return MouseButton::Middle;
     case Button3: return MouseButton::Right;
-    case 8: return MouseButton::Button4;
-    case 9: return MouseButton::Button5;
-    case 10: return MouseButton::Button6;
-    case 11: return MouseButton::Button7;
-    case 12: return MouseButton::Button8;
+    case s_X11MouseButton4: return MouseButton::Button4;
+    case s_X11MouseButton5: return MouseButton::Button5;
+    case s_X11MouseButton6: return MouseButton::Button6;
+    case s_X11MouseButton7: return MouseButton::Button7;
+    case s_X11MouseButton8: return MouseButton::Button8;
     default:
         return -1;
     }
@@ -123,17 +136,17 @@ static bool TranslateScroll(u32 button, f64& xoffset, f64& yoffset){
     yoffset = 0.0;
 
     switch(button){
-    case 4:
-        yoffset = 1.0;
+    case s_X11ScrollUpButton:
+        yoffset = s_ScrollUnit;
         return true;
-    case 5:
-        yoffset = -1.0;
+    case s_X11ScrollDownButton:
+        yoffset = -s_ScrollUnit;
         return true;
-    case 6:
-        xoffset = -1.0;
+    case s_X11ScrollLeftButton:
+        xoffset = -s_ScrollUnit;
         return true;
-    case 7:
-        xoffset = 1.0;
+    case s_X11ScrollRightButton:
+        xoffset = s_ScrollUnit;
         return true;
     default:
         return false;
@@ -147,7 +160,7 @@ static i32 TranslateKey(KeySym keySym){
 }
 
 static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mods){
-    char buffer[64] = {};
+    char buffer[s_TextInputBufferSize] = {};
     KeySym ignored = NoSymbol;
     const i32 byteCount = XLookupString(&keyEvent, buffer, static_cast<i32>(sizeof(buffer)), &ignored, nullptr);
     if(byteCount <= 0)
@@ -163,7 +176,7 @@ static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mo
 
         i += consumed;
 
-        if(unicode < 32 || unicode == 127)
+        if(unicode < s_TextInputControlCodePointLimit || unicode == s_TextInputDeleteCodePoint)
             continue;
 
         input.keyboardCharInput(unicode, mods);

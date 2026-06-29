@@ -241,7 +241,7 @@ AssetBunchExpanderAutoRegistrar::AssetBunchExpanderAutoRegistrar(const AssetBunc
 }
 
 bool DiscoverFilesWithExtension(
-    const CookVector<Path>& assetRoots,
+    const CookVector<ResolvedAssetRoot>& assetRoots,
     const AStringView expectedExtension,
     DiscoveredNwbFileVector& outFiles,
     ScratchArena& scratchArena
@@ -257,31 +257,27 @@ bool DiscoverFilesWithExtension(
 
     outFiles.clear();
 
-    for(const Path& assetRoot : assetRoots){
-        ACompactString virtualRoot;
-        if(!BuildAssetRootVirtualRoot(assetRoot, virtualRoot, scratchArena))
-            return false;
-
+    for(const ResolvedAssetRoot& assetRoot : assetRoots){
         errorCode.clear();
-        if(!IsDirectory(assetRoot, errorCode)){
+        if(!IsDirectory(assetRoot.path, errorCode)){
             if(errorCode){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to query asset root '{}': {}")
-                    , PathToString<tchar>(assetRoot)
+                    , PathToString<tchar>(assetRoot.path)
                     , StringConvert(errorCode.message())
                 );
                 return false;
             }
 
             NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset root is not a directory: '{}'")
-                , PathToString<tchar>(assetRoot)
+                , PathToString<tchar>(assetRoot.path)
             );
             return false;
         }
 
-        for(const auto& dirEntry : RecursiveDirectoryIterator(assetRoot, errorCode)){
+        for(const auto& dirEntry : RecursiveDirectoryIterator(assetRoot.path, errorCode)){
             if(errorCode){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: error scanning asset root '{}': {}")
-                    , PathToString<tchar>(assetRoot)
+                    , PathToString<tchar>(assetRoot.path)
                     , StringConvert(errorCode.message())
                 );
                 return false;
@@ -292,7 +288,7 @@ bool DiscoverFilesWithExtension(
             if(errorCode){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to inspect '{}' while scanning '{}': {}")
                     , PathToString<tchar>(dirEntry.path())
-                    , PathToString<tchar>(assetRoot)
+                    , PathToString<tchar>(assetRoot.path)
                     , StringConvert(errorCode.message())
                 );
                 return false;
@@ -311,7 +307,7 @@ bool DiscoverFilesWithExtension(
             if(!seenPathHashes.insert(ComputeFnv64Text(normalizedPath)).second)
                 continue;
 
-            outFiles.emplace_back(cookArena, assetRoot, filePath, normalizedPath, virtualRoot);
+            outFiles.emplace_back(cookArena, assetRoot.path, filePath, normalizedPath, assetRoot.virtualRoot);
         }
     }
 

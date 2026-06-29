@@ -279,7 +279,7 @@ template<typename Vector3Like>
 }
 
 [[nodiscard]] bool TriangleHasArea(
-    const SourceTriangleCorner (&vertices)[3],
+    const SourceTriangleCorner (&vertices)[s_TriangleIndexCount],
     const f64 triangleAreaLengthSquaredEpsilon
 ){
     const Vec3& a = vertices[0u].position;

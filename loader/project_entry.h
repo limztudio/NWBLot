@@ -56,9 +56,12 @@ NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u16 s_DefaultProjectFrameClientWidth = 1280u;
+inline constexpr u16 s_DefaultProjectFrameClientHeight = 900u;
+
 struct ProjectFrameClientSize{
-    u16 width = 1280;
-    u16 height = 900;
+    u16 width = s_DefaultProjectFrameClientWidth;
+    u16 height = s_DefaultProjectFrameClientHeight;
 };
 
 struct ProjectRuntimeContext{

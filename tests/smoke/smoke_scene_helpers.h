@@ -61,7 +61,7 @@ namespace Smoke{
 
     const Name materialInterface(materialInterfacePath);
     entity.addComponent<Impl::MaterialInstanceComponent>(arena, materialInterface);
-    if(!Impl::SetMaterialMutableFloat4(
+    if(!Impl::SetMaterialMutableHalf4(
         world,
         entity.id(),
         materialInterface,

@@ -86,7 +86,7 @@ half3 nwbBxdfCausticIrradiance(int2 pixel){
 
 
 void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 lightVector, out half3 radiance){
-    const half3 baseRadiance = half3(clamp(light.colorIntensity.xyz, float3(0.0), float3(1.5)) * min(max(light.colorIntensity.w, 0.0), 2.0));
+    const half3 baseRadiance = half3(clamp(light.colorIntensity.xyz, float3(0.0), float3(1.5))) * half(min(max(light.colorIntensity.w, 0.0), 2.0));
     const float lightType = light.params.y;
 
     if(lightType < 0.5){
@@ -130,10 +130,10 @@ half3 nwbSceneShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVect
     const float bitangentLobe = pow(max(abs(dot(bitangentVector, halfVector)), 0.0), 18.0);
     const float backLight = max(dot(-normalVector, lightVector), 0.0);
 
-    const half3 specularTint = half3(lerp(float3(0.78), float3(1.0, 0.9, 0.68), 0.65));
+    const half3 specularTint = lerp(half3(0.78), half3(1.0, 0.9, 0.68), half(0.65));
     const half3 diffuse = baseColor * lightRadiance * half(0.02 + 0.98 * keyDiffuse);
     const half3 specularColor = lightRadiance * specularTint * half(specular * (0.08 + 0.92 * ndotl) + viewSpecular);
-    const half3 rimColor = half3(lerp(float3(0.12, 0.26, 0.52), lightRadiance, 0.25)) * half(rim * (0.04 + 0.96 * ndotl));
+    const half3 rimColor = lerp(half3(0.12, 0.26, 0.52), lightRadiance, half(0.25)) * half(rim * (0.04 + 0.96 * ndotl));
     const half3 frameCue = half(0.16) * (
         half3(1.0, 0.35, 0.2) * half(tangentLobe)
         + half3(0.2, 0.7, 1.0) * half(bitangentLobe)
@@ -155,7 +155,7 @@ half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, floa
     const float3 viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - worldPosition, float3(0.0, 0.0, 1.0));
     const half ndotv = half(max(dot(normalVector, viewVector), 0.0));
     const float skyAmount = normalVector.z * 0.5 + 0.5;
-    const half3 hemiAmbient = half3(lerp(float3(0.008, 0.012, 0.02), float3(0.045, 0.055, 0.075), skyAmount));
+    const half3 hemiAmbient = lerp(half3(0.008, 0.012, 0.02), half3(0.045, 0.055, 0.075), half(skyAmount));
 
     half3 litColor = baseColor * hemiAmbient;
     const uint lightCount = nwbSceneLightCount();

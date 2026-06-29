@@ -17,9 +17,8 @@ template<typename VertexRefVectorT>
     return localVertexRefs.size() + outMissingVertexCount <= s_MeshMaxMeshletVertices;
 }
 
-template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefVectorT>
+template<typename TriangleIndexVectorT, typename VertexRefVectorT>
 static void UpdateBestMeshletCandidateIfBetter(
-    const CookEntryT& entry,
     const MeshletTrianglePrecompute& trianglePrecompute,
     const TriangleIndexVectorT& triangleIndices,
     const MeshletScoreState& scoreState,
@@ -38,7 +37,6 @@ static void UpdateBestMeshletCandidateIfBetter(
         return;
 
     const f32 score = ScoreMeshletCandidate(
-        entry,
         trianglePrecompute,
         triangleIndices,
         scoreState,
@@ -77,9 +75,8 @@ static void UpdateBestMeshletCandidateFromResult(
     outCandidate = candidate.candidate;
 }
 
-template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefVectorT>
+template<typename TriangleIndexVectorT, typename VertexRefVectorT>
 [[nodiscard]] static bool FindBestMeshletFrontierCandidate(
-    const CookEntryT& entry,
     const MeshletTrianglePrecompute& trianglePrecompute,
     const Core::Assets::AssetVector<u32>& frontier,
     const TriangleIndexVectorT& triangleIndices,
@@ -92,7 +89,6 @@ template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefV
     for(usize frontierOffset = 0u; frontierOffset < frontier.size(); ++frontierOffset){
         const u32 triangleIndex = frontier[frontierOffset];
         UpdateBestMeshletCandidateIfBetter(
-            entry,
             trianglePrecompute,
             triangleIndices,
             scoreState,
@@ -109,9 +105,8 @@ template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefV
     return found;
 }
 
-template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefVectorT>
+template<typename TriangleIndexVectorT, typename VertexRefVectorT>
 [[nodiscard]] static bool FindBestDisconnectedMeshletCandidateRange(
-    const CookEntryT& entry,
     const MeshletTrianglePrecompute& trianglePrecompute,
     const usize searchBegin,
     const usize searchEnd,
@@ -127,7 +122,6 @@ template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefV
             continue;
 
         UpdateBestMeshletCandidateIfBetter(
-            entry,
             trianglePrecompute,
             triangleIndices,
             scoreState,
@@ -144,9 +138,8 @@ template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefV
     return found;
 }
 
-template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefVectorT>
+template<typename TriangleIndexVectorT, typename VertexRefVectorT>
 [[nodiscard]] static bool FindBestDisconnectedMeshletCandidate(
-    const CookEntryT& entry,
     const MeshletTrianglePrecompute& trianglePrecompute,
     const usize searchOffset,
     const TriangleIndexVectorT& triangleIndices,
@@ -164,7 +157,6 @@ template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefV
     const usize searchCount = triangleCount - searchOffset;
     if(!threadPool.isParallelEnabled() || searchCount < s_MeshletDisconnectedCandidateParallelThreshold){
         return FindBestDisconnectedMeshletCandidateRange(
-            entry,
             trianglePrecompute,
             searchOffset,
             triangleCount,
@@ -190,7 +182,6 @@ template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefV
 
         MeshletCandidateSearchResult result;
         result.found = FindBestDisconnectedMeshletCandidateRange(
-            entry,
             trianglePrecompute,
             chunkBegin,
             chunkEnd,

@@ -1,0 +1,76 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "math/type.h"
+#include "simplemath.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace TextWrite{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr f32 s_CleanFloatEpsilon = 0.00000001f;
+inline constexpr int s_OutputFloatPrecision = 9;
+
+inline f32 CleanFloat(const f32 value){
+    if(Abs(value) < s_CleanFloatEpsilon)
+        return 0.0f;
+    return value;
+}
+
+template<typename Stream>
+void WriteFloat(Stream& out, const f32 value){
+    out << CleanFloat(value);
+}
+
+template<typename Stream>
+void WriteVec2(Stream& out, const Float2U& value){
+    out << "[";
+    WriteFloat(out, value.x);
+    out << ", ";
+    WriteFloat(out, value.y);
+    out << "]";
+}
+
+template<typename Stream>
+void WriteVec3(Stream& out, const Float3U& value){
+    out << "[";
+    WriteFloat(out, value.x);
+    out << ", ";
+    WriteFloat(out, value.y);
+    out << ", ";
+    WriteFloat(out, value.z);
+    out << "]";
+}
+
+template<typename Stream>
+void WriteVec4(Stream& out, const Float4U& value){
+    out << "[";
+    WriteFloat(out, value.x);
+    out << ", ";
+    WriteFloat(out, value.y);
+    out << ", ";
+    WriteFloat(out, value.z);
+    out << ", ";
+    WriteFloat(out, value.w);
+    out << "]";
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

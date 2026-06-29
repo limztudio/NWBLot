@@ -79,7 +79,7 @@ static bool AppendIncludeDirectory(
 
 static bool BuildIncludeDirectories(
     const Path& repoRoot,
-    const CookVector<Path>& assetRoots,
+    const CookVector<Core::Assets::ResolvedAssetRoot>& assetRoots,
     const CookVector<Path>& implicitIncludeRoots,
     const ShaderCook::ShaderEntry& entry,
     CookVector<Path>& outIncludeDirectories,
@@ -426,8 +426,8 @@ bool PrepareShaderEntriesForCook(
         implicitIncludeRoots.push_back(shadowTransmittanceIncludeRoot);
     if(!csgShapeIncludeRoot.empty()){
         implicitIncludeRoots.push_back(csgShapeIncludeRoot);
-        for(const Path& assetRoot : resolvedPaths.assetRoots)
-            implicitIncludeRoots.push_back(assetRoot);
+        for(const Core::Assets::ResolvedAssetRoot& assetRoot : resolvedPaths.assetRoots)
+            implicitIncludeRoots.push_back(assetRoot.path);
     }
 
     for(ShaderCook::ShaderEntry& entry : inOutShaderEntries){

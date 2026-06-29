@@ -30,9 +30,9 @@ struct NwbRtInstanceMaterial{
 
 #define NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT 0x1u
 // flags bit1 = isRefractive: the material asset's `refractive` classification, plumbed to the GPU instance record
-// as groundwork for the future caustic producer. The shadow trace does NOT read this -- a transparent occluder's
-// surface hook supplies the optical params (ior / transmission) and the engine integrates the shadow visibility
-// over the true volume path (per-crossing Fresnel + signed Beer-Lambert). This flag is the producer's classification.
+// for the caustic producer. The shadow trace does NOT read this -- a transparent occluder's surface hook supplies the
+// optical params (ior / transmission) and the engine integrates the shadow visibility over the true volume path
+// (per-crossing Fresnel + signed Beer-Lambert). This flag is the producer's classification.
 #define NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE 0x2u
 
 

@@ -258,7 +258,7 @@ bool ParseSkeletonCookMetadata(
     Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_skeleton_cook;
-    (void)scratchArena;
+    static_cast<void>(scratchArena);
 
     outEntry = SkeletonCookEntry(outEntry.joints.get_allocator().arena());
 

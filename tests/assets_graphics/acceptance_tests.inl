@@ -340,7 +340,7 @@ TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
         [](const NWB::Impl::Mesh& loadedMesh){
             EXPECT_EQ(loadedMesh.positionStream().size(), 8u);
             EXPECT_EQ(loadedMesh.normalStream().size(), 6u);
-            EXPECT_EQ(loadedMesh.tangentStream().size(), 6u);
+            EXPECT_EQ(loadedMesh.tangentStream().size(), 4u);
             EXPECT_EQ(loadedMesh.uv0Stream().size(), 4u);
             EXPECT_EQ(loadedMesh.colorStream().size(), 1u);
             EXPECT_EQ(loadedMesh.meshlets().size(), 1u);
@@ -488,7 +488,7 @@ TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
         Name("project/meshes/uv_seam_quad"),
         [](const NWB::Impl::Mesh& loadedMesh){
             EXPECT_EQ(loadedMesh.positionStream().size(), 4u);
-            EXPECT_EQ(loadedMesh.uv0Stream().size(), 6u);
+            EXPECT_EQ(loadedMesh.uv0Stream().size(), 4u);
             EXPECT_EQ(loadedMesh.tangentStream().size(), 2u);
             EXPECT_EQ(TestMeshletLogicalPositionRefCount(loadedMesh), 4u);
             EXPECT_EQ(TestMeshletLogicalAttributeRefCount(loadedMesh), 6u);
@@ -503,11 +503,21 @@ TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
             EXPECT_NE(localRefs[2u].localAttribute, localRefs[4u].localAttribute);
 
             NWB::Impl::MeshletAttributeStreamRef attributeRef0;
+            NWB::Impl::MeshletAttributeStreamRef attributeRef2;
             NWB::Impl::MeshletAttributeStreamRef attributeRef3;
+            NWB::Impl::MeshletAttributeStreamRef attributeRef4;
             EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute, attributeRef0));
+            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[2u].localAttribute, attributeRef2));
             EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute, attributeRef3));
+            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[4u].localAttribute, attributeRef4));
             EXPECT_EQ(attributeRef0.uv0, 0u);
-            EXPECT_EQ(attributeRef3.uv0, 3u);
+            EXPECT_EQ(attributeRef2.uv0, 2u);
+            EXPECT_EQ(attributeRef3.uv0, 1u);
+            EXPECT_EQ(attributeRef4.uv0, 3u);
+            EXPECT_EQ(attributeRef0.tangent, 0u);
+            EXPECT_EQ(attributeRef2.tangent, 0u);
+            EXPECT_EQ(attributeRef3.tangent, 1u);
+            EXPECT_EQ(attributeRef4.tangent, 1u);
         }
     );
 }

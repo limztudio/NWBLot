@@ -63,7 +63,7 @@ ConstantBuffer<NwbAvboitDrawPushConstants> g_NwbAvboitDraw;
 #undef NWB_AVBOIT_PUSH_CONSTANTS
 
 half nwbAvboitResolveFragmentAlpha(half4 color){
-    return half(clamp(color.a, 0.0, 1.0));
+    return clamp(color.a, half(0.0), half(1.0));
 }
 
 #if NWB_CSG_ENABLED
@@ -187,7 +187,7 @@ bool nwbAvboitAcceptLowDepthFragment(
     out uint outVirtualSlice
 ){
     outVirtualSlice = 0u;
-    if(alpha <= 0.0)
+    if(alpha <= half(0.0))
         return false;
 
     const float opaqueDepthValue = nwbAvboitOpaqueDepthFromLowFragCoord(opaqueDepth, pointSampler, fragCoord.xy);

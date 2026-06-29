@@ -271,10 +271,9 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     const float3 invDir = nwbCausticSwSafeInvDir(direction);
 
     // FRONT-TO-BACK ordered descent. Keep the current node loaded; at an internal node descend the NEARER-entry child
-    // and defer the farther onto the stack (re-tested when popped, against the by-then-smaller closest.t). Output-
-    // identical to a push-both traversal -- closest-hit is order-independent -- but processing near first shrinks
-    // closest.t sooner, so more far subtrees cull -> fewer triangle tests + (the expensive) refractive surface dispatches.
-    // The stack now holds only deferred FAR children (<= tree depth), so it also overflows less than the old push-both.
+    // and defer the farther onto the stack (re-tested when popped, against the by-then-smaller closest.t). Processing
+    // near first shrinks closest.t sooner, so more far subtrees cull -> fewer triangle tests + refractive dispatches.
+    // The stack holds only deferred FAR children (<= tree depth).
     uint stack[NWB_CAUSTIC_SW_MESH_STACK_SIZE];
     uint stackPointer = 0u;
     NwbBvhNode node = g_NwbCausticSwMeshNodes[meshIndex][0u]; // per-mesh root
@@ -341,8 +340,8 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
             float tRight;
             const bool hitRight = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, tRight);
             if(hitLeft && hitRight){
-                // Descend the nearer child; defer the farther (dropped only if the stack is full -> a missed subtree,
-                // never a corruption -- same fallback as the old over-deep guard, but far rarer with one push per level).
+                // Descend the nearer child; defer the farther. A full stack drops that farther subtree rather than
+                // corrupting traversal state.
                 if(tLeft <= tRight){
                     if(stackPointer < NWB_CAUSTIC_SW_MESH_STACK_SIZE) stack[stackPointer++] = node.rightChild;
                     node = leftNode;
@@ -516,9 +515,8 @@ void nwbCausticSwSplat(const float3 worldPos, const float3 flux){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Picks the caustic light for this photon. v1 round-robins photons across the lights that hold a caustic slot
-// (params.w >= 0), so each caustic light gets a fair share of the budget. Returns false when no caustic light
-// exists (the dispatch should not run in that case, but guard anyway).
+// Picks the caustic light for this photon. Round-robin across lights that hold a caustic slot (params.w >= 0), so each
+// caustic light gets a fair share of the budget. Returns false when no caustic light exists.
 bool nwbCausticSwPickLight(const uint photonIndex, out NwbSceneLight outLight){
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     uint causticLightCount = 0u;

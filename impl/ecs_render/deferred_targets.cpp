@@ -42,7 +42,7 @@ struct CsgIntervalSubresources{
     };
 }
 
-static void AssertCsgIntervalTargetsAvailable(const DeferredFrameTargets& targets){
+static void AssertCsgIntervalTargetsAvailable([[maybe_unused]] const DeferredFrameTargets& targets){
     NWB_ASSERT(targets.csgCapBackNormal);
     NWB_ASSERT(targets.csgIntervalDepth);
     NWB_ASSERT(targets.csgIntervalId);

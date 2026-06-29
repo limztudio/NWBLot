@@ -23,6 +23,8 @@ namespace __hidden_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr usize s_SchedulerRebuildScratchBytes = 4096u;
+
 [[nodiscard]] bool accessesCanShareStage(const ComponentAccess& stageAccess, const ComponentAccess& systemAccess){
     if(stageAccess.typeId != systemAccess.typeId)
         return true;
@@ -164,7 +166,7 @@ void SystemScheduler::rebuild(){
     //  - They do not both write the same component type
     //  - One does not write a component that the other reads
 
-    Alloc::ScratchArena scratchArena(EcsArenaScope::s_SchedulerRebuildScratch, 4096);
+    Alloc::ScratchArena scratchArena(EcsArenaScope::s_SchedulerRebuildScratch, __hidden_system::s_SchedulerRebuildScratchBytes);
 
     Vector<u8, Alloc::ScratchArena> assignedSystems(
         systemCount, 0,

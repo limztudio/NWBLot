@@ -24,6 +24,10 @@ namespace __hidden_log_client{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr long s_ConnectTimeoutMs = 1000L;
+static constexpr long s_RequestTimeoutMs = 2000L;
+static constexpr u32 s_RetrySleepMs = 100u;
+
 [[nodiscard]] static AString<LogArena> UrlWithEndpoint(LogArena& arena, const AStringView baseUrl, const AStringView endpoint){
     AString<LogArena> output(baseUrl, arena);
     if(output.empty() || endpoint.empty())
@@ -112,13 +116,13 @@ bool Client::internalInit(NotNull<const char*> url){
         return false;
     }
 
-    ret = curl_easy_setopt(curlHandle, CURLOPT_CONNECTTIMEOUT_MS, 1000L);
+    ret = curl_easy_setopt(curlHandle, CURLOPT_CONNECTTIMEOUT_MS, __hidden_log_client::s_ConnectTimeoutMs);
     if(ret != CURLE_OK){
         enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set connect timeout on {}: {}"), CLIENT_NAME, StringConvert(BaseType::arena(), curl_easy_strerror(ret))), Type::Fatal);
         return false;
     }
 
-    ret = curl_easy_setopt(curlHandle, CURLOPT_TIMEOUT_MS, 2000L);
+    ret = curl_easy_setopt(curlHandle, CURLOPT_TIMEOUT_MS, __hidden_log_client::s_RequestTimeoutMs);
     if(ret != CURLE_OK){
         enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set request timeout on {}: {}"), CLIENT_NAME, StringConvert(BaseType::arena(), curl_easy_strerror(ret))), Type::Fatal);
         return false;
@@ -183,7 +187,7 @@ bool Client::internalUpdate(){
         if(this->m_exit.load(MemoryOrder::acquire))
             return;
 
-        SleepMS(100);
+        SleepMS(__hidden_log_client::s_RetrySleepMs);
         if(this->m_exit.load(MemoryOrder::acquire))
             return;
 

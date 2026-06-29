@@ -111,7 +111,6 @@ static bool BuildMeshlets(
         if(!AddVisitedMeshletTriangle(
             nwbFilePath,
             metaKind,
-            entry,
             trianglePrecompute,
             seedTriangleIndex,
             localSourceVertexRefs,
@@ -127,7 +126,6 @@ static bool BuildMeshlets(
         if(!GrowMeshletFromFrontier(
             nwbFilePath,
             metaKind,
-            entry,
             trianglePrecompute,
             seedSearchOffset,
             localSourceVertexRefs,

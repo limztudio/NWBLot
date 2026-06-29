@@ -32,24 +32,43 @@ namespace __hidden_runtime{
 using TestbedModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
+static constexpr f32 s_DegreesToRadians = s_PI / 180.0f;
+static constexpr f32 s_QuarterTurnFraction = 0.25f;
 static constexpr f32 s_CameraStartDepth = 2.2f;
 static constexpr f32 s_CameraMoveEpsilon = 0.000001f;
 static constexpr f32 s_FlyCameraMoveSpeed = 2.5f;
 static constexpr f32 s_FlyCameraBoostMultiplier = 4.0f;
-static constexpr f32 s_FlyCameraMouseSensitivityRadiansPerPixel = 0.12f * (s_PI / 180.0f);
-static constexpr f32 s_FlyCameraPitchLimitRadians = 89.0f * (s_PI / 180.0f);
-static constexpr f32 s_DefaultDirectionalLightPitch = s_PI * 0.25f; // emission aimed 45 degrees below horizontal (sun shining down)
-static constexpr f32 s_DefaultDirectionalLightYaw = s_PI * 0.25f;   // 45 degrees around the up axis
+static constexpr f32 s_FlyCameraMouseSensitivityDegreesPerPixel = 0.12f;
+static constexpr f32 s_FlyCameraPitchLimitDegrees = 89.0f;
+static constexpr f32 s_FlyCameraMouseSensitivityRadiansPerPixel = s_FlyCameraMouseSensitivityDegreesPerPixel * s_DegreesToRadians;
+static constexpr f32 s_FlyCameraPitchLimitRadians = s_FlyCameraPitchLimitDegrees * s_DegreesToRadians;
+static constexpr f32 s_DefaultDirectionalLightPitch = s_PI * s_QuarterTurnFraction; // emission aimed 45 degrees below horizontal (sun shining down)
+static constexpr f32 s_DefaultDirectionalLightYaw = s_PI * s_QuarterTurnFraction;   // 45 degrees around the up axis
+static constexpr f32 s_DefaultDirectionalLightRoll = 0.0f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 1.0f;
+static constexpr f32 s_DefaultDirectionalLightColorR = 1.0f;
+static constexpr f32 s_DefaultDirectionalLightColorG = 0.96f;
+static constexpr f32 s_DefaultDirectionalLightColorB = 0.88f;
 static constexpr f32 s_CharacterCameraTargetY = 0.85f;
 // Orbit the camera to the +Z side and yaw 180 degrees so it faces back along -Z onto the model's front.
 static constexpr f32 s_CameraStartYaw = s_PI;
+static constexpr f32 s_PointLightPositionX = 1.5f;
+static constexpr f32 s_PointLightPositionY = 1.6f;
+static constexpr f32 s_PointLightPositionZ = 1.5f;
+static constexpr f32 s_PointLightColorR = 0.6f;
+static constexpr f32 s_PointLightColorG = 0.74f;
+static constexpr f32 s_PointLightColorB = 1.0f;
 static constexpr f32 s_PointLightIntensity = 2.0f;
 static constexpr f32 s_PointLightRange = 16.0f; // larger range = gentler distance falloff so it stays comparable to the directional across the scene
+static constexpr f32 s_UiInitialPositionX = 18.0f;
+static constexpr f32 s_UiInitialPositionY = 18.0f;
+static constexpr f32 s_UiInitialWidth = 360.0f;
+static constexpr f32 s_UiInitialHeightAuto = 0.0f;
 static constexpr AStringView s_FemaleModelPath = "project/characters/female/model";
 static constexpr AStringView s_ModelMaterialPath = "project/materials/mat_skinned_uv";
 static constexpr AStringView s_GroundPlaneModelPath = "project/meshes/ground_plane/model";
 static constexpr AStringView s_GroundPlaneMaterialPath = "project/materials/mat_white_opaque";
+static constexpr tchar s_DefaultSceneDescription[] = NWB_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
@@ -277,8 +296,8 @@ void ProjectTestbed::verifyRendererSystemOrDie(NWB::Core::ECS::World& world){
 }
 
 void ProjectTestbed::drawUiControls(){
-    ImGui::SetNextWindowPos(ImVec2(18.0f, 18.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(360.0f, 0.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(__hidden_runtime::s_UiInitialPositionX, __hidden_runtime::s_UiInitialPositionY), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(__hidden_runtime::s_UiInitialWidth, __hidden_runtime::s_UiInitialHeightAuto), ImGuiCond_FirstUseEver);
     if(!ImGui::Begin("NWB Testbed")){
         ImGui::End();
         return;
@@ -330,14 +349,26 @@ bool ProjectTestbed::onStartup(){
         *m_world,
         __hidden_runtime::s_DefaultDirectionalLightPitch,
         __hidden_runtime::s_DefaultDirectionalLightYaw,
-        0.0f,
-        Float4(1.0f, 0.96f, 0.88f),
+        __hidden_runtime::s_DefaultDirectionalLightRoll,
+        Float4(
+            __hidden_runtime::s_DefaultDirectionalLightColorR,
+            __hidden_runtime::s_DefaultDirectionalLightColorG,
+            __hidden_runtime::s_DefaultDirectionalLightColorB
+        ),
         __hidden_runtime::s_DefaultDirectionalLightIntensity
     );
     NWB::Impl::Scene::CreatePointLightEntity(
         *m_world,
-        Float4(1.5f, 1.6f, 1.5f),
-        Float4(0.6f, 0.74f, 1.0f),
+        Float4(
+            __hidden_runtime::s_PointLightPositionX,
+            __hidden_runtime::s_PointLightPositionY,
+            __hidden_runtime::s_PointLightPositionZ
+        ),
+        Float4(
+            __hidden_runtime::s_PointLightColorR,
+            __hidden_runtime::s_PointLightColorG,
+            __hidden_runtime::s_PointLightColorB
+        ),
         __hidden_runtime::s_PointLightIntensity,
         __hidden_runtime::s_PointLightRange
     );
@@ -360,7 +391,7 @@ void ProjectTestbed::createDefaultScene(){
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
-        NWB_TEXT("45-degree directional + point light, female skinned character on a white ground plane")
+        __hidden_runtime::s_DefaultSceneDescription
     );
 }
 

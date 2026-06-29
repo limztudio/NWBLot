@@ -50,8 +50,7 @@
 
 
 // Reuse the shadow per-mesh cap so the C++ slot arrays + the shader's [N] descriptor arrays stay one definition. The
-// photon grid side is no longer a compile-time constant here -- the HW raygen reads it from the gridSide push constant
-// (config-scaled in C++, byte-identical to the SW producer), so the grid decomposes the photon index the same way.
+// HW raygen reads the photon grid side from the same push-constant layout as the SW producer.
 #include "../shadow/binding_slots.h"
 #include "sw_binding_slots.h"
 

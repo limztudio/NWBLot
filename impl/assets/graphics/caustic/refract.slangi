@@ -23,7 +23,7 @@
 //
 // TIR branch: identical to RefractV's VectorSelect(result, VectorZero(), totalInternalReflection) and matched in
 // Vector3Refract -- when the discriminant k < 0 the refracted ray does not exist (total internal reflection), and
-// the result is float3(0). The caustic producer reads a zero result as "drop this photon" in v1.
+// the result is float3(0). The caustic producer reads a zero result as "drop this photon".
 float3 nwbCausticRefract(float3 incident, float3 normal, float eta){
     const float cosI = dot(incident, normal);
     const float k = 1.0 - eta * eta * (1.0 - cosI * cosI);

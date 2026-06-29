@@ -115,10 +115,10 @@ static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4
 // Initial capacity (in records) of the per-frame caustic emission-target buffer; grows by doubling.
 inline constexpr usize s_CausticEmissionTargetInitialCapacity = 32u;
 
-// CPU/GPU record of one caustic emission target (P1): the world-space AABB of a refractive instance. The future
-// caustic photon producer aims its light-side emission domain at these boxes; for v1 a single global list (all
-// caustic lights share it). A tight 32-byte std430-friendly record ({ float4 aabbMin; float4 aabbMax; }); the w
-// lanes are unused padding (kept for SIMD-friendly 16-byte lanes / std430 float4 alignment).
+// CPU/GPU record of one caustic emission target (P1): the world-space AABB of a refractive instance. The caustic
+// photon producer aims its light-side emission domain at these boxes; all caustic lights share one global target list.
+// A tight 32-byte std430-friendly record ({ float4 aabbMin; float4 aabbMax; }); the w lanes are unused padding (kept
+// for SIMD-friendly 16-byte lanes / std430 float4 alignment).
 struct NwbCausticEmissionTargetGpu{
     Float4 aabbMin = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 aabbMax = Float4(0.f, 0.f, 0.f, 0.f);
@@ -146,10 +146,9 @@ static_assert(sizeof(NwbRtInstanceMaterialGpu) == 32u, "NwbRtInstanceMaterialGpu
 
 // Per-instance shadow-occluder flags (NwbRtInstanceMaterialGpu.flags), mirroring the shader-side
 // NWB_RT_INSTANCE_MATERIAL_FLAG_* defines: `Transparent` = evaluate the per-hit transmittance hook; `Refractive` =
-// the material asset's `refractive` classification, plumbed to the GPU instance record as groundwork for the future
-// caustic producer. The shadow trace does NOT gate on `Refractive` -- transmittance is unified (each material's
-// surface hook owns the final value, a refractive hook computing it via the engine helper). This is the producer's
-// classification.
+// the material asset's `refractive` classification for the caustic producer. The shadow trace does NOT gate on
+// `Refractive` -- transmittance is unified (each material's surface hook owns the final value, a refractive hook
+// computing it via the engine helper). This is the producer's classification.
 namespace RtInstanceMaterialFlag{
     enum Mask : u32{
         None = 0u,
@@ -254,16 +253,14 @@ inline constexpr u32 s_CausticSwPhotonCount = s_CausticSwPhotonGridSide * s_Caus
 
 // Single exposure knob (the only caustic brightness gain), applied in the resolve after the PHYSICAL flux->irradiance
 // conversion (per-photon flux = lightColor * emissionDomainArea * targetCount / photonCount in the producer, divided
-// by the receiver area-per-pixel in the resolve). Because the producer flux is now physical + energy-conserving (no
-// fudge constant -- the old s_CausticTotalEmittedPower=20 / s_CausticIntensity=10 pair is gone), the caustic has a
-// MEANINGFUL dynamic range: the DENSE focused caustic stays bright at a low exposure while the SPARSE far prism-
-// scatter falls below the visible floor. ~2 is a unit-ish exposure for the demo lighting (light intensity 2.0);
-// doubling the photon count leaves the per-frame image brightness unchanged (the energy-conservation invariant holds).
+// by the receiver area-per-pixel in the resolve). This keeps the caustic energy-conserving: focused caustics stay
+// bright at low exposure while sparse far-prism scatter falls below the visible floor. ~2 is a unit-ish exposure for
+// the demo lighting (light intensity 2.0); doubling the photon count leaves per-frame brightness unchanged.
 inline constexpr f32 s_CausticIntensity = 2.0f;
 
 // The caustic resolve denoise is an N-pass edge-avoiding a-trous wavelet (purely spatial, NO temporal accumulation ->
-// ghost-free for a moving caustic). The pass count + wavelet kernel live in the shader (NWB_CAUSTIC_RESOLVE_PASS_COUNT,
-// resolve_binding_slots.h); there is no longer a single-pass blur radius or a temporal-EMA blend weight.
+// ghost-free for a moving caustic). The pass count + wavelet kernel live in the shader
+// (NWB_CAUSTIC_RESOLVE_PASS_COUNT, resolve_binding_slots.h).
 
 // Photon-aim slack for DEFORMING (runtime/skinned) refractors. Their emission AABB is derived from the bind-pose
 // (rest) bounds -- there is no per-frame CPU deformed bound (the per-frame bounds live only in the GPU meshlet-bounds
@@ -579,7 +576,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(m_renderer.materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo)){
+        if(m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo)){
             u32 materialConstantByteOffset = 0u;
             if(!m_renderer.materialSystem().appendShadowOccluderMaterialContext(
                 entity,
@@ -800,7 +797,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(m_renderer.materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo)){
+        if(m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo)){
             u32 materialConstantByteOffset = 0u;
             if(!m_renderer.materialSystem().appendShadowOccluderMaterialContext(
                 entity,
@@ -888,11 +885,10 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
 
 bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
     // Caustic emission-target gather (P1, CPU only): collect the world-space AABB of every refractive instance in
-    // the scene -- the domain the future caustic photon producer aims at. Runs once per frame regardless of the
-    // shadow backend (HW TLAS or SW BVH); mirrors buildSceneSwBvh's mesh/transform resolve + 8-corner world AABB
-    // but does NOT require a software BVH and keeps ONLY instances whose material is refractive. The count gates
-    // caustic-light assignment (see ResolveCausticLights): zero refractive instances -> zero caustic lights. No
-    // consumer reads the uploaded buffer yet.
+    // the scene -- the domain the caustic photon producer aims at. Runs once per frame regardless of the shadow
+    // backend (HW TLAS or SW BVH); mirrors buildSceneSwBvh's mesh/transform resolve + 8-corner world AABB but does
+    // NOT require a software BVH and keeps ONLY instances whose material is refractive. The count gates caustic-light
+    // assignment (see ResolveCausticLights): zero refractive instances -> zero caustic lights.
     rayTracingState().m_causticRefractiveInstanceCount = 0u;
 
     auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
@@ -929,7 +925,7 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
         // Only refractive instances are emission targets (the producer's classification, mirroring buildSceneTlas
         // / buildSceneSwBvh's MaterialSurfaceInfo.refractive read).
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(!m_renderer.materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo))
+        if(!m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo))
             continue;
         if(!materialInfo || !materialInfo->refractive)
             continue;
@@ -3560,8 +3556,8 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
 }
 
 bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCount){
-    // The caustic emission-target list is CPU-written each frame and (eventually) read by the caustic producer,
-    // so it is a structured SRV (no UAV) that grows by doubling like the scene-BVH / instance-material buffers.
+    // The caustic emission-target list is CPU-written each frame and read by the caustic producer, so it is a
+    // structured SRV (no UAV) that grows by doubling like the scene-BVH / instance-material buffers.
     if(rayTracingState().m_causticEmissionTargetBuffer && rayTracingState().m_causticEmissionTargetCapacity >= targetCount)
         return true;
 

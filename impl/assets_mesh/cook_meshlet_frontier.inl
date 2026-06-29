@@ -76,23 +76,14 @@ template<typename VertexRefVectorT, typename PrimitiveIndexVectorT>
     return true;
 }
 
-template<typename CookEntryT, typename TriangleIndexVectorT>
+template<typename TriangleIndexVectorT>
 static void AddMeshletTriangleToScoreState(
-    const CookEntryT& entry,
     const MeshletTrianglePrecompute& trianglePrecompute,
     const TriangleIndexVectorT& triangleIndices,
     const MeshletTriangleData& triangle,
     MeshletScoreState& state
 ){
-    SIMDVector trianglePositions[3];
-    for(usize cornerIndex = 0u; cornerIndex < 3u; ++cornerIndex){
-        trianglePositions[cornerIndex] = VectorSetW(
-            LoadFloat(MeshletSourceVertexPositionStreamValue(entry, triangle.vertexRefs[cornerIndex])),
-            0.0f
-        );
-    }
-
-    AccumulateMeshletScoreBounds(trianglePositions, state.minBounds, state.maxBounds);
+    AccumulateMeshletScoreBounds(triangle.positionVectors, state.minBounds, state.maxBounds);
     const SIMDVector triangleCentroid = triangle.centroid;
     const SIMDVector triangleAreaNormal = triangle.areaNormal;
     state.radius = AabbTests::Radius(state.minBounds, state.maxBounds);
@@ -110,11 +101,9 @@ static void AddMeshletTriangleToScoreState(
     );
 }
 
-template<typename CookEntryT>
 [[nodiscard]] static bool AddVisitedMeshletTriangle(
     const Path& nwbFilePath,
     const tchar* metaKind,
-    const CookEntryT& entry,
     MeshletTrianglePrecompute& trianglePrecompute,
     const u32 triangleIndex,
     Core::Assets::AssetVector<u32>& localSourceVertexRefs,
@@ -130,17 +119,15 @@ template<typename CookEntryT>
         return false;
 
     localTriangleIndices.push_back(triangleIndex);
-    AddMeshletTriangleToScoreState(entry, trianglePrecompute, localTriangleIndices, triangle, scoreState);
+    AddMeshletTriangleToScoreState(trianglePrecompute, localTriangleIndices, triangle, scoreState);
     trianglePrecompute.visitedTriangles[triangleIndex] = 1u;
     AddMeshletTriangleNeighborsToFrontier(trianglePrecompute, triangleIndex, frontier, frontierFlags);
     return true;
 }
 
-template<typename CookEntryT>
 [[nodiscard]] static bool GrowMeshletFromFrontier(
     const Path& nwbFilePath,
     const tchar* metaKind,
-    const CookEntryT& entry,
     MeshletTrianglePrecompute& trianglePrecompute,
     const usize seedSearchOffset,
     Core::Assets::AssetVector<u32>& localSourceVertexRefs,
@@ -157,7 +144,6 @@ template<typename CookEntryT>
         if(frontier.empty()){
             MeshletFrontierCandidate disconnectedCandidate;
             if(!FindBestDisconnectedMeshletCandidate(
-                entry,
                 trianglePrecompute,
                 seedSearchOffset + 1u,
                 localTriangleIndices,
@@ -173,7 +159,6 @@ template<typename CookEntryT>
             if(!AddVisitedMeshletTriangle(
                 nwbFilePath,
                 metaKind,
-                entry,
                 trianglePrecompute,
                 disconnectedCandidate.triangleIndex,
                 localSourceVertexRefs,
@@ -190,7 +175,6 @@ template<typename CookEntryT>
 
         MeshletFrontierCandidate bestCandidate;
         if(!FindBestMeshletFrontierCandidate(
-            entry,
             trianglePrecompute,
             frontier,
             localTriangleIndices,
@@ -205,7 +189,6 @@ template<typename CookEntryT>
         if(!AddVisitedMeshletTriangle(
             nwbFilePath,
             metaKind,
-            entry,
             trianglePrecompute,
             bestCandidate.triangleIndex,
             localSourceVertexRefs,

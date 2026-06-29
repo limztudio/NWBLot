@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include <core/assets/paths.h>
 #include <core/common/command_line.h>
 
 
@@ -29,6 +30,8 @@ struct ParsedCookOptions{
     std::string configuration;
     std::string assetType;
 };
+
+inline constexpr AStringView s_ImplDirectoryName = "impl";
 
 static bool AssignCompactString(
     const AStringView source,
@@ -58,9 +61,34 @@ static bool AssignString(
     return true;
 }
 
-static bool AssignStrings(
+static bool AssignAssetRootVirtualRoot(
+    const std::string& source,
+    ACompactString& outVirtualRoot,
+    NWB::Core::Assets::AssetString& outError
+){
+    outVirtualRoot.clear();
+
+    NWB::Core::Assets::AssetArena& arena = outError.get_allocator().arena();
+    const Path assetRootPath(arena, source.c_str());
+    const Path normalizedAssetRootPath = assetRootPath.lexically_normal();
+
+    auto parentDirectoryName = PathToString(arena, normalizedAssetRootPath.parent_path().filename());
+    CanonicalizeTextInPlace(parentDirectoryName);
+
+    const AStringView virtualRoot = parentDirectoryName == s_ImplDirectoryName
+        ? NWB::Core::Assets::s_EngineVirtualRoot
+        : NWB::Core::Assets::s_ProjectVirtualRoot
+    ;
+    if(outVirtualRoot.assign(virtualRoot))
+        return true;
+
+    outError = StringFormat(outError.get_allocator().arena(), "asset root virtual root '{}' exceeds ACompactString capacity ({})", virtualRoot, ACompactString::s_MaxLength);
+    return false;
+}
+
+static bool AssignAssetRoots(
     const std::vector<std::string>& source,
-    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>& outValues,
+    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetCookRoot>& outValues,
     NWB::Core::Assets::AssetString& outError
 ){
     outValues.clear();
@@ -72,7 +100,14 @@ static bool AssignStrings(
             outValues.clear();
             return false;
         }
-        outValues.emplace_back(value.data(), value.size(), arena);
+
+        ACompactString virtualRoot;
+        if(!AssignAssetRootVirtualRoot(value, virtualRoot, outError)){
+            outValues.clear();
+            return false;
+        }
+
+        outValues.emplace_back(arena, AStringView(value.data(), value.size()), virtualRoot);
     }
     return true;
 }
@@ -113,7 +148,7 @@ CommandLineParseResult::Enum ParseCommandLine(
     CookOptions& outOptions,
     NWB::Core::Assets::AssetString& outError
 ){
-    (void)arena;
+    static_cast<void>(arena);
 
     outOptions.repoRoot.clear();
     outOptions.assetRoots.clear();
@@ -151,7 +186,7 @@ CommandLineParseResult::Enum ParseCommandLine(
 
     if(!__hidden_command_line::AssignString(parsedOptions.repoRoot, outOptions.repoRoot, outError))
         return CommandLineParseResult::Error;
-    if(!__hidden_command_line::AssignStrings(parsedOptions.assetRoots, outOptions.assetRoots, outError))
+    if(!__hidden_command_line::AssignAssetRoots(parsedOptions.assetRoots, outOptions.assetRoots, outError))
         return CommandLineParseResult::Error;
     if(!__hidden_command_line::AssignString(parsedOptions.outputDirectory, outOptions.outputDirectory, outError))
         return CommandLineParseResult::Error;
@@ -177,7 +212,7 @@ CommandLineParseResult::Enum ParseCommandLine(
 
 
 void PrintUsage(NWB::Core::Assets::AssetArena& arena){
-    (void)arena;
+    static_cast<void>(arena);
     __hidden_command_line::ParsedCookOptions options;
     CLI::App app{ "resource_cooker" };
     app.set_help_flag("-h,--help", "Show help");

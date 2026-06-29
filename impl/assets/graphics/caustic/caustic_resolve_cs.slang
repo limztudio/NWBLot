@@ -10,13 +10,10 @@
 
 
 // Caustic resolve = an EDGE-AVOIDING A-TROUS WAVELET denoise (Dammertz et al.), run at HALF RESOLUTION as N ping-pong
-// compute passes, bracketed by a 2x2 downsample (the prepare pass) and a bilinear upsample. This REPLACES the temporal-
-// EMA + variance-clamp + motion-vector path: a refractor's caustic moves NON-RIGIDLY (a spinning prism MORPHS its
-// caustic), so no motion vector tracks it and any temporal accumulation trails it (the ghost). A-trous denoises each
-// frame PURELY SPATIALLY -> the sparse photon splat smooths to a clean caustic with NO history -> ghost-free for any
-// caustic motion. The producer's per-photon emission is a deterministic stratified distribution (no per-frame jitter),
-// so a static scene is flicker-free without temporal averaging, and the wavelet's geometry edge-stop keeps the
-// smoothing bounded to the receiver surface.
+// compute passes, bracketed by a 2x2 downsample (the prepare pass) and an edge-aware upsample. A refractor's caustic
+// moves NON-RIGIDLY (a spinning prism MORPHS its caustic), so the resolve stays purely spatial with no history. The
+// producer's per-photon emission is a deterministic stratified distribution (no per-frame jitter), and the wavelet's
+// geometry edge-stop keeps the smoothing bounded to the receiver surface.
 //
 // HALF-RES PIPELINE (3 stages, selected by pushConstants.stage):
 //   stage 0 PREPARE+DOWNSAMPLE (half-res dispatch): each half-res pixel sums the 2x2 full-res R32_UINT splat-accumulator
@@ -25,8 +22,8 @@
 //     2x2 flux / (4x larger half-res area) == the full-res average irradiance, so brightness is preserved.
 //   stage 1 WAVELET (half-res dispatch): edge-avoiding a-trous step at dilation stepWidth (1,2,4 half-res texels). Reads
 //     the previous half-res color (half-A/half-B ping-pong) + the FULL-res G-buffer sampled at the half pixel's 2x
-//     location for the world-distance edge-stop. Each half-res dilation reaches 2x the world extent of the same full-res
-//     dilation, so 3 half-res passes match the old 5 full-res passes' support at a quarter the per-pass pixel count.
+//     location for the world-distance edge-stop. Each half-res dilation reaches 2x the world extent of a full-res
+//     dilation, keeping wide support at a quarter the per-pass pixel count.
 //   stage 2 UPSAMPLE (full-res dispatch): bilinearly samples the final half-res caustic into the full-res irradiance
 //     buffer the deferred lighting adds; background pixels (no receiver) write zero (the additive no-op).
 
@@ -81,8 +78,8 @@ groupshared uint   s_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS]
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Half-res receiver geometry, read from the precomputed cache (one half-res texel, vs the old per-tap full-res world +
-// depth re-reads). xyz = world position (the 2x point sample of the full-res G-buffer), w = receiver validity (1/0).
+// Half-res receiver geometry, read from the precomputed cache. xyz = world position (the 2x point sample of the
+// full-res G-buffer), w = receiver validity (1/0).
 float3 nwbCausticResolveWorldAtHalf(const int2 halfTexel){
     return g_NwbCausticResolveGeometry.Load(int3(halfTexel, 0)).xyz;
 }
@@ -308,3 +305,4 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

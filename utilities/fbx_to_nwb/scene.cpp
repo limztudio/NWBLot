@@ -22,6 +22,9 @@ namespace __hidden_scene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr usize s_UfbxErrorBufferSize = 4096u;
+static constexpr f32 s_TargetUnitMeters = 1.0f;
+
 AString FromUfbxString(const ufbx_string value){
     if(!value.data || value.length == 0u)
         return {};
@@ -85,7 +88,7 @@ AString MeshDisplayName(const MeshInstance& instance){
 }
 
 AString FormatUfbxError(const ufbx_error& error){
-    char buffer[4096] = {};
+    char buffer[s_UfbxErrorBufferSize] = {};
     ufbx_format_error(buffer, sizeof(buffer), &error);
     return buffer;
 }
@@ -141,7 +144,7 @@ bool LoadScene(const ImportOptions& options, SceneHandle& outScene){
         loadOptions.target_axes.right = UFBX_COORDINATE_AXIS_POSITIVE_X;
         loadOptions.target_axes.up = UFBX_COORDINATE_AXIS_POSITIVE_Y;
         loadOptions.target_axes.front = UFBX_COORDINATE_AXIS_POSITIVE_Z;
-        loadOptions.target_unit_meters = 1.0f;
+        loadOptions.target_unit_meters = __hidden_scene::s_TargetUnitMeters;
     }
 
     const AString inputPath = PathToUtf8(PathFromUtf8(options.inputPath));

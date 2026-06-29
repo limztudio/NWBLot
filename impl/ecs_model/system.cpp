@@ -31,16 +31,22 @@ namespace __hidden_model_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ApplyObjectTransform(Scene::TransformComponent& transform, const SIMDMatrix& matrix){
+[[nodiscard]] bool ResolveObjectTransformVectors(
+    const SIMDMatrix& matrix,
+    SIMDVector& outScale,
+    SIMDVector& outRotation,
+    SIMDVector& outTranslation
+){
     SIMDVector scale;
     SIMDVector rotation;
     SIMDVector translation;
     if(!MatrixDecompose(&scale, &rotation, &translation, matrix))
-        return;
+        return false;
 
-    StoreFloat(VectorSetW(translation, 0.0f), &transform.position);
-    StoreFloat(rotation, &transform.rotation);
-    StoreFloat(VectorSetW(scale, 0.0f), &transform.scale);
+    outScale = VectorSetW(scale, 0.0f);
+    outRotation = rotation;
+    outTranslation = VectorSetW(translation, 0.0f);
+    return true;
 }
 
 SIMDMatrix MakeTransformMatrix(
@@ -53,14 +59,6 @@ SIMDMatrix MakeTransformMatrix(
         VectorZero(),
         rotation,
         translation
-    );
-}
-
-SIMDMatrix MakeTransformMatrix(const Scene::TransformComponent& transform){
-    return MakeTransformMatrix(
-        LoadFloat(transform.scale),
-        LoadFloat(transform.rotation),
-        LoadFloat(transform.position)
     );
 }
 
@@ -80,24 +78,6 @@ SIMDMatrix MakeStaticAttachmentWorldTransform(
     if(jointTransform)
         worldTransform = MatrixMultiply(worldTransform, *jointTransform);
     return MatrixMultiply(worldTransform, localTransform);
-}
-
-SIMDMatrix MakeOwnedObjectWorldTransform(
-    Core::ECS::World& world,
-    const Core::ECS::EntityID owner,
-    const SkeletonJointMatrix& localTransform
-){
-    const Scene::TransformComponent* ownerTransform = world.tryGetComponent<Scene::TransformComponent>(owner);
-    const SIMDMatrix ownerMatrix = ownerTransform
-        ? MakeTransformMatrix(*ownerTransform)
-        : MatrixIdentity()
-    ;
-    return MakeWorldTransform(ownerMatrix, LoadFloat(localTransform));
-}
-
-void ApplyObjectTransform(Core::ECS::Entity& entity, const SIMDMatrix& matrix){
-    auto& transform = entity.addComponent<Scene::TransformComponent>();
-    ApplyObjectTransform(transform, matrix);
 }
 
 void TagObject(
@@ -325,10 +305,29 @@ bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Mod
         object.transform,
         ModelObjectKind::Skeleton
     );
-    __hidden_model_system::ApplyObjectTransform(
-        entity,
-        __hidden_model_system::MakeOwnedObjectWorldTransform(m_world, owner, object.transform)
-    );
+    auto& transform = entity.addComponent<Scene::TransformComponent>();
+    const Scene::TransformComponent* ownerTransform = m_world.tryGetComponent<Scene::TransformComponent>(owner);
+    const SIMDMatrix ownerMatrix = ownerTransform
+        ? __hidden_model_system::MakeTransformMatrix(
+            LoadFloat(ownerTransform->scale),
+            LoadFloat(ownerTransform->rotation),
+            LoadFloat(ownerTransform->position)
+        )
+        : MatrixIdentity()
+    ;
+    SIMDVector scale;
+    SIMDVector rotation;
+    SIMDVector translation;
+    if(__hidden_model_system::ResolveObjectTransformVectors(
+        __hidden_model_system::MakeWorldTransform(ownerMatrix, LoadFloat(object.transform)),
+        scale,
+        rotation,
+        translation
+    )){
+        StoreFloat(translation, &transform.position);
+        StoreFloat(rotation, &transform.rotation);
+        StoreFloat(scale, &transform.scale);
+    }
 
     auto& pose = entity.addComponent<SkeletonPoseComponent>(m_arena);
     pose.parentJoints.clear();
@@ -356,10 +355,29 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
         object.transform,
         ModelObjectKind::StaticMesh
     );
-    __hidden_model_system::ApplyObjectTransform(
-        entity,
-        __hidden_model_system::MakeOwnedObjectWorldTransform(m_world, owner, object.transform)
-    );
+    auto& transform = entity.addComponent<Scene::TransformComponent>();
+    const Scene::TransformComponent* ownerTransform = m_world.tryGetComponent<Scene::TransformComponent>(owner);
+    const SIMDMatrix ownerMatrix = ownerTransform
+        ? __hidden_model_system::MakeTransformMatrix(
+            LoadFloat(ownerTransform->scale),
+            LoadFloat(ownerTransform->rotation),
+            LoadFloat(ownerTransform->position)
+        )
+        : MatrixIdentity()
+    ;
+    SIMDVector scale;
+    SIMDVector rotation;
+    SIMDVector translation;
+    if(__hidden_model_system::ResolveObjectTransformVectors(
+        __hidden_model_system::MakeWorldTransform(ownerMatrix, LoadFloat(object.transform)),
+        scale,
+        rotation,
+        translation
+    )){
+        StoreFloat(translation, &transform.position);
+        StoreFloat(rotation, &transform.rotation);
+        StoreFloat(scale, &transform.scale);
+    }
     if(m_applyRenderer)
         m_applyRenderer(m_world, m_arena, entity, owner, object.material);
 
@@ -437,10 +455,29 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
         object.transform,
         ModelObjectKind::SkinnedMesh
     );
-    __hidden_model_system::ApplyObjectTransform(
-        entity,
-        __hidden_model_system::MakeOwnedObjectWorldTransform(m_world, owner, object.transform)
-    );
+    auto& transform = entity.addComponent<Scene::TransformComponent>();
+    const Scene::TransformComponent* ownerTransform = m_world.tryGetComponent<Scene::TransformComponent>(owner);
+    const SIMDMatrix ownerMatrix = ownerTransform
+        ? __hidden_model_system::MakeTransformMatrix(
+            LoadFloat(ownerTransform->scale),
+            LoadFloat(ownerTransform->rotation),
+            LoadFloat(ownerTransform->position)
+        )
+        : MatrixIdentity()
+    ;
+    SIMDVector scale;
+    SIMDVector rotation;
+    SIMDVector translation;
+    if(__hidden_model_system::ResolveObjectTransformVectors(
+        __hidden_model_system::MakeWorldTransform(ownerMatrix, LoadFloat(object.transform)),
+        scale,
+        rotation,
+        translation
+    )){
+        StoreFloat(translation, &transform.position);
+        StoreFloat(rotation, &transform.rotation);
+        StoreFloat(scale, &transform.scale);
+    }
     if(m_applyRenderer)
         m_applyRenderer(m_world, m_arena, entity, owner, object.material);
 
@@ -458,10 +495,28 @@ void ModelSystem::updateModelObjectTransforms(){
             if(object.kind == ModelObjectKind::StaticMesh)
                 return;
 
-            __hidden_model_system::ApplyObjectTransform(
-                transform,
-                __hidden_model_system::MakeOwnedObjectWorldTransform(m_world, object.owner, object.localTransform)
-            );
+            const Scene::TransformComponent* ownerTransform = m_world.tryGetComponent<Scene::TransformComponent>(object.owner);
+            const SIMDMatrix ownerMatrix = ownerTransform
+                ? __hidden_model_system::MakeTransformMatrix(
+                    LoadFloat(ownerTransform->scale),
+                    LoadFloat(ownerTransform->rotation),
+                    LoadFloat(ownerTransform->position)
+                )
+                : MatrixIdentity()
+            ;
+            SIMDVector scale;
+            SIMDVector rotation;
+            SIMDVector translation;
+            if(__hidden_model_system::ResolveObjectTransformVectors(
+                __hidden_model_system::MakeWorldTransform(ownerMatrix, LoadFloat(object.localTransform)),
+                scale,
+                rotation,
+                translation
+            )){
+                StoreFloat(translation, &transform.position);
+                StoreFloat(rotation, &transform.rotation);
+                StoreFloat(scale, &transform.scale);
+            }
         }
     );
 }
@@ -476,24 +531,41 @@ void ModelSystem::updateStaticMeshAttachments(){
                 ? m_world.tryGetComponent<Scene::TransformComponent>(attachment.parentEntity)
                 : ownerTransform;
             const SIMDMatrix ownerMatrix = ownerTransform
-                ? __hidden_model_system::MakeTransformMatrix(*ownerTransform)
+                ? __hidden_model_system::MakeTransformMatrix(
+                    LoadFloat(ownerTransform->scale),
+                    LoadFloat(ownerTransform->rotation),
+                    LoadFloat(ownerTransform->position)
+                )
                 : MatrixIdentity()
             ;
             const SIMDMatrix parentMatrix = parentTransform
-                ? __hidden_model_system::MakeTransformMatrix(*parentTransform)
+                ? __hidden_model_system::MakeTransformMatrix(
+                    LoadFloat(parentTransform->scale),
+                    LoadFloat(parentTransform->rotation),
+                    LoadFloat(parentTransform->position)
+                )
                 : ownerMatrix
             ;
             const SIMDMatrix localMatrix = LoadFloat(attachment.localTransform);
 
             if(!attachment.parentEntity.valid() || attachment.parentJointIndex == Limit<u32>::s_Max){
-                __hidden_model_system::ApplyObjectTransform(
-                    transform,
+                SIMDVector scale;
+                SIMDVector rotation;
+                SIMDVector translation;
+                if(__hidden_model_system::ResolveObjectTransformVectors(
                     __hidden_model_system::MakeStaticAttachmentWorldTransform(
                         parentMatrix,
                         nullptr,
                         localMatrix
-                    )
-                );
+                    ),
+                    scale,
+                    rotation,
+                    translation
+                )){
+                    StoreFloat(translation, &transform.position);
+                    StoreFloat(rotation, &transform.rotation);
+                    StoreFloat(scale, &transform.scale);
+                }
                 return;
             }
 
@@ -507,14 +579,23 @@ void ModelSystem::updateStaticMeshAttachments(){
 
             NWB_ASSERT(attachment.parentJointIndex < m_scratchJoints.size());
             const SIMDMatrix jointMatrix = LoadFloat(m_scratchJoints[attachment.parentJointIndex]);
-            __hidden_model_system::ApplyObjectTransform(
-                transform,
+            SIMDVector scale;
+            SIMDVector rotation;
+            SIMDVector translation;
+            if(__hidden_model_system::ResolveObjectTransformVectors(
                 __hidden_model_system::MakeStaticAttachmentWorldTransform(
                     parentMatrix,
                     &jointMatrix,
                     localMatrix
-                )
-            );
+                ),
+                scale,
+                rotation,
+                translation
+            )){
+                StoreFloat(translation, &transform.position);
+                StoreFloat(rotation, &transform.rotation);
+                StoreFloat(scale, &transform.scale);
+            }
         }
     );
 }

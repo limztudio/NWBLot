@@ -483,7 +483,7 @@ bool ParseModelCookMetadata(
     Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_model_cook;
-    (void)scratchArena;
+    static_cast<void>(scratchArena);
 
     outEntry = ModelCookEntry(outEntry.skeletonObjects.get_allocator().arena());
 

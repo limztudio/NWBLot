@@ -216,8 +216,8 @@ void nwbCausticHwSplat(const float3 worldPos, const float3 flux){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Picks the caustic light for this photon -- a VERBATIM copy of the SW kernel's nwbCausticSwPickLight: round-robin
-// across the lights that hold a caustic slot (params.w >= 0). Returns false when no caustic light exists.
+// Picks the caustic light for this photon, matching the SW producer: round-robin across the lights that hold a
+// caustic slot (params.w >= 0). Returns false when no caustic light exists.
 bool nwbCausticHwPickLight(const uint photonIndex, out NwbSceneLight outLight){
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     uint causticLightCount = 0u;

@@ -20,7 +20,6 @@ NWB_ASSETS_BEGIN
 
 
 static constexpr AStringView s_AssetsDirectoryName = "assets";
-static constexpr AStringView s_ImplDirectoryName = "impl";
 static constexpr AStringView s_EngineVirtualRoot = "engine";
 static constexpr AStringView s_ProjectVirtualRoot = "project";
 static constexpr AStringView s_NwbExtension = ".nwb";
@@ -34,31 +33,6 @@ namespace AssetPathsDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] inline bool ResolveAssetRootVirtualRootText(
-    const Path& assetRoot,
-    AStringView& outVirtualRootText,
-    Alloc::ScratchArena& scratchArena
-){
-    outVirtualRootText = {};
-
-    AString<Alloc::ScratchArena> assetRootName = PathToString(scratchArena, assetRoot.filename());
-    CanonicalizeTextInPlace(assetRootName);
-    if(assetRootName != s_AssetsDirectoryName){
-        NWB_LOGGER_ERROR(NWB_TEXT("Assets: asset root must point to an 'assets' directory: '{}'")
-            , PathToString<tchar>(assetRoot)
-        );
-        return false;
-    }
-
-    AString<Alloc::ScratchArena> parentDirectoryName = PathToString(scratchArena, assetRoot.parent_path().filename());
-    CanonicalizeTextInPlace(parentDirectoryName);
-    outVirtualRootText = parentDirectoryName == s_ImplDirectoryName
-        ? s_EngineVirtualRoot
-        : s_ProjectVirtualRoot
-    ;
-    return true;
-}
 
 template<typename StringT>
 [[nodiscard]] inline bool BuildRelativeAssetPathText(const Path& relativePath, StringT& outRelativePath){
@@ -157,26 +131,6 @@ template<typename StringT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BuildAssetRootVirtualRoot(
-    const Path& assetRoot,
-    ACompactString& outVirtualRoot,
-    Alloc::ScratchArena& scratchArena
-){
-    outVirtualRoot.clear();
-
-    AStringView virtualRootText;
-    if(!AssetPathsDetail::ResolveAssetRootVirtualRootText(assetRoot, virtualRootText, scratchArena))
-        return false;
-    if(!outVirtualRoot.assign(virtualRootText)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Assets: asset virtual root '{}' exceeds ACompactString capacity")
-            , StringConvert(virtualRootText)
-        );
-        return false;
-    }
-
-    return true;
-}
-
 template<typename StringT>
 [[nodiscard]] inline bool BuildDerivedAssetVirtualPath(const Path& assetRoot, const AStringView virtualRoot, const Path& sourceOrMetaPath, StringT& outVirtualPath){
     return AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, sourceOrMetaPath, outVirtualPath);
@@ -246,14 +200,11 @@ template<typename AssetRootVector>
             return false;
     }
 
-    for(const Path& assetRoot : assetRoots){
-        ACompactString assetVirtualRoot;
-        if(!BuildAssetRootVirtualRoot(assetRoot, assetVirtualRoot, scratchArena))
-            return false;
-        if(assetVirtualRoot != requestedVirtualRoot)
+    for(const auto& assetRoot : assetRoots){
+        if(assetRoot.virtualRoot != requestedVirtualRoot)
             continue;
 
-        outResolvedPath = assetRoot;
+        outResolvedPath = assetRoot.path;
         ++componentIt;
         for(; componentIt != virtualPathPath.end(); ++componentIt){
             AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, *componentIt);

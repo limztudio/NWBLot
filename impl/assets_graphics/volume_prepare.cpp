@@ -375,9 +375,8 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
         return false;
 
     // The transparent-pass twin: generate each TRANSPARENT material's AVBOIT accumulate pixel shader from the
-    // SAME `surface` hook (its color now comes from the material's surface + BXDF, not the old fixed
-    // vertex-color + hard-coded lambert). The renderer binds it for the transparent draw, keyed by the material.
-    // Runs alongside the G-buffer PS generation (before shader prep + before ValidateMaterials).
+    // SAME `surface` hook. The renderer binds it for the transparent draw, keyed by the material. Runs alongside
+    // the G-buffer PS generation (before shader prep + before ValidateMaterials).
     MaterialCookVector<GeneratedMaterialPixelShader> generatedAvboitAccumulatePixelShaders(materialCookArena);
     if(!EmitMaterialAvboitAccumulatePixelShaders(
         materialCookArena,

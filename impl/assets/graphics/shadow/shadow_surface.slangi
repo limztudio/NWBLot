@@ -93,10 +93,9 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Builds the surface-input bundle a hook reads from a ray hit. v1 sources uv0 / normal / worldPosition from the
-// hit; color + tangent are neutral defaults (the trace interpolates only uv0 + normal for now -- a hook that
-// needs vertex color or tangent in its shadow path is a later unit). normal is world space (the contract the
-// rasterizer also satisfies), supplied already-transformed by the trace backend that filled the hit.
+// Builds the surface-input bundle a hook reads from a ray hit. The trace supplies uv0 / normal / worldPosition;
+// color + tangent are neutral defaults. normal is world space (the contract the rasterizer also satisfies),
+// supplied already-transformed by the trace backend that filled the hit.
 NwbMeshSurfaceInputs nwbShadowBuildSurfaceInputs(NwbShadowHit hit){
     NwbMeshSurfaceInputs inputs;
     inputs.color = half4(1.0, 1.0, 1.0, 1.0);

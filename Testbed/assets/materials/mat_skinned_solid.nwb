@@ -5,9 +5,9 @@ asset.surface = "project/shaders/surface.surface";
 asset.bxdf = "project/shaders/lambert.bxdf";
 asset.parameters = {
     "surface": {
-        "base_color": "float4(0.78, 0.35, 1.0, 1.0)",
+        "base_color": "half4(0.78, 0.35, 1.0, 1.0)",
     },
     "runtime": {
-        "color_tint": "float4(1.0, 1.0, 1.0, 1.0)",
+        "color_tint": "half4(1.0, 1.0, 1.0, 1.0)",
     },
 };

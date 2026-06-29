@@ -4,16 +4,16 @@
 
 [material_constant]
 struct NwbFrostSurfaceMaterial{
-    [default("float4(0.2, 0.4, 0.9, 1.0)")]
-    float4 frost_albedo;
-    [default("float(0.5)")]
-    float roughness_value;
+    [default("half4(0.2, 0.4, 0.9, 1.0)")]
+    half4 frost_albedo;
+    [default("half(0.5)")]
+    half roughness_value;
 };
 
 [material_mutable]
 struct NwbFrostRuntimeMaterial{
-    [default("float3(1.0, 1.0, 1.0)")]
-    float3 sparkle_tint;
+    [default("half3(1.0, 1.0, 1.0)")]
+    half3 sparkle_tint;
 };
 
 NwbFrostSurfaceMaterial frost;

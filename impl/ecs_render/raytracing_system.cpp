@@ -17,10 +17,6 @@
 #include <impl/assets/graphics/bvh/binding_slots.h>
 #include <impl/assets/graphics/bvh/names.h>
 
-#include <global/environment.h> // ReadEnvironmentVariableBuffer -- NWB_SHADOW_RESOLVE_EDGE_THRESHOLD tuning override
-
-#include <cstdlib> // std::atof (edge-threshold env override parse)
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -217,20 +213,17 @@ struct CausticGeometryDownsamplePushConstants{
 };
 static_assert(sizeof(CausticGeometryDownsamplePushConstants) == sizeof(u32) * 4u, "CausticGeometryDownsamplePushConstants must match the shader push-constant layout");
 
-// Mirror of shadow_resolve_cs.slang's NwbShadowResolvePushConstants (the edge-adaptive shadow resolve): full-res dims +
-// the half-res ray-traced visibility dims + the edge threshold (per-channel half-res tap spread above which a pixel
-// straddles the shadow silhouette and is RE-TRACED at full-res instead of bilinear-filled).
-inline constexpr f32 s_ShadowResolveDefaultEdgeThreshold = 0.005f;
-
+// Mirror of shadow_resolve_cs.slang's NwbShadowResolvePushConstants (the half-res visibility resolve): full-res dims +
+// the half-res ray-traced visibility dims + the active shadow slot count.
 struct ShadowResolvePushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 halfWidth = 0u;
     u32 halfHeight = 0u;
     u32 slotCount = 0u;          // active shadow slots this frame; only these are resolved (the rest stay cleared white)
-    f32 edgeThreshold = s_ShadowResolveDefaultEdgeThreshold; // low visibility spread across nearby taps -> re-trace
+    u32 pad0 = 0u;
 };
-static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 5u + sizeof(f32), "ShadowResolvePushConstants must match the shader push-constant layout");
+static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 6u, "ShadowResolvePushConstants must match the shader push-constant layout");
 
 // Per-frame photon budget. Energy-conserving (per-photon flux = lightColor*emissionDomainArea*targetCount/photonCount,
 // so it scales 1/photonCount), so a higher count only DENSIFIES the splat without changing its per-frame brightness.
@@ -1260,10 +1253,10 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         1u
     );
 
-    // Edge-adaptive resolve of the half-res visibility into the full-res buffer the deferred lighting samples: bilinear
-    // in flat regions, full-res RE-TRACE at the silhouette so the shadow edge matches the full-res scene geometry.
+    // Resolve the half-res visibility into the full-res buffer the deferred lighting samples: geometry-stopped bilinear
+    // in flat regions, with a rare full-res retrace only when the half-res neighbourhood is not representative.
     // Under the same s_ShadowVisibility scope so the timing covers the whole shadow cost (half-res rays + resolve, which
-    // re-traces only the silhouette band). setResourceStatesForBindingSet transitions the half buffer UAV(trace) ->
+    // can retrace isolated receiver slivers). setResourceStatesForBindingSet transitions the half buffer UAV(trace) ->
     // SRV(resolve read) and the full buffer -> UAV; the resolve set also re-binds the trace geometry/TLAS it re-traces.
     {
         commandList.setResourceStatesForBindingSet(rayTracingState().m_shadowResolveBindingSet.get());
@@ -1277,18 +1270,6 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         // Resolve only the slots that actually hold a light this frame (the rest stay at the cleared white default);
         // processing all NWB_SCENE_SHADOW_SLOT_COUNT layers would multiply the resolve's array reads ~8x.
         resolvePush.slotCount = rayTracingState().m_shadowSlotCount;
-        // Edge threshold: only half-res taps that disagree by MORE than this (per channel) re-trace at full-res. Keep
-        // this low for transparent colored shadows: their silhouettes can be low-contrast after tint/tonemap, and a
-        // high threshold lets the half-res footprint remain visible. The resolve's retrace path now anti-aliases with
-        // four subpixel rays, so the extra edge coverage is a better trade than leaving blocky colored-shadow islands.
-        static const f32 s_edgeThreshold = [](){
-            char value[32] = {};
-            if(!ReadEnvironmentVariableBuffer("NWB_SHADOW_RESOLVE_EDGE_THRESHOLD", value, sizeof(value)))
-                return s_ShadowResolveDefaultEdgeThreshold;
-            const f32 parsed = static_cast<f32>(::std::atof(value));
-            return (parsed > 0.0f && parsed <= 1.0f) ? parsed : s_ShadowResolveDefaultEdgeThreshold;
-        }();
-        resolvePush.edgeThreshold = s_edgeThreshold;
 
         Core::ComputeState resolveState;
         resolveState.setPipeline(rayTracingState().m_shadowResolvePipeline.get());

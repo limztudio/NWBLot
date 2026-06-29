@@ -26,7 +26,7 @@ struct NwbShadowResolvePushConstants{
     uint halfHeight;     // half-res height
     uint slotCount;      // active shadow slots this frame (= min(lightCount, NWB_SCENE_SHADOW_SLOT_COUNT)); only these
                          // are processed -- inactive slots stay at the full buffer's cleared "lit" white default.
-    float edgeThreshold; // reserved for resolve tuning
+    uint pad0;
 };
 
 [[vk::push_constant]]

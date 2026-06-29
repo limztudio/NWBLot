@@ -2,18 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// EDGE-ADAPTIVE full-res reconstruction of the half-res ray-traced shadow visibility. The trace casts one occlusion
-// ray per HALF-res pixel (1/4 the rays); the deferred lighting samples a FULL-res visibility array. A plain bilinear
-// upsample leaves the shadow silhouette ~2-3 full-res px wide -- visibly coarser than the 1px scene geometry it falls
-// next to (a resolution mismatch). On a FLAT receiver the upsample cannot recover a crisp edge: the shadow silhouette
-// is a light-space feature, so the full-res G-buffer of the plane carries nothing to reconstruct against.
-//
-// So this pass is adaptive: per full-res pixel it inspects the 2x2 half-res neighbourhood. Where the neighbourhood is
-// uniform (a flat shadow interior / fully-lit region) it uses the cheap geometry-stopped bilinear. Where it STRADDLES
-// a shadow edge (the taps disagree, or the full-res receiver matches none of them) it RE-TRACES this pixel's occlusion
-// ray at full-res via the SHARED nwbShadowRqLightVisible -- the identical colored-transmittance physics, now sampled at
-// the pixel's own full-res G-buffer surface, so the silhouette lands on the full-res grid (1px, matching geometry).
-// Only the silhouette band pays the extra ray, so the cost stays near the half-res trace's.
+// Full-res reconstruction of the half-res ray-traced shadow visibility. The trace casts one occlusion ray per HALF-res
+// pixel (1/4 the rays); the deferred lighting samples a FULL-res visibility array. This pass keeps the cheap half-res
+// result and uses full-res G-buffer geometry only to stop interpolation across receiver edges.
 
 
 #include "binding_slots.h"
@@ -35,8 +26,7 @@ struct NwbShadowResolvePushConstants{
     uint halfHeight;     // half-res height
     uint slotCount;      // active shadow slots this frame (= min(lightCount, NWB_SCENE_SHADOW_SLOT_COUNT)); only these
                          // are processed -- inactive slots stay at the full buffer's cleared "lit" white default.
-    float edgeThreshold; // max per-channel spread across the 2x2 half-res taps below which a pixel is "flat" (bilinear);
-                         // above it the pixel straddles a shadow edge and is RE-TRACED at full-res.
+    float edgeThreshold; // reserved for resolve tuning
 };
 
 [[vk::push_constant]]
@@ -126,10 +116,8 @@ NwbShadowResolveSurfaceBasis nwbShadowResolveLoadSurfaceBasis(const int2 fullTex
     return basis;
 }
 
-// RE-TRACE this full-res pixel's occlusion ray for every active light slot and write the crisp colored visibility.
-// Uses the pixel's OWN full-res G-buffer surface (not the half-res representative texel), and averages four subpixel
-// receiver positions so transparent shadow silhouettes resolve as an anti-aliased full-res edge rather than a
-// point-sampled stair step. Identical physics to the half-res trace (shared nwbShadowRqLightVisible).
+// RE-TRACE this full-res pixel's occlusion ray for every active light slot when every half-res tap was rejected by the
+// receiver edge-stops. This is a rare fallback for isolated full-res receiver slivers.
 void nwbShadowResolveRetrace(const uint2 pixel, const int2 fullTexel, const uint slotCount){
     const NwbShadowResolveSurfaceBasis basis = nwbShadowResolveLoadSurfaceBasis(fullTexel);
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
@@ -191,42 +179,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             taps[idx] = tap;
             tapValid[idx] = g_NwbShadowGBufferDepth.Load(int3(nwbShadowResolveHalfToFull(tap), 0)).r < 0.999999;
         }
-    }
-
-    // EDGE TEST: the largest per-channel spread of the half-res visibility across the nearby valid taps, over all
-    // active slots. A flat interior has ~0 spread (cheap bilinear); a silhouette straddle exceeds edgeThreshold
-    // (re-trace). The expanded neighbourhood grows the 2x2 bilinear footprint by one half texel, so low-contrast
-    // colored-shadow edges do not leak a visible half-res block.
-    float maxSpread = 0.0;
-    bool anyBackgroundTap = false;
-    [unroll] for(int k = 0; k < 4; ++k)
-        anyBackgroundTap = anyBackgroundTap || !tapValid[k];
-    for(uint slot = 0u; slot < slotCount; ++slot){
-        float3 lo = float3(1.0, 1.0, 1.0);
-        float3 hi = float3(0.0, 0.0, 0.0);
-        for(int y = -1; y <= 2; ++y){
-            for(int x = -1; x <= 2; ++x){
-                const int2 tap = int2(clamp(baseTexel.x + x, 0, hw - 1), clamp(baseTexel.y + y, 0, hh - 1));
-                const int2 tapFull = nwbShadowResolveHalfToFull(tap);
-                if(g_NwbShadowGBufferDepth.Load(int3(tapFull, 0)).r < 0.999999){
-                    const float3 v = g_NwbShadowHalfVisibility.Load(int4(tap, (int)slot, 0)).rgb;
-                    lo = min(lo, v);
-                    hi = max(hi, v);
-                }
-                else{
-                    anyBackgroundTap = true;
-                }
-            }
-        }
-        const float3 spread = hi - lo;
-        maxSpread = max(maxSpread, max(spread.x, max(spread.y, spread.z)));
-    }
-
-    if(anyBackgroundTap || maxSpread > g_NwbShadowResolvePushConstants.edgeThreshold){
-        // Shadow-edge pixel: re-trace at full-res so the silhouette resolves on the full-res grid (matching the scene
-        // geometry) instead of the half-res 2x2 stair-step a bilinear would leave.
-        nwbShadowResolveRetrace(pixel, fullTexel, slotCount);
-        return;
     }
 
     // FLAT region: cheap geometry-stopped bilinear of the half-res taps. Edge-stops (world distance + plane distance +

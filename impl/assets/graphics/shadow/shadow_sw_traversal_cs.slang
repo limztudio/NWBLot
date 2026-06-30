@@ -70,6 +70,18 @@ RWTexture2DArray<float4> g_NwbSwShadowCoarse;
 [[vk::binding(NWB_SW_SHADOW_BINDING_EDGE_STATS, NWB_SW_SHADOW_SET)]]
 RWStructuredBuffer<uint> g_NwbSwShadowEdgeStats;
 
+// Stage-3 compaction: the edge-pixel append counter ([0] atomic append count, [1] clamped trace count), the compacted
+// edge-record list (2 u32 per record), and the indirect dispatch-args buffer (3 u32, also created isDrawIndirectArgs so
+// dispatchIndirect accepts it). mode 6 appends + mode 7 builds args + mode 8 indirect-traces; reset/cleared each frame.
+[[vk::binding(NWB_SW_SHADOW_BINDING_EDGE_COUNTER, NWB_SW_SHADOW_SET)]]
+RWStructuredBuffer<uint> g_NwbSwShadowEdgeCounter;
+
+[[vk::binding(NWB_SW_SHADOW_BINDING_EDGE_LIST, NWB_SW_SHADOW_SET)]]
+RWStructuredBuffer<uint> g_NwbSwShadowEdgeList;
+
+[[vk::binding(NWB_SW_SHADOW_BINDING_INDIRECT_ARGS, NWB_SW_SHADOW_SET)]]
+RWStructuredBuffer<uint> g_NwbSwShadowIndirectArgs;
+
 // Per-instance record: the affine world->object transform (3 rows) + the slot into the parallel per-mesh
 // descriptor arrays. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes).
 struct NwbSwShadowInstance{
@@ -120,16 +132,33 @@ struct NwbSwShadowPushConstants{
     //      (sharp). Folds the result onto each full-res pixel's own opaque mask -- so the opaque (hard) shadow stays
     //      full-res while the soft transparent shadow costs one trace per block in the interior and per-pixel only at
     //      its edges. The opaque mask comes from the HW RayQuery pass (hybrid) or the mode-3 pass (no-RT software).
+    //  6 = CLASSIFY+FILL (Stage-3 compacted): full-res. Same 2x2 range test as mode 5; FLAT slots interpolate + fold
+    //      onto the opaque mask in place (the ~97% fast path). EDGE slots are NOT traced here -- they are appended to
+    //      the compacted edge list and the edge texel is left holding the PRISTINE opaque mask (so mode 8's single
+    //      overwrite cannot double-multiply the read-modify-write fold); on list OVERFLOW the edge texel degrades to
+    //      the interpolated fallback instead.
+    //  7 = BUILD-ARGS (Stage-3 compacted): 1 thread. Clamps the append count to edgeCapacity, writes
+    //      DispatchIndirectArguments{ceil(count/traceGroupSize),1,1} into the indirect-args buffer + the clamped count.
+    //  8 = INDIRECT TRACE+SCATTER (Stage-3 compacted): DispatchIndirect, 1 record per thread. Unpacks the edge record,
+    //      re-traces that pixel/light full-res via nwbSwShadowLightVisible, folds onto the pristine opaque mask. Every
+    //      lane in a wave is a real edge ray (no divergence); the tile-major append keeps them screen-local.
     uint multiplyMode;
-    // Coarse (half-res) grid extent for modes 4/5 (rounded up so a coarse texel always covers its 2x2 block).
+    // Coarse (half-res) grid extent for modes 4/5/6 (rounded up so a coarse texel always covers its 2x2 block).
     uint coarseWidth;
     uint coarseHeight;
-    // Mode-5 edge metric: a 2x2 coarse neighbourhood whose worst per-channel transmittance range exceeds this is an
+    // Modes 5/6 edge metric: a 2x2 coarse neighbourhood whose worst per-channel transmittance range exceeds this is an
     // EDGE (re-traced at full res); at or below it the block is FLAT and bilinearly interpolated from the coarse buffer.
     float edgeThreshold;
-    // Mode-5: when non-zero, atomically tally traced-vs-total rays into the edge-stats buffer (measurement only; adds
+    // Modes 5/6: when non-zero, atomically tally traced-vs-total rays into the edge-stats buffer (measurement only; adds
     // two atomics per lit pixel, so it is left off on the timed/production path and toggled on only to read the fraction).
     uint collectStats;
+    // Stage-3 (modes 6/7/8): element capacity of the edge-list buffer in RECORDS (each = NWB_SW_SHADOW_EDGE_RECORD_WORDS
+    // u32). mode 6 guards its appended index against this; mode 7 clamps the trace count to it. Beyond it, edges degrade
+    // to the interpolated fallback (graceful, never garbage).
+    uint edgeCapacity;
+    // Stage-3: threads per group of the indirect trace pass (= NWB_SW_SHADOW_TRACE_GROUP = 64). mode 7 divides the count
+    // by this to size the indirect dispatch; mode 8 reconstructs its flat record index as groupID.x*traceGroupSize + groupIndex.
+    uint traceGroupSize;
 };
 
 [[vk::push_constant]]
@@ -287,13 +316,13 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
     // Occluder-class filter by pass:
     //  - mode 3 (OPAQUE pre-pass): skip TRANSPARENT occluders -> a binary opaque blocker mask.
-    //  - modes 2/4/5 (transparent traces): skip OPAQUE occluders -> the opaque shadow already comes from the HW RayQuery
+    //  - modes 2/4/5/8 (transparent traces): skip OPAQUE occluders -> the opaque shadow already comes from the HW RayQuery
     //    mask (hybrid) or the mode-3 pass (software), so tracing opaque here would only redundantly re-darken. Tracing
-    //    transparent only also avoids walking the opaque meshes' triangle BVHs.
+    //    transparent only also avoids walking the opaque meshes' triangle BVHs. (Mode 8 is the Stage-3 indirect re-trace.)
     const uint occluderPassMode = g_NwbSwShadowPushConstants.multiplyMode;
     if(occluderPassMode == 3u && transparent)
         return;
-    if((occluderPassMode == 2u || occluderPassMode == 4u || occluderPassMode == 5u) && !transparent)
+    if((occluderPassMode == 2u || occluderPassMode == 4u || occluderPassMode == 5u || occluderPassMode == 8u) && !transparent)
         return;
     // meshIndex selects this instance's slot in the per-mesh descriptor ARRAYS (nodes/indices/positions/attributes).
     // It is NON-UNIFORM across the wave -- different invocations' rays hit different meshes -- so every indexed access
@@ -568,18 +597,158 @@ void nwbSwShadowAdaptiveResolve(const uint2 pixel){
     }
 }
 
+// Stage-3 edge record packing: word0 = (x<<16)|y (full-res pixel, 16 bits each), word1 = light-loop index.
+uint nwbSwShadowPackPixel(const uint2 pixel){
+    return (pixel.x << 16) | (pixel.y & 0xFFFFu);
+}
+uint2 nwbSwShadowUnpackPixel(const uint word){
+    return uint2(word >> 16, word & 0xFFFFu);
+}
+
+// Mode 6 -- CLASSIFY + FILL (Stage-3 compacted resolve). Byte-identical edge test + interpolation to mode 5, but EDGE
+// slots are not traced here: they are atomically APPENDED to the compacted edge list and the edge texel is left holding
+// the PRISTINE opaque mask, so the indirect trace pass (mode 8) can read that mask and fold transmittance with a SINGLE
+// overwrite -- never double-multiplying mode-3/HW's read-modify-write fold. On list overflow (index >= edgeCapacity) the
+// edge texel degrades to the interpolated fallback instead of being left un-tinted.
+void nwbSwShadowClassifyFill(const uint2 pixel){
+    if(pixel.x >= g_NwbSwShadowPushConstants.width || pixel.y >= g_NwbSwShadowPushConstants.height)
+        return;
+    const int3 texel = int3(int2(pixel), 0);
+
+    // Background: leave the pristine (white) opaque mask; it casts no candidate rays.
+    if(g_NwbSwShadowGBufferDepth.Load(texel).r >= 0.999999)
+        return;
+
+    const float2 coarseCoord = float2(pixel) * 0.5;
+    const uint2 c0 = uint2(floor(coarseCoord));
+    const uint2 c1 = min(c0 + uint2(1u, 1u), uint2(g_NwbSwShadowPushConstants.coarseWidth - 1u, g_NwbSwShadowPushConstants.coarseHeight - 1u));
+    const float2 w = coarseCoord - float2(c0);
+
+    const float edgeThreshold = g_NwbSwShadowPushConstants.edgeThreshold;
+    const uint edgeCapacity = g_NwbSwShadowPushConstants.edgeCapacity;
+
+    uint tracedRays = 0u;
+    uint totalRays = 0u;
+
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
+    for(uint i = 0u; i < lightCount; ++i){
+        const float slotF = g_NwbSceneLights[i].params.z;
+        if(slotF < 0.0)
+            continue;
+        const uint slot = uint(slotF);
+        ++totalRays;
+
+        const float3 t00 = g_NwbSwShadowCoarse[uint3(c0.x, c0.y, slot)].rgb;
+        const float3 t10 = g_NwbSwShadowCoarse[uint3(c1.x, c0.y, slot)].rgb;
+        const float3 t01 = g_NwbSwShadowCoarse[uint3(c0.x, c1.y, slot)].rgb;
+        const float3 t11 = g_NwbSwShadowCoarse[uint3(c1.x, c1.y, slot)].rgb;
+
+        const float3 lo = min(min(t00, t10), min(t01, t11));
+        const float3 hi = max(max(t00, t10), max(t01, t11));
+        const float range = max(max(hi.x - lo.x, hi.y - lo.y), hi.z - lo.z);
+
+        if(range > edgeThreshold){
+            // EDGE: append (pixel, lightIndex) to the compacted list; DO NOT trace and DO NOT write the texel -- leave
+            // the pristine opaque mask for mode 8's single overwrite. Always increment the counter (so the true edge
+            // total is measured) but guard the indexed write to the allocated capacity.
+            ++tracedRays;
+            uint appendIndex;
+            InterlockedAdd(g_NwbSwShadowEdgeCounter[NWB_SW_SHADOW_EDGE_COUNTER_APPEND], 1u, appendIndex);
+            if(appendIndex < edgeCapacity){
+                const uint base = appendIndex * NWB_SW_SHADOW_EDGE_RECORD_WORDS;
+                g_NwbSwShadowEdgeList[base] = nwbSwShadowPackPixel(pixel);
+                g_NwbSwShadowEdgeList[base + 1u] = i;
+            }
+            else{
+                // OVERFLOW: this edge will not be traced, so degrade it to the interpolated fallback (Stage-1 quality)
+                // rather than leaving the un-tinted opaque mask. Near-impossible at the allocated capacity.
+                const float3 tx0 = lerp(t00, t10, w.x);
+                const float3 tx1 = lerp(t01, t11, w.x);
+                const float3 interp = lerp(tx0, tx1, w.y);
+                const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb;
+                g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * interp, 1.0);
+            }
+        }
+        else{
+            // FLAT interior: interpolate the coarse transmittance and fold onto the pristine opaque mask in place.
+            const float3 tx0 = lerp(t00, t10, w.x);
+            const float3 tx1 = lerp(t01, t11, w.x);
+            const float3 interp = lerp(tx0, tx1, w.y);
+            const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb;
+            g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * interp, 1.0);
+        }
+    }
+
+    if(g_NwbSwShadowPushConstants.collectStats != 0u && totalRays > 0u){
+        InterlockedAdd(g_NwbSwShadowEdgeStats[NWB_SW_SHADOW_EDGE_STATS_TRACED], tracedRays);
+        InterlockedAdd(g_NwbSwShadowEdgeStats[NWB_SW_SHADOW_EDGE_STATS_TOTAL], totalRays);
+    }
+}
+
+// Mode 7 -- BUILD INDIRECT ARGS (Stage-3 compacted). One thread: clamp the append count to the list capacity, write the
+// DispatchIndirectArguments{groupsX,1,1} for mode 8 (groupsX = ceil(count / traceGroupSize); 0 when no edges -> a valid
+// zero-workgroup indirect dispatch), and stash the clamped count for mode 8's tail guard.
+void nwbSwShadowBuildArgs(const uint3 dispatchThreadID){
+    if(dispatchThreadID.x != 0u || dispatchThreadID.y != 0u)
+        return;
+    const uint groupSize = max(g_NwbSwShadowPushConstants.traceGroupSize, 1u);
+    uint count = g_NwbSwShadowEdgeCounter[NWB_SW_SHADOW_EDGE_COUNTER_APPEND];
+    count = min(count, g_NwbSwShadowPushConstants.edgeCapacity);
+    const uint groups = (count + groupSize - 1u) / groupSize;
+    g_NwbSwShadowIndirectArgs[0] = groups;
+    g_NwbSwShadowIndirectArgs[1] = 1u;
+    g_NwbSwShadowIndirectArgs[2] = 1u;
+    g_NwbSwShadowEdgeCounter[NWB_SW_SHADOW_EDGE_COUNTER_TRACE] = count;
+}
+
+// Mode 8 -- INDIRECT TRACE + SCATTER (Stage-3 compacted). One thread per compacted edge record: unpack the pixel +
+// light, re-trace that single light full-res via the UNCHANGED nwbSwShadowLightVisible (preserving the per-mesh
+// NonUniformResourceIndex wrapping), and fold onto the pristine opaque mask mode 6 left in the texel. Every lane in the
+// wave is a real edge ray (no divergence); the tile-major append keeps the records -- and thus the traced rays -- screen-local.
+void nwbSwShadowIndirectTrace(const uint linearId){
+    if(linearId >= g_NwbSwShadowEdgeCounter[NWB_SW_SHADOW_EDGE_COUNTER_TRACE])
+        return;
+    const uint base = linearId * NWB_SW_SHADOW_EDGE_RECORD_WORDS;
+    const uint2 pixel = nwbSwShadowUnpackPixel(g_NwbSwShadowEdgeList[base]);
+    const uint lightIndex = g_NwbSwShadowEdgeList[base + 1u];
+    const NwbSceneLight light = g_NwbSceneLights[lightIndex];
+    const uint slot = uint(light.params.z);
+
+    const int3 texel = int3(int2(pixel), 0);
+    const float3 worldPosition = g_NwbSwShadowGBufferWorldPosition.Load(texel).xyz;
+    const float3 normal = normalize(g_NwbSwShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
+    const float3 transmittance = float3(nwbSwShadowLightVisible(worldPosition, normal, light));
+
+    const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb;
+    g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * transmittance, 1.0);
+}
+
 [numthreads(NWB_SW_SHADOW_GROUP_SIZE, NWB_SW_SHADOW_GROUP_SIZE, 1)]
-void main(uint3 dispatchThreadID : SV_DispatchThreadID){
+void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, uint groupIndex : SV_GroupIndex){
     const uint multiplyMode = g_NwbSwShadowPushConstants.multiplyMode;
 
-    // Stage-2 adaptive passes own the thread outright -- their dispatch grids (coarse / full-res) differ from the legacy
-    // grid and they handle their own bounds.
+    // Stage-2/3 passes own the thread outright -- their dispatch grids (coarse / full-res / 1D-indirect) differ from the
+    // legacy grid and they handle their own bounds.
     if(multiplyMode == 4u){
         nwbSwShadowCoarseTrace(dispatchThreadID.xy);
         return;
     }
     if(multiplyMode == 5u){
         nwbSwShadowAdaptiveResolve(dispatchThreadID.xy);
+        return;
+    }
+    if(multiplyMode == 6u){
+        nwbSwShadowClassifyFill(dispatchThreadID.xy);
+        return;
+    }
+    if(multiplyMode == 7u){
+        nwbSwShadowBuildArgs(dispatchThreadID);
+        return;
+    }
+    if(multiplyMode == 8u){
+        // 1D over the compacted edge list: flat record index = groupID.x * traceGroupSize + groupIndex. The group is
+        // [numthreads(8,8,1)] = 64 threads and mode 7 sized groupsX = ceil(traceCount / 64).
+        nwbSwShadowIndirectTrace(groupID.x * g_NwbSwShadowPushConstants.traceGroupSize + groupIndex);
         return;
     }
 

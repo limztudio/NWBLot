@@ -177,7 +177,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         usageFlags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     if(d.isConstantBuffer)
         usageFlags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-    if(d.structStride != 0 || d.canHaveUAVs)
+    if(d.structStride != 0 || d.canHaveUAVs || d.canHaveRawViews)
         usageFlags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
     if(d.isDrawIndirectArgs)
         usageFlags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;

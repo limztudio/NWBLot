@@ -49,14 +49,38 @@
 //    whether the Stage-3 compaction/indirect path is worth building.
 #define NWB_SW_SHADOW_BINDING_COARSE 15
 #define NWB_SW_SHADOW_BINDING_EDGE_STATS 16
+// Stage-3 compacted-indirect adaptive transparent shadow (the soft-shadow analog of an irradiance cache, but the
+// re-traced edge pixels are STREAM-COMPACTED into a list and dispatched indirectly so only edge rays launch, as
+// coherent waves with no in-wave divergence). Three UAVs:
+//  - EDGE_COUNTER: a 2-uint counter ([0] = atomic append count, [1] = clamped trace count written by the build-args pass).
+//  - EDGE_LIST: the compacted edge-pixel list, 2 u32 per record (word0 = (x<<16)|y, word1 = light-loop index).
+//  - INDIRECT_ARGS: a 3-uint DispatchIndirectArguments{groupsX,1,1} buffer (created UAV + isDrawIndirectArgs) the
+//    build-args pass writes and the indirect trace pass consumes via ComputeState::indirectParams.
+#define NWB_SW_SHADOW_BINDING_EDGE_COUNTER 17
+#define NWB_SW_SHADOW_BINDING_EDGE_LIST 18
+#define NWB_SW_SHADOW_BINDING_INDIRECT_ARGS 19
 
 // 8x8 = 64 threads per group (one thread per pixel).
 #define NWB_SW_SHADOW_GROUP_SIZE 8
+
+// Threads per group for the 1D indirect trace pass (mode 8). Equals GROUP_SIZE^2 so it reuses the [numthreads(8,8,1)]
+// entry point: the build-args pass computes groupsX = ceil(traceCount / 64) and each thread derives its flat record
+// index as groupID.x * 64 + SV_GroupIndex.
+#define NWB_SW_SHADOW_TRACE_GROUP 64
 
 // Edge-stats counter layout (NWB_SW_SHADOW_BINDING_EDGE_STATS): [0] traced rays, [1] total candidate rays.
 #define NWB_SW_SHADOW_EDGE_STATS_TRACED 0
 #define NWB_SW_SHADOW_EDGE_STATS_TOTAL 1
 #define NWB_SW_SHADOW_EDGE_STATS_COUNT 2
+
+// Compaction counter layout (NWB_SW_SHADOW_BINDING_EDGE_COUNTER): [0] atomic append count, [1] clamped trace count.
+#define NWB_SW_SHADOW_EDGE_COUNTER_APPEND 0
+#define NWB_SW_SHADOW_EDGE_COUNTER_TRACE 1
+#define NWB_SW_SHADOW_EDGE_COUNTER_SIZE 2
+
+// Compacted edge record: 2 u32 words. word0 packs the full-res pixel (x<<16)|y (16 bits each); word1 holds the
+// light-LOOP index (0..NWB_SCENE_MAX_LIGHTS-1) so the trace pass does one g_NwbSceneLights load + recovers slot=params.z.
+#define NWB_SW_SHADOW_EDGE_RECORD_WORDS 2
 
 // Maximum distinct meshes the per-mesh descriptor arrays can address in one frame.
 #define NWB_SW_SHADOW_MAX_MESHES 64

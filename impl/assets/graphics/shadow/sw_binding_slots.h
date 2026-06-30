@@ -63,6 +63,13 @@
 // 8x8 = 64 threads per group (one thread per pixel).
 #define NWB_SW_SHADOW_GROUP_SIZE 8
 
+// Coarse-trace downscale for the adaptive passes (modes 4/5/6/9/10): the coarse buffer + trace run at full-res >> SHIFT,
+// i.e. one coarse trace per (FACTOR x FACTOR) full-res block. SHIFT=1 -> half-res (1 trace / 2x2 block); SHIFT=2 ->
+// quarter-res (1 trace / 4x4 block, ~4x fewer coarse traces but coarser interior + more edge-refine). Shared by the
+// shader (coarse-trace block stride + resolve coordinate) and C++ (coarse-buffer dims + dispatch grid) so they agree.
+#define NWB_SW_SHADOW_COARSE_SHIFT 2u
+#define NWB_SW_SHADOW_COARSE_FACTOR (1u << NWB_SW_SHADOW_COARSE_SHIFT)
+
 // Threads per group for the 1D indirect trace pass (mode 8). Equals GROUP_SIZE^2 so it reuses the [numthreads(8,8,1)]
 // entry point: the build-args pass computes groupsX = ceil(traceCount / 64) and each thread derives its flat record
 // index as groupID.x * 64 + SV_GroupIndex.

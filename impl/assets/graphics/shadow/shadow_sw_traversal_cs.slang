@@ -503,9 +503,9 @@ half3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, c
 void nwbSwShadowCoarseTrace(const uint2 coarsePixel){
     if(coarsePixel.x >= g_NwbSwShadowPushConstants.coarseWidth || coarsePixel.y >= g_NwbSwShadowPushConstants.coarseHeight)
         return;
-    // Coarse texel k samples (and the resolve reconstructs around) full-res 2k -- the block's top-left texel. coarseWidth
-    // is rounded UP from width/2, so 2k stays in [0, width) for every k < coarseWidth.
-    const uint2 base = coarsePixel * 2u;
+    // Coarse texel k samples (and the resolve reconstructs around) full-res k*FACTOR -- the block's top-left texel.
+    // coarseWidth is rounded UP from width/FACTOR, so k*FACTOR stays in [0, width) for every k < coarseWidth.
+    const uint2 base = coarsePixel * NWB_SW_SHADOW_COARSE_FACTOR;
     const int3 texel = int3(int2(base), 0);
 
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
@@ -554,7 +554,7 @@ void nwbSwShadowAdaptiveResolve(const uint2 pixel){
 
     // Continuous coarse coordinate: coarse sample k sits at full-res 2k, so a full-res pixel maps to k = pixel/2. floor +
     // frac give the bracketing coarse texels and the bilinear weights; clamp the upper texel to the coarse extent.
-    const float2 coarseCoord = float2(pixel) * 0.5;
+    const float2 coarseCoord = float2(pixel) * (1.0 / float(NWB_SW_SHADOW_COARSE_FACTOR));
     const uint2 c0 = uint2(floor(coarseCoord));
     const uint2 c1 = min(c0 + uint2(1u, 1u), uint2(g_NwbSwShadowPushConstants.coarseWidth - 1u, g_NwbSwShadowPushConstants.coarseHeight - 1u));
     const float2 w = coarseCoord - float2(c0);
@@ -630,7 +630,7 @@ void nwbSwShadowClassifyFill(const uint2 pixel){
     if(g_NwbSwShadowGBufferDepth.Load(texel).r >= 0.999999)
         return;
 
-    const float2 coarseCoord = float2(pixel) * 0.5;
+    const float2 coarseCoord = float2(pixel) * (1.0 / float(NWB_SW_SHADOW_COARSE_FACTOR));
     const uint2 c0 = uint2(floor(coarseCoord));
     const uint2 c1 = min(c0 + uint2(1u, 1u), uint2(g_NwbSwShadowPushConstants.coarseWidth - 1u, g_NwbSwShadowPushConstants.coarseHeight - 1u));
     const float2 w = coarseCoord - float2(c0);
@@ -757,7 +757,7 @@ void nwbSwShadowAdaptiveResolveOpaque(const uint2 pixel){
     const float3 worldPosition = g_NwbSwShadowGBufferWorldPosition.Load(texel).xyz;
     const float3 normal = normalize(g_NwbSwShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
 
-    const float2 coarseCoord = float2(pixel) * 0.5;
+    const float2 coarseCoord = float2(pixel) * (1.0 / float(NWB_SW_SHADOW_COARSE_FACTOR));
     const uint2 c0 = uint2(floor(coarseCoord));
     const uint2 c1 = min(c0 + uint2(1u, 1u), uint2(g_NwbSwShadowPushConstants.coarseWidth - 1u, g_NwbSwShadowPushConstants.coarseHeight - 1u));
     const float2 w = coarseCoord - float2(c0);

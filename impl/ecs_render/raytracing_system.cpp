@@ -1157,8 +1157,8 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     targets.shadowCoarseTransmittanceFormat = Core::Format::RGBA16_FLOAT;
     Core::TextureDesc coarseDesc;
     coarseDesc
-        .setWidth((targets.width + 1u) / 2u)
-        .setHeight((targets.height + 1u) / 2u)
+        .setWidth((targets.width + NWB_SW_SHADOW_COARSE_FACTOR - 1u) / NWB_SW_SHADOW_COARSE_FACTOR)
+        .setHeight((targets.height + NWB_SW_SHADOW_COARSE_FACTOR - 1u) / NWB_SW_SHADOW_COARSE_FACTOR)
         .setArraySize(NWB_SCENE_SHADOW_SLOT_COUNT)
         .setDimension(Core::TextureDimension::Texture2DArray)
         .setFormat(targets.shadowCoarseTransmittanceFormat)
@@ -1497,8 +1497,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     const u32 groupSize = static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE);
     const u32 fullGroupsX = DivideUp(targets.width, groupSize);
     const u32 fullGroupsY = DivideUp(targets.height, groupSize);
-    const u32 coarseWidth = (targets.width + 1u) / 2u;
-    const u32 coarseHeight = (targets.height + 1u) / 2u;
+    const u32 coarseWidth = (targets.width + NWB_SW_SHADOW_COARSE_FACTOR - 1u) / NWB_SW_SHADOW_COARSE_FACTOR;
+    const u32 coarseHeight = (targets.height + NWB_SW_SHADOW_COARSE_FACTOR - 1u) / NWB_SW_SHADOW_COARSE_FACTOR;
     const u32 coarseGroupsX = DivideUp(coarseWidth, groupSize);
     const u32 coarseGroupsY = DivideUp(coarseHeight, groupSize);
 

@@ -230,14 +230,18 @@ struct NwbSwShadowVertexAttrib{
 };
 
 NwbSwShadowVertexAttrib nwbSwShadowLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
+    // meshIndex is non-uniform across the wave (each invocation's ray hits whatever instance/mesh occludes it), so
+    // every per-mesh descriptor-array access MUST be tagged NonUniformResourceIndex; without it the index is UB and
+    // a wave that straddles a mesh-shadow boundary reads another mesh's descriptor for some lanes.
+    const uint nuMesh = NonUniformResourceIndex(meshIndex);
     const uint base = attributeIndex * 16u;
-    const uint2 packedNormal = g_NwbSwShadowMeshAttributes[meshIndex].Load2(base);
+    const uint2 packedNormal = g_NwbSwShadowMeshAttributes[nuMesh].Load2(base);
     NwbSwShadowVertexAttrib attrib;
     attrib.normal = float3(
         nwbUnpackHalf2x16(packedNormal.x),
         nwbUnpackHalf2x16(packedNormal.y).x
     );
-    attrib.uv0 = asfloat(g_NwbSwShadowMeshAttributes[meshIndex].Load2(base + 8u));
+    attrib.uv0 = asfloat(g_NwbSwShadowMeshAttributes[nuMesh].Load2(base + 8u));
     return attrib;
 }
 
@@ -252,6 +256,12 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     const NwbSwShadowInstance instance = g_NwbSwShadowInstances[instanceIndex];
     const NwbRtInstanceMaterial material = g_NwbSwShadowInstanceMaterial[instanceIndex];
     const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
+    // meshIndex selects this instance's slot in the per-mesh descriptor ARRAYS (nodes/indices/positions/attributes).
+    // It is NON-UNIFORM across the wave -- different invocations' rays hit different meshes -- so every indexed access
+    // must be wrapped in NonUniformResourceIndex() AT THE SUBSCRIPT (the decoration does not reliably survive a copy
+    // into a plain uint). Omitting it is undefined behaviour: on a wave that straddles a mesh-shadow boundary the
+    // hardware can read a DIFFERENT mesh's BVH/geometry for some lanes, which culls real occluder hits there and
+    // leaves an under-occluded (bright) wave-tile-aligned band along the boundary.
     const uint meshIndex = instance.meshIndex;
     const float3 origin = nwbSwShadowTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwShadowTransformVector(instance, worldDirection);
@@ -263,19 +273,19 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
 
     while(stackPointer > 0u){
         const uint nodeIndex = stack[--stackPointer];
-        const NwbBvhNode node = g_NwbSwShadowMeshNodes[meshIndex][nodeIndex];
+        const NwbBvhNode node = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][nodeIndex];
         if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax))
             continue;
 
         if(nwbBvhNodeIsLeaf(node)){
             const uint triangle = nwbBvhLeafPrimitive(node);
             const uint indexBase = triangle * 3u;
-            const uint i0 = g_NwbSwShadowMeshIndices[meshIndex].Load(indexBase * 4u);
-            const uint i1 = g_NwbSwShadowMeshIndices[meshIndex].Load((indexBase + 1u) * 4u);
-            const uint i2 = g_NwbSwShadowMeshIndices[meshIndex].Load((indexBase + 2u) * 4u);
-            const float3 v0 = asfloat(g_NwbSwShadowMeshPositions[meshIndex].Load3(i0 * 12u));
-            const float3 v1 = asfloat(g_NwbSwShadowMeshPositions[meshIndex].Load3(i1 * 12u));
-            const float3 v2 = asfloat(g_NwbSwShadowMeshPositions[meshIndex].Load3(i2 * 12u));
+            const uint i0 = g_NwbSwShadowMeshIndices[NonUniformResourceIndex(meshIndex)].Load(indexBase * 4u);
+            const uint i1 = g_NwbSwShadowMeshIndices[NonUniformResourceIndex(meshIndex)].Load((indexBase + 1u) * 4u);
+            const uint i2 = g_NwbSwShadowMeshIndices[NonUniformResourceIndex(meshIndex)].Load((indexBase + 2u) * 4u);
+            const float3 v0 = asfloat(g_NwbSwShadowMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(i0 * 12u));
+            const float3 v1 = asfloat(g_NwbSwShadowMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(i1 * 12u));
+            const float3 v2 = asfloat(g_NwbSwShadowMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(i2 * 12u));
             const NwbSwShadowTriangleHit triangleHit = nwbSwShadowRayTriangle(origin, direction, tMin, tMax, v0, v1, v2);
             if(triangleHit.hit){
                 if(!transparent){

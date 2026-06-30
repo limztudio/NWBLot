@@ -8,6 +8,7 @@
 #include <core/ecs/module.h>
 #include <core/mesh/frame_math.h>
 #include <core/graphics/module.h>
+#include <core/input/module.h> // InputDispatcher / IInputEventHandler / Key -- arrow-key manual yaw scrubbing
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 #include <impl/ecs_csg/module.h>
 #endif
@@ -23,9 +24,11 @@
 #include "csg_smoke_helpers.h"
 #endif
 
-#include <global/environment.h> // ReadEnvironmentVariableBuffer -- the NWB_TRANSPARENT_MULTI_SPIN_SPEED diagnostic override
-#include <cstdlib>               // std::atof
-#include <limits>                // std::numeric_limits -- the NWB_TRANSPARENT_MULTI_SPIN_ANGLE freeze sentinel
+#include <global/environment.h>   // ReadEnvironmentVariableBuffer -- the NWB_TRANSPARENT_MULTI_SPIN_SPEED diagnostic override
+#include <global/math/constant.h> // s_PI / s_2PI -- normalising the displayed yaw into [0, 2pi) for the title bar
+#include <cstdlib>                // std::atof
+#include <cmath>                  // std::fmod / std::floor -- wrapping the accumulated manual yaw for display
+#include <limits>                 // std::numeric_limits -- the NWB_TRANSPARENT_MULTI_SPIN_ANGLE freeze sentinel
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,6 +56,9 @@ static constexpr f32 s_DefaultDirectionalLightPitch = 0.9f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
+// Manual arrow-key scrub speed (radians/second). Slow enough that a brief tap nudges the yaw finely, while holding a
+// key still sweeps a full turn in a few seconds -- enough control to park on the exact angle an artifact appears at.
+static constexpr f32 s_ManualYawSpeed = 0.6f;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 static constexpr AStringView s_TransparentShapeMeshPath = "project/meshes/caustic_sphere";
 #else
@@ -220,6 +226,33 @@ static void ApplyTransparentCsgSceneTransform(
 }
 
 
+// Arrow-key manual yaw scrubber. Registered with the InputDispatcher so the user can step the scene rotation by hand
+// (Left/Right) to a precise orientation and read the exact yaw off the title bar -- the workflow for pinning down the
+// angle an artifact appears at. Tracks held state for both keys (press latches, release clears) and consumes only the
+// two arrow keys so any other handler (e.g. a camera) still sees everything else.
+class ArrowYawInputHandler final : public NWB::Core::IInputEventHandler{
+public:
+    bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override{
+        static_cast<void>(scancode);
+        static_cast<void>(mods);
+        const bool held = (action != NWB::Core::InputAction::Release); // Press or Repeat -> held
+        switch(key){
+        case NWB::Core::Key::Left:  m_leftHeld = held;  return true;
+        case NWB::Core::Key::Right: m_rightHeld = held; return true;
+        default:                    return false;
+        }
+    }
+
+    // Signed scrub direction this frame: +1 spins forward (Right), -1 back (Left), 0 idle. Both held cancels out.
+    [[nodiscard]] f32 axis()const{ return (m_rightHeld ? 1.0f : 0.0f) - (m_leftHeld ? 1.0f : 0.0f); }
+
+
+private:
+    bool m_leftHeld = false;
+    bool m_rightHeld = false;
+};
+
+
 class TransparentMultiSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
@@ -266,6 +299,7 @@ public:
     {}
 
     virtual ~TransparentMultiSmokeProject()override{
+        m_context.input.removeHandler(m_arrowYawInput); // idempotent backstop if onShutdown was skipped (dispatcher outlives us)
         destroyWorld();
     }
 
@@ -275,6 +309,12 @@ public:
         // Opt into per-pass GPU timing: flips the GPU-timing double gate (perf-session sink + graphics query
         // recorder) so m_gpuPassTimingProbe can read each pass's GPU time from the timing view every frame.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+
+        // Arrow keys (Left/Right) drive a manual yaw scrub; the live angle is shown in the title bar so the exact
+        // orientation an artifact appears at can be read off and reproduced (via NWB_TRANSPARENT_MULTI_SPIN_ANGLE).
+        // The dispatcher visits handlers back-to-front, so addHandlerToBack gives this diagnostic scrubber first crack
+        // at the arrow keys; it consumes only Left/Right and passes everything else through.
+        m_context.input.addHandlerToBack(m_arrowYawInput);
 
         auto activeCameraEntity = m_world->createEntity();
         auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
@@ -415,6 +455,7 @@ public:
     }
 
     virtual void onShutdown()override{
+        m_context.input.removeHandler(m_arrowYawInput);
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: shutdown"));
     }
@@ -423,14 +464,26 @@ public:
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
-        // A fixed-angle override pins the scene to one orientation for deterministic A/B captures (e.g. comparing the
-        // half-res shadow upsample against the raw trace at the EXACT same frame); otherwise spin accumulates as usual.
+        // Yaw selection, in priority order:
+        //  1. NWB_TRANSPARENT_MULTI_SPIN_ANGLE env freeze -- pins one orientation for deterministic A/B captures.
+        //  2. Manual arrow-key scrub -- the moment Left/Right is touched, auto-spin latches off so the user can park
+        //     the scene on a precise angle (read off the title bar) to report exactly where an artifact appears.
+        //  3. Auto-spin -- the default continuous rotation.
         const f32 frozenAngle = effectiveFrozenAngle();
-        if(IsFinite(frozenAngle))
+        if(IsFinite(frozenAngle)){
             m_animationTime = frozenAngle;
-        else
-            m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * effectiveRotationSpeed();
+        }
+        else{
+            const f32 manualAxis = m_arrowYawInput.axis();
+            if(manualAxis != 0.0f)
+                m_manualYawControl = true; // latch: first arrow input takes over from auto-spin
+            if(m_manualYawControl)
+                m_animationTime += manualAxis * s_ManualYawSpeed * safeDelta;
+            else
+                m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * effectiveRotationSpeed();
+        }
         updateTransparentSceneTransforms();
+        updateWindowTitleYaw();
         m_world->tick(safeDelta);
         return true;
     }
@@ -480,6 +533,31 @@ private:
         ApplyTransparentSceneTransform(*m_world, m_opaqueRightShape, OpaqueRightShapeBasePosition(), sceneRotation, QuaternionIdentity());
     }
 
+    // Reflect the current scene yaw in the window title so the exact orientation can be read off and reported. The
+    // accumulated yaw is wrapped into [0, 2pi) -- the rotation is periodic, so the wrapped value is itself a valid
+    // NWB_TRANSPARENT_MULTI_SPIN_ANGLE for reproducing the orientation. setWindowTitle copies the string and the frame
+    // loop only re-applies it to the OS window when it actually changes, so calling this every frame is cheap.
+    void updateWindowTitleYaw(){
+        f32 wrapped = ::std::fmod(m_animationTime, s_2PI);
+        if(wrapped < 0.0f)
+            wrapped += s_2PI;
+        const f32 degrees = wrapped * (180.0f / s_PI);
+
+        static constexpr usize s_TitleCapacity = 192u;
+        tchar title[s_TitleCapacity];
+        NWB_TSPRINTF(
+            title,
+            s_TitleCapacity,
+            NWB_TEXT("%s  |  yaw %.4f rad (%.2f deg)%s"),
+            NWB::QueryProjectWindowTitle(),
+            wrapped,
+            degrees,
+            m_manualYawControl ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
+        );
+        const tchar* titlePtr = title;
+        m_context.graphics.setWindowTitle(MakeNotNull(titlePtr));
+    }
+
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ TransparentMultiFpsLabel() };
@@ -490,6 +568,8 @@ private:
     NWB::Core::ECS::EntityID m_opaqueLeftShape = {};
     NWB::Core::ECS::EntityID m_opaqueRightShape = {};
     f32 m_animationTime = 0.0f;
+    ArrowYawInputHandler m_arrowYawInput;
+    bool m_manualYawControl = false; // latched true once the user first drives the yaw with an arrow key
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     NWB::Core::ECS::EntityID m_csgReceiver = {};
     NWB::Core::ECS::EntityID m_csgCutter = {};

@@ -238,9 +238,12 @@ struct NwbCausticSwVertexAttrib{
 };
 
 NwbCausticSwVertexAttrib nwbCausticSwLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
+    // meshIndex is non-uniform across the wave (each photon/pixel's ray hits a different mesh), so the per-mesh
+    // descriptor-array access MUST be tagged NonUniformResourceIndex; without it the index is UB and a wave that
+    // straddles a mesh boundary reads another mesh's descriptor for some lanes.
     // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- a single memory request
     // instead of two dependent Load2s (bit-identical result, lower latency in the refractive-hit path).
-    const uint4 packed = g_NwbCausticSwMeshAttributes[meshIndex].Load4(attributeIndex * 16u);
+    const uint4 packed = g_NwbCausticSwMeshAttributes[NonUniformResourceIndex(meshIndex)].Load4(attributeIndex * 16u);
     NwbCausticSwVertexAttrib attrib;
     attrib.normal = float3(
         nwbUnpackHalf2x16(packed.x),
@@ -265,6 +268,10 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     const NwbCausticSwInstance instance = g_NwbCausticSwInstances[instanceIndex];
     const NwbRtInstanceMaterial material = g_NwbCausticSwInstanceMaterial[instanceIndex];
     const bool refractive = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
+    // meshIndex selects this instance's slot in the per-mesh descriptor ARRAYS (nodes/indices/positions/attributes).
+    // It is NON-UNIFORM across the wave, so every indexed access must be wrapped in NonUniformResourceIndex() AT THE
+    // SUBSCRIPT (the decoration does not reliably survive a copy into a plain uint). Omitting it is undefined
+    // behaviour: a wave straddling a mesh boundary reads a DIFFERENT mesh's BVH/geometry for some lanes.
     const uint meshIndex = instance.meshIndex;
     const float3 origin = nwbCausticSwTransformPoint(instance, worldOrigin);
     const float3 direction = nwbCausticSwTransformVector(instance, worldDirection);
@@ -276,7 +283,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     // The stack holds only deferred FAR children (<= tree depth).
     uint stack[NWB_CAUSTIC_SW_MESH_STACK_SIZE];
     uint stackPointer = 0u;
-    NwbBvhNode node = g_NwbCausticSwMeshNodes[meshIndex][0u]; // per-mesh root
+    NwbBvhNode node = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][0u]; // per-mesh root
     bool active = nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax);
 
     [loop] while(active){
@@ -284,13 +291,13 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
             const uint triangle = nwbBvhLeafPrimitive(node);
             const uint indexBase = triangle * 3u;
             // The 3 triangle indices are contiguous -> one Load3 instead of three Loads (bit-identical, one request).
-            const uint3 triIndices = g_NwbCausticSwMeshIndices[meshIndex].Load3(indexBase * 4u);
+            const uint3 triIndices = g_NwbCausticSwMeshIndices[NonUniformResourceIndex(meshIndex)].Load3(indexBase * 4u);
             const uint i0 = triIndices.x;
             const uint i1 = triIndices.y;
             const uint i2 = triIndices.z;
-            const float3 v0 = asfloat(g_NwbCausticSwMeshPositions[meshIndex].Load3(i0 * 12u));
-            const float3 v1 = asfloat(g_NwbCausticSwMeshPositions[meshIndex].Load3(i1 * 12u));
-            const float3 v2 = asfloat(g_NwbCausticSwMeshPositions[meshIndex].Load3(i2 * 12u));
+            const float3 v0 = asfloat(g_NwbCausticSwMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(i0 * 12u));
+            const float3 v1 = asfloat(g_NwbCausticSwMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(i1 * 12u));
+            const float3 v2 = asfloat(g_NwbCausticSwMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(i2 * 12u));
             const NwbCausticSwTriangleHit triangleHit = nwbCausticSwRayTriangle(origin, direction, tMin, closest.t, v0, v1, v2);
             if(triangleHit.hit){
                 // Closer than the running min -> adopt it.
@@ -333,8 +340,8 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
             active = false; // leaf done -> pop the next deferred node below
         }
         else{
-            const NwbBvhNode leftNode = g_NwbCausticSwMeshNodes[meshIndex][node.leftChild];
-            const NwbBvhNode rightNode = g_NwbCausticSwMeshNodes[meshIndex][node.rightChild];
+            const NwbBvhNode leftNode = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.leftChild];
+            const NwbBvhNode rightNode = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.rightChild];
             float tLeft;
             const bool hitLeft = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, tLeft);
             float tRight;
@@ -359,7 +366,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
 
         // Pop the next deferred node that still survives the (now-smaller) closest.t cull; drain -> done.
         [loop] while(stackPointer > 0u){
-            node = g_NwbCausticSwMeshNodes[meshIndex][stack[--stackPointer]];
+            node = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][stack[--stackPointer]];
             if(nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax)){
                 active = true;
                 break;

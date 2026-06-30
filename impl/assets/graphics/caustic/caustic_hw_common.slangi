@@ -132,9 +132,12 @@ struct NwbCausticHwVertexAttrib{
 };
 
 NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
+    // meshIndex is non-uniform across the ray wave (each hit is on a different instance/mesh), so the per-mesh
+    // descriptor-array access MUST be tagged NonUniformResourceIndex; without it the index is UB and a wave whose
+    // hits straddle a mesh boundary reads another mesh's attribute descriptor for some lanes.
     // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- one request instead of two
     // dependent Load2s (bit-identical; mirrors the SW producer).
-    const uint4 packed = g_NwbCausticHwMeshAttributes[meshIndex].Load4(attributeIndex * 16u);
+    const uint4 packed = g_NwbCausticHwMeshAttributes[NonUniformResourceIndex(meshIndex)].Load4(attributeIndex * 16u);
     NwbCausticHwVertexAttrib attrib;
     attrib.normal = float3(
         nwbUnpackHalf2x16(packed.x),

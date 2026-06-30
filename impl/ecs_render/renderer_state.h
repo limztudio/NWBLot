@@ -380,6 +380,22 @@ private:
     Core::Buffer* m_swShadowMeshIndexBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
     Core::Buffer* m_swShadowMeshAttributeBuffers[NWB_SW_SHADOW_MAX_MESHES] = {}; // U2 per-vertex normal/uv0 for the per-hit transmittance dispatch
     u32 m_swShadowMeshCount = 0u;
+    // Stage-2 adaptive transparent shadow (coarse-trace + edge-refine) config, read once from the environment:
+    //  - NWB_SW_SHADOW_ADAPTIVE      (default ON; "0" falls back to the uniform half-res mode-2 path for A/B).
+    //  - NWB_SW_SHADOW_EDGE_THRESHOLD (default 0.1; the 2x2 coarse transmittance range above which a block is an edge).
+    //  - NWB_SW_SHADOW_EDGE_STATS    (default OFF; "1" periodically reads back the traced/total ray fraction to the log).
+    bool m_swShadowAdaptiveConfigQueried = false;
+    bool m_swShadowAdaptiveEnabled = true;
+    bool m_swShadowEdgeStatsEnabled = false;
+    f32 m_swShadowEdgeThreshold = 0.1f;
+    // Edge-fraction instrumentation: a 2-uint UAV counter the resolve tallies into ([0] traced rays, [1] total rays),
+    // snapshotted into a CPU-readable buffer on a slow cadence and logged a safe number of frames later (so the copy is
+    // GPU-complete without a stall). The tick counts transparent-shadow dispatches; pending guards the in-flight copy.
+    Core::BufferHandle m_swShadowEdgeStatsBuffer;
+    Core::BufferHandle m_swShadowEdgeStatsReadback;
+    u32 m_swShadowEdgeStatsTick = 0u;
+    bool m_swShadowEdgeStatsPending = false;
+    u32 m_swShadowEdgeStatsPendingTick = 0u;
     // Software caustic photon producer (P3) — the no-hardware-ray-tracing fallback. It reuses the same software
     // scene/instance + per-mesh BVH buffers the SW shadow trace builds (NWB_CAUSTIC_SW_MAX_MESHES ==
     // NWB_SW_SHADOW_MAX_MESHES, so the m_swShadowMesh* arrays serve both), and adds the caustic-specific inputs

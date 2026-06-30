@@ -40,9 +40,23 @@
 // material-constant words + the per-instance mutable-storage records.
 #define NWB_SW_SHADOW_BINDING_MATERIAL_TYPED 13
 #define NWB_SW_SHADOW_BINDING_MESH_INSTANCES 14
+// Stage-2 adaptive transparent shadow (coarse-trace + edge-refine):
+//  - COARSE: a HALF-res RGBA16F Texture2DArray (one layer per shadow slot) the coarse transparent trace (mode 4)
+//    writes one transmittance per 2x2 block into and the adaptive resolve (mode 5) reads back to interpolate the
+//    flat interior / detect edges. UAV (written by mode 4, UAV-loaded by mode 5).
+//  - EDGE_STATS: a 2-uint UAV counter ([0] = full-res traced rays, [1] = total candidate rays) the resolve
+//    atomically tallies when stats collection is on, read back to the log as the edge fraction that decides
+//    whether the Stage-3 compaction/indirect path is worth building.
+#define NWB_SW_SHADOW_BINDING_COARSE 15
+#define NWB_SW_SHADOW_BINDING_EDGE_STATS 16
 
 // 8x8 = 64 threads per group (one thread per pixel).
 #define NWB_SW_SHADOW_GROUP_SIZE 8
+
+// Edge-stats counter layout (NWB_SW_SHADOW_BINDING_EDGE_STATS): [0] traced rays, [1] total candidate rays.
+#define NWB_SW_SHADOW_EDGE_STATS_TRACED 0
+#define NWB_SW_SHADOW_EDGE_STATS_TOTAL 1
+#define NWB_SW_SHADOW_EDGE_STATS_COUNT 2
 
 // Maximum distinct meshes the per-mesh descriptor arrays can address in one frame.
 #define NWB_SW_SHADOW_MAX_MESHES 64

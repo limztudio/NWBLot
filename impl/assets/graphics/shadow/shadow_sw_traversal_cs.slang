@@ -142,6 +142,12 @@ struct NwbSwShadowPushConstants{
     //  8 = INDIRECT TRACE+SCATTER (Stage-3 compacted): DispatchIndirect, 1 record per thread. Unpacks the edge record,
     //      re-traces that pixel/light full-res via nwbSwShadowLightVisible, folds onto the pristine opaque mask. Every
     //      lane in a wave is a real edge ray (no divergence); the tile-major append keeps them screen-local.
+    //  9 = OPAQUE COARSE (adaptive-opaque): the no-RT opaque pre-pass's coarse layer -- one OPAQUE-only any-hit trace per
+    //      2x2 block written (binary 0/1) into the coarse buffer (reuses nwbSwShadowCoarseTrace; the occluder filter makes
+    //      it opaque-only so the transmittance is binary). Replaces the front of the full-res mode-3 pass.
+    // 10 = OPAQUE ADAPTIVE RESOLVE (adaptive-opaque): full-res. Reads the 2x2 coarse neighbourhood; if the binary values
+    //      AGREE (flat interior, fully lit or fully shadowed) writes that value, else (a silhouette edge) re-traces this
+    //      pixel full-res. OVERWRITES the visibility (it IS the opaque mask, so the transparent pass multiplies onto it).
     uint multiplyMode;
     // Coarse (half-res) grid extent for modes 4/5/6 (rounded up so a coarse texel always covers its 2x2 block).
     uint coarseWidth;
@@ -303,6 +309,10 @@ NwbSwShadowVertexAttrib nwbSwShadowLoadVertexAttrib(const uint meshIndex, const 
     return attrib;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Below this per-channel transmittance the occluder ray is effectively fully blocked; traversal stops early.
 #define NWB_SW_SHADOW_TRANSMITTANCE_EPSILON 1e-3
 
@@ -315,12 +325,13 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     const NwbRtInstanceMaterial material = g_NwbSwShadowInstanceMaterial[instanceIndex];
     const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
     // Occluder-class filter by pass:
-    //  - mode 3 (OPAQUE pre-pass): skip TRANSPARENT occluders -> a binary opaque blocker mask.
-    //  - modes 2/4/5/8 (transparent traces): skip OPAQUE occluders -> the opaque shadow already comes from the HW RayQuery
-    //    mask (hybrid) or the mode-3 pass (software), so tracing opaque here would only redundantly re-darken. Tracing
+    //  - OPAQUE passes (mode 3 full-res pre-pass; modes 9/10 the adaptive-opaque coarse + resolve): skip TRANSPARENT
+    //    occluders -> a binary opaque blocker mask.
+    //  - TRANSPARENT passes (modes 2/4/5/8): skip OPAQUE occluders -> the opaque shadow already comes from the HW RayQuery
+    //    mask (hybrid) or the opaque pre-pass (software), so tracing opaque here would only redundantly re-darken. Tracing
     //    transparent only also avoids walking the opaque meshes' triangle BVHs. (Mode 8 is the Stage-3 indirect re-trace.)
     const uint occluderPassMode = g_NwbSwShadowPushConstants.multiplyMode;
-    if(occluderPassMode == 3u && transparent)
+    if((occluderPassMode == 3u || occluderPassMode == 9u || occluderPassMode == 10u) && transparent)
         return;
     if((occluderPassMode == 2u || occluderPassMode == 4u || occluderPassMode == 5u || occluderPassMode == 8u) && !transparent)
         return;
@@ -723,6 +734,73 @@ void nwbSwShadowIndirectTrace(const uint linearId){
     g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * transmittance, 1.0);
 }
 
+// Mode 10 -- OPAQUE ADAPTIVE RESOLVE. The adaptive-opaque analog of the full-res mode-3 pre-pass: it WRITES the binary
+// opaque blocker mask (the later transparent pass multiplies its colored shadow onto it). Mode 9 wrote one OPAQUE-only
+// any-hit result (binary 0/1) per 2x2 block into the coarse buffer; here, per pixel/light, read the 2x2 coarse
+// neighbourhood -- where the binary values AGREE (flat interior: fully lit or fully shadowed) write that value, else (a
+// silhouette edge straddles the block) RE-TRACE this pixel full-res. Like mode 5 but OVERWRITE (it is the mask, not a
+// multiply) and binary. The opaque shadow keeps full-res sharp silhouettes (edge blocks re-trace) while flat interior
+// regions cost one trace per 2x2 block -- the same coarse+refine economy the transparent pass already gets.
+void nwbSwShadowAdaptiveResolveOpaque(const uint2 pixel){
+    if(pixel.x >= g_NwbSwShadowPushConstants.width || pixel.y >= g_NwbSwShadowPushConstants.height)
+        return;
+    const int3 texel = int3(int2(pixel), 0);
+
+    // Background is fully lit: overwrite every slot white (matching the full-res mode-3 pre-pass), so the transparent
+    // pass leaves the white background untouched.
+    if(g_NwbSwShadowGBufferDepth.Load(texel).r >= 0.999999){
+        for(uint slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot)
+            g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
+        return;
+    }
+
+    const float3 worldPosition = g_NwbSwShadowGBufferWorldPosition.Load(texel).xyz;
+    const float3 normal = normalize(g_NwbSwShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
+
+    const float2 coarseCoord = float2(pixel) * 0.5;
+    const uint2 c0 = uint2(floor(coarseCoord));
+    const uint2 c1 = min(c0 + uint2(1u, 1u), uint2(g_NwbSwShadowPushConstants.coarseWidth - 1u, g_NwbSwShadowPushConstants.coarseHeight - 1u));
+    const float2 w = coarseCoord - float2(c0);
+
+    const float edgeThreshold = g_NwbSwShadowPushConstants.edgeThreshold;
+
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
+    for(uint i = 0u; i < lightCount; ++i){
+        const float slotF = g_NwbSceneLights[i].params.z;
+        if(slotF < 0.0)
+            continue;
+        const uint slot = uint(slotF);
+
+        // 2x2 coarse neighbourhood (binary opaque blocker values written by mode 9).
+        const float3 t00 = g_NwbSwShadowCoarse[uint3(c0.x, c0.y, slot)].rgb;
+        const float3 t10 = g_NwbSwShadowCoarse[uint3(c1.x, c0.y, slot)].rgb;
+        const float3 t01 = g_NwbSwShadowCoarse[uint3(c0.x, c1.y, slot)].rgb;
+        const float3 t11 = g_NwbSwShadowCoarse[uint3(c1.x, c1.y, slot)].rgb;
+
+        const float3 lo = min(min(t00, t10), min(t01, t11));
+        const float3 hi = max(max(t00, t10), max(t01, t11));
+        const float range = max(max(hi.x - lo.x, hi.y - lo.y), hi.z - lo.z);
+
+        float3 transmittance;
+        if(range > edgeThreshold){
+            // Silhouette edge: re-trace this exact full-res pixel (opaque-only -> binary).
+            transmittance = float3(nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]));
+        }
+        else{
+            // Flat interior: the agreed binary value (bilinear of equal values == that value).
+            const float3 tx0 = lerp(t00, t10, w.x);
+            const float3 tx1 = lerp(t01, t11, w.x);
+            transmittance = lerp(tx0, tx1, w.y);
+        }
+
+        g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(transmittance, 1.0); // OVERWRITE -- this IS the opaque mask
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [numthreads(NWB_SW_SHADOW_GROUP_SIZE, NWB_SW_SHADOW_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, uint groupIndex : SV_GroupIndex){
     const uint multiplyMode = g_NwbSwShadowPushConstants.multiplyMode;
@@ -749,6 +827,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
         // 1D over the compacted edge list: flat record index = groupID.x * traceGroupSize + groupIndex. The group is
         // [numthreads(8,8,1)] = 64 threads and mode 7 sized groupsX = ceil(traceCount / 64).
         nwbSwShadowIndirectTrace(groupID.x * g_NwbSwShadowPushConstants.traceGroupSize + groupIndex);
+        return;
+    }
+    if(multiplyMode == 9u){
+        // Adaptive-opaque coarse layer: one OPAQUE-only any-hit trace per 2x2 block (the occluder filter makes it binary).
+        nwbSwShadowCoarseTrace(dispatchThreadID.xy);
+        return;
+    }
+    if(multiplyMode == 10u){
+        nwbSwShadowAdaptiveResolveOpaque(dispatchThreadID.xy);
         return;
     }
 

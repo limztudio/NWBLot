@@ -391,6 +391,11 @@ private:
     // conditional re-trace is replaced by classify+append (mode 6) -> build-args (mode 7) -> DispatchIndirect trace
     // (mode 8), so only edge rays launch as coherent waves. "0" falls back to the mode-4+5 adaptive path for A/B.
     bool m_swShadowCompactEnabled = true;
+    // Adaptive OPAQUE pre-pass (NWB_SW_SHADOW_ADAPTIVE_OPAQUE, default ON): replace the full-res mode-3 opaque blocker
+    // trace (no-RT path only) with a coarse (mode 9) + edge-refine (mode 10) pass, the binary analog of the transparent
+    // adaptive resolve -- flat lit/shadowed interior costs one trace per 2x2 block, only silhouette blocks re-trace full
+    // res. "0" falls back to the full-res mode-3 pass for A/B. No effect on the HW path (opaque there is HW RayQuery).
+    bool m_swShadowAdaptiveOpaqueEnabled = true;
     f32 m_swShadowEdgeThreshold = 0.1f;
     // Edge-fraction instrumentation: a 2-uint UAV counter the resolve tallies into ([0] traced rays, [1] total rays),
     // snapshotted into a CPU-readable buffer on a slow cadence and logged a safe number of frames later (so the copy is

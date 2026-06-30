@@ -1507,17 +1507,54 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     // the hybrid path (HW opaque mask + transparent), so the software fallback gets the same hard-opaque/soft-transparent
     // split while its hard opaque shadows stay full-res sharp.
     if(!multiplyOntoOpaque){
-        SwShadowPushConstants opaquePush;
-        opaquePush.width = targets.width;
-        opaquePush.height = targets.height;
-        opaquePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-        opaquePush.multiplyMode = 3u; // opaque-only, full-res, overwrite
-        commandList.setComputeState(computeState);
-        commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
-        commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
+        if(rayTracingState().m_swShadowAdaptiveOpaqueEnabled){
+            // Adaptive OPAQUE pre-pass: coarse (mode 9, half-res) traces one OPAQUE any-hit per 2x2 block into the coarse
+            // buffer, then resolve (mode 10, full-res) writes the binary mask -- interpolating flat lit/shadowed interior
+            // and re-tracing only silhouette blocks. The binary analog of the transparent adaptive resolve; reuses the
+            // transparent coarse buffer (the mode-4 transparent coarse overwrites it next, after the WAR barrier below).
+            SwShadowPushConstants opaqueCoarsePush;
+            opaqueCoarsePush.width = targets.width;
+            opaqueCoarsePush.height = targets.height;
+            opaqueCoarsePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+            opaqueCoarsePush.multiplyMode = 9u;
+            opaqueCoarsePush.coarseWidth = coarseWidth;
+            opaqueCoarsePush.coarseHeight = coarseHeight;
+            opaqueCoarsePush.edgeThreshold = rayTracingState().m_swShadowEdgeThreshold;
+            commandList.setComputeState(computeState);
+            commandList.setPushConstants(&opaqueCoarsePush, sizeof(opaqueCoarsePush));
+            commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
 
-        // Sync the opaque mask before the transparent pass reads + multiplies it (UAV->UAV on the same image).
+            // Sync the coarse buffer (mode-9 write -> mode-10 read on the same image).
+            commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.commitBarriers();
+
+            SwShadowPushConstants opaqueResolvePush = opaqueCoarsePush;
+            opaqueResolvePush.multiplyMode = 10u;
+            commandList.setComputeState(computeState);
+            commandList.setPushConstants(&opaqueResolvePush, sizeof(opaqueResolvePush));
+            commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
+        }
+        else{
+            // Full-res opaque blocker (mode 3) -- the A/B fallback (NWB_SW_SHADOW_ADAPTIVE_OPAQUE=0).
+            SwShadowPushConstants opaquePush;
+            opaquePush.width = targets.width;
+            opaquePush.height = targets.height;
+            opaquePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+            opaquePush.multiplyMode = 3u; // opaque-only, full-res, overwrite
+            commandList.setComputeState(computeState);
+            commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
+            commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
+        }
+
+        // Sync before the transparent pass. The opaque mask (mode 3 or mode 10 wrote shadowVisibility) -> transparent
+        // reads+multiplies it: a write->read/write hazard the visibility UAV barrier covers, so stays UnorderedAccess.
+        // The coarse buffer is the subtle one: adaptive-opaque mode 10 only READ it, and the mode-4 transparent coarse
+        // WRITES it next -- a WRITE-AFTER-READ hazard. A same-state UAV barrier does NOT cover WAR (it tracks the last
+        // WRITE, not reads), so the shared coarse buffer flickered. Transition it through ShaderResource here so mode 4's
+        // setComputeState emits a real ShaderResource->UnorderedAccess barrier that orders mode 10's read before the
+        // write. (No-op for the mode-3 path, which never touched the coarse buffer.)
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();
     }
 
@@ -2134,14 +2171,17 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
                 rayTracingState().m_swShadowEdgeStatsEnabled = (envBuffer[0] == '1');
             if(ReadEnvironmentVariableBuffer("NWB_SW_SHADOW_COMPACT", envBuffer, sizeof(envBuffer)))
                 rayTracingState().m_swShadowCompactEnabled = (envBuffer[0] != '0');
+            if(ReadEnvironmentVariableBuffer("NWB_SW_SHADOW_ADAPTIVE_OPAQUE", envBuffer, sizeof(envBuffer)))
+                rayTracingState().m_swShadowAdaptiveOpaqueEnabled = (envBuffer[0] != '0');
             if(ReadEnvironmentVariableBuffer("NWB_SW_SHADOW_EDGE_THRESHOLD", envBuffer, sizeof(envBuffer))){
                 f64 parsed = static_cast<f64>(rayTracingState().m_swShadowEdgeThreshold);
                 if(ParseF64FromChars(envBuffer, envBuffer + NWB_STRLEN(envBuffer), parsed))
                     rayTracingState().m_swShadowEdgeThreshold = static_cast<f32>(parsed);
             }
-            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW shadow adaptive={} compact={} edgeThreshold={} edgeStats={}")
+            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW shadow adaptive={} compact={} adaptiveOpaque={} edgeThreshold={} edgeStats={}")
                 , rayTracingState().m_swShadowAdaptiveEnabled ? 1 : 0
                 , rayTracingState().m_swShadowCompactEnabled ? 1 : 0
+                , rayTracingState().m_swShadowAdaptiveOpaqueEnabled ? 1 : 0
                 , static_cast<f64>(rayTracingState().m_swShadowEdgeThreshold)
                 , rayTracingState().m_swShadowEdgeStatsEnabled ? 1 : 0
             );

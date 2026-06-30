@@ -1413,23 +1413,52 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     // before traversal.
     commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    // The two software sub-passes (opaque pre-pass + transparent multiply) both write the visibility UAV, and the second
+    // reads the opaque mask the first wrote -- enable UAV barriers on it so the barrier between them syncs that hazard.
+    commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
     commandList.setResourceStatesForBindingSet(rayTracingState().m_swShadowBindingSet.get());
     commandList.commitBarriers();
-
-    SwShadowPushConstants pushConstants;
-    pushConstants.width = targets.width;
-    pushConstants.height = targets.height;
-    pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-    pushConstants.multiplyMode = multiplyOntoOpaque ? 1u : 0u;
 
     Core::ComputeState computeState;
     computeState.setPipeline(rayTracingState().m_swShadowPipeline.get());
     computeState.addBindingSet(rayTracingState().m_swShadowBindingSet.get());
+
+    const u32 groupSize = static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE);
+    const u32 fullGroupsX = DivideUp(targets.width, groupSize);
+    const u32 fullGroupsY = DivideUp(targets.height, groupSize);
+
+    // No-RayQuery software path: there is no HW opaque mask, so first write the full-res OPAQUE binary mask ourselves
+    // (mode 3, opaque occluders only), then the mode-2 transparent multiply downscales onto it -- exactly mirroring the
+    // hybrid path (HW opaque mask + half-res transparent), so the software fallback gets the SAME downscaling speedup
+    // while its hard opaque shadows stay full-res sharp.
+    if(!multiplyOntoOpaque){
+        SwShadowPushConstants opaquePush;
+        opaquePush.width = targets.width;
+        opaquePush.height = targets.height;
+        opaquePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+        opaquePush.multiplyMode = 3u; // opaque-only, full-res, overwrite
+        commandList.setComputeState(computeState);
+        commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
+        commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
+
+        // Sync the opaque mask before the transparent pass reads + multiplies it (UAV->UAV on the same image).
+        commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+    }
+
+    // Transparent multiply at HALF resolution (mode 2), for BOTH backends: the colored transparent shadow is soft and
+    // low-frequency, so one trace per 2x2 block (folded onto each full-res pixel's own opaque mask) is ~4x fewer of the
+    // expensive transparent traversals. width/height stay FULL dims (the shader derives 2x2 blocks + bounds-checks).
+    SwShadowPushConstants pushConstants;
+    pushConstants.width = targets.width;
+    pushConstants.height = targets.height;
+    pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+    pushConstants.multiplyMode = 2u;
     commandList.setComputeState(computeState);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(
-        DivideUp(targets.width, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE)),
-        DivideUp(targets.height, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE)),
+        DivideUp((targets.width + 1u) / 2u, groupSize),
+        DivideUp((targets.height + 1u) / 2u, groupSize),
         1u
     );
 

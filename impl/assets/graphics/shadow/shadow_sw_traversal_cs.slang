@@ -96,10 +96,15 @@ struct NwbSwShadowPushConstants{
     uint width;
     uint height;
     uint instanceCount;
-    // 0 = OVERWRITE the visibility (standalone software path -- the only shadow backend, traces opaque + transparent).
-    // 1 = MULTIPLY into the visibility (hybrid path on RT hardware -- the HW pass already wrote the opaque binary mask
-    //     into the buffer; this pass traces ONLY the transparent occluders and multiplies its colored transmittance on
-    //     top, so final = opaque_binary * transparent_colored).
+    // 0 = OVERWRITE the visibility at full res, ALL occluders (legacy single-pass software path).
+    // 1 = MULTIPLY into the visibility at FULL resolution (all occluders) -- legacy/fallback.
+    // 2 = MULTIPLY at HALF resolution (the downscaled transparent pass, used by BOTH backends now): one trace per 2x2
+    //     pixel block written to all four full-res pixels, each multiplied by ITS OWN full-res opaque mask. The opaque
+    //     (hard) shadow stays full-res sharp; only the soft colored transparent shadow is half-res -- ~4x fewer of the
+    //     expensive transparent traversals. The opaque mask comes from the HW RayQuery pass (hybrid) or from the mode-3
+    //     pass below (no-RT software path).
+    // 3 = OVERWRITE at full resolution, OPAQUE occluders ONLY (binary blocker mask) -- the software path's own opaque
+    //     pre-pass, the SW analog of the HW RayQuery opaque mask, run before the mode-2 transparent multiply.
     uint multiplyMode;
 };
 
@@ -256,6 +261,17 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     const NwbSwShadowInstance instance = g_NwbSwShadowInstances[instanceIndex];
     const NwbRtInstanceMaterial material = g_NwbSwShadowInstanceMaterial[instanceIndex];
     const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
+    // Occluder-class filter by pass:
+    //  - mode 3 (OPAQUE pre-pass): skip TRANSPARENT occluders -> a binary opaque blocker mask.
+    //  - modes 1/2 (transparent MULTIPLY): skip OPAQUE occluders -> the opaque shadow already comes from the HW RayQuery
+    //    mask (hybrid) or the mode-3 pass (software), so tracing opaque here would only redundantly re-darken (at reduced
+    //    resolution in mode 2). Tracing transparent only also avoids walking the opaque meshes' triangle BVHs.
+    //  - mode 0 (legacy single pass): trace everything.
+    const uint occluderPassMode = g_NwbSwShadowPushConstants.multiplyMode;
+    if(occluderPassMode == 3u && transparent)
+        return;
+    if((occluderPassMode == 1u || occluderPassMode == 2u) && !transparent)
+        return;
     // meshIndex selects this instance's slot in the per-mesh descriptor ARRAYS (nodes/indices/positions/attributes).
     // It is NON-UNIFORM across the wave -- different invocations' rays hit different meshes -- so every indexed access
     // must be wrapped in NonUniformResourceIndex() AT THE SUBSCRIPT (the decoration does not reliably survive a copy
@@ -424,15 +440,23 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(pixel.x >= g_NwbSwShadowPushConstants.width || pixel.y >= g_NwbSwShadowPushConstants.height)
         return;
 
-    const int3 texel = int3(int2(pixel), 0);
-    const bool multiply = g_NwbSwShadowPushConstants.multiplyMode != 0u;
+    const uint multiplyMode = g_NwbSwShadowPushConstants.multiplyMode;
+    const bool multiply = (multiplyMode == 1u) || (multiplyMode == 2u); // modes 0/3 OVERWRITE; 1/2 MULTIPLY
+    const bool halfRes = multiplyMode == 2u;
+
+    // In half-res mode the dispatch grid is half-size: each thread owns a 2x2 full-res block, sampling the G-buffer at
+    // (and tracing once from) the block's top-left full-res texel.
+    const uint2 base = halfRes ? (pixel * 2u) : pixel;
+    if(base.x >= g_NwbSwShadowPushConstants.width || base.y >= g_NwbSwShadowPushConstants.height)
+        return;
+    const int3 texel = int3(int2(base), 0);
 
     // Background (no geometry) is fully lit; the lighting pass ignores it anyway. In multiply mode the HW opaque pass
     // already wrote the (white) background, so leave it untouched rather than overwrite it.
     if(g_NwbSwShadowGBufferDepth.Load(texel).r >= 0.999999){
         if(!multiply){
             for(uint slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot)
-                g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
+                g_NwbSwShadowVisibility[uint3(base, slot)] = float4(1.0, 1.0, 1.0, 1.0);
         }
         return;
     }
@@ -448,14 +472,27 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         if(slot < 0.0)
             continue;
 
+        // One transparent traversal (the expensive part) per thread -- shared across the 2x2 block in half-res mode.
         const half3 transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
-        if(multiply){
-            // Hybrid: fold the transparent transmittance onto the HW-written opaque binary mask already in the buffer.
-            const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(pixel, uint(slot))].rgb;
-            g_NwbSwShadowVisibility[uint3(pixel, uint(slot))] = float4(opaqueMask * float3(transmittance), 1.0);
+
+        if(!multiply){
+            g_NwbSwShadowVisibility[uint3(base, uint(slot))] = float4(transmittance, 1.0);
+        }
+        else if(halfRes){
+            // Fold this block's transparent transmittance onto EACH full-res pixel's own opaque binary mask, so the
+            // opaque (hard) shadow keeps full resolution while the soft colored transparent shadow is shared 2x2.
+            for(uint dy = 0u; dy < 2u; ++dy)
+            for(uint dx = 0u; dx < 2u; ++dx){
+                const uint2 sub = base + uint2(dx, dy);
+                if(sub.x >= g_NwbSwShadowPushConstants.width || sub.y >= g_NwbSwShadowPushConstants.height)
+                    continue;
+                const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(sub, uint(slot))].rgb;
+                g_NwbSwShadowVisibility[uint3(sub, uint(slot))] = float4(opaqueMask * float3(transmittance), 1.0);
+            }
         }
         else{
-            g_NwbSwShadowVisibility[uint3(pixel, uint(slot))] = float4(transmittance, 1.0);
+            const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(base, uint(slot))].rgb;
+            g_NwbSwShadowVisibility[uint3(base, uint(slot))] = float4(opaqueMask * float3(transmittance), 1.0);
         }
     }
 }

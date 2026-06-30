@@ -622,6 +622,38 @@ if(Python3_Interpreter_FOUND)
             "--reject-log-message" "failed to resolve shader"
         )
 
+        # Load-time STRESS scene: TEN animated skinned `body` characters (5 transparent + 5 opaque) over a ground plane
+        # under a directional + a point light. Reuses the benchmark's cooked assets (body model + transparent_multi
+        # glass/ground materials); exercises per-frame skinning x10 + SW BVH refits + the hybrid shadow path across two
+        # shadowed lights at load.
+        nwb_declare_executable(nwb_stress_test_smoke)
+        target_sources(nwb_stress_test_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_stress_test_smoke
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_stress_test_smoke nwb_skinning_culling_benchmark_assets)
+
+        # Forced-software-emulation sibling: the SW shadow path runs even on RT hardware, for the HW-vs-SW parity A/B.
+        nwb_declare_executable(nwb_stress_test_sw_smoke)
+        target_sources(nwb_stress_test_sw_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+        )
+        target_compile_definitions(nwb_stress_test_sw_smoke PRIVATE
+            NWB_STRESS_TEST_FORCE_RT_EMULATION=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_stress_test_sw_smoke
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_stress_test_sw_smoke nwb_skinning_culling_benchmark_assets)
+
         unset(_nwb_skinning_culling_asset_stamp)
         unset(_nwb_skinning_culling_model_nwb)
         unset(_nwb_skinning_culling_runtime_root)

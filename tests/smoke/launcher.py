@@ -47,6 +47,13 @@ SMOKE_SCENES = {
             "compute": SmokeExecutable("nwb_csg_visible_compute_emulation_smoke", "csg_visible_compute_emulation_smoke"),
         },
     ),
+    "stress-test": SmokeScene(
+        runtime="skinning_culling_benchmark_runtime",
+        backends={
+            "hw": SmokeExecutable("nwb_stress_test_smoke", "stress_test_smoke"),
+            "sw": SmokeExecutable("nwb_stress_test_sw_smoke", "stress_test_sw_smoke"),
+        },
+    ),
 }
 
 

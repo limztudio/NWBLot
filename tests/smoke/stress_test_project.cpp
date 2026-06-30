@@ -41,8 +41,9 @@ using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// STRESS scene: an empty ground plane with TEN skinned `body` characters -- five TRANSPARENT (glass) in the front row +
-// five OPAQUE in the back row -- lit by one directional + one point light. Each character SPINS about its vertical axis
+// STRESS scene: an empty ground plane with TEN skinned `body` characters in a tight ZIGZAG -- alternating TRANSPARENT
+// (glass) and OPAQUE, staggered front/back so their shadows overlap -- lit by one directional + one point light. Each
+// character SPINS about its vertical axis
 // (no skeleton-pose animation; the bodies render in bind pose and the whole entity rotates), so its instance transform
 // changes every frame -- exercising the per-frame scene BVH/TLAS rebuild + the hybrid shadow path (opaque->HW binary,
 // transparent->SW colored) across TWO shadowed lights as the occluders sweep. Reuses the body model + transparent_multi
@@ -56,15 +57,15 @@ static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/
 
 static constexpr u32 s_CharactersPerClass = 5u;                       // 5 transparent + 5 opaque
 static constexpr u32 s_CharacterCount = s_CharactersPerClass * 2u;    // = 10
-static constexpr f32 s_CharacterSpacingX = 1.15f;
-static constexpr f32 s_TransparentRowZ = -0.7f;                       // front row (nearer the -Z camera)
-static constexpr f32 s_OpaqueRowZ = 0.9f;                             // back row (seen THROUGH the glass row)
+static constexpr f32 s_CharacterSpacingX = 0.72f;                     // tight so neighbours' shadows overlap
+static constexpr f32 s_TransparentRowZ = -0.55f;                      // even index -> front of the zigzag
+static constexpr f32 s_OpaqueRowZ = 0.55f;                            // odd index  -> back of the zigzag
 static constexpr f32 s_CharacterLift = 0.0f;
 static constexpr f32 s_GroundScale = 8.0f;
 
-static constexpr f32 s_CameraDistance = 6.5f;
-static constexpr f32 s_CameraHeight = 2.0f;
-static constexpr f32 s_CameraPitch = 0.18f;                          // tilt down slightly to frame the whole crowd
+static constexpr f32 s_CameraDistance = 4.8f;
+static constexpr f32 s_CameraHeight = 1.8f;
+static constexpr f32 s_CameraPitch = 0.2f;                           // tilt down a touch more to read the ground shadows
 
 static constexpr f32 s_DirectionalLightPitch = 0.9f;
 static constexpr f32 s_DirectionalLightYaw = 0.65f;
@@ -137,9 +138,13 @@ private:
     }
 
     [[nodiscard]] NWB::Core::ECS::EntityID createCharacter(const u32 index){
-        const bool transparent = index < s_CharactersPerClass;
-        const u32 classIndex = index % s_CharactersPerClass;
-        const f32 x = (static_cast<f32>(classIndex) - static_cast<f32>(s_CharactersPerClass - 1u) * 0.5f) * s_CharacterSpacingX;
+        // Zigzag: alternate transparent / opaque along one tight line, staggering even indices to the front row and odd
+        // to the back. Neighbours are a transparent and an opaque character offset diagonally, so their (directional +
+        // point) shadows overlap on the ground -- the colored transparent shadow folds onto the hard opaque shadow and
+        // adjacent characters' shadows pile up, making the shadow duplication / combine easy to observe.
+        const bool transparent = (index % 2u) == 0u;
+        const u32 classIndex = index / 2u; // 0..4 within each material class (tint palette)
+        const f32 x = (static_cast<f32>(index) - static_cast<f32>(s_CharacterCount - 1u) * 0.5f) * s_CharacterSpacingX;
         const f32 z = transparent ? s_TransparentRowZ : s_OpaqueRowZ;
 
         bool tintApplied = false;

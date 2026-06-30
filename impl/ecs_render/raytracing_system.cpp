@@ -17,6 +17,10 @@
 #include <impl/assets/graphics/bvh/binding_slots.h>
 #include <impl/assets/graphics/bvh/names.h>
 
+#include <global/environment.h>
+#include <global/text_utils.h>
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -37,6 +41,13 @@ inline constexpr usize s_TlasInitialInstanceCapacity = 128u;
 
 // Initial element capacity of the BVH Morton-sort scratch buffers (keys + payload); grows by doubling.
 inline constexpr usize s_BvhSortInitialCapacity = 1024u;
+
+// Stage-2 adaptive shadow edge-fraction instrumentation cadence, in transparent-shadow dispatches: snapshot the GPU
+// counter into the CPU-readable buffer every s_SwShadowEdgeStatsPeriod ticks, then log it s_SwShadowEdgeStatsLogDelay
+// ticks later -- by which point the copy is GPU-complete, so the map needs no stall (the delay is comfortably deeper than
+// any frames-in-flight count).
+inline constexpr u32 s_SwShadowEdgeStatsPeriod = 120u;
+inline constexpr u32 s_SwShadowEdgeStatsLogDelay = 8u;
 
 // CPU mirror of the shader NwbBvhBitonicSortPushConstants block (one bitonic compare-exchange step).
 struct BvhSortPushConstants{
@@ -161,9 +172,15 @@ struct SwShadowPushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 instanceCount = 0u;
-    u32 multiplyMode = 0u; // 0 = overwrite (standalone SW path); 1 = multiply onto the HW opaque mask (hybrid on RT HW)
+    // 2 = uniform half-res transparent multiply (non-adaptive baseline); 3 = full-res opaque-only overwrite (opaque
+    // pre-pass); 4 = Stage-2 coarse transparent trace; 5 = Stage-2 adaptive resolve. See the shader for full notes.
+    u32 multiplyMode = 0u;
+    u32 coarseWidth = 0u;     // half-res grid extent for modes 4/5
+    u32 coarseHeight = 0u;
+    f32 edgeThreshold = 0.1f; // mode-5 edge metric: 2x2 coarse transmittance range above which a block is re-traced
+    u32 collectStats = 0u;    // mode-5: tally traced/total rays into the edge-stats buffer (measurement only)
 };
-static_assert(sizeof(SwShadowPushConstants) == sizeof(u32) * 4u, "SwShadowPushConstants must match the shader push-constant layout");
+static_assert(sizeof(SwShadowPushConstants) == sizeof(u32) * 8u, "SwShadowPushConstants must match the shader push-constant layout");
 
 // CPU mirror of the caustic photon producer push constants, shared by BOTH the software compute producer
 // (caustic/caustic_photon_sw_cs.slang) and the hardware ray-traced producer (caustic/caustic_photon_hw_raygen.slang).
@@ -1128,6 +1145,28 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow visibility target"));
         return false;
     }
+
+    // Stage-2 adaptive transparent shadow scratch: a HALF-res sibling of the visibility target (same slot layers, RGBA16F)
+    // the coarse software trace writes one transmittance per 2x2 block into and the adaptive resolve interpolates/refines.
+    // Allocated alongside the visibility target so it shares the resize lifecycle (resetDeferredFrameTargets rebuilds the
+    // SW shadow binding set, which re-binds whichever coarse handle is current). Round UP so a coarse texel covers its 2x2
+    // block even for odd extents -- matching the caustic half-res buffers.
+    targets.shadowCoarseTransmittanceFormat = Core::Format::RGBA16_FLOAT;
+    Core::TextureDesc coarseDesc;
+    coarseDesc
+        .setWidth((targets.width + 1u) / 2u)
+        .setHeight((targets.height + 1u) / 2u)
+        .setArraySize(NWB_SCENE_SHADOW_SLOT_COUNT)
+        .setDimension(Core::TextureDimension::Texture2DArray)
+        .setFormat(targets.shadowCoarseTransmittanceFormat)
+        .setInUAV(true)
+        .setName("engine/shadow/coarse_transmittance")
+    ;
+    targets.shadowCoarseTransmittance = graphics().createTexture(coarseDesc);
+    if(!targets.shadowCoarseTransmittance){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow coarse transmittance target"));
+        return false;
+    }
     return true;
 }
 
@@ -1413,25 +1452,137 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     // before traversal.
     commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    // The two software sub-passes that write the visibility UAV (the opaque pre-pass + the transparent resolve/multiply)
+    // need a UAV barrier between them, and the Stage-2 coarse->resolve handoff needs one on the coarse texture. Enable
+    // UAV barriers on both so each commitBarriers between dispatches syncs the read-after-write hazard on the same image.
+    commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
+    commandList.setEnableUavBarriersForTexture(targets.shadowCoarseTransmittance.get(), true);
     commandList.setResourceStatesForBindingSet(rayTracingState().m_swShadowBindingSet.get());
     commandList.commitBarriers();
-
-    SwShadowPushConstants pushConstants;
-    pushConstants.width = targets.width;
-    pushConstants.height = targets.height;
-    pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-    pushConstants.multiplyMode = multiplyOntoOpaque ? 1u : 0u;
 
     Core::ComputeState computeState;
     computeState.setPipeline(rayTracingState().m_swShadowPipeline.get());
     computeState.addBindingSet(rayTracingState().m_swShadowBindingSet.get());
-    commandList.setComputeState(computeState);
-    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    commandList.dispatch(
-        DivideUp(targets.width, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE)),
-        DivideUp(targets.height, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE)),
-        1u
-    );
+
+    const u32 groupSize = static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE);
+    const u32 fullGroupsX = DivideUp(targets.width, groupSize);
+    const u32 fullGroupsY = DivideUp(targets.height, groupSize);
+    const u32 coarseWidth = (targets.width + 1u) / 2u;
+    const u32 coarseHeight = (targets.height + 1u) / 2u;
+    const u32 coarseGroupsX = DivideUp(coarseWidth, groupSize);
+    const u32 coarseGroupsY = DivideUp(coarseHeight, groupSize);
+
+    // No-RayQuery software path: there is no HW opaque mask, so first write the full-res OPAQUE binary mask ourselves
+    // (mode 3, opaque occluders only), then the transparent pass folds its colored shadow onto it -- exactly mirroring
+    // the hybrid path (HW opaque mask + transparent), so the software fallback gets the same hard-opaque/soft-transparent
+    // split while its hard opaque shadows stay full-res sharp.
+    if(!multiplyOntoOpaque){
+        SwShadowPushConstants opaquePush;
+        opaquePush.width = targets.width;
+        opaquePush.height = targets.height;
+        opaquePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+        opaquePush.multiplyMode = 3u; // opaque-only, full-res, overwrite
+        commandList.setComputeState(computeState);
+        commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
+        commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
+
+        // Sync the opaque mask before the transparent pass reads + multiplies it (UAV->UAV on the same image).
+        commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+    }
+
+    if(rayTracingState().m_swShadowAdaptiveEnabled){
+        // Stage-2 ADAPTIVE transparent shadow: coarse (half-res) trace, then a full-res resolve that bilinearly
+        // interpolates the flat shadow interior from the coarse buffer and re-traces only the edge blocks at full res.
+        // Edge-fraction instrumentation rides a slow cadence: snapshot the GPU counter every s_SwShadowEdgeStatsPeriod
+        // ticks and read it back s_SwShadowEdgeStatsLogDelay ticks later (by then GPU-complete, so the map never stalls).
+        const u32 tick = rayTracingState().m_swShadowEdgeStatsTick++;
+        const bool snapshot =
+            rayTracingState().m_swShadowEdgeStatsEnabled
+            && !rayTracingState().m_swShadowEdgeStatsPending
+            && (tick % s_SwShadowEdgeStatsPeriod == 0u)
+        ;
+
+        if(snapshot){
+            commandList.clearBufferUInt(rayTracingState().m_swShadowEdgeStatsBuffer.get(), 0u);
+            commandList.setBufferState(rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.commitBarriers();
+        }
+
+        // Mode 4: one transparent trace per 2x2 block written into the coarse buffer (transmittance only).
+        SwShadowPushConstants coarsePush;
+        coarsePush.width = targets.width;
+        coarsePush.height = targets.height;
+        coarsePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+        coarsePush.multiplyMode = 4u;
+        coarsePush.coarseWidth = coarseWidth;
+        coarsePush.coarseHeight = coarseHeight;
+        coarsePush.edgeThreshold = rayTracingState().m_swShadowEdgeThreshold;
+        coarsePush.collectStats = 0u;
+        commandList.setComputeState(computeState);
+        commandList.setPushConstants(&coarsePush, sizeof(coarsePush));
+        commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
+
+        // Sync the coarse buffer before the resolve UAV-reads it (UAV write -> UAV read on the same image).
+        commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+
+        // Mode 5: full-res adaptive resolve (interpolate interior / re-trace edges, fold onto the opaque mask).
+        SwShadowPushConstants resolvePush = coarsePush;
+        resolvePush.multiplyMode = 5u;
+        resolvePush.collectStats = snapshot ? 1u : 0u;
+        commandList.setComputeState(computeState);
+        commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
+        commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
+
+        if(snapshot){
+            // Snapshot the counter into the CPU-readable buffer; the map happens s_SwShadowEdgeStatsLogDelay ticks later.
+            commandList.setBufferState(rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::CopySource);
+            commandList.commitBarriers();
+            commandList.copyBuffer(
+                rayTracingState().m_swShadowEdgeStatsReadback.get(), 0u,
+                rayTracingState().m_swShadowEdgeStatsBuffer.get(), 0u,
+                static_cast<u64>(sizeof(u32) * NWB_SW_SHADOW_EDGE_STATS_COUNT)
+            );
+            rayTracingState().m_swShadowEdgeStatsPending = true;
+            rayTracingState().m_swShadowEdgeStatsPendingTick = tick;
+        }
+        else if(
+            rayTracingState().m_swShadowEdgeStatsPending
+            && (tick - rayTracingState().m_swShadowEdgeStatsPendingTick) >= s_SwShadowEdgeStatsLogDelay
+        ){
+            const u32* stats = static_cast<const u32*>(graphics().getDevice()->mapBuffer(rayTracingState().m_swShadowEdgeStatsReadback.get(), Core::CpuAccessMode::Read));
+            if(stats){
+                const u32 traced = stats[NWB_SW_SHADOW_EDGE_STATS_TRACED];
+                const u32 total = stats[NWB_SW_SHADOW_EDGE_STATS_TOTAL];
+                graphics().getDevice()->unmapBuffer(rayTracingState().m_swShadowEdgeStatsReadback.get());
+                const f64 fraction = (total > 0u) ? (100.0 * static_cast<f64>(traced) / static_cast<f64>(total)) : 0.0;
+                NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW shadow adaptive edge fraction = {}% ({} traced / {} total rays, threshold {})")
+                    , fraction
+                    , static_cast<u64>(traced)
+                    , static_cast<u64>(total)
+                    , static_cast<f64>(rayTracingState().m_swShadowEdgeThreshold)
+                );
+            }
+            rayTracingState().m_swShadowEdgeStatsPending = false;
+        }
+    }
+    else{
+        // Non-adaptive baseline: uniform transparent multiply at HALF resolution (mode 2) -- one trace per 2x2 block
+        // folded onto each full-res pixel's own opaque mask. Kept for A/B comparison against the adaptive path.
+        SwShadowPushConstants pushConstants;
+        pushConstants.width = targets.width;
+        pushConstants.height = targets.height;
+        pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+        pushConstants.multiplyMode = 2u;
+        pushConstants.coarseWidth = coarseWidth;
+        pushConstants.coarseHeight = coarseHeight;
+        pushConstants.edgeThreshold = rayTracingState().m_swShadowEdgeThreshold;
+        pushConstants.collectStats = 0u;
+        commandList.setComputeState(computeState);
+        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
+    }
 
     if(!rayTracingState().m_swShadowDispatchLogged){
         rayTracingState().m_swShadowDispatchLogged = true;
@@ -1861,11 +2012,68 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_INSTANCE_MATERIAL, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MATERIAL_TYPED, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MESH_INSTANCES, 1));
+        // Stage-2 adaptive transparent shadow: the half-res coarse transmittance scratch (written by the coarse trace,
+        // UAV-read by the resolve) + the edge-fraction stats counter. Always present in the layout (the shader always
+        // declares them); the env config only chooses which mode is dispatched and whether the counter is tallied.
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_COARSE, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_STATS, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowPushConstants)));
 
         rayTracingState().m_swShadowBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_swShadowBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow binding layout"));
+            rayTracingState().m_swShadowPipelineFailed = true;
+            return false;
+        }
+
+        // Read the Stage-2 adaptive config once (env-gated; defaults: adaptive ON, edge threshold 0.1, stats OFF) and
+        // create the persistent edge-fraction counter + its CPU-readable snapshot. Both are tiny and always bound (the
+        // shader always declares slots 15/16), so they are created here alongside the layout regardless of the config --
+        // the config only selects the dispatched mode (uniform half-res vs coarse+resolve) and whether stats are tallied.
+        if(!rayTracingState().m_swShadowAdaptiveConfigQueried){
+            rayTracingState().m_swShadowAdaptiveConfigQueried = true;
+            char envBuffer[64] = {};
+            if(ReadEnvironmentVariableBuffer("NWB_SW_SHADOW_ADAPTIVE", envBuffer, sizeof(envBuffer)))
+                rayTracingState().m_swShadowAdaptiveEnabled = (envBuffer[0] != '0');
+            if(ReadEnvironmentVariableBuffer("NWB_SW_SHADOW_EDGE_STATS", envBuffer, sizeof(envBuffer)))
+                rayTracingState().m_swShadowEdgeStatsEnabled = (envBuffer[0] == '1');
+            if(ReadEnvironmentVariableBuffer("NWB_SW_SHADOW_EDGE_THRESHOLD", envBuffer, sizeof(envBuffer))){
+                f64 parsed = static_cast<f64>(rayTracingState().m_swShadowEdgeThreshold);
+                if(ParseF64FromChars(envBuffer, envBuffer + NWB_STRLEN(envBuffer), parsed))
+                    rayTracingState().m_swShadowEdgeThreshold = static_cast<f32>(parsed);
+            }
+            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW shadow adaptive={} edgeThreshold={} edgeStats={}")
+                , rayTracingState().m_swShadowAdaptiveEnabled ? 1 : 0
+                , static_cast<f64>(rayTracingState().m_swShadowEdgeThreshold)
+                , rayTracingState().m_swShadowEdgeStatsEnabled ? 1 : 0
+            );
+        }
+
+        Core::BufferDesc edgeStatsDesc;
+        edgeStatsDesc
+            .setByteSize(static_cast<u64>(sizeof(u32) * NWB_SW_SHADOW_EDGE_STATS_COUNT))
+            .setStructStride(sizeof(u32))
+            .setCanHaveUAVs(true)
+            .setDebugName(Name("sw_shadow_edge_stats"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        rayTracingState().m_swShadowEdgeStatsBuffer = graphics().createBuffer(edgeStatsDesc);
+        if(!rayTracingState().m_swShadowEdgeStatsBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-stats buffer"));
+            rayTracingState().m_swShadowPipelineFailed = true;
+            return false;
+        }
+
+        Core::BufferDesc edgeStatsReadbackDesc;
+        edgeStatsReadbackDesc
+            .setByteSize(static_cast<u64>(sizeof(u32) * NWB_SW_SHADOW_EDGE_STATS_COUNT))
+            .setCpuAccess(Core::CpuAccessMode::Read)
+            .setDebugName(Name("sw_shadow_edge_stats_readback"))
+            .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
+        ;
+        rayTracingState().m_swShadowEdgeStatsReadback = graphics().createBuffer(edgeStatsReadbackDesc);
+        if(!rayTracingState().m_swShadowEdgeStatsReadback){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-stats readback buffer"));
             rayTracingState().m_swShadowPipelineFailed = true;
             return false;
         }
@@ -1903,6 +2111,8 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
     NWB_ASSERT(rayTracingState().m_shadowInstanceMaterialBuffer);
     NWB_ASSERT(rayTracingState().m_swShadowMeshCount > 0u);
     NWB_ASSERT(targets.shadowVisibility);
+    NWB_ASSERT(targets.shadowCoarseTransmittance);
+    NWB_ASSERT(rayTracingState().m_swShadowEdgeStatsBuffer);
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
     NWB_ASSERT(deferredState().m_lightBuffer);
     // The material-constants context the per-hit transmittance dispatch reads (g_NwbMaterialTypedWords +
@@ -1972,6 +2182,17 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_INSTANCE_MATERIAL, instanceMaterialBuffer));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MATERIAL_TYPED, materialTypedBuffer));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MESH_INSTANCES, meshInstanceBuffer));
+    // Stage-2 adaptive transparent shadow: the half-res coarse transmittance scratch (UAV) + the edge-fraction counter
+    // (UAV). The coarse texture is recreated with the visibility target on resize, so tracking the visibility pointer in
+    // the rebuild guard also covers it; the stats buffer is persistent.
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_SW_SHADOW_BINDING_COARSE,
+        targets.shadowCoarseTransmittance.get(),
+        targets.shadowCoarseTransmittanceFormat,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_STATS, rayTracingState().m_swShadowEdgeStatsBuffer.get()));
 
     // Per-mesh descriptor arrays: bind every slot (the shader only indexes meshIndex < meshCount). Unused
     // tail slots are padded with the last real mesh so a non-bindless array has no unbound descriptors.

@@ -59,6 +59,17 @@ StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbSwShadowSceneNodes;
 [[vk::binding(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, NWB_SW_SHADOW_SET)]]
 RWTexture2DArray<float4> g_NwbSwShadowVisibility;
 
+// Stage-2 adaptive transparent shadow scratch: HALF-res colored transmittance, one layer per shadow slot. The coarse
+// trace (mode 4) writes one transmittance per 2x2 block here; the adaptive resolve (mode 5) UAV-loads the 2x2
+// neighbourhood to interpolate the flat interior / detect edges.
+[[vk::binding(NWB_SW_SHADOW_BINDING_COARSE, NWB_SW_SHADOW_SET)]]
+RWTexture2DArray<float4> g_NwbSwShadowCoarse;
+
+// Edge-fraction instrumentation counter ([0] = full-res traced rays, [1] = total candidate rays). The resolve
+// atomically tallies into it only when collectStats is set; read back to the log to decide the Stage-3 payoff.
+[[vk::binding(NWB_SW_SHADOW_BINDING_EDGE_STATS, NWB_SW_SHADOW_SET)]]
+RWStructuredBuffer<uint> g_NwbSwShadowEdgeStats;
+
 // Per-instance record: the affine world->object transform (3 rows) + the slot into the parallel per-mesh
 // descriptor arrays. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes).
 struct NwbSwShadowInstance{
@@ -96,11 +107,29 @@ struct NwbSwShadowPushConstants{
     uint width;
     uint height;
     uint instanceCount;
-    // 0 = OVERWRITE the visibility (standalone software path -- the only shadow backend, traces opaque + transparent).
-    // 1 = MULTIPLY into the visibility (hybrid path on RT hardware -- the HW pass already wrote the opaque binary mask
-    //     into the buffer; this pass traces ONLY the transparent occluders and multiplies its colored transmittance on
-    //     top, so final = opaque_binary * transparent_colored).
+    // Pass mode (per-mode behaviour detailed at each handler):
+    //  2 = MULTIPLY transparent at HALF resolution -- one trace per 2x2 block written to all four full-res pixels,
+    //      each folded onto ITS OWN full-res opaque mask. The UNIFORM (non-adaptive) downscale: the Stage-1 baseline
+    //      kept for A/B comparison against the adaptive modes 4/5.
+    //  3 = OVERWRITE at full resolution, OPAQUE occluders ONLY (binary blocker mask) -- the software path's own opaque
+    //      pre-pass, the SW analog of the HW RayQuery opaque mask, run before the transparent multiply.
+    //  4 = COARSE transparent trace (Stage-2 adaptive): one trace per 2x2 block written into the coarse buffer
+    //      (transmittance only, NOT yet multiplied onto the opaque mask). The cheap base layer the resolve refines.
+    //  5 = ADAPTIVE resolve (Stage-2 adaptive): full-res. Reads the 2x2 coarse neighbourhood; where it AGREES (flat
+    //      shadow) bilinearly interpolates it (cheap), where it DISAGREES (an edge) re-traces THIS pixel at full res
+    //      (sharp). Folds the result onto each full-res pixel's own opaque mask -- so the opaque (hard) shadow stays
+    //      full-res while the soft transparent shadow costs one trace per block in the interior and per-pixel only at
+    //      its edges. The opaque mask comes from the HW RayQuery pass (hybrid) or the mode-3 pass (no-RT software).
     uint multiplyMode;
+    // Coarse (half-res) grid extent for modes 4/5 (rounded up so a coarse texel always covers its 2x2 block).
+    uint coarseWidth;
+    uint coarseHeight;
+    // Mode-5 edge metric: a 2x2 coarse neighbourhood whose worst per-channel transmittance range exceeds this is an
+    // EDGE (re-traced at full res); at or below it the block is FLAT and bilinearly interpolated from the coarse buffer.
+    float edgeThreshold;
+    // Mode-5: when non-zero, atomically tally traced-vs-total rays into the edge-stats buffer (measurement only; adds
+    // two atomics per lit pixel, so it is left off on the timed/production path and toggled on only to read the fraction).
+    uint collectStats;
 };
 
 [[vk::push_constant]]
@@ -256,6 +285,16 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     const NwbSwShadowInstance instance = g_NwbSwShadowInstances[instanceIndex];
     const NwbRtInstanceMaterial material = g_NwbSwShadowInstanceMaterial[instanceIndex];
     const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
+    // Occluder-class filter by pass:
+    //  - mode 3 (OPAQUE pre-pass): skip TRANSPARENT occluders -> a binary opaque blocker mask.
+    //  - modes 2/4/5 (transparent traces): skip OPAQUE occluders -> the opaque shadow already comes from the HW RayQuery
+    //    mask (hybrid) or the mode-3 pass (software), so tracing opaque here would only redundantly re-darken. Tracing
+    //    transparent only also avoids walking the opaque meshes' triangle BVHs.
+    const uint occluderPassMode = g_NwbSwShadowPushConstants.multiplyMode;
+    if(occluderPassMode == 3u && transparent)
+        return;
+    if((occluderPassMode == 2u || occluderPassMode == 4u || occluderPassMode == 5u) && !transparent)
+        return;
     // meshIndex selects this instance's slot in the per-mesh descriptor ARRAYS (nodes/indices/positions/attributes).
     // It is NON-UNIFORM across the wave -- different invocations' rays hit different meshes -- so every indexed access
     // must be wrapped in NonUniformResourceIndex() AT THE SUBSCRIPT (the decoration does not reliably survive a copy
@@ -418,21 +457,154 @@ half3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Mode 4 -- COARSE transparent trace. One thread per coarse (half-res) texel: trace ONE transparent occlusion ray from
+// the 2x2 block's top-left full-res G-buffer texel and store the colored transmittance into the coarse buffer. This is
+// the cheap base layer the adaptive resolve (mode 5) interpolates over the flat interior and refines at edges.
+void nwbSwShadowCoarseTrace(const uint2 coarsePixel){
+    if(coarsePixel.x >= g_NwbSwShadowPushConstants.coarseWidth || coarsePixel.y >= g_NwbSwShadowPushConstants.coarseHeight)
+        return;
+    // Coarse texel k samples (and the resolve reconstructs around) full-res 2k -- the block's top-left texel. coarseWidth
+    // is rounded UP from width/2, so 2k stays in [0, width) for every k < coarseWidth.
+    const uint2 base = coarsePixel * 2u;
+    const int3 texel = int3(int2(base), 0);
+
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
+
+    // Background: store fully-lit WHITE so the resolve's range test sees the geometry/background block boundary as an
+    // edge (and re-traces it at full res) rather than bleeding "no shadow" across it.
+    if(g_NwbSwShadowGBufferDepth.Load(texel).r >= 0.999999){
+        for(uint i = 0u; i < lightCount; ++i){
+            const float slot = g_NwbSceneLights[i].params.z;
+            if(slot < 0.0)
+                continue;
+            g_NwbSwShadowCoarse[uint3(coarsePixel, uint(slot))] = float4(1.0, 1.0, 1.0, 1.0);
+        }
+        return;
+    }
+
+    const float3 worldPosition = g_NwbSwShadowGBufferWorldPosition.Load(texel).xyz;
+    const float3 normal = normalize(g_NwbSwShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
+    for(uint i = 0u; i < lightCount; ++i){
+        const float slot = g_NwbSceneLights[i].params.z;
+        if(slot < 0.0)
+            continue;
+        const half3 transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
+        g_NwbSwShadowCoarse[uint3(coarsePixel, uint(slot))] = float4(transmittance, 1.0);
+    }
+}
+
+// Mode 5 -- ADAPTIVE resolve. One thread per FULL-res pixel: read the 2x2 coarse neighbourhood; where the colored
+// transmittance AGREES (flat shadow) bilinearly interpolate it (cheap), where it DISAGREES (an edge) re-trace THIS pixel
+// at full res (sharp). Either way fold the result onto this pixel's own full-res opaque mask, so the opaque (hard)
+// shadow stays full-res while the soft transparent shadow costs one trace per block in the interior and per-pixel only
+// along its edges. Interpolating the SHADOW signal itself (not a geometry proxy) is what keeps the interpolated value
+// correct regardless of the surface under it: where the 4 coarse samples agree the result is that shared value; where
+// they disagree we never interpolate -- we trace.
+void nwbSwShadowAdaptiveResolve(const uint2 pixel){
+    if(pixel.x >= g_NwbSwShadowPushConstants.width || pixel.y >= g_NwbSwShadowPushConstants.height)
+        return;
+    const int3 texel = int3(int2(pixel), 0);
+
+    // Background: the opaque pass already left it white; nothing to multiply, and it casts no candidate rays.
+    if(g_NwbSwShadowGBufferDepth.Load(texel).r >= 0.999999)
+        return;
+
+    const float3 worldPosition = g_NwbSwShadowGBufferWorldPosition.Load(texel).xyz;
+    const float3 normal = normalize(g_NwbSwShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
+
+    // Continuous coarse coordinate: coarse sample k sits at full-res 2k, so a full-res pixel maps to k = pixel/2. floor +
+    // frac give the bracketing coarse texels and the bilinear weights; clamp the upper texel to the coarse extent.
+    const float2 coarseCoord = float2(pixel) * 0.5;
+    const uint2 c0 = uint2(floor(coarseCoord));
+    const uint2 c1 = min(c0 + uint2(1u, 1u), uint2(g_NwbSwShadowPushConstants.coarseWidth - 1u, g_NwbSwShadowPushConstants.coarseHeight - 1u));
+    const float2 w = coarseCoord - float2(c0);
+
+    const float edgeThreshold = g_NwbSwShadowPushConstants.edgeThreshold;
+
+    uint tracedRays = 0u;
+    uint totalRays = 0u;
+
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
+    for(uint i = 0u; i < lightCount; ++i){
+        const float slotF = g_NwbSceneLights[i].params.z;
+        if(slotF < 0.0)
+            continue;
+        const uint slot = uint(slotF);
+        ++totalRays;
+
+        // 2x2 coarse neighbourhood transmittances around this pixel.
+        const float3 t00 = g_NwbSwShadowCoarse[uint3(c0.x, c0.y, slot)].rgb;
+        const float3 t10 = g_NwbSwShadowCoarse[uint3(c1.x, c0.y, slot)].rgb;
+        const float3 t01 = g_NwbSwShadowCoarse[uint3(c0.x, c1.y, slot)].rgb;
+        const float3 t11 = g_NwbSwShadowCoarse[uint3(c1.x, c1.y, slot)].rgb;
+
+        // Edge metric: worst per-channel range across the 4 coarse samples.
+        const float3 lo = min(min(t00, t10), min(t01, t11));
+        const float3 hi = max(max(t00, t10), max(t01, t11));
+        const float range = max(max(hi.x - lo.x, hi.y - lo.y), hi.z - lo.z);
+
+        float3 transmittance;
+        if(range > edgeThreshold){
+            // Edge block: re-trace this exact full-res pixel.
+            transmittance = float3(nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]));
+            ++tracedRays;
+        }
+        else{
+            // Flat interior: bilinearly interpolate the coarse transmittance.
+            const float3 tx0 = lerp(t00, t10, w.x);
+            const float3 tx1 = lerp(t01, t11, w.x);
+            transmittance = lerp(tx0, tx1, w.y);
+        }
+
+        const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb;
+        g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * transmittance, 1.0);
+    }
+
+    // Edge-fraction instrumentation: one atomic pair per lit pixel (only when measuring). traced/total over the frame is
+    // the fraction of candidate rays that still needed a full-res trace -- the number that decides the Stage-3 payoff.
+    if(g_NwbSwShadowPushConstants.collectStats != 0u && totalRays > 0u){
+        InterlockedAdd(g_NwbSwShadowEdgeStats[NWB_SW_SHADOW_EDGE_STATS_TRACED], tracedRays);
+        InterlockedAdd(g_NwbSwShadowEdgeStats[NWB_SW_SHADOW_EDGE_STATS_TOTAL], totalRays);
+    }
+}
+
 [numthreads(NWB_SW_SHADOW_GROUP_SIZE, NWB_SW_SHADOW_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
+    const uint multiplyMode = g_NwbSwShadowPushConstants.multiplyMode;
+
+    // Stage-2 adaptive passes own the thread outright -- their dispatch grids (coarse / full-res) differ from the legacy
+    // grid and they handle their own bounds.
+    if(multiplyMode == 4u){
+        nwbSwShadowCoarseTrace(dispatchThreadID.xy);
+        return;
+    }
+    if(multiplyMode == 5u){
+        nwbSwShadowAdaptiveResolve(dispatchThreadID.xy);
+        return;
+    }
+
+    // Legacy / fallback modes: 2 = uniform HALF-res transparent multiply (the non-adaptive baseline), 3 = full-res
+    // OPAQUE-only overwrite (the opaque pre-pass).
     const uint2 pixel = dispatchThreadID.xy;
     if(pixel.x >= g_NwbSwShadowPushConstants.width || pixel.y >= g_NwbSwShadowPushConstants.height)
         return;
 
-    const int3 texel = int3(int2(pixel), 0);
-    const bool multiply = g_NwbSwShadowPushConstants.multiplyMode != 0u;
+    const bool multiply = (multiplyMode == 2u); // mode 3 OVERWRITES; mode 2 MULTIPLIES
+    const bool halfRes = (multiplyMode == 2u);
+
+    // In half-res mode the dispatch grid is half-size: each thread owns a 2x2 full-res block, sampling the G-buffer at
+    // (and tracing once from) the block's top-left full-res texel.
+    const uint2 base = halfRes ? (pixel * 2u) : pixel;
+    if(base.x >= g_NwbSwShadowPushConstants.width || base.y >= g_NwbSwShadowPushConstants.height)
+        return;
+    const int3 texel = int3(int2(base), 0);
 
     // Background (no geometry) is fully lit; the lighting pass ignores it anyway. In multiply mode the HW opaque pass
     // already wrote the (white) background, so leave it untouched rather than overwrite it.
     if(g_NwbSwShadowGBufferDepth.Load(texel).r >= 0.999999){
         if(!multiply){
             for(uint slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot)
-                g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
+                g_NwbSwShadowVisibility[uint3(base, slot)] = float4(1.0, 1.0, 1.0, 1.0);
         }
         return;
     }
@@ -448,14 +620,23 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         if(slot < 0.0)
             continue;
 
+        // One transparent traversal (the expensive part) per thread -- shared across the 2x2 block in half-res mode.
         const half3 transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
-        if(multiply){
-            // Hybrid: fold the transparent transmittance onto the HW-written opaque binary mask already in the buffer.
-            const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(pixel, uint(slot))].rgb;
-            g_NwbSwShadowVisibility[uint3(pixel, uint(slot))] = float4(opaqueMask * float3(transmittance), 1.0);
+
+        if(!multiply){
+            g_NwbSwShadowVisibility[uint3(base, uint(slot))] = float4(transmittance, 1.0);
         }
         else{
-            g_NwbSwShadowVisibility[uint3(pixel, uint(slot))] = float4(transmittance, 1.0);
+            // Fold this block's transparent transmittance onto EACH full-res pixel's own opaque binary mask, so the
+            // opaque (hard) shadow keeps full resolution while the soft colored transparent shadow is shared 2x2.
+            for(uint dy = 0u; dy < 2u; ++dy)
+            for(uint dx = 0u; dx < 2u; ++dx){
+                const uint2 sub = base + uint2(dx, dy);
+                if(sub.x >= g_NwbSwShadowPushConstants.width || sub.y >= g_NwbSwShadowPushConstants.height)
+                    continue;
+                const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(sub, uint(slot))].rgb;
+                g_NwbSwShadowVisibility[uint3(sub, uint(slot))] = float4(opaqueMask * float3(transmittance), 1.0);
+            }
         }
     }
 }

@@ -139,6 +139,13 @@ struct DeferredFrameTargets{
     // RayQuery pass writes the binary opaque mask and the software traversal multiplies the colored transparent shadow
     // onto it; on the no-RT path the software traversal writes it directly. Full-resolution.
     Core::TextureHandle shadowVisibility;
+    // Stage-2 adaptive transparent shadow scratch (RGBA16F Texture2DArray, NWB_SCENE_SHADOW_SLOT_COUNT layers, HALF the
+    // render extent). The coarse software trace writes one colored transmittance per 2x2 block here; the adaptive resolve
+    // reads it to bilinearly interpolate the flat shadow interior and re-trace only the edge blocks at full resolution.
+    // Soft/low-frequency colored signal, so half-res sampling + edge refine is the soft-shadow analog of an irradiance
+    // cache. Needs no clear (the coarse trace fully overwrites every block it samples). Null when adaptive is disabled.
+    Core::Format::Enum shadowCoarseTransmittanceFormat = Core::Format::UNKNOWN;
+    Core::TextureHandle shadowCoarseTransmittance;
     // Caustic producer targets (additive, inverted lifecycle vs shadowVisibility): the RGBA16F resolved irradiance
     // the deferred lighting pass adds pre-tonemap, the R32_UINT splat accumulators (one Texture2DArray layer per RGB
     // channel) the producer's fixed-point InterlockedAdd lands in, and the RGBA16F a-trous wavelet scratch buffer.

@@ -802,6 +802,14 @@ class LinuxX11Capture:
         finally:
             self.x11.XFree(value)
 
+    @staticmethod
+    def title_matches(candidate, expected):
+        if not expected:
+            return True
+        if candidate == expected:
+            return True
+        return bool(candidate and candidate.startswith(f"{expected} "))
+
     def get_attributes(self, window):
         attributes = self.XWindowAttributes()
         if self.x11.XGetWindowAttributes(self.display, window, ctypes.byref(attributes)) == 0:
@@ -840,7 +848,7 @@ class LinuxX11Capture:
 
             window_pid = self.get_window_pid(window)
             if title:
-                if self.get_window_title(window) != title:
+                if not self.title_matches(self.get_window_title(window), title):
                     continue
                 if window_pid is not None and window_pid != pid:
                     continue

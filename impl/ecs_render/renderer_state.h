@@ -387,6 +387,10 @@ private:
     bool m_swShadowAdaptiveConfigQueried = false;
     bool m_swShadowAdaptiveEnabled = true;
     bool m_swShadowEdgeStatsEnabled = false;
+    // Stage-3 compacted-indirect resolve (NWB_SW_SHADOW_COMPACT, default ON): when set AND adaptive is on, the mode-5
+    // conditional re-trace is replaced by classify+append (mode 6) -> build-args (mode 7) -> DispatchIndirect trace
+    // (mode 8), so only edge rays launch as coherent waves. "0" falls back to the mode-4+5 adaptive path for A/B.
+    bool m_swShadowCompactEnabled = true;
     f32 m_swShadowEdgeThreshold = 0.1f;
     // Edge-fraction instrumentation: a 2-uint UAV counter the resolve tallies into ([0] traced rays, [1] total rays),
     // snapshotted into a CPU-readable buffer on a slow cadence and logged a safe number of frames later (so the copy is
@@ -396,6 +400,14 @@ private:
     u32 m_swShadowEdgeStatsTick = 0u;
     bool m_swShadowEdgeStatsPending = false;
     u32 m_swShadowEdgeStatsPendingTick = 0u;
+    // Stage-3 compaction resources: the per-frame append counter (2 u32: [0] append count, [1] clamped trace count), the
+    // compacted edge-record list (recreated on resize, sized in records), and the persistent indirect dispatch-args
+    // buffer (created UAV + isDrawIndirectArgs). The edge list is recreated alongside the visibility target, so the
+    // binding-set rebuild already triggers on the tracked visibility pointer.
+    Core::BufferHandle m_swShadowEdgeCounterBuffer;
+    Core::BufferHandle m_swShadowEdgeListBuffer;
+    u32 m_swShadowEdgeListCapacity = 0u; // capacity in RECORDS
+    Core::BufferHandle m_swShadowIndirectArgsBuffer;
     // Software caustic photon producer (P3) — the no-hardware-ray-tracing fallback. It reuses the same software
     // scene/instance + per-mesh BVH buffers the SW shadow trace builds (NWB_CAUSTIC_SW_MAX_MESHES ==
     // NWB_SW_SHADOW_MAX_MESHES, so the m_swShadowMesh* arrays serve both), and adds the caustic-specific inputs

@@ -26,9 +26,8 @@
 
 #include <global/environment.h>   // ReadEnvironmentVariableBuffer -- the NWB_TRANSPARENT_MULTI_SPIN_SPEED diagnostic override
 #include <global/math/constant.h> // s_PI / s_2PI -- normalising the displayed yaw into [0, 2pi) for the title bar
-#include <cstdlib>                // std::atof
-#include <cmath>                  // std::fmod / std::floor -- wrapping the accumulated manual yaw for display
-#include <limits>                 // std::numeric_limits -- the NWB_TRANSPARENT_MULTI_SPIN_ANGLE freeze sentinel
+#include <global/simplemath.h>    // FMod -- wrapping the accumulated manual yaw for display
+#include <global/text_utils.h>    // ParseF32FromChars -- env float diagnostics
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -496,7 +495,9 @@ public:
             char value[32] = {};
             if(!ReadEnvironmentVariableBuffer("NWB_TRANSPARENT_MULTI_SPIN_SPEED", value, sizeof(value)))
                 return s_TransparentSceneRotationSpeed;
-            const f32 parsed = static_cast<f32>(::std::atof(value));
+            f32 parsed = 0.0f;
+            if(!ParseF32FromChars(value, value + NWB_STRLEN(value), parsed))
+                return s_TransparentSceneRotationSpeed;
             return IsFinite(parsed) && (parsed >= 0.0f) ? parsed : s_TransparentSceneRotationSpeed;
         }();
         return s_speed;
@@ -508,9 +509,11 @@ public:
         static const f32 s_angle = [](){
             char value[32] = {};
             if(!ReadEnvironmentVariableBuffer("NWB_TRANSPARENT_MULTI_SPIN_ANGLE", value, sizeof(value)))
-                return std::numeric_limits<f32>::quiet_NaN();
-            const f32 parsed = static_cast<f32>(::std::atof(value));
-            return IsFinite(parsed) ? parsed : std::numeric_limits<f32>::quiet_NaN();
+                return Limit<f32>::s_QuietNaN;
+            f32 parsed = 0.0f;
+            if(!ParseF32FromChars(value, value + NWB_STRLEN(value), parsed))
+                return Limit<f32>::s_QuietNaN;
+            return IsFinite(parsed) ? parsed : Limit<f32>::s_QuietNaN;
         }();
         return s_angle;
     }
@@ -538,7 +541,7 @@ private:
     // NWB_TRANSPARENT_MULTI_SPIN_ANGLE for reproducing the orientation. setWindowTitle copies the string and the frame
     // loop only re-applies it to the OS window when it actually changes, so calling this every frame is cheap.
     void updateWindowTitleYaw(){
-        f32 wrapped = ::std::fmod(m_animationTime, s_2PI);
+        f32 wrapped = FMod(m_animationTime, s_2PI);
         if(wrapped < 0.0f)
             wrapped += s_2PI;
         const f32 degrees = wrapped * (180.0f / s_PI);

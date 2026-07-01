@@ -23,8 +23,8 @@
 #include "smoke_skinned_scene_helpers.h"
 
 #include <global/environment.h>   // ReadEnvironmentVariableBuffer -- NWB_FLICKER_TEST_SPIN_ANGLE freeze for deterministic A/B
-#include <cstdlib>                 // std::atof
-#include <cmath>                   // std::fmod -- wrapping the displayed yaw into [0, 2pi)
+#include <global/simplemath.h>     // FMod -- wrapping the displayed yaw into [0, 2pi)
+#include <global/text_utils.h>     // ParseF32FromChars -- env float diagnostics
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,7 +150,8 @@ private:
             char value[32] = {};
             if(!ReadEnvironmentVariableBuffer("NWB_FLICKER_TEST_SPIN_ANGLE", value, sizeof(value)))
                 return -1.0f;
-            return static_cast<f32>(::std::atof(value));
+            f32 parsed = -1.0f;
+            return ParseF32FromChars(value, value + NWB_STRLEN(value), parsed) ? parsed : -1.0f;
         }();
         return s_yaw;
     }
@@ -310,7 +311,7 @@ public:
     // Reflect the current character yaw in the title bar (wrapped to [0, 2pi)) so the exact orientation a flicker appears at
     // can be read off and reproduced via NWB_FLICKER_TEST_SPIN_ANGLE.
     void updateWindowTitleYaw(){
-        f32 wrapped = ::std::fmod(m_yaw, s_TwoPi);
+        f32 wrapped = FMod(m_yaw, s_TwoPi);
         if(wrapped < 0.0f)
             wrapped += s_TwoPi;
         const f32 degrees = wrapped * (360.0f / s_TwoPi);

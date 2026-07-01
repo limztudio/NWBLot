@@ -74,6 +74,12 @@ template<typename T>
 }
 
 template<typename T>
+[[nodiscard]] NWB_INLINE T FMod(const T numerator, const T denominator){
+    using std::fmod;
+    return static_cast<T>(fmod(numerator, denominator));
+}
+
+template<typename T>
 [[nodiscard]] NWB_INLINE T Sqrt(const T value){
     using std::sqrt;
     return static_cast<T>(sqrt(value));

@@ -336,6 +336,11 @@ template<usize N>
     return parseResult.ec == std::errc() && parseResult.ptr == end;
 }
 
+[[nodiscard]] inline bool ParseF32FromChars(const char* begin, const char* end, f32& outValue){
+    const auto parseResult = std::from_chars(begin, end, outValue);
+    return parseResult.ec == std::errc() && parseResult.ptr == end;
+}
+
 
 [[nodiscard]] inline bool ParseU64(const AStringView text, u64& outValue){
     outValue = 0;

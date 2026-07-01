@@ -654,6 +654,37 @@ if(Python3_Interpreter_FOUND)
         )
         add_dependencies(nwb_stress_test_sw_smoke nwb_skinning_culling_benchmark_assets)
 
+        # Minimal FLICKER-REPRO scene: ONE opaque `body` character on ONE opaque ground plane under a SINGLE directional
+        # light, arrow-key-spun. The tightest isolation of the hard-shadow edge crawl (no transparency, no point light, no
+        # crowd). Reuses the benchmark's cooked assets (body model + ground material).
+        nwb_declare_executable(nwb_flicker_test_smoke)
+        target_sources(nwb_flicker_test_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/flicker_test_project.cpp"
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_flicker_test_smoke
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_flicker_test_smoke nwb_skinning_culling_benchmark_assets)
+
+        # Forced-software-emulation sibling: the SW shadow path runs even on RT hardware, for the HW-vs-SW flicker A/B.
+        nwb_declare_executable(nwb_flicker_test_sw_smoke)
+        target_sources(nwb_flicker_test_sw_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/flicker_test_project.cpp"
+        )
+        target_compile_definitions(nwb_flicker_test_sw_smoke PRIVATE
+            NWB_FLICKER_TEST_FORCE_RT_EMULATION=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_flicker_test_sw_smoke
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_flicker_test_sw_smoke nwb_skinning_culling_benchmark_assets)
+
         unset(_nwb_skinning_culling_asset_stamp)
         unset(_nwb_skinning_culling_model_nwb)
         unset(_nwb_skinning_culling_runtime_root)

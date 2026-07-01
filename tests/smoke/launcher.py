@@ -54,6 +54,13 @@ SMOKE_SCENES = {
             "sw": SmokeExecutable("nwb_stress_test_sw_smoke", "stress_test_sw_smoke"),
         },
     ),
+    "flicker-test": SmokeScene(
+        runtime="skinning_culling_benchmark_runtime",
+        backends={
+            "hw": SmokeExecutable("nwb_flicker_test_smoke", "flicker_test_smoke"),
+            "sw": SmokeExecutable("nwb_flicker_test_sw_smoke", "flicker_test_sw_smoke"),
+        },
+    ),
 }
 
 

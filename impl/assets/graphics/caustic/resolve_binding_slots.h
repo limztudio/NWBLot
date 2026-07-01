@@ -45,6 +45,15 @@
 #define NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH 1
 #define NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT 2
 
+// Accumulator decay pre-pass (its own pipeline + binding layout): the SPLAT-SPACE temporal EMA. Before the producer
+// splats this frame's photons, each accumulator texel is multiplied by decayFactor (accum_N = decay*accum_{N-1}); the
+// producer then atomic-adds this frame's photons on top, so the accumulator holds the EMA and the static steady state
+// is photons/(1-decayFactor). The resolve pre-multiplies causticIntensity by (1-decayFactor) so the STATIC brightness
+// is unchanged. Reprojection-free (no image-space warp -> no ghosting on the spinning refractor). One dedicated slot:
+// the accumulator UAV read-modify-written in place.
+#define NWB_CAUSTIC_ACCUMULATOR_DECAY_SET 0
+#define NWB_CAUSTIC_ACCUMULATOR_DECAY_BINDING_ACCUMULATOR 0
+
 // 8x8 = 64 threads per group (one thread per pixel).
 #define NWB_CAUSTIC_RESOLVE_GROUP_SIZE 8
 

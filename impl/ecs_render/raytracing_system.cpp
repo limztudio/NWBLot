@@ -233,6 +233,17 @@ struct CausticGeometryDownsamplePushConstants{
 };
 static_assert(sizeof(CausticGeometryDownsamplePushConstants) == sizeof(u32) * 4u, "CausticGeometryDownsamplePushConstants must match the shader push-constant layout");
 
+// Mirror of caustic_accumulator_decay_cs.slang's NwbCausticAccumulatorDecayPushConstants (the splat-space temporal EMA
+// pre-pass): the accumulator dims + the per-frame decay factor (accum_N = decayFactor*accum_{N-1} before this frame's
+// splat). pad keeps the block a 16-byte multiple.
+struct CausticAccumulatorDecayPushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    f32 decayFactor = 0.f;
+    u32 pad = 0u;
+};
+static_assert(sizeof(CausticAccumulatorDecayPushConstants) == sizeof(u32) * 4u, "CausticAccumulatorDecayPushConstants must match the shader push-constant layout");
+
 // Per-frame photon budget. Energy-conserving (per-photon flux = lightColor*emissionDomainArea*targetCount/photonCount,
 // so it scales 1/photonCount), so a higher count only DENSIFIES the splat without changing its per-frame brightness.
 // Density matters because the resolve is spatial-only (a-trous, no temporal accumulation): each frame must be dense
@@ -1215,6 +1226,11 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     targets.causticAccumulatorFormat = Core::Format::R32_UINT;
     targets.causticHistoryFormat = Core::Format::RGBA16_FLOAT;
 
+    // A (re)created accumulator holds no valid splat history, so re-seed the splat-space temporal EMA: the next
+    // temporal-enabled frame clears the accumulator instead of decaying it. (This runs on the initial create AND on a
+    // resize, both of which allocate a fresh accumulator texture.)
+    rayTracingState().m_causticAccumulatorInitialized = false;
+
     // Round UP so a half-res pixel always covers its 2x2 full-res block even for odd extents.
     const u32 halfWidth = (targets.width + 1u) / 2u;
     const u32 halfHeight = (targets.height + 1u) / 2u;
@@ -1353,14 +1369,21 @@ void RendererRayTracingSystem::clearCausticTargets(Core::CommandList& commandLis
 
     // Per-frame reset of the additive caustic targets. Black irradiance = the additive identity (the inverse of the
     // shadow buffer's white default): the value the deferred lighting samples whenever no caustic producer ran this
-    // frame, so the additive term is a pixel-identical no-op. The accumulators are the per-frame splat target (integer
-    // R32_UINT, one layer per RGB channel, cleared to 0). The a-trous scratch (causticHistory) needs NO clear -- every
-    // wavelet pass fully overwrites it; the resolve is purely spatial (no persistent state across frames).
+    // frame, so the additive term is a pixel-identical no-op. Always cleared.
     commandList.setTextureState(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.clearTextureFloat(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    commandList.clearTextureUInt(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, 0u);
+
+    // The accumulator is the R32_UINT fixed-point splat target (one Texture2DArray layer per RGB channel). When the
+    // splat-space temporal EMA is ENABLED (NWB_CAUSTIC_TEMPORAL_DECAY > 0) it must PERSIST across frames -- the producer
+    // decays it in place instead of clearing (prepareCausticAccumulatorForSplat) -- so it is NOT cleared here. When
+    // temporal is DISABLED it is a per-frame target, cleared to 0 here exactly as before. (The a-trous scratch
+    // causticHistory needs no clear either way -- every wavelet pass fully overwrites it.)
+    if(causticTemporalDecay() <= 0.f){
+        commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.clearTextureUInt(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, 0u);
+    }
 }
 
 void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& commandList, DeferredFrameTargets& targets){
@@ -1401,6 +1424,12 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
         commandList.dispatch(halfGroupsX, halfGroupsY, 1u);
     }
 
+    // Splat-space temporal EMA normalization: with decay enabled the accumulator holds the EMA accum = photons/(1-decay)
+    // at the static steady state, so pre-multiply the exposure by (1-decay) to keep the STATIC caustic brightness
+    // byte-unchanged vs the non-temporal path. Disabled (decay <= 0) -> factor 1, the exposure is exactly s_CausticIntensity.
+    const f32 temporalDecay = causticTemporalDecay();
+    const f32 effectiveIntensity = (temporalDecay > 0.f) ? (s_CausticIntensity * (1.f - temporalDecay)) : s_CausticIntensity;
+
     const auto runPass = [&](Core::BindingSet* const bindingSet, const u32 stepWidth, const CausticResolveStage::Enum stage, const u32 groupsX, const u32 groupsY){
         commandList.setResourceStatesForBindingSet(bindingSet);
         commandList.commitBarriers();
@@ -1410,7 +1439,7 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
         resolvePush.height = targets.height;
         resolvePush.halfWidth = halfWidth;
         resolvePush.halfHeight = halfHeight;
-        resolvePush.causticIntensity = s_CausticIntensity;
+        resolvePush.causticIntensity = effectiveIntensity;
         resolvePush.stepWidth = stepWidth;
         resolvePush.stage = static_cast<u32>(stage);
 
@@ -1447,6 +1476,48 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     // UPSAMPLE (full-res): edge-aware bilateral resample of the final half-res caustic (half-B) into the full-res
     // irradiance buffer the deferred lighting adds.
     runPass(rayTracingState().m_causticResolveBindingSetUpsample.get(), 1u, CausticResolveStage::Upsample, fullGroupsX, fullGroupsY);
+}
+
+void RendererRayTracingSystem::prepareCausticAccumulatorForSplat(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor){
+    // Splat-space temporal EMA step, run at the top of the SW/HW producer when temporal is enabled (decayFactor > 0).
+    // clearCausticTargets left the accumulator untouched (the clear is deferred to here), so exactly ONE of two paths
+    // runs per frame:
+    //  - First enabled frame (or the frame after a resize/invalidation): the accumulator holds no valid history, so clear
+    //    it to 0. The producer then splats a normal single-frame caustic on top -- identical to the pre-temporal frame 0.
+    //  - Every later frame: dispatch the decay pass (accum_N = decayFactor*accum_{N-1}) in place; the producer atomic-adds
+    //    this frame's photons on top, so the accumulator holds the EMA. A UAV barrier between the decay dispatch and the
+    //    producer's atomic-adds (setEnableUavBarriersForTexture + commitBarriers) syncs the read-after-write on the image.
+    // Both paths leave the accumulator in UnorderedAccess for the producer's atomic-adds.
+    if(!rayTracingState().m_causticAccumulatorInitialized){
+        rayTracingState().m_causticAccumulatorInitialized = true;
+        commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.clearTextureUInt(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, 0u);
+        return;
+    }
+
+    commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
+    commandList.setResourceStatesForBindingSet(rayTracingState().m_causticAccumulatorDecayBindingSet.get());
+    commandList.commitBarriers();
+
+    CausticAccumulatorDecayPushConstants decayPush;
+    decayPush.width = targets.width;
+    decayPush.height = targets.height;
+    decayPush.decayFactor = decayFactor;
+
+    Core::ComputeState decayState;
+    decayState.setPipeline(rayTracingState().m_causticAccumulatorDecayPipeline.get());
+    decayState.addBindingSet(rayTracingState().m_causticAccumulatorDecayBindingSet.get());
+    commandList.setComputeState(decayState);
+    commandList.setPushConstants(&decayPush, sizeof(decayPush));
+    commandList.dispatch(
+        DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)),
+        DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)),
+        1u
+    );
+
+    // Sync the decay's UAV writes before the producer's atomic-adds hit the same image.
+    commandList.commitBarriers();
 }
 
 bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets, bool multiplyOntoOpaque){
@@ -1769,7 +1840,13 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
         && ensureCausticResolvePipeline()
         && ensureCausticResolveBindingSet(targets)
     ;
-    return producerReady && resolveReady;
+    // The splat-space temporal EMA decay pre-pass is only dispatched when temporal is enabled (decay > 0); gate its
+    // pipeline + binding set on that so the disabled path never builds them.
+    const bool temporalReady =
+        causticTemporalDecay() <= 0.f
+        || (ensureCausticAccumulatorDecayPipeline() && ensureCausticAccumulatorDecayBindingSet(targets))
+    ;
+    return producerReady && resolveReady && temporalReady;
 }
 
 bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets){
@@ -1780,6 +1857,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
 
     if(!hasCausticWork())
         return false;
+    const f32 temporalDecay = causticTemporalDecay();
     if(
         !rayTracingState().m_swCausticPipeline
         || !rayTracingState().m_swCausticBindingSet
@@ -1789,6 +1867,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         || !rayTracingState().m_causticResolveBindingSetUpsample
         || !rayTracingState().m_causticGeometryDownsamplePipeline
         || !rayTracingState().m_causticGeometryDownsampleBindingSet
+        || (temporalDecay > 0.f && (!rayTracingState().m_causticAccumulatorDecayPipeline || !rayTracingState().m_causticAccumulatorDecayBindingSet))
     )
         return false;
     if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory || !targets.causticResolveHalf || !targets.causticResolveGeometry)
@@ -1796,6 +1875,13 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
 
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, graphics().getDevice(), commandList);
+
+        // Splat-space temporal EMA step (enabled paths only): decay the resident accumulator (or clear it on the first
+        // frame / after a resize) before this frame's splat. clearCausticTargets skipped the accumulator clear when
+        // temporal is on, so this owns the accumulator's per-frame reset. No-op when temporal is disabled (the
+        // accumulator was already cleared to 0 by clearCausticTargets).
+        if(temporalDecay > 0.f)
+            prepareCausticAccumulatorForSplat(commandList, targets, temporalDecay);
 
         // The per-mesh BVH node + geometry buffers were left in ShaderResource by the SW shadow pass; re-assert the
         // state for every traced mesh, plus the shadow-owned material-context buffers (for the per-hit surface
@@ -2861,6 +2947,111 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsampleBindingSet(Deferre
     return true;
 }
 
+f32 RendererRayTracingSystem::causticTemporalDecay(){
+    // Splat-space temporal EMA decay factor, read once from env. Default 0.85 (a moderate ~6-7 frame time constant that
+    // visibly de-sparkles a spinning refractor while still following its motion); <=0 disables temporal entirely (the
+    // old clear-every-frame behavior, a clean A/B + safe fallback). Clamp to [0,1) so the EMA can never diverge.
+    if(!rayTracingState().m_causticTemporalDecayQueried){
+        rayTracingState().m_causticTemporalDecayQueried = true;
+        char envBuffer[64] = {};
+        if(ReadEnvironmentVariableBuffer("NWB_CAUSTIC_TEMPORAL_DECAY", envBuffer, sizeof(envBuffer))){
+            f64 parsed = static_cast<f64>(rayTracingState().m_causticTemporalDecay);
+            if(ParseF64FromChars(envBuffer, envBuffer + NWB_STRLEN(envBuffer), parsed))
+                rayTracingState().m_causticTemporalDecay = static_cast<f32>(parsed);
+        }
+        if(rayTracingState().m_causticTemporalDecay >= 1.f)
+            rayTracingState().m_causticTemporalDecay = 0.99f;
+        if(rayTracingState().m_causticTemporalDecay < 0.f)
+            rayTracingState().m_causticTemporalDecay = 0.f;
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: caustic temporal decay={} ({})")
+            , static_cast<f64>(rayTracingState().m_causticTemporalDecay)
+            , (rayTracingState().m_causticTemporalDecay > 0.f) ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
+        );
+    }
+    return rayTracingState().m_causticTemporalDecay;
+}
+
+bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
+    if(rayTracingState().m_causticAccumulatorDecayPipeline)
+        return true;
+    if(rayTracingState().m_causticAccumulatorDecayPipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_causticAccumulatorDecayBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_ACCUMULATOR_DECAY_BINDING_ACCUMULATOR, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticAccumulatorDecayPushConstants)));
+
+        rayTracingState().m_causticAccumulatorDecayBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_causticAccumulatorDecayBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic accumulator decay binding layout"));
+            rayTracingState().m_causticAccumulatorDecayPipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_causticAccumulatorDecayShader,
+        AssetsGraphicsCaustic::s_AccumulatorDecayShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_CausticAccumulatorDecay"
+    )){
+        rayTracingState().m_causticAccumulatorDecayPipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_causticAccumulatorDecayShader)
+        .addBindingLayout(rayTracingState().m_causticAccumulatorDecayBindingLayout)
+    ;
+    rayTracingState().m_causticAccumulatorDecayPipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_causticAccumulatorDecayPipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic accumulator decay compute pipeline"));
+        rayTracingState().m_causticAccumulatorDecayPipelineFailed = true;
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureCausticAccumulatorDecayBindingSet(DeferredFrameTargets& targets){
+    NWB_ASSERT(rayTracingState().m_causticAccumulatorDecayBindingLayout);
+    NWB_ASSERT(targets.causticAccumulator);
+
+    Core::Texture* accumulatorTarget = targets.causticAccumulator.get();
+    if(
+        rayTracingState().m_causticAccumulatorDecayBindingSet
+        && rayTracingState().m_causticAccumulatorDecayAccumulator == accumulatorTarget
+    )
+        return true;
+
+    auto* device = graphics().getDevice();
+
+    Core::BindingSetDesc desc(arena());
+    desc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_CAUSTIC_ACCUMULATOR_DECAY_BINDING_ACCUMULATOR,
+        accumulatorTarget,
+        targets.causticAccumulatorFormat,
+        ECSRenderDetail::s_CausticAccumulatorSubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+
+    Core::BindingSetHandle bindingSet = device->createBindingSet(desc, rayTracingState().m_causticAccumulatorDecayBindingLayout);
+    if(!bindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic accumulator decay binding set"));
+        rayTracingState().m_causticAccumulatorDecayBindingSet = nullptr;
+        rayTracingState().m_causticAccumulatorDecayAccumulator = nullptr;
+        return false;
+    }
+    rayTracingState().m_causticAccumulatorDecayBindingSet = Move(bindingSet);
+    rayTracingState().m_causticAccumulatorDecayAccumulator = accumulatorTarget;
+    return true;
+}
+
 bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     if(rayTracingState().m_hwCausticPipeline)
         return true;
@@ -3105,7 +3296,13 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
         && ensureCausticResolvePipeline()
         && ensureCausticResolveBindingSet(targets)
     ;
-    return producerReady && resolveReady;
+    // The splat-space temporal EMA decay pre-pass is only dispatched when temporal is enabled (decay > 0); gate its
+    // pipeline + binding set on that so the disabled path never builds them.
+    const bool temporalReady =
+        causticTemporalDecay() <= 0.f
+        || (ensureCausticAccumulatorDecayPipeline() && ensureCausticAccumulatorDecayBindingSet(targets))
+    ;
+    return producerReady && resolveReady && temporalReady;
 }
 
 bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets){
@@ -3115,6 +3312,7 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
     // accumulator the SAME resolve consumes, so the HW + SW paths converge to the same caustic (Monte-Carlo A/B).
     if(!hasHwCausticWork())
         return false;
+    const f32 temporalDecay = causticTemporalDecay();
     if(
         !rayTracingState().m_hwCausticPipeline
         || !rayTracingState().m_hwCausticShaderTable
@@ -3125,6 +3323,7 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         || !rayTracingState().m_causticResolveBindingSetUpsample
         || !rayTracingState().m_causticGeometryDownsamplePipeline
         || !rayTracingState().m_causticGeometryDownsampleBindingSet
+        || (temporalDecay > 0.f && (!rayTracingState().m_causticAccumulatorDecayPipeline || !rayTracingState().m_causticAccumulatorDecayBindingSet))
     )
         return false;
     if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory || !targets.causticResolveHalf || !targets.causticResolveGeometry)
@@ -3132,6 +3331,11 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
 
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, graphics().getDevice(), commandList);
+
+        // Splat-space temporal EMA step (enabled paths only): decay the resident accumulator (or clear it on the first
+        // frame / after a resize) before this frame's splat. Byte-identical to the SW producer's temporal step.
+        if(temporalDecay > 0.f)
+            prepareCausticAccumulatorForSplat(commandList, targets, temporalDecay);
 
         // Move the per-mesh index/attribute/position byte buffers + the shadow-owned material context + the emission
         // targets to ShaderResource; setResourceStatesForBindingSet derives the TLAS, G-buffer SRVs, view CB, and the

@@ -357,9 +357,15 @@ private:
     u32 m_causticLightCount = 0u;
     Float4 m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
-    // The caustic resolve is a purely SPATIAL a-trous wavelet denoise -- no temporal history, no motion vectors, no
-    // motion-reject reseed (a moving caustic is ghost-free by construction) and the producer emission is deterministic +
-    // frame-independent, so NO per-frame caustic state is needed.
+    // The caustic resolve is a purely SPATIAL a-trous wavelet denoise. The one bit of temporal state is the SPLAT-SPACE
+    // EMA in the R32_UINT accumulator (m_causticTemporalDecay > 0): the accumulator is decayed then re-splatted each
+    // frame instead of cleared, so the sparkle-flicker of a moving caustic averages out WITHOUT any image-space
+    // reprojection (reprojection would ghost). m_causticTemporalDecay is read ONCE from env NWB_CAUSTIC_TEMPORAL_DECAY
+    // (default 0.85; <=0 disables temporal -> the old clear-every-frame behavior); m_causticTemporalDecayQueried gates
+    // that one-time read. The static steady state is photons/(1-decay), so the resolve pre-multiplies causticIntensity by
+    // (1-decay) to keep the STATIC brightness byte-unchanged.
+    f32 m_causticTemporalDecay = 0.85f;
+    bool m_causticTemporalDecayQueried = false;
     bool m_causticEmissionGateLogged = false;
     Core::BindingLayoutHandle m_swShadowBindingLayout; // software (compute) shadow traversal pass
     Core::ShaderHandle m_swShadowShader;
@@ -398,7 +404,7 @@ private:
     // terminator precision only), so it is the default; set "1" to opt back into the coarse speedup where the pop is
     // acceptable (e.g. static scenes). No effect on the HW path (opaque there is HW RayQuery). The SOFT transparent shadow
     // keeps its adaptive coarse path -- undersampling a band-limited soft shadow is invisible; a hard shadow it is not.
-    bool m_swShadowAdaptiveOpaqueEnabled = false;
+    bool m_swShadowAdaptiveOpaqueEnabled = true;
     f32 m_swShadowEdgeThreshold = 0.1f;
     // Edge-fraction instrumentation: a 2-uint UAV counter the resolve tallies into ([0] traced rays, [1] total rays),
     // snapshotted into a CPU-readable buffer on a slow cadence and logged a safe number of frames later (so the copy is
@@ -484,6 +490,18 @@ private:
     const Core::Texture* m_causticGeometryDownsampleDepth = nullptr;
     const Core::Texture* m_causticGeometryDownsampleGeometry = nullptr;
     bool m_causticGeometryDownsamplePipelineFailed = false;
+    // Caustic accumulator decay pre-pass (splat-space temporal EMA): a single-resource compute pass that multiplies the
+    // resident R32_UINT accumulator by m_causticTemporalDecay before the producer splats this frame's photons.
+    // m_causticAccumulatorInitialized gates the first-frame (and post-resize) clear-vs-decay: the accumulator holds no
+    // valid history until the producer has splatted once, so the first enabled frame clears (as before) and every later
+    // frame decays. Reset to false wherever the deferred targets are (re)created so a resize re-seeds cleanly.
+    Core::BindingLayoutHandle m_causticAccumulatorDecayBindingLayout;
+    Core::ShaderHandle m_causticAccumulatorDecayShader;
+    Core::ComputePipelineHandle m_causticAccumulatorDecayPipeline;
+    Core::BindingSetHandle m_causticAccumulatorDecayBindingSet;
+    const Core::Texture* m_causticAccumulatorDecayAccumulator = nullptr;
+    bool m_causticAccumulatorDecayPipelineFailed = false;
+    bool m_causticAccumulatorInitialized = false;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;
     bool m_bvhSortPipelineFailed = false;

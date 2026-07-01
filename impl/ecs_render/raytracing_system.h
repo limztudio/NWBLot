@@ -73,6 +73,17 @@ private:
     // Geometry downsample pre-pass: fills the half-res geometry cache (world + receiver validity) the resolve reads.
     [[nodiscard]] bool ensureCausticGeometryDownsamplePipeline();
     [[nodiscard]] bool ensureCausticGeometryDownsampleBindingSet(DeferredFrameTargets& targets);
+    // Accumulator decay pre-pass (splat-space temporal EMA): multiplies the resident R32_UINT accumulator by the temporal
+    // decay factor before the producer splats this frame's photons (only used when temporal is enabled, decay > 0).
+    [[nodiscard]] bool ensureCausticAccumulatorDecayPipeline();
+    [[nodiscard]] bool ensureCausticAccumulatorDecayBindingSet(DeferredFrameTargets& targets);
+    // Reads NWB_CAUSTIC_TEMPORAL_DECAY once (into m_causticTemporalDecay), returns the cached factor. <=0 == temporal off.
+    [[nodiscard]] f32 causticTemporalDecay();
+    // Splat-space temporal step, run at the top of each caustic producer (SW/HW) when temporal is enabled: on the first
+    // enabled frame (or after a resize) the accumulator holds no history so it is CLEARED to 0; every later frame the
+    // decay pass multiplies it by decayFactor in place (accum_N = decay*accum_{N-1}). Leaves the accumulator in
+    // UnorderedAccess for the producer's atomic-adds.
+    void prepareCausticAccumulatorForSplat(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor);
     // Runs the N-pass edge-avoiding a-trous wavelet resolve (shared by the SW + HW caustic paths): converts the splat
     // accumulator to denoised irradiance, ping-ponging the irradiance + scratch buffers so the final pass lands in
     // irradiance. The accumulator must already hold this frame's splat (producer dispatched). Assumes the resolve

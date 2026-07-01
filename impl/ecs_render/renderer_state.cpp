@@ -292,6 +292,15 @@ void RendererRayTracingState::invalidateResources(){
     m_causticGeometryDownsampleDepth = nullptr;
     m_causticGeometryDownsampleGeometry = nullptr;
     m_causticGeometryDownsamplePipelineFailed = false;
+    m_causticAccumulatorDecayBindingLayout.reset();
+    m_causticAccumulatorDecayShader.reset();
+    m_causticAccumulatorDecayPipeline.reset();
+    m_causticAccumulatorDecayBindingSet.reset();
+    m_causticAccumulatorDecayAccumulator = nullptr;
+    m_causticAccumulatorDecayPipelineFailed = false;
+    // The accumulator target is released on invalidation (deferred targets are recreated), so its splat-space history is
+    // gone -- re-seed the EMA (the next enabled frame clears instead of decaying).
+    m_causticAccumulatorInitialized = false;
     m_shadowPipelineFailed = false;
     m_bvhSortPipelineFailed = false;
     m_bvhBuildPipelineFailed = false;

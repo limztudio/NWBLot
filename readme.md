@@ -25,6 +25,7 @@
   - the Windows toolchain now builds with `clang`/`clang++`, `lld-link`, and Ninja. It still targets the Windows/MSVC ABI, so the Windows SDK and the Microsoft C++ runtime/standard library remain part of the environment.
 
 - Linux status
+  - Local verification should use the repo-bundled CMake and CTest binaries under `__cmake/tool-venv/bin/` when system `cmake` / `ctest` are not on `PATH`.
   - full configure preset: `linux-clang-x64`
   - engine-only configure preset: `linux-clang-engine-x64`
   - testbed configure preset: `linux-clang-testbed-x64`
@@ -33,6 +34,9 @@
   - `nwb_frame`, `nwb_loader`, `nwb_logserver`, `nwb_resource_cooker`, and `testbed` are configured through the CMake build options and platform dependencies.
   - Full Linux configure: `cmake --preset linux-clang-x64`.
   - Debug test verification: `cmake --build --preset linux-clang-dbg`, then `ctest --test-dir __cmake/build/linux-clang-x64 -C dbg --output-on-failure`.
+  - Transparent multi capture verification: configure with `cmake --preset linux-clang-x64`, build the executable/assets with `cmake --build --preset linux-clang-dbg --target nwb_transparent_multi_smoke`, then run `ctest --test-dir __cmake/build/linux-clang-x64 -C dbg -R "^nwb_transparent_multi_capture_smoke$" --output-on-failure`.
+  - `nwb_transparent_multi_capture_smoke` is a CTest entry, not a Ninja build target. The latest capture is written to `__cmake/build/linux-clang-x64/Testing/smoke/dbg/transparent_multi_capture_latest.png`.
+  - Window-capture smoke tests require a usable X11 display server. In headless Linux environments without `DISPLAY` or `Xvfb`, `nwb_testbed_window_capture_smoke` is expected to skip with `XOpenDisplay failed`.
   - fin skinning-culling benchmark verification: configure with `cmake --preset linux-clang-x64`, build `nwb_skinning_culling_benchmark` with `cmake --build --preset linux-clang-fin --target nwb_skinning_culling_benchmark`, then run `ctest --test-dir __cmake/build/linux-clang-x64 -C fin -R nwb_skinning_culling_benchmark --output-on-failure`.
   - The skinning-culling benchmark CTest entry is `fin`-only and is configured only when `tests/smoke/assets/characters/body.nwb` is present.
   - The benchmark CTest is a smoke/regression check. It records GPU timing metrics in the log and allows a small tolerance for near-equal no-culling and culling render times.

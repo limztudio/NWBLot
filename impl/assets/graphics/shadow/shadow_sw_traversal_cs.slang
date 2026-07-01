@@ -773,6 +773,16 @@ void nwbSwShadowIndirectTrace(const uint linearId){
     g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * transmittance, 1.0);
 }
 
+// ANTI-POP dilation (in COARSE cells) for the opaque adaptive resolve's edge TEST. A hard opaque shadow is NOT band-
+// limited, so the tight (bracketing-2x2) edge test leaves a block in agreement until a sweeping silhouette edge crosses
+// a coarse SAMPLE -- the interpolated block then lags ~1 coarse cell and snaps (the visible pop), and sub-cell slivers
+// between samples are missed. Widening the edge TEST by this many coarse cells re-traces the block full-res BEFORE the
+// edge arrives, so it is already exact as the edge sweeps through. 1 cell removes the dominant sweep pop at ~3x the
+// (still small) edge-retrace count; the interpolation itself stays on the tight bracketing 2x2.
+#ifndef NWB_SW_SHADOW_OPAQUE_EDGE_DILATE
+#define NWB_SW_SHADOW_OPAQUE_EDGE_DILATE 1
+#endif
+
 // Mode 10 -- OPAQUE ADAPTIVE RESOLVE. The adaptive-opaque analog of the full-res mode-3 pre-pass: it WRITES the binary
 // opaque blocker mask (the later transparent pass multiplies its colored shadow onto it). Mode 9 wrote one OPAQUE-only
 // any-hit result (binary 0/1) per 2x2 block into the coarse buffer; here, per pixel/light, read the 2x2 coarse
@@ -810,14 +820,28 @@ void nwbSwShadowAdaptiveResolveOpaque(const uint2 pixel){
             continue;
         const uint slot = uint(slotF);
 
-        // 2x2 coarse neighbourhood (binary opaque blocker values written by mode 9).
+        // 2x2 coarse neighbourhood (binary opaque blocker values written by mode 9) -- used for the flat-interior interp.
         const float3 t00 = g_NwbSwShadowCoarse[uint3(c0.x, c0.y, slot)].rgb;
         const float3 t10 = g_NwbSwShadowCoarse[uint3(c1.x, c0.y, slot)].rgb;
         const float3 t01 = g_NwbSwShadowCoarse[uint3(c0.x, c1.y, slot)].rgb;
         const float3 t11 = g_NwbSwShadowCoarse[uint3(c1.x, c1.y, slot)].rgb;
 
-        const float3 lo = min(min(t00, t10), min(t01, t11));
-        const float3 hi = max(max(t00, t10), max(t01, t11));
+        // Edge TEST over a DILATED coarse neighbourhood (anti-pop, see NWB_SW_SHADOW_OPAQUE_EDGE_DILATE): re-trace where a
+        // hard-shadow edge lies within the dilated band of this pixel, so a sweeping edge is caught full-res before it
+        // crosses the next sample. The interpolation below still uses ONLY the tight bracketing 2x2 (t00..t11).
+        float3 lo = float3(1.0, 1.0, 1.0);
+        float3 hi = float3(0.0, 0.0, 0.0);
+        const int coarseW = int(g_NwbSwShadowPushConstants.coarseWidth);
+        const int coarseH = int(g_NwbSwShadowPushConstants.coarseHeight);
+        [unroll] for(int dy = -NWB_SW_SHADOW_OPAQUE_EDGE_DILATE; dy <= 1 + NWB_SW_SHADOW_OPAQUE_EDGE_DILATE; ++dy){
+            [unroll] for(int dx = -NWB_SW_SHADOW_OPAQUE_EDGE_DILATE; dx <= 1 + NWB_SW_SHADOW_OPAQUE_EDGE_DILATE; ++dx){
+                const int sx = clamp(int(c0.x) + dx, 0, coarseW - 1);
+                const int sy = clamp(int(c0.y) + dy, 0, coarseH - 1);
+                const float3 s = g_NwbSwShadowCoarse[uint3(uint(sx), uint(sy), slot)].rgb;
+                lo = min(lo, s);
+                hi = max(hi, s);
+            }
+        }
         const float range = max(max(hi.x - lo.x, hi.y - lo.y), hi.z - lo.z);
 
         float3 transmittance;

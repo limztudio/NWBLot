@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Soft directional shadow RESOLVE = an EDGE-AVOIDING A-TROUS WAVELET denoise (Dammertz et al.), run at HALF resolution
+// Soft OPAQUE shadow RESOLVE = an EDGE-AVOIDING A-TROUS WAVELET denoise (Dammertz et al.), run at HALF resolution
 // as N ping-pong compute passes, bracketed by the shadow geometry downsample pre-pass + an edge-aware upsample. Cloned
 // from caustic_resolve_cs (same denoise skeleton -- a sparse/noisy spatial signal reconstructed purely spatially, no
 // history this stage) with THREE shadow-specific changes:
@@ -23,9 +23,9 @@
 //       geometry-cache normals), so the penumbra never smooths across a depth discontinuity OR an orientation crease.
 //
 // PER-SLOT: the half-res visibility is a Texture2DArray, one layer per shadow slot. The push carries the active
-// DIRECTIONAL slot range [lightSlotStart, lightSlotStart+lightSlotCount); every stage loops that range so a scene with
-// several directional lights denoises each layer in one dispatch. Non-directional slots are left untouched (their hard
-// shadow, written elsewhere, survives -- this pass only OVERWRITES the directional slots it upsamples).
+// SOFT slot range [lightSlotStart, lightSlotStart+lightSlotCount); every stage loops that range so a scene with several
+// soft-shadowed lights (directional, point, or spot) denoises each layer in one dispatch. Slots not in the soft set are
+// left untouched (their hard shadow, written elsewhere, survives -- this pass only OVERWRITES the soft slots it upsamples).
 //
 // HALF-RES PIPELINE (3 stages, selected by pushConstants.stage):
 //   stage 0 PREPARE (half-res dispatch): per slot, copy the half-res traced visibility (SOFT_HALF) into the ping-pong
@@ -65,8 +65,8 @@ struct NwbShadowResolvePushConstants{
     uint halfHeight;     // HALF-res height
     uint stepWidth;      // a-trous dilation for this wavelet pass (1,2,4,8,16), in HALF-res texels
     uint stage;          // 0 = PREPARE, 1 = WAVELET (half-res), 2 = UPSAMPLE (-> full-res visibility)
-    uint lightSlotStart; // first active DIRECTIONAL shadow slot to process
-    uint lightSlotCount; // number of contiguous active DIRECTIONAL slots to process
+    uint lightSlotStart; // first active SOFT shadow slot to process (any light type)
+    uint lightSlotCount; // number of contiguous active SOFT slots to process
 };
 
 [[vk::push_constant]]

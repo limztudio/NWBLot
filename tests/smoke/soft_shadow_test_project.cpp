@@ -45,16 +45,20 @@ using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// DEDICATED SOFT-SHADOW scene (Stage 1 of the soft-ray-traced-shadow feature): ONE opaque `body` character standing on ONE
-// opaque ground plane, lit by a SINGLE directional light with a PHYSICAL angular source size. That source size is what
-// makes the shadow soft: the shadow trace jitters the ray inside a cone of the light's `angularRadius`, so the penumbra
-// emerges + WIDENS with occluder->receiver distance and HARDENS at contact -- read it off the character's cast shadow
-// (crisp at the feet, softening up the body). Deliberately directional-only (Stage 1 softens directional lights only) and
-// opaque-only (no transparency / caustics) so the soft directional penumbra is the ONLY thing on screen.
+// DEDICATED SOFT-SHADOW scene (soft-ray-traced-shadow feature): ONE opaque `body` character standing on ONE opaque ground
+// plane, lit by THREE differently-coloured lights AT ONCE -- a warm-white DIRECTIONAL sun, a RED POINT light, and a BLUE
+// SPOT -- each with a PHYSICAL source size. That source size is what makes each shadow soft: the trace jitters the ray
+// over the light's source (the sun's angularRadius disk, or a point/spot's sourceRadius sphere subtending asin(R/dist)),
+// so every penumbra emerges + WIDENS with occluder->receiver distance and HARDENS at contact. Opaque-only (no
+// transparency / caustics) so the three coloured soft penumbras are the only thing on screen.
 //
 // A/B levers:
-//   - NWB_SOFT_SHADOW_TEST_ANGLE (radians, default 0.03 ~ 1.7deg): the light's angular radius. Sweep it -- ~0.001 is a
-//     near-HARD reference (tight penumbra), ~0.05 is very soft. Shown live in the title bar (deg).
+//   - THREE differently-coloured soft-shadowed lights are lit AT ONCE (a warm-white directional sun, a RED point, a BLUE
+//     spot), so all three soft penumbras are on screen together, distinguishable by tint (overlaps blend the colours).
+//   - NWB_SOFT_SHADOW_TEST_ANGLE (radians, default 0.03 ~ 1.7deg): the DIRECTIONAL sun's angular radius. Sweep it --
+//     ~0.001 is a near-HARD reference (tight penumbra), ~0.05 is very soft. Shown live in the title bar (deg).
+//   - NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS (world units, default 0.15): the POINT + SPOT emissive sphere radius. Larger =
+//     softer; the penumbra ALSO widens as the light nears the caster (asin(radius/dist)) -- physical distance softening.
 //   - The _sw_smoke build (NWB_SOFT_SHADOW_TEST_FORCE_RT_EMULATION) forces the SOFTWARE path, which runs the FULL soft
 //     pipeline (half-res jittered trace -> a-trous denoise -> bilateral upsample). The HW build applies the same cone
 //     jitter but at full res without the denoise (per-frame shimmer expected until the temporal stage).
@@ -80,6 +84,18 @@ static constexpr f32 s_DirectionalLightPitch = 0.65f;
 static constexpr f32 s_DirectionalLightYaw = 1.4f;
 static constexpr f32 s_DirectionalLightIntensity = 2.0f;
 static constexpr f32 s_DefaultAngularRadius = 0.03f;                 // ~1.7deg: clearly soft but not mushy (env-overridable)
+static constexpr f32 s_DefaultSourceRadius = 0.15f;                  // point/spot emissive sphere radius (world units); env-overridable
+
+// Point / spot light params. All three lights (directional + point + spot) are lit AT ONCE, spread so their coloured
+// shadows rake in different directions. Point lights attenuate by distance -> brighter than the directional sun.
+static constexpr f32 s_PointLightIntensity = 10.0f;
+static constexpr f32 s_PointLightRange = 14.0f;
+static constexpr f32 s_SpotLightIntensity = 13.0f;
+static constexpr f32 s_SpotLightRange = 16.0f;
+static constexpr f32 s_SpotLightPitch = 1.5f;                        // near-overhead, aimed ~straight down at the caster
+static constexpr f32 s_SpotLightYaw = 0.0f;
+static constexpr f32 s_SpotInnerConeCos = 0.85f;
+static constexpr f32 s_SpotOuterConeCos = 0.55f;                     // WIDE cone so the caster stays lit even if the aim is approximate
 
 static constexpr f32 s_SpinSpeed = 0.5f;                             // radians / second, gentle auto-spin until an arrow takes over
 static constexpr f32 s_ManualYawSpeed = 0.6f;                        // radians / second for the arrow-key manual yaw scrub
@@ -163,6 +179,22 @@ private:
         return s_angle;
     }
 
+    // The point/spot emissive sphere radius (world units), read once from NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS (default
+    // s_DefaultSourceRadius). Larger = softer; clamped to [0, 1]. The penumbra ALSO widens as the light nears the caster
+    // (the source subtends asin(radius/dist)), so moving the light softens it too -- radius is only half the story.
+    static f32 configuredSourceRadius(){
+        static const f32 s_radius = [](){
+            char value[32] = {};
+            if(!ReadEnvironmentVariableBuffer("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS", value, sizeof(value)))
+                return s_DefaultSourceRadius;
+            f32 parsed = s_DefaultSourceRadius;
+            if(!ParseF32FromChars(value, value + NWB_STRLEN(value), parsed))
+                return s_DefaultSourceRadius;
+            return Min(Max(parsed, 0.0f), 1.0f);
+        }();
+        return s_radius;
+    }
+
     // Diagnostic freeze (read once): NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins the yaw to a fixed radians value so the character
     // holds one orientation -- two captures then differ only via non-determinism (shimmer), not motion.
     static f32 frozenYaw(){
@@ -211,18 +243,47 @@ public:
         if(auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera))
             StoreFloat(QuaternionRotationRollPitchYaw(s_CameraPitch, 0.0f, 0.0f), &cameraTransform->rotation);
 
+        // THREE differently-coloured soft-shadowed lights AT ONCE (not a chooser): a warm-white DIRECTIONAL sun (rakes its
+        // shadow to one side), a RED POINT light on the opposite side (rakes the other way), and a BLUE SPOT overhead (a
+        // short contact pool). Each casts its OWN soft shadow in its own tint, so the three penumbras are on screen together
+        // and distinguishable by colour (overlaps blend). Each light's physical source size drives its softness: the
+        // directional reads angularRadius (a constant sun-disk angle), point/spot read sourceRadius (the emissive sphere,
+        // whose subtended angle asin(R/dist) softens more as the light nears the caster). Both env-tunable + A/B-controllable.
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DirectionalLightPitch,
             s_DirectionalLightYaw,
             0.0f,
-            Float4(1.0f, 0.96f, 0.88f),
+            Float4(1.00f, 0.96f, 0.88f), // warm white sun
             s_DirectionalLightIntensity
         );
-        // The physical source size that makes the shadow soft. Overwrite the light's default angular radius with the
-        // configured (env-tunable) value so the penumbra width is A/B-controllable.
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(directionalLight))
             light->angularRadius = configuredAngularRadius();
+
+        const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(
+            *m_world,
+            Float4(1.5f, 2.2f, 0.3f, 0.0f),
+            Float4(1.00f, 0.35f, 0.30f), // red
+            s_PointLightIntensity,
+            s_PointLightRange
+        );
+        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(pointLight))
+            light->sourceRadius = configuredSourceRadius();
+
+        const NWB::Core::ECS::EntityID spotLight = NWB::Impl::Scene::CreateSpotLightEntity(
+            *m_world,
+            Float4(0.4f, 3.0f, 0.4f, 0.0f),
+            s_SpotLightPitch,
+            s_SpotLightYaw,
+            0.0f,
+            Float4(0.35f, 0.55f, 1.00f), // blue
+            s_SpotLightIntensity,
+            s_SpotLightRange,
+            s_SpotInnerConeCos,
+            s_SpotOuterConeCos
+        );
+        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(spotLight))
+            light->sourceRadius = configuredSourceRadius();
 
         m_groundEntity = CreateTintedStaticMeshEntity(
             *m_world,
@@ -297,8 +358,8 @@ public:
         return true;
     }
 
-    // Reflect the current yaw (wrapped to [0, 2pi)) + the configured angular radius (deg) in the title bar, so the exact
-    // orientation + the soft-shadow angle in effect can be read off at a glance.
+    // Reflect the current yaw (wrapped to [0, 2pi)) + both soft source sizes (the directional sun angle in deg + the
+    // point/spot radius in world units) in the title bar, so the parameters in effect can be read off at a glance.
     void updateWindowTitle(){
         f32 wrapped = FMod(m_yaw, s_TwoPi);
         if(wrapped < 0.0f)
@@ -306,15 +367,12 @@ public:
         const f32 yawDegrees = wrapped * (360.0f / s_TwoPi);
         const f32 angleDegrees = configuredAngularRadius() * (360.0f / s_TwoPi);
 
-        static constexpr usize s_TitleCapacity = 224u;
+        static constexpr usize s_TitleCapacity = 256u;
         tchar title[s_TitleCapacity];
         NWB_TSPRINTF(
-            title,
-            s_TitleCapacity,
-            NWB_TEXT("%s  |  yaw %.2f deg  |  source %.2f deg%s"),
-            NWB::QueryProjectWindowTitle(),
-            yawDegrees,
-            angleDegrees,
+            title, s_TitleCapacity,
+            NWB_TEXT("%s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
+            NWB::QueryProjectWindowTitle(), yawDegrees, angleDegrees, configuredSourceRadius(),
             m_manualYawControl ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
         );
         const tchar* titlePtr = title;

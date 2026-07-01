@@ -136,14 +136,15 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
     // Active shadow slots = the importance-ranked pool ResolveSceneLights filled (slots 0..min(lightCount,N)-1); the
     // half-res shadow upsample reads this so it only reconstructs the slots that hold a light.
     rayTracingState().m_shadowSlotCount = (lightCount < NWB_SCENE_SHADOW_SLOT_COUNT) ? lightCount : NWB_SCENE_SHADOW_SLOT_COUNT;
-    // Soft directional shadow (Stage 1): record which shadow slots belong to a DIRECTIONAL light (params.y < 0.5) that
-    // was assigned a slot (params.z >= 0). The soft path traces + denoises + upsamples exactly these slots (once per
-    // set bit); point/spot slots keep their hard opaque shadow. A directional light can land on any slot index (the
-    // slot allocator ranks by importance, not type), so this is a scattered bitmask, not a contiguous range.
+    // Soft opaque shadow (all light types): record which shadow slots hold a light (params.z >= 0), regardless of type.
+    // The soft path traces + denoises + upsamples exactly these slots (once per set bit): a directional light softens by
+    // its constant angular radius, a point/spot light by the distance-dependent cone its source sphere subtends -- both
+    // handled inside the trace, so every slot light is soft. A light can land on any slot index (the slot allocator
+    // ranks by importance, not type), so this is a scattered bitmask, not a contiguous range.
     u32 softShadowSlotMask = 0u;
     for(u32 i = 0u; i < lightCount; ++i){
         const f32 slot = lightData[i].params.z;
-        if(lightData[i].params.y < 0.5f && slot >= 0.f){
+        if(slot >= 0.f){
             const u32 slotIndex = static_cast<u32>(slot);
             if(slotIndex < NWB_SCENE_SHADOW_SLOT_COUNT)
                 softShadowSlotMask |= (1u << slotIndex);

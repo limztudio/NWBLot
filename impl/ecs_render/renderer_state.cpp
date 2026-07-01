@@ -237,8 +237,8 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowOpaqueCoarsePipeline.reset();
     m_swShadowOpaqueResolveShader.reset();
     m_swShadowOpaqueResolvePipeline.reset();
-    m_swShadowSoftDirectionalShader.reset();
-    m_swShadowSoftDirectionalPipeline.reset();
+    m_swShadowSoftOpaqueShader.reset();
+    m_swShadowSoftOpaquePipeline.reset();
     m_swShadowTransparentCoarseShader.reset();
     m_swShadowTransparentCoarsePipeline.reset();
     m_swShadowTransparentResolveShader.reset();

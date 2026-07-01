@@ -385,8 +385,8 @@ private:
     Core::ComputePipelineHandle m_swShadowOpaqueCoarsePipeline;
     Core::ShaderHandle m_swShadowOpaqueResolveShader;
     Core::ComputePipelineHandle m_swShadowOpaqueResolvePipeline;
-    Core::ShaderHandle m_swShadowSoftDirectionalShader;
-    Core::ComputePipelineHandle m_swShadowSoftDirectionalPipeline;
+    Core::ShaderHandle m_swShadowSoftOpaqueShader;
+    Core::ComputePipelineHandle m_swShadowSoftOpaquePipeline;
     Core::ShaderHandle m_swShadowTransparentCoarseShader;
     Core::ComputePipelineHandle m_swShadowTransparentCoarsePipeline;
     Core::ShaderHandle m_swShadowTransparentResolveShader;
@@ -443,20 +443,21 @@ private:
     Core::BufferHandle m_swShadowEdgeStatsReadback;
     u32 m_swShadowEdgeStatsTick = 0u;
     bool m_swShadowEdgeStatsPending = false;
-    // Soft directional shadow (Stage 1 of the soft-ray-traced-shadow feature): a per-frame counter seeding the
-    // per-pixel low-discrepancy cone-jitter sample. Incremented once per frame by whichever primary shadow producer
-    // runs (the HW RayQuery opaque trace on the HW path, the no-RT software traversal otherwise -- mutually exclusive
-    // per frame), so each pixel's single jittered ray walks the sun disk across frames. No temporal reuse this stage,
-    // so this only decorrelates the per-frame sample (a later stage feeds it into a temporal accumulator).
+    // Soft opaque shadow (soft-ray-traced-shadow feature): a per-frame counter seeding the per-pixel low-discrepancy
+    // cone-jitter sample. Incremented once per frame by whichever primary shadow producer runs (the HW RayQuery opaque
+    // trace on the HW path, the no-RT software traversal otherwise -- mutually exclusive per frame), so each pixel's
+    // single jittered ray walks the source across frames. No temporal reuse this stage, so this only decorrelates the
+    // per-frame sample (a later stage feeds it into a temporal accumulator).
     u32 m_softShadowFrameIndex = 0u;
-    // The set of shadow slots this frame that belong to a DIRECTIONAL light (params.y < 0.5) AND hold a shadow slot
-    // (params.z >= 0) -- the slots the soft directional path traces + denoises + upsamples. A bitmask (slot k -> bit k)
-    // over the NWB_SCENE_SHADOW_SLOT_COUNT pool, filled by updateSceneShadingBuffer from the resolved light data. The
-    // resolve dispatches once per set bit (its lightSlotStart/lightSlotCount address a single slot), so the scattered
-    // directional-slot assignment (a directional light can land on any slot index) is handled without a contiguous
-    // range assumption, and non-directional (point/spot) slots keep their hard opaque shadow untouched.
+    // The set of shadow slots this frame that hold a shadow slot (params.z >= 0), regardless of light type -- the slots
+    // the soft opaque path traces + denoises + upsamples. A directional light softens by its constant angular radius
+    // (params2.x), a point/spot light by the distance-dependent cone its source sphere (params2.y) subtends; both are
+    // handled inside the trace, so every slot light is soft. A bitmask (slot k -> bit k) over the
+    // NWB_SCENE_SHADOW_SLOT_COUNT pool, filled by updateSceneShadingBuffer from the resolved light data. The resolve
+    // dispatches once per set bit (its lightSlotStart/lightSlotCount address a single slot), so the scattered slot
+    // assignment (a light can land on any slot index) is handled without a contiguous range assumption.
     u32 m_softShadowSlotMask = 0u;
-    // Soft directional shadow RESOLVE (Stage 1): the a-trous wavelet denoise pipeline (cloned from the caustic resolve)
+    // Soft opaque shadow RESOLVE: the a-trous wavelet denoise pipeline (cloned from the caustic resolve)
     // dispatched per pass with two ping-pong binding sets that swap the (output UAV, input-color SRV) pair between the
     // half-res soft-A / soft-B buffers; the upsample set writes the full-res visibility. All sets share the geometry
     // cache + depth SRVs; rebuilt when any tracked target changes (on resize). Mirrors the caustic resolve state.
@@ -483,9 +484,9 @@ private:
     const Core::Texture* m_shadowGeometryDownsampleNormal = nullptr;
     const Core::Texture* m_shadowGeometryDownsampleDepth = nullptr;
     const Core::Texture* m_shadowGeometryDownsampleGeometry = nullptr;
-    // Set by prepareShadowVisibilityResources (no-RT path) when the soft directional geometry-downsample + resolve
-    // pipelines AND binding sets are all ready this frame; gates the render's soft directional trace + resolve dispatch.
-    // A failure here is non-fatal to shadows -- the directional slots simply keep their hard opaque mask this frame.
+    // Set by prepareShadowVisibilityResources (no-RT path) when the soft opaque geometry-downsample + resolve
+    // pipelines AND binding sets are all ready this frame; gates the render's soft opaque trace + resolve dispatch.
+    // A failure here is non-fatal to shadows -- the slot lights simply keep their hard opaque mask this frame.
     bool m_softShadowReady = false;
     u32 m_swShadowEdgeStatsPendingTick = 0u;
     // Stage-3 compaction resources: the per-frame append counter (2 u32: [0] append count, [1] clamped trace count), the

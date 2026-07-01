@@ -31,7 +31,7 @@
 
 #include "occlusion.slangi"
 #include "../scene/buffer.slangi"
-// The soft directional cone-jitter, shared with the software traversal so the HW opaque path softens IDENTICALLY.
+// The soft cone-jitter, shared with the software traversal so the HW opaque path softens IDENTICALLY.
 #include "shadow_sampling.slangi"
 
 
@@ -42,9 +42,11 @@
 // OPAQUE hit, else 1 (lit). Transparent occluders are skipped here -- the software traversal tints those and multiplies
 // its colored transmittance onto this mask. Mirrors the software path's ray setup (directional aims to "infinity";
 // point/spot aim at the light with tMax = distance; geometric-normal bias + tMin avoids self-intersection).
-// `jitter` is the per-pixel low-discrepancy 2D sample for the soft directional cone-jitter (pass float2(0,0) for the
-// hard path); it offsets the directional toward-light axis inside the light's angular radius (params2.x) so the HW
-// opaque path softens the SAME way the software traversal does. Point/spot lights ignore it this stage.
+// `jitter` is the per-pixel low-discrepancy 2D sample for the soft cone-jitter (pass float2(0,0) for the hard path); it
+// offsets the toward-light direction inside the cone the physical source subtends so the HW opaque path softens the SAME
+// way the software traversal does: a DIRECTIONAL light uses its constant angular radius (params2.x); a POINT/SPOT light
+// the distance-dependent half-angle asin(params2.y/dist) its source sphere (radius params2.y) subtends (a zero source
+// radius / angular radius -> a zero cone half-angle -> nwbShadowJitterCone returns the axis exactly -> the hard path).
 half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter){
     float3 toLight;
     float tMax;
@@ -55,7 +57,12 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
     else{
         const float3 delta = light.position.xyz - worldPosition;
         tMax = length(delta);
-        toLight = (tMax > 1.0e-5) ? (delta / tMax) : float3(0.0, 1.0, 0.0);
+        const float3 centerDir = (tMax > 1.0e-5) ? (delta / tMax) : float3(0.0, 1.0, 0.0);
+        // Punctual soft: the source sphere (radius params2.y) subtends a cone of half-angle asin(R/dist); jitter the
+        // toward-light ray inside it. tMax stays the distance to the light CENTRE (the small jittered-direction vs
+        // centre-distance discrepancy is negligible; only occluders ALONG the ray matter). R==0 -> the hard path.
+        const float sinHalf = (tMax > 1.0e-5) ? min(light.params2.y / tMax, 0.999) : 0.0;
+        toLight = nwbShadowJitterCone(centerDir, asin(sinHalf), jitter);
     }
 
     const float tMin = 0.001;

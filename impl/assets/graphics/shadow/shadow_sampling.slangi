@@ -10,13 +10,16 @@
 
 
 // Soft-shadow ray-jitter sampling. A PHYSICAL light is not a point: a directional (sun) light subtends an angular
-// radius (its disk half-angle) and a punctual light an emissive sphere of a source radius. The occlusion ray is
-// jittered over that source, so the penumbra emerges + WIDENS with occluder->receiver distance for free (a point
-// deep in the umbra sees the source fully blocked from every jittered direction; a point near the edge sees it
-// partially blocked, its visibility the fraction of unblocked samples). ONE low-discrepancy sample per pixel per
-// frame keeps the trace cost identical to the hard shadow; the spatial a-trous denoise (shadow_resolve_cs) then
-// reconstructs the smooth penumbra from the per-pixel single-sample estimate. NO temporal reuse this stage, so a
-// per-frame shimmer of that single sample is expected + accepted (a later stage adds the temporal accumulation).
+// radius (its disk half-angle) and a punctual light an emissive sphere of a source radius. Both are sampled by ONE
+// sampler -- nwbShadowJitterCone -- because a sphere of radius R at distance d subtends a cone of half-angle
+// asin(R/d): the directional caller passes the constant angular radius, the punctual caller the distance-dependent
+// asin(params2.y/dist), and the occlusion ray is jittered inside that cone. So the penumbra emerges + WIDENS with
+// occluder->receiver distance for free (a point deep in the umbra sees the source fully blocked from every jittered
+// direction; a point near the edge sees it partially blocked, its visibility the fraction of unblocked samples). ONE
+// low-discrepancy sample per pixel per frame keeps the trace cost identical to the hard shadow; the spatial a-trous
+// denoise (shadow_resolve_cs) then reconstructs the smooth penumbra from the per-pixel single-sample estimate. NO
+// temporal reuse this stage, so a per-frame shimmer of that single sample is expected + accepted (a later stage adds
+// the temporal accumulation).
 //
 // The 2D sample is the R2 low-discrepancy sequence (Roberts 2018) advanced by the frame index, ROTATED per pixel by
 // a cheap hash-derived Cranley-Patterson offset. R2 alone (same sequence value for every pixel each frame) would
@@ -100,22 +103,6 @@ float3 nwbShadowJitterCone(const float3 axis, const float halfAngle, const float
         sin(phi) * sinTheta * bitangent +
         cosTheta * axis
     );
-}
-
-
-// Offset a point onto a sphere of radius `radius` centred at `center`, from a 2D sample u in [0,1)^2 (uniform on the
-// sphere surface). This is the punctual (source-radius) soft-shadow sampler -- the ray then aims from the shaded
-// point at this jittered light position instead of the centre. UNUSED this stage (directional-only); provided so the
-// later punctual stage reuses the same sampling module. radius == 0 returns the centre exactly (the hard path).
-float3 nwbShadowJitterSphere(const float3 center, const float radius, const float2 u){
-    if(radius <= 0.0)
-        return center;
-
-    const float cosTheta = 1.0 - 2.0 * u.x; // uniform in [-1,1]
-    const float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
-    const float phi = 6.28318530717958647692 * u.y;
-    const float3 dir = float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
-    return center + radius * dir;
 }
 
 

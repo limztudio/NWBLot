@@ -203,14 +203,14 @@ struct SwShadowOpaqueResolvePushConstants{
 };
 static_assert(sizeof(SwShadowOpaqueResolvePushConstants) == sizeof(u32) * 6u, "SwShadowOpaqueResolvePushConstants must match the kernel push-constant layout");
 
-// Soft directional half-res jittered trace (sw_shadow_soft_directional_cs): frameIndex seeds the per-pixel cone jitter.
-struct SwShadowSoftDirectionalPushConstants{
+// Soft opaque half-res jittered trace (sw_shadow_soft_opaque_cs, all light types): frameIndex seeds the per-pixel cone jitter.
+struct SwShadowSoftOpaquePushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 instanceCount = 0u;
     u32 frameIndex = 0u;
 };
-static_assert(sizeof(SwShadowSoftDirectionalPushConstants) == sizeof(u32) * 4u, "SwShadowSoftDirectionalPushConstants must match the kernel push-constant layout");
+static_assert(sizeof(SwShadowSoftOpaquePushConstants) == sizeof(u32) * 4u, "SwShadowSoftOpaquePushConstants must match the kernel push-constant layout");
 
 // Stage-2 COARSE transparent trace (sw_shadow_transparent_coarse_cs): one TRANSPARENT trace per coarse block, colored.
 struct SwShadowTransparentCoarsePushConstants{
@@ -280,7 +280,7 @@ struct SwShadowMaxPushConstants{
 static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowOpaquePrepassPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
 static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowOpaqueCoarsePushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
 static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowOpaqueResolvePushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
-static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowSoftDirectionalPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
+static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowSoftOpaquePushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
 static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentCoarsePushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
 static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentResolvePushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
 static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentClassifyPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
@@ -289,14 +289,15 @@ static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentIndi
 static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentUniformPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
 
 // CPU mirror of the hardware RayQuery shadow push constants (shadow_rayquery_cs.slang): just the frame counter that
-// seeds the soft directional cone-jitter (a soft directional light softens the full-res HW opaque trace directly).
+// seeds the soft cone-jitter (the full-res HW opaque trace softens directly -- directional by its angular radius,
+// point/spot by the cone their source sphere subtends).
 struct ShadowRqPushConstants{
     u32 frameIndex = 0u;
 };
 static_assert(sizeof(ShadowRqPushConstants) == sizeof(u32), "ShadowRqPushConstants must match the shader push-constant layout");
 
 // CPU mirror of shadow_resolve_cs.slang's NwbShadowResolvePushConstants: the full/half dims, the a-trous dilation +
-// stage selector, and the active directional shadow-slot range the resolve loops. All-scalar -> 8 x 4 = 32 bytes.
+// stage selector, and the active shadow-slot range the resolve loops. All-scalar -> 8 x 4 = 32 bytes.
 struct ShadowResolvePushConstants{
     u32 width = 0u;          // FULL-res width (UPSAMPLE dispatch/output dim)
     u32 height = 0u;         // FULL-res height
@@ -304,8 +305,8 @@ struct ShadowResolvePushConstants{
     u32 halfHeight = 0u;     // HALF-res height
     u32 stepWidth = 1u;      // a-trous dilation for this wavelet pass (1,2,4,8,16), in HALF-res texels
     u32 stage = 0u;          // 0 = PREPARE, 1 = WAVELET (half-res), 2 = UPSAMPLE (-> full-res visibility)
-    u32 lightSlotStart = 0u; // first active DIRECTIONAL shadow slot to process
-    u32 lightSlotCount = 0u; // number of contiguous active DIRECTIONAL slots to process
+    u32 lightSlotStart = 0u; // first active shadow slot to process
+    u32 lightSlotCount = 0u; // number of contiguous active slots to process
 };
 static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 8u, "ShadowResolvePushConstants must match the shader push-constant layout");
 
@@ -1271,9 +1272,9 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
 
     outBackendReady = ensureSwShadowPipeline() && ensureSwShadowBindingSet(targets);
 
-    // Soft directional shadow (Stage 1): build the geometry-downsample + a-trous resolve pipelines/binding sets so the
-    // render can denoise the mode-11 half-res jittered directional trace into the full-res visibility. Non-fatal to
-    // shadows -- a failure leaves m_softShadowReady false and the directional slots keep their hard opaque mask.
+    // Soft opaque shadow (all light types): build the geometry-downsample + a-trous resolve pipelines/binding sets so
+    // the render can denoise the half-res jittered opaque trace into the full-res visibility. Non-fatal to shadows -- a
+    // failure leaves m_softShadowReady false and the slot lights keep their hard opaque mask.
     rayTracingState().m_softShadowReady =
         outBackendReady
         && ensureShadowGeometryDownsamplePipeline()
@@ -1282,7 +1283,7 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         && ensureSoftShadowResolveBindingSet(targets)
     ;
     if(outBackendReady && !rayTracingState().m_softShadowReady)
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft directional shadow resource preparation failed; directional shadows hard this frame"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft opaque shadow resource preparation failed; shadows hard this frame"));
 
     // Build the software caustic producer + resolve resources alongside the SW shadow resources (same SW scene BVH +
     // per-mesh geometry). Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op).
@@ -1850,14 +1851,14 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();
 
-        // Soft directional shadow (Stage 1). The opaque pre-pass above wrote a HARD binary mask into EVERY slot; now
-        // OVERWRITE just the DIRECTIONAL slots with the soft penumbra: mode-11 half-res jittered opaque directional
-        // trace -> geometry downsample -> a-trous denoise -> bilateral upsample into the full-res visibility. Runs only
-        // when the resolve resources are ready this frame AND at least one directional light holds a shadow slot; else
-        // the directional slots keep the hard mask (a clean fallback). Non-directional (point/spot) slots are never
-        // touched here, so their hard opaque shadow survives, and the transparent pass below still multiplies its
-        // colored shadow onto the (now soft directional / still hard non-directional) mask -- so point/spot stay hard
-        // and transparent colored shadow keeps working, exactly as this stage requires.
+        // Soft opaque shadow (all light types). The opaque pre-pass above wrote a HARD binary mask into EVERY slot; now
+        // OVERWRITE every slot light with the soft penumbra: half-res jittered opaque trace (directional softens by its
+        // constant angular radius, point/spot by the distance-dependent cone their source sphere subtends -- the jitter
+        // is type-aware inside the trace) -> geometry downsample -> a-trous denoise -> bilateral upsample into the full-
+        // res visibility. Runs only when the resolve resources are ready this frame AND at least one light holds a shadow
+        // slot; else the slot lights keep the hard mask (a clean fallback). The transparent pass below still multiplies
+        // its colored shadow onto the (now soft) opaque mask -- so transparent colored shadow keeps working, exactly as
+        // this feature requires.
         if(rayTracingState().m_softShadowReady && rayTracingState().m_softShadowSlotMask != 0u){
             const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
             const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -1868,22 +1869,22 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             // this frame, mutually exclusive with the HW RayQuery path).
             const u32 frameIndex = rayTracingState().m_softShadowFrameIndex++;
 
-            // Mode 11: one cone-jittered opaque directional visibility sample per HALF-res pixel into soft-A (all
-            // directional slots at once). Enable UAV barriers on the soft buffers + geometry cache for the resolve.
+            // Soft opaque trace: one cone-jittered opaque visibility sample per HALF-res pixel into soft-A (all slot
+            // lights at once). Enable UAV barriers on the soft buffers + geometry cache for the resolve.
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
 
-            SwShadowSoftDirectionalPushConstants softTracePush;
+            SwShadowSoftOpaquePushConstants softTracePush;
             softTracePush.width = targets.width;
             softTracePush.height = targets.height;
             softTracePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
             softTracePush.frameIndex = frameIndex;
-            commandList.setComputeState(passState(rayTracingState().m_swShadowSoftDirectionalPipeline));
+            commandList.setComputeState(passState(rayTracingState().m_swShadowSoftOpaquePipeline));
             commandList.setPushConstants(&softTracePush, sizeof(softTracePush));
             commandList.dispatch(softGroupsX, softGroupsY, 1u);
 
-            // Sync soft-A (mode-11 write -> the resolve PREPARE reads it as an SRV). The resolve's
+            // Sync soft-A (soft trace write -> the resolve PREPARE reads it as an SRV). The resolve's
             // setResourceStatesForBindingSet transitions soft-A UnorderedAccess -> ShaderResource here.
             commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
@@ -1909,7 +1910,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
                 commandList.dispatch(softGroupsX, softGroupsY, 1u);
             }
 
-            // Denoise + upsample EACH directional slot (scattered set, so one dispatch chain per set bit). Each chain
+            // Denoise + upsample EACH slot light (scattered set, so one dispatch chain per set bit). Each chain
             // overwrites that slot's full-res visibility with the soft penumbra.
             for(u32 slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot){
                 if((rayTracingState().m_softShadowSlotMask & (1u << slot)) == 0u)
@@ -2653,7 +2654,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         ensureSwShadowPassPipeline(rayTracingState().m_swShadowOpaquePrepassShader, rayTracingState().m_swShadowOpaquePrepassPipeline, AssetsGraphicsShadow::s_SwOpaquePrepassShaderName, "ECSRender_SwShadowOpaquePrepass")
         && ensureSwShadowPassPipeline(rayTracingState().m_swShadowOpaqueCoarseShader, rayTracingState().m_swShadowOpaqueCoarsePipeline, AssetsGraphicsShadow::s_SwOpaqueCoarseShaderName, "ECSRender_SwShadowOpaqueCoarse")
         && ensureSwShadowPassPipeline(rayTracingState().m_swShadowOpaqueResolveShader, rayTracingState().m_swShadowOpaqueResolvePipeline, AssetsGraphicsShadow::s_SwOpaqueResolveShaderName, "ECSRender_SwShadowOpaqueResolve")
-        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowSoftDirectionalShader, rayTracingState().m_swShadowSoftDirectionalPipeline, AssetsGraphicsShadow::s_SwSoftDirectionalShaderName, "ECSRender_SwShadowSoftDirectional")
+        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowSoftOpaqueShader, rayTracingState().m_swShadowSoftOpaquePipeline, AssetsGraphicsShadow::s_SwSoftOpaqueShaderName, "ECSRender_SwShadowSoftOpaque")
         && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentCoarseShader, rayTracingState().m_swShadowTransparentCoarsePipeline, AssetsGraphicsShadow::s_SwTransparentCoarseShaderName, "ECSRender_SwShadowTransparentCoarse")
         && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentResolveShader, rayTracingState().m_swShadowTransparentResolvePipeline, AssetsGraphicsShadow::s_SwTransparentResolveShaderName, "ECSRender_SwShadowTransparentResolve")
         && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentClassifyShader, rayTracingState().m_swShadowTransparentClassifyPipeline, AssetsGraphicsShadow::s_SwTransparentClassifyShaderName, "ECSRender_SwShadowTransparentClassify")
@@ -3604,7 +3605,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
         resolvePush.stepWidth = stepWidth;
         resolvePush.stage = static_cast<u32>(stage);
         resolvePush.lightSlotStart = slot;
-        resolvePush.lightSlotCount = 1u; // one directional slot per dispatch (scattered slots handled by the C++ loop)
+        resolvePush.lightSlotCount = 1u; // one soft slot per dispatch (scattered slots handled by the C++ loop)
 
         Core::ComputeState computeState;
         computeState.setPipeline(rayTracingState().m_shadowResolvePipeline.get());

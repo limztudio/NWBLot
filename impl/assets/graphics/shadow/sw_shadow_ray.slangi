@@ -1,0 +1,84 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_SW_SHADOW_RAY_SLANGI
+#define NWB_GRAPHICS_SHADOW_SW_SHADOW_RAY_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "sw_binding_slots.h"
+
+// Point the scene shading-constants + light-list bindings at this pass's binding set (guarded, before scene/buffer.slangi
+// is first pulled) so g_NwbSceneShadingBuffer / g_NwbSceneLights resolve here. Emitted in this concern -- the per-light
+// ray setup below is the software-shadow user of the scene light list -- so every tracing pass gets a consistent redirect.
+#ifndef NWB_SCENE_SHADING_SET
+#define NWB_SCENE_SHADING_SET NWB_SW_SHADOW_SET
+#endif
+#ifndef NWB_SCENE_SHADING_BINDING
+#define NWB_SCENE_SHADING_BINDING NWB_SW_SHADOW_BINDING_SCENE_SHADING
+#endif
+#ifndef NWB_SCENE_LIGHT_LIST_SET
+#define NWB_SCENE_LIGHT_LIST_SET NWB_SW_SHADOW_SET
+#endif
+#ifndef NWB_SCENE_LIGHT_LIST_BINDING
+#define NWB_SCENE_LIGHT_LIST_BINDING NWB_SW_SHADOW_BINDING_LIGHT_LIST
+#endif
+
+#include "sw_shadow_traverse.slangi"
+#include "../scene/buffer.slangi"
+// The per-pixel/per-frame low-discrepancy 2D sample + the cone jitter the soft directional trace applies to the
+// occlusion ray so a physical sun disk casts a penumbra (nwbShadowJitterCone; the soft pass also uses
+// nwbShadowLowDiscrepancy2D directly).
+#include "shadow_sampling.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Per light: cast one occlusion ray from the surface toward the light. Mirrors the hardware raygen
+// (directional aims along the toward-light axis to "infinity"; point/spot aim at the light with tMax = the
+// distance; geometric-normal bias + tMin avoids self-intersection; a light inside the bias shell is lit).
+// Returns the per-channel transmittance: float3(1) when fully lit, tinted toward zero through occluders.
+// `jitter` is the per-pixel low-discrepancy 2D sample (in [0,1)^2) for the soft directional cone-jitter; pass
+// float2(0,0) for the HARD path (all non-soft modes) -- jitter is only consumed for a directional light with a
+// non-zero angular radius (params2.x), where the toward-light direction is offset inside the sun-disk cone so the
+// occlusion ray samples the physical source and a penumbra emerges. Point/spot lights ignore the jitter this stage.
+half3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter){
+    float3 toLight;
+    float tMax;
+    if(light.params.y < 0.5){
+        // Directional: jitter the toward-light axis inside the cone of half-angle params2.x (the sun angular radius).
+        // halfAngle 0 (a point-source directional) returns the axis exactly -> the hard shadow, no branch needed.
+        toLight = nwbShadowJitterCone(normalize(light.direction.xyz), light.params2.x, jitter);
+        tMax = 1.0e7;
+    }
+    else{
+        const float3 delta = light.position.xyz - worldPosition;
+        tMax = length(delta);
+        toLight = (tMax > 1.0e-5) ? (delta / tMax) : float3(0.0, 1.0, 0.0);
+    }
+
+    const float tMin = 0.001;
+    const float tEnd = tMax - 0.002;
+    if(tEnd <= tMin)
+        return half3(1.0, 1.0, 1.0);
+
+    const float3 origin = worldPosition + normal * tMin;
+    NwbShadowVisibilityAccumulator acc = nwbShadowVisibilityBegin();
+    nwbSwShadowOccluded(origin, toLight, tMin, tEnd, acc);
+    // Combine into the final per-channel visibility (Fresnel product * Beer-Lambert, with the absolute-t bias
+    // correction) -- the SAME shared finalize the HW raygen uses, so the two backends match exactly.
+    return nwbShadowFinalizeVisibility(acc);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

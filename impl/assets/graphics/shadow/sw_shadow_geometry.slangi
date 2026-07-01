@@ -1,0 +1,135 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_SW_SHADOW_GEOMETRY_SLANGI
+#define NWB_GRAPHICS_SHADOW_SW_SHADOW_GEOMETRY_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "sw_binding_slots.h"
+
+#include "../bvh/bvh_common.slangi"
+#include "../common/math.slangi"
+#include "instance_material.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The software-shadow scene geometry: the scene/instance BVH node buffer, the per-instance record (affine
+// world->object transform + per-mesh descriptor slot) + its world->object transform helpers, the parallel per-mesh
+// descriptor ARRAYS (BVH nodes / raw positions / raw indices / per-corner attributes), and the vertex-attribute
+// unpack. Declares the scene-node / instance / instance-material / per-mesh bindings; any pass that walks the BVH
+// pulls this concern.
+
+
+[[vk::binding(NWB_SW_SHADOW_BINDING_SCENE_NODES, NWB_SW_SHADOW_SET)]]
+StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbSwShadowSceneNodes;
+
+// Per-instance record: the affine world->object transform (3 rows) + the slot into the parallel per-mesh
+// descriptor arrays. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes).
+struct NwbSwShadowInstance{
+    float4 worldToObjectRow0;
+    float4 worldToObjectRow1;
+    float4 worldToObjectRow2;
+    uint meshIndex;
+    uint primitiveCount;
+    uint pad0;
+    uint pad1;
+};
+
+[[vk::binding(NWB_SW_SHADOW_BINDING_SCENE_INSTANCES, NWB_SW_SHADOW_SET)]]
+StructuredBuffer<NwbSwShadowInstance, Std430DataLayout> g_NwbSwShadowInstances;
+
+[[vk::binding(NWB_SW_SHADOW_BINDING_INSTANCE_MATERIAL, NWB_SW_SHADOW_SET)]]
+StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbSwShadowInstanceMaterial;
+
+// Parallel per-mesh arrays (slot k = mesh k): triangle BVH nodes + raw position / index byte buffers.
+[[vk::binding(NWB_SW_SHADOW_BINDING_MESH_NODES, NWB_SW_SHADOW_SET)]]
+StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbSwShadowMeshNodes[NWB_SW_SHADOW_MAX_MESHES];
+
+[[vk::binding(NWB_SW_SHADOW_BINDING_MESH_POSITIONS, NWB_SW_SHADOW_SET)]]
+ByteAddressBuffer g_NwbSwShadowMeshPositions[NWB_SW_SHADOW_MAX_MESHES];
+
+[[vk::binding(NWB_SW_SHADOW_BINDING_MESH_INDICES, NWB_SW_SHADOW_SET)]]
+ByteAddressBuffer g_NwbSwShadowMeshIndices[NWB_SW_SHADOW_MAX_MESHES];
+
+// Per-triangle-corner shadow-trace attributes (AttribGpu = Half4U normal @ +0 (8B) + Float2U uv0 @ +8 (8B), 16B
+// stride), indexed as triangle*3+corner in lockstep with the triangle index buffer.
+[[vk::binding(NWB_SW_SHADOW_BINDING_MESH_ATTRIBUTES, NWB_SW_SHADOW_SET)]]
+ByteAddressBuffer g_NwbSwShadowMeshAttributes[NWB_SW_SHADOW_MAX_MESHES];
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Affine world->object transform of a point (row-major 3x4; the engine SIMDMatrix rows map onto the rows).
+float3 nwbSwShadowTransformPoint(const NwbSwShadowInstance instance, const float3 point){
+    return float3(
+        dot(instance.worldToObjectRow0.xyz, point) + instance.worldToObjectRow0.w,
+        dot(instance.worldToObjectRow1.xyz, point) + instance.worldToObjectRow1.w,
+        dot(instance.worldToObjectRow2.xyz, point) + instance.worldToObjectRow2.w
+    );
+}
+
+// Same transform applied as a direction (no translation). Left UN-normalized on purpose so the ray
+// parameter t is preserved between world and object space (object hit at t == world hit at t).
+float3 nwbSwShadowTransformVector(const NwbSwShadowInstance instance, const float3 vector){
+    return float3(
+        dot(instance.worldToObjectRow0.xyz, vector),
+        dot(instance.worldToObjectRow1.xyz, vector),
+        dot(instance.worldToObjectRow2.xyz, vector)
+    );
+}
+
+// Transforms an object-space normal to world space for the surface hook (NwbMeshSurface.normal is world space).
+// The normal transform is the inverse-transpose of object->world -- the transpose of the world->object 3x3 carried
+// in the instance rows; that transpose's i-th component is the dot of the object normal with the i-th COLUMN of the
+// world->object 3x3 (the i-th components of the three rows). This matches the hardware any-hit and is the
+// geometrically-correct transform; it equals the rasterizer's world-space normal under uniform instance scale (the
+// common case) and diverges in direction only under NON-uniform scale (where the rasterizer applies the forward
+// map instead) -- latent for transmittance hooks that don't read the normal. nwbSafeNormalize guards the
+// degenerate (near-zero / non-finite, e.g. a singular instance transform) result, matching the engine pattern.
+float3 nwbSwShadowTransformNormal(const NwbSwShadowInstance instance, const float3 objectNormal){
+    const float3 worldNormal = float3(
+        dot(float3(instance.worldToObjectRow0.x, instance.worldToObjectRow1.x, instance.worldToObjectRow2.x), objectNormal),
+        dot(float3(instance.worldToObjectRow0.y, instance.worldToObjectRow1.y, instance.worldToObjectRow2.y), objectNormal),
+        dot(float3(instance.worldToObjectRow0.z, instance.worldToObjectRow1.z, instance.worldToObjectRow2.z), objectNormal)
+    );
+    return nwbSafeNormalize(worldNormal, float3(0.0, 0.0, 1.0));
+}
+
+// Unpacks a per-triangle-corner shadow-trace attribute (AttribGpu) from a per-mesh attribute byte buffer: Half4U
+// normal (two packed-half uints) at +0, Float2U uv0 (two floats) at +8. Returns object-space normal in .xyz, uv0.
+struct NwbSwShadowVertexAttrib{
+    float3 normal;
+    float2 uv0;
+};
+
+NwbSwShadowVertexAttrib nwbSwShadowLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
+    // meshIndex is non-uniform across the wave (each invocation's ray hits whatever instance/mesh occludes it), so
+    // every per-mesh descriptor-array access MUST be tagged NonUniformResourceIndex; without it the index is UB and
+    // a wave that straddles a mesh-shadow boundary reads another mesh's descriptor for some lanes.
+    const uint nuMesh = NonUniformResourceIndex(meshIndex);
+    const uint base = attributeIndex * 16u;
+    const uint2 packedNormal = g_NwbSwShadowMeshAttributes[nuMesh].Load2(base);
+    NwbSwShadowVertexAttrib attrib;
+    attrib.normal = float3(
+        nwbUnpackHalf2x16(packedNormal.x),
+        nwbUnpackHalf2x16(packedNormal.y).x
+    );
+    attrib.uv0 = asfloat(g_NwbSwShadowMeshAttributes[nuMesh].Load2(base + 8u));
+    return attrib;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

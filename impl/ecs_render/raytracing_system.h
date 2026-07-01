@@ -64,7 +64,12 @@ private:
     // context), appended by the trace pipeline/set. (Factored out for clarity; visibilityTarget is the full-res output.)
     void appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const;
     void appendShadowTraceBindingSet(Core::BindingSetDesc& desc, DeferredFrameTargets& targets, Core::Texture* visibilityTarget)const;
+    // ensureSwShadowPipeline creates the SHARED software-shadow binding layout + the persistent Stage-2/3 buffers once,
+    // then creates one NAMED compute pipeline per decomposed pass via ensureSwShadowPassPipeline (each loads its own
+    // kernel against the shared layout). The old single multiplyMode pipeline is retired; the dispatch selects a pass
+    // pipeline the same env-gated way the monolith selected the mode.
     [[nodiscard]] bool ensureSwShadowPipeline();
+    [[nodiscard]] bool ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const char* debugLabel);
     [[nodiscard]] bool ensureSwShadowBindingSet(DeferredFrameTargets& targets);
     // Soft directional shadow (Stage 1 of the soft-ray-traced-shadow feature): the half-res geometry downsample pre-pass
     // + the a-trous wavelet resolve/upsample (cloned from the caustic resolve). dispatchSoftShadowResolve runs the whole

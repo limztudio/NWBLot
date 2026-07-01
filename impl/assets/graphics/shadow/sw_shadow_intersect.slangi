@@ -1,0 +1,147 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_SW_SHADOW_INTERSECT_SLANGI
+#define NWB_GRAPHICS_SHADOW_SW_SHADOW_INTERSECT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Software-shadow ray/primitive intersection math: the slab ray/AABB overlap test, the safe reciprocal-direction, and
+// the watertight Woop ray/triangle test. PURE float math -- declares NO bindings and pulls NO other concern, so any BVH
+// traversal (scene or per-mesh) can compose it. (It is BVH-general and could later move to the bvh module; kept in
+// shadow/ for now to keep the software-shadow decomposition self-contained.)
+
+
+#define NWB_SW_SHADOW_AABB_PADDING 1e-4
+#define NWB_SW_SHADOW_BARYCENTRIC_EPSILON 1e-5
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Slab ray/AABB overlap test over the [tMin, tMax] interval. invDir may contain +/-inf for axis-aligned
+// directions; the min/max ordering keeps that well-defined for all but the measure-zero on-slab case.
+bool nwbSwShadowRayAabb(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
+    const float3 t0 = (boxMin - NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
+    const float3 t1 = (boxMax + NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
+    const float3 tSmall = min(t0, t1);
+    const float3 tLarge = max(t0, t1);
+    const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
+    const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
+    return tNear <= tFar;
+}
+
+// Reciprocal of the ray direction with each component nudged off exactly zero, so an axis-aligned ray gets
+// a large-but-finite slope instead of +/-inf. That keeps the slab test from forming inf*0 = NaN when the
+// ray origin lies exactly on a box face (a NaN there compares false and would silently drop the shadow).
+float3 nwbSwShadowSafeInvDir(const float3 direction){
+    const float epsilon = 1e-8;
+    const float3 safe = float3(
+        abs(direction.x) > epsilon ? direction.x : (direction.x < 0.0 ? -epsilon : epsilon),
+        abs(direction.y) > epsilon ? direction.y : (direction.y < 0.0 ? -epsilon : epsilon),
+        abs(direction.z) > epsilon ? direction.z : (direction.z < 0.0 ? -epsilon : epsilon)
+    );
+    return 1.0 / safe;
+}
+
+// Result of a ray/triangle test: whether the ray crossed the triangle inside (tMin, tMax) + the hit's
+// barycentrics. (u, v) are the Moeller-Trumbore parameters (weights of v1, v2); w = 1 - u - v is v0's weight, so
+// an attribute interpolates as a*w + b*u + c*v. t is the world/object ray parameter at the hit.
+struct NwbSwShadowTriangleHit{
+    bool hit;
+    float t;
+    float u;
+    float v;
+    float w;
+};
+
+// Watertight ray/triangle test (Woop/Benthin/Wald 2013), two-sided: an occluder shadows regardless of facing.
+// The edge-function sign convention hits exactly one triangle across a shared edge (no float gap, no double count),
+// which is the robust replacement for Moeller-Trumbore's barycentric-epsilon fudge + 1/det amplification. NOTE: this is
+// a correctness/robustness improvement, NOT a hardware-parity fix -- the driver's opaque intersector still disagrees
+// with ANY software intersector by +/-1 crossing at grazing silhouettes (see shadow_rayquery_cs), an inherent hybrid
+// residual, invisible for this binary opaque test beyond a sub-pixel edge. Reports a hit strictly inside (tMin, tMax).
+NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
+    NwbSwShadowTriangleHit result;
+    result.hit = false;
+    result.t = 0.0;
+    result.u = 0.0;
+    result.v = 0.0;
+    result.w = 0.0;
+
+    // Choose the ray's dominant axis as kz so the shear never divides by a near-zero direction component; kx,ky are the
+    // other two, swapped to keep the winding sign consistent when dir[kz] < 0.
+    const float3 absDir = abs(direction);
+    int kz = (absDir.x >= absDir.y) ? ((absDir.x >= absDir.z) ? 0 : 2) : ((absDir.y >= absDir.z) ? 1 : 2);
+    int kx = (kz + 1 == 3) ? 0 : (kz + 1);
+    int ky = (kx + 1 == 3) ? 0 : (kx + 1);
+    const float dirKz = direction[kz];
+    if(dirKz < 0.0){
+        const int swap = kx;
+        kx = ky;
+        ky = swap;
+    }
+
+    // Shear/scale constants aligning the ray with +kz.
+    const float shearX = direction[kx] / dirKz;
+    const float shearY = direction[ky] / dirKz;
+    const float shearZ = 1.0 / dirKz;
+
+    // Vertices relative to the ray origin, then sheared into ray space (x,y for the edge tests).
+    const float3 relA = v0 - origin;
+    const float3 relB = v1 - origin;
+    const float3 relC = v2 - origin;
+    const float ax = relA[kx] - shearX * relA[kz];
+    const float ay = relA[ky] - shearY * relA[kz];
+    const float bx = relB[kx] - shearX * relB[kz];
+    const float by = relB[ky] - shearY * relB[kz];
+    const float cx = relC[kx] - shearX * relC[kz];
+    const float cy = relC[ky] - shearY * relC[kz];
+
+    // Scaled barycentrics from the three edge functions (u->v0, v->v1, w->v2 weight).
+    float u = cx * by - cy * bx;
+    float v = ax * cy - ay * cx;
+    float w = bx * ay - by * ax;
+
+    // Two-sided: reject only when the edge functions carry MIXED signs (the point is outside the triangle). All-non-
+    // negative OR all-non-positive is inside, so a shared edge (some component exactly 0) still resolves to a single
+    // owning triangle rather than a gap.
+    if((u < 0.0 || v < 0.0 || w < 0.0) && (u > 0.0 || v > 0.0 || w > 0.0))
+        return result;
+
+    const float det = u + v + w;
+    if(det == 0.0)
+        return result;
+
+    // Interpolate the sheared z to the hit distance, sign-correct against det so the (tMin,tMax) test holds for either
+    // triangle facing without a divide.
+    const float az = shearZ * relA[kz];
+    const float bz = shearZ * relB[kz];
+    const float cz = shearZ * relC[kz];
+    const float tScaled = u * az + v * bz + w * cz;
+    const float detSign = (det < 0.0) ? -1.0 : 1.0;
+    const float absDet = det * detSign;
+    const float tSigned = tScaled * detSign;
+    if(tSigned <= tMin * absDet || tSigned >= tMax * absDet)
+        return result;
+
+    const float invDet = 1.0 / det;
+    result.hit = true;
+    result.t = tScaled * invDet;
+    result.u = v * invDet; // MT convention: u weights v1
+    result.v = w * invDet; // v weights v2
+    result.w = u * invDet; // w weights v0
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

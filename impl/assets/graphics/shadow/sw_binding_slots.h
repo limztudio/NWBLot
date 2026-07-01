@@ -105,6 +105,41 @@
 // Maximum distinct meshes the per-mesh descriptor arrays can address in one frame.
 #define NWB_SW_SHADOW_MAX_MESHES 64
 
+// Occluder class the per-mesh traversal filters to. Each pass kernel that traces #defines NWB_SW_SHADOW_OCCLUDER to
+// one of these BEFORE including sw_shadow_traverse.slangi; the filter in nwbSwShadowInstanceOccluded then skips the
+// other class. This replaces the old numeric multiplyMode occluder switch -- the class is now a COMPILE-TIME identity
+// baked into each pass, not a runtime push value:
+//  - OPAQUE      -> skip TRANSPARENT occluders: a binary blocker mask. The opaque prepass / adaptive-opaque coarse +
+//                   resolve / soft directional half-res trace (the SW analog of the HW RayQuery opaque mask).
+//  - TRANSPARENT -> skip OPAQUE occluders: the colored Beer-Lambert tint MULTIPLIED onto an existing opaque mask
+//                   (the transparent coarse / resolve / indirect re-trace / uniform half-res multiply). The opaque
+//                   shadow already came from the HW mask (hybrid) or the opaque prepass (software), so tracing opaque
+//                   here would only redundantly re-darken -- and skipping it avoids walking the opaque meshes' BVHs.
+//  - ALL         -> trace BOTH classes (no pass uses this today; reserved so a future single-pass fallback composes).
+#define NWB_SW_SHADOW_OCCLUDER_OPAQUE 0
+#define NWB_SW_SHADOW_OCCLUDER_TRANSPARENT 1
+#define NWB_SW_SHADOW_OCCLUDER_ALL 2
+
+// G-buffer background/validity depth: a depth at or above this is the cleared background (no geometry) -- fully lit,
+// casts no candidate ray. Centralised here (was a bare 0.999999 literal repeated across every trace/resolve pass) so
+// the gbuffer concern's nwbSwShadowIsBackground and every pass share one definition.
+#define NWB_SW_SHADOW_BACKGROUND_DEPTH 0.999999
+
+// Anti-pop dilation (in COARSE cells) for the opaque adaptive resolve's edge TEST. A hard opaque shadow is NOT band-
+// limited, so the tight (bracketing-2x2) edge test leaves a block in agreement until a sweeping silhouette edge crosses
+// a coarse SAMPLE -- the interpolated block then lags ~1 coarse cell and snaps (the visible pop), and sub-cell slivers
+// between samples are missed. Widening the edge TEST by this many coarse cells re-traces the block full-res BEFORE the
+// edge arrives, so it is already exact as the edge sweeps through. 1 cell removes the dominant sweep pop at ~3x the
+// (still small) edge-retrace count; the interpolation itself stays on the tight bracketing 2x2. (Contract-shared so the
+// opaque-resolve pass + any C++ that references the dilation agree on one value.)
+#define NWB_SW_SHADOW_OPAQUE_EDGE_DILATE 1
+
+// Per-frame samples-per-pixel for the soft directional trace. Stage 1 has NO temporal accumulation, so it multi-samples
+// the sun disk PER FRAME to hand the resolve a smooth (rather than dithered 0/1) coverage signal the value-aware a-trous
+// can actually denoise; Stage 3's temporal accumulation will supply the samples over frames instead, letting this return
+// toward 1. (Contract-shared with the soft directional pass.)
+#define NWB_SW_SHADOW_SOFT_SPP 8u
+
 // Per-thread traversal stack depths. The scene/instance BVH is shallow (a few-to-hundreds of instances);
 // the per-mesh triangle BVH is deeper. Both traversals treat a deeper subtree as occluded rather than
 // skipping it, so these are generous-but-not-proven bounds, not correctness-critical.

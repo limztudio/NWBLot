@@ -168,24 +168,125 @@ namespace RtInstanceMaterialFlag{
 // Initial element capacity of the per-frame instance-material table; grows by doubling like the TLAS/scene BVH.
 inline constexpr usize s_ShadowInstanceMaterialInitialCapacity = 128u;
 
-// CPU mirror of the software shadow traversal push constants (see shadow_sw_traversal_cs.slang).
-struct SwShadowPushConstants{
+// CPU mirrors of the software shadow traversal push constants. The old single multiplyMode struct is retired: each
+// decomposed pass kernel declares its OWN push struct (its minimal field subset, NO mode selector) and the renderer
+// mirrors each here. Every mirror matches its kernel's [[vk::push_constant]] layout exactly (asserted). The shared
+// binding LAYOUT sizes its push range to the LARGEST of these (SwShadowMaxPushConstants below) so every per-pass
+// pipeline is layout-compatible while each dispatch sets only its own struct's bytes.
+
+// Opaque pre-pass (full-res OPAQUE overwrite; sw_shadow_opaque_prepass_cs). The A/B fallback for the adaptive-opaque path.
+struct SwShadowOpaquePrepassPushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 instanceCount = 0u;
-    // 2 = uniform half-res transparent multiply (non-adaptive baseline); 3 = full-res opaque-only overwrite (opaque
-    // pre-pass); 4 = Stage-2 coarse transparent trace; 5 = Stage-2 adaptive resolve; 6 = Stage-3 classify+append;
-    // 7 = Stage-3 build indirect args; 8 = Stage-3 indirect trace+scatter. See the shader for full notes.
-    u32 multiplyMode = 0u;
-    u32 coarseWidth = 0u;     // half-res grid extent for modes 4/5/6
-    u32 coarseHeight = 0u;
-    f32 edgeThreshold = 0.1f; // modes 5/6 edge metric: 2x2 coarse transmittance range above which a block is re-traced
-    u32 collectStats = 0u;    // modes 5/6: tally traced/total rays into the edge-stats buffer (measurement only)
-    u32 edgeCapacity = 0u;    // Stage-3 (modes 6/7): edge-list capacity in RECORDS (append guard + build-args clamp)
-    u32 traceGroupSize = 0u;  // Stage-3 (modes 7/8): threads per indirect-trace group (= NWB_SW_SHADOW_TRACE_GROUP)
-    u32 frameIndex = 0u;      // Soft directional (mode 11): the frame counter seeding the per-pixel cone-jitter sample
 };
-static_assert(sizeof(SwShadowPushConstants) == sizeof(u32) * 11u, "SwShadowPushConstants must match the shader push-constant layout");
+static_assert(sizeof(SwShadowOpaquePrepassPushConstants) == sizeof(u32) * 3u, "SwShadowOpaquePrepassPushConstants must match the kernel push-constant layout");
+
+// Adaptive-opaque COARSE trace (sw_shadow_opaque_coarse_cs): one OPAQUE any-hit per coarse block, binary.
+struct SwShadowOpaqueCoarsePushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 instanceCount = 0u;
+    u32 coarseWidth = 0u;
+    u32 coarseHeight = 0u;
+};
+static_assert(sizeof(SwShadowOpaqueCoarsePushConstants) == sizeof(u32) * 5u, "SwShadowOpaqueCoarsePushConstants must match the kernel push-constant layout");
+
+// Adaptive-opaque ADAPTIVE RESOLVE (sw_shadow_opaque_resolve_cs): coarse-interior interp / dilated-edge re-trace, overwrite.
+struct SwShadowOpaqueResolvePushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 instanceCount = 0u;
+    u32 coarseWidth = 0u;
+    u32 coarseHeight = 0u;
+    f32 edgeThreshold = 0.1f;
+};
+static_assert(sizeof(SwShadowOpaqueResolvePushConstants) == sizeof(u32) * 6u, "SwShadowOpaqueResolvePushConstants must match the kernel push-constant layout");
+
+// Soft directional half-res jittered trace (sw_shadow_soft_directional_cs): frameIndex seeds the per-pixel cone jitter.
+struct SwShadowSoftDirectionalPushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 instanceCount = 0u;
+    u32 frameIndex = 0u;
+};
+static_assert(sizeof(SwShadowSoftDirectionalPushConstants) == sizeof(u32) * 4u, "SwShadowSoftDirectionalPushConstants must match the kernel push-constant layout");
+
+// Stage-2 COARSE transparent trace (sw_shadow_transparent_coarse_cs): one TRANSPARENT trace per coarse block, colored.
+struct SwShadowTransparentCoarsePushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 instanceCount = 0u;
+    u32 coarseWidth = 0u;
+    u32 coarseHeight = 0u;
+};
+static_assert(sizeof(SwShadowTransparentCoarsePushConstants) == sizeof(u32) * 5u, "SwShadowTransparentCoarsePushConstants must match the kernel push-constant layout");
+
+// Stage-2 ADAPTIVE transparent resolve (sw_shadow_transparent_resolve_cs): interp / re-trace + multiply, stats optional.
+struct SwShadowTransparentResolvePushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 instanceCount = 0u;
+    u32 coarseWidth = 0u;
+    u32 coarseHeight = 0u;
+    f32 edgeThreshold = 0.1f;
+    u32 collectStats = 0u;
+};
+static_assert(sizeof(SwShadowTransparentResolvePushConstants) == sizeof(u32) * 7u, "SwShadowTransparentResolvePushConstants must match the kernel push-constant layout");
+
+// Stage-3 CLASSIFY + append (sw_shadow_transparent_classify_cs): interior fold in place / edge append; no trace.
+struct SwShadowTransparentClassifyPushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 coarseWidth = 0u;
+    u32 coarseHeight = 0u;
+    f32 edgeThreshold = 0.1f;
+    u32 collectStats = 0u;
+    u32 edgeCapacity = 0u;
+};
+static_assert(sizeof(SwShadowTransparentClassifyPushConstants) == sizeof(u32) * 7u, "SwShadowTransparentClassifyPushConstants must match the kernel push-constant layout");
+
+// Stage-3 BUILD ARGS (sw_shadow_transparent_buildargs_cs): 1 thread; clamp count + write DispatchIndirectArguments.
+struct SwShadowTransparentBuildArgsPushConstants{
+    u32 traceGroupSize = 0u;
+    u32 edgeCapacity = 0u;
+};
+static_assert(sizeof(SwShadowTransparentBuildArgsPushConstants) == sizeof(u32) * 2u, "SwShadowTransparentBuildArgsPushConstants must match the kernel push-constant layout");
+
+// Stage-3 INDIRECT trace + scatter (sw_shadow_transparent_indirect_cs): one edge record per thread, single overwrite.
+struct SwShadowTransparentIndirectPushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 instanceCount = 0u;
+    u32 traceGroupSize = 0u;
+};
+static_assert(sizeof(SwShadowTransparentIndirectPushConstants) == sizeof(u32) * 4u, "SwShadowTransparentIndirectPushConstants must match the kernel push-constant layout");
+
+// Uniform HALF-res transparent multiply (sw_shadow_transparent_uniform_cs): the non-adaptive Stage-1 A/B baseline.
+struct SwShadowTransparentUniformPushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 instanceCount = 0u;
+};
+static_assert(sizeof(SwShadowTransparentUniformPushConstants) == sizeof(u32) * 3u, "SwShadowTransparentUniformPushConstants must match the kernel push-constant layout");
+
+// The push-constant range the SHARED binding layout declares: sized to the LARGEST pass struct so every per-pass
+// pipeline (each of which sets only its own smaller struct) is layout-compatible. Currently the 7-u32 resolve/classify
+// structs; kept as an explicit max so adding a wider pass struct later fails the static_assert rather than silently
+// under-sizing the range.
+struct SwShadowMaxPushConstants{
+    u32 words[7] = {};
+};
+static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowOpaquePrepassPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
+static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowOpaqueCoarsePushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
+static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowOpaqueResolvePushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
+static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowSoftDirectionalPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
+static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentCoarsePushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
+static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentResolvePushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
+static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentClassifyPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
+static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentBuildArgsPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
+static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentIndirectPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
+static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentUniformPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
 
 // CPU mirror of the hardware RayQuery shadow push constants (shadow_rayquery_cs.slang): just the frame counter that
 // seeds the soft directional cone-jitter (a soft directional light softens the full-res HW opaque trace directly).
@@ -1644,7 +1745,9 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     // No software scene BVH this frame (no traceable instances) -> the caller clears the mask to all-lit.
     if(!rayTracingState().m_sceneBvhNodeBuffer || rayTracingState().m_sceneBvhInstanceCount == 0u)
         return false;
-    if(!rayTracingState().m_swShadowPipeline || !rayTracingState().m_swShadowBindingSet || rayTracingState().m_swShadowMeshCount == 0u)
+    // Every decomposed pass pipeline must be resident (ensureSwShadowPipeline creates them all-or-nothing) alongside the
+    // shared binding set + the per-mesh geometry; the opaque prepass is a representative liveness check for the set.
+    if(!rayTracingState().m_swShadowOpaquePrepassPipeline || !rayTracingState().m_swShadowBindingSet || rayTracingState().m_swShadowMeshCount == 0u)
         return false;
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
@@ -1672,9 +1775,15 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     commandList.setResourceStatesForBindingSet(rayTracingState().m_swShadowBindingSet.get());
     commandList.commitBarriers();
 
-    Core::ComputeState computeState;
-    computeState.setPipeline(rayTracingState().m_swShadowPipeline.get());
-    computeState.addBindingSet(rayTracingState().m_swShadowBindingSet.get());
+    // Each pass now has its OWN pipeline (the multiplyMode monolith is retired) but shares the one binding set. This
+    // builds the per-pass ComputeState right before its dispatch -- the only mechanical change from the old single
+    // setComputeState(computeState); the barrier sequence, grids, and push values are unchanged.
+    const auto passState = [&](const Core::ComputePipelineHandle& pipeline){
+        Core::ComputeState state;
+        state.setPipeline(pipeline.get());
+        state.addBindingSet(rayTracingState().m_swShadowBindingSet.get());
+        return state;
+    };
 
     const u32 groupSize = static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE);
     const u32 fullGroupsX = DivideUp(targets.width, groupSize);
@@ -1694,15 +1803,13 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             // buffer, then resolve (mode 10, full-res) writes the binary mask -- interpolating flat lit/shadowed interior
             // and re-tracing only silhouette blocks. The binary analog of the transparent adaptive resolve; reuses the
             // transparent coarse buffer (the mode-4 transparent coarse overwrites it next, after the WAR barrier below).
-            SwShadowPushConstants opaqueCoarsePush;
+            SwShadowOpaqueCoarsePushConstants opaqueCoarsePush;
             opaqueCoarsePush.width = targets.width;
             opaqueCoarsePush.height = targets.height;
             opaqueCoarsePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-            opaqueCoarsePush.multiplyMode = 9u;
             opaqueCoarsePush.coarseWidth = coarseWidth;
             opaqueCoarsePush.coarseHeight = coarseHeight;
-            opaqueCoarsePush.edgeThreshold = rayTracingState().m_swShadowEdgeThreshold;
-            commandList.setComputeState(computeState);
+            commandList.setComputeState(passState(rayTracingState().m_swShadowOpaqueCoarsePipeline));
             commandList.setPushConstants(&opaqueCoarsePush, sizeof(opaqueCoarsePush));
             commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
 
@@ -1710,20 +1817,24 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
-            SwShadowPushConstants opaqueResolvePush = opaqueCoarsePush;
-            opaqueResolvePush.multiplyMode = 10u;
-            commandList.setComputeState(computeState);
+            SwShadowOpaqueResolvePushConstants opaqueResolvePush;
+            opaqueResolvePush.width = targets.width;
+            opaqueResolvePush.height = targets.height;
+            opaqueResolvePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+            opaqueResolvePush.coarseWidth = coarseWidth;
+            opaqueResolvePush.coarseHeight = coarseHeight;
+            opaqueResolvePush.edgeThreshold = rayTracingState().m_swShadowEdgeThreshold;
+            commandList.setComputeState(passState(rayTracingState().m_swShadowOpaqueResolvePipeline));
             commandList.setPushConstants(&opaqueResolvePush, sizeof(opaqueResolvePush));
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
         }
         else{
-            // Full-res opaque blocker (mode 3) -- the A/B fallback (NWB_SW_SHADOW_ADAPTIVE_OPAQUE=0).
-            SwShadowPushConstants opaquePush;
+            // Full-res opaque blocker (opaque prepass) -- the A/B fallback (NWB_SW_SHADOW_ADAPTIVE_OPAQUE=0).
+            SwShadowOpaquePrepassPushConstants opaquePush;
             opaquePush.width = targets.width;
             opaquePush.height = targets.height;
             opaquePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-            opaquePush.multiplyMode = 3u; // opaque-only, full-res, overwrite
-            commandList.setComputeState(computeState);
+            commandList.setComputeState(passState(rayTracingState().m_swShadowOpaquePrepassPipeline));
             commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
         }
@@ -1763,13 +1874,12 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
 
-            SwShadowPushConstants softTracePush;
+            SwShadowSoftDirectionalPushConstants softTracePush;
             softTracePush.width = targets.width;
             softTracePush.height = targets.height;
             softTracePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-            softTracePush.multiplyMode = 11u;
             softTracePush.frameIndex = frameIndex;
-            commandList.setComputeState(computeState);
+            commandList.setComputeState(passState(rayTracingState().m_swShadowSoftDirectionalPipeline));
             commandList.setPushConstants(&softTracePush, sizeof(softTracePush));
             commandList.dispatch(softGroupsX, softGroupsY, 1u);
 
@@ -1834,19 +1944,15 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.commitBarriers();
         }
 
-        // Mode 4: one transparent trace per 2x2 block written into the coarse buffer (transmittance only). Shared base.
-        SwShadowPushConstants coarsePush;
+        // Transparent coarse: one transparent trace per coarse block written into the coarse buffer (colored
+        // transmittance only). Shared base for both the compacted and the Stage-2 adaptive resolve.
+        SwShadowTransparentCoarsePushConstants coarsePush;
         coarsePush.width = targets.width;
         coarsePush.height = targets.height;
         coarsePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-        coarsePush.multiplyMode = 4u;
         coarsePush.coarseWidth = coarseWidth;
         coarsePush.coarseHeight = coarseHeight;
-        coarsePush.edgeThreshold = rayTracingState().m_swShadowEdgeThreshold;
-        coarsePush.collectStats = 0u;
-        coarsePush.edgeCapacity = rayTracingState().m_swShadowEdgeListCapacity;
-        coarsePush.traceGroupSize = static_cast<u32>(NWB_SW_SHADOW_TRACE_GROUP);
-        commandList.setComputeState(computeState);
+        commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentCoarsePipeline));
         commandList.setPushConstants(&coarsePush, sizeof(coarsePush));
         commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
 
@@ -1865,12 +1971,18 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.setBufferState(rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
-            // Mode 6: classify each pixel/light; interior -> interpolate + fold in place; edge -> append to the list and
-            // leave the PRISTINE opaque mask for mode 8's single overwrite. collectStats tallies the fraction on snapshots.
-            SwShadowPushConstants classifyPush = coarsePush;
-            classifyPush.multiplyMode = 6u;
+            // Classify (Stage-3): classify each pixel/light; interior -> interpolate + fold in place; edge -> append to
+            // the list and leave the PRISTINE opaque mask for the indirect trace's single overwrite. collectStats tallies
+            // the fraction on snapshots.
+            SwShadowTransparentClassifyPushConstants classifyPush;
+            classifyPush.width = targets.width;
+            classifyPush.height = targets.height;
+            classifyPush.coarseWidth = coarseWidth;
+            classifyPush.coarseHeight = coarseHeight;
+            classifyPush.edgeThreshold = rayTracingState().m_swShadowEdgeThreshold;
             classifyPush.collectStats = snapshot ? 1u : 0u;
-            commandList.setComputeState(computeState);
+            classifyPush.edgeCapacity = rayTracingState().m_swShadowEdgeListCapacity;
+            commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentClassifyPipeline));
             commandList.setPushConstants(&classifyPush, sizeof(classifyPush));
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
 
@@ -1881,11 +1993,11 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
-            // Mode 7: 1 thread builds DispatchIndirectArguments{ceil(count/64),1,1} from the clamped append count.
-            SwShadowPushConstants argsPush = classifyPush;
-            argsPush.multiplyMode = 7u;
-            argsPush.collectStats = 0u;
-            commandList.setComputeState(computeState);
+            // Build args (Stage-3): 1 thread builds DispatchIndirectArguments{ceil(count/64),1,1} from the clamped append count.
+            SwShadowTransparentBuildArgsPushConstants argsPush;
+            argsPush.traceGroupSize = static_cast<u32>(NWB_SW_SHADOW_TRACE_GROUP);
+            argsPush.edgeCapacity = rayTracingState().m_swShadowEdgeListCapacity;
+            commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentBuildArgsPipeline));
             commandList.setPushConstants(&argsPush, sizeof(argsPush));
             commandList.dispatch(1u, 1u, 1u);
 
@@ -1894,13 +2006,15 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.setBufferState(rayTracingState().m_swShadowEdgeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
-            // Mode 8: DispatchIndirect over the compacted edge records -- one ray per thread, all real edge rays. A second
-            // ComputeState carries the indirect-args buffer; setComputeState auto-transitions it UnorderedAccess->IndirectArgument.
-            SwShadowPushConstants tracePush = argsPush;
-            tracePush.multiplyMode = 8u;
-            Core::ComputeState computeStateIndirect;
-            computeStateIndirect.setPipeline(rayTracingState().m_swShadowPipeline.get());
-            computeStateIndirect.addBindingSet(rayTracingState().m_swShadowBindingSet.get());
+            // Indirect trace (Stage-3): DispatchIndirect over the compacted edge records -- one ray per thread, all real
+            // edge rays. Its ComputeState carries the indirect-args buffer; setComputeState auto-transitions it
+            // UnorderedAccess->IndirectArgument.
+            SwShadowTransparentIndirectPushConstants tracePush;
+            tracePush.width = targets.width;
+            tracePush.height = targets.height;
+            tracePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+            tracePush.traceGroupSize = static_cast<u32>(NWB_SW_SHADOW_TRACE_GROUP);
+            Core::ComputeState computeStateIndirect = passState(rayTracingState().m_swShadowTransparentIndirectPipeline);
             computeStateIndirect.setIndirectParams(rayTracingState().m_swShadowIndirectArgsBuffer.get());
             commandList.setComputeState(computeStateIndirect);
             commandList.setPushConstants(&tracePush, sizeof(tracePush));
@@ -1908,10 +2022,15 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         }
         else{
             // Stage-2 resolve: full-res adaptive (interpolate interior / re-trace edges in place, fold onto the opaque mask).
-            SwShadowPushConstants resolvePush = coarsePush;
-            resolvePush.multiplyMode = 5u;
+            SwShadowTransparentResolvePushConstants resolvePush;
+            resolvePush.width = targets.width;
+            resolvePush.height = targets.height;
+            resolvePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+            resolvePush.coarseWidth = coarseWidth;
+            resolvePush.coarseHeight = coarseHeight;
+            resolvePush.edgeThreshold = rayTracingState().m_swShadowEdgeThreshold;
             resolvePush.collectStats = snapshot ? 1u : 0u;
-            commandList.setComputeState(computeState);
+            commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentResolvePipeline));
             commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
         }
@@ -1949,18 +2068,14 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         }
     }
     else{
-        // Non-adaptive baseline: uniform transparent multiply at HALF resolution (mode 2) -- one trace per 2x2 block
-        // folded onto each full-res pixel's own opaque mask. Kept for A/B comparison against the adaptive path.
-        SwShadowPushConstants pushConstants;
+        // Non-adaptive baseline: uniform transparent multiply at HALF resolution -- one trace per 2x2 block folded onto
+        // each full-res pixel's own opaque mask. Kept for A/B comparison against the adaptive path. Dispatched at the
+        // COARSE grid, exactly as before (the kernel's LITERAL *2u half-res fold is preserved -- see the shader).
+        SwShadowTransparentUniformPushConstants pushConstants;
         pushConstants.width = targets.width;
         pushConstants.height = targets.height;
         pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-        pushConstants.multiplyMode = 2u;
-        pushConstants.coarseWidth = coarseWidth;
-        pushConstants.coarseHeight = coarseHeight;
-        pushConstants.edgeThreshold = rayTracingState().m_swShadowEdgeThreshold;
-        pushConstants.collectStats = 0u;
-        commandList.setComputeState(computeState);
+        commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentUniformPipeline));
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
     }
@@ -2386,8 +2501,9 @@ bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targ
 }
 
 bool RendererRayTracingSystem::ensureSwShadowPipeline(){
-    if(rayTracingState().m_swShadowPipeline)
-        return true;
+    // Idempotent: the shared layout + persistent Stage-2/3 buffers are created once (guarded by m_swShadowBindingLayout),
+    // and each per-pass pipeline creation below is itself idempotent (guarded by its own handle). A prior hard failure is
+    // sticky.
     if(rayTracingState().m_swShadowPipelineFailed)
         return false;
 
@@ -2425,7 +2541,9 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         // Soft directional shadow (Stage 1): the half-res soft directional visibility UAV the mode-11 jittered trace
         // writes (read by the separate shadow_resolve pipeline). Always in the layout (the shader always declares it).
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_SOFT_HALF, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowPushConstants)));
+        // Push-constant range sized to the LARGEST pass struct: every per-pass pipeline shares this layout and each
+        // dispatch sets only its own (smaller) struct's bytes -- see SwShadowMaxPushConstants.
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowMaxPushConstants)));
 
         rayTracingState().m_swShadowBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_swShadowBindingLayout){
@@ -2527,26 +2645,55 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         }
     }
 
-    if(!m_renderer.shaderSystem().loadShader(
-        rayTracingState().m_swShadowShader,
-        AssetsGraphicsShadow::s_SwTraversalShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
-        "ECSRender_SwShadowTraversal"
-    )){
+    // One NAMED pipeline per pass, all against the shared layout. Each pass's kernel references only its own subset of
+    // the slot map, so the shared binding set drives them identically; the dispatch selects the pass pipeline the same
+    // env-gated way the monolith selected multiplyMode. Any single failure fails the whole ensure (the frame's SW shadow
+    // backend is not ready), matching the old single-pipeline behavior.
+    const bool passesReady =
+        ensureSwShadowPassPipeline(rayTracingState().m_swShadowOpaquePrepassShader, rayTracingState().m_swShadowOpaquePrepassPipeline, AssetsGraphicsShadow::s_SwOpaquePrepassShaderName, "ECSRender_SwShadowOpaquePrepass")
+        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowOpaqueCoarseShader, rayTracingState().m_swShadowOpaqueCoarsePipeline, AssetsGraphicsShadow::s_SwOpaqueCoarseShaderName, "ECSRender_SwShadowOpaqueCoarse")
+        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowOpaqueResolveShader, rayTracingState().m_swShadowOpaqueResolvePipeline, AssetsGraphicsShadow::s_SwOpaqueResolveShaderName, "ECSRender_SwShadowOpaqueResolve")
+        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowSoftDirectionalShader, rayTracingState().m_swShadowSoftDirectionalPipeline, AssetsGraphicsShadow::s_SwSoftDirectionalShaderName, "ECSRender_SwShadowSoftDirectional")
+        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentCoarseShader, rayTracingState().m_swShadowTransparentCoarsePipeline, AssetsGraphicsShadow::s_SwTransparentCoarseShaderName, "ECSRender_SwShadowTransparentCoarse")
+        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentResolveShader, rayTracingState().m_swShadowTransparentResolvePipeline, AssetsGraphicsShadow::s_SwTransparentResolveShaderName, "ECSRender_SwShadowTransparentResolve")
+        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentClassifyShader, rayTracingState().m_swShadowTransparentClassifyPipeline, AssetsGraphicsShadow::s_SwTransparentClassifyShaderName, "ECSRender_SwShadowTransparentClassify")
+        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentBuildArgsShader, rayTracingState().m_swShadowTransparentBuildArgsPipeline, AssetsGraphicsShadow::s_SwTransparentBuildArgsShaderName, "ECSRender_SwShadowTransparentBuildArgs")
+        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentIndirectShader, rayTracingState().m_swShadowTransparentIndirectPipeline, AssetsGraphicsShadow::s_SwTransparentIndirectShaderName, "ECSRender_SwShadowTransparentIndirect")
+        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentUniformShader, rayTracingState().m_swShadowTransparentUniformPipeline, AssetsGraphicsShadow::s_SwTransparentUniformShaderName, "ECSRender_SwShadowTransparentUniform")
+    ;
+    if(!passesReady){
         rayTracingState().m_swShadowPipelineFailed = true;
         return false;
     }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const char* debugLabel){
+    // Idempotent per-pass loader + compute-pipeline creator against the SHARED software-shadow binding layout (created by
+    // ensureSwShadowPipeline before any pass is built). Returns true if the pipeline is already/newly resident; a failure
+    // here bubbles up to fail the whole SW shadow ensure for the frame.
+    if(pipeline)
+        return true;
+
+    if(!m_renderer.shaderSystem().loadShader(
+        shader,
+        shaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        debugLabel
+    ))
+        return false;
 
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
-        .setComputeShader(rayTracingState().m_swShadowShader)
+        .setComputeShader(shader)
         .addBindingLayout(rayTracingState().m_swShadowBindingLayout)
     ;
-    rayTracingState().m_swShadowPipeline = device->createComputePipeline(pipelineDesc);
-    if(!rayTracingState().m_swShadowPipeline){
+    pipeline = graphics().getDevice()->createComputePipeline(pipelineDesc);
+    if(!pipeline){
+        // debugLabel identifies the failing pass in the shader-load path already; keep the message argument-free (the
+        // NWB_TEXT log string is wide, and debugLabel is a narrow const char* the wide formatter cannot consume).
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
-        rayTracingState().m_swShadowPipelineFailed = true;
         return false;
     }
     return true;

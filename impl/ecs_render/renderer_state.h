@@ -367,10 +367,38 @@ private:
     f32 m_causticTemporalDecay = 0.85f;
     bool m_causticTemporalDecayQueried = false;
     bool m_causticEmissionGateLogged = false;
-    Core::BindingLayoutHandle m_swShadowBindingLayout; // software (compute) shadow traversal pass
-    Core::ShaderHandle m_swShadowShader;
-    Core::ComputePipelineHandle m_swShadowPipeline;
+    // Software (compute) shadow traversal, decomposed into one NAMED pipeline per pass (the old single multiplyMode
+    // pipeline is retired). All passes SHARE one binding layout + one binding set: each pass's kernel references only its
+    // own subset of the slot map (unreferenced layout entries are legal), and the bound resources at every slot are
+    // identical regardless of pass -- so the per-pass pipelines produce byte-identical output to the monolith while each
+    // now carries its own push-constant struct (no multiplyMode). The shared layout's push-constant range is sized to the
+    // LARGEST pass struct (SwShadowMaxPushConstants); each pass sets only its own bytes. The mesh-descriptor-array
+    // resource-state prep, the barrier sequence, and the binding-set rebuild guard below are unchanged.
+    Core::BindingLayoutHandle m_swShadowBindingLayout;
     Core::BindingSetHandle m_swShadowBindingSet;
+    // One compute pipeline per software-shadow pass (created lazily; each loads its own kernel). The dispatch selects the
+    // pass pipeline the same env-gated way the monolith selected multiplyMode. A per-pass shader handle keeps each kernel
+    // resident for its pipeline.
+    Core::ShaderHandle m_swShadowOpaquePrepassShader;
+    Core::ComputePipelineHandle m_swShadowOpaquePrepassPipeline;
+    Core::ShaderHandle m_swShadowOpaqueCoarseShader;
+    Core::ComputePipelineHandle m_swShadowOpaqueCoarsePipeline;
+    Core::ShaderHandle m_swShadowOpaqueResolveShader;
+    Core::ComputePipelineHandle m_swShadowOpaqueResolvePipeline;
+    Core::ShaderHandle m_swShadowSoftDirectionalShader;
+    Core::ComputePipelineHandle m_swShadowSoftDirectionalPipeline;
+    Core::ShaderHandle m_swShadowTransparentCoarseShader;
+    Core::ComputePipelineHandle m_swShadowTransparentCoarsePipeline;
+    Core::ShaderHandle m_swShadowTransparentResolveShader;
+    Core::ComputePipelineHandle m_swShadowTransparentResolvePipeline;
+    Core::ShaderHandle m_swShadowTransparentClassifyShader;
+    Core::ComputePipelineHandle m_swShadowTransparentClassifyPipeline;
+    Core::ShaderHandle m_swShadowTransparentBuildArgsShader;
+    Core::ComputePipelineHandle m_swShadowTransparentBuildArgsPipeline;
+    Core::ShaderHandle m_swShadowTransparentIndirectShader;
+    Core::ComputePipelineHandle m_swShadowTransparentIndirectPipeline;
+    Core::ShaderHandle m_swShadowTransparentUniformShader;
+    Core::ComputePipelineHandle m_swShadowTransparentUniformPipeline;
     const Core::Buffer* m_swShadowBindingSetSceneNodes = nullptr;
     const Core::Buffer* m_swShadowBindingSetInstances = nullptr;
     const Core::Buffer* m_swShadowBindingSetInstanceMaterial = nullptr;
@@ -399,7 +427,7 @@ private:
     bool m_swShadowCompactEnabled = true;
     // Adaptive OPAQUE pre-pass (NWB_SW_SHADOW_ADAPTIVE_OPAQUE, default ON): coarse (mode 9) + edge-refine (mode 10)
     // instead of the full-res mode-3 opaque blocker trace (no-RT path only). The edge TEST is DILATED
-    // (NWB_SW_SHADOW_OPAQUE_EDGE_DILATE, shadow_sw_traversal_cs) so a sweeping hard-shadow silhouette is re-traced full-res
+    // (NWB_SW_SHADOW_OPAQUE_EDGE_DILATE, sw_binding_slots.h) so a sweeping hard-shadow silhouette is re-traced full-res
     // BEFORE it crosses the next coarse sample -- the ANTI-POP fix. Without it, coarse point-sampling of a HARD (non-band-
     // limited) opaque shadow POPS as occluders move: an interpolated block lags ~1 coarse cell then snaps, and sub-cell
     // slivers between samples are missed. With the dilation the adaptive mask tracks full-res: measured on the 10-char

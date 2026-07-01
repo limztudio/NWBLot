@@ -17,6 +17,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Frame counter for the soft directional cone-jitter, seeding the per-pixel low-discrepancy sample so the single
+// jittered opaque ray walks the sun disk across frames. A soft directional light softens THIS full-res HW opaque
+// trace directly (per-frame shimmer expected this stage; the SW path adds the half-res trace + a-trous denoise, the
+// HW path here softens at full res without the denoise -- see the renderer notes). A directional light with a zero
+// angular radius (params2.x == 0) cone-jitters to the axis exactly -> the unchanged hard shadow, so this is a no-op
+// for a point-source sun.
+struct NwbShadowRqPushConstants{
+    uint frameIndex;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<NwbShadowRqPushConstants> g_NwbShadowRqPushConstants;
+
+
 [numthreads(NWB_SHADOW_RT_GROUP_SIZE, NWB_SHADOW_RT_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // FULL-RESOLUTION: one inline-RayQuery occlusion ray per output pixel, written straight into the full-res
@@ -51,7 +65,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         if(slot < 0.0)
             continue;
 
-        const half3 transmittance = nwbShadowRqLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
+        // Per-pixel low-discrepancy cone-jitter sample (hard for a zero-radius directional / any point/spot light).
+        const float2 jitter = nwbShadowLowDiscrepancy2D(pixel, g_NwbShadowRqPushConstants.frameIndex);
+        const half3 transmittance = nwbShadowRqLightVisible(worldPosition, normal, g_NwbSceneLights[i], jitter);
         g_NwbShadowVisibility[uint3(pixel, uint(slot))] = float4(transmittance, 1.0);
     }
 }

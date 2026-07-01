@@ -54,6 +54,9 @@ struct NwbSceneLight{
     float4 colorIntensity;
     // x = range, y = light type, z = shadow slot (negative = none), w = caustic slot (negative = none).
     float4 params;
+    // Soft-shadow source size: x = directional angular radius (radians, cone half-angle), y = punctual source
+    // radius (world units, emissive sphere). z/w reserved. The shadow trace jitters the ray over this source.
+    float4 params2;
 };
 
 [[vk::binding(NWB_SCENE_LIGHT_LIST_BINDING, NWB_SCENE_LIGHT_LIST_SET)]]

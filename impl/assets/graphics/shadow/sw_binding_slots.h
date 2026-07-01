@@ -59,6 +59,12 @@
 #define NWB_SW_SHADOW_BINDING_EDGE_COUNTER 17
 #define NWB_SW_SHADOW_BINDING_EDGE_LIST 18
 #define NWB_SW_SHADOW_BINDING_INDIRECT_ARGS 19
+// Soft directional shadow (Stage 1 of the soft-ray-traced-shadow feature): a HALF-res RGBA16F Texture2DArray (one
+// layer per shadow slot) the jittered opaque directional trace (mode 11) writes ONE cone-jittered visibility sample
+// per half-res pixel into. It is then denoised by the SEPARATE shadow_resolve pipeline (its own binding set) --
+// geometry downsample + a-trous wavelet + bilateral upsample into the full-res visibility the lighting samples. UAV
+// (written by mode 11, read by the resolve). Only the SW traversal declares/writes it; the resolve binds its own copy.
+#define NWB_SW_SHADOW_BINDING_SOFT_HALF 20
 
 // 8x8 = 64 threads per group (one thread per pixel).
 #define NWB_SW_SHADOW_GROUP_SIZE 8
@@ -69,6 +75,13 @@
 // shader (coarse-trace block stride + resolve coordinate) and C++ (coarse-buffer dims + dispatch grid) so they agree.
 #define NWB_SW_SHADOW_COARSE_SHIFT 2u
 #define NWB_SW_SHADOW_COARSE_FACTOR (1u << NWB_SW_SHADOW_COARSE_SHIFT)
+
+// Soft directional shadow downscale (mode 11 + the shadow_resolve denoise): the jittered directional trace + its
+// a-trous denoise run at full-res >> SOFT_SHIFT. SHIFT=1 -> HALF resolution (1 jittered trace per 2x2 block, the
+// Stage-1 target). Independent of COARSE_SHIFT above (that is the adaptive TRANSPARENT trace's quarter-res); the soft
+// directional trace is a separate signal with its own half-res buffers, so its factor is kept distinct and explicit.
+#define NWB_SW_SHADOW_SOFT_SHIFT 1u
+#define NWB_SW_SHADOW_SOFT_FACTOR (1u << NWB_SW_SHADOW_SOFT_SHIFT)
 
 // Threads per group for the 1D indirect trace pass (mode 8). Equals GROUP_SIZE^2 so it reuses the [numthreads(8,8,1)]
 // entry point: the build-args pass computes groupsX = ceil(traceCount / 64) and each thread derives its flat record

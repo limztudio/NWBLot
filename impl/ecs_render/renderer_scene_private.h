@@ -99,6 +99,7 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, SceneLightGpuData* outLig
             -1.f,
             src.enableCaustics ? s_CausticSlotUnassigned : s_CausticSlotDisabled
         ); // z = shadow slot; w = caustic slot, or disabled when the light did not opt in
+        dst.params2 = Float4(src.angularRadius, src.sourceRadius, 0.f, 0.f); // soft-shadow source size
     }
 
     // Importance-ranked shadow-slot allocator: hand the bounded pool of NWB_SCENE_SHADOW_SLOT_COUNT slots to

@@ -66,6 +66,15 @@ private:
     void appendShadowTraceBindingSet(Core::BindingSetDesc& desc, DeferredFrameTargets& targets, Core::Texture* visibilityTarget)const;
     [[nodiscard]] bool ensureSwShadowPipeline();
     [[nodiscard]] bool ensureSwShadowBindingSet(DeferredFrameTargets& targets);
+    // Soft directional shadow (Stage 1 of the soft-ray-traced-shadow feature): the half-res geometry downsample pre-pass
+    // + the a-trous wavelet resolve/upsample (cloned from the caustic resolve). dispatchSoftShadowResolve runs the whole
+    // denoise chain (geometry downsample -> PREPARE -> N wavelet ping-pong passes -> bilateral upsample) for one
+    // directional shadow slot, overwriting that slot's full-res visibility with the denoised soft shadow.
+    [[nodiscard]] bool ensureSoftShadowResolvePipeline();
+    [[nodiscard]] bool ensureSoftShadowResolveBindingSet(DeferredFrameTargets& targets);
+    [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();
+    [[nodiscard]] bool ensureShadowGeometryDownsampleBindingSet(DeferredFrameTargets& targets);
+    void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slot);
     [[nodiscard]] bool ensureSwCausticPipeline();
     [[nodiscard]] bool ensureSwCausticBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureCausticResolvePipeline();

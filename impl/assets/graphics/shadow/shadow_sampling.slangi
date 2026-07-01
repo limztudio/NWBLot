@@ -1,0 +1,128 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_SAMPLING_SLANGI
+#define NWB_GRAPHICS_SHADOW_SAMPLING_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Soft-shadow ray-jitter sampling. A PHYSICAL light is not a point: a directional (sun) light subtends an angular
+// radius (its disk half-angle) and a punctual light an emissive sphere of a source radius. The occlusion ray is
+// jittered over that source, so the penumbra emerges + WIDENS with occluder->receiver distance for free (a point
+// deep in the umbra sees the source fully blocked from every jittered direction; a point near the edge sees it
+// partially blocked, its visibility the fraction of unblocked samples). ONE low-discrepancy sample per pixel per
+// frame keeps the trace cost identical to the hard shadow; the spatial a-trous denoise (shadow_resolve_cs) then
+// reconstructs the smooth penumbra from the per-pixel single-sample estimate. NO temporal reuse this stage, so a
+// per-frame shimmer of that single sample is expected + accepted (a later stage adds the temporal accumulation).
+//
+// The 2D sample is the R2 low-discrepancy sequence (Roberts 2018) advanced by the frame index, ROTATED per pixel by
+// a cheap hash-derived Cranley-Patterson offset. R2 alone (same sequence value for every pixel each frame) would
+// correlate the penumbra noise across the whole image into a coherent breathing; the per-pixel rotation decorrelates
+// neighbours (a blue-noise-ish screen-space distribution) so the denoise averages independent estimates. Frame-
+// indexing the sequence walks each pixel across the source disk over successive frames, which the (future) temporal
+// stage integrates and which even now keeps the single-frame estimate unbiased in expectation.
+
+
+// Integer hash (PCG-style, Wang/Jenkins lineage) -> a well-mixed 32-bit value. Used to derive the per-pixel
+// Cranley-Patterson rotation from the pixel coordinate + frame index; cheap (a few ALU) and decorrelated enough for
+// a jitter offset (this is NOT a cryptographic or statistical-grade RNG, just a screen-space decorrelator).
+uint nwbShadowHashU32(uint value){
+    value ^= value >> 17u;
+    value *= 0xed5ad4bbu;
+    value ^= value >> 11u;
+    value *= 0xac4c1b51u;
+    value ^= value >> 15u;
+    value *= 0x31848babu;
+    value ^= value >> 14u;
+    return value;
+}
+
+// Combine a 2D pixel + frame index into one seed, then hash. The multipliers are large odd constants so the three
+// inputs occupy distinct bit lanes before mixing (no trivial collisions across neighbouring pixels or frames).
+uint nwbShadowSeed(const uint2 pixel, const uint frameIndex){
+    return nwbShadowHashU32(pixel.x * 0x9e3779b1u + pixel.y * 0x85ebca77u + frameIndex * 0xc2b2ae3du);
+}
+
+
+// The low-discrepancy 2D sample for this pixel/frame in [0,1)^2: the R2 sequence at index frameIndex, Cranley-
+// Patterson rotated (wrapped add) by a per-pixel hash offset. The R2 additive constants are the reciprocals of the
+// plastic constant's powers (a1 = 1/phi2, a2 = 1/phi2^2, phi2 ~= 1.32471795724474602596), the 2D generalization of
+// the golden-ratio sequence with the lowest known 2D discrepancy.
+float2 nwbShadowLowDiscrepancy2D(const uint2 pixel, const uint frameIndex){
+    const float a1 = 0.75487766624669276005; // 1 / phi2
+    const float a2 = 0.56984029099805326591; // 1 / phi2^2
+    const float2 r2 = frac(float2(a1, a2) * float(frameIndex + 1u));
+
+    // Per-pixel rotation offset in [0,1) from the hash (two independent 16-bit halves for x/y), decorrelating the
+    // otherwise pixel-identical R2 value into a blue-noise-ish screen distribution.
+    const uint seed = nwbShadowSeed(pixel, frameIndex);
+    const float2 offset = float2(float(seed & 0xffffu), float((seed >> 16u) & 0xffffu)) * (1.0 / 65536.0);
+
+    return frac(r2 + offset);
+}
+
+
+// Right-handed orthonormal basis (tangent, bitangent) around a unit axis. Duff et al. (2017) branchless build --
+// numerically stable for any axis orientation, no normalize needed. Used to place the cone/disk sample around the
+// toward-light direction.
+void nwbShadowBuildBasis(const float3 axis, out float3 tangent, out float3 bitangent){
+    const float sign = (axis.z >= 0.0) ? 1.0 : -1.0;
+    const float a = -1.0 / (sign + axis.z);
+    const float b = axis.x * axis.y * a;
+    tangent = float3(1.0 + sign * axis.x * axis.x * a, sign * b, -sign * axis.x);
+    bitangent = float3(b, sign + axis.y * axis.y * a, -axis.y);
+}
+
+
+// Uniform-solid-angle direction inside a cone of half-angle halfAngle around `axis`, from a 2D sample u in [0,1)^2.
+// cosTheta is drawn uniformly in [cos(halfAngle), 1] (the correct area measure on the sphere cap -> uniform over the
+// SOURCE DISK as seen from the shaded point), the azimuth uniformly in [0, 2pi). halfAngle == 0 returns the axis
+// exactly (a hard shadow), so the caller can pass the raw angular radius and get the hard path for a point-source
+// light with no branch. The result is normalized by construction.
+float3 nwbShadowJitterCone(const float3 axis, const float halfAngle, const float2 u){
+    if(halfAngle <= 0.0)
+        return axis;
+
+    const float cosHalfAngle = cos(halfAngle);
+    const float cosTheta = lerp(cosHalfAngle, 1.0, u.x);
+    const float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
+    const float phi = 6.28318530717958647692 * u.y; // 2*pi
+
+    float3 tangent;
+    float3 bitangent;
+    nwbShadowBuildBasis(axis, tangent, bitangent);
+
+    return normalize(
+        cos(phi) * sinTheta * tangent +
+        sin(phi) * sinTheta * bitangent +
+        cosTheta * axis
+    );
+}
+
+
+// Offset a point onto a sphere of radius `radius` centred at `center`, from a 2D sample u in [0,1)^2 (uniform on the
+// sphere surface). This is the punctual (source-radius) soft-shadow sampler -- the ray then aims from the shaded
+// point at this jittered light position instead of the centre. UNUSED this stage (directional-only); provided so the
+// later punctual stage reuses the same sampling module. radius == 0 returns the centre exactly (the hard path).
+float3 nwbShadowJitterSphere(const float3 center, const float radius, const float2 u){
+    if(radius <= 0.0)
+        return center;
+
+    const float cosTheta = 1.0 - 2.0 * u.x; // uniform in [-1,1]
+    const float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
+    const float phi = 6.28318530717958647692 * u.y;
+    const float3 dir = float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+    return center + radius * dir;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

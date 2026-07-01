@@ -415,6 +415,50 @@ private:
     Core::BufferHandle m_swShadowEdgeStatsReadback;
     u32 m_swShadowEdgeStatsTick = 0u;
     bool m_swShadowEdgeStatsPending = false;
+    // Soft directional shadow (Stage 1 of the soft-ray-traced-shadow feature): a per-frame counter seeding the
+    // per-pixel low-discrepancy cone-jitter sample. Incremented once per frame by whichever primary shadow producer
+    // runs (the HW RayQuery opaque trace on the HW path, the no-RT software traversal otherwise -- mutually exclusive
+    // per frame), so each pixel's single jittered ray walks the sun disk across frames. No temporal reuse this stage,
+    // so this only decorrelates the per-frame sample (a later stage feeds it into a temporal accumulator).
+    u32 m_softShadowFrameIndex = 0u;
+    // The set of shadow slots this frame that belong to a DIRECTIONAL light (params.y < 0.5) AND hold a shadow slot
+    // (params.z >= 0) -- the slots the soft directional path traces + denoises + upsamples. A bitmask (slot k -> bit k)
+    // over the NWB_SCENE_SHADOW_SLOT_COUNT pool, filled by updateSceneShadingBuffer from the resolved light data. The
+    // resolve dispatches once per set bit (its lightSlotStart/lightSlotCount address a single slot), so the scattered
+    // directional-slot assignment (a directional light can land on any slot index) is handled without a contiguous
+    // range assumption, and non-directional (point/spot) slots keep their hard opaque shadow untouched.
+    u32 m_softShadowSlotMask = 0u;
+    // Soft directional shadow RESOLVE (Stage 1): the a-trous wavelet denoise pipeline (cloned from the caustic resolve)
+    // dispatched per pass with two ping-pong binding sets that swap the (output UAV, input-color SRV) pair between the
+    // half-res soft-A / soft-B buffers; the upsample set writes the full-res visibility. All sets share the geometry
+    // cache + depth SRVs; rebuilt when any tracked target changes (on resize). Mirrors the caustic resolve state.
+    Core::BindingLayoutHandle m_shadowResolveBindingLayout;
+    Core::ShaderHandle m_shadowResolveShader;
+    Core::ComputePipelineHandle m_shadowResolvePipeline;
+    bool m_shadowResolvePipelineFailed = false;
+    Core::BindingSetHandle m_shadowResolveBindingSetOutputHalfA; // output=soft-A, input=soft-B (prepare + odd wavelet passes)
+    Core::BindingSetHandle m_shadowResolveBindingSetOutputHalfB; // output=soft-B, input=soft-A (even wavelet passes)
+    Core::BindingSetHandle m_shadowResolveBindingSetUpsample;    // output=full-res visibility, input=soft-B (final upsample)
+    const Core::Texture* m_shadowResolveBindingSetSoftHalfA = nullptr;
+    const Core::Texture* m_shadowResolveBindingSetSoftHalfB = nullptr;
+    const Core::Texture* m_shadowResolveBindingSetGeometry = nullptr;
+    const Core::Texture* m_shadowResolveBindingSetDepth = nullptr;
+    const Core::Texture* m_shadowResolveBindingSetVisibility = nullptr;
+    // Shadow geometry downsample pre-pass (its own pipeline): fills the half-res packed geometry cache (octahedral
+    // normal + camera distance + validity) the resolve passes read for the edge-stop, so they tap one half-res texel.
+    Core::BindingLayoutHandle m_shadowGeometryDownsampleBindingLayout;
+    Core::ShaderHandle m_shadowGeometryDownsampleShader;
+    Core::ComputePipelineHandle m_shadowGeometryDownsamplePipeline;
+    bool m_shadowGeometryDownsamplePipelineFailed = false;
+    Core::BindingSetHandle m_shadowGeometryDownsampleBindingSet;
+    const Core::Texture* m_shadowGeometryDownsampleWorldPosition = nullptr;
+    const Core::Texture* m_shadowGeometryDownsampleNormal = nullptr;
+    const Core::Texture* m_shadowGeometryDownsampleDepth = nullptr;
+    const Core::Texture* m_shadowGeometryDownsampleGeometry = nullptr;
+    // Set by prepareShadowVisibilityResources (no-RT path) when the soft directional geometry-downsample + resolve
+    // pipelines AND binding sets are all ready this frame; gates the render's soft directional trace + resolve dispatch.
+    // A failure here is non-fatal to shadows -- the directional slots simply keep their hard opaque mask this frame.
+    bool m_softShadowReady = false;
     u32 m_swShadowEdgeStatsPendingTick = 0u;
     // Stage-3 compaction resources: the per-frame append counter (2 u32: [0] append count, [1] clamped trace count), the
     // compacted edge-record list (recreated on resize, sized in records), and the persistent indirect dispatch-args

@@ -31,6 +31,8 @@
 
 #include "occlusion.slangi"
 #include "../scene/buffer.slangi"
+// The soft directional cone-jitter, shared with the software traversal so the HW opaque path softens IDENTICALLY.
+#include "shadow_sampling.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,11 +42,14 @@
 // OPAQUE hit, else 1 (lit). Transparent occluders are skipped here -- the software traversal tints those and multiplies
 // its colored transmittance onto this mask. Mirrors the software path's ray setup (directional aims to "infinity";
 // point/spot aim at the light with tMax = distance; geometric-normal bias + tMin avoids self-intersection).
-half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light){
+// `jitter` is the per-pixel low-discrepancy 2D sample for the soft directional cone-jitter (pass float2(0,0) for the
+// hard path); it offsets the directional toward-light axis inside the light's angular radius (params2.x) so the HW
+// opaque path softens the SAME way the software traversal does. Point/spot lights ignore it this stage.
+half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter){
     float3 toLight;
     float tMax;
     if(light.params.y < 0.5){
-        toLight = normalize(light.direction.xyz);
+        toLight = nwbShadowJitterCone(normalize(light.direction.xyz), light.params2.x, jitter);
         tMax = 1.0e7;
     }
     else{

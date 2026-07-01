@@ -20,7 +20,7 @@
 #define NWB_SCENE_LIGHT_LIST_DEFAULT_BINDING 6
 
 #define NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT 4u
-#define NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT 16u
+#define NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT 20u
 #define NWB_SCENE_MAX_LIGHTS 64u
 
 // Colored shadows store per-light float3 transmittance in a Texture2DArray with one layer per shadow slot.

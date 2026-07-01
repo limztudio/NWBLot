@@ -146,6 +146,19 @@ struct DeferredFrameTargets{
     // cache. Needs no clear (the coarse trace fully overwrites every block it samples). Null when adaptive is disabled.
     Core::Format::Enum shadowCoarseTransmittanceFormat = Core::Format::UNKNOWN;
     Core::TextureHandle shadowCoarseTransmittance;
+    // Soft directional shadow (Stage 1 of the soft-ray-traced-shadow feature) HALF-res targets:
+    //  - shadowSoftHalfA / shadowSoftHalfB: two HALF-res RGBA16F Texture2DArrays (NWB_SCENE_SHADOW_SLOT_COUNT layers),
+    //    the a-trous ping-pong buffers. The mode-11 jittered directional trace writes shadowSoftHalfA; the resolve's
+    //    PREPARE copies it, the wavelet alternates A<->B, the final wavelet lands in B, and the upsample reads B into
+    //    the full-res shadowVisibility. Half the render extent (1/4 the pixels); need no clear (every pass fully
+    //    overwrites, and the trace writes the LIT identity for background/non-directional).
+    //  - shadowSoftGeometry: a HALF-res RGBA16F single-layer geometry cache (xy = octahedral receiver normal, z =
+    //    camera distance, w = validity) the geometry downsample pre-pass fills once per frame for the edge-stop.
+    Core::Format::Enum shadowSoftFormat = Core::Format::UNKNOWN;
+    Core::TextureHandle shadowSoftHalfA;
+    Core::TextureHandle shadowSoftHalfB;
+    Core::Format::Enum shadowSoftGeometryFormat = Core::Format::UNKNOWN;
+    Core::TextureHandle shadowSoftGeometry;
     // Caustic producer targets (additive, inverted lifecycle vs shadowVisibility): the RGBA16F resolved irradiance
     // the deferred lighting pass adds pre-tonemap, the R32_UINT splat accumulators (one Texture2DArray layer per RGB
     // channel) the producer's fixed-point InterlockedAdd lands in, and the RGBA16F a-trous wavelet scratch buffer.

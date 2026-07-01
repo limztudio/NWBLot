@@ -169,6 +169,8 @@ bool TryBuildSceneLight(const TransformComponent& transform, const LightComponen
     outLight.colorIntensity = light.colorIntensity;
     outLight.type = light.type;
     outLight.enableCaustics = light.enableCaustics;
+    outLight.angularRadius = light.angularRadius;
+    outLight.sourceRadius = light.sourceRadius;
 
     switch(light.type){
     case LightType::Directional:{

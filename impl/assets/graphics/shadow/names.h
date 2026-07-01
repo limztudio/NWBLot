@@ -29,6 +29,11 @@ namespace AssetsGraphicsShadow{
 // shadow is cast by the software traversal below and multiplied onto this opaque mask (the hybrid split).
 inline constexpr Name s_RayQueryShaderName("engine/graphics/shadow/shadow_rayquery_cs");
 inline constexpr Name s_SwTraversalShaderName("engine/graphics/shadow/shadow_sw_traversal_cs");
+// Soft directional shadow (Stage 1 of the soft-ray-traced-shadow feature): the half-res geometry downsample pre-pass
+// (octahedral normal + camera distance + validity, for the resolve's edge-stop) + the a-trous wavelet resolve +
+// bilateral upsample that denoises the mode-11 jittered half-res directional visibility into the full-res visibility.
+inline constexpr Name s_GeometryDownsampleShaderName("engine/graphics/shadow/shadow_geometry_downsample_cs");
+inline constexpr Name s_SoftResolveShaderName("engine/graphics/shadow/shadow_resolve_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

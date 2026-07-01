@@ -9,6 +9,7 @@
 
 #include <impl/assets/graphics/shadow/binding_slots.h>
 #include <impl/assets/graphics/shadow/sw_binding_slots.h>
+#include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 #include <impl/assets/graphics/shadow/names.h>
 #include <impl/assets/graphics/caustic/sw_binding_slots.h>
 #include <impl/assets/graphics/caustic/hw_binding_slots.h>
@@ -182,8 +183,49 @@ struct SwShadowPushConstants{
     u32 collectStats = 0u;    // modes 5/6: tally traced/total rays into the edge-stats buffer (measurement only)
     u32 edgeCapacity = 0u;    // Stage-3 (modes 6/7): edge-list capacity in RECORDS (append guard + build-args clamp)
     u32 traceGroupSize = 0u;  // Stage-3 (modes 7/8): threads per indirect-trace group (= NWB_SW_SHADOW_TRACE_GROUP)
+    u32 frameIndex = 0u;      // Soft directional (mode 11): the frame counter seeding the per-pixel cone-jitter sample
 };
-static_assert(sizeof(SwShadowPushConstants) == sizeof(u32) * 10u, "SwShadowPushConstants must match the shader push-constant layout");
+static_assert(sizeof(SwShadowPushConstants) == sizeof(u32) * 11u, "SwShadowPushConstants must match the shader push-constant layout");
+
+// CPU mirror of the hardware RayQuery shadow push constants (shadow_rayquery_cs.slang): just the frame counter that
+// seeds the soft directional cone-jitter (a soft directional light softens the full-res HW opaque trace directly).
+struct ShadowRqPushConstants{
+    u32 frameIndex = 0u;
+};
+static_assert(sizeof(ShadowRqPushConstants) == sizeof(u32), "ShadowRqPushConstants must match the shader push-constant layout");
+
+// CPU mirror of shadow_resolve_cs.slang's NwbShadowResolvePushConstants: the full/half dims, the a-trous dilation +
+// stage selector, and the active directional shadow-slot range the resolve loops. All-scalar -> 8 x 4 = 32 bytes.
+struct ShadowResolvePushConstants{
+    u32 width = 0u;          // FULL-res width (UPSAMPLE dispatch/output dim)
+    u32 height = 0u;         // FULL-res height
+    u32 halfWidth = 0u;      // HALF-res width (PREPARE/WAVELET dispatch dim)
+    u32 halfHeight = 0u;     // HALF-res height
+    u32 stepWidth = 1u;      // a-trous dilation for this wavelet pass (1,2,4,8,16), in HALF-res texels
+    u32 stage = 0u;          // 0 = PREPARE, 1 = WAVELET (half-res), 2 = UPSAMPLE (-> full-res visibility)
+    u32 lightSlotStart = 0u; // first active DIRECTIONAL shadow slot to process
+    u32 lightSlotCount = 0u; // number of contiguous active DIRECTIONAL slots to process
+};
+static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 8u, "ShadowResolvePushConstants must match the shader push-constant layout");
+
+// Shadow resolve stages, kept in lockstep with shadow_resolve_cs.slang's pushConstants.stage switch.
+namespace ShadowResolveStage{
+    enum Enum : u32{
+        Prepare = 0u,
+        Wavelet = 1u,
+        Upsample = 2u,
+    };
+};
+
+// Mirror of shadow_geometry_downsample_cs.slang's NwbShadowGeometryDownsamplePushConstants: full-res G-buffer dims +
+// the half-res output dims.
+struct ShadowGeometryDownsamplePushConstants{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 halfWidth = 0u;
+    u32 halfHeight = 0u;
+};
+static_assert(sizeof(ShadowGeometryDownsamplePushConstants) == sizeof(u32) * 4u, "ShadowGeometryDownsamplePushConstants must match the shader push-constant layout");
 
 // CPU mirror of the caustic photon producer push constants, shared by BOTH the software compute producer
 // (caustic/caustic_photon_sw_cs.slang) and the hardware ray-traced producer (caustic/caustic_photon_hw_raygen.slang).
@@ -1128,6 +1170,19 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
 
     outBackendReady = ensureSwShadowPipeline() && ensureSwShadowBindingSet(targets);
 
+    // Soft directional shadow (Stage 1): build the geometry-downsample + a-trous resolve pipelines/binding sets so the
+    // render can denoise the mode-11 half-res jittered directional trace into the full-res visibility. Non-fatal to
+    // shadows -- a failure leaves m_softShadowReady false and the directional slots keep their hard opaque mask.
+    rayTracingState().m_softShadowReady =
+        outBackendReady
+        && ensureShadowGeometryDownsamplePipeline()
+        && ensureShadowGeometryDownsampleBindingSet(targets)
+        && ensureSoftShadowResolvePipeline()
+        && ensureSoftShadowResolveBindingSet(targets)
+    ;
+    if(outBackendReady && !rayTracingState().m_softShadowReady)
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft directional shadow resource preparation failed; directional shadows hard this frame"));
+
     // Build the software caustic producer + resolve resources alongside the SW shadow resources (same SW scene BVH +
     // per-mesh geometry). Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op).
     if(!prepareGpuBvhCausticResources(targets))
@@ -1179,6 +1234,55 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     targets.shadowCoarseTransmittance = graphics().createTexture(coarseDesc);
     if(!targets.shadowCoarseTransmittance){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow coarse transmittance target"));
+        return false;
+    }
+
+    // Soft directional shadow (Stage 1) HALF-res targets: the two ping-pong soft buffers (RGBA16F Texture2DArrays, one
+    // layer per shadow slot -- the mode-11 jittered trace writes A, the a-trous resolve alternates A<->B, the upsample
+    // reads B into the full-res visibility) + the single-layer packed geometry cache (octahedral normal + camera
+    // distance + validity) the geometry downsample fills for the edge-stop. Half the render extent (rounded up so a
+    // half texel covers its SOFT_FACTOR block for odd extents), matching the caustic half-res buffers. Allocated with
+    // the visibility target so they share the resize lifecycle (resetDeferredFrameTargets rebuilds the resolve set).
+    targets.shadowSoftFormat = Core::Format::RGBA16_FLOAT;
+    targets.shadowSoftGeometryFormat = Core::Format::RGBA16_FLOAT;
+    const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+
+    Core::TextureDesc softHalfADesc;
+    softHalfADesc
+        .setWidth(softHalfWidth)
+        .setHeight(softHalfHeight)
+        .setArraySize(NWB_SCENE_SHADOW_SLOT_COUNT)
+        .setDimension(Core::TextureDimension::Texture2DArray)
+        .setFormat(targets.shadowSoftFormat)
+        .setInUAV(true)
+        .setName("engine/shadow/soft_half_a")
+    ;
+    targets.shadowSoftHalfA = graphics().createTexture(softHalfADesc);
+    if(!targets.shadowSoftHalfA){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow half-A target"));
+        return false;
+    }
+
+    Core::TextureDesc softHalfBDesc = softHalfADesc;
+    softHalfBDesc.setName("engine/shadow/soft_half_b");
+    targets.shadowSoftHalfB = graphics().createTexture(softHalfBDesc);
+    if(!targets.shadowSoftHalfB){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow half-B target"));
+        return false;
+    }
+
+    Core::TextureDesc softGeometryDesc;
+    softGeometryDesc
+        .setWidth(softHalfWidth)
+        .setHeight(softHalfHeight)
+        .setFormat(targets.shadowSoftGeometryFormat)
+        .setInUAV(true)
+        .setName("engine/shadow/soft_geometry")
+    ;
+    targets.shadowSoftGeometry = graphics().createTexture(softGeometryDesc);
+    if(!targets.shadowSoftGeometry){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow geometry cache target"));
         return false;
     }
 
@@ -1342,6 +1446,13 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     shadowState.setPipeline(rayTracingState().m_shadowPipeline.get());
     shadowState.addBindingSet(rayTracingState().m_shadowBindingSet.get());
     commandList.setComputeState(shadowState);
+    // Soft directional cone-jitter: advance the per-frame seed once here (the HW opaque trace is the primary shadow
+    // producer on the HW path, mutually exclusive with the no-RT software traversal per frame). A soft directional
+    // (angular-radius > 0) light softens this full-res HW opaque trace directly; a zero-radius directional / point /
+    // spot light cone-jitters to the axis exactly -> the unchanged hard shadow.
+    ShadowRqPushConstants shadowPush;
+    shadowPush.frameIndex = rayTracingState().m_softShadowFrameIndex++;
+    commandList.setPushConstants(&shadowPush, sizeof(shadowPush));
     commandList.dispatch(
         DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
         DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
@@ -1627,6 +1738,79 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();
+
+        // Soft directional shadow (Stage 1). The opaque pre-pass above wrote a HARD binary mask into EVERY slot; now
+        // OVERWRITE just the DIRECTIONAL slots with the soft penumbra: mode-11 half-res jittered opaque directional
+        // trace -> geometry downsample -> a-trous denoise -> bilateral upsample into the full-res visibility. Runs only
+        // when the resolve resources are ready this frame AND at least one directional light holds a shadow slot; else
+        // the directional slots keep the hard mask (a clean fallback). Non-directional (point/spot) slots are never
+        // touched here, so their hard opaque shadow survives, and the transparent pass below still multiplies its
+        // colored shadow onto the (now soft directional / still hard non-directional) mask -- so point/spot stay hard
+        // and transparent colored shadow keeps working, exactly as this stage requires.
+        if(rayTracingState().m_softShadowReady && rayTracingState().m_softShadowSlotMask != 0u){
+            const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+            const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+            const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
+            const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);
+
+            // Advance the per-frame cone-jitter seed once (the no-RT software traversal is the primary shadow producer
+            // this frame, mutually exclusive with the HW RayQuery path).
+            const u32 frameIndex = rayTracingState().m_softShadowFrameIndex++;
+
+            // Mode 11: one cone-jittered opaque directional visibility sample per HALF-res pixel into soft-A (all
+            // directional slots at once). Enable UAV barriers on the soft buffers + geometry cache for the resolve.
+            commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
+            commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
+            commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
+
+            SwShadowPushConstants softTracePush;
+            softTracePush.width = targets.width;
+            softTracePush.height = targets.height;
+            softTracePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+            softTracePush.multiplyMode = 11u;
+            softTracePush.frameIndex = frameIndex;
+            commandList.setComputeState(computeState);
+            commandList.setPushConstants(&softTracePush, sizeof(softTracePush));
+            commandList.dispatch(softGroupsX, softGroupsY, 1u);
+
+            // Sync soft-A (mode-11 write -> the resolve PREPARE reads it as an SRV). The resolve's
+            // setResourceStatesForBindingSet transitions soft-A UnorderedAccess -> ShaderResource here.
+            commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.commitBarriers();
+
+            // Geometry downsample: fill the half-res packed geometry cache ONCE (slot-independent) before the per-slot
+            // resolve loop taps it. Writes the cache UAV; each slot's resolve then reads it as an SRV (the cache is not
+            // rewritten, so the UAV->SRV transition happens once and every directional slot shares it).
+            {
+                commandList.setResourceStatesForBindingSet(rayTracingState().m_shadowGeometryDownsampleBindingSet.get());
+                commandList.commitBarriers();
+
+                ShadowGeometryDownsamplePushConstants geometryPush;
+                geometryPush.width = targets.width;
+                geometryPush.height = targets.height;
+                geometryPush.halfWidth = softHalfWidth;
+                geometryPush.halfHeight = softHalfHeight;
+
+                Core::ComputeState geometryState;
+                geometryState.setPipeline(rayTracingState().m_shadowGeometryDownsamplePipeline.get());
+                geometryState.addBindingSet(rayTracingState().m_shadowGeometryDownsampleBindingSet.get());
+                commandList.setComputeState(geometryState);
+                commandList.setPushConstants(&geometryPush, sizeof(geometryPush));
+                commandList.dispatch(softGroupsX, softGroupsY, 1u);
+            }
+
+            // Denoise + upsample EACH directional slot (scattered set, so one dispatch chain per set bit). Each chain
+            // overwrites that slot's full-res visibility with the soft penumbra.
+            for(u32 slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot){
+                if((rayTracingState().m_softShadowSlotMask & (1u << slot)) == 0u)
+                    continue;
+                dispatchSoftShadowResolve(commandList, targets, slot);
+            }
+
+            // The resolve left the visibility in UnorderedAccess (its final UPSAMPLE UAV write) + soft targets in
+            // whatever the last pass set; the transparent pass below re-binds the SW shadow set, and its
+            // setResourceStatesForBindingSet re-derives the visibility UAV state, so no extra transition is needed here.
+        }
     }
 
     if(rayTracingState().m_swShadowAdaptiveEnabled){
@@ -2032,6 +2216,9 @@ void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayou
     layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INSTANCES, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_POSITIONS, NWB_SHADOW_RT_MAX_MESHES));
+    // Soft directional cone-jitter: the frame counter (NwbShadowRqPushConstants) seeding the per-pixel low-discrepancy
+    // jitter sample so a soft directional (angular-radius > 0) light softens this HW opaque trace.
+    layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowRqPushConstants)));
 }
 
 void RendererRayTracingSystem::appendShadowTraceBindingSet(Core::BindingSetDesc& desc, DeferredFrameTargets& targets, Core::Texture* visibilityTarget)const{
@@ -2235,6 +2422,9 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_COUNTER, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_LIST, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_INDIRECT_ARGS, 1));
+        // Soft directional shadow (Stage 1): the half-res soft directional visibility UAV the mode-11 jittered trace
+        // writes (read by the separate shadow_resolve pipeline). Always in the layout (the shader always declares it).
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_SOFT_HALF, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowPushConstants)));
 
         rayTracingState().m_swShadowBindingLayout = device->createBindingLayout(layoutDesc);
@@ -2370,6 +2560,7 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
     NWB_ASSERT(rayTracingState().m_swShadowMeshCount > 0u);
     NWB_ASSERT(targets.shadowVisibility);
     NWB_ASSERT(targets.shadowCoarseTransmittance);
+    NWB_ASSERT(targets.shadowSoftHalfA);
     NWB_ASSERT(rayTracingState().m_swShadowEdgeStatsBuffer);
     NWB_ASSERT(rayTracingState().m_swShadowEdgeCounterBuffer);
     NWB_ASSERT(rayTracingState().m_swShadowEdgeListBuffer);
@@ -2458,6 +2649,15 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_COUNTER, rayTracingState().m_swShadowEdgeCounterBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_LIST, rayTracingState().m_swShadowEdgeListBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_INDIRECT_ARGS, rayTracingState().m_swShadowIndirectArgsBuffer.get()));
+    // Soft directional shadow (Stage 1): the half-res soft directional visibility UAV (recreated with the visibility
+    // target on resize, so tracking the visibility pointer in the rebuild guard also covers it).
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_SW_SHADOW_BINDING_SOFT_HALF,
+        targets.shadowSoftHalfA.get(),
+        targets.shadowSoftFormat,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
 
     // Per-mesh descriptor arrays: bind every slot (the shader only indexes meshIndex < meshCount). Unused
     // tail slots are padded with the last real mesh so a non-bindless array has no unbound descriptors.
@@ -2945,6 +3145,350 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsampleBindingSet(Deferre
     rayTracingState().m_causticGeometryDownsampleDepth = depthTarget;
     rayTracingState().m_causticGeometryDownsampleGeometry = geometryTarget;
     return true;
+}
+
+bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
+    if(rayTracingState().m_shadowGeometryDownsamplePipeline)
+        return true;
+    if(rayTracingState().m_shadowGeometryDownsamplePipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_shadowGeometryDownsampleBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_NORMAL, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_SCENE_SHADING, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowGeometryDownsamplePushConstants)));
+
+        rayTracingState().m_shadowGeometryDownsampleBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_shadowGeometryDownsampleBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow geometry downsample binding layout"));
+            rayTracingState().m_shadowGeometryDownsamplePipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_shadowGeometryDownsampleShader,
+        AssetsGraphicsShadow::s_GeometryDownsampleShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_ShadowGeometryDownsample"
+    )){
+        rayTracingState().m_shadowGeometryDownsamplePipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_shadowGeometryDownsampleShader)
+        .addBindingLayout(rayTracingState().m_shadowGeometryDownsampleBindingLayout)
+    ;
+    rayTracingState().m_shadowGeometryDownsamplePipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_shadowGeometryDownsamplePipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow geometry downsample compute pipeline"));
+        rayTracingState().m_shadowGeometryDownsamplePipelineFailed = true;
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureShadowGeometryDownsampleBindingSet(DeferredFrameTargets& targets){
+    NWB_ASSERT(rayTracingState().m_shadowGeometryDownsampleBindingLayout);
+    NWB_ASSERT(targets.worldPosition);
+    NWB_ASSERT(targets.normal);
+    NWB_ASSERT(targets.depth);
+    NWB_ASSERT(targets.shadowSoftGeometry);
+    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
+
+    Core::Texture* worldPositionTarget = targets.worldPosition.get();
+    Core::Texture* normalTarget = targets.normal.get();
+    Core::Texture* depthTarget = targets.depth.get();
+    Core::Texture* geometryTarget = targets.shadowSoftGeometry.get();
+    if(
+        rayTracingState().m_shadowGeometryDownsampleBindingSet
+        && rayTracingState().m_shadowGeometryDownsampleWorldPosition == worldPositionTarget
+        && rayTracingState().m_shadowGeometryDownsampleNormal == normalTarget
+        && rayTracingState().m_shadowGeometryDownsampleDepth == depthTarget
+        && rayTracingState().m_shadowGeometryDownsampleGeometry == geometryTarget
+    )
+        return true;
+
+    auto* device = graphics().getDevice();
+
+    Core::BindingSetDesc desc(arena());
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION,
+        worldPositionTarget,
+        targets.worldPositionFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_NORMAL,
+        normalTarget,
+        targets.normalFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH,
+        depthTarget,
+        targets.depthFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
+    desc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT,
+        geometryTarget,
+        targets.shadowSoftGeometryFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+
+    Core::BindingSetHandle bindingSet = device->createBindingSet(desc, rayTracingState().m_shadowGeometryDownsampleBindingLayout);
+    if(!bindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow geometry downsample binding set"));
+        rayTracingState().m_shadowGeometryDownsampleBindingSet = nullptr;
+        rayTracingState().m_shadowGeometryDownsampleWorldPosition = nullptr;
+        rayTracingState().m_shadowGeometryDownsampleNormal = nullptr;
+        rayTracingState().m_shadowGeometryDownsampleDepth = nullptr;
+        rayTracingState().m_shadowGeometryDownsampleGeometry = nullptr;
+        return false;
+    }
+    rayTracingState().m_shadowGeometryDownsampleBindingSet = Move(bindingSet);
+    rayTracingState().m_shadowGeometryDownsampleWorldPosition = worldPositionTarget;
+    rayTracingState().m_shadowGeometryDownsampleNormal = normalTarget;
+    rayTracingState().m_shadowGeometryDownsampleDepth = depthTarget;
+    rayTracingState().m_shadowGeometryDownsampleGeometry = geometryTarget;
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
+    if(rayTracingState().m_shadowResolvePipeline)
+        return true;
+    if(rayTracingState().m_shadowResolvePipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_shadowResolveBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_GEOMETRY, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_GBUFFER_DEPTH, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RESOLVE_BINDING_OUTPUT, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_INPUT_COLOR, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RESOLVE_BINDING_VISIBILITY, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowResolvePushConstants)));
+
+        rayTracingState().m_shadowResolveBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_shadowResolveBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow resolve binding layout"));
+            rayTracingState().m_shadowResolvePipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_shadowResolveShader,
+        AssetsGraphicsShadow::s_SoftResolveShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_SoftShadowResolve"
+    )){
+        rayTracingState().m_shadowResolvePipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_shadowResolveShader)
+        .addBindingLayout(rayTracingState().m_shadowResolveBindingLayout)
+    ;
+    rayTracingState().m_shadowResolvePipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_shadowResolvePipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow resolve compute pipeline"));
+        rayTracingState().m_shadowResolvePipelineFailed = true;
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTargets& targets){
+    NWB_ASSERT(rayTracingState().m_shadowResolveBindingLayout);
+    NWB_ASSERT(targets.shadowSoftHalfA);
+    NWB_ASSERT(targets.shadowSoftHalfB);
+    NWB_ASSERT(targets.shadowSoftGeometry);
+    NWB_ASSERT(targets.depth);
+    NWB_ASSERT(targets.shadowVisibility);
+
+    Core::Texture* softATarget = targets.shadowSoftHalfA.get();
+    Core::Texture* softBTarget = targets.shadowSoftHalfB.get();
+    Core::Texture* geometryTarget = targets.shadowSoftGeometry.get();
+    Core::Texture* depthTarget = targets.depth.get();
+    Core::Texture* visibilityTarget = targets.shadowVisibility.get();
+    if(
+        rayTracingState().m_shadowResolveBindingSetOutputHalfA
+        && rayTracingState().m_shadowResolveBindingSetOutputHalfB
+        && rayTracingState().m_shadowResolveBindingSetUpsample
+        && rayTracingState().m_shadowResolveBindingSetSoftHalfA == softATarget
+        && rayTracingState().m_shadowResolveBindingSetSoftHalfB == softBTarget
+        && rayTracingState().m_shadowResolveBindingSetGeometry == geometryTarget
+        && rayTracingState().m_shadowResolveBindingSetDepth == depthTarget
+        && rayTracingState().m_shadowResolveBindingSetVisibility == visibilityTarget
+    )
+        return true;
+
+    auto* device = graphics().getDevice();
+
+    // SOFT_HALF is the mode-11 trace target (soft-A), read ONLY by the PREPARE stage (which runs on the OutputHalfB
+    // set). The three sets differ in the (SOFT_HALF, OUTPUT, INPUT_COLOR) triple, chosen so NO set ever binds the same
+    // texture as both an SRV and a UAV (which the resource-state framework cannot resolve to one state):
+    //  - OutputHalfB: softHalf=soft-A, out=soft-B, in=soft-A -- PREPARE (copies soft-A -> soft-B) + the even wavelets.
+    //  - OutputHalfA: softHalf=soft-B, out=soft-A, in=soft-B -- the odd wavelets. SOFT_HALF is bound-but-unused here, so
+    //                 pointing it at soft-B (not soft-A == OUTPUT) avoids an SRV+UAV alias of soft-A in this set.
+    //  - Upsample:    softHalf=soft-A, out=full-res visibility, in=soft-A (the final wavelet lands in soft-A, odd count).
+    // The half + full targets are dimensionless in the set (the bound texture carries the extent), so one layout serves.
+    const auto buildSet = [&](Core::Texture* softHalfTex, Core::Texture* outputTex, Core::Format::Enum outputFormat, Core::TextureDimension::Enum outputDim, Core::Texture* inputTex) -> Core::BindingSetHandle {
+        Core::BindingSetDesc desc(arena());
+        desc.addItem(Core::BindingSetItem::Texture_SRV(
+            NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF,
+            softHalfTex,
+            targets.shadowSoftFormat,
+            ECSRenderDetail::s_ShadowVisibilitySubresources,
+            Core::TextureDimension::Texture2DArray
+        ));
+        desc.addItem(Core::BindingSetItem::Texture_SRV(
+            NWB_SHADOW_RESOLVE_BINDING_GEOMETRY,
+            geometryTarget,
+            targets.shadowSoftGeometryFormat,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture2D
+        ));
+        desc.addItem(Core::BindingSetItem::Texture_SRV(
+            NWB_SHADOW_RESOLVE_BINDING_GBUFFER_DEPTH,
+            depthTarget,
+            targets.depthFormat,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture2D
+        ));
+        desc.addItem(Core::BindingSetItem::Texture_UAV(
+            NWB_SHADOW_RESOLVE_BINDING_OUTPUT,
+            outputTex,
+            outputFormat,
+            ECSRenderDetail::s_ShadowVisibilitySubresources,
+            outputDim
+        ));
+        desc.addItem(Core::BindingSetItem::Texture_SRV(
+            NWB_SHADOW_RESOLVE_BINDING_INPUT_COLOR,
+            inputTex,
+            targets.shadowSoftFormat,
+            ECSRenderDetail::s_ShadowVisibilitySubresources,
+            Core::TextureDimension::Texture2DArray
+        ));
+        desc.addItem(Core::BindingSetItem::Texture_UAV(
+            NWB_SHADOW_RESOLVE_BINDING_VISIBILITY,
+            visibilityTarget,
+            targets.shadowVisibilityFormat,
+            ECSRenderDetail::s_ShadowVisibilitySubresources,
+            Core::TextureDimension::Texture2DArray
+        ));
+        return device->createBindingSet(desc, rayTracingState().m_shadowResolveBindingLayout);
+    };
+
+    // OUTPUT is a half-res Texture2DArray for the ping-pong sets; for the upsample it is UNUSED (the upsample writes the
+    // full-res VISIBILITY UAV instead) but must still be a valid binding -- point it at soft-B (a half-res array).
+    Core::BindingSetHandle outputHalfA = buildSet(softBTarget, softATarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, softBTarget);
+    Core::BindingSetHandle outputHalfB = buildSet(softATarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, softATarget);
+    Core::BindingSetHandle upsample    = buildSet(softATarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, softATarget);
+    if(!outputHalfA || !outputHalfB || !upsample){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow resolve binding sets"));
+        rayTracingState().m_shadowResolveBindingSetOutputHalfA = nullptr;
+        rayTracingState().m_shadowResolveBindingSetOutputHalfB = nullptr;
+        rayTracingState().m_shadowResolveBindingSetUpsample = nullptr;
+        rayTracingState().m_shadowResolveBindingSetSoftHalfA = nullptr;
+        rayTracingState().m_shadowResolveBindingSetSoftHalfB = nullptr;
+        rayTracingState().m_shadowResolveBindingSetGeometry = nullptr;
+        rayTracingState().m_shadowResolveBindingSetDepth = nullptr;
+        rayTracingState().m_shadowResolveBindingSetVisibility = nullptr;
+        return false;
+    }
+    rayTracingState().m_shadowResolveBindingSetOutputHalfA = Move(outputHalfA);
+    rayTracingState().m_shadowResolveBindingSetOutputHalfB = Move(outputHalfB);
+    rayTracingState().m_shadowResolveBindingSetUpsample = Move(upsample);
+    rayTracingState().m_shadowResolveBindingSetSoftHalfA = softATarget;
+    rayTracingState().m_shadowResolveBindingSetSoftHalfB = softBTarget;
+    rayTracingState().m_shadowResolveBindingSetGeometry = geometryTarget;
+    rayTracingState().m_shadowResolveBindingSetDepth = depthTarget;
+    rayTracingState().m_shadowResolveBindingSetVisibility = visibilityTarget;
+    return true;
+}
+
+void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slot){
+    // The a-trous denoise + upsample of ONE directional slot's half-res single-sample jittered visibility (mode 11)
+    // into the full-res visibility. Cloned from dispatchCausticResolve: PREPARE (copy) -> N wavelet ping-pong passes
+    // -> bilateral upsample. Assumes the pipelines + binding sets are ready, the mode-11 trace already wrote soft-A
+    // (this frame) with a UAV barrier, AND the slot-independent geometry downsample already filled the geometry cache
+    // (the caller runs it ONCE before the per-slot loop, since the cache does not depend on the slot).
+    const u32 halfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 halfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 halfGroupsX = DivideUp(halfWidth, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
+    const u32 halfGroupsY = DivideUp(halfHeight, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
+    const u32 fullGroupsX = DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
+    const u32 fullGroupsY = DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
+
+    const auto runPass = [&](Core::BindingSet* const bindingSet, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY){
+        commandList.setResourceStatesForBindingSet(bindingSet);
+        commandList.commitBarriers();
+
+        ShadowResolvePushConstants resolvePush;
+        resolvePush.width = targets.width;
+        resolvePush.height = targets.height;
+        resolvePush.halfWidth = halfWidth;
+        resolvePush.halfHeight = halfHeight;
+        resolvePush.stepWidth = stepWidth;
+        resolvePush.stage = static_cast<u32>(stage);
+        resolvePush.lightSlotStart = slot;
+        resolvePush.lightSlotCount = 1u; // one directional slot per dispatch (scattered slots handled by the C++ loop)
+
+        Core::ComputeState computeState;
+        computeState.setPipeline(rayTracingState().m_shadowResolvePipeline.get());
+        computeState.addBindingSet(bindingSet);
+        commandList.setComputeState(computeState);
+        commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
+        commandList.dispatch(groupsX, groupsY, 1u);
+    };
+
+    // PREPARE: copy the half-res traced visibility (SOFT_HALF == soft-A) into soft-B. Written via the OutputHalfB set
+    // (out=soft-B, in=soft-A) so the copy never read-write aliases soft-A. The result then lives in soft-B.
+    runPass(rayTracingState().m_shadowResolveBindingSetOutputHalfB.get(), 1u, ShadowResolveStage::Prepare, halfGroupsX, halfGroupsY);
+
+    // Half-res a-trous wavelet passes at a doubling dilation, starting from soft-B. Each pass writes the buffer NOT
+    // holding its input (OutputHalfA reads soft-B writes soft-A; OutputHalfB reads soft-A writes soft-B). srcIsHalfB
+    // tracks where the latest result lives; PREPARE left it in soft-B so it starts true.
+    bool srcIsHalfB = true;
+    for(u32 pass = 0u; pass < static_cast<u32>(NWB_SHADOW_RESOLVE_PASS_COUNT); ++pass){
+        Core::BindingSet* const bindingSet = srcIsHalfB
+            ? rayTracingState().m_shadowResolveBindingSetOutputHalfA.get()
+            : rayTracingState().m_shadowResolveBindingSetOutputHalfB.get()
+        ;
+        runPass(bindingSet, 1u << pass, ShadowResolveStage::Wavelet, halfGroupsX, halfGroupsY);
+        srcIsHalfB = !srcIsHalfB;
+    }
+
+    // UPSAMPLE (full-res): edge-aware bilateral resample of the FINAL half-res visibility into the full-res visibility
+    // slot. The final wavelet result lives in soft-A when PASS_COUNT is ODD (our config, 5) -- srcIsHalfB is now false.
+    // Both upsample sets read soft-A (INPUT_COLOR) by construction; assert the parity so a PASS_COUNT change is caught.
+    NWB_ASSERT(!srcIsHalfB); // PASS_COUNT must be odd for the final result to land in soft-A (the upsample's input)
+    runPass(rayTracingState().m_shadowResolveBindingSetUpsample.get(), 1u, ShadowResolveStage::Upsample, fullGroupsX, fullGroupsY);
 }
 
 f32 RendererRayTracingSystem::causticTemporalDecay(){

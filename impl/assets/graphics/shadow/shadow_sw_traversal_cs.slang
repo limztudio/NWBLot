@@ -22,6 +22,9 @@
 #include "../bvh/bvh_common.slangi"
 #include "../common/math.slangi"
 #include "instance_material.slangi"
+// Soft-shadow ray-jitter sampling: the per-pixel/per-frame low-discrepancy 2D sample + the cone jitter the soft
+// directional trace (mode 11) applies to the occlusion ray so a physical sun disk casts a penumbra.
+#include "shadow_sampling.slangi"
 
 // The shadow trace's material-constants context (NwbShadowHit + the per-invocation accessors + the surface
 // contract + the engine-side shadow physics helpers nwbShadowFresnelTransmittedFraction /
@@ -81,6 +84,12 @@ RWStructuredBuffer<uint> g_NwbSwShadowEdgeList;
 
 [[vk::binding(NWB_SW_SHADOW_BINDING_INDIRECT_ARGS, NWB_SW_SHADOW_SET)]]
 RWStructuredBuffer<uint> g_NwbSwShadowIndirectArgs;
+
+// Soft directional shadow (Stage 1): the HALF-res RGBA16F Texture2DArray (one layer per shadow slot) the jittered
+// opaque directional trace (mode 11) writes ONE cone-jittered visibility sample per half-res pixel into. The separate
+// shadow_resolve pipeline then denoises + upsamples it into the full-res visibility above. Only mode 11 touches it.
+[[vk::binding(NWB_SW_SHADOW_BINDING_SOFT_HALF, NWB_SW_SHADOW_SET)]]
+RWTexture2DArray<float4> g_NwbSwShadowSoftHalf;
 
 // Per-instance record: the affine world->object transform (3 rows) + the slot into the parallel per-mesh
 // descriptor arrays. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes).
@@ -165,6 +174,9 @@ struct NwbSwShadowPushConstants{
     // Stage-3: threads per group of the indirect trace pass (= NWB_SW_SHADOW_TRACE_GROUP = 64). mode 7 divides the count
     // by this to size the indirect dispatch; mode 8 reconstructs its flat record index as groupID.x*traceGroupSize + groupIndex.
     uint traceGroupSize;
+    // Soft directional shadow (mode 11): the renderer frame counter, seeding the per-pixel low-discrepancy cone-jitter
+    // sample so the single jittered ray walks the sun disk across frames (decorrelated per pixel by a hash rotation).
+    uint frameIndex;
 };
 
 [[vk::push_constant]]
@@ -370,7 +382,9 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     //    mask (hybrid) or the opaque pre-pass (software), so tracing opaque here would only redundantly re-darken. Tracing
     //    transparent only also avoids walking the opaque meshes' triangle BVHs. (Mode 8 is the Stage-3 indirect re-trace.)
     const uint occluderPassMode = g_NwbSwShadowPushConstants.multiplyMode;
-    if((occluderPassMode == 3u || occluderPassMode == 9u || occluderPassMode == 10u) && transparent)
+    // OPAQUE passes: the full-res mode-3 pre-pass, the adaptive-opaque coarse+resolve (9/10), and the soft directional
+    // half-res trace (11) all cast an OPAQUE-only blocker -> skip transparent occluders.
+    if((occluderPassMode == 3u || occluderPassMode == 9u || occluderPassMode == 10u || occluderPassMode == 11u) && transparent)
         return;
     if((occluderPassMode == 2u || occluderPassMode == 4u || occluderPassMode == 5u || occluderPassMode == 8u) && !transparent)
         return;
@@ -506,11 +520,17 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
 // (directional aims along the toward-light axis to "infinity"; point/spot aim at the light with tMax = the
 // distance; geometric-normal bias + tMin avoids self-intersection; a light inside the bias shell is lit).
 // Returns the per-channel transmittance: float3(1) when fully lit, tinted toward zero through occluders.
-half3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light){
+// `jitter` is the per-pixel low-discrepancy 2D sample (in [0,1)^2) for the soft directional cone-jitter; pass
+// float2(0,0) for the HARD path (all non-soft modes) -- jitter is only consumed for a directional light with a
+// non-zero angular radius (params2.x), where the toward-light direction is offset inside the sun-disk cone so the
+// occlusion ray samples the physical source and a penumbra emerges. Point/spot lights ignore the jitter this stage.
+half3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter){
     float3 toLight;
     float tMax;
     if(light.params.y < 0.5){
-        toLight = normalize(light.direction.xyz);
+        // Directional: jitter the toward-light axis inside the cone of half-angle params2.x (the sun angular radius).
+        // halfAngle 0 (a point-source directional) returns the axis exactly -> the hard shadow, no branch needed.
+        toLight = nwbShadowJitterCone(normalize(light.direction.xyz), light.params2.x, jitter);
         tMax = 1.0e7;
     }
     else{
@@ -567,7 +587,7 @@ void nwbSwShadowCoarseTrace(const uint2 coarsePixel){
         const float slot = g_NwbSceneLights[i].params.z;
         if(slot < 0.0)
             continue;
-        const half3 transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
+        const half3 transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i], float2(0.0, 0.0));
         g_NwbSwShadowCoarse[uint3(coarsePixel, uint(slot))] = float4(transmittance, 1.0);
     }
 }
@@ -625,7 +645,7 @@ void nwbSwShadowAdaptiveResolve(const uint2 pixel){
         float3 transmittance;
         if(range > edgeThreshold){
             // Edge block: re-trace this exact full-res pixel.
-            transmittance = float3(nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]));
+            transmittance = float3(nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i], float2(0.0, 0.0)));
             ++tracedRays;
         }
         else{
@@ -767,7 +787,7 @@ void nwbSwShadowIndirectTrace(const uint linearId){
     const int3 texel = int3(int2(pixel), 0);
     const float3 worldPosition = g_NwbSwShadowGBufferWorldPosition.Load(texel).xyz;
     const float3 normal = normalize(g_NwbSwShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
-    const float3 transmittance = float3(nwbSwShadowLightVisible(worldPosition, normal, light));
+    const float3 transmittance = float3(nwbSwShadowLightVisible(worldPosition, normal, light, float2(0.0, 0.0)));
 
     const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb;
     g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * transmittance, 1.0);
@@ -847,7 +867,7 @@ void nwbSwShadowAdaptiveResolveOpaque(const uint2 pixel){
         float3 transmittance;
         if(range > edgeThreshold){
             // Silhouette edge: re-trace this exact full-res pixel (opaque-only -> binary).
-            transmittance = float3(nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]));
+            transmittance = float3(nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i], float2(0.0, 0.0)));
         }
         else{
             // Flat interior: the agreed binary value (bilinear of equal values == that value).
@@ -857,6 +877,70 @@ void nwbSwShadowAdaptiveResolveOpaque(const uint2 pixel){
         }
 
         g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(transmittance, 1.0); // OVERWRITE -- this IS the opaque mask
+    }
+}
+
+// Per-frame samples-per-pixel for the mode-11 soft directional trace. Stage 1 has NO temporal accumulation, so it
+// multi-samples the sun disk PER FRAME to hand the resolve a smooth (rather than dithered 0/1) coverage signal the
+// value-aware a-trous can actually denoise; Stage 3's temporal accumulation will supply the samples over frames
+// instead, letting this return toward 1.
+#define NWB_SW_SHADOW_SOFT_SPP 8u
+
+// Mode 11 -- SOFT DIRECTIONAL half-res trace (Stage 1 of the soft-ray-traced-shadow feature). One thread per HALF-res
+// pixel: for each DIRECTIONAL light holding a shadow slot, cast ONE OPAQUE occlusion ray CONE-JITTERED inside the
+// light's angular radius (params2.x) and write the single-sample visibility (0..1, here binary per sample) into the
+// half-res soft buffer. The separate shadow_resolve pipeline then denoises + upsamples it into the full-res
+// visibility. Non-directional lights are SKIPPED here (they keep their hard shadow from the opaque/HW pass -- this
+// stage softens directional only); the resolve upsample overwrites only the directional slots it processed. The
+// jitter is the per-pixel/per-frame low-discrepancy sample, seeded by the half-res pixel + frameIndex so each pixel
+// walks the sun disk over frames while neighbours stay decorrelated (the denoise then averages independent estimates).
+void nwbSwShadowSoftDirectionalTrace(const uint2 halfPixel){
+    // The half-res grid is width>>SOFT_SHIFT: guard against the padded tail. The trace samples the block's top-left
+    // full-res texel (matching the geometry downsample's + resolve's 2x point sample).
+    const uint halfWidth = (g_NwbSwShadowPushConstants.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) >> NWB_SW_SHADOW_SOFT_SHIFT;
+    const uint halfHeight = (g_NwbSwShadowPushConstants.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) >> NWB_SW_SHADOW_SOFT_SHIFT;
+    if(halfPixel.x >= halfWidth || halfPixel.y >= halfHeight)
+        return;
+
+    const uint2 base = halfPixel << NWB_SW_SHADOW_SOFT_SHIFT;
+    const int3 texel = int3(int2(min(base.x, g_NwbSwShadowPushConstants.width - 1u), min(base.y, g_NwbSwShadowPushConstants.height - 1u)), 0);
+
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
+
+    // Background: fully LIT (white) for every directional slot -- the multiplicative identity the resolve carries and
+    // the value the upsample writes for a background full-res pixel, so the two agree at the geometry/background edge.
+    if(g_NwbSwShadowGBufferDepth.Load(texel).r >= 0.999999){
+        for(uint i = 0u; i < lightCount; ++i){
+            if(g_NwbSceneLights[i].params.y >= 0.5) // directional only (params.y < 0.5)
+                continue;
+            const float slot = g_NwbSceneLights[i].params.z;
+            if(slot < 0.0)
+                continue;
+            g_NwbSwShadowSoftHalf[uint3(halfPixel, uint(slot))] = float4(1.0, 1.0, 1.0, 1.0);
+        }
+        return;
+    }
+
+    const float3 worldPosition = g_NwbSwShadowGBufferWorldPosition.Load(texel).xyz;
+    const float3 normal = normalize(g_NwbSwShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
+    for(uint i = 0u; i < lightCount; ++i){
+        if(g_NwbSceneLights[i].params.y >= 0.5)
+            continue; // directional only
+        const float slot = g_NwbSceneLights[i].params.z;
+        if(slot < 0.0)
+            continue;
+        // OPAQUE-only jittered occlusion (the occluder-class filter in nwbSwShadowInstanceOccluded treats mode 11 as an
+        // opaque pass). Each sample is binary; averaging NWB_SW_SHADOW_SOFT_SPP of them per frame -- each walking the sun
+        // disk via its OWN low-discrepancy 2D point (per pixel, per frame, per sample index) -- yields the smooth 0..1
+        // coverage the value-aware resolve needs (a single binary sample would leave a dithered penumbra the a-trous
+        // could not smooth without washing the umbra out). Stage 3's temporal accumulation replaces this per-frame loop.
+        half3 accum = half3(0.0, 0.0, 0.0);
+        [loop] for(uint s = 0u; s < NWB_SW_SHADOW_SOFT_SPP; ++s){
+            const float2 sampleJitter = nwbShadowLowDiscrepancy2D(halfPixel, g_NwbSwShadowPushConstants.frameIndex * NWB_SW_SHADOW_SOFT_SPP + s);
+            accum += nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i], sampleJitter);
+        }
+        const half3 transmittance = accum * half(1.0 / float(NWB_SW_SHADOW_SOFT_SPP));
+        g_NwbSwShadowSoftHalf[uint3(halfPixel, uint(slot))] = float4(transmittance, 1.0);
     }
 }
 
@@ -884,6 +968,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
     }
     if(multiplyMode == 7u){
         nwbSwShadowBuildArgs(dispatchThreadID);
+        return;
+    }
+    if(multiplyMode == 11u){
+        // Soft directional half-res jittered opaque trace (Stage 1). Dispatched at width>>SOFT_SHIFT x height>>SOFT_SHIFT.
+        nwbSwShadowSoftDirectionalTrace(dispatchThreadID.xy);
         return;
     }
     if(multiplyMode == 8u){
@@ -940,7 +1029,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
             continue;
 
         // One transparent traversal (the expensive part) per thread -- shared across the 2x2 block in half-res mode.
-        const half3 transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i]);
+        const half3 transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i], float2(0.0, 0.0));
 
         if(!multiply){
             g_NwbSwShadowVisibility[uint3(base, uint(slot))] = float4(transmittance, 1.0);

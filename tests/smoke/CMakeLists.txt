@@ -685,6 +685,39 @@ if(Python3_Interpreter_FOUND)
         )
         add_dependencies(nwb_flicker_test_sw_smoke nwb_skinning_culling_benchmark_assets)
 
+        # Dedicated SOFT-SHADOW scene (Stage 1): ONE opaque `body` character on ONE opaque ground plane under a SINGLE
+        # directional light with a physical angular source size (env NWB_SOFT_SHADOW_TEST_ANGLE). Isolates the soft
+        # directional penumbra (contact hardening + distance-widening), arrow-key-spun for a crawl check. Reuses the
+        # benchmark's cooked assets (body model + ground material).
+        nwb_declare_executable(nwb_soft_shadow_test_smoke)
+        target_sources(nwb_soft_shadow_test_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_test_project.cpp"
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_soft_shadow_test_smoke
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_soft_shadow_test_smoke nwb_skinning_culling_benchmark_assets)
+
+        # Forced-software-emulation sibling: runs the FULL soft pipeline (half-res jittered trace -> a-trous denoise ->
+        # bilateral upsample) even on RT hardware -- the intended way to see the denoised soft shadow.
+        nwb_declare_executable(nwb_soft_shadow_test_sw_smoke)
+        target_sources(nwb_soft_shadow_test_sw_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_test_project.cpp"
+        )
+        target_compile_definitions(nwb_soft_shadow_test_sw_smoke PRIVATE
+            NWB_SOFT_SHADOW_TEST_FORCE_RT_EMULATION=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_soft_shadow_test_sw_smoke
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_soft_shadow_test_sw_smoke nwb_skinning_culling_benchmark_assets)
+
         unset(_nwb_skinning_culling_asset_stamp)
         unset(_nwb_skinning_culling_model_nwb)
         unset(_nwb_skinning_culling_runtime_root)

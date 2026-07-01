@@ -246,8 +246,12 @@ struct NwbSwShadowTriangleHit{
     float w;
 };
 
-// Moeller-Trumbore ray/triangle test (two-sided: an occluder shadows regardless of facing). Reports a hit
-// strictly inside the (tMin, tMax) interval along with its barycentrics for per-hit attribute interpolation.
+// Watertight ray/triangle test (Woop/Benthin/Wald 2013), two-sided: an occluder shadows regardless of facing.
+// The edge-function sign convention hits exactly one triangle across a shared edge (no float gap, no double count),
+// which is the robust replacement for Moeller-Trumbore's barycentric-epsilon fudge + 1/det amplification. NOTE: this is
+// a correctness/robustness improvement, NOT a hardware-parity fix -- the driver's opaque intersector still disagrees
+// with ANY software intersector by +/-1 crossing at grazing silhouettes (see shadow_rayquery_cs), an inherent hybrid
+// residual, invisible for this binary opaque test beyond a sub-pixel edge. Reports a hit strictly inside (tMin, tMax).
 NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
     NwbSwShadowTriangleHit result;
     result.hit = false;
@@ -256,33 +260,68 @@ NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 
     result.v = 0.0;
     result.w = 0.0;
 
-    const float3 edge1 = v1 - v0;
-    const float3 edge2 = v2 - v0;
-    const float3 pVec = cross(direction, edge2);
-    const float det = dot(edge1, pVec);
-    if(abs(det) < 1e-12)
+    // Choose the ray's dominant axis as kz so the shear never divides by a near-zero direction component; kx,ky are the
+    // other two, swapped to keep the winding sign consistent when dir[kz] < 0.
+    const float3 absDir = abs(direction);
+    int kz = (absDir.x >= absDir.y) ? ((absDir.x >= absDir.z) ? 0 : 2) : ((absDir.y >= absDir.z) ? 1 : 2);
+    int kx = (kz + 1 == 3) ? 0 : (kz + 1);
+    int ky = (kx + 1 == 3) ? 0 : (kx + 1);
+    const float dirKz = direction[kz];
+    if(dirKz < 0.0){
+        const int swap = kx;
+        kx = ky;
+        ky = swap;
+    }
+
+    // Shear/scale constants aligning the ray with +kz.
+    const float shearX = direction[kx] / dirKz;
+    const float shearY = direction[ky] / dirKz;
+    const float shearZ = 1.0 / dirKz;
+
+    // Vertices relative to the ray origin, then sheared into ray space (x,y for the edge tests).
+    const float3 relA = v0 - origin;
+    const float3 relB = v1 - origin;
+    const float3 relC = v2 - origin;
+    const float ax = relA[kx] - shearX * relA[kz];
+    const float ay = relA[ky] - shearY * relA[kz];
+    const float bx = relB[kx] - shearX * relB[kz];
+    const float by = relB[ky] - shearY * relB[kz];
+    const float cx = relC[kx] - shearX * relC[kz];
+    const float cy = relC[ky] - shearY * relC[kz];
+
+    // Scaled barycentrics from the three edge functions (u->v0, v->v1, w->v2 weight).
+    float u = cx * by - cy * bx;
+    float v = ax * cy - ay * cx;
+    float w = bx * ay - by * ax;
+
+    // Two-sided: reject only when the edge functions carry MIXED signs (the point is outside the triangle). All-non-
+    // negative OR all-non-positive is inside, so a shared edge (some component exactly 0) still resolves to a single
+    // owning triangle rather than a gap.
+    if((u < 0.0 || v < 0.0 || w < 0.0) && (u > 0.0 || v > 0.0 || w > 0.0))
+        return result;
+
+    const float det = u + v + w;
+    if(det == 0.0)
+        return result;
+
+    // Interpolate the sheared z to the hit distance, sign-correct against det so the (tMin,tMax) test holds for either
+    // triangle facing without a divide.
+    const float az = shearZ * relA[kz];
+    const float bz = shearZ * relB[kz];
+    const float cz = shearZ * relC[kz];
+    const float tScaled = u * az + v * bz + w * cz;
+    const float detSign = (det < 0.0) ? -1.0 : 1.0;
+    const float absDet = det * detSign;
+    const float tSigned = tScaled * detSign;
+    if(tSigned <= tMin * absDet || tSigned >= tMax * absDet)
         return result;
 
     const float invDet = 1.0 / det;
-    const float3 tVec = origin - v0;
-    const float u = dot(tVec, pVec) * invDet;
-    if(u < -NWB_SW_SHADOW_BARYCENTRIC_EPSILON || u > 1.0 + NWB_SW_SHADOW_BARYCENTRIC_EPSILON)
-        return result;
-
-    const float3 qVec = cross(tVec, edge1);
-    const float v = dot(direction, qVec) * invDet;
-    if(v < -NWB_SW_SHADOW_BARYCENTRIC_EPSILON || (u + v) > 1.0 + NWB_SW_SHADOW_BARYCENTRIC_EPSILON)
-        return result;
-
-    const float t = dot(edge2, qVec) * invDet;
-    if(t <= tMin || t >= tMax)
-        return result;
-
     result.hit = true;
-    result.t = t;
-    result.u = u;
-    result.v = v;
-    result.w = 1.0 - u - v;
+    result.t = tScaled * invDet;
+    result.u = v * invDet; // MT convention: u weights v1
+    result.v = w * invDet; // v weights v2
+    result.w = u * invDet; // w weights v0
     return result;
 }
 

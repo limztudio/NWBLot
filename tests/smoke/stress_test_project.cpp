@@ -7,6 +7,7 @@
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/module.h>
+#include <core/input/module.h> // InputDispatcher / IInputEventHandler / Key -- arrow-key manual yaw scrub
 #include <core/mesh/frame_math.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
@@ -21,6 +22,10 @@
 #include "gpu_pass_timing_probe.h"
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
+
+#include <global/environment.h>   // ReadEnvironmentVariableBuffer -- NWB_STRESS_TEST_SPIN_ANGLE freeze for deterministic A/B
+#include <cstdlib>                 // std::atof
+#include <cmath>                   // std::fmod -- wrapping the displayed yaw into [0, 2pi)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,6 +81,7 @@ static constexpr f32 s_PointLightIntensity = 9.0f;                   // point li
 static constexpr f32 s_PointLightRange = 16.0f;
 
 static constexpr f32 s_SpinSpeed = 0.8f;                             // radians / second
+static constexpr f32 s_ManualYawSpeed = 0.6f;                        // radians / second for the arrow-key manual yaw scrub
 static constexpr f32 s_TwoPi = 6.2831853f;
 static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;                  // clamp huge stalls so the spin can't jump
 
@@ -103,6 +109,35 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;                  // clamp hu
     const u32 slot = classIndex % s_CharactersPerClass;
     return transparent ? s_transparentTints[slot] : s_opaqueTints[slot];
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Arrow-key manual yaw scrubber (mirrors transparent_multi): registered with the InputDispatcher so the crowd rotation can
+// be stepped by hand (Left/Right) to the exact orientation a flicker appears at and read off the title bar. Consumes only
+// the two arrow keys so any other handler still sees everything else.
+class ArrowYawInputHandler final : public NWB::Core::IInputEventHandler{
+public:
+    bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override{
+        static_cast<void>(scancode);
+        static_cast<void>(mods);
+        const bool held = (action != NWB::Core::InputAction::Release); // Press or Repeat -> held
+        switch(key){
+        case NWB::Core::Key::Left:  m_leftHeld = held;  return true;
+        case NWB::Core::Key::Right: m_rightHeld = held; return true;
+        default:                    return false;
+        }
+    }
+
+    // Signed scrub direction this frame: +1 Right, -1 Left, 0 idle. Both held cancels out.
+    [[nodiscard]] f32 axis()const{ return (m_rightHeld ? 1.0f : 0.0f) - (m_leftHeld ? 1.0f : 0.0f); }
+
+
+private:
+    bool m_leftHeld = false;
+    bool m_rightHeld = false;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,8 +203,20 @@ private:
     // Spin every character about its vertical (Y) axis around its fixed position; a per-character phase staggers the
     // start angles so the crowd isn't in lockstep. Only the root transform's rotation changes -- the skinned bodies
     // stay in bind pose -- so each frame the instance/scene BVH + the two lights' shadows re-resolve as they turn.
+    // Diagnostic freeze (read once): NWB_STRESS_TEST_SPIN_ANGLE pins yawBase to a fixed radians value so the skinned
+    // crowd holds one orientation -- two captures then differ only via non-determinism (a flicker/race), not motion.
+    static f32 frozenYaw(){
+        static const f32 s_yaw = [](){
+            char value[32] = {};
+            if(!ReadEnvironmentVariableBuffer("NWB_STRESS_TEST_SPIN_ANGLE", value, sizeof(value)))
+                return -1.0f;
+            return static_cast<f32>(::std::atof(value));
+        }();
+        return s_yaw;
+    }
+
     void spinCharacters(){
-        const f32 yawBase = static_cast<f32>(m_spinTime) * s_SpinSpeed;
+        const f32 yawBase = m_yaw;
         for(usize index = 0u; index < m_characterOwners.size(); ++index){
             auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(m_characterOwners[index]);
             if(!transform)
@@ -189,6 +236,7 @@ public:
     {}
 
     virtual ~StressTestSmokeProject()override{
+        m_context.input.removeHandler(m_arrowYawInput); // idempotent backstop if onShutdown was skipped (dispatcher outlives us)
         destroyWorld();
     }
 
@@ -197,6 +245,11 @@ public:
     virtual bool onStartup()override{
         // Per-pass GPU timing so the FPS / GPU-pass probes report the skinning + shadow costs each interval.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+
+        // Arrow keys (Left/Right) scrub the crowd yaw by hand; the live angle shows in the title bar so the exact angle a
+        // flicker appears at can be read off and reproduced via NWB_STRESS_TEST_SPIN_ANGLE. addHandlerToBack gives this
+        // scrubber first crack at the arrow keys; it consumes only Left/Right.
+        m_context.input.addHandlerToBack(m_arrowYawInput);
 
         auto activeCameraEntity = m_world->createEntity();
         auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
@@ -261,6 +314,7 @@ public:
     }
 
     virtual void onShutdown()override{
+        m_context.input.removeHandler(m_arrowYawInput);
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: shutdown"));
     }
@@ -269,10 +323,48 @@ public:
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
-        m_spinTime += static_cast<f64>(Min(safeDelta, s_MaxSpinDelta));
+        // Yaw selection: 1) NWB_STRESS_TEST_SPIN_ANGLE env freeze (pins one orientation); 2) manual arrow scrub (latches off
+        // auto-spin the moment Left/Right is first pressed, so the crowd can be parked on a precise angle); 3) auto-spin.
+        const f32 frozen = frozenYaw();
+        if(frozen >= 0.0f){
+            m_yaw = frozen;
+        }
+        else{
+            const f32 manualAxis = m_arrowYawInput.axis();
+            if(manualAxis != 0.0f)
+                m_manualYawControl = true; // latch: first arrow input takes over from auto-spin
+            if(m_manualYawControl)
+                m_yaw += manualAxis * s_ManualYawSpeed * safeDelta;
+            else
+                m_yaw += Min(safeDelta, s_MaxSpinDelta) * s_SpinSpeed;
+        }
         spinCharacters();
+        updateWindowTitleYaw();
         m_world->tick(safeDelta);
         return true;
+    }
+
+    // Reflect the current crowd yaw in the title bar (wrapped to [0, 2pi)) so the exact orientation a flicker appears at can
+    // be read off and reproduced via NWB_STRESS_TEST_SPIN_ANGLE.
+    void updateWindowTitleYaw(){
+        f32 wrapped = ::std::fmod(m_yaw, s_TwoPi);
+        if(wrapped < 0.0f)
+            wrapped += s_TwoPi;
+        const f32 degrees = wrapped * (360.0f / s_TwoPi);
+
+        static constexpr usize s_TitleCapacity = 192u;
+        tchar title[s_TitleCapacity];
+        NWB_TSPRINTF(
+            title,
+            s_TitleCapacity,
+            NWB_TEXT("%s  |  yaw %.4f rad (%.2f deg)%s"),
+            NWB::QueryProjectWindowTitle(),
+            wrapped,
+            degrees,
+            m_manualYawControl ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
+        );
+        const tchar* titlePtr = title;
+        m_context.graphics.setWindowTitle(MakeNotNull(titlePtr));
     }
 
 
@@ -283,7 +375,9 @@ private:
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("StressTestSmokeProject") };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("StressTestSmokeProject") };
-    f64 m_spinTime = 0.0;
+    f32 m_yaw = 0.0f;                  // accumulated crowd yaw (radians): env-freeze / arrow-scrub / auto-spin
+    ArrowYawInputHandler m_arrowYawInput;
+    bool m_manualYawControl = false;   // latched true once an arrow key first drives the yaw
 };
 
 

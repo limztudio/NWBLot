@@ -73,6 +73,7 @@ ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
 groupshared half3  s_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared float3 s_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   s_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
+groupshared uint   s_NwbCausticResolveTileActive; // 1 iff the loaded tile+halo holds ANY caustic -> empty-tile early-out
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -219,6 +220,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const uint threadCount = NWB_CAUSTIC_RESOLVE_GROUP_SIZE * NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
         const uint threadIndex = groupThreadID.y * NWB_CAUSTIC_RESOLVE_GROUP_SIZE + groupThreadID.x;
         const uint tileTexels = (uint)(tileW * tileW);
+        // Empty-tile early-out flag: OR-set below iff any loaded tile+halo texel carries caustic. Init before the load.
+        if(threadIndex == 0u)
+            s_NwbCausticResolveTileActive = 0u;
+        GroupMemoryBarrierWithGroupSync();
+
         for(uint i = threadIndex; i < tileTexels; i += threadCount){
             const int2 t = tileOrigin + int2((int)(i % (uint)tileW), (int)(i / (uint)tileW));
             half3 tapColor = half3(0.0, 0.0, 0.0);
@@ -230,6 +236,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     tapColor = half3(g_NwbCausticResolveInputColor.Load(int3(t, 0)).rgb);
                     tapWorld = nwbCausticResolveWorldAtHalf(t);
                     tapValid = 1u;
+                    if(any(tapColor > half3(0.0, 0.0, 0.0)))
+                        InterlockedOr(s_NwbCausticResolveTileActive, 1u);
                 }
             }
             s_NwbCausticResolveTileColor[i] = tapColor;
@@ -237,6 +245,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             s_NwbCausticResolveTileValid[i] = tapValid;
         }
         GroupMemoryBarrierWithGroupSync();
+
+        // EMPTY-TILE EARLY-OUT (EXACT): the caustic is sparse, so most tiles have zero caustic across the whole tile+halo;
+        // their 25-tap bilateral would sum to exactly zero anyway. Skip it and write the zero directly -- bit-identical
+        // output, but the expensive wavelet math only runs on tiles that actually carry (or border) caustic.
+        if(s_NwbCausticResolveTileActive == 0u){
+            if(inBounds)
+                g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }
 
         if(!inBounds)
             return;

@@ -59,11 +59,13 @@
 
 // A-trous wavelet pass count (the dispatch runs a PREPARE pass first, then this many wavelet passes at dilation
 // 1,2,4,8,16,...). 25 taps/pass. Run at HALF resolution (see caustic_resolve_cs.slang). Cumulative world reach ~= 2x the
-// sum of the dilations. 3 half-res passes (~16px full support) under-smoothed sparse/sharp caustics into visible speckle;
-// 5 passes (dilations 1,2,4,8,16 == 2,4,8,16,32 full-equivalent, ~64px full support) smooth the sparse photon splat
-// cleanly -- a clear visual win over 4 on the spinning refractors, for a small added cost (the 8,16 half-res passes fall
-// back to the direct-texture-tap path, no LDS). The dispatch handles any parity (it seeds the ping-pong so the final
-// pass always lands in half-B, which the upsample reads into the full-res irradiance buffer the lighting samples).
+// sum of the dilations. 3 half-res passes (~16px full support) under-smoothed sparse/sharp caustics into visible speckle
+// (confirmed still too grainy under motion even with the temporal accumulation); 5 passes (dilations 1,2,4,8,16 ==
+// 2,4,8,16,32 full-equivalent, ~64px full support) smooth the sparse photon splat cleanly -- a clear visual win over 4 on
+// the spinning refractors, for a small added cost (the 8,16 half-res passes fall back to the direct-texture-tap path, no
+// LDS). Perf comes instead from the empty-tile early-out in the wavelet (the caustic is sparse; all-zero tiles skip),
+// which preserves this quality EXACTLY. The dispatch handles any parity (it seeds the ping-pong so the final pass always
+// lands in half-B, which the upsample reads into the full-res irradiance buffer the lighting samples).
 #define NWB_CAUSTIC_RESOLVE_PASS_COUNT 5
 
 // LDS (groupshared) tiling for the wavelet: passes with dilation stepWidth <= LDS_MAX_STEP cooperatively load the

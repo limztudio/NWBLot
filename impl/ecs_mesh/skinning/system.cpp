@@ -112,12 +112,10 @@ bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, co
 }
 
 bool MeshSkinningSystem::ensureFrameCommandList(){
-    auto* device = m_graphics.getDevice();
-    if(!device)
-        return false;
+    auto& device = *m_graphics.getDevice();
 
     if(!m_renderCommandList){
-        m_renderCommandList = device->createCommandList();
+        m_renderCommandList = device.createCommandList();
         if(!m_renderCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create render command list"));
             return false;

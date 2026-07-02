@@ -264,7 +264,7 @@ bool BuildSkeletonOutputData(
         return false;
     }
 
-    HashMap<ufbx_node*, usize> sourceJointLookup;
+    HashMap<const ufbx_node*, usize> sourceJointLookup;
     sourceJointLookup.reserve(joints.size());
     UtilityVector<AString> sortNames;
     sortNames.reserve(joints.size());
@@ -289,7 +289,7 @@ bool BuildSkeletonOutputData(
         if(!parent)
             continue;
 
-        const auto foundParent = sourceJointLookup.find(const_cast<ufbx_node*>(parent));
+        const auto foundParent = sourceJointLookup.find(parent);
         if(foundParent != sourceJointLookup.end())
             parentIndices[jointIndex] = static_cast<u32>(foundParent.value());
     }
@@ -622,7 +622,7 @@ void WriteSkeletonAssetBody(
     file << variableName << ".joints = [\n";
     const UtilityVector<AString> jointNames = BuildUniqueJointNames(joints);
 
-    HashMap<ufbx_node*, usize> jointLookup;
+    HashMap<const ufbx_node*, usize> jointLookup;
     jointLookup.reserve(joints.size());
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
         jointLookup.emplace(joints[jointIndex], jointIndex);

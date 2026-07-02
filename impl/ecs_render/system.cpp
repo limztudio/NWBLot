@@ -115,12 +115,10 @@ void RendererSystem::update(Core::ECS::World& world, f32 delta){
 }
 
 bool RendererSystem::ensureFrameCommandLists(){
-    auto* device = m_graphics.getDevice();
-    if(!device)
-        return false;
+    auto& device = *m_graphics.getDevice();
 
     if(!m_renderCommandList){
-        m_renderCommandList = device->createCommandList();
+        m_renderCommandList = device.createCommandList();
         if(!m_renderCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create render command list"));
             return false;
@@ -128,7 +126,7 @@ bool RendererSystem::ensureFrameCommandLists(){
     }
 
     if(!m_shadowPrepareCommandList){
-        m_shadowPrepareCommandList = device->createCommandList();
+        m_shadowPrepareCommandList = device.createCommandList();
         if(!m_shadowPrepareCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow preparation command list"));
             return false;
@@ -188,9 +186,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
     }
 
-    auto* device = m_graphics.getDevice();
-    if(!device)
-        return false;
+    auto& device = *m_graphics.getDevice();
 
     m_shadowPrepareCommandList->open();
     const bool shadowResourcesPrepared = m_raytracingSystem.prepareShadowVisibilityResources(
@@ -204,7 +200,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
 
     Core::CommandList* shadowPrepareCommandLists[] = { m_shadowPrepareCommandList.get() };
-    device->executeCommandLists(shadowPrepareCommandLists, 1);
+    device.executeCommandLists(shadowPrepareCommandLists, 1);
 
     return true;
 }

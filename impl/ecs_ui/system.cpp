@@ -206,12 +206,10 @@ bool UiSystem::validateResources(const u32 width, const u32 height, const u32 sa
 }
 
 bool UiSystem::ensureFrameCommandLists(){
-    auto* device = m_graphics.getDevice();
-    if(!device)
-        return false;
+    auto& device = *m_graphics.getDevice();
 
     if(!m_prepareCommandList){
-        m_prepareCommandList = device->createCommandList();
+        m_prepareCommandList = device.createCommandList();
         if(!m_prepareCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create preparation command list"));
             return false;
@@ -219,7 +217,7 @@ bool UiSystem::ensureFrameCommandLists(){
     }
 
     if(!m_renderCommandList){
-        m_renderCommandList = device->createCommandList();
+        m_renderCommandList = device.createCommandList();
         if(!m_renderCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create render command list"));
             return false;
@@ -259,9 +257,7 @@ bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
 
     if(__hidden_ui::HasTextureRequests(*drawData)){
-        auto* device = m_graphics.getDevice();
-        if(!device)
-            return false;
+        auto& device = *m_graphics.getDevice();
 
         if(!m_prepareCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: preparation command list was not validated"));
@@ -275,7 +271,7 @@ bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
             return false;
 
         Core::CommandList* commandLists[] = { m_prepareCommandList.get() };
-        device->executeCommandLists(commandLists, 1);
+        device.executeCommandLists(commandLists, 1);
     }
 
     if(!ensureBuffers(

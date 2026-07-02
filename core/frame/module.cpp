@@ -154,7 +154,8 @@ bool Frame::updateFrame(f32 delta){
     m_perfSession.recordMemorySnapshot(m_projectObjectArenaMemoryScope, m_projectObjectArena);
     m_perfSession.publishFrame();
     if(m_telemetrySession.captureOptions().perfEnabled()){
-        [[maybe_unused]] const auto perfRecordResult = m_telemetrySession.recordPerfReport(m_perfSession.report());
+        [[maybe_unused]] const Telemetry::PerfSessionRecordResult perfRecordResult =
+            m_telemetrySession.recordPerfReport(m_perfSession.report());
     }
     return true;
 }

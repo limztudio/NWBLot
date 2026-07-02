@@ -100,7 +100,7 @@ static void __hidden_silence_process()noexcept{
 
 int RunCrashHandlerProcess(const isize argc, tchar** argv){
     __hidden_crash_handler::__hidden_silence_process();
-    [[maybe_unused]] auto& dumpArena = Detail::DumpArena();
+    [[maybe_unused]] Alloc::PersistentArena& dumpArena = Detail::DumpArena();
 
 #if defined(NWB_PLATFORM_WINDOWS)
     HANDLE requestReadHandle = INVALID_HANDLE_VALUE;

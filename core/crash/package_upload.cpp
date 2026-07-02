@@ -85,7 +85,7 @@ static void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
     if(s_CurlGlobalInitialized)
         return true;
 
-    [[maybe_unused]] auto& dumpArena = DumpArena();
+    [[maybe_unused]] Alloc::PersistentArena& dumpArena = DumpArena();
     const CURLcode result = curl_global_init_mem(
         CURL_GLOBAL_ALL,
         CrashCurlMalloc,

@@ -232,11 +232,12 @@ bool InstallCrashCapture(CrashArena& crashArena){
             ? NWB::Core::Crash::GpuCrashDumpKind::RadeonGpuDetective
             : NWB::Core::Crash::GpuCrashDumpKind::Aftermath
         ;
-        [[maybe_unused]] const auto dumpResult = NWB::Core::Crash::CaptureGpuCrashDump(
-            AStringView(report.details.data(), report.details.size())
-            , binaryDump
-            , dumpKind
-        );
+        [[maybe_unused]] const NWB::Core::Crash::CrashDumpResult dumpResult =
+            NWB::Core::Crash::CaptureGpuCrashDump(
+                AStringView(report.details.data(), report.details.size())
+                , binaryDump
+                , dumpKind
+            );
     }, nullptr);
     return true;
 }

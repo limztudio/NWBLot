@@ -4,7 +4,7 @@
 
 #include "crash_test_helpers.h"
 
-#include <tests/filesystem_helpers.h>
+#include <global/filesystem/utility.h>
 #include <tests/test_context.h>
 
 #include <gtest/gtest.h>
@@ -39,7 +39,7 @@ namespace __hidden_logger_server_tests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 using TestArena = NWB::Tests::TestArena<struct LoggerServerCrashTestsTag>;
-using NWB::Tests::WaitForDirectory;
+using ::WaitForDirectory;
 using namespace NWB::Tests::LoggerServerCrash;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
 inline constexpr AStringView s_InvalidArchiveHeader("NWBCRASHPKG 0\n");

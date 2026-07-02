@@ -4,7 +4,6 @@
 
 #include "crash_test_helpers.h"
 
-#include <tests/filesystem_helpers.h>
 #include <gtest/gtest.h>
 
 #include <core/crash/package_internal.h>

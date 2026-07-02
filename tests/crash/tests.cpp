@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/filesystem_helpers.h>
+#include <global/filesystem/utility.h>
 #include <tests/test_context.h>
 #include <gtest/gtest.h>
 
@@ -28,8 +28,8 @@ namespace __hidden_crash_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 using TestArena = NWB::Tests::TestArena<struct CrashTestsTag>;
 using CrashTestPath = Path<NWB::Core::Alloc::GlobalArena>;
-using NWB::Tests::TextFileContains;
-using NWB::Tests::WaitForDirectory;
+using ::TextFileContains;
+using ::WaitForDirectory;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
 
 inline constexpr Name s_InstallArena("tests/crash/install");

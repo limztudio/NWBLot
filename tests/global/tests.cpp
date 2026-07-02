@@ -13,6 +13,7 @@
 #include <global/diagnostics.h>
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
+#include <global/filesystem/utility.h>
 #include <global/hash_utils.h>
 #include <global/limit.h>
 #include <global/text_utils.h>
@@ -364,6 +365,21 @@ TEST(Global, FilesystemMovePathToDirectory){
     EXPECT_EQ(AStringView(movedText.data(), movedText.size()), AStringView("fresh"));
     EXPECT_FALSE(FileExists(source, error));
     EXPECT_FALSE(error);
+
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
+}
+
+TEST(Global, FilesystemUtilityHelpers){
+    NWB::Tests::TestArena<> testArena;
+    const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/filesystem_utility_helpers");
+    const Path<NWB::Core::Alloc::GlobalArena> textFile = root / "sample.txt";
+
+    ErrorCode error;
+    EXPECT_TRUE(EnsureEmptyDirectory(root, error));
+    EXPECT_TRUE(WaitForDirectory(root, 0u));
+    EXPECT_TRUE(WriteTextFile(textFile, AStringView("alpha beta")));
+    EXPECT_TRUE(TextFileContains(textFile, AStringView("alpha")));
+    EXPECT_FALSE(TextFileContains(textFile, AStringView("gamma")));
 
     EXPECT_TRUE(RemoveAllIfExists(root, error));
 }

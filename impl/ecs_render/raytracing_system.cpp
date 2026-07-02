@@ -175,34 +175,14 @@ inline constexpr usize s_ShadowInstanceMaterialInitialCapacity = 128u;
 // binding LAYOUT sizes its push range to the LARGEST of these (SwShadowMaxPushConstants below) so every per-pass
 // pipeline is layout-compatible while each dispatch sets only its own struct's bytes.
 
-// Opaque pre-pass (full-res OPAQUE overwrite; sw_shadow_opaque_prepass_cs). The A/B fallback for the adaptive-opaque path.
+// Opaque pre-pass (full-res OPAQUE binary blocker; sw_shadow_opaque_prepass_cs). The SW-path baseline opaque mask -- soft
+// opaque overwrites it per soft slot when ready, else it IS the shadow (the fallback).
 struct SwShadowOpaquePrepassPushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 instanceCount = 0u;
 };
 static_assert(sizeof(SwShadowOpaquePrepassPushConstants) == sizeof(u32) * 3u, "SwShadowOpaquePrepassPushConstants must match the kernel push-constant layout");
-
-// Adaptive-opaque COARSE trace (sw_shadow_opaque_coarse_cs): one OPAQUE any-hit per coarse block, binary.
-struct SwShadowOpaqueCoarsePushConstants{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 instanceCount = 0u;
-    u32 coarseWidth = 0u;
-    u32 coarseHeight = 0u;
-};
-static_assert(sizeof(SwShadowOpaqueCoarsePushConstants) == sizeof(u32) * 5u, "SwShadowOpaqueCoarsePushConstants must match the kernel push-constant layout");
-
-// Adaptive-opaque ADAPTIVE RESOLVE (sw_shadow_opaque_resolve_cs): coarse-interior interp / dilated-edge re-trace, overwrite.
-struct SwShadowOpaqueResolvePushConstants{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 instanceCount = 0u;
-    u32 coarseWidth = 0u;
-    u32 coarseHeight = 0u;
-    f32 edgeThreshold = 0.1f;
-};
-static_assert(sizeof(SwShadowOpaqueResolvePushConstants) == sizeof(u32) * 6u, "SwShadowOpaqueResolvePushConstants must match the kernel push-constant layout");
 
 // Soft opaque half-res jittered trace (sw_shadow_soft_opaque_cs, all light types): frameIndex seeds the per-pixel cone jitter.
 struct SwShadowSoftOpaquePushConstants{
@@ -290,8 +270,6 @@ struct SwShadowMaxPushConstants{
     u32 words[7] = {};
 };
 static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowOpaquePrepassPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
-static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowOpaqueCoarsePushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
-static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowOpaqueResolvePushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
 static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowSoftOpaquePushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
 static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentSoftPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
 static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentCoarsePushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
@@ -1970,54 +1948,23 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     // the hybrid path (HW opaque mask + transparent), so the software fallback gets the same hard-opaque/soft-transparent
     // split while its hard opaque shadows stay full-res sharp.
     if(!multiplyOntoOpaque){
-        if(rayTracingState().m_swShadowAdaptiveOpaqueEnabled){
-            // Adaptive OPAQUE pre-pass: coarse (mode 9, half-res) traces one OPAQUE any-hit per 2x2 block into the coarse
-            // buffer, then resolve (mode 10, full-res) writes the binary mask -- interpolating flat lit/shadowed interior
-            // and re-tracing only silhouette blocks. The binary analog of the transparent adaptive resolve; reuses the
-            // transparent coarse buffer (the mode-4 transparent coarse overwrites it next, after the WAR barrier below).
-            SwShadowOpaqueCoarsePushConstants opaqueCoarsePush;
-            opaqueCoarsePush.width = targets.width;
-            opaqueCoarsePush.height = targets.height;
-            opaqueCoarsePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-            opaqueCoarsePush.coarseWidth = coarseWidth;
-            opaqueCoarsePush.coarseHeight = coarseHeight;
-            commandList.setComputeState(passState(rayTracingState().m_swShadowOpaqueCoarsePipeline));
-            commandList.setPushConstants(&opaqueCoarsePush, sizeof(opaqueCoarsePush));
-            commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
+        // Full-res OPAQUE binary blocker (opaque prepass) into EVERY slot -- the SW-path baseline mask. When the soft
+        // pipeline is ready (the shipping case) the soft opaque pass below OVERWRITES every soft slot, so this is the
+        // fallback that keeps the SW path producing a valid opaque shadow if the soft resources failed to build. (Stage 6
+        // retired the adaptive-opaque coarse/edge-refine economizer: soft opaque overwrote its output, so it was pure dead
+        // work here; the full-res prepass is the simpler, exact baseline.)
+        SwShadowOpaquePrepassPushConstants opaquePush;
+        opaquePush.width = targets.width;
+        opaquePush.height = targets.height;
+        opaquePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+        commandList.setComputeState(passState(rayTracingState().m_swShadowOpaquePrepassPipeline));
+        commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
+        commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
 
-            // Sync the coarse buffer (mode-9 write -> mode-10 read on the same image).
-            commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-            commandList.commitBarriers();
-
-            SwShadowOpaqueResolvePushConstants opaqueResolvePush;
-            opaqueResolvePush.width = targets.width;
-            opaqueResolvePush.height = targets.height;
-            opaqueResolvePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-            opaqueResolvePush.coarseWidth = coarseWidth;
-            opaqueResolvePush.coarseHeight = coarseHeight;
-            opaqueResolvePush.edgeThreshold = rayTracingState().m_swShadowEdgeThreshold;
-            commandList.setComputeState(passState(rayTracingState().m_swShadowOpaqueResolvePipeline));
-            commandList.setPushConstants(&opaqueResolvePush, sizeof(opaqueResolvePush));
-            commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
-        }
-        else{
-            // Full-res opaque blocker (opaque prepass) -- the A/B fallback (NWB_SW_SHADOW_ADAPTIVE_OPAQUE=0).
-            SwShadowOpaquePrepassPushConstants opaquePush;
-            opaquePush.width = targets.width;
-            opaquePush.height = targets.height;
-            opaquePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-            commandList.setComputeState(passState(rayTracingState().m_swShadowOpaquePrepassPipeline));
-            commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
-            commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
-        }
-
-        // Sync before the transparent pass. The opaque mask (mode 3 or mode 10 wrote shadowVisibility) -> transparent
-        // reads+multiplies it: a write->read/write hazard the visibility UAV barrier covers, so stays UnorderedAccess.
-        // The coarse buffer is the subtle one: adaptive-opaque mode 10 only READ it, and the mode-4 transparent coarse
-        // WRITES it next -- a WRITE-AFTER-READ hazard. A same-state UAV barrier does NOT cover WAR (it tracks the last
-        // WRITE, not reads), so the shared coarse buffer flickered. Transition it through ShaderResource here so mode 4's
-        // setComputeState emits a real ShaderResource->UnorderedAccess barrier that orders mode 10's read before the
-        // write. (No-op for the mode-3 path, which never touched the coarse buffer.)
+        // Sync before the transparent pass. The opaque mask (the prepass wrote shadowVisibility) -> the transparent pass
+        // reads+multiplies it: a write->read/write hazard the visibility UAV barrier covers, so it stays UnorderedAccess.
+        // The mode-4 transparent coarse WRITES the coarse buffer next, so stage it ShaderResource here -> mode 4's
+        // setComputeState emits the ShaderResource->UnorderedAccess barrier ordering it. (The prepass never touched it.)
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();
@@ -2982,8 +2929,6 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     // backend is not ready), matching the old single-pipeline behavior.
     const bool passesReady =
         ensureSwShadowPassPipeline(rayTracingState().m_swShadowOpaquePrepassShader, rayTracingState().m_swShadowOpaquePrepassPipeline, AssetsGraphicsShadow::s_SwOpaquePrepassShaderName, "ECSRender_SwShadowOpaquePrepass")
-        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowOpaqueCoarseShader, rayTracingState().m_swShadowOpaqueCoarsePipeline, AssetsGraphicsShadow::s_SwOpaqueCoarseShaderName, "ECSRender_SwShadowOpaqueCoarse")
-        && ensureSwShadowPassPipeline(rayTracingState().m_swShadowOpaqueResolveShader, rayTracingState().m_swShadowOpaqueResolvePipeline, AssetsGraphicsShadow::s_SwOpaqueResolveShaderName, "ECSRender_SwShadowOpaqueResolve")
         && ensureSwShadowPassPipeline(rayTracingState().m_swShadowSoftOpaqueShader, rayTracingState().m_swShadowSoftOpaquePipeline, AssetsGraphicsShadow::s_SwSoftOpaqueShaderName, "ECSRender_SwShadowSoftOpaque")
         && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentCoarseShader, rayTracingState().m_swShadowTransparentCoarsePipeline, AssetsGraphicsShadow::s_SwTransparentCoarseShaderName, "ECSRender_SwShadowTransparentCoarse")
         && ensureSwShadowPassPipeline(rayTracingState().m_swShadowTransparentResolveShader, rayTracingState().m_swShadowTransparentResolvePipeline, AssetsGraphicsShadow::s_SwTransparentResolveShaderName, "ECSRender_SwShadowTransparentResolve")

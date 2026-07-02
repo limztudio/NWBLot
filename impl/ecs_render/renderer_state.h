@@ -379,10 +379,6 @@ private:
     // resident for its pipeline.
     Core::ShaderHandle m_swShadowOpaquePrepassShader;
     Core::ComputePipelineHandle m_swShadowOpaquePrepassPipeline;
-    Core::ShaderHandle m_swShadowOpaqueCoarseShader;
-    Core::ComputePipelineHandle m_swShadowOpaqueCoarsePipeline;
-    Core::ShaderHandle m_swShadowOpaqueResolveShader;
-    Core::ComputePipelineHandle m_swShadowOpaqueResolvePipeline;
     Core::ShaderHandle m_swShadowSoftOpaqueShader;
     Core::ComputePipelineHandle m_swShadowSoftOpaquePipeline;
     Core::ShaderHandle m_swShadowTransparentCoarseShader;
@@ -416,25 +412,17 @@ private:
     Core::Buffer* m_swShadowMeshIndexBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
     Core::Buffer* m_swShadowMeshAttributeBuffers[NWB_SW_SHADOW_MAX_MESHES] = {}; // U2 per-vertex normal/uv0 for the per-hit transmittance dispatch
     u32 m_swShadowMeshCount = 0u;
-    // Stage-2 adaptive transparent shadow (coarse-trace + edge-refine) config, fixed at shipping defaults (adaptive ON,
-    // edge threshold 0.1, stats OFF). The NWB_SW_SHADOW_* env A/B knobs were removed under the no-engine-env policy; these
-    // flags (+ the passes they select) retire with Stage 6, when soft shadows fully replace the hard economizers.
+    // Stage-2 adaptive TRANSPARENT shadow (coarse-trace + edge-refine) config, fixed at shipping defaults (adaptive ON,
+    // edge threshold 0.1, stats OFF). These flags drive the transparent economizer path, which STAYS live: the HW-hybrid
+    // backend (renderGpuBvhShadowVisibility multiplyOntoOpaque=true) casts its COLORED shadow through it. Stage 6 retired
+    // only the hard OPAQUE economizer (the adaptive coarse+edge-refine opaque pass) -- soft opaque overwrote its output,
+    // so it was pure dead work; the plain full-res opaque prepass remains the SW-path baseline/fallback.
     bool m_swShadowAdaptiveEnabled = true;
     bool m_swShadowEdgeStatsEnabled = false;
-    // Stage-3 compacted-indirect resolve (NWB_SW_SHADOW_COMPACT, default ON): when set AND adaptive is on, the mode-5
-    // conditional re-trace is replaced by classify+append (mode 6) -> build-args (mode 7) -> DispatchIndirect trace
-    // (mode 8), so only edge rays launch as coherent waves. "0" falls back to the mode-4+5 adaptive path for A/B.
+    // Stage-3 compacted-indirect resolve (default ON): when set AND adaptive is on, the mode-5 conditional re-trace is
+    // replaced by classify+append (mode 6) -> build-args (mode 7) -> DispatchIndirect trace (mode 8), so only edge rays
+    // launch as coherent waves. "0" falls back to the mode-4+5 adaptive path.
     bool m_swShadowCompactEnabled = true;
-    // Adaptive OPAQUE pre-pass (NWB_SW_SHADOW_ADAPTIVE_OPAQUE, default ON): coarse (mode 9) + edge-refine (mode 10)
-    // instead of the full-res mode-3 opaque blocker trace (no-RT path only). The edge TEST is DILATED
-    // (NWB_SW_SHADOW_OPAQUE_EDGE_DILATE, sw_binding_slots.h) so a sweeping hard-shadow silhouette is re-traced full-res
-    // BEFORE it crosses the next coarse sample -- the ANTI-POP fix. Without it, coarse point-sampling of a HARD (non-band-
-    // limited) opaque shadow POPS as occluders move: an interpolated block lags ~1 coarse cell then snaps, and sub-cell
-    // slivers between samples are missed. With the dilation the adaptive mask tracks full-res: measured on the 10-char
-    // stress spin, render.shadow_visibility 35ms -> 19.3ms (~45% faster) while the adaptive-vs-full per-frame miss-change
-    // is only ~3% of the inherent full-res hard-edge crawl (essentially as stable as full-res, minus rare isolated sub-
-    // cell slivers). Set "0" for the exact full-res mode-3 A/B. No effect on the HW path (opaque there is HW RayQuery).
-    bool m_swShadowAdaptiveOpaqueEnabled = true;
     f32 m_swShadowEdgeThreshold = 0.1f;
     // Edge-fraction instrumentation: a 2-uint UAV counter the resolve tallies into ([0] traced rays, [1] total rays),
     // snapshotted into a CPU-readable buffer on a slow cadence and logged a safe number of frames later (so the copy is

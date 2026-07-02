@@ -31,12 +31,10 @@ inline constexpr Name s_RayQueryShaderName("engine/graphics/shadow/shadow_rayque
 // Software (compute) shadow traversal, decomposed into one NAMED kernel per pass (the old numeric multiplyMode monolith
 // is retired). Each pass composes only the concern .slangi files it needs, #defines its occluder class at compile time,
 // and declares its own minimal binding subset + push struct. The renderer creates one pipeline per pass and dispatches
-// the same sequence the monolith did (opaque prepass OR adaptive-opaque coarse+resolve; the soft opaque half-res trace
-// -- all light types; then the transparent coarse + either the Stage-3 compacted classify/build-args/indirect chain, the Stage-2
-// adaptive resolve, or the uniform half-res multiply -- env-gated exactly as before).
+// the same sequence the monolith did (the full-res opaque prepass; the soft opaque half-res trace -- all light types;
+// then the transparent coarse + either the Stage-3 compacted classify/build-args/indirect chain, the Stage-2 adaptive
+// resolve, or the uniform half-res multiply). The adaptive-opaque coarse+resolve economizer retired with Stage 6.
 inline constexpr Name s_SwOpaquePrepassShaderName("engine/graphics/shadow/sw_shadow_opaque_prepass_cs");
-inline constexpr Name s_SwOpaqueCoarseShaderName("engine/graphics/shadow/sw_shadow_opaque_coarse_cs");
-inline constexpr Name s_SwOpaqueResolveShaderName("engine/graphics/shadow/sw_shadow_opaque_resolve_cs");
 inline constexpr Name s_SwSoftOpaqueShaderName("engine/graphics/shadow/sw_shadow_soft_opaque_cs");
 inline constexpr Name s_SwTransparentCoarseShaderName("engine/graphics/shadow/sw_shadow_transparent_coarse_cs");
 inline constexpr Name s_SwTransparentResolveShaderName("engine/graphics/shadow/sw_shadow_transparent_resolve_cs");

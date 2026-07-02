@@ -133,15 +133,6 @@
 // the gbuffer concern's nwbSwShadowIsBackground and every pass share one definition.
 #define NWB_SW_SHADOW_BACKGROUND_DEPTH 0.999999
 
-// Anti-pop dilation (in COARSE cells) for the opaque adaptive resolve's edge TEST. A hard opaque shadow is NOT band-
-// limited, so the tight (bracketing-2x2) edge test leaves a block in agreement until a sweeping silhouette edge crosses
-// a coarse SAMPLE -- the interpolated block then lags ~1 coarse cell and snaps (the visible pop), and sub-cell slivers
-// between samples are missed. Widening the edge TEST by this many coarse cells re-traces the block full-res BEFORE the
-// edge arrives, so it is already exact as the edge sweeps through. 1 cell removes the dominant sweep pop at ~3x the
-// (still small) edge-retrace count; the interpolation itself stays on the tight bracketing 2x2. (Contract-shared so the
-// opaque-resolve pass + any C++ that references the dilation agree on one value.)
-#define NWB_SW_SHADOW_OPAQUE_EDGE_DILATE 1
-
 // Per-frame samples-per-pixel for the soft directional trace. Stage 3 adds TEMPORAL accumulation (the reproject-merge pass)
 // that supplies the sun-disk samples OVER FRAMES, so this drops from Stage 1's per-frame wash-out count (8) toward 1 --
 // pinned at 2 (not 1) on purpose: for a STATIC receiver the temporal history + the wide a-trous converge fine from a single

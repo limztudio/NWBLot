@@ -79,9 +79,36 @@ private:
     [[nodiscard]] bool ensureSoftShadowResolveBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();
     [[nodiscard]] bool ensureShadowGeometryDownsampleBindingSet(DeferredFrameTargets& targets);
-    // dispatchSoftShadowResolve runs the a-trous PREPARE -> N wavelet passes -> upsample for one slot. prepareOverride (Stage
-    // 3 temporal) swaps the PREPARE input from the raw trace to the accumulated history; nullptr keeps the raw-trace path.
-    void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slot, Core::BindingSet* prepareOverride = nullptr);
+    // Stage 5 (soft COLORED TRANSPARENT shadow): the RGB a-trous resolve pipeline (the SAME shadow_resolve source cooked
+    // with NWB_SHADOW_RESOLVE_CHANNELS=3, sharing the resolve binding LAYOUT) + the five parallel transparent resolve
+    // binding sets (over transparentSoftHalf/transparentHist as SOFT_HALF, the SAME half-res ping-pong scratch as OUTPUT,
+    // and the SAME full-res shadowVisibility as the fold-multiply VISIBILITY target). The transparent merge REUSES the
+    // opaque merge pipeline; only its two front/back binding sets are parallel (built over the transparent hist/moments).
+    [[nodiscard]] bool ensureSoftTransparentResolvePipeline();
+    [[nodiscard]] bool ensureSoftTransparentResolveBindingSet(DeferredFrameTargets& targets);
+    [[nodiscard]] bool ensureShadowTransparentReprojectMergeBindingSet(DeferredFrameTargets& targets);
+    // The set of binding sets + pipeline + fold mode a dispatchSoftShadowResolve call runs against, so ONE dispatch routine
+    // serves BOTH the opaque (scalar pipeline, its own base sets, Overwrite fold) and the transparent (RGB pipeline, its own
+    // base sets, Multiply fold) resolve. The prepareOverride (temporal) still swaps the PREPARE input to the accumulated
+    // history; nullptr keeps the raw-trace path AND drives momentsValid=0 (the spatial-variance fallback).
+    // UPSAMPLE fold mode (mirrors shadow_resolve_cs.slang's pushConstants.upsampleFold): OVERWRITE the full-res visibility
+    // (soft OPAQUE) vs MULTIPLY the denoised colored transmittance onto it (soft TRANSPARENT fold). Declared here (not in the
+    // .cpp) so the dispatch struct below can carry it type-safely.
+    enum class SoftShadowUpsampleFold : u32{
+        Overwrite = 0u,
+        Multiply = 1u,
+    };
+    struct SoftShadowResolveDispatch{
+        Core::ComputePipeline* pipeline = nullptr;
+        Core::BindingSet* outputHalfA = nullptr; // wavelet ping-pong: reads scratch-B, writes scratch-A (odd passes)
+        Core::BindingSet* outputHalfB = nullptr; // PREPARE + even wavelet passes: reads scratch-A, writes scratch-B
+        Core::BindingSet* upsample = nullptr;    // final: reads scratch-A, writes/folds the full-res visibility
+        Core::BindingSet* prepareOverride = nullptr; // temporal: PREPARE reads the accumulated history instead of the raw trace
+        SoftShadowUpsampleFold fold = SoftShadowUpsampleFold::Overwrite;
+    };
+    // dispatchSoftShadowResolve runs the a-trous PREPARE -> N wavelet passes -> upsample for one slot, against the sets +
+    // pipeline + fold in `dispatch`. See SoftShadowResolveDispatch.
+    void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slot, const SoftShadowResolveDispatch& dispatch);
     // Soft opaque shadow TEMPORAL accumulation (Stage 3 of the soft-ray-traced-shadow feature): the reproject-merge pass
     // inserted per slot between the soft trace and the a-trous resolve. ensureShadowReprojectMergePipeline builds its
     // pipeline + layout; ensureShadowReprojectMergeBindingSet builds the two front/back sets (history-in SRV and history-out

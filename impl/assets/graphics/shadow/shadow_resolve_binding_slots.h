@@ -81,6 +81,16 @@
 // 8x8 = 64 threads per group (one thread per pixel), matching the caustic resolve + the SW traversal.
 #define NWB_SHADOW_RESOLVE_GROUP_SIZE 8
 
+// A-trous wavelet channel count (Stage 5). The resolve source (shadow_resolve_cs.slang) parameterizes ONLY its wavelet
+// accumulator + tap read/write by this: 1 = SCALAR (the soft OPAQUE grayscale visibility -- the default; keeps 1x ALU +
+// 1x LDS on the common path), 3 = RGB (the soft COLORED TRANSPARENT transmittance -- denoises color, the value edge-stop
+// uses the LUMA of the RGB delta). ONE source, TWO cooked pipelines (shadow_resolve_cs = scalar default, shadow_resolve_
+// rgb_cs = the =3 wrapper), so the common opaque path is never charged the 3x wavelet ALU/LDS for an identically-gray
+// signal while the transparent path denoises the colored penumbra. The kernel, edge-stops, LDS load/branch, and the
+// upsample (already RGB end-to-end) are shared; only the wavelet vector type + tap channel count differ.
+#define NWB_SHADOW_RESOLVE_CHANNELS_SCALAR 1
+#define NWB_SHADOW_RESOLVE_CHANNELS_RGB    3
+
 // A-trous wavelet pass count (the dispatch runs a PREPARE copy first, then this many wavelet passes at dilation
 // 1,2,4,8,16). Run at HALF resolution. A single-sample jittered penumbra is NOISY (one sample per pixel, no temporal),
 // so a WIDE support is needed to reconstruct the smooth gradient -- 5 half-res passes (dilations 1,2,4,8,16 ==

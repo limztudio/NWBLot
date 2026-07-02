@@ -45,12 +45,12 @@ using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// DEDICATED SOFT-SHADOW scene (soft-ray-traced-shadow feature): ONE opaque `body` character standing on ONE opaque ground
-// plane, lit by THREE differently-coloured lights AT ONCE -- a warm-white DIRECTIONAL sun, a RED POINT light, and a BLUE
-// SPOT -- each with a PHYSICAL source size. That source size is what makes each shadow soft: the trace jitters the ray
-// over the light's source (the sun's angularRadius disk, or a point/spot's sourceRadius sphere subtending asin(R/dist)),
-// so every penumbra emerges + WIDENS with occluder->receiver distance and HARDENS at contact. Opaque-only (no
-// transparency / caustics) so the three coloured soft penumbras are the only thing on screen.
+// DEDICATED SOFT-SHADOW scene (soft-ray-traced-shadow feature): an OPAQUE and a GLASS `body` character standing on ONE
+// opaque ground plane, lit by THREE differently-coloured lights AT ONCE -- a warm-white DIRECTIONAL sun, a RED POINT
+// light, and a BLUE SPOT -- each with a PHYSICAL source size. That source size is what makes each shadow soft: the trace
+// jitters the ray over the light's source (the sun's angularRadius disk, or a point/spot's sourceRadius sphere subtending
+// asin(R/dist)), so every penumbra emerges + WIDENS with occluder->receiver distance and HARDENS at contact. The GLASS
+// caster adds a COLORED transparent soft shadow (Stage 5) beside the opaque grey ones. Both casters spin (arrow keys).
 //
 // A/B levers:
 //   - THREE differently-coloured soft-shadowed lights are lit AT ONCE (a warm-white directional sun, a RED point, a BLUE
@@ -67,12 +67,13 @@ using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 // Reuses the benchmark's cooked body model + ground material (no new assets).
 static constexpr AStringView s_ModelPath = "project/characters/body/model";
 static constexpr AStringView s_OpaqueMaterialPath = "project/smoke/transparent_multi/materials/ground";  // opaque lambert
+static constexpr AStringView s_TransparentMaterialPath = "project/smoke/transparent_multi/materials/shared"; // glass (colored transmittance)
 static constexpr AStringView s_GroundMeshPath = "project/meshes/shadow_plane";
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 static constexpr f32 s_GroundScale = 8.0f;
 
-static constexpr f32 s_CameraDistance = 2.4f;                        // pulled in close so the cast ground shadow reads large
+static constexpr f32 s_CameraDistance = 3.2f;                        // fits the opaque + glass casters both in frame
 static constexpr f32 s_CameraHeight = 1.5f;
 static constexpr f32 s_CameraPitch = 0.30f;                         // tilt down a bit more to frame the ground shadow
 
@@ -208,11 +209,12 @@ private:
         return s_yaw;
     }
 
-    void spinCharacter(){
-        auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(m_characterOwner);
-        if(!transform)
-            return;
-        StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw, 0.0f), &transform->rotation);
+    void spinCasters(){
+        for(const NWB::Core::ECS::EntityID owner : { m_characterOwner, m_glassOwner }){
+            auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(owner);
+            if(transform)
+                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw, 0.0f), &transform->rotation);
+        }
     }
 
 
@@ -313,16 +315,35 @@ public:
         if(!tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
 
+        // A GLASS (transparent) caster beside her: the SAME body model with a refractive material + a coloured, sub-1-alpha
+        // tint. Its shadow is the COLORED transparent soft shadow (Stage 5) -- the light passing through the glass is tinted
+        // by it, so the cast shadow carries the glass colour AND softens like the opaque one. Offset to the side so the
+        // coloured penumbra reads next to the opaque grey one.
+        bool glassTintApplied = false;
+        m_glassOwner = CreateTintedModelEntity(
+            *m_world,
+            m_context.objectArena,
+            s_ModelPath,
+            s_TransparentMaterialPath,
+            s_SmokeSurfaceMaterialInterface,
+            Float4(0.55f, 0.90f, 0.85f, 0.40f), // teal glass, sub-1 alpha (marks it transparent)
+            Float4(1.1f, 0.0f, 0.1f, 0.0f),
+            Float4(1.0f, 1.0f, 1.0f, 0.0f),
+            &glassTintApplied
+        );
+        if(!glassTintApplied)
+            NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));
+
         // One tick spawns the model object entities (skeleton/mesh) so the first rendered frame is fully populated.
         m_world->tick(0.0f);
 
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.camera.valid() && m_groundEntity.valid() && m_characterOwner.valid(),
+            activeCamera.camera.valid() && m_groundEntity.valid() && m_characterOwner.valid() && m_glassOwner.valid(),
             NWB_TEXT("SoftShadowTestSmokeProject failed to create all scene entities")
         );
 
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("SoftShadowTestSmokeProject: one opaque character on a ground plane, single directional light, angularRadius={} rad")
+            NWB_TEXT("SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius={} rad")
             , static_cast<f64>(configuredAngularRadius())
         );
         return true;
@@ -352,7 +373,7 @@ public:
             else
                 m_yaw += Min(safeDelta, s_MaxSpinDelta) * s_SpinSpeed;
         }
-        spinCharacter();
+        spinCasters();
         updateWindowTitle();
         m_world->tick(safeDelta);
         return true;
@@ -384,6 +405,7 @@ private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Core::ECS::EntityID m_characterOwner = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_glassOwner = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("SoftShadowTestSmokeProject") };
     f32 m_yaw = 0.0f;                  // accumulated character yaw (radians): env-freeze / arrow-scrub / auto-spin

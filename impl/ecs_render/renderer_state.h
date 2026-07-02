@@ -399,6 +399,10 @@ private:
     Core::ComputePipelineHandle m_swShadowTransparentIndirectPipeline;
     Core::ShaderHandle m_swShadowTransparentUniformShader;
     Core::ComputePipelineHandle m_swShadowTransparentUniformPipeline;
+    // Soft COLORED TRANSPARENT trace (Stage 5): the colored (Beer-Lambert/Fresnel) analog of the soft opaque trace, against
+    // the SAME shared SW-shadow binding layout/set (it only adds the NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF UAV slot).
+    Core::ShaderHandle m_swShadowTransparentSoftShader;
+    Core::ComputePipelineHandle m_swShadowTransparentSoftPipeline;
     const Core::Buffer* m_swShadowBindingSetSceneNodes = nullptr;
     const Core::Buffer* m_swShadowBindingSetInstances = nullptr;
     const Core::Buffer* m_swShadowBindingSetInstanceMaterial = nullptr;
@@ -547,6 +551,53 @@ private:
     Core::BindingSetHandle m_shadowResolveBindingSetTemporalHistB; // PREPARE reads shadowHistB as SOFT_HALF
     const Core::Texture* m_shadowResolveBindingSetTemporalHistATex = nullptr;
     const Core::Texture* m_shadowResolveBindingSetTemporalHistBTex = nullptr;
+    // ---- Stage 5: the PARALLEL soft COLORED TRANSPARENT denoise state (mirrors the opaque m_shadowResolve* / merge blocks) ----
+    // The RGB a-trous resolve pipeline: the SAME shadow_resolve source cooked with NWB_SHADOW_RESOLVE_CHANNELS=3 (via the
+    // shadow_resolve_rgb_cs wrapper). It shares the resolve BINDING LAYOUT (identical bindings; only the wavelet channel
+    // count + a runtime fold flag differ), so only a distinct shader + pipeline handle are needed, not a new layout.
+    Core::ShaderHandle m_shadowResolveRgbShader;
+    Core::ComputePipelineHandle m_shadowResolveRgbPipeline;
+    bool m_shadowResolveRgbPipelineFailed = false;
+    // The five transparent resolve binding-set variants, built over transparentSoftHalf / transparentHistA/B / transparent
+    // MomentsA/B as SOFT_HALF/INPUT + the SAME half-res soft-A/soft-B as the ping-pong OUTPUT scratch (the a-trous ping-pong
+    // is signal-agnostic -- it just needs two half-res arrays) + the SAME full-res shadowVisibility as VISIBILITY (the fold
+    // target). Selected exactly like the opaque set (output-A/output-B/upsample + two temporal-hist variants).
+    Core::BindingSetHandle m_transparentResolveBindingSetOutputHalfA;
+    Core::BindingSetHandle m_transparentResolveBindingSetOutputHalfB;
+    Core::BindingSetHandle m_transparentResolveBindingSetUpsample;
+    Core::BindingSetHandle m_transparentResolveBindingSetTemporalHistA;
+    Core::BindingSetHandle m_transparentResolveBindingSetTemporalHistB;
+    const Core::Texture* m_transparentResolveBindingSetSoftHalf = nullptr;   // transparentSoftHalf (the raw colored trace)
+    const Core::Texture* m_transparentResolveBindingSetScratchA = nullptr;   // soft-A ping-pong scratch (shared with opaque)
+    const Core::Texture* m_transparentResolveBindingSetScratchB = nullptr;   // soft-B ping-pong scratch (shared with opaque)
+    const Core::Texture* m_transparentResolveBindingSetGeometry = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetDepth = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetVisibility = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetHistA = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetHistB = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetMomentsA = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetMomentsB = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetWorldPos = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetNormal = nullptr;
+    // The two front/back TRANSPARENT reproject-merge binding sets (SAME m_shadowReprojectMergePipeline/Layout drive both;
+    // the merge shader is fully RGB-safe and reused verbatim). Built over transparentSoftHalf (SOFT_TRACE) + transparentHist
+    // A/B (history) + transparentMomentsA/B (moments) + the SHARED shadowSoftGeometry/Prev + full-res world-position.
+    Core::BindingSetHandle m_transparentReprojectMergeBindingSetAtoB; // histIn/momIn = A -> histOut/momOut = B
+    Core::BindingSetHandle m_transparentReprojectMergeBindingSetBtoA; // histIn/momIn = B -> histOut/momOut = A
+    const Core::Texture* m_transparentReprojectMergeSoftTrace = nullptr;
+    const Core::Texture* m_transparentReprojectMergeHistA = nullptr;
+    const Core::Texture* m_transparentReprojectMergeHistB = nullptr;
+    const Core::Texture* m_transparentReprojectMergeMomentsA = nullptr;
+    const Core::Texture* m_transparentReprojectMergeMomentsB = nullptr;
+    const Core::Texture* m_transparentReprojectMergeGeometryCurr = nullptr;
+    const Core::Texture* m_transparentReprojectMergeGeometryPrev = nullptr;
+    const Core::Texture* m_transparentReprojectMergeWorldPosition = nullptr;
+    // Gates (mirror m_softShadowReady / m_softShadowTemporalReady): set by prepareShadowVisibilityResources when the RGB
+    // resolve pipeline + the transparent resolve binding sets (and, for temporal, the transparent merge pipeline is shared +
+    // its two binding sets) are all ready this frame. Non-fatal: a failure leaves the soft transparent path off (the old
+    // transparent coarse/adaptive path then runs its colored multiply as before -- no double-fold because they are exclusive).
+    bool m_softTransparentReady = false;
+    bool m_softTransparentTemporalReady = false;
     u32 m_swShadowEdgeStatsPendingTick = 0u;
     // Stage-3 compaction resources: the per-frame append counter (2 u32: [0] append count, [1] clamped trace count), the
     // compacted edge-record list (recreated on resize, sized in records), and the persistent indirect dispatch-args

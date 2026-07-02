@@ -11,6 +11,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// A-trous WAVELET channel count (Stage 5): 1 = SCALAR (soft OPAQUE grayscale visibility -- the default), 3 = RGB (soft
+// COLORED TRANSPARENT transmittance). The RGB pipeline is cooked from shadow_resolve_rgb_cs.slang, which #defines this =3
+// then #includes THIS file. Only the wavelet's accumulator vector type + the tap read/write channel count depend on it;
+// everything else (kernel, geometry edge-stops, LDS layout, PREPARE/UPSAMPLE which are already .rgb) is shared. Scalar
+// stays exactly 1x ALU + 1x LDS so the common opaque path is never charged for a signal that is identically gray.
+#ifndef NWB_SHADOW_RESOLVE_CHANNELS
+#define NWB_SHADOW_RESOLVE_CHANNELS NWB_SHADOW_RESOLVE_CHANNELS_SCALAR
+#endif
+
+#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
+    typedef half   NwbShadowResolveVis;      // per-channel LDS storage element (kept half to match the scalar tile budget)
+    typedef half3  NwbShadowResolveVisVec;   // the wavelet accumulator / tap value type
+    typedef float3 NwbShadowResolveVisFVec;  // the float working type inside the wavelet sums
+#else
+    typedef half   NwbShadowResolveVis;
+    typedef half   NwbShadowResolveVisVec;
+    typedef float  NwbShadowResolveVisFVec;
+#endif
+
+
 // Soft OPAQUE shadow RESOLVE = an EDGE-AVOIDING A-TROUS WAVELET denoise (Dammertz et al.), run at HALF resolution
 // as N ping-pong compute passes, bracketed by the shadow geometry downsample pre-pass + an edge-aware upsample. Cloned
 // from caustic_resolve_cs (same denoise skeleton -- a sparse/noisy spatial signal reconstructed purely spatially, no
@@ -91,6 +111,10 @@ struct NwbShadowResolvePushConstants{
     uint momentsValid;   // 1 = the MOMENTS SRV holds this-frame integrated temporal moments (the merge ran) -> the wavelet
                          // may use the temporal variance where n is high; 0 = temporal off / first frame -> the wavelet
                          // NEVER samples the (dummy) MOMENTS SRV and uses the spatial-variance fallback everywhere.
+    uint upsampleFold;   // UPSAMPLE fold mode (Stage 5): 0 = OVERWRITE the full-res visibility (soft OPAQUE, as always);
+                         // 1 = MULTIPLY the denoised result onto the visibility (soft COLORED TRANSPARENT fold-multiply,
+                         // read-modify-write). Background pixels skip the write entirely when fold==1 (leaving the opaque
+                         // result untouched -- white would clobber it). Ignored by PREPARE/WAVELET. See the UPSAMPLE stage.
 };
 
 [[vk::push_constant]]
@@ -99,7 +123,7 @@ ConstantBuffer<NwbShadowResolvePushConstants> g_NwbShadowResolvePushConstants;
 // Groupshared (LDS) tile for the small-dilation wavelet passes: the group cooperatively loads its half-res tile + halo
 // (for ONE slot at a time) here once, then every thread taps from LDS. Sized for the largest LDS-tiled step
 // (24x24 = 576 texels). Reloaded per slot inside the wavelet's slot loop (a barrier brackets each reload).
-groupshared half   s_NwbShadowResolveTileVis[NWB_SHADOW_RESOLVE_TILE_TEXELS];  // the visibility being smoothed
+groupshared NwbShadowResolveVisVec s_NwbShadowResolveTileVis[NWB_SHADOW_RESOLVE_TILE_TEXELS];  // the visibility being smoothed (scalar for opaque, RGB for colored transparent)
 groupshared half2  s_NwbShadowResolveTileNormal[NWB_SHADOW_RESOLVE_TILE_TEXELS]; // octahedral normal
 groupshared float  s_NwbShadowResolveTileDist[NWB_SHADOW_RESOLVE_TILE_TEXELS];  // camera distance
 groupshared uint   s_NwbShadowResolveTileValid[NWB_SHADOW_RESOLVE_TILE_TEXELS]; // 1 = receiver
@@ -172,6 +196,43 @@ float nwbShadowResolveValueWeight(const float centerVis, const float tapVis, con
     return exp(-abs(tapVis - centerVis) / sigmaLum);
 }
 
+// Rec.709 luma of a visibility value -- the scalar the value edge-stop compares. For SCALAR (CH1) it is the value itself;
+// for RGB (CH3) it is the luma of the colored transmittance, so the wavelet stops on the same perceptual delta the
+// temporal merge's moments track (both Rec.709). Overloaded so the wavelet body is channel-agnostic.
+float nwbShadowResolveLuma(const float v){
+    return v;
+}
+float nwbShadowResolveLuma(const float3 c){
+    return dot(c, float3(0.2126, 0.7152, 0.0722));
+}
+
+// Value (visibility) edge-stop on the wavelet's vector value type: exp(-|luma(tap)-luma(center)|/sigmaLum). Reduces to the
+// scalar nwbShadowResolveValueWeight above for CH1 (luma is identity), and for CH3 stops on the LUMA of the RGB delta so
+// the colored penumbra smooths WITHIN the tint / WITHIN the lit region without bleeding across the colored shadow edge.
+float nwbShadowResolveValueWeightVec(const NwbShadowResolveVisFVec centerVis, const NwbShadowResolveVisFVec tapVis, const float sigmaLum){
+    return exp(-abs(nwbShadowResolveLuma(tapVis) - nwbShadowResolveLuma(centerVis)) / sigmaLum);
+}
+
+// PREPARE/WAVELET tap read of the current INPUT_COLOR (or SOFT_HALF) at a half-res texel + slot, as the wavelet vector
+// type: .r broadcast for SCALAR (CH1), .rgb for RGB (CH3). Centralised so the LDS-load + large-step paths read identically.
+NwbShadowResolveVisVec nwbShadowResolveLoadInput(const int2 tap, const uint slot){
+    const float4 s = g_NwbShadowResolveInputColor.Load(int4(tap, (int)slot, 0));
+#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
+    return NwbShadowResolveVisVec(s.rgb);
+#else
+    return NwbShadowResolveVisVec(s.r);
+#endif
+}
+
+// WAVELET output store: broadcast the smoothed vector into float4(v,v,v,1) for SCALAR (grayscale) or float4(v,1) for RGB.
+float4 nwbShadowResolveStore(const NwbShadowResolveVisFVec v){
+#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
+    return float4(v, 1.0);
+#else
+    return float4(v, v, v, 1.0);
+#endif
+}
+
 // Per-centre-pixel luminance edge-stop sigma for the wavelet (§ Stage 4A). Chooses the TEMPORAL moment variance when the
 // history is long (momentsValid == 1 AND n >= MIN_HISTORY) and otherwise a 3x3 SPATIAL luma variance of the current
 // INPUT_COLOR over valid receiver taps. Crucially, when momentsValid == 0 the moments SRV is NEVER sampled (the temporal
@@ -196,7 +257,14 @@ float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const in
             const int2 t = int2(clamp(texel.x + dx, 0, hw - 1), clamp(texel.y + dy, 0, hh - 1));
             if(g_NwbShadowResolveGeometry.Load(int3(t, 0)).w <= 0.5)
                 continue; // background tap -> no receiver, skip
-            const float v = g_NwbShadowResolveInputColor.Load(int4(t, (int)slot, 0)).r;
+            // SCALAR: .r visibility; RGB: the LUMA of the colored transmittance, so the spatial variance tracks the same
+            // perceptual signal the temporal moments (also luma) do -- keeping the sigma metric consistent for both variants.
+            const float4 sColor = g_NwbShadowResolveInputColor.Load(int4(t, (int)slot, 0));
+#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
+            const float v = nwbShadowResolveLuma(sColor.rgb);
+#else
+            const float v = sColor.r;
+#endif
             mean += v;
             mean2 += v * v;
             ++cnt;
@@ -248,9 +316,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float sigmaDist = max(centerDist * NWB_SHADOW_RESOLVE_UPSAMPLE_DIST_FRAC, 1e-3);
         const float invTwoSigmaDistSq = 1.0 / (2.0 * sigmaDist * sigmaDist);
 
+        // Fold mode (Stage 5): 0 = OVERWRITE the visibility (soft OPAQUE, the always-run first pass); 1 = MULTIPLY the
+        // denoised colored transmittance onto it (soft TRANSPARENT fold, read-modify-write). One texel per thread, VISIBILITY
+        // is UAV-only in this set, so the fold==1 RMW is a safe self-UAV update (no cross-texel dependency); the caller
+        // orders the opaque UPSAMPLE's writes before this pass's reads with a UAV barrier on the visibility image.
+        const uint fold = g_NwbShadowResolvePushConstants.upsampleFold;
         for(uint slot = slotStart; slot < slotEnd; ++slot){
             if(background){
-                g_NwbShadowResolveVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0); // LIT identity
+                // OVERWRITE mode writes the LIT identity for a background pixel; FOLD mode leaves the prior (opaque) value
+                // UNTOUCHED -- writing white here would clobber the opaque result at a background full-res texel.
+                if(fold == 0u)
+                    g_NwbShadowResolveVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0); // LIT identity
                 continue;
             }
             float3 sum = float3(0.0, 0.0, 0.0);
@@ -270,8 +346,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     weightSum += weight;
                 }
             }
-            // All four taps rejected: the LIT identity (never black).
-            g_NwbShadowResolveVisibility[uint3(pixel, slot)] = (weightSum > 0.0) ? float4(sum / weightSum, 1.0) : float4(1.0, 1.0, 1.0, 1.0);
+            // All four taps rejected: the LIT / UNTINTED identity (never black).
+            const float3 result = (weightSum > 0.0) ? (sum / weightSum) : float3(1.0, 1.0, 1.0);
+            if(fold == 0u){
+                g_NwbShadowResolveVisibility[uint3(pixel, slot)] = float4(result, 1.0); // OVERWRITE (opaque)
+            }
+            else{
+                // MULTIPLY the denoised colored transmittance onto the (soft opaque) visibility -- the Stage-5 fold. A tap-
+                // rejected `result` == 1.0 (untinted identity) leaves the opaque value unchanged, so an all-rejected fold
+                // texel is a no-op rather than a black leak.
+                const float3 prior = g_NwbShadowResolveVisibility[uint3(pixel, slot)].rgb;
+                g_NwbShadowResolveVisibility[uint3(pixel, slot)] = float4(prior * result, 1.0);
+            }
         }
         return;
     }
@@ -324,14 +410,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             // marked invalid so the wavelet skips them (matches the texture path's OOB + background skips).
             for(uint i = threadIndex; i < tileTexels; i += threadCount){
                 const int2 t = tileOrigin + int2((int)(i % (uint)tileW), (int)(i / (uint)tileW));
-                half tapVis = half(1.0);
+                NwbShadowResolveVisVec tapVis = NwbShadowResolveVisVec(1.0); // LIT / UNTINTED identity for OOB/background taps
                 half2 tapNormal = half2(0.0, 0.0);
                 float tapDist = 0.0;
                 uint tapValid = 0u;
                 if(t.x >= 0 && t.y >= 0 && t.x < hw && t.y < hh){
                     const float4 g = nwbShadowResolveGeomAtHalf(t);
                     if(g.w > 0.5){
-                        tapVis = half(g_NwbShadowResolveInputColor.Load(int4(t, slot, 0)).r);
+                        tapVis = NwbShadowResolveVisVec(nwbShadowResolveLoadInput(t, slot));
                         tapNormal = half2(g.xy);
                         tapDist = g.z;
                         tapValid = 1u;
@@ -350,28 +436,29 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 }
                 else{
                     const uint centerIdx = (uint)((int(groupThreadID.y) + 2 * step) * tileW + (int(groupThreadID.x) + 2 * step));
-                    const float centerVis = (float)s_NwbShadowResolveTileVis[centerIdx];
+                    const NwbShadowResolveVisFVec centerVis = (NwbShadowResolveVisFVec)s_NwbShadowResolveTileVis[centerIdx];
                     // Per-slot SVGF luminance sigma for THIS receiver pixel (temporal-when-converged, else spatial fallback).
                     const float sigmaLum = nwbShadowResolveCenterSigmaLum(texel, slot, hw, hh, momentsValid);
-                    float sum = 0.0;
+                    NwbShadowResolveVisFVec sum = (NwbShadowResolveVisFVec)0.0;
                     float weightSum = 0.0;
                     [unroll] for(int ky = -2; ky <= 2; ++ky){
                         [unroll] for(int kx = -2; kx <= 2; ++kx){
                             const uint idx = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileW + (int(groupThreadID.x) + (kx + 2) * step));
                             if(s_NwbShadowResolveTileValid[idx] == 0u)
                                 continue;
-                            const float tapVis = (float)s_NwbShadowResolveTileVis[idx];
+                            const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)s_NwbShadowResolveTileVis[idx];
                             const float dDist = s_NwbShadowResolveTileDist[idx] - centerGeom.z;
                             const float distWeight = exp(-dDist * dDist * invTwoSigmaDistSq);
                             const float normalWeight = nwbShadowResolveNormalWeight(centerGeom.xy, float2(s_NwbShadowResolveTileNormal[idx]));
-                            const float valueWeight = nwbShadowResolveValueWeight(centerVis, tapVis, sigmaLum);
+                            const float valueWeight = nwbShadowResolveValueWeightVec(centerVis, tapVis, sigmaLum);
                             const float weight = s_NwbShadowResolveKernel[kx + 2] * s_NwbShadowResolveKernel[ky + 2] * distWeight * normalWeight * valueWeight;
                             sum += weight * tapVis;
                             weightSum += weight;
                         }
                     }
-                    const float vis = (weightSum > 0.0) ? (sum / weightSum) : 1.0; // all taps rejected -> LIT identity
-                    g_NwbShadowResolveOutput[uint3(pixel, slot)] = float4(vis, vis, vis, 1.0);
+                    // all taps rejected -> LIT / UNTINTED identity (never black).
+                    const NwbShadowResolveVisFVec vis = (weightSum > 0.0) ? (sum / weightSum) : (NwbShadowResolveVisFVec)1.0;
+                    g_NwbShadowResolveOutput[uint3(pixel, slot)] = nwbShadowResolveStore(vis);
                 }
             }
             // Barrier before the NEXT slot reloads the shared tile (WAR on the LDS arrays). Every thread reaches it.
@@ -388,10 +475,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             g_NwbShadowResolveOutput[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
             continue;
         }
-        const float centerVis = g_NwbShadowResolveInputColor.Load(int4(texel, slot, 0)).r;
+        const NwbShadowResolveVisFVec centerVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(texel, slot);
         // Per-slot SVGF luminance sigma for THIS receiver pixel (temporal-when-converged, else spatial fallback).
         const float sigmaLum = nwbShadowResolveCenterSigmaLum(texel, slot, hw, hh, momentsValid);
-        float sum = 0.0;
+        NwbShadowResolveVisFVec sum = (NwbShadowResolveVisFVec)0.0;
         float weightSum = 0.0;
         [unroll] for(int ky = -2; ky <= 2; ++ky){
             [unroll] for(int kx = -2; kx <= 2; ++kx){
@@ -401,18 +488,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const float4 tapGeom = nwbShadowResolveGeomAtHalf(tap);
                 if(tapGeom.w <= 0.5)
                     continue;
-                const float tapVis = g_NwbShadowResolveInputColor.Load(int4(tap, slot, 0)).r;
+                const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
                 const float dDist = tapGeom.z - centerGeom.z;
                 const float distWeight = exp(-dDist * dDist * invTwoSigmaDistSq);
                 const float normalWeight = nwbShadowResolveNormalWeight(centerGeom.xy, tapGeom.xy);
-                const float valueWeight = nwbShadowResolveValueWeight(centerVis, tapVis, sigmaLum);
+                const float valueWeight = nwbShadowResolveValueWeightVec(centerVis, tapVis, sigmaLum);
                 const float weight = s_NwbShadowResolveKernel[kx + 2] * s_NwbShadowResolveKernel[ky + 2] * distWeight * normalWeight * valueWeight;
                 sum += weight * tapVis;
                 weightSum += weight;
             }
         }
-        const float vis = (weightSum > 0.0) ? (sum / weightSum) : 1.0;
-        g_NwbShadowResolveOutput[uint3(pixel, slot)] = float4(vis, vis, vis, 1.0);
+        const NwbShadowResolveVisFVec vis = (weightSum > 0.0) ? (sum / weightSum) : (NwbShadowResolveVisFVec)1.0;
+        g_NwbShadowResolveOutput[uint3(pixel, slot)] = nwbShadowResolveStore(vis);
     }
 }
 

@@ -65,6 +65,14 @@
 // geometry downsample + a-trous wavelet + bilateral upsample into the full-res visibility the lighting samples. UAV
 // (written by mode 11, read by the resolve). Only the SW traversal declares/writes it; the resolve binds its own copy.
 #define NWB_SW_SHADOW_BINDING_SOFT_HALF 20
+// Soft COLORED TRANSPARENT shadow (Stage 5 of the soft-ray-traced-shadow feature): a HALF-res RGBA16F Texture2DArray (one
+// layer per shadow slot) the soft transparent trace (sw_shadow_transparent_soft_cs) writes ONE cone-jittered COLORED
+// (Beer-Lambert/Fresnel) transmittance sample per half-res pixel into. It is denoised by the SEPARATE RGB shadow_resolve
+// pipeline (its own binding set) -- temporal reproject-merge + RGB a-trous wavelet + fold-multiply upsample onto the
+// full-res visibility (which already holds the soft OPAQUE result). UAV (written by the soft transparent trace, read by
+// the resolve). Only the SW traversal declares/writes it; the resolve binds its own copy. Kept a PARALLEL signal to the
+// opaque SOFT_HALF (independent noise stats, separately denoised) and folded only at the final full-res upsample.
+#define NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF 21
 
 // 8x8 = 64 threads per group (one thread per pixel).
 #define NWB_SW_SHADOW_GROUP_SIZE 8
@@ -143,6 +151,14 @@
 // same still-cheap half-res binary trace cost. So 2 keeps moving regions clean while temporal handles static convergence.
 // (An A/B at 1 vs 2 is a one-line edit here.) Contract-shared with the soft directional pass.
 #define NWB_SW_SHADOW_SOFT_SPP 2u
+
+// Decorrelation salt for the soft TRANSPARENT trace's cone-jitter low-discrepancy stream (Stage 5), so its colored
+// penumbra estimator samples the source at points INDEPENDENT of the soft OPAQUE trace's. The two soft signals are
+// SEPARATELY temporally denoised (opaque binary Bernoulli vs colored chord-variance RGB product -- their per-frame noise
+// must not be correlated) and folded only at the final full-res upsample, so the transparent trace adds this odd offset
+// into its sample index alongside frameIndex*SPP+s. A large odd constant (the golden-ratio hash multiplier's high word)
+// so it is far from any small frameIndex*SPP+s value and shares no small factor with SPP. Contract-shared with the pass.
+#define NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT 2654435761u
 
 // Per-thread traversal stack depths. The scene/instance BVH is shallow (a few-to-hundreds of instances);
 // the per-mesh triangle BVH is deeper. Both traversals treat a deeper subtree as occluded rather than

@@ -178,6 +178,26 @@ struct DeferredFrameTargets{
     Core::TextureHandle shadowMomentsA;
     Core::TextureHandle shadowMomentsB;
     Core::TextureHandle shadowSoftGeometryPrev;
+    // Soft COLORED TRANSPARENT shadow (Stage 5 of the soft-ray-traced-shadow feature) HALF-res targets: the PARALLEL colored
+    // pipeline kept SEPARATE from the opaque soft signal through the whole denoise, folded (multiplied) onto the opaque
+    // visibility only at the final full-res upsample (opaque binary Bernoulli vs colored chord-variance RGB product have
+    // different noise stats, so denoise(A)*denoise(B) != denoise(A*B) -- they must be denoised independently). Mirrors the
+    // opaque allocation exactly (RGBA16F Texture2DArray, NWB_SCENE_SHADOW_SLOT_COUNT layers, half the render extent):
+    //  - transparentSoftHalf: the RAW colored soft trace output (analog of shadowSoftHalfA). The soft transparent trace
+    //    (sw_shadow_transparent_soft_cs) writes one cone-jittered colored transmittance per half-res pixel here; the merge
+    //    reads it as its "current" sample and the RGB a-trous reads whichever the merge just wrote.
+    //  - transparentHistA / transparentHistB: the accumulated-visibility ping-pong (analog of shadowHistA/B), sharing the
+    //    SAME frontIsA selector as the opaque history so both stay in lockstep (one frame-end flip covers both).
+    //  - transparentMomentsA / transparentMomentsB: the ping-pong luma moments (analog of shadowMomentsA/B).
+    // The geometry cache (shadowSoftGeometry/Prev) + the stashed prevWorldToClip are SHARED (same receivers) -- NOT
+    // duplicated here. Allocated with the visibility target so they share the resize lifecycle (createShadowVisibilityTarget).
+    // Guarded by m_softTransparentReady / m_softTransparentTemporalReady; a first frame / resize / temporal-off degrades to
+    // raw-colored-soft-trace -> spatial RGB a-trous -> fold-multiply (always valid, never black -- white identity everywhere).
+    Core::TextureHandle transparentSoftHalf;
+    Core::TextureHandle transparentHistA;
+    Core::TextureHandle transparentHistB;
+    Core::TextureHandle transparentMomentsA;
+    Core::TextureHandle transparentMomentsB;
     // Caustic producer targets (additive, inverted lifecycle vs shadowVisibility): the RGBA16F resolved irradiance
     // the deferred lighting pass adds pre-tonemap, the R32_UINT splat accumulators (one Texture2DArray layer per RGB
     // channel) the producer's fixed-point InterlockedAdd lands in, and the RGBA16F a-trous wavelet scratch buffer.

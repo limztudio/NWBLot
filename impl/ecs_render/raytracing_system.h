@@ -20,6 +20,19 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// UPSAMPLE fold mode (mirrors shadow_resolve_cs.slang's pushConstants.upsampleFold): OVERWRITE the full-res visibility
+// (soft OPAQUE) vs MULTIPLY the denoised colored transmittance onto it (soft TRANSPARENT fold).
+namespace SoftShadowUpsampleFold{
+    enum Enum : u32{
+        Overwrite = 0u,
+        Multiply = 1u,
+    };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class RendererRayTracingSystem final : public RendererSystemSubsystemBase<RendererSystem>{
 public:
     explicit RendererRayTracingSystem(RendererSystem& renderer);
@@ -91,20 +104,13 @@ private:
     // serves BOTH the opaque (scalar pipeline, its own base sets, Overwrite fold) and the transparent (RGB pipeline, its own
     // base sets, Multiply fold) resolve. The prepareOverride (temporal) still swaps the PREPARE input to the accumulated
     // history; nullptr keeps the raw-trace path AND drives momentsValid=0 (the spatial-variance fallback).
-    // UPSAMPLE fold mode (mirrors shadow_resolve_cs.slang's pushConstants.upsampleFold): OVERWRITE the full-res visibility
-    // (soft OPAQUE) vs MULTIPLY the denoised colored transmittance onto it (soft TRANSPARENT fold). Declared here (not in the
-    // .cpp) so the dispatch struct below can carry it type-safely.
-    enum class SoftShadowUpsampleFold : u32{
-        Overwrite = 0u,
-        Multiply = 1u,
-    };
     struct SoftShadowResolveDispatch{
         Core::ComputePipeline* pipeline = nullptr;
         Core::BindingSet* outputHalfA = nullptr; // wavelet ping-pong: reads scratch-B, writes scratch-A (odd passes)
         Core::BindingSet* outputHalfB = nullptr; // PREPARE + even wavelet passes: reads scratch-A, writes scratch-B
         Core::BindingSet* upsample = nullptr;    // final: reads scratch-A, writes/folds the full-res visibility
         Core::BindingSet* prepareOverride = nullptr; // temporal: PREPARE reads the accumulated history instead of the raw trace
-        SoftShadowUpsampleFold fold = SoftShadowUpsampleFold::Overwrite;
+        SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
     };
     // dispatchSoftShadowResolve runs the a-trous PREPARE -> N wavelet passes -> upsample for one slot, against the sets +
     // pipeline + fold in `dispatch`. See SoftShadowResolveDispatch.

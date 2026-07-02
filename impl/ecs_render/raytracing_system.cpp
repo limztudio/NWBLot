@@ -304,7 +304,7 @@ struct ShadowResolvePushConstants{
                              // first frame -> the shader never samples the (dummy) MOMENTS SRV and uses the spatial fallback.
     u32 upsampleFold = 0u;   // UPSAMPLE fold mode (Stage 5): 0 = OVERWRITE the full-res visibility (soft OPAQUE, as always);
                              // 1 = MULTIPLY the denoised colored transmittance onto it (soft TRANSPARENT fold, RMW). Ignored
-                             // by PREPARE/WAVELET; see SoftShadowUpsampleFold + the UPSAMPLE stage in shadow_resolve_cs.
+                             // by PREPARE/WAVELET; see SoftShadowUpsampleFold::Enum + the UPSAMPLE stage in shadow_resolve_cs.
 };
 static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 10u, "ShadowResolvePushConstants must match the shader push-constant layout");
 
@@ -317,8 +317,8 @@ namespace ShadowResolveStage{
     };
 };
 
-// UPSAMPLE fold mode: the RendererRayTracingSystem::SoftShadowUpsampleFold enum (declared in the header so the dispatch
-// struct can carry it) is the single source of truth, kept in lockstep with shadow_resolve_cs.slang's upsampleFold branch:
+// UPSAMPLE fold mode: the SoftShadowUpsampleFold::Enum values are the single source of truth, kept in lockstep with
+// shadow_resolve_cs.slang's upsampleFold branch:
 //  - Overwrite: the soft OPAQUE resolve writes its denoised grayscale visibility into the full-res visibility (as always).
 //  - Multiply:  the soft COLORED TRANSPARENT resolve read-modify-write MULTIPLIES its denoised colored transmittance onto
 //    the visibility (which already holds the opaque result), so visibility = opaqueSoftUpsampled * transparentSoftUpsampled.

@@ -42,6 +42,7 @@ using NWB::Tests::Smoke::ArrowYawInputHandler;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
+using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -265,8 +266,7 @@ public:
         for(u32 index = 0u; index < s_CharacterCount; ++index)
             m_characterOwners.push_back(createCharacter(index));
 
-        // One tick spawns the model object entities (skeleton/mesh) so the first rendered frame is fully populated.
-        m_world->tick(0.0f);
+        SyncSmokeModelRuntimes(*m_world);
 
         bool allCharactersValid = m_characterOwners.size() == s_CharacterCount;
         for(const NWB::Core::ECS::EntityID owner : m_characterOwners)

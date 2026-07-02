@@ -374,6 +374,8 @@ bool ProjectTestbed::onStartup(){
     );
 
     createDefaultScene();
+    if(auto* modelSystem = m_world->getSystem<NWB::Impl::ModelSystem>())
+        modelSystem->syncModelRuntimes();
     registerInputHandler();
     return m_characterEntity.valid();
 }

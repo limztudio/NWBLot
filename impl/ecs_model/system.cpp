@@ -208,6 +208,10 @@ ModelSystem::ModelSystem(
 void ModelSystem::prepare(Core::ECS::World& world){
     static_cast<void>(world);
 
+    syncModelRuntimes();
+}
+
+void ModelSystem::syncModelRuntimes(){
     clearInvalidSpawnedObjects();
     clearRuntimeObjectsWithoutModel();
 

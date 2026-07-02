@@ -38,6 +38,7 @@ using BenchmarkMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::FindSpawnedModelObject;
+using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
 inline constexpr Name s_EnvironmentFlagArena("tests/smoke/skinning_culling_benchmark/environment_flag");
 
@@ -529,7 +530,7 @@ public:
             modelOwners.push_back(entity.id());
         }
 
-        m_world->tick(0.0f);
+        SyncSmokeModelRuntimes(*m_world);
         for(const NWB::Core::ECS::EntityID owner : modelOwners){
             const NWB::Core::ECS::EntityID skeletonEntity = FindSpawnedModelObject(
                 *m_world,

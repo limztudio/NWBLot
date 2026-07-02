@@ -41,6 +41,7 @@ using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::FindSpawnedModelObject;
+using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -242,7 +243,7 @@ public:
         );
 
         m_character = createGlassCharacter();
-        m_world->tick(0.0f);
+        SyncSmokeModelRuntimes(*m_world);
 
         m_skeletonEntity = FindSpawnedModelObject(
             *m_world,
@@ -250,7 +251,6 @@ public:
             s_ModelSkeletonObject,
             NWB::Impl::ModelObjectKind::Skeleton
         );
-        m_world->tick(0.0f);
 
         NWB_FATAL_ASSERT_MSG(
             activeCamera.camera.valid()

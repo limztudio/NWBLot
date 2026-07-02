@@ -42,6 +42,7 @@ using NWB::Tests::Smoke::AssignCsgCutterTransform;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::FindSpawnedModelObject;
+using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -321,11 +322,10 @@ public:
         );
 
         createReceiver();
-        m_world->tick(0.0f);
+        SyncSmokeModelRuntimes(*m_world);
         const bool receiverReady = installCsgReceiverOnSpawnedModelObject();
         StoreFloat(resolveCutterAnchorLocalCenter(), &m_cutterLocalCenter);
         createCutter();
-        m_world->tick(0.0f);
         NWB_FATAL_ASSERT_MSG(
             activeCamera.camera.valid()
                 && m_plainReceiver.valid()

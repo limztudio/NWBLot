@@ -41,6 +41,7 @@ using NWB::Tests::Smoke::ArrowYawInputHandler;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
+using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -299,8 +300,7 @@ public:
         if(!glassTintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));
 
-        // One tick spawns the model object entities (skeleton/mesh) so the first rendered frame is fully populated.
-        m_world->tick(0.0f);
+        SyncSmokeModelRuntimes(*m_world);
 
         NWB_FATAL_ASSERT_MSG(
             activeCamera.camera.valid() && m_groundEntity.valid() && m_glassOwner.valid(),

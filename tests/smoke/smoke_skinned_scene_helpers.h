@@ -10,6 +10,7 @@
 
 #include "smoke_scene_helpers.h"
 
+#include <core/common/log.h>
 #include <impl/assets_model/asset.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_model/module.h>
@@ -75,6 +76,16 @@ inline void DestroySmokeSkinnedRenderWorld(
     }
 
     FinishDestroyingSmokeWorld(context, world);
+}
+
+inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
+    auto* modelSystem = world.getSystem<Impl::ModelSystem>();
+    if(!modelSystem){
+        NWB_LOGGER_ERROR(NWB_TEXT("Smoke: failed to sync model runtimes because the model system is missing"));
+        return;
+    }
+
+    modelSystem->syncModelRuntimes();
 }
 
 [[nodiscard]] inline Core::ECS::EntityID CreateTintedModelEntity(

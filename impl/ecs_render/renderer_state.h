@@ -473,6 +473,12 @@ private:
     const Core::Texture* m_shadowResolveBindingSetGeometry = nullptr;
     const Core::Texture* m_shadowResolveBindingSetDepth = nullptr;
     const Core::Texture* m_shadowResolveBindingSetVisibility = nullptr;
+    // Stage 4 tracked targets: the SVGF moments buffers (bound as the MOMENTS SRV -- paired per temporal set, dummy on the
+    // rest) + the full-res world-position/normal G-buffers the guided upsample reads. Any change rebuilds all five sets.
+    const Core::Texture* m_shadowResolveBindingSetMomentsA = nullptr;
+    const Core::Texture* m_shadowResolveBindingSetMomentsB = nullptr;
+    const Core::Texture* m_shadowResolveBindingSetWorldPos = nullptr;
+    const Core::Texture* m_shadowResolveBindingSetNormal = nullptr;
     // Shadow geometry downsample pre-pass (its own pipeline): fills the half-res packed geometry cache (octahedral
     // normal + camera distance + validity) the resolve passes read for the edge-stop, so they tap one half-res texel.
     Core::BindingLayoutHandle m_shadowGeometryDownsampleBindingLayout;

@@ -58,6 +58,27 @@ Texture2DArray<float4> g_NwbShadowResolveInputColor;
 [[vk::binding(NWB_SHADOW_RESOLVE_BINDING_VISIBILITY, NWB_SHADOW_RESOLVE_SET)]]
 RWTexture2DArray<float4> g_NwbShadowResolveVisibility;
 
+// TEMPORAL moments SRV (.x = m1, .y = m2, .z = history length n) from the reproject-merge. Read by the WAVELET stage's
+// variance-coupled luminance edge-stop, but ONLY when g_NwbShadowResolvePushConstants.momentsValid == 1; otherwise this
+// is a valid-but-unused dummy (never sampled -- the shader takes the spatial-variance fallback). See binding-slot doc.
+[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_MOMENTS, NWB_SHADOW_RESOLVE_SET)]]
+Texture2DArray<float4> g_NwbShadowResolveMoments;
+
+// FULL-res G-buffer world position + normal SRVs -- the UPSAMPLE stage's joint-bilateral CENTRE (see binding-slot doc).
+[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_GBUFFER_WORLDPOS, NWB_SHADOW_RESOLVE_SET)]]
+Texture2D<float4> g_NwbShadowResolveGBufferWorldPos;
+[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_GBUFFER_NORMAL, NWB_SHADOW_RESOLVE_SET)]]
+Texture2D<float4> g_NwbShadowResolveGBufferNormal;
+
+// Scene-shading CB: only the camera world position is needed (the full-res upsample centre's camera distance). Declared
+// directly (not via scene/buffer.slangi) for the same reason the geometry downsample does -- to layout-match the C++
+// binding set exactly (which binds only this CB) without depending on dead-code-stripping the unused light-list SRV.
+struct NwbShadowResolveSceneShading{
+    float4 cameraPosition; // xyz = camera world position (w = active light count, unused here)
+};
+[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_SCENE_SHADING, NWB_SHADOW_RESOLVE_SET)]]
+ConstantBuffer<NwbShadowResolveSceneShading, Std140DataLayout> g_NwbShadowResolveSceneShading;
+
 struct NwbShadowResolvePushConstants{
     uint width;          // FULL-res width (UPSAMPLE dispatch/output dim)
     uint height;         // FULL-res height
@@ -67,6 +88,9 @@ struct NwbShadowResolvePushConstants{
     uint stage;          // 0 = PREPARE, 1 = WAVELET (half-res), 2 = UPSAMPLE (-> full-res visibility)
     uint lightSlotStart; // first active SOFT shadow slot to process (any light type)
     uint lightSlotCount; // number of contiguous active SOFT slots to process
+    uint momentsValid;   // 1 = the MOMENTS SRV holds this-frame integrated temporal moments (the merge ran) -> the wavelet
+                         // may use the temporal variance where n is high; 0 = temporal off / first frame -> the wavelet
+                         // NEVER samples the (dummy) MOMENTS SRV and uses the spatial-variance fallback everywhere.
 };
 
 [[vk::push_constant]]
@@ -105,23 +129,84 @@ static const float s_NwbShadowResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 /
 // Normal edge-stop exponent: taps whose receiver normal diverges from the centre's fall off as pow(max(dot,0), N).
 #define NWB_SHADOW_RESOLVE_NORMAL_POWER 32.0
 
+// Camera-distance edge-stop fraction: the distance sigma is this fraction of the camera distance (a few percent keeps
+// same-surface taps while rejecting a silhouette depth jump), clamped away from zero. Two named twins so the UPSAMPLE
+// and the WAVELET distance stops read the SAME documented constant rather than a bare 0.02 magic literal.
+#define NWB_SHADOW_RESOLVE_UPSAMPLE_DIST_FRAC 0.02
+#define NWB_SHADOW_RESOLVE_WAVELET_DIST_FRAC 0.02
+
 float nwbShadowResolveNormalWeight(const float2 centerOct, const float2 tapOct){
     const float3 cn = nwbOctDecodeNormal(centerOct);
     const float3 tn = nwbOctDecodeNormal(tapOct);
     return pow(max(dot(cn, tn), 0.0), NWB_SHADOW_RESOLVE_NORMAL_POWER);
 }
 
+// Normal edge-stop variant taking an ALREADY-DECODED centre normal (the full-res G-buffer centre in the guided upsample)
+// against an octahedral-packed tap normal (the half-res geometry cache), so the full-res centre is decoded just once.
+float nwbShadowResolveNormalWeightVec(const float3 centerNormal, const float2 tapOct){
+    const float3 tn = nwbOctDecodeNormal(tapOct);
+    return pow(max(dot(centerNormal, tn), 0.0), NWB_SHADOW_RESOLVE_NORMAL_POWER);
+}
+
 // Value (visibility) edge-stop: taps whose visibility diverges from the centre's fall off exponentially, so the wavelet
 // smooths WITHIN the umbra and WITHIN the lit region but does NOT bleed the dark umbra across the shadow boundary into
 // the lit plane. The geometry edge-stop alone cannot do this -- a FLAT receiver has no depth/normal discontinuity AT the
-// shadow edge, so without this term a wide a-trous Gaussian-blurs the shadow across the plane until it washes out. Sigma
-// sits ABOVE the multi-sample noise floor (so same-region noise still smooths) but well BELOW the umbra<->lit gap of 1.0
-// (so the boundary is rejected). This is the spatial stand-in for SVGF's variance-driven luminance stop until the
-// temporal stage supplies real per-pixel variance.
-#define NWB_SHADOW_RESOLVE_VALUE_SIGMA 0.25
+// shadow edge, so without this term a wide a-trous Gaussian-blurs the shadow across the plane until it washes out.
+//
+// STAGE 4A (SVGF variance-coupled): the sigma is now DRIVEN PER PIXEL by the luminance variance instead of a single fixed
+// constant. sigma_l = SIGMA_LUM * sqrt(variance) + EPS. HIGH variance (freshly disoccluded / noisy) -> large sigma ->
+// loose stop -> aggressive fill; LOW variance (temporally converged) -> sigma ~= EPS -> tight stop -> the sharp penumbra
+// is preserved. The variance is the temporal moment variance (max(m2 - m1^2, 0)) where history is long enough to trust
+// it, else a small-neighbourhood SPATIAL luma variance (mirroring the merge's gate-B 3x3 metric) for low-history pixels.
 
-float nwbShadowResolveValueWeight(const float centerVis, const float tapVis){
-    return exp(-abs(tapVis - centerVis) / NWB_SHADOW_RESOLVE_VALUE_SIGMA);
+// The history length n at/above which the temporal moment variance is statistically trustworthy; below it (freshly
+// disoccluded) the temporal m2-m1^2 is built from too few samples, so fall back to the SPATIAL luma variance.
+#define NWB_SHADOW_RESOLVE_VARIANCE_MIN_HISTORY 4.0
+// Luminance edge-stop scale: sigma_l = SIGMA_LUM * sqrt(variance) + EPS. Larger -> looser value stop -> more fill.
+#define NWB_SHADOW_RESOLVE_SIGMA_LUM 4.0
+// Epsilon floor so a fully-converged (variance -> 0) pixel still has a finite, tight sigma (no divide-by-zero and no
+// infinitely-sharp stop that would reject every neighbour). Sits at the old fixed-sigma's noise-floor scale.
+#define NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS 0.05
+
+float nwbShadowResolveValueWeight(const float centerVis, const float tapVis, const float sigmaLum){
+    return exp(-abs(tapVis - centerVis) / sigmaLum);
+}
+
+// Per-centre-pixel luminance edge-stop sigma for the wavelet (§ Stage 4A). Chooses the TEMPORAL moment variance when the
+// history is long (momentsValid == 1 AND n >= MIN_HISTORY) and otherwise a 3x3 SPATIAL luma variance of the current
+// INPUT_COLOR over valid receiver taps. Crucially, when momentsValid == 0 the moments SRV is NEVER sampled (the temporal
+// branch is guarded by it), so a dummy-bound moments texture on the non-temporal path is safe.
+float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const int hw, const int hh, const uint momentsValid){
+    if(momentsValid != 0u){
+        const float3 mom = g_NwbShadowResolveMoments.Load(int4(texel, (int)slot, 0)).xyz;
+        const float n = mom.z;
+        if(n >= NWB_SHADOW_RESOLVE_VARIANCE_MIN_HISTORY){
+            const float varTemporal = max(mom.y - mom.x * mom.x, 0.0);
+            return NWB_SHADOW_RESOLVE_SIGMA_LUM * sqrt(varTemporal) + NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS;
+        }
+        // low n: fall through to the spatial estimate (temporal variance unreliable when freshly disoccluded).
+    }
+    // SPATIAL fallback: 3x3 luma variance of the current INPUT_COLOR (.r visibility) over VALID receiver taps only,
+    // matching the merge's gate-B neighbourhood. Never touches the moments SRV -> safe when momentsValid == 0.
+    float mean = 0.0;
+    float mean2 = 0.0;
+    int cnt = 0;
+    [unroll] for(int dy = -1; dy <= 1; ++dy){
+        [unroll] for(int dx = -1; dx <= 1; ++dx){
+            const int2 t = int2(clamp(texel.x + dx, 0, hw - 1), clamp(texel.y + dy, 0, hh - 1));
+            if(g_NwbShadowResolveGeometry.Load(int3(t, 0)).w <= 0.5)
+                continue; // background tap -> no receiver, skip
+            const float v = g_NwbShadowResolveInputColor.Load(int4(t, (int)slot, 0)).r;
+            mean += v;
+            mean2 += v * v;
+            ++cnt;
+        }
+    }
+    if(cnt <= 0)
+        return NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS; // no valid neighbourhood -> tightest sigma (a lone receiver texel)
+    const float invCount = 1.0 / (float)cnt;
+    const float varSpatial = max(mean2 * invCount - (mean * invCount) * (mean * invCount), 0.0);
+    return NWB_SHADOW_RESOLVE_SIGMA_LUM * sqrt(varSpatial) + NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS;
 }
 
 
@@ -149,15 +234,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const int2 baseTexel = int2(floor(src));
         const float2 lerpFrac = src - float2(baseTexel);
 
-        // This full-res pixel's own receiver geometry, sampled from the SAME half-res cache the taps use (its top-left
-        // half texel), so the centre + tap distances/normals are consistent (a plain half->full point sample).
-        const int2 selfHalf = int2(clamp(baseTexel.x, 0, hw - 1), clamp(baseTexel.y, 0, hh - 1));
-        const float4 selfGeom = nwbShadowResolveGeomAtHalf(selfHalf);
-        const float centerDist = selfGeom.z;
-        const float2 centerOct = selfGeom.xy;
+        // FULL-RES-GUIDED bilateral CENTRE (Stage 4B): this output pixel's OWN full-res world position + normal, read at
+        // FULL resolution (NOT the half-res cache the old code sampled at selfHalf). Two adjacent full-res pixels inside
+        // one half-res block that straddle a geometry edge now get DIFFERENT centres -> they weight the 4 half-res taps
+        // differently -> the shadow terminator snaps to the full-res silhouette instead of stair-stepping at the half-res
+        // block boundary. The centre camera distance is derived in the SAME world-unit space as the half-res cache's .z
+        // (length(world - cameraPos)), so the per-tap distance edge-stop below stays consistent with the wavelet's metric.
+        const float3 centerWorld = g_NwbShadowResolveGBufferWorldPos.Load(int3(fullTexel, 0)).xyz;
+        const float3 centerNormal = normalize(g_NwbShadowResolveGBufferNormal.Load(int3(fullTexel, 0)).xyz * 2.0 - 1.0);
+        const float centerDist = length(centerWorld - g_NwbShadowResolveSceneShading.cameraPosition.xyz);
         // Distance edge-stop sigma: a few percent of the camera distance keeps same-surface taps while rejecting a
         // silhouette jump; clamped away from zero for a receiver at the camera.
-        const float sigmaDist = max(centerDist * 0.02, 1e-3);
+        const float sigmaDist = max(centerDist * NWB_SHADOW_RESOLVE_UPSAMPLE_DIST_FRAC, 1e-3);
         const float invTwoSigmaDistSq = 1.0 / (2.0 * sigmaDist * sigmaDist);
 
         for(uint slot = slotStart; slot < slotEnd; ++slot){
@@ -174,9 +262,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     if(tapGeom.w <= 0.5)
                         continue; // background tap -> no receiver
                     const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
-                    const float dDist = tapGeom.z - centerDist;
+                    const float dDist = tapGeom.z - centerDist; // half-res tap camDist vs FULL-res centre camDist
                     const float distWeight = exp(-dDist * dDist * invTwoSigmaDistSq);
-                    const float normalWeight = nwbShadowResolveNormalWeight(centerOct, tapGeom.xy);
+                    const float normalWeight = nwbShadowResolveNormalWeightVec(centerNormal, tapGeom.xy);
                     const float weight = bilinearWeight * distWeight * normalWeight;
                     sum += weight * g_NwbShadowResolveInputColor.Load(int4(tap, slot, 0)).rgb;
                     weightSum += weight;
@@ -214,8 +302,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     // Distance edge-stop sigma from THIS half pixel's camera distance (scaled by the dilation so wider passes tolerate
     // more spread), computed once (same receiver for every slot). invalid centre pixels write the LIT identity below.
     const float4 centerGeom = inBounds ? nwbShadowResolveGeomAtHalf(texel) : float4(0.0, 0.0, 0.0, 0.0);
-    const float sigmaDist = max(centerGeom.z * 0.02 * (float)step, 1e-3);
+    const float sigmaDist = max(centerGeom.z * NWB_SHADOW_RESOLVE_WAVELET_DIST_FRAC * (float)step, 1e-3);
     const float invTwoSigmaDistSq = 1.0 / (2.0 * sigmaDist * sigmaDist);
+
+    // Per-centre-pixel SVGF luminance edge-stop sigma (Stage 4A), computed ONCE (same receiver for every slot). NOTE this
+    // reads the moments SRV / the current INPUT_COLOR at THIS texel -- only meaningful for an in-bounds receiver; invalid /
+    // background centre pixels write the LIT identity below without using it. Guarded by momentsValid inside the helper.
+    const uint momentsValid = g_NwbShadowResolvePushConstants.momentsValid;
 
     // SMALL-dilation passes (LDS): per slot, cooperatively load the group's tile + 2*step halo (for THAT slot) into
     // LDS, barrier, then tap from LDS. ALL threads must reach every barrier, so NO early `return` inside the slot loop.
@@ -258,6 +351,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 else{
                     const uint centerIdx = (uint)((int(groupThreadID.y) + 2 * step) * tileW + (int(groupThreadID.x) + 2 * step));
                     const float centerVis = (float)s_NwbShadowResolveTileVis[centerIdx];
+                    // Per-slot SVGF luminance sigma for THIS receiver pixel (temporal-when-converged, else spatial fallback).
+                    const float sigmaLum = nwbShadowResolveCenterSigmaLum(texel, slot, hw, hh, momentsValid);
                     float sum = 0.0;
                     float weightSum = 0.0;
                     [unroll] for(int ky = -2; ky <= 2; ++ky){
@@ -269,7 +364,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                             const float dDist = s_NwbShadowResolveTileDist[idx] - centerGeom.z;
                             const float distWeight = exp(-dDist * dDist * invTwoSigmaDistSq);
                             const float normalWeight = nwbShadowResolveNormalWeight(centerGeom.xy, float2(s_NwbShadowResolveTileNormal[idx]));
-                            const float valueWeight = nwbShadowResolveValueWeight(centerVis, tapVis);
+                            const float valueWeight = nwbShadowResolveValueWeight(centerVis, tapVis, sigmaLum);
                             const float weight = s_NwbShadowResolveKernel[kx + 2] * s_NwbShadowResolveKernel[ky + 2] * distWeight * normalWeight * valueWeight;
                             sum += weight * tapVis;
                             weightSum += weight;
@@ -294,6 +389,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             continue;
         }
         const float centerVis = g_NwbShadowResolveInputColor.Load(int4(texel, slot, 0)).r;
+        // Per-slot SVGF luminance sigma for THIS receiver pixel (temporal-when-converged, else spatial fallback).
+        const float sigmaLum = nwbShadowResolveCenterSigmaLum(texel, slot, hw, hh, momentsValid);
         float sum = 0.0;
         float weightSum = 0.0;
         [unroll] for(int ky = -2; ky <= 2; ++ky){
@@ -308,7 +405,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const float dDist = tapGeom.z - centerGeom.z;
                 const float distWeight = exp(-dDist * dDist * invTwoSigmaDistSq);
                 const float normalWeight = nwbShadowResolveNormalWeight(centerGeom.xy, tapGeom.xy);
-                const float valueWeight = nwbShadowResolveValueWeight(centerVis, tapVis);
+                const float valueWeight = nwbShadowResolveValueWeight(centerVis, tapVis, sigmaLum);
                 const float weight = s_NwbShadowResolveKernel[kx + 2] * s_NwbShadowResolveKernel[ky + 2] * distWeight * normalWeight * valueWeight;
                 sum += weight * tapVis;
                 weightSum += weight;

@@ -164,7 +164,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float3 cur = g_NwbShadowMergeSoftTrace.Load(int4(texel, slot, 0)).rgb;
 
         // A background/invalid receiver has no meaningful shadow to accumulate -- pass the current sample straight through
-        // and reset the moments (so a receiver that appears next frame starts fresh, not from a stale history).
+        // and reset the moments with n=0 (so a receiver that appears next frame starts fresh, not from a stale history).
+        // The written (m1,m2) here are of the current sample luma; because n=0 the resolve treats this texel as low-history
+        // and takes the SPATIAL variance fallback, so this degenerate m2-m1^2==0 is never consumed as "converged variance".
         if(!valid){
             g_NwbShadowMergeHistoryOut[uint3(h, slot)] = float4(cur, 1.0);
             const float lumaCur0 = nwbShadowMergeLuma(cur);
@@ -172,12 +174,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             continue;
         }
 
-        // Reprojected history + its moments (only when gate A accepted; else pure current, n=0).
+        // Reprojected history + its moments (only when gate A accepted; else pure current, n=0 -> the moment integration
+        // below degenerates to alpha=1, i.e. the current-sample moments, which is exactly right for a reset/disoccluded texel).
         float3 hist = cur;
         float n = 0.0;
+        float m1Prev = 0.0; // prev integrated luma mean       (moments.x); stays 0 when history rejected -> pure-current
+        float m2Prev = 0.0; // prev integrated luma 2nd-moment (moments.y); stays 0 when history rejected -> pure-current
         if(historyAccepted){
             hist = g_NwbShadowMergeHistoryIn.Load(int4(hp, slot, 0)).rgb;
-            n = g_NwbShadowMergeMomentsIn.Load(int4(hp, slot, 0)).z;
+            const float3 mom = g_NwbShadowMergeMomentsIn.Load(int4(hp, slot, 0)).xyz;
+            m1Prev = mom.x;
+            m2Prev = mom.y;
+            n = mom.z;
         }
 
         // STEP 3 GATE B (variance clamp): mean + stddev of the CURRENT trace over the 3x3 half-res neighborhood (valid
@@ -221,9 +229,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float3 outVis = lerp(histClamped, cur, alpha);
         const float nNext = min(nEff + 1.0, NWB_SHADOW_TEMPORAL_MAX_HISTORY);
 
+        // Temporally integrate the CURRENT sample's luma moments with the SAME alpha the colour used, so (m2 - m1^2) is a
+        // REAL running variance of the noisy per-frame signal (SVGF), NOT the 0 the old (lumaOut, lumaOut^2) self-pair
+        // produced (m2 - m1^2 == 0 identically). lumaCur is the current raw-trace luma computed at gate C above; the
+        // integration input is that noisy per-frame value, NOT the blended outVis. When history was rejected (m1Prev =
+        // m2Prev = 0, n = 0 -> nEff = 0 -> alpha = 1) this collapses to the pure current-sample moments -- a clean reset.
+        const float m1 = lerp(m1Prev, lumaCur, alpha);
+        const float m2 = lerp(m2Prev, lumaCur * lumaCur, alpha);
+
         g_NwbShadowMergeHistoryOut[uint3(h, slot)] = float4(outVis, 1.0);
-        const float lumaOut = nwbShadowMergeLuma(outVis);
-        g_NwbShadowMergeMomentsOut[uint3(h, slot)] = float4(lumaOut, lumaOut * lumaOut, nNext, 0.0);
+        g_NwbShadowMergeMomentsOut[uint3(h, slot)] = float4(m1, m2, nNext, 0.0);
     }
 }
 

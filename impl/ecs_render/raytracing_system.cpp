@@ -298,7 +298,7 @@ struct ShadowRqPushConstants{
 static_assert(sizeof(ShadowRqPushConstants) == sizeof(u32), "ShadowRqPushConstants must match the shader push-constant layout");
 
 // CPU mirror of shadow_resolve_cs.slang's NwbShadowResolvePushConstants: the full/half dims, the a-trous dilation +
-// stage selector, and the active shadow-slot range the resolve loops. All-scalar -> 8 x 4 = 32 bytes.
+// stage selector, the active shadow-slot range the resolve loops, and the temporal-moments-valid flag. 9 x 4 = 36 bytes.
 struct ShadowResolvePushConstants{
     u32 width = 0u;          // FULL-res width (UPSAMPLE dispatch/output dim)
     u32 height = 0u;         // FULL-res height
@@ -308,8 +308,11 @@ struct ShadowResolvePushConstants{
     u32 stage = 0u;          // 0 = PREPARE, 1 = WAVELET (half-res), 2 = UPSAMPLE (-> full-res visibility)
     u32 lightSlotStart = 0u; // first active shadow slot to process
     u32 lightSlotCount = 0u; // number of contiguous active slots to process
+    u32 momentsValid = 0u;   // 1 = the MOMENTS SRV holds this-frame integrated temporal moments (the merge ran this frame)
+                             // -> the WAVELET's SVGF variance edge-stop may use the temporal variance; 0 = temporal off /
+                             // first frame -> the shader never samples the (dummy) MOMENTS SRV and uses the spatial fallback.
 };
-static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 8u, "ShadowResolvePushConstants must match the shader push-constant layout");
+static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 9u, "ShadowResolvePushConstants must match the shader push-constant layout");
 
 // Shadow resolve stages, kept in lockstep with shadow_resolve_cs.slang's pushConstants.stage switch.
 namespace ShadowResolveStage{
@@ -3576,6 +3579,12 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RESOLVE_BINDING_OUTPUT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_INPUT_COLOR, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RESOLVE_BINDING_VISIBILITY, 1));
+        // Stage 4: the SVGF temporal moments SRV (variance-coupled a-trous) + the full-res world-pos/normal SRVs and the
+        // scene-shading CB (full-res-guided upsample). The moments SRV is a dummy on the non-temporal path (see dispatch).
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_MOMENTS, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_GBUFFER_WORLDPOS, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_GBUFFER_NORMAL, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SHADOW_RESOLVE_BINDING_SCENE_SHADING, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowResolvePushConstants)));
 
         rayTracingState().m_shadowResolveBindingLayout = device->createBindingLayout(layoutDesc);
@@ -3620,6 +3629,11 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
     NWB_ASSERT(targets.shadowVisibility);
     NWB_ASSERT(targets.shadowHistA);
     NWB_ASSERT(targets.shadowHistB);
+    NWB_ASSERT(targets.shadowMomentsA);
+    NWB_ASSERT(targets.shadowMomentsB);
+    NWB_ASSERT(targets.worldPosition);
+    NWB_ASSERT(targets.normal);
+    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
 
     Core::Texture* softATarget = targets.shadowSoftHalfA.get();
     Core::Texture* softBTarget = targets.shadowSoftHalfB.get();
@@ -3631,6 +3645,12 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
     // hist role points at rebuilds the sets (mirrors the base tracked-pointer rebuild).
     Core::Texture* histATarget = targets.shadowHistA.get();
     Core::Texture* histBTarget = targets.shadowHistB.get();
+    // Stage 4: the SVGF moments buffers (bound as the MOMENTS SRV on the matching temporal set; a dummy on the others),
+    // plus the full-res world-position + normal G-buffers the guided upsample reads. All tracked for the resize rebuild.
+    Core::Texture* momentsATarget = targets.shadowMomentsA.get();
+    Core::Texture* momentsBTarget = targets.shadowMomentsB.get();
+    Core::Texture* worldPositionTarget = targets.worldPosition.get();
+    Core::Texture* normalTarget = targets.normal.get();
     if(
         rayTracingState().m_shadowResolveBindingSetOutputHalfA
         && rayTracingState().m_shadowResolveBindingSetOutputHalfB
@@ -3644,6 +3664,10 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
         && rayTracingState().m_shadowResolveBindingSetVisibility == visibilityTarget
         && rayTracingState().m_shadowResolveBindingSetTemporalHistATex == histATarget
         && rayTracingState().m_shadowResolveBindingSetTemporalHistBTex == histBTarget
+        && rayTracingState().m_shadowResolveBindingSetMomentsA == momentsATarget
+        && rayTracingState().m_shadowResolveBindingSetMomentsB == momentsBTarget
+        && rayTracingState().m_shadowResolveBindingSetWorldPos == worldPositionTarget
+        && rayTracingState().m_shadowResolveBindingSetNormal == normalTarget
     )
         return true;
 
@@ -3657,7 +3681,10 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
     //                 pointing it at soft-B (not soft-A == OUTPUT) avoids an SRV+UAV alias of soft-A in this set.
     //  - Upsample:    softHalf=soft-A, out=full-res visibility, in=soft-A (the final wavelet lands in soft-A, odd count).
     // The half + full targets are dimensionless in the set (the bound texture carries the extent), so one layout serves.
-    const auto buildSet = [&](Core::Texture* softHalfTex, Core::Texture* outputTex, Core::Format::Enum outputFormat, Core::TextureDimension::Enum outputDim, Core::Texture* inputTex) -> Core::BindingSetHandle {
+    // momentsTex: the MOMENTS SRV source for this set. For the two temporal variants it is the merge's history-OUT moments
+    // buffer (the accumulated moments this frame's a-trous should read); for the non-temporal sets it is a valid-but-unused
+    // dummy (any half-res array) -- the shader guards the read behind push.momentsValid == 0, so the dummy is never sampled.
+    const auto buildSet = [&](Core::Texture* softHalfTex, Core::Texture* outputTex, Core::Format::Enum outputFormat, Core::TextureDimension::Enum outputDim, Core::Texture* inputTex, Core::Texture* momentsTex) -> Core::BindingSetHandle {
         Core::BindingSetDesc desc(arena());
         desc.addItem(Core::BindingSetItem::Texture_SRV(
             NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF,
@@ -3701,19 +3728,50 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
             ECSRenderDetail::s_ShadowVisibilitySubresources,
             Core::TextureDimension::Texture2DArray
         ));
+        // Stage 4A: the temporal moments SRV (per-set source above). Same half-res array format/subresources as the hist
+        // buffers (a Texture2DArray, one layer per slot). Dummy-bound + shader-guarded on the non-temporal sets.
+        desc.addItem(Core::BindingSetItem::Texture_SRV(
+            NWB_SHADOW_RESOLVE_BINDING_MOMENTS,
+            momentsTex,
+            targets.shadowSoftFormat,
+            ECSRenderDetail::s_ShadowVisibilitySubresources,
+            Core::TextureDimension::Texture2DArray
+        ));
+        // Stage 4B: the full-res world-position + normal G-buffers -- the guided upsample's bilateral centre.
+        desc.addItem(Core::BindingSetItem::Texture_SRV(
+            NWB_SHADOW_RESOLVE_BINDING_GBUFFER_WORLDPOS,
+            worldPositionTarget,
+            targets.worldPositionFormat,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture2D
+        ));
+        desc.addItem(Core::BindingSetItem::Texture_SRV(
+            NWB_SHADOW_RESOLVE_BINDING_GBUFFER_NORMAL,
+            normalTarget,
+            targets.normalFormat,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture2D
+        ));
+        // The scene-shading CB (camera world position) -- the upsample centre's camera distance (same buffer + slot pattern
+        // the geometry downsample binds).
+        desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SHADOW_RESOLVE_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
         return device->createBindingSet(desc, rayTracingState().m_shadowResolveBindingLayout);
     };
 
     // OUTPUT is a half-res Texture2DArray for the ping-pong sets; for the upsample it is UNUSED (the upsample writes the
     // full-res VISIBILITY UAV instead) but must still be a valid binding -- point it at soft-B (a half-res array).
-    Core::BindingSetHandle outputHalfA = buildSet(softBTarget, softATarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, softBTarget);
-    Core::BindingSetHandle outputHalfB = buildSet(softATarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, softATarget);
-    Core::BindingSetHandle upsample    = buildSet(softATarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, softATarget);
+    // The non-temporal sets never sample the MOMENTS SRV (push.momentsValid == 0 on those dispatches), so bind moments-A as
+    // an inert dummy. The two temporal variants bind the moments buffer PAIRED with the hist buffer they read as SOFT_HALF
+    // (hist-A <-> moments-A, hist-B <-> moments-B), i.e. the merge's accumulated moments for this frame's a-trous.
+    Core::BindingSetHandle outputHalfA = buildSet(softBTarget, softATarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, softBTarget, momentsATarget);
+    Core::BindingSetHandle outputHalfB = buildSet(softATarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, softATarget, momentsATarget);
+    Core::BindingSetHandle upsample    = buildSet(softATarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, softATarget, momentsATarget);
     // Two TEMPORAL variants: PREPARE reads the accumulated history (hist-A / hist-B) as SOFT_HALF (+ INPUT_COLOR, unused by
     // PREPARE), writes soft-B (out). SOFT_HALF == hist buffer is DISTINCT from the ping-pong output soft-A/soft-B, so no
-    // SRV+UAV alias. The dispatch picks the variant matching the merge's history-out buffer (B when frontIsA, else A).
-    Core::BindingSetHandle temporalHistA = buildSet(histATarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, histATarget);
-    Core::BindingSetHandle temporalHistB = buildSet(histBTarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, histBTarget);
+    // SRV+UAV alias. The dispatch picks the variant matching the merge's history-out buffer (B when frontIsA, else A). Each
+    // binds its paired moments buffer as the MOMENTS SRV so the variance-coupled a-trous reads the accumulated moments.
+    Core::BindingSetHandle temporalHistA = buildSet(histATarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, histATarget, momentsATarget);
+    Core::BindingSetHandle temporalHistB = buildSet(histBTarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, histBTarget, momentsBTarget);
     if(!outputHalfA || !outputHalfB || !upsample || !temporalHistA || !temporalHistB){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow resolve binding sets"));
         rayTracingState().m_shadowResolveBindingSetOutputHalfA = nullptr;
@@ -3728,6 +3786,10 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
         rayTracingState().m_shadowResolveBindingSetVisibility = nullptr;
         rayTracingState().m_shadowResolveBindingSetTemporalHistATex = nullptr;
         rayTracingState().m_shadowResolveBindingSetTemporalHistBTex = nullptr;
+        rayTracingState().m_shadowResolveBindingSetMomentsA = nullptr;
+        rayTracingState().m_shadowResolveBindingSetMomentsB = nullptr;
+        rayTracingState().m_shadowResolveBindingSetWorldPos = nullptr;
+        rayTracingState().m_shadowResolveBindingSetNormal = nullptr;
         return false;
     }
     rayTracingState().m_shadowResolveBindingSetOutputHalfA = Move(outputHalfA);
@@ -3742,6 +3804,10 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
     rayTracingState().m_shadowResolveBindingSetVisibility = visibilityTarget;
     rayTracingState().m_shadowResolveBindingSetTemporalHistATex = histATarget;
     rayTracingState().m_shadowResolveBindingSetTemporalHistBTex = histBTarget;
+    rayTracingState().m_shadowResolveBindingSetMomentsA = momentsATarget;
+    rayTracingState().m_shadowResolveBindingSetMomentsB = momentsBTarget;
+    rayTracingState().m_shadowResolveBindingSetWorldPos = worldPositionTarget;
+    rayTracingState().m_shadowResolveBindingSetNormal = normalTarget;
     return true;
 }
 
@@ -3774,6 +3840,10 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
         resolvePush.stage = static_cast<u32>(stage);
         resolvePush.lightSlotStart = slot;
         resolvePush.lightSlotCount = 1u; // one soft slot per dispatch (scattered slots handled by the C++ loop)
+        // The moments SRV holds this-frame integrated temporal moments IFF the merge ran, which is exactly when the caller
+        // passes a temporal prepareOverride. So prepareOverride != nullptr is the single source of the momentsValid flag: on
+        // it the WAVELET's SVGF variance stop may use the temporal variance; off it never samples the (dummy) moments SRV.
+        resolvePush.momentsValid = (prepareOverride != nullptr) ? 1u : 0u;
 
         Core::ComputeState computeState;
         computeState.setPipeline(rayTracingState().m_shadowResolvePipeline.get());

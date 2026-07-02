@@ -49,6 +49,25 @@
 // image the deferred lighting samples. Only written by the UPSAMPLE stage (bound but unused on PREPARE/WAVELET).
 #define NWB_SHADOW_RESOLVE_BINDING_VISIBILITY 5
 
+// The TEMPORAL MOMENTS Texture2DArray SRV (the reproject-merge's moments-out: .x = integrated luma mean m1, .y =
+// integrated luma second-moment m2, .z = history length n). The WAVELET stage reads it to drive the SVGF variance-
+// coupled luminance edge-stop (variance = max(m2 - m1*m1, 0)) where history is long. Bound ONLY when temporal is live
+// (push.momentsValid == 1); the non-temporal / first-frame path binds a valid-but-unused dummy half-res array and the
+// shader guards every read behind momentsValid == 0 -> the SPATIAL variance fallback, so a dummy is never sampled.
+#define NWB_SHADOW_RESOLVE_BINDING_MOMENTS 6
+// The FULL-res G-buffer world-position SRV (targets.worldPosition). The UPSAMPLE stage reads THIS output pixel's own
+// full-res world position as the joint-bilateral CENTRE (via the camera distance below) so two adjacent full-res
+// pixels straddling a geometry edge inside one half-res block pick DIFFERENT half-res taps -> the shadow terminator
+// snaps to the full-res silhouette instead of stair-stepping at the half-res block boundary. Bound on all sets.
+#define NWB_SHADOW_RESOLVE_BINDING_GBUFFER_WORLDPOS 7
+// The FULL-res G-buffer normal SRV (targets.normal), [0,1]-encoded (matching the traces' `n*2-1` decode). The
+// UPSAMPLE stage decodes it as the full-res bilateral centre normal for the per-tap normal edge-stop. Bound on all sets.
+#define NWB_SHADOW_RESOLVE_BINDING_GBUFFER_NORMAL 8
+// The scene-shading CB (m_sceneShadingBuffer; xyz = camera world position). The UPSAMPLE stage derives the full-res
+// centre's camera distance as length(centerWorld - cameraPosition) so its distance edge-stop is in the SAME world-unit
+// space as the half-res geometry cache's stored .z, keeping the wavelet + upsample distance metric consistent end-to-end.
+#define NWB_SHADOW_RESOLVE_BINDING_SCENE_SHADING 9
+
 // Shadow geometry downsample pre-pass (its own pipeline + binding layout): reads the full-res G-buffer world position
 // + normal + depth + the scene-shading CB (for the camera position), writes the packed half-res geometry cache above
 // (octahedral normal + camera distance + validity).

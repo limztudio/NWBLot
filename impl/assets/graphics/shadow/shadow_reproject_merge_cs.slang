@@ -12,7 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Soft OPAQUE shadow TEMPORAL reproject-merge (Stage 3). Runs at HALF resolution, one thread per half-res pixel, per shadow
+// Soft OPAQUE shadow TEMPORAL reproject-merge. Runs at HALF resolution, one thread per half-res pixel, per shadow
 // slot (the C++ dispatches one slot per call, lightSlotCount == 1), inserted between the soft trace and the a-trous resolve.
 //
 // WHY REPROJECTION, NOT MOTION VECTORS: the engine rebuilds the view fresh each frame (no prev-G-buffer, no motion vectors).
@@ -230,10 +230,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float nNext = min(nEff + 1.0, NWB_SHADOW_TEMPORAL_MAX_HISTORY);
 
         // Temporally integrate the CURRENT sample's luma moments with the SAME alpha the colour used, so (m2 - m1^2) is a
-        // REAL running variance of the noisy per-frame signal (SVGF), NOT the 0 the old (lumaOut, lumaOut^2) self-pair
-        // produced (m2 - m1^2 == 0 identically). lumaCur is the current raw-trace luma computed at gate C above; the
-        // integration input is that noisy per-frame value, NOT the blended outVis. When history was rejected (m1Prev =
-        // m2Prev = 0, n = 0 -> nEff = 0 -> alpha = 1) this collapses to the pure current-sample moments -- a clean reset.
+        // running variance of the noisy per-frame signal (SVGF). lumaCur is the current raw-trace luma computed at gate C
+        // above; the integration input is that noisy per-frame value, NOT the blended outVis. When history was rejected
+        // (m1Prev = m2Prev = 0, n = 0 -> nEff = 0 -> alpha = 1), this collapses to the pure current-sample moments.
         const float m1 = lerp(m1Prev, lumaCur, alpha);
         const float m2 = lerp(m2Prev, lumaCur * lumaCur, alpha);
 

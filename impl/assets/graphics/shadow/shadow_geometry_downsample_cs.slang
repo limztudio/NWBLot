@@ -22,16 +22,15 @@ ConstantBuffer<NwbShadowGeometrySceneShading, Std140DataLayout> g_NwbShadowGeome
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Geometry downsample pre-pass for the half-res soft directional shadow resolve. The resolve's a-trous wavelet + its
+// Geometry downsample pre-pass for the half-res soft shadow resolve. The resolve's a-trous wavelet + its
 // upsample need the receiver's NORMAL + a distance edge-stop at every tap (5x5 taps x N passes), and re-reading the
 // full-res normal + world-position G-buffer at the half pixel's 2x location every tap is a scattered, cache-unfriendly
 // load. This pass resolves it ONCE: each half-res texel point-samples the full-res G-buffer at its top-left full texel
 // and writes a single compact half-res record -- .xy = octahedral-packed receiver normal, .z = world-space distance
 // from the camera (a linear, world-unit depth proxy for the edge-stop), .w = receiver validity (1 = receiver, 0 =
-// background). Cloned from caustic_geometry_downsample_cs, with the caustic's raw world-position output replaced by
-// the packed normal + camera-distance the shadow edge-stop uses (shadow needs a discontinuity metric, not the area
-// Jacobian the caustic derived from world spacing). Same 2x point sample the resolve's half->full map would use, so no
-// quality change vs per-tap full-res reads; it only removes redundant full-res bandwidth.
+// background). It stores the packed normal + camera-distance the shadow edge-stop uses (shadow needs a discontinuity
+// metric, not an area Jacobian). Same 2x point sample the resolve's half->full map would use, so no quality change vs
+// per-tap full-res reads; it only removes redundant full-res bandwidth.
 
 [[vk::binding(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION, NWB_SHADOW_GEOMETRY_DOWNSAMPLE_SET)]]
 Texture2D<float4> g_NwbShadowGeometryWorldPosition;

@@ -80,7 +80,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         // OPAQUE-only jittered occlusion. Each sample is binary; averaging NWB_SW_SHADOW_SOFT_SPP of them per frame --
         // each walking the source via its OWN low-discrepancy 2D point (per pixel, per frame, per sample index) --
         // yields the smooth 0..1 coverage the value-aware resolve needs (a single binary sample would leave a dithered
-        // penumbra the a-trous could not smooth without washing the umbra out). Stage 3's temporal accumulation
+        // penumbra the a-trous could not smooth without washing the umbra out). Temporal accumulation
         // replaces this per-frame loop.
         half3 accum = half3(0.0, 0.0, 0.0);
         [loop] for(uint s = 0u; s < NWB_SW_SHADOW_SOFT_SPP; ++s){

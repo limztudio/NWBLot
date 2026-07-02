@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A-trous WAVELET channel count (Stage 5): 1 = SCALAR (soft OPAQUE grayscale visibility -- the default), 3 = RGB (soft
+// A-trous WAVELET channel count: 1 = SCALAR (soft OPAQUE grayscale visibility -- the default), 3 = RGB (soft
 // COLORED TRANSPARENT transmittance). The RGB pipeline is cooked from shadow_resolve_rgb_cs.slang, which #defines this =3
 // then #includes THIS file. Only the wavelet's accumulator vector type + the tap read/write channel count depend on it;
 // everything else (kernel, geometry edge-stops, LDS layout, PREPARE/UPSAMPLE which are already .rgb) is shared. Scalar
@@ -31,10 +31,9 @@
 #endif
 
 
-// Soft OPAQUE shadow RESOLVE = an EDGE-AVOIDING A-TROUS WAVELET denoise (Dammertz et al.), run at HALF resolution
-// as N ping-pong compute passes, bracketed by the shadow geometry downsample pre-pass + an edge-aware upsample. Cloned
-// from caustic_resolve_cs (same denoise skeleton -- a sparse/noisy spatial signal reconstructed purely spatially, no
-// history this stage) with THREE shadow-specific changes:
+// Soft shadow RESOLVE = an EDGE-AVOIDING A-TROUS WAVELET denoise (Dammertz et al.), run at HALF resolution as N
+// ping-pong compute passes, bracketed by the shadow geometry downsample pre-pass + an edge-aware upsample. Shadow-specific
+// signal rules:
 //   (a) SIGNAL: a per-slot 0..1 VISIBILITY, not irradiance -- so ALL the caustic area-Jacobian / photon-density /
 //       exposure math is dropped. PREPARE just COPIES the half-res traced visibility.
 //   (b) MULTIPLICATIVE IDENTITY = 1.0 (fully LIT): background/invalid taps and the all-taps-rejected sentinel write
@@ -111,7 +110,7 @@ struct NwbShadowResolvePushConstants{
     uint momentsValid;   // 1 = the MOMENTS SRV holds this-frame integrated temporal moments (the merge ran) -> the wavelet
                          // may use the temporal variance where n is high; 0 = temporal off / first frame -> the wavelet
                          // NEVER samples the (dummy) MOMENTS SRV and uses the spatial-variance fallback everywhere.
-    uint upsampleFold;   // UPSAMPLE fold mode (Stage 5): 0 = OVERWRITE the full-res visibility (soft OPAQUE, as always);
+    uint upsampleFold;   // UPSAMPLE fold mode: 0 = OVERWRITE the full-res visibility (soft OPAQUE);
                          // 1 = MULTIPLY the denoised result onto the visibility (soft COLORED TRANSPARENT fold-multiply,
                          // read-modify-write). Background pixels skip the write entirely when fold==1 (leaving the opaque
                          // result untouched -- white would clobber it). Ignored by PREPARE/WAVELET. See the UPSAMPLE stage.
@@ -189,7 +188,7 @@ float nwbShadowResolveNormalWeightVec(const float3 centerNormal, const float2 ta
 // Luminance edge-stop scale: sigma_l = SIGMA_LUM * sqrt(variance) + EPS. Larger -> looser value stop -> more fill.
 #define NWB_SHADOW_RESOLVE_SIGMA_LUM 4.0
 // Epsilon floor so a fully-converged (variance -> 0) pixel still has a finite, tight sigma (no divide-by-zero and no
-// infinitely-sharp stop that would reject every neighbour). Sits at the old fixed-sigma's noise-floor scale.
+// infinitely-sharp stop that would reject every neighbour). Tuned at the spatial fallback's noise-floor scale.
 #define NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS 0.05
 
 float nwbShadowResolveValueWeight(const float centerVis, const float tapVis, const float sigmaLum){
@@ -302,10 +301,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const int2 baseTexel = int2(floor(src));
         const float2 lerpFrac = src - float2(baseTexel);
 
-        // FULL-RES-GUIDED bilateral CENTRE (Stage 4B): this output pixel's OWN full-res world position + normal, read at
-        // FULL resolution (NOT the half-res cache the old code sampled at selfHalf). Two adjacent full-res pixels inside
-        // one half-res block that straddle a geometry edge now get DIFFERENT centres -> they weight the 4 half-res taps
-        // differently -> the shadow terminator snaps to the full-res silhouette instead of stair-stepping at the half-res
+        // FULL-RES-GUIDED bilateral CENTRE: this output pixel's own full-res world position + normal. Two adjacent
+        // full-res pixels inside one half-res block that straddle a geometry edge get different centres -> they weight the
+        // 4 half-res taps differently -> the shadow terminator snaps to the full-res silhouette instead of stair-stepping at the half-res
         // block boundary. The centre camera distance is derived in the SAME world-unit space as the half-res cache's .z
         // (length(world - cameraPos)), so the per-tap distance edge-stop below stays consistent with the wavelet's metric.
         const float3 centerWorld = g_NwbShadowResolveGBufferWorldPos.Load(int3(fullTexel, 0)).xyz;
@@ -316,7 +314,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float sigmaDist = max(centerDist * NWB_SHADOW_RESOLVE_UPSAMPLE_DIST_FRAC, 1e-3);
         const float invTwoSigmaDistSq = 1.0 / (2.0 * sigmaDist * sigmaDist);
 
-        // Fold mode (Stage 5): 0 = OVERWRITE the visibility (soft OPAQUE, the always-run first pass); 1 = MULTIPLY the
+        // Fold mode: 0 = OVERWRITE the visibility (soft OPAQUE); 1 = MULTIPLY the
         // denoised colored transmittance onto it (soft TRANSPARENT fold, read-modify-write). One texel per thread, VISIBILITY
         // is UAV-only in this set, so the fold==1 RMW is a safe self-UAV update (no cross-texel dependency); the caller
         // orders the opaque UPSAMPLE's writes before this pass's reads with a UAV barrier on the visibility image.

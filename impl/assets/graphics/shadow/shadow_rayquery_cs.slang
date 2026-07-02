@@ -17,12 +17,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Frame counter for the soft directional cone-jitter, seeding the per-pixel low-discrepancy sample so the single
-// jittered opaque ray walks the sun disk across frames. A soft directional light softens THIS full-res HW opaque
-// trace directly (per-frame shimmer expected this stage; the SW path adds the half-res trace + a-trous denoise, the
-// HW path here softens at full res without the denoise -- see the renderer notes). A directional light with a zero
-// angular radius (params2.x == 0) cone-jitters to the axis exactly -> the unchanged hard shadow, so this is a no-op
-// for a point-source sun.
+// Frame counter for soft-light cone jitter. It seeds the per-pixel low-discrepancy sample so the single jittered opaque
+// ray walks the light's source disk/sphere across frames. A zero-radius light jitters to the axis exactly and keeps the
+// hard-shadow result.
 struct NwbShadowRqPushConstants{
     uint frameIndex;
 };

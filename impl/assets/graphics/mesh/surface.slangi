@@ -108,9 +108,9 @@ NwbMeshSurface nwbMakeGlassSurface(half3 baseColor, float3 normal, half refracti
 // supplies (NwbMeshSurface.refractionIor / .shadowAbsorptionTint). They live on the shared surface contract -- not the trace --
 // so the SAME definitions resolve in every context that pulls in this header. They use ONLY Slang built-ins, so the
 // hardware any-hit and the software traversal evaluate them byte-identically, preserving the HW/SW lockstep mandate.
-// The engine owns the physics; the hook owns only the params (refractionIor / shadowAbsorptionTint). Unlike the retired per-hit
-// transmittance model, the engine integrates absorption over the TRUE entry->exit path (signed optical-depth
-// telescoping) and applies Fresnel per surface crossing -- the only place that sees both faces of a volume.
+// The engine owns the physics; the hook owns only the params (refractionIor / shadowAbsorptionTint). The engine integrates
+// absorption over the TRUE entry->exit path (signed optical-depth telescoping) and applies Fresnel per surface crossing --
+// the only place that sees both faces of a volume.
 
 // Fresnel transmitted fraction at one air<->medium interface (Schlick). cosI is the incident cosine |ray . normal|.
 // ior = 1 -> r0 = 0 -> fully transmissive (returns 1).

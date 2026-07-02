@@ -40,10 +40,9 @@
 // material-constant words + the per-instance mutable-storage records.
 #define NWB_SW_SHADOW_BINDING_MATERIAL_TYPED 13
 #define NWB_SW_SHADOW_BINDING_MESH_INSTANCES 14
-// Stage-2 adaptive transparent shadow (coarse-trace + edge-refine):
-//  - COARSE: a HALF-res RGBA16F Texture2DArray (one layer per shadow slot) the coarse transparent trace (mode 4)
-//    writes one transmittance per 2x2 block into and the adaptive resolve (mode 5) reads back to interpolate the
-//    flat interior / detect edges. UAV (written by mode 4, UAV-loaded by mode 5).
+// Adaptive transparent shadow (coarse-trace + edge-refine):
+//  - COARSE: an RGBA16F Texture2DArray (one layer per shadow slot) the coarse transparent trace writes one transmittance
+//    per coarse block into and the adaptive resolve reads back to interpolate the flat interior / detect edges.
 //  - EDGE_STATS: a 2-uint UAV counter ([0] = full-res traced rays, [1] = total candidate rays) the resolve
 //    atomically tallies when stats collection is on, read back to the log as the edge fraction that decides
 //    whether the Stage-3 compaction/indirect path is worth building.
@@ -59,13 +58,12 @@
 #define NWB_SW_SHADOW_BINDING_EDGE_COUNTER 17
 #define NWB_SW_SHADOW_BINDING_EDGE_LIST 18
 #define NWB_SW_SHADOW_BINDING_INDIRECT_ARGS 19
-// Soft directional shadow (Stage 1 of the soft-ray-traced-shadow feature): a HALF-res RGBA16F Texture2DArray (one
-// layer per shadow slot) the jittered opaque directional trace (mode 11) writes ONE cone-jittered visibility sample
-// per half-res pixel into. It is then denoised by the SEPARATE shadow_resolve pipeline (its own binding set) --
-// geometry downsample + a-trous wavelet + bilateral upsample into the full-res visibility the lighting samples. UAV
-// (written by mode 11, read by the resolve). Only the SW traversal declares/writes it; the resolve binds its own copy.
+// Soft opaque shadow: a HALF-res RGBA16F Texture2DArray (one layer per shadow slot) the jittered opaque trace writes one
+// cone-jittered visibility sample per half-res pixel into. It is then denoised by the SEPARATE shadow_resolve pipeline --
+// geometry downsample + a-trous wavelet + bilateral upsample into the full-res visibility the lighting samples. Only the
+// SW traversal declares/writes it; the resolve binds its own copy.
 #define NWB_SW_SHADOW_BINDING_SOFT_HALF 20
-// Soft COLORED TRANSPARENT shadow (Stage 5 of the soft-ray-traced-shadow feature): a HALF-res RGBA16F Texture2DArray (one
+// Soft COLORED TRANSPARENT shadow: a HALF-res RGBA16F Texture2DArray (one
 // layer per shadow slot) the soft transparent trace (sw_shadow_transparent_soft_cs) writes ONE cone-jittered COLORED
 // (Beer-Lambert/Fresnel) transmittance sample per half-res pixel into. It is denoised by the SEPARATE RGB shadow_resolve
 // pipeline (its own binding set) -- temporal reproject-merge + RGB a-trous wavelet + fold-multiply upsample onto the
@@ -77,21 +75,21 @@
 // 8x8 = 64 threads per group (one thread per pixel).
 #define NWB_SW_SHADOW_GROUP_SIZE 8
 
-// Coarse-trace downscale for the adaptive passes (modes 4/5/6/9/10): the coarse buffer + trace run at full-res >> SHIFT,
+// Coarse-trace downscale for the adaptive transparent passes: the coarse buffer + trace run at full-res >> SHIFT,
 // i.e. one coarse trace per (FACTOR x FACTOR) full-res block. SHIFT=1 -> half-res (1 trace / 2x2 block); SHIFT=2 ->
 // quarter-res (1 trace / 4x4 block, ~4x fewer coarse traces but coarser interior + more edge-refine). Shared by the
 // shader (coarse-trace block stride + resolve coordinate) and C++ (coarse-buffer dims + dispatch grid) so they agree.
 #define NWB_SW_SHADOW_COARSE_SHIFT 2u
 #define NWB_SW_SHADOW_COARSE_FACTOR (1u << NWB_SW_SHADOW_COARSE_SHIFT)
 
-// Soft directional shadow downscale (mode 11 + the shadow_resolve denoise): the jittered directional trace + its
+// Soft opaque shadow downscale: the jittered opaque trace + its
 // a-trous denoise run at full-res >> SOFT_SHIFT. SHIFT=1 -> HALF resolution (1 jittered trace per 2x2 block, the
 // Stage-1 target). Independent of COARSE_SHIFT above (that is the adaptive TRANSPARENT trace's quarter-res); the soft
-// directional trace is a separate signal with its own half-res buffers, so its factor is kept distinct and explicit.
+// opaque trace is a separate signal with its own half-res buffers, so its factor is kept distinct and explicit.
 #define NWB_SW_SHADOW_SOFT_SHIFT 1u
 #define NWB_SW_SHADOW_SOFT_FACTOR (1u << NWB_SW_SHADOW_SOFT_SHIFT)
 
-// Threads per group for the 1D indirect trace pass (mode 8). Equals GROUP_SIZE^2 so it reuses the [numthreads(8,8,1)]
+// Threads per group for the 1D indirect trace pass. Equals GROUP_SIZE^2 so it reuses the [numthreads(8,8,1)]
 // entry point: the build-args pass computes groupsX = ceil(traceCount / 64) and each thread derives its flat record
 // index as groupID.x * 64 + SV_GroupIndex.
 #define NWB_SW_SHADOW_TRACE_GROUP 64
@@ -115,10 +113,9 @@
 
 // Occluder class the per-mesh traversal filters to. Each pass kernel that traces #defines NWB_SW_SHADOW_OCCLUDER to
 // one of these BEFORE including sw_shadow_traverse.slangi; the filter in nwbSwShadowInstanceOccluded then skips the
-// other class. This replaces the old numeric multiplyMode occluder switch -- the class is now a COMPILE-TIME identity
-// baked into each pass, not a runtime push value:
+// other class. The class is a compile-time identity baked into each pass, not a runtime push value:
 //  - OPAQUE      -> skip TRANSPARENT occluders: a binary blocker mask. The opaque prepass / adaptive-opaque coarse +
-//                   resolve / soft directional half-res trace (the SW analog of the HW RayQuery opaque mask).
+//                   resolve / soft opaque half-res trace (the SW analog of the HW RayQuery opaque mask).
 //  - TRANSPARENT -> skip OPAQUE occluders: the colored Beer-Lambert tint MULTIPLIED onto an existing opaque mask
 //                   (the transparent coarse / resolve / indirect re-trace / uniform half-res multiply). The opaque
 //                   shadow already came from the HW mask (hybrid) or the opaque prepass (software), so tracing opaque
@@ -128,22 +125,21 @@
 #define NWB_SW_SHADOW_OCCLUDER_TRANSPARENT 1
 #define NWB_SW_SHADOW_OCCLUDER_ALL 2
 
-// G-buffer background/validity depth: a depth at or above this is the cleared background (no geometry) -- fully lit,
-// casts no candidate ray. Centralised here (was a bare 0.999999 literal repeated across every trace/resolve pass) so
-// the gbuffer concern's nwbSwShadowIsBackground and every pass share one definition.
+// G-buffer background/validity depth: a depth at or above this is the cleared background (no geometry), so it is fully
+// lit and casts no candidate ray. The gbuffer concern's nwbSwShadowIsBackground and every pass share this definition.
 #define NWB_SW_SHADOW_BACKGROUND_DEPTH 0.999999
 
-// Per-frame samples-per-pixel for the soft directional trace. Stage 3 adds TEMPORAL accumulation (the reproject-merge pass)
-// that supplies the sun-disk samples OVER FRAMES, so this drops from Stage 1's per-frame wash-out count (8) toward 1 --
+// Per-frame samples-per-pixel for the soft opaque trace. Temporal accumulation (the reproject-merge pass) supplies the
+// source-area samples over frames, so this can stay close to 1 --
 // pinned at 2 (not 1) on purpose: for a STATIC receiver the temporal history + the wide a-trous converge fine from a single
 // sample, but in a freshly-disoccluded / gate-B-clamped region (a spinning occluder's leading edge) the effective history
 // length collapses to ~0 and the pixel falls back to (near) pure current -- where 1 spp is a single binary ray whose
 // dithered penumbra the a-trous cannot fully smooth in ONE frame, whereas 2 spp halves that moving-region noise for the
 // same still-cheap half-res binary trace cost. So 2 keeps moving regions clean while temporal handles static convergence.
-// (An A/B at 1 vs 2 is a one-line edit here.) Contract-shared with the soft directional pass.
+// Contract-shared with the soft opaque pass.
 #define NWB_SW_SHADOW_SOFT_SPP 2u
 
-// Decorrelation salt for the soft TRANSPARENT trace's cone-jitter low-discrepancy stream (Stage 5), so its colored
+// Decorrelation salt for the soft TRANSPARENT trace's cone-jitter low-discrepancy stream, so its colored
 // penumbra estimator samples the source at points INDEPENDENT of the soft OPAQUE trace's. The two soft signals are
 // SEPARATELY temporally denoised (opaque binary Bernoulli vs colored chord-variance RGB product -- their per-frame noise
 // must not be correlated) and folded only at the final full-res upsample, so the transparent trace adds this odd offset

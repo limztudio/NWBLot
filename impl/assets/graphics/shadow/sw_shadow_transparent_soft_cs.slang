@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// SOFT TRANSPARENT half-res trace (Stage 5 of the soft-ray-traced-shadow feature, all light types). The COLORED
+// SOFT TRANSPARENT half-res trace (all light types). The COLORED
 // (Beer-Lambert / Fresnel) analog of sw_shadow_soft_opaque_cs: one thread per HALF-res pixel casts NWB_SW_SHADOW_SOFT_SPP
 // cone-jittered occlusion rays inside the cone the light's physical source subtends and writes the AVERAGED single-frame
 // COLORED transmittance (RGB, not a binary) into the parallel half-res soft transparent buffer. Byte-identical to the

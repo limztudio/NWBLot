@@ -54,10 +54,8 @@
 // Below this per-channel transmittance the occluder ray is effectively fully blocked; traversal stops early.
 #define NWB_SW_SHADOW_TRANSMITTANCE_EPSILON 1e-3
 
-// Instance count of the software scene BVH this frame. Each pass declares its OWN push-constant struct (no shared
-// multiplyMode), but every one that traces names it g_NwbSwShadowPush and carries an `instanceCount` field, so the
-// shared traversal reads it uniformly regardless of the pass's other push fields (the field-name contract that
-// replaces the old single monolithic push struct).
+// Instance count of the software scene BVH this frame. Each pass declares its own push-constant struct, but every tracing
+// pass names it g_NwbSwShadowPush and carries an `instanceCount` field, so the shared traversal reads it uniformly.
 uint nwbSwShadowInstanceCount(){
     return g_NwbSwShadowPush.instanceCount;
 }

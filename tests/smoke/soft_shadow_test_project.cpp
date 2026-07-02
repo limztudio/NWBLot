@@ -52,7 +52,7 @@ using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 // light, and a BLUE SPOT -- each with a PHYSICAL source size. That source size is what makes each shadow soft: the trace
 // jitters the ray over the light's source (the sun's angularRadius disk, or a point/spot's sourceRadius sphere subtending
 // asin(R/dist)), so every penumbra emerges + WIDENS with occluder->receiver distance and HARDENS at contact. The GLASS
-// caster casts a COLORED transparent soft shadow (Stage 5), isolated so it is the only shadow on the plane. It spins (arrow keys).
+// caster casts a colored transparent soft shadow, isolated so it is the only shadow on the plane. It spins (arrow keys).
 //
 // A/B levers:
 //   - THREE differently-coloured soft-shadowed lights are lit AT ONCE (a warm-white directional sun, a RED point, a BLUE
@@ -273,7 +273,7 @@ public:
         );
 
         // The SOLE caster is a GLASS (transparent) `body` character standing on the plane: the body model with a refractive
-        // material + a coloured, sub-1-alpha tint. Its shadow is the COLORED transparent soft shadow (Stage 5) -- the light
+        // material + a coloured, sub-1-alpha tint. Its shadow is the colored transparent soft shadow; the light
         // passing through the glass is tinted by it, so the cast shadow carries the glass colour AND softens with
         // occluder->receiver distance. No opaque caster shares the scene, so the glass shadow is the only one on the plane.
         bool glassTintApplied = false;

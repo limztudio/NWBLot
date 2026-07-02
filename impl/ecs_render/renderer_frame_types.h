@@ -146,12 +146,12 @@ struct DeferredFrameTargets{
     // cache. Needs no clear (the coarse trace fully overwrites every block it samples). Null when adaptive is disabled.
     Core::Format::Enum shadowCoarseTransmittanceFormat = Core::Format::UNKNOWN;
     Core::TextureHandle shadowCoarseTransmittance;
-    // Soft directional shadow (Stage 1 of the soft-ray-traced-shadow feature) HALF-res targets:
+    // Soft opaque shadow HALF-res targets:
     //  - shadowSoftHalfA / shadowSoftHalfB: two HALF-res RGBA16F Texture2DArrays (NWB_SCENE_SHADOW_SLOT_COUNT layers),
-    //    the a-trous ping-pong buffers. The mode-11 jittered directional trace writes shadowSoftHalfA; the resolve's
+    //    the a-trous ping-pong buffers. The jittered opaque trace writes shadowSoftHalfA; the resolve's
     //    PREPARE copies it, the wavelet alternates A<->B, the final wavelet lands in B, and the upsample reads B into
     //    the full-res shadowVisibility. Half the render extent (1/4 the pixels); need no clear (every pass fully
-    //    overwrites, and the trace writes the LIT identity for background/non-directional).
+    //    overwrites, and the trace writes the LIT identity for background or inactive slots).
     //  - shadowSoftGeometry: a HALF-res RGBA16F single-layer geometry cache (xy = octahedral receiver normal, z =
     //    camera distance, w = validity) the geometry downsample pre-pass fills once per frame for the edge-stop.
     Core::Format::Enum shadowSoftFormat = Core::Format::UNKNOWN;
@@ -159,7 +159,7 @@ struct DeferredFrameTargets{
     Core::TextureHandle shadowSoftHalfB;
     Core::Format::Enum shadowSoftGeometryFormat = Core::Format::UNKNOWN;
     Core::TextureHandle shadowSoftGeometry;
-    // Soft opaque shadow TEMPORAL accumulation (Stage 3 of the soft-ray-traced-shadow feature) HALF-res targets. The
+    // Soft opaque shadow TEMPORAL accumulation HALF-res targets. The
     // reproject-merge pass (inserted per slot between the soft trace and the a-trous resolve) accumulates the noisy per-
     // frame trace over time -- so the per-frame SPP can drop while a STATIC receiver converges smooth AND a MOVING occluder
     // leaves no ghost trail -- by reprojecting the current world pos through a STASHED previous-frame worldToClip (there are
@@ -178,7 +178,7 @@ struct DeferredFrameTargets{
     Core::TextureHandle shadowMomentsA;
     Core::TextureHandle shadowMomentsB;
     Core::TextureHandle shadowSoftGeometryPrev;
-    // Soft COLORED TRANSPARENT shadow (Stage 5 of the soft-ray-traced-shadow feature) HALF-res targets: the PARALLEL colored
+    // Soft COLORED TRANSPARENT shadow HALF-res targets: the PARALLEL colored
     // pipeline kept SEPARATE from the opaque soft signal through the whole denoise, folded (multiplied) onto the opaque
     // visibility only at the final full-res upsample (opaque binary Bernoulli vs colored chord-variance RGB product have
     // different noise stats, so denoise(A)*denoise(B) != denoise(A*B) -- they must be denoised independently). Mirrors the

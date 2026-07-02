@@ -365,18 +365,14 @@ private:
     // brightness byte-unchanged.
     f32 m_causticTemporalDecay = 0.85f;
     bool m_causticEmissionGateLogged = false;
-    // Software (compute) shadow traversal, decomposed into one NAMED pipeline per pass (the old single multiplyMode
-    // pipeline is retired). All passes SHARE one binding layout + one binding set: each pass's kernel references only its
-    // own subset of the slot map (unreferenced layout entries are legal), and the bound resources at every slot are
-    // identical regardless of pass -- so the per-pass pipelines produce byte-identical output to the monolith while each
-    // now carries its own push-constant struct (no multiplyMode). The shared layout's push-constant range is sized to the
-    // LARGEST pass struct (SwShadowMaxPushConstants); each pass sets only its own bytes. The mesh-descriptor-array
-    // resource-state prep, the barrier sequence, and the binding-set rebuild guard below are unchanged.
+    // Software (compute) shadow traversal, decomposed into one named pipeline per pass. All passes share one binding
+    // layout + one binding set: each pass's kernel references only its own subset of the slot map, and the bound resources
+    // at every slot are identical regardless of pass. The shared layout's push-constant range is sized to the largest pass
+    // struct (SwShadowMaxPushConstants); each pass sets only its own bytes.
     Core::BindingLayoutHandle m_swShadowBindingLayout;
     Core::BindingSetHandle m_swShadowBindingSet;
-    // One compute pipeline per software-shadow pass (created lazily; each loads its own kernel). The dispatch selects the
-    // pass pipeline the same env-gated way the monolith selected multiplyMode. A per-pass shader handle keeps each kernel
-    // resident for its pipeline.
+    // One compute pipeline per software-shadow pass (created lazily; each loads its own kernel). A per-pass shader handle
+    // keeps each kernel resident for its pipeline.
     Core::ShaderHandle m_swShadowOpaquePrepassShader;
     Core::ComputePipelineHandle m_swShadowOpaquePrepassPipeline;
     Core::ShaderHandle m_swShadowSoftOpaqueShader;
@@ -393,7 +389,7 @@ private:
     Core::ComputePipelineHandle m_swShadowTransparentIndirectPipeline;
     Core::ShaderHandle m_swShadowTransparentUniformShader;
     Core::ComputePipelineHandle m_swShadowTransparentUniformPipeline;
-    // Soft COLORED TRANSPARENT trace (Stage 5): the colored (Beer-Lambert/Fresnel) analog of the soft opaque trace, against
+    // Soft COLORED TRANSPARENT trace: the colored (Beer-Lambert/Fresnel) analog of the soft opaque trace, against
     // the SAME shared SW-shadow binding layout/set (it only adds the NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF UAV slot).
     Core::ShaderHandle m_swShadowTransparentSoftShader;
     Core::ComputePipelineHandle m_swShadowTransparentSoftPipeline;
@@ -412,16 +408,14 @@ private:
     Core::Buffer* m_swShadowMeshIndexBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
     Core::Buffer* m_swShadowMeshAttributeBuffers[NWB_SW_SHADOW_MAX_MESHES] = {}; // U2 per-vertex normal/uv0 for the per-hit transmittance dispatch
     u32 m_swShadowMeshCount = 0u;
-    // Stage-2 adaptive TRANSPARENT shadow (coarse-trace + edge-refine) config, fixed at shipping defaults (adaptive ON,
-    // edge threshold 0.1, stats OFF). These flags drive the transparent economizer path, which STAYS live: the HW-hybrid
-    // backend (renderGpuBvhShadowVisibility multiplyOntoOpaque=true) casts its COLORED shadow through it. Stage 6 retired
-    // only the hard OPAQUE economizer (the adaptive coarse+edge-refine opaque pass) -- soft opaque overwrote its output,
-    // so it was pure dead work; the plain full-res opaque prepass remains the SW-path baseline/fallback.
+    // Adaptive transparent shadow (coarse-trace + edge-refine) config, fixed at shipping defaults (adaptive ON,
+    // edge threshold 0.1, stats OFF). These flags drive the transparent economizer path used by the HW-hybrid backend
+    // (renderGpuBvhShadowVisibility multiplyOntoOpaque=true). The full-res opaque prepass remains the SW-path
+    // baseline/fallback.
     bool m_swShadowAdaptiveEnabled = true;
     bool m_swShadowEdgeStatsEnabled = false;
-    // Stage-3 compacted-indirect resolve (default ON): when set AND adaptive is on, the mode-5 conditional re-trace is
-    // replaced by classify+append (mode 6) -> build-args (mode 7) -> DispatchIndirect trace (mode 8), so only edge rays
-    // launch as coherent waves. "0" falls back to the mode-4+5 adaptive path.
+    // Compacted-indirect resolve (default ON): when set and adaptive is on, classify+append -> build-args ->
+    // DispatchIndirect trace launches only edge rays as coherent waves. Disabled falls back to the coarse/adaptive path.
     bool m_swShadowCompactEnabled = true;
     f32 m_swShadowEdgeThreshold = 0.1f;
     // Edge-fraction instrumentation: a 2-uint UAV counter the resolve tallies into ([0] traced rays, [1] total rays),
@@ -461,7 +455,7 @@ private:
     const Core::Texture* m_shadowResolveBindingSetGeometry = nullptr;
     const Core::Texture* m_shadowResolveBindingSetDepth = nullptr;
     const Core::Texture* m_shadowResolveBindingSetVisibility = nullptr;
-    // Stage 4 tracked targets: the SVGF moments buffers (bound as the MOMENTS SRV -- paired per temporal set, dummy on the
+    // Tracked resolve targets: the SVGF moments buffers (bound as the MOMENTS SRV -- paired per temporal set, dummy on the
     // rest) + the full-res world-position/normal G-buffers the guided upsample reads. Any change rebuilds all five sets.
     const Core::Texture* m_shadowResolveBindingSetMomentsA = nullptr;
     const Core::Texture* m_shadowResolveBindingSetMomentsB = nullptr;
@@ -482,7 +476,7 @@ private:
     // pipelines AND binding sets are all ready this frame; gates the render's soft opaque trace + resolve dispatch.
     // A failure here is non-fatal to shadows -- the slot lights simply keep their hard opaque mask this frame.
     bool m_softShadowReady = false;
-    // Soft opaque shadow TEMPORAL accumulation (Stage 3 of the soft-ray-traced-shadow feature): the reproject-merge pass
+    // Soft opaque shadow TEMPORAL accumulation: the reproject-merge pass
     // inserted per slot between the soft trace and the a-trous resolve, plus the CPU-side state it needs. There are NO
     // motion vectors / prev-G-buffer in this engine (the view is rebuilt fresh each frame), so the merge reprojects the
     // current world position through a STASHED previous-frame worldToClip -- exact for a static receiver regardless of how
@@ -530,7 +524,7 @@ private:
     Core::BindingSetHandle m_shadowResolveBindingSetTemporalHistB; // PREPARE reads shadowHistB as SOFT_HALF
     const Core::Texture* m_shadowResolveBindingSetTemporalHistATex = nullptr;
     const Core::Texture* m_shadowResolveBindingSetTemporalHistBTex = nullptr;
-    // ---- Stage 5: the PARALLEL soft COLORED TRANSPARENT denoise state (mirrors the opaque m_shadowResolve* / merge blocks) ----
+    // ---- Parallel soft COLORED TRANSPARENT denoise state (mirrors the opaque m_shadowResolve* / merge blocks) ----
     // The RGB a-trous resolve pipeline: the SAME shadow_resolve source cooked with NWB_SHADOW_RESOLVE_CHANNELS=3 (via the
     // shadow_resolve_rgb_cs wrapper). It shares the resolve BINDING LAYOUT (identical bindings; only the wavelet channel
     // count + a runtime fold flag differ), so only a distinct shader + pipeline handle are needed, not a new layout.
@@ -573,8 +567,8 @@ private:
     const Core::Texture* m_transparentReprojectMergeWorldPosition = nullptr;
     // Gates (mirror m_softShadowReady / m_softShadowTemporalReady): set by prepareShadowVisibilityResources when the RGB
     // resolve pipeline + the transparent resolve binding sets (and, for temporal, the transparent merge pipeline is shared +
-    // its two binding sets) are all ready this frame. Non-fatal: a failure leaves the soft transparent path off (the old
-    // transparent coarse/adaptive path then runs its colored multiply as before -- no double-fold because they are exclusive).
+    // its two binding sets) are all ready this frame. Non-fatal: a failure leaves the soft transparent path off; the
+    // transparent coarse/adaptive path then runs its colored multiply, with no double-fold because the paths are exclusive.
     bool m_softTransparentReady = false;
     bool m_softTransparentTemporalReady = false;
     u32 m_swShadowEdgeStatsPendingTick = 0u;
@@ -657,7 +651,7 @@ private:
     // Caustic accumulator decay pre-pass (splat-space temporal EMA): a single-resource compute pass that multiplies the
     // resident R32_UINT accumulator by m_causticTemporalDecay before the producer splats this frame's photons.
     // m_causticAccumulatorInitialized gates the first-frame (and post-resize) clear-vs-decay: the accumulator holds no
-    // valid history until the producer has splatted once, so the first enabled frame clears (as before) and every later
+    // valid history until the producer has splatted once, so the first enabled frame clears and every later
     // frame decays. Reset to false wherever the deferred targets are (re)created so a resize re-seeds cleanly.
     Core::BindingLayoutHandle m_causticAccumulatorDecayBindingLayout;
     Core::ShaderHandle m_causticAccumulatorDecayShader;

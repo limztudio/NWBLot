@@ -77,22 +77,19 @@ private:
     // context), appended by the trace pipeline/set. (Factored out for clarity; visibilityTarget is the full-res output.)
     void appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const;
     void appendShadowTraceBindingSet(Core::BindingSetDesc& desc, DeferredFrameTargets& targets, Core::Texture* visibilityTarget)const;
-    // ensureSwShadowPipeline creates the SHARED software-shadow binding layout + the persistent Stage-2/3 buffers once,
-    // then creates one NAMED compute pipeline per decomposed pass via ensureSwShadowPassPipeline (each loads its own
-    // kernel against the shared layout). The old single multiplyMode pipeline is retired; the dispatch selects a pass
-    // pipeline the same env-gated way the monolith selected the mode.
+    // ensureSwShadowPipeline creates the shared software-shadow binding layout + persistent adaptive buffers once, then
+    // creates one named compute pipeline per decomposed pass via ensureSwShadowPassPipeline.
     [[nodiscard]] bool ensureSwShadowPipeline();
     [[nodiscard]] bool ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const char* debugLabel);
     [[nodiscard]] bool ensureSwShadowBindingSet(DeferredFrameTargets& targets);
-    // Soft directional shadow (Stage 1 of the soft-ray-traced-shadow feature): the half-res geometry downsample pre-pass
-    // + the a-trous wavelet resolve/upsample (cloned from the caustic resolve). dispatchSoftShadowResolve runs the whole
-    // denoise chain (geometry downsample -> PREPARE -> N wavelet ping-pong passes -> bilateral upsample) for one
-    // directional shadow slot, overwriting that slot's full-res visibility with the denoised soft shadow.
+    // Soft opaque shadow: the half-res geometry downsample pre-pass + the a-trous wavelet resolve/upsample.
+    // dispatchSoftShadowResolve runs the denoise chain for one shadow slot, overwriting that slot's full-res visibility
+    // with the denoised soft shadow.
     [[nodiscard]] bool ensureSoftShadowResolvePipeline();
     [[nodiscard]] bool ensureSoftShadowResolveBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();
     [[nodiscard]] bool ensureShadowGeometryDownsampleBindingSet(DeferredFrameTargets& targets);
-    // Stage 5 (soft COLORED TRANSPARENT shadow): the RGB a-trous resolve pipeline (the SAME shadow_resolve source cooked
+    // Soft colored-transparent shadow: the RGB a-trous resolve pipeline (the SAME shadow_resolve source cooked
     // with NWB_SHADOW_RESOLVE_CHANNELS=3, sharing the resolve binding LAYOUT) + the five parallel transparent resolve
     // binding sets (over transparentSoftHalf/transparentHist as SOFT_HALF, the SAME half-res ping-pong scratch as OUTPUT,
     // and the SAME full-res shadowVisibility as the fold-multiply VISIBILITY target). The transparent merge REUSES the
@@ -115,7 +112,7 @@ private:
     // dispatchSoftShadowResolve runs the a-trous PREPARE -> N wavelet passes -> upsample for one slot, against the sets +
     // pipeline + fold in `dispatch`. See SoftShadowResolveDispatch.
     void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slot, const SoftShadowResolveDispatch& dispatch);
-    // Soft opaque shadow TEMPORAL accumulation (Stage 3 of the soft-ray-traced-shadow feature): the reproject-merge pass
+    // Soft opaque shadow TEMPORAL accumulation: the reproject-merge pass
     // inserted per slot between the soft trace and the a-trous resolve. ensureShadowReprojectMergePipeline builds its
     // pipeline + layout; ensureShadowReprojectMergeBindingSet builds the two front/back sets (history-in SRV and history-out
     // UAV never alias). swapSoftShadowTemporalHistory stashes this frame's worldToClip for next-frame reprojection +

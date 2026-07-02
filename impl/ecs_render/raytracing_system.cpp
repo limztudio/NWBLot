@@ -169,11 +169,9 @@ namespace RtInstanceMaterialFlag{
 // Initial element capacity of the per-frame instance-material table; grows by doubling like the TLAS/scene BVH.
 inline constexpr usize s_ShadowInstanceMaterialInitialCapacity = 128u;
 
-// CPU mirrors of the software shadow traversal push constants. The old single multiplyMode struct is retired: each
-// decomposed pass kernel declares its OWN push struct (its minimal field subset, NO mode selector) and the renderer
-// mirrors each here. Every mirror matches its kernel's [[vk::push_constant]] layout exactly (asserted). The shared
-// binding LAYOUT sizes its push range to the LARGEST of these (SwShadowMaxPushConstants below) so every per-pass
-// pipeline is layout-compatible while each dispatch sets only its own struct's bytes.
+// CPU mirrors of the software shadow traversal push constants. Each pass kernel declares its own minimal push struct,
+// and every mirror matches its kernel's [[vk::push_constant]] layout exactly (asserted). The shared binding layout sizes
+// its push range to the largest mirror below so every per-pass pipeline is layout-compatible.
 
 // Opaque pre-pass (full-res OPAQUE binary blocker; sw_shadow_opaque_prepass_cs). The SW-path baseline opaque mask -- soft
 // opaque overwrites it per soft slot when ready, else it IS the shadow (the fallback).
@@ -193,7 +191,7 @@ struct SwShadowSoftOpaquePushConstants{
 };
 static_assert(sizeof(SwShadowSoftOpaquePushConstants) == sizeof(u32) * 4u, "SwShadowSoftOpaquePushConstants must match the kernel push-constant layout");
 
-// Soft COLORED TRANSPARENT half-res jittered trace (sw_shadow_transparent_soft_cs, all light types; Stage 5): identical
+// Soft COLORED TRANSPARENT half-res jittered trace (sw_shadow_transparent_soft_cs, all light types): identical
 // layout to the soft opaque trace (frameIndex seeds the per-pixel cone jitter -- the shader adds a compile-time salt to
 // decorrelate its low-discrepancy stream from the opaque trace's). A distinct type so the two dispatches cannot swap args.
 struct SwShadowTransparentSoftPushConstants{
@@ -289,7 +287,7 @@ static_assert(sizeof(ShadowRqPushConstants) == sizeof(u32), "ShadowRqPushConstan
 
 // CPU mirror of shadow_resolve_cs.slang's NwbShadowResolvePushConstants: the full/half dims, the a-trous dilation +
 // stage selector, the active shadow-slot range the resolve loops, the temporal-moments-valid flag, and the upsample
-// fold mode (Stage 5). 10 x 4 = 40 bytes.
+// fold mode. 10 x 4 = 40 bytes.
 struct ShadowResolvePushConstants{
     u32 width = 0u;          // FULL-res width (UPSAMPLE dispatch/output dim)
     u32 height = 0u;         // FULL-res height
@@ -302,7 +300,7 @@ struct ShadowResolvePushConstants{
     u32 momentsValid = 0u;   // 1 = the MOMENTS SRV holds this-frame integrated temporal moments (the merge ran this frame)
                              // -> the WAVELET's SVGF variance edge-stop may use the temporal variance; 0 = temporal off /
                              // first frame -> the shader never samples the (dummy) MOMENTS SRV and uses the spatial fallback.
-    u32 upsampleFold = 0u;   // UPSAMPLE fold mode (Stage 5): 0 = OVERWRITE the full-res visibility (soft OPAQUE, as always);
+    u32 upsampleFold = 0u;   // UPSAMPLE fold mode: 0 = OVERWRITE the full-res visibility (soft OPAQUE);
                              // 1 = MULTIPLY the denoised colored transmittance onto it (soft TRANSPARENT fold, RMW). Ignored
                              // by PREPARE/WAVELET; see SoftShadowUpsampleFold::Enum + the UPSAMPLE stage in shadow_resolve_cs.
 };
@@ -319,7 +317,7 @@ namespace ShadowResolveStage{
 
 // UPSAMPLE fold mode: the SoftShadowUpsampleFold::Enum values are the single source of truth, kept in lockstep with
 // shadow_resolve_cs.slang's upsampleFold branch:
-//  - Overwrite: the soft OPAQUE resolve writes its denoised grayscale visibility into the full-res visibility (as always).
+//  - Overwrite: the soft OPAQUE resolve writes its denoised grayscale visibility into the full-res visibility.
 //  - Multiply:  the soft COLORED TRANSPARENT resolve read-modify-write MULTIPLIES its denoised colored transmittance onto
 //    the visibility (which already holds the opaque result), so visibility = opaqueSoftUpsampled * transparentSoftUpsampled.
 
@@ -333,7 +331,7 @@ struct ShadowGeometryDownsamplePushConstants{
 };
 static_assert(sizeof(ShadowGeometryDownsamplePushConstants) == sizeof(u32) * 4u, "ShadowGeometryDownsamplePushConstants must match the shader push-constant layout");
 
-// CPU mirror of shadow_reproject_merge_cs.slang's NwbShadowReprojectMergePushConstants (Stage 3 temporal accumulation):
+// CPU mirror of shadow_reproject_merge_cs.slang's NwbShadowReprojectMergePushConstants (temporal accumulation):
 // the STASHED previous-frame worldToClip (64-byte row-major matrix -- Float44U's raw[16] is the row-major dump of the
 // mesh-view worldToClip, matching the shader's `row_major float4x4`) + the full/half dims + the active shadow-slot range +
 // the history-valid flag + one pad word to a 16-byte multiple. 64 + 8*4 = 96 bytes (within the 128-byte push guarantee).
@@ -628,7 +626,7 @@ bool RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandLi
 }
 
 bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandList){
-    // Builds/refits per-mesh software BVHs. Two callers gate WHEN it runs (it no longer self-gates on RT support):
+    // Builds/refits per-mesh software BVHs. Two callers gate WHEN it runs:
     //  - The no-RayQuery fallback prepare (the only shadow backend) -- builds every mesh.
     //  - The hybrid prepare on RT hardware -- only when the scene has a TRANSPARENT occluder (whose colored shadow the
     //    software pass must trace); opaque-only / no-transparent scenes never call this, so they pay no software cost.
@@ -861,7 +859,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     // when the scene has a transparent occluder. The gather order matches buildSceneTlas's (same RendererComponent
     // view, aligned conditions), so the scene-BVH leaf index equals the hardware InstanceID -- and the material context
     // it rebuilds is byte-identical to buildSceneTlas's, so the HW caustic (which reads that context by InstanceID) is
-    // unaffected even though both write it. The caller gates WHEN this runs (it no longer self-gates on RT support).
+    // unaffected even though both write it. The caller gates WHEN this runs.
     auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
     if(!meshSystem)
         return false;
@@ -1317,7 +1315,7 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
     if(outBackendReady && !rayTracingState().m_softShadowReady)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft opaque shadow resource preparation failed; shadows hard this frame"));
 
-    // Soft opaque shadow TEMPORAL accumulation (Stage 3): build the reproject-merge pipeline + its two front/back binding
+    // Soft opaque shadow TEMPORAL accumulation: build the reproject-merge pipeline + its two front/back binding
     // sets AND the two temporal SOFT_HALF resolve variants (the a-trous then reads the accumulated history instead of the
     // raw trace). Always on when the resources build; non-fatal: a failure leaves m_softShadowTemporalReady false and the
     // soft path feeds the raw trace straight into the a-trous (the Stage-1/2 spatial-only fallback).
@@ -1329,11 +1327,11 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
     if(rayTracingState().m_softShadowReady && !rayTracingState().m_softShadowTemporalReady)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
 
-    // Stage 5 soft COLORED TRANSPARENT shadow: build the RGB a-trous resolve pipeline + the parallel transparent resolve
+    // Soft COLORED TRANSPARENT shadow: build the RGB a-trous resolve pipeline + the parallel transparent resolve
     // binding sets (over the transparent half-res buffers), gated on the opaque soft path being ready (it shares the
     // geometry cache + the resolve binding layout + the ping-pong scratch). Non-fatal: a failure leaves m_softTransparentReady
-    // false so the soft transparent fold is skipped and the OLD transparent coarse/adaptive multiply runs as before (no
-    // double-fold -- they are exclusive). The transparent TEMPORAL path additionally needs the (shared) merge pipeline + the
+    // false so the soft transparent fold is skipped and the transparent coarse/adaptive fallback runs (no double-fold --
+    // they are exclusive). The transparent TEMPORAL path additionally needs the (shared) merge pipeline + the
     // parallel transparent merge binding sets; a failure there leaves m_softTransparentTemporalReady false and the transparent
     // resolve reads the raw colored trace straight into the RGB a-trous (the spatial fallback).
     rayTracingState().m_softTransparentReady =
@@ -1406,8 +1404,8 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         return false;
     }
 
-    // Soft directional shadow (Stage 1) HALF-res targets: the two ping-pong soft buffers (RGBA16F Texture2DArrays, one
-    // layer per shadow slot -- the mode-11 jittered trace writes A, the a-trous resolve alternates A<->B, the upsample
+    // Soft opaque shadow HALF-res targets: the two ping-pong soft buffers (RGBA16F Texture2DArrays, one
+    // layer per shadow slot -- the jittered trace writes A, the a-trous resolve alternates A<->B, the upsample
     // reads B into the full-res visibility) + the single-layer packed geometry cache (octahedral normal + camera
     // distance + validity) the geometry downsample fills for the edge-stop. Half the render extent (rounded up so a
     // half texel covers its SOFT_FACTOR block for odd extents), matching the caustic half-res buffers. Allocated with
@@ -1455,7 +1453,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         return false;
     }
 
-    // Soft opaque shadow TEMPORAL accumulation (Stage 3) HALF-res targets: the accumulated-visibility + moments ping-pong
+    // Soft opaque shadow TEMPORAL accumulation HALF-res targets: the accumulated-visibility + moments ping-pong
     // Texture2DArrays (mirror softHalfADesc: NWB_SCENE_SHADOW_SLOT_COUNT layers, UAV) + the previous-frame single-layer
     // geometry cache (mirror softGeometryDesc). Allocated here so they share the resize lifecycle; a freshly (re)created
     // history holds no valid samples, so re-seed the temporal state (the next merge treats every pixel as n=0 = pure
@@ -1500,7 +1498,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     rayTracingState().m_prevWorldToClipValid = false;
     rayTracingState().m_softShadowHistoryFrontIsA = 1u;
 
-    // Stage 5 soft COLORED TRANSPARENT shadow HALF-res targets: the PARALLEL colored pipeline's buffers -- the raw colored
+    // Soft COLORED TRANSPARENT shadow HALF-res targets: the PARALLEL colored pipeline's buffers -- the raw colored
     // soft trace output + its accumulated-visibility & moments ping-pong (mirroring the opaque set exactly: same softHalfADesc
     // format/extent/layers/UAV). The geometry cache + prevWorldToClip are SHARED (not duplicated). Allocated here so they
     // share the resize lifecycle; the transparent history uses the SAME m_softShadowHistoryFrontIsA selector as the opaque
@@ -1542,16 +1540,16 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         return false;
     }
 
-    // Stage-3 compacted edge list (recreated on resize alongside the visibility/coarse targets, so the SW shadow binding-set
+    // Compacted edge list (recreated on resize alongside the visibility/coarse targets, so the SW shadow binding-set
     // rebuild that already triggers on the visibility-pointer change re-binds it). Each record is NWB_SW_SHADOW_EDGE_RECORD_WORDS
     // u32. Lives on rayTracingState (a buffer, not a frame target) since it is shadow-subsystem scratch the lighting never samples.
-    // SIZING: capacity = one record per full-res PIXEL, but mode 6 appends one record per (pixel, active shadow slot) edge, so the
+    // SIZING: capacity = one record per full-res pixel, but the classify pass appends one record per (pixel, active shadow slot) edge, so the
     // TIGHT worst-case demand is width*height*activeShadowSlots (slots capped at NWB_SCENE_SHADOW_SLOT_COUNT=8). One-per-pixel is
     // deliberately NOT that bound: at the measured ~3% edge fraction the demand is ~0.03*slots per pixel, so width*height is 4-16x
     // the realistic worst case even with many lights -- and provisioning the 8x tight bound would burn ~73MB of 96%-empty scratch.
     // Overflow (a pathological all-edge multi-slot frame) is SAFE, not corrupt: the append still increments the counter but the
-    // indexed list write is guarded by edgeCapacity, mode 7 clamps the trace count to it, and mode 8's tail guard reads only
-    // in-range records -- so overflowed edges simply take mode 6's bilinear-interpolated fallback (Stage-1 quality), no OOB/UB.
+    // indexed list write is guarded by edgeCapacity, the build-args pass clamps the trace count to it, and the indirect
+    // pass's tail guard reads only in-range records -- so overflowed edges take the bilinear-interpolated fallback.
     const u32 edgeListCapacityRecords = targets.width * targets.height;
     Core::BufferDesc edgeListDesc;
     edgeListDesc
@@ -1702,10 +1700,8 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     shadowState.setPipeline(rayTracingState().m_shadowPipeline.get());
     shadowState.addBindingSet(rayTracingState().m_shadowBindingSet.get());
     commandList.setComputeState(shadowState);
-    // Soft directional cone-jitter: advance the per-frame seed once here (the HW opaque trace is the primary shadow
-    // producer on the HW path, mutually exclusive with the no-RT software traversal per frame). A soft directional
-    // (angular-radius > 0) light softens this full-res HW opaque trace directly; a zero-radius directional / point /
-    // spot light cone-jitters to the axis exactly -> the unchanged hard shadow.
+    // Soft shadow cone-jitter: advance the per-frame seed once here. A soft light samples inside its source cone; a
+    // zero-radius light jitters to the axis exactly and keeps the hard-shadow result.
     ShadowRqPushConstants shadowPush;
     shadowPush.frameIndex = rayTracingState().m_softShadowFrameIndex++;
     commandList.setPushConstants(&shadowPush, sizeof(shadowPush));
@@ -1744,8 +1740,8 @@ void RendererRayTracingSystem::clearCausticTargets(Core::CommandList& commandLis
     // The accumulator is the R32_UINT fixed-point splat target (one Texture2DArray layer per RGB channel). When the
     // splat-space temporal EMA is ENABLED (NWB_CAUSTIC_TEMPORAL_DECAY > 0) it must PERSIST across frames -- the producer
     // decays it in place instead of clearing (prepareCausticAccumulatorForSplat) -- so it is NOT cleared here. When
-    // temporal is DISABLED it is a per-frame target, cleared to 0 here exactly as before. (The a-trous scratch
-    // causticHistory needs no clear either way -- every wavelet pass fully overwrites it.)
+    // temporal is disabled it is a per-frame target and is cleared to 0 here. The a-trous scratch causticHistory needs no
+    // clear either way because every wavelet pass fully overwrites it.
     if(causticTemporalDecay() <= 0.f){
         commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::CopyDest);
         commandList.commitBarriers();
@@ -1930,9 +1926,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     commandList.setResourceStatesForBindingSet(rayTracingState().m_swShadowBindingSet.get());
     commandList.commitBarriers();
 
-    // Each pass now has its OWN pipeline (the multiplyMode monolith is retired) but shares the one binding set. This
-    // builds the per-pass ComputeState right before its dispatch -- the only mechanical change from the old single
-    // setComputeState(computeState); the barrier sequence, grids, and push values are unchanged.
+    // Each pass has its own pipeline but shares the one binding set, so build the ComputeState right before dispatch.
     const auto passState = [&](const Core::ComputePipelineHandle& pipeline){
         Core::ComputeState state;
         state.setPipeline(pipeline.get());
@@ -1948,22 +1942,17 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     const u32 coarseGroupsX = DivideUp(coarseWidth, groupSize);
     const u32 coarseGroupsY = DivideUp(coarseHeight, groupSize);
 
-    // Stage 5: set true once the soft COLORED TRANSPARENT fold has folded its denoised colored transmittance onto the soft-
-    // opaque visibility for the soft slots (the no-multiply/software-primary path only). When true, the OLD transparent
-    // coarse/adaptive/uniform multiply below is SKIPPED for those slots so the colored shadow is never double-folded. Since
-    // every shadow slot is soft, this is all-or-nothing per frame; a non-soft frame leaves it false and the old path runs.
+    // Set true once the soft colored-transparent fold has multiplied its denoised transmittance onto the soft-opaque
+    // visibility. The transparent coarse/adaptive/uniform fallback below is skipped so the colored shadow is not folded
+    // twice.
     bool softTransparentRan = false;
 
-    // No-RayQuery software path: there is no HW opaque mask, so first write the full-res OPAQUE binary mask ourselves
-    // (mode 3, opaque occluders only), then the transparent pass folds its colored shadow onto it -- exactly mirroring
-    // the hybrid path (HW opaque mask + transparent), so the software fallback gets the same hard-opaque/soft-transparent
-    // split while its hard opaque shadows stay full-res sharp.
+    // No-RayQuery software path: there is no HW opaque mask, so first write the full-res OPAQUE binary mask, then fold the
+    // transparent colored shadow onto it. This mirrors the hybrid path (HW opaque mask + transparent) while keeping hard
+    // opaque shadows full-res sharp.
     if(!multiplyOntoOpaque){
-        // Full-res OPAQUE binary blocker (opaque prepass) into EVERY slot -- the SW-path baseline mask. When the soft
-        // pipeline is ready (the shipping case) the soft opaque pass below OVERWRITES every soft slot, so this is the
-        // fallback that keeps the SW path producing a valid opaque shadow if the soft resources failed to build. (Stage 6
-        // retired the adaptive-opaque coarse/edge-refine economizer: soft opaque overwrote its output, so it was pure dead
-        // work here; the full-res prepass is the simpler, exact baseline.)
+        // Full-res OPAQUE binary blocker (opaque prepass) into every slot. When the soft pipeline is ready, the soft
+        // opaque pass below overwrites every soft slot; otherwise this remains the valid SW-path baseline mask.
         SwShadowOpaquePrepassPushConstants opaquePush;
         opaquePush.width = targets.width;
         opaquePush.height = targets.height;
@@ -1974,8 +1963,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
 
         // Sync before the transparent pass. The opaque mask (the prepass wrote shadowVisibility) -> the transparent pass
         // reads+multiplies it: a write->read/write hazard the visibility UAV barrier covers, so it stays UnorderedAccess.
-        // The mode-4 transparent coarse WRITES the coarse buffer next, so stage it ShaderResource here -> mode 4's
-        // setComputeState emits the ShaderResource->UnorderedAccess barrier ordering it. (The prepass never touched it.)
+        // The transparent coarse pass writes the coarse buffer next, so stage it as ShaderResource here; setComputeState
+        // emits the ShaderResource->UnorderedAccess barrier that orders it. The prepass never touched it.
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();
@@ -2119,12 +2108,11 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             // The opaque resolve left the visibility in UnorderedAccess (its final UPSAMPLE UAV write) + soft scratch in
             // whatever the last pass set.
 
-            // ---- Stage 5: soft COLORED TRANSPARENT shadow, FOLD-MULTIPLIED onto the (now soft-opaque) visibility ----
-            // A PARALLEL colored pipeline, separately traced + temporally denoised + RGB a-trous'd, folded (multiplied) onto
-            // the opaque visibility ONLY here at the final upsample -- so visibility = opaqueSoftUpsampled * transparentSoft
-            // Upsampled, both independently denoised (opaque binary Bernoulli vs colored chord-variance RGB have different
-            // noise stats). When it runs it REPLACES the old transparent coarse/adaptive multiply for these soft slots
-            // (softTransparentRan gates the old path off below), so the colored shadow is NEVER double-folded.
+            // ---- Soft COLORED TRANSPARENT shadow, FOLD-MULTIPLIED onto the soft-opaque visibility ----
+            // A parallel colored pipeline, separately traced + temporally denoised + RGB a-trous'd, folded (multiplied) onto
+            // the opaque visibility only at the final upsample: visibility = opaqueSoftUpsampled * transparentSoftUpsampled.
+            // The opaque binary Bernoulli signal and colored chord-variance RGB signal have different noise stats, so they
+            // are denoised independently.
             if(rayTracingState().m_softTransparentReady){
                 // (a) UAV barrier: the opaque UPSAMPLE's visibility WRITES must be ordered before the transparent UPSAMPLE's
                 // read-modify-write READS the same image (a WAW/RAW hazard on shadowVisibility). The visibility UAV barrier
@@ -2215,8 +2203,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
                     dispatchSoftShadowResolve(commandList, targets, slot, transparentDispatch);
                 }
 
-                // The soft transparent fold ran for all soft slots this frame -> the OLD transparent coarse/adaptive/uniform
-                // multiply is skipped below (anti-double-fold). Since every shadow slot is soft, this is all-or-nothing.
+                // The soft transparent fold ran for all soft slots this frame; skip the transparent fallback below.
                 softTransparentRan = true;
             }
 
@@ -2228,15 +2215,12 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         }
     }
 
-    // OLD transparent colored-shadow path (the HARD-ish coarse/adaptive/uniform multiply). SKIPPED for soft slots when the
-    // Stage-5 soft transparent fold ran (softTransparentRan) -- the two are EXCLUSIVE per slot so the colored shadow is
-    // never double-folded. Since every shadow slot is soft (Stage 2+), softTransparentRan is all-or-nothing; a non-soft
-    // frame (or the hybrid HW path, where soft opaque never runs) leaves it false and this path runs exactly as before.
+    // Transparent colored-shadow fallback (coarse/adaptive/uniform multiply). Skipped when the soft transparent fold ran;
+    // the two paths are exclusive per slot so the colored shadow is never double-folded.
     if(!softTransparentRan && rayTracingState().m_swShadowAdaptiveEnabled){
-        // Stage-2/3 ADAPTIVE transparent shadow. Shared base: the mode-4 coarse (half-res) trace. The resolve is then
-        // either Stage-2's in-place conditional re-trace (mode 5) or, when NWB_SW_SHADOW_COMPACT is set, Stage-3's
-        // compacted-indirect path (mode 6 classify+append -> mode 7 build-args -> mode 8 DispatchIndirect trace), which
-        // launches ONLY the edge rays as coherent waves instead of a full-res grid that diverges on the ~3% edge lanes.
+        // Adaptive transparent shadow. Shared base: the coarse trace. The resolve is either an in-place conditional
+        // re-trace or, when compacted mode is enabled, classify+append -> build-args -> DispatchIndirect trace. The
+        // compacted path launches only edge rays as coherent waves instead of a full-res grid that diverges on edge lanes.
         // Edge-fraction instrumentation rides a slow cadence: snapshot the GPU counter every s_SwShadowEdgeStatsPeriod
         // ticks and read it back s_SwShadowEdgeStatsLogDelay ticks later (by then GPU-complete, so the map never stalls).
         const bool compact = rayTracingState().m_swShadowCompactEnabled;
@@ -2270,8 +2254,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         commandList.commitBarriers();
 
         if(compact){
-            // Stage-3 COMPACTED resolve. Reset the per-frame append counter (the list needs no clear -- mode 8 reads only
-            // indices < the clamped count, all written this frame) and stage the compaction buffers writable.
+            // Compacted resolve. Reset the per-frame append counter; the list needs no clear because the indirect trace
+            // reads only indices below the clamped count, all written this frame. Stage the compaction buffers writable.
             commandList.setEnableUavBarriersForBuffer(rayTracingState().m_swShadowEdgeCounterBuffer.get(), true);
             commandList.setEnableUavBarriersForBuffer(rayTracingState().m_swShadowEdgeListBuffer.get(), true);
             commandList.clearBufferUInt(rayTracingState().m_swShadowEdgeCounterBuffer.get(), 0u);
@@ -2295,14 +2279,14 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.setPushConstants(&classifyPush, sizeof(classifyPush));
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
 
-            // Sync the append counter + edge list (producer mode 6 -> consumers mode 7/8) and the visibility WAW (mode 6's
-            // interior/overflow writes -> mode 8's edge overwrites). UAV barriers are enabled on all three.
+            // Sync the append counter + edge list (classify producer -> buildargs/indirect consumers) and the visibility
+            // WAW (interior/overflow writes -> indirect edge overwrites). UAV barriers are enabled on all three.
             commandList.setBufferState(rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setBufferState(rayTracingState().m_swShadowEdgeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
-            // Build args (Stage-3): 1 thread builds DispatchIndirectArguments{ceil(count/64),1,1} from the clamped append count.
+            // Build args: 1 thread builds DispatchIndirectArguments{ceil(count/64),1,1} from the clamped append count.
             SwShadowTransparentBuildArgsPushConstants argsPush;
             argsPush.traceGroupSize = static_cast<u32>(NWB_SW_SHADOW_TRACE_GROUP);
             argsPush.edgeCapacity = rayTracingState().m_swShadowEdgeListCapacity;
@@ -2310,13 +2294,13 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.setPushConstants(&argsPush, sizeof(argsPush));
             commandList.dispatch(1u, 1u, 1u);
 
-            // Sync mode-7's args write before the indirect consume, and keep the list/counter readable by mode 8.
+            // Sync the args write before the indirect consume, and keep the list/counter readable by the indirect trace.
             commandList.setBufferState(rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setBufferState(rayTracingState().m_swShadowEdgeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
-            // Indirect trace (Stage-3): DispatchIndirect over the compacted edge records -- one ray per thread, all real
-            // edge rays. Its ComputeState carries the indirect-args buffer; setComputeState auto-transitions it
+            // Indirect trace: DispatchIndirect over the compacted edge records, one ray per thread. Its ComputeState
+            // carries the indirect-args buffer; setComputeState auto-transitions it
             // UnorderedAccess->IndirectArgument.
             SwShadowTransparentIndirectPushConstants tracePush;
             tracePush.width = targets.width;
@@ -2377,9 +2361,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         }
     }
     else if(!softTransparentRan){
-        // Non-adaptive baseline: uniform transparent multiply at HALF resolution -- one trace per 2x2 block folded onto
-        // each full-res pixel's own opaque mask. Kept for A/B comparison against the adaptive path. Dispatched at the
-        // COARSE grid, exactly as before (the kernel's LITERAL *2u half-res fold is preserved -- see the shader).
+        // Non-adaptive baseline: uniform transparent multiply at HALF resolution, one trace per 2x2 block folded onto
+        // each full-res pixel's own opaque mask. Kept for comparison against the adaptive path.
         SwShadowTransparentUniformPushConstants pushConstants;
         pushConstants.width = targets.width;
         pushConstants.height = targets.height;
@@ -2640,8 +2623,8 @@ void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayou
     layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INSTANCES, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_POSITIONS, NWB_SHADOW_RT_MAX_MESHES));
-    // Soft directional cone-jitter: the frame counter (NwbShadowRqPushConstants) seeding the per-pixel low-discrepancy
-    // jitter sample so a soft directional (angular-radius > 0) light softens this HW opaque trace.
+    // Soft shadow cone-jitter: the frame counter (NwbShadowRqPushConstants) seeds the per-pixel low-discrepancy jitter
+    // sample for soft-light opaque traces.
     layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowRqPushConstants)));
 }
 
@@ -2838,19 +2821,18 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MESH_INSTANCES, 1));
         // Stage-2 adaptive transparent shadow: the half-res coarse transmittance scratch (written by the coarse trace,
         // UAV-read by the resolve) + the edge-fraction stats counter. Always present in the layout (the shader always
-        // declares them); the env config only chooses which mode is dispatched and whether the counter is tallied.
+        // declares them); renderer state chooses which pass is dispatched and whether the counter is tallied.
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_COARSE, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_STATS, 1));
-        // Stage-3 compaction UAVs: the edge append counter, the compacted edge-record list, and the indirect dispatch-args
-        // buffer. Always present in the layout (the shader always declares them); the COMPACT env only selects whether the
-        // mode-6/7/8 compacted path runs or the mode-5 adaptive path does.
+        // Compaction UAVs: the edge append counter, the compacted edge-record list, and the indirect dispatch-args buffer.
+        // Always present in the layout; renderer state selects compacted-indirect or coarse/adaptive resolve.
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_COUNTER, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_LIST, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_INDIRECT_ARGS, 1));
-        // Soft directional shadow (Stage 1): the half-res soft directional visibility UAV the mode-11 jittered trace
-        // writes (read by the separate shadow_resolve pipeline). Always in the layout (the shader always declares it).
+        // Soft opaque shadow: the half-res soft visibility UAV the jittered trace writes (read by the separate
+        // shadow_resolve pipeline). Always in the layout.
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_SOFT_HALF, 1));
-        // Soft COLORED TRANSPARENT shadow (Stage 5): the half-res colored soft transmittance UAV the soft transparent trace
+        // Soft COLORED TRANSPARENT shadow: the half-res colored soft transmittance UAV the soft transparent trace
         // writes (read by the SEPARATE RGB shadow_resolve pipeline). Always in the layout -- only the soft transparent trace
         // kernel declares/writes it; the other passes leave it inert. Recreated with the visibility target on resize.
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF, 1));
@@ -2900,7 +2882,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         }
 
         // Stage-3 compaction: the persistent per-frame append counter (2 u32) + the indirect dispatch-args buffer (3 u32,
-        // created BOTH UAV-writable -- mode 7 writes it -- AND isDrawIndirectArgs so dispatchIndirect's validateIndirectBuffer
+        // created BOTH UAV-writable -- build-args writes it -- AND isDrawIndirectArgs so dispatchIndirect's validateIndirectBuffer
         // accepts it). The variable-size edge list is allocated per-resolution in createShadowVisibilityTarget.
         Core::BufferDesc edgeCounterDesc;
         edgeCounterDesc
@@ -2934,10 +2916,9 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         }
     }
 
-    // One NAMED pipeline per pass, all against the shared layout. Each pass's kernel references only its own subset of
-    // the slot map, so the shared binding set drives them identically; the dispatch selects the pass pipeline the same
-    // env-gated way the monolith selected multiplyMode. Any single failure fails the whole ensure (the frame's SW shadow
-    // backend is not ready), matching the old single-pipeline behavior.
+    // One named pipeline per pass, all against the shared layout. Each pass's kernel references only its own subset of
+    // the slot map, so the shared binding set drives them identically. Any single failure fails the whole ensure, leaving
+    // the frame's SW shadow backend not ready.
     const bool passesReady =
         ensureSwShadowPassPipeline(rayTracingState().m_swShadowOpaquePrepassShader, rayTracingState().m_swShadowOpaquePrepassPipeline, AssetsGraphicsShadow::s_SwOpaquePrepassShaderName, "ECSRender_SwShadowOpaquePrepass")
         && ensureSwShadowPassPipeline(rayTracingState().m_swShadowSoftOpaqueShader, rayTracingState().m_swShadowSoftOpaquePipeline, AssetsGraphicsShadow::s_SwSoftOpaqueShaderName, "ECSRender_SwShadowSoftOpaque")
@@ -3085,8 +3066,8 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_COUNTER, rayTracingState().m_swShadowEdgeCounterBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_LIST, rayTracingState().m_swShadowEdgeListBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_INDIRECT_ARGS, rayTracingState().m_swShadowIndirectArgsBuffer.get()));
-    // Soft directional shadow (Stage 1): the half-res soft directional visibility UAV (recreated with the visibility
-    // target on resize, so tracking the visibility pointer in the rebuild guard also covers it).
+    // Soft opaque shadow: the half-res soft visibility UAV (recreated with the visibility target on resize, so tracking
+    // the visibility pointer in the rebuild guard also covers it).
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
         NWB_SW_SHADOW_BINDING_SOFT_HALF,
         targets.shadowSoftHalfA.get(),
@@ -3094,7 +3075,7 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
         ECSRenderDetail::s_ShadowVisibilitySubresources,
         Core::TextureDimension::Texture2DArray
     ));
-    // Soft COLORED TRANSPARENT shadow (Stage 5): the half-res colored soft transmittance UAV (recreated with the visibility
+    // Soft COLORED TRANSPARENT shadow: the half-res colored soft transmittance UAV (recreated with the visibility
     // target on resize, so the tracked visibility-pointer rebuild guard also covers it).
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
         NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF,
@@ -3732,7 +3713,7 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RESOLVE_BINDING_OUTPUT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_INPUT_COLOR, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RESOLVE_BINDING_VISIBILITY, 1));
-        // Stage 4: the SVGF temporal moments SRV (variance-coupled a-trous) + the full-res world-pos/normal SRVs and the
+        // The SVGF temporal moments SRV (variance-coupled a-trous) + the full-res world-pos/normal SRVs and the
         // scene-shading CB (full-res-guided upsample). The moments SRV is a dummy on the non-temporal path (see dispatch).
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_MOMENTS, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_GBUFFER_WORLDPOS, 1));
@@ -3774,7 +3755,7 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
 }
 
 bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
-    // Stage 5: the RGB variant of the soft-shadow a-trous resolve -- the SAME shadow_resolve source cooked with
+    // RGB variant of the soft-shadow a-trous resolve: the SAME shadow_resolve source cooked with
     // NWB_SHADOW_RESOLVE_CHANNELS=3 (via the shadow_resolve_rgb_cs wrapper). It shares the resolve BINDING LAYOUT (the
     // bindings are identical; only the wavelet channel count + a runtime fold flag differ), created by
     // ensureSoftShadowResolvePipeline -- always called first (m_softTransparentReady is gated on m_softShadowReady), so the
@@ -3838,7 +3819,7 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
     // hist role points at rebuilds the sets (mirrors the base tracked-pointer rebuild).
     Core::Texture* histATarget = targets.shadowHistA.get();
     Core::Texture* histBTarget = targets.shadowHistB.get();
-    // Stage 4: the SVGF moments buffers (bound as the MOMENTS SRV on the matching temporal set; a dummy on the others),
+    // SVGF moments buffers (bound as the MOMENTS SRV on the matching temporal set; a dummy on the others),
     // plus the full-res world-position + normal G-buffers the guided upsample reads. All tracked for the resize rebuild.
     Core::Texture* momentsATarget = targets.shadowMomentsA.get();
     Core::Texture* momentsBTarget = targets.shadowMomentsB.get();
@@ -3866,7 +3847,7 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
 
     auto* device = graphics().getDevice();
 
-    // SOFT_HALF is the mode-11 trace target (soft-A), read ONLY by the PREPARE stage (which runs on the OutputHalfB
+    // SOFT_HALF is the soft trace target (soft-A), read only by the PREPARE stage (which runs on the OutputHalfB
     // set). The three sets differ in the (SOFT_HALF, OUTPUT, INPUT_COLOR) triple, chosen so NO set ever binds the same
     // texture as both an SRV and a UAV (which the resource-state framework cannot resolve to one state):
     //  - OutputHalfB: softHalf=soft-A, out=soft-B, in=soft-A -- PREPARE (copies soft-A -> soft-B) + the even wavelets.
@@ -4005,7 +3986,7 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
 }
 
 bool RendererRayTracingSystem::ensureSoftTransparentResolveBindingSet(DeferredFrameTargets& targets){
-    // Stage 5: the PARALLEL transparent resolve binding sets (mirror of ensureSoftShadowResolveBindingSet, over the colored
+    // Parallel transparent resolve binding sets (mirror of ensureSoftShadowResolveBindingSet, over the colored
     // buffers). They share the resolve BINDING LAYOUT + the SAME half-res ping-pong SCRATCH (soft-A/soft-B) + the SAME
     // full-res shadowVisibility as the opaque resolve; only the (SOFT_HALF, INPUT-history, MOMENTS) sources differ:
     //  - the RAW colored trace lives in transparentSoftHalf (NOT soft-A), so PREPARE reads it as SOFT_HALF into soft-B.
@@ -4196,7 +4177,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     // TRANSPARENT resolve (RGB pipeline, its own base sets over transparentSoftHalf/transparentHist, Multiply fold). The
     // ping-pong SCRATCH (the outputHalfA/B sets' OUTPUT + INPUT) is the SAME half-res soft-A/soft-B for both, dispatched
     // strictly sequentially (opaque resolve fully done, then transparent), so they never race on the scratch.
-    // TEMPORAL (Stage 3): when the merge ran, dispatch.prepareOverride is the temporal SOFT_HALF variant whose PREPARE reads
+    // TEMPORAL: when the merge ran, dispatch.prepareOverride is the temporal SOFT_HALF variant whose PREPARE reads
     // the ACCUMULATED history instead of the raw trace; it still writes soft-B, so the wavelet + upsample chain is identical.
     // prepareOverride == nullptr (temporal off / first frame) keeps the raw-trace PREPARE AND drives momentsValid=0.
     const u32 halfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -4444,7 +4425,7 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergeBindingSet(DeferredFram
 }
 
 bool RendererRayTracingSystem::ensureShadowTransparentReprojectMergeBindingSet(DeferredFrameTargets& targets){
-    // Stage 5: the two front/back TRANSPARENT reproject-merge binding sets (mirror of ensureShadowReprojectMergeBindingSet,
+    // The two front/back TRANSPARENT reproject-merge binding sets (mirror of ensureShadowReprojectMergeBindingSet,
     // over the colored buffers). They drive the SAME m_shadowReprojectMergePipeline (the merge shader is fully RGB-safe and
     // reused verbatim); only the SOFT_TRACE / HISTORY / MOMENTS sources are the transparent buffers. The GEOMETRY_CURR/PREV
     // caches + the full-res world-position are SHARED with the opaque merge (same receivers), so this frame's transparent
@@ -4607,8 +4588,7 @@ void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTarget
 
 f32 RendererRayTracingSystem::causticTemporalDecay(){
     // Splat-space temporal EMA decay factor: 0.85 = a moderate ~6-7 frame time constant that de-sparkles a spinning
-    // refractor while still following its motion (a fixed value on the renderer state, clamped to [0,1) at its default so
-    // the EMA can never diverge). Was an env A/B knob; removed under the no-engine-env policy -- tuning belongs in tests.
+    // refractor while still following its motion. The renderer-state value is clamped to [0,1), so the EMA cannot diverge.
     return rayTracingState().m_causticTemporalDecay;
 }
 

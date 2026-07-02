@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Soft OPAQUE shadow TEMPORAL reproject-merge (Stage 3 of the soft-ray-traced-shadow feature): the pass inserted BETWEEN
+// Soft OPAQUE shadow TEMPORAL reproject-merge: the pass inserted BETWEEN
 // the half-res soft trace + the a-trous resolve, per shadow slot, that accumulates the noisy per-frame trace over time so
 // the per-frame samples-per-pixel can drop toward 1 while STATIC receivers still converge smooth -- and a MOVING/spinning
 // occluder leaves NO ghost trail. There are NO motion vectors and NO prev-G-buffer in this engine (the view is rebuilt
@@ -21,8 +21,8 @@
 // visibility (the a-trous then reads THIS instead of the raw trace, and it becomes next frame's history) + the next moments.
 #define NWB_SHADOW_REPROJECT_MERGE_SET 0
 
-// SRV: the raw half-res trace this frame (shadowSoftHalfA, the mode-11/soft trace output) -- the "current" sample the
-// blend leans on. Texture2DArray, one layer per shadow slot.
+// SRV: the raw half-res trace this frame -- the "current" sample the blend leans on. Texture2DArray, one layer per
+// shadow slot.
 #define NWB_SHADOW_REPROJECT_MERGE_BINDING_SOFT_TRACE       0
 // SRV: the PREVIOUS frame's accumulated visibility (the history buffer), Texture2DArray. Reprojected + gated + blended.
 #define NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_IN       1

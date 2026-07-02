@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// RGB variant of the soft-shadow a-trous resolve (Stage 5). The a-trous wavelet in shadow_resolve_cs.slang is
+// RGB variant of the soft-shadow a-trous resolve. The a-trous wavelet in shadow_resolve_cs.slang is
 // channel-count-parameterized by NWB_SHADOW_RESOLVE_CHANNELS: the default (scalar, =1) denoises the grayscale soft OPAQUE
 // visibility; this wrapper compiles the SAME source with =3 so the wavelet denoises the COLORED soft TRANSPARENT
 // transmittance (the value/luminance edge-stop uses the luma of the RGB delta). One-file-per-pipeline convention (matching

@@ -9,22 +9,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Soft directional shadow RESOLVE (Stage 1 of the soft-ray-traced-shadow feature): the SPATIAL denoise + upsample of
-// the half-res single-sample jittered directional visibility the SW traversal's mode-11 trace produced. Cloned from
-// the caustic resolve (an edge-avoiding a-trous wavelet run at half-res as N ping-pong compute passes, bracketed by a
-// geometry downsample pre-pass + a bilateral upsample), with three signal changes for shadow:
-//  - the signal is a per-slot 0..1 VISIBILITY (later colored transparent), NOT irradiance, so ALL the caustic photon-
+// Soft shadow RESOLVE: the spatial denoise + upsample of the half-res jittered visibility produced by the soft trace.
+// It runs an edge-avoiding a-trous wavelet at half-res as N ping-pong compute passes, bracketed by a geometry downsample
+// pre-pass + a bilateral upsample. Shadow-specific signal rules:
+//  - the signal is a per-slot 0..1 VISIBILITY / colored transmittance, NOT irradiance, so ALL the caustic photon-
 //    density / area-Jacobian / exposure math is dropped: the PREPARE pass just copies the half-res traced visibility.
 //  - the MULTIPLICATIVE IDENTITY is 1.0 (fully LIT): background/invalid taps and the all-taps-rejected sentinel write
 //    1.0, never the caustic 0.0 (which is the ADDITIVE identity -- writing 0.0 here would leak black shadow).
 //  - the edge-stop adds a NORMAL term (dot of packed geometry normals) alongside the world-distance term, so the
 //    penumbra never smooths across a surface-orientation crease the way a flat caustic on one receiver could.
-// Per-slot: the half-res visibility is a Texture2DArray (one layer per shadow slot); the resolve processes a RANGE of
-// active directional-light slots [lightSlotStart, lightSlotStart+lightSlotCount) carried in the push constants, so a
-// scene with several directional lights denoises each layer in one dispatch loop.
+// Per-slot: the half-res visibility is a Texture2DArray (one layer per shadow slot); the resolve processes a range of
+// active shadow slots [lightSlotStart, lightSlotStart+lightSlotCount) carried in the push constants.
 #define NWB_SHADOW_RESOLVE_SET 0
 
-// The half-res soft directional visibility Texture2DArray (one layer per shadow slot). SRV role: read by PREPARE
+// The half-res soft visibility Texture2DArray (one layer per shadow slot). SRV role: read by PREPARE
 // (copy) + WAVELET (the previous pass's color, via the ping-pong -- see below). The FINAL upsample reads it too.
 #define NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF 0
 // Half-res GEOMETRY CACHE SRV, produced once by the shadow geometry downsample pre-pass. RGBA16F packs the FOUR
@@ -81,7 +79,7 @@
 // 8x8 = 64 threads per group (one thread per pixel), matching the caustic resolve + the SW traversal.
 #define NWB_SHADOW_RESOLVE_GROUP_SIZE 8
 
-// A-trous wavelet channel count (Stage 5). The resolve source (shadow_resolve_cs.slang) parameterizes ONLY its wavelet
+// A-trous wavelet channel count. The resolve source (shadow_resolve_cs.slang) parameterizes ONLY its wavelet
 // accumulator + tap read/write by this: 1 = SCALAR (the soft OPAQUE grayscale visibility -- the default; keeps 1x ALU +
 // 1x LDS on the common path), 3 = RGB (the soft COLORED TRANSPARENT transmittance -- denoises color, the value edge-stop
 // uses the LUMA of the RGB delta). ONE source, TWO cooked pipelines (shadow_resolve_cs = scalar default, shadow_resolve_

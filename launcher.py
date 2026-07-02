@@ -6,8 +6,10 @@ import platform
 import re
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -17,18 +19,14 @@ CONFIGURATIONS = ("dbg", "opt", "fin")
 DEFAULT_ARCH = "x64"
 DEFAULT_CONFIG = "dbg"
 DEFAULT_DOMAIN = "full"
-
-
-@dataclass(frozen=True)
-class SmokeExecutable:
-    target: str
-    executable: str
-
-
-@dataclass(frozen=True)
-class SmokeScene:
-    runtime: str
-    backends: Dict[str, SmokeExecutable]
+SMOKE_SCRIPT = Path("tests") / "smoke" / "launcher.py"
+PROFILE_LOGSERVER_TARGET = "nwb_logserver"
+PROFILE_LOGSERVER_EXECUTABLE = "logserver"
+PROFILE_LOG_ADDRESS = "http://localhost"
+PROFILE_LOGSERVER_TIMEOUT_SECONDS = 10.0
+PROFILE_REQUIRED_DEFINES = {
+    "NWB_BUILD_LOGSERVER": "ON",
+}
 
 
 @dataclass(frozen=True)
@@ -50,95 +48,11 @@ class CMakeTargetInfo:
     artifacts: Tuple[Path, ...]
 
 
-SMOKE_REQUIRED_DEFINES = {
-    "NWB_BUILD_TESTS": "ON",
-}
-
-
-SMOKE_SCENES = {
-    "transparent-multi": SmokeScene(
-        runtime="smoke_runtime",
-        backends={
-            "hw": SmokeExecutable("nwb_transparent_multi_smoke", "transparent_multi_smoke"),
-            "sw": SmokeExecutable("nwb_transparent_multi_sw_smoke", "transparent_multi_sw_smoke"),
-        },
-    ),
-    "transparent-csg": SmokeScene(
-        runtime="smoke_runtime",
-        backends={
-            "hw": SmokeExecutable("nwb_transparent_csg_smoke", "transparent_csg_smoke"),
-        },
-    ),
-    "caustic-sphere": SmokeScene(
-        runtime="smoke_runtime",
-        backends={
-            "hw": SmokeExecutable("nwb_caustic_sphere_smoke", "caustic_sphere_smoke"),
-            "sw": SmokeExecutable("nwb_caustic_sphere_sw_smoke", "caustic_sphere_sw_smoke"),
-        },
-    ),
-    "csg-visible": SmokeScene(
-        runtime="csg_visible_smoke_runtime",
-        backends={
-            "hw": SmokeExecutable("nwb_csg_visible_smoke", "csg_visible_smoke"),
-            "compute": SmokeExecutable("nwb_csg_visible_compute_emulation_smoke", "csg_visible_compute_emulation_smoke"),
-        },
-    ),
-    "csg-skinned-visible": SmokeScene(
-        runtime="csg_skinned_visible_smoke_runtime",
-        backends={
-            "hw": SmokeExecutable("nwb_csg_skinned_visible_smoke", "csg_skinned_visible_smoke"),
-        },
-    ),
-    "csg-skinned-sphere-visible": SmokeScene(
-        runtime="csg_skinned_visible_smoke_runtime",
-        backends={
-            "hw": SmokeExecutable("nwb_csg_skinned_sphere_visible_smoke", "csg_skinned_sphere_visible_smoke"),
-        },
-    ),
-    "csg-skinned-transparent-sphere-visible": SmokeScene(
-        runtime="csg_skinned_visible_smoke_runtime",
-        backends={
-            "hw": SmokeExecutable(
-                "nwb_csg_skinned_transparent_sphere_visible_smoke",
-                "csg_skinned_transparent_sphere_visible_smoke",
-            ),
-        },
-    ),
-    "skinning-culling-benchmark": SmokeScene(
-        runtime="skinning_culling_benchmark_runtime",
-        backends={
-            "hw": SmokeExecutable("nwb_skinning_culling_benchmark", "skinning_culling_benchmark"),
-        },
-    ),
-    "skinned-caustic": SmokeScene(
-        runtime="skinning_culling_benchmark_runtime",
-        backends={
-            "hw": SmokeExecutable("nwb_skinned_caustic_smoke", "skinned_caustic_smoke"),
-            "sw": SmokeExecutable("nwb_skinned_caustic_sw_smoke", "skinned_caustic_sw_smoke"),
-        },
-    ),
-    "stress-test": SmokeScene(
-        runtime="skinning_culling_benchmark_runtime",
-        backends={
-            "hw": SmokeExecutable("nwb_stress_test_smoke", "stress_test_smoke"),
-            "sw": SmokeExecutable("nwb_stress_test_sw_smoke", "stress_test_sw_smoke"),
-        },
-    ),
-    "flicker-test": SmokeScene(
-        runtime="skinning_culling_benchmark_runtime",
-        backends={
-            "hw": SmokeExecutable("nwb_flicker_test_smoke", "flicker_test_smoke"),
-            "sw": SmokeExecutable("nwb_flicker_test_sw_smoke", "flicker_test_sw_smoke"),
-        },
-    ),
-    "soft-shadow-test": SmokeScene(
-        runtime="skinning_culling_benchmark_runtime",
-        backends={
-            "hw": SmokeExecutable("nwb_soft_shadow_test_smoke", "soft_shadow_test_smoke"),
-            "sw": SmokeExecutable("nwb_soft_shadow_test_sw_smoke", "soft_shadow_test_sw_smoke"),
-        },
-    ),
-}
+@dataclass(frozen=True)
+class ProfileSession:
+    log_port: int
+    logserver_executable: Path
+    process: Optional[subprocess.Popen]
 
 
 def repo_root() -> Path:
@@ -295,6 +209,19 @@ def cache_matches_required_defines(build_dir: Path, required_defines: Dict[str, 
         elif cached_value != required_value:
             return False
     return True
+
+
+def merged_required_defines(*define_sets: Dict[str, str]) -> Dict[str, str]:
+    merged: Dict[str, str] = {}
+    for define_set in define_sets:
+        merged.update(define_set)
+    return merged
+
+
+def profile_required_defines(args) -> Dict[str, str]:
+    if not getattr(args, "with_profile", False):
+        return {}
+    return dict(PROFILE_REQUIRED_DEFINES)
 
 
 def file_api_query_path(build_dir: Path) -> Path:
@@ -470,6 +397,14 @@ def build_target(args, settings: LaunchSettings, target: str, env: Dict[str, str
     run_checked(command, settings.root, env, args.dry_run)
 
 
+def build_profile_targets(args, settings: LaunchSettings, env: Dict[str, str]) -> None:
+    if not getattr(args, "with_profile", False):
+        return
+    if args.profile_logserver_executable is not None:
+        return
+    build_target(args, settings, args.profile_logserver_target, env)
+
+
 def resolve_executable_path(
     settings: LaunchSettings,
     target: str,
@@ -503,15 +438,8 @@ def resolve_working_directory(settings: LaunchSettings, override: Optional[Path]
     return override if override.is_absolute() else settings.root / override
 
 
-def build_environment(args) -> Dict[str, str]:
-    env = os.environ.copy()
-    spin_angle = getattr(args, "spin_angle", None)
-    spin_speed = getattr(args, "spin_speed", None)
-    if spin_angle is not None:
-        env["NWB_TRANSPARENT_MULTI_SPIN_ANGLE"] = spin_angle
-    if spin_speed is not None:
-        env["NWB_TRANSPARENT_MULTI_SPIN_SPEED"] = spin_speed
-    return env
+def build_environment(_args) -> Dict[str, str]:
+    return os.environ.copy()
 
 
 def normalize_application_args(args: Sequence[str]) -> List[str]:
@@ -533,12 +461,131 @@ def stop_existing_process(executable: Path, platform_name: str) -> None:
     subprocess.run(["pkill", "-f", pattern], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def launch_process(args, executable: Path, working_directory: Path, env: Dict[str, str], application_args: Sequence[str]) -> int:
-    if not args.dry_run:
-        if not executable.exists():
-            raise SystemExit(f"missing executable: {executable}")
-        if not working_directory.exists():
-            raise SystemExit(f"missing working directory: {working_directory}")
+def validate_launch_paths(executable: Path, working_directory: Path, dry_run: bool) -> None:
+    if dry_run:
+        return
+    if not executable.exists():
+        raise SystemExit(f"missing executable: {executable}")
+    if not working_directory.exists():
+        raise SystemExit(f"missing working directory: {working_directory}")
+
+
+def terminate_process(process: Optional[subprocess.Popen], label: str, timeout_seconds: float = 5.0) -> None:
+    if process is None or process.poll() is not None:
+        return
+
+    print(f"stopping {label} pid={process.pid}", flush=True)
+    process.terminate()
+    try:
+        process.wait(timeout=timeout_seconds)
+        return
+    except subprocess.TimeoutExpired:
+        print(f"killing {label} pid={process.pid}", flush=True)
+        process.kill()
+        process.wait()
+
+
+def choose_free_tcp_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        return int(listener.getsockname()[1])
+
+
+def ensure_tcp_port_available(port: int) -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        try:
+            listener.bind(("127.0.0.1", port))
+        except OSError as exc:
+            raise SystemExit(f"profile log port {port} is not available: {exc}") from exc
+
+
+def resolve_profile_log_port(args) -> int:
+    port = int(args.profile_log_port)
+    if port < 0 or port > 65535:
+        raise SystemExit("--profile-log-port must be between 0 and 65535")
+    if port != 0:
+        if not args.dry_run:
+            ensure_tcp_port_available(port)
+        return port
+    if args.dry_run:
+        return 7117
+    return choose_free_tcp_port()
+
+
+def wait_for_tcp_port(port: int, timeout_seconds: float, process: Optional[subprocess.Popen]) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_error: Optional[OSError] = None
+    while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            raise SystemExit(f"logserver exited before port {port} became ready (exit {process.returncode})")
+
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.25):
+                return
+        except OSError as exc:
+            last_error = exc
+            time.sleep(0.05)
+
+    suffix = f": {last_error}" if last_error is not None else ""
+    raise SystemExit(f"logserver did not accept TCP connections on port {port} within {timeout_seconds:.1f}s{suffix}")
+
+
+def profile_client_args(args, profile_session: Optional[ProfileSession]) -> List[str]:
+    if profile_session is None:
+        return []
+    return ["-a", args.profile_log_address, "-p", str(profile_session.log_port)]
+
+
+def start_profile_session(
+    args,
+    settings: LaunchSettings,
+    working_directory: Path,
+    env: Dict[str, str],
+) -> Optional[ProfileSession]:
+    if not getattr(args, "with_profile", False):
+        return None
+
+    if args.profile_logserver_timeout <= 0.0:
+        raise SystemExit("--profile-logserver-timeout must be positive")
+
+    log_port = resolve_profile_log_port(args)
+    logserver_executable = resolve_executable_path(
+        settings,
+        args.profile_logserver_target,
+        args.profile_logserver_executable,
+        args.profile_logserver_name,
+        args.dry_run,
+    )
+    validate_launch_paths(logserver_executable, working_directory, args.dry_run)
+
+    command = [str(logserver_executable), "-p", str(log_port)] + list(args.profile_logserver_args)
+    print("+ " + format_command(command), flush=True)
+    print(f"  cwd: {working_directory}", flush=True)
+    if args.dry_run:
+        return ProfileSession(log_port, logserver_executable, None)
+
+    process = subprocess.Popen(command, cwd=working_directory, env=env)
+    print(f"launched {logserver_executable.name} pid={process.pid} port={log_port}", flush=True)
+    try:
+        wait_for_tcp_port(log_port, args.profile_logserver_timeout, process)
+    except BaseException:
+        terminate_process(process, "logserver")
+        raise
+
+    return ProfileSession(log_port, logserver_executable, process)
+
+
+def launch_process(
+    args,
+    executable: Path,
+    working_directory: Path,
+    env: Dict[str, str],
+    application_args: Sequence[str],
+    profile_session: Optional[ProfileSession] = None,
+    paths_validated: bool = False,
+) -> int:
+    if not paths_validated:
+        validate_launch_paths(executable, working_directory, args.dry_run)
 
     if args.kill_existing and not args.dry_run:
         stop_existing_process(executable, host_platform_name())
@@ -546,6 +593,7 @@ def launch_process(args, executable: Path, working_directory: Path, env: Dict[st
     launch = [str(executable)]
     if args.gpudbg:
         launch.append("--gpudbg")
+    launch += profile_client_args(args, profile_session)
     launch += list(application_args)
 
     print("+ " + format_command(launch), flush=True)
@@ -553,24 +601,50 @@ def launch_process(args, executable: Path, working_directory: Path, env: Dict[st
     if args.dry_run:
         return 0
 
-    process = subprocess.Popen(launch, cwd=working_directory, env=env)
-    print(f"launched {executable.name} pid={process.pid}", flush=True)
-    if args.detach:
-        return 0
-
+    process: Optional[subprocess.Popen] = None
     try:
+        process = subprocess.Popen(launch, cwd=working_directory, env=env)
+        print(f"launched {executable.name} pid={process.pid}", flush=True)
+        if args.detach:
+            return 0
+
         return process.wait()
     except KeyboardInterrupt:
-        print("leaving app running; close the window when done", flush=True)
+        if profile_session is not None and profile_session.process is not None:
+            print("leaving app and logserver running; close them when done", flush=True)
+        else:
+            print("leaving app running; close the window when done", flush=True)
         return 0
+    finally:
+        if (
+            profile_session is not None
+            and profile_session.process is not None
+            and not args.detach
+            and (process is None or process.poll() is not None)
+        ):
+            terminate_process(profile_session.process, "logserver")
+
+
+def launch_with_optional_profile(
+    args,
+    settings: LaunchSettings,
+    executable: Path,
+    working_directory: Path,
+    env: Dict[str, str],
+    application_args: Sequence[str],
+) -> int:
+    validate_launch_paths(executable, working_directory, args.dry_run)
+    profile_session = start_profile_session(args, settings, working_directory, env)
+    return launch_process(args, executable, working_directory, env, application_args, profile_session, paths_validated=True)
 
 
 def run_target_command(args) -> int:
     env = build_environment(args)
     settings = resolve_launch_settings(args, DEFAULT_DOMAIN)
-    maybe_configure(args, settings, {}, env)
+    maybe_configure(args, settings, profile_required_defines(args), env)
     settings = refresh_launch_settings(settings, args.domain)
     build_target(args, settings, args.target, env)
+    build_profile_targets(args, settings, env)
 
     executable = resolve_executable_path(settings, args.target, args.executable, args.executable_name, args.dry_run)
     working_directory = resolve_working_directory(
@@ -578,58 +652,49 @@ def run_target_command(args) -> int:
         args.working_directory,
         output_root(settings.root, settings.platform_name, settings.arch, settings.domain),
     )
-    return launch_process(args, executable, working_directory, env, normalize_application_args(args.application_args))
-
-
-def smoke_scene_name(args) -> str:
-    scene = args.scene_name or args.scene
-    if scene not in SMOKE_SCENES:
-        valid = ", ".join(sorted(SMOKE_SCENES))
-        raise SystemExit(f"unknown smoke scene '{scene}' (valid: {valid})")
-    return scene
-
-
-def smoke_command(args) -> int:
-    scene_name = smoke_scene_name(args)
-    scene = SMOKE_SCENES[scene_name]
-    if args.backend not in scene.backends:
-        valid = ", ".join(sorted(scene.backends))
-        raise SystemExit(f"scene '{scene_name}' does not have backend '{args.backend}' (valid: {valid})")
-
-    smoke_executable = scene.backends[args.backend]
-    env = build_environment(args)
-    settings = resolve_launch_settings(args, DEFAULT_DOMAIN)
-    maybe_configure(args, settings, SMOKE_REQUIRED_DEFINES, env)
-    settings = refresh_launch_settings(settings, args.domain)
-    build_target(args, settings, smoke_executable.target, env)
-
-    executable = resolve_executable_path(
+    return launch_with_optional_profile(
+        args,
         settings,
-        smoke_executable.target,
-        args.executable,
-        args.executable_name or smoke_executable.executable,
-        args.dry_run,
+        executable,
+        working_directory,
+        env,
+        normalize_application_args(args.application_args),
     )
-    working_directory = resolve_working_directory(
-        settings,
-        args.working_directory,
-        settings.build_dir / "Testing" / scene.runtime / settings.config,
-    )
-    return launch_process(args, executable, working_directory, env, normalize_application_args(args.application_args))
+
+
+def run_repo_script(script: Path, script_args: Sequence[str], echo: bool = True) -> int:
+    root = repo_root()
+    script_path = root / script
+    command = [sys.executable, str(script_path)] + list(script_args)
+    if echo:
+        print("+ " + format_command(command), flush=True)
+    return subprocess.run(command, cwd=root).returncode
+
+
+def is_help_request(args: Sequence[str]) -> bool:
+    for arg in args:
+        if arg == "--":
+            return False
+        if arg == "-h" or arg == "--help":
+            return True
+    return False
+
+
+def smoke_script_command(args) -> int:
+    forwarded_args = list(args.forwarded_args)
+    application_args = getattr(args, "application_args", [])
+    if application_args:
+        forwarded_args += ["--"] + list(application_args)
+    return run_repo_script(SMOKE_SCRIPT, forwarded_args, echo=not is_help_request(forwarded_args))
 
 
 def list_profiles_command(_args) -> int:
-    print("runnable targets:")
-    print("  run testbed")
-    print("  run nwb_resource_cooker")
-    print("  run nwb_fbx_to_nwb")
-    print()
-    print("smoke scenes:")
-    for name in sorted(SMOKE_SCENES):
-        scene = SMOKE_SCENES[name]
-        backends = ", ".join(sorted(scene.backends))
-        print(f"  smoke {name} --backend {{{backends}}}")
-    return 0
+    print("runnable targets:", flush=True)
+    print("  run testbed", flush=True)
+    print("  run nwb_resource_cooker", flush=True)
+    print("  run nwb_fbx_to_nwb", flush=True)
+    print("", flush=True)
+    return run_repo_script(SMOKE_SCRIPT, ["--profiles"], echo=False)
 
 
 def add_common_options(parser: argparse.ArgumentParser) -> None:
@@ -657,17 +722,46 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--gpudbg", action="store_true", help="Append --gpudbg to the launched application.")
     parser.add_argument("--kill-existing", action="store_true", help="Close any running executable with the same name before launch.")
     parser.add_argument("--detach", action="store_true", help="Return after launch instead of waiting for the app.")
-
-
-def add_smoke_options(parser: argparse.ArgumentParser, allow_positional_scene: bool) -> None:
-    if allow_positional_scene:
-        parser.add_argument("scene_name", nargs="?", help="Smoke scene name.")
-    else:
-        parser.set_defaults(scene_name=None)
-    parser.add_argument("--scene", choices=sorted(SMOKE_SCENES), default="transparent-multi")
-    parser.add_argument("--backend", default="hw", help="Backend variant for the scene, such as hw/sw/compute.")
-    parser.add_argument("--spin-angle", help="Pin NWB_TRANSPARENT_MULTI_SPIN_ANGLE, in radians.")
-    parser.add_argument("--spin-speed", help="Set NWB_TRANSPARENT_MULTI_SPIN_SPEED.")
+    parser.add_argument("--with-profile", action="store_true", help="Start nwb_logserver and connect the launched app to it.")
+    parser.add_argument(
+        "--profile-log-address",
+        default=PROFILE_LOG_ADDRESS,
+        help="Log address passed to the launched app when --with-profile is enabled.",
+    )
+    parser.add_argument(
+        "--profile-log-port",
+        type=int,
+        default=0,
+        help="Logserver port for --with-profile. Defaults to an available localhost port.",
+    )
+    parser.add_argument(
+        "--profile-logserver-target",
+        default=PROFILE_LOGSERVER_TARGET,
+        help="CMake target used for the profiling logserver.",
+    )
+    parser.add_argument(
+        "--profile-logserver-name",
+        default=PROFILE_LOGSERVER_EXECUTABLE,
+        help="Executable base name for the profiling logserver when CMake metadata is unavailable.",
+    )
+    parser.add_argument(
+        "--profile-logserver-executable",
+        type=Path,
+        help="Override logserver executable path for --with-profile.",
+    )
+    parser.add_argument(
+        "--profile-logserver-timeout",
+        type=float,
+        default=PROFILE_LOGSERVER_TIMEOUT_SECONDS,
+        help="Seconds to wait for the profiling logserver to accept connections.",
+    )
+    parser.add_argument(
+        "--profile-logserver-arg",
+        dest="profile_logserver_args",
+        action="append",
+        default=[],
+        help="Extra argument passed to the profiling logserver; repeat as needed.",
+    )
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -679,22 +773,13 @@ def make_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("target", help="CMake executable target, such as testbed or nwb_resource_cooker.")
     run_parser.set_defaults(handler=run_target_command)
 
-    smoke_parser = subparsers.add_parser("smoke", help="Build, cook, and launch a smoke scene profile.")
-    add_common_options(smoke_parser)
-    add_smoke_options(smoke_parser, allow_positional_scene=True)
-    smoke_parser.set_defaults(handler=smoke_command)
+    smoke_parser = subparsers.add_parser("smoke", help="Forward to the smoke launcher under tests/smoke.")
+    smoke_parser.add_argument("forwarded_args", nargs=argparse.REMAINDER)
+    smoke_parser.set_defaults(handler=smoke_script_command)
 
     profiles_parser = subparsers.add_parser("profiles", help="List built-in launch profiles.")
     profiles_parser.set_defaults(handler=list_profiles_command)
 
-    return parser
-
-
-def make_smoke_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Build, recook, and launch an NWB smoke scene.")
-    add_common_options(parser)
-    add_smoke_options(parser, allow_positional_scene=False)
-    parser.set_defaults(handler=smoke_command)
     return parser
 
 
@@ -707,15 +792,11 @@ def split_application_args(argv: Sequence[str]) -> Tuple[List[str], List[str]]:
 
 
 def main(argv: Sequence[str]) -> int:
+    if argv and argv[0] == "smoke":
+        return run_repo_script(SMOKE_SCRIPT, argv[1:], echo=not is_help_request(argv[1:]))
+
     parser_args, application_args = split_application_args(argv)
     args = make_parser().parse_args(parser_args)
-    args.application_args = application_args
-    return args.handler(args)
-
-
-def smoke_main(argv: Sequence[str]) -> int:
-    parser_args, application_args = split_application_args(argv)
-    args = make_smoke_parser().parse_args(parser_args)
     args.application_args = application_args
     return args.handler(args)
 

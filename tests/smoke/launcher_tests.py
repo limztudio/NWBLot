@@ -83,6 +83,23 @@ class LauncherPlatformTests(unittest.TestCase):
             self.assertTrue(launcher.cache_matches_required_defines(build_dir, {"NWB_BUILD_TESTS": "TRUE"}))
             self.assertFalse(launcher.cache_matches_required_defines(build_dir, {"NWB_BUILD_TESTS": "OFF"}))
 
+    def test_profile_required_defines_are_opt_in(self):
+        self.assertEqual({}, launcher.profile_required_defines(argparse.Namespace(with_profile=False)))
+        self.assertEqual(
+            {"NWB_BUILD_LOGSERVER": "ON"},
+            launcher.profile_required_defines(argparse.Namespace(with_profile=True)),
+        )
+
+    def test_profile_client_args_point_runtime_at_logserver(self):
+        args = argparse.Namespace(profile_log_address="http://localhost")
+        session = launcher.ProfileSession(8123, Path(os.sep) / "repo" / "logserver", None)
+        self.assertEqual(["-a", "http://localhost", "-p", "8123"], launcher.profile_client_args(args, session))
+
+    def test_run_parser_accepts_profile_options(self):
+        args = launcher.make_parser().parse_args(["run", "testbed", "--with-profile", "--profile-log-port", "8123"])
+        self.assertTrue(args.with_profile)
+        self.assertEqual(8123, args.profile_log_port)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -46,5 +46,7 @@
 - Launcher
   - Repo-level launcher: `python launcher.py run testbed --config dbg`
   - Generic executable target: `python launcher.py run nwb_resource_cooker -- --help`
-  - Smoke profile: `python launcher.py smoke transparent-multi --backend hw`
-  - Legacy smoke entry point remains available at `python tests/smoke/launcher.py --scene transparent-multi --backend hw`.
+  - Launch with profiling/logserver: `python launcher.py run testbed --with-profile`
+  - Smoke profile through root dispatch: `python launcher.py smoke transparent-multi --backend hw`
+  - Smoke profile with profiling/logserver: `python launcher.py smoke transparent-multi --backend hw --with-profile`
+  - Smoke-domain launcher script: `python tests/smoke/launcher.py --scene transparent-multi --backend hw`

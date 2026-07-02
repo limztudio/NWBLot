@@ -2167,10 +2167,10 @@ private:
         VulkanAllocationHandle allocation = {};
         void* mappedMemory = nullptr;
         Atomic<u32> nextSequence = 0u;
-        Array<AmdBreadcrumbSlotRecord, s_MaxAmdBreadcrumbSlots> slotRecords = {};
         // Serializes the (sequence, markerHash) pair store so concurrent command-list recording on different
         // worker threads cannot tear a slot record (which would resolve the wrong marker on device-lost).
         Futex slotMutex;
+        Array<AmdBreadcrumbSlotRecord, s_MaxAmdBreadcrumbSlots> slotRecords = {};
     };
 
 

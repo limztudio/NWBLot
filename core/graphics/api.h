@@ -686,6 +686,8 @@ typedef u32 MipLevel;
 typedef u32 ArraySlice;
 
 struct TextureDesc{
+    Name name;
+    Color clearValue;
     u32 width = 1;
     u32 height = 1;
     u32 depth = 1;
@@ -693,9 +695,9 @@ struct TextureDesc{
     u32 mipLevels = 1;
     u32 sampleCount = 1;
     u32 sampleQuality = 0;
+    ResourceStates::Mask initialState = ResourceStates::Unknown;
     Format::Enum format = Format::UNKNOWN;
     TextureDimension::Enum dimension = TextureDimension::Enum::Texture2D;
-    Name name;
 
     bool isShaderResource = true;
     bool isRenderTarget = false;
@@ -708,10 +710,7 @@ struct TextureDesc{
     bool isVirtual = false;
     bool isTiled = false;
 
-    Color clearValue;
     bool useClearValue = false;
-
-    ResourceStates::Mask initialState = ResourceStates::Unknown;
 
     // If keepInitialState is true, command lists that use the texture will automatically
     // begin tracking the texture from the initial state and transition it to the initial state
@@ -868,11 +867,11 @@ namespace SamplerFeedbackFormat{
 };
 
 struct SamplerFeedbackTextureDesc{
-    SamplerFeedbackFormat::Enum samplerFeedbackFormat = SamplerFeedbackFormat::MinMipOpaque;
     u32 samplerFeedbackMipRegionX = 0;
     u32 samplerFeedbackMipRegionY = 0;
     u32 samplerFeedbackMipRegionZ = 0;
     ResourceStates::Mask initialState = ResourceStates::Unknown;
+    SamplerFeedbackFormat::Enum samplerFeedbackFormat = SamplerFeedbackFormat::MinMipOpaque;
     bool keepInitialState = false;
 };
 
@@ -884,12 +883,12 @@ typedef GraphicsBackend::Handle<SamplerFeedbackTexture> SamplerFeedbackTextureHa
 
 
 struct VertexAttributeDesc{
-    Format::Enum format = Format::UNKNOWN;
+    Name name;
     u32 arraySize = 1;
     u32 bufferIndex = 0;
     u32 offset = 0;
     u32 elementStride = 0;
-    Name name;
+    Format::Enum format = Format::UNKNOWN;
     bool isInstanced = false;
 
     constexpr VertexAttributeDesc& setFormat(Format::Enum value){ format = value; return *this; }
@@ -909,11 +908,12 @@ typedef GraphicsBackend::Handle<InputLayout> InputLayoutHandle;
 
 
 struct BufferDesc{
+    Name debugName;
     u64 byteSize = 0;
     u32 structStride = 0; // if non-zero it's structured
     u32 maxVersions = 0; // only valid and required to be nonzero for volatile buffers on backends that keep per-version state
+    ResourceStates::Mask initialState = ResourceStates::Common;
     Format::Enum format = Format::UNKNOWN; // for typed buffer views
-    Name debugName;
     bool canHaveUAVs = false;
     bool canHaveTypedViews = false;
     bool canHaveRawViews = false;
@@ -931,8 +931,6 @@ struct BufferDesc{
     // Indicates that the buffer is created with no backing memory,
     // and memory is bound to the buffer later using bindBufferMemory.
     bool isVirtual = false;
-
-    ResourceStates::Mask initialState = ResourceStates::Common;
 
     // see TextureDesc::keepInitialState
     bool keepInitialState = false;
@@ -1119,18 +1117,17 @@ struct CustomSemantic{
 };
 
 struct ShaderDesc{
-    ShaderType::Mask shaderType = ShaderType::None;
     Name debugName;
     GraphicsString entryName;
+    CustomSemantic* pCustomSemantics = nullptr;
+    u32* pCoordinateSwizzling = nullptr;
 
     i32 hlslExtensionsUAV = -1;
-
-    bool useSpecificShaderExt = false;
     u32 numCustomSemantics = 0;
-    CustomSemantic* pCustomSemantics = nullptr;
 
+    ShaderType::Mask shaderType = ShaderType::None;
     FastGeometryShaderFlags::Mask fastGSFlags = FastGeometryShaderFlags::None;
-    u32* pCoordinateSwizzling = nullptr;
+    bool useSpecificShaderExt = false;
 
     explicit ShaderDesc(GraphicsArena& arena)
         : entryName("main", arena)
@@ -1728,20 +1725,21 @@ struct RayTracingGeometryAABB{
 struct RayTracingGeometryTriangles{
     Buffer* indexBuffer = nullptr;   // make sure the first 2 fields in all Geometry
     Buffer* vertexBuffer = nullptr;  // structs are Buffer* for easier debugging
-    Format::Enum indexFormat = Format::UNKNOWN;
-    Format::Enum vertexFormat = Format::UNKNOWN;
     u64 indexOffset = 0;
     u64 vertexOffset = 0;
-    u32 indexCount = 0;
-    u32 vertexCount = 0;
-    u32 vertexStride = 0;
 
     RayTracingOpacityMicromap* opacityMicromap = nullptr;
     Buffer* ommIndexBuffer = nullptr;
     u64 ommIndexBufferOffset = 0;
-    Format::Enum ommIndexFormat = Format::UNKNOWN;
     const RayTracingOpacityMicromapUsageCount* pOmmUsageCounts = nullptr;
+
+    u32 indexCount = 0;
+    u32 vertexCount = 0;
+    u32 vertexStride = 0;
     u32 numOmmUsageCounts = 0;
+    Format::Enum indexFormat = Format::UNKNOWN;
+    Format::Enum vertexFormat = Format::UNKNOWN;
+    Format::Enum ommIndexFormat = Format::UNKNOWN;
 
     constexpr RayTracingGeometryTriangles& setIndexBuffer(Buffer* value){ indexBuffer = value; return *this; }
     constexpr RayTracingGeometryTriangles& setVertexBuffer(Buffer* value){ vertexBuffer = value; return *this; }
@@ -1776,17 +1774,18 @@ struct RayTracingGeometryAABBs{
 struct RayTracingGeometrySpheres{
     Buffer* indexBuffer = nullptr;
     Buffer* vertexBuffer = nullptr;
-    Format::Enum indexFormat = Format::UNKNOWN;
-    Format::Enum vertexPositionFormat = Format::UNKNOWN;
-    Format::Enum vertexRadiusFormat = Format::UNKNOWN;
     u64 indexOffset = 0;
     u64 vertexPositionOffset = 0;
     u64 vertexRadiusOffset = 0;
+
     u32 indexCount = 0;
     u32 vertexCount = 0;
     u32 indexStride = 0;
     u32 vertexPositionStride = 0;
     u32 vertexRadiusStride = 0;
+    Format::Enum indexFormat = Format::UNKNOWN;
+    Format::Enum vertexPositionFormat = Format::UNKNOWN;
+    Format::Enum vertexRadiusFormat = Format::UNKNOWN;
 
     constexpr RayTracingGeometrySpheres& setIndexBuffer(Buffer* value){ indexBuffer = value; return *this; }
     constexpr RayTracingGeometrySpheres& setVertexBuffer(Buffer* value){ vertexBuffer = value; return *this; }
@@ -1820,18 +1819,19 @@ namespace RayTracingGeometryLssEndcapMode{
 struct RayTracingGeometryLss{
     Buffer* indexBuffer = nullptr;
     Buffer* vertexBuffer = nullptr;
-    Format::Enum indexFormat = Format::UNKNOWN;
-    Format::Enum vertexPositionFormat = Format::UNKNOWN;
-    Format::Enum vertexRadiusFormat = Format::UNKNOWN;
     u64 indexOffset = 0;
     u64 vertexPositionOffset = 0;
     u64 vertexRadiusOffset = 0;
+
     u32 indexCount = 0;
     u32 primitiveCount = 0;
     u32 vertexCount = 0;
     u32 indexStride = 0;
     u32 vertexPositionStride = 0;
     u32 vertexRadiusStride = 0;
+    Format::Enum indexFormat = Format::UNKNOWN;
+    Format::Enum vertexPositionFormat = Format::UNKNOWN;
+    Format::Enum vertexRadiusFormat = Format::UNKNOWN;
     RayTracingGeometryLssPrimitiveFormat::Enum primitiveFormat = RayTracingGeometryLssPrimitiveFormat::List;
     RayTracingGeometryLssEndcapMode::Enum endcapMode = RayTracingGeometryLssEndcapMode::None;
 
@@ -1854,6 +1854,8 @@ struct RayTracingGeometryLss{
 };
 
 struct RayTracingGeometryDesc{
+    AffineTransform transform{};
+
     union GeomTypeUnion{
         RayTracingGeometryTriangles triangles;
         RayTracingGeometryAABBs aabbs;
@@ -1861,10 +1863,9 @@ struct RayTracingGeometryDesc{
         RayTracingGeometryLss lss;
     } geometryData;
 
-    bool useTransform = false;
-    AffineTransform transform{};
     RayTracingGeometryFlags::Mask flags = RayTracingGeometryFlags::None;
     RayTracingGeometryType::Enum geometryType = RayTracingGeometryType::Triangles;
+    bool useTransform = false;
 
     RayTracingGeometryDesc()
         : geometryData{}
@@ -2196,19 +2197,18 @@ struct BindingOffsets{
 };
 
 struct BindingLayoutDesc{
-    ShaderType::Mask visibility = ShaderType::None;
+    GraphicsVector<BindingLayoutItem> bindings;
+    BindingOffsets bindingOffsets;
 
     // DXC maps HLSL register spaces to SPIR-V descriptor sets, so this can be used as the descriptor set index.
     // Set `registerSpaceIsDescriptorSet` to enable that mapping explicitly.
     u32 registerSpace = 0;
+    ShaderType::Mask visibility = ShaderType::None;
 
     // This flag controls the behavior for pipelines that use multiple binding layouts.
     // When true, the layout uses `registerSpace` as its SPIR-V descriptor set index. Layouts in the same
     // pipeline must not reuse a descriptor set index.
     bool registerSpaceIsDescriptorSet = false;
-
-    GraphicsVector<BindingLayoutItem> bindings;
-    BindingOffsets bindingOffsets;
 
     explicit BindingLayoutDesc(GraphicsArena& arena)
         : bindings(arena)
@@ -2249,11 +2249,10 @@ namespace BindlessLayoutType{
 // The `registerSpaces` vector specifies which spaces the table will be bound to,
 // with the table type (SRV or UAV) derived from the resource type assigned to each space.
 struct BindlessLayoutDesc{
-    ShaderType::Mask visibility = ShaderType::None;
+    FixedVector<BindingLayoutItem, s_MaxBindlessRegisterSpaces> registerSpaces;
     u32 firstSlot = 0;
     u32 maxCapacity = 0;
-    FixedVector<BindingLayoutItem, s_MaxBindlessRegisterSpaces> registerSpaces;
-
+    ShaderType::Mask visibility = ShaderType::None;
     BindlessLayoutType::Enum layoutType = BindlessLayoutType::Immutable;
 
     constexpr BindlessLayoutDesc& setVisibility(ShaderType::Mask value){ visibility = value; return *this; }

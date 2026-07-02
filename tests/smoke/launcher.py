@@ -5,10 +5,10 @@ from pathlib import Path
 
 def _load_launcher():
     root = Path(__file__).resolve().parents[2]
-    sys.path.insert(0, str(root / "scripts"))
-    import nwb_launcher
+    sys.path.insert(0, str(root))
+    import launcher
 
-    return nwb_launcher
+    return launcher
 
 
 def main(argv):

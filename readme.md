@@ -44,7 +44,7 @@
   - When `requestQuit` is raised during project update, the frame loop exits without submitting another graphics frame.
 
 - Launcher
-  - Repo-level launcher: `python scripts/nwb_launcher.py run testbed --config dbg`
-  - Generic executable target: `python scripts/nwb_launcher.py run nwb_resource_cooker -- --help`
-  - Smoke profile: `python scripts/nwb_launcher.py smoke transparent-multi --backend hw`
+  - Repo-level launcher: `python launcher.py run testbed --config dbg`
+  - Generic executable target: `python launcher.py run nwb_resource_cooker -- --help`
+  - Smoke profile: `python launcher.py smoke transparent-multi --backend hw`
   - Legacy smoke entry point remains available at `python tests/smoke/launcher.py --scene transparent-multi --backend hw`.

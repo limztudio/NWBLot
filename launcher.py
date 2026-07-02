@@ -142,7 +142,7 @@ SMOKE_SCENES = {
 
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parent
 
 
 def host_platform_name(system_name: Optional[str] = None) -> str:
@@ -633,7 +633,7 @@ def list_profiles_command(_args) -> int:
 
 
 def add_common_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--repo-root", type=Path, help="Repository root. Defaults to the parent of scripts/.")
+    parser.add_argument("--repo-root", type=Path, help="Repository root. Defaults to the directory containing launcher.py.")
     parser.add_argument("--platform", default=host_platform_name(), help="Output platform directory, such as windows/linux/darwin.")
     parser.add_argument("--arch", default=DEFAULT_ARCH, help="Output architecture directory.")
     parser.add_argument("--domain", help="Output domain directory. Defaults to full or the CMake cache.")

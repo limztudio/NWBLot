@@ -26,8 +26,8 @@ namespace __hidden_telemetry_report{
 static constexpr f64 s_MillisecondsPerSecond = 1000.0;
 
 template<typename... Args>
-void AppendFormat(TelemetryArena& arena, AString<TelemetryArena>& out, AFormatString<Args...> fmt, Args&&... args){
-    out += StringFormat(arena, fmt, Forward<Args>(args)...);
+void AppendFormat(AString<TelemetryArena>& out, AFormatString<Args...> fmt, Args&&... args){
+    std::vformat_to(std::back_inserter(out), fmt.get(), std::make_format_args<AFormatContext>(args...));
 }
 
 [[nodiscard]] usize EventKindBucket(const Telemetry::EventKind::Enum kind)noexcept{
@@ -54,7 +54,6 @@ void AppendPerfCsvHeader(AString<TelemetryArena>& out){
 }
 
 void AppendPerfCsvRow(
-    TelemetryArena& arena,
     AString<TelemetryArena>& out,
     const Telemetry::PerfTimingSource::Enum source,
     const Telemetry::PerfTimingPayload& payload
@@ -63,7 +62,6 @@ void AppendPerfCsvRow(
     out += ',';
     AppendCsvCell(out, payload.scopeText);
     AppendFormat(
-        arena,
         out,
         ",{},{:.9},{:.9},{:.9},{:.9},{},{},{}\n",
         payload.stats.publishFrameIndex,
@@ -171,13 +169,13 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
 
         const auto timed = timing.find(node.name);
         const AStringView labelView(node.label.data(), node.label.size());
-        AppendFormat(arena, out, "  n{} [shape={}, label=", i, FrameGraphNodeShape(node.kind));
+        AppendFormat(out, "  n{} [shape={}, label=", i, FrameGraphNodeShape(node.kind));
         if(timed != timing.end()){
             AString<TelemetryArena> label(arena);
             label.reserve(labelView.size() + 16u);
             label.append(labelView.data(), labelView.size());
             label += '\n';
-            label += StringFormat(arena, "{:.3f} ms", timed.value() * s_MillisecondsPerSecond);
+            AppendFormat(label, "{:.3f} ms", timed.value() * s_MillisecondsPerSecond);
 
             AppendDotQuotedText(out, AStringView(label.data(), label.size()));
         }
@@ -187,7 +185,7 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
     }
 
     for(const Telemetry::FrameGraphEdgePayload& edge : graph.edges){
-        AppendFormat(arena, out, "  n{} -> n{} [label=", edge.fromNodeIndex, edge.toNodeIndex);
+        AppendFormat(out, "  n{} -> n{} [label=", edge.fromNodeIndex, edge.toNodeIndex);
         AppendDotQuotedText(out, AStringView(FrameGraphEdgeLabel(edge.kind)));
         out += "];\n";
     }
@@ -195,48 +193,48 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
     out += "}\n";
 }
 
-void BuildJson(TelemetryArena& arena, const TelemetryReportSummary& summary, AString<TelemetryArena>& out){
+void BuildJson(const TelemetryReportSummary& summary, AString<TelemetryArena>& out){
     out.clear();
     out.reserve(1024u);
     out += "{\n";
-    AppendFormat(arena, out, "  \"eventCount\": {},\n", summary.eventCount);
+    AppendFormat(out, "  \"eventCount\": {},\n", summary.eventCount);
     out += "  \"frameRange\": {";
-    AppendFormat(arena, out, "\"present\": {}", summary.hasFrameRange ? "true" : "false");
+    AppendFormat(out, "\"present\": {}", summary.hasFrameRange ? "true" : "false");
     if(summary.hasFrameRange)
-        AppendFormat(arena, out, ", \"min\": {}, \"max\": {}", summary.minFrameIndex, summary.maxFrameIndex);
+        AppendFormat(out, ", \"min\": {}, \"max\": {}", summary.minFrameIndex, summary.maxFrameIndex);
     out += "},\n";
 
     out += "  \"events\": {\n";
     for(usize i = 0u; i < s_TelemetryReportEventKindCount; ++i){
         out += "    ";
         AppendJsonQuotedText(out, EventKindText(static_cast<Telemetry::EventKind::Enum>(i)));
-        AppendFormat(arena, out, ": {}{}", summary.eventKindCounts[i], i + 1u == s_TelemetryReportEventKindCount ? "\n" : ",\n");
+        AppendFormat(out, ": {}{}", summary.eventKindCounts[i], i + 1u == s_TelemetryReportEventKindCount ? "\n" : ",\n");
     }
     out += "  },\n";
 
     out += "  \"perf\": {\n";
-    AppendFormat(arena, out, "    \"cpuTimingEvents\": {},\n", summary.cpuTimingEventCount);
-    AppendFormat(arena, out, "    \"cpuTimingSamples\": {},\n", summary.cpuTimingSampleCount);
-    AppendFormat(arena, out, "    \"cpuTimingSeconds\": {:.9},\n", summary.cpuTimingSeconds);
-    AppendFormat(arena, out, "    \"maxCpuTimingSeconds\": {:.9},\n", summary.maxCpuTimingSeconds);
-    AppendFormat(arena, out, "    \"gpuTimingEvents\": {},\n", summary.gpuTimingEventCount);
-    AppendFormat(arena, out, "    \"gpuTimingSamples\": {},\n", summary.gpuTimingSampleCount);
-    AppendFormat(arena, out, "    \"gpuTimingSeconds\": {:.9},\n", summary.gpuTimingSeconds);
-    AppendFormat(arena, out, "    \"maxGpuTimingSeconds\": {:.9},\n", summary.maxGpuTimingSeconds);
-    AppendFormat(arena, out, "    \"memoryEvents\": {},\n", summary.memoryEventCount);
-    AppendFormat(arena, out, "    \"maxMemoryUsedBytes\": {},\n", summary.maxMemoryUsedBytes);
-    AppendFormat(arena, out, "    \"maxMemoryPeakUsedBytes\": {},\n", summary.maxMemoryPeakUsedBytes);
-    AppendFormat(arena, out, "    \"totalMemoryUsedDeltaBytes\": {}\n", summary.totalMemoryUsedDeltaBytes);
+    AppendFormat(out, "    \"cpuTimingEvents\": {},\n", summary.cpuTimingEventCount);
+    AppendFormat(out, "    \"cpuTimingSamples\": {},\n", summary.cpuTimingSampleCount);
+    AppendFormat(out, "    \"cpuTimingSeconds\": {:.9},\n", summary.cpuTimingSeconds);
+    AppendFormat(out, "    \"maxCpuTimingSeconds\": {:.9},\n", summary.maxCpuTimingSeconds);
+    AppendFormat(out, "    \"gpuTimingEvents\": {},\n", summary.gpuTimingEventCount);
+    AppendFormat(out, "    \"gpuTimingSamples\": {},\n", summary.gpuTimingSampleCount);
+    AppendFormat(out, "    \"gpuTimingSeconds\": {:.9},\n", summary.gpuTimingSeconds);
+    AppendFormat(out, "    \"maxGpuTimingSeconds\": {:.9},\n", summary.maxGpuTimingSeconds);
+    AppendFormat(out, "    \"memoryEvents\": {},\n", summary.memoryEventCount);
+    AppendFormat(out, "    \"maxMemoryUsedBytes\": {},\n", summary.maxMemoryUsedBytes);
+    AppendFormat(out, "    \"maxMemoryPeakUsedBytes\": {},\n", summary.maxMemoryPeakUsedBytes);
+    AppendFormat(out, "    \"totalMemoryUsedDeltaBytes\": {}\n", summary.totalMemoryUsedDeltaBytes);
     out += "  },\n";
 
     out += "  \"frameGraph\": {\n";
-    AppendFormat(arena, out, "    \"frames\": {},\n", summary.frameGraphFrameCount);
-    AppendFormat(arena, out, "    \"nodes\": {},\n", summary.frameGraphNodeCount);
-    AppendFormat(arena, out, "    \"edges\": {},\n", summary.frameGraphEdgeCount);
-    AppendFormat(arena, out, "    \"maxNodes\": {},\n", summary.maxFrameGraphNodeCount);
-    AppendFormat(arena, out, "    \"maxEdges\": {}\n", summary.maxFrameGraphEdgeCount);
+    AppendFormat(out, "    \"frames\": {},\n", summary.frameGraphFrameCount);
+    AppendFormat(out, "    \"nodes\": {},\n", summary.frameGraphNodeCount);
+    AppendFormat(out, "    \"edges\": {},\n", summary.frameGraphEdgeCount);
+    AppendFormat(out, "    \"maxNodes\": {},\n", summary.maxFrameGraphNodeCount);
+    AppendFormat(out, "    \"maxEdges\": {}\n", summary.maxFrameGraphEdgeCount);
     out += "  },\n";
-    AppendFormat(arena, out, "  \"parseFailures\": {}\n", summary.parseFailureCount);
+    AppendFormat(out, "  \"parseFailures\": {}\n", summary.parseFailureCount);
     out += "}\n";
 }
 
@@ -325,7 +323,7 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
                 break;
             }
             __hidden_telemetry_report::AddTiming(outReport.summary, payload);
-            __hidden_telemetry_report::AppendPerfCsvRow(arena, outReport.perfCsv, payload.source, payload);
+            __hidden_telemetry_report::AppendPerfCsvRow(outReport.perfCsv, payload.source, payload);
             timingByScope.insert_or_assign(payload.scopeName, payload.stats.seconds);
             break;
         }
@@ -362,7 +360,7 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
         }
     }
 
-    __hidden_telemetry_report::BuildJson(arena, outReport.summary, outReport.json);
+    __hidden_telemetry_report::BuildJson(outReport.summary, outReport.json);
     return true;
 }
 

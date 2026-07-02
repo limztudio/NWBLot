@@ -488,6 +488,59 @@ private:
     // pipelines AND binding sets are all ready this frame; gates the render's soft opaque trace + resolve dispatch.
     // A failure here is non-fatal to shadows -- the slot lights simply keep their hard opaque mask this frame.
     bool m_softShadowReady = false;
+    // Soft opaque shadow TEMPORAL accumulation (Stage 3 of the soft-ray-traced-shadow feature): the reproject-merge pass
+    // inserted per slot between the soft trace and the a-trous resolve, plus the CPU-side state it needs. There are NO
+    // motion vectors / prev-G-buffer in this engine (the view is rebuilt fresh each frame), so the merge reprojects the
+    // current world position through a STASHED previous-frame worldToClip -- exact for a static receiver regardless of how
+    // the occluder moved, collapsing the moving-occluder anti-ghost to a value-agreement test. See shadow_reproject_merge_cs.
+    //  - m_prevWorldToClip: last frame's worldToClip (raw 16-float row-major dump of drawState().m_meshViewGpuData's
+    //    worldToClip), stashed at the end of renderGpuBvhShadowVisibility for NEXT frame's reprojection push constant.
+    //    m_prevWorldToClipValid is false on frame 0 / after a resize (invalidated in createShadowVisibilityTarget) -> the
+    //    merge's historyValid gate forces pure-current so it can't reproject through a stale matrix into fresh garbage.
+    Float44U m_prevWorldToClip = {};
+    bool m_prevWorldToClipValid = false;
+    // Ping-pong selector: 1 = shadowHistA/MomentsA hold the INCOMING history this frame (merge writes B), 0 = the reverse.
+    // Flipped by the frame-end swap. Also selects which merge binding set + which temporal resolve SOFT_HALF source is used.
+    u32 m_softShadowHistoryFrontIsA = 1u;
+    // Cleared whenever the temporal targets are (re)created (createShadowVisibilityTarget); the FIRST merge dispatch sets it
+    // true. Until then the merge treats every pixel as n=0 (pure current sample) -- the clean first-frame / post-resize path.
+    bool m_softShadowTemporalSeeded = false;
+    // NWB_SOFT_SHADOW_TEMPORAL env kill-switch (default ON; "0" disables temporal for a clean A/B), read ONCE and cached --
+    // mirrors the caustic NWB_CAUSTIC_TEMPORAL_DECAY pattern. When disabled, m_softShadowTemporalReady stays false and the
+    // dispatch skips the merge, feeding the raw trace straight into the a-trous (the exact pre-temporal Stage-1/2 pipeline).
+    bool m_softShadowTemporalEnabled = true;
+    bool m_softShadowTemporalEnabledQueried = false;
+    // Set by prepareShadowVisibilityResources when m_softShadowReady AND temporal is enabled AND the merge pipeline + both
+    // merge binding sets + both temporal resolve SOFT_HALF variants built this frame; gates the per-slot merge insertion +
+    // the frame-end stash/swap. Non-fatal: a failure leaves it false and the soft path runs its non-temporal fallback.
+    bool m_softShadowTemporalReady = false;
+    // The reproject-merge pipeline (mirrors the m_shadowResolve* block). Two binding sets, front/back, so the history-in
+    // SRV and history-out UAV never alias the same texture: AtoB (histIn=A,momIn=A -> histOut=B,momOut=B) and BtoA (mirror).
+    // Both share SOFT_TRACE=shadowSoftHalfA, GEOMETRY_CURR=shadowSoftGeometry, GEOMETRY_PREV=shadowSoftGeometryPrev,
+    // WORLDPOS=targets.worldPosition. Rebuilt (tracked-pointer compare) when any bound target changes (resize / frame-end swap).
+    Core::BindingLayoutHandle m_shadowReprojectMergeBindingLayout;
+    Core::ShaderHandle m_shadowReprojectMergeShader;
+    Core::ComputePipelineHandle m_shadowReprojectMergePipeline;
+    bool m_shadowReprojectMergePipelineFailed = false;
+    Core::BindingSetHandle m_shadowReprojectMergeBindingSetAtoB; // histIn/momIn = A -> histOut/momOut = B
+    Core::BindingSetHandle m_shadowReprojectMergeBindingSetBtoA; // histIn/momIn = B -> histOut/momOut = A
+    const Core::Texture* m_shadowReprojectMergeHistA = nullptr;
+    const Core::Texture* m_shadowReprojectMergeHistB = nullptr;
+    const Core::Texture* m_shadowReprojectMergeMomentsA = nullptr;
+    const Core::Texture* m_shadowReprojectMergeMomentsB = nullptr;
+    const Core::Texture* m_shadowReprojectMergeSoftTrace = nullptr;
+    const Core::Texture* m_shadowReprojectMergeGeometryCurr = nullptr;
+    const Core::Texture* m_shadowReprojectMergeGeometryPrev = nullptr;
+    const Core::Texture* m_shadowReprojectMergeWorldPosition = nullptr;
+    // Two EXTRA soft-shadow resolve binding-set variants whose SOFT_HALF (the PREPARE stage's input) is a temporal history
+    // buffer (shadowHistA / shadowHistB) instead of the raw shadowSoftHalfA. The dispatch selects the one matching the merge's
+    // history-out buffer this frame (B when frontIsA, A otherwise) so the a-trous denoises the ACCUMULATED visibility. Neither
+    // binds its SOFT_HALF as the wavelet OUTPUT (the ping-pong output is soft-A/soft-B, distinct from the hist buffers), so no
+    // SRV+UAV alias -- the same constraint the base three resolve sets document. Built alongside them in ensureSoftShadowResolveBindingSet.
+    Core::BindingSetHandle m_shadowResolveBindingSetTemporalHistA; // PREPARE reads shadowHistA as SOFT_HALF
+    Core::BindingSetHandle m_shadowResolveBindingSetTemporalHistB; // PREPARE reads shadowHistB as SOFT_HALF
+    const Core::Texture* m_shadowResolveBindingSetTemporalHistATex = nullptr;
+    const Core::Texture* m_shadowResolveBindingSetTemporalHistBTex = nullptr;
     u32 m_swShadowEdgeStatsPendingTick = 0u;
     // Stage-3 compaction resources: the per-frame append counter (2 u32: [0] append count, [1] clamped trace count), the
     // compacted edge-record list (recreated on resize, sized in records), and the persistent indirect dispatch-args

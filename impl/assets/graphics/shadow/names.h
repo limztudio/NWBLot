@@ -49,6 +49,11 @@ inline constexpr Name s_SwTransparentUniformShaderName("engine/graphics/shadow/s
 // bilateral upsample that denoises the jittered half-res opaque visibility into the full-res visibility.
 inline constexpr Name s_GeometryDownsampleShaderName("engine/graphics/shadow/shadow_geometry_downsample_cs");
 inline constexpr Name s_SoftResolveShaderName("engine/graphics/shadow/shadow_resolve_cs");
+// Soft opaque shadow TEMPORAL reproject-merge (Stage 3 of the soft-ray-traced-shadow feature): inserted per slot between
+// the half-res soft trace and the a-trous resolve, it reprojects the current world position through a stashed previous-
+// frame worldToClip and accumulates the noisy per-frame trace into a variance-clamped/antilag temporal history (so the
+// per-frame SPP can drop and static receivers converge smooth, while a moving occluder leaves no ghost trail).
+inline constexpr Name s_SoftReprojectMergeShaderName("engine/graphics/shadow/shadow_reproject_merge_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

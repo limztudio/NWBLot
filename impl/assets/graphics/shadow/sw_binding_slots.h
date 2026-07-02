@@ -134,11 +134,15 @@
 // opaque-resolve pass + any C++ that references the dilation agree on one value.)
 #define NWB_SW_SHADOW_OPAQUE_EDGE_DILATE 1
 
-// Per-frame samples-per-pixel for the soft directional trace. Stage 1 has NO temporal accumulation, so it multi-samples
-// the sun disk PER FRAME to hand the resolve a smooth (rather than dithered 0/1) coverage signal the value-aware a-trous
-// can actually denoise; Stage 3's temporal accumulation will supply the samples over frames instead, letting this return
-// toward 1. (Contract-shared with the soft directional pass.)
-#define NWB_SW_SHADOW_SOFT_SPP 8u
+// Per-frame samples-per-pixel for the soft directional trace. Stage 3 adds TEMPORAL accumulation (the reproject-merge pass)
+// that supplies the sun-disk samples OVER FRAMES, so this drops from Stage 1's per-frame wash-out count (8) toward 1 --
+// pinned at 2 (not 1) on purpose: for a STATIC receiver the temporal history + the wide a-trous converge fine from a single
+// sample, but in a freshly-disoccluded / gate-B-clamped region (a spinning occluder's leading edge) the effective history
+// length collapses to ~0 and the pixel falls back to (near) pure current -- where 1 spp is a single binary ray whose
+// dithered penumbra the a-trous cannot fully smooth in ONE frame, whereas 2 spp halves that moving-region noise for the
+// same still-cheap half-res binary trace cost. So 2 keeps moving regions clean while temporal handles static convergence.
+// (An A/B at 1 vs 2 is a one-line edit here.) Contract-shared with the soft directional pass.
+#define NWB_SW_SHADOW_SOFT_SPP 2u
 
 // Per-thread traversal stack depths. The scene/instance BVH is shallow (a few-to-hundreds of instances);
 // the per-mesh triangle BVH is deeper. Both traversals treat a deeper subtree as occluded rather than

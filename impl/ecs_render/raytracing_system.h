@@ -79,7 +79,19 @@ private:
     [[nodiscard]] bool ensureSoftShadowResolveBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();
     [[nodiscard]] bool ensureShadowGeometryDownsampleBindingSet(DeferredFrameTargets& targets);
-    void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slot);
+    // dispatchSoftShadowResolve runs the a-trous PREPARE -> N wavelet passes -> upsample for one slot. prepareOverride (Stage
+    // 3 temporal) swaps the PREPARE input from the raw trace to the accumulated history; nullptr keeps the raw-trace path.
+    void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slot, Core::BindingSet* prepareOverride = nullptr);
+    // Soft opaque shadow TEMPORAL accumulation (Stage 3 of the soft-ray-traced-shadow feature): the reproject-merge pass
+    // inserted per slot between the soft trace and the a-trous resolve. ensureShadowReprojectMergePipeline builds its
+    // pipeline + layout; ensureShadowReprojectMergeBindingSet builds the two front/back sets (history-in SRV and history-out
+    // UAV never alias). softShadowTemporalEnabled reads NWB_SOFT_SHADOW_TEMPORAL once (default on; "0" disables for an A/B).
+    // swapSoftShadowTemporalHistory stashes this frame's worldToClip for next-frame reprojection + ping-pongs the history /
+    // moments / geometry buffers at frame end (guarded on m_softShadowTemporalReady so the cadence never stalls).
+    [[nodiscard]] bool ensureShadowReprojectMergePipeline();
+    [[nodiscard]] bool ensureShadowReprojectMergeBindingSet(DeferredFrameTargets& targets);
+    [[nodiscard]] bool softShadowTemporalEnabled();
+    void swapSoftShadowTemporalHistory(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureSwCausticPipeline();
     [[nodiscard]] bool ensureSwCausticBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureCausticResolvePipeline();

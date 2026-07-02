@@ -159,6 +159,25 @@ struct DeferredFrameTargets{
     Core::TextureHandle shadowSoftHalfB;
     Core::Format::Enum shadowSoftGeometryFormat = Core::Format::UNKNOWN;
     Core::TextureHandle shadowSoftGeometry;
+    // Soft opaque shadow TEMPORAL accumulation (Stage 3 of the soft-ray-traced-shadow feature) HALF-res targets. The
+    // reproject-merge pass (inserted per slot between the soft trace and the a-trous resolve) accumulates the noisy per-
+    // frame trace over time -- so the per-frame SPP can drop while a STATIC receiver converges smooth AND a MOVING occluder
+    // leaves no ghost trail -- by reprojecting the current world pos through a STASHED previous-frame worldToClip (there are
+    // NO motion vectors / prev-G-buffer in this engine) then variance-clamping + antilag-blending the reprojected history:
+    //  - shadowHistA / shadowHistB: the accumulated-visibility ping-pong (RGBA16F Texture2DArray, NWB_SCENE_SHADOW_SLOT_COUNT
+    //    layers). The merge writes one (out) and reads the other (prev history in); the a-trous resolve reads whichever the
+    //    merge just wrote as its "raw trace" input; the frame-end swap makes this frame's out become next frame's history in.
+    //  - shadowMomentsA / shadowMomentsB: the ping-pong moments (RGBA16F Texture2DArray, same layers): .x = m1 (luma),
+    //    .y = m2 (luma^2), .z = n (history length in frames). n drives the blend alpha (1/(n+1)) so convergence tightens.
+    //  - shadowSoftGeometryPrev: the PREVIOUS-frame single-layer geometry cache (a ping-pong sibling of shadowSoftGeometry,
+    //    swapped at frame end) the merge samples at the reprojected texel for the disocclusion / moving-receiver gate.
+    // All allocated with the visibility target so they share the resize lifecycle (createShadowVisibilityTarget). Guarded by
+    // m_softShadowTemporalReady; a first frame / resize / temporal-off falls back to the raw trace feeding the a-trous.
+    Core::TextureHandle shadowHistA;
+    Core::TextureHandle shadowHistB;
+    Core::TextureHandle shadowMomentsA;
+    Core::TextureHandle shadowMomentsB;
+    Core::TextureHandle shadowSoftGeometryPrev;
     // Caustic producer targets (additive, inverted lifecycle vs shadowVisibility): the RGBA16F resolved irradiance
     // the deferred lighting pass adds pre-tonemap, the R32_UINT splat accumulators (one Texture2DArray layer per RGB
     // channel) the producer's fixed-point InterlockedAdd lands in, and the RGBA16F a-trous wavelet scratch buffer.

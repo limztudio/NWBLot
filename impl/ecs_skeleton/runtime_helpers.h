@@ -152,28 +152,24 @@ template<typename JointMatrixVector>
     const SIMDVector row0 = VectorSetW(matrix.v[0], 0.0f);
     const SIMDVector row1 = VectorSetW(matrix.v[1], 0.0f);
     const SIMDVector row2 = VectorSetW(matrix.v[2], 0.0f);
-    const f32 length0 = VectorGetX(Vector3LengthSq(row0));
-    const f32 length1 = VectorGetX(Vector3LengthSq(row1));
-    const f32 length2 = VectorGetX(Vector3LengthSq(row2));
-    const f32 dot01 = VectorGetX(Vector3Dot(row0, row1));
-    const f32 dot02 = VectorGetX(Vector3Dot(row0, row2));
-    const f32 dot12 = VectorGetX(Vector3Dot(row1, row2));
-    const f32 determinant = VectorGetX(Vector3Dot(row0, Vector3Cross(row1, row2)));
+    const SIMDVector lengthSq = VectorMergeX(
+        Vector3LengthSq(row0),
+        Vector3LengthSq(row1),
+        Vector3LengthSq(row2),
+        s_SIMDOne
+    );
+    const SIMDVector dotAndDeterminant = VectorMergeX(
+        Vector3Dot(row0, row1),
+        Vector3Dot(row0, row2),
+        Vector3Dot(row1, row2),
+        Vector3Dot(row0, Vector3Cross(row1, row2))
+    );
+    const SIMDVector epsilon = VectorReplicate(s_RigidJointEpsilon);
     return
-        IsFinite(length0)
-        && IsFinite(length1)
-        && IsFinite(length2)
-        && IsFinite(dot01)
-        && IsFinite(dot02)
-        && IsFinite(dot12)
-        && IsFinite(determinant)
-        && Abs(length0 - 1.0f) <= s_RigidJointEpsilon
-        && Abs(length1 - 1.0f) <= s_RigidJointEpsilon
-        && Abs(length2 - 1.0f) <= s_RigidJointEpsilon
-        && Abs(dot01) <= s_RigidJointEpsilon
-        && Abs(dot02) <= s_RigidJointEpsilon
-        && Abs(dot12) <= s_RigidJointEpsilon
-        && Abs(determinant - 1.0f) <= s_RigidJointEpsilon
+        VectorIsFinite(lengthSq, 0x7u)
+        && VectorIsFinite(dotAndDeterminant, 0xFu)
+        && Vector4LessOrEqual(VectorAbs(VectorSubtract(lengthSq, s_SIMDOne)), epsilon)
+        && Vector4LessOrEqual(VectorAbs(VectorSubtract(dotAndDeterminant, s_SIMDIdentityR3)), epsilon)
     ;
 }
 

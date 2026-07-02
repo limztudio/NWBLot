@@ -1705,6 +1705,32 @@ NWB_INLINE SIMDVector SIMDCALL VectorSum(SIMDVector value)noexcept{
 #endif
 }
 
+NWB_INLINE SIMDVector SIMDCALL VectorMergeX(SIMDVector x, SIMDVector y, SIMDVector z, SIMDVector w)noexcept{
+    const SIMDVector xy = VectorPermute<0, 4, 1, 5>(x, y);
+    const SIMDVector zw = VectorPermute<0, 4, 1, 5>(z, w);
+    return VectorPermute<0, 1, 4, 5>(xy, zw);
+}
+
+NWB_INLINE SIMDVector SIMDCALL Vector4MinComponent(SIMDVector value)noexcept{
+    SIMDVector result = VectorMin(value, VectorSwizzle<2, 3, 0, 1>(value));
+    result = VectorMin(result, VectorSwizzle<1, 0, 3, 2>(result));
+    return result;
+}
+
+NWB_INLINE SIMDVector SIMDCALL Vector4MaxComponent(SIMDVector value)noexcept{
+    SIMDVector result = VectorMax(value, VectorSwizzle<2, 3, 0, 1>(value));
+    result = VectorMax(result, VectorSwizzle<1, 0, 3, 2>(result));
+    return result;
+}
+
+NWB_INLINE SIMDVector SIMDCALL Vector3MinComponent(SIMDVector value)noexcept{
+    return Vector4MinComponent(VectorSwizzle<0, 1, 2, 0>(value));
+}
+
+NWB_INLINE SIMDVector SIMDCALL Vector3MaxComponent(SIMDVector value)noexcept{
+    return Vector4MaxComponent(VectorSwizzle<0, 1, 2, 0>(value));
+}
+
 NWB_INLINE SIMDVector SIMDCALL VectorReciprocal(SIMDVector value)noexcept{
 #if defined(NWB_HAS_NEON)
 #if defined(__aarch64__) || defined(_M_ARM64)

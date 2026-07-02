@@ -142,6 +142,22 @@ TEST(Math, VectorNamedScalarFunctions){
     EXPECT_FALSE(SignBit(VectorGetY(signedZeroTanH)));
 }
 
+TEST(Math, VectorMergeAndComponentReductions){
+    const SIMDVector merged = VectorMergeX(
+        VectorSet(1.0f, 10.0f, 10.0f, 10.0f),
+        VectorSet(2.0f, 20.0f, 20.0f, 20.0f),
+        VectorSet(3.0f, 30.0f, 30.0f, 30.0f),
+        VectorSet(4.0f, 40.0f, 40.0f, 40.0f)
+    );
+    EXPECT_TRUE(NearlyEqual4(merged, 1.0f, 2.0f, 3.0f, 4.0f));
+
+    const SIMDVector value = VectorSet(3.0f, -7.0f, 11.0f, -19.0f);
+    EXPECT_TRUE(NearlyEqual4(Vector4MinComponent(value), -19.0f, -19.0f, -19.0f, -19.0f));
+    EXPECT_TRUE(NearlyEqual4(Vector4MaxComponent(value), 11.0f, 11.0f, 11.0f, 11.0f));
+    EXPECT_TRUE(NearlyEqual4(Vector3MinComponent(value), -7.0f, -7.0f, -7.0f, -7.0f));
+    EXPECT_TRUE(NearlyEqual4(Vector3MaxComponent(value), 11.0f, 11.0f, 11.0f, 11.0f));
+}
+
 TEST(Math, RefractCriticalAngle){
     const SIMDVector normal = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     const SIMDVector criticalIncident = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);

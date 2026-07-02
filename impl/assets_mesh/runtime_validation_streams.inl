@@ -3,15 +3,19 @@
 
 
 [[nodiscard]] static bool ValidDirectionVector(const SIMDVector direction){
-    const f32 lengthSquared = VectorGetX(Vector3LengthSq(direction));
-    return VectorIsFinite(direction, 0x7u) && IsFinite(lengthSquared) && Abs(lengthSquared - 1.0f) <= 0.01f;
+    return
+        VectorIsFinite(direction, 0x7u)
+        && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(0.01f))
+    ;
 }
 
 [[nodiscard]] static bool ValidTangentVector(const SIMDVector tangent){
     const SIMDVector direction = VectorSetW(tangent, 0.0f);
-    const f32 lengthSquared = VectorGetX(Vector3LengthSq(direction));
-    const f32 handedness = Abs(VectorGetW(tangent));
-    return VectorIsFinite(tangent, 0xFu) && IsFinite(lengthSquared) && Abs(lengthSquared - 1.0f) <= 0.01f && Abs(handedness - 1.0f) <= 0.001f;
+    return
+        VectorIsFinite(tangent, 0xFu)
+        && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(0.01f))
+        && Vector4NearEqual(VectorAbs(VectorSplatW(tangent)), s_SIMDOne, VectorReplicate(0.001f))
+    ;
 }
 
 [[nodiscard]] static bool ValidateMeshStreams(

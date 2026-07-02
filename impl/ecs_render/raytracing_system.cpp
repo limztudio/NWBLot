@@ -469,9 +469,13 @@ namespace __hidden_raytracing_system{
 
 void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noexcept{
     const SIMDVector extent = VectorSubtract(boundsMax, boundsMin);
-    const f32 maxExtent = Max(Max(VectorGetX(extent), VectorGetY(extent)), VectorGetZ(extent));
-    const f32 padding = Max(s_SwShadowSceneBoundsMinPadding, maxExtent * s_SwShadowSceneBoundsRelativePadding);
-    const SIMDVector paddingVector = VectorSet(padding, padding, padding, 0.0f);
+    const SIMDVector paddingVector = VectorSetW(
+        VectorMax(
+            VectorReplicate(s_SwShadowSceneBoundsMinPadding),
+            VectorScale(Vector3MaxComponent(extent), s_SwShadowSceneBoundsRelativePadding)
+        ),
+        0.0f
+    );
     boundsMin = VectorSubtract(boundsMin, paddingVector);
     boundsMax = VectorAdd(boundsMax, paddingVector);
 }

@@ -30,10 +30,10 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
     if(!VectorIsFinite(scale, 0x7u) || !Vector3Greater(scale, VectorZero()))
         return false;
 
-    const SIMDVector minScale = VectorMin(VectorMin(VectorSplatX(scale), VectorSplatY(scale)), VectorSplatZ(scale));
-    const SIMDVector maxScale = VectorMax(VectorMax(VectorSplatX(scale), VectorSplatY(scale)), VectorSplatZ(scale));
+    const SIMDVector minScale = Vector3MinComponent(scale);
+    const SIMDVector maxScale = Vector3MaxComponent(scale);
     const SIMDVector tolerance = VectorScale(VectorMax(maxScale, s_SIMDOne), s_MeshletConeCullUniformScaleEpsilon);
-    return VectorGetX(VectorSubtract(maxScale, minScale)) <= VectorGetX(tolerance);
+    return Vector3LessOrEqual(VectorSubtract(maxScale, minScale), tolerance);
 }
 
 struct MaterialTypedByteRangeKey{

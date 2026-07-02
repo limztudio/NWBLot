@@ -137,9 +137,6 @@ namespace MeshletRefDeltaWidth{
 }
 
 [[nodiscard]] NWB_INLINE SIMDVector FoldMeshletConeOctAxis(SIMDVector axis){
-    if(VectorGetZ(axis) >= 0.0f)
-        return axis;
-
     const SIMDVector absXY = VectorAndInt(VectorAbs(axis), s_SIMDMaskXY);
     const SIMDVector foldedMagnitude = VectorSubtract(s_SIMDOne, VectorSwizzle<1, 0, 2, 3>(absXY));
     const SIMDVector foldedSign = VectorSelect(
@@ -148,14 +145,14 @@ namespace MeshletRefDeltaWidth{
         VectorGreaterOrEqual(axis, VectorZero())
     );
     const SIMDVector foldedXY = VectorMultiply(foldedMagnitude, foldedSign);
-    return VectorSelect(axis, foldedXY, s_SIMDMaskXY);
+    const SIMDVector folded = VectorSelect(axis, foldedXY, s_SIMDMaskXY);
+    return VectorSelect(axis, folded, VectorLess(VectorSplatZ(axis), VectorZero()));
 }
 
 [[nodiscard]] NWB_INLINE u32 PackMeshletConeOct16(const SIMDVector axis){
     SIMDVector octAxis = VectorSetW(axis, 0.0f);
     const SIMDVector lengthVector = VectorSum(VectorAbs(octAxis));
-    const f32 length = VectorGetX(lengthVector);
-    if(!IsFinite(length) || length <= s_MeshletConeAxisLengthEpsilon)
+    if(!VectorIsFinite(lengthVector, 0xFu) || !Vector4Greater(lengthVector, VectorReplicate(s_MeshletConeAxisLengthEpsilon)))
         return s_MeshletConeAxisFallback;
 
     octAxis = FoldMeshletConeOctAxis(VectorMultiply(octAxis, VectorReciprocal(lengthVector)));
@@ -193,16 +190,18 @@ namespace MeshletRefDeltaWidth{
         unpackedAxis,
         s_MeshletConeAxisLengthSquaredEpsilon
     );
-    const f32 axisDot = Max(-1.0f, Min(1.0f, VectorGetX(Vector3Dot(normalizedAxis, unpackedAxis))));
-    const f32 safeCutoff = Saturate(cutoff);
-    const SIMDVector cosineTerms = VectorSet(safeCutoff, axisDot, 0.0f, 0.0f);
+    const SIMDVector axisDot = VectorClamp(Vector3Dot(normalizedAxis, unpackedAxis), s_SIMDNegativeOne, s_SIMDOne);
+    const SIMDVector safeCutoff = VectorReplicate(Saturate(cutoff));
+    const SIMDVector cosineTerms = VectorMergeX(safeCutoff, axisDot, VectorZero(), VectorZero());
     const SIMDVector sineTerms = VectorSqrt(VectorMax(
         VectorZero(),
         VectorSubtract(s_SIMDOne, VectorMultiply(cosineTerms, cosineTerms))
     ));
-    const f32 sinTheta = VectorGetX(sineTerms);
-    const f32 sinAxisError = VectorGetY(sineTerms);
-    return safeCutoff * axisDot - sinTheta * sinAxisError;
+    const SIMDVector conservativeCutoff = VectorSubtract(
+        VectorMultiply(safeCutoff, axisDot),
+        VectorMultiply(VectorSplatX(sineTerms), VectorSplatY(sineTerms))
+    );
+    return VectorGetX(conservativeCutoff);
 }
 
 [[nodiscard]] NWB_INLINE u32 PackMeshletCone(const SIMDVector axis, const f32 cutoff){

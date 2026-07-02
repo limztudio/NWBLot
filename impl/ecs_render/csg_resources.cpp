@@ -101,8 +101,7 @@ static void CopyCsgCutterInlineParameters(
 
     SIMDVector determinant;
     outWorldToLocal = MatrixInverse(&determinant, *localToWorld);
-    const f32 det = VectorGetX(determinant);
-    return IsFinite(det) && Abs(det) > 0.0f;
+    return VectorIsFinite(determinant, 0xFu) && Vector4Greater(VectorAbs(determinant), VectorZero());
 }
 
 [[nodiscard]] static bool BuildCsgReceiverWorldBounds(

@@ -34,11 +34,10 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
 
 
 [[nodiscard]] inline bool ValidSkinInfluenceWeights(const SIMDVector weights){
-    const f32 weightSum = VectorGetX(Vector4Dot(weights, s_SIMDOne));
     if(!VectorIsFinite(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero()))
         return false;
 
-    return Abs(weightSum - 1.0f) <= s_SkinWeightSumEpsilon;
+    return Vector4NearEqual(Vector4Dot(weights, s_SIMDOne), s_SIMDOne, VectorReplicate(s_SkinWeightSumEpsilon));
 }
 
 [[nodiscard]] inline bool SkinInfluenceFitsSkeleton(const SkinInfluence4& skin, const u32 skeletonJointCount, u32& outJoint){
@@ -71,11 +70,11 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
     )
         return false;
 
-    const f32 determinant = VectorGetX(Vector3Dot(
+    const SIMDVector determinant = Vector3Dot(
         VectorSetW(row0, 0.0f),
         Vector3Cross(VectorSetW(row1, 0.0f), VectorSetW(row2, 0.0f))
-    ));
-    return IsFinite(determinant) && Abs(determinant) > s_Epsilon;
+    );
+    return VectorIsFinite(determinant, 0xFu) && Vector4Greater(VectorAbs(determinant), VectorReplicate(s_Epsilon));
 }
 
 [[nodiscard]] inline bool ValidInverseBindMatrices(

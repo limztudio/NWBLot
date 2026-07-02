@@ -202,8 +202,7 @@ bool ParseColorText(const AString& text, Vec4& outColor){
 
 bool Normalize(const SIMDVector value, SIMDVector& outValue){
     const SIMDVector lengthSquaredVector = Vector3LengthSq(value);
-    const f32 lengthSquared = VectorGetX(lengthSquaredVector);
-    if(!IsFinite(lengthSquared) || lengthSquared <= 0.0f)
+    if(!VectorIsFinite(lengthSquaredVector, 0xFu) || !Vector3Greater(lengthSquaredVector, VectorZero()))
         return false;
 
     const SIMDVector normalized = VectorDivide(value, VectorSqrt(lengthSquaredVector));

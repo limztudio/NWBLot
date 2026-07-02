@@ -281,8 +281,8 @@ template<usize ComponentCount>
         return false;
     }
 
-    const f32 weightSum = VectorGetX(Vector4Dot(weights, s_SIMDOne));
-    if(!IsFinite(weightSum) || weightSum <= SkinValidation::s_Epsilon){
+    const SIMDVector weightSum = Vector4Dot(weights, s_SIMDOne);
+    if(!VectorIsFinite(weightSum, 0xFu) || !Vector4Greater(weightSum, VectorReplicate(SkinValidation::s_Epsilon))){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must contain a positive total")
             , PathToString<tchar>(nwbFilePath)
             , influenceIndex
@@ -290,7 +290,7 @@ template<usize ComponentCount>
         return false;
     }
 
-    const SIMDVector normalizedWeights = VectorScale(weights, 1.0f / weightSum);
+    const SIMDVector normalizedWeights = VectorDivide(weights, weightSum);
     influence.weight[0u] = VectorGetX(normalizedWeights);
     influence.weight[1u] = VectorGetY(normalizedWeights);
     influence.weight[2u] = VectorGetZ(normalizedWeights);

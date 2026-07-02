@@ -15,7 +15,7 @@ static constexpr f32 s_FrameDirectionEpsilon = 0.00000001f;
 static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
 
 [[nodiscard]] NWB_INLINE bool FrameValidDirection(const SIMDVector value){
-    return VectorIsFinite(value, 0x7u) && VectorGetX(Vector3LengthSq(value)) > s_FrameDirectionEpsilon;
+    return VectorIsFinite(value, 0x7u) && Vector3Greater(Vector3LengthSq(value), VectorReplicate(s_FrameDirectionEpsilon));
 }
 
 [[nodiscard]] NWB_INLINE SIMDVector FrameNormalizeDirection(const SIMDVector value, const SIMDVector fallback){
@@ -25,16 +25,19 @@ static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
 [[nodiscard]] NWB_INLINE SIMDVector FrameProjectOntoPlane(const SIMDVector value, const SIMDVector normal){
     return VectorMultiplyAdd(
         normal,
-        VectorReplicate(-VectorGetX(Vector3Dot(value, normal))),
+        VectorNegate(Vector3Dot(value, normal)),
         value
     );
 }
 
 [[nodiscard]] NWB_INLINE SIMDVector FrameFallbackTangent(const SIMDVector normal){
-    const SIMDVector axis = Abs(VectorGetZ(normal)) < 0.999f
-        ? VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
-        : VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
-    ;
+    const SIMDVector zAxis = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+    const SIMDVector yAxis = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    const SIMDVector axis = VectorSelect(
+        yAxis,
+        zAxis,
+        VectorLess(VectorAbs(VectorSplatZ(normal)), VectorReplicate(0.999f))
+    );
     return FrameNormalizeDirection(Vector3Cross(axis, normal), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
 }
 

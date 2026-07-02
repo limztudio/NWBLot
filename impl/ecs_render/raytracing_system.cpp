@@ -1330,15 +1330,14 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
 
     // Soft opaque shadow TEMPORAL accumulation (Stage 3): build the reproject-merge pipeline + its two front/back binding
     // sets AND the two temporal SOFT_HALF resolve variants (the a-trous then reads the accumulated history instead of the
-    // raw trace). Gated behind the NWB_SOFT_SHADOW_TEMPORAL kill-switch. Non-fatal: a failure (or temporal disabled) leaves
-    // m_softShadowTemporalReady false and the soft path feeds the raw trace straight into the a-trous (the Stage-1/2 path).
+    // raw trace). Always on when the resources build; non-fatal: a failure leaves m_softShadowTemporalReady false and the
+    // soft path feeds the raw trace straight into the a-trous (the Stage-1/2 spatial-only fallback).
     rayTracingState().m_softShadowTemporalReady =
         rayTracingState().m_softShadowReady
-        && softShadowTemporalEnabled()
         && ensureShadowReprojectMergePipeline()
         && ensureShadowReprojectMergeBindingSet(targets)
     ;
-    if(rayTracingState().m_softShadowReady && softShadowTemporalEnabled() && !rayTracingState().m_softShadowTemporalReady)
+    if(rayTracingState().m_softShadowReady && !rayTracingState().m_softShadowTemporalReady)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
 
     // Stage 5 soft COLORED TRANSPARENT shadow: build the RGB a-trous resolve pipeline + the parallel transparent resolve
@@ -2908,34 +2907,10 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
             return false;
         }
 
-        // Read the Stage-2 adaptive config once (env-gated; defaults: adaptive ON, edge threshold 0.1, stats OFF) and
-        // create the persistent edge-fraction counter + its CPU-readable snapshot. Both are tiny and always bound (the
-        // shader always declares slots 15/16), so they are created here alongside the layout regardless of the config --
-        // the config only selects the dispatched mode (uniform half-res vs coarse+resolve) and whether stats are tallied.
-        if(!rayTracingState().m_swShadowAdaptiveConfigQueried){
-            rayTracingState().m_swShadowAdaptiveConfigQueried = true;
-            char envBuffer[64] = {};
-            if(ReadEnvironmentVariableBuffer("NWB_SW_SHADOW_ADAPTIVE", envBuffer, sizeof(envBuffer)))
-                rayTracingState().m_swShadowAdaptiveEnabled = (envBuffer[0] != '0');
-            if(ReadEnvironmentVariableBuffer("NWB_SW_SHADOW_EDGE_STATS", envBuffer, sizeof(envBuffer)))
-                rayTracingState().m_swShadowEdgeStatsEnabled = (envBuffer[0] == '1');
-            if(ReadEnvironmentVariableBuffer("NWB_SW_SHADOW_COMPACT", envBuffer, sizeof(envBuffer)))
-                rayTracingState().m_swShadowCompactEnabled = (envBuffer[0] != '0');
-            if(ReadEnvironmentVariableBuffer("NWB_SW_SHADOW_ADAPTIVE_OPAQUE", envBuffer, sizeof(envBuffer)))
-                rayTracingState().m_swShadowAdaptiveOpaqueEnabled = (envBuffer[0] != '0');
-            if(ReadEnvironmentVariableBuffer("NWB_SW_SHADOW_EDGE_THRESHOLD", envBuffer, sizeof(envBuffer))){
-                f64 parsed = static_cast<f64>(rayTracingState().m_swShadowEdgeThreshold);
-                if(ParseF64FromChars(envBuffer, envBuffer + NWB_STRLEN(envBuffer), parsed))
-                    rayTracingState().m_swShadowEdgeThreshold = static_cast<f32>(parsed);
-            }
-            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW shadow adaptive={} compact={} adaptiveOpaque={} edgeThreshold={} edgeStats={}")
-                , rayTracingState().m_swShadowAdaptiveEnabled ? 1 : 0
-                , rayTracingState().m_swShadowCompactEnabled ? 1 : 0
-                , rayTracingState().m_swShadowAdaptiveOpaqueEnabled ? 1 : 0
-                , static_cast<f64>(rayTracingState().m_swShadowEdgeThreshold)
-                , rayTracingState().m_swShadowEdgeStatsEnabled ? 1 : 0
-            );
-        }
+        // The Stage-2 adaptive config is fixed at its shipping defaults (adaptive ON, compact ON, adaptiveOpaque ON, edge
+        // threshold 0.1, stats OFF -- see renderer_state.h). Create the persistent edge-fraction counter + its CPU-readable
+        // snapshot: both are tiny and always bound (the shader always declares slots 15/16), so they exist alongside the
+        // layout regardless of the config -- the config only selects the dispatched mode + whether stats are tallied.
 
         Core::BufferDesc edgeStatsDesc;
         edgeStatsDesc
@@ -4327,25 +4302,6 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     runPass(dispatch.upsample, 1u, ShadowResolveStage::Upsample, fullGroupsX, fullGroupsY);
 }
 
-bool RendererRayTracingSystem::softShadowTemporalEnabled(){
-    // NWB_SOFT_SHADOW_TEMPORAL kill-switch, read ONCE from env and cached (mirrors causticTemporalDecay's one-time query).
-    // Default ON; "0" disables the Stage-3 temporal accumulation for a clean A/B (the soft path then feeds the raw trace
-    // straight into the a-trous, the exact pre-temporal pipeline). Any other value (or unset) leaves it enabled.
-    if(!rayTracingState().m_softShadowTemporalEnabledQueried){
-        rayTracingState().m_softShadowTemporalEnabledQueried = true;
-        char envBuffer[64] = {};
-        if(ReadEnvironmentVariableBuffer("NWB_SOFT_SHADOW_TEMPORAL", envBuffer, sizeof(envBuffer))){
-            // "0" (with optional surrounding whitespace already trimmed by the reader) disables; everything else enables.
-            if(envBuffer[0] == '0' && (envBuffer[1] == '\0'))
-                rayTracingState().m_softShadowTemporalEnabled = false;
-        }
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: soft shadow temporal accumulation {}")
-            , rayTracingState().m_softShadowTemporalEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
-        );
-    }
-    return rayTracingState().m_softShadowTemporalEnabled;
-}
-
 bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
     if(rayTracingState().m_shadowReprojectMergePipeline)
         return true;
@@ -4694,26 +4650,9 @@ void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTarget
 }
 
 f32 RendererRayTracingSystem::causticTemporalDecay(){
-    // Splat-space temporal EMA decay factor, read once from env. Default 0.85 (a moderate ~6-7 frame time constant that
-    // visibly de-sparkles a spinning refractor while still following its motion); <=0 disables temporal entirely (the
-    // old clear-every-frame behavior, a clean A/B + safe fallback). Clamp to [0,1) so the EMA can never diverge.
-    if(!rayTracingState().m_causticTemporalDecayQueried){
-        rayTracingState().m_causticTemporalDecayQueried = true;
-        char envBuffer[64] = {};
-        if(ReadEnvironmentVariableBuffer("NWB_CAUSTIC_TEMPORAL_DECAY", envBuffer, sizeof(envBuffer))){
-            f64 parsed = static_cast<f64>(rayTracingState().m_causticTemporalDecay);
-            if(ParseF64FromChars(envBuffer, envBuffer + NWB_STRLEN(envBuffer), parsed))
-                rayTracingState().m_causticTemporalDecay = static_cast<f32>(parsed);
-        }
-        if(rayTracingState().m_causticTemporalDecay >= 1.f)
-            rayTracingState().m_causticTemporalDecay = 0.99f;
-        if(rayTracingState().m_causticTemporalDecay < 0.f)
-            rayTracingState().m_causticTemporalDecay = 0.f;
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: caustic temporal decay={} ({})")
-            , static_cast<f64>(rayTracingState().m_causticTemporalDecay)
-            , (rayTracingState().m_causticTemporalDecay > 0.f) ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
-        );
-    }
+    // Splat-space temporal EMA decay factor: 0.85 = a moderate ~6-7 frame time constant that de-sparkles a spinning
+    // refractor while still following its motion (a fixed value on the renderer state, clamped to [0,1) at its default so
+    // the EMA can never diverge). Was an env A/B knob; removed under the no-engine-env policy -- tuning belongs in tests.
     return rayTracingState().m_causticTemporalDecay;
 }
 

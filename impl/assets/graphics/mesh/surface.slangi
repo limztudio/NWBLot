@@ -15,35 +15,52 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Named neutral / preset values for the surface's optical + render fields, so the defaults below and the material
+// hooks read as intent rather than bare literals (no magic numbers). refractionIor is a physical index (vacuum 1.0,
+// typical glass ~1.5); shadowAbsorptionTint is a per-unit SURVIVAL colour (white = nothing absorbed = no shadow);
+// renderCoverage is the AVBOIT blend coverage (1 = fully opaque).
+#define NWB_SURFACE_IOR_VACUUM        half(1.0)              // no refraction / no Fresnel
+#define NWB_SURFACE_IOR_GLASS         half(1.5)              // typical glass Fresnel -- a convenience preset a material MAY author
+#define NWB_SURFACE_ABSORPTION_NONE   half3(1.0, 1.0, 1.0)   // per-unit survival = perfectly clear -> casts no shadow
+#define NWB_SURFACE_COVERAGE_OPAQUE   half(1.0)              // render coverage = fully opaque
+
 // The per-material surface contract, shared by the G-buffer pixel shader (gbuffer_ps.slangi), the shadow trace
 // (shadow/shadow_surface.slangi), and the AVBOIT transparent passes. Each material provides ONLY a surface hook,
 // nwbMaterialSurface(), that fills the surface below from the surface-input statics (inColor / inNormal /
 // inTangent / inUv0 / inWorldPosition / inIncidentDirection) and its own logic. A material never writes the
-// G-buffer targets or the model-id packing, and cannot get the target layout wrong. The surface carries the
-// per-pixel OUTPUTS plus the optical PARAMS each consumer needs: `alpha` is the AVBOIT transparent passes'
-// per-pixel opacity (the hook decides it, exactly as it decides the shaded base color), while `ior` /
-// `transmission` are the refractive OPTICAL PARAMS the shadow trace integrates over the geometry. The hook supplies
-// only the params; the ENGINE (which alone sees a shadow ray's entry AND exit faces) integrates the shadow
-// visibility over the TRUE volume path: per surface crossing it folds in Fresnel_transmitted(ior) and accumulates
-// a signed Beer-Lambert optical depth (absorptionCoeff(transmission) * t * faceSign, +1 exit / -1 entry) that
-// telescopes to the real inside path length. So the surface stays
-// `{ baseColor, normal, param0, param1, ior, transmission, alpha }`.
+// G-buffer targets or the model-id packing, and cannot get the target layout wrong.
+//
+// The optical/render fields are named for the CONSUMER SPACE they feed -- the two are disjoint, which is the whole
+// point (nothing reads across the boundary):
+//   RENDER space (how the MESH looks on screen): `renderCoverage` is the AVBOIT per-fragment blend coverage /
+//     extinction. All three AVBOIT passes (occupancy, extinction, accumulate) read it and NOTHING else does; the
+//     opaque G-buffer + shadow trace ignore it. A raster pass cannot see an occluder's back face, so coverage is a
+//     single screen-space scalar, not a volume measurement.
+//   SHADOW space (how the cast SHADOW looks): `refractionIor` (per-crossing Fresnel) + `shadowAbsorptionTint`
+//     (per-unit Beer-Lambert SURVIVAL colour) are the optical params the shadow + caustic traces integrate over the
+//     TRUE entry->exit path. The hook supplies only the params; the ENGINE (which alone sees both faces of an
+//     occluder) folds Fresnel_transmitted(refractionIor) per crossing and accumulates a signed Beer-Lambert optical
+//     depth absorptionCoeff(shadowAbsorptionTint) * t * faceSign (+1 exit / -1 entry) that telescopes to the real
+//     inside path length.
+//
+// The two spaces are physically CORRELATED (a denser glass is both more opaque AND casts a darker shadow) but live
+// in different units, so they stay separate fields. Author them CONSISTENTLY with nwbMakeGlassSurface (one `density`
+// seeds both); set them independently only for a deliberate stylised mismatch. So the surface stays
+// `{ baseColor, normal, param0, param1, refractionIor, shadowAbsorptionTint, renderCoverage }`.
 struct NwbMeshSurface{
     half3  baseColor;
-    float3 normal;          // world space; the engine encodes it into the normal target
-    half   param0;          // user BXDF parameter, packed into normal.a (e.g. roughness)
-    half   param1;          // user BXDF parameter, packed into world.a (e.g. metallic)
-    half   ior;             // index of refraction (Fresnel). 1.0 = no refraction (fully transmissive surface). The
-                            // shadow trace applies per-crossing Fresnel from this; the rasterizer G-buffer write
-                            // discards it. The caustic producer uses it for refractive materials.
-    half3  transmission;    // per-unit Beer-Lambert absorption color (the fraction surviving ONE world unit of the
-                            // medium). float3(1) = no absorption. The shadow trace integrates exp(-absorptionCoeff *
-                            // pathLength) over the real entry->exit path; the rasterizer discards it.
-    half   alpha;           // AVBOIT per-pixel opacity the material's hook decides. Default 1.0 (fully opaque): an
-                            // opaque material leaves it, and the rasterizer G-buffer + shadow trace ignore it. ALL
-                            // THREE AVBOIT passes (occupancy, extinction, accumulate) read it so the extinction-built
-                            // volume and the accumulate color-weight share the IDENTICAL shader-decided alpha. A
-                            // transparent material's hook sets it (e.g. 1 - nwbLuminance(transmission)).
+    float3 normal;                // world space; the engine encodes it into the normal target
+    half   param0;                // user BXDF parameter, packed into normal.a (e.g. roughness)
+    half   param1;                // user BXDF parameter, packed into world.a (e.g. metallic)
+    half   refractionIor;         // SHADOW space. Index of refraction (Fresnel). 1.0 = no refraction. The shadow +
+                                  // caustic traces apply per-crossing Fresnel from this; the raster G-buffer discards it.
+    half3  shadowAbsorptionTint;  // SHADOW space. Per-unit Beer-Lambert SURVIVAL colour (fraction of light surviving
+                                  // ONE world unit of the medium). white = no absorption = casts no shadow. The trace
+                                  // integrates exp(-absorptionCoeff * pathLength) over the real entry->exit chord; raster discards it.
+    half   renderCoverage;        // RENDER space. AVBOIT per-fragment blend coverage the hook decides. Default 1.0
+                                  // (opaque): an opaque material leaves it, and the raster G-buffer + shadow trace
+                                  // ignore it. ALL THREE AVBOIT passes (occupancy, extinction, accumulate) read this
+                                  // identical value so the extinction-built volume and the accumulate colour-weight agree.
 };
 
 NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal, half param0, half param1){
@@ -52,17 +69,35 @@ NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal, half param0, h
     surface.normal = normal;
     surface.param0 = param0;
     surface.param1 = param1;
-    surface.ior = half(1.0);
-    surface.transmission = half3(1.0, 1.0, 1.0);
-    surface.alpha = half(1.0);
+    surface.refractionIor = NWB_SURFACE_IOR_VACUUM;
+    surface.shadowAbsorptionTint = NWB_SURFACE_ABSORPTION_NONE;
+    surface.renderCoverage = NWB_SURFACE_COVERAGE_OPAQUE;
     return surface;
 }
 
 // Convenience for materials with no extra BXDF parameters. Opaque casters use these defaults unchanged: the shadow
-// trace zeroes an opaque occluder via the trace's opaque flag (it terminates before reading ior/transmission), so the
-// defaults are neutral optical params (ior = 1, transmission = white).
+// trace zeroes an opaque occluder via the trace's opaque flag (it terminates before reading the optical params), so
+// the defaults are neutral (refractionIor = 1, shadowAbsorptionTint = white, renderCoverage = opaque).
 NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal){
     return nwbMakeMeshSurface(baseColor, normal, half(0.0), half(0.0));
+}
+
+// Convenience for a TRANSPARENT (glass) material: author ONE `density` (0 = perfectly clear, 1 = fully solid) plus a
+// `tint` (the colour the shadow keeps), and BOTH consumers are seeded CONSISTENTLY from them so the on-screen look
+// and the cast shadow move together -- a solid glass is opaque AND casts a matching shadow, never one without the
+// other. density drives renderCoverage directly, and scales how strongly the tint absorbs:
+//   shadowAbsorptionTint = lerp(white, tint, density)
+// so density 0 -> white survival (no shadow, invisible mesh) and density 1 -> the full tint (its darkness/saturation
+// IS the solid-glass shadow colour: pick a darker/more-saturated tint for a darker shadow). The bridge is scalar +
+// Slang-builtin only, so it drags no extra include into the shared contract. For a DELIBERATE stylised decoupling (a
+// glass that looks more/less solid than its shadow) call this, then overwrite result.renderCoverage independently --
+// that override is the visible, intentional exception, not an accidental mismatch.
+NwbMeshSurface nwbMakeGlassSurface(half3 baseColor, float3 normal, half refractionIor, half3 tint, half density){
+    NwbMeshSurface surface = nwbMakeMeshSurface(baseColor, normal);
+    surface.refractionIor = refractionIor;
+    surface.renderCoverage = clamp(density, half(0.0), half(1.0));
+    surface.shadowAbsorptionTint = lerp(NWB_SURFACE_ABSORPTION_NONE, clamp(tint, half3(0.0), half3(1.0)), surface.renderCoverage);
+    return surface;
 }
 
 
@@ -70,10 +105,10 @@ NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal){
 
 
 // Engine-side shadow physics LIBRARY helpers the trace backends CALL with the optical params a hit's surface hook
-// supplies (NwbMeshSurface.ior / .transmission). They live on the shared surface contract -- not the shadow trace --
+// supplies (NwbMeshSurface.refractionIor / .shadowAbsorptionTint). They live on the shared surface contract -- not the trace --
 // so the SAME definitions resolve in every context that pulls in this header. They use ONLY Slang built-ins, so the
 // hardware any-hit and the software traversal evaluate them byte-identically, preserving the HW/SW lockstep mandate.
-// The engine owns the physics; the hook owns only the params (ior / transmission). Unlike the retired per-hit
+// The engine owns the physics; the hook owns only the params (refractionIor / shadowAbsorptionTint). Unlike the retired per-hit
 // transmittance model, the engine integrates absorption over the TRUE entry->exit path (signed optical-depth
 // telescoping) and applies Fresnel per surface crossing -- the only place that sees both faces of a volume.
 

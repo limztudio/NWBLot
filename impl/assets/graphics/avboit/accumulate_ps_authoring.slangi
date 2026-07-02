@@ -161,12 +161,12 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
 #endif
 
     // The material's surface hook decides the per-pixel surface (base color + normal + BXDF params) the same way
-    // the G-buffer pixel shader does, AND the AVBOIT opacity (surface.alpha). Run it before the alpha gate so the
+    // the G-buffer pixel shader does, AND the AVBOIT opacity (surface.renderCoverage). Run it before the alpha gate so the
     // accumulate color-weight uses the SAME shader-decided alpha the occupancy/extinction passes built the volume
     // from -- an opaque material leaves the default 1.0, a transparent material's hook sets it.
     const NwbMeshSurface surface = nwbMaterialSurface();
 
-    const half alpha = half(clamp(surface.alpha, 0.0, 1.0));
+    const half alpha = half(clamp(surface.renderCoverage, 0.0, 1.0));
     if(alpha <= half(0.0))
         discard;
 

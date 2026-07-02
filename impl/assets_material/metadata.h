@@ -42,7 +42,7 @@ static constexpr AStringView s_TransparentField = "transparent";
 static constexpr AStringView s_TwoSidedField = "two_sided";
 // The dedicated refractive-caster classification flag (SEPARATE from `transparent`). Authored exactly like
 // `transparent`/`two_sided` as a bare 0/1 flag (`asset.refractive = 1;`). The material decides ONLY this boolean;
-// the actual refraction VALUES (ior/thickness/transmission) are shader-side -- the `.surface` hook returns them
+// the actual refraction VALUES (refractionIor / shadowAbsorptionTint) are shader-side -- the `.surface` hook returns them
 // via NwbMeshSurface -- mirroring how the colored-shadow transmittance is shader-decided. Default 0 (not a
 // refractive caster), so a material declaring none behaves identically to today.
 static constexpr AStringView s_RefractiveField = "refractive";

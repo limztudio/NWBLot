@@ -112,12 +112,10 @@ private:
     // Soft opaque shadow TEMPORAL accumulation (Stage 3 of the soft-ray-traced-shadow feature): the reproject-merge pass
     // inserted per slot between the soft trace and the a-trous resolve. ensureShadowReprojectMergePipeline builds its
     // pipeline + layout; ensureShadowReprojectMergeBindingSet builds the two front/back sets (history-in SRV and history-out
-    // UAV never alias). softShadowTemporalEnabled reads NWB_SOFT_SHADOW_TEMPORAL once (default on; "0" disables for an A/B).
-    // swapSoftShadowTemporalHistory stashes this frame's worldToClip for next-frame reprojection + ping-pongs the history /
-    // moments / geometry buffers at frame end (guarded on m_softShadowTemporalReady so the cadence never stalls).
+    // UAV never alias). swapSoftShadowTemporalHistory stashes this frame's worldToClip for next-frame reprojection +
+    // ping-pongs the history / moments / geometry buffers at frame end (guarded on m_softShadowTemporalReady).
     [[nodiscard]] bool ensureShadowReprojectMergePipeline();
     [[nodiscard]] bool ensureShadowReprojectMergeBindingSet(DeferredFrameTargets& targets);
-    [[nodiscard]] bool softShadowTemporalEnabled();
     void swapSoftShadowTemporalHistory(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureSwCausticPipeline();
     [[nodiscard]] bool ensureSwCausticBindingSet(DeferredFrameTargets& targets);
@@ -130,7 +128,7 @@ private:
     // decay factor before the producer splats this frame's photons (only used when temporal is enabled, decay > 0).
     [[nodiscard]] bool ensureCausticAccumulatorDecayPipeline();
     [[nodiscard]] bool ensureCausticAccumulatorDecayBindingSet(DeferredFrameTargets& targets);
-    // Reads NWB_CAUSTIC_TEMPORAL_DECAY once (into m_causticTemporalDecay), returns the cached factor. <=0 == temporal off.
+    // Returns the fixed splat-space EMA decay factor (m_causticTemporalDecay = 0.85). <=0 would mean temporal off.
     [[nodiscard]] f32 causticTemporalDecay();
     // Splat-space temporal step, run at the top of each caustic producer (SW/HW) when temporal is enabled: on the first
     // enabled frame (or after a resize) the accumulator holds no history so it is CLEARED to 0; every later frame the

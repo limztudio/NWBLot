@@ -57,10 +57,21 @@ uint nwbShadowSeed(const uint2 pixel, const uint frameIndex){
 float2 nwbShadowLowDiscrepancy2D(const uint2 pixel, const uint frameIndex){
     const float a1 = 0.75487766624669276005; // 1 / phi2
     const float a2 = 0.56984029099805326591; // 1 / phi2^2
-    const float2 r2 = frac(float2(a1, a2) * float(frameIndex + 1u));
+    // CRITICAL: reduce the index modulo 2^16 in INTEGER space BEFORE the float multiply. A float32 has a 24-bit
+    // mantissa, so float(n) is exact only for n < 2^24 and a*n stays representable enough for frac() only while a*n's
+    // magnitude keeps a sub-unit ULP (roughly n < 2^23). A large index -- an unbounded per-frame counter, or a big
+    // decorrelation SALT the transparent soft trace adds (asin-cone sample-index offset) -- pushes float(n) past that
+    // range, where frac(a1*float(n)) collapses to a QUANTIZED CONSTANT (0 for the ~2.65e9 salt): the R2 walk dies, so
+    // every jittered ray fires at the SAME (rim) cone direction and a thin grazing occluder is missed -> the colored
+    // penumbra vanishes. Masking to 2^16 keeps a*n < ~4.9e4 (ULP << 1, frac() exact) while the R2 period (65536) is far
+    // longer than any temporal-reuse window, and the per-pixel Cranley-Patterson rotation below still fully decorrelates
+    // neighbours -- so the distribution is unchanged in practice. Also inoculates the OPAQUE trace's unbounded counter.
+    const float indexF = float((frameIndex & 0xffffu) + 1u);
+    const float2 r2 = frac(float2(a1, a2) * indexF);
 
     // Per-pixel rotation offset in [0,1) from the hash (two independent 16-bit halves for x/y), decorrelating the
-    // otherwise pixel-identical R2 value into a blue-noise-ish screen distribution.
+    // otherwise pixel-identical R2 value into a blue-noise-ish screen distribution. The hash seed uses the FULL index
+    // (not the masked one) so the per-pixel rotation keeps advancing every frame even where the R2 term has wrapped.
     const uint seed = nwbShadowSeed(pixel, frameIndex);
     const float2 offset = float2(float(seed & 0xffffu), float((seed >> 16u) & 0xffffu)) * (1.0 / 65536.0);
 

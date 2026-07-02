@@ -327,7 +327,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
         // Mirror the accumulate pass: bind this material's cook-generated per-material occupancy PS so the coverage
-        // it marks comes from the material's own surface.alpha (the SAME alpha the extinction + accumulate passes
+        // it marks comes from the material's own surface.renderCoverage (the SAME coverage the extinction + accumulate passes
         // read). A material without one falls back to the engine's fixed occupancy PS (vertex-alpha).
         if(materialDrivenAvboitOccupancy){
             passPixelShaderName = materialInfo.avboitOccupancyPixelShader.name();
@@ -342,7 +342,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
         // Mirror the accumulate pass: bind this material's cook-generated per-material extinction PS so the volume
-        // it splats comes from the material's own surface.alpha (the SAME alpha the occupancy + accumulate passes
+        // it splats comes from the material's own surface.renderCoverage (the SAME coverage the occupancy + accumulate passes
         // read). A material without one falls back to the engine's fixed extinction PS (vertex-alpha).
         if(materialDrivenAvboitExtinction){
             passPixelShaderName = materialInfo.avboitExtinctionPixelShader.name();

@@ -17,17 +17,17 @@ NwbMeshSurface nwbMaterialSurface(){
     const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
     const half4 tinted = half4(surface.base_color * runtime.color_tint);
     const half3 baseColor = nwbSmokeMaterialVertexColor(tinted.rgb);
-    // The hook supplies only the optical PARAMS; the ENGINE integrates the shadow visibility over the true
-    // entry->exit volume path (per-crossing Fresnel + signed Beer-Lambert optical depth), since only the trace sees
-    // both faces of an occluder. ior 1.5 = glass (Fresnel); transmission is the per-unit absorption color, tracking
-    // the per-cube tint so the cast shadow matches the base color. alpha (the AVBOIT opacity all three passes read)
-    // is still hook-decided. The base color stays the rasterized appearance (the G-buffer discards ior/transmission
-    // + alpha). Hardcoded test values; the production path authors them as typed .bind constants.
-    NwbMeshSurface result = nwbMakeMeshSurface(baseColor, inNormal, half(0.0), half(0.0));
-    result.ior = half(1.5);
-    result.transmission = clamp(tinted.rgb, half3(0.0), half3(1.0)) * half(0.7);
-    result.alpha = half(1.0 - nwbLuminance(result.transmission));
-    return result;
+    // ONE authored transparency, two consistent consumers: `density` (the tint's ALPHA channel) = how solid the glass
+    // is, and `tint` (the tint RGB) = the colour its shadow keeps when solid. nwbMakeGlassSurface seeds BOTH from them
+    // -- renderCoverage (the AVBOIT opacity all three passes read) = density, and shadowAbsorptionTint =
+    // lerp(white, tint, density) -- so a solid glass is opaque on screen AND casts a matching coloured shadow; the two
+    // can no longer disagree (a bright tint = a light glass = a faint shadow, which is now honest, not a surprise;
+    // pick a DARKER/more-saturated tint for a darker shadow). The ENGINE still integrates the shadow over the true
+    // entry->exit volume path (per-crossing Fresnel from refractionIor + signed Beer-Lambert), since only the trace
+    // sees both faces. To DELIBERATELY decouple the look from the shadow, set result.renderCoverage after this call --
+    // a visible, intentional exception. The base color stays the rasterized appearance (the G-buffer discards the
+    // optical params + coverage).
+    return nwbMakeGlassSurface(baseColor, inNormal, NWB_SURFACE_IOR_GLASS, tinted.rgb, tinted.a);
 }
 
 

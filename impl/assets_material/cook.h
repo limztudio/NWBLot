@@ -72,7 +72,7 @@ struct MaterialCookEntry{
     MaterialCookString avboitAccumulatePixelShaderName;
     // The occupancy/extinction twins of avboitAccumulatePixelShaderName, set by
     // EmitMaterialAvboitOccupancyPixelShaders / EmitMaterialAvboitExtinctionPixelShaders. So all three AVBOIT passes
-    // read this material's SAME shader-decided surface.alpha, each transparent `surface`-authored material gets its
+    // read this material's SAME shader-decided surface.renderCoverage, each transparent `surface`-authored material gets its
     // own occupancy + extinction PS too (not only the accumulate PS). Same lifecycle/usage as the accumulate name.
     MaterialCookString avboitOccupancyPixelShaderName;
     MaterialCookString avboitExtinctionPixelShaderName;
@@ -254,7 +254,7 @@ struct GeneratedMaterialPixelShader{
 // The occupancy/extinction twins of EmitMaterialAvboitAccumulatePixelShaders: for each TRANSPARENT material
 // authored with a `surface`, generate its AVBOIT occupancy / extinction pixel shader (engine AVBOIT
 // occupancy/extinction authoring + the material's typed `.bind` + its resolved `surface` hook), so all three
-// AVBOIT passes read this material's SAME shader-decided surface.alpha. Like the accumulate PS these are NOT
+// AVBOIT passes read this material's SAME shader-decided surface.renderCoverage. Like the accumulate PS these are NOT
 // material stage shaders; the renderer derives each PS's identity from the material name + the matching prefix to
 // bind it for the transparent draw's occupancy/extinction pass. `surfaceSource` must already be resolved.
 [[nodiscard]] bool EmitMaterialAvboitOccupancyPixelShaders(

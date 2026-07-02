@@ -389,7 +389,7 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
         return false;
 
     // The occupancy/extinction twins: each transparent material gets its own occupancy + extinction PS too, so all
-    // three AVBOIT passes read this material's SAME shader-decided surface.alpha (an accumulate-only change would
+    // three AVBOIT passes read this material's SAME shader-decided surface.renderCoverage (an accumulate-only change would
     // desync the extinction-built volume from the accumulate color-weight). The renderer binds them per material.
     MaterialCookVector<GeneratedMaterialPixelShader> generatedAvboitOccupancyPixelShaders(materialCookArena);
     if(!EmitMaterialAvboitOccupancyPixelShaders(

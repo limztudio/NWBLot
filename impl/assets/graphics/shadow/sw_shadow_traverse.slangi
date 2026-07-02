@@ -151,7 +151,7 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 // for crossing pairing and smooth author normals only for optional Fresnel.
                 const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
                 const float3 geometricNormal = cross(v1 - v0, v2 - v0);
-                nwbShadowIntegrateCrossing(acc, instanceIndex, surface.ior, surface.transmission, geometricNormal, objectNormal, smoothNormalWeight, direction, triangleHit.t);
+                nwbShadowIntegrateCrossing(acc, instanceIndex, surface.refractionIor, surface.shadowAbsorptionTint, geometricNormal, objectNormal, smoothNormalWeight, direction, triangleHit.t);
                 // Cost safeguard for deeply-stacked transparency: stop once effectively opaque, but KEEP the
                 // accumulated (near-zero) value -- the finalize applies the same Beer-Lambert term. Hard-zeroing here
                 // was order-dependent and could snap an overlap pixel to pure black; matches the HW soft early-out.

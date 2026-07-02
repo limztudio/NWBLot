@@ -290,14 +290,14 @@ public:
     // G-buffer PS); this is a second, transparent-only pixel shader the renderer selects by pass.
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitAccumulatePixelShader()const{ return m_avboitAccumulatePixelShader; }
     // The occupancy/extinction twins of avboitAccumulatePixelShader, bound for this material's transparent draw so
-    // all three AVBOIT passes read the material's SAME shader-decided surface.alpha. Valid only for a transparent
+    // all three AVBOIT passes read the material's SAME shader-decided surface.renderCoverage. Valid only for a transparent
     // material authored with a `surface`; invalid otherwise (the draw then uses the engine's fixed pass PS).
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitOccupancyPixelShader()const{ return m_avboitOccupancyPixelShader; }
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitExtinctionPixelShader()const{ return m_avboitExtinctionPixelShader; }
     [[nodiscard]] bool transparent()const{ return m_transparent; }
     [[nodiscard]] bool twoSided()const{ return m_twoSided; }
     // The dedicated refractive-caster classification flag (SEPARATE from `transparent`). The material decides only
-    // this boolean; the refraction VALUES (ior/thickness/transmission) are shader-side, returned by the `.surface`
+    // this boolean; the refraction VALUES (refractionIor / shadowAbsorptionTint) are shader-side, returned by the `.surface`
     // hook via NwbMeshSurface. Default false (not a refractive caster) -- a material declaring none is unchanged.
     [[nodiscard]] bool refractive()const{ return m_refractive; }
 

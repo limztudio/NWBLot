@@ -12,7 +12,7 @@
 // Engine-owned authoring header for a material's AVBOIT-occupancy pixel shader, the per-material twin of the fixed
 // occupancy_ps.slang. A material's occupancy pixel shader includes this + its `.bind` interface + its surface hook,
 // and the engine owns the entry (the main below) + the coverage-marking math. The occupancy alpha now comes from
-// the SAME per-material surface hook (nwbMaterialSurface -> surface.alpha) the accumulate + extinction passes use,
+// the SAME per-material surface hook (nwbMaterialSurface -> surface.renderCoverage) the accumulate + extinction passes use,
 // so the extinction-built volume and the accumulate color-weight share the IDENTICAL shader-decided alpha. Only the
 // alpha SOURCE changes; the coverage-marking + depth/slice math is byte-identical to the fixed occupancy_ps.slang.
 //
@@ -55,7 +55,7 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
 
 // The typed-word load families the generated .bind accessors build on, then the surface contract (NwbMeshSurface
 // / nwbMaterialSurface). The AVBOIT main loads the surface-input statics + invokes nwbMaterialSurface() directly
-// for surface.alpha; this pass shades no color, so it pulls neither scene/lighting.slangi nor the BXDF dispatch.
+// for surface.renderCoverage; this pass shades no color, so it pulls neither scene/lighting.slangi nor the BXDF dispatch.
 #include "../mesh/material_typed_accessors.slangi"
 #include "../mesh/surface.slangi"
 
@@ -85,7 +85,7 @@ void main(NwbAvboitOccupancyPixelInput input){
     surfaceInputs.uv0 = input.uv0;
     surfaceInputs.worldPosition = input.worldPosition.xyz;
     // This pass binds no scene shading buffer, so the true view direction is unavailable; use the documented dummy
-    // -normal exactly as the rasterizer G-buffer does. It is harmless here -- this pass reads only surface.alpha
+    // -normal exactly as the rasterizer G-buffer does. It is harmless here -- this pass reads only surface.renderCoverage
     // (the optical params ior/transmission are read only by the shadow trace).
     surfaceInputs.incidentDirection = -input.normal;
     nwbLoadMeshSurfaceInputs(surfaceInputs);
@@ -97,11 +97,11 @@ void main(NwbAvboitOccupancyPixelInput input){
         discard;
 #endif
 
-    // The material's surface hook decides the AVBOIT opacity (surface.alpha) -- the SAME value the extinction +
+    // The material's surface hook decides the AVBOIT opacity (surface.renderCoverage) -- the SAME value the extinction +
     // accumulate passes read, so the coverage this pass marks matches the volume they build.
     const NwbMeshSurface surface = nwbMaterialSurface();
 
-    const half alpha = half(clamp(surface.alpha, 0.0, 1.0));
+    const half alpha = half(clamp(surface.renderCoverage, 0.0, 1.0));
     uint virtualSlice;
     if(!nwbAvboitAcceptLowDepthFragment(g_OpaqueDepth, g_PointSampler, input.position, alpha, virtualSlice))
         discard;

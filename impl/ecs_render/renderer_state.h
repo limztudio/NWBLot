@@ -360,12 +360,10 @@ private:
     // The caustic resolve is a purely SPATIAL a-trous wavelet denoise. The one bit of temporal state is the SPLAT-SPACE
     // EMA in the R32_UINT accumulator (m_causticTemporalDecay > 0): the accumulator is decayed then re-splatted each
     // frame instead of cleared, so the sparkle-flicker of a moving caustic averages out WITHOUT any image-space
-    // reprojection (reprojection would ghost). m_causticTemporalDecay is read ONCE from env NWB_CAUSTIC_TEMPORAL_DECAY
-    // (default 0.85; <=0 disables temporal -> the old clear-every-frame behavior); m_causticTemporalDecayQueried gates
-    // that one-time read. The static steady state is photons/(1-decay), so the resolve pre-multiplies causticIntensity by
-    // (1-decay) to keep the STATIC brightness byte-unchanged.
+    // reprojection (reprojection would ghost). Fixed at 0.85 (a moderate ~6-7 frame time constant). The static steady
+    // state is photons/(1-decay), so the resolve pre-multiplies causticIntensity by (1-decay) to keep the STATIC
+    // brightness byte-unchanged.
     f32 m_causticTemporalDecay = 0.85f;
-    bool m_causticTemporalDecayQueried = false;
     bool m_causticEmissionGateLogged = false;
     // Software (compute) shadow traversal, decomposed into one NAMED pipeline per pass (the old single multiplyMode
     // pipeline is retired). All passes SHARE one binding layout + one binding set: each pass's kernel references only its
@@ -418,11 +416,9 @@ private:
     Core::Buffer* m_swShadowMeshIndexBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
     Core::Buffer* m_swShadowMeshAttributeBuffers[NWB_SW_SHADOW_MAX_MESHES] = {}; // U2 per-vertex normal/uv0 for the per-hit transmittance dispatch
     u32 m_swShadowMeshCount = 0u;
-    // Stage-2 adaptive transparent shadow (coarse-trace + edge-refine) config, read once from the environment:
-    //  - NWB_SW_SHADOW_ADAPTIVE      (default ON; "0" falls back to the uniform half-res mode-2 path for A/B).
-    //  - NWB_SW_SHADOW_EDGE_THRESHOLD (default 0.1; the 2x2 coarse transmittance range above which a block is an edge).
-    //  - NWB_SW_SHADOW_EDGE_STATS    (default OFF; "1" periodically reads back the traced/total ray fraction to the log).
-    bool m_swShadowAdaptiveConfigQueried = false;
+    // Stage-2 adaptive transparent shadow (coarse-trace + edge-refine) config, fixed at shipping defaults (adaptive ON,
+    // edge threshold 0.1, stats OFF). The NWB_SW_SHADOW_* env A/B knobs were removed under the no-engine-env policy; these
+    // flags (+ the passes they select) retire with Stage 6, when soft shadows fully replace the hard economizers.
     bool m_swShadowAdaptiveEnabled = true;
     bool m_swShadowEdgeStatsEnabled = false;
     // Stage-3 compacted-indirect resolve (NWB_SW_SHADOW_COMPACT, default ON): when set AND adaptive is on, the mode-5
@@ -515,12 +511,7 @@ private:
     // Cleared whenever the temporal targets are (re)created (createShadowVisibilityTarget); the FIRST merge dispatch sets it
     // true. Until then the merge treats every pixel as n=0 (pure current sample) -- the clean first-frame / post-resize path.
     bool m_softShadowTemporalSeeded = false;
-    // NWB_SOFT_SHADOW_TEMPORAL env kill-switch (default ON; "0" disables temporal for a clean A/B), read ONCE and cached --
-    // mirrors the caustic NWB_CAUSTIC_TEMPORAL_DECAY pattern. When disabled, m_softShadowTemporalReady stays false and the
-    // dispatch skips the merge, feeding the raw trace straight into the a-trous (the exact pre-temporal Stage-1/2 pipeline).
-    bool m_softShadowTemporalEnabled = true;
-    bool m_softShadowTemporalEnabledQueried = false;
-    // Set by prepareShadowVisibilityResources when m_softShadowReady AND temporal is enabled AND the merge pipeline + both
+    // Set by prepareShadowVisibilityResources when m_softShadowReady AND the merge pipeline + both
     // merge binding sets + both temporal resolve SOFT_HALF variants built this frame; gates the per-slot merge insertion +
     // the frame-end stash/swap. Non-fatal: a failure leaves it false and the soft path runs its non-temporal fallback.
     bool m_softShadowTemporalReady = false;

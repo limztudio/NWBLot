@@ -29,6 +29,14 @@
 #define NWB_SHADOW_CROSSING_MERGE_REL_EPSILON 1e-5
 #define NWB_SHADOW_INTERFACE_FADE_DISTANCE 2e-3
 #define NWB_SHADOW_SINGLETON_FALLBACK_CHORD 0.20
+// Minimum effective occluder thickness (world units) for a transparent occluder's cast shadow. A thin-shell
+// transparent mesh (e.g. a glass character) has a tiny entry->exit chord, so strict Beer-Lambert (visibility =
+// survival^chord) leaves it casting almost no shadow no matter how dark/dense the material -- chord -> 0 pushes
+// visibility -> 1. Flooring a REAL volume chord to this thickness lets a thin glass caster still cast a shadow
+// governed by its density/tint rather than its accidental geometric thinness. Thicker casters keep their larger real
+// chord (physical thickness still darkens them), so the thick caustic-sphere shadow + the HW/SW parity are unchanged,
+// and the caustic light-transport path (a separate integrator in caustic_trace.slangi) is untouched entirely.
+#define NWB_SHADOW_MIN_OCCLUDER_THICKNESS 0.5
 
 // Per-occluder optical-depth bin. Each occluder's crossings are accumulated INDEPENDENTLY (binned by instance id) so
 // one occluder's unbalanced crossing cannot corrupt the others. For a closed volume the robust chord is the sum of
@@ -182,6 +190,13 @@ half3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){
             if((crossingCount & 1u) != 0u)
                 chordLength = max(chordLength, crossingCount == 1u ? acc.bins[i].singletonFallbackChord : max(acc.bins[i].tMax - acc.bins[i].tMin, 0.0));
         }
+
+        // Floor a REAL volume chord (a paired entry->exit, an odd>1 set, or an overflowed span) to the minimum
+        // occluder thickness so a THIN transparent shell still casts a density/tint-driven shadow instead of
+        // vanishing under Beer-Lambert over its tiny chord. The lone-crossing grazing fallback (crossingCount == 1)
+        // is left untouched so silhouette grazes gain no hard rim; thicker casters keep their larger real chord.
+        if(acc.bins[i].crossingOverflow != 0u || crossingCount >= 2u)
+            chordLength = max(chordLength, NWB_SHADOW_MIN_OCCLUDER_THICKNESS);
 
         const float interfaceWeight = smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chordLength);
         interfaceTransmittance *= lerp(1.0, acc.bins[i].interfaceTransmittance, interfaceWeight);

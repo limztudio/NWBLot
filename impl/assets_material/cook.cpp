@@ -2192,8 +2192,8 @@ static bool EmitShadowTransmittanceDispatchModuleImpl(
     // first id's `using`, so the shared-interface case keeps working. The surface hook itself is still renamed to
     // a unique per-id name (nwbShadowSurfaceModel<id>) so multiple hooks coexist; the wrapper sets the trace
     // material context from the hit + loads the surface-input statics (inlining nwbMaterialSurfaceAt) before
-    // invoking the renamed hook, then returns the hook's whole NwbMeshSurface (its optical params -- ior /
-    // transmission -- plus base color / normal). The hook supplies only the params; the ENGINE integrates the shadow
+    // invoking the renamed hook, then returns the hook's whole NwbMeshSurface (its optical params -- refractionIor /
+    // shadowAbsorptionTint -- plus base color / normal). The hook supplies only the params; the ENGINE integrates the shadow
     // visibility over the true entry->exit volume path (per-crossing Fresnel + signed Beer-Lambert optical depth),
     // since only the trace sees both faces of an occluder. There is no per-hit transmittance for the hook to own.
     for(usize id = 0u; id < surfaceById.size(); ++id){
@@ -2412,7 +2412,7 @@ static bool EmitMaterialPixelShadersImpl(
 // Shared body for the three per-material AVBOIT pass-PS generators (accumulate / occupancy / extinction). All three
 // generate ONE PS per TRANSPARENT `surface`-authored material that includes the engine pass-authoring header + the
 // material's typed .bind + its resolved surface hook, so all three read this material's SAME shader-decided
-// surface.alpha. They differ only in the generated-directory leaf, the included authoring header, the log label,
+// surface.renderCoverage. They differ only in the generated-directory leaf, the included authoring header, the log label,
 // the generated-name prefix, and which entry name field records the identity -- threaded through here. Unlike the
 // G-buffer PS these are NOT material stage shaders; the renderer derives each PS's identity from the material name
 // + the matching prefix to bind it for the transparent draw. Opaque materials + transparent materials with explicit
@@ -2459,7 +2459,7 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
 
         // The generated pass pixel shader: engine AVBOIT pass authoring + this material's typed .bind (by interface
         // virtual path) + its resolved surface hook (by absolute path) -- the same .bind + .surface pair the
-        // G-buffer PS uses, so the transparent pass reads the material's own shader-decided surface.alpha.
+        // G-buffer PS uses, so the transparent pass reads the material's own shader-decided surface.renderCoverage.
         CookString generatedSource(arena);
         generatedSource += "// Generated per-material AVBOIT pass pixel shader: engine AVBOIT pass authoring + this material's\n";
         generatedSource += "// typed .bind + its surface hook. The material declares only its 'surface' fragment; the cook\n";
@@ -3037,7 +3037,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     // Optional per-material AVBOIT pass pixel shaders: accumulate, then occupancy, then extinction -- each a
     // presence flag + the shader name hash, mirroring a stage-shader entry. Present only for a surface-authored
     // transparent material; loadBinary reads them back in this order. All three carry the material's SAME
-    // shader-decided surface.alpha, so the renderer can bind a per-material PS for every AVBOIT pass.
+    // shader-decided surface.renderCoverage, so the renderer can bind a per-material PS for every AVBOIT pass.
     const auto appendOptionalAvboitPixelShader = [&outBinary](const Core::Assets::AssetRef<Shader>& shaderRef){
         if(shaderRef.valid()){
             AppendPOD(outBinary, static_cast<u32>(1u));

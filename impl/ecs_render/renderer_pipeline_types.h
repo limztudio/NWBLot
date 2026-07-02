@@ -165,7 +165,7 @@ struct MaterialSurfaceInfo{
     // (the draw then uses the engine's fixed accumulate PS).
     Core::Assets::AssetRef<Shader> avboitAccumulatePixelShader;
     // The occupancy/extinction twins, bound for those AVBOIT passes so all three read the material's SAME
-    // shader-decided surface.alpha. Valid only for a surface-authored transparent material; invalid otherwise
+    // shader-decided surface.renderCoverage. Valid only for a surface-authored transparent material; invalid otherwise
     // (the pass then uses the engine's fixed occupancy/extinction PS).
     Core::Assets::AssetRef<Shader> avboitOccupancyPixelShader;
     Core::Assets::AssetRef<Shader> avboitExtinctionPixelShader;
@@ -177,7 +177,7 @@ struct MaterialSurfaceInfo{
     u32 shadingModelId = 0u;
     u32 shadowTransmittanceModelId = 0u;
     // The dedicated refractive-caster classification flag, copied from the cooked Material. The RT instance
-    // occluder record (U0-2) reads it. The refraction VALUES (ior/thickness/transmission) are shader-side
+    // occluder record (U0-2) reads it. The refraction VALUES (refractionIor / shadowAbsorptionTint) are shader-side
     // (NwbMeshSurface), not here. Default false (not a refractive caster) -- a material declaring none is unchanged.
     bool transparent = false;
     bool twoSided = false;

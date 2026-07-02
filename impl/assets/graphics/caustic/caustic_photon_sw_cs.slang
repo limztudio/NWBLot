@@ -333,8 +333,8 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                     hit.rayDirection = worldDirection;
 
                     const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
-                    closest.ior = surface.ior;
-                    closest.transmission = surface.transmission;
+                    closest.ior = surface.refractionIor;
+                    closest.transmission = surface.shadowAbsorptionTint;
                 }
             }
             active = false; // leaf done -> pop the next deferred node below

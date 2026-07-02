@@ -165,10 +165,8 @@ inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 f
 
     SIMDVector determinant;
     const SIMDMatrix clipToWorld = MatrixInverse(&determinant, worldToClip);
-    if(VectorIsFinite(determinant, 0xFu) && Vector4Greater(VectorAbs(determinant), VectorZero()))
-        StoreFloat(clipToWorld, &state.clipToWorld);
-    else
-        StoreFloat(MatrixIdentity(), &state.clipToWorld);
+    NWB_ASSERT(VectorIsFinite(determinant, 0xFu) && Vector4Greater(VectorAbs(determinant), VectorZero()));
+    StoreFloat(clipToWorld, &state.clipToWorld);
 
     SIMDVector cameraPosition;
     SIMDVector frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];

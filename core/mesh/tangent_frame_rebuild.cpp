@@ -32,17 +32,17 @@ static constexpr f32 s_Epsilon = 0.000001f;
 
 
 struct alignas(Float4) TangentFrameAccumulator{
-    SIMDVector normal;
-    SIMDVector tangent;
-    SIMDVector bitangent;
+    Float4 normal;
+    Float4 tangent;
+    Float4 bitangent;
 };
 static_assert(
     alignof(TangentFrameAccumulator) >= alignof(Float4),
-    "TangentFrameAccumulator must keep SIMD accumulator lanes aligned"
+    "TangentFrameAccumulator must keep vector storage lanes aligned"
 );
 static_assert(
     (sizeof(TangentFrameAccumulator) % alignof(TangentFrameAccumulator)) == 0,
-    "TangentFrameAccumulator array stride must keep every element SIMD-aligned"
+    "TangentFrameAccumulator array stride must keep every element aligned"
 );
 
 
@@ -130,11 +130,7 @@ bool RebuildTangentFrames(
     Core::Alloc::ScratchArena scratchArena(MeshArenaScope::s_RebuildScratch);
     Vector<TangentFrameAccumulator, Core::Alloc::ScratchArena> accumulators(
         vertexCount,
-        TangentFrameAccumulator{
-            VectorZero(),
-            VectorZero(),
-            VectorZero(),
-        },
+        TangentFrameAccumulator{},
         scratchArena
     );
 
@@ -168,19 +164,19 @@ bool RebuildTangentFrames(
         TangentFrameAccumulator& accumulator0 = accumulators[i0];
         TangentFrameAccumulator& accumulator1 = accumulators[i1];
         TangentFrameAccumulator& accumulator2 = accumulators[i2];
-        accumulator0.normal = VectorAdd(accumulator0.normal, faceNormal);
-        accumulator1.normal = VectorAdd(accumulator1.normal, faceNormal);
-        accumulator2.normal = VectorAdd(accumulator2.normal, faceNormal);
+        StoreFloat(VectorAdd(LoadFloat(accumulator0.normal), faceNormal), &accumulator0.normal);
+        StoreFloat(VectorAdd(LoadFloat(accumulator1.normal), faceNormal), &accumulator1.normal);
+        StoreFloat(VectorAdd(LoadFloat(accumulator2.normal), faceNormal), &accumulator2.normal);
 
         SIMDVector tangent = VectorZero();
         SIMDVector bitangent = VectorZero();
         if(AccumulateTriangleTangentFrame(uv0, uv1, uv2, edge01, edge02, tangent, bitangent)){
-            accumulator0.tangent = VectorAdd(accumulator0.tangent, tangent);
-            accumulator1.tangent = VectorAdd(accumulator1.tangent, tangent);
-            accumulator2.tangent = VectorAdd(accumulator2.tangent, tangent);
-            accumulator0.bitangent = VectorAdd(accumulator0.bitangent, bitangent);
-            accumulator1.bitangent = VectorAdd(accumulator1.bitangent, bitangent);
-            accumulator2.bitangent = VectorAdd(accumulator2.bitangent, bitangent);
+            StoreFloat(VectorAdd(LoadFloat(accumulator0.tangent), tangent), &accumulator0.tangent);
+            StoreFloat(VectorAdd(LoadFloat(accumulator1.tangent), tangent), &accumulator1.tangent);
+            StoreFloat(VectorAdd(LoadFloat(accumulator2.tangent), tangent), &accumulator2.tangent);
+            StoreFloat(VectorAdd(LoadFloat(accumulator0.bitangent), bitangent), &accumulator0.bitangent);
+            StoreFloat(VectorAdd(LoadFloat(accumulator1.bitangent), bitangent), &accumulator1.bitangent);
+            StoreFloat(VectorAdd(LoadFloat(accumulator2.bitangent), bitangent), &accumulator2.bitangent);
         }
         else{
             ++result.degenerateUvTriangleCount;
@@ -191,12 +187,12 @@ bool RebuildTangentFrames(
         TangentFrameRebuildVertex& vertex = vertices[vertexIndex];
         const TangentFrameAccumulator& accumulator = accumulators[vertexIndex];
         const SIMDVector previousNormal = FrameNormalizeDirection(LoadFloat(vertex.normal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
-        const SIMDVector normal = FrameNormalizeDirection(accumulator.normal, previousNormal);
+        const SIMDVector normal = FrameNormalizeDirection(LoadFloat(accumulator.normal), previousNormal);
         if(!FrameValidDirection(normal))
             return false;
 
         const SIMDVector previousTangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
-        SIMDVector tangentSource = accumulator.tangent;
+        SIMDVector tangentSource = LoadFloat(accumulator.tangent);
         if(!FrameValidDirection(tangentSource)){
             tangentSource = previousTangent;
             ++result.fallbackTangentVertexCount;
@@ -207,7 +203,7 @@ bool RebuildTangentFrames(
             return false;
 
         f32 handedness = ResolveTangentHandedness(vertex.tangent.w);
-        const SIMDVector bitangent = accumulator.bitangent;
+        const SIMDVector bitangent = LoadFloat(accumulator.bitangent);
         if(FrameValidDirection(bitangent)){
             const f32 bitangentSign = VectorGetX(Vector3Dot(Vector3Cross(normal, tangent), bitangent));
             if(IsFinite(bitangentSign) && Abs(bitangentSign) > s_Epsilon)

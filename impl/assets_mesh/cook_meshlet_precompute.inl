@@ -66,13 +66,13 @@ template<typename CookEntryT>
             LoadFloat(MeshletSourceVertexPositionStreamValue(entry, triangle.vertexRefs[2])),
             0.0f
         );
-        triangle.positionVectors[0] = p0;
-        triangle.positionVectors[1] = p1;
-        triangle.positionVectors[2] = p2;
+        StoreFloat(p0, &triangle.positionVectors[0]);
+        StoreFloat(p1, &triangle.positionVectors[1]);
+        StoreFloat(p2, &triangle.positionVectors[2]);
         const SIMDVector centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / 3.0f);
         const SIMDVector areaNormal = TriangleTests::AreaNormal(p0, p1, p2);
-        triangle.centroid = VectorSetW(centroid, 0.0f);
-        triangle.areaNormal = VectorSetW(areaNormal, 0.0f);
+        StoreFloat(VectorSetW(centroid, 0.0f), &triangle.centroid);
+        StoreFloat(VectorSetW(areaNormal, 0.0f), &triangle.areaNormal);
 
         const u32 triangleIndexU32 = static_cast<u32>(triangleIndex);
         for(const u32 positionIndex : triangle.positions){

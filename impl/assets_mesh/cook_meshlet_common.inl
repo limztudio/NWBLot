@@ -34,9 +34,9 @@ template<typename CookEntryT>
 struct MeshletTriangleData{
     u32 vertexRefs[3] = {};
     u32 positions[3] = {};
-    SIMDVector positionVectors[3] = {};
-    SIMDVector centroid = {};
-    SIMDVector areaNormal = {};
+    Float4 positionVectors[3] = {};
+    Float4 centroid = {};
+    Float4 areaNormal = {};
 };
 
 struct MeshletTrianglePrecompute{

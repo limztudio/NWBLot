@@ -126,11 +126,11 @@ template<typename TriangleIndexVectorT>
     bool hasNormal = false;
     f32 coneCutoff = 1.0f;
     for(const u32 triangleIndex : triangleIndices){
-        const SIMDVector triangleAreaNormal = trianglePrecompute.triangles[triangleIndex].areaNormal;
+        const SIMDVector triangleAreaNormal = LoadFloat(trianglePrecompute.triangles[triangleIndex].areaNormal);
         UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
     }
     if(hasExtraTriangle){
-        const SIMDVector triangleAreaNormal = trianglePrecompute.triangles[extraTriangleIndex].areaNormal;
+        const SIMDVector triangleAreaNormal = LoadFloat(trianglePrecompute.triangles[extraTriangleIndex].areaNormal);
         UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
     }
 
@@ -179,9 +179,14 @@ template<typename TriangleIndexVectorT>
     const bool disconnected
 ){
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
-    const SIMDVector triangleCentroid = triangle.centroid;
-    const SIMDVector triangleAreaNormal = triangle.areaNormal;
-    const f32 predictedRadius = PredictMeshletScoreRadius(state, triangle.positionVectors);
+    const SIMDVector trianglePositions[3] = {
+        LoadFloat(triangle.positionVectors[0u]),
+        LoadFloat(triangle.positionVectors[1u]),
+        LoadFloat(triangle.positionVectors[2u]),
+    };
+    const SIMDVector triangleCentroid = LoadFloat(triangle.centroid);
+    const SIMDVector triangleAreaNormal = LoadFloat(triangle.areaNormal);
+    const f32 predictedRadius = PredictMeshletScoreRadius(state, trianglePositions);
     const f32 predictedRadiusGrowth = Max(0.0f, predictedRadius - state.radius);
     const f32 centroidDistance = MeshletScoreCentroidDistance(state, triangleCentroid);
     const f32 normalCoherence = MeshletScoreNormalCoherence(state, triangleAreaNormal);

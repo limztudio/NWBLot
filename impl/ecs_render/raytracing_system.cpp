@@ -78,8 +78,8 @@ struct NwbBvhNodeGpu{
 static_assert(sizeof(NwbBvhNodeGpu) == 32u, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
 
 struct SceneBvhNodeBuildData{
-    SIMDVector aabbMin;
-    SIMDVector aabbMax;
+    Float4 aabbMin;
+    Float4 aabbMax;
     u32 leftChild = 0u;
     u32 rightChild = 0u;
 };
@@ -490,13 +490,13 @@ u32 BuildSceneBvhNode(
     u32* indices,
     const u32 lo,
     const u32 hi,
-    const SIMDVector* instanceAabbMin,
-    const SIMDVector* instanceAabbMax,
-    const SIMDVector* instanceCentroid,
+    const Float4* instanceAabbMin,
+    const Float4* instanceAabbMax,
+    const Float4* instanceCentroid,
     Vector<SceneBvhNodeBuildData, Core::Alloc::ScratchArena>& nodes
 ){
     const u32 nodeIndex = static_cast<u32>(nodes.size());
-    nodes.push_back(SceneBvhNodeBuildData{ VectorZero(), VectorZero(), 0u, 0u });
+    nodes.push_back(SceneBvhNodeBuildData{});
 
     if((hi - lo) == 1u){
         const u32 instance = indices[lo];
@@ -511,7 +511,7 @@ u32 BuildSceneBvhNode(
     SIMDVector centroidMin = VectorReplicate(1e30f);
     SIMDVector centroidMax = VectorReplicate(-1e30f);
     for(u32 i = lo; i < hi; ++i){
-        const SIMDVector centroid = instanceCentroid[indices[i]];
+        const SIMDVector centroid = LoadFloat(instanceCentroid[indices[i]]);
         centroidMin = VectorMin(centroidMin, centroid);
         centroidMax = VectorMax(centroidMax, centroid);
     }
@@ -526,7 +526,7 @@ u32 BuildSceneBvhNode(
 
     u32 mid = lo;
     for(u32 i = lo; i < hi; ++i){
-        if(SceneBvhAxisComponent(instanceCentroid[indices[i]], axis) < splitValue){
+        if(SceneBvhAxisComponent(LoadFloat(instanceCentroid[indices[i]]), axis) < splitValue){
             const u32 swap = indices[i];
             indices[i] = indices[mid];
             indices[mid] = swap;
@@ -540,8 +540,8 @@ u32 BuildSceneBvhNode(
     const u32 rightChild = BuildSceneBvhNode(indices, mid, hi, instanceAabbMin, instanceAabbMax, instanceCentroid, nodes);
 
     SceneBvhNodeBuildData& node = nodes[nodeIndex];
-    node.aabbMin = VectorMin(nodes[leftChild].aabbMin, nodes[rightChild].aabbMin);
-    node.aabbMax = VectorMax(nodes[leftChild].aabbMax, nodes[rightChild].aabbMax);
+    StoreFloat(VectorMin(LoadFloat(nodes[leftChild].aabbMin), LoadFloat(nodes[rightChild].aabbMin)), &node.aabbMin);
+    StoreFloat(VectorMax(LoadFloat(nodes[leftChild].aabbMax), LoadFloat(nodes[rightChild].aabbMax)), &node.aabbMax);
     node.leftChild = leftChild;
     node.rightChild = rightChild;
     return nodeIndex;
@@ -872,9 +872,9 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     // Per-instance GPU records + the world-space AABBs / centroids the CPU build consumes (kept parallel so
     // the BVH leaf payload indexes straight into the uploaded instance buffer).
     Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena> instances{ scratchArena };
-    Vector<SIMDVector, Core::Alloc::ScratchArena> instanceAabbMin{ scratchArena };
-    Vector<SIMDVector, Core::Alloc::ScratchArena> instanceAabbMax{ scratchArena };
-    Vector<SIMDVector, Core::Alloc::ScratchArena> instanceCentroid{ scratchArena };
+    Vector<Float4, Core::Alloc::ScratchArena> instanceAabbMin{ scratchArena };
+    Vector<Float4, Core::Alloc::ScratchArena> instanceAabbMax{ scratchArena };
+    Vector<Float4, Core::Alloc::ScratchArena> instanceCentroid{ scratchArena };
     // Per-instance occluder material, built lockstep with `instances` (same push order) so the uploaded table
     // indexes by the scene-BVH leaf instance index the software traversal reads.
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
@@ -1015,10 +1015,17 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
         }
 
+        Float4 storedWorldMin;
+        Float4 storedWorldMax;
+        Float4 storedCentroid;
+        StoreFloat(worldMin, &storedWorldMin);
+        StoreFloat(worldMax, &storedWorldMax);
+        StoreFloat(VectorScale(VectorAdd(worldMin, worldMax), 0.5f), &storedCentroid);
+
         instances.push_back(instance);
-        instanceAabbMin.push_back(worldMin);
-        instanceAabbMax.push_back(worldMax);
-        instanceCentroid.push_back(VectorScale(VectorAdd(worldMin, worldMax), 0.5f));
+        instanceAabbMin.push_back(storedWorldMin);
+        instanceAabbMax.push_back(storedWorldMax);
+        instanceCentroid.push_back(storedCentroid);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
     }
@@ -1049,8 +1056,8 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     nodes.reserve(buildNodes.size());
     for(const SceneBvhNodeBuildData& buildNode : buildNodes){
         NwbBvhNodeGpu node;
-        StoreFloatInt(buildNode.aabbMin, buildNode.leftChild, &node.aabbMinLeftChild);
-        StoreFloatInt(buildNode.aabbMax, buildNode.rightChild, &node.aabbMaxRightChild);
+        StoreFloatInt(LoadFloat(buildNode.aabbMin), buildNode.leftChild, &node.aabbMinLeftChild);
+        StoreFloatInt(LoadFloat(buildNode.aabbMax), buildNode.rightChild, &node.aabbMaxRightChild);
         nodes.push_back(node);
     }
 
@@ -6131,9 +6138,9 @@ void RendererRayTracingSystem::runSceneBvhSelfTest(){
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RayTracingBuildArena, 16u * 1024u);
 
-    Vector<SIMDVector, Core::Alloc::ScratchArena> instanceAabbMin{ scratchArena };
-    Vector<SIMDVector, Core::Alloc::ScratchArena> instanceAabbMax{ scratchArena };
-    Vector<SIMDVector, Core::Alloc::ScratchArena> instanceCentroid{ scratchArena };
+    Vector<Float4, Core::Alloc::ScratchArena> instanceAabbMin{ scratchArena };
+    Vector<Float4, Core::Alloc::ScratchArena> instanceAabbMax{ scratchArena };
+    Vector<Float4, Core::Alloc::ScratchArena> instanceCentroid{ scratchArena };
     instanceAabbMin.reserve(instanceCount);
     instanceAabbMax.reserve(instanceCount);
     instanceCentroid.reserve(instanceCount);
@@ -6145,9 +6152,16 @@ void RendererRayTracingSystem::runSceneBvhSelfTest(){
         const SIMDVector boxMin = VectorSet(base, base * 0.25f, -base * 0.5f, 0.0f);
         const SIMDVector boxMax = VectorAdd(boxMin, VectorSet(1.5f, 2.0f, 1.0f, 0.0f));
 
-        instanceAabbMin.push_back(boxMin);
-        instanceAabbMax.push_back(boxMax);
-        instanceCentroid.push_back(VectorScale(VectorAdd(boxMin, boxMax), 0.5f));
+        Float4 storedBoxMin;
+        Float4 storedBoxMax;
+        Float4 storedCentroid;
+        StoreFloat(boxMin, &storedBoxMin);
+        StoreFloat(boxMax, &storedBoxMax);
+        StoreFloat(VectorScale(VectorAdd(boxMin, boxMax), 0.5f), &storedCentroid);
+
+        instanceAabbMin.push_back(storedBoxMin);
+        instanceAabbMax.push_back(storedBoxMax);
+        instanceCentroid.push_back(storedCentroid);
 
         boundsMin = VectorMin(boundsMin, boxMin);
         boundsMax = VectorMax(boundsMax, boxMax);
@@ -6190,8 +6204,8 @@ void RendererRayTracingSystem::runSceneBvhSelfTest(){
     const SIMDVector epsilonVector = VectorReplicate(1e-3f);
     if(valid){
         if(
-            !Vector3LessOrEqual(VectorAbs(VectorSubtract(nodes[0].aabbMin, boundsMin)), epsilonVector)
-            || !Vector3LessOrEqual(VectorAbs(VectorSubtract(nodes[0].aabbMax, boundsMax)), epsilonVector)
+            !Vector3LessOrEqual(VectorAbs(VectorSubtract(LoadFloat(nodes[0].aabbMin), boundsMin)), epsilonVector)
+            || !Vector3LessOrEqual(VectorAbs(VectorSubtract(LoadFloat(nodes[0].aabbMax), boundsMax)), epsilonVector)
         )
             valid = false;
     }
@@ -6206,11 +6220,11 @@ void RendererRayTracingSystem::runSceneBvhSelfTest(){
             valid = false;
             break;
         }
-        const SIMDVector childMin = VectorMin(nodes[leftChild].aabbMin, nodes[rightChild].aabbMin);
-        const SIMDVector childMax = VectorMax(nodes[leftChild].aabbMax, nodes[rightChild].aabbMax);
+        const SIMDVector childMin = VectorMin(LoadFloat(nodes[leftChild].aabbMin), LoadFloat(nodes[rightChild].aabbMin));
+        const SIMDVector childMax = VectorMax(LoadFloat(nodes[leftChild].aabbMax), LoadFloat(nodes[rightChild].aabbMax));
         if(
-            !Vector3LessOrEqual(nodes[i].aabbMin, VectorAdd(childMin, epsilonVector))
-            || !Vector3GreaterOrEqual(nodes[i].aabbMax, VectorSubtract(childMax, epsilonVector))
+            !Vector3LessOrEqual(LoadFloat(nodes[i].aabbMin), VectorAdd(childMin, epsilonVector))
+            || !Vector3GreaterOrEqual(LoadFloat(nodes[i].aabbMax), VectorSubtract(childMax, epsilonVector))
         )
             valid = false;
     }

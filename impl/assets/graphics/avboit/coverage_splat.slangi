@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_AVBOIT_COVERAGE_SPLAT_SLANGI
+#define NWB_AVBOIT_COVERAGE_SPLAT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void nwbAvboitMarkCoverageSlice(uint virtualSlice){
+    InterlockedOr(
+        g_CoverageWords[virtualSlice >> NWB_AVBOIT_COVERAGE_WORD_SHIFT],
+        1u << (virtualSlice & NWB_AVBOIT_COVERAGE_BIT_MASK)
+    );
+}
+
+void nwbAvboitMarkCoverageFromDepth(float depth){
+    uint virtualSlice0;
+    uint virtualSlice1;
+    float sliceWeight0;
+    float sliceWeight1;
+    nwbAvboitLinearVirtualSlicesFromDepth(depth, virtualSlice0, virtualSlice1, sliceWeight0, sliceWeight1);
+
+    if(sliceWeight0 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
+        nwbAvboitMarkCoverageSlice(virtualSlice0);
+    if(virtualSlice1 != virtualSlice0 && sliceWeight1 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
+        nwbAvboitMarkCoverageSlice(virtualSlice1);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

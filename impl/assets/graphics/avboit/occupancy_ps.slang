@@ -27,6 +27,12 @@ static half4 inColor;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "coverage_splat.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void main(NwbAvboitOccupancyPixelInput input, float4 fragCoord : SV_Position){
     inColor = input.color;
 #if NWB_CSG_ENABLED
@@ -42,16 +48,7 @@ void main(NwbAvboitOccupancyPixelInput input, float4 fragCoord : SV_Position){
     if(!nwbAvboitAcceptLowDepthFragment(g_OpaqueDepth, g_PointSampler, fragCoord, alpha, virtualSlice))
         discard;
 
-    uint virtualSlice0;
-    uint virtualSlice1;
-    float sliceWeight0;
-    float sliceWeight1;
-    nwbAvboitLinearVirtualSlicesFromDepth(fragCoord.z, virtualSlice0, virtualSlice1, sliceWeight0, sliceWeight1);
-
-    if(sliceWeight0 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
-        InterlockedOr(g_CoverageWords[virtualSlice0 >> NWB_AVBOIT_COVERAGE_WORD_SHIFT], 1u << (virtualSlice0 & NWB_AVBOIT_COVERAGE_BIT_MASK));
-    if(virtualSlice1 != virtualSlice0 && sliceWeight1 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
-        InterlockedOr(g_CoverageWords[virtualSlice1 >> NWB_AVBOIT_COVERAGE_WORD_SHIFT], 1u << (virtualSlice1 & NWB_AVBOIT_COVERAGE_BIT_MASK));
+    nwbAvboitMarkCoverageFromDepth(fragCoord.z);
 }
 
 

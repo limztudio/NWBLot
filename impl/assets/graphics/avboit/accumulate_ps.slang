@@ -43,40 +43,7 @@ static float3 inWorldPosition;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-uint nwbAvboitActivePhysicalSliceCount(){
-    return clamp(g_Control[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES], 1u, nwbAvboitPhysicalSliceCount());
-}
-
-float nwbAvboitWarpedPhysicalSliceFromVirtualSlice(uint virtualSlice){
-    const uint clampedVirtualSlice = min(virtualSlice, nwbAvboitVirtualSliceCount() - 1u);
-    return float(min(g_DepthWarp[clampedVirtualSlice], nwbAvboitActivePhysicalSliceCount() - 1u));
-}
-
-float nwbAvboitPhysicalSliceFromVirtualSampleSlice(float sampleSlice){
-    const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
-    const float sliceBase = floor(sampleSlice);
-    const uint virtualSlice0 = uint(sliceBase);
-    const uint virtualSlice1 = min(virtualSlice0 + 1u, virtualSliceCount - 1u);
-    const float physicalSlice0 = nwbAvboitWarpedPhysicalSliceFromVirtualSlice(virtualSlice0);
-    const float physicalSlice1 = nwbAvboitWarpedPhysicalSliceFromVirtualSlice(virtualSlice1);
-    return lerp(physicalSlice0, physicalSlice1, sampleSlice - sliceBase);
-}
-
-float nwbAvboitLinearBiasedTransmittance(float2 fragCoord, float depth){
-    const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
-    const float virtualSliceMax = max(float(virtualSliceCount) - 1.0, 0.0);
-    const float sampleSlice = clamp(
-        depth * float(virtualSliceCount) - nwbAvboitSelfOcclusionSliceBias(),
-        0.0,
-        virtualSliceMax
-    );
-    const float physicalSlice = nwbAvboitPhysicalSliceFromVirtualSampleSlice(sampleSlice);
-    const float physicalSliceUv = (physicalSlice + 0.5) / max(float(nwbAvboitPhysicalSliceCount()), 1.0);
-    return g_Transmittance.Sample(
-        g_LinearSampler,
-        float3(nwbAvboitFullUvFromFragCoord(fragCoord), clamp(physicalSliceUv, 0.0, 1.0))
-    ).r;
-}
+#include "accumulate_transmittance.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

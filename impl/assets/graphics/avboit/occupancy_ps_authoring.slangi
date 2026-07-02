@@ -77,6 +77,12 @@ struct NwbAvboitOccupancyPixelInput{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "coverage_splat.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void main(NwbAvboitOccupancyPixelInput input){
     NwbMeshSurfaceInputs surfaceInputs;
     surfaceInputs.color = half4(input.color);
@@ -106,16 +112,7 @@ void main(NwbAvboitOccupancyPixelInput input){
     if(!nwbAvboitAcceptLowDepthFragment(g_OpaqueDepth, g_PointSampler, input.position, alpha, virtualSlice))
         discard;
 
-    uint virtualSlice0;
-    uint virtualSlice1;
-    float sliceWeight0;
-    float sliceWeight1;
-    nwbAvboitLinearVirtualSlicesFromDepth(input.position.z, virtualSlice0, virtualSlice1, sliceWeight0, sliceWeight1);
-
-    if(sliceWeight0 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
-        InterlockedOr(g_CoverageWords[virtualSlice0 >> NWB_AVBOIT_COVERAGE_WORD_SHIFT], 1u << (virtualSlice0 & NWB_AVBOIT_COVERAGE_BIT_MASK));
-    if(virtualSlice1 != virtualSlice0 && sliceWeight1 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
-        InterlockedOr(g_CoverageWords[virtualSlice1 >> NWB_AVBOIT_COVERAGE_WORD_SHIFT], 1u << (virtualSlice1 & NWB_AVBOIT_COVERAGE_BIT_MASK));
+    nwbAvboitMarkCoverageFromDepth(input.position.z);
 }
 
 

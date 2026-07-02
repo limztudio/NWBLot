@@ -30,30 +30,7 @@ static half4 inColor;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void nwbAvboitSplatExtinction(uint2 lowPixel, uint virtualSlice, float extinction){
-    if(extinction <= 0.0)
-        return;
-
-    const uint activePhysicalSlices = max(min(g_Control[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES], nwbAvboitPhysicalSliceCount()), 1u);
-    const uint physicalSlice = min(g_DepthWarp[virtualSlice], activePhysicalSlices - 1u);
-    const uint wordIndex = nwbAvboitExtinctionWordIndex(lowPixel, physicalSlice);
-    if(wordIndex >= nwbAvboitExtinctionWordCount())
-        return;
-
-    const uint packedExtinction = nwbAvboitPackExtinctionByte(extinction);
-    if(packedExtinction == 0u)
-        return;
-
-    const uint byteShift = nwbAvboitExtinctionByteShift(physicalSlice);
-    uint previousWord;
-    InterlockedAdd(g_Extinction[wordIndex], packedExtinction << byteShift, previousWord);
-    const uint previousByte = (previousWord >> byteShift) & NWB_AVBOIT_EXTINCTION_BYTE_MASK;
-    const bool byteOverflow = previousByte + packedExtinction > NWB_AVBOIT_EXTINCTION_BYTE_MASK;
-    const float previousExtinction = float(previousByte) / nwbAvboitExtinctionFixedScale();
-    const bool rawOverflow = previousExtinction + extinction > nwbAvboitExtinctionSaturation();
-    if(byteOverflow || rawOverflow)
-        InterlockedMin(g_ExtinctionOverflowDepth[nwbAvboitLowPixelIndex(lowPixel)], physicalSlice);
-}
+#include "extinction_splat.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,17 +53,7 @@ void main(NwbAvboitExtinctionPixelInput input, float4 fragCoord : SV_Position){
 
     const uint2 lowPixel = nwbAvboitLowPixelFromLowFragCoord(fragCoord.xy);
     const float extinction = nwbAvboitExtinctionFromAlpha(alpha);
-
-    uint virtualSlice0;
-    uint virtualSlice1;
-    float sliceWeight0;
-    float sliceWeight1;
-    nwbAvboitLinearVirtualSlicesFromDepth(fragCoord.z, virtualSlice0, virtualSlice1, sliceWeight0, sliceWeight1);
-
-    if(sliceWeight0 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
-        nwbAvboitSplatExtinction(lowPixel, virtualSlice0, extinction * sliceWeight0);
-    if(virtualSlice1 != virtualSlice0 && sliceWeight1 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
-        nwbAvboitSplatExtinction(lowPixel, virtualSlice1, extinction * sliceWeight1);
+    nwbAvboitSplatExtinctionFromDepth(lowPixel, fragCoord.z, extinction);
 }
 
 

@@ -8,7 +8,6 @@
 #include <core/ecs/module.h>
 #include <core/mesh/frame_math.h>
 #include <core/graphics/module.h>
-#include <core/input/module.h> // InputDispatcher / IInputEventHandler / Key -- arrow-key manual yaw scrubbing
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 #include <impl/ecs_csg/module.h>
 #endif
@@ -17,6 +16,7 @@
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material_instance.h>
 
+#include "arrow_yaw_input_handler.h"
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
 #include "smoke_scene_helpers.h"
@@ -40,6 +40,7 @@ namespace __hidden_transparent_multi_smoke{
 
 
 using NWB::Tests::Smoke::AddSmokeRenderSystems;
+using NWB::Tests::Smoke::ArrowYawInputHandler;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
@@ -223,33 +224,6 @@ static void ApplyTransparentCsgSceneTransform(
 
     return entity;
 }
-
-
-// Arrow-key manual yaw scrubber. Registered with the InputDispatcher so the user can step the scene rotation by hand
-// (Left/Right) to a precise orientation and read the exact yaw off the title bar -- the workflow for pinning down the
-// angle an artifact appears at. Tracks held state for both keys (press latches, release clears) and consumes only the
-// two arrow keys so any other handler (e.g. a camera) still sees everything else.
-class ArrowYawInputHandler final : public NWB::Core::IInputEventHandler{
-public:
-    bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override{
-        static_cast<void>(scancode);
-        static_cast<void>(mods);
-        const bool held = (action != NWB::Core::InputAction::Release); // Press or Repeat -> held
-        switch(key){
-        case NWB::Core::Key::Left:  m_leftHeld = held;  return true;
-        case NWB::Core::Key::Right: m_rightHeld = held; return true;
-        default:                    return false;
-        }
-    }
-
-    // Signed scrub direction this frame: +1 spins forward (Right), -1 back (Left), 0 idle. Both held cancels out.
-    [[nodiscard]] f32 axis()const{ return (m_rightHeld ? 1.0f : 0.0f) - (m_leftHeld ? 1.0f : 0.0f); }
-
-
-private:
-    bool m_leftHeld = false;
-    bool m_rightHeld = false;
-};
 
 
 class TransparentMultiSmokeProject final : public NWB::IProjectEntryCallbacks{

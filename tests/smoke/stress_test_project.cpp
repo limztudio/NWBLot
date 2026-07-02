@@ -7,7 +7,6 @@
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/module.h>
-#include <core/input/module.h> // InputDispatcher / IInputEventHandler / Key -- arrow-key manual yaw scrub
 #include <core/mesh/frame_math.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
@@ -18,6 +17,7 @@
 #include <impl/ecs_render/material_instance.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
+#include "arrow_yaw_input_handler.h"
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
 #include "smoke_scene_helpers.h"
@@ -38,6 +38,7 @@ namespace __hidden_stress_test_smoke{
 
 
 using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
+using NWB::Tests::Smoke::ArrowYawInputHandler;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
@@ -109,35 +110,6 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;                  // clamp hu
     const u32 slot = classIndex % s_CharactersPerClass;
     return transparent ? s_transparentTints[slot] : s_opaqueTints[slot];
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Arrow-key manual yaw scrubber (mirrors transparent_multi): registered with the InputDispatcher so the crowd rotation can
-// be stepped by hand (Left/Right) to the exact orientation a flicker appears at and read off the title bar. Consumes only
-// the two arrow keys so any other handler still sees everything else.
-class ArrowYawInputHandler final : public NWB::Core::IInputEventHandler{
-public:
-    bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override{
-        static_cast<void>(scancode);
-        static_cast<void>(mods);
-        const bool held = (action != NWB::Core::InputAction::Release); // Press or Repeat -> held
-        switch(key){
-        case NWB::Core::Key::Left:  m_leftHeld = held;  return true;
-        case NWB::Core::Key::Right: m_rightHeld = held; return true;
-        default:                    return false;
-        }
-    }
-
-    // Signed scrub direction this frame: +1 Right, -1 Left, 0 idle. Both held cancels out.
-    [[nodiscard]] f32 axis()const{ return (m_rightHeld ? 1.0f : 0.0f) - (m_leftHeld ? 1.0f : 0.0f); }
-
-
-private:
-    bool m_leftHeld = false;
-    bool m_rightHeld = false;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

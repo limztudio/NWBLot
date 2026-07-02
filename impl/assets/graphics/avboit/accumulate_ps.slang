@@ -50,7 +50,7 @@ static float3 inWorldPosition;
 
 
 NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input, float4 fragCoord : SV_Position){
-    inColor = input.color;
+    inColor = half4(input.color);
     inNormal = input.normal;
     inTangent = input.tangent;
     inWorldPosition = input.worldPosition.xyz;

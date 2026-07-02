@@ -25,8 +25,11 @@ struct NwbImguiPixelOutput{
 
 
 NwbImguiPixelOutput main(NwbImguiPixelInput input){
+    const half4 color = half4(input.color);
+    const half4 texel = half4(g_UiTexture.Sample(g_UiSampler, input.uv));
+
     NwbImguiPixelOutput output;
-    output.color = input.color * g_UiTexture.Sample(g_UiSampler, input.uv);
+    output.color = float4(color * texel);
     return output;
 }
 

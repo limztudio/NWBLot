@@ -19,8 +19,8 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
         if(all(radiance <= half3(0.0)))
             continue;
 
-        const float ndotl = max(dot(normal, lightVector), 0.0);
-        const half band = ndotl > 0.6 ? half(1.0) : (ndotl > 0.25 ? half(0.55) : half(0.18)); // 3 toon bands
+        const half ndotl = half(max(dot(normal, lightVector), 0.0));
+        const half band = ndotl > half(0.6) ? half(1.0) : (ndotl > half(0.25) ? half(0.55) : half(0.18)); // 3 toon bands
         const half3 visibility = nwbBxdfLightTransmittance(pixel, i);
         color += surface.baseColor * radiance * (band * visibility);
     }

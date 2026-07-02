@@ -34,7 +34,7 @@ static half4 inColor;
 
 
 void main(NwbAvboitOccupancyPixelInput input, float4 fragCoord : SV_Position){
-    inColor = input.color;
+    inColor = half4(input.color);
 #if NWB_CSG_ENABLED
     if(nwbAvboitCsgPixelDiscard(
         nwbAvboitFullRasterPositionFromLowFragCoord(fragCoord),

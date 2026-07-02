@@ -120,20 +120,21 @@ half3 nwbSceneShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVect
         return half3(0.0);
 
     const float3 halfVector = nwbSafeNormalize(lightVector + viewVector, lightVector);
-    const float ndotl = max(dot(normalVector, lightVector), 0.0);
-    const float keyDiffuse = ndotl * ndotl;
-    const float rim = pow(1.0 - ndotv, 3.0);
-    const float halfDotNormal = max(dot(normalVector, halfVector), 0.0);
-    const float specular = pow(halfDotNormal, 72.0) * 0.85 + pow(halfDotNormal, 18.0) * 0.18;
-    const float viewSpecular = pow(ndotv, 22.0) * 0.28;
-    const float tangentLobe = pow(max(abs(dot(tangentVector, halfVector)), 0.0), 18.0);
-    const float bitangentLobe = pow(max(abs(dot(bitangentVector, halfVector)), 0.0), 18.0);
-    const float backLight = max(dot(-normalVector, lightVector), 0.0);
+    const half ndotl = half(max(dot(normalVector, lightVector), 0.0));
+    const half keyDiffuse = ndotl * ndotl;
+    const half rim = half(pow(max(1.0 - float(ndotv), 0.0), 3.0));
+    const half halfDotNormal = half(max(dot(normalVector, halfVector), 0.0));
+    const float halfDotNormalF = float(halfDotNormal);
+    const half specular = half(pow(halfDotNormalF, 72.0) * 0.85 + pow(halfDotNormalF, 18.0) * 0.18);
+    const half viewSpecular = half(pow(float(ndotv), 22.0) * 0.28);
+    const half tangentLobe = half(pow(max(abs(dot(tangentVector, halfVector)), 0.0), 18.0));
+    const half bitangentLobe = half(pow(max(abs(dot(bitangentVector, halfVector)), 0.0), 18.0));
+    const half backLight = half(max(dot(-normalVector, lightVector), 0.0));
 
     const half3 specularTint = lerp(half3(0.78), half3(1.0, 0.9, 0.68), half(0.65));
-    const half3 diffuse = baseColor * lightRadiance * half(0.02 + 0.98 * keyDiffuse);
-    const half3 specularColor = lightRadiance * specularTint * half(specular * (0.08 + 0.92 * ndotl) + viewSpecular);
-    const half3 rimColor = lerp(half3(0.12, 0.26, 0.52), lightRadiance, half(0.25)) * half(rim * (0.04 + 0.96 * ndotl));
+    const half3 diffuse = baseColor * lightRadiance * (half(0.02) + half(0.98) * keyDiffuse);
+    const half3 specularColor = lightRadiance * specularTint * (specular * (half(0.08) + half(0.92) * ndotl) + viewSpecular);
+    const half3 rimColor = lerp(half3(0.12, 0.26, 0.52), lightRadiance, half(0.25)) * (rim * (half(0.04) + half(0.96) * ndotl));
     const half3 frameCue = half(0.16) * (
         half3(1.0, 0.35, 0.2) * half(tangentLobe)
         + half3(0.2, 0.7, 1.0) * half(bitangentLobe)
@@ -154,8 +155,8 @@ half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, floa
 
     const float3 viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - worldPosition, float3(0.0, 0.0, 1.0));
     const half ndotv = half(max(dot(normalVector, viewVector), 0.0));
-    const float skyAmount = normalVector.z * 0.5 + 0.5;
-    const half3 hemiAmbient = lerp(half3(0.008, 0.012, 0.02), half3(0.045, 0.055, 0.075), half(skyAmount));
+    const half skyAmount = half(normalVector.z * 0.5 + 0.5);
+    const half3 hemiAmbient = lerp(half3(0.008, 0.012, 0.02), half3(0.045, 0.055, 0.075), skyAmount);
 
     half3 litColor = baseColor * hemiAmbient;
     const uint lightCount = nwbSceneLightCount();

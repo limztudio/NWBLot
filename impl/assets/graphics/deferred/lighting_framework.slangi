@@ -79,22 +79,22 @@ struct NwbDeferredLightingPixelOutput{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-float3 nwbDeferredDecodeNormal(float3 value){
-    return nwbSafeNormalize(value * 2.0 - 1.0, float3(0.0, 0.0, 1.0));
+float3 nwbDeferredDecodeNormal(half3 value){
+    return nwbSafeNormalize(float3(value) * 2.0 - 1.0, float3(0.0, 0.0, 1.0));
 }
 
 // Unpack the G-buffer at a fullscreen UV into the surface a BXDF reads.
 NwbBxdfSurface nwbBxdfLoadSurface(float2 uv){
-    const float4 baseColorSample = g_GBufferBaseColor.Sample(g_DeferredSampler, uv);
-    const float4 normalSample = g_GBufferNormal.Sample(g_DeferredSampler, uv);
+    const half4 baseColorSample = half4(g_GBufferBaseColor.Sample(g_DeferredSampler, uv));
+    const half4 normalSample = half4(g_GBufferNormal.Sample(g_DeferredSampler, uv));
     const float4 worldSample = g_GBufferWorldPosition.Sample(g_DeferredSampler, uv);
     const float depth = g_GBufferDepth.Sample(g_DeferredSampler, uv).r;
 
     NwbBxdfSurface surface;
-    surface.baseColor = half3(baseColorSample.rgb);
-    surface.shadingModel = uint(baseColorSample.a + 0.5);
+    surface.baseColor = baseColorSample.rgb;
+    surface.shadingModel = uint(float(baseColorSample.a) + 0.5);
     surface.normal = nwbDeferredDecodeNormal(normalSample.rgb);
-    surface.param0 = half(normalSample.a);
+    surface.param0 = normalSample.a;
     surface.worldPosition = worldSample.xyz;
     surface.param1 = half(worldSample.a);
     surface.viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - surface.worldPosition, float3(0.0, 0.0, 1.0));

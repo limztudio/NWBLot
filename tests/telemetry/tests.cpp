@@ -872,7 +872,7 @@ TEST(Telemetry, RecordPerfTimingUsesTelemetryEvent){
 
     const Name scopeName("cpu/update");
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, scopeName, stats, 11u));
+    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, scopeName, "cpu/update", stats, 11u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
     ASSERT_NE(event, nullptr);
@@ -885,6 +885,7 @@ TEST(Telemetry, RecordPerfTimingUsesTelemetryEvent){
     EXPECT_TRUE(Telemetry::ParsePerfTimingPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.source, Telemetry::PerfTimingSource::Cpu);
     EXPECT_EQ(parsed.scopeName, scopeName);
+    EXPECT_EQ(parsed.scopeText, "cpu/update");
     EXPECT_EQ(parsed.stats.sampleCount, stats.sampleCount);
 }
 
@@ -1013,7 +1014,7 @@ TEST(Telemetry, RecordPerfMemoryUsesTelemetryEvent){
     const Name scopeName("memory/project_arena");
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
-    EXPECT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, snapshot, delta, 12u));
+    EXPECT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, "memory/project_arena", snapshot, delta, 12u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
     ASSERT_NE(event, nullptr);
@@ -1025,6 +1026,7 @@ TEST(Telemetry, RecordPerfMemoryUsesTelemetryEvent){
     Telemetry::PerfMemoryPayload parsed(testArena.arena);
     EXPECT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.scopeName, scopeName);
+    EXPECT_EQ(parsed.scopeText, "memory/project_arena");
     EXPECT_EQ(parsed.snapshot.usedBytes, snapshot.usedBytes);
     EXPECT_TRUE(parsed.delta.hasSamples);
     EXPECT_EQ(parsed.delta.usedBytes, delta.usedBytes);
@@ -1201,12 +1203,12 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
 
     const Name cpuScopeName("cpu/update");
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, stats, 2u));
+    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, "cpu/update", stats, 2u));
 
     const Name memoryScopeName("memory/project_arena");
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(memoryScopeName);
     const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
-    EXPECT_TRUE(Telemetry::RecordPerfMemory(recorder, memoryScopeName, snapshot, delta, 3u));
+    EXPECT_TRUE(Telemetry::RecordPerfMemory(recorder, memoryScopeName, "memory/project_arena", snapshot, delta, 3u));
 
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
@@ -1258,7 +1260,7 @@ TEST(Telemetry, TelemetryIngestStoresRawAndReports){
 
     const Name cpuScopeName("ingest/cpu");
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, stats, 2u));
+    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, "ingest/cpu", stats, 2u));
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
     EXPECT_TRUE(Telemetry::EncodeEventStream(recorder.view(), encoded));

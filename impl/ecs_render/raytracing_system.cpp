@@ -2391,7 +2391,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
 
     if(!rayTracingState().m_swShadowDispatchLogged){
         rayTracingState().m_swShadowDispatchLogged = true;
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)")
             , static_cast<u64>(targets.width)
             , static_cast<u64>(targets.height)
             , static_cast<u64>(rayTracingState().m_sceneBvhInstanceCount)

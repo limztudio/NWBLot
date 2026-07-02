@@ -41,6 +41,23 @@ static const char* s_DiagnosticEventExpression = nullptr;
 static const char* s_DiagnosticEventMessage = nullptr;
 static const char* s_DiagnosticEventFile = nullptr;
 static u32 s_DiagnosticEventLine = 0u;
+inline constexpr usize s_DiagnosticEventCaptureTextBytes = 2048u;
+static char s_DiagnosticEventNameText[s_DiagnosticEventCaptureTextBytes] = {};
+static char s_DiagnosticEventCategoryText[s_DiagnosticEventCaptureTextBytes] = {};
+static char s_DiagnosticEventExpressionText[s_DiagnosticEventCaptureTextBytes] = {};
+static char s_DiagnosticEventMessageText[s_DiagnosticEventCaptureTextBytes] = {};
+static char s_DiagnosticEventFileText[s_DiagnosticEventCaptureTextBytes] = {};
+
+static const char* CopyDiagnosticEventText(char (&outText)[s_DiagnosticEventCaptureTextBytes], const char* const text)noexcept{
+    const char* const source = text ? text : "";
+    usize copied = 0u;
+    while(source[copied] != 0 && copied + 1u < s_DiagnosticEventCaptureTextBytes){
+        outText[copied] = source[copied];
+        ++copied;
+    }
+    outText[copied] = 0;
+    return outText;
+}
 
 static void ResetDiagnosticEventCapture()noexcept{
     s_DiagnosticEventCaptureCount = 0u;
@@ -50,15 +67,20 @@ static void ResetDiagnosticEventCapture()noexcept{
     s_DiagnosticEventMessage = nullptr;
     s_DiagnosticEventFile = nullptr;
     s_DiagnosticEventLine = 0u;
+    s_DiagnosticEventNameText[0u] = 0;
+    s_DiagnosticEventCategoryText[0u] = 0;
+    s_DiagnosticEventExpressionText[0u] = 0;
+    s_DiagnosticEventMessageText[0u] = 0;
+    s_DiagnosticEventFileText[0u] = 0;
 }
 
 static void RecordDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
     ++s_DiagnosticEventCaptureCount;
-    s_DiagnosticEventName = record.event;
-    s_DiagnosticEventCategory = record.category;
-    s_DiagnosticEventExpression = record.expression;
-    s_DiagnosticEventMessage = record.message;
-    s_DiagnosticEventFile = record.file;
+    s_DiagnosticEventName = CopyDiagnosticEventText(s_DiagnosticEventNameText, record.event);
+    s_DiagnosticEventCategory = CopyDiagnosticEventText(s_DiagnosticEventCategoryText, record.category);
+    s_DiagnosticEventExpression = CopyDiagnosticEventText(s_DiagnosticEventExpressionText, record.expression);
+    s_DiagnosticEventMessage = CopyDiagnosticEventText(s_DiagnosticEventMessageText, record.message);
+    s_DiagnosticEventFile = CopyDiagnosticEventText(s_DiagnosticEventFileText, record.file);
     s_DiagnosticEventLine = record.line;
 }
 

@@ -221,6 +221,7 @@ bool RecordPerfTiming(
     Recorder& recorder,
     const PerfTimingSource::Enum source,
     const Name& scopeName,
+    const AStringView scopeText,
     const Perf::TimingStats& stats,
     const u32 streamId
 ){
@@ -229,10 +230,20 @@ bool RecordPerfTiming(
         EventKind::PerfFrame,
         stats.publishFrameIndex,
         streamId,
-        [source, &scopeName, &stats](TelemetryArena& arena, TelemetryBytes& payload){
-            return BuildPerfTimingPayload(arena, source, scopeName, stats, payload);
+        [source, &scopeName, scopeText, &stats](TelemetryArena& arena, TelemetryBytes& payload){
+            return BuildPerfTimingPayload(arena, source, scopeName, scopeText, stats, payload);
         }
     );
+}
+
+bool RecordPerfTiming(
+    Recorder& recorder,
+    const PerfTimingSource::Enum source,
+    const Name& scopeName,
+    const Perf::TimingStats& stats,
+    const u32 streamId
+){
+    return RecordPerfTiming(recorder, source, scopeName, AStringView(scopeName.c_str()), stats, streamId);
 }
 
 bool BuildPerfMemoryPayload(
@@ -343,6 +354,7 @@ bool ParsePerfMemoryPayload(
 bool RecordPerfMemory(
     Recorder& recorder,
     const Name& scopeName,
+    const AStringView scopeText,
     const Perf::MemorySnapshot& snapshot,
     const Perf::MemoryDelta& delta,
     const u32 streamId
@@ -352,10 +364,20 @@ bool RecordPerfMemory(
         EventKind::MemoryFrame,
         snapshot.frameIndex,
         streamId,
-        [&scopeName, &snapshot, &delta](TelemetryArena& arena, TelemetryBytes& payload){
-            return BuildPerfMemoryPayload(arena, scopeName, snapshot, delta, payload);
+        [&scopeName, scopeText, &snapshot, &delta](TelemetryArena& arena, TelemetryBytes& payload){
+            return BuildPerfMemoryPayload(arena, scopeName, scopeText, snapshot, delta, payload);
         }
     );
+}
+
+bool RecordPerfMemory(
+    Recorder& recorder,
+    const Name& scopeName,
+    const Perf::MemorySnapshot& snapshot,
+    const Perf::MemoryDelta& delta,
+    const u32 streamId
+){
+    return RecordPerfMemory(recorder, scopeName, AStringView(scopeName.c_str()), snapshot, delta, streamId);
 }
 
 PerfSessionRecordResult RecordPerfSessionReport(

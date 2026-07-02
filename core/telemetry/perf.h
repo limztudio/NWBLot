@@ -147,6 +147,14 @@ struct PerfSessionRecordResult{
     Recorder& recorder,
     PerfTimingSource::Enum source,
     const Name& scopeName,
+    AStringView scopeText,
+    const Perf::TimingStats& stats,
+    u32 streamId = 0u
+);
+[[nodiscard]] bool RecordPerfTiming(
+    Recorder& recorder,
+    PerfTimingSource::Enum source,
+    const Name& scopeName,
     const Perf::TimingStats& stats,
     u32 streamId = 0u
 );
@@ -166,6 +174,14 @@ struct PerfSessionRecordResult{
     TelemetryBytes& outPayload
 );
 [[nodiscard]] bool ParsePerfMemoryPayload(TelemetryArena& arena, const void* payload, usize payloadBytes, PerfMemoryPayload& outPayload);
+[[nodiscard]] bool RecordPerfMemory(
+    Recorder& recorder,
+    const Name& scopeName,
+    AStringView scopeText,
+    const Perf::MemorySnapshot& snapshot,
+    const Perf::MemoryDelta& delta,
+    u32 streamId = 0u
+);
 [[nodiscard]] bool RecordPerfMemory(
     Recorder& recorder,
     const Name& scopeName,

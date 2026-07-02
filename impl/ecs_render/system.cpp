@@ -7,7 +7,6 @@
 #include "arena_names.h"
 #include "renderer_private.h"
 
-#include <impl/ecs_scene/camera.h>
 #include <impl/ecs_scene/components.h>
 
 

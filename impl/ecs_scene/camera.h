@@ -9,8 +9,6 @@
 
 #include <core/ecs/entity_id.h>
 
-#include <cstddef>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,46 +19,12 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ActiveCameraComponent{
-    Core::ECS::EntityID camera = Core::ECS::ENTITY_ID_INVALID;
-};
-
-static_assert(IsStandardLayout_V<ActiveCameraComponent>, "ActiveCameraComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<ActiveCameraComponent>, "ActiveCameraComponent must stay cheap to move in dense ECS storage");
-static_assert(sizeof(ActiveCameraComponent) == sizeof(Core::ECS::EntityID), "ActiveCameraComponent must only contain the active camera entity reference");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct alignas(Float4) CameraComponent{
-    // x = vertical FOV, y = near plane, z = far plane, w = aspect ratio.
-    // An aspect ratio of 0 lets renderers derive aspect from the active framebuffer.
-    Float4 projection = Float4(60.0f * (s_PI / 180.0f), 0.001f, 10000.0f, 0.0f);
-
-    [[nodiscard]] f32 verticalFovRadians()const{ return projection.x; }
-    [[nodiscard]] f32 nearPlane()const{ return projection.y; }
-    [[nodiscard]] f32 farPlane()const{ return projection.z; }
-    [[nodiscard]] f32 aspectRatio()const{ return projection.w; }
-
-    void setVerticalFovRadians(const f32 value){ projection.x = value; }
-    void setNearPlane(const f32 value){ projection.y = value; }
-    void setFarPlane(const f32 value){ projection.z = value; }
-    void setAspectRatio(const f32 value){ projection.w = value; }
-};
-
 struct alignas(Float4) CameraProjectionData{
     Float4 projectionParams = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     f32 aspectRatio = 1.0f;
     f32 tanHalfVerticalFov = 0.0f;
 };
 
-static_assert(IsStandardLayout_V<CameraComponent>, "CameraComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<CameraComponent>, "CameraComponent must stay cheap to move in dense ECS storage");
-static_assert(alignof(CameraComponent) >= alignof(Float4), "CameraComponent must stay aligned for SIMD component loads");
-static_assert(sizeof(CameraComponent) == sizeof(Float4), "CameraComponent must stay one aligned vector wide");
-static_assert((sizeof(CameraComponent) % alignof(CameraComponent)) == 0, "CameraComponent array stride must keep every element SIMD-aligned");
-static_assert((offsetof(CameraComponent, projection) % alignof(Float4)) == 0, "CameraComponent::projection must stay aligned");
 static_assert(IsStandardLayout_V<CameraProjectionData>, "CameraProjectionData must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<CameraProjectionData>, "CameraProjectionData must stay cheap to pass by value");
 static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectionData must keep projection params aligned");

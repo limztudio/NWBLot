@@ -23,6 +23,7 @@
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <dlfcn.h>
@@ -116,6 +117,17 @@ static void AppendHexAddressText(NWB::Core::Alloc::GlobalArena& arena, CrashTest
     return ExecutableAvailableInPath(arena, searchPath, "llvm-symbolizer")
         || ExecutableAvailableInPath(arena, searchPath, "addr2line")
     ;
+}
+
+static void LinuxSilenceExpectedCrashChildConsole(){
+    const int nullFd = open("/dev/null", O_WRONLY);
+    if(nullFd < 0)
+        return;
+
+    [[maybe_unused]] const int stdoutRedirectFd = dup2(nullFd, STDOUT_FILENO);
+    [[maybe_unused]] const int stderrRedirectFd = dup2(nullFd, STDERR_FILENO);
+    if(nullFd > STDERR_FILENO)
+        close(nullFd);
 }
 
 [[nodiscard]] static bool PendingDirectoryContainsManifestTexts(
@@ -367,6 +379,7 @@ TEST(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
         if(!NWB::Core::Crash::InstallCrashHandler(installArena, config))
             _exit(121);
 
+        LinuxSilenceExpectedCrashChildConsole();
         LinuxForceAssertFalseForCrashObservation();
         _exit(122);
     }

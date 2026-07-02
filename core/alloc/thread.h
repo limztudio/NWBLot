@@ -167,6 +167,7 @@ private:
     struct ParallelForDesc{
         void (*invoke)(const void* functor, usize chunkBegin, usize chunkEnd);
         const void* functor;
+        ThreadPool* owner;
         Atomic<usize> nextChunk{ 0 };
         usize numChunks;
         usize begin;
@@ -178,6 +179,34 @@ private:
 
     using WorkerList = Vector<JoiningThread, PersistentArena>;
     using TaskQueue = Deque<TaskItem, PersistentArena>;
+
+    struct ScopedParallelForExecution{
+        inline explicit ScopedParallelForExecution(ThreadPool* owner)noexcept
+            : previousPool(s_CurrentParallelForPool)
+            , previousDepth(s_CurrentParallelForDepth)
+        {
+            if(owner){
+                if(s_CurrentParallelForPool == owner){
+                    ++s_CurrentParallelForDepth;
+                }
+                else{
+                    s_CurrentParallelForPool = owner;
+                    s_CurrentParallelForDepth = 1u;
+                }
+            }
+        }
+
+        inline ~ScopedParallelForExecution(){
+            s_CurrentParallelForPool = previousPool;
+            s_CurrentParallelForDepth = previousDepth;
+        }
+
+        ScopedParallelForExecution(const ScopedParallelForExecution&) = delete;
+        ScopedParallelForExecution& operator=(const ScopedParallelForExecution&) = delete;
+
+        ThreadPool* previousPool;
+        usize previousDepth;
+    };
 
 
 private:
@@ -202,6 +231,10 @@ private:
     static inline void runSerialRange(usize begin, usize end, const Func& func){
         for(usize i = begin; i < end; ++i)
             func(i);
+    }
+
+    [[nodiscard]] inline bool isExecutingParallelForOnThisPool()const noexcept{
+        return s_CurrentParallelForPool == this && s_CurrentParallelForDepth > 0u;
     }
 
     template<typename Func>
@@ -290,7 +323,7 @@ public:
 
         const usize count = end - begin;
 
-        if(m_threadCount == 0 || count == 1){
+        if(m_threadCount == 0 || count == 1 || isExecutingParallelForOnThisPool()){
             runSerialRange(begin, end, func);
             return;
         }
@@ -307,7 +340,7 @@ public:
         const usize count = end - begin;
         const usize effectiveGrainSize = grainSize > 0 ? grainSize : 1;
 
-        if(m_threadCount == 0 || count <= effectiveGrainSize){
+        if(m_threadCount == 0 || count <= effectiveGrainSize || isExecutingParallelForOnThisPool()){
             runSerialRange(begin, end, func);
             return;
         }
@@ -340,6 +373,8 @@ private:
     }
 
     static inline void processParallelFor(ParallelForDesc* pf){
+        ScopedParallelForExecution executionScope(pf->owner);
+
         for(;;){
             const usize c = pf->nextChunk.fetch_add(1, MemoryOrder::relaxed);
             if(c >= pf->numChunks)
@@ -365,6 +400,7 @@ private:
                 f(i);
         };
         desc.functor = &func;
+        desc.owner = this;
         desc.nextChunk.store(0, MemoryOrder::relaxed);
         desc.numChunks = numChunks;
         desc.begin = begin;
@@ -450,6 +486,9 @@ private:
     Atomic<usize> m_pendingCount{ 0 };
     u32 m_threadCount;
     WorkerList m_workers;
+
+    inline static thread_local ThreadPool* s_CurrentParallelForPool = nullptr;
+    inline static thread_local usize s_CurrentParallelForDepth = 0u;
 };
 
 

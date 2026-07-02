@@ -31,6 +31,8 @@ namespace __hidden_model_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr usize s_ParallelModelObjectTransformGrainSize = 256u;
+
 [[nodiscard]] bool ResolveObjectTransformVectors(
     const SIMDMatrix& matrix,
     SIMDVector& outScale,
@@ -489,7 +491,9 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
 }
 
 void ModelSystem::updateModelObjectTransforms(){
-    m_world.view<ModelObjectComponent, Scene::TransformComponent>().each(
+    m_world.view<ModelObjectComponent, Scene::TransformComponent>().parallelEach(
+        m_world.taskPool(),
+        __hidden_model_system::s_ParallelModelObjectTransformGrainSize,
         [&](const Core::ECS::EntityID entity, ModelObjectComponent& object, Scene::TransformComponent& transform){
             static_cast<void>(entity);
             if(object.kind == ModelObjectKind::StaticMesh)

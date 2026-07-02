@@ -249,6 +249,36 @@ public:
         );
     }
 
+    template<typename Func>
+    void parallelEach(Alloc::ThreadPool& pool, usize grainSize, Func&& func)const{
+        if(!m_valid)
+            return;
+
+        if constexpr(sizeof...(Ts) == 1u){
+            pool.parallelFor(
+                static_cast<usize>(0),
+                m_count,
+                grainSize,
+                [this, &func](usize i){
+                    const EntityID entityId = entityAt(i);
+                    auto& component = ECSDetail::ViewTupleAccess::componentAtDense<0>(m_pools, static_cast<u32>(i));
+                    func(entityId, component);
+                }
+            );
+            return;
+        }
+
+        pool.parallelFor(
+            static_cast<usize>(0),
+            m_count,
+            grainSize,
+            [this, &func](usize i){
+                EntityID entityId = entityAt(i);
+                tryApplyFunc(func, entityId, i);
+            }
+        );
+    }
+
 
 private:
     void initializeAnchor(){

@@ -5,6 +5,8 @@
 
 #include <cstdint>
 #include <exception>
+#include <iostream>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -23,6 +25,35 @@
 namespace nwb_rgd{
 
 namespace{
+
+std::mutex& RgdConsoleMutex(){
+    static std::mutex mutex;
+    return mutex;
+}
+
+class ScopedRgdConsoleMute final{
+public:
+    ScopedRgdConsoleMute()
+        : m_lock(RgdConsoleMutex())
+        , m_coutBuffer(std::cout.rdbuf(m_sink.rdbuf()))
+        , m_cerrBuffer(std::cerr.rdbuf(m_sink.rdbuf()))
+    {
+    }
+
+    ~ScopedRgdConsoleMute(){
+        std::cout.rdbuf(m_coutBuffer);
+        std::cerr.rdbuf(m_cerrBuffer);
+    }
+
+    ScopedRgdConsoleMute(const ScopedRgdConsoleMute&) = delete;
+    ScopedRgdConsoleMute& operator=(const ScopedRgdConsoleMute&) = delete;
+
+private:
+    std::ostringstream m_sink;
+    std::lock_guard<std::mutex> m_lock;
+    std::streambuf* m_coutBuffer;
+    std::streambuf* m_cerrBuffer;
+};
 
 // Mirrors the RGD CLI frontend's SerializeTextOutput, summary-only: input info, system info, the
 // "markers in progress" list, the execution-marker tree (+ legend), and — when the crash is a page fault —
@@ -124,9 +155,12 @@ bool DecodeCrashDumpToText(const std::string& rgd_file_path, std::string& out_te
         // flag keeps its false default, so no shader/ISA disassembly code path is exercised.
 
         RgdCrashDumpContents contents;
-        if(!RgdParsingUtils::ParseCrashDump(config, contents)){
-            out_text = "parse_failed";
-            return false;
+        {
+            ScopedRgdConsoleMute muteRgdConsole;
+            if(!RgdParsingUtils::ParseCrashDump(config, contents)){
+                out_text = "parse_failed";
+                return false;
+            }
         }
 
         AssembleTextSummary(config, contents, out_text);

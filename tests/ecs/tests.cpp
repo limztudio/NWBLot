@@ -8,6 +8,7 @@
 #include <tests/ecs_test_world.h>
 #include <gtest/gtest.h>
 
+#include <global/atomic.h>
 #include <global/compile.h>
 
 
@@ -21,6 +22,8 @@ namespace __hidden_ecs_tests{
 
 
 using TestWorld = NWB::Tests::EcsTestWorld;
+
+inline constexpr Name s_EcsParallelTestArena("tests/ecs_parallel");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -321,6 +324,90 @@ TEST(Ecs, DuplicateComponentAddIsStable){
 
     entity.removeComponent<PositionComponent>();
     EXPECT_FALSE(entity.hasComponent<PositionComponent>());
+}
+
+TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
+    NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
+    NWB::Core::Alloc::ThreadPool threadPool(3u, NWB::Core::Alloc::CoreAffinity::Any);
+    NWB::Core::ECS::World world(arena, threadPool);
+
+    static constexpr u32 s_EntityCount = 512u;
+    for(u32 i = 0u; i < s_EntityCount; ++i){
+        auto entity = world.createEntity();
+        auto& position = entity.addComponent<PositionComponent>();
+        position.x = static_cast<i32>(i);
+
+        if((i & 1u) == 0u){
+            auto& velocity = entity.addComponent<VelocityComponent>();
+            velocity.x = static_cast<i32>(i * 2u);
+        }
+    }
+
+    Atomic<u32> positionVisits{ 0u };
+    world.view<PositionComponent>().parallelEach(
+        threadPool,
+        32u,
+        [&positionVisits](NWB::Core::ECS::EntityID, PositionComponent& position){
+            position.y = position.x + 1;
+            positionVisits.fetch_add(1u, MemoryOrder::relaxed);
+        }
+    );
+
+    EXPECT_EQ(positionVisits.load(MemoryOrder::relaxed), s_EntityCount);
+
+    u32 verifiedPositions = 0u;
+    world.view<PositionComponent>().each(
+        [&verifiedPositions](NWB::Core::ECS::EntityID, PositionComponent& position){
+            EXPECT_EQ(position.y, position.x + 1);
+            ++verifiedPositions;
+        }
+    );
+    EXPECT_EQ(verifiedPositions, s_EntityCount);
+
+    Atomic<u32> pairVisits{ 0u };
+    world.view<PositionComponent, VelocityComponent>().parallelEach(
+        threadPool,
+        16u,
+        [&pairVisits](NWB::Core::ECS::EntityID, PositionComponent& position, VelocityComponent& velocity){
+            position.x += velocity.x;
+            pairVisits.fetch_add(1u, MemoryOrder::relaxed);
+        }
+    );
+
+    EXPECT_EQ(pairVisits.load(MemoryOrder::relaxed), s_EntityCount / 2u);
+}
+
+TEST(Ecs, ParallelEachNestedInParallelForFallsBackSerial){
+    NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
+    NWB::Core::Alloc::ThreadPool threadPool(3u, NWB::Core::Alloc::CoreAffinity::Any);
+    NWB::Core::ECS::World world(arena, threadPool);
+
+    static constexpr u32 s_EntityCount = 64u;
+    static constexpr usize s_OuterCount = 4u;
+    for(u32 i = 0u; i < s_EntityCount; ++i){
+        auto entity = world.createEntity();
+        auto& position = entity.addComponent<PositionComponent>();
+        position.x = static_cast<i32>(i);
+    }
+
+    Atomic<u32> visits{ 0u };
+    threadPool.parallelFor(
+        static_cast<usize>(0),
+        s_OuterCount,
+        [&](usize outerIndex){
+            static_cast<void>(outerIndex);
+            world.view<PositionComponent>().parallelEach(
+                threadPool,
+                1u,
+                [&visits](NWB::Core::ECS::EntityID, PositionComponent& position){
+                    static_cast<void>(position);
+                    visits.fetch_add(1u, MemoryOrder::relaxed);
+                }
+            );
+        }
+    );
+
+    EXPECT_EQ(visits.load(MemoryOrder::relaxed), s_EntityCount * static_cast<u32>(s_OuterCount));
 }
 
 TEST(Ecs, DuplicateSchedulerAddIsStable){

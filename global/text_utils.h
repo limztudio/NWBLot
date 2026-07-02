@@ -24,6 +24,39 @@ template<typename CharT>
     return text ? BasicStringView<CharT>(text) : BasicStringView<CharT>();
 }
 
+namespace TextDetail{
+inline constexpr usize s_Utf8BomByteCount = 3u;
+inline constexpr u8 s_Utf8BomByte0 = 0xEFu;
+inline constexpr u8 s_Utf8BomByte1 = 0xBBu;
+inline constexpr u8 s_Utf8BomByte2 = 0xBFu;
+inline constexpr u8 s_Utf8ContinuationMask = 0xC0u;
+inline constexpr u8 s_Utf8ContinuationMarker = 0x80u;
+inline constexpr u8 s_Utf8OneByteMaxExclusive = 0x80u;
+inline constexpr u8 s_Utf8TwoByteMask = 0xE0u;
+inline constexpr u8 s_Utf8TwoByteMarker = 0xC0u;
+inline constexpr u8 s_Utf8ThreeByteMask = 0xF0u;
+inline constexpr u8 s_Utf8ThreeByteMarker = 0xE0u;
+inline constexpr u8 s_Utf8FourByteMask = 0xF8u;
+inline constexpr u8 s_Utf8FourByteMarker = 0xF0u;
+inline constexpr u8 s_Utf8TwoBytePayloadMask = 0x1Fu;
+inline constexpr u8 s_Utf8ThreeBytePayloadMask = 0x0Fu;
+inline constexpr u8 s_Utf8FourBytePayloadMask = 0x07u;
+inline constexpr u8 s_Utf8ContinuationPayloadMask = 0x3Fu;
+inline constexpr u32 s_Utf8ContinuationPayloadBits = 6u;
+inline constexpr i32 s_Utf8TwoByteLength = 2;
+inline constexpr i32 s_Utf8ThreeByteLength = 3;
+inline constexpr i32 s_Utf8FourByteLength = 4;
+inline constexpr u32 s_Utf8TwoByteMinCodePoint = 0x80u;
+inline constexpr u32 s_Utf8ThreeByteMinCodePoint = 0x800u;
+inline constexpr u32 s_Utf8FourByteMinCodePoint = 0x10000u;
+inline constexpr u32 s_UnicodeMaxCodePoint = 0x10ffffu;
+inline constexpr u32 s_UnicodeHighSurrogateMin = 0xd800u;
+inline constexpr u32 s_UnicodeLowSurrogateMax = 0xdfffu;
+inline constexpr u32 s_AsciiControlMaxExclusive = 32u;
+inline constexpr u32 s_AsciiDelete = 127u;
+inline constexpr u8 s_JsonControlMaxExclusive = 0x20u;
+};
+
 
 template<typename CharT>
 [[nodiscard]] inline BasicStringView<CharT> TrimView(const BasicStringView<CharT> text){
@@ -126,20 +159,24 @@ inline void TrimTrailingCarriageReturn(BasicString<CharT, ArenaT>& inOutLine){
 
 template<typename StringT>
 inline void StripUtf8Bom(StringT& inOutText){
-    if(inOutText.size() < 3)
+    if(inOutText.size() < TextDetail::s_Utf8BomByteCount)
         return;
 
     const u8 byte0 = static_cast<u8>(inOutText[0]);
     const u8 byte1 = static_cast<u8>(inOutText[1]);
     const u8 byte2 = static_cast<u8>(inOutText[2]);
-    const bool hasUtf8Bom = byte0 == 0xEF && byte1 == 0xBB && byte2 == 0xBF;
+    const bool hasUtf8Bom =
+        byte0 == TextDetail::s_Utf8BomByte0
+        && byte1 == TextDetail::s_Utf8BomByte1
+        && byte2 == TextDetail::s_Utf8BomByte2
+    ;
     if(hasUtf8Bom)
-        inOutText.erase(0, 3);
+        inOutText.erase(0, TextDetail::s_Utf8BomByteCount);
 }
 
 
 [[nodiscard]] inline bool IsUtf8Continuation(const u8 value){
-    return (value & 0xc0u) == 0x80u;
+    return (value & TextDetail::s_Utf8ContinuationMask) == TextDetail::s_Utf8ContinuationMarker;
 }
 
 [[nodiscard]] inline i32 DecodeUtf8CodePoint(const char* bytes, const i32 length, u32& unicode){
@@ -147,25 +184,26 @@ inline void StripUtf8Bom(StringT& inOutText){
         return 0;
 
     const u8 c0 = static_cast<u8>(bytes[0]);
-    if(c0 < 0x80u){
+    if(c0 < TextDetail::s_Utf8OneByteMaxExclusive){
         unicode = c0;
         return 1;
     }
 
-    if((c0 & 0xe0u) == 0xc0u){
-        if(length < 2)
+    if((c0 & TextDetail::s_Utf8TwoByteMask) == TextDetail::s_Utf8TwoByteMarker){
+        if(length < TextDetail::s_Utf8TwoByteLength)
             return 0;
 
         const u8 c1 = static_cast<u8>(bytes[1]);
         if(!IsUtf8Continuation(c1))
             return 0;
 
-        unicode = (static_cast<u32>(c0 & 0x1fu) << 6) | static_cast<u32>(c1 & 0x3fu);
-        return unicode >= 0x80u ? 2 : 0;
+        unicode = (static_cast<u32>(c0 & TextDetail::s_Utf8TwoBytePayloadMask) << TextDetail::s_Utf8ContinuationPayloadBits)
+            | static_cast<u32>(c1 & TextDetail::s_Utf8ContinuationPayloadMask);
+        return unicode >= TextDetail::s_Utf8TwoByteMinCodePoint ? TextDetail::s_Utf8TwoByteLength : 0;
     }
 
-    if((c0 & 0xf0u) == 0xe0u){
-        if(length < 3)
+    if((c0 & TextDetail::s_Utf8ThreeByteMask) == TextDetail::s_Utf8ThreeByteMarker){
+        if(length < TextDetail::s_Utf8ThreeByteLength)
             return 0;
 
         const u8 c1 = static_cast<u8>(bytes[1]);
@@ -173,12 +211,16 @@ inline void StripUtf8Bom(StringT& inOutText){
         if(!IsUtf8Continuation(c1) || !IsUtf8Continuation(c2))
             return 0;
 
-        unicode = (static_cast<u32>(c0 & 0x0fu) << 12) | (static_cast<u32>(c1 & 0x3fu) << 6) | static_cast<u32>(c2 & 0x3fu);
-        return unicode >= 0x800u ? 3 : 0;
+        unicode =
+            (static_cast<u32>(c0 & TextDetail::s_Utf8ThreeBytePayloadMask) << (TextDetail::s_Utf8ContinuationPayloadBits * 2u))
+            | (static_cast<u32>(c1 & TextDetail::s_Utf8ContinuationPayloadMask) << TextDetail::s_Utf8ContinuationPayloadBits)
+            | static_cast<u32>(c2 & TextDetail::s_Utf8ContinuationPayloadMask)
+        ;
+        return unicode >= TextDetail::s_Utf8ThreeByteMinCodePoint ? TextDetail::s_Utf8ThreeByteLength : 0;
     }
 
-    if((c0 & 0xf8u) == 0xf0u){
-        if(length < 4)
+    if((c0 & TextDetail::s_Utf8FourByteMask) == TextDetail::s_Utf8FourByteMarker){
+        if(length < TextDetail::s_Utf8FourByteLength)
             return 0;
 
         const u8 c1 = static_cast<u8>(bytes[1]);
@@ -188,23 +230,23 @@ inline void StripUtf8Bom(StringT& inOutText){
             return 0;
 
         unicode =
-            (static_cast<u32>(c0 & 0x07u) << 18)
-            | (static_cast<u32>(c1 & 0x3fu) << 12)
-            | (static_cast<u32>(c2 & 0x3fu) << 6)
-            | static_cast<u32>(c3 & 0x3fu)
+            (static_cast<u32>(c0 & TextDetail::s_Utf8FourBytePayloadMask) << (TextDetail::s_Utf8ContinuationPayloadBits * 3u))
+            | (static_cast<u32>(c1 & TextDetail::s_Utf8ContinuationPayloadMask) << (TextDetail::s_Utf8ContinuationPayloadBits * 2u))
+            | (static_cast<u32>(c2 & TextDetail::s_Utf8ContinuationPayloadMask) << TextDetail::s_Utf8ContinuationPayloadBits)
+            | static_cast<u32>(c3 & TextDetail::s_Utf8ContinuationPayloadMask)
         ;
-        return unicode >= 0x10000u && unicode <= 0x10ffffu ? 4 : 0;
+        return unicode >= TextDetail::s_Utf8FourByteMinCodePoint && unicode <= TextDetail::s_UnicodeMaxCodePoint ? TextDetail::s_Utf8FourByteLength : 0;
     }
 
     return 0;
 }
 
 [[nodiscard]] inline bool IsTextInputCodePoint(const u32 unicode){
-    if(unicode < 32u || unicode == 127u)
+    if(unicode < TextDetail::s_AsciiControlMaxExclusive || unicode == TextDetail::s_AsciiDelete)
         return false;
-    if(unicode > 0x10ffffu)
+    if(unicode > TextDetail::s_UnicodeMaxCodePoint)
         return false;
-    if(unicode >= 0xd800u && unicode <= 0xdfffu)
+    if(unicode >= TextDetail::s_UnicodeHighSurrogateMin && unicode <= TextDetail::s_UnicodeLowSurrogateMax)
         return false;
     return true;
 }
@@ -240,7 +282,7 @@ inline void AppendJsonEscapedText(StringT& out, const AStringView text){
             out += "\\t";
             break;
         default:
-            if(static_cast<unsigned char>(ch) < 0x20u)
+            if(static_cast<unsigned char>(ch) < TextDetail::s_JsonControlMaxExclusive)
                 out += '?';
             else
                 out += ch;

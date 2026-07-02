@@ -579,7 +579,7 @@ bool BackendContext::createVulkanInstance(){
 
     decltype(m_enabledExtensions.instance) requiredExtensions(m_enabledExtensions.instance);
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_InstanceCreateArena, 32768);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_InstanceCreateArena, s_DeviceSetupScratchArenaBytes);
 
     uint32_t extensionCount = 0;
     res = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
@@ -862,7 +862,7 @@ bool BackendContext::pickPhysicalDevice(){
         return false;
     }
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_PhysicalDeviceSelectArena, 32768);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_PhysicalDeviceSelectArena, s_DeviceSetupScratchArenaBytes);
 
     Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
     res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
@@ -1069,7 +1069,7 @@ bool BackendContext::pickPhysicalDevice(){
 bool BackendContext::createVulkanDevice(){
     VkResult res = VK_SUCCESS;
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DeviceCreateArena, 32768);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DeviceCreateArena, s_DeviceSetupScratchArenaBytes);
     m_bufferDeviceAddressSupported = false;
     m_dynamicRenderingSupported = false;
     m_synchronization2Supported = false;
@@ -1297,7 +1297,7 @@ bool BackendContext::createVulkanDevice(){
     ;
 
     HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::ScratchArena> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), scratchArena);
-    uniqueQueueFamilies.reserve(4u);
+    uniqueQueueFamilies.reserve(s_MaxVulkanQueueFamilyKinds);
     uniqueQueueFamilies.insert(m_graphicsQueueFamily);
 
     if(!m_deviceParams.headlessDevice)
@@ -1876,7 +1876,7 @@ bool BackendContext::createDevice(){
     if(!createVulkanDevice())
         return false;
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DeviceExtensionSetupArena, 32768);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DeviceExtensionSetupArena, s_DeviceSetupScratchArenaBytes);
 
     auto vecInstanceExt = VulkanDetail::StringSetToVector(m_enabledExtensions.instance, scratchArena);
     auto vecDeviceExt = VulkanDetail::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);

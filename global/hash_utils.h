@@ -19,6 +19,12 @@ inline constexpr u64 FNV64_PRIME = 1099511628211ull;
 inline constexpr usize s_HashCombineGoldenRatio = 0x9e3779b9u;
 inline constexpr usize s_HashCombineLeftShift = 6u;
 inline constexpr usize s_HashCombineRightShift = 2u;
+inline constexpr usize s_HexDecimalDigitCount = 10u;
+inline constexpr usize s_HexPrefixLength = 2u;
+inline constexpr usize s_HexU32DigitCount = 8u;
+inline constexpr usize s_HexU64DigitCount = 16u;
+inline constexpr u32 s_HexNibbleBits = 4u;
+inline constexpr u64 s_HexNibbleMask = 0xFu;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,11 +151,11 @@ template<typename CharT>
         return true;
     }
     if(ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('f')){
-        outValue = static_cast<u8>(ch - static_cast<CharT>('a') + 10);
+        outValue = static_cast<u8>(ch - static_cast<CharT>('a') + s_HexDecimalDigitCount);
         return true;
     }
     if(ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('F')){
-        outValue = static_cast<u8>(ch - static_cast<CharT>('A') + 10);
+        outValue = static_cast<u8>(ch - static_cast<CharT>('A') + s_HexDecimalDigitCount);
         return true;
     }
     return false;
@@ -158,7 +164,7 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline bool ParseHexU64(const BasicStringView<CharT> text, u64& outValue){
-    if(text.size() != 16)
+    if(text.size() != s_HexU64DigitCount)
         return false;
 
     outValue = 0;
@@ -167,7 +173,7 @@ template<typename CharT>
         if(!ParseHexDigit(ch, nibble))
             return false;
 
-        outValue = (outValue << 4) | static_cast<u64>(nibble);
+        outValue = (outValue << s_HexNibbleBits) | static_cast<u64>(nibble);
     }
 
     return true;
@@ -177,9 +183,9 @@ template<typename CharT>
 template<typename CharT>
 [[nodiscard]] inline bool ParseVariableHexU64(BasicStringView<CharT> text, u64& outValue){
     outValue = 0u;
-    if(text.size() >= 2u && text[0u] == static_cast<CharT>('0') && (text[1u] == static_cast<CharT>('x') || text[1u] == static_cast<CharT>('X')))
-        text.remove_prefix(2u);
-    if(text.empty() || text.size() > 16u)
+    if(text.size() >= s_HexPrefixLength && text[0u] == static_cast<CharT>('0') && (text[1u] == static_cast<CharT>('x') || text[1u] == static_cast<CharT>('X')))
+        text.remove_prefix(s_HexPrefixLength);
+    if(text.empty() || text.size() > s_HexU64DigitCount)
         return false;
 
     for(const CharT ch : text){
@@ -187,7 +193,7 @@ template<typename CharT>
         if(!ParseHexDigit(ch, nibble))
             return false;
 
-        outValue = (outValue << 4u) | static_cast<u64>(nibble);
+        outValue = (outValue << s_HexNibbleBits) | static_cast<u64>(nibble);
     }
     return true;
 }
@@ -202,9 +208,9 @@ namespace HashUtilsDetail{
 template<typename CharT>
 [[nodiscard]] inline constexpr CharT HexDigit(const usize nibble){
     return static_cast<CharT>(
-        nibble < 10u
+        nibble < s_HexDecimalDigitCount
             ? static_cast<usize>('0') + nibble
-            : static_cast<usize>('a') + (nibble - 10u)
+            : static_cast<usize>('a') + (nibble - s_HexDecimalDigitCount)
     );
 }
 
@@ -215,20 +221,20 @@ inline void AppendFixedHexImpl(const u64 value, const u32 nibbleCount, StringT& 
 
     using CharT = typename StringT::value_type;
     for(u32 nibbleIndex = 0; nibbleIndex < nibbleCount; ++nibbleIndex){
-        const u32 shift = (nibbleCount - 1u - nibbleIndex) * 4u;
-        const usize nibble = static_cast<usize>((value >> shift) & 0xF);
+        const u32 shift = (nibbleCount - 1u - nibbleIndex) * s_HexNibbleBits;
+        const usize nibble = static_cast<usize>((value >> shift) & s_HexNibbleMask);
         outText.push_back(HexDigit<CharT>(nibble));
     }
 }
 
 template<typename StringT>
 inline void AppendHexU32Impl(const u32 value, StringT& outText){
-    AppendFixedHexImpl(static_cast<u64>(value), 8u, outText);
+    AppendFixedHexImpl(static_cast<u64>(value), s_HexU32DigitCount, outText);
 }
 
 template<typename StringT>
 inline void AppendHexU64Impl(const u64 value, StringT& outText){
-    AppendFixedHexImpl(value, 16u, outText);
+    AppendFixedHexImpl(value, s_HexU64DigitCount, outText);
 }
 
 

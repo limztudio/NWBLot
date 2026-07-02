@@ -35,6 +35,10 @@ void AssignBytecode(const void* binary, const usize binarySize, ByteVector& outB
     outBytecode.assign(byteData, byteData + binarySize);
 }
 
+[[nodiscard]] inline bool IsValidSpirvBytecode(const void* binary, const usize binarySize)noexcept{
+    return binary && binarySize != 0u && (binarySize & s_SpirvWordAlignmentMask) == 0u;
+}
+
 inline bool ComputeVertexAttributeBytes(const VertexAttributeDesc& attr, const u32 attributeIndex, u64& outBytes){
     outBytes = 0;
 
@@ -65,7 +69,7 @@ inline bool CopySpirvWords(
 ){
     outWords = {};
 
-    if(!binary || binarySize == 0 || (binarySize & 3) != 0)
+    if(!IsValidSpirvBytecode(binary, binarySize))
         return false;
 
     const usize wordCount = binarySize / sizeof(u32);
@@ -193,7 +197,7 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
     shader->m_desc.entryName = requestedEntryName;
     shader->m_bytecode = m_bytecode;
 
-    if(shader->m_bytecode.empty() || (shader->m_bytecode.size() & 3) != 0){
+    if(!__hidden_vulkan_shader::IsValidSpirvBytecode(shader->m_bytecode.data(), shader->m_bytecode.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload for entry '{}'"), StringConvert(requestedEntryName));
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
@@ -236,7 +240,7 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
 
 
 ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize binarySize){
-    if(!binary || binarySize == 0 || (binarySize & 3) != 0){
+    if(!__hidden_vulkan_shader::IsValidSpirvBytecode(binary, binarySize)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload"));
         return nullptr;
     }
@@ -337,7 +341,7 @@ ShaderHandle Device::createShaderSpecialization(Shader* baseShader, const Shader
 }
 
 ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binarySize){
-    if(!binary || binarySize == 0 || (binarySize & 3) != 0){
+    if(!__hidden_vulkan_shader::IsValidSpirvBytecode(binary, binarySize)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload"));
         return nullptr;
     }

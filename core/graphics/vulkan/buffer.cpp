@@ -509,7 +509,7 @@ void CommandList::clearBufferUInt(Buffer* bufferResource, u32 clearValue){
 
     Buffer& buffer = *bufferResource;
 #if defined(NWB_DEBUG)
-    if((buffer.m_desc.byteSize & 3u) != 0){
+    if((buffer.m_desc.byteSize & s_BufferAlignmentMask) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear buffer: buffer size is not 4-byte aligned"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear buffer: buffer size is not 4-byte aligned"));
         return;

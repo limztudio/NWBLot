@@ -147,7 +147,7 @@ bool CommandList::validateIndirectBuffer(Buffer* bufferResource, u64 offsetBytes
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to execute indirect command: buffer was not created with indirect-argument usage"));
         return false;
     }
-    if((offsetBytes & 3u) != 0){
+    if((offsetBytes & s_BufferAlignmentMask) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute {}: offset is not 4-byte aligned"), commandName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to execute indirect command: offset is not 4-byte aligned"));
         return false;

@@ -58,6 +58,9 @@ inline constexpr u64 s_DefaultScratchChunkSize = 16 * 1024 * 1024; // 16 MB
 inline constexpr u64 s_ScratchMemoryLimit = 256 * 1024 * 1024; // 256 MB
 inline constexpr u64 s_LargeBufferThreshold = 16 * 1024 * 1024; // 16 MB
 inline constexpr u64 s_BufferAlignmentBytes = 4;
+inline constexpr u64 s_BufferAlignmentMask = s_BufferAlignmentBytes - 1u;
+inline constexpr usize s_SpirvWordAlignmentBytes = sizeof(u32);
+inline constexpr usize s_SpirvWordAlignmentMask = s_SpirvWordAlignmentBytes - 1u;
 
 // Fixed-size, pre-reserved arena for GPU crash reports. Captured on device-lost, so it must
 // not touch the growable heap (which may be unsafe at crash time); the block is reserved up front.
@@ -104,6 +107,8 @@ inline constexpr usize s_ParallelGeometryThreshold = 256;
 inline constexpr usize s_GeometryGrainSize = 64;
 inline constexpr usize s_ParallelTlasInstanceThreshold = 1024;
 inline constexpr usize s_TlasInstanceGrainSize = 256;
+inline constexpr usize s_DeviceSetupScratchArenaBytes = 32u * 1024u;
+inline constexpr usize s_MaxVulkanQueueFamilyKinds = 4u;
 
 // Ray tracing helper defaults.
 inline constexpr u64 s_DefaultTopLevelASBufferSize = 1024 * 1024;

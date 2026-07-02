@@ -34,10 +34,14 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_WinFrameActiveFlagByteIndex = 4u;
+inline constexpr COLORREF s_DefaultLogRowTextColor = RGB(0, 0, 0);
+inline constexpr COLORREF s_DefaultLogRowBackgroundColor = RGB(230, 230, 230);
+
 class WinFrame : public FrameData{
 public:
-    inline bool isActive()const{ return m_data.u8[4] != 0; }
-    inline void setActive(bool value){ m_data.u8[4] = value ? 1u : 0u; }
+    inline bool isActive()const{ return m_data.u8[s_WinFrameActiveFlagByteIndex] != 0; }
+    inline void setActive(bool value){ m_data.u8[s_WinFrameActiveFlagByteIndex] = value ? 1u : 0u; }
 
     inline HINSTANCE instance()const{ return static_cast<HINSTANCE>(m_data.ptr[0]); }
     inline void setInstance(HINSTANCE value){ m_data.ptr[0] = value; }
@@ -47,9 +51,22 @@ public:
 };
 
 struct LogRowColors{
-    COLORREF text = RGB(0, 0, 0);
-    COLORREF background = RGB(230, 230, 230);
+    COLORREF text = s_DefaultLogRowTextColor;
+    COLORREF background = s_DefaultLogRowBackgroundColor;
 };
+
+inline constexpr LogRowColors s_DefaultEvenLogRowColors{};
+inline constexpr LogRowColors s_InfoOddLogRowColors{ RGB(80, 80, 80), RGB(255, 255, 255) };
+inline constexpr LogRowColors s_WarningEvenLogRowColors{ RGB(0, 0, 0), RGB(170, 170, 0) };
+inline constexpr LogRowColors s_WarningOddLogRowColors{ RGB(60, 60, 60), RGB(200, 200, 0) };
+inline constexpr LogRowColors s_CriticalWarningEvenLogRowColors{ RGB(240, 240, 240), RGB(170, 80, 0) };
+inline constexpr LogRowColors s_CriticalWarningOddLogRowColors{ RGB(255, 255, 255), RGB(200, 100, 0) };
+inline constexpr LogRowColors s_AssertEvenLogRowColors{ RGB(200, 200, 200), RGB(120, 0, 160) };
+inline constexpr LogRowColors s_AssertOddLogRowColors{ RGB(255, 255, 255), RGB(145, 20, 190) };
+inline constexpr LogRowColors s_ErrorEvenLogRowColors{ RGB(200, 200, 200), RGB(170, 0, 0) };
+inline constexpr LogRowColors s_ErrorOddLogRowColors{ RGB(255, 255, 255), RGB(200, 0, 0) };
+inline constexpr LogRowColors s_FatalEvenLogRowColors{ RGB(200, 200, 0), RGB(220, 0, 0) };
+inline constexpr LogRowColors s_FatalOddLogRowColors{ RGB(255, 255, 0), RGB(250, 0, 0) };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -91,39 +108,39 @@ static LogRowColors ResolveLogRowColors(const Log::Type::Enum type, const bool a
     switch(type){
     case Log::Type::EssentialInfo:
     case Log::Type::Info:
-        return SelectLogRowColors(alternate, LogRowColors{}, LogRowColors{ RGB(80, 80, 80), RGB(255, 255, 255) });
+        return SelectLogRowColors(alternate, s_DefaultEvenLogRowColors, s_InfoOddLogRowColors);
     case Log::Type::Warning:
         return SelectLogRowColors(
             alternate,
-            LogRowColors{ RGB(0, 0, 0), RGB(170, 170, 0) },
-            LogRowColors{ RGB(60, 60, 60), RGB(200, 200, 0) }
+            s_WarningEvenLogRowColors,
+            s_WarningOddLogRowColors
         );
     case Log::Type::CriticalWarning:
         return SelectLogRowColors(
             alternate,
-            LogRowColors{ RGB(240, 240, 240), RGB(170, 80, 0) },
-            LogRowColors{ RGB(255, 255, 255), RGB(200, 100, 0) }
+            s_CriticalWarningEvenLogRowColors,
+            s_CriticalWarningOddLogRowColors
         );
     case Log::Type::Assert:
         return SelectLogRowColors(
             alternate,
-            LogRowColors{ RGB(200, 200, 200), RGB(120, 0, 160) },
-            LogRowColors{ RGB(255, 255, 255), RGB(145, 20, 190) }
+            s_AssertEvenLogRowColors,
+            s_AssertOddLogRowColors
         );
     case Log::Type::Error:
         return SelectLogRowColors(
             alternate,
-            LogRowColors{ RGB(200, 200, 200), RGB(170, 0, 0) },
-            LogRowColors{ RGB(255, 255, 255), RGB(200, 0, 0) }
+            s_ErrorEvenLogRowColors,
+            s_ErrorOddLogRowColors
         );
     case Log::Type::Fatal:
         return SelectLogRowColors(
             alternate,
-            LogRowColors{ RGB(200, 200, 0), RGB(220, 0, 0) },
-            LogRowColors{ RGB(255, 255, 0), RGB(250, 0, 0) }
+            s_FatalEvenLogRowColors,
+            s_FatalOddLogRowColors
         );
     default:
-        return SelectLogRowColors(alternate, LogRowColors{}, LogRowColors{ RGB(80, 80, 80), RGB(255, 255, 255) });
+        return SelectLogRowColors(alternate, s_DefaultEvenLogRowColors, s_InfoOddLogRowColors);
     }
 }
 

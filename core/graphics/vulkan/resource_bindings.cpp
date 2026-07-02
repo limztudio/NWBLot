@@ -333,7 +333,7 @@ bool ValidatePushConstantByteSize(const VulkanContext& context, const u32 byteSi
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed push constant operation: size is zero"));
         return false;
     }
-    if((byteSize & 3u) != 0){
+    if((byteSize & s_BufferAlignmentMask) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: push constant size is not 4-byte aligned"), operationName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed push constant operation: size is not 4-byte aligned"));
         return false;

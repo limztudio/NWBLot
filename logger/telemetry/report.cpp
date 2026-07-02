@@ -24,6 +24,13 @@ namespace __hidden_telemetry_report{
 
 
 static constexpr f64 s_MillisecondsPerSecond = 1000.0;
+static constexpr usize s_PerfCsvFixedReserveBytes = 128u;
+static constexpr usize s_PerfCsvBytesPerEvent = 128u;
+static constexpr usize s_TimedGraphDotFixedReserveBytes = 96u;
+static constexpr usize s_TimedGraphDotBytesPerNode = 64u;
+static constexpr usize s_TimedGraphDotBytesPerEdge = 40u;
+static constexpr usize s_TimedGraphDotTimingLabelExtraBytes = 16u;
+static constexpr usize s_JsonReportReserveBytes = 1024u;
 
 template<typename... Args>
 void AppendFormat(AString<TelemetryArena>& out, AFormatString<Args...> fmt, Args&&... args){
@@ -117,7 +124,7 @@ void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphP
 using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, TelemetryArena>;
 
 [[nodiscard]] usize EstimatePerfCsvReserve(const usize eventCount)noexcept{
-    return 128u + eventCount * 128u;
+    return s_PerfCsvFixedReserveBytes + eventCount * s_PerfCsvBytesPerEvent;
 }
 
 [[nodiscard]] usize EstimateTimedGraphDotReserve(const Telemetry::FrameGraphPayload& graph)noexcept{
@@ -125,7 +132,11 @@ using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, Telemetry
     for(const Telemetry::FrameGraphNodePayload& node : graph.nodes)
         labelBytes += node.label.size();
 
-    return 96u + graph.nodes.size() * 64u + graph.edges.size() * 40u + labelBytes;
+    return s_TimedGraphDotFixedReserveBytes
+        + graph.nodes.size() * s_TimedGraphDotBytesPerNode
+        + graph.edges.size() * s_TimedGraphDotBytesPerEdge
+        + labelBytes
+    ;
 }
 
 [[nodiscard]] const char* FrameGraphNodeShape(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
@@ -172,7 +183,7 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
         AppendFormat(out, "  n{} [shape={}, label=", i, FrameGraphNodeShape(node.kind));
         if(timed != timing.end()){
             AString<TelemetryArena> label(arena);
-            label.reserve(labelView.size() + 16u);
+            label.reserve(labelView.size() + s_TimedGraphDotTimingLabelExtraBytes);
             label.append(labelView.data(), labelView.size());
             label += '\n';
             AppendFormat(label, "{:.3f} ms", timed.value() * s_MillisecondsPerSecond);
@@ -195,7 +206,7 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
 
 void BuildJson(const TelemetryReportSummary& summary, AString<TelemetryArena>& out){
     out.clear();
-    out.reserve(1024u);
+    out.reserve(s_JsonReportReserveBytes);
     out += "{\n";
     AppendFormat(out, "  \"eventCount\": {},\n", summary.eventCount);
     out += "  \"frameRange\": {";

@@ -36,8 +36,9 @@ namespace NameDetail{
 
 
 inline constexpr u32 s_HashLaneCount = 8;
+inline constexpr usize s_DebugNameCapacity = 256u;
 
-inline constexpr u64 LANE_SEEDS[8] = {
+inline constexpr u64 LANE_SEEDS[s_HashLaneCount] = {
     FNV64_OFFSET_BASIS,
     FNV64_OFFSET_BASIS ^ 0x0123456789ABCDEFull,
     FNV64_OFFSET_BASIS ^ 0xFEDCBA9876543210ull,
@@ -431,7 +432,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
-        CopyCanonical(m_debugName, 256, str);
+        CopyCanonical(m_debugName, NameDetail::s_DebugNameCapacity, str);
 #endif
     }
     constexpr Name(const wchar* str)
@@ -444,7 +445,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
-        CopyCanonical(m_debugName, 256, str);
+        CopyCanonical(m_debugName, NameDetail::s_DebugNameCapacity, str);
 #endif
     }
     explicit Name(const NameHash& hash)
@@ -457,7 +458,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG)
-        NameDetail::HashToDebugString(m_hash, m_debugName, 256);
+        NameDetail::HashToDebugString(m_hash, m_debugName, NameDetail::s_DebugNameCapacity);
 #endif
     }
     explicit Name(const AStringView text)
@@ -470,7 +471,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
-        NameDetail::CopyDebugName(text, m_debugName, 256);
+        NameDetail::CopyDebugName(text, m_debugName, NameDetail::s_DebugNameCapacity);
 #endif
         NameDetail::RecordNameSymbolText(m_hash, text);
     }
@@ -484,7 +485,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
-        NameDetail::CopyDebugName(text, m_debugName, 256);
+        NameDetail::CopyDebugName(text, m_debugName, NameDetail::s_DebugNameCapacity);
 #endif
         NameDetail::RecordNameSymbolText(m_hash, text);
     }
@@ -545,7 +546,7 @@ private:
 private:
     NameHash m_hash;
 #if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
-    char m_debugName[256];
+    char m_debugName[NameDetail::s_DebugNameCapacity];
 #endif
 #if defined(NWB_BUILDMODE)
     bool m_hasSymbolText;

@@ -2,7 +2,7 @@ find_package(Python3 COMPONENTS Interpreter)
 
 if(Python3_Interpreter_FOUND)
     add_test(
-        NAME nwb_smoke_launcher_unit
+        NAME nwb_launcher_unit
         COMMAND
             "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/launcher_tests.py"

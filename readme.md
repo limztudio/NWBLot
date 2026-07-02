@@ -42,3 +42,9 @@
   - The benchmark CTest is a smoke/regression check. It records GPU timing metrics in the log and allows a small tolerance for near-equal no-culling and culling render times.
   - Project code should request a clean shutdown through `ProjectRuntimeContext::requestQuit`; do not call platform-specific quit APIs such as `PostQuitMessage` from project or smoke-test code.
   - When `requestQuit` is raised during project update, the frame loop exits without submitting another graphics frame.
+
+- Launcher
+  - Repo-level launcher: `python scripts/nwb_launcher.py run testbed --config dbg`
+  - Generic executable target: `python scripts/nwb_launcher.py run nwb_resource_cooker -- --help`
+  - Smoke profile: `python scripts/nwb_launcher.py smoke transparent-multi --backend hw`
+  - Legacy smoke entry point remains available at `python tests/smoke/launcher.py --scene transparent-multi --backend hw`.

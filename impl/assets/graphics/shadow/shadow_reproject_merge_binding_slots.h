@@ -57,6 +57,12 @@
 //  - ANTILAG: gate C temporal-gradient antilag strength. A large per-frame luma gradient (a hard swept shadow edge) scales
 //    the effective history length toward 0 so the blend snaps to the current sample instead of lagging.
 #define NWB_SHADOW_TEMPORAL_ANTILAG        4.0
+//  - NOISE_SLACK: gate C noise floor, in std-devs of the CURRENT 3x3 spatial luma. Only the part of the per-frame temporal
+//    gradient that EXCEEDS this*sigma counts as a real swept edge. WITHOUT it the raw Monte-Carlo noise of a 1-2 spp trace
+//    reads as a "hard edge" at every penumbra pixel and collapses the history EVERY frame -> the accumulation never converges
+//    and grain pops at random positions even on a STATIC scene. 2 sigma passes ordinary noise through (history keeps
+//    accumulating) while a genuine umbra<->lit sweep (many sigma out) still trips the antilag.
+#define NWB_SHADOW_TEMPORAL_NOISE_SLACK    2.0
 //  - ALPHA_MIN: the minimum blend alpha (weight of the current sample), which caps the temporal lag at ~1/ALPHA_MIN frames
 //    (~10) as a global anti-ghost backstop even if a gate mis-fires -- history can never dominate indefinitely.
 #define NWB_SHADOW_TEMPORAL_ALPHA_MIN      0.1

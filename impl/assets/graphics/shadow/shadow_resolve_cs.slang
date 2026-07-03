@@ -345,6 +345,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             }
             float3 sum = float3(0.0, 0.0, 0.0);
             float weightSum = 0.0;
+            // Degenerate-tap guard (anti-SPARKLE): also track the highest bilinear-weight VALID (on-surface) tap. When the
+            // distance/normal edge-stop rejects EVERY tap -- common at a thin sub-half-res silhouette (a character's fingers,
+            // hair) where all four half-res taps sit on the far surface -- falling back to the LIT identity flashes a WHITE
+            // speckle INSIDE the shadow (the flickering grain). Using the nearest on-surface shadow value instead keeps a
+            // plausible shadow there, killing that sparkle; true no-receiver (all-background) pixels still resolve to LIT.
+            float bestBilinear = -1.0;
+            float3 bestVis = float3(1.0, 1.0, 1.0);
+            bool anyOnSurface = false;
             [unroll] for(int j = 0; j < 2; ++j){
                 [unroll] for(int i = 0; i < 2; ++i){
                     const int2 tap = int2(clamp(baseTexel.x + i, 0, hw - 1), clamp(baseTexel.y + j, 0, hh - 1));
@@ -356,12 +364,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     const float distWeight = exp(-dDist * dDist * invTwoSigmaDistSq);
                     const float normalWeight = nwbShadowResolveNormalWeightVec(centerNormal, tapGeom.xy);
                     const float weight = bilinearWeight * distWeight * normalWeight;
-                    sum += weight * g_NwbShadowResolveInputColor.Load(int4(tap, slot, 0)).rgb;
+                    const float3 tapVis = g_NwbShadowResolveInputColor.Load(int4(tap, slot, 0)).rgb;
+                    sum += weight * tapVis;
                     weightSum += weight;
+                    anyOnSurface = true;
+                    if(bilinearWeight > bestBilinear){ bestBilinear = bilinearWeight; bestVis = tapVis; }
                 }
             }
-            // All four taps rejected: the LIT / UNTINTED identity (never black).
-            const float3 result = (weightSum > 0.0) ? (sum / weightSum) : float3(1.0, 1.0, 1.0);
+            // Edge-stop rejected every on-surface tap -> use the NEAREST on-surface shadow value (bestVis), NOT the LIT
+            // identity (which sparkles); only a truly receiver-less (all-background) block resolves to LIT.
+            const float3 result = (weightSum > 0.0) ? (sum / weightSum) : (anyOnSurface ? bestVis : float3(1.0, 1.0, 1.0));
             if(fold == 0u){
                 g_NwbShadowResolveVisibility[uint3(pixel, slot)] = float4(result, 1.0); // OVERWRITE (opaque)
             }

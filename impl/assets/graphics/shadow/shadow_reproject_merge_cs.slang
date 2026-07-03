@@ -193,6 +193,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         // stale-bright history over a newly-shadowed texel lands outside the band and snaps to the dark current mean.
         float3 mu = float3(0.0, 0.0, 0.0);
         float3 mu2 = float3(0.0, 0.0, 0.0);
+        float lumaM1 = 0.0; // 3x3 luma mean  (gate C noise floor)
+        float lumaM2 = 0.0; // 3x3 luma 2nd-moment
         int cnt = 0;
         [unroll] for(int dy = -1; dy <= 1; ++dy){
             [unroll] for(int dx = -1; dx <= 1; ++dx){
@@ -202,10 +204,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 const float3 s = g_NwbShadowMergeSoftTrace.Load(int4(t, slot, 0)).rgb;
                 mu += s;
                 mu2 += s * s;
+                const float sl = nwbShadowMergeLuma(s);
+                lumaM1 += sl;
+                lumaM2 += sl * sl;
                 ++cnt;
             }
         }
         float3 histClamped = hist;
+        float sigmaLuma = 0.0; // gate C noise floor; 0 when no neighbours -> gate C falls back to the raw gradient
         if(cnt > 0){
             const float invCount = 1.0 / (float)cnt;
             mu *= invCount;
@@ -214,13 +220,19 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const float3 lo = mu - NWB_SHADOW_TEMPORAL_GAMMA * sigma;
             const float3 hi = mu + NWB_SHADOW_TEMPORAL_GAMMA * sigma;
             histClamped = clamp(hist, lo, hi);
+            const float lumaMean = lumaM1 * invCount;
+            sigmaLuma = sqrt(max(lumaM2 * invCount - lumaMean * lumaMean, 0.0));
         }
 
-        // STEP 4 GATE C (temporal-gradient antilag): a large per-frame luma gradient (a hard swept shadow edge) shrinks the
-        // effective history length so the blend snaps to current. saturate keeps nEff in [0, n].
+        // STEP 4 GATE C (temporal-gradient antilag), NOISE-AWARE: a hard SWEPT shadow edge shrinks the effective history so
+        // the blend snaps to current -- but only the part of the per-frame luma disagreement that EXCEEDS the local spatial
+        // noise floor (NOISE_SLACK * sigmaLuma) counts as such an edge. Subtracting the noise floor is what stops the raw
+        // 1-2 spp Monte-Carlo noise from reading as an edge and collapsing the history every frame (the static-scene random
+        // grain); a genuine umbra<->lit sweep sits many sigma out and still trips it. saturate keeps nEff in [0, n].
         const float lumaCur = nwbShadowMergeLuma(cur);
         const float lumaHist = nwbShadowMergeLuma(histClamped);
-        const float tempGrad = abs(lumaCur - lumaHist) / max(max(lumaCur, lumaHist), 1e-3);
+        const float edgeSignal = max(0.0, abs(lumaCur - lumaHist) - NWB_SHADOW_TEMPORAL_NOISE_SLACK * sigmaLuma);
+        const float tempGrad = edgeSignal / max(max(lumaCur, lumaHist), 1e-3);
         const float nEff = n * saturate(1.0 - NWB_SHADOW_TEMPORAL_ANTILAG * tempGrad);
 
         // STEP 5 BLEND: alpha (weight of the current sample) is 1/(nEff+1) capped from below by ALPHA_MIN, so the temporal

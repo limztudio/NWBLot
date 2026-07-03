@@ -308,7 +308,7 @@ public:
             // more solid glass. Here a DEEP GREEN glass (keeps green, absorbs red+blue) casts a clearly green penumbra --
             // a bright rgb like (0.35,0.925,..) would still read faint because it barely absorbs. To decouple look from
             // shadow deliberately, override renderCoverage in the hook after the constructor.
-            Float4(0.20f, 0.55f, 0.12f, 0.9f),
+            Float4(0.20f, 0.55f, 0.12f, 0.6f),
             Float4(-0.6f, 0.0f, -1.1f, 0.0f),
             Float4(1.0f, 1.0f, 1.0f, 0.0f),
             &glassTintApplied

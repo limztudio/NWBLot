@@ -181,14 +181,9 @@ static const float s_NwbShadowResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 /
 // whole smooth-curvature neighbourhood -- a binary cut, NOT a pow falloff, so it never starves the fit to one tap on a curve.
 #define NWB_SHADOW_RESOLVE_GUIDED_NORMAL_GATE 0.5
 
-float nwbShadowResolveNormalWeight(const float2 centerOct, const float2 tapOct){
-    const float3 cn = nwbOctDecodeNormal(centerOct);
-    const float3 tn = nwbOctDecodeNormal(tapOct);
-    return pow(max(dot(cn, tn), 0.0), NWB_SHADOW_RESOLVE_NORMAL_POWER);
-}
-
-// Normal edge-stop variant taking an ALREADY-DECODED centre normal (the full-res G-buffer centre in the guided upsample)
-// against an octahedral-packed tap normal (the half-res geometry cache), so the full-res centre is decoded just once.
+// Normal edge-stop: taps whose receiver normal diverges from the centre's fall off as pow(max(dot,0), N). Takes an
+// ALREADY-DECODED centre normal (constant across the wavelet kernel + the guided upsample) against an octahedral-packed
+// tap normal (the half-res geometry cache), so the centre is oct-decoded ONCE, never per tap.
 float nwbShadowResolveNormalWeightVec(const float3 centerNormal, const float2 tapOct){
     const float3 tn = nwbOctDecodeNormal(tapOct);
     return pow(max(dot(centerNormal, tn), 0.0), NWB_SHADOW_RESOLVE_NORMAL_POWER);
@@ -454,6 +449,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const float4 centerGeom = inBounds ? nwbShadowResolveGeomAtHalf(texel) : float4(0.0, 0.0, 0.0, 0.0);
     const float sigmaDist = max(centerGeom.z * NWB_SHADOW_RESOLVE_WAVELET_DIST_FRAC * (float)step, 1e-3);
     const float invTwoSigmaDistSq = 1.0 / (2.0 * sigmaDist * sigmaDist);
+    // Decode the centre receiver normal ONCE (it is constant for every slot AND every tap); the per-tap normal edge-stop
+    // below then uses the ...Vec variant so the octahedral decode is not repeated across the 25-tap x 5-pass kernel.
+    const float3 centerNormalWavelet = nwbOctDecodeNormal(centerGeom.xy);
 
     // Per-centre-pixel SVGF luminance edge-stop sigma (Stage 4A), computed ONCE (same receiver for every slot). NOTE this
     // reads the moments SRV / the current INPUT_COLOR at THIS texel -- only meaningful for an in-bounds receiver; invalid /
@@ -513,7 +511,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                             const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)s_NwbShadowResolveTileVis[idx];
                             const float dDist = s_NwbShadowResolveTileDist[idx] - centerGeom.z;
                             const float distWeight = exp(-dDist * dDist * invTwoSigmaDistSq);
-                            const float normalWeight = nwbShadowResolveNormalWeight(centerGeom.xy, float2(s_NwbShadowResolveTileNormal[idx]));
+                            const float normalWeight = nwbShadowResolveNormalWeightVec(centerNormalWavelet, float2(s_NwbShadowResolveTileNormal[idx]));
                             const float valueWeight = nwbShadowResolveValueWeightVec(centerVis, tapVis, sigmaLum);
                             const float weight = s_NwbShadowResolveKernel[kx + 2] * s_NwbShadowResolveKernel[ky + 2] * distWeight * normalWeight * valueWeight;
                             sum += weight * tapVis;
@@ -555,7 +553,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
                 const float dDist = tapGeom.z - centerGeom.z;
                 const float distWeight = exp(-dDist * dDist * invTwoSigmaDistSq);
-                const float normalWeight = nwbShadowResolveNormalWeight(centerGeom.xy, tapGeom.xy);
+                const float normalWeight = nwbShadowResolveNormalWeightVec(centerNormalWavelet, tapGeom.xy);
                 const float valueWeight = nwbShadowResolveValueWeightVec(centerVis, tapVis, sigmaLum);
                 const float weight = s_NwbShadowResolveKernel[kx + 2] * s_NwbShadowResolveKernel[ky + 2] * distWeight * normalWeight * valueWeight;
                 sum += weight * tapVis;

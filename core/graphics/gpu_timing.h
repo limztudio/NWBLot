@@ -41,6 +41,11 @@ private:
         u64 frameIndex = 0u;
         u32 epoch = 0u;
         bool pending = false;
+        // False until this pool has been reset on the DEVICE timeline by recordFrameReset() at a frame open. A
+        // freshly created pool is only host-reset (which the validation layer will not accept as ordered before a
+        // first vkCmdWriteTimestamp), so its first use is deferred one frame -- until a frame-open device reset has
+        // made it defined in the command stream -- to avoid a spurious "query not reset" warning.
+        bool deviceReady = false;
     };
 
     using QueryVector = Vector<QueryRecord, Alloc::GlobalArena>;
@@ -59,6 +64,7 @@ public:
     }
 
     void collect(Device& device, Perf::TimingSink& timing, u32 epoch);
+    void recordFrameReset(CommandList& commandList);
     [[nodiscard]] GpuTimingScope beginQuery(Device& device, CommandList& commandList, u64 frameIndex, u32 epoch);
     void endQuery(CommandList& commandList, const GpuTimingScope& scope);
 
@@ -96,6 +102,11 @@ public:
     void collect(Device& device);
     void collect(Device& device, u64 publishFrameIndex);
     void beginFrame(u64 frameIndex);
+    // Record a device-timeline reset of every timer query pool onto the command buffer. The renderer MUST call
+    // this at frame open, before opening any dynamic render pass (vkCmdResetQueryPool is illegal inside one), so
+    // every pool is defined before this frame's timestamp writes -- the validation-correct alternative to a
+    // host-side reset the layer cannot order against the recorded writes.
+    void recordFrameReset(CommandList& commandList);
 
 
 private:

@@ -229,6 +229,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     commandList->open();
 
+    // Reset every GPU-timing query pool on the device timeline now, while the command buffer has no render pass
+    // open yet (vkCmdResetQueryPool is illegal inside a dynamic render pass). This makes every pool defined before
+    // the timestamp writes below, so the validation layer never reports a first-use "query not reset" for the
+    // per-pass timers. collect() already read back and cleared last frame's results before this frame's render.
+    m_graphics.gpuTiming().recordFrameReset(*commandList);
+
     bool commandListReady = true;
     {
         Core::GpuTimingMeasure frameTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Frame, device, *commandList);

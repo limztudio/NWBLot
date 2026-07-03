@@ -23,8 +23,8 @@
 
 // Max distinct occluders one shadow ray accumulates PER-OCCLUDER. A ray crosses only the few refractors between it
 // and the light; a further occluder beyond this drops its (rare) contribution gracefully rather than mis-binning.
-#define NWB_SHADOW_MAX_OCCLUDER_BINS 8
-#define NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER 8
+#define NWB_SHADOW_MAX_OCCLUDER_BINS 4
+#define NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER 4
 #define NWB_SHADOW_CROSSING_MERGE_MIN_EPSILON 1e-4
 #define NWB_SHADOW_CROSSING_MERGE_REL_EPSILON 1e-5
 #define NWB_SHADOW_INTERFACE_FADE_DISTANCE 2e-3

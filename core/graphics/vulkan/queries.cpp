@@ -209,10 +209,33 @@ void Device::resetTimerQuery(TimerQuery* queryResource){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void CommandList::resetTimerQuery(TimerQuery* queryResource){
+    auto* query = queryResource;
+    if(!query || query->m_queryPool == VK_NULL_HANDLE)
+        return;
+
+    // Device-timeline reset: recorded into the command buffer so the validation layer can order it before the
+    // timestamp writes issued later this frame. MUST be recorded OUTSIDE any dynamic render pass, because
+    // vkCmdResetQueryPool is illegal inside a render pass instance -- the caller guarantees that.
+    vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, query->m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
+}
+
+bool CommandList::canResetTimerQueryHere()const{
+    return !m_renderPassActive;
+}
+
 void CommandList::beginTimerQuery(TimerQuery* queryResource){
     auto* query = queryResource;
     if(!query || query->m_queryPool == VK_NULL_HANDLE)
         return;
+
+    // If no dynamic render pass is open, reset the pool on the device timeline right here so it is defined and
+    // correctly ordered before this write -- this makes compute / outside-pass scopes (the shadow trace, caustics,
+    // etc., which each run on their own command list) fully self-sufficient regardless of any frame-open reset.
+    // Inside a render pass vkCmdResetQueryPool is illegal, so those scopes instead rely on the frame-open
+    // recordFrameReset() plus the deviceReady gate that defers a freshly created pool's first use by one frame.
+    if(!m_renderPassActive)
+        vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, query->m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
 
     vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query->m_queryPool, s_TimerQueryBeginIndex);
 }

@@ -2079,19 +2079,30 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         && rayTracingState().m_prevWorldToClipValid
         && rayTracingState().m_softShadowTemporalSeeded) ? 1u : 0u;
 
-    // Denoise + upsample EACH slot light (scattered set, so one dispatch chain per set bit). With temporal on, a
-    // per-slot reproject-merge runs FIRST (accumulating this frame's trace into the history), then the a-trous
-    // resolve reads the accumulated history via temporalPrepareSet; else the resolve reads the raw trace directly.
+    // Active slot SPAN: the merge + resolve shaders loop [slotStart, slotStart+slotCount) per pixel over the per-slot
+    // Texture2DArray layers, so ONE dispatch over the whole span replaces the former per-set-bit dispatch chain (3
+    // shadow-slot lights -> 1 dispatch), cutting the dispatch/barrier count ~3x. This is COMPUTE-PRESERVING: each layer
+    // is independent and the shader does the identical per-slot work; only HOW MANY dispatches issue it changes.
+    // Cover [0, highestSetBit+1). For the normal contiguous case (lights get slots 0,1,2) this IS the active count; any
+    // gap-slot inside the range is harmless (its unused visibility layer is trivially re-denoised into a dead target).
+    u32 slotSpan = 0u;
     for(u32 slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot){
-        if((rayTracingState().m_softShadowSlotMask & (1u << slot)) == 0u)
-            continue;
+        if((rayTracingState().m_softShadowSlotMask & (1u << slot)) != 0u)
+            slotSpan = slot + 1u;
+    }
+    const u32 slotRangeStart = 0u;
+    const u32 slotRangeCount = slotSpan;
 
+    // Denoise + upsample the whole active slot RANGE in ONE dispatch chain. With temporal on, a single range-wide
+    // reproject-merge runs FIRST (accumulating this frame's trace into every slot's history), then the a-trous resolve
+    // reads the accumulated history via temporalPrepareSet; else the resolve reads the raw trace directly.
+    {
         if(temporalActive){
-            // Reproject-merge (half-res, one slot): reads the raw trace (soft-A) + prev history/moments + curr/prev
+            // Reproject-merge (half-res, whole range): reads the raw trace (soft-A) + prev history/moments + curr/prev
             // geometry + the full-res world-position G-buffer; writes the accumulated visibility (history-out) +
-            // moments. setResourceStatesForBindingSet transitions the raw trace + geometry + world-pos to SRV and
-            // the history/moments out to UAV; a UAV barrier (enabled above) then orders the write before the
-            // resolve PREPARE reads history-out as an SRV.
+            // moments for every slot layer. setResourceStatesForBindingSet transitions the raw trace + geometry +
+            // world-pos to SRV and the history/moments out to UAV (covering the whole array in one shot); a UAV barrier
+            // (enabled above) then orders the write before the resolve PREPARE reads history-out as an SRV.
             commandList.setResourceStatesForBindingSet(mergeSet);
             commandList.commitBarriers();
 
@@ -2101,8 +2112,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
             mergePush.height = targets.height;
             mergePush.halfWidth = softHalfWidth;
             mergePush.halfHeight = softHalfHeight;
-            mergePush.lightSlotStart = slot;
-            mergePush.lightSlotCount = 1u;
+            mergePush.lightSlotStart = slotRangeStart;
+            mergePush.lightSlotCount = slotRangeCount;
             mergePush.historyValid = historyValid;
 
             Core::ComputeState mergeState;
@@ -2122,7 +2133,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         opaqueDispatch.upsample = rayTracingState().m_shadowResolveBindingSetUpsample.get();
         opaqueDispatch.prepareOverride = temporalPrepareSet;
         opaqueDispatch.fold = SoftShadowUpsampleFold::Overwrite;
-        dispatchSoftShadowResolve(commandList, targets, slot, opaqueDispatch);
+        dispatchSoftShadowResolve(commandList, targets, slotRangeStart, slotRangeCount, opaqueDispatch);
     }
 
     // The opaque resolve left the visibility in UnorderedAccess (its final UPSAMPLE UAV write) + soft scratch in
@@ -2204,13 +2215,11 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
             : nullptr
         ;
 
-        for(u32 slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot){
-            if((rayTracingState().m_softShadowSlotMask & (1u << slot)) == 0u)
-                continue;
-
+        {
             if(transparentTemporalActive){
                 // Transparent reproject-merge (same RGB-safe merge pipeline; its own front/back set over the
-                // transparent hist/moments + transparentSoftHalf + the SHARED geometry caches + world-position).
+                // transparent hist/moments + transparentSoftHalf + the SHARED geometry caches + world-position). ONE
+                // range-wide dispatch, matching the opaque collapse: the shader loops [slotStart, slotStart+slotCount).
                 commandList.setResourceStatesForBindingSet(transparentMergeSet);
                 commandList.commitBarriers();
 
@@ -2220,8 +2229,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
                 transparentMergePush.height = targets.height;
                 transparentMergePush.halfWidth = softHalfWidth;
                 transparentMergePush.halfHeight = softHalfHeight;
-                transparentMergePush.lightSlotStart = slot;
-                transparentMergePush.lightSlotCount = 1u;
+                transparentMergePush.lightSlotStart = slotRangeStart;
+                transparentMergePush.lightSlotCount = slotRangeCount;
                 transparentMergePush.historyValid = historyValid;
 
                 Core::ComputeState transparentMergeState;
@@ -2234,7 +2243,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
 
             // Transparent RGB resolve: RGB pipeline, its OWN base sets (over transparentSoftHalf + the shared soft-A/B
             // scratch + the SAME shadowVisibility as the fold target), MULTIPLY fold. The prepareOverride (temporal)
-            // swaps PREPARE to the accumulated transparent history + drives momentsValid.
+            // swaps PREPARE to the accumulated transparent history + drives momentsValid. ONE dispatch over the whole
+            // active slot range (folds each slot's colored transmittance onto that slot's opaque visibility layer).
             SoftShadowResolveDispatch transparentDispatch;
             transparentDispatch.pipeline = rayTracingState().m_shadowResolveRgbPipeline.get();
             transparentDispatch.outputHalfA = rayTracingState().m_transparentResolveBindingSetOutputHalfA.get();
@@ -2242,7 +2252,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
             transparentDispatch.upsample = rayTracingState().m_transparentResolveBindingSetUpsample.get();
             transparentDispatch.prepareOverride = transparentPrepareSet;
             transparentDispatch.fold = SoftShadowUpsampleFold::Multiply;
-            dispatchSoftShadowResolve(commandList, targets, slot, transparentDispatch);
+            dispatchSoftShadowResolve(commandList, targets, slotRangeStart, slotRangeCount, transparentDispatch);
         }
     }
 
@@ -2321,33 +2331,38 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     // transparent colored shadow onto it. This mirrors the hybrid path (HW opaque mask + transparent) while keeping hard
     // opaque shadows full-res sharp.
     if(!multiplyOntoOpaque){
-        // Full-res OPAQUE binary blocker (opaque prepass) into every slot. When the soft pipeline is ready, the soft
-        // opaque pass below overwrites every soft slot; otherwise this remains the valid SW-path baseline mask.
-        SwShadowOpaquePrepassPushConstants opaquePush;
-        opaquePush.width = targets.width;
-        opaquePush.height = targets.height;
-        opaquePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-        commandList.setComputeState(passState(rayTracingState().m_swShadowOpaquePrepassPipeline));
-        commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
-        commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
+        // The soft pipeline OVERWRITES every slot's visibility (fold=Overwrite at the upsample), so when it will run the
+        // full-res opaque prepass is PURE WASTED WORK -- a full-res software-BVH trace over every pixel x every light,
+        // immediately overwritten by the soft resolve. SKIP it when soft will run; keep it ONLY as the fallback when soft
+        // is not ready this frame (its full-res binary mask is then the shadow). Retiring the half-res adaptive-opaque
+        // economizer (Stage 6) while leaving this full-res prepass unconditional was the SW-path perf regression.
+        const bool softWillRun = rayTracingState().m_softShadowReady && rayTracingState().m_softShadowSlotMask != 0u;
+        if(!softWillRun){
+            SwShadowOpaquePrepassPushConstants opaquePush;
+            opaquePush.width = targets.width;
+            opaquePush.height = targets.height;
+            opaquePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+            commandList.setComputeState(passState(rayTracingState().m_swShadowOpaquePrepassPipeline));
+            commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
+            commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
+        }
 
-        // Sync before the transparent pass. The opaque mask (the prepass wrote shadowVisibility) -> the transparent pass
-        // reads+multiplies it: a write->read/write hazard the visibility UAV barrier covers, so it stays UnorderedAccess.
-        // The transparent coarse pass writes the coarse buffer next, so stage it as ShaderResource here; setComputeState
-        // emits the ShaderResource->UnorderedAccess barrier that orders it. The prepass never touched it.
+        // Sync before the transparent pass. The opaque mask (the prepass, or the soft resolve below, wrote shadowVisibility)
+        // -> the transparent pass reads+multiplies it: a write->read/write hazard the visibility UAV barrier covers, so it
+        // stays UnorderedAccess. The transparent coarse pass writes the coarse buffer next, so stage it as ShaderResource
+        // here; setComputeState emits the ShaderResource->UnorderedAccess barrier that orders it. Both are cheap state
+        // transitions kept unconditional so the rare soft-not-transparent-ready fallback's old transparent path stays ordered.
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();
 
-        // Soft opaque shadow (all light types). The opaque pre-pass above wrote a HARD binary mask into EVERY slot; now
-        // OVERWRITE every slot light with the soft penumbra: half-res jittered opaque trace (directional softens by its
-        // constant angular radius, point/spot by the distance-dependent cone their source sphere subtends -- the jitter
-        // is type-aware inside the trace) -> geometry downsample -> a-trous denoise -> bilateral upsample into the full-
-        // res visibility. Runs only when the resolve resources are ready this frame AND at least one light holds a shadow
-        // slot; else the slot lights keep the hard mask (a clean fallback). The transparent pass below still multiplies
-        // its colored shadow onto the (now soft) opaque mask -- so transparent colored shadow keeps working, exactly as
-        // this feature requires.
-        if(rayTracingState().m_softShadowReady && rayTracingState().m_softShadowSlotMask != 0u){
+        // Soft opaque shadow (all light types): half-res jittered opaque trace (directional softens by its constant angular
+        // radius, point/spot by the distance-dependent cone their source sphere subtends -- the jitter is type-aware inside
+        // the trace) -> geometry downsample -> a-trous denoise -> bilateral upsample, OVERWRITING every slot's full-res
+        // visibility. Runs only when the resolve resources are ready this frame AND at least one light holds a shadow slot
+        // (softWillRun); else the full-res prepass mask above is the shadow (a clean fallback). The transparent pass below
+        // still folds its colored shadow onto the (now soft) opaque mask, so transparent colored shadow keeps working.
+        if(softWillRun){
             const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
             const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
             const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
@@ -4460,7 +4475,7 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolveBindingSet(DeferredFr
     return true;
 }
 
-void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slot, const SoftShadowResolveDispatch& dispatch){
+void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slotStart, u32 slotCount, const SoftShadowResolveDispatch& dispatch){
     // The a-trous denoise + upsample of ONE slot's half-res jittered visibility into the full-res visibility. Cloned from
     // dispatchCausticResolve: PREPARE (copy) -> N wavelet ping-pong passes -> bilateral upsample. Assumes the pipeline +
     // binding sets in `dispatch` are ready, the trace already wrote its raw half-res buffer (this frame) with a UAV barrier,
@@ -4491,8 +4506,8 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
         resolvePush.halfHeight = halfHeight;
         resolvePush.stepWidth = stepWidth;
         resolvePush.stage = static_cast<u32>(stage);
-        resolvePush.lightSlotStart = slot;
-        resolvePush.lightSlotCount = 1u; // one soft slot per dispatch (scattered slots handled by the C++ loop)
+        resolvePush.lightSlotStart = slotStart;
+        resolvePush.lightSlotCount = slotCount; // ONE dispatch covers the whole active slot RANGE; the shader loops it per pixel
         // The moments SRV holds this-frame integrated temporal moments IFF the merge ran, which is exactly when the caller
         // passes a temporal prepareOverride. So prepareOverride != nullptr is the single source of the momentsValid flag: on
         // it the WAVELET's SVGF variance stop may use the temporal variance; off it never samples the (dummy) moments SRV.

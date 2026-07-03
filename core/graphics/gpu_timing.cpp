@@ -28,8 +28,24 @@ void GpuTimingAccumulator::collect(Device& device, Perf::TimingSink& timing, con
 
         if(record.epoch == epoch)
             timing.recordSample(m_timingScope, static_cast<f64>(device.getTimerQueryTime(record.query.get())), record.frameIndex);
-        device.resetTimerQuery(record.query.get());
         record.pending = false;
+    }
+}
+
+void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
+    if(!m_enabled)
+        return;
+
+    // Reset every pool this accumulator owns on the device timeline. A pool with a still-pending result would be
+    // clobbered, but collect() polls and clears every pending record before this runs each frame, so only settled
+    // (or never-used) pools are reset here. Recording the reset here also marks the pool deviceReady, which gates
+    // its first timestamp write: a pool created mid-frame (inside a render pass) cannot be device-reset until the
+    // NEXT frame open, so its first write waits until then rather than tripping the validator on a host-only reset.
+    for(QueryRecord& record : m_queries){
+        if(record.query){
+            commandList.resetTimerQuery(record.query.get());
+            record.deviceReady = true;
+        }
     }
 }
 
@@ -47,7 +63,15 @@ GpuTimingScope GpuTimingAccumulator::beginQuery(
         return {};
 
     QueryRecord& record = m_queries[index];
-    device.resetTimerQuery(record.query.get());
+    // beginTimerQuery self-resets the pool on the device timeline when it is called outside a render pass, so an
+    // outside-pass scope is always safe. Inside a render pass that reset is illegal, so a pool that has not yet
+    // been device-reset at a frame open (a brand-new pool first acquired inside a render pass) must not be written
+    // this frame -- doing so would trip VUID-vkCmdWriteTimestamp-None-00830. Defer its first use one frame, until
+    // recordFrameReset() has made it deviceReady; the skipped scope simply reports no sample that one frame, a
+    // negligible startup/growth gap the interval averaging absorbs.
+    if(!record.deviceReady && !commandList.canResetTimerQueryHere())
+        return {};
+
     commandList.beginTimerQuery(record.query.get());
     record.frameIndex = frameIndex;
     record.epoch = epoch;
@@ -119,6 +143,15 @@ void GpuTimingRecorder::collect(Device& device, const u64 publishFrameIndex){
 
 void GpuTimingRecorder::beginFrame(const u64 frameIndex){
     m_currentFrameIndex = frameIndex;
+}
+
+void GpuTimingRecorder::recordFrameReset(CommandList& commandList){
+    syncActiveState();
+    if(!m_accumulatorsActive)
+        return;
+
+    for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
+        it.value()->recordFrameReset(commandList);
 }
 
 GpuTimingScope GpuTimingRecorder::beginScope(const Name& scopeName, Device* device, CommandList& commandList){

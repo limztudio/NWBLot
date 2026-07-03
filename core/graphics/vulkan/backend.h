@@ -2005,6 +2005,8 @@ public:
     void executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& desc);
     void convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs);
 
+    void resetTimerQuery(TimerQuery* query);
+    [[nodiscard]] bool canResetTimerQueryHere()const;
     void beginTimerQuery(TimerQuery* query);
     void endTimerQuery(TimerQuery* query);
     void beginMarker(const AStringView name);

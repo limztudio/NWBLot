@@ -95,8 +95,8 @@ private:
     [[nodiscard]] bool ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const char* debugLabel);
     [[nodiscard]] bool ensureSwShadowBindingSet(DeferredFrameTargets& targets);
     // Soft opaque shadow: the half-res geometry downsample pre-pass + the a-trous wavelet resolve/upsample.
-    // dispatchSoftShadowResolve runs the denoise chain for one shadow slot, overwriting that slot's full-res visibility
-    // with the denoised soft shadow.
+    // dispatchSoftShadowResolve runs the denoise chain for a contiguous RANGE of shadow slots in one dispatch, overwriting
+    // each of those slots' full-res visibility with the denoised soft shadow.
     [[nodiscard]] bool ensureSoftShadowResolvePipeline();
     [[nodiscard]] bool ensureSoftShadowResolveBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();
@@ -121,9 +121,12 @@ private:
         Core::BindingSet* prepareOverride = nullptr; // temporal: PREPARE reads the accumulated history instead of the raw trace
         SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
     };
-    // dispatchSoftShadowResolve runs the a-trous PREPARE -> N wavelet passes -> upsample for one slot, against the sets +
-    // pipeline + fold in `dispatch`. See SoftShadowResolveDispatch.
-    void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slot, const SoftShadowResolveDispatch& dispatch);
+    // dispatchSoftShadowResolve runs the a-trous PREPARE -> N wavelet passes -> upsample for a CONTIGUOUS RANGE of shadow
+    // slots [slotStart, slotStart+slotCount), against the sets + pipeline + fold in `dispatch`. The resolve shader loops the
+    // range per pixel, so ONE dispatch covers every active slot layer of the Texture2DArray targets (each layer independent):
+    // this collapses the former per-slot dispatch chain into a single issue, cutting the dispatch/barrier count. See
+    // SoftShadowResolveDispatch.
+    void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slotStart, u32 slotCount, const SoftShadowResolveDispatch& dispatch);
     // Backend-agnostic soft-shadow denoise + transparent fold, run AFTER whichever backend (SW BVH or HW RayQuery) wrote
     // the half-res soft opaque trace into shadowSoftHalfA (and synced it to UnorderedAccess): geometry downsample ->
     // per-slot [temporal reproject-merge -> a-trous resolve OVERWRITE] -> the guarded soft colored-transparent trace+fold

@@ -42,19 +42,30 @@
 // Per-light shadow visibility: half3 transmittance (1 = lit, 0 = fully shadowed, tinted by colored
 // transparent occluders), one Texture2DArray layer per shadow slot. The shadow producers write a light's
 // transmittance into its slot layer; a light's slot index lives in its light record (params.z).
+#ifndef NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
 [[vk::binding(NWB_SCENE_SHADOW_VISIBILITY_BINDING, NWB_SCENE_SHADOW_VISIBILITY_SET)]]
 Texture2DArray<float4> g_NwbShadowVisibility;
+#endif
 
 // Additive caustic irradiance (RGBA16F, screen space): the focused light the caustic producer splats onto opaque
 // receivers, already tinted by the glass it passed through. Unlike the multiplicative per-light shadow visibility
 // this is a single screen-space buffer (all caustic lights accumulate into it) and is ADDED to the lit color
 // pre-tonemap. Cleared to black each frame -- black is the additive identity, so an unwritten buffer is a no-op.
+#ifndef NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
 [[vk::binding(NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING, NWB_SCENE_CAUSTIC_IRRADIANCE_SET)]]
 Texture2D<float4> g_NwbCausticIrradiance;
+#endif
 
 // 1 (white) = lit, 0 = shadowed, tint = colored transmittance. Reads the light's shadow-slot layer; a light
 // with no slot (params.z < 0 -- the clear default, or a light the slot allocator did not reach) is fully lit.
 half3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
+#ifdef NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
+    // No screen-space shadow-visibility buffer bound in this pass (e.g. the AVBOIT transparent accumulate, whose
+    // fragments are not in the opaque G-buffer the visibility was traced from): every light is fully lit. Omitting the
+    // declaration + this read keeps the pass from declaring an unused SAMPLED_IMAGE at a default slot its set-0 layout
+    // fills with a StructuredBuffer (a descriptor-type mismatch). Behaviour-identical to the negative-pixel sentinel.
+    return half3(1.0, 1.0, 1.0);
+#else
     // Negative pixel = "skip screen-space shadow sampling" sentinel for the forward / AVBOIT transparent pass
     // (transparent fragments are not in the opaque G-buffer the visibility was traced from) -- treat as lit.
     if(pixel.x < 0)
@@ -65,6 +76,7 @@ half3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
         return half3(1.0, 1.0, 1.0);
 
     return half3(g_NwbShadowVisibility.Load(int4(pixel, int(slot), 0)).rgb);
+#endif
 }
 
 // Additive caustic irradiance at the receiver pixel (scene-referred, pre-tonemap). Black = no caustic. The
@@ -73,6 +85,10 @@ half3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
 half3 nwbBxdfCausticIrradiance(int2 pixel){
 #if NWB_CAUSTIC_DEBUG_FORCE_GREY
     return half3(0.15, 0.15, 0.15);
+#elif defined(NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED)
+    // No caustic-irradiance buffer bound in this pass (see nwbBxdfLightTransmittance): no additive caustic (black is
+    // the additive identity). Behaviour-identical to the negative-pixel sentinel below, minus the unused binding.
+    return half3(0.0, 0.0, 0.0);
 #else
     if(pixel.x < 0)
         return half3(0.0, 0.0, 0.0);

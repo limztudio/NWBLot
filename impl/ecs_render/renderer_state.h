@@ -285,6 +285,21 @@ private:
     const Core::Buffer* m_shadowBindingSetMaterialTyped = nullptr;
     const Core::Buffer* m_shadowBindingSetMeshInstances = nullptr;
     u32 m_shadowBindingSetMeshCount = 0u;
+    // Hardware (RayQuery) SOFT OPAQUE half-res trace pipeline + its binding set (shadow_rayquery_soft_cs). It REUSES the
+    // shared m_shadowBindingLayout (identical trace context; only the bound visibility-output texture differs -- the soft
+    // set binds shadowSoftHalfA as the UAV output instead of the full-res shadowVisibility), so the HW opaque shadow can
+    // run the SAME half-res -> temporal -> a-trous -> upsample soft-shadow denoise chain as the SW path. The binding set
+    // rebuilds on the SAME tracked-pointer keys as m_shadowBindingSet (TLAS / instance-material / material-context /
+    // mesh-count), so a TLAS/G-buffer/target change rebuilds it.
+    Core::ShaderHandle m_shadowSoftShader;
+    Core::ComputePipelineHandle m_shadowSoftPipeline;
+    bool m_shadowSoftPipelineFailed = false;
+    Core::BindingSetHandle m_shadowSoftBindingSet;
+    const Core::RayTracingAccelStruct* m_shadowSoftBindingSetTlas = nullptr;
+    const Core::Buffer* m_shadowSoftBindingSetInstanceMaterial = nullptr;
+    const Core::Buffer* m_shadowSoftBindingSetMaterialTyped = nullptr;
+    const Core::Buffer* m_shadowSoftBindingSetMeshInstances = nullptr;
+    u32 m_shadowSoftBindingSetMeshCount = 0u;
     // Active shadow slots this frame (= min(lightCount, NWB_SCENE_SHADOW_SLOT_COUNT)), set during the light upload and
     // read by the edge-adaptive shadow resolve so it only processes the slots that hold a light.
     u32 m_shadowSlotCount = 0u;

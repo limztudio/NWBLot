@@ -65,14 +65,26 @@ public:
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
     // True when the prepare built the hybrid transparent-shadow software resources this frame (RT hardware + the scene
     // has a transparent occluder). The render then runs renderGpuBvhShadowVisibility(..., multiplyOntoOpaque=true) after
-    // the HW opaque pass, folding the colored transparent shadow onto the binary opaque mask.
+    // the HW opaque pass, folding the colored transparent shadow onto the binary opaque mask -- ONLY as the
+    // !softTransparentShadowReady fallback (Phase 2 moved the colored fold inside renderShadowVisibility's soft chain).
     [[nodiscard]] bool hybridTransparentShadowReady()const noexcept;
+    // True when the prepare built the soft transparent trace+fold resources this frame (the HW/SW opaque soft path is
+    // ready AND the transparent SW scene BVH + RGB resolve/merge sets built). When true, the colored TRANSPARENT shadow
+    // is traced + denoised + multiplied onto the soft-opaque visibility INSIDE renderShadowVisibility's soft chain, so
+    // the old hybrid multiply (renderGpuBvhShadowVisibility, multiplyOntoOpaque=true) is skipped as redundant.
+    [[nodiscard]] bool softTransparentShadowReady()const noexcept;
 
 
 private:
     [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
     [[nodiscard]] bool ensureShadowPipeline();
     [[nodiscard]] bool ensureShadowBindingSet(DeferredFrameTargets& targets);
+    // Hardware (RayQuery) SOFT OPAQUE half-res trace: clones of the two above, but the pipeline loads
+    // s_RayQuerySoftShaderName (REUSING the shared m_shadowBindingLayout -- identical trace context) and the binding set
+    // binds shadowSoftHalfA (half-res soft-A) as the visibility-output UAV instead of the full-res shadowVisibility, so
+    // the HW opaque shadow feeds the SAME half-res -> temporal -> a-trous -> upsample denoise chain as the SW path.
+    [[nodiscard]] bool ensureShadowSoftPipeline();
+    [[nodiscard]] bool ensureShadowSoftBindingSet(DeferredFrameTargets& targets);
     // Shared hardware opaque-shadow-trace bindings (TLAS + G-buffer + scene/light + per-mesh geometry + material
     // context), appended by the trace pipeline/set. (Factored out for clarity; visibilityTarget is the full-res output.)
     void appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const;
@@ -112,6 +124,12 @@ private:
     // dispatchSoftShadowResolve runs the a-trous PREPARE -> N wavelet passes -> upsample for one slot, against the sets +
     // pipeline + fold in `dispatch`. See SoftShadowResolveDispatch.
     void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slot, const SoftShadowResolveDispatch& dispatch);
+    // Backend-agnostic soft-shadow denoise + transparent fold, run AFTER whichever backend (SW BVH or HW RayQuery) wrote
+    // the half-res soft opaque trace into shadowSoftHalfA (and synced it to UnorderedAccess): geometry downsample ->
+    // per-slot [temporal reproject-merge -> a-trous resolve OVERWRITE] -> the guarded soft colored-transparent trace+fold
+    // (SW-only in Phase 1) -> temporal history swap. Reads ONLY the shared soft/temporal buffers + the G-buffer, so the
+    // SAME chain denoises both backends. softGroupsX/Y are the half-res dispatch grid; frameIndex seeds the trace jitter.
+    void dispatchSoftShadowDenoiseAndTransparentFold(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 frameIndex, u32 softGroupsX, u32 softGroupsY);
     // Soft opaque shadow TEMPORAL accumulation: the reproject-merge pass
     // inserted per slot between the soft trace and the a-trous resolve. ensureShadowReprojectMergePipeline builds its
     // pipeline + layout; ensureShadowReprojectMergeBindingSet builds the two front/back sets (history-in SRV and history-out

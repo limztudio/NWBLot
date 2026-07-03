@@ -28,6 +28,11 @@ namespace AssetsGraphicsShadow{
 // Hardware OPAQUE shadow trace: inline RayQuery compute (binary "any opaque hit -> shadowed"). The colored TRANSPARENT
 // shadow is cast by the software traversal below and multiplied onto this opaque mask (the hybrid split).
 inline constexpr Name s_RayQueryShaderName("engine/graphics/shadow/shadow_rayquery_cs");
+// Hardware (RayQuery) SOFT OPAQUE half-res trace: the HW analog of s_SwSoftOpaqueShaderName. One thread per HALF-res
+// pixel casts SPP cone-jittered opaque RayQuery rays and writes the averaged single-frame visibility into the SAME
+// half-res soft buffer the SW path writes, so the shared geometry-downsample -> temporal reproject-merge -> a-trous
+// resolve -> bilateral upsample denoise chain turns the HW opaque shadow into a soft shadow exactly as on the SW path.
+inline constexpr Name s_RayQuerySoftShaderName("engine/graphics/shadow/shadow_rayquery_soft_cs");
 // Software (compute) shadow traversal, decomposed into one named kernel per pass. Each pass composes only the concern
 // .slangi files it needs, defines its occluder class at compile time, and declares its own minimal binding subset + push
 // struct. The renderer creates one pipeline per pass and dispatches the full-res opaque prepass, the soft opaque half-res

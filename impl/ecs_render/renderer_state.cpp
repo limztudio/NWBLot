@@ -191,6 +191,14 @@ void RendererRayTracingState::invalidateResources(){
     m_shadowBindingSetMaterialTyped = nullptr;
     m_shadowBindingSetMeshInstances = nullptr;
     m_shadowBindingSetMeshCount = 0u;
+    m_shadowSoftShader.reset();
+    m_shadowSoftPipeline.reset();
+    m_shadowSoftBindingSet.reset();
+    m_shadowSoftBindingSetTlas = nullptr;
+    m_shadowSoftBindingSetInstanceMaterial = nullptr;
+    m_shadowSoftBindingSetMaterialTyped = nullptr;
+    m_shadowSoftBindingSetMeshInstances = nullptr;
+    m_shadowSoftBindingSetMeshCount = 0u;
     m_shadowSlotCount = 0u;
     m_shadowMeshCount = 0u;
     m_shadowMeshCapReported = false;
@@ -316,6 +324,7 @@ void RendererRayTracingState::invalidateResources(){
     // gone -- re-seed the EMA (the next enabled frame clears instead of decaying).
     m_causticAccumulatorInitialized = false;
     m_shadowPipelineFailed = false;
+    m_shadowSoftPipelineFailed = false;
     m_bvhSortPipelineFailed = false;
     m_bvhBuildPipelineFailed = false;
     m_swShadowPipelineFailed = false;

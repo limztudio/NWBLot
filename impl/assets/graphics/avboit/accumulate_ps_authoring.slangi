@@ -30,6 +30,14 @@
 #define NWB_SCENE_LIGHT_LIST_SET NWB_AVBOIT_TRANSPARENT_SET
 #define NWB_SCENE_LIGHT_LIST_BINDING NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST
 
+// This transparent accumulate shades through the BXDF -> deferred lighting, but its fragments are NOT in the opaque
+// G-buffer the screen-space shadow visibility + caustic irradiance were produced from -- it passes the int2(-1,-1)
+// sentinel, so both already resolve to lit / no-caustic. Declaring those two SAMPLED_IMAGE resources anyway lands them
+// at their DEFAULT set 0 bindings 7/8, which THIS pass fills with material-context StructuredBuffers -- a descriptor-
+// type mismatch (VUID-VkGraphicsPipelineCreateInfo-layout-07990). This tells lighting.slangi to omit the declarations
+// and return the lit/black constants directly (behaviour-identical to the sentinel, minus the unused bindings).
+#define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
+
 // The AVBOIT draw push constant (g_NwbAvboitDraw, declared by avboit/common.slangi) carries the per-draw mesh
 // dispatch (nwbMeshDispatch[]) -- the same layout the rasterizer reads from its own per-draw push constant. The
 // material surface hook reads its typed `.bind` constants through nwbMeshShadingModelId() / nwbMeshInstanceIndex()

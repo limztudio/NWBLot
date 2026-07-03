@@ -86,18 +86,38 @@ inline constexpr Name s_MessageArenaName("logger/server/frame/messages");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// The message store (arena + deque) is arena-backed heap memory, so its lifetime MUST end while the
+// standalone allocator runtime (oneTBB scalable_malloc, behind GlobalArena) is still alive. It therefore
+// lives inside the Frame instance, NOT at namespace scope: a namespace-scope arena/deque would be torn
+// down by the CRT atexit chain AFTER the runtime has already shut down, freeing memory into a dead
+// allocator (observed as an access violation / abort on close). MessageStore is owned by the Frame and
+// reached through the s_Store pointer; all access is guarded by s_ListMutex plus a live-store check, so
+// a stray Frame::print from a not-yet-stopped worker thread after teardown is a safe no-op.
+struct MessageStore{
+    MessageStore()
+        : arena(s_MessageArenaName)
+        , messages(arena)
+    {}
+
+    LogArena arena;
+    MessageDeque messages;
+};
+
 static Frame* s_Frame = nullptr;
 static HFONT s_Font = nullptr;
 static HWND s_ListHwnd = nullptr;
-static LogArena s_MessageArena(s_MessageArenaName);
-static MessageDeque s_Messages{s_MessageArena};
+
+// Raw pointer -> trivially destructible, so it is safe as a namespace-scope static. Points at the live
+// Frame store while a Frame exists; null before construction and after ~Frame. Guarded by s_ListMutex.
+static MessageStore* s_Store = nullptr;
 
 static Futex s_ListMutex;
 
 static WNDPROC s_OrigListProc = nullptr;
 
+// Callers must already hold s_ListMutex; validates the item index against the live store.
 static bool IsMessageIndexValid(UINT itemID){
-    return static_cast<usize>(itemID) < s_Messages.size();
+    return s_Store && static_cast<usize>(itemID) < s_Store->messages.size();
 }
 
 static LogRowColors SelectLogRowColors(const bool alternate, const LogRowColors& even, const LogRowColors& odd){
@@ -224,10 +244,13 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_EXITSIZEMOVE:
         {
+            ScopedLock lock(s_ListMutex);
             SendMessage(s_ListHwnd, WM_SETREDRAW, FALSE, 0);
             SendMessage(s_ListHwnd, LB_RESETCONTENT, 0, 0);
-            for(auto& str : s_Messages)
-                SendMessage(s_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(str.first().c_str()));
+            if(s_Store){
+                for(auto& str : s_Store->messages)
+                    SendMessage(s_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(str.first().c_str()));
+            }
             SendMessage(s_ListHwnd, WM_SETREDRAW, TRUE, 0);
             InvalidateRect(s_ListHwnd, nullptr, TRUE);
         }
@@ -236,8 +259,9 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_MEASUREITEM:
         {
             auto* mis = reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam);
+            ScopedLock lock(s_ListMutex);
             if(IsMessageIndexValid(mis->itemID)){
-                const auto& curStr = s_Messages[static_cast<usize>(mis->itemID)];
+                const auto& curStr = s_Store->messages[static_cast<usize>(mis->itemID)];
 
                 RECT rect;
                 GetClientRect(hwnd, &rect);
@@ -262,9 +286,9 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         {
             if(wParam == 'C' && (GetKeyState(VK_CONTROL) & 0x8000)){
                 ScopedLock lock(s_ListMutex);
-                if(!s_Messages.empty()){
+                if(s_Store && !s_Store->messages.empty()){
                     usize combinedSize = 0u;
-                    for(const auto& msg : s_Messages){
+                    for(const auto& msg : s_Store->messages){
                         const usize messageSize = msg.first().size();
                         if(messageSize > Limit<usize>::s_Max - combinedSize)
                             return 0;
@@ -276,9 +300,9 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     if(combinedSize > (Limit<usize>::s_Max / sizeof(tchar)) - 1u)
                         return 0;
 
-                    LogString combined{s_MessageArena};
+                    LogString combined{s_Store->arena};
                     combined.reserve(combinedSize);
-                    for(const auto& msg : s_Messages){
+                    for(const auto& msg : s_Store->messages){
                         combined += msg.first();
                         combined += NWB_TEXT("\r\n");
                     }
@@ -314,8 +338,9 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_DRAWITEM:
         {
             auto* dis = reinterpret_cast<LPDRAWITEMSTRUCT>(lParam);
+            ScopedLock lock(s_ListMutex);
             if(IsMessageIndexValid(dis->itemID)){
-                const auto& curData = s_Messages[static_cast<usize>(dis->itemID)];
+                const auto& curData = s_Store->messages[static_cast<usize>(dis->itemID)];
 
                 HDC hdc = dis->hDC;
                 RECT rect = dis->rcItem;
@@ -347,15 +372,25 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 
 Frame::Frame(void* inst){
+    {
+        ScopedLock lock(FrameDetail::s_ListMutex);
+        FrameDetail::s_Store = new FrameDetail::MessageStore();
+    }
     FrameDetail::s_Frame = this;
 
     data<FrameDetail::WinFrame>().setInstance(reinterpret_cast<HINSTANCE>(inst));
 }
 Frame::~Frame(){
+    // Destroy the window first (stops UI-thread WinProc access to the store), then release the store
+    // while the allocator runtime is still alive. Clearing s_Frame/s_Store under the lock makes any
+    // concurrent Frame::print from a worker thread that has not yet been stopped a safe no-op.
     cleanup();
 
-    FrameDetail::s_Messages.clear();
     FrameDetail::s_Frame = nullptr;
+
+    ScopedLock lock(FrameDetail::s_ListMutex);
+    delete FrameDetail::s_Store;
+    FrameDetail::s_Store = nullptr;
 }
 
 bool Frame::init(){
@@ -416,8 +451,13 @@ bool Frame::mainLoop(){
 void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
     ScopedLock lock(FrameDetail::s_ListMutex);
 
-    FrameDetail::s_Messages.emplace_back(LogString(str, FrameDetail::s_MessageArena), type);
-    SendMessage(FrameDetail::s_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(FrameDetail::s_Messages.back().first().c_str()));
+    // The store is released in ~Frame() while worker threads may still be draining; ignore late prints
+    // rather than resurrect a torn-down store.
+    if(!FrameDetail::s_Store)
+        return;
+
+    FrameDetail::s_Store->messages.emplace_back(LogString(str, FrameDetail::s_Store->arena), type);
+    SendMessage(FrameDetail::s_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(FrameDetail::s_Store->messages.back().first().c_str()));
 
     auto numItem = SendMessage(FrameDetail::s_ListHwnd, LB_GETCOUNT, 0, 0);
     if(numItem > 0)

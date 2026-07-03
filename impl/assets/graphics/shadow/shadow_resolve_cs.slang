@@ -185,11 +185,27 @@ float nwbShadowResolveNormalWeightVec(const float3 centerNormal, const float2 ta
 // The history length n at/above which the temporal moment variance is statistically trustworthy; below it (freshly
 // disoccluded) the temporal m2-m1^2 is built from too few samples, so fall back to the SPATIAL luma variance.
 #define NWB_SHADOW_RESOLVE_VARIANCE_MIN_HISTORY 4.0
+// Per-variant value-edge-stop TIGHTNESS scale. The COLORED TRANSPARENT (RGB) glass tint is a WEAK, low-contrast signal that a
+// loose value stop + wide a-trous spreads thin over the soft penumbra until it WASHES OUT to gray -- the reported "soft glass
+// shadow is hard to recognise" while a near-hard one reads fine. So the RGB variant TIGHTENS the value stop (0.20 = a 5x tighter
+// luminance sigma) to reject taps across the tint edge and KEEP the colored shadow's per-pixel contrast, recovering its
+// visibility toward the near-hard reference. The OPAQUE (scalar) path is UNCHANGED (1.0): its sharp binary edge already has
+// strong contrast and wants the fuller fill. Applied to BOTH the variance scale and the EPS floor so a converged transparent
+// pixel also gets the tighter stop. Measured on the soft-shadow test scene (glass green-tint density vs the near-hard
+// NWB_SOFT_SHADOW_TEST_ANGLE=0.002 reference): scale 0.20 lifts the soft glass shadow's green-tint mass from ~1.05 (loose) to
+// ~1.18, essentially the near-hard reference's ~1.19, with NO measurable added speckle (the 3x3 high-pass RMS in the glass band
+// is unchanged vs the loose config and vs the near-hard reference -- the temporal reproject-merge, not the value stop, governs
+// the residual per-frame noise). 0.35 was also tried (~1.15-1.17); 0.20 recovers a touch more contrast at the same noise.
+#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
+    #define NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE 0.20
+#else
+    #define NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE 1.0
+#endif
 // Luminance edge-stop scale: sigma_l = SIGMA_LUM * sqrt(variance) + EPS. Larger -> looser value stop -> more fill.
-#define NWB_SHADOW_RESOLVE_SIGMA_LUM 4.0
+#define NWB_SHADOW_RESOLVE_SIGMA_LUM (4.0 * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
 // Epsilon floor so a fully-converged (variance -> 0) pixel still has a finite, tight sigma (no divide-by-zero and no
 // infinitely-sharp stop that would reject every neighbour). Tuned at the spatial fallback's noise-floor scale.
-#define NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS 0.05
+#define NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS (0.05 * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
 
 float nwbShadowResolveValueWeight(const float centerVis, const float tapVis, const float sigmaLum){
     return exp(-abs(tapVis - centerVis) / sigmaLum);

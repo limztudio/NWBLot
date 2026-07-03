@@ -97,6 +97,14 @@
 // wavelet pass always lands in soft-A (PASS_COUNT is ODD), which the upsample reads into the full-res visibility.
 #define NWB_SHADOW_RESOLVE_PASS_COUNT 5
 
+// A-trous wavelet pass count for the soft COLORED-TRANSPARENT resolve. FEWER than the opaque 5: the transparent tint is a
+// SMOOTH low-frequency signal (Beer-Lambert/Fresnel colored penumbra), not the opaque path's sharp binary blocker edge, so it
+// needs far less spatial support to reconstruct -- 3 half-res passes (dilations 1,2,4 == 2,4,8 full-equivalent, ~8px full
+// support) suffice for the smooth colored gradient, cutting the transparent a-trous cost from 5 to 3 passes. It is temporally
+// accumulated (reproject-merge) on top. MUST be ODD (like the opaque 5): the dispatch seeds the ping-pong so the final wavelet
+// lands in soft-A ONLY for an odd count, and the fixed upsample binding set reads soft-A. Both 5 and 3 are odd.
+#define NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT 3
+
 // LDS (groupshared) tiling for the wavelet: passes with dilation stepWidth <= LDS_MAX_STEP cooperatively load the
 // group's tile + 2*stepWidth halo into groupshared ONCE, then tap from LDS. Larger-dilation passes tap the textures
 // directly. Tile side = GROUP_SIZE + 4*stepWidth; sized for the largest LDS-tiled step (8 + 4*4 = 24 -> 576 texels).

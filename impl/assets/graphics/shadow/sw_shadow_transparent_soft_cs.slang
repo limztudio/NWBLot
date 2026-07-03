@@ -3,7 +3,7 @@
 
 
 // SOFT TRANSPARENT half-res trace (all light types). The COLORED
-// (Beer-Lambert / Fresnel) analog of sw_shadow_soft_opaque_cs: one thread per HALF-res pixel casts NWB_SW_SHADOW_SOFT_SPP
+// (Beer-Lambert / Fresnel) analog of sw_shadow_soft_opaque_cs: one thread per HALF-res pixel casts NWB_SW_SHADOW_TRANSPARENT_SPP
 // cone-jittered occlusion rays inside the cone the light's physical source subtends and writes the AVERAGED single-frame
 // COLORED transmittance (RGB, not a binary) into the parallel half-res soft transparent buffer. Byte-identical to the
 // opaque soft trace EXCEPT: (a) the occluder class is TRANSPARENT (below) so nwbSwShadowLightVisible skips opaque blockers
@@ -84,16 +84,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         if(slot < 0.0)
             continue;
         // TRANSPARENT-only jittered colored transmittance. Each sample is the RGB Beer-Lambert/Fresnel product through the
-        // colored occluders along its jittered ray; averaging NWB_SW_SHADOW_SOFT_SPP of them per frame -- each walking the
+        // colored occluders along its jittered ray; averaging NWB_SW_SHADOW_TRANSPARENT_SPP of them per frame -- each walking the
         // source via its OWN low-discrepancy 2D point (per pixel, per frame, per sample index) -- yields the smooth colored
         // penumbra the RGB value-aware resolve needs. The SALT offset decorrelates this stream from the opaque soft trace
         // (independent estimators, separately denoised).
         half3 accum = half3(0.0, 0.0, 0.0);
-        [loop] for(uint s = 0u; s < NWB_SW_SHADOW_SOFT_SPP; ++s){
-            const float2 sampleJitter = nwbShadowLowDiscrepancy2D(halfPixel, g_NwbSwShadowPush.frameIndex * NWB_SW_SHADOW_SOFT_SPP + s + NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT);
+        [loop] for(uint s = 0u; s < NWB_SW_SHADOW_TRANSPARENT_SPP; ++s){
+            const float2 sampleJitter = nwbShadowLowDiscrepancy2D(halfPixel, g_NwbSwShadowPush.frameIndex * NWB_SW_SHADOW_TRANSPARENT_SPP + s + NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT);
             accum += nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i], sampleJitter);
         }
-        const half3 transmittance = accum * half(1.0 / float(NWB_SW_SHADOW_SOFT_SPP));
+        const half3 transmittance = accum * half(1.0 / float(NWB_SW_SHADOW_TRANSPARENT_SPP));
         g_NwbSwShadowTransparentSoftHalf[uint3(halfPixel, uint(slot))] = float4(transmittance, 1.0);
     }
 }

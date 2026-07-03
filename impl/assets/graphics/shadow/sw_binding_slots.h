@@ -139,6 +139,13 @@
 // Contract-shared with the soft opaque pass.
 #define NWB_SW_SHADOW_SOFT_SPP 2u
 
+// Per-frame samples-per-pixel for the soft TRANSPARENT (colored Beer-Lambert/Fresnel) trace. Kept at 1 -- HALF the opaque
+// count -- on purpose: the colored transparent signal is a SMOOTH low-frequency tint (not the opaque path's sharp binary
+// blocker edge), it is temporally accumulated (reproject-merge history) AND denoised by the RGB a-trous, so a single jittered
+// sample per frame converges cleanly. The opaque binary edge keeps 2 (its dithered penumbra needs the extra sample to stay
+// clean in freshly-disoccluded moving regions where the temporal history collapses). Contract-shared with the transparent pass.
+#define NWB_SW_SHADOW_TRANSPARENT_SPP 1u
+
 // Decorrelation salt for the soft TRANSPARENT trace's cone-jitter low-discrepancy stream, so its colored
 // penumbra estimator samples the source at points INDEPENDENT of the soft OPAQUE trace's. The two soft signals are
 // SEPARATELY temporally denoised (opaque binary Bernoulli vs colored chord-variance RGB product -- their per-frame noise

@@ -120,6 +120,11 @@ private:
         Core::BindingSet* upsample = nullptr;    // final: reads scratch-A, writes/folds the full-res visibility
         Core::BindingSet* prepareOverride = nullptr; // temporal: PREPARE reads the accumulated history instead of the raw trace
         SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
+        // A-trous wavelet pass count for this signal: opaque = NWB_SHADOW_RESOLVE_PASS_COUNT (5), the cheaper smooth transparent
+        // tint = NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT (3). MUST be ODD -- the ping-pong leaves the final result in soft-A
+        // (the fixed upsample set's input) only for an odd count; dispatchSoftShadowResolve asserts the parity. Defaulted to 5
+        // (= NWB_SHADOW_RESOLVE_PASS_COUNT, which this header does not include) and set explicitly at each build site.
+        u32 waveletPassCount = 5u;
     };
     // dispatchSoftShadowResolve runs the a-trous PREPARE -> N wavelet passes -> upsample for a CONTIGUOUS RANGE of shadow
     // slots [slotStart, slotStart+slotCount), against the sets + pipeline + fold in `dispatch`. The resolve shader loops the

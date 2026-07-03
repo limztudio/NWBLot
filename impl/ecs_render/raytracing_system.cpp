@@ -2133,6 +2133,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         opaqueDispatch.upsample = rayTracingState().m_shadowResolveBindingSetUpsample.get();
         opaqueDispatch.prepareOverride = temporalPrepareSet;
         opaqueDispatch.fold = SoftShadowUpsampleFold::Overwrite;
+        // Opaque path stays FULL quality: the 5-pass (dilation 1,2,4,8,16) a-trous the sharp binary blocker edge needs.
+        opaqueDispatch.waveletPassCount = static_cast<u32>(NWB_SHADOW_RESOLVE_PASS_COUNT);
         dispatchSoftShadowResolve(commandList, targets, slotRangeStart, slotRangeCount, opaqueDispatch);
     }
 
@@ -2252,6 +2254,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
             transparentDispatch.upsample = rayTracingState().m_transparentResolveBindingSetUpsample.get();
             transparentDispatch.prepareOverride = transparentPrepareSet;
             transparentDispatch.fold = SoftShadowUpsampleFold::Multiply;
+            // Cheaper than opaque: the smooth colored tint reconstructs from a 3-pass (dilation 1,2,4) a-trous. Both odd.
+            transparentDispatch.waveletPassCount = static_cast<u32>(NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT);
             dispatchSoftShadowResolve(commandList, targets, slotRangeStart, slotRangeCount, transparentDispatch);
         }
     }
@@ -4532,17 +4536,21 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     // Half-res a-trous wavelet passes at a doubling dilation, starting from soft-B. Each pass writes the buffer NOT
     // holding its input (outputHalfA reads soft-B writes soft-A; outputHalfB reads soft-A writes soft-B). srcIsHalfB
     // tracks where the latest result lives; PREPARE left it in soft-B so it starts true.
+    // The per-signal pass count (opaque = NWB_SHADOW_RESOLVE_PASS_COUNT 5, transparent = NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT
+    // 3). Both must be ODD so the final result lands in soft-A (see the assert below); both literals are compile-time odd.
+    static_assert((NWB_SHADOW_RESOLVE_PASS_COUNT % 2) == 1, "opaque resolve pass count must be ODD (final result must land in soft-A for the upsample)");
+    static_assert((NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT % 2) == 1, "transparent resolve pass count must be ODD (final result must land in soft-A for the upsample)");
     bool srcIsHalfB = true;
-    for(u32 pass = 0u; pass < static_cast<u32>(NWB_SHADOW_RESOLVE_PASS_COUNT); ++pass){
+    for(u32 pass = 0u; pass < dispatch.waveletPassCount; ++pass){
         Core::BindingSet* const bindingSet = srcIsHalfB ? dispatch.outputHalfA : dispatch.outputHalfB;
         runPass(bindingSet, 1u << pass, ShadowResolveStage::Wavelet, halfGroupsX, halfGroupsY);
         srcIsHalfB = !srcIsHalfB;
     }
 
     // UPSAMPLE (full-res): edge-aware bilateral resample of the FINAL half-res visibility into the full-res visibility
-    // slot. The final wavelet result lives in soft-A when PASS_COUNT is ODD (our config, 5) -- srcIsHalfB is now false.
-    // Both upsample sets read soft-A (INPUT_COLOR) by construction; assert the parity so a PASS_COUNT change is caught.
-    NWB_ASSERT(!srcIsHalfB); // PASS_COUNT must be odd for the final result to land in soft-A (the upsample's input)
+    // slot. The final wavelet result lives in soft-A when waveletPassCount is ODD (5 opaque / 3 transparent) -- srcIsHalfB is
+    // now false. Both upsample sets read soft-A (INPUT_COLOR) by construction; assert the parity so a pass-count change is caught.
+    NWB_ASSERT(!srcIsHalfB); // waveletPassCount must be odd for the final result to land in soft-A (the upsample's input)
     runPass(dispatch.upsample, 1u, ShadowResolveStage::Upsample, fullGroupsX, fullGroupsY);
 }
 

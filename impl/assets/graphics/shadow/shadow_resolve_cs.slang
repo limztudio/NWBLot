@@ -149,14 +149,37 @@ bool nwbShadowResolveValidAtHalf(const int2 halfTexel){
 // without bleeding across a receiver depth/silhouette discontinuity or an orientation crease.
 static const float s_NwbShadowResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0 };
 
-// Normal edge-stop exponent: taps whose receiver normal diverges from the centre's fall off as pow(max(dot,0), N).
-#define NWB_SHADOW_RESOLVE_NORMAL_POWER 32.0
+// Normal edge-stop exponent: taps whose receiver normal diverges from the centre's fall off as pow(max(dot,0), N). This is
+// DELIBERATELY GENTLE (8, not the 32 it was): the receiver normal is a HALF-res point-sampled cache, and on a smoothly
+// CURVING receiver (a character torso/hip) adjacent half-res texels legitimately differ by ~10-20deg while the far a-trous
+// taps (dilation up to 16) diverge much more. A pow-32 stop (half-weight at ~11deg) treated that smooth curvature as an
+// orientation crease and starved every reconstruction stage (wavelet + upsample) down to 1-2 near-parallel taps, so the
+// residual per-frame trace noise was never averaged -> the clustered self-shadow grain. pow-8 (half-weight at ~45deg)
+// restores the tap support needed to average that noise on the curve, while a REAL discontinuity is still rejected by the
+// camera-DISTANCE stop (a silhouette/crease almost always carries a depth jump) and the shadow terminator is still held
+// sharp by the VALUE stop -- so smoothing on curvature costs no cross-surface bleed. Flat receivers are unaffected (their
+// taps are parallel -> dot~=1 -> pow-8 == pow-32 == 1).
+#define NWB_SHADOW_RESOLVE_NORMAL_POWER 8.0
 
 // Camera-distance edge-stop fraction: the distance sigma is this fraction of the camera distance (a few percent keeps
 // same-surface taps while rejecting a silhouette depth jump), clamped away from zero. Two named twins so the UPSAMPLE
 // and the WAVELET distance stops read the SAME documented constant rather than a bare 0.02 magic literal.
 #define NWB_SHADOW_RESOLVE_UPSAMPLE_DIST_FRAC 0.02
 #define NWB_SHADOW_RESOLVE_WAVELET_DIST_FRAC 0.02
+
+// FAST GUIDED FILTER upsample (He 2010) parameters. The stage-2 upsample fits a local linear model vis ~= a*dist + b over a
+// (2*RADIUS+1)^2 half-res window from its box-filtered moments and evaluates it at the full-res pixel, replacing the 2x2
+// joint-bilateral that COLLAPSED to a single noisy tap on curvature (the clustered self-shadow grain). RADIUS = half-res
+// window radius (1 -> 3x3 half-res = 6x6 full-res footprint).
+#define NWB_SHADOW_RESOLVE_GUIDED_RADIUS 1
+// GUIDED_EPS_FRAC: the guided-filter regularisation eps = (this * cameraDistance)^2 -- the "degree of smoothing". Larger ->
+// a -> 0 -> the window box-averages (kills grain where camera distance does not correlate with the shadow, i.e. within a
+// surface); a real depth-correlated silhouette has window variance >> eps so its `a` term still tracks that edge sharply.
+#define NWB_SHADOW_RESOLVE_GUIDED_EPS_FRAC 0.02
+// GUIDED_NORMAL_GATE: a WIDE binary same-surface gate (min dot(centreNormal, tapNormal) to admit a tap into the model).
+// Excludes a genuinely different surface (a crease / silhouette the scalar distance guide cannot see) while admitting the
+// whole smooth-curvature neighbourhood -- a binary cut, NOT a pow falloff, so it never starves the fit to one tap on a curve.
+#define NWB_SHADOW_RESOLVE_GUIDED_NORMAL_GATE 0.5
 
 float nwbShadowResolveNormalWeight(const float2 centerOct, const float2 tapOct){
     const float3 cn = nwbOctDecodeNormal(centerOct);
@@ -299,10 +322,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const uint slotStart = g_NwbShadowResolvePushConstants.lightSlotStart;
     const uint slotEnd = min(slotStart + g_NwbShadowResolvePushConstants.lightSlotCount, NWB_SCENE_SHADOW_SLOT_COUNT);
 
-    // UPSAMPLE (stage 2, FULL-res dispatch): per slot, edge-aware (joint-bilateral) resample of the final half-res
-    // visibility into the full-res visibility buffer. Each of the 4 bilinear taps is weighted by the bilinear weight
-    // AND a camera-distance + normal edge-stop to THIS full-res pixel's receiver; background taps are dropped, and if
-    // ALL are rejected the result is the LIT identity (never black). On a flat receiver all taps pass -> plain bilinear.
+    // UPSAMPLE (stage 2, FULL-res dispatch): per slot, a FAST GUIDED FILTER (He 2010) resample of the final half-res
+    // visibility into the full-res visibility buffer. For each output pixel we fit a local linear model vis ~= a*dist + b
+    // over a small half-res window (valid same-surface taps) from its box-filtered moments, then evaluate it at THIS full-res
+    // pixel's own camera distance. Unlike the old 2x2 joint-bilateral it NEVER collapses to a single tap -- every window tap
+    // feeds the moment sums, so on a curved receiver (where the per-tap normal stop used to starve the average down to one
+    // noisy tap -> clustered grain) the output is a smooth regression that averages the trace noise out, while a
+    // depth-correlated silhouette is still tracked by the `a` term and a crease is excluded by the wide same-surface gate.
     if(stage == 2u){
         const uint2 pixel = dispatchThreadID.xy;
         if(pixel.x >= g_NwbShadowResolvePushConstants.width || pixel.y >= g_NwbShadowResolvePushConstants.height)
@@ -314,26 +340,23 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const int hw = (int)g_NwbShadowResolvePushConstants.halfWidth;
         const int hh = (int)g_NwbShadowResolvePushConstants.halfHeight;
         const float2 src = (float2(pixel) + 0.5) / float(NWB_SW_SHADOW_SOFT_FACTOR) - 0.5; // full centre -> half texel space
-        const int2 baseTexel = int2(floor(src));
-        const float2 lerpFrac = src - float2(baseTexel);
+        const int2 baseTexel = int2(round(src)); // nearest half-res texel = the guided-filter window centre
 
-        // FULL-RES-GUIDED bilateral CENTRE: this output pixel's own full-res world position + normal. Two adjacent
-        // full-res pixels inside one half-res block that straddle a geometry edge get different centres -> they weight the
-        // 4 half-res taps differently -> the shadow terminator snaps to the full-res silhouette instead of stair-stepping at the half-res
-        // block boundary. The centre camera distance is derived in the SAME world-unit space as the half-res cache's .z
-        // (length(world - cameraPos)), so the per-tap distance edge-stop below stays consistent with the wavelet's metric.
+        // FULL-RES-GUIDED CENTRE: this output pixel's own full-res world position + normal. The camera distance is the model
+        // GUIDE (SAME length(world - cameraPos) space as the half-res cache .z), and the full-res centre distance is what the
+        // linear model is evaluated at, so the reconstruction snaps to the full-res silhouette rather than the half-res grid;
+        // the centre normal drives the wide same-surface gate. The guide is referenced to the centre INSIDE the loop for
+        // fp32 stability (relative distances are ~cm, absolute ~m -> squaring the absolute would lose the variance).
         const float3 centerWorld = g_NwbShadowResolveGBufferWorldPos.Load(int3(fullTexel, 0)).xyz;
         const float3 centerNormal = normalize(g_NwbShadowResolveGBufferNormal.Load(int3(fullTexel, 0)).xyz * 2.0 - 1.0);
         const float centerDist = length(centerWorld - g_NwbShadowResolveSceneShading.cameraPosition.xyz);
-        // Distance edge-stop sigma: a few percent of the camera distance keeps same-surface taps while rejecting a
-        // silhouette jump; clamped away from zero for a receiver at the camera.
-        const float sigmaDist = max(centerDist * NWB_SHADOW_RESOLVE_UPSAMPLE_DIST_FRAC, 1e-3);
-        const float invTwoSigmaDistSq = 1.0 / (2.0 * sigmaDist * sigmaDist);
+        const float guidedEps = NWB_SHADOW_RESOLVE_GUIDED_EPS_FRAC * centerDist;
+        const float guidedEpsSq = guidedEps * guidedEps;
 
-        // Fold mode: 0 = OVERWRITE the visibility (soft OPAQUE); 1 = MULTIPLY the
-        // denoised colored transmittance onto it (soft TRANSPARENT fold, read-modify-write). One texel per thread, VISIBILITY
-        // is UAV-only in this set, so the fold==1 RMW is a safe self-UAV update (no cross-texel dependency); the caller
-        // orders the opaque UPSAMPLE's writes before this pass's reads with a UAV barrier on the visibility image.
+        // Fold mode: 0 = OVERWRITE the visibility (soft OPAQUE); 1 = MULTIPLY the denoised colored transmittance onto it
+        // (soft TRANSPARENT fold, read-modify-write). One texel per thread, VISIBILITY is UAV-only in this set, so the
+        // fold==1 RMW is a safe self-UAV update; the caller orders the opaque UPSAMPLE writes before this pass's reads
+        // with a UAV barrier on the visibility image.
         const uint fold = g_NwbShadowResolvePushConstants.upsampleFold;
         for(uint slot = slotStart; slot < slotEnd; ++slot){
             if(background){
@@ -343,37 +366,52 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     g_NwbShadowResolveVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0); // LIT identity
                 continue;
             }
-            float3 sum = float3(0.0, 0.0, 0.0);
-            float weightSum = 0.0;
-            // Degenerate-tap guard (anti-SPARKLE): also track the highest bilinear-weight VALID (on-surface) tap. When the
-            // distance/normal edge-stop rejects EVERY tap -- common at a thin sub-half-res silhouette (a character's fingers,
-            // hair) where all four half-res taps sit on the far surface -- falling back to the LIT identity flashes a WHITE
-            // speckle INSIDE the shadow (the flickering grain). Using the nearest on-surface shadow value instead keeps a
-            // plausible shadow there, killing that sparkle; true no-receiver (all-background) pixels still resolve to LIT.
-            float bestBilinear = -1.0;
-            float3 bestVis = float3(1.0, 1.0, 1.0);
-            bool anyOnSurface = false;
-            [unroll] for(int j = 0; j < 2; ++j){
-                [unroll] for(int i = 0; i < 2; ++i){
-                    const int2 tap = int2(clamp(baseTexel.x + i, 0, hw - 1), clamp(baseTexel.y + j, 0, hh - 1));
+            // Box-filtered guided-filter moments over the same-surface window: guide g = tapDist - centerDist, input p = tap
+            // visibility (RGB; the scalar guide gives per-channel a,b). `anySum` is an ungated on-surface fallback for a thin
+            // feature where the same-surface gate would exclude every tap.
+            float sumG = 0.0;
+            float sumG2 = 0.0;
+            float3 sumP = float3(0.0, 0.0, 0.0);
+            float3 sumGP = float3(0.0, 0.0, 0.0);
+            float count = 0.0;
+            float3 anySum = float3(0.0, 0.0, 0.0);
+            float anyCount = 0.0;
+            [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
+                [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
+                    const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
                     const float4 tapGeom = nwbShadowResolveGeomAtHalf(tap);
                     if(tapGeom.w <= 0.5)
                         continue; // background tap -> no receiver
-                    const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
-                    const float dDist = tapGeom.z - centerDist; // half-res tap camDist vs FULL-res centre camDist
-                    const float distWeight = exp(-dDist * dDist * invTwoSigmaDistSq);
-                    const float normalWeight = nwbShadowResolveNormalWeightVec(centerNormal, tapGeom.xy);
-                    const float weight = bilinearWeight * distWeight * normalWeight;
                     const float3 tapVis = g_NwbShadowResolveInputColor.Load(int4(tap, slot, 0)).rgb;
-                    sum += weight * tapVis;
-                    weightSum += weight;
-                    anyOnSurface = true;
-                    if(bilinearWeight > bestBilinear){ bestBilinear = bilinearWeight; bestVis = tapVis; }
+                    anySum += tapVis;
+                    anyCount += 1.0;
+                    if(dot(centerNormal, nwbOctDecodeNormal(tapGeom.xy)) < NWB_SHADOW_RESOLVE_GUIDED_NORMAL_GATE)
+                        continue; // genuinely different surface (crease/silhouette) -> not part of this linear model
+                    const float g = tapGeom.z - centerDist; // centre-referenced camera-distance guide (fp32-stable)
+                    sumG += g;
+                    sumG2 += g * g;
+                    sumP += tapVis;
+                    sumGP += g * tapVis;
+                    count += 1.0;
                 }
             }
-            // Edge-stop rejected every on-surface tap -> use the NEAREST on-surface shadow value (bestVis), NOT the LIT
-            // identity (which sparkles); only a truly receiver-less (all-background) block resolves to LIT.
-            const float3 result = (weightSum > 0.0) ? (sum / weightSum) : (anyOnSurface ? bestVis : float3(1.0, 1.0, 1.0));
+            float3 result;
+            if(count > 0.0){
+                const float invN = 1.0 / count;
+                const float meanG = sumG * invN;
+                const float3 meanP = sumP * invN;
+                const float varG = max(sumG2 * invN - meanG * meanG, 0.0);
+                const float3 covGP = sumGP * invN - meanG * meanP;
+                const float3 a = covGP / (varG + guidedEpsSq);
+                // Evaluate at the centre: the guide is referenced to centerDist so the centre guide value is 0 ->
+                // q = a*0 + b = b = meanP - a*meanG. The linear model can mildly overshoot -> clamp into [0,1].
+                result = clamp(meanP - a * meanG, float3(0.0, 0.0, 0.0), float3(1.0, 1.0, 1.0));
+            }
+            else{
+                // Same-surface gate excluded every tap (a thin sub-half-res feature): fall back to the plain on-surface mean;
+                // a truly receiver-less (all-background) block resolves to the LIT identity.
+                result = (anyCount > 0.0) ? (anySum / anyCount) : float3(1.0, 1.0, 1.0);
+            }
             if(fold == 0u){
                 g_NwbShadowResolveVisibility[uint3(pixel, slot)] = float4(result, 1.0); // OVERWRITE (opaque)
             }

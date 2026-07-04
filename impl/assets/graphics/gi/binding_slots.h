@@ -92,6 +92,29 @@
 #define NWB_GI_HIT_SHADOW_RAYS 1
 
 
+// Octahedral atlas tile geometry. Each probe owns one square tile in the atlas; the atlas packs tiles in one row
+// (atlas width = probeCount * tile, height = tile). The interior holds the octahedrally-projected irradiance /
+// distance samples; the 1-texel border is filled by the border pass so octahedral sampling at the edge does not
+// wrap into the neighbour probe's texels. See .helper/ddgi_plan.md §2 (Blend).
+#define NWB_GI_IRRADIANCE_ATLAS_INTERIOR 6
+#define NWB_GI_IRRADIANCE_ATLAS_TILE 8    // 6 interior + 2 * 1-texel border
+#define NWB_GI_DISTANCE_ATLAS_INTERIOR 14
+#define NWB_GI_DISTANCE_ATLAS_TILE 16    // 14 interior + 2 * 1-texel border
+
+// Blend pass contiguous binding slots (separate from the trace pass's SW BVH layout). The irradiance blend and
+// distance blend share the SAME layout (CB + ray-data SRV + front-atlas SRV + back-atlas UAV); the binding set
+// decides which actual textures are bound at the front/back slots. The border pass has its own layout
+// (CB + irradiance UAV + distance UAV).
+#define NWB_GI_BLEND_BINDING_GRID_CONSTANTS 0
+#define NWB_GI_BLEND_BINDING_RAY_DATA 1
+#define NWB_GI_BLEND_BINDING_FRONT_ATLAS 2
+#define NWB_GI_BLEND_BINDING_BACK_ATLAS 3
+
+#define NWB_GI_BORDER_BINDING_GRID_CONSTANTS 0
+#define NWB_GI_BORDER_BINDING_IRRADIANCE 1
+#define NWB_GI_BORDER_BINDING_DISTANCE 2
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

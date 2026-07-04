@@ -691,9 +691,17 @@ private:
     Core::ShaderHandle m_giProbeBorderShader;
     Core::ComputePipelineHandle m_giProbeBorderPipeline;
     Core::BindingSetHandle m_giTraceBindingSet;
+    // U4 blend + border. The irradiance + distance blend share the SAME binding LAYOUT (CB + ray-data SRV +
+    // front-atlas SRV + back-atlas UAV) but distinct sets (the bound textures differ by ping-pong state). The border
+    // pass has its own layout (CB + irradiance UAV + distance UAV) and two sets (one per atlas), selected by a push
+    // constant. m_giBlendBindingLayout is shared by the irradiance + distance blend; m_giBorderBindingLayout is
+    // shared by the irradiance + distance border dispatches.
+    Core::BindingLayoutHandle m_giBlendBindingLayout;
+    Core::BindingLayoutHandle m_giBorderBindingLayout;
     Core::BindingSetHandle m_giBlendIrradianceBindingSet;
     Core::BindingSetHandle m_giBlendDistanceBindingSet;
-    Core::BindingSetHandle m_giBorderBindingSet;
+    Core::BindingSetHandle m_giBorderIrradianceBindingSet;
+    Core::BindingSetHandle m_giBorderDistanceBindingSet;
     // Ping-pong octahedral atlases (irradiance RGBA16F v1, distance RG16F). m_giHistoryFrontIsA selects the INCOMING
     // history this frame; flipped at the end of the GI block. Black-cleared atlases are the additive identity so
     // lighting stays branchless when GI is off.

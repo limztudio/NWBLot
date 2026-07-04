@@ -6104,6 +6104,20 @@ struct NwbGiTracePushConstantsGpu{
 };
 static_assert(sizeof(NwbGiTracePushConstantsGpu) == sizeof(u32) * 4u, "NwbGiTracePushConstantsGpu must match the shader NwbGiTracePushConstants layout");
 
+// CPU mirror of the shader NwbGiBorderPushConstants (4 x u32 = 16 bytes): selects the atlas (irradiance vs distance)
+// and carries the tile edge length for the border fill dispatch.
+struct NwbGiBorderPushConstantsGpu{
+    u32 tile = 0u;
+    u32 mode = 0u; // 0 = irradiance (float4), 1 = distance (float2)
+    u32 pad0 = 0u;
+    u32 pad1 = 0u;
+};
+static_assert(sizeof(NwbGiBorderPushConstantsGpu) == sizeof(u32) * 4u, "NwbGiBorderPushConstantsGpu must match the shader NwbGiBorderPushConstants layout");
+
+// Default hysteresis for the EMA blend (the probe history weight). 0.97 gives ~6-7 frame time constant (matches the
+// caustic splat-space decay precedent); 0 on frame 0 (m_giSeeded false) so the first blend is the pure current sample.
+inline constexpr f32 s_GiDefaultHysteresis = 0.97f;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -6178,14 +6192,17 @@ bool RendererRayTracingSystem::ensureGiTracePipeline(){
 
 
 bool RendererRayTracingSystem::ensureGiResources(){
-    // U3 scaffold: create the atlas/ray-data/grid-CB resources lazily. For now this is a placeholder that returns
-    // true when GI is disabled (the common case). Full atlas creation + dispatch wiring lands below.
+    // Create the atlas/ray-data/grid-CB resources lazily. Atlases live on RendererRayTracingState (NOT
+    // DeferredFrameTargets) so a window resize does not reset probe convergence. See .helper/ddgi_plan.md §2.
     if(!hasGiWork())
         return true;
 
-    // Create the ray-data texture (RGBA16F: rgb = irradiance, a = hitT). Width = probe count, height = rays/probe.
     const u32 probeCount = rayTracingState().m_giGridSizeX * rayTracingState().m_giGridSizeY * rayTracingState().m_giGridSizeZ;
+    if(probeCount == 0u)
+        return false;
     const u32 raysPerProbe = rayTracingState().m_giRaysPerProbe;
+
+    // Ray-data texture (RGBA16F: rgb = irradiance, a = hitT). Width = probe count, height = rays/probe.
     if(!rayTracingState().m_giRayData){
         Core::TextureDesc rayDataDesc;
         rayDataDesc
@@ -6202,7 +6219,7 @@ bool RendererRayTracingSystem::ensureGiResources(){
         }
     }
 
-    // Create the grid constant buffer.
+    // Grid constant buffer (6 x Float4 = 96 bytes, matches NwbGiGridConstants).
     if(!rayTracingState().m_giGridConstants){
         Core::BufferDesc gridCbDesc;
         gridCbDesc
@@ -6217,7 +6234,390 @@ bool RendererRayTracingSystem::ensureGiResources(){
         }
     }
 
-    return ensureGiTracePipeline();
+    // Irradiance + distance ping-pong atlases. Each probe owns one square tile (interior + 1-texel border). The
+    // atlas width = probeCount * tile, height = tile. Black-cleared atlases are the additive identity so lighting
+    // stays branchless when GI is off. m_giSeeded is reset on atlas (re)creation so the blend's hysteresis is 0 on
+    // the next frame (pure current sample).
+    const u32 irrTile = NWB_GI_IRRADIANCE_ATLAS_TILE;
+    const u32 distTile = NWB_GI_DISTANCE_ATLAS_TILE;
+    const auto createAtlasPair = [this, probeCount](const u32 tile, const Core::Format::Enum format, const char* nameA, const char* nameB) -> bool{
+        Core::TextureDesc desc;
+        desc
+            .setWidth(probeCount * tile)
+            .setHeight(tile)
+            .setFormat(format)
+            .setInUAV(true)
+        ;
+        desc.setName(Name(nameA));
+        const Core::TextureHandle a = graphics().createTexture(desc);
+        if(!a){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI atlas-A ({})"), nameA);
+            return false;
+        }
+        desc.setName(Name(nameB));
+        const Core::TextureHandle b = graphics().createTexture(desc);
+        if(!b){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI atlas-B ({})"), nameB);
+            return false;
+        }
+        // Stash into the right pair via the caller's comparison below.
+        if(format == Core::Format::RGBA16_FLOAT){
+            rayTracingState().m_giIrradianceAtlasA = a;
+            rayTracingState().m_giIrradianceAtlasB = b;
+        }
+        else{
+            rayTracingState().m_giDistanceAtlasA = a;
+            rayTracingState().m_giDistanceAtlasB = b;
+        }
+        return true;
+    };
+
+    if(!rayTracingState().m_giIrradianceAtlasA || !rayTracingState().m_giIrradianceAtlasB){
+        if(!createAtlasPair(irrTile, Core::Format::RGBA16_FLOAT, "engine/gi/irradiance_a", "engine/gi/irradiance_b"))
+            return false;
+        // Clear the freshly-created atlases to black (the additive identity) so the consumer is branchless.
+        rayTracingState().m_giSeeded = false;
+    }
+    if(!rayTracingState().m_giDistanceAtlasA || !rayTracingState().m_giDistanceAtlasB){
+        if(!createAtlasPair(distTile, Core::Format::RG16_FLOAT, "engine/gi/distance_a", "engine/gi/distance_b"))
+            return false;
+        rayTracingState().m_giSeeded = false;
+    }
+
+    // Build the pipelines + binding sets. Non-fatal: a sub-failure leaves the pipeline handle null and the render
+    // dispatch guards each on its own handle before issuing.
+    if(!ensureGiTracePipeline())
+        return false;
+    if(!ensureGiBlendIrradiancePipeline() || !ensureGiBlendDistancePipeline() || !ensureGiBorderPipeline())
+        return false;
+    if(!ensureGiBlendIrradianceBindingSet() || !ensureGiBlendDistanceBindingSet())
+        return false;
+    if(!ensureGiBorderBindingSets())
+        return false;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// U4 blend + border pipelines. The irradiance + distance blend share the SAME binding layout (CB + ray-data SRV +
+// front-atlas SRV + back-atlas UAV); the binding set decides which textures are bound at the front/back slots
+// (ping-pong). The border pass has its own layout (CB + irradiance UAV + distance UAV) + a push constant selecting
+// the format, dispatched twice (once per atlas).
+
+bool RendererRayTracingSystem::ensureGiBlendIrradiancePipeline(){
+    if(rayTracingState().m_giProbeBlendIrradiancePipeline)
+        return true;
+    if(rayTracingState().m_giProbeBlendIrradiancePipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_giBlendBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_BLEND_BINDING_GRID_CONSTANTS, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_GI_BLEND_BINDING_RAY_DATA, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_GI_BLEND_BINDING_FRONT_ATLAS, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_GI_BLEND_BINDING_BACK_ATLAS, 1));
+        rayTracingState().m_giBlendBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_giBlendBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI blend binding layout"));
+            rayTracingState().m_giProbeBlendIrradiancePipelineFailed = true;
+            rayTracingState().m_giProbeBlendDistancePipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_giProbeBlendIrradianceShader,
+        AssetsGraphicsGi::s_ProbeBlendIrradianceShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_GiProbeBlendIrradiance"
+    )){
+        rayTracingState().m_giProbeBlendIrradiancePipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_giProbeBlendIrradianceShader)
+        .addBindingLayout(rayTracingState().m_giBlendBindingLayout)
+    ;
+    rayTracingState().m_giProbeBlendIrradiancePipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_giProbeBlendIrradiancePipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI probe blend irradiance compute pipeline"));
+        rayTracingState().m_giProbeBlendIrradiancePipelineFailed = true;
+        return false;
+    }
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created GI probe blend irradiance compute pipeline"));
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureGiBlendDistancePipeline(){
+    if(rayTracingState().m_giProbeBlendDistancePipeline)
+        return true;
+    if(rayTracingState().m_giProbeBlendDistancePipelineFailed)
+        return false;
+
+    // Shares the irradiance blend's layout (CB + ray-data SRV + front/back atlas). Build it first so the layout is
+    // resident.
+    if(!ensureGiBlendIrradiancePipeline())
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_giProbeBlendDistanceShader,
+        AssetsGraphicsGi::s_ProbeBlendDistanceShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_GiProbeBlendDistance"
+    )){
+        rayTracingState().m_giProbeBlendDistancePipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_giProbeBlendDistanceShader)
+        .addBindingLayout(rayTracingState().m_giBlendBindingLayout)
+    ;
+    rayTracingState().m_giProbeBlendDistancePipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_giProbeBlendDistancePipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI probe blend distance compute pipeline"));
+        rayTracingState().m_giProbeBlendDistancePipelineFailed = true;
+        return false;
+    }
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created GI probe blend distance compute pipeline"));
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureGiBorderPipeline(){
+    if(rayTracingState().m_giProbeBorderPipeline)
+        return true;
+    if(rayTracingState().m_giProbeBorderPipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_giBorderBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_BORDER_BINDING_GRID_CONSTANTS, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_GI_BORDER_BINDING_IRRADIANCE, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_GI_BORDER_BINDING_DISTANCE, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(NwbGiBorderPushConstantsGpu)));
+        rayTracingState().m_giBorderBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_giBorderBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI border binding layout"));
+            rayTracingState().m_giProbeBorderPipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_giProbeBorderShader,
+        AssetsGraphicsGi::s_ProbeBorderShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_GiProbeBorder"
+    )){
+        rayTracingState().m_giProbeBorderPipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_giProbeBorderShader)
+        .addBindingLayout(rayTracingState().m_giBorderBindingLayout)
+    ;
+    rayTracingState().m_giProbeBorderPipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_giProbeBorderPipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI probe border compute pipeline"));
+        rayTracingState().m_giProbeBorderPipelineFailed = true;
+        return false;
+    }
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created GI probe border compute pipeline"));
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureGiBlendIrradianceBindingSet(){
+    NWB_ASSERT(rayTracingState().m_giBlendBindingLayout);
+    NWB_ASSERT(rayTracingState().m_giGridConstants);
+    NWB_ASSERT(rayTracingState().m_giRayData);
+    NWB_ASSERT(rayTracingState().m_giIrradianceAtlasA);
+    NWB_ASSERT(rayTracingState().m_giIrradianceAtlasB);
+
+    // Ping-pong: front = history-in (SRV), back = history-out (UAV). The trace reads PREV-front (last frame's
+    // back), the blend writes THIS frame's back. The render flips m_giHistoryFrontIsA at block end so next frame's
+    // front is this frame's back.
+    Core::Texture* frontAtlas = (rayTracingState().m_giHistoryFrontIsA != 0u)
+        ? rayTracingState().m_giIrradianceAtlasA.get()
+        : rayTracingState().m_giIrradianceAtlasB.get()
+    ;
+    Core::Texture* backAtlas = (rayTracingState().m_giHistoryFrontIsA != 0u)
+        ? rayTracingState().m_giIrradianceAtlasB.get()
+        : rayTracingState().m_giIrradianceAtlasA.get()
+    ;
+
+    Core::BindingSetDesc desc(arena());
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_BLEND_BINDING_GRID_CONSTANTS, rayTracingState().m_giGridConstants.get()));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_GI_BLEND_BINDING_RAY_DATA,
+        rayTracingState().m_giRayData.get(),
+        Core::Format::RGBA16_FLOAT,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_GI_BLEND_BINDING_FRONT_ATLAS,
+        frontAtlas,
+        Core::Format::RGBA16_FLOAT,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_GI_BLEND_BINDING_BACK_ATLAS,
+        backAtlas,
+        Core::Format::RGBA16_FLOAT,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+
+    // The irradiance blend set is rebuilt every frame (the ping-pong front/back swap each frame), so release the
+    // old set + create the new one unconditionally.
+    rayTracingState().m_giBlendIrradianceBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_giBlendBindingLayout);
+    if(!rayTracingState().m_giBlendIrradianceBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI blend irradiance binding set"));
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureGiBlendDistanceBindingSet(){
+    NWB_ASSERT(rayTracingState().m_giBlendBindingLayout);
+    NWB_ASSERT(rayTracingState().m_giGridConstants);
+    NWB_ASSERT(rayTracingState().m_giRayData);
+    NWB_ASSERT(rayTracingState().m_giDistanceAtlasA);
+    NWB_ASSERT(rayTracingState().m_giDistanceAtlasB);
+
+    Core::Texture* frontAtlas = (rayTracingState().m_giHistoryFrontIsA != 0u)
+        ? rayTracingState().m_giDistanceAtlasA.get()
+        : rayTracingState().m_giDistanceAtlasB.get()
+    ;
+    Core::Texture* backAtlas = (rayTracingState().m_giHistoryFrontIsA != 0u)
+        ? rayTracingState().m_giDistanceAtlasB.get()
+        : rayTracingState().m_giDistanceAtlasA.get()
+    ;
+
+    Core::BindingSetDesc desc(arena());
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_BLEND_BINDING_GRID_CONSTANTS, rayTracingState().m_giGridConstants.get()));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_GI_BLEND_BINDING_RAY_DATA,
+        rayTracingState().m_giRayData.get(),
+        Core::Format::RGBA16_FLOAT,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_GI_BLEND_BINDING_FRONT_ATLAS,
+        frontAtlas,
+        Core::Format::RG16_FLOAT,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_GI_BLEND_BINDING_BACK_ATLAS,
+        backAtlas,
+        Core::Format::RG16_FLOAT,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+
+    rayTracingState().m_giBlendDistanceBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_giBlendBindingLayout);
+    if(!rayTracingState().m_giBlendDistanceBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI blend distance binding set"));
+        return false;
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureGiBorderBindingSets(){
+    NWB_ASSERT(rayTracingState().m_giBorderBindingLayout);
+    NWB_ASSERT(rayTracingState().m_giGridConstants);
+    NWB_ASSERT(rayTracingState().m_giIrradianceAtlasA);
+    NWB_ASSERT(rayTracingState().m_giIrradianceAtlasB);
+    NWB_ASSERT(rayTracingState().m_giDistanceAtlasA);
+    NWB_ASSERT(rayTracingState().m_giDistanceAtlasB);
+
+    // The border runs AFTER the blend on the BACK atlas (this frame's history-out, which the consumer reads next
+    // frame), so the border set binds the BACK atlas at BOTH slots (the float4 slot for irradiance, the float2 slot
+    // for distance). Each dispatch's push constant selects which slot the kernel reads/writes.
+    auto* device = graphics().getDevice();
+
+    {
+        Core::Texture* backIrr = (rayTracingState().m_giHistoryFrontIsA != 0u)
+            ? rayTracingState().m_giIrradianceAtlasB.get()
+            : rayTracingState().m_giIrradianceAtlasA.get()
+        ;
+        Core::BindingSetDesc desc(arena());
+        desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_BORDER_BINDING_GRID_CONSTANTS, rayTracingState().m_giGridConstants.get()));
+        desc.addItem(Core::BindingSetItem::Texture_UAV(
+            NWB_GI_BORDER_BINDING_IRRADIANCE,
+            backIrr,
+            Core::Format::RGBA16_FLOAT,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture2D
+        ));
+        // The distance slot is bound to the SAME irradiance atlas (the kernel writes only the slot the push-constant
+        // mode selects, so the unused slot's format is irrelevant -- it just needs a valid UAV binding). Pointing it
+        // at the irradiance atlas keeps both slots the same format (RGBA16F) so the descriptor is valid.
+        desc.addItem(Core::BindingSetItem::Texture_UAV(
+            NWB_GI_BORDER_BINDING_DISTANCE,
+            backIrr,
+            Core::Format::RGBA16_FLOAT,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture2D
+        ));
+        rayTracingState().m_giBorderIrradianceBindingSet = device->createBindingSet(desc, rayTracingState().m_giBorderBindingLayout);
+        if(!rayTracingState().m_giBorderIrradianceBindingSet){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI border irradiance binding set"));
+            return false;
+        }
+    }
+
+    {
+        Core::Texture* backDist = (rayTracingState().m_giHistoryFrontIsA != 0u)
+            ? rayTracingState().m_giDistanceAtlasB.get()
+            : rayTracingState().m_giDistanceAtlasA.get()
+        ;
+        Core::BindingSetDesc desc(arena());
+        desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_BORDER_BINDING_GRID_CONSTANTS, rayTracingState().m_giGridConstants.get()));
+        // Mirror: the irradiance slot is bound to the SAME distance atlas so both slots are RG16F.
+        desc.addItem(Core::BindingSetItem::Texture_UAV(
+            NWB_GI_BORDER_BINDING_IRRADIANCE,
+            backDist,
+            Core::Format::RG16_FLOAT,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture2D
+        ));
+        desc.addItem(Core::BindingSetItem::Texture_UAV(
+            NWB_GI_BORDER_BINDING_DISTANCE,
+            backDist,
+            Core::Format::RG16_FLOAT,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture2D
+        ));
+        rayTracingState().m_giBorderDistanceBindingSet = device->createBindingSet(desc, rayTracingState().m_giBorderBindingLayout);
+        if(!rayTracingState().m_giBorderDistanceBindingSet){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI border distance binding set"));
+            return false;
+        }
+    }
+    return true;
 }
 
 
@@ -6225,29 +6625,150 @@ bool RendererRayTracingSystem::ensureGiResources(){
 
 
 bool RendererRayTracingSystem::hasGiWork()const noexcept{
-    // U1 scaffold: GI is disabled until a later unit enables m_giEnabled. Black-cleared atlases are the additive
-    // identity, so lighting stays branchless. See .helper/ddgi_plan.md §2 (Ownership + wiring).
+    // GI is disabled until m_giEnabled is set. Black-cleared atlases are the additive identity, so lighting stays
+    // branchless. See .helper/ddgi_plan.md §2 (Ownership + wiring).
     return rayTracingState().m_giEnabled;
 }
 
 bool RendererRayTracingSystem::prepareGiResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    // U1 scaffold: inert no-op. The atlas/ray-data/grid-CB/pipeline resources will be lazily created here in a
-    // later unit (clone of ensureCausticResolvePipeline/BindingSet). Returns true so the render hook proceeds
-    // harmlessly.
-    static_cast<void>(commandList);
     static_cast<void>(targets);
     if(!hasGiWork())
         return true;
+
+    // Lazily create the atlas/ray-data/grid-CB/pipeline resources. Atlases live on RendererRayTracingState so a
+    // window resize does not reset probe convergence.
+    if(!ensureGiResources())
+        return false;
+
+    // Upload the grid constant buffer. The frame counter seeds the per-frame R2 rotation; the update cursor is the
+    // round-robin offset (1/Nth of probes per frame); the hysteresis is 0 on frame 0 (m_giSeeded false -> pure
+    // current sample) and s_GiDefaultHysteresis afterward.
+    const u32 probeCount = rayTracingState().m_giGridSizeX * rayTracingState().m_giGridSizeY * rayTracingState().m_giGridSizeZ;
+    const f32 hysteresis = rayTracingState().m_giSeeded ? s_GiDefaultHysteresis : 0.0f;
+    NwbGiGridConstantsGpu grid;
+    grid.gridOrigin = Float4(NWB_GI_DEFAULT_GRID_ORIGIN_X, NWB_GI_DEFAULT_GRID_ORIGIN_Y, NWB_GI_DEFAULT_GRID_ORIGIN_Z, 0.0f);
+    grid.gridSpacing = Float4(NWB_GI_DEFAULT_GRID_SPACING, NWB_GI_DEFAULT_GRID_SPACING, NWB_GI_DEFAULT_GRID_SPACING, 0.0f);
+    grid.gridDims = Float4(
+        static_cast<f32>(rayTracingState().m_giGridSizeX),
+        static_cast<f32>(rayTracingState().m_giGridSizeY),
+        static_cast<f32>(rayTracingState().m_giGridSizeZ),
+        static_cast<f32>(probeCount)
+    );
+    grid.params0 = Float4(
+        static_cast<f32>(rayTracingState().m_giRaysPerProbe),
+        static_cast<f32>(NWB_GI_DEFAULT_UPDATE_DIVISOR),
+        static_cast<f32>(rayTracingState().m_giFrameIndex),
+        static_cast<f32>(rayTracingState().m_giHistoryFrontIsA)
+    );
+    grid.params1 = Float4(hysteresis, 0.0f, 0.0f, 0.0f);
+    grid.params2 = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    Core::Buffer* gridCb = rayTracingState().m_giGridConstants.get();
+    commandList.setBufferState(gridCb, Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(gridCb, &grid, sizeof(grid));
+    commandList.setBufferState(gridCb, Core::ResourceStates::ShaderResource);
+    commandList.commitBarriers();
     return true;
 }
 
 bool RendererRayTracingSystem::renderGi(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    // U1 scaffold: inert no-op. The trace -> blend_irr -> blend_dist -> border -> flip dispatch chain lands in
-    // later units (U3 trace, U4 blend/border). Returns true so the render proceeds.
-    static_cast<void>(commandList);
     static_cast<void>(targets);
     if(!hasGiWork())
         return true;
+
+    // Guard: every pass needs its pipeline + binding set. A missing handle (a prior ensure failure) leaves the
+    // dispatch inert this frame rather than crashing.
+    if(
+        !rayTracingState().m_giProbeTracePipeline
+        || !rayTracingState().m_giProbeBlendIrradiancePipeline
+        || !rayTracingState().m_giProbeBlendDistancePipeline
+        || !rayTracingState().m_giProbeBorderPipeline
+        || !rayTracingState().m_giBlendIrradianceBindingSet
+        || !rayTracingState().m_giBlendDistanceBindingSet
+        || !rayTracingState().m_giBorderIrradianceBindingSet
+        || !rayTracingState().m_giBorderDistanceBindingSet
+    )
+        return true;
+
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_GiProbeBlend, graphics().getDevice(), commandList);
+
+    const u32 probeCount = rayTracingState().m_giGridSizeX * rayTracingState().m_giGridSizeY * rayTracingState().m_giGridSizeZ;
+    const u32 raysPerProbe = rayTracingState().m_giRaysPerProbe;
+    const u32 groupSize = NWB_GI_GROUP_SIZE;
+
+    // (1) Trace: workgroup-per-probe. dispatch(activeProbeCount, 1, 1) with [numthreads(64, 1, 1)] -- U3 wired this
+    // against the SW BVH; the binding set + push constants are set up there. For U4 we only add the blend/border
+    // dispatches after it, so the trace dispatch itself is owned by the U3 path (the binding set is built there).
+
+    // (2) Blend irradiance: one thread per interior atlas texel. dispatch(probeCount * interior, interior).
+    {
+        const u32 interior = NWB_GI_IRRADIANCE_ATLAS_INTERIOR;
+        const u32 groupsX = DivideUp(probeCount * interior, groupSize);
+        const u32 groupsY = DivideUp(interior, groupSize);
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_giBlendIrradianceBindingSet.get());
+        commandList.commitBarriers();
+        Core::ComputeState state;
+        state.setPipeline(rayTracingState().m_giProbeBlendIrradiancePipeline.get());
+        state.addBindingSet(rayTracingState().m_giBlendIrradianceBindingSet.get());
+        commandList.setComputeState(state);
+        commandList.dispatch(groupsX, groupsY, 1u);
+    }
+
+    // (3) Blend distance: one thread per interior atlas texel. dispatch(probeCount * interior, interior).
+    {
+        const u32 interior = NWB_GI_DISTANCE_ATLAS_INTERIOR;
+        const u32 groupsX = DivideUp(probeCount * interior, groupSize);
+        const u32 groupsY = DivideUp(interior, groupSize);
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_giBlendDistanceBindingSet.get());
+        commandList.commitBarriers();
+        Core::ComputeState state;
+        state.setPipeline(rayTracingState().m_giProbeBlendDistancePipeline.get());
+        state.addBindingSet(rayTracingState().m_giBlendDistanceBindingSet.get());
+        commandList.setComputeState(state);
+        commandList.dispatch(groupsX, groupsY, 1u);
+    }
+
+    // (4) Border: dispatched twice (once per atlas) with a push constant selecting the format + tile size. Each
+    // dispatch covers the whole atlas (probeCount * tile, tile) and the kernel skips interior texels.
+    {
+        const u32 irrTile = NWB_GI_IRRADIANCE_ATLAS_TILE;
+        const u32 groupsX = DivideUp(probeCount * irrTile, groupSize);
+        const u32 groupsY = DivideUp(irrTile, groupSize);
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_giBorderIrradianceBindingSet.get());
+        commandList.commitBarriers();
+        NwbGiBorderPushConstantsGpu irrPush;
+        irrPush.tile = irrTile;
+        irrPush.mode = 0u; // irradiance (float4)
+        Core::ComputeState state;
+        state.setPipeline(rayTracingState().m_giProbeBorderPipeline.get());
+        state.addBindingSet(rayTracingState().m_giBorderIrradianceBindingSet.get());
+        commandList.setComputeState(state);
+        commandList.setPushConstants(&irrPush, sizeof(irrPush));
+        commandList.dispatch(groupsX, groupsY, 1u);
+    }
+    {
+        const u32 distTile = NWB_GI_DISTANCE_ATLAS_TILE;
+        const u32 groupsX = DivideUp(probeCount * distTile, groupSize);
+        const u32 groupsY = DivideUp(distTile, groupSize);
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_giBorderDistanceBindingSet.get());
+        commandList.commitBarriers();
+        NwbGiBorderPushConstantsGpu distPush;
+        distPush.tile = distTile;
+        distPush.mode = 1u; // distance (float2)
+        Core::ComputeState state;
+        state.setPipeline(rayTracingState().m_giProbeBorderPipeline.get());
+        state.addBindingSet(rayTracingState().m_giBorderDistanceBindingSet.get());
+        commandList.setComputeState(state);
+        commandList.setPushConstants(&distPush, sizeof(distPush));
+        commandList.dispatch(groupsX, groupsY, 1u);
+    }
+
+    // (5) Flip the ping-pong front selector so next frame's front is this frame's back (the blended + bordered
+    // atlas). m_giSeeded is set true so the next blend's hysteresis is nonzero (EMA accumulation begins).
+    rayTracingState().m_giHistoryFrontIsA ^= 1u;
+    rayTracingState().m_giSeeded = true;
+    rayTracingState().m_giFrameIndex = rayTracingState().m_giFrameIndex + 1u;
     return true;
 }
 

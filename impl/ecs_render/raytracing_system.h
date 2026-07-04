@@ -71,6 +71,16 @@ public:
     [[nodiscard]] bool renderGi(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureGiResources();
     [[nodiscard]] bool ensureGiTracePipeline();
+    // U4 blend + border pipelines / binding sets. The irradiance + distance blend share the SAME layout
+    // (CB + ray-data SRV + front-atlas SRV + back-atlas UAV); the binding set decides which textures are bound at
+    // the front/back slots (ping-pong). The border pass has its own layout (CB + irradiance UAV + distance UAV) and
+    // is dispatched twice (once per atlas) with a push constant selecting the format.
+    [[nodiscard]] bool ensureGiBlendIrradiancePipeline();
+    [[nodiscard]] bool ensureGiBlendDistancePipeline();
+    [[nodiscard]] bool ensureGiBorderPipeline();
+    [[nodiscard]] bool ensureGiBlendIrradianceBindingSet();
+    [[nodiscard]] bool ensureGiBlendDistanceBindingSet();
+    [[nodiscard]] bool ensureGiBorderBindingSets();
     // True when the prepare built the hybrid transparent-shadow software resources this frame (RT hardware + the scene
     // has a transparent occluder). The render then runs renderGpuBvhShadowVisibility(..., multiplyOntoOpaque=true) after
     // the HW opaque pass, folding the colored transparent shadow onto the binary opaque mask -- ONLY as the

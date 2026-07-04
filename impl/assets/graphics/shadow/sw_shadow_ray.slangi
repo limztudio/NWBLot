@@ -69,6 +69,13 @@ half3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, c
         toLight = nwbShadowJitterCone(centerDir, asin(sinHalf), jitter);
     }
 
+    // Back-face receiver cull: a surface facing away from the light receives no direct light
+    // (the deferred lighting clamps NdotL to 0), so tracing its occlusion ray is wasted work.
+    // Return fully lit and skip the traversal -- the standard shadow-ray optimization, applied
+    // here too so the SW path matches the HW RayQuery path's early-out (HW/SW parity).
+    if(dot(normal, toLight) <= 0.0)
+        return half3(1.0, 1.0, 1.0);
+
     const float tMin = 0.001;
     const float tEnd = tMax - 0.002;
     if(tEnd <= tMin)

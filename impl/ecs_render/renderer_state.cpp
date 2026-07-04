@@ -430,6 +430,11 @@ void RendererRayTracingState::invalidateResources(){
     m_giProbeBorderShader.reset();
     m_giProbeBorderPipeline.reset();
     m_giTraceBindingSet.reset();
+    m_giTraceBindingSetSceneNodes = nullptr;
+    m_giTraceBindingSetInstances = nullptr;
+    m_giTraceBindingSetMaterialTyped = nullptr;
+    m_giTraceBindingSetMeshInstances = nullptr;
+    m_giTraceBindingSetMeshCount = 0u;
     m_giBlendBindingLayout.reset();
     m_giBorderBindingLayout.reset();
     m_giBlendIrradianceBindingSet.reset();

@@ -81,6 +81,12 @@ public:
     [[nodiscard]] bool ensureGiBlendIrradianceBindingSet();
     [[nodiscard]] bool ensureGiBlendDistanceBindingSet();
     [[nodiscard]] bool ensureGiBorderBindingSets();
+    // U5: the trace binding set (SW BVH scene/instance/mesh context + grid CB + ray-data UAV + prev-front atlas
+    // SRVs + hit-albedo SRV). Built when the SW scene BVH is resident (the same geometry the SW shadow trace uses).
+    [[nodiscard]] bool ensureGiTraceBindingSet();
+    // U5: the per-instance flat-albedo buffer the trace's Lambert hit-shade reads. CPU-built from the gathered
+    // occluders (NWB_GI_DEFAULT_ALBEDO fallback).
+    [[nodiscard]] bool ensureGiHitAlbedoBuffer();
     // True when the prepare built the hybrid transparent-shadow software resources this frame (RT hardware + the scene
     // has a transparent occluder). The render then runs renderGpuBvhShadowVisibility(..., multiplyOntoOpaque=true) after
     // the HW opaque pass, folding the colored transparent shadow onto the binary opaque mask -- ONLY as the

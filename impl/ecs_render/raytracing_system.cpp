@@ -19,6 +19,7 @@
 #include <impl/assets/graphics/bvh/binding_slots.h>
 #include <impl/assets/graphics/bvh/names.h>
 #include <impl/assets/graphics/gi/names.h>
+#include <impl/assets/graphics/gi/sw_binding_slots.h>
 
 #include <global/environment.h>
 #include <global/text_utils.h>
@@ -1365,6 +1366,12 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow scene BVH build failed"));
         return true;
     }
+
+    // U5: enable DDGI on the SW path (the GI trace reuses the SW scene BVH the SW shadow/caustic paths built).
+    // The prepareGiResources hook (called before this) lazily creates the GI atlases/pipelines; setting
+    // m_giEnabled here lets the next frame's prepare + render run the full trace -> blend -> border chain.
+    if(rayTracingState().m_sceneBvhInstanceCount > 0u && rayTracingState().m_swShadowMeshCount > 0u)
+        rayTracingState().m_giEnabled = true;
 
     if(rayTracingState().m_sceneBvhInstanceCount == 0u)
         return true;
@@ -6625,6 +6632,140 @@ bool RendererRayTracingSystem::ensureGiBorderBindingSets(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// U5: the per-instance flat-albedo buffer the trace's Lambert hit-shade reads. CPU-built from the gathered occluders;
+// each instance's albedo defaults to NWB_GI_DEFAULT_ALBEDO_FLOAT3 until a resolved-material path exists. Grows by
+// doubling like the shadow instance-material table.
+bool RendererRayTracingSystem::ensureGiHitAlbedoBuffer(){
+    const u32 instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+    if(instanceCount == 0u)
+        return true;
+    if(rayTracingState().m_giHitAlbedo && rayTracingState().m_giHitAlbedoCapacity >= instanceCount)
+        return true;
+
+    usize capacity = rayTracingState().m_giHitAlbedoCapacity > 0u ? rayTracingState().m_giHitAlbedoCapacity : 32u;
+    while(capacity < instanceCount)
+        capacity *= 2u;
+
+    Core::BufferDesc desc;
+    desc
+        .setByteSize(static_cast<u64>(sizeof(f32) * 3u * capacity))
+        .setStructStride(sizeof(f32) * 3u)
+        .setDebugName(Name("gi_hit_albedo"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    rayTracingState().m_giHitAlbedo = graphics().createBuffer(desc);
+    if(!rayTracingState().m_giHitAlbedo){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI hit-albedo buffer"));
+        return false;
+    }
+    rayTracingState().m_giHitAlbedoCapacity = capacity;
+    return true;
+}
+
+// U5: the trace binding set. Mirrors the SW shadow binding layout (scene BVH + instances + per-mesh descriptor arrays +
+// scene/light CBs) and adds the GI-specific I/O (grid CB, ray-data UAV, prev-front atlas SRVs, hit-albedo SRV). Built
+// when the SW scene BVH is resident; rebuilt when the scene-BVH/instance buffers or the distinct-mesh count change.
+bool RendererRayTracingSystem::ensureGiTraceBindingSet(){
+    NWB_ASSERT(rayTracingState().m_giBindingLayout);
+    NWB_ASSERT(rayTracingState().m_giGridConstants);
+    NWB_ASSERT(rayTracingState().m_giRayData);
+    NWB_ASSERT(rayTracingState().m_giIrradianceAtlasA);
+    NWB_ASSERT(rayTracingState().m_giIrradianceAtlasB);
+    NWB_ASSERT(rayTracingState().m_giDistanceAtlasA);
+    NWB_ASSERT(rayTracingState().m_giDistanceAtlasB);
+    NWB_ASSERT(rayTracingState().m_giHitAlbedo);
+    NWB_ASSERT(rayTracingState().m_sceneBvhNodeBuffer);
+    NWB_ASSERT(rayTracingState().m_sceneInstanceBuffer);
+    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
+    NWB_ASSERT(deferredState().m_lightBuffer);
+
+    // Rebuild when any tracked input changes (mirrors the SW shadow set): the scene node/instance buffers, the
+    // shadow-owned material context, the distinct-mesh count, and the GI grid/ray-data/atlases (resident on
+    // RendererRayTracingState, recreated only on grid-param change or device reset).
+    Core::Buffer* sceneNodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
+    Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
+    Core::Buffer* materialTypedBuffer = rayTracingState().m_shadowMaterialTypedBuffer.get();
+    Core::Buffer* meshInstanceBuffer = rayTracingState().m_shadowInstanceBuffer.get();
+    const u32 meshCount = rayTracingState().m_swShadowMeshCount;
+    if(
+        rayTracingState().m_giTraceBindingSet
+        && rayTracingState().m_giTraceBindingSetSceneNodes == sceneNodeBuffer
+        && rayTracingState().m_giTraceBindingSetInstances == instanceBuffer
+        && rayTracingState().m_giTraceBindingSetMaterialTyped == materialTypedBuffer
+        && rayTracingState().m_giTraceBindingSetMeshInstances == meshInstanceBuffer
+        && rayTracingState().m_giTraceBindingSetMeshCount == meshCount
+    )
+        return true;
+
+    Core::BindingSetDesc desc(arena());
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(0, deferredState().m_sceneShadingBuffer.get())); // scene shading
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, deferredState().m_lightBuffer.get())); // light list
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, sceneNodeBuffer)); // scene nodes
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, instanceBuffer)); // scene instances
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(4, rayTracingState().m_shadowInstanceMaterialBuffer.get())); // instance material
+    // Per-mesh descriptor arrays: bind every slot; pad unused tail with the last real mesh (the trace only indexes
+    // meshIndex < meshCount), mirroring the SW shadow set.
+    for(u32 slot = 0u; slot < NWB_GI_SW_MAX_MESHES; ++slot){
+        const u32 source = (slot < meshCount) ? slot : (meshCount > 0u ? (meshCount - 1u) : 0u);
+        desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(5, rayTracingState().m_swShadowMeshNodeBuffers[source]).setArrayElement(slot));
+        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(6, rayTracingState().m_swShadowMeshPositionBuffers[source]).setArrayElement(slot));
+        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(7, rayTracingState().m_swShadowMeshIndexBuffers[source]).setArrayElement(slot));
+        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(8, rayTracingState().m_swShadowMeshAttributeBuffers[source]).setArrayElement(slot));
+    }
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(9, materialTypedBuffer)); // material typed
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(10, meshInstanceBuffer)); // mesh instances
+    // GI-specific bindings.
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(11, rayTracingState().m_giGridConstants.get())); // grid constants
+    desc.addItem(Core::BindingSetItem::Texture_UAV(
+        12,
+        rayTracingState().m_giRayData.get(),
+        Core::Format::RGBA16_FLOAT,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    )); // ray data
+    // Prev-front atlases (SRV): the trace reads last frame's front for the infinite-bounce term. m_giHistoryFrontIsA
+    // is flipped at the END of the previous frame's GI block, so at trace time it already points at the PREV front
+    // (the one the consumer will read THIS frame, which the trace should NOT read). The trace wants the OTHER atlas
+    // (the one that was BACK last frame = the older front). So invert the selector here.
+    const bool prevFrontIsA = (rayTracingState().m_giHistoryFrontIsA == 0u);
+    Core::Texture* prevIrr = prevFrontIsA ? rayTracingState().m_giIrradianceAtlasA.get() : rayTracingState().m_giIrradianceAtlasB.get();
+    Core::Texture* prevDist = prevFrontIsA ? rayTracingState().m_giDistanceAtlasA.get() : rayTracingState().m_giDistanceAtlasB.get();
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        13, prevIrr,
+        Core::Format::RGBA16_FLOAT,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    )); // prev irradiance
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        14, prevDist,
+        Core::Format::RG16_FLOAT,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    )); // prev distance
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(15, rayTracingState().m_giHitAlbedo.get())); // hit albedo
+
+    rayTracingState().m_giTraceBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_giBindingLayout);
+    if(!rayTracingState().m_giTraceBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI trace binding set"));
+        rayTracingState().m_giTraceBindingSetSceneNodes = nullptr;
+        rayTracingState().m_giTraceBindingSetInstances = nullptr;
+        rayTracingState().m_giTraceBindingSetMaterialTyped = nullptr;
+        rayTracingState().m_giTraceBindingSetMeshInstances = nullptr;
+        rayTracingState().m_giTraceBindingSetMeshCount = 0u;
+        return false;
+    }
+    rayTracingState().m_giTraceBindingSetSceneNodes = sceneNodeBuffer;
+    rayTracingState().m_giTraceBindingSetInstances = instanceBuffer;
+    rayTracingState().m_giTraceBindingSetMaterialTyped = materialTypedBuffer;
+    rayTracingState().m_giTraceBindingSetMeshInstances = meshInstanceBuffer;
+    rayTracingState().m_giTraceBindingSetMeshCount = meshCount;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::hasGiWork()const noexcept{
     // GI is disabled until m_giEnabled is set. Black-cleared atlases are the additive identity, so lighting stays
     // branchless. See .helper/ddgi_plan.md §2 (Ownership + wiring).
@@ -6698,9 +6839,79 @@ bool RendererRayTracingSystem::renderGi(Core::CommandList& commandList, Deferred
     const u32 raysPerProbe = rayTracingState().m_giRaysPerProbe;
     const u32 groupSize = NWB_GI_GROUP_SIZE;
 
-    // (1) Trace: workgroup-per-probe. dispatch(activeProbeCount, 1, 1) with [numthreads(64, 1, 1)] -- U3 wired this
-    // against the SW BVH; the binding set + push constants are set up there. For U4 we only add the blend/border
-    // dispatches after it, so the trace dispatch itself is owned by the U3 path (the binding set is built there).
+    // (1) Trace: workgroup-per-probe. The trace needs the SW scene BVH (the same geometry the SW shadow trace
+    // built) + the hit-albedo buffer. Build both here (renderGi runs AFTER prepareShadowVisibilityResources, so the
+    // SW BVH is resident); then dispatch the trace with its push constants before the blend reads the ray-data.
+    if(!ensureGiHitAlbedoBuffer() || !ensureGiTraceBindingSet() || !rayTracingState().m_giTraceBindingSet)
+        return true; // non-fatal: skip the whole GI block this frame
+
+    {
+        // Stage the SW BVH per-mesh geometry + the shadow-owned material context to ShaderResource for the trace.
+        for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
+            commandList.setBufferState(rayTracingState().m_swShadowMeshNodeBuffers[slot], Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(rayTracingState().m_swShadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(rayTracingState().m_swShadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(rayTracingState().m_swShadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
+        }
+        commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_giHitAlbedo.get(), Core::ResourceStates::ShaderResource);
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_giTraceBindingSet.get());
+        commandList.commitBarriers();
+
+        // Upload the hit-albedo buffer (all instances get the default albedo for now; a resolved-material path can
+        // refine this per-instance later). Done each frame on the render command list so it stays in sync with the
+        // per-frame instance gather.
+        {
+            const u32 instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+            if(instanceCount > 0u){
+                // Build a flat f32 array (3 per instance) of the default albedo (NWB_GI_DEFAULT_ALBEDO_FLOAT3 =
+                // 0.5,0.5,0.5). The macro expands to 3 comma-separated floats, so a constexpr f3[] is simplest.
+                constexpr f32 s_DefaultAlbedo[3] = { NWB_GI_DEFAULT_ALBEDO_FLOAT3 };
+                // Use a scratch-arena Vector (matches the existing scratchArena Vector pattern in this TU).
+                Core::Alloc::ScratchArena albedoArena(RendererArenaScope::s_RayTracingBuildArena, static_cast<usize>(instanceCount) * 3u * sizeof(f32) + 64u);
+                Vector<f32, Core::Alloc::ScratchArena> albedos{ albedoArena };
+                albedos.resize(static_cast<usize>(instanceCount) * 3u);
+                for(u32 i = 0u; i < instanceCount; ++i){
+                    albedos[i * 3u + 0u] = s_DefaultAlbedo[0];
+                    albedos[i * 3u + 1u] = s_DefaultAlbedo[1];
+                    albedos[i * 3u + 2u] = s_DefaultAlbedo[2];
+                }
+                Core::Buffer* hitAlbedo = rayTracingState().m_giHitAlbedo.get();
+                commandList.setBufferState(hitAlbedo, Core::ResourceStates::CopyDest);
+                commandList.commitBarriers();
+                commandList.writeBuffer(hitAlbedo, albedos.data(), albedos.size() * sizeof(f32));
+                commandList.setBufferState(hitAlbedo, Core::ResourceStates::ShaderResource);
+                commandList.commitBarriers();
+            }
+        }
+
+        // Trace dispatch: [numthreads(64, 1, 1)] workgroup-per-probe. The active probe count this frame =
+        // ceil(probeCount / updateDivisor); dispatch one workgroup per active probe along X.
+        const u32 updateDivisor = Max<u32>(NWB_GI_DEFAULT_UPDATE_DIVISOR, 1u);
+        const u32 activeProbeCount = DivideUp(probeCount, updateDivisor);
+        const u32 traceGroupsX = DivideUp(activeProbeCount, 64u);
+
+        NwbGiTracePushConstantsGpu tracePush;
+        tracePush.activeProbeCount = activeProbeCount;
+        tracePush.updateCursor = rayTracingState().m_giUpdateCursor;
+        tracePush.frameIndex = rayTracingState().m_giFrameIndex;
+        tracePush.raysPerProbe = raysPerProbe;
+
+        Core::ComputeState traceState;
+        traceState.setPipeline(rayTracingState().m_giProbeTracePipeline.get());
+        traceState.addBindingSet(rayTracingState().m_giTraceBindingSet.get());
+        commandList.setComputeState(traceState);
+        commandList.setPushConstants(&tracePush, sizeof(tracePush));
+        commandList.dispatch(traceGroupsX, 1u, 1u);
+
+        // Sync the ray-data UAV write -> the blend's SRV read.
+        commandList.setTextureState(rayTracingState().m_giRayData.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+
+        // Advance the round-robin cursor for next frame.
+        rayTracingState().m_giUpdateCursor = (rayTracingState().m_giUpdateCursor + 1u) % Max<u32>(updateDivisor, 1u);
+    }
 
     // (2) Blend irradiance: one thread per interior atlas texel. dispatch(probeCount * interior, interior).
     {

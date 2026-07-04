@@ -691,6 +691,12 @@ private:
     Core::ShaderHandle m_giProbeBorderShader;
     Core::ComputePipelineHandle m_giProbeBorderPipeline;
     Core::BindingSetHandle m_giTraceBindingSet;
+    // Tracked pointers for the trace binding set rebuild (mirrors the SW shadow set's rebuild guard).
+    const Core::Buffer* m_giTraceBindingSetSceneNodes = nullptr;
+    const Core::Buffer* m_giTraceBindingSetInstances = nullptr;
+    const Core::Buffer* m_giTraceBindingSetMaterialTyped = nullptr;
+    const Core::Buffer* m_giTraceBindingSetMeshInstances = nullptr;
+    u32 m_giTraceBindingSetMeshCount = 0u;
     // U4 blend + border. The irradiance + distance blend share the SAME binding LAYOUT (CB + ray-data SRV +
     // front-atlas SRV + back-atlas UAV) but distinct sets (the bound textures differ by ping-pong state). The border
     // pass has its own layout (CB + irradiance UAV + distance UAV) and two sets (one per atlas), selected by a push

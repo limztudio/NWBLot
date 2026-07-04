@@ -21,9 +21,11 @@
 // nwbShadowFresnelTransmittedFraction / nwbShadowAbsorptionCoefficient (both backends already pull those in first).
 
 
-// Max distinct occluders one shadow ray accumulates PER-OCCLUDER. A ray crosses only the few refractors between it
-// and the light; a further occluder beyond this drops its (rare) contribution gracefully rather than mis-binning.
-#define NWB_SHADOW_MAX_OCCLUDER_BINS 4
+// Max distinct occluders one shadow ray accumulates (the per-thread transparent accumulator's bin array). A ray crosses only
+// the few refractors between it and the light; a further occluder beyond this drops its (rare) contribution gracefully rather
+// than mis-binning. REDUCED 4 -> 3 as a product-perf trade (smaller per-thread accumulator -> higher transparent-trace
+// occupancy); only a ray stacking 4+ distinct transparent layers loses its 4th, which real scenes essentially never hit.
+#define NWB_SHADOW_MAX_OCCLUDER_BINS 3
 #define NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER 4
 #define NWB_SHADOW_CROSSING_MERGE_MIN_EPSILON 1e-4
 #define NWB_SHADOW_CROSSING_MERGE_REL_EPSILON 1e-5

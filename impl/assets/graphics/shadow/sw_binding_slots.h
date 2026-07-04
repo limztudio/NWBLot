@@ -130,14 +130,13 @@
 #define NWB_SW_SHADOW_BACKGROUND_DEPTH 0.999999
 
 // Per-frame samples-per-pixel for the soft opaque trace. Temporal accumulation (the reproject-merge pass) supplies the
-// source-area samples over frames, so this can stay close to 1 --
-// pinned at 2 (not 1) on purpose: for a STATIC receiver the temporal history + the wide a-trous converge fine from a single
-// sample, but in a freshly-disoccluded / gate-B-clamped region (a spinning occluder's leading edge) the effective history
-// length collapses to ~0 and the pixel falls back to (near) pure current -- where 1 spp is a single binary ray whose
-// dithered penumbra the a-trous cannot fully smooth in ONE frame, whereas 2 spp halves that moving-region noise for the
-// same still-cheap half-res binary trace cost. So 2 keeps moving regions clean while temporal handles static convergence.
+// source-area samples over frames, so this is pinned at 1 -- leaning FULLY on the temporal history + the a-trous for
+// moving-region noise. Trade (was 2): in a freshly-disoccluded / gate-B-clamped region (a spinning occluder's leading edge)
+// the effective history collapses to ~0 and the pixel falls back to a single binary ray whose dithered penumbra the a-trous
+// cannot fully smooth in ONE frame, so 1 spp shows more moving-region shimmer than 2 did. Halves the (already cheap half-res
+// binary) opaque trace's ray count; the aggregate shadow_visibility win is small because the opaque trace is a minority of it.
 // Contract-shared with the soft opaque pass.
-#define NWB_SW_SHADOW_SOFT_SPP 2u
+#define NWB_SW_SHADOW_SOFT_SPP 1u
 
 // Per-frame samples-per-pixel for the soft TRANSPARENT (colored Beer-Lambert/Fresnel) trace. Kept at 1 -- HALF the opaque
 // count -- on purpose: the colored transparent signal is a SMOOTH low-frequency tint (not the opaque path's sharp binary

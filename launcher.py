@@ -608,6 +608,15 @@ def launch_process(
         if args.detach:
             return 0
 
+        run_seconds = getattr(args, "run_seconds", None)
+        if run_seconds is not None and run_seconds > 0.0:
+            try:
+                return process.wait(timeout=run_seconds)
+            except subprocess.TimeoutExpired:
+                print(f"run-seconds {run_seconds} elapsed; terminating app", flush=True)
+                terminate_process(process, executable.name)
+                return 0
+
         return process.wait()
     except KeyboardInterrupt:
         if profile_session is not None and profile_session.process is not None:
@@ -722,6 +731,7 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--gpudbg", action="store_true", help="Append --gpudbg to the launched application.")
     parser.add_argument("--kill-existing", action="store_true", help="Close any running executable with the same name before launch.")
     parser.add_argument("--detach", action="store_true", help="Return after launch instead of waiting for the app.")
+    parser.add_argument("--run-seconds", type=float, default=None, help="Terminate the launched app (and logserver) after N seconds instead of waiting for it to close -- for bounded profiling capture.")
     parser.add_argument("--with-profile", action="store_true", help="Start nwb_logserver and connect the launched app to it.")
     parser.add_argument(
         "--profile-log-address",

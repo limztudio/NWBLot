@@ -12,6 +12,9 @@
 #include <global/simplemath.h>
 #include <global/type.h>
 
+#include <cstdio>  // optional NWB_GPU_TIMING_FILE sink (bounded profiling A/B -- see report())
+#include <cstdlib>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -107,6 +110,15 @@ private:
             , m_intervalSeconds
         );
 
+        // Optional FILE sink for bounded profiling A/B: the smoke app is a GUI process with no stdout, and its logger routes
+        // to the logserver's WINDOW, so an automated harness cannot scrape these numbers. When NWB_GPU_TIMING_FILE is set,
+        // ALSO append each interval's per-pass averages there (Name::c_str() is the readable scope text in a dbg build).
+        std::FILE* timingFile = nullptr;
+        if(const char* timingPath = std::getenv("NWB_GPU_TIMING_FILE"))
+            timingFile = std::fopen(timingPath, "a");
+        if(timingFile)
+            std::fprintf(timingFile, "=== interval: %u frames / %.4fs ===\n", static_cast<unsigned>(m_intervalFrames), m_intervalSeconds);
+
         const usize scopeCount = Min(gpuTiming.scopeCount(), s_MaxScopes);
         for(usize i = 0u; i < scopeCount; ++i){
             const ScopeAccum& accum = m_scopes[i];
@@ -123,7 +135,13 @@ private:
                 , accum.maxSeconds * 1000.0
                 , accum.frames
             );
+            if(timingFile)
+                std::fprintf(timingFile, "  %s: avg=%.4f min=%.4f max=%.4f samples=%u\n"
+                    , scopeName.c_str(), averageMs, accum.minSeconds * 1000.0, accum.maxSeconds * 1000.0
+                    , static_cast<unsigned>(accum.frames));
         }
+        if(timingFile)
+            std::fclose(timingFile);
     }
 
     void resetInterval(){

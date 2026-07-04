@@ -99,6 +99,7 @@ NwbBxdfSurface nwbBxdfLoadSurface(float2 uv){
     surface.param1 = half(worldSample.a);
     surface.viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - surface.worldPosition, float3(0.0, 0.0, 1.0));
     surface.isBackground = depth >= 0.999999;
+    surface.indirectIrradiance = nwbBxdfIndirectIrradiance(surface.normal);
     return surface;
 }
 

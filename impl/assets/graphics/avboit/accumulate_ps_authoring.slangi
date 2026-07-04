@@ -159,6 +159,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     bxdfSurface.param0 = surface.param0;
     bxdfSurface.param1 = surface.param1;
     bxdfSurface.isBackground = false;
+    bxdfSurface.indirectIrradiance = nwbBxdfIndirectIrradiance(bxdfSurface.normal);
 
     // Shade through the material's own BXDF, by its shading-model id. Pass the negative-pixel sentinel: a
     // transparent fragment is not in the opaque G-buffer the screen-space shadow visibility was traced from, so

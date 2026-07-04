@@ -188,6 +188,10 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     auto& device = *m_graphics.getDevice();
 
     m_shadowPrepareCommandList->open();
+    // DDGI prepare hook: GI resources are prepared alongside the shadow/caustic prepare. U1 scaffold: inert
+    // no-op (hasGiWork returns false, m_giEnabled defaults false). See .helper/ddgi_plan.md §2.
+    if(!m_raytracingSystem.prepareGiResources(*m_shadowPrepareCommandList, deferredTargets))
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GI resource preparation failed"));
     const bool shadowResourcesPrepared = m_raytracingSystem.prepareShadowVisibilityResources(
         *m_shadowPrepareCommandList,
         deferredTargets,
@@ -419,6 +423,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 [[maybe_unused]] const bool causticsDispatched = m_raytracingSystem.renderGpuBvhCaustics(*commandList, deferredTargets);
             }
         }
+
+        // DDGI render hook: GI probe dispatches run between the caustic producer and the deferred lighting, so the
+        // lighting read sees the resolved probe irradiance. U1 scaffold: inert no-op (hasGiWork returns false).
+        if(!m_raytracingSystem.renderGi(*commandList, deferredTargets))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GI render pass failed"));
 
         commandListReady = m_deferredSystem.renderDeferredLighting(*commandList, deferredTargets);
         if(commandListReady){

@@ -18,6 +18,7 @@
 #include <impl/assets/graphics/caustic/names.h>
 #include <impl/assets/graphics/bvh/binding_slots.h>
 #include <impl/assets/graphics/bvh/names.h>
+#include <impl/assets/graphics/gi/names.h>
 
 #include <global/environment.h>
 #include <global/text_utils.h>
@@ -6076,6 +6077,37 @@ bool RendererRayTracingSystem::uploadShadowMaterialContextBuffers(
     commandList.writeBuffer(materialTypedBuffer, materialTypedBytes.data(), uploadBytes);
     commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererRayTracingSystem::hasGiWork()const noexcept{
+    // U1 scaffold: GI is disabled until a later unit enables m_giEnabled. Black-cleared atlases are the additive
+    // identity, so lighting stays branchless. See .helper/ddgi_plan.md §2 (Ownership + wiring).
+    return rayTracingState().m_giEnabled;
+}
+
+bool RendererRayTracingSystem::prepareGiResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    // U1 scaffold: inert no-op. The atlas/ray-data/grid-CB/pipeline resources will be lazily created here in a
+    // later unit (clone of ensureCausticResolvePipeline/BindingSet). Returns true so the render hook proceeds
+    // harmlessly.
+    static_cast<void>(commandList);
+    static_cast<void>(targets);
+    if(!hasGiWork())
+        return true;
+    return true;
+}
+
+bool RendererRayTracingSystem::renderGi(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    // U1 scaffold: inert no-op. The trace -> blend_irr -> blend_dist -> border -> flip dispatch chain lands in
+    // later units (U3 trace, U4 blend/border). Returns true so the render proceeds.
+    static_cast<void>(commandList);
+    static_cast<void>(targets);
+    if(!hasGiWork())
+        return true;
     return true;
 }
 

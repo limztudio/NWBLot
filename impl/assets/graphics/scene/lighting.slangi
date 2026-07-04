@@ -160,6 +160,20 @@ half3 nwbSceneShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVect
     return diffuse + specularColor + rimColor + frameCue + backLightCue;
 }
 
+// DDGI indirect irradiance: the diffuse irradiance the probe atlas evaluates for this surface. U2 scaffold: returns
+// the SAME hemiAmbient the engine used inline, so this unit is pixel-identical to today (the probe atlas is not yet
+// filled -- it is the additive black identity). Later units (U3+) fill the atlas; the atlas-evaluation path (bias +
+// trilinear + Chebyshev, outside-volume -> this hemiAmbient fallback) replaces the body here. The D3 contract change
+// threads this VALUE through the cook-generated bxdf_dispatch.slangi so materials can reshape their indirect term.
+half3 nwbBxdfIndirectIrradiance(float3 normalVector){
+    const half skyAmount = half(normalVector.z * 0.5 + 0.5);
+    return lerp(half3(0.008, 0.012, 0.02), half3(0.045, 0.055, 0.075), skyAmount);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, float3 worldPosition, int2 pixel){
     const float3 normalVector = nwbSafeNormalize(normal, float3(0.0, 0.0, 1.0));
     const float3 tangentVector = nwbFrameOrthonormalTangent(tangent.xyz, normalVector);
@@ -171,10 +185,8 @@ half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, floa
 
     const float3 viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - worldPosition, float3(0.0, 0.0, 1.0));
     const half ndotv = half(max(dot(normalVector, viewVector), 0.0));
-    const half skyAmount = half(normalVector.z * 0.5 + 0.5);
-    const half3 hemiAmbient = lerp(half3(0.008, 0.012, 0.02), half3(0.045, 0.055, 0.075), skyAmount);
 
-    half3 litColor = baseColor * hemiAmbient;
+    half3 litColor = baseColor * nwbBxdfIndirectIrradiance(normalVector);
     const uint lightCount = nwbSceneLightCount();
     for(uint i = 0u; i < lightCount; ++i){
         // Per-light colored transmittance (1 = lit, 0 = shadowed, tint = colored transparent occluder);

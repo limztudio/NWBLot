@@ -63,6 +63,12 @@ public:
     [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
+    // DDGI (Dynamic Diffuse GI): the feature gate + prep + render hooks. U1 scaffold: hasGiWork returns false
+    // (m_giEnabled defaults false); prepare/render are inert no-ops that succeed without dispatching. Later units
+    // (U3+) fill in the trace/blend/border dispatches. See .helper/ddgi_plan.md §2.
+    [[nodiscard]] bool hasGiWork()const noexcept;
+    [[nodiscard]] bool prepareGiResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    [[nodiscard]] bool renderGi(Core::CommandList& commandList, DeferredFrameTargets& targets);
     // True when the prepare built the hybrid transparent-shadow software resources this frame (RT hardware + the scene
     // has a transparent occluder). The render then runs renderGpuBvhShadowVisibility(..., multiplyOntoOpaque=true) after
     // the HW opaque pass, folding the colored transparent shadow onto the binary opaque mask -- ONLY as the

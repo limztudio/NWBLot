@@ -6251,13 +6251,14 @@ bool RendererRayTracingSystem::ensureGiResources(){
         desc.setName(Name(nameA));
         const Core::TextureHandle a = graphics().createTexture(desc);
         if(!a){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI atlas-A ({})"), nameA);
+            // nameA is a narrow const char* the wide formatter cannot consume; keep the message argument-free.
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI atlas-A"));
             return false;
         }
         desc.setName(Name(nameB));
         const Core::TextureHandle b = graphics().createTexture(desc);
         if(!b){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI atlas-B ({})"), nameB);
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI atlas-B"));
             return false;
         }
         // Stash into the right pair via the caller's comparison below.

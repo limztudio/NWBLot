@@ -6084,6 +6084,146 @@ bool RendererRayTracingSystem::uploadShadowMaterialContextBuffers(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// CPU mirror of the shader NwbGiGridConstants (6 x Float4 = 96 bytes, matches probe_grid.slangi).
+struct NwbGiGridConstantsGpu{
+    Float4 gridOrigin;
+    Float4 gridSpacing;
+    Float4 gridDims;
+    Float4 params0;
+    Float4 params1;
+    Float4 params2;
+};
+static_assert(sizeof(NwbGiGridConstantsGpu) == sizeof(f32) * 4u * 6u, "NwbGiGridConstantsGpu must match the shader NwbGiGridConstants layout");
+
+// CPU mirror of the shader NwbGiTracePushConstants (4 x u32 = 16 bytes).
+struct NwbGiTracePushConstantsGpu{
+    u32 activeProbeCount = 0u;
+    u32 updateCursor = 0u;
+    u32 frameIndex = 0u;
+    u32 raysPerProbe = 0u;
+};
+static_assert(sizeof(NwbGiTracePushConstantsGpu) == sizeof(u32) * 4u, "NwbGiTracePushConstantsGpu must match the shader NwbGiTracePushConstants layout");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererRayTracingSystem::ensureGiTracePipeline(){
+    if(rayTracingState().m_giProbeTracePipeline)
+        return true;
+    if(rayTracingState().m_giProbeTracePipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_giBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Scene BVH + instance + light list + per-mesh descriptor arrays (mirrors SW shadow/caustic layout).
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(0, 1)); // scene shading
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1)); // light list
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1)); // scene nodes
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1)); // scene instances
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(4, 1)); // instance material
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, NWB_SW_SHADOW_MAX_MESHES)); // mesh nodes
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(6, NWB_SW_SHADOW_MAX_MESHES)); // mesh positions
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(7, NWB_SW_SHADOW_MAX_MESHES)); // mesh indices
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(8, NWB_SW_SHADOW_MAX_MESHES)); // mesh attributes
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(9, 1)); // material typed
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(10, 1)); // mesh instances
+        // GI-specific bindings.
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(11, 1)); // grid constants
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(12, 1)); // ray data
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(13, 1)); // prev irradiance
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(14, 1)); // prev distance
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(15, 1)); // hit albedo
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(NwbGiTracePushConstantsGpu)));
+
+        rayTracingState().m_giBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_giBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI binding layout"));
+            rayTracingState().m_giProbeTracePipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_giProbeTraceShader,
+        AssetsGraphicsGi::s_ProbeTraceSwShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_GiProbeTraceSw"
+    )){
+        rayTracingState().m_giProbeTracePipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_giProbeTraceShader)
+        .addBindingLayout(rayTracingState().m_giBindingLayout)
+    ;
+    rayTracingState().m_giProbeTracePipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_giProbeTracePipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI probe trace compute pipeline"));
+        rayTracingState().m_giProbeTracePipelineFailed = true;
+        return false;
+    }
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created GI probe trace compute pipeline"));
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererRayTracingSystem::ensureGiResources(){
+    // U3 scaffold: create the atlas/ray-data/grid-CB resources lazily. For now this is a placeholder that returns
+    // true when GI is disabled (the common case). Full atlas creation + dispatch wiring lands below.
+    if(!hasGiWork())
+        return true;
+
+    // Create the ray-data texture (RGBA16F: rgb = irradiance, a = hitT). Width = probe count, height = rays/probe.
+    const u32 probeCount = rayTracingState().m_giGridSizeX * rayTracingState().m_giGridSizeY * rayTracingState().m_giGridSizeZ;
+    const u32 raysPerProbe = rayTracingState().m_giRaysPerProbe;
+    if(!rayTracingState().m_giRayData){
+        Core::TextureDesc rayDataDesc;
+        rayDataDesc
+            .setWidth(probeCount)
+            .setHeight(raysPerProbe)
+            .setFormat(Core::Format::RGBA16_FLOAT)
+            .setInUAV(true)
+            .setName("engine/gi/ray_data")
+        ;
+        rayTracingState().m_giRayData = graphics().createTexture(rayDataDesc);
+        if(!rayTracingState().m_giRayData){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI ray-data texture"));
+            return false;
+        }
+    }
+
+    // Create the grid constant buffer.
+    if(!rayTracingState().m_giGridConstants){
+        Core::BufferDesc gridCbDesc;
+        gridCbDesc
+            .setByteSize(sizeof(NwbGiGridConstantsGpu))
+            .setDebugName(Name("gi_grid_constants"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        rayTracingState().m_giGridConstants = graphics().createBuffer(gridCbDesc);
+        if(!rayTracingState().m_giGridConstants){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI grid constant buffer"));
+            return false;
+        }
+    }
+
+    return ensureGiTracePipeline();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::hasGiWork()const noexcept{
     // U1 scaffold: GI is disabled until a later unit enables m_giEnabled. Black-cleared atlases are the additive
     // identity, so lighting stays branchless. See .helper/ddgi_plan.md §2 (Ownership + wiring).

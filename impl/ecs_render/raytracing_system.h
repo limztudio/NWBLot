@@ -69,6 +69,8 @@ public:
     [[nodiscard]] bool hasGiWork()const noexcept;
     [[nodiscard]] bool prepareGiResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderGi(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    [[nodiscard]] bool ensureGiResources();
+    [[nodiscard]] bool ensureGiTracePipeline();
     // True when the prepare built the hybrid transparent-shadow software resources this frame (RT hardware + the scene
     // has a transparent occluder). The render then runs renderGpuBvhShadowVisibility(..., multiplyOntoOpaque=true) after
     // the HW opaque pass, folding the colored transparent shadow onto the binary opaque mask -- ONLY as the

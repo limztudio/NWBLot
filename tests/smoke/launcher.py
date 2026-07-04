@@ -118,6 +118,13 @@ SMOKE_SCENES = {
             "sw": SmokeExecutable("nwb_soft_shadow_test_sw_smoke", "soft_shadow_test_sw_smoke"),
         },
     ),
+    "gi-test": SmokeScene(
+        runtime="skinning_culling_benchmark_runtime",
+        backends={
+            "hw": SmokeExecutable("nwb_gi_test_smoke", "gi_test_smoke"),
+            "sw": SmokeExecutable("nwb_gi_test_sw_smoke", "gi_test_sw_smoke"),
+        },
+    ),
 }
 
 

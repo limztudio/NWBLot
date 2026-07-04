@@ -6802,7 +6802,7 @@ bool RendererRayTracingSystem::prepareGiResources(Core::CommandList& commandList
         static_cast<f32>(rayTracingState().m_giFrameIndex),
         static_cast<f32>(rayTracingState().m_giHistoryFrontIsA)
     );
-    grid.params1 = Float4(hysteresis, 0.0f, 0.0f, 0.0f);
+    grid.params1 = Float4(hysteresis, 0.0f, 0.15f, 0.0f);
     grid.params2 = Float4(0.0f, 0.0f, 0.0f, 0.0f);
 
     Core::Buffer* gridCb = rayTracingState().m_giGridConstants.get();

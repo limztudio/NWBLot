@@ -47,6 +47,26 @@
 #ifndef NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING NWB_DEFERRED_LIGHTING_BINDING_CAUSTIC_IRRADIANCE
 #endif
+// DDGI atlas + grid-CB bindings live in the deferred lighting binding set; point scene/lighting.slangi at those
+// slots before it declares them. The GI irradiance/distance/params slots are reserved in deferred/binding_slots.h.
+#ifndef NWB_SCENE_GI_IRRADIANCE_SET
+#define NWB_SCENE_GI_IRRADIANCE_SET NWB_DEFERRED_LIGHTING_SET
+#endif
+#ifndef NWB_SCENE_GI_IRRADIANCE_BINDING
+#define NWB_SCENE_GI_IRRADIANCE_BINDING NWB_DEFERRED_LIGHTING_BINDING_GI_IRRADIANCE
+#endif
+#ifndef NWB_SCENE_GI_DISTANCE_SET
+#define NWB_SCENE_GI_DISTANCE_SET NWB_DEFERRED_LIGHTING_SET
+#endif
+#ifndef NWB_SCENE_GI_DISTANCE_BINDING
+#define NWB_SCENE_GI_DISTANCE_BINDING NWB_DEFERRED_LIGHTING_BINDING_GI_DISTANCE
+#endif
+#ifndef NWB_SCENE_GI_GRID_CONSTANTS_SET
+#define NWB_SCENE_GI_GRID_CONSTANTS_SET NWB_DEFERRED_LIGHTING_SET
+#endif
+#ifndef NWB_SCENE_GI_GRID_CONSTANTS_BINDING
+#define NWB_SCENE_GI_GRID_CONSTANTS_BINDING NWB_DEFERRED_LIGHTING_BINDING_GI_PARAMS
+#endif
 
 // Brings common/math (nwbSafeNormalize, frame helpers), scene/buffer (g_NwbSceneLights, nwbSceneLightCount,
 // g_NwbSceneCameraPosition, nwbSceneResolveLight) and the engine's default BRDF lobe (nwbSceneShadeLight) +
@@ -99,7 +119,7 @@ NwbBxdfSurface nwbBxdfLoadSurface(float2 uv){
     surface.param1 = half(worldSample.a);
     surface.viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - surface.worldPosition, float3(0.0, 0.0, 1.0));
     surface.isBackground = depth >= 0.999999;
-    surface.indirectIrradiance = nwbBxdfIndirectIrradiance(surface.normal);
+    surface.indirectIrradiance = nwbBxdfIndirectIrradiance(surface.worldPosition, surface.normal);
     return surface;
 }
 

@@ -5,6 +5,7 @@
 #include "renderer_private.h"
 
 #include <impl/assets/graphics/deferred/names.h>
+#include <impl/assets/graphics/gi/binding_slots.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,6 +62,15 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_CAUSTIC_IRRADIANCE, 1));
+
+        // DDGI indirect-irradiance atlas bindings: the irradiance atlas (RGBA16F), the distance atlas (RG16F),
+        // and the grid constant buffer. These are SRVs/CB consumed by nwbBxdfIndirectIrradiance in the lighting
+        // shader. The atlases live on RendererRayTracingState (ping-pong A/B; the front flips each frame); the
+        // binding set (deferred_targets.cpp) binds the CURRENT front. When GI is disabled the atlases are black-
+        // cleared (additive identity), so lighting stays correct.
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GI_IRRADIANCE, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GI_DISTANCE, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_GI_PARAMS, 1));
 
         deferredState().m_lightingBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!deferredState().m_lightingBindingLayout){
@@ -181,10 +191,109 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
     return true;
 }
 
+void RendererDeferredSystem::rebuildDeferredLightingGiBindings(){
+    // The GI atlas front flips each frame (m_giHistoryFrontIsA on RendererRayTracingState); the lighting binding
+    // set must point at the current front so the deferred lighting pass reads the atlas the GI block is NOT writing
+    // this frame. The rebuild is idempotent (a no-op when the front has not flipped since the last build).
+    DeferredFrameTargets& targets = deferredState().m_targets;
+    if(!targets.lightingBindingSet)
+        return;
+
+    // When GI is inactive OR the atlases are not yet created, the set was built with whatever atlas existed at
+    // creation time (possibly null). The shader returns hemiAmbient for null/zero-extent atlases, so this is safe.
+    if(!rayTracingState().m_giIrradianceAtlasA || !rayTracingState().m_giIrradianceAtlasB)
+        return;
+
+    const u32 frontIsA = rayTracingState().m_giHistoryFrontIsA;
+    if(targets.giLightingBindingSetFrontIsA == frontIsA)
+        return; // already pointing at the current front
+
+    targets.lightingBindingSet.reset();
+
+    auto* device = graphics().getDevice();
+    Core::Texture* frontIrr = (frontIsA != 0u) ? rayTracingState().m_giIrradianceAtlasA.get() : rayTracingState().m_giIrradianceAtlasB.get();
+    Core::Texture* frontDist = (frontIsA != 0u) ? rayTracingState().m_giDistanceAtlasA.get() : rayTracingState().m_giDistanceAtlasB.get();
+
+    Core::BindingSetDesc lightingBindingSetDesc(arena());
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR,
+        targets.albedo.get(),
+        targets.albedoFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_NORMAL,
+        targets.normal.get(),
+        targets.normalFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION,
+        targets.worldPosition.get(),
+        targets.worldPositionFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH,
+        targets.depth.get(),
+        targets.depthFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, deferredState().m_sampler.get()));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get()));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY,
+        targets.shadowVisibility.get(),
+        targets.shadowVisibilityFormat,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_CAUSTIC_IRRADIANCE,
+        targets.causticIrradiance.get(),
+        targets.causticIrradianceFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    // GI atlas + grid-CB: bind the CURRENT front.
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_GI_IRRADIANCE,
+        frontIrr,
+        Core::Format::RGBA16_FLOAT,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_GI_DISTANCE,
+        frontDist,
+        Core::Format::RG16_FLOAT,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
+        NWB_DEFERRED_LIGHTING_BINDING_GI_PARAMS,
+        rayTracingState().m_giGridConstants.get()
+    ));
+    targets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, deferredState().m_lightingBindingLayout);
+    if(!targets.lightingBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to rebuild deferred lighting binding set (GI front flip)"));
+        return;
+    }
+    targets.giLightingBindingSetFrontIsA = frontIsA;
+}
+
 bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets){
     NWB_ASSERT(targets.lightingBindingSet);
     NWB_ASSERT(targets.opaqueLightingFramebuffer);
     NWB_ASSERT(deferredState().m_lightingPipeline);
+
+    // Rebuild the lighting binding set if the GI atlas front flipped this frame (idempotent no-op otherwise).
+    rebuildDeferredLightingGiBindings();
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, graphics().getDevice(), commandList);
 

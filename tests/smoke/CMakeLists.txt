@@ -725,6 +725,34 @@ if(Python3_Interpreter_FOUND)
         )
         add_dependencies(nwb_soft_shadow_test_sw_smoke nwb_skinning_culling_benchmark_assets)
 
+        # Dedicated DDGI GI scene (U5): a white open-top box + one saturated-red wall + a directional light aimed
+        # so the red wall is lit but the adjacent floor is in direct shadow. The indirect red bleed on the
+        # shadowed floor is the unfakeable DDGI pass signal. Reuses the benchmark's cooked assets (ground material).
+        nwb_declare_executable(nwb_gi_test_smoke)
+        target_sources(nwb_gi_test_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/gi_test_project.cpp"
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_gi_test_smoke
+            "${_nwb_skinning_culling_runtime_root}"
+        )
+        add_dependencies(nwb_gi_test_smoke nwb_skinning_culling_benchmark_assets)
+
+        # Forced-software-emulation sibling: the SW GI path (probe trace -> blend -> border) runs even on RT
+        # hardware, for the SW-first DDGI verification.
+        nwb_declare_executable(nwb_gi_test_sw_smoke)
+        target_sources(nwb_gi_test_sw_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/gi_test_project.cpp"
+        )
+        target_compile_definitions(nwb_gi_test_sw_smoke PRIVATE
+            NWB_GI_TEST_FORCE_RT_EMULATION=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_gi_test_sw_smoke
+            "${_nwb_skinning_culling_runtime_root}"
+        )
+        add_dependencies(nwb_gi_test_sw_smoke nwb_skinning_culling_benchmark_assets)
+
         unset(_nwb_skinning_culling_asset_stamp)
         unset(_nwb_skinning_culling_model_nwb)
         unset(_nwb_skinning_culling_runtime_root)

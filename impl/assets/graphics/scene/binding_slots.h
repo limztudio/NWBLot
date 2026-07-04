@@ -47,6 +47,18 @@
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_SET 0
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_BINDING 8
 
+// DDGI (Dynamic Diffuse GI) probe atlas + grid-CB bindings the deferred lighting pass consumes. The irradiance
+// atlas (RGBA16F octahedral) + distance atlas (RG16F octahedral) live on RendererRayTracingState; the grid-CB
+// carries the runtime grid params. nwbBxdfIndirectIrradiance evaluates these; outside the probe volume the
+// evaluation falls back to the hemiAmbient ambient term (the additive black identity keeps lighting correct
+// when GI is disabled -- the atlases are black-cleared).
+#define NWB_SCENE_GI_IRRADIANCE_DEFAULT_SET 0
+#define NWB_SCENE_GI_IRRADIANCE_DEFAULT_BINDING 9
+#define NWB_SCENE_GI_DISTANCE_DEFAULT_SET 0
+#define NWB_SCENE_GI_DISTANCE_DEFAULT_BINDING 10
+#define NWB_SCENE_GI_GRID_CONSTANTS_DEFAULT_SET 0
+#define NWB_SCENE_GI_GRID_CONSTANTS_DEFAULT_BINDING 11
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -4,6 +4,8 @@
 
 #include "renderer_private.h"
 
+#include <impl/assets/graphics/gi/binding_slots.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -432,6 +434,28 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         createdTargets.causticIrradianceFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
+    ));
+    // DDGI atlas + grid-CB bindings. The atlases live on RendererRayTracingState (ping-pong A/B). At creation time
+    // they may not yet exist (ensureGiResources is lazy); bind null here and rebuild the set when GI becomes active
+    // (rebuildDeferredLightingGiBindings, called from renderDeferredLighting). Null SRVs are safe because the shader's
+    // probe evaluation returns the hemiAmbient fallback when the surface is outside the (zero-extent) probe volume.
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_GI_IRRADIANCE,
+        rayTracingState().m_giIrradianceAtlasA.get(),
+        Core::Format::RGBA16_FLOAT,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_GI_DISTANCE,
+        rayTracingState().m_giDistanceAtlasA.get(),
+        Core::Format::RG16_FLOAT,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
+        NWB_DEFERRED_LIGHTING_BINDING_GI_PARAMS,
+        rayTracingState().m_giGridConstants.get()
     ));
     createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, deferredState().m_lightingBindingLayout);
     if(!createdTargets.lightingBindingSet){

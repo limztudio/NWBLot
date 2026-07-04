@@ -219,6 +219,10 @@ struct DeferredFrameTargets{
     Core::FramebufferHandle opaqueLightingFramebuffer;
     Core::BindingSetHandle lightingBindingSet;
     Core::BindingSetHandle compositeBindingSet;
+    // The GI atlas front selector the lighting binding set was built against. The GI atlas front flips each frame
+    // (m_giHistoryFrontIsA on RendererRayTracingState); when this tracked value diverges the lighting binding set
+    // is rebuilt to point at the new front atlas. 0xFFFFFFFF = never built (forces a rebuild on the first frame).
+    u32 giLightingBindingSetFrontIsA = 0xFFFFFFFFu;
     AvboitFrameTargets avboit;
 
     [[nodiscard]] bool csgIntervalTargetsValid()const noexcept{

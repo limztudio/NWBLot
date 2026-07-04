@@ -37,6 +37,7 @@
 // type mismatch (VUID-VkGraphicsPipelineCreateInfo-layout-07990). This tells lighting.slangi to omit the declarations
 // and return the lit/black constants directly (behaviour-identical to the sentinel, minus the unused bindings).
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
+#define NWB_SCENE_GI_SAMPLING_DISABLED
 
 // The AVBOIT draw push constant (g_NwbAvboitDraw, declared by avboit/common.slangi) carries the per-draw mesh
 // dispatch (nwbMeshDispatch[]) -- the same layout the rasterizer reads from its own per-draw push constant. The
@@ -159,7 +160,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     bxdfSurface.param0 = surface.param0;
     bxdfSurface.param1 = surface.param1;
     bxdfSurface.isBackground = false;
-    bxdfSurface.indirectIrradiance = nwbBxdfIndirectIrradiance(bxdfSurface.normal);
+    bxdfSurface.indirectIrradiance = nwbBxdfIndirectIrradiance(bxdfSurface.worldPosition, bxdfSurface.normal);
 
     // Shade through the material's own BXDF, by its shading-model id. Pass the negative-pixel sentinel: a
     // transparent fragment is not in the opaque G-buffer the screen-space shadow visibility was traced from, so

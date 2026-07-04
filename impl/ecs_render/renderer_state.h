@@ -15,6 +15,7 @@
 #include <impl/assets/graphics/shadow/sw_binding_slots.h>
 #include <impl/assets/graphics/caustic/sw_binding_slots.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
+#include <impl/assets/graphics/gi/binding_slots.h>
 
 #include <global/generic.h>
 
@@ -675,6 +676,59 @@ private:
     const Core::Texture* m_causticAccumulatorDecayAccumulator = nullptr;
     bool m_causticAccumulatorDecayPipelineFailed = false;
     bool m_causticAccumulatorInitialized = false;
+    // ---- DDGI (Dynamic Diffuse GI) state ----
+    // Atlases/ray-data/probe-data/grid-CB live HERE (beside the caustic block), NOT on DeferredFrameTargets, which is
+    // torn down on every window resize and would silently reset probe convergence. Lifetime = grid-param change or
+    // device reset only. See .helper/ddgi_plan.md §2 (Ownership + wiring). U1 scaffold: handles declared, plumbing
+    // inert until the trace/blend/border kernels + ensureGiResources land.
+    Core::BindingLayoutHandle m_giBindingLayout;
+    Core::ShaderHandle m_giProbeTraceShader;
+    Core::ComputePipelineHandle m_giProbeTracePipeline;
+    Core::ShaderHandle m_giProbeBlendIrradianceShader;
+    Core::ComputePipelineHandle m_giProbeBlendIrradiancePipeline;
+    Core::ShaderHandle m_giProbeBlendDistanceShader;
+    Core::ComputePipelineHandle m_giProbeBlendDistancePipeline;
+    Core::ShaderHandle m_giProbeBorderShader;
+    Core::ComputePipelineHandle m_giProbeBorderPipeline;
+    Core::BindingSetHandle m_giTraceBindingSet;
+    Core::BindingSetHandle m_giBlendIrradianceBindingSet;
+    Core::BindingSetHandle m_giBlendDistanceBindingSet;
+    Core::BindingSetHandle m_giBorderBindingSet;
+    // Ping-pong octahedral atlases (irradiance RGBA16F v1, distance RG16F). m_giHistoryFrontIsA selects the INCOMING
+    // history this frame; flipped at the end of the GI block. Black-cleared atlases are the additive identity so
+    // lighting stays branchless when GI is off.
+    Core::TextureHandle m_giIrradianceAtlasA;
+    Core::TextureHandle m_giIrradianceAtlasB;
+    Core::TextureHandle m_giDistanceAtlasA;
+    Core::TextureHandle m_giDistanceAtlasB;
+    // Ray-data texture (RGBA16F: rgb = irradiance, a = hitT). Width = probe count, height = NWB_GI_PROBE_FIXED_RAY_COUNT.
+    Core::TextureHandle m_giRayData;
+    // Probe-data texture (v2 relocation/classification -- allocated-but-INERT in v1 per D6).
+    Core::TextureHandle m_giProbeData;
+    // Grid constant buffer (~10 Float4: origin/spacing/dims/rays/fraction/frame/hysteresis/front-flag/bias).
+    Core::BufferHandle m_giGridConstants;
+    // Per-instance flat albedo (CPU-built StructuredBuffer; NWB_GI_DEFAULT_ALBEDO fallback).
+    Core::BufferHandle m_giHitAlbedo;
+    usize m_giHitAlbedoCapacity = 0u;
+    // Grid dimensions (cached from the grid-CB build so dispatch sizing stays CPU-side).
+    u32 m_giGridSizeX = NWB_GI_DEFAULT_GRID_SIZE_X;
+    u32 m_giGridSizeY = NWB_GI_DEFAULT_GRID_SIZE_Y;
+    u32 m_giGridSizeZ = NWB_GI_DEFAULT_GRID_SIZE_Z;
+    u32 m_giRaysPerProbe = NWB_GI_DEFAULT_RAYS_PER_PROBE;
+    // Ping-pong selector + round-robin update cursor + frame counter (seeds the per-frame R2 rotation).
+    u32 m_giHistoryFrontIsA = 1u;
+    u32 m_giUpdateCursor = 0u;
+    u32 m_giFrameIndex = 0u;
+    // m_giSeeded: false on frame 0 / after atlas (re)creation -> the blend's hysteresis is 0 (pure current sample);
+    // set true after the first blend. Mirrors the caustic accumulator seed precedent.
+    bool m_giSeeded = false;
+    // Feature gate + per-pipeline-failed flags (mirrors the caustic / shadow precedent).
+    bool m_giEnabled = false;
+    bool m_giProbeTracePipelineFailed = false;
+    bool m_giProbeBlendIrradiancePipelineFailed = false;
+    bool m_giProbeBlendDistancePipelineFailed = false;
+    bool m_giProbeBorderPipelineFailed = false;
+    bool m_giDispatchLogged = false;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;
     bool m_bvhSortPipelineFailed = false;

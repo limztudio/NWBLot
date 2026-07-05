@@ -21,6 +21,7 @@
 #include "surfel_record.slangi"
 #include "surfel_constants.slangi"
 #include "surfel_hash.slangi"
+#include "surfel_sh.slangi"
 
 
 [[vk::binding(NWB_SCENE_GI_SURFEL_POOL_BINDING, NWB_SCENE_GI_SURFEL_POOL_SET)]]
@@ -59,7 +60,10 @@ bool nwbSurfelGather(const float3 worldPosition, const float3 normal, out float3
                 const float distanceWeight = saturate(1.0 - dist / max(surfel.radius, 1e-4));
                 const float confidence = saturate(float(surfel.sampleCount) / 8.0);
                 const float weight = normalWeight * distanceWeight * confidence;
-                irradianceSum += surfel.meanIrradiance * weight;
+                // Reconstruct the surfel's directional irradiance at the QUERY normal (U3): a surface facing the red
+                // wall reads redder than one facing away. Normal/distance similarity still gates leakage (the surfel's
+                // SH is only sampled over its own hemisphere, so a far-off query normal is rejected by normalWeight).
+                irradianceSum += nwbSurfelShReconstruct(surfel.shR, surfel.shG, surfel.shB, normal) * weight;
                 totalWeight += weight;
             }
             id = surfel.nextInCell;

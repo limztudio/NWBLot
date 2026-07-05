@@ -18,6 +18,7 @@
 #include "surfel_record.slangi"
 #include "surfel_constants.slangi"
 #include "surfel_binding_slots.h"
+#include "surfel_sh.slangi"          // nwbSurfelShBasis / nwbSurfelShProjectionScale (U3 directional irradiance)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,8 +31,12 @@ ConstantBuffer<NwbSurfelConstants> g_NwbSurfelConstants;
 RWStructuredBuffer<NwbSurfel> g_NwbSurfelPool;
 
 
-groupshared float3 s_surfelRadiance[NWB_SURFEL_RAYS_PER_SURFEL];
-groupshared float s_surfelWeight[NWB_SURFEL_RAYS_PER_SURFEL];
+// Per-ray 2-band SH projection of the incoming radiance (one float4 of coefficients per colour). Reduced by thread 0
+// into the surfel's running-mean SH. No cosine weight here -- the SH stores RAW radiance; the gather's reconstruction
+// applies the cosine-lobe convolution (surfel_sh.slangi).
+groupshared float4 s_surfelShR[NWB_SURFEL_RAYS_PER_SURFEL];
+groupshared float4 s_surfelShG[NWB_SURFEL_RAYS_PER_SURFEL];
+groupshared float4 s_surfelShB[NWB_SURFEL_RAYS_PER_SURFEL];
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,8 +54,9 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const uint cursor = frameIndex % updateDivisor;
     const uint surfelIndex = cursor + groupID.x * updateDivisor;
 
-    s_surfelRadiance[rayIndex] = float3(0.0, 0.0, 0.0);
-    s_surfelWeight[rayIndex] = 0.0;
+    s_surfelShR[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
+    s_surfelShG[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
+    s_surfelShB[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
 
     bool active = surfelIndex < poolCapacity;
     NwbSurfel surfel;
@@ -70,9 +76,8 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         const float3 tangent = normalize(cross(up, n));
         const float3 bitangent = cross(n, tangent);
         float3 dirLocal = nwbGiFibonacciDirection(rayIndex, NWB_SURFEL_RAYS_PER_SURFEL, rotation);
-        dirLocal.z = abs(dirLocal.z);
+        dirLocal.z = abs(dirLocal.z);   // fold to the upper hemisphere -> every ray leaves the surface (pdf 1/(2 pi))
         const float3 rayDir = normalize(dirLocal.x * tangent + dirLocal.y * bitangent + dirLocal.z * n);
-        const float weight = max(dot(n, rayDir), 0.0);
 
         const float3 origin = surfel.position + n * normalBias;
         const NwbGiProbeHit hit = nwbGiSwTraceClosest(origin, rayDir, 0.001, 1.0e4);
@@ -80,34 +85,45 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         if(hit.hit)
             radiance = nwbGiSwShadeHit(hit, rayDir);   // miss = sky = black (U0; multi-bounce lands in U4)
 
-        s_surfelRadiance[rayIndex] = radiance * weight;
-        s_surfelWeight[rayIndex] = weight;
+        // Project RAW radiance into 2-band SH (no cosine weight -- the reconstruction convolves the cosine lobe). Each
+        // ray contributes radiance * SH-basis(rayDir); thread 0 sums + scales by 2*pi/N (the hemisphere pdf).
+        const float4 basis = nwbSurfelShBasis(rayDir);
+        s_surfelShR[rayIndex] = radiance.r * basis;
+        s_surfelShG[rayIndex] = radiance.g * basis;
+        s_surfelShB[rayIndex] = radiance.b * basis;
     }
 
     GroupMemoryBarrierWithGroupSync();
 
-    // Thread 0 reduces the 64 cosine-weighted samples -> hemispherical irradiance -> running-mean into the surfel.
+    // Thread 0 reduces the 64 per-ray SH projections -> this frame's directional-irradiance SH estimate -> running-mean
+    // into the surfel's SH.
     if(rayIndex == 0u && active){
-        float3 weightedRadianceSum = float3(0.0, 0.0, 0.0);
-        float weightSum = 0.0;
+        float4 sumR = float4(0.0, 0.0, 0.0, 0.0);
+        float4 sumG = float4(0.0, 0.0, 0.0, 0.0);
+        float4 sumB = float4(0.0, 0.0, 0.0, 0.0);
         [unroll]
         for(uint i = 0u; i < NWB_SURFEL_RAYS_PER_SURFEL; ++i){
-            weightedRadianceSum += s_surfelRadiance[i];
-            weightSum += s_surfelWeight[i];
+            sumR += s_surfelShR[i];
+            sumG += s_surfelShG[i];
+            sumB += s_surfelShB[i];
         }
-        const float3 irradiance = weightSum > 1e-4 ? (weightedRadianceSum / weightSum) : float3(0.0, 0.0, 0.0);
+        const float projectionScale = nwbSurfelShProjectionScale(NWB_SURFEL_RAYS_PER_SURFEL);   // 2*pi / N
+        const float4 frameShR = sumR * projectionScale;
+        const float4 frameShG = sumG * projectionScale;
+        const float4 frameShB = sumB * projectionScale;
 
-        // Bounded running mean. Each frame rotates the ray set (nwbGiFrameRotation), so successive estimates are
-        // DECORRELATED Monte-Carlo samples of the same hemispherical integral. Blend as a true incremental average --
-        // weight 1/(n+1) on the new sample -- so the variance falls like 1/n toward zero (a fixed-alpha EMA would leave
-        // a permanent ~sqrt(alpha) residual = the corner flicker). n is capped at coverageRadiusBiasHyst.w so past the
-        // cap it becomes a bounded EMA (weight 1/(cap+1)), keeping a finite memory for future dynamic lighting.
-        // sampleCount here is the count BEFORE this sample (incremented below), so n==0 on the first trace -> weight 1
-        // (seed directly from the first estimate, no dark bias -- this subsumes the old sampleCount==0 special case).
+        // Bounded running mean over the SH coefficients (linear -> averaging coefficients averages the field). Each frame
+        // rotates the ray set (nwbGiFrameRotation), so successive estimates are DECORRELATED Monte-Carlo samples of the
+        // same projection integral. Blend as a true incremental average -- weight 1/(n+1) on the new sample -- so the
+        // variance falls like 1/n toward zero (a fixed-alpha EMA would leave a permanent ~sqrt(alpha) residual = flicker).
+        // n is capped at coverageRadiusBiasHyst.w so past the cap it becomes a bounded EMA. sampleCount here is the count
+        // BEFORE this sample (incremented below), so n==0 on the first trace -> weight 1 (seed directly, no dark bias).
         const uint accumCap = max(uint(g_NwbSurfelConstants.coverageRadiusBiasHyst.w), 1u);
         const uint n = min(surfel.sampleCount, accumCap);
         const float historyWeight = float(n) / float(n + 1u);
-        surfel.meanIrradiance = lerp(irradiance, surfel.meanIrradiance, historyWeight);
+        surfel.shR = lerp(frameShR, surfel.shR, historyWeight);
+        surfel.shG = lerp(frameShG, surfel.shG, historyWeight);
+        surfel.shB = lerp(frameShB, surfel.shB, historyWeight);
         surfel.sampleCount = min(surfel.sampleCount + 1u, 0xFFFFu);
         g_NwbSurfelPool[surfelIndex] = surfel;
     }

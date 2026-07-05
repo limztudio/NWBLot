@@ -1,0 +1,64 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_GI_SURFEL_SH_SLANGI
+#define NWB_GRAPHICS_GI_SURFEL_SH_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// 2-band real spherical harmonics for surfel DIRECTIONAL irradiance (U3). Each surfel stores its incoming radiance
+// projected into 2-band SH (4 coefficients per colour: Y_00, Y_1-1, Y_10, Y_11), so the gather can reconstruct the
+// cosine-weighted irradiance for ANY query normal -- a surface bump facing the red wall reads redder than one facing
+// away -- instead of the flat mean U0 stored. The trace projects RAW radiance (no cosine weight) with a 2*pi/N
+// Monte-Carlo weight (the hemisphere is sampled at pdf 1/(2*pi)); the reconstruction convolves with the clamped-cosine
+// lobe (Ramamoorthi 2001: A_0 = pi, A_1 = 2*pi/3) and divides by pi, so a UNIFORM radiance field L reconstructs to
+// exactly L at the surfel normal -- matching U0's cosine-weighted mean radiance, i.e. no-regression on flat surfaces
+// where the query normal equals the surfel normal. 2-band SH can dip slightly negative off-axis, so the reconstruction
+// is clamped >= 0. Shared by the trace (project), the gather (reconstruct), and the spawn spatial seed (reconstruct is
+// coefficient-only, no buffer binding, so it works over both the SRV gather pool and the UAV spawn pool).
+
+
+// Real 2-band SH basis at a unit direction: (Y_00, Y_1-1, Y_10, Y_11).
+float4 nwbSurfelShBasis(const float3 dir){
+    return float4(
+        0.2820947918,          // Y_00  = 1 / (2 sqrt(pi))
+        0.4886025119 * dir.y,  // Y_1-1 = sqrt(3 / (4 pi)) * y
+        0.4886025119 * dir.z,  // Y_10  = sqrt(3 / (4 pi)) * z
+        0.4886025119 * dir.x   // Y_11  = sqrt(3 / (4 pi)) * x
+    );
+}
+
+// Per-ray projection weight: the upper hemisphere is sampled with pdf 1/(2*pi), so the summed radiance*basis products
+// over N rays are scaled by 2*pi/N to estimate the SH projection integral.
+float nwbSurfelShProjectionScale(const uint rayCount){
+    return 6.2831853072 / float(max(rayCount, 1u));   // 2 * pi / N
+}
+
+// Reconstruct one colour channel's cosine-weighted mean radiance for a query normal from its 4 SH coefficients:
+// (1/pi) * [A_0 c_00 Y_00 + A_1 (c_1-1 Y_1-1 + c_10 Y_10 + c_11 Y_11)] = c_00 Y_00 + (2/3)(c_1m Y_1m), clamped >= 0.
+float nwbSurfelShReconstructChannel(const float4 sh, const float4 basis){
+    const float value = sh.x * basis.x + (2.0 / 3.0) * (sh.y * basis.y + sh.z * basis.z + sh.w * basis.w);
+    return max(value, 0.0);
+}
+
+// Reconstruct the RGB cosine-weighted mean radiance for a query normal.
+float3 nwbSurfelShReconstruct(const float4 shR, const float4 shG, const float4 shB, const float3 normal){
+    const float4 basis = nwbSurfelShBasis(normal);
+    return float3(
+        nwbSurfelShReconstructChannel(shR, basis),
+        nwbSurfelShReconstructChannel(shG, basis),
+        nwbSurfelShReconstructChannel(shB, basis)
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

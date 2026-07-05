@@ -1,5 +1,32 @@
 # Surfel GI Plan (pivot from the world-grid DDGI)
 
+## U3 — 2-BAND SH DIRECTIONAL IRRADIANCE COMPLETE + VERIFIED (2026-07-05, uncommitted on shadow_render)
+DECISION: 2-band real SH, NOT the octahedral atlas the U3 bullet below proposes -- octahedral.slangi was deleted with
+the grid, and for low-frequency DIFFUSE irradiance 2-band SH is standard, sufficient, and self-contained (no atlas
+texture, no border/seam pass). (User confirmed 2-band SH.) The surfel now stores its incoming radiance projected into
+2-band SH (4 coeffs per colour: Y_00, Y_1-1, Y_10, Y_11), so the gather reconstructs the cosine-weighted irradiance for
+ANY query normal instead of the flat mean U0 stored. NEW surfel_sh.slangi: nwbSurfelShBasis(dir) = (0.2820948,
+0.4886025*y, 0.4886025*z, 0.4886025*x); the TRACE projects RAW radiance (no cosine weight) -> sum radiance*basis over
+the 64 rays, scaled by 2*pi/N (hemisphere pdf); the reconstruction is c_00 Y_00(n) + (2/3)(c_1m Y_1m(n)), clamped >= 0
+(the clamped-cosine convolution A_0=pi/A_1=2pi/3 divided by pi -> uniform radiance L reconstructs to exactly L at the
+surfel normal = no-regression on flat surfaces; the (2/3) L1 term supplies HALF the reconstruction at the surfel normal,
+so a working directional field is REQUIRED to keep the bounce from halving). RECORD grew 64->96 bytes (6 float4 lanes):
+lane2/3/4 = shR/shG/shB, meanIrradiance dropped, metadata (sampleCount|lastSeenFrame|alive|pad0) moved to lane5. The
+running-mean accumulator + the U2 spatial seed now operate on the SH coefficients (linear -> averaging coeffs averages
+the field; the seed is still gated on sampleCount>=2 = race-free). Files: surfel_sh.slangi(NEW), surfel_record.slangi
+(6-lane layout), surfel_trace_cs.slang (groupshared shR/G/B + projection + SH running-mean), surfel_gather.slangi
+(nwbSurfelShReconstruct at the query normal), surfel_spawn_cs.slang (seed over SH), surfel_binding_slots.h
+(NWB_SURFEL_RECORD_SIZE 96). No C++ struct mirror (the pool is a raw byte buffer sized off the macro), so the only C++
+change is the record-size constant.
+VERIFIED: (a) no-regression -- flicker 0/6 (== U0), bounce preserved (blue wall 71,76,127 / red 113,74,84 vs U0
+70,75,124 / 111,73,84; the small shift is 2-band truncation) -- and this preservation itself PROVES the L1 directional
+terms work (L0 alone would halve the irradiance); (b) a Python replica of the exact shader SH formulas -- uniform L=1
+reconstructs to 1.04 at the surfel normal (MC noise, averages out), and a +x-directional source reconstructs 0.41 toward
++x vs 0.11 away (genuinely directional); (c) validation/warning-clean, all 5 surfel pipelines created. NOTE: the flat
+gi_test scene cannot VISUALLY show the directional benefit (all query normals equal the surfel normals; a tilted ramp
+would read redder just by tracing more red, not by the reconstruction) -- the directional correctness is proven by the
+Python replica + the L1-required no-regression instead. NEXT: U4 surfel->surfel infinite bounce.
+
 ## U2 — ROUND-ROBIN TRACE BUDGET + PER-SURFEL SEEDING COMPLETE + VERIFIED (2026-07-05, uncommitted on shadow_render)
 The round-robin trace budget was ALREADY implemented in U0: the trace dispatches DivideUp(poolCapacity, updateDivisor)
 workgroups (updateDivisor = NWB_SURFEL_UPDATE_DIVISOR=4 in steady state, 1 on the bootstrap frame), and the trace shader

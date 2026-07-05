@@ -67,9 +67,9 @@
 #define NWB_SURFEL_COUNTER_FREE_TOP 1u
 #define NWB_SURFEL_COUNTER_SIZE 2u
 
-// Byte size of one NwbSurfel record (surfel_record.slangi: 4 x float4 = 64B). The C++ pool buffer sizes its stride off
-// this so the RWStructuredBuffer<NwbSurfel> stride matches the shader's std430 record.
-#define NWB_SURFEL_RECORD_SIZE 64u
+// Byte size of one NwbSurfel record (surfel_record.slangi: 6 x float4 = 96B -- U3 grew it with the 3 SH colour lanes).
+// The C++ pool buffer sizes its stride off this so the RWStructuredBuffer<NwbSurfel> stride matches the std430 record.
+#define NWB_SURFEL_RECORD_SIZE 96u
 
 // Empty-list / end-of-list sentinel for the spatial-hash cell heads + the per-surfel nextInCell link (the C++ side
 // clears the cell-head buffer to this; the shaders compare against it). Shared here so both agree on the value.

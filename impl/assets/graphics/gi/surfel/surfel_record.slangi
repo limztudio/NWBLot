@@ -12,25 +12,30 @@
 // One surface element (surfel). Surfels are allocated ON visible surfaces (screen-space spawn) instead of on a
 // world-space probe grid, so the sample count tracks visible surface area rather than the grid's cubic volume. The
 // record is single-buffered: exactly one trace workgroup owns a surfel and read-old/writes-new its own irradiance in
-// place (no cross-workgroup contention, no float image atomics, no ping-pong). U0 stores a flat RGB mean irradiance;
-// U3 replaces meanIrradiance with 2-band spherical harmonics (the record grows accordingly). 64 bytes / std430 = four
-// float4 lanes; keep it 16-byte aligned so the RWStructuredBuffer<NwbSurfel> stride matches the C++ mirror.
+// place (no cross-workgroup contention, no float image atomics, no ping-pong). U3 stores DIRECTIONAL irradiance as
+// 2-band spherical harmonics (4 coefficients per colour: Y_00, Y_1-1, Y_10, Y_11), replacing U0's flat RGB mean: the
+// trace projects the incoming radiance into SH, the gather reconstructs the cosine-weighted irradiance for the query
+// normal (surfel_sh.slangi). 96 bytes / std430 = six float4 lanes; keep it 16-byte aligned so the
+// RWStructuredBuffer<NwbSurfel> stride matches NWB_SURFEL_RECORD_SIZE on the C++ side.
 //
-//   lane 0 : position.xyz         | radius
-//   lane 1 : normal.xyz           | nextInCell     (hash-grid linked-list next; 0xFFFFFFFF = end)
-//   lane 2 : meanIrradiance.rgb   | sampleCount    (traces integrated; drives the running-mean weight n/(n+1), capped)
-//   lane 3 : lastSeenFrame | alive | pad0 | pad1
+//   lane 0 : position.xyz   | radius
+//   lane 1 : normal.xyz     | nextInCell     (hash-grid linked-list next; 0xFFFFFFFF = end)
+//   lane 2 : shR.xyzw       (2-band SH of the incoming radiance, red channel)
+//   lane 3 : shG.xyzw       (green channel)
+//   lane 4 : shB.xyzw       (blue channel)
+//   lane 5 : sampleCount | lastSeenFrame | alive | pad0   (sampleCount drives the running-mean weight n/(n+1), capped)
 struct NwbSurfel{
     float3 position;
     float radius;
     float3 normal;
     uint nextInCell;
-    float3 meanIrradiance;
+    float4 shR;
+    float4 shG;
+    float4 shB;
     uint sampleCount;
     uint lastSeenFrame;
     uint alive;
     uint pad0;
-    uint pad1;
 };
 
 

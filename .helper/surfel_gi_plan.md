@@ -1,5 +1,54 @@
 # Surfel GI Plan (pivot from the world-grid DDGI)
 
+## U4 — SURFEL->SURFEL INFINITE BOUNCE COMPLETE + VERIFIED (2026-07-05, uncommitted on shadow_render)
+Jacobi radiosity: each trace ray's radiance now = albedo * (E_direct + E_indirect) instead of albedo * E_direct only.
+E_indirect at the ray HIT point is gathered from a SNAPSHOT of the PREVIOUS frame's converged surfel field, so the
+running mean integrates a further bounce every frame -> converges to the infinite-bounce solution (stable at albedo<1;
+gi_test walls = 0.80). DESIGN was adversarially verified by 4 parallel audits (workflow w53v8qcut); all 4 concurred on
+fix #1.
+- **THREE design fixes the audits caught:** (1) FACE-FORWARDED normal -- the bounce is queried with
+  `facingNormal = dot(hit.normal,rayDir)<0 ? hit.normal : -hit.normal` (matches gi_sw_trace.slangi:334); raw hit.normal
+  would reject every neighbour + sample the wrong hemisphere on back-face/interior-wall hits -> silent ~0 bounce.
+  (2) ENERGY CLAMP is MANDATORY, not a safety net: nwbSurfelShReconstruct clamps each channel >=0, rectifying the 2-band
+  negative lobes and injecting a little energy every bounce -> in an enclosed high-albedo corner the effective per-bounce
+  gain can creep toward 1.0. `NWB_SURFEL_BOUNCE_CLAMP 4.0f` (~2x the scene's brightest light, intensity 2.0) bounds it.
+  (3) Snapshot BOTH pool AND cellHead (not pool only) -- a slot recycled this frame must not be reachable from a stale
+  head; copying both keeps the walk mutually consistent. Rejected a per-surfel bounce optimization (semantically wrong --
+  the bounce is at the distant HIT point, per-ray, not at the surfel).
+- **Files -- shaders:** surfel_binding_slots.h (NWB_SURFEL_BINDING_SNAPSHOT_POOL 19 / _SNAPSHOT_CELL_HEAD 20 SRVs in the
+  trace set; NWB_SURFEL_BOUNCE_CLAMP 4.0f). surfel_trace_cs.slang (+#include surfel_hash.slangi; declare the 2 snapshot
+  SRVs; nwbSurfelBounceGather(worldPos, queryNormal) = a copy of the resolve gather body reading the snapshot pair +
+  g_NwbSurfelConstants, 3x3x3 walk, gate alive&&sampleCount>0, weight = ndot*distFalloff*saturate(sc/8), accumulate
+  nwbSurfelShReconstruct*weight, return sum/totalWeight; main() adds `radiance += hit.albedo * min(bounce, CLAMP)`).
+- **Files -- C++ (raytracing_system.cpp):** ensureSurfelResources creates m_surfelPoolSnapshotBuffer (SRV-only, size ==
+  live pool) + m_surfelCellHeadSnapshotBuffer (SRV-only, size == live cellHead); ensureSurfelTracePipeline layout +
+  ensureSurfelTraceBindingSet add the two snapshot SRVs (slots 19/20); renderSurfelGi copies live pool+cellHead ->
+  snapshots at the TOP (CopySource->CopyDest->ShaderResource barriers) BEFORE any pass mutates them, so the snapshot ==
+  the prev-frame converged field. renderer_state.h holds the 2 snapshot handles. Snapshot buffers are persistent so the
+  trace set-reuse guard needs no new key.
+- **BUG FIXED (pre-existing from U0, surfaced by this first --gpudbg run):** m_surfelConstants was created WITHOUT
+  `.setIsConstantBuffer(true)`, so the 80-byte CB lacked VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT + 16-byte alignment yet was
+  bound as a ConstantBuffer in all 5 surfel passes -> VUID-VkWriteDescriptorSet-descriptorType-00330 / -type-11452 /
+  -11461. The driver read it anyway (memory valid, just wrong usage bit), so U0-U3 rendered correctly and the warning
+  stayed latent until validation ran. Fix = add setIsConstantBuffer(true). LESSON: a bound ConstantBuffer MUST set that
+  flag; a structured/raw buffer bound as UNIFORM is silently-correct on the GPU but validation-dirty. Always verify the
+  surfel path with --gpudbg (prior surfel runs used logserver WITHOUT --gpudbg, so Vulkan validation was never captured).
+- **VERIFIED (all four, fixed binary):** (a) ENERGY-STABILITY = dead-flat 40s / 200-frame plateau, tail |delta|=0.002
+  (floor) .. 0.018 (wall), ratio 1.00x -- a double-count (effective albedo>1) would diverge/creep upward over 40s; it
+  does not -> NO runaway, NO double-count. (b) BOUNCE CONTRIBUTES (clamp 0 vs 4 A/B on converged means): 12.7% of pixels
+  brighter, only 1.4% darker (dithering), the delta is STRUCTURAL on the box INTERIOR (walls+floor, zero on the black
+  background), affected-pixel mean channel delta R+1.17/G+0.11/B+1.23 = red+blue wall colour bleeding via the 2nd bounce;
+  min-clamp=0 fully disables the bounce (min(bounce>=0, 0)=0) so the A/B also validates the clamp. (c) FLICKER regression
+  = std max 0.50 / mean 0.017 (== U0 FLICKER-FIXED baseline) -- the surfel->surfel feedback did NOT reintroduce flicker.
+  (d) VALIDATION-CLEAN = 0 warnings / 0 errors / 0 VUID / 0 hazards under --gpudbg after the CB fix; render unchanged.
+- **Magnitude is SUBTLE by design:** it is a genuine higher-order bounce on top of an already-bright direct+first-bounce
+  image, tonemap-compressed at the bright end. The surfel field may also be ~pi off absolute (nwbSurfelShReconstruct is
+  mean-radiance scale, nwbGiSwShadeHit is exitance scale) -- a CALIBRATION follow-up (flagged, not a stability bug; the
+  field is a self-consistent converging fixed point). Convergence is ASYMPTOTIC + STATIC-SCENE ONLY (~65-frame time
+  constant from the accum cap; dynamic lights lag; single-frame renders show first-bounce only -- frame-0 snapshot empty).
+- **Tools:** scratchpad/energy_probe.py (per-frame corner-patch brightness time series from launch), u4_diff.py
+  (amplified signed ON-vs-OFF converged-mean diff heatmap). NEXT: U5 HW RayQuery twin -> U6 perf.
+
 ## U3 — 2-BAND SH DIRECTIONAL IRRADIANCE COMPLETE + VERIFIED (2026-07-05, uncommitted on shadow_render)
 DECISION: 2-band real SH, NOT the octahedral atlas the U3 bullet below proposes -- octahedral.slangi was deleted with
 the grid, and for low-frequency DIFFUSE irradiance 2-band SH is standard, sufficient, and self-contained (no atlas

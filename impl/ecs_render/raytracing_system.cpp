@@ -6343,10 +6343,12 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(8, NWB_SW_SHADOW_MAX_MESHES)); // mesh attributes
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(9, 1)); // material typed
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(10, 1)); // mesh instances
-        // Surfel bindings (11 = constants CB, 12 = pool UAV). No push constants -- the trace derives the round-robin
-        // phase from frameIndex % divisor in the CB.
+        // Surfel bindings (11 = constants CB, 12 = pool UAV, 19/20 = prev-frame snapshot pool/cell-head SRVs the U4
+        // bounce gather reads). No push constants -- the trace derives the round-robin phase from frameIndex % divisor.
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // surfel pool
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, 1)); // U4 bounce: prev-frame pool
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, 1)); // U4 bounce: prev-frame cell-head
         rayTracingState().m_surfelTraceBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelTraceBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace binding layout"));
@@ -6472,6 +6474,45 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         rayTracingState().m_surfelResourcesNeedClear = true;
     }
 
+    // Snapshot pool (U4 infinite bounce): a copy of the previous frame's converged pool the trace's bounce gather reads
+    // as an SRV (never the live pool it is writing), so surfel->surfel feedback reads a stable frame-start field. SRV-only
+    // (canHaveUAVs false -- only copyBuffer writes it), same size/stride as the live pool. No clear: fully overwritten by
+    // the copyBuffer at the top of renderSurfelGi before any read (frame 0's snapshot is a copy of the freshly-cleared
+    // pool, so the bounce is 0 until the first real frame lands -- the documented "single frame shows first bounce only").
+    if(!rayTracingState().m_surfelPoolSnapshotBuffer){
+        Core::BufferDesc desc;
+        desc
+            .setByteSize(static_cast<u64>(NWB_SURFEL_RECORD_SIZE) * poolCapacity)
+            .setStructStride(NWB_SURFEL_RECORD_SIZE)
+            .setCanHaveUAVs(false)
+            .setDebugName(Name("surfel_pool_snapshot"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        rayTracingState().m_surfelPoolSnapshotBuffer = graphics().createBuffer(desc);
+        if(!rayTracingState().m_surfelPoolSnapshotBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel pool snapshot buffer"));
+            return false;
+        }
+    }
+
+    // Snapshot cell-head (U4): the matching prev-frame cell-head, so the bounce gather's 3x3x3 walk is mutually
+    // consistent with its snapshot pool (both captured at the same frame-start). SRV-only; overwritten by copyBuffer.
+    if(!rayTracingState().m_surfelCellHeadSnapshotBuffer){
+        Core::BufferDesc desc;
+        desc
+            .setByteSize(static_cast<u64>(sizeof(u32)) * cellCount)
+            .setStructStride(sizeof(u32))
+            .setCanHaveUAVs(false)
+            .setDebugName(Name("surfel_cell_head_snapshot"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        rayTracingState().m_surfelCellHeadSnapshotBuffer = graphics().createBuffer(desc);
+        if(!rayTracingState().m_surfelCellHeadSnapshotBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel cell-head snapshot buffer"));
+            return false;
+        }
+    }
+
     // CPU-readable copy of the counter for the periodic live-count diagnostic (U1). Snapshotted on a log-interval frame,
     // mapped a few frames later (mirrors the SW-shadow edge-stats readback).
     if(!rayTracingState().m_surfelCounterReadback){
@@ -6489,11 +6530,15 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         }
     }
 
-    // Params CB (5 x Float4). Uploaded each rendered frame in prepareSurfelResources.
+    // Params CB (5 x Float4). Uploaded each rendered frame in prepareSurfelResources. setIsConstantBuffer marks it a
+    // uniform buffer (adds VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT + 16-byte-aligns the suballocation); it is bound as a
+    // ConstantBuffer in every surfel pass, so without the flag the validation layer flags a UNIFORM_BUFFER type/usage
+    // + alignment mismatch (VUID-VkWriteDescriptorSet-descriptorType-00330 / -type-11452 / -11461).
     if(!rayTracingState().m_surfelConstants){
         Core::BufferDesc cbDesc;
         cbDesc
             .setByteSize(sizeof(NwbSurfelConstantsGpu))
+            .setIsConstantBuffer(true)
             .setDebugName(Name("surfel_constants"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -6627,6 +6672,8 @@ bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
     NWB_ASSERT(rayTracingState().m_surfelTraceBindingLayout);
     NWB_ASSERT(rayTracingState().m_surfelConstants);
     NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
+    NWB_ASSERT(rayTracingState().m_surfelPoolSnapshotBuffer);
+    NWB_ASSERT(rayTracingState().m_surfelCellHeadSnapshotBuffer);
     NWB_ASSERT(rayTracingState().m_sceneBvhNodeBuffer);
     NWB_ASSERT(rayTracingState().m_sceneInstanceBuffer);
     NWB_ASSERT(rayTracingState().m_shadowInstanceMaterialBuffer);
@@ -6669,6 +6716,8 @@ bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(10, meshInstanceBuffer)); // mesh instances
     desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get())); // surfel constants
     desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get())); // surfel pool
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, rayTracingState().m_surfelPoolSnapshotBuffer.get())); // U4 bounce: prev-frame pool
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, rayTracingState().m_surfelCellHeadSnapshotBuffer.get())); // U4 bounce: prev-frame cell-head
 
     rayTracingState().m_surfelTraceBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelTraceBindingLayout);
     if(!rayTracingState().m_surfelTraceBindingSet){
@@ -6918,6 +6967,30 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     const u32 poolCapacity = rayTracingState().m_surfelPoolCapacity;
     const u32 updateDivisor = rayTracingState().m_surfelSeeded ? Max<u32>(NWB_SURFEL_UPDATE_DIVISOR, 1u) : 1u;
     const u32 activeSurfelCount = DivideUp(poolCapacity, updateDivisor);
+
+    // (U4 infinite bounce) Snapshot the previous frame's converged pool + cell-head into the SRV-only snapshot buffers
+    // BEFORE any pass mutates them this frame, so the trace's per-ray bounce gather reads a stable frame-start field
+    // (== the PREVIOUS frame's converged result -- only the trace writes SH, and it runs after this copy). Copying BOTH
+    // keeps the snapshot walk mutually consistent (a slot recycled this frame must not be reachable from a stale head).
+    // On the (re)creation frame the source pool is post-clear (UnorderedAccess) rather than the prev-frame resolve's
+    // ShaderResource; either way the CopySource transition barrier below covers it. ~2.5 MB/frame -- negligible.
+    {
+        const u32 cellCount = rayTracingState().m_surfelHashCellCount;
+        Core::Buffer* pool = rayTracingState().m_surfelPoolBuffer.get();
+        Core::Buffer* cellHead = rayTracingState().m_surfelCellHeadBuffer.get();
+        Core::Buffer* poolSnapshot = rayTracingState().m_surfelPoolSnapshotBuffer.get();
+        Core::Buffer* cellHeadSnapshot = rayTracingState().m_surfelCellHeadSnapshotBuffer.get();
+        commandList.setBufferState(pool, Core::ResourceStates::CopySource);
+        commandList.setBufferState(cellHead, Core::ResourceStates::CopySource);
+        commandList.setBufferState(poolSnapshot, Core::ResourceStates::CopyDest);
+        commandList.setBufferState(cellHeadSnapshot, Core::ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.copyBuffer(poolSnapshot, 0u, pool, 0u, static_cast<u64>(NWB_SURFEL_RECORD_SIZE) * poolCapacity);
+        commandList.copyBuffer(cellHeadSnapshot, 0u, cellHead, 0u, static_cast<u64>(sizeof(u32)) * cellCount);
+        commandList.setBufferState(poolSnapshot, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(cellHeadSnapshot, Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
+    }
 
     // The passes UAV-write the surfel buffers then UAV/SRV-read them next; enable automatic UAV barriers so the
     // commitBarriers between passes serialises the writes. This enable block MUST sit ABOVE pass (0) so the age-free

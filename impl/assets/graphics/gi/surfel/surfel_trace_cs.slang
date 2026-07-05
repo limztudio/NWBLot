@@ -19,6 +19,7 @@
 #include "surfel_constants.slangi"
 #include "surfel_binding_slots.h"
 #include "surfel_sh.slangi"          // nwbSurfelShBasis / nwbSurfelShProjectionScale (U3 directional irradiance)
+#include "surfel_hash.slangi"        // nwbSurfelCellCoord / nwbSurfelHashCell (U4 bounce gather over the snapshot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,6 +30,60 @@ ConstantBuffer<NwbSurfelConstants> g_NwbSurfelConstants;
 
 [[vk::binding(NWB_SURFEL_BINDING_POOL, NWB_SURFEL_SET)]]
 RWStructuredBuffer<NwbSurfel> g_NwbSurfelPool;
+
+// Snapshot of the PREVIOUS frame's converged field (U4 bounce): the bounce gather reads THESE (SRVs), never the live
+// pool this frame's trace is writing -> the surfel->surfel feedback reads a stable frame-start field, no torn read.
+[[vk::binding(NWB_SURFEL_BINDING_SNAPSHOT_POOL, NWB_SURFEL_SET)]]
+StructuredBuffer<NwbSurfel> g_NwbSurfelSnapshotPool;
+
+[[vk::binding(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, NWB_SURFEL_SET)]]
+StructuredBuffer<uint> g_NwbSurfelSnapshotCellHead;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// U4 infinite bounce: gather the surfel field's INDIRECT irradiance arriving at a ray HIT point, from the previous
+// frame's snapshot. Mirrors nwbSurfelGather (surfel_gather.slangi) but reads the snapshot buffers + the trace's own
+// constants CB, and is queried with the FACE-FORWARDED hit normal (a back-face wall hit must not reject every neighbour
+// + sample the opposite hemisphere). Adding hit.albedo * this to each ray's radiance makes the surfel integrate
+// multi-bounce -> the running mean converges to the infinite-bounce solution (Jacobi radiosity; stable at albedo < 1).
+float3 nwbSurfelBounceGather(const float3 worldPosition, const float3 queryNormal){
+    const float cellSize = g_NwbSurfelConstants.cameraPositionCellSize.w;
+    const uint cellCount = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.x);
+    const uint poolCapacity = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.y);
+    const float normalBias = g_NwbSurfelConstants.coverageRadiusBiasHyst.z;
+    const float3 biasedPosition = worldPosition + queryNormal * normalBias;
+
+    float3 irradianceSum = float3(0.0, 0.0, 0.0);
+    float totalWeight = 0.0;
+    const int3 baseCell = nwbSurfelCellCoord(biasedPosition, cellSize);
+    for(int dz = -1; dz <= 1; ++dz)
+    for(int dy = -1; dy <= 1; ++dy)
+    for(int dx = -1; dx <= 1; ++dx){
+        const uint bucket = nwbSurfelHashCell(baseCell + int3(dx, dy, dz), cellCount);
+        uint id = g_NwbSurfelSnapshotCellHead[bucket];
+        uint walk = 0u;
+        [loop] while(id < poolCapacity && walk < NWB_SURFEL_MAX_WALK){
+            const NwbSurfel surfel = g_NwbSurfelSnapshotPool[id];
+            if(surfel.alive != 0u && surfel.sampleCount != 0u){
+                const float dist = length(biasedPosition - surfel.position);
+                const float normalWeight = saturate(dot(queryNormal, surfel.normal));
+                const float distanceWeight = saturate(1.0 - dist / max(surfel.radius, 1e-4));
+                const float confidence = saturate(float(surfel.sampleCount) / 8.0);
+                const float weight = normalWeight * distanceWeight * confidence;
+                irradianceSum += nwbSurfelShReconstruct(surfel.shR, surfel.shG, surfel.shB, queryNormal) * weight;
+                totalWeight += weight;
+            }
+            id = surfel.nextInCell;
+            ++walk;
+        }
+    }
+    return totalWeight > 1e-4 ? (irradianceSum / totalWeight) : float3(0.0, 0.0, 0.0);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Per-ray 2-band SH projection of the incoming radiance (one float4 of coefficients per colour). Reduced by thread 0
@@ -82,8 +137,16 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         const float3 origin = surfel.position + n * normalBias;
         const NwbGiProbeHit hit = nwbGiSwTraceClosest(origin, rayDir, 0.001, 1.0e4);
         float3 radiance = float3(0.0, 0.0, 0.0);
-        if(hit.hit)
-            radiance = nwbGiSwShadeHit(hit, rayDir);   // miss = sky = black (U0; multi-bounce lands in U4)
+        if(hit.hit){
+            radiance = nwbGiSwShadeHit(hit, rayDir);   // reflected DIRECT = albedo * E_direct (miss = sky = black)
+            // U4 infinite bounce: add the hit surface's reflected INDIRECT -- the PREVIOUS frame's surfel field arriving
+            // at the hit, reconstructed at the FACE-FORWARDED normal (matching nwbGiSwShadeHit; a back-face wall hit must
+            // not reject every neighbour) and clamped (bounds the SH-rectification energy injection). radiance now =
+            // albedo * (E_direct + E_indirect), so the running mean integrates multi-bounce -> converges (albedo 0.8 < 1).
+            const float3 facingNormal = dot(hit.normal, rayDir) < 0.0 ? hit.normal : -hit.normal;
+            const float3 bounce = min(nwbSurfelBounceGather(hit.worldPos, facingNormal), float3(NWB_SURFEL_BOUNCE_CLAMP, NWB_SURFEL_BOUNCE_CLAMP, NWB_SURFEL_BOUNCE_CLAMP));
+            radiance += hit.albedo * bounce;
+        }
 
         // Project RAW radiance into 2-band SH (no cosine weight -- the reconstruction convolves the cosine lobe). Each
         // ray contributes radiance * SH-basis(rayDir); thread 0 sums + scales by 2*pi/N (the hemisphere pdf).

@@ -735,6 +735,11 @@ private:
     // Free-list (U1): persistent LIFO stack of recycled surfel ids (poolCapacity uints). Pushed by age-free, popped by
     // spawn; the stack depth lives in counter[FREE_TOP]. Same barrier/state-tracking as the pool.
     Core::BufferHandle m_surfelFreeListBuffer;
+    // Snapshot of the previous frame's converged field (U4 infinite bounce): the trace's bounce gather reads these (SRV)
+    // instead of the live pool it is writing, so surfel->surfel feedback reads a stable frame-start field. Both pool +
+    // cell-head are snapshotted (mutually consistent prev-frame walk); overwritten by copyBuffer at the top of each frame.
+    Core::BufferHandle m_surfelPoolSnapshotBuffer;
+    Core::BufferHandle m_surfelCellHeadSnapshotBuffer;
     // CPU-readable copy of the counter (BUMP_TOP, FREE_TOP) for the periodic live-count diagnostic (U1). The copy is
     // snapshotted on a log-interval frame and mapped a few frames later (async), mirroring the SW-shadow edge-stats path.
     Core::BufferHandle m_surfelCounterReadback;

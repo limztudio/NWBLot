@@ -45,6 +45,12 @@
 // age-free + spawn sets. See .helper/surfel_gi_plan.md (U1).
 #define NWB_SURFEL_BINDING_FREE_LIST 18   // RWStructuredBuffer<uint> (UAV) -- capacity poolCapacity, depth = counter[FREE_TOP]
 
+// Snapshot of the PREVIOUS frame's converged field (U4 infinite bounce), bound as SRVs in the TRACE set: the trace's
+// per-ray bounce gather reads these (never the live pool being written this frame), so surfel->surfel feedback reads a
+// stable prev-frame field. Copied at the TOP of renderSurfelGi (pool + cell-head, so the walk is mutually consistent).
+#define NWB_SURFEL_BINDING_SNAPSHOT_POOL 19       // StructuredBuffer<NwbSurfel> (SRV) -- prev-frame pool copy
+#define NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD 20  // StructuredBuffer<uint> (SRV) -- prev-frame cell-head copy
+
 // RESOLVE pass: a COMPUTE pass that gathers the surfel irradiance ONCE PER PIXEL into a screen-space texture, which
 // the deferred-lighting PIXEL shader then samples. This decouples the pixel consumer from the read-write surfel pool:
 // the pool is now touched ONLY by compute (like the caustic accumulator), so the frames-in-flight pixel-read-vs-next-
@@ -85,7 +91,7 @@
 #define NWB_SURFEL_MAX_WALK 16u
 
 // Defaults (Default tier). Pool + hash are power-of-two so the hash mask works; the spawn tile bounds spawns/frame.
-#define NWB_SURFEL_POOL_CAPACITY 16384u        // 16384 * 64B = 1 MB pool
+#define NWB_SURFEL_POOL_CAPACITY 16384u        // 16384 * 96B = 1.5 MB pool (U3 record; the U4 snapshot mirrors it)
 #define NWB_SURFEL_HASH_CELL_COUNT 262144u     // 2^18 * 4B = 1 MB cell-head table
 // One surfel per hash cell: the CELL_SIZE sets the surfel spacing (GI resolution); the RADIUS is a bit larger so the
 // gather's 3x3x3 distance-weighted blend of neighbouring cells' surfels overlaps smoothly (no coverage gaps). Decoupled
@@ -104,6 +110,14 @@
 #define NWB_SURFEL_MAX_ACCUM 64u
 #define NWB_SURFEL_MAX_AGE 60u                 // recycle a surfel unseen for this many frames (U1)
 #define NWB_SURFEL_GROUP_SIZE 8                 // spawn/hash-build tile threads (8x8 = 64)
+// Per-channel ceiling on the U4 surfel->surfel bounce (mean-radiance scale). MANDATORY, not just a safety net: the SH
+// reconstruction clamps each channel >= 0, which rectifies the negative lobes of the 2-band directional field and injects
+// a little energy every bounce -- in a fully-enclosed high-albedo corner that can push the effective per-bounce gain
+// toward 1.0 and creep the equilibrium bright. Capping the gathered bounce bounds that injection. ~2x the scene's
+// brightest analytic light (gi_test directional intensity 2.0) -- generous enough for the real multi-bounce (which
+// converges to <= ~5x the first bounce at albedo 0.80), tight enough to stop unbounded creep. Validated by the
+// energy-stability test (the plateau must not creep toward the clamp).
+#define NWB_SURFEL_BOUNCE_CLAMP 4.0f
 
 // Default per-instance base colour the CPU writes into the shadow instance-material record (AssignInstanceBaseColor)
 // when an entity has no authored tint, so a bounce is never black. Mirrors the shader's NWB_GI_SW_TRACE_DEFAULT_ALBEDO.

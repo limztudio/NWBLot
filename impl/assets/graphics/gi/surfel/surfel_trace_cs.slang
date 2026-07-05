@@ -5,10 +5,12 @@
 // Surfel trace: ONE workgroup per surfel, 64 threads = 64 hemisphere rays. Each ray closest-hits the SW BVH (reusing
 // gi_sw_trace.slangi verbatim) and Lambert-shades the hit with the per-instance base colour, so a red wall bounces
 // red. The 64 shaded radiances reduce in GROUPSHARED (one workgroup owns one surfel -> zero cross-workgroup
-// contention -> NO float atomics) into the cosine-weighted hemispherical irradiance, EMA-blended into the surfel's
-// meanIrradiance in place. Hysteresis is 0 while sampleCount == 0, so a just-spawned/recycled surfel seeds from its
-// first trace with no global dark-bias. Round-robin: 1/Nth of surfels per frame (divisor), ALL on the bootstrap frame
-// (divisor 1). See .helper/surfel_gi_plan.md (Ray budget).
+// contention -> NO float atomics) into the cosine-weighted hemispherical irradiance, then accumulate into the surfel's
+// meanIrradiance in place as a BOUNDED RUNNING MEAN (weight 1/(n+1) until n hits NWB_SURFEL_MAX_ACCUM, then a bounded
+// EMA). A true running mean -- not a fixed-alpha EMA -- is required because each frame rotates the ray set, so the
+// estimates are decorrelated Monte-Carlo samples: the running mean drives variance -> 0 (a fixed EMA leaves a
+// permanent noise residual = flicker). n==0 on the first trace seeds directly (no dark bias). Round-robin: 1/Nth of
+// surfels per frame (divisor), ALL on the bootstrap frame (divisor 1). See .helper/surfel_gi_plan.md (Ray budget).
 
 
 #include "../gi_sw_trace.slangi"     // BVH bindings (0-10) + nwbGiSwTraceClosest / nwbGiSwShadeHit
@@ -84,7 +86,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
 
     GroupMemoryBarrierWithGroupSync();
 
-    // Thread 0 reduces the 64 cosine-weighted samples -> hemispherical irradiance -> EMA into the surfel in place.
+    // Thread 0 reduces the 64 cosine-weighted samples -> hemispherical irradiance -> running-mean into the surfel.
     if(rayIndex == 0u && active){
         float3 weightedRadianceSum = float3(0.0, 0.0, 0.0);
         float weightSum = 0.0;
@@ -95,8 +97,17 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         }
         const float3 irradiance = weightSum > 1e-4 ? (weightedRadianceSum / weightSum) : float3(0.0, 0.0, 0.0);
 
-        const float hysteresis = surfel.sampleCount == 0u ? 0.0 : g_NwbSurfelConstants.coverageRadiusBiasHyst.w;
-        surfel.meanIrradiance = lerp(irradiance, surfel.meanIrradiance, hysteresis);
+        // Bounded running mean. Each frame rotates the ray set (nwbGiFrameRotation), so successive estimates are
+        // DECORRELATED Monte-Carlo samples of the same hemispherical integral. Blend as a true incremental average --
+        // weight 1/(n+1) on the new sample -- so the variance falls like 1/n toward zero (a fixed-alpha EMA would leave
+        // a permanent ~sqrt(alpha) residual = the corner flicker). n is capped at coverageRadiusBiasHyst.w so past the
+        // cap it becomes a bounded EMA (weight 1/(cap+1)), keeping a finite memory for future dynamic lighting.
+        // sampleCount here is the count BEFORE this sample (incremented below), so n==0 on the first trace -> weight 1
+        // (seed directly from the first estimate, no dark bias -- this subsumes the old sampleCount==0 special case).
+        const uint accumCap = max(uint(g_NwbSurfelConstants.coverageRadiusBiasHyst.w), 1u);
+        const uint n = min(surfel.sampleCount, accumCap);
+        const float historyWeight = float(n) / float(n + 1u);
+        surfel.meanIrradiance = lerp(irradiance, surfel.meanIrradiance, historyWeight);
         surfel.sampleCount = min(surfel.sampleCount + 1u, 0xFFFFu);
         g_NwbSurfelPool[surfelIndex] = surfel;
     }

@@ -102,6 +102,7 @@ struct DeferredFrameTargets{
     Core::Format::Enum depthFormat = Core::Format::UNKNOWN;
     Core::Format::Enum shadowVisibilityFormat = Core::Format::UNKNOWN;
     Core::Format::Enum causticIrradianceFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum surfelIrradianceFormat = Core::Format::UNKNOWN;
     Core::Format::Enum causticAccumulatorFormat = Core::Format::UNKNOWN;
     Core::Format::Enum causticHistoryFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgCapNormalFormat = Core::Format::UNKNOWN;
@@ -204,6 +205,12 @@ struct DeferredFrameTargets{
     // The irradiance + accumulator are cleared to BLACK each frame (additive identity), so when no producer runs the
     // additive caustic term is a pixel-identical no-op.
     Core::TextureHandle causticIrradiance;
+    // Resolved surfel-GI indirect irradiance (RGBA16F, screen space): the surfel_resolve_cs COMPUTE pass gathers the
+    // surfel field once per pixel into this (rgb = indirect irradiance, a = coverage flag), and the deferred lighting
+    // PIXEL shader samples it -- so the read-write surfel pool never touches the pixel shader (compute-only, like the
+    // caustic accumulator), eliminating the frames-in-flight pool race. Cleared to 0 each frame (a = 0 -> hemiAmbient
+    // fallback) so a disabled/absent GI producer is a pixel-identical no-op.
+    Core::TextureHandle surfelIrradiance;
     Core::TextureHandle causticAccumulator;
     // The two HALF-res RGBA16F ping-pong buffers for the half-res a-trous wavelet (caustic_resolve_cs.slang): the prepare
     // pass writes causticHistory (half-A), the wavelet alternates causticHistory <-> causticResolveHalf, and the final
@@ -219,11 +226,6 @@ struct DeferredFrameTargets{
     Core::FramebufferHandle opaqueLightingFramebuffer;
     Core::BindingSetHandle lightingBindingSet;
     Core::BindingSetHandle compositeBindingSet;
-    // The surfel pool buffer the lighting binding set was built against. The surfel pool is created lazily (in the
-    // prepare phase, after the deferred targets + this binding set already exist), so the set is first built with a
-    // null pool SRV and rebuilt ONCE when the real pool appears (rebuildDeferredLightingGiBindings). The surfel pool
-    // does not ping-pong, so after that one rebuild it stays valid. nullptr = built with no pool (forces the rebuild).
-    const Core::Buffer* surfelLightingBindingSetPool = nullptr;
     AvboitFrameTargets avboit;
 
     [[nodiscard]] bool csgIntervalTargetsValid()const noexcept{

@@ -70,8 +70,9 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input, float4 
     const half3 shadedColor = clamp(
         // Transparent fragments are not in the opaque G-buffer the screen-space shadow visibility was traced
         // from, so pass the negative-pixel sentinel: nwbSceneApplyLighting skips shadow sampling and treats
-        // every light as fully visible (the pre-colored-shadow transparent behaviour).
-        nwbSceneApplyLighting(baseColor, inNormal, inTangent, inWorldPosition, int2(-1, -1)),
+        // every light as fully visible (the pre-colored-shadow transparent behaviour). The indirect term is the
+        // hemiAmbient fallback (transparent fragments are not in the G-buffer the surfel resolve ran over).
+        nwbSceneApplyLighting(baseColor, inNormal, inTangent, inWorldPosition, int2(-1, -1), nwbBxdfIndirectIrradiance(inWorldPosition, inNormal)),
         half3(0.0),
         half3(1.0)
     );

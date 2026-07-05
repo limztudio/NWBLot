@@ -86,6 +86,12 @@ public:
     [[nodiscard]] bool ensureSurfelSpawnBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureSurfelHashBuildBindingSet();
     [[nodiscard]] bool ensureSurfelTraceBindingSet();
+    // The resolve pass: a COMPUTE gather-once-per-pixel into the screen-space surfelIrradiance texture the deferred
+    // lighting samples (keeps the RW pool off the pixel shader -> no frames-in-flight pool race). Pipeline + its set
+    // (surfel constants/pool SRV/cell-head SRV + G-buffer world-position/normal + surfelIrradiance UAV; rebuilt on a
+    // target change).
+    [[nodiscard]] bool ensureSurfelResolvePipeline();
+    [[nodiscard]] bool ensureSurfelResolveBindingSet(DeferredFrameTargets& targets);
     // True when the prepare built the hybrid transparent-shadow software resources this frame (RT hardware + the scene
     // has a transparent occluder). The render then runs renderGpuBvhShadowVisibility(..., multiplyOntoOpaque=true) after
     // the HW opaque pass, folding the colored transparent shadow onto the binary opaque mask -- ONLY as the

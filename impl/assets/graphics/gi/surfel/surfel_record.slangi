@@ -18,7 +18,7 @@
 //
 //   lane 0 : position.xyz         | radius
 //   lane 1 : normal.xyz           | nextInCell     (hash-grid linked-list next; 0xFFFFFFFF = end)
-//   lane 2 : meanIrradiance.rgb   | sampleCount    (frames integrated; hysteresis 0 until the first sample)
+//   lane 2 : meanIrradiance.rgb   | sampleCount    (traces integrated; drives the running-mean weight n/(n+1), capped)
 //   lane 3 : lastSeenFrame | alive | pad0 | pad1
 struct NwbSurfel{
     float3 position;

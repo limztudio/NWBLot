@@ -17,16 +17,21 @@ machinery that the review tied to confirmed bugs.
 
 ## Architecture (recommended: GIBS-style screen-spawned, world-hashed surfels)
 
-### Allocation — screen-coverage spawn (integer atomics only)
+### Allocation — one-surfel-per-hash-bucket spawn (integer atomics only)
 `surfel_spawn_cs` runs at the existing `renderGi` hook (`system.cpp:428`), where the G-buffer is resident (opaque pass
-ended). `numthreads(8,8,1)`, `dispatch(DivideUp(w,16), DivideUp(h,16), 1)` = one thread per 16x16 screen tile (<=1
-spawn/tile/frame — no groupshared voting). Each thread reads the tile-center G-buffer worldPos/normal/depth (the SAME
-targets deferred lighting binds), hashes the world point, sums coverage `saturate(dot(Nsurf,Ns))*saturate(1-dist/r)`
-over the 3x3x3 neighbour cells; coverage < threshold allocates via `InterlockedAdd` on a uint bump counter (integer —
-the "no float image atomics" rule is untouched). Every covering surfel gets `lastSeenFrame = frame` (keep-alive). On
-the BOOTSTRAP frame the pool is empty, so every visible tile spawns once -> all visible surfaces covered in ONE frame
-(the smoke app renders only the bootstrap frame when unfocused, so first-frame usefulness is mandatory — this delivers
-it, like the DDGI first-frame-all-trace).
+ended). `numthreads(8,8,1)`, `dispatch(DivideUp(w,16), DivideUp(h,16), 1)` = one thread per 16x16 screen tile. Each thread
+reads the tile-center G-buffer worldPos/normal (the SAME targets deferred lighting binds) and hashes the world point to a
+cell. ONE SURFEL PER HASH BUCKET: the hash is (re)built from the live pool BEFORE the spawn (hash-build now runs first), so
+a non-empty cell head means a surfel already covers the cell -> skip. An empty cell is claimed with an atomic
+`InterlockedCompareExchange(cellHead, INVALID -> PENDING)` so exactly one tile allocates when many map to one near-camera
+cell (bootstrap); the winner bump-allocates via `InterlockedAdd` on a uint counter and publishes the real slot (losers /
+pool-full bail without consuming a slot). Integer atomics only. This keeps every cell list length 1 -> the gather's
+fixed-order walk is deterministic (the flicker was hundreds of tile-surfels per cell walked in non-deterministic prepend
+order + truncated at MAX_WALK). NOTE: the ORIGINAL coverage-sum spawn (`saturate(dot(Nsurf,Ns))*saturate(1-dist/r)` over
+3x3x3, coverage < threshold -> spawn, radius = cellSize/2) was the flicker's root cause -- it packed one surfel per 16px
+TILE, overstuffing near-camera cells -- and was REPLACED by this occupancy+claim. On the BOOTSTRAP frame the pool is empty
+so every visible cell spawns once -> all visible surfaces covered in ONE frame (mandatory: the unfocused smoke app renders
+only the bootstrap frame). Keep-alive (`lastSeenFrame`) + recycle land in U1.
 
 ### Storage — RendererRayTracingState, resize-safe, GPU-only
 - `NwbSurfel` = 64B std430 (4 float4 lanes): `position+radius / normal+nextInCell / meanIrradiance+sampleCount /
@@ -116,6 +121,102 @@ DELETED: the grid CB + probe atlases + ray-data + the blend/border/distance pass
 2. **HW twin (U5) = IN SCOPE**, after U0-U4 land. Makes the first real GI HW path (the old DDGI HW trace was a stub).
 3. Bootstrap: pool 16384 + hash 262144 + 16x16 spawn tile (~4-5k surfels, ~290k bootstrap rays); raise the tile if a
    target GPU chokes. PS-gather through U5. Linked-list hash. Screen-only spawn through U5. (Plan defaults kept.)
+
+## CORNER FLICKER — TRUE ROOT CAUSE + FIX (2026-07-05): OVERSTUFFED HASH CELLS, not a data race. (supersedes the two sections below)
+The triple-corner flicker was FINALLY root-caused. The "frames-in-flight pool DATA RACE" + "resolve pass fixed it" claims
+below are WRONG: that resolve verification was a FALSE POSITIVE -- a concurrent nwbSceneApplyLighting bug meant the render
+was showing hemiAmbient the whole time, so the "0/8 stable" measurement never actually touched the surfel field.
+DECISIVE isolation (flicker_probe.py, 6 runs each): (a) resolve writes a CONSTANT -> 0/6 stable (texture+lighting path is
+fine); (b) gather over a pool of HARDCODED-CONSTANT meanIrradiance -> STILL 6/6 flicker. A weighted average of a constant
+is that constant regardless of weights, so the flicker can only be a structural churn in WHICH surfels get walked. (c)
+MAX_WALK 64 -> 4096 (complete, order-independent walk) -> flicker 11 -> 0.5 (0/6). CONFIRMED it is the walked SET, not a race.
+ROOT CAUSE: the old spawn allocated one surfel per 16px SCREEN TILE with radius 0.35 < cellSize 0.70, so a near-camera cell
+collected far more than MAX_WALK(64) surfels; the coverage query ALSO truncated at 64, so a stuffed cell never reached the
+coverage threshold and spawned FOREVER (hundreds/cell). The gather then walked only the first 64 in the hash-build's
+InterlockedExchange PREPEND order, which is NON-DETERMINISTIC (thread race) -- so at the triple corner (one cell spans
+red+blue+floor surfels) the walked-64's surface MIX churned frame to frame = the flicker. NOT a barrier race: every
+within/cross-frame barrier checked out (SRV->Common restore at close; Common maps to ALL_COMMANDS stage, constants.cpp:256).
+FIX = ONE SURFEL PER HASH BUCKET (canonical sparse surfel cache). Reordered renderSurfelGi so HASH-BUILD runs BEFORE SPAWN;
+the spawn reads the fresh cell head (occupancy: non-empty == already covered -> skip) and claims an EMPTY bucket via atomic
+CompareExchange(INVALID -> PENDING) so exactly one screen tile allocates it (bootstrap packs many tiles into one near-camera
+cell); the winner publishes the real slot, losers / pool-full bail without wasting a counter slot. NO new buffer (cellHead
+SRV->UAV in the spawn layout+set). Retuned cellSize 0.70->0.6 (surfel spacing) + radius 0.35->0.9 (>cell, for smooth 3x3x3
+neighbour overlap; the old radius=cellSize/2 was tied to the dropped coverage sum); MAX_WALK 64->16 (lists are length 1 now,
+pure collision headroom); dropped NWB_SURFEL_COVERAGE_THRESHOLD + CB coverageRadiusBiasHyst.x (now reserved). Files:
+surfel_spawn_cs.slang (occupancy+claim), surfel_hash_build_cs (runs first), surfel_binding_slots.h, surfel_constants.slangi,
+raytracing_system.cpp (spawn cellHead UAV, pass reorder, cellSize, CB pack).
+VERIFIED SIMULTANEOUSLY (the whole point -- bounce needs the flicker gone AT THE SAME TIME): flicker 0/8 (max std 0.48 =
+residual Monte-Carlo ray-rotation variance, converges); bounce vivid AND observable -- blue wall (70,75,124) / red wall
+(111,73,84) match the "vivid" target, corner red-glow (161,109,116), directional floor bleed (warm 212,205,203 near red /
+cool 208,205,210 near blue); warning+validation clean (120-line streamed logserver log, zero [WARNING]/[ERROR]/VUID/
+validation/SYNC-hazard, all 4 surfel pipelines created). The RESOLVE PASS stays -- it is a genuine architectural
+improvement (gather once/pixel in compute, pool compute-only) and the right foundation; it just was NOT the flicker fix.
+
+## (WRONG -- superseded above) CORNER FLICKER — "FIXED via a RESOLVE PASS / frames-in-flight pool DATA RACE" (2026-07-05).
+FIX SHIPPED (option A, the caustic pattern): a new COMPUTE pass `surfel_resolve_cs` gathers the surfel field ONCE PER
+PIXEL (nwbSurfelGather, reused verbatim) into a screen-space `surfelIrradiance` RGBA16F texture (rgb = indirect
+irradiance, a = 1 where a surfel covered the pixel). The deferred lighting PIXEL shader now Loads THAT texture (point,
+1:1, alpha<0.5 -> hemiAmbient), never the read-write surfel pool. So the pool is touched only by COMPUTE (spawn/hash/
+trace/resolve), like the caustic accumulator, and the frames-in-flight pixel-read-vs-next-frame-compute-write race is
+GONE. VERIFIED with flicker_probe.py: 0/8 runs flicker, corner temporal std = 0.00 (was ~12); red bounce preserved
+(corner reddish, warning-free + validation-clean, C++/cook build clean 101 files). Files: surfel_resolve_cs.slang(+.nwb)
++ surfel_binding_slots.h (resolve slots) + gi/names.h (s_SurfelResolveShaderName) + timing_names.h (s_SurfelResolve);
+the resolve pipeline/set on RendererRayTracingState (ensureSurfelResolvePipeline/BindingSet, dispatched as step 5 of
+renderSurfelGi); the surfelIrradiance texture on DeferredFrameTargets (created + bound at target creation, cleared to 0
+each frame in clearDeferredTargets); lighting_framework.slangi samples it (nwbBxdfResolvedIndirect in nwbBxdfLoadSurface),
+lighting.slangi's nwbBxdfIndirectIrradiance is now the hemiAmbient FALLBACK only (AVBOIT/disabled path); the deferred
+lighting set binds ONE texture SRV at slot 9 (pool/hash/params dropped from the LIGHTING layout; they live only in the
+resolve set); rebuildDeferredLightingGiBindings + surfelLightingBindingSetPool DELETED (no lazy rebuild -- the texture is
+a normal target). NOTE: the strong corner "glow" the user first saw was largely the flicker artifact; the stable bounce
+is subtler (the box-interior camera directly lights the floor). Probe tool + measurements in scratchpad.
+
+## (WRONG -- superseded) CORNER FLICKER — "ROOT CAUSE: a frames-in-flight DATA RACE on the surfel pool" (2026-07-05).
+The user reported a persistent flicker at the back blue/red/floor triple-corner. Two earlier diagnoses were WRONG
+(over-spawn/duplication; then a non-converging fixed-alpha EMA -> the running-mean accumulator below). Built a
+multi-frame flicker probe (scratchpad/flicker_probe.py: launches the app, foregrounds it, BitBlt-grabs N frames,
+computes per-pixel temporal std). It isolated the flicker to a ~16x8px spot at the exact triple corner (peak std ~12/255,
+a RED-channel drop 175->~100 on sporadic frames; ~1/4 launches show it, rest stable -> non-deterministic per launch).
+EXHAUSTIVE black-box tests (each 8 runs via the probe), ALL still flicker 8/8 -> RULED OUT: over-spawn (spawn gated to
+bootstrap-only), walk truncation (NWB_SURFEL_MAX_WALK 64->512), the accumulator (running mean), ray-count variance (64->256
+rays, NO change), the shade shadow ray (off -> WORSE), the ray rotation (frozen -> still flickers), the RMW blend (direct
+write -> still flickers), the whole-struct vs partial write. The DECISIVE test: a HARDCODED CONSTANT meanIrradiance (every
+surfel writes the identical value, zero computation dependence) STILL flickers 8/8 -> the gather reads pool values that are
+NOT what the trace wrote -> a TORN READ / DATA RACE on the pool, not the GI algorithm. Disabling the gather -> perfectly
+stable (std 0.00), so it is unambiguously the surfel path. The contributor-count diag showed the gathered SET is stable ->
+it is the meanIrradiance VALUES being corrupted.
+ROOT CAUSE: the deferred-lighting PIXEL shader reads the persistent RW surfel pool DIRECTLY, while the NEXT frame's
+COMPUTE passes (spawn/hash-build/trace) RMW the same single-buffered pool. The engine runs up to m_maxFramesInFlight
+frames concurrently (backend_context.cpp:2109), so frame N's pixel read overlaps frame N+1's compute write with no
+sufficient cross-frame barrier -> torn reads. This is SPECIFIC to the surfel pool: every other RW resource (caustic
+accumulator, shadow BVH) is touched only by compute and the CONSUMER reads a SEPARATE resolved texture -- the caustic
+path RESOLVES the accumulator into a screen-space irradiance texture that lighting reads, decoupling reader from writer.
+FIX OPTIONS (pick one): (A) mirror the caustic pattern -- a compute "surfel resolve" pass gathers once per pixel into a
+screen-space irradiance texture; deferred lighting reads THAT texture (decouples the pixel consumer from the RW pool;
+also faster -- gather once/pixel in compute, not in the pixel shader). RECOMMENDED. (B) a correct explicit cross-frame
+barrier serialising the pool's pixel-read vs next-frame compute-write (cheaper if the state-tracker gap is real, but
+uncertain). (C) double-buffer the pool -- rejected: the round-robin traces only 1/N surfels/frame, so a ping-pong would
+need to copy all untraced surfels forward each frame. Probe tool + all measurements in scratchpad.
+
+## U0 status: COMPLETE + VERIFIED + FLICKER-FIXED (for real) 2026-07-05. U0 uses FLAT RGB mean-irradiance (SH lands in U3).
+## [The running-mean accumulator below is a real correctness improvement (variance->0) but was NOT the flicker cause -- the
+## flicker was overstuffed hash cells; see the "TRUE ROOT CAUSE" section at the top. Both changes stay.]
+FLICKER FIX (post-U0, diagnosed by a 6-agent adversarial workflow): the user saw a temporal flicker at the back
+blue/red/floor triple-corner. Root cause was NOT surfel duplication (a 5-agent diagnosis REFUTED that: static camera ->
+spawn is a one-shot bootstrap, coverage>=1.0 at each tile centre, so the surfel set is FIXED after bootstrap). The real
+cause: surfel_trace_cs blended each 64-ray estimate with a FIXED-alpha EMA (hysteresis 0.9), but nwbGiFrameRotation
+rotates the ray set every frame -> successive estimates are DECORRELATED Monte-Carlo samples -> a fixed-alpha EMA never
+converges, holding a PERMANENT residual std = sigma*sqrt(alpha/(2-alpha)) ~= 23% of single-trace noise, largest where
+the bleed is brightest (the corner) = the flicker. FIX = replace the fixed EMA with a BOUNDED RUNNING MEAN: historyWeight
+= n/(n+1), n=min(sampleCount, NWB_SURFEL_MAX_ACCUM=64) -> a true incremental average (variance -> 0) that becomes a
+bounded EMA past the cap. n==0 seeds directly (subsumes the old sampleCount==0 special case). Repurposed the CB
+coverageRadiusBiasHyst.w lane (was hysteresis) to carry the cap; deleted s_SurfelDefaultHysteresis + the CPU seeded?0:0.9
+branch (the shader's n==0 handles bootstrap). Files: surfel_trace_cs.slang, surfel_binding_slots.h (NWB_SURFEL_MAX_ACCUM),
+raytracing_system.cpp (CB .w + comments), surfel_constants.slangi + surfel_record.slangi (comments). VERIFIED: a numeric
+sim of both accumulators over decorrelated samples shows fixed-EMA residual 2.5-7.2% of signal vs running-mean 0.56-2.0%
+(4-5x reduction, -> 0 uncapped); the render still shows the correct red bleed, warning-free + validation-clean. NOTE: the
+capture harness CANNOT reproduce the flicker (it catches a deterministic per-launch frame; A/B corner diff is dominated by
+window-alignment jitter, not GI noise) -- the definitive flicker check is interactive. arithmetic-only change (no
+binding/barrier/CB-layout change), bootstrap frame byte-unchanged.
 
 ## U0 status: COMPLETE + VERIFIED 2026-07-05. U0 uses FLAT RGB mean-irradiance (SH lands in U3).
 VERIFIED: nwb_gi_test_sw_smoke (forced SW emulation, --gpudbg) renders a correct colored bounce -- the saturated-red

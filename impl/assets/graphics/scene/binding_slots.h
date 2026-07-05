@@ -47,17 +47,12 @@
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_SET 0
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_BINDING 8
 
-// Surfel GI bindings the deferred lighting pass consumes. The surfel pool (StructuredBuffer<NwbSurfel>) holds the
-// screen-spawned, world-hashed surfels' integrated irradiance; the cell-head buffer (StructuredBuffer<uint>) is the
-// spatial-hash linked-list heads; the params CB carries the runtime hash/coverage constants. All live on
-// RendererRayTracingState. nwbSurfelGather walks the 3x3x3 neighbour cells at the shaded point; when no surfel covers
-// it (or GI is disabled) nwbBxdfIndirectIrradiance falls back to the hemiAmbient ambient term.
-#define NWB_SCENE_GI_SURFEL_POOL_DEFAULT_SET 0
-#define NWB_SCENE_GI_SURFEL_POOL_DEFAULT_BINDING 9
-#define NWB_SCENE_GI_SURFEL_HASH_DEFAULT_SET 0
-#define NWB_SCENE_GI_SURFEL_HASH_DEFAULT_BINDING 10
-#define NWB_SCENE_GI_SURFEL_PARAMS_DEFAULT_SET 0
-#define NWB_SCENE_GI_SURFEL_PARAMS_DEFAULT_BINDING 11
+// Surfel GI: the deferred lighting pass samples a single RESOLVED screen-space irradiance texture. The per-pixel
+// surfel gather runs in a dedicated COMPUTE pass (surfel_resolve_cs) that writes this texture, so the lighting pixel
+// shader never touches the read-write surfel pool (that decoupling eliminates the frames-in-flight pool race). The
+// pool / hash / params are bound only in the resolve set (surfel_binding_slots.h), not the lighting set.
+#define NWB_SCENE_GI_SURFEL_IRRADIANCE_DEFAULT_SET 0
+#define NWB_SCENE_GI_SURFEL_IRRADIANCE_DEFAULT_BINDING 9
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

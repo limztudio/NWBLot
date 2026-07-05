@@ -14,10 +14,17 @@
 // shadow/caustic path already builds, exactly like the retired probe trace did -- so the trace body
 // (gi_sw_trace.slangi: nwbGiSwTraceClosest + nwbGiSwShadeHit + per-instance baseColor tint) is reused verbatim.
 //
-//   SPAWN     : constants + pool(UAV) + cellHead(SRV, prev frame) + counter(UAV) + G-buffer worldPos/normal/depth(SRV)
-//   HASH_BUILD: constants + pool(UAV) + cellHead(UAV) + counter(UAV)
+//   HASH_BUILD: constants + pool(UAV) + cellHead(UAV)                                  [runs BEFORE spawn]
+//   SPAWN     : constants + pool(UAV) + cellHead(UAV, this frame) + counter(UAV) + G-buffer worldPos/normal(SRV)
 //   TRACE     : SW-BVH slots 0-10 + constants + pool(UAV)
-//   GATHER    : (in the deferred-lighting set) constants + pool(SRV) + cellHead(SRV)
+//   GATHER    : (in the resolve set) constants + pool(SRV) + cellHead(SRV)
+//
+// ONE SURFEL PER HASH BUCKET. The hash is (re)built from the live pool FIRST; the spawn then only fills buckets whose
+// cell-head is still empty, claiming each with an atomic CompareExchange(INVALID -> PENDING) so exactly one screen tile
+// wins a given empty bucket per frame (bootstrap packs many tiles into one near-camera cell). This keeps every cell
+// list length 1, so the gather's fixed-order walk is deterministic -- the flicker cause was overstuffed cells (hundreds
+// of tile-surfels per cell) walked in the hash-build's non-deterministic InterlockedExchange order and truncated at
+// NWB_SURFEL_MAX_WALK, so the walked subset's surface mix churned frame to frame. See .helper/surfel_gi_plan.md.
 
 #define NWB_SURFEL_SET 0
 
@@ -33,6 +40,20 @@
 #define NWB_SURFEL_BINDING_GBUFFER_NORMAL 16
 #define NWB_SURFEL_BINDING_GBUFFER_DEPTH 17
 
+// RESOLVE pass: a COMPUTE pass that gathers the surfel irradiance ONCE PER PIXEL into a screen-space texture, which
+// the deferred-lighting PIXEL shader then samples. This decouples the pixel consumer from the read-write surfel pool:
+// the pool is now touched ONLY by compute (like the caustic accumulator), so the frames-in-flight pixel-read-vs-next-
+// frame-compute-write race is gone. Output alpha = 1 where a surfel covered the pixel (rgb = gathered irradiance), 0
+// otherwise (the lighting falls back to hemiAmbient). Its own binding set.
+#define NWB_SURFEL_RESOLVE_SET 0
+#define NWB_SURFEL_RESOLVE_BINDING_CONSTANTS 0              // ConstantBuffer<NwbSurfelConstants>
+#define NWB_SURFEL_RESOLVE_BINDING_POOL 1                  // StructuredBuffer<NwbSurfel> (SRV)
+#define NWB_SURFEL_RESOLVE_BINDING_CELL_HEAD 2             // StructuredBuffer<uint> (SRV)
+#define NWB_SURFEL_RESOLVE_BINDING_GBUFFER_WORLD_POSITION 3
+#define NWB_SURFEL_RESOLVE_BINDING_GBUFFER_NORMAL 4
+#define NWB_SURFEL_RESOLVE_BINDING_OUTPUT 5                // RWTexture2D<float4> (screen-space irradiance)
+#define NWB_SURFEL_RESOLVE_GROUP_SIZE 8
+
 // g_SurfelCounter layout: index 0 = bump-allocation top (next fresh slot), index 1 = free-list top (recycled slots,
 // U1). Kept as named indices so the spawn / hash-build passes agree. NWB_SURFEL_COUNTER_SIZE is the buffer length.
 #define NWB_SURFEL_COUNTER_BUMP_TOP 0u
@@ -47,19 +68,34 @@
 // clears the cell-head buffer to this; the shaders compare against it). Shared here so both agree on the value.
 #define NWB_SURFEL_CELL_INVALID 0xFFFFFFFFu
 
-// Per-cell linked-list walk cap: a hard bound on the surfels examined from one bucket so a hash collision or a dense
-// cell can never turn the traversal into a GPU hang. Generous for the < 16k-surfel scale.
-#define NWB_SURFEL_MAX_WALK 64u
+// Transient claim sentinel the spawn writes into a cell head via CompareExchange(INVALID -> PENDING) to reserve an
+// empty bucket before it bump-allocates the surfel slot, so only one tile per empty bucket allocates (no wasted slots).
+// The winner overwrites it with the real slot (or restores INVALID on pool exhaustion), so it never survives the pass.
+#define NWB_SURFEL_CELL_PENDING 0xFFFFFFFEu
+
+// Per-cell linked-list walk cap: a hard bound on the surfels examined from one bucket so a hash collision can never turn
+// the traversal into a GPU hang. With one surfel per bucket the lists are length 1; this is pure collision headroom.
+#define NWB_SURFEL_MAX_WALK 16u
 
 // Defaults (Default tier). Pool + hash are power-of-two so the hash mask works; the spawn tile bounds spawns/frame.
 #define NWB_SURFEL_POOL_CAPACITY 16384u        // 16384 * 64B = 1 MB pool
 #define NWB_SURFEL_HASH_CELL_COUNT 262144u     // 2^18 * 4B = 1 MB cell-head table
-#define NWB_SURFEL_DEFAULT_RADIUS 0.35f        // world units (depth-scaled in U6)
+// One surfel per hash cell: the CELL_SIZE sets the surfel spacing (GI resolution); the RADIUS is a bit larger so the
+// gather's 3x3x3 distance-weighted blend of neighbouring cells' surfels overlaps smoothly (no coverage gaps). Decoupled
+// (radius != cellSize) because the density is now the cell grid, not the old coverage-sum that needed radius = cellSize/2.
+#define NWB_SURFEL_CELL_SIZE 0.6f              // world units -- hash cell edge = surfel spacing (depth-scaled in U6)
+#define NWB_SURFEL_DEFAULT_RADIUS 0.9f         // world units -- gather falloff radius (~1.5x cell for neighbour overlap)
 #define NWB_SURFEL_SPAWN_TILE 16u              // one spawn candidate per 16x16 screen tile
 #define NWB_SURFEL_RAYS_PER_SURFEL 64u         // one workgroup (64 threads) per surfel
 #define NWB_SURFEL_UPDATE_DIVISOR 4u           // steady-state: trace 1/Nth of surfels per frame (all on the bootstrap frame)
+// Bounded running-mean window for the trace's temporal accumulation. The trace blends each new 64-ray estimate as a
+// true incremental average (weight 1/(n+1)) until n reaches this cap, then holds a bounded EMA (weight 1/(cap+1)). A
+// TRUE average is required (not a fixed-alpha EMA): each frame rotates the Fibonacci ray set, so successive estimates
+// are decorrelated Monte-Carlo samples -- a fixed-alpha EMA over them never converges (holds a permanent ~sqrt(alpha)
+// noise residual, visible as flicker on the brightest bleed), whereas the running mean drives variance -> 0. The cap
+// keeps a bounded memory so a future dynamic-lighting unit still propagates (lower it for faster response).
+#define NWB_SURFEL_MAX_ACCUM 64u
 #define NWB_SURFEL_MAX_AGE 60u                 // recycle a surfel unseen for this many frames (U1)
-#define NWB_SURFEL_COVERAGE_THRESHOLD 0.75f    // spawn when summed neighbour coverage < this
 #define NWB_SURFEL_GROUP_SIZE 8                 // spawn/hash-build tile threads (8x8 = 64)
 
 // Default per-instance base colour the CPU writes into the shadow instance-material record (AssignInstanceBaseColor)

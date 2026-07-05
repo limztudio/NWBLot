@@ -244,13 +244,19 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_EXITSIZEMOVE:
         {
-            ScopedLock lock(s_ListMutex);
+            usize count = 0u;
+            {
+                ScopedLock lock(s_ListMutex);
+                count = s_Store ? s_Store->messages.size() : 0u;
+            }
+            // Re-add the items OUTSIDE the lock. Each LB_ADDSTRING re-enters WM_MEASUREITEM on this same UI thread,
+            // which locks s_ListMutex; holding it here would self-deadlock (Futex is non-recursive). The owner-draw
+            // handlers index the store by itemID, so the LB_ADDSTRING item data is unused -- re-adding `count` empty
+            // items just re-triggers the per-item measure over the (unchanged) store.
             SendMessage(s_ListHwnd, WM_SETREDRAW, FALSE, 0);
             SendMessage(s_ListHwnd, LB_RESETCONTENT, 0, 0);
-            if(s_Store){
-                for(auto& str : s_Store->messages)
-                    SendMessage(s_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(str.first().c_str()));
-            }
+            for(usize i = 0u; i < count; ++i)
+                SendMessage(s_ListHwnd, LB_ADDSTRING, 0, 0);
             SendMessage(s_ListHwnd, WM_SETREDRAW, TRUE, 0);
             InvalidateRect(s_ListHwnd, nullptr, TRUE);
         }
@@ -449,19 +455,36 @@ bool Frame::mainLoop(){
 }
 
 void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
-    ScopedLock lock(FrameDetail::s_ListMutex);
+    HWND listHwnd = nullptr;
+    const tchar* itemText = nullptr;
+    {
+        ScopedLock lock(FrameDetail::s_ListMutex);
 
-    // The store is released in ~Frame() while worker threads may still be draining; ignore late prints
-    // rather than resurrect a torn-down store.
-    if(!FrameDetail::s_Store)
+        // The store is released in ~Frame() while worker threads may still be draining; ignore late prints
+        // rather than resurrect a torn-down store.
+        if(!FrameDetail::s_Store)
+            return;
+
+        FrameDetail::s_Store->messages.emplace_back(LogString(str, FrameDetail::s_Store->arena), type);
+        itemText = FrameDetail::s_Store->messages.back().first().c_str();
+        listHwnd = FrameDetail::s_ListHwnd;
+    }
+
+    // CRITICAL: the SendMessage calls run OUTSIDE s_ListMutex. print() runs on the Server's worker thread, while the
+    // listbox lives on the UI thread. LB_ADDSTRING on an LBS_OWNERDRAWVARIABLE listbox SYNCHRONOUSLY re-enters the UI
+    // thread's WM_MEASUREITEM / WM_DRAWITEM handlers, and those lock s_ListMutex to read the store. Holding the mutex
+    // across the cross-thread SendMessage would deadlock the worker (blocked in SendMessage) against the UI thread
+    // (blocked on the mutex) -- the first log line would freeze the whole logserver (blank, unresponsive to WM_CLOSE).
+    // The message was already appended under the lock above; the owner-draw handlers index the store by itemID (not the
+    // item pointer), so the LB_ADDSTRING item data is unused and the single worker never mutates the store concurrently.
+    if(!listHwnd)
         return;
 
-    FrameDetail::s_Store->messages.emplace_back(LogString(str, FrameDetail::s_Store->arena), type);
-    SendMessage(FrameDetail::s_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(FrameDetail::s_Store->messages.back().first().c_str()));
+    SendMessage(listHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(itemText));
 
-    auto numItem = SendMessage(FrameDetail::s_ListHwnd, LB_GETCOUNT, 0, 0);
+    const auto numItem = SendMessage(listHwnd, LB_GETCOUNT, 0, 0);
     if(numItem > 0)
-        SendMessage(FrameDetail::s_ListHwnd, LB_SETCURSEL, numItem - 1, 0);
+        SendMessage(listHwnd, LB_SETCURSEL, numItem - 1, 0);
 }
 
 

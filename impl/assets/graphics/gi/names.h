@@ -30,6 +30,7 @@ namespace AssetsGraphicsGi{
 inline constexpr Name s_SurfelSpawnShaderName("engine/graphics/gi/surfel/surfel_spawn_cs");
 inline constexpr Name s_SurfelHashBuildShaderName("engine/graphics/gi/surfel/surfel_hash_build_cs");
 inline constexpr Name s_SurfelTraceShaderName("engine/graphics/gi/surfel/surfel_trace_cs");
+inline constexpr Name s_SurfelResolveShaderName("engine/graphics/gi/surfel/surfel_resolve_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -3,12 +3,13 @@
 
 
 // Surfel spawn: one thread per screen tile (spawnTile x spawnTile px). Reads the tile-centre G-buffer world position +
-// normal, walks the 3x3x3 neighbour cells of the PREVIOUS frame's hash to sum how well existing surfels cover the
-// point, and -- if coverage is below threshold -- bump-allocates a new surfel (InterlockedAdd on an integer counter,
-// no float atomics) initialised on that surface. On the BOOTSTRAP frame the hash is empty, so every visible tile
-// spawns once -> all visible surfaces covered in one frame (the smoke app renders only the bootstrap frame when
-// unfocused, so this is mandatory). Background pixels (no G-buffer normal) are skipped. Recycling / keep-alive land in
-// U1. See .helper/surfel_gi_plan.md (Allocation).
+// normal, hashes it to a cell, and -- if that cell's list is still EMPTY -- claims the cell and bump-allocates one
+// surfel on that surface. ONE SURFEL PER HASH BUCKET: the hash is rebuilt from the live pool BEFORE this pass, so a
+// non-empty cell head means a surfel already covers the cell (skip). Many screen tiles map to one near-camera cell on
+// the bootstrap frame, so the empty-cell claim is atomic -- CompareExchange(INVALID -> PENDING) -- and only the winning
+// tile allocates; losers skip (no wasted slots). Keeping every cell list length 1 is what makes the gather's fixed-order
+// walk deterministic (the flicker was overstuffed cells walked in non-deterministic order + truncated). Background
+// pixels (no G-buffer normal) are skipped. Recycling / keep-alive land in U1. See .helper/surfel_gi_plan.md (Allocation).
 
 
 #include "surfel_record.slangi"
@@ -27,7 +28,7 @@ ConstantBuffer<NwbSurfelConstants> g_NwbSurfelConstants;
 RWStructuredBuffer<NwbSurfel> g_NwbSurfelPool;
 
 [[vk::binding(NWB_SURFEL_BINDING_CELL_HEAD, NWB_SURFEL_SET)]]
-StructuredBuffer<uint> g_NwbSurfelCellHead;   // previous frame's hash (coverage query)
+RWStructuredBuffer<uint> g_NwbSurfelCellHead;   // this frame's hash (built before spawn); the claim links the new surfel
 
 [[vk::binding(NWB_SURFEL_BINDING_COUNTER, NWB_SURFEL_SET)]]
 RWStructuredBuffer<uint> g_NwbSurfelCounter;
@@ -65,48 +66,44 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint cellCount = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.x);
     const uint poolCapacity = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.y);
     const uint frameIndex = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.z);
-    const float coverageThreshold = g_NwbSurfelConstants.coverageRadiusBiasHyst.x;
     const float defaultRadius = g_NwbSurfelConstants.coverageRadiusBiasHyst.y;
 
-    // Coverage: sum normal-aligned + distance-falloff weight over the 3x3x3 neighbour cells' surfels.
-    float coverage = 0.0;
-    const int3 baseCell = nwbSurfelCellCoord(worldPosition, cellSize);
-    for(int dz = -1; dz <= 1; ++dz)
-    for(int dy = -1; dy <= 1; ++dy)
-    for(int dx = -1; dx <= 1; ++dx){
-        const uint bucket = nwbSurfelHashCell(baseCell + int3(dx, dy, dz), cellCount);
-        uint id = g_NwbSurfelCellHead[bucket];
-        uint walk = 0u;
-        [loop] while(id != NWB_SURFEL_CELL_INVALID && walk < NWB_SURFEL_MAX_WALK){
-            const NwbSurfel s = g_NwbSurfelPool[id];
-            if(s.alive != 0u){
-                const float dist = length(worldPosition - s.position);
-                const float normalWeight = saturate(dot(worldNormal, s.normal));
-                coverage += normalWeight * saturate(1.0 - dist / max(s.radius, 1e-4));
-            }
-            id = s.nextInCell;
-            ++walk;
-        }
+    // One surfel per hash bucket. The hash was rebuilt from the live pool BEFORE this pass, so a non-empty cell head
+    // means a surfel already covers this cell -> nothing to do (cheap early-out, no allocation).
+    const uint bucket = nwbSurfelHashCell(nwbSurfelCellCoord(worldPosition, cellSize), cellCount);
+    if(g_NwbSurfelCellHead[bucket] != NWB_SURFEL_CELL_INVALID)
+        return;
+
+    // The cell is empty. Claim it atomically so only ONE tile allocates when many map to the same empty bucket (the
+    // bootstrap frame packs a near-camera cell with dozens of tiles). CompareExchange INVALID -> PENDING: the winner
+    // gets INVALID back, everyone else gets PENDING (or a real slot) and bails without touching the counter.
+    uint previous = NWB_SURFEL_CELL_INVALID;
+    InterlockedCompareExchange(g_NwbSurfelCellHead[bucket], NWB_SURFEL_CELL_INVALID, NWB_SURFEL_CELL_PENDING, previous);
+    if(previous != NWB_SURFEL_CELL_INVALID)
+        return;
+
+    // Won the claim: bump-allocate a slot. On pool exhaustion, release the claim (restore INVALID) so a later frame can
+    // retry once recycling (U1) frees slots. No float atomics -- an InterlockedAdd on an integer counter.
+    uint slot = 0u;
+    InterlockedAdd(g_NwbSurfelCounter[NWB_SURFEL_COUNTER_BUMP_TOP], 1u, slot);
+    if(slot >= poolCapacity){
+        g_NwbSurfelCellHead[bucket] = NWB_SURFEL_CELL_INVALID;
+        return;
     }
 
-    if(coverage < coverageThreshold){
-        uint slot = 0u;
-        InterlockedAdd(g_NwbSurfelCounter[NWB_SURFEL_COUNTER_BUMP_TOP], 1u, slot);
-        if(slot < poolCapacity){
-            NwbSurfel surfel;
-            surfel.position = worldPosition;
-            surfel.radius = defaultRadius;
-            surfel.normal = worldNormal;
-            surfel.nextInCell = NWB_SURFEL_CELL_INVALID;
-            surfel.meanIrradiance = float3(0.0, 0.0, 0.0);
-            surfel.sampleCount = 0u;
-            surfel.lastSeenFrame = frameIndex;
-            surfel.alive = 1u;
-            surfel.pad0 = 0u;
-            surfel.pad1 = 0u;
-            g_NwbSurfelPool[slot] = surfel;
-        }
-    }
+    NwbSurfel surfel;
+    surfel.position = worldPosition;
+    surfel.radius = defaultRadius;
+    surfel.normal = worldNormal;
+    surfel.nextInCell = NWB_SURFEL_CELL_INVALID;   // sole member of this cell's list
+    surfel.meanIrradiance = float3(0.0, 0.0, 0.0);
+    surfel.sampleCount = 0u;
+    surfel.lastSeenFrame = frameIndex;
+    surfel.alive = 1u;
+    surfel.pad0 = 0u;
+    surfel.pad1 = 0u;
+    g_NwbSurfelPool[slot] = surfel;
+    g_NwbSurfelCellHead[bucket] = slot;   // publish the real slot (replaces the PENDING sentinel), linking it into the cell
 }
 
 

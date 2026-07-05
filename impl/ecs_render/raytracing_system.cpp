@@ -1720,6 +1720,25 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         return false;
     }
 
+    // Surfel-GI resolved irradiance: full-res RGBA16F. The surfel_resolve_cs COMPUTE pass gathers the surfel field once
+    // per pixel into this (rgb = indirect irradiance, a = 1 where a surfel covered the pixel); the deferred lighting
+    // samples it instead of the read-write surfel pool -- keeping the pool off the pixel shader eliminates the
+    // frames-in-flight pool race. Same lifecycle as causticIrradiance (full-res, recreated on resize).
+    targets.surfelIrradianceFormat = Core::Format::RGBA16_FLOAT;
+    Core::TextureDesc surfelIrradianceDesc;
+    surfelIrradianceDesc
+        .setWidth(targets.width)
+        .setHeight(targets.height)
+        .setFormat(targets.surfelIrradianceFormat)
+        .setInUAV(true)
+        .setName("engine/gi/surfel_irradiance")
+    ;
+    targets.surfelIrradiance = graphics().createTexture(surfelIrradianceDesc);
+    if(!targets.surfelIrradiance){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel irradiance target"));
+        return false;
+    }
+
     Core::TextureDesc accumulatorDesc;
     accumulatorDesc
         .setWidth(targets.width)
@@ -6132,16 +6151,11 @@ bool RendererRayTracingSystem::uploadShadowMaterialContextBuffers(
 struct NwbSurfelConstantsGpu{
     Float4 cameraPositionCellSize;  // xyz = camera world position (unused until U6 distance-scaled spawn), w = hash cell size
     Float4 hashPoolFrameDivisor;    // x = hash cell count, y = pool capacity, z = frame index, w = update divisor
-    Float4 coverageRadiusBiasHyst;  // x = spawn coverage threshold, y = default radius, z = normal bias, w = EMA hysteresis
+    Float4 coverageRadiusBiasHyst;  // x = reserved (coverage sum dropped for one-surfel-per-cell), y = default radius, z = normal bias, w = accumulation cap
     Float4 ageRaysTileScreen;       // x = max age, y = rays/surfel, z = spawn tile (px), w = screen width
     Float4 screenHeightPad;         // x = screen height, yzw = pad
 };
 static_assert(sizeof(NwbSurfelConstantsGpu) == sizeof(f32) * 4u * 5u, "NwbSurfelConstantsGpu must match the shader NwbSurfelConstants layout");
-
-// Default EMA hysteresis for the surfel irradiance (the history weight). ~0.9 gives a ~10-frame time constant; the
-// trace forces 0 while sampleCount == 0 so a just-spawned surfel seeds directly (no global dark bias). 0 on the first
-// enabled frame (m_surfelSeeded false) so nothing carries stale history. Mirrors the caustic/GI seed precedent.
-inline constexpr f32 s_SurfelDefaultHysteresis = 0.9f;
 
 // The surfel normal bias: push the trace ray origin + the gather sample point off the surface along the normal so a
 // ray/query does not self-hit the surface it belongs to. Small world-space offset; U6 scales it by camera distance.
@@ -6164,7 +6178,7 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // pool
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_CELL_HEAD, 1)); // cell head (prev frame)
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_CELL_HEAD, 1)); // cell head (this frame; claim links)
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_COUNTER, 1)); // counter
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SURFEL_BINDING_GBUFFER_WORLD_POSITION, 1)); // G-buffer world position
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SURFEL_BINDING_GBUFFER_NORMAL, 1)); // G-buffer normal
@@ -6401,7 +6415,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
     // Build the pipelines + the hash-build binding set (which depends only on the persistent buffers, so it is built
     // once here). The spawn + trace sets depend on per-frame targets/BVH, so they build in renderSurfelGi. Non-fatal:
     // a sub-failure leaves the pipeline handle null and the render dispatch guards each on its own handle.
-    if(!ensureSurfelSpawnPipeline() || !ensureSurfelHashBuildPipeline() || !ensureSurfelTracePipeline())
+    if(!ensureSurfelSpawnPipeline() || !ensureSurfelHashBuildPipeline() || !ensureSurfelTracePipeline() || !ensureSurfelResolvePipeline())
         return false;
     if(!ensureSurfelHashBuildBindingSet())
         return false;
@@ -6435,7 +6449,7 @@ bool RendererRayTracingSystem::ensureSurfelSpawnBindingSet(DeferredFrameTargets&
     Core::BindingSetDesc desc(arena());
     desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get()));
     desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_CELL_HEAD, rayTracingState().m_surfelCellHeadBuffer.get()));
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_CELL_HEAD, rayTracingState().m_surfelCellHeadBuffer.get()));
     desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_COUNTER, rayTracingState().m_surfelCounterBuffer.get()));
     desc.addItem(Core::BindingSetItem::Texture_SRV(
         NWB_SURFEL_BINDING_GBUFFER_WORLD_POSITION,
@@ -6559,6 +6573,123 @@ bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
+    if(rayTracingState().m_surfelResolvePipeline)
+        return true;
+    if(rayTracingState().m_surfelResolvePipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_surfelResolveBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_RESOLVE_BINDING_CONSTANTS, 1)); // surfel constants
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_RESOLVE_BINDING_POOL, 1)); // pool (SRV)
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_RESOLVE_BINDING_CELL_HEAD, 1)); // cell head (SRV)
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SURFEL_RESOLVE_BINDING_GBUFFER_WORLD_POSITION, 1)); // G-buffer world position
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SURFEL_RESOLVE_BINDING_GBUFFER_NORMAL, 1)); // G-buffer normal
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SURFEL_RESOLVE_BINDING_OUTPUT, 1)); // surfelIrradiance (UAV)
+        rayTracingState().m_surfelResolveBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_surfelResolveBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel resolve binding layout"));
+            rayTracingState().m_surfelResolvePipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_surfelResolveShader,
+        AssetsGraphicsGi::s_SurfelResolveShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_SurfelResolve"
+    )){
+        rayTracingState().m_surfelResolvePipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_surfelResolveShader)
+        .addBindingLayout(rayTracingState().m_surfelResolveBindingLayout)
+    ;
+    rayTracingState().m_surfelResolvePipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_surfelResolvePipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel resolve compute pipeline"));
+        rayTracingState().m_surfelResolvePipelineFailed = true;
+        return false;
+    }
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel resolve compute pipeline"));
+    return true;
+}
+
+// The resolve set: the surfel constants/pool(SRV)/cell-head(SRV) + the G-buffer world-position/normal + the
+// surfelIrradiance UAV. Rebuilt when any bound target changes (on resize), mirroring the spawn set's guard.
+bool RendererRayTracingSystem::ensureSurfelResolveBindingSet(DeferredFrameTargets& targets){
+    NWB_ASSERT(rayTracingState().m_surfelResolveBindingLayout);
+    NWB_ASSERT(rayTracingState().m_surfelConstants);
+    NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
+    NWB_ASSERT(rayTracingState().m_surfelCellHeadBuffer);
+    NWB_ASSERT(targets.worldPosition);
+    NWB_ASSERT(targets.normal);
+    NWB_ASSERT(targets.surfelIrradiance);
+
+    const Core::Texture* worldPosition = targets.worldPosition.get();
+    const Core::Texture* normal = targets.normal.get();
+    const Core::Texture* output = targets.surfelIrradiance.get();
+    if(
+        rayTracingState().m_surfelResolveBindingSet
+        && rayTracingState().m_surfelResolveBindingSetWorldPosition == worldPosition
+        && rayTracingState().m_surfelResolveBindingSetNormal == normal
+        && rayTracingState().m_surfelResolveBindingSetOutput == output
+    )
+        return true;
+
+    Core::BindingSetDesc desc(arena());
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_RESOLVE_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get()));
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_RESOLVE_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get()));
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_RESOLVE_BINDING_CELL_HEAD, rayTracingState().m_surfelCellHeadBuffer.get()));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SURFEL_RESOLVE_BINDING_GBUFFER_WORLD_POSITION,
+        targets.worldPosition.get(),
+        targets.worldPositionFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SURFEL_RESOLVE_BINDING_GBUFFER_NORMAL,
+        targets.normal.get(),
+        targets.normalFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_SURFEL_RESOLVE_BINDING_OUTPUT,
+        targets.surfelIrradiance.get(),
+        targets.surfelIrradianceFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+
+    rayTracingState().m_surfelResolveBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelResolveBindingLayout);
+    if(!rayTracingState().m_surfelResolveBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel resolve binding set"));
+        rayTracingState().m_surfelResolveBindingSetWorldPosition = nullptr;
+        rayTracingState().m_surfelResolveBindingSetNormal = nullptr;
+        rayTracingState().m_surfelResolveBindingSetOutput = nullptr;
+        return false;
+    }
+    rayTracingState().m_surfelResolveBindingSetWorldPosition = worldPosition;
+    rayTracingState().m_surfelResolveBindingSetNormal = normal;
+    rayTracingState().m_surfelResolveBindingSetOutput = output;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::hasSurfelWork()const noexcept{
     // Surfel GI is disabled until m_surfelEnabled is set (in prepareShadowVisibilityResources, once the SW scene BVH is
     // resident). A zero-init pool + 0xFFFFFFFF cell heads make the gather a no-op (-> hemiAmbient) until then.
@@ -6595,13 +6726,15 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
         rayTracingState().m_surfelResourcesNeedClear = false;
     }
 
-    // Upload the params CB. The cell size is 2 * default radius (a surfel overlaps only its own + 26 neighbour cells).
+    // Upload the params CB. The cell size sets the surfel spacing (one surfel per hash cell); the gather radius is a bit
+    // larger (NWB_SURFEL_DEFAULT_RADIUS) so the 3x3x3 neighbour blend overlaps smoothly.
     // The update divisor is 1 on the first (not-yet-seeded) frame so EVERY surfel traces to bootstrap in ONE frame --
-    // the unfocused smoke app renders only that frame -- then reverts to the round-robin divisor. Hysteresis is 0 until
-    // seeded (the trace also forces 0 while sampleCount == 0). The camera position rides xyz for U6's distance scaling.
+    // the unfocused smoke app renders only that frame -- then reverts to the round-robin divisor. The trace's temporal
+    // accumulation is a bounded running mean capped at NWB_SURFEL_MAX_ACCUM (carried in coverageRadiusBiasHyst.w); the
+    // per-surfel sampleCount drives the seed (n==0 -> first sample), so no CPU seeded/hysteresis branch is needed. The
+    // camera position rides xyz for U6's distance scaling.
     const u32 updateDivisor = rayTracingState().m_surfelSeeded ? Max<u32>(NWB_SURFEL_UPDATE_DIVISOR, 1u) : 1u;
-    const f32 hysteresis = rayTracingState().m_surfelSeeded ? s_SurfelDefaultHysteresis : 0.0f;
-    const f32 cellSize = 2.0f * NWB_SURFEL_DEFAULT_RADIUS;
+    const f32 cellSize = NWB_SURFEL_CELL_SIZE;
 
     NwbSurfelConstantsGpu params;
     params.cameraPositionCellSize = Float4(0.0f, 0.0f, 0.0f, cellSize);
@@ -6611,7 +6744,7 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
         static_cast<f32>(rayTracingState().m_surfelFrameIndex),
         static_cast<f32>(updateDivisor)
     );
-    params.coverageRadiusBiasHyst = Float4(NWB_SURFEL_COVERAGE_THRESHOLD, NWB_SURFEL_DEFAULT_RADIUS, s_SurfelNormalBias, hysteresis);
+    params.coverageRadiusBiasHyst = Float4(0.0f, NWB_SURFEL_DEFAULT_RADIUS, s_SurfelNormalBias, static_cast<f32>(NWB_SURFEL_MAX_ACCUM));
     params.ageRaysTileScreen = Float4(
         static_cast<f32>(NWB_SURFEL_MAX_AGE),
         static_cast<f32>(NWB_SURFEL_RAYS_PER_SURFEL),
@@ -6638,18 +6771,22 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         !rayTracingState().m_surfelSpawnPipeline
         || !rayTracingState().m_surfelHashBuildPipeline
         || !rayTracingState().m_surfelTracePipeline
+        || !rayTracingState().m_surfelResolvePipeline
     )
         return true;
 
-    // Build the per-frame binding sets: the spawn set needs the G-buffer (recreated on resize); the trace set needs the
-    // SW scene BVH (built this frame in prepareShadowVisibilityResources). Non-fatal: skip the whole block on failure.
+    // Build the per-frame binding sets: the spawn + resolve sets need the G-buffer + surfelIrradiance (recreated on
+    // resize); the trace set needs the SW scene BVH (built this frame in prepareShadowVisibilityResources). Non-fatal:
+    // skip the whole block on failure.
     if(
         !ensureSurfelSpawnBindingSet(targets)
         || !ensureSurfelHashBuildBindingSet()
         || !ensureSurfelTraceBindingSet()
+        || !ensureSurfelResolveBindingSet(targets)
         || !rayTracingState().m_surfelSpawnBindingSet
         || !rayTracingState().m_surfelHashBuildBindingSet
         || !rayTracingState().m_surfelTraceBindingSet
+        || !rayTracingState().m_surfelResolveBindingSet
     )
         return true;
 
@@ -6657,14 +6794,35 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     const u32 updateDivisor = rayTracingState().m_surfelSeeded ? Max<u32>(NWB_SURFEL_UPDATE_DIVISOR, 1u) : 1u;
     const u32 activeSurfelCount = DivideUp(poolCapacity, updateDivisor);
 
-    // The three passes UAV-write the surfel buffers then UAV/SRV-read them next; enable automatic UAV barriers so the
+    // The passes UAV-write the surfel buffers then UAV/SRV-read them next; enable automatic UAV barriers so the
     // commitBarriers between passes serialises the writes.
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelPoolBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelCellHeadBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelCounterBuffer.get(), true);
 
-    // (1) Spawn: one thread per screen tile. Reads the PREVIOUS frame's hash (cell-head SRV) for coverage; bump-
-    // allocates a surfel where coverage is below threshold. [numthreads(8,8,1)] over (screen / spawnTile) tiles.
+    // (1) Clear the cell-head to empty, then rebuild the hash from the live pool BEFORE the spawn, so the spawn sees this
+    // frame's exact occupancy (a non-empty cell head == a surfel already covers the cell) and fills only empty cells.
+    {
+        Core::Buffer* cellHead = rayTracingState().m_surfelCellHeadBuffer.get();
+        commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
+    }
+
+    // (2) Hash-build: one thread per pool slot; link each live surfel into its cell's list. [numthreads(64,1,1)].
+    {
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelHashBuild, graphics().getDevice(), commandList);
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelHashBuildBindingSet.get());
+        commandList.commitBarriers();
+        Core::ComputeState state;
+        state.setPipeline(rayTracingState().m_surfelHashBuildPipeline.get());
+        state.addBindingSet(rayTracingState().m_surfelHashBuildBindingSet.get());
+        commandList.setComputeState(state);
+        commandList.dispatch(DivideUp(poolCapacity, 64u), 1u, 1u);
+    }
+
+    // (3) Spawn: one thread per screen tile. Reads the freshly-built cell head; where a cell is still empty, atomically
+    // claims it and bump-allocates one surfel (one surfel per hash bucket). [numthreads(8,8,1)] over (screen / spawnTile).
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelSpawn, graphics().getDevice(), commandList);
         commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelSpawnBindingSet.get());
@@ -6676,27 +6834,6 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         const u32 tilesX = DivideUp(targets.width, NWB_SURFEL_SPAWN_TILE);
         const u32 tilesY = DivideUp(targets.height, NWB_SURFEL_SPAWN_TILE);
         commandList.dispatch(DivideUp(tilesX, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), DivideUp(tilesY, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), 1u);
-    }
-
-    // (2) Clear the cell-head to empty BEFORE the hash-build re-links this frame's live surfels. The spawn above already
-    // consumed the previous frame's hash. (The enabled UAV barrier + this state transition serialise it after spawn.)
-    {
-        Core::Buffer* cellHead = rayTracingState().m_surfelCellHeadBuffer.get();
-        commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
-    }
-
-    // (3) Hash-build: one thread per pool slot; link each live surfel into its cell's list. [numthreads(64,1,1)].
-    {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelHashBuild, graphics().getDevice(), commandList);
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelHashBuildBindingSet.get());
-        commandList.commitBarriers();
-        Core::ComputeState state;
-        state.setPipeline(rayTracingState().m_surfelHashBuildPipeline.get());
-        state.addBindingSet(rayTracingState().m_surfelHashBuildBindingSet.get());
-        commandList.setComputeState(state);
-        commandList.dispatch(DivideUp(poolCapacity, 64u), 1u, 1u);
     }
 
     // (4) Trace: one workgroup per active surfel (64 threads = 64 hemisphere rays through the SW scene BVH). Stage the
@@ -6720,9 +6857,26 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.dispatch(activeSurfelCount, 1u, 1u);
     }
 
-    // (5) Sync the pool + cell-head UAV writes -> the deferred-lighting gather's SRV reads.
-    commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(rayTracingState().m_surfelCellHeadBuffer.get(), Core::ResourceStates::ShaderResource);
+    // (5) Resolve: one thread per screen pixel, gather the surfel field (pool + cell-head as COMPUTE SRVs) + the
+    // G-buffer, write the screen-space surfelIrradiance the deferred lighting samples. This is what keeps the pool off
+    // the pixel shader (compute-only), eliminating the frames-in-flight pool race. The pool/cell-head UAV writes (trace/
+    // hash-build) are synced to SRV here; the surfelIrradiance UAV write is synced to SRV for the lighting after.
+    {
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelResolve, graphics().getDevice(), commandList);
+        commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_surfelCellHeadBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelResolveBindingSet.get());
+        commandList.commitBarriers();
+        Core::ComputeState state;
+        state.setPipeline(rayTracingState().m_surfelResolvePipeline.get());
+        state.addBindingSet(rayTracingState().m_surfelResolveBindingSet.get());
+        commandList.setComputeState(state);
+        const u32 groupSize = static_cast<u32>(NWB_SURFEL_RESOLVE_GROUP_SIZE);
+        commandList.dispatch(DivideUp(targets.width, groupSize), DivideUp(targets.height, groupSize), 1u);
+    }
+
+    // (6) Sync the surfelIrradiance UAV write -> the deferred-lighting pixel-shader SRV read.
+    commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 
     // Advance the frame counter (seeds the ray rotation + round-robin) and mark seeded so the next frame uses the

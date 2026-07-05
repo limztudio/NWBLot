@@ -433,22 +433,15 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
-    // Surfel GI bindings. The pool / cell-head / params buffers live on RendererRayTracingState. At target-creation
-    // time they may not yet exist (ensureSurfelResources is lazy, run in the prepare phase); a null resourceHandle is
-    // SKIPPED by createBindingSet (no warning), leaving the slot unwritten. The set is rebuilt with the real buffers
-    // when the pool appears (rebuildDeferredLightingGiBindings, called from renderDeferredLighting, before the lighting
-    // pass samples them). Until then nwbSurfelGather finds no surfel and falls back to hemiAmbient.
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(
-        NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_POOL,
-        rayTracingState().m_surfelPoolBuffer.get()
-    ));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(
-        NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_HASH,
-        rayTracingState().m_surfelCellHeadBuffer.get()
-    ));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
-        NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_PARAMS,
-        rayTracingState().m_surfelConstants.get()
+    // Surfel GI: the RESOLVED screen-space irradiance texture (surfel_resolve_cs writes it; the lighting samples it).
+    // Created WITH these targets (same lifetime), so it is bound here at creation -- no lazy rebuild. Reading the
+    // resolved texture (not the RW surfel pool) is what keeps the pool off the pixel shader = no frames-in-flight race.
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_IRRADIANCE,
+        createdTargets.surfelIrradiance.get(),
+        createdTargets.surfelIrradianceFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
     ));
     createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, deferredState().m_lightingBindingLayout);
     if(!createdTargets.lightingBindingSet){
@@ -547,11 +540,19 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 
+    // Surfel-GI resolved irradiance: cleared to 0 (alpha 0 = "no surfel covered this pixel") each frame. When the surfel
+    // resolve pass runs (SW GI enabled) it overwrites every pixel; when it does NOT (GI off / HW path), the cleared 0
+    // makes the lighting fall back to hemiAmbient -- a correct no-op. Same per-frame reset as the caustic irradiance.
+    if(targets.surfelIrradiance)
+        commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+
     commandList.commitBarriers();
 
     commandList.clearTextureFloat(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
     commandList.clearTextureFloat(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.5f, 0.5f, 1.f, 1.f));
     commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
+    if(targets.surfelIrradiance)
+        commandList.clearTextureFloat(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
 
     if(clearCsgTargets){
         Core::GpuTimingMeasure csgClearTiming(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, graphics().getDevice(), commandList);

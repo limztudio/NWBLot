@@ -47,27 +47,6 @@
 #ifndef NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING NWB_DEFERRED_LIGHTING_BINDING_CAUSTIC_IRRADIANCE
 #endif
-// Surfel GI bindings live in the deferred lighting binding set; point scene/lighting.slangi at those slots before
-// it declares them. The surfel pool/hash/params slots are reserved in deferred/binding_slots.h.
-#ifndef NWB_SCENE_GI_SURFEL_POOL_SET
-#define NWB_SCENE_GI_SURFEL_POOL_SET NWB_DEFERRED_LIGHTING_SET
-#endif
-#ifndef NWB_SCENE_GI_SURFEL_POOL_BINDING
-#define NWB_SCENE_GI_SURFEL_POOL_BINDING NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_POOL
-#endif
-#ifndef NWB_SCENE_GI_SURFEL_HASH_SET
-#define NWB_SCENE_GI_SURFEL_HASH_SET NWB_DEFERRED_LIGHTING_SET
-#endif
-#ifndef NWB_SCENE_GI_SURFEL_HASH_BINDING
-#define NWB_SCENE_GI_SURFEL_HASH_BINDING NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_HASH
-#endif
-#ifndef NWB_SCENE_GI_SURFEL_PARAMS_SET
-#define NWB_SCENE_GI_SURFEL_PARAMS_SET NWB_DEFERRED_LIGHTING_SET
-#endif
-#ifndef NWB_SCENE_GI_SURFEL_PARAMS_BINDING
-#define NWB_SCENE_GI_SURFEL_PARAMS_BINDING NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_PARAMS
-#endif
-
 // Brings common/math (nwbSafeNormalize, frame helpers), scene/buffer (g_NwbSceneLights, nwbSceneLightCount,
 // g_NwbSceneCameraPosition, nwbSceneResolveLight) and the engine's default BRDF lobe (nwbSceneShadeLight) +
 // whole-surface model (nwbSceneApplyLighting). A project BXDF may use or ignore the default model.
@@ -82,6 +61,26 @@
 [[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferWorldPosition;
 [[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferDepth;
 [[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, NWB_DEFERRED_LIGHTING_SET)]] SamplerState g_DeferredSampler;
+
+// Resolved surfel-GI indirect irradiance (RGBA16F, screen space): the surfel_resolve_cs COMPUTE pass gathered the
+// surfel field once per pixel into this texture (rgb = indirect irradiance, a = 1 where a surfel covered the pixel,
+// 0 = none). The lighting reads THIS texture rather than the read-write surfel pool, so the pool stays off the pixel
+// shader (compute-only) -- that is what kills the frames-in-flight pool race. Cleared to 0 (a = 0 -> hemiAmbient) when
+// no surfel producer ran this frame, so an unbound/disabled GI is a correct hemiAmbient no-op.
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_IRRADIANCE, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_NwbSurfelIrradiance;
+
+// Indirect irradiance for the OPAQUE deferred path: read the resolved surfel texture at THIS pixel; where no surfel
+// covered it (a < 0.5) fall back to the hemiAmbient ambient term. Replaces the old in-pixel nwbSurfelGather. The
+// resolve texture is 1:1 with the screen, so a point Load (not a bilinear Sample) reproduces the old per-pixel gather
+// exactly -- a bilinear tap would blend the coverage flag + irradiance across the covered/uncovered boundary.
+half3 nwbBxdfResolvedIndirect(float2 uv, float3 normalVector){
+    uint width;
+    uint height;
+    g_NwbSurfelIrradiance.GetDimensions(width, height);
+    const int2 pixel = int2(uv * float2(width, height));
+    const float4 resolved = g_NwbSurfelIrradiance.Load(int3(pixel, 0));
+    return resolved.a > 0.5 ? half3(resolved.rgb) : nwbGiHemiAmbient(normalVector);
+}
 
 struct NwbDeferredLightingPixelInput{
     float4 position : SV_Position;
@@ -119,7 +118,7 @@ NwbBxdfSurface nwbBxdfLoadSurface(float2 uv){
     surface.param1 = half(worldSample.a);
     surface.viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - surface.worldPosition, float3(0.0, 0.0, 1.0));
     surface.isBackground = depth >= 0.999999;
-    surface.indirectIrradiance = nwbBxdfIndirectIrradiance(surface.worldPosition, surface.normal);
+    surface.indirectIrradiance = nwbBxdfResolvedIndirect(uv, surface.normal);
     return surface;
 }
 

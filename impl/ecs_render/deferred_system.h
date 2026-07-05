@@ -33,11 +33,6 @@ public:
     [[nodiscard]] bool updateSceneShadingBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
     [[nodiscard]] bool createDeferredLightingResources();
     [[nodiscard]] bool createDeferredLightingPipeline(DeferredFrameTargets& targets);
-    // Rebuilds the deferred lighting binding set once the surfel pool / cell-head / params buffers exist. Those are
-    // created lazily in the prepare phase (after this set already exists), so the set is first built with null surfel
-    // bindings and rebuilt to point at the real buffers when the pool appears. The surfel buffers do not ping-pong, so
-    // the rebuild is a one-shot upgrade (idempotent once bound to the current pool).
-    void rebuildDeferredLightingGiBindings();
     [[nodiscard]] bool renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
     [[nodiscard]] bool createDeferredCompositeResources();

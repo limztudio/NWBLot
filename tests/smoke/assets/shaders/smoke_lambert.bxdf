@@ -12,7 +12,8 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
         surface.normal,
         float4(0.0, 0.0, 0.0, 1.0),
         surface.worldPosition,
-        pixel
+        pixel,
+        surface.indirectIrradiance
     );
 }
 

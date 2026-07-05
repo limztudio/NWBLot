@@ -697,6 +697,19 @@ private:
     Core::BindingSetHandle m_surfelSpawnBindingSet;
     Core::BindingSetHandle m_surfelHashBuildBindingSet;
     Core::BindingSetHandle m_surfelTraceBindingSet;
+    // Resolve pass: a COMPUTE pass that gathers the surfel field once per pixel into the screen-space surfelIrradiance
+    // texture the deferred lighting samples. Keeping the gather in compute (not the pixel shader) keeps the RW pool off
+    // the pixel stage, eliminating the frames-in-flight pool race. Binds surfel constants/pool(SRV)/cell-head(SRV) + the
+    // G-buffer world-position/normal + the surfelIrradiance UAV.
+    Core::BindingLayoutHandle m_surfelResolveBindingLayout;
+    Core::ShaderHandle m_surfelResolveShader;
+    Core::ComputePipelineHandle m_surfelResolvePipeline;
+    Core::BindingSetHandle m_surfelResolveBindingSet;
+    // Tracked pointers for the resolve set rebuild (G-buffer world-position/normal + the surfelIrradiance output, all
+    // recreated on resize).
+    const Core::Texture* m_surfelResolveBindingSetWorldPosition = nullptr;
+    const Core::Texture* m_surfelResolveBindingSetNormal = nullptr;
+    const Core::Texture* m_surfelResolveBindingSetOutput = nullptr;
     // Tracked pointers for the spawn set rebuild (the G-buffer world-position + normal are recreated on resize).
     const Core::Texture* m_surfelSpawnBindingSetWorldPosition = nullptr;
     const Core::Texture* m_surfelSpawnBindingSetNormal = nullptr;
@@ -730,6 +743,7 @@ private:
     bool m_surfelSpawnPipelineFailed = false;
     bool m_surfelHashBuildPipelineFailed = false;
     bool m_surfelTracePipelineFailed = false;
+    bool m_surfelResolvePipelineFailed = false;
     bool m_surfelDispatchLogged = false;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;

@@ -434,6 +434,13 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelSpawnBindingSet.reset();
     m_surfelHashBuildBindingSet.reset();
     m_surfelTraceBindingSet.reset();
+    m_surfelResolveBindingLayout.reset();
+    m_surfelResolveShader.reset();
+    m_surfelResolvePipeline.reset();
+    m_surfelResolveBindingSet.reset();
+    m_surfelResolveBindingSetWorldPosition = nullptr;
+    m_surfelResolveBindingSetNormal = nullptr;
+    m_surfelResolveBindingSetOutput = nullptr;
     m_surfelSpawnBindingSetWorldPosition = nullptr;
     m_surfelSpawnBindingSetNormal = nullptr;
     m_surfelTraceBindingSetSceneNodes = nullptr;
@@ -454,6 +461,7 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelSpawnPipelineFailed = false;
     m_surfelHashBuildPipelineFailed = false;
     m_surfelTracePipelineFailed = false;
+    m_surfelResolvePipelineFailed = false;
     m_surfelDispatchLogged = false;
     m_shadowPipelineFailed = false;
     m_shadowSoftPipelineFailed = false;

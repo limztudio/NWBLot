@@ -35,25 +35,6 @@
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_BINDING
 #endif
 
-#ifndef NWB_SCENE_GI_SURFEL_POOL_SET
-#define NWB_SCENE_GI_SURFEL_POOL_SET NWB_SCENE_GI_SURFEL_POOL_DEFAULT_SET
-#endif
-#ifndef NWB_SCENE_GI_SURFEL_POOL_BINDING
-#define NWB_SCENE_GI_SURFEL_POOL_BINDING NWB_SCENE_GI_SURFEL_POOL_DEFAULT_BINDING
-#endif
-#ifndef NWB_SCENE_GI_SURFEL_HASH_SET
-#define NWB_SCENE_GI_SURFEL_HASH_SET NWB_SCENE_GI_SURFEL_HASH_DEFAULT_SET
-#endif
-#ifndef NWB_SCENE_GI_SURFEL_HASH_BINDING
-#define NWB_SCENE_GI_SURFEL_HASH_BINDING NWB_SCENE_GI_SURFEL_HASH_DEFAULT_BINDING
-#endif
-#ifndef NWB_SCENE_GI_SURFEL_PARAMS_SET
-#define NWB_SCENE_GI_SURFEL_PARAMS_SET NWB_SCENE_GI_SURFEL_PARAMS_DEFAULT_SET
-#endif
-#ifndef NWB_SCENE_GI_SURFEL_PARAMS_BINDING
-#define NWB_SCENE_GI_SURFEL_PARAMS_BINDING NWB_SCENE_GI_SURFEL_PARAMS_DEFAULT_BINDING
-#endif
-
 // Debug toggle for the visual gate: when 1, nwbBxdfCausticIrradiance returns a small constant grey instead of
 // sampling the buffer, so the additive caustic path can be confirmed (every receiver brightens additively and
 // uniformly) without a producer running. Default 0 samples the (black-cleared) buffer = additive no-op.
@@ -78,13 +59,11 @@ Texture2DArray<float4> g_NwbShadowVisibility;
 Texture2D<float4> g_NwbCausticIrradiance;
 #endif
 
-// Surfel GI gather. The surfel pool (StructuredBuffer<NwbSurfel>), spatial-hash cell-head buffer, and params CB
-// live on RendererRayTracingState; nwbSurfelGather walks the 3x3x3 neighbour cells at the shaded point. When
-// NWB_SCENE_GI_SAMPLING_DISABLED is defined (the AVBOIT transparent accumulate, which does not bind these), the
-// header + its bindings are omitted and nwbBxdfIndirectIrradiance falls back to hemiAmbient -- identical to no GI.
-#ifndef NWB_SCENE_GI_SAMPLING_DISABLED
-#include "../gi/surfel/surfel_gather.slangi"
-#endif
+// The surfel GI gather is NOT done here. It runs once per pixel in a dedicated COMPUTE resolve pass
+// (surfel_resolve_cs) into a screen-space irradiance texture, which the deferred-lighting harness samples
+// (lighting_framework.slangi's nwbBxdfLoadSurface). That keeps the read-write surfel pool off the pixel shader
+// (compute-only, like the caustic accumulator), eliminating the frames-in-flight pool race. nwbBxdfIndirectIrradiance
+// below is the hemiAmbient FALLBACK the AVBOIT transparent path (no G-buffer -> no resolve) and null coverage use.
 
 // 1 (white) = lit, 0 = shadowed, tint = colored transmittance. Reads the light's shadow-slot layer; a light
 // with no slot (params.z < 0 -- the clear default, or a light the slot allocator did not reach) is fully lit.
@@ -207,27 +186,24 @@ half3 nwbGiHemiAmbient(float3 normalVector){
     return lerp(NWB_GI_HEMI_AMBIENT_GROUND, NWB_GI_HEMI_AMBIENT_SKY, skyAmount);
 }
 
-// Surfel GI indirect irradiance: the diffuse irradiance the world-hashed surfels integrate for this surface.
-// nwbSurfelGather biases the shaded point outward along the normal, hashes it, walks the 3x3x3 neighbour cells'
-// surfel lists, and weights each surfel by normal alignment * distance falloff * confidence. When no surfel
-// covers the point (or GI sampling is disabled), fades to the hemiAmbient ambient term. The D3 contract change
-// threads this VALUE through the cook-generated bxdf_dispatch.slangi so materials can reshape their indirect term.
+// Fallback indirect irradiance: the hemispherical ambient term. The OPAQUE deferred path OVERRIDES this per pixel by
+// sampling the resolved surfel-irradiance texture (lighting_framework.slangi's nwbBxdfLoadSurface); this function is
+// what the AVBOIT transparent path (whose fragments are not in the opaque G-buffer the resolve ran over) and any
+// null-coverage fallback use. worldPosition is unused (kept for the signature the cook-generated dispatch threads).
 half3 nwbBxdfIndirectIrradiance(float3 worldPosition, float3 normalVector){
-#ifdef NWB_SCENE_GI_SAMPLING_DISABLED
     return nwbGiHemiAmbient(normalVector);
-#else
-    float3 gi;
-    if(nwbSurfelGather(worldPosition, normalVector, gi))
-        return half3(gi);
-    return nwbGiHemiAmbient(normalVector);
-#endif
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, float3 worldPosition, int2 pixel){
+// indirectIrradiance is the surface's precomputed indirect term (the opaque deferred path resolves it once per pixel
+// from the surfel-irradiance texture in nwbBxdfLoadSurface; the AVBOIT transparent path passes the hemiAmbient
+// fallback). It is threaded IN rather than recomputed here, so the whole-surface model reads the same value the BXDF
+// contract exposes as surface.indirectIrradiance -- and, critically, the deferred path never re-gathers the surfel
+// pool from the pixel shader (that is what the resolve pass decoupled to kill the frames-in-flight race).
+half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, float3 worldPosition, int2 pixel, half3 indirectIrradiance){
     const float3 normalVector = nwbSafeNormalize(normal, float3(0.0, 0.0, 1.0));
     const float3 tangentVector = nwbFrameOrthonormalTangent(tangent.xyz, normalVector);
     const float tangentSign = tangent.w < 0.0 ? -1.0 : 1.0;
@@ -239,7 +215,7 @@ half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, floa
     const float3 viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - worldPosition, float3(0.0, 0.0, 1.0));
     const half ndotv = half(max(dot(normalVector, viewVector), 0.0));
 
-    half3 litColor = baseColor * nwbBxdfIndirectIrradiance(worldPosition, normalVector);
+    half3 litColor = baseColor * indirectIrradiance;
     const uint lightCount = nwbSceneLightCount();
     for(uint i = 0u; i < lightCount; ++i){
         // Per-light colored transmittance (1 = lit, 0 = shadowed, tint = colored transparent occluder);

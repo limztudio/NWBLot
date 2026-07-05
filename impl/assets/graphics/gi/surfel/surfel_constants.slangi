@@ -15,9 +15,9 @@
 // distance-scaled spawn/recycle, the frame index for the per-frame R2 ray rotation + age comparisons, and the update
 // divisor which is 1 on the bootstrap frame so every surfel is seeded in one frame).
 struct NwbSurfelConstants{
-    float4 cameraPositionCellSize;  // xyz = camera world position, w = hash cell size (= 2 * max surfel radius)
+    float4 cameraPositionCellSize;  // xyz = camera world position, w = hash cell size (surfel spacing; one surfel per cell)
     float4 hashPoolFrameDivisor;    // x = hash cell count (pow2), y = pool capacity, z = frame index, w = update divisor
-    float4 coverageRadiusBiasHyst;  // x = spawn coverage threshold, y = default spawn radius, z = normal bias, w = hysteresis
+    float4 coverageRadiusBiasHyst;  // x = reserved (one-surfel-per-cell dropped the coverage sum), y = default spawn radius, z = normal bias, w = accumulation cap (bounded running-mean window)
     float4 ageRaysTileScreen;       // x = max age (frames before recycle), y = rays/surfel, z = spawn tile (px), w = screen width
     float4 screenHeightPad;         // x = screen height, yzw = pad
 };

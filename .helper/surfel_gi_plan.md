@@ -1,5 +1,25 @@
 # Surfel GI Plan (pivot from the world-grid DDGI)
 
+## U2 — ROUND-ROBIN TRACE BUDGET + PER-SURFEL SEEDING COMPLETE + VERIFIED (2026-07-05, uncommitted on shadow_render)
+The round-robin trace budget was ALREADY implemented in U0: the trace dispatches DivideUp(poolCapacity, updateDivisor)
+workgroups (updateDivisor = NWB_SURFEL_UPDATE_DIVISOR=4 in steady state, 1 on the bootstrap frame), and the trace shader
+owns surfel `cursor + groupID*divisor` (cursor = frameIndex % divisor) -> 1/4 of the slot space per frame, all slots over
+4 frames = a 4x ray drop by construction (4096 vs 16384 workgroups; 64 rays each), temporally stable (running-mean
+n==0 seed + flicker 0/8). So U2's genuine delta is the "no recycle dark-flash" criterion: a freshly-spawned/recycled
+surfel is sampleCount 0 -> the gather skips it -> a newly-revealed region with no seeded neighbour in reach shows
+hemiAmbient until the round-robin traces it (a pop-in). The gather's 3x3x3 blend already covers gradual reveals (adjacent
+seeded surfels fill in), but under U1 recycling a whole revisited region can be all-fresh. FIX = PER-SURFEL SPATIAL
+SEEDING in the spawn: a new surfel seeds meanIrradiance from ESTABLISHED neighbours (sampleCount >= 2 -> traced >=twice
+-> never a this-frame spawn, so NO torn read + NO seed-from-seed) in the 3x3x3 cells, normal + distance weighted (the
+gather's weighting); found -> meanIrradiance = weighted average, sampleCount = 1 (so the gather includes it immediately);
+none -> stays 0. Race-free: the neighbours' meanIrradiance was written by the PREVIOUS frame's trace (pass 4) and is not
+written during this spawn (pass 3, before this frame's trace); only lastSeenFrame is written this pass (a different field).
+VERIFIED: static no-regression (flicker 0/6, bounce byte-identical -- the seed path is unexercised on a static scene since
+no new surfels spawn after bootstrap); under a temp auto-pan that exercises the seed's concurrent neighbour reads -- no
+crash, validation/warning-clean (confirms the sampleCount>=2 concurrency-safety empirically), recycling still bounded
+(max bump 229, live 228, no creep to capacity); temp pan reverted, static reconfirmed (flicker 0/3). File:
+surfel_spawn_cs.slang (seed block before the surfel write). NEXT: U3 octahedral directional irradiance.
+
 ## U1 — RECYCLING + FREE-LIST COMPLETE + VERIFIED (2026-07-05, uncommitted on shadow_render)
 Design adversarially verified BEFORE coding (7-auditor + synth workflow) — it caught 3 real concurrency bugs in the
 first design: (1) head-only keep-alive starves a deeper collision-node surfel -> ages out while visible -> re-spawn

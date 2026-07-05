@@ -139,13 +139,46 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
+    // Per-surfel spatial seeding (U2, "no recycle dark-flash"): a fresh surfel is sampleCount 0 -> the gather skips it,
+    // so a newly-revealed / recycled surface with NO seeded neighbour in the gather's reach shows hemiAmbient until the
+    // round-robin traces this surfel a few frames later = a pop-in. Seed meanIrradiance from ESTABLISHED neighbours
+    // (sampleCount >= 2, i.e. traced at least twice -> never a this-frame spawn, so no torn read + no seed-from-seed) in
+    // the 3x3x3 cells, normal + distance weighted (the gather's weighting), so the surface shows a plausible bounce
+    // immediately; the first real trace then refines it (seeded sampleCount 1 -> the trace blends the new estimate at
+    // weight 1/2). No established neighbour (bootstrap, or a genuinely new region) -> stays 0. The neighbours'
+    // meanIrradiance was written by the PREVIOUS frame's trace (pass 4) and is stable during this spawn (pass 3, before
+    // this frame's trace), so the read is race-free.
+    float3 seedIrradiance = float3(0.0, 0.0, 0.0);
+    float seedWeight = 0.0;
+    for(int dz = -1; dz <= 1; ++dz)
+    for(int dy = -1; dy <= 1; ++dy)
+    for(int dx = -1; dx <= 1; ++dx){
+        const uint seedBucket = nwbSurfelHashCell(myCell + int3(dx, dy, dz), cellCount);
+        uint seedId = g_NwbSurfelCellHead[seedBucket];
+        uint seedWalk = 0u;
+        [loop] while(seedId < poolCapacity && seedWalk < NWB_SURFEL_MAX_WALK){
+            const NwbSurfel neighbour = g_NwbSurfelPool[seedId];
+            if(neighbour.alive != 0u && neighbour.sampleCount >= 2u){
+                const float dist = length(worldPosition - neighbour.position);
+                const float normalWeight = saturate(dot(worldNormal, neighbour.normal));
+                const float distanceWeight = saturate(1.0 - dist / max(neighbour.radius, 1e-4));
+                const float weight = normalWeight * distanceWeight;
+                seedIrradiance += neighbour.meanIrradiance * weight;
+                seedWeight += weight;
+            }
+            seedId = neighbour.nextInCell;
+            ++seedWalk;
+        }
+    }
+    const bool seeded = seedWeight > 1e-4;
+
     NwbSurfel surfel;
     surfel.position = worldPosition;
     surfel.radius = defaultRadius;
     surfel.normal = worldNormal;
     surfel.nextInCell = NWB_SURFEL_CELL_INVALID;   // sole member of this cell's list
-    surfel.meanIrradiance = float3(0.0, 0.0, 0.0);
-    surfel.sampleCount = 0u;
+    surfel.meanIrradiance = seeded ? (seedIrradiance / seedWeight) : float3(0.0, 0.0, 0.0);
+    surfel.sampleCount = seeded ? 1u : 0u;
     surfel.lastSeenFrame = frameIndex;
     surfel.alive = 1u;
     surfel.pad0 = 0u;

@@ -1,6 +1,6 @@
 nwb_declare_static_library(nwb_alloc)
 target_sources(nwb_alloc PRIVATE
-    "${PROJECT_SOURCE_DIR}/global/container/adaptor.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/container_adaptor.cpp"
     "${PROJECT_SOURCE_DIR}/global/container/adaptor.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/core.cpp"

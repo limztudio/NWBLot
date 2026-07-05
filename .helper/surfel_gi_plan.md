@@ -105,15 +105,27 @@ DELETED: the grid CB + probe atlases + ray-data + the blend/border/distance pass
   cells; optional half-res surfel-apply + bilateral upsample. VERIFY: NWB_GPU_TIMING_FILE shows the surfel block below
   the old grid block; fps up.
 
-## Open decisions (need the user — like the DDGI D1-D6)
-1. **U3 storage — octahedral tiles vs 2-band SH.** Octahedral (reuses octahedral.slangi verbatim per the mandate;
-   richer directionality; needs a border pass) vs SH-2 packed into the 64B record (no atlas/border pass, smaller, but
-   new encode/decode + softer directionality). *Recommend octahedral.*
-2. **HW twin (U5) — in scope or deferred?** GI runs SW-only today (the DDGI HW trace was a stub); U5 makes the HW twin
-   real, matching the shadow/caustic dual-path. *Recommend in scope but after U0-U4 land.*
-3. **Bootstrap cost / spawn-tile default.** Pool 16384 + hash 262144 + 16x16 tile spawns ~4-5k surfels for the box and,
-   with divisor-1 bootstrap, traces them ALL x64 (~290k rays) in the one bootstrap frame. If too heavy on a target GPU,
-   raise the spawn tile to 24/32 (divisor-first budget check vs the 2048-probe grid budget). *Recommend 16px, revisit.*
-4. Per-pixel PS gather vs half-res compute gather — *PS for U0-U5, revisit in U6.* Linked-list hash vs prefix-sum —
-   *linked-list at <=16k surfels.* Screen-only spawn (brief GI pop under fast motion; non-issue for the static box) —
-   *screen-only through U5.* (These have clear defaults; listed for completeness.)
+## Decisions RESOLVED (user, 2026-07-05)
+1. **U3 storage = 2-band SPHERICAL HARMONICS** (user chose against the octahedral recommendation). Per-surfel
+   directional irradiance is stored as SH-2 packed into the surfel record — NO per-surfel atlas, NO border pass
+   (`surfel_border_cs` is DROPPED from U3). Needs new SH encode (accumulate `radiance * shBasis(dir)` in the trace's
+   groupshared reduce) + decode (`dot(sh, shBasis(pixelNormal))` clamped >=0) code. Smaller + cheaper than the atlas;
+   softer directionality (2 bands = 4 coeffs/channel = 12 floats RGB). The `NwbSurfel` record grows past 64B to hold
+   the SH (RGB SH-2 = 12 floats = 48B) — re-size to ~96-112B (6-7 float4 lanes); `octahedral.slangi` is NOT reused for
+   surfels (only the SW trace/shade + Fibonacci dirs + the consumer contract are).
+2. **HW twin (U5) = IN SCOPE**, after U0-U4 land. Makes the first real GI HW path (the old DDGI HW trace was a stub).
+3. Bootstrap: pool 16384 + hash 262144 + 16x16 spawn tile (~4-5k surfels, ~290k bootstrap rays); raise the tile if a
+   target GPU chokes. PS-gather through U5. Linked-list hash. Screen-only spawn through U5. (Plan defaults kept.)
+
+## U0 status: IMPLEMENTING (started 2026-07-05). U0 uses FLAT RGB mean-irradiance (the SH decision lands in U3).
+
+## Cleanup mandate (user 2026-07-05: "remove all retired core later")
+The surfel pivot RETIRES the world-grid GI. Remove ALL of it CLEANLY (no dead code) as the surfel units land — not
+left orphaned: the probe atlases (irradiance A/B + distance A/B) + ray-data + grid CB + hit-albedo buffer; the blend
+(irradiance + distance) + border passes and their pipelines/binding-sets/`ensure*`/shader files (gi_probe_blend_*_cs,
+gi_probe_border_cs + .nwb); the grid state fields on RendererRayTracingState + their invalidateResources resets; the
+ping-pong front-flip + rebuildDeferredLightingGiBindings flip; and probe_grid.slangi's grid helpers
+(NwbGiGridConstants/ProbeWorldPos/LinearIndex/ProbeCount/ProbeActiveThisFrame). KEEP + REUSE: gi_probe_trace_sw_cs.slang
+(the closest-hit trace + shade + baseColor tint), nwbGiFibonacciDirection/nwbGiFrameRotation, the sw BVH bindings, and
+the nwbBxdfIndirectIrradiance consumer contract. Whole-workspace grep for stale `gi_probe_blend`/`gi_probe_border`/
+`m_giIrradianceAtlas`/`nwbGiProbe*` references after each unit (mirror the BXDF-redesign stale-code sweep).

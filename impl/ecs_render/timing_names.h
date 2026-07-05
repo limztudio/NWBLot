@@ -51,6 +51,7 @@ inline constexpr Name s_AvboitExtinction("render.avboit_extinction");
 inline constexpr Name s_AvboitIntegration("render.avboit_integration");
 inline constexpr Name s_AvboitAccumulate("render.avboit_accumulate");
 inline constexpr Name s_SurfelSpawn("render.surfel_spawn");
+inline constexpr Name s_SurfelAgeFree("render.surfel_age_free");
 inline constexpr Name s_SurfelHashBuild("render.surfel_hash_build");
 inline constexpr Name s_SurfelTrace("render.surfel_trace");
 inline constexpr Name s_SurfelResolve("render.surfel_resolve");

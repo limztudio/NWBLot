@@ -1,5 +1,35 @@
 # Surfel GI Plan (pivot from the world-grid DDGI)
 
+## U1 — RECYCLING + FREE-LIST COMPLETE + VERIFIED (2026-07-05, uncommitted on shadow_render)
+Design adversarially verified BEFORE coding (7-auditor + synth workflow) — it caught 3 real concurrency bugs in the
+first design: (1) head-only keep-alive starves a deeper collision-node surfel -> ages out while visible -> re-spawn
+churn = FLICKER (the U0 failure mode); (2) the signed-decrement-undo free-list pop was correct but fragile; (3) the
+BUMP_TOP "undo an overshoot with InterlockedAdd(-1)" trap ALIASES two surfels onto one slot. Shipped fixes:
+- COLLISION-AWARE KEEP-ALIVE: the spawn walks the bucket list (bounded by MAX_WALK, like the gather) and refreshes
+  lastSeenFrame on the node whose nwbSurfelCellCoord == THIS tile's cell (not just the head); only a genuinely-empty
+  cell falls through to the CmpXchg(INVALID->PENDING) claim. `id < poolCapacity` terminates the walk on INVALID/PENDING.
+- AGE-FREE PASS (new surfel_age_free_cs.slang, runs FIRST as pass 0): 1 thread/slot; a live surfel with
+  frameIndex - lastSeenFrame > maxAge is freed (alive=0) + its id PUSHED to a persistent free-list stack via
+  InterlockedAdd(counter[FREE_TOP]). Reads lastSeenFrame from the PREVIOUS frame's spawn keep-alive.
+- SPAWN POP-OR-BUMP: after winning the claim, POP the free-list first via a CAS loop (pushes are quiescent this pass --
+  barrier-separated -> FREE_TOP only decreases -> never underflows / never negative); else BUMP via a CAS capped at
+  poolCapacity (a monotonic high-water mark -- never overshoot, never decrement). Full 10-field surfel write scrubs the
+  recycled slot's stale nextInCell.
+- PASS ORDER: (0) age-free -> (1) clear cellHead -> (2) hash-build -> (3) spawn -> (4) trace -> (5) resolve. Push (pass 0)
+  + pop (pass 3) are barrier-separated (clear + hash-build between) so the free-list stack has NO concurrent push/pop ->
+  ABA is structurally impossible -> no epoch counter needed. Free-list buffer gets pool-equivalent state-tracking +
+  setEnableUavBarriersForBuffer, and the whole enable block sits ABOVE pass 0 (R1/R2).
+- LIVE-COUNT DIAGNOSTIC: a CPU-readback of the counter (modeled on the SW-shadow edge-stats path) logs
+  live = BUMP_TOP - FREE_TOP every 120 frames (exact because BUMP_TOP is CAS-capped).
+VERIFIED: (a) static no-regression -- flicker 0/8 (std ~0.48, == U0), bounce byte-identical, live count = 220 / free = 0
+STABLE (proves age-free is inert on a fully-visible scene AND the collision-aware keep-alive refreshes every surfel --
+else free would rise); (b) recycling under a temporary auto-pan -- FREE_TOP rose 0 -> 228 as off-view walls aged out,
+BUMP_TOP stayed ~constant (221 -> 229, i.e. freed slots REUSED not bump-grown), live count bounded (max 226 of 16384,
+never creeping to capacity); (c) validation/warning-clean throughout; temp auto-pan reverted, static baseline reconfirmed
+(flicker 0/4). Files: surfel_age_free_cs.slang(+.nwb), surfel_spawn_cs.slang, surfel_binding_slots.h (slot 18
+FREE_LIST + CELL_SIZE note), gi/names.h, timing_names.h, renderer_state.h, raytracing_system.h/.cpp (free-list +
+readback buffers, age-free pipeline/set, spawn set free-list, pass 0, counter readback log). NEXT: U2 round-robin budget.
+
 Author date: 2026-07-05. Basis: a 5-agent design workflow (2 surveys of the reusable plumbing + G-buffer, 2 candidate
 architectures, 1 verified synthesis). Supersedes the world-grid probe volume in `.helper/ddgi_plan.md` for the GI
 sample layer; the world-grid DDGI it replaces is COMPLETE + verified (colored red/blue bounce) and stays as the

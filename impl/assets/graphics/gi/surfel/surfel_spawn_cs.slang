@@ -33,6 +33,9 @@ RWStructuredBuffer<uint> g_NwbSurfelCellHead;   // this frame's hash (built befo
 [[vk::binding(NWB_SURFEL_BINDING_COUNTER, NWB_SURFEL_SET)]]
 RWStructuredBuffer<uint> g_NwbSurfelCounter;
 
+[[vk::binding(NWB_SURFEL_BINDING_FREE_LIST, NWB_SURFEL_SET)]]
+RWStructuredBuffer<uint> g_NwbSurfelFreeList;   // recycled ids (U1); popped before bump-allocating
+
 [[vk::binding(NWB_SURFEL_BINDING_GBUFFER_WORLD_POSITION, NWB_SURFEL_SET)]]
 Texture2D<float4> g_NwbSurfelGbufferWorldPosition;
 
@@ -68,26 +71,71 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint frameIndex = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.z);
     const float defaultRadius = g_NwbSurfelConstants.coverageRadiusBiasHyst.y;
 
-    // One surfel per hash bucket. The hash was rebuilt from the live pool BEFORE this pass, so a non-empty cell head
-    // means a surfel already covers this cell -> nothing to do (cheap early-out, no allocation).
-    const uint bucket = nwbSurfelHashCell(nwbSurfelCellCoord(worldPosition, cellSize), cellCount);
-    if(g_NwbSurfelCellHead[bucket] != NWB_SURFEL_CELL_INVALID)
-        return;
+    // One surfel per hash bucket. The hash was rebuilt from the live pool BEFORE this pass. COLLISION-AWARE KEEP-ALIVE:
+    // walk the bucket's (short) list and, if a node's cell matches THIS tile's cell, refresh its lastSeenFrame and return
+    // -- the cell is covered. Refreshing only the list HEAD would starve a deeper node when two distinct cells collide
+    // onto one bucket, ageing out a still-visible surfel = flicker; walking (bounded, like the gather) refreshes the
+    // right one. id < poolCapacity terminates the walk on INVALID / PENDING (both > poolCapacity).
+    const int3 myCell = nwbSurfelCellCoord(worldPosition, cellSize);
+    const uint bucket = nwbSurfelHashCell(myCell, cellCount);
+    {
+        uint id = g_NwbSurfelCellHead[bucket];
+        uint walk = 0u;
+        [loop] while(id < poolCapacity && walk < NWB_SURFEL_MAX_WALK){
+            if(all(nwbSurfelCellCoord(g_NwbSurfelPool[id].position, cellSize) == myCell)){
+                g_NwbSurfelPool[id].lastSeenFrame = frameIndex;   // keep-alive (many tiles -> same node -> same value, benign)
+                return;
+            }
+            id = g_NwbSurfelPool[id].nextInCell;
+            ++walk;
+        }
+    }
 
-    // The cell is empty. Claim it atomically so only ONE tile allocates when many map to the same empty bucket (the
-    // bootstrap frame packs a near-camera cell with dozens of tiles). CompareExchange INVALID -> PENDING: the winner
-    // gets INVALID back, everyone else gets PENDING (or a real slot) and bails without touching the counter.
+    // No surfel covers this cell yet. Claim the bucket atomically so only ONE tile allocates when many map to the same
+    // empty bucket (the bootstrap frame packs a near-camera cell with dozens of tiles). CompareExchange INVALID ->
+    // PENDING: the winner gets INVALID back; everyone else (bucket occupied by a foreign-cell surfel, or another tile
+    // mid-claim) gets a non-INVALID value and bails without touching the counters.
     uint previous = NWB_SURFEL_CELL_INVALID;
     InterlockedCompareExchange(g_NwbSurfelCellHead[bucket], NWB_SURFEL_CELL_INVALID, NWB_SURFEL_CELL_PENDING, previous);
     if(previous != NWB_SURFEL_CELL_INVALID)
         return;
 
-    // Won the claim: bump-allocate a slot. On pool exhaustion, release the claim (restore INVALID) so a later frame can
-    // retry once recycling (U1) frees slots. No float atomics -- an InterlockedAdd on an integer counter.
+    // Won the claim: allocate a slot. POP a recycled id off the free-list first (U1) via a CAS loop -- pushes are
+    // quiescent this pass (age-free's push ran in a separate barrier-separated pass), so FREE_TOP only decreases and the
+    // pop never underflows / never goes transiently negative. If the free-list is empty, BUMP-allocate via a CAS capped
+    // at poolCapacity: BUMP_TOP is a monotonic high-water mark, so it must never overshoot -- decrementing it to "undo"
+    // an over-bump could re-hand a slot index already holding a live surfel (aliasing). On pool exhaustion, release the
+    // claim (restore INVALID) so a later frame retries once recycling frees slots.
     uint slot = 0u;
-    InterlockedAdd(g_NwbSurfelCounter[NWB_SURFEL_COUNTER_BUMP_TOP], 1u, slot);
-    if(slot >= poolCapacity){
-        g_NwbSurfelCellHead[bucket] = NWB_SURFEL_CELL_INVALID;
+    bool allocated = false;
+    {
+        uint freeTop = g_NwbSurfelCounter[NWB_SURFEL_COUNTER_FREE_TOP];
+        [loop] while(freeTop != 0u){
+            uint prev;
+            InterlockedCompareExchange(g_NwbSurfelCounter[NWB_SURFEL_COUNTER_FREE_TOP], freeTop, freeTop - 1u, prev);
+            if(prev == freeTop){
+                slot = g_NwbSurfelFreeList[freeTop - 1u];
+                allocated = true;
+                break;
+            }
+            freeTop = prev;
+        }
+    }
+    if(!allocated){
+        uint bumpTop = g_NwbSurfelCounter[NWB_SURFEL_COUNTER_BUMP_TOP];
+        [loop] while(bumpTop < poolCapacity){
+            uint prev;
+            InterlockedCompareExchange(g_NwbSurfelCounter[NWB_SURFEL_COUNTER_BUMP_TOP], bumpTop, bumpTop + 1u, prev);
+            if(prev == bumpTop){
+                slot = bumpTop;
+                allocated = true;
+                break;
+            }
+            bumpTop = prev;
+        }
+    }
+    if(!allocated){
+        g_NwbSurfelCellHead[bucket] = NWB_SURFEL_CELL_INVALID;   // pool full -> release the claim
         return;
     }
 

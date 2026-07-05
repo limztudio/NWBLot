@@ -40,6 +40,11 @@
 #define NWB_SURFEL_BINDING_GBUFFER_NORMAL 16
 #define NWB_SURFEL_BINDING_GBUFFER_DEPTH 17
 
+// Free-list (U1 recycling): a persistent LIFO stack of recycled surfel ids. The age-free pass PUSHES an id (dead surfel)
+// via InterlockedAdd on counter[FREE_TOP]; the spawn POPS one (before bump-allocating) via a CAS loop. Bound UAV in the
+// age-free + spawn sets. See .helper/surfel_gi_plan.md (U1).
+#define NWB_SURFEL_BINDING_FREE_LIST 18   // RWStructuredBuffer<uint> (UAV) -- capacity poolCapacity, depth = counter[FREE_TOP]
+
 // RESOLVE pass: a COMPUTE pass that gathers the surfel irradiance ONCE PER PIXEL into a screen-space texture, which
 // the deferred-lighting PIXEL shader then samples. This decouples the pixel consumer from the read-write surfel pool:
 // the pool is now touched ONLY by compute (like the caustic accumulator), so the frames-in-flight pixel-read-vs-next-
@@ -54,8 +59,10 @@
 #define NWB_SURFEL_RESOLVE_BINDING_OUTPUT 5                // RWTexture2D<float4> (screen-space irradiance)
 #define NWB_SURFEL_RESOLVE_GROUP_SIZE 8
 
-// g_SurfelCounter layout: index 0 = bump-allocation top (next fresh slot), index 1 = free-list top (recycled slots,
-// U1). Kept as named indices so the spawn / hash-build passes agree. NWB_SURFEL_COUNTER_SIZE is the buffer length.
+// g_SurfelCounter layout: index 0 = bump-allocation top (fresh slots ever handed out; CAS-capped at poolCapacity so
+// it is a true high-water mark, never overshoots), index 1 = free-list top (live LIFO depth of recycled ids, U1).
+// Invariant: alive_count + FREE_TOP == BUMP_TOP <= poolCapacity, so live = BUMP_TOP - FREE_TOP is exact. Kept as named
+// indices so the age-free / spawn passes agree. NWB_SURFEL_COUNTER_SIZE is the buffer length.
 #define NWB_SURFEL_COUNTER_BUMP_TOP 0u
 #define NWB_SURFEL_COUNTER_FREE_TOP 1u
 #define NWB_SURFEL_COUNTER_SIZE 2u

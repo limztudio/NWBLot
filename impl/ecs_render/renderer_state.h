@@ -686,15 +686,21 @@ private:
     // The three passes have DISTINCT binding layouts: the cell-head is an SRV at spawn (reads the previous frame) but a
     // UAV at hash-build (writes the links), so they cannot share one layout the way the SW-shadow passes do.
     Core::BindingLayoutHandle m_surfelSpawnBindingLayout;
+    Core::BindingLayoutHandle m_surfelAgeFreeBindingLayout;
     Core::BindingLayoutHandle m_surfelHashBuildBindingLayout;
     Core::BindingLayoutHandle m_surfelTraceBindingLayout;
     Core::ShaderHandle m_surfelSpawnShader;
     Core::ComputePipelineHandle m_surfelSpawnPipeline;
+    // Age-free (U1 recycling): one thread per pool slot; frees surfels unseen for maxAge frames + pushes their ids onto
+    // the free-list. Depends only on the persistent buffers, so it is built once (like hash-build).
+    Core::ShaderHandle m_surfelAgeFreeShader;
+    Core::ComputePipelineHandle m_surfelAgeFreePipeline;
     Core::ShaderHandle m_surfelHashBuildShader;
     Core::ComputePipelineHandle m_surfelHashBuildPipeline;
     Core::ShaderHandle m_surfelTraceShader;
     Core::ComputePipelineHandle m_surfelTracePipeline;
     Core::BindingSetHandle m_surfelSpawnBindingSet;
+    Core::BindingSetHandle m_surfelAgeFreeBindingSet;
     Core::BindingSetHandle m_surfelHashBuildBindingSet;
     Core::BindingSetHandle m_surfelTraceBindingSet;
     // Resolve pass: a COMPUTE pass that gathers the surfel field once per pixel into the screen-space surfelIrradiance
@@ -726,6 +732,14 @@ private:
     Core::BufferHandle m_surfelPoolBuffer;
     Core::BufferHandle m_surfelCellHeadBuffer;
     Core::BufferHandle m_surfelCounterBuffer;
+    // Free-list (U1): persistent LIFO stack of recycled surfel ids (poolCapacity uints). Pushed by age-free, popped by
+    // spawn; the stack depth lives in counter[FREE_TOP]. Same barrier/state-tracking as the pool.
+    Core::BufferHandle m_surfelFreeListBuffer;
+    // CPU-readable copy of the counter (BUMP_TOP, FREE_TOP) for the periodic live-count diagnostic (U1). The copy is
+    // snapshotted on a log-interval frame and mapped a few frames later (async), mirroring the SW-shadow edge-stats path.
+    Core::BufferHandle m_surfelCounterReadback;
+    bool m_surfelCountReadbackPending = false;
+    u32 m_surfelCountReadbackFrame = 0u;
     // Params CB (NwbSurfelConstants: 5 x Float4). Uploaded each rendered frame.
     Core::BufferHandle m_surfelConstants;
     u32 m_surfelPoolCapacity = NWB_SURFEL_POOL_CAPACITY;
@@ -741,6 +755,7 @@ private:
     // Feature gate + per-pipeline-failed flags (mirrors the caustic / shadow precedent).
     bool m_surfelEnabled = false;
     bool m_surfelSpawnPipelineFailed = false;
+    bool m_surfelAgeFreePipelineFailed = false;
     bool m_surfelHashBuildPipelineFailed = false;
     bool m_surfelTracePipelineFailed = false;
     bool m_surfelResolvePipelineFailed = false;

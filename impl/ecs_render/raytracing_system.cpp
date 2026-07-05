@@ -6161,6 +6161,11 @@ static_assert(sizeof(NwbSurfelConstantsGpu) == sizeof(f32) * 4u * 5u, "NwbSurfel
 // ray/query does not self-hit the surface it belongs to. Small world-space offset; U6 scales it by camera distance.
 inline constexpr f32 s_SurfelNormalBias = 0.05f;
 
+// Live-count diagnostic (U1): snapshot the surfel counter every s_SurfelCountLogInterval frames and map + log it
+// s_SurfelCountLogDelay frames later (the copy is async, so the delay lets the GPU finish before the CPU maps).
+inline constexpr u32 s_SurfelCountLogInterval = 120u;
+inline constexpr u32 s_SurfelCountLogDelay = 3u;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -6180,6 +6185,7 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // pool
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_CELL_HEAD, 1)); // cell head (this frame; claim links)
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_COUNTER, 1)); // counter
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_FREE_LIST, 1)); // free-list (U1 pop)
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SURFEL_BINDING_GBUFFER_WORLD_POSITION, 1)); // G-buffer world position
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SURFEL_BINDING_GBUFFER_NORMAL, 1)); // G-buffer normal
         rayTracingState().m_surfelSpawnBindingLayout = device->createBindingLayout(layoutDesc);
@@ -6213,6 +6219,55 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
         return false;
     }
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel spawn compute pipeline"));
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
+    if(rayTracingState().m_surfelAgeFreePipeline)
+        return true;
+    if(rayTracingState().m_surfelAgeFreePipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_surfelAgeFreeBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // pool (write alive = 0)
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_COUNTER, 1)); // counter (FREE_TOP push)
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_FREE_LIST, 1)); // free-list (push)
+        rayTracingState().m_surfelAgeFreeBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_surfelAgeFreeBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel age-free binding layout"));
+            rayTracingState().m_surfelAgeFreePipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_surfelAgeFreeShader,
+        AssetsGraphicsGi::s_SurfelAgeFreeShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_SurfelAgeFree"
+    )){
+        rayTracingState().m_surfelAgeFreePipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_surfelAgeFreeShader)
+        .addBindingLayout(rayTracingState().m_surfelAgeFreeBindingLayout)
+    ;
+    rayTracingState().m_surfelAgeFreePipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_surfelAgeFreePipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel age-free compute pipeline"));
+        rayTracingState().m_surfelAgeFreePipelineFailed = true;
+        return false;
+    }
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel age-free compute pipeline"));
     return true;
 }
 
@@ -6397,6 +6452,43 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         rayTracingState().m_surfelResourcesNeedClear = true;
     }
 
+    // Free-list (U1 recycling): poolCapacity uints, a persistent LIFO stack of recycled surfel ids (depth = counter
+    // FREE_TOP). Age-free pushes; spawn pops. Same barrier/state-tracking as the pool so the intra-frame push->pop
+    // (pass 0 -> pass 3) UAV barrier is emitted. Contents cleared to 0 once (FREE_TOP=0 is what marks it empty).
+    if(!rayTracingState().m_surfelFreeListBuffer){
+        Core::BufferDesc desc;
+        desc
+            .setByteSize(static_cast<u64>(sizeof(u32)) * poolCapacity)
+            .setStructStride(sizeof(u32))
+            .setCanHaveUAVs(true)
+            .setDebugName(Name("surfel_free_list"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        rayTracingState().m_surfelFreeListBuffer = graphics().createBuffer(desc);
+        if(!rayTracingState().m_surfelFreeListBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel free-list buffer"));
+            return false;
+        }
+        rayTracingState().m_surfelResourcesNeedClear = true;
+    }
+
+    // CPU-readable copy of the counter for the periodic live-count diagnostic (U1). Snapshotted on a log-interval frame,
+    // mapped a few frames later (mirrors the SW-shadow edge-stats readback).
+    if(!rayTracingState().m_surfelCounterReadback){
+        Core::BufferDesc desc;
+        desc
+            .setByteSize(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE)
+            .setCpuAccess(Core::CpuAccessMode::Read)
+            .setDebugName(Name("surfel_counter_readback"))
+            .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
+        ;
+        rayTracingState().m_surfelCounterReadback = graphics().createBuffer(desc);
+        if(!rayTracingState().m_surfelCounterReadback){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel counter readback buffer"));
+            return false;
+        }
+    }
+
     // Params CB (5 x Float4). Uploaded each rendered frame in prepareSurfelResources.
     if(!rayTracingState().m_surfelConstants){
         Core::BufferDesc cbDesc;
@@ -6415,9 +6507,9 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
     // Build the pipelines + the hash-build binding set (which depends only on the persistent buffers, so it is built
     // once here). The spawn + trace sets depend on per-frame targets/BVH, so they build in renderSurfelGi. Non-fatal:
     // a sub-failure leaves the pipeline handle null and the render dispatch guards each on its own handle.
-    if(!ensureSurfelSpawnPipeline() || !ensureSurfelHashBuildPipeline() || !ensureSurfelTracePipeline() || !ensureSurfelResolvePipeline())
+    if(!ensureSurfelSpawnPipeline() || !ensureSurfelAgeFreePipeline() || !ensureSurfelHashBuildPipeline() || !ensureSurfelTracePipeline() || !ensureSurfelResolvePipeline())
         return false;
-    if(!ensureSurfelHashBuildBindingSet())
+    if(!ensureSurfelHashBuildBindingSet() || !ensureSurfelAgeFreeBindingSet())
         return false;
     return true;
 }
@@ -6434,6 +6526,7 @@ bool RendererRayTracingSystem::ensureSurfelSpawnBindingSet(DeferredFrameTargets&
     NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
     NWB_ASSERT(rayTracingState().m_surfelCellHeadBuffer);
     NWB_ASSERT(rayTracingState().m_surfelCounterBuffer);
+    NWB_ASSERT(rayTracingState().m_surfelFreeListBuffer);
     NWB_ASSERT(targets.worldPosition);
     NWB_ASSERT(targets.normal);
 
@@ -6451,6 +6544,7 @@ bool RendererRayTracingSystem::ensureSurfelSpawnBindingSet(DeferredFrameTargets&
     desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get()));
     desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_CELL_HEAD, rayTracingState().m_surfelCellHeadBuffer.get()));
     desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_COUNTER, rayTracingState().m_surfelCounterBuffer.get()));
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_FREE_LIST, rayTracingState().m_surfelFreeListBuffer.get()));
     desc.addItem(Core::BindingSetItem::Texture_SRV(
         NWB_SURFEL_BINDING_GBUFFER_WORLD_POSITION,
         targets.worldPosition.get(),
@@ -6475,6 +6569,31 @@ bool RendererRayTracingSystem::ensureSurfelSpawnBindingSet(DeferredFrameTargets&
     }
     rayTracingState().m_surfelSpawnBindingSetWorldPosition = worldPosition;
     rayTracingState().m_surfelSpawnBindingSetNormal = normal;
+    return true;
+}
+
+// The age-free binding set (U1): surfel constants + pool UAV + counter UAV + free-list UAV. All persistent, so it is
+// built once (from ensureSurfelResources) and reused, like the hash-build set.
+bool RendererRayTracingSystem::ensureSurfelAgeFreeBindingSet(){
+    if(rayTracingState().m_surfelAgeFreeBindingSet)
+        return true;
+    NWB_ASSERT(rayTracingState().m_surfelAgeFreeBindingLayout);
+    NWB_ASSERT(rayTracingState().m_surfelConstants);
+    NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
+    NWB_ASSERT(rayTracingState().m_surfelCounterBuffer);
+    NWB_ASSERT(rayTracingState().m_surfelFreeListBuffer);
+
+    Core::BindingSetDesc desc(arena());
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get()));
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get()));
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_COUNTER, rayTracingState().m_surfelCounterBuffer.get()));
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_FREE_LIST, rayTracingState().m_surfelFreeListBuffer.get()));
+
+    rayTracingState().m_surfelAgeFreeBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelAgeFreeBindingLayout);
+    if(!rayTracingState().m_surfelAgeFreeBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel age-free binding set"));
+        return false;
+    }
     return true;
 }
 
@@ -6712,16 +6831,20 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
         Core::Buffer* pool = rayTracingState().m_surfelPoolBuffer.get();
         Core::Buffer* cellHead = rayTracingState().m_surfelCellHeadBuffer.get();
         Core::Buffer* counter = rayTracingState().m_surfelCounterBuffer.get();
+        Core::Buffer* freeList = rayTracingState().m_surfelFreeListBuffer.get();
         commandList.setBufferState(pool, Core::ResourceStates::CopyDest);
         commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
         commandList.setBufferState(counter, Core::ResourceStates::CopyDest);
+        commandList.setBufferState(freeList, Core::ResourceStates::CopyDest);
         commandList.commitBarriers();
         commandList.clearBufferUInt(pool, 0u);
         commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
         commandList.clearBufferUInt(counter, 0u);
+        commandList.clearBufferUInt(freeList, 0u);   // contents cosmetic; counter FREE_TOP=0 is what marks it empty
         commandList.setBufferState(pool, Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(cellHead, Core::ResourceStates::ShaderResource);
         commandList.setBufferState(counter, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(freeList, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         rayTracingState().m_surfelResourcesNeedClear = false;
     }
@@ -6769,6 +6892,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     // Guard: every pass needs its pipeline (a prior ensure failure leaves the block inert this frame).
     if(
         !rayTracingState().m_surfelSpawnPipeline
+        || !rayTracingState().m_surfelAgeFreePipeline
         || !rayTracingState().m_surfelHashBuildPipeline
         || !rayTracingState().m_surfelTracePipeline
         || !rayTracingState().m_surfelResolvePipeline
@@ -6784,6 +6908,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         || !ensureSurfelTraceBindingSet()
         || !ensureSurfelResolveBindingSet(targets)
         || !rayTracingState().m_surfelSpawnBindingSet
+        || !rayTracingState().m_surfelAgeFreeBindingSet
         || !rayTracingState().m_surfelHashBuildBindingSet
         || !rayTracingState().m_surfelTraceBindingSet
         || !rayTracingState().m_surfelResolveBindingSet
@@ -6795,10 +6920,28 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     const u32 activeSurfelCount = DivideUp(poolCapacity, updateDivisor);
 
     // The passes UAV-write the surfel buffers then UAV/SRV-read them next; enable automatic UAV barriers so the
-    // commitBarriers between passes serialises the writes.
+    // commitBarriers between passes serialises the writes. This enable block MUST sit ABOVE pass (0) so the age-free
+    // pass's first counter[FREE_TOP]/free-list writes are barriered against the previous frame's spawn writes.
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelPoolBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelCellHeadBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelCounterBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelFreeListBuffer.get(), true);
+
+    // (0) Age-free (U1 recycling): one thread per pool slot; free surfels unseen for maxAge frames (alive = 0) and PUSH
+    // their ids onto the free-list for the spawn to reuse. Runs FIRST -- it reads lastSeenFrame written by the PREVIOUS
+    // frame's spawn keep-alive, and frees the slots BEFORE the hash-build re-links live surfels + the spawn pops. The
+    // push (here) and the spawn's pop are barrier-separated (clear + hash-build between), so the free-list stack has no
+    // concurrent push/pop -> no ABA. [numthreads(64,1,1)].
+    {
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelAgeFree, graphics().getDevice(), commandList);
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelAgeFreeBindingSet.get());
+        commandList.commitBarriers();
+        Core::ComputeState state;
+        state.setPipeline(rayTracingState().m_surfelAgeFreePipeline.get());
+        state.addBindingSet(rayTracingState().m_surfelAgeFreeBindingSet.get());
+        commandList.setComputeState(state);
+        commandList.dispatch(DivideUp(poolCapacity, 64u), 1u, 1u);
+    }
 
     // (1) Clear the cell-head to empty, then rebuild the hash from the live pool BEFORE the spawn, so the spawn sees this
     // frame's exact occupancy (a non-empty cell head == a surfel already covers the cell) and fills only empty cells.
@@ -6878,6 +7021,41 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     // (6) Sync the surfelIrradiance UAV write -> the deferred-lighting pixel-shader SRV read.
     commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
+
+    // Live-count diagnostic (U1): map a prior snapshot (async copy done by now) and log it, else snapshot this frame.
+    // live = BUMP_TOP - FREE_TOP is exact (BUMP_TOP is CAS-capped at poolCapacity). On a static fully-visible scene
+    // FREE_TOP stays 0 + BUMP_TOP is stable; under camera motion FREE_TOP rises as off-screen surfels age out and falls
+    // as revealed cells reuse the freed ids -> the live count stays bounded (the point of recycling).
+    {
+        const u32 frameIndex = rayTracingState().m_surfelFrameIndex;
+        Core::Buffer* counter = rayTracingState().m_surfelCounterBuffer.get();
+        Core::Buffer* readback = rayTracingState().m_surfelCounterReadback.get();
+        if(
+            rayTracingState().m_surfelCountReadbackPending
+            && (frameIndex - rayTracingState().m_surfelCountReadbackFrame) >= s_SurfelCountLogDelay
+        ){
+            const u32* counts = static_cast<const u32*>(graphics().getDevice()->mapBuffer(readback, Core::CpuAccessMode::Read));
+            if(counts){
+                const u32 bumpTop = counts[NWB_SURFEL_COUNTER_BUMP_TOP];
+                const u32 freeTop = counts[NWB_SURFEL_COUNTER_FREE_TOP];
+                graphics().getDevice()->unmapBuffer(readback);
+                NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: surfel live count = {} (bump {} - free {}) of {} pool capacity")
+                    , static_cast<u64>(bumpTop - freeTop)
+                    , static_cast<u64>(bumpTop)
+                    , static_cast<u64>(freeTop)
+                    , static_cast<u64>(rayTracingState().m_surfelPoolCapacity)
+                );
+            }
+            rayTracingState().m_surfelCountReadbackPending = false;
+        }
+        else if(!rayTracingState().m_surfelCountReadbackPending && (frameIndex % s_SurfelCountLogInterval) == 0u){
+            commandList.setBufferState(counter, Core::ResourceStates::CopySource);
+            commandList.commitBarriers();
+            commandList.copyBuffer(readback, 0u, counter, 0u, static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE);
+            rayTracingState().m_surfelCountReadbackPending = true;
+            rayTracingState().m_surfelCountReadbackFrame = frameIndex;
+        }
+    }
 
     // Advance the frame counter (seeds the ray rotation + round-robin) and mark seeded so the next frame uses the
     // steady-state divisor + EMA hysteresis.

@@ -3,6 +3,7 @@
 
 
 #include "module.h"
+#include "backend_selection.h"
 
 #include <core/common/log.h>
 #include <core/telemetry/session.h>
@@ -314,7 +315,7 @@ Graphics::Graphics(
     , m_jobSystem(jobSystem)
     , m_deviceCreationParams(m_allocator.getObjectArena())
     , m_gpuTiming(m_allocator.getObjectArena(), gpuTiming)
-    , m_backend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool)
+    , m_backend(MakeGlobalUnique<Backend>(m_allocator.getObjectArena(), m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool))
     , m_renderPasses(m_allocator.getObjectArena())
     , m_swapChainFramebuffers(m_allocator.getObjectArena())
     , m_windowTitle(m_allocator.getObjectArena())
@@ -334,19 +335,18 @@ bool Graphics::init(const Common::FrameData& data){
     m_swapChainState.backBufferHeight = data.height();
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 
-    Backend& backend = m_backend;
-    backend.setPlatformFrameParam(data.frameParam());
+    m_backend->setPlatformFrameParam(data.frameParam());
 
     if(!m_instanceCreated){
-        if(!backend.createInstance())
+        if(!m_backend->createInstance())
             return false;
         m_instanceCreated = true;
     }
 
-    if(!backend.createDevice())
+    if(!m_backend->createDevice())
         return false;
 
-    if(!backend.createSwapChain())
+    if(!m_backend->createSwapChain())
         return false;
 
     m_swapChainState.backBufferWidth = 0;
@@ -365,14 +365,13 @@ bool Graphics::createHeadlessDevice(){
     m_deviceCreationParams.headlessDevice = true;
     m_hasPresentedFrame = false;
 
-    Backend& backend = m_backend;
     if(!m_instanceCreated){
-        if(!backend.createInstance())
+        if(!m_backend->createInstance())
             return false;
         m_instanceCreated = true;
     }
 
-    if(!backend.createDevice())
+    if(!m_backend->createDevice())
         return false;
 
     m_previousFrameTimestamp = TimerNow();
@@ -387,7 +386,7 @@ bool Graphics::createInstance(const InstanceParameters& params){
         return false;
     }
 
-    if(!m_backend.createInstance())
+    if(!m_backend->createInstance())
         return false;
 
     m_instanceCreated = true;
@@ -431,7 +430,7 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
         m_swapChainState.backBufferHeight = height;
         m_swapChainState.vsyncEnabled = m_requestedVSync;
 
-        m_backend.resizeSwapChain();
+        m_backend->resizeSwapChain();
         backBufferResized();
     }
 
@@ -448,8 +447,16 @@ void Graphics::destroy(){
     m_gpuTiming.resetQueries();
 
     m_swapChainFramebuffers.clear();
-    m_backend.destroy();
+    m_backend->destroy();
     m_instanceCreated = false;
+}
+
+GraphicsBackend::Device* Graphics::getDevice()const noexcept{
+    return m_backend->getDevice();
+}
+
+bool Graphics::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){
+    return m_backend->enumerateAdapters(outAdapters);
 }
 
 void Graphics::addRenderPassToFront(IRenderPass& pass){
@@ -481,6 +488,18 @@ void Graphics::removeRenderPass(IRenderPass& pass){
     m_renderPasses.remove(&pass);
 }
 
+const tchar* Graphics::getRendererString()const{
+    return m_backend->getRendererString();
+}
+
+GraphicsAPI::Enum Graphics::getGraphicsAPI()const{
+    return GraphicsBackend::s_Api;
+}
+
+void Graphics::reportLiveObjects()const{
+    m_backend->reportLiveObjects();
+}
+
 void Graphics::getWindowDimensions(i32& width, i32& height)const{
     width = m_swapChainState.backBufferWidth;
     height = m_swapChainState.backBufferHeight;
@@ -504,10 +523,34 @@ void Graphics::setPointerScaleChangedCallback(PointerScaleChangedCallback callba
     notifyPointerScaleChanged();
 }
 
+Texture* Graphics::getCurrentBackBuffer()const{
+    return m_backend->getCurrentBackBuffer();
+}
+
+Texture* Graphics::getBackBuffer(u32 index)const{
+    return m_backend->getBackBuffer(index);
+}
+
+u32 Graphics::getCurrentBackBufferIndex()const{
+    return m_backend->getCurrentBackBufferIndex();
+}
+
+u32 Graphics::getBackBufferCount()const{
+    return m_backend->getBackBufferCount();
+}
+
 Framebuffer* Graphics::getFramebuffer(u32 index)const{
     if(index < m_swapChainFramebuffers.size())
         return m_swapChainFramebuffers[index].get();
     return nullptr;
+}
+
+BufferHandle Graphics::createBuffer(const BufferDesc& desc)const{
+    return getDevice()->createBuffer(desc);
+}
+
+TextureHandle Graphics::createTexture(const TextureDesc& desc)const{
+    return getDevice()->createTexture(desc);
 }
 
 void Graphics::backBufferResizing(){
@@ -636,10 +679,10 @@ bool Graphics::animateRenderPresent(){
                 &Graphics::BackBufferResizingCallback,
                 &Graphics::BackBufferResizedCallback,
             };
-            if(m_backend.beginFrame(resizeCallbacks)){
+            if(m_backend->beginFrame(resizeCallbacks)){
                 render();
 
-                if(!m_backend.present())
+                if(!m_backend->present())
                     return false;
 
                 m_hasPresentedFrame = true;

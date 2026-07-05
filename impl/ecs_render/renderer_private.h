@@ -21,6 +21,7 @@
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/module.h>
+#include <core/graphics/backend_selection.h>
 #include <core/graphics/shader_archive.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets/graphics/avboit/binding_slots.h>

@@ -6,7 +6,6 @@
 
 
 #include "api.h"
-#include "backend_selection.h"
 
 #include "gpu_timing.h"
 #include "render_pass.h"
@@ -112,8 +111,8 @@ public:
     void destroy();
 
 public:
-    [[nodiscard]] GraphicsBackend::Device* getDevice()const noexcept{ return m_backend.getDevice(); }
-    [[nodiscard]] bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){ return m_backend.enumerateAdapters(outAdapters); }
+    [[nodiscard]] GraphicsBackend::Device* getDevice()const noexcept;
+    [[nodiscard]] bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters);
     [[nodiscard]] bool queryFeatureSupport(Feature::Enum feature, void* featureInfo = nullptr, usize featureInfoSize = 0)const;
 #if !defined(NWB_FINAL)
     void setFeatureSupportDisabledForTesting(Feature::Enum feature, bool disabled);
@@ -124,15 +123,15 @@ public:
     void addRenderPassToBack(IRenderPass& pass);
     void removeRenderPass(IRenderPass& pass);
 
-    [[nodiscard]] const tchar* getRendererString()const{ return m_backend.getRendererString(); }
-    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const{ return GraphicsBackend::s_Api; }
+    [[nodiscard]] const tchar* getRendererString()const;
+    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const;
     [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
     [[nodiscard]] u64 getFrameIndex()const{ return m_frameIndex; }
     [[nodiscard]] GpuTimingRecorder& gpuTiming(){ return m_gpuTiming; }
     [[nodiscard]] const GpuTimingRecorder& gpuTiming()const{ return m_gpuTiming; }
     [[nodiscard]] bool isVsyncEnabled()const{ return m_swapChainState.vsyncEnabled; }
     void setVSyncEnabled(bool enabled){ m_requestedVSync = enabled; }
-    void reportLiveObjects()const{ m_backend.reportLiveObjects(); }
+    void reportLiveObjects()const;
 
     void getWindowDimensions(i32& width, i32& height)const;
     void getDPIScaleInfo(f32& x, f32& y)const;
@@ -140,15 +139,15 @@ public:
     void setWindowTitle(NotNull<const tchar*> title);
     void setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData);
 
-    [[nodiscard]] Texture* getCurrentBackBuffer()const{ return m_backend.getCurrentBackBuffer(); }
-    [[nodiscard]] Texture* getBackBuffer(u32 index)const{ return m_backend.getBackBuffer(index); }
-    [[nodiscard]] u32 getCurrentBackBufferIndex()const{ return m_backend.getCurrentBackBufferIndex(); }
-    [[nodiscard]] u32 getBackBufferCount()const{ return m_backend.getBackBufferCount(); }
+    [[nodiscard]] Texture* getCurrentBackBuffer()const;
+    [[nodiscard]] Texture* getBackBuffer(u32 index)const;
+    [[nodiscard]] u32 getCurrentBackBufferIndex()const;
+    [[nodiscard]] u32 getBackBufferCount()const;
     [[nodiscard]] Framebuffer* getCurrentFramebuffer()const{ return getFramebuffer(getCurrentBackBufferIndex()); }
     [[nodiscard]] Framebuffer* getFramebuffer(u32 index)const;
 
-    [[nodiscard]] BufferHandle createBuffer(const BufferDesc& desc)const{ return getDevice()->createBuffer(desc); }
-    [[nodiscard]] TextureHandle createTexture(const TextureDesc& desc)const{ return getDevice()->createTexture(desc); }
+    [[nodiscard]] BufferHandle createBuffer(const BufferDesc& desc)const;
+    [[nodiscard]] TextureHandle createTexture(const TextureDesc& desc)const;
 
     [[nodiscard]] BufferHandle setupBuffer(const BufferSetupDesc& desc)const;
     [[nodiscard]] TextureHandle setupTexture(const TextureSetupDesc& desc)const;
@@ -188,7 +187,7 @@ private:
     GpuTimingRecorder m_gpuTiming;
 
 private:
-    Backend m_backend;
+    GlobalUniquePtr<Backend> m_backend;
 
     bool m_skipRenderOnFirstFrame = false;
     bool m_hasPresentedFrame = false;

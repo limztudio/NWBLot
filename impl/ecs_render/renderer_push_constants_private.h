@@ -9,6 +9,7 @@
 #include "renderer_constants_private.h"
 
 #include <core/graphics/module.h>
+#include <core/graphics/backend_selection.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
 

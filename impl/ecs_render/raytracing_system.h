@@ -63,30 +63,29 @@ public:
     [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
-    // DDGI (Dynamic Diffuse GI): the feature gate + prep + render hooks. U1 scaffold: hasGiWork returns false
-    // (m_giEnabled defaults false); prepare/render are inert no-ops that succeed without dispatching. Later units
-    // (U3+) fill in the trace/blend/border dispatches. See .helper/ddgi_plan.md §2.
-    [[nodiscard]] bool hasGiWork()const noexcept;
-    [[nodiscard]] bool prepareGiResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    [[nodiscard]] bool renderGi(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    [[nodiscard]] bool ensureGiResources();
-    [[nodiscard]] bool ensureGiTracePipeline();
-    // U4 blend + border pipelines / binding sets. The irradiance + distance blend share the SAME layout
-    // (CB + ray-data SRV + front-atlas SRV + back-atlas UAV); the binding set decides which textures are bound at
-    // the front/back slots (ping-pong). The border pass has its own layout (CB + irradiance UAV + distance UAV) and
-    // is dispatched twice (once per atlas) with a push constant selecting the format.
-    [[nodiscard]] bool ensureGiBlendIrradiancePipeline();
-    [[nodiscard]] bool ensureGiBlendDistancePipeline();
-    [[nodiscard]] bool ensureGiBorderPipeline();
-    [[nodiscard]] bool ensureGiBlendIrradianceBindingSet();
-    [[nodiscard]] bool ensureGiBlendDistanceBindingSet();
-    [[nodiscard]] bool ensureGiBorderBindingSets();
-    // U5: the trace binding set (SW BVH scene/instance/mesh context + grid CB + ray-data UAV + prev-front atlas
-    // SRVs + hit-albedo SRV). Built when the SW scene BVH is resident (the same geometry the SW shadow trace uses).
-    [[nodiscard]] bool ensureGiTraceBindingSet();
-    // U5: the per-instance flat-albedo buffer the trace's Lambert hit-shade reads. CPU-built from the gathered
-    // occluders (NWB_GI_DEFAULT_ALBEDO fallback).
-    [[nodiscard]] bool ensureGiHitAlbedoBuffer();
+    // Surfel GI: the feature gate + prep + render hooks. hasSurfelWork returns m_surfelEnabled (set in
+    // prepareShadowVisibilityResources once the SW scene BVH is resident). prepareSurfelResources creates the
+    // persistent pool/hash/counter/params buffers + pipelines, clears them on (re)creation, and uploads the params
+    // CB. renderSurfelGi runs the spawn -> hash-build -> trace passes (the SW trace reuses the SW scene BVH). See
+    // .helper/surfel_gi_plan.md.
+    [[nodiscard]] bool hasSurfelWork()const noexcept;
+    [[nodiscard]] bool prepareSurfelResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    [[nodiscard]] bool renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    // Lazily create the persistent surfel buffers (pool / cell-head / counter / params CB) + the three pass
+    // pipelines. The buffers live on RendererRayTracingState so a window resize does not reset convergence.
+    [[nodiscard]] bool ensureSurfelResources();
+    // The three pass pipelines. The spawn + hash-build read only the surfel buffers + G-buffer; the trace reuses the
+    // SW scene BVH (slots 0-10) exactly like the SW shadow/caustic trace. Distinct layouts (the cell-head is an SRV at
+    // spawn, a UAV at hash-build).
+    [[nodiscard]] bool ensureSurfelSpawnPipeline();
+    [[nodiscard]] bool ensureSurfelHashBuildPipeline();
+    [[nodiscard]] bool ensureSurfelTracePipeline();
+    // The spawn set (surfel buffers + G-buffer world-position/normal; rebuilt on G-buffer change) + the hash-build set
+    // (surfel buffers only; built once) + the trace set (SW scene BVH + per-mesh arrays + surfel constants/pool;
+    // rebuilt when the scene BVH / distinct-mesh count changes, mirroring the SW shadow set).
+    [[nodiscard]] bool ensureSurfelSpawnBindingSet(DeferredFrameTargets& targets);
+    [[nodiscard]] bool ensureSurfelHashBuildBindingSet();
+    [[nodiscard]] bool ensureSurfelTraceBindingSet();
     // True when the prepare built the hybrid transparent-shadow software resources this frame (RT hardware + the scene
     // has a transparent occluder). The render then runs renderGpuBvhShadowVisibility(..., multiplyOntoOpaque=true) after
     // the HW opaque pass, folding the colored transparent shadow onto the binary opaque mask -- ONLY as the

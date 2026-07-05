@@ -15,7 +15,7 @@
 #include <impl/assets/graphics/shadow/sw_binding_slots.h>
 #include <impl/assets/graphics/caustic/sw_binding_slots.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
-#include <impl/assets/graphics/gi/binding_slots.h>
+#include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 
 #include <global/generic.h>
 
@@ -676,78 +676,61 @@ private:
     const Core::Texture* m_causticAccumulatorDecayAccumulator = nullptr;
     bool m_causticAccumulatorDecayPipelineFailed = false;
     bool m_causticAccumulatorInitialized = false;
-    // ---- DDGI (Dynamic Diffuse GI) state ----
-    // Atlases/ray-data/probe-data/grid-CB live HERE (beside the caustic block), NOT on DeferredFrameTargets, which is
-    // torn down on every window resize and would silently reset probe convergence. Lifetime = grid-param change or
-    // device reset only. See .helper/ddgi_plan.md §2 (Ownership + wiring). U1 scaffold: handles declared, plumbing
-    // inert until the trace/blend/border kernels + ensureGiResources land.
-    Core::BindingLayoutHandle m_giBindingLayout;
-    Core::ShaderHandle m_giProbeTraceShader;
-    Core::ComputePipelineHandle m_giProbeTracePipeline;
-    Core::ShaderHandle m_giProbeBlendIrradianceShader;
-    Core::ComputePipelineHandle m_giProbeBlendIrradiancePipeline;
-    Core::ShaderHandle m_giProbeBlendDistanceShader;
-    Core::ComputePipelineHandle m_giProbeBlendDistancePipeline;
-    Core::ShaderHandle m_giProbeBorderShader;
-    Core::ComputePipelineHandle m_giProbeBorderPipeline;
-    Core::BindingSetHandle m_giTraceBindingSet;
-    // Tracked pointers for the trace binding set rebuild (mirrors the SW shadow set's rebuild guard).
-    const Core::Buffer* m_giTraceBindingSetSceneNodes = nullptr;
-    const Core::Buffer* m_giTraceBindingSetInstances = nullptr;
-    const Core::Buffer* m_giTraceBindingSetMaterialTyped = nullptr;
-    const Core::Buffer* m_giTraceBindingSetMeshInstances = nullptr;
-    u32 m_giTraceBindingSetMeshCount = 0u;
-    // U4 blend + border. The irradiance + distance blend share the SAME binding LAYOUT (CB + ray-data SRV +
-    // front-atlas SRV + back-atlas UAV) but distinct sets (the bound textures differ by ping-pong state). The border
-    // pass has its own layout (CB + irradiance UAV + distance UAV) and two sets (one per atlas), selected by a push
-    // constant. m_giBlendBindingLayout is shared by the irradiance + distance blend; m_giBorderBindingLayout is
-    // shared by the irradiance + distance border dispatches.
-    Core::BindingLayoutHandle m_giBlendBindingLayout;
-    Core::BindingLayoutHandle m_giBorderBindingLayout;
-    Core::BindingSetHandle m_giBlendIrradianceBindingSet;
-    Core::BindingSetHandle m_giBlendDistanceBindingSet;
-    Core::BindingSetHandle m_giBorderIrradianceBindingSet;
-    Core::BindingSetHandle m_giBorderDistanceBindingSet;
-    // Ping-pong octahedral atlases (irradiance RGBA16F v1, distance RG16F). m_giHistoryFrontIsA selects the INCOMING
-    // history this frame; flipped at the end of the GI block. Black-cleared atlases are the additive identity so
-    // lighting stays branchless when GI is off.
-    Core::TextureHandle m_giIrradianceAtlasA;
-    Core::TextureHandle m_giIrradianceAtlasB;
-    Core::TextureHandle m_giDistanceAtlasA;
-    Core::TextureHandle m_giDistanceAtlasB;
-    // Ray-data texture (RGBA16F: rgb = irradiance, a = hitT). Width = probe count, height = NWB_GI_PROBE_FIXED_RAY_COUNT.
-    Core::TextureHandle m_giRayData;
-    // Probe-data texture (v2 relocation/classification -- allocated-but-INERT in v1 per D6).
-    Core::TextureHandle m_giProbeData;
-    // Grid constant buffer (~10 Float4: origin/spacing/dims/rays/fraction/frame/hysteresis/front-flag/bias).
-    Core::BufferHandle m_giGridConstants;
-    // Per-instance flat albedo (CPU-built StructuredBuffer; NWB_GI_DEFAULT_ALBEDO fallback).
-    Core::BufferHandle m_giHitAlbedo;
-    usize m_giHitAlbedoCapacity = 0u;
-    // Grid dimensions (cached from the grid-CB build so dispatch sizing stays CPU-side).
-    u32 m_giGridSizeX = NWB_GI_DEFAULT_GRID_SIZE_X;
-    u32 m_giGridSizeY = NWB_GI_DEFAULT_GRID_SIZE_Y;
-    u32 m_giGridSizeZ = NWB_GI_DEFAULT_GRID_SIZE_Z;
-    u32 m_giRaysPerProbe = NWB_GI_DEFAULT_RAYS_PER_PROBE;
-    // Ping-pong selector + round-robin update cursor + frame counter (seeds the per-frame R2 rotation).
-    u32 m_giHistoryFrontIsA = 1u;
-    u32 m_giUpdateCursor = 0u;
-    u32 m_giFrameIndex = 0u;
-    // m_giSeeded: false on frame 0 / after atlas (re)creation -> the blend's hysteresis is 0 (pure current sample);
-    // set true after the first blend. Mirrors the caustic accumulator seed precedent.
-    bool m_giSeeded = false;
-    // m_giAtlasesNeedClear: set true when the ping-pong atlases are (re)created in ensureGiResources() -- which has
-    // no command list -- and consumed once in prepareGiResources() (which does) to clear all four to black BEFORE the
-    // first trace/blend. Without this the consumer samples uninitialised atlas memory (garbage / NaN) until a probe
-    // happens to write each tile, which the round-robin defers for many frames.
-    bool m_giAtlasesNeedClear = false;
+    // ---- Surfel GI state ----
+    // Screen-spawned, world-hashed surfels integrate one-bounce diffuse GI. The persistent buffers (pool / cell-head /
+    // counter / params CB) live HERE (beside the caustic block), NOT on DeferredFrameTargets, which is torn down on
+    // every window resize and would silently reset surfel convergence. Lifetime = device reset only. Three compute
+    // passes per frame: spawn (screen tiles -> bump-allocate a surfel where existing coverage is low) -> hash-build
+    // (link live surfels into the spatial-hash cell lists) -> trace (one workgroup per surfel, 64 SW rays -> EMA
+    // irradiance). The deferred-lighting gather walks the hash at each shaded point. See .helper/surfel_gi_plan.md.
+    // The three passes have DISTINCT binding layouts: the cell-head is an SRV at spawn (reads the previous frame) but a
+    // UAV at hash-build (writes the links), so they cannot share one layout the way the SW-shadow passes do.
+    Core::BindingLayoutHandle m_surfelSpawnBindingLayout;
+    Core::BindingLayoutHandle m_surfelHashBuildBindingLayout;
+    Core::BindingLayoutHandle m_surfelTraceBindingLayout;
+    Core::ShaderHandle m_surfelSpawnShader;
+    Core::ComputePipelineHandle m_surfelSpawnPipeline;
+    Core::ShaderHandle m_surfelHashBuildShader;
+    Core::ComputePipelineHandle m_surfelHashBuildPipeline;
+    Core::ShaderHandle m_surfelTraceShader;
+    Core::ComputePipelineHandle m_surfelTracePipeline;
+    Core::BindingSetHandle m_surfelSpawnBindingSet;
+    Core::BindingSetHandle m_surfelHashBuildBindingSet;
+    Core::BindingSetHandle m_surfelTraceBindingSet;
+    // Tracked pointers for the spawn set rebuild (the G-buffer world-position + normal are recreated on resize).
+    const Core::Texture* m_surfelSpawnBindingSetWorldPosition = nullptr;
+    const Core::Texture* m_surfelSpawnBindingSetNormal = nullptr;
+    // Tracked pointers for the trace set rebuild (the SW scene BVH + per-mesh arrays; mirrors the SW shadow set guard).
+    const Core::Buffer* m_surfelTraceBindingSetSceneNodes = nullptr;
+    const Core::Buffer* m_surfelTraceBindingSetInstances = nullptr;
+    const Core::Buffer* m_surfelTraceBindingSetMaterialTyped = nullptr;
+    const Core::Buffer* m_surfelTraceBindingSetMeshInstances = nullptr;
+    u32 m_surfelTraceBindingSetMeshCount = 0u;
+    // Persistent surfel buffers (created once, never resized with the window). The pool holds the NwbSurfel records; the
+    // cell-head buffer is the spatial-hash linked-list heads (one uint per cell); the counter is 2 u32 (bump top, free
+    // top). All UAV-writable; the gather binds the pool + cell-head as SRVs. One-shot init on creation: pool zeroed,
+    // cell-head = 0xFFFFFFFF, counter = 0.
+    Core::BufferHandle m_surfelPoolBuffer;
+    Core::BufferHandle m_surfelCellHeadBuffer;
+    Core::BufferHandle m_surfelCounterBuffer;
+    // Params CB (NwbSurfelConstants: 5 x Float4). Uploaded each rendered frame.
+    Core::BufferHandle m_surfelConstants;
+    u32 m_surfelPoolCapacity = NWB_SURFEL_POOL_CAPACITY;
+    u32 m_surfelHashCellCount = NWB_SURFEL_HASH_CELL_COUNT;
+    // Per-frame counter seeding the ray rotation + age comparisons.
+    u32 m_surfelFrameIndex = 0u;
+    // m_surfelSeeded: false on the first enabled frame -> the trace's update divisor is 1 (ALL surfels traced to
+    // bootstrap in one frame), set true after the first trace. Mirrors the caustic/GI seed precedent.
+    bool m_surfelSeeded = false;
+    // m_surfelResourcesNeedClear: set when the buffers are (re)created in ensureSurfelResources (no command list) and
+    // consumed once in prepareSurfelResources (which has one) to clear the pool/cell-head/counter before the first pass.
+    bool m_surfelResourcesNeedClear = false;
     // Feature gate + per-pipeline-failed flags (mirrors the caustic / shadow precedent).
-    bool m_giEnabled = false;
-    bool m_giProbeTracePipelineFailed = false;
-    bool m_giProbeBlendIrradiancePipelineFailed = false;
-    bool m_giProbeBlendDistancePipelineFailed = false;
-    bool m_giProbeBorderPipelineFailed = false;
-    bool m_giDispatchLogged = false;
+    bool m_surfelEnabled = false;
+    bool m_surfelSpawnPipelineFailed = false;
+    bool m_surfelHashBuildPipelineFailed = false;
+    bool m_surfelTracePipelineFailed = false;
+    bool m_surfelDispatchLogged = false;
     bool m_capabilityLogged = false;
     bool m_shadowPipelineFailed = false;
     bool m_bvhSortPipelineFailed = false;

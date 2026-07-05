@@ -5,7 +5,6 @@
 #include "renderer_private.h"
 
 #include <impl/assets/graphics/deferred/names.h>
-#include <impl/assets/graphics/gi/binding_slots.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,14 +62,14 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_CAUSTIC_IRRADIANCE, 1));
 
-        // DDGI indirect-irradiance atlas bindings: the irradiance atlas (RGBA16F), the distance atlas (RG16F),
-        // and the grid constant buffer. These are SRVs/CB consumed by nwbBxdfIndirectIrradiance in the lighting
-        // shader. The atlases live on RendererRayTracingState (ping-pong A/B; the front flips each frame); the
-        // binding set (deferred_targets.cpp) binds the CURRENT front. When GI is disabled the atlases are black-
-        // cleared (additive identity), so lighting stays correct.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GI_IRRADIANCE, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GI_DISTANCE, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_GI_PARAMS, 1));
+        // Surfel GI bindings: the surfel pool (StructuredBuffer<NwbSurfel>), the spatial-hash cell-head buffer
+        // (StructuredBuffer<uint>), and the surfel params CB. nwbSurfelGather (in the lighting shader) walks the hash
+        // at each shaded point. All live on RendererRayTracingState. They are created lazily (in the prepare phase,
+        // after this layout/set already exist), so the set is first built with null bindings and rebuilt once when the
+        // buffers appear (rebuildDeferredLightingGiBindings). A zero-init pool / 0xFFFFFFFF cell head is a no-op gather.
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_POOL, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_HASH, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_PARAMS, 1));
 
         deferredState().m_lightingBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!deferredState().m_lightingBindingLayout){
@@ -192,27 +191,25 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
 }
 
 void RendererDeferredSystem::rebuildDeferredLightingGiBindings(){
-    // The GI atlas front flips each frame (m_giHistoryFrontIsA on RendererRayTracingState); the lighting binding
-    // set must point at the current front so the deferred lighting pass reads the atlas the GI block is NOT writing
-    // this frame. The rebuild is idempotent (a no-op when the front has not flipped since the last build).
+    // The surfel pool / cell-head / params buffers are created lazily (in the prepare phase, after the deferred targets
+    // + this binding set already exist), so the set is first built with null surfel bindings and must be rebuilt ONCE
+    // when the real pool appears. The surfel buffers do not ping-pong, so after that one rebuild the set stays valid.
+    // A null pool SRV is safe (nwbSurfelGather finds no surfel -> hemiAmbient); this only upgrades to the real pool.
     DeferredFrameTargets& targets = deferredState().m_targets;
     if(!targets.lightingBindingSet)
         return;
 
-    // When GI is inactive OR the atlases are not yet created, the set was built with whatever atlas existed at
-    // creation time (possibly null). The shader returns hemiAmbient for null/zero-extent atlases, so this is safe.
-    if(!rayTracingState().m_giIrradianceAtlasA || !rayTracingState().m_giIrradianceAtlasB)
+    // Not yet created (GI inactive this frame, or the prepare has not run) -> keep the null-bound set (safe no-op gather).
+    if(!rayTracingState().m_surfelPoolBuffer || !rayTracingState().m_surfelCellHeadBuffer || !rayTracingState().m_surfelConstants)
         return;
 
-    const u32 frontIsA = rayTracingState().m_giHistoryFrontIsA;
-    if(targets.giLightingBindingSetFrontIsA == frontIsA)
-        return; // already pointing at the current front
+    const Core::Buffer* pool = rayTracingState().m_surfelPoolBuffer.get();
+    if(targets.surfelLightingBindingSetPool == pool)
+        return; // already bound to the current pool
 
     targets.lightingBindingSet.reset();
 
     auto* device = graphics().getDevice();
-    Core::Texture* frontIrr = (frontIsA != 0u) ? rayTracingState().m_giIrradianceAtlasA.get() : rayTracingState().m_giIrradianceAtlasB.get();
-    Core::Texture* frontDist = (frontIsA != 0u) ? rayTracingState().m_giDistanceAtlasA.get() : rayTracingState().m_giDistanceAtlasB.get();
 
     Core::BindingSetDesc lightingBindingSetDesc(arena());
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
@@ -260,31 +257,25 @@ void RendererDeferredSystem::rebuildDeferredLightingGiBindings(){
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
-    // GI atlas + grid-CB: bind the CURRENT front.
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_LIGHTING_BINDING_GI_IRRADIANCE,
-        frontIrr,
-        Core::Format::RGBA16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
+    // Surfel GI: the pool + cell-head SRVs the gather walks, and the params CB.
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_POOL,
+        rayTracingState().m_surfelPoolBuffer.get()
     ));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_LIGHTING_BINDING_GI_DISTANCE,
-        frontDist,
-        Core::Format::RG16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_HASH,
+        rayTracingState().m_surfelCellHeadBuffer.get()
     ));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
-        NWB_DEFERRED_LIGHTING_BINDING_GI_PARAMS,
-        rayTracingState().m_giGridConstants.get()
+        NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_PARAMS,
+        rayTracingState().m_surfelConstants.get()
     ));
     targets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, deferredState().m_lightingBindingLayout);
     if(!targets.lightingBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to rebuild deferred lighting binding set (GI front flip)"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to rebuild deferred lighting binding set (surfel GI bind)"));
         return;
     }
-    targets.giLightingBindingSetFrontIsA = frontIsA;
+    targets.surfelLightingBindingSetPool = pool;
 }
 
 bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets){

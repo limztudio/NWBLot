@@ -21,12 +21,13 @@
 #define NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST 6
 #define NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY 7
 #define NWB_DEFERRED_LIGHTING_BINDING_CAUSTIC_IRRADIANCE 8
-// DDGI indirect-irradiance atlas bindings (U2 reservation; the actual C++ layout/set binding lands when the
-// atlas textures exist in U3/U4). nwbBxdfIndirectIrradiance currently returns the hemiAmbient fallback, so
-// lighting is correct WITHOUT these bound; the atlas is black-cleared (additive identity) when it arrives.
-#define NWB_DEFERRED_LIGHTING_BINDING_GI_IRRADIANCE 9
-#define NWB_DEFERRED_LIGHTING_BINDING_GI_DISTANCE 10
-#define NWB_DEFERRED_LIGHTING_BINDING_GI_PARAMS 11
+// Surfel GI bindings the deferred lighting pass consumes: the surfel pool (StructuredBuffer<NwbSurfel>), the
+// spatial-hash cell-head buffer (StructuredBuffer<uint>), and the surfel params CB. nwbSurfelGather walks the
+// hash at the shaded point; when no surfel covers it (or GI is off) nwbBxdfIndirectIrradiance falls back to
+// hemiAmbient, so lighting is correct WITHOUT these bound (the pool is zero-init, cell heads are 0xFFFFFFFF).
+#define NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_POOL 9
+#define NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_HASH 10
+#define NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_PARAMS 11
 
 #define NWB_DEFERRED_COMPOSITE_BINDING_OPAQUE_COLOR 0
 #define NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_COLOR 1

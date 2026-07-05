@@ -9,11 +9,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// DDGI probe trace -- SOFTWARE (SW BVH) bindings. The trace reuses the SAME software scene/instance + per-mesh BVH
-// buffers the SW shadow/caustic trace builds (NWB_GI_SW_MAX_MESHES == NWB_SW_SHADOW_MAX_MESHES), so the
-// prepareShadowVisibilityResources -> buildSceneSwBvh pipeline already populates them. Adds the GI-specific I/O:
-// the grid CB, the ray-data output UAV, the prev-front atlas SRVs (bounce), and the hit-albedo buffer. See
-// .helper/ddgi_plan.md §2 (Trace / Ray data).
+// Shared SOFTWARE (SW BVH) trace bindings -- slots 0-10 the GI trace body (gi_sw_trace.slangi) declares. It reuses the
+// SAME software scene/instance + per-mesh BVH buffers the SW shadow/caustic trace builds (NWB_GI_SW_MAX_MESHES ==
+// NWB_SW_SHADOW_MAX_MESHES), so prepareShadowVisibilityResources -> buildSceneSwBvh already populates them. Producers
+// (the surfel trace) add their OWN output bindings at the tail (>= 11); nothing GI-grid-specific lives here anymore.
 
 #define NWB_GI_SW_SET 0
 
@@ -30,15 +29,6 @@
 #define NWB_GI_SW_BINDING_MATERIAL_TYPED 9
 #define NWB_GI_SW_BINDING_MESH_INSTANCES 10
 
-// GI-specific bindings.
-#define NWB_GI_SW_BINDING_GRID_CONSTANTS 11  // ConstantBuffer<NwbGiGridConstants>
-#define NWB_GI_SW_BINDING_RAY_DATA 12        // RWTexture2D<float4> (RGBA16F: rgb=irradiance, a=hitT)
-#define NWB_GI_SW_BINDING_PREV_IRRADIANCE 13 // Texture2D<float4> (prev-front irradiance atlas SRV)
-#define NWB_GI_SW_BINDING_PREV_DISTANCE 14   // Texture2D<float2> (prev-front distance atlas SRV)
-#define NWB_GI_SW_BINDING_HIT_ALBEDO 15      // StructuredBuffer<float3> (per-instance flat albedo)
-
-#define NWB_GI_SW_BINDING_PUSH_CONSTANTS 16  // NwbGiTracePushConstants
-
 // Reuse the SAME per-mesh cap as the SW shadow/caustic (they share the buildSceneSwBvh output). The shadow SW
 // binding slots header defines NWB_SW_SHADOW_MAX_MESHES.
 #include "../shadow/sw_binding_slots.h"
@@ -46,7 +36,7 @@
 #define NWB_GI_SW_MAX_MESHES NWB_SW_SHADOW_MAX_MESHES
 #endif
 
-// Hit shadow rays (D4 = 1). Included here so the .slang does not need a separate define; U3 measures both 1 and 0.
+// Hit shadow rays toward the dominant light per bounce hit (1 = on). gi_sw_trace.slangi's shade reads this.
 #ifndef NWB_GI_HIT_SHADOW_RAYS
 #define NWB_GI_HIT_SHADOW_RAYS 1
 #endif

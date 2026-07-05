@@ -1,0 +1,43 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_GI_SURFEL_RECORD_SLANGI
+#define NWB_GRAPHICS_GI_SURFEL_RECORD_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// One surface element (surfel). Surfels are allocated ON visible surfaces (screen-space spawn) instead of on a
+// world-space probe grid, so the sample count tracks visible surface area rather than the grid's cubic volume. The
+// record is single-buffered: exactly one trace workgroup owns a surfel and read-old/writes-new its own irradiance in
+// place (no cross-workgroup contention, no float image atomics, no ping-pong). U0 stores a flat RGB mean irradiance;
+// U3 replaces meanIrradiance with 2-band spherical harmonics (the record grows accordingly). 64 bytes / std430 = four
+// float4 lanes; keep it 16-byte aligned so the RWStructuredBuffer<NwbSurfel> stride matches the C++ mirror.
+//
+//   lane 0 : position.xyz         | radius
+//   lane 1 : normal.xyz           | nextInCell     (hash-grid linked-list next; 0xFFFFFFFF = end)
+//   lane 2 : meanIrradiance.rgb   | sampleCount    (frames integrated; hysteresis 0 until the first sample)
+//   lane 3 : lastSeenFrame | alive | pad0 | pad1
+struct NwbSurfel{
+    float3 position;
+    float radius;
+    float3 normal;
+    uint nextInCell;
+    float3 meanIrradiance;
+    uint sampleCount;
+    uint lastSeenFrame;
+    uint alive;
+    uint pad0;
+    uint pad1;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

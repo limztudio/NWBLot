@@ -50,9 +50,9 @@ inline constexpr Name s_AvboitDepthWarp("render.avboit_depth_warp");
 inline constexpr Name s_AvboitExtinction("render.avboit_extinction");
 inline constexpr Name s_AvboitIntegration("render.avboit_integration");
 inline constexpr Name s_AvboitAccumulate("render.avboit_accumulate");
-inline constexpr Name s_GiProbeTrace("render.gi_probe_trace");
-inline constexpr Name s_GiProbeBlend("render.gi_probe_blend");
-inline constexpr Name s_GiProbeBorder("render.gi_probe_border");
+inline constexpr Name s_SurfelSpawn("render.surfel_spawn");
+inline constexpr Name s_SurfelHashBuild("render.surfel_hash_build");
+inline constexpr Name s_SurfelTrace("render.surfel_trace");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,50 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_GI_SAMPLING_SLANGI
+#define NWB_GRAPHICS_GI_SAMPLING_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// GI ray-sampling math: a spherical-Fibonacci direction sequence + a per-frame R2 rotation. Shared by any GI producer
+// that casts a deterministic low-discrepancy ray set with one rotation per frame (the surfel trace folds a ray set to
+// the upper hemisphere via the surfel-normal TBN). Grid-free -- no probe volume, no atlas, no constant buffer.
+
+
+// Spherical Fibonacci direction for index i of N. Returns a unit vector on the sphere in a canonical frame (z = spiral
+// axis). Uses the Golden-Angle spiral point method (increment = golden angle ~ 2.39996); the caller rotates it into
+// its own frame. The (x, y) tangent components are rotated by the shared per-frame R2 rotation, z is kept.
+float3 nwbGiFibonacciDirection(const uint i, const uint N, const float2 rotation){
+    const float goldenAngle = 2.39996323f;
+    const float phi = float(i) * goldenAngle;
+    const float z = 1.0 - (float(i) + 0.5) / float(N) * 2.0;
+    const float radius = sqrt(max(1.0 - z * z, 0.0));
+    const float x = cos(phi) * radius;
+    const float y = sin(phi) * radius;
+
+    const float ca = rotation.x;
+    const float sa = rotation.y;
+    return float3(x * ca - y * sa, x * sa + y * ca, z);
+}
+
+
+// Per-frame R2 rotation (2D, returns (cos, sin) of the rotation angle). The frame index drives a low-discrepancy
+// rotation so consecutive frames decorrelate their ray sets without per-ray RNG (temporal stability over per-frame noise).
+float2 nwbGiFrameRotation(const uint frameIndex){
+    // Golden ratio fractional part: a well-distributed 1D sequence in [0, 1).
+    const float frac = fract(float(frameIndex) * 0.61803398875f);
+    const float angle = frac * 6.28318530718f;
+    return float2(cos(angle), sin(angle));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2,6 +2,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_GRAPHICS_GI_SW_TRACE_SLANGI
+#define NWB_GRAPHICS_GI_SW_TRACE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Software closest-hit trace + Lambert shade, shared by any GI producer that walks the SW scene/instance/per-mesh BVH
+// the SW shadow/caustic path already builds. It declares the BVH bindings (slots 0-10 of NWB_GI_SW_SET) + the scene
+// light list + the per-instance material record, and provides nwbGiSwTraceClosest / nwbGiSwInstanceClosest /
+// nwbGiSwShadeHit (Lambert direct light + optional dominant-light shadow ray + the per-instance authored base colour,
+// so a red wall bounces red). The producer's own shader supplies the OUTPUT bindings + main(): the retired probe grid
+// wrote an octahedral ray-data texture; the surfel path reduces the rays in groupshared and EMAs them into a surfel
+// record. Nothing here references a grid CB, atlas, or ray-data buffer.
+
+
 #include "sw_binding_slots.h"
 
 #define NWB_SCENE_SHADING_SET NWB_GI_SW_SET
@@ -18,12 +34,18 @@
 #include "../bvh/bvh_common.slangi"
 #include "../common/math.slangi"
 #include "../shadow/instance_material.slangi"
-#include "binding_slots.h"
-#include "probe_grid.slangi"
+
+
+// Default bounce albedo when a hit's per-instance base colour is unresolved (a colourless mid-grey reflectance).
+#ifndef NWB_GI_SW_TRACE_DEFAULT_ALBEDO
+#define NWB_GI_SW_TRACE_DEFAULT_ALBEDO 0.5, 0.5, 0.5
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+// --- BVH bindings (slots 0-10; identical to the SW shadow/caustic trace) ---
 
 [[vk::binding(NWB_GI_SW_BINDING_SCENE_NODES, NWB_GI_SW_SET)]]
 StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbGiSwSceneNodes;
@@ -55,31 +77,6 @@ ByteAddressBuffer g_NwbGiSwMeshIndices[NWB_GI_SW_MAX_MESHES];
 
 [[vk::binding(NWB_GI_SW_BINDING_MESH_ATTRIBUTES, NWB_GI_SW_SET)]]
 ByteAddressBuffer g_NwbGiSwMeshAttributes[NWB_GI_SW_MAX_MESHES];
-
-[[vk::binding(NWB_GI_SW_BINDING_GRID_CONSTANTS, NWB_GI_SW_SET)]]
-ConstantBuffer<NwbGiGridConstants> g_NwbGiGrid;
-
-[[vk::binding(NWB_GI_SW_BINDING_RAY_DATA, NWB_GI_SW_SET)]]
-RWTexture2D<float4> g_NwbGiRayData;
-
-[[vk::binding(NWB_GI_SW_BINDING_PREV_IRRADIANCE, NWB_GI_SW_SET)]]
-Texture2D<float4> g_NwbGiPrevIrradiance;
-
-[[vk::binding(NWB_GI_SW_BINDING_PREV_DISTANCE, NWB_GI_SW_SET)]]
-Texture2D<float2> g_NwbGiPrevDistance;
-
-[[vk::binding(NWB_GI_SW_BINDING_HIT_ALBEDO, NWB_GI_SW_SET)]]
-StructuredBuffer<float3> g_NwbGiHitAlbedo;
-
-struct NwbGiTracePushConstants{
-    uint activeProbeCount;
-    uint updateCursor;   // first active probe in the round-robin
-    uint frameIndex;     // seeds the per-frame R2 rotation
-    uint raysPerProbe;   // compile-time from the default; pushed for flexibility
-};
-
-[[vk::push_constant]]
-ConstantBuffer<NwbGiTracePushConstants> g_NwbGiPushConstants;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -189,8 +186,8 @@ NwbGiSwTriangleHit nwbGiSwRayTriangle(const float3 origin, const float3 directio
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Probe closest-hit result: the world-space hit point, the geometric face normal (Lambert uses it), and the hit
-// instance's flat albedo for the bounce.
+// Closest-hit result: the world-space hit point, the geometric face normal (Lambert uses it), and the hit instance's
+// authored base colour for the bounce.
 struct NwbGiProbeHit{
     bool hit;
     float t;
@@ -199,10 +196,9 @@ struct NwbGiProbeHit{
     float3 albedo;
 };
 
-// Per-instance closest-hit refinement: push the world ray into object space, walk the mesh BVH front-to-back,
-// keep the nearest triangle crossing. On hit, compute the geometric face normal (inverse-transpose) + read the
-// per-instance flat albedo. Cloned from nwbCausticSwInstanceClosest but simpler (no refractive dispatch, just
-// Lambert geometry).
+// Per-instance closest-hit refinement: push the world ray into object space, walk the mesh BVH front-to-back, keep the
+// nearest triangle crossing. On hit, compute the geometric face normal (inverse-transpose) + read the per-instance
+// base colour packed into the instance-material record by the CPU gather (AssignInstanceBaseColor).
 void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbGiProbeHit closest){
     const NwbGiSwInstance instance = g_NwbGiSwInstances[instanceIndex];
     const NwbRtInstanceMaterial material = g_NwbGiSwInstanceMaterial[instanceIndex];
@@ -231,9 +227,6 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
                 closest.t = triHit.t;
                 closest.worldPos = worldOrigin + worldDirection * triHit.t;
                 closest.normal = nwbSafeNormalize(nwbGiSwTransformNormal(instance, triHit.normal), float3(0.0, 0.0, 1.0));
-                // Per-instance base colour (the entity's authored tint) packed into the instance-material record by
-                // the CPU gather (AssignInstanceBaseColor), read back with asfloat. This makes the bounce carry the
-                // surface's real colour (e.g. a red wall bounces red) instead of a flat default.
                 closest.albedo = float3(asfloat(material.baseColorR), asfloat(material.baseColorG), asfloat(material.baseColorB));
             }
             active = false;
@@ -278,7 +271,7 @@ NwbGiProbeHit nwbGiSwTraceClosest(float3 origin, float3 direction, float tMin, f
     closest.t = tMax;
     closest.worldPos = float3(0.0, 0.0, 0.0);
     closest.normal = float3(0.0, 0.0, 1.0);
-    closest.albedo = float3(NWB_GI_DEFAULT_ALBEDO_FLOAT3);
+    closest.albedo = float3(NWB_GI_SW_TRACE_DEFAULT_ALBEDO);
 
     const float3 invDir = nwbGiSwSafeInvDir(direction);
 
@@ -331,16 +324,15 @@ NwbGiProbeHit nwbGiSwTraceClosest(float3 origin, float3 direction, float tMin, f
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Lambert hit shade: sum direct light (<=8 lights, unshadowed base + D4 dominant-light shadow ray) + per-instance
-// flat albedo + prev-front atlas bounce fetch. Miss -> far-distance / zero (sky).
+// Lambert hit shade: direct light (<=8 lights, unshadowed base + optional dominant-light shadow ray) * per-instance
+// base colour. The caller adds any multi-bounce term (U4 surfel-to-surfel).
 float3 nwbGiSwShadeHit(const NwbGiProbeHit hit, const float3 rayDir){
     float3 irradiance = float3(0.0, 0.0, 0.0);
 
     const float3 normal = hit.normal;
-    // Face-forward the normal against the ray (the probe ray could hit a back face -- use the face the ray sees).
+    // Face-forward the normal against the ray (the ray could hit a back face -- use the face the ray sees).
     const float3 facingNormal = dot(normal, rayDir) < 0.0 ? normal : -normal;
 
-    // Lambert direct light over the <=8 NwbSceneLight entries (unshadowed -- D4 shadow ray is separate).
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint i = 0u; i < lightCount; ++i){
         const NwbSceneLight light = g_NwbSceneLights[i];
@@ -354,8 +346,7 @@ float3 nwbGiSwShadeHit(const NwbGiProbeHit hit, const float3 rayDir){
     }
 
 #if NWB_GI_HIT_SHADOW_RAYS
-    // D4: one occlusion ray toward the DOMINANT light. The dominant light is the one with the highest NdotL.
-    // This is an any-hit early-out (cheaper than the primary ray): miss -> lit, hit -> shadowed.
+    // One occlusion ray toward the DOMINANT light (the highest-NdotL lit light): miss -> lit, hit -> shadowed.
     {
         float bestNdotl = 0.0;
         float3 dominantLightDir = float3(0.0, 1.0, 0.0);
@@ -383,14 +374,8 @@ float3 nwbGiSwShadeHit(const NwbGiProbeHit hit, const float3 rayDir){
     }
 #endif
 
-    // Apply the per-instance flat albedo (the bounce's diffuse reflectance).
+    // Apply the per-instance base colour (the bounce's diffuse reflectance).
     irradiance *= hit.albedo;
-
-    // Infinite bounce: add the prev-front atlas probe fetch at this hit position. The prev-front irradiance atlas
-    // holds the last frame's accumulated irradiance, so adding it creates an infinite-bounce feedback from day one.
-    // U2 scaffold: the atlas is black-cleared (additive identity), so this is a no-op until U4 fills it.
-    // TODO(U4): octahedral fetch from g_NwbGiPrevIrradiance at the hit's facing-normal direction + the nearest probe.
-
     return irradiance;
 }
 
@@ -398,58 +383,7 @@ float3 nwbGiSwShadeHit(const NwbGiProbeHit hit, const float3 rayDir){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Workgroup-per-active-probe, one thread per ray: dispatch(activeProbeCount, 1, 1) with [numthreads(64, 1, 1)].
-// groupID.x selects the active-probe SLOT; groupThreadID.x selects the ray. (SV_DispatchThreadID.y is STRUCTURALLY 0
-// for a (N,1,1) dispatch, so the earlier main() -- which indexed the probe off .y -- only ever traced one probe/frame.)
-[numthreads(64, 1, 1)]
-void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
-    const uint rayIndex = groupThreadID.x;
-    const uint raysPerProbe = g_NwbGiPushConstants.raysPerProbe;
-    if(rayIndex >= raysPerProbe)
-        return;
-
-    // Map this workgroup's slot to the STRIDED round-robin probe the blend consumes. The active set is
-    // { cursor, cursor+divisor, cursor+2*divisor, ... } with cursor = frameIndex % divisor -- driven off the SAME
-    // grid.params0.z that nwbGiProbeActiveThisFrame() uses in the blend, so probeIndex % divisor == cursor BY
-    // CONSTRUCTION and the trace-written probes exactly match the blend-consumed set (no contiguous-vs-strided mismatch).
-    const uint probeCount = nwbGiProbeCount(g_NwbGiGrid);
-    const uint updateDivisor = max(uint(g_NwbGiGrid.params0.y), 1u);
-    const uint cursor = uint(g_NwbGiGrid.params0.z) % updateDivisor;
-    const uint probeIndex = cursor + groupID.x * updateDivisor;
-    if(probeIndex >= probeCount)
-        return;
-
-    // De-linearize the probe index to 3D.
-    const uint3 dims = uint3(g_NwbGiGrid.gridDims.xyz);
-    const uint ix = probeIndex % dims.x;
-    const uint iy = (probeIndex / dims.x) % dims.y;
-    const uint iz = probeIndex / (dims.x * dims.y);
-    const uint3 probeCoord = uint3(ix, iy, iz);
-    const float3 probePos = nwbGiProbeWorldPos(probeCoord, g_NwbGiGrid);
-
-    // Fibonacci ray direction with the per-frame R2 rotation, driven off grid.params0.z (the SAME frame index the
-    // blend uses to reconstruct ray directions) so the traced set and the gathered set are bit-identical.
-    const float2 rotation = nwbGiFrameRotation(uint(g_NwbGiGrid.params0.z));
-    const float3 rayDir = nwbGiFibonacciDirection(rayIndex, raysPerProbe, rotation);
-
-    // Trace.
-    const float tMax = 1.0e4; // grid diagonal * 1.5 in a later refinement
-    const NwbGiProbeHit hit = nwbGiSwTraceClosest(probePos, rayDir, 0.001, tMax);
-
-    float4 rayResult;
-    if(hit.hit){
-        rayResult.rgb = nwbGiSwShadeHit(hit, rayDir);
-        rayResult.a = hit.t;
-    }
-    else{
-        // Miss: far-distance / zero. The sky contributes nothing (black).
-        rayResult = float4(0.0, 0.0, 0.0, tMax);
-    }
-
-    // Write to ray-data texture (x = probe linear index, y = ray index).
-    g_NwbGiRayData[uint2(probeIndex, rayIndex)] = rayResult;
-}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

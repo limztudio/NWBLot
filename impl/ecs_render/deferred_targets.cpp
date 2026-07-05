@@ -4,8 +4,6 @@
 
 #include "renderer_private.h"
 
-#include <impl/assets/graphics/gi/binding_slots.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -435,27 +433,22 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
-    // DDGI atlas + grid-CB bindings. The atlases live on RendererRayTracingState (ping-pong A/B). At creation time
-    // they may not yet exist (ensureGiResources is lazy); bind null here and rebuild the set when GI becomes active
-    // (rebuildDeferredLightingGiBindings, called from renderDeferredLighting). Null SRVs are safe because the shader's
-    // probe evaluation returns the hemiAmbient fallback when the surface is outside the (zero-extent) probe volume.
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_LIGHTING_BINDING_GI_IRRADIANCE,
-        rayTracingState().m_giIrradianceAtlasA.get(),
-        Core::Format::RGBA16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
+    // Surfel GI bindings. The pool / cell-head / params buffers live on RendererRayTracingState. At target-creation
+    // time they may not yet exist (ensureSurfelResources is lazy, run in the prepare phase); a null resourceHandle is
+    // SKIPPED by createBindingSet (no warning), leaving the slot unwritten. The set is rebuilt with the real buffers
+    // when the pool appears (rebuildDeferredLightingGiBindings, called from renderDeferredLighting, before the lighting
+    // pass samples them). Until then nwbSurfelGather finds no surfel and falls back to hemiAmbient.
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_POOL,
+        rayTracingState().m_surfelPoolBuffer.get()
     ));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_LIGHTING_BINDING_GI_DISTANCE,
-        rayTracingState().m_giDistanceAtlasA.get(),
-        Core::Format::RG16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(
+        NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_HASH,
+        rayTracingState().m_surfelCellHeadBuffer.get()
     ));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
-        NWB_DEFERRED_LIGHTING_BINDING_GI_PARAMS,
-        rayTracingState().m_giGridConstants.get()
+        NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_PARAMS,
+        rayTracingState().m_surfelConstants.get()
     ));
     createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, deferredState().m_lightingBindingLayout);
     if(!createdTargets.lightingBindingSet){

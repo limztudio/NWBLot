@@ -1,0 +1,45 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_GI_SURFEL_HASH_SLANGI
+#define NWB_GRAPHICS_GI_SURFEL_HASH_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// World-space spatial hash for surfel lookup. A surfel is bucketed by the integer cell of its centre; the hash-build
+// pass links each surfel into a per-cell singly-linked list (InterlockedExchange on the cell head -- one integer
+// atomic, no float atomics). The cell size is 2 * max surfel radius, so a surfel can only overlap the query point's
+// own cell or its 26 neighbours -- a 3x3x3 neighbour walk is exhaustive. Collisions (two cells hashing to the same
+// bucket) only add far/near-zero-weight candidates to a walk, never a wrong result, and every walk is capped so a
+// pathological bucket can never spin the shader. NWB_SURFEL_CELL_INVALID + NWB_SURFEL_MAX_WALK are shared with C++.
+
+
+#include "surfel_binding_slots.h"
+
+
+// Integer cell coordinate of a world position for the given cell size.
+int3 nwbSurfelCellCoord(const float3 worldPosition, const float cellSize){
+    return int3(floor(worldPosition / max(cellSize, 1e-6)));
+}
+
+
+// Fold a 3D cell coordinate to a bucket index in [0, cellCount). cellCount MUST be a power of two so the mask works.
+uint nwbSurfelHashCell(const int3 cell, const uint cellCount){
+    const uint hash =
+        (uint(cell.x) * 73856093u)
+        ^ (uint(cell.y) * 19349663u)
+        ^ (uint(cell.z) * 83492791u);
+    return hash & (cellCount - 1u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

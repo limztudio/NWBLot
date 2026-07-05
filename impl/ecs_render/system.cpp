@@ -423,10 +423,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
         }
 
-        // DDGI render hook: GI probe dispatches run between the caustic producer and the deferred lighting, so the
-        // lighting read sees the resolved probe irradiance. U1 scaffold: inert no-op (hasGiWork returns false).
-        if(!m_raytracingSystem.renderGi(*commandList, deferredTargets))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GI render pass failed"));
+        // Surfel GI render hook: the spawn -> hash-build -> trace passes run between the caustic producer and the
+        // deferred lighting, so the lighting gather sees this frame's integrated surfel irradiance. Inert (returns
+        // true without dispatching) until m_surfelEnabled is set once the SW scene BVH is resident.
+        if(!m_raytracingSystem.renderSurfelGi(*commandList, deferredTargets))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI render pass failed"));
 
         commandListReady = m_deferredSystem.renderDeferredLighting(*commandList, deferredTargets);
         if(commandListReady){

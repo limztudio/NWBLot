@@ -117,7 +117,87 @@ DELETED: the grid CB + probe atlases + ray-data + the blend/border/distance pass
 3. Bootstrap: pool 16384 + hash 262144 + 16x16 spawn tile (~4-5k surfels, ~290k bootstrap rays); raise the tile if a
    target GPU chokes. PS-gather through U5. Linked-list hash. Screen-only spawn through U5. (Plan defaults kept.)
 
-## U0 status: IMPLEMENTING (started 2026-07-05). U0 uses FLAT RGB mean-irradiance (the SH decision lands in U3).
+## U0 status: COMPLETE + VERIFIED 2026-07-05. U0 uses FLAT RGB mean-irradiance (SH lands in U3).
+VERIFIED: nwb_gi_test_sw_smoke (forced SW emulation, --gpudbg) renders a correct colored bounce -- the saturated-red
+wall bleeds a distinct red glow onto the floor at its base (the unfakeable color-bleed GI signal), blue wall opposite.
+Warning-free + validation-clean: the capture harness with --reject-log-message "Validation"/"VUID"/"[WARNING]"/"surfel"
+all pass (exit 0); the C++ + shader cook build clean (100 cooked files, no grid shaders). The full grid GI subsystem is
+retired: deleted gi_probe_{trace_sw,trace_hw,blend_irradiance,blend_distance,border}_cs(+.nwb) + octahedral.slangi +
+gi/binding_slots.h; probe_grid.slangi -> sampling.slangi (Fibonacci + R2 rotation only); sw_binding_slots.h trimmed to
+slots 0-10; names.h/timing_names.h surfel-only; all m_gi* CPU state -> m_surfel*; NwbGiGridConstantsGpu/push mirrors gone.
+CPU shape: 3 DISTINCT binding layouts (cellHead is an SRV at spawn but a UAV at hash-build, so they cannot share one) --
+spawn: constants+pool(UAV)+cellHead(SRV)+counter(UAV)+gbuffer worldPos/normal; hash-build: constants+pool(UAV)+cellHead(UAV);
+trace: SW BVH 0-10 + constants + pool(UAV). renderSurfelGi order: spawn -> clear cellHead -> hash-build -> trace -> pool +
+cellHead UAV->SRV for the gather (setEnableUavBarriersForBuffer on all three). prepareSurfelResources one-shot clears (pool 0
+/ cellHead 0xFFFFFFFF / counter 0 on (re)creation) + uploads the CB each frame (divisor 1 while !seeded so ALL surfels trace
+on the bootstrap frame). Deferred set binds pool SRV / cellHead SRV / params CB at slots 9/10/11; NULL-SAFE at target
+creation -- createBindingSet skips null-handle items with NO warning (resource_bindings.cpp:1907) -- rebuilt once when the
+pool appears (surfelLightingBindingSetPool guard, replacing the grid's giLightingBindingSetFrontIsA). U0 caveats (fixed in
+later units): the bounce is surfel-LOCAL near the wall (no temporal/spatial spread); the trace dispatches the FULL poolCapacity
+each frame (U6 -> dispatchIndirect off the live count); the pool grows monotonically (U1 recycling). NEXT: U1 recycle+free
+list+keep-alive age, U2 round-robin budget, U3 2-band SH, U4 surfel->surfel infinite bounce, U5 HW twin, U6 perf.
+
+## (historical) SHADER LAYER DONE 2026-07-05 (CPU + wiring next). U0 uses FLAT RGB mean-irradiance (SH lands in U3).
+SHADER LAYER COMPLETE (all CRLF): impl/assets/graphics/gi/gi_sw_trace.slangi (extracted BVH bindings + nwbGiSwTrace
+Closest/InstanceClosest/ShadeHit from the grid trace -- reused verbatim); impl/assets/graphics/gi/surfel/{surfel_record,
+surfel_constants,surfel_hash,surfel_gather}.slangi + surfel_binding_slots.h + {surfel_spawn_cs,surfel_hash_build_cs,
+surfel_trace_cs}.slang(+.nwb); gi/names.h has s_Surfel{Spawn,HashBuild,Trace}ShaderName. Contracts the CPU must honour:
+  - Pass order per frame at the renderGi hook: spawn -> (barrier) -> CLEAR cellHead to 0xFFFFFFFF -> hash_build ->
+    (barrier) -> trace -> (barrier pool UAV->SRV for the lighting gather).
+  - Dispatches: spawn = dispatch(DivideUp(screenW/tile,8), DivideUp(screenH/tile,8),1) [numthreads 8x8]; hash_build =
+    dispatch(DivideUp(poolCap,64),1,1) [numthreads 64]; trace = dispatch(activeSurfelCount,1,1) [numthreads 64], where
+    activeSurfelCount = DivideUp(poolCap, divisor) (divisor 1 bootstrap -> poolCap groups). NOTE U0 dispatches the full
+    poolCap; U6 makes it dispatchIndirect off the live count.
+  - Buffers (RWStructuredBuffer, on RendererRayTracingState): pool = poolCap * sizeof(NwbSurfel=64B); cellHead = cellCount
+    * 4B; counter = 2 * 4B (bump top, free top). One-shot init: pool zeroed, cellHead = 0xFFFFFFFF, counter = 0. CB =
+    sizeof(NwbSurfelConstantsGpu) = 5*float4. Reset counter.bumpTop = 0 EACH frame in prepare (U0 re-spawns from empty
+    each frame it renders; the smoke app renders 1 bootstrap frame so this is fine; U1 adds recycling instead).
+  - CB (NwbSurfelConstantsGpu mirror, matched to surfel_constants.slangi lane-for-lane): cameraPos+cellSize(=2*radius);
+    cellCount,poolCap,frameIndex,divisor(=m_surfelSeeded?4:1); coverageThresh,radius,normalBias(~0.05),hysteresis(0.9);
+    maxAge,rays(64),spawnTile(16),screenW; screenH,pad. frameIndex increments each rendered frame; m_surfelSeeded set
+    true after the first renderSurfelGi (so bootstrap traces ALL surfels).
+  - Consumer wiring: lighting_framework.slangi rename NWB_SCENE_GI_IRRADIANCE/DISTANCE/GI_PARAMS macros (SET+BINDING) ->
+    NWB_SCENE_GI_SURFEL_POOL/HASH/PARAMS (same slot indices 9/10/11); lighting.slangi (inside the #ifndef
+    NWB_SCENE_GI_SAMPLING_DISABLED block) replace the 3 GI atlas/CB decls with `#include "../gi/surfel/surfel_gather.slangi"`
+    and make nwbBxdfIndirectIrradiance body: `float3 gi; if(nwbSurfelGather(worldPosition, normalVector, gi)) return
+    half3(gi); return nwbGiHemiAmbient(normalVector);` (keep the outer signature + the normal-bias comment). deferred_
+    lighting.cpp createDeferredLightingResources layout (slots 9/10/11 -> StructuredBuffer_SRV pool, StructuredBuffer_SRV
+    cellHead, ConstantBuffer surfel CB) + rebuildDeferredLightingGiBindings collapses to build-once-on-handle-change;
+    deferred_targets.cpp binding set (443-458) binds the same three. giLightingBindingSetFrontIsA -> a handle-generation
+    guard (no ping-pong).
+  - DELETE (retired, cleanly): ensureGiHitAlbedoBuffer + slot-15 upload + m_giHitAlbedo; ALL ensureGi{TracePipeline is
+    KEPT-as-surfel-trace? no}, ensureGiBlend*/Border* + their dispatches + pipelines/binding-sets/shaders (gi_probe_blend_
+    *_cs, gi_probe_border_cs + .nwb); the atlases + ray-data + grid CB + ping-pong flip; the grid state fields + their
+    invalidateResources resets; probe_grid.slangi's grid helpers (KEEP only nwbGiFibonacciDirection + nwbGiFrameRotation);
+    gi_probe_trace_sw_cs.slang (its reusable core moved to gi_sw_trace.slangi; its main was grid-specific). KEEP: gi_sw_
+    trace.slangi, the SW BVH build (buildSceneSwBvh + AssignInstanceBaseColor), the m_giEnabled gate site (-> m_surfelEnabled).
+
+DONE so far (foundation, under impl/assets/graphics/gi/surfel/, CRLF): surfel_record.slangi (NwbSurfel 64B),
+surfel_constants.slangi (NwbSurfelConstants 5xfloat4), surfel_hash.slangi (cell coord + pow2 fold + NWB_SURFEL_MAX_WALK
+cap), surfel_binding_slots.h (slots 11-17 tail + counter layout + defaults: pool 16384, hash 2^18, tile 16, rays 64,
+divisor 4, radius 0.35). REMAINING for U0:
+  1. Refactor gi_probe_trace_sw_cs.slang -> extract the BVH bindings + nwbGiSwTraceClosest/InstanceClosest/ShadeHit +
+     helpers into a shared gi_sw_trace.slangi (behind a NWB_SURFEL_TRACE_CLOSEST-style seam); the retired grid trace
+     main() + the surfel trace both include it. (KEEP the trace; RETIRE only the grid main + grid bindings 11-15.)
+  2. New compute shaders + .nwb: surfel_spawn_cs (screen-tile coverage spawn, InterlockedAdd bump alloc, G-buffer in),
+     surfel_hash_build_cs (clear cellHead 0xFFFFFFFF + InterlockedExchange link), surfel_trace_cs (workgroup-per-surfel,
+     64 rays via nwbGiFibonacciDirection into the surfel TBN, groupshared reduce -> EMA meanIrradiance, hysteresis 0
+     while sampleCount==0). + surfel_gather.slangi (3x3x3 capped walk, weight by normal+distance).
+  3. gi/names.h: add s_Surfel{Spawn,HashBuild,Trace}ShaderName.
+  4. renderer_state.h/.cpp: replace the m_gi grid/atlas/ray-data/hit-albedo/blend/border fields with m_surfel{Pool,
+     CellHead,Counter,Constants} + spawn/hashbuild/trace pipelines+sets + m_surfel{Enabled,Seeded,FrameIndex,NeedsClear,
+     UpdateCursor}; update invalidateResources.
+  5. raytracing_system.cpp: DELETE ensureGiHitAlbedoBuffer + slot-15 0.5 upload + ALL blend/border/distance/atlas
+     ensure*/dispatch + the grid CB + the ping-pong flip; ADD ensureSurfelResources + prepareSurfelResources (cellHead
+     clear + CB upload, bootstrap divisor 1) + renderSurfelGi (spawn -> hashbuild -> trace with barriers); set
+     m_surfelEnabled at the old m_giEnabled site (line ~1373).
+  6. scene/lighting.slangi: replace the 3 GI atlas/CB decls with surfel pool SRV + cellHead SRV + surfel CB; the
+     nwbBxdfIndirectIrradiance BODY -> surfel_gather (KEEP signature + hemiAmbient + normal bias).
+  7. deferred/binding_slots.h + lighting_framework.slangi: rename GI_IRRADIANCE/DISTANCE/GI_PARAMS slots 9/10/11 to
+     SURFEL_POOL/HASH/PARAMS (same indices). deferred_lighting.cpp createDeferredLightingResources layout +
+     rebuildDeferredLightingGiBindings (collapse to build-once-on-handle-change) + deferred_targets.cpp binding set.
+  8. BUILD nwb_gi_test_sw_smoke + capture: expect the red/blue bootstrap bounce (parity with the retired grid), then a
+     whole-workspace grep sweep for stale gi_probe_blend/gi_probe_border/m_giIrradianceAtlas/nwbGiProbe* references.
 
 ## Cleanup mandate (user 2026-07-05: "remove all retired core later")
 The surfel pivot RETIRES the world-grid GI. Remove ALL of it CLEANLY (no dead code) as the surfel units land — not

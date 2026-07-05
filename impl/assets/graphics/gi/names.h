@@ -25,13 +25,11 @@ namespace AssetsGraphicsGi{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// DDGI shader virtual paths. The trace pass has SW + HW twins behind a traversal #define seam (U3 SW-first, U6 HW);
-// the blend / border passes are backend-agnostic (gather-style, no traversal). See .helper/ddgi_plan.md §2.
-inline constexpr Name s_ProbeTraceSwShaderName("engine/graphics/gi/gi_probe_trace_sw_cs");
-inline constexpr Name s_ProbeTraceHwShaderName("engine/graphics/gi/gi_probe_trace_hw_cs");
-inline constexpr Name s_ProbeBlendIrradianceShaderName("engine/graphics/gi/gi_probe_blend_irradiance_cs");
-inline constexpr Name s_ProbeBlendDistanceShaderName("engine/graphics/gi/gi_probe_blend_distance_cs");
-inline constexpr Name s_ProbeBorderShaderName("engine/graphics/gi/gi_probe_border_cs");
+// Surfel GI shader virtual paths. Screen-spawn -> world-hash-build -> SW trace; the trace reuses gi_sw_trace.slangi
+// (the extracted closest-hit + Lambert shade). The gather is folded into the deferred-lighting pass (surfel_gather).
+inline constexpr Name s_SurfelSpawnShaderName("engine/graphics/gi/surfel/surfel_spawn_cs");
+inline constexpr Name s_SurfelHashBuildShaderName("engine/graphics/gi/surfel/surfel_hash_build_cs");
+inline constexpr Name s_SurfelTraceShaderName("engine/graphics/gi/surfel/surfel_trace_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

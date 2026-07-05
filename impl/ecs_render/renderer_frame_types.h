@@ -219,10 +219,11 @@ struct DeferredFrameTargets{
     Core::FramebufferHandle opaqueLightingFramebuffer;
     Core::BindingSetHandle lightingBindingSet;
     Core::BindingSetHandle compositeBindingSet;
-    // The GI atlas front selector the lighting binding set was built against. The GI atlas front flips each frame
-    // (m_giHistoryFrontIsA on RendererRayTracingState); when this tracked value diverges the lighting binding set
-    // is rebuilt to point at the new front atlas. 0xFFFFFFFF = never built (forces a rebuild on the first frame).
-    u32 giLightingBindingSetFrontIsA = 0xFFFFFFFFu;
+    // The surfel pool buffer the lighting binding set was built against. The surfel pool is created lazily (in the
+    // prepare phase, after the deferred targets + this binding set already exist), so the set is first built with a
+    // null pool SRV and rebuilt ONCE when the real pool appears (rebuildDeferredLightingGiBindings). The surfel pool
+    // does not ping-pong, so after that one rebuild it stays valid. nullptr = built with no pool (forces the rebuild).
+    const Core::Buffer* surfelLightingBindingSetPool = nullptr;
     AvboitFrameTargets avboit;
 
     [[nodiscard]] bool csgIntervalTargetsValid()const noexcept{

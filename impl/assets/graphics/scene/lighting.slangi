@@ -12,11 +12,8 @@
 #include "../common/math.slangi"
 #include "buffer.slangi"
 
-// DDGI probe-evaluation helpers (grid-coord math + octahedral atlas sampling). These are header-only math; the
-// actual atlas + grid-CB bindings are declared below and the deferred lighting pass binds them.
-#include "../gi/binding_slots.h"
-#include "../gi/probe_grid.slangi"
-#include "../gi/octahedral.slangi"
+// Surfel GI gather (world-hashed surfel lookup) is included below, inside the NWB_SCENE_GI_SAMPLING_DISABLED
+// guard, so the surfel pool/hash/params bindings are only declared where the deferred pass binds them.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,23 +35,23 @@
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_BINDING
 #endif
 
-#ifndef NWB_SCENE_GI_IRRADIANCE_SET
-#define NWB_SCENE_GI_IRRADIANCE_SET NWB_SCENE_GI_IRRADIANCE_DEFAULT_SET
+#ifndef NWB_SCENE_GI_SURFEL_POOL_SET
+#define NWB_SCENE_GI_SURFEL_POOL_SET NWB_SCENE_GI_SURFEL_POOL_DEFAULT_SET
 #endif
-#ifndef NWB_SCENE_GI_IRRADIANCE_BINDING
-#define NWB_SCENE_GI_IRRADIANCE_BINDING NWB_SCENE_GI_IRRADIANCE_DEFAULT_BINDING
+#ifndef NWB_SCENE_GI_SURFEL_POOL_BINDING
+#define NWB_SCENE_GI_SURFEL_POOL_BINDING NWB_SCENE_GI_SURFEL_POOL_DEFAULT_BINDING
 #endif
-#ifndef NWB_SCENE_GI_DISTANCE_SET
-#define NWB_SCENE_GI_DISTANCE_SET NWB_SCENE_GI_DISTANCE_DEFAULT_SET
+#ifndef NWB_SCENE_GI_SURFEL_HASH_SET
+#define NWB_SCENE_GI_SURFEL_HASH_SET NWB_SCENE_GI_SURFEL_HASH_DEFAULT_SET
 #endif
-#ifndef NWB_SCENE_GI_DISTANCE_BINDING
-#define NWB_SCENE_GI_DISTANCE_BINDING NWB_SCENE_GI_DISTANCE_DEFAULT_BINDING
+#ifndef NWB_SCENE_GI_SURFEL_HASH_BINDING
+#define NWB_SCENE_GI_SURFEL_HASH_BINDING NWB_SCENE_GI_SURFEL_HASH_DEFAULT_BINDING
 #endif
-#ifndef NWB_SCENE_GI_GRID_CONSTANTS_SET
-#define NWB_SCENE_GI_GRID_CONSTANTS_SET NWB_SCENE_GI_GRID_CONSTANTS_DEFAULT_SET
+#ifndef NWB_SCENE_GI_SURFEL_PARAMS_SET
+#define NWB_SCENE_GI_SURFEL_PARAMS_SET NWB_SCENE_GI_SURFEL_PARAMS_DEFAULT_SET
 #endif
-#ifndef NWB_SCENE_GI_GRID_CONSTANTS_BINDING
-#define NWB_SCENE_GI_GRID_CONSTANTS_BINDING NWB_SCENE_GI_GRID_CONSTANTS_DEFAULT_BINDING
+#ifndef NWB_SCENE_GI_SURFEL_PARAMS_BINDING
+#define NWB_SCENE_GI_SURFEL_PARAMS_BINDING NWB_SCENE_GI_SURFEL_PARAMS_DEFAULT_BINDING
 #endif
 
 // Debug toggle for the visual gate: when 1, nwbBxdfCausticIrradiance returns a small constant grey instead of
@@ -81,21 +78,12 @@ Texture2DArray<float4> g_NwbShadowVisibility;
 Texture2D<float4> g_NwbCausticIrradiance;
 #endif
 
-// DDGI probe atlases + grid constant buffer. The irradiance atlas (RGBA16F octahedral, one tile per probe) holds
-// the EMA-blended diffuse irradiance; the distance atlas (RG16F octahedral, mean + mean²) feeds the Chebyshev
-// leak-rejection. The grid-CB carries the runtime grid origin/spacing/dims + bias params. These live on
-// RendererRayTracingState (ping-pong A/B; the front flips each frame). When NWB_SCENE_GI_SAMPLING_DISABLED is
-// defined (the AVBOIT transparent accumulate, which does not bind these), the declarations are omitted and
-// nwbBxdfIndirectIrradiance falls back to the hemiAmbient ambient term -- behaviour-identical to no GI.
+// Surfel GI gather. The surfel pool (StructuredBuffer<NwbSurfel>), spatial-hash cell-head buffer, and params CB
+// live on RendererRayTracingState; nwbSurfelGather walks the 3x3x3 neighbour cells at the shaded point. When
+// NWB_SCENE_GI_SAMPLING_DISABLED is defined (the AVBOIT transparent accumulate, which does not bind these), the
+// header + its bindings are omitted and nwbBxdfIndirectIrradiance falls back to hemiAmbient -- identical to no GI.
 #ifndef NWB_SCENE_GI_SAMPLING_DISABLED
-[[vk::binding(NWB_SCENE_GI_GRID_CONSTANTS_BINDING, NWB_SCENE_GI_GRID_CONSTANTS_SET)]]
-ConstantBuffer<NwbGiGridConstants> g_NwbGiGridConstants;
-
-[[vk::binding(NWB_SCENE_GI_IRRADIANCE_BINDING, NWB_SCENE_GI_IRRADIANCE_SET)]]
-Texture2D<float4> g_NwbGiIrradianceAtlas;
-
-[[vk::binding(NWB_SCENE_GI_DISTANCE_BINDING, NWB_SCENE_GI_DISTANCE_SET)]]
-Texture2D<float2> g_NwbGiDistanceAtlas;
+#include "../gi/surfel/surfel_gather.slangi"
 #endif
 
 // 1 (white) = lit, 0 = shadowed, tint = colored transmittance. Reads the light's shadow-slot layer; a light
@@ -219,98 +207,19 @@ half3 nwbGiHemiAmbient(float3 normalVector){
     return lerp(NWB_GI_HEMI_AMBIENT_GROUND, NWB_GI_HEMI_AMBIENT_SKY, skyAmount);
 }
 
-// DDGI indirect irradiance: the diffuse irradiance the probe atlas evaluates for this surface. Finds the 8 probes
-// surrounding the (normal-biased) surface position, octahedral-samples each probe's irradiance tile in the surface
-// normal direction, applies Chebyshev leak rejection from the distance atlas, and trilinear-blends the 8 results.
-// Outside the probe grid volume, fades to the hemiAmbient ambient term. The D3 contract change threads this VALUE
-// through the cook-generated bxdf_dispatch.slangi so materials can reshape their indirect term.
+// Surfel GI indirect irradiance: the diffuse irradiance the world-hashed surfels integrate for this surface.
+// nwbSurfelGather biases the shaded point outward along the normal, hashes it, walks the 3x3x3 neighbour cells'
+// surfel lists, and weights each surfel by normal alignment * distance falloff * confidence. When no surfel
+// covers the point (or GI sampling is disabled), fades to the hemiAmbient ambient term. The D3 contract change
+// threads this VALUE through the cook-generated bxdf_dispatch.slangi so materials can reshape their indirect term.
 half3 nwbBxdfIndirectIrradiance(float3 worldPosition, float3 normalVector){
 #ifdef NWB_SCENE_GI_SAMPLING_DISABLED
     return nwbGiHemiAmbient(normalVector);
 #else
-    const NwbGiGridConstants grid = g_NwbGiGridConstants;
-
-    // Normal bias: offset the sample position OUTWARD along the surface normal (away from the surface, into the
-    // volume the probes see) so the probe fetch does not self-occlude against the surface it is shading. The push
-    // must be +N: pushing -N buries the sample inside/behind the surface -- e.g. a floor at the grid's y=0 boundary
-    // biased to y<0 falls OUTSIDE the volume and silently reverts to hemiAmbient (no bounce). The plan's
-    // (0.2N+0.8V)·0.75·minSpacing reduces to a normal-only push here (view is not available at this evaluation
-    // point); the grid-CB's params1.z carries the runtime bias (0 = auto).
-    const float minSpacing = min(min(grid.gridSpacing.x, grid.gridSpacing.y), grid.gridSpacing.z);
-    const float normalBias = (grid.params1.z > 0.0) ? grid.params1.z : (0.2 * 0.75 * minSpacing);
-    const float3 samplePos = worldPosition + normalVector * normalBias;
-
-    // Fractional grid coordinate of the biased position.
-    const float3 gridCoord = (samplePos - grid.gridOrigin.xyz) / grid.gridSpacing.xyz;
-    const float3 dims = float3(grid.gridDims.xyz);
-
-    // Outside the probe volume -> hemiAmbient. The 0..dims-1 range covers all interior grid cells.
-    if(any(gridCoord < float3(0.0)) || any(gridCoord >= dims))
-        return nwbGiHemiAmbient(normalVector);
-
-    const float3 baseCoordF = floor(gridCoord);
-    const float3 frac = gridCoord - baseCoordF;
-    const uint3 baseIdx = uint3(baseCoordF);
-
-    const uint irrInterior = NWB_GI_IRRADIANCE_ATLAS_INTERIOR;
-    const uint irrTile = NWB_GI_IRRADIANCE_ATLAS_TILE;
-    const uint distInterior = NWB_GI_DISTANCE_ATLAS_INTERIOR;
-    const uint distTile = NWB_GI_DISTANCE_ATLAS_TILE;
-
-    // Octahedral UV for the surface normal (shared by irradiance + distance fetches).
-    const float2 octUv = nwbGiOctahedralEncode(normalVector);
-
-    half3 irradiance = half3(0.0);
-    float totalWeight = 0.0;
-
-    // Trilinear blend over the 8 surrounding probes.
-    [unroll]
-    for(uint i = 0u; i < 8u; ++i){
-        const uint3 offset = uint3(i & 1u, (i >> 1u) & 1u, (i >> 2u) & 1u);
-        const uint3 probeIdx = baseIdx + offset;
-
-        // Clamp: probes at the grid edge skip out-of-bounds corners.
-        if(any(probeIdx >= uint3(dims)))
-            continue;
-
-        // Trilinear weight.
-        const float3 w3 = lerp(float3(1.0) - frac, frac, float3(offset));
-        const float w = w3.x * w3.y * w3.z;
-
-        const uint linearIndex = nwbGiProbeLinearIndex(probeIdx, grid);
-
-        // Chebyshev leak rejection from the distance atlas (mean + mean² -> variance).
-        const uint2 distTexel = nwbGiAtlasTexelFromUv(linearIndex, octUv, distInterior, distTile);
-        const float2 distSample = g_NwbGiDistanceAtlas.Load(int3(int2(distTexel), 0));
-        const float meanDist = distSample.x;
-        const float meanSqDist = distSample.y;
-        const float variance = max(meanSqDist - meanDist * meanDist, 0.0);
-
-        // Surface distance from this probe.
-        const float3 probePos = nwbGiProbeWorldPos(probeIdx, grid);
-        const float surfDist = length(samplePos - probePos);
-
-        // One-tailed Chebyshev: if the surface is farther than the probe's mean geometry distance, the
-        // probe's irradiance likely leaks through the occluder -- attenuate the weight.
-        float chebWeight = 1.0;
-        if(surfDist > meanDist && variance > 1e-4){
-            const float delta = surfDist - meanDist;
-            chebWeight = variance / (variance + delta * delta);
-        }
-
-        // Octahedral irradiance fetch for this probe.
-        const uint2 irrTexel = nwbGiAtlasTexelFromUv(linearIndex, octUv, irrInterior, irrTile);
-        const float4 irrSample = g_NwbGiIrradianceAtlas.Load(int3(int2(irrTexel), 0));
-
-        const float blendedWeight = w * chebWeight;
-        irradiance += half3(irrSample.rgb) * half(blendedWeight);
-        totalWeight += blendedWeight;
-    }
-
-    if(totalWeight < 1e-4)
-        return nwbGiHemiAmbient(normalVector);
-
-    return irradiance / half(totalWeight);
+    float3 gi;
+    if(nwbSurfelGather(worldPosition, normalVector, gi))
+        return half3(gi);
+    return nwbGiHemiAmbient(normalVector);
 #endif
 }
 

@@ -1,0 +1,57 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Surfel hash build: one thread per pool slot. A live surfel links itself into its cell's singly-linked list --
+// InterlockedExchange the cell head to this surfel id (one integer atomic, no float atomics) and store the previous
+// head as this surfel's nextInCell. The gather + the next frame's spawn walk these lists. The cell-head table is
+// cleared to NWB_SURFEL_CELL_INVALID by the CPU each frame BEFORE this pass (a buffer clear), so the linking starts
+// from empty lists. See .helper/surfel_gi_plan.md (Acceleration).
+
+
+#include "surfel_record.slangi"
+#include "surfel_constants.slangi"
+#include "surfel_hash.slangi"
+#include "surfel_binding_slots.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[vk::binding(NWB_SURFEL_BINDING_CONSTANTS, NWB_SURFEL_SET)]]
+ConstantBuffer<NwbSurfelConstants> g_NwbSurfelConstants;
+
+[[vk::binding(NWB_SURFEL_BINDING_POOL, NWB_SURFEL_SET)]]
+RWStructuredBuffer<NwbSurfel> g_NwbSurfelPool;
+
+[[vk::binding(NWB_SURFEL_BINDING_CELL_HEAD, NWB_SURFEL_SET)]]
+RWStructuredBuffer<uint> g_NwbSurfelCellHead;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[numthreads(64, 1, 1)]
+void main(uint3 dispatchThreadID : SV_DispatchThreadID){
+    const uint surfelIndex = dispatchThreadID.x;
+    const uint poolCapacity = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.y);
+    if(surfelIndex >= poolCapacity)
+        return;
+
+    const NwbSurfel surfel = g_NwbSurfelPool[surfelIndex];
+    if(surfel.alive == 0u)
+        return;
+
+    const float cellSize = g_NwbSurfelConstants.cameraPositionCellSize.w;
+    const uint cellCount = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.x);
+    const uint bucket = nwbSurfelHashCell(nwbSurfelCellCoord(surfel.position, cellSize), cellCount);
+
+    // Push onto the cell's linked list: this surfel becomes the new head; its next is the previous head. Each slot is
+    // written by exactly one thread (surfelIndex), so the single-field nextInCell store is race-free.
+    uint previousHead = NWB_SURFEL_CELL_INVALID;
+    InterlockedExchange(g_NwbSurfelCellHead[bucket], surfelIndex, previousHead);
+    g_NwbSurfelPool[surfelIndex].nextInCell = previousHead;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

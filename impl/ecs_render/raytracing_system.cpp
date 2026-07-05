@@ -596,7 +596,7 @@ u32 BuildSceneBvhNode(
 // authored per-instance tint (mutable "runtime.color_tint", which the scenes set and which flows to the G-buffer base
 // colour), else the neutral GI default. Always runs (even for an unresolved material) so a bounce is never black.
 void AssignInstanceBaseColor(NwbRtInstanceMaterialGpu& material, Core::ECS::World& world, const Core::ECS::EntityID entity){
-    Float4 color(NWB_GI_DEFAULT_ALBEDO_FLOAT3, 1.0f);
+    Float4 color(NWB_SURFEL_DEFAULT_ALBEDO_FLOAT3, 1.0f);
     if(const MaterialInstanceComponent* materialInstance = world.tryGetComponent<MaterialInstanceComponent>(entity)){
         Float4 tint;
         if(GetMaterialMutableHalf4(*materialInstance, "runtime.color_tint", tint))
@@ -1398,16 +1398,16 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         return true;
     }
 
-    // U5: enable DDGI on the SW path (the GI trace reuses the SW scene BVH the SW shadow/caustic paths built) and
+    // Enable surfel GI on the SW path (the surfel trace reuses the SW scene BVH the SW shadow/caustic paths built) and
     // create its resources THIS frame -- here, in the prepare phase, right after the SW scene BVH is resident. Doing
-    // the lazy creation after the enable (instead of a frame earlier, before the enable) removes DDGI's one-frame
-    // startup latency: renderGi in the render phase can trace/blend/border on the very same frame the probe volume
-    // becomes active, so a single bootstrap frame already shows a bounce. The atlas/pipeline resources live on
-    // RendererRayTracingState so a window resize does not reset probe convergence.
+    // the lazy creation after the enable (instead of a frame earlier, before the enable) removes surfel GI's one-frame
+    // startup latency: renderSurfelGi in the render phase can spawn/hash/trace on the very same frame the surfels
+    // become active, so a single bootstrap frame already shows a bounce (the unfocused smoke app renders only that
+    // frame). The pool/hash/pipeline resources live on RendererRayTracingState so a resize does not reset convergence.
     if(rayTracingState().m_sceneBvhInstanceCount > 0u && rayTracingState().m_swShadowMeshCount > 0u){
-        rayTracingState().m_giEnabled = true;
-        if(!prepareGiResources(commandList, targets))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GI resource preparation failed"));
+        rayTracingState().m_surfelEnabled = true;
+        if(!prepareSurfelResources(commandList, targets))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI resource preparation failed"));
     }
 
     if(rayTracingState().m_sceneBvhInstanceCount == 0u)
@@ -6128,56 +6128,141 @@ bool RendererRayTracingSystem::uploadShadowMaterialContextBuffers(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CPU mirror of the shader NwbGiGridConstants (6 x Float4 = 96 bytes, matches probe_grid.slangi).
-struct NwbGiGridConstantsGpu{
-    Float4 gridOrigin;
-    Float4 gridSpacing;
-    Float4 gridDims;
-    Float4 params0;
-    Float4 params1;
-    Float4 params2;
+// CPU mirror of the shader NwbSurfelConstants (5 x Float4 = 80 bytes, matches surfel_constants.slangi lane-for-lane).
+struct NwbSurfelConstantsGpu{
+    Float4 cameraPositionCellSize;  // xyz = camera world position (unused until U6 distance-scaled spawn), w = hash cell size
+    Float4 hashPoolFrameDivisor;    // x = hash cell count, y = pool capacity, z = frame index, w = update divisor
+    Float4 coverageRadiusBiasHyst;  // x = spawn coverage threshold, y = default radius, z = normal bias, w = EMA hysteresis
+    Float4 ageRaysTileScreen;       // x = max age, y = rays/surfel, z = spawn tile (px), w = screen width
+    Float4 screenHeightPad;         // x = screen height, yzw = pad
 };
-static_assert(sizeof(NwbGiGridConstantsGpu) == sizeof(f32) * 4u * 6u, "NwbGiGridConstantsGpu must match the shader NwbGiGridConstants layout");
+static_assert(sizeof(NwbSurfelConstantsGpu) == sizeof(f32) * 4u * 5u, "NwbSurfelConstantsGpu must match the shader NwbSurfelConstants layout");
 
-// CPU mirror of the shader NwbGiTracePushConstants (4 x u32 = 16 bytes).
-struct NwbGiTracePushConstantsGpu{
-    u32 activeProbeCount = 0u;
-    u32 updateCursor = 0u;
-    u32 frameIndex = 0u;
-    u32 raysPerProbe = 0u;
-};
-static_assert(sizeof(NwbGiTracePushConstantsGpu) == sizeof(u32) * 4u, "NwbGiTracePushConstantsGpu must match the shader NwbGiTracePushConstants layout");
+// Default EMA hysteresis for the surfel irradiance (the history weight). ~0.9 gives a ~10-frame time constant; the
+// trace forces 0 while sampleCount == 0 so a just-spawned surfel seeds directly (no global dark bias). 0 on the first
+// enabled frame (m_surfelSeeded false) so nothing carries stale history. Mirrors the caustic/GI seed precedent.
+inline constexpr f32 s_SurfelDefaultHysteresis = 0.9f;
 
-// CPU mirror of the shader NwbGiBorderPushConstants (4 x u32 = 16 bytes): selects the atlas (irradiance vs distance)
-// and carries the tile edge length for the border fill dispatch.
-struct NwbGiBorderPushConstantsGpu{
-    u32 tile = 0u;
-    u32 mode = 0u; // 0 = irradiance (float4), 1 = distance (float2)
-    u32 pad0 = 0u;
-    u32 pad1 = 0u;
-};
-static_assert(sizeof(NwbGiBorderPushConstantsGpu) == sizeof(u32) * 4u, "NwbGiBorderPushConstantsGpu must match the shader NwbGiBorderPushConstants layout");
-
-// Default hysteresis for the EMA blend (the probe history weight). 0.97 gives ~6-7 frame time constant (matches the
-// caustic splat-space decay precedent); 0 on frame 0 (m_giSeeded false) so the first blend is the pure current sample.
-inline constexpr f32 s_GiDefaultHysteresis = 0.97f;
+// The surfel normal bias: push the trace ray origin + the gather sample point off the surface along the normal so a
+// ray/query does not self-hit the surface it belongs to. Small world-space offset; U6 scales it by camera distance.
+inline constexpr f32 s_SurfelNormalBias = 0.05f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureGiTracePipeline(){
-    if(rayTracingState().m_giProbeTracePipeline)
+bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
+    if(rayTracingState().m_surfelSpawnPipeline)
         return true;
-    if(rayTracingState().m_giProbeTracePipelineFailed)
+    if(rayTracingState().m_surfelSpawnPipelineFailed)
         return false;
 
     auto* device = graphics().getDevice();
 
-    if(!rayTracingState().m_giBindingLayout){
+    if(!rayTracingState().m_surfelSpawnBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Scene BVH + instance + light list + per-mesh descriptor arrays (mirrors SW shadow/caustic layout).
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // pool
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_CELL_HEAD, 1)); // cell head (prev frame)
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_COUNTER, 1)); // counter
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SURFEL_BINDING_GBUFFER_WORLD_POSITION, 1)); // G-buffer world position
+        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SURFEL_BINDING_GBUFFER_NORMAL, 1)); // G-buffer normal
+        rayTracingState().m_surfelSpawnBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_surfelSpawnBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn binding layout"));
+            rayTracingState().m_surfelSpawnPipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_surfelSpawnShader,
+        AssetsGraphicsGi::s_SurfelSpawnShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_SurfelSpawn"
+    )){
+        rayTracingState().m_surfelSpawnPipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_surfelSpawnShader)
+        .addBindingLayout(rayTracingState().m_surfelSpawnBindingLayout)
+    ;
+    rayTracingState().m_surfelSpawnPipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_surfelSpawnPipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn compute pipeline"));
+        rayTracingState().m_surfelSpawnPipelineFailed = true;
+        return false;
+    }
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel spawn compute pipeline"));
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
+    if(rayTracingState().m_surfelHashBuildPipeline)
+        return true;
+    if(rayTracingState().m_surfelHashBuildPipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_surfelHashBuildBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // pool
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_CELL_HEAD, 1)); // cell head (write links)
+        rayTracingState().m_surfelHashBuildBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_surfelHashBuildBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel hash-build binding layout"));
+            rayTracingState().m_surfelHashBuildPipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_renderer.shaderSystem().loadShader(
+        rayTracingState().m_surfelHashBuildShader,
+        AssetsGraphicsGi::s_SurfelHashBuildShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Compute,
+        "ECSRender_SurfelHashBuild"
+    )){
+        rayTracingState().m_surfelHashBuildPipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(rayTracingState().m_surfelHashBuildShader)
+        .addBindingLayout(rayTracingState().m_surfelHashBuildBindingLayout)
+    ;
+    rayTracingState().m_surfelHashBuildPipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_surfelHashBuildPipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel hash-build compute pipeline"));
+        rayTracingState().m_surfelHashBuildPipelineFailed = true;
+        return false;
+    }
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel hash-build compute pipeline"));
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
+    if(rayTracingState().m_surfelTracePipeline)
+        return true;
+    if(rayTracingState().m_surfelTracePipelineFailed)
+        return false;
+
+    auto* device = graphics().getDevice();
+
+    if(!rayTracingState().m_surfelTraceBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(arena());
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // SW scene BVH + instance + light list + per-mesh descriptor arrays (slots 0-10; identical to the SW
+        // shadow/caustic trace -- the trace body is gi_sw_trace.slangi, reused verbatim).
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(0, 1)); // scene shading
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1)); // light list
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1)); // scene nodes
@@ -6189,45 +6274,41 @@ bool RendererRayTracingSystem::ensureGiTracePipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(8, NWB_SW_SHADOW_MAX_MESHES)); // mesh attributes
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(9, 1)); // material typed
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(10, 1)); // mesh instances
-        // GI-specific bindings.
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(11, 1)); // grid constants
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(12, 1)); // ray data
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(13, 1)); // prev irradiance
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(14, 1)); // prev distance
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(15, 1)); // hit albedo
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(NwbGiTracePushConstantsGpu)));
-
-        rayTracingState().m_giBindingLayout = device->createBindingLayout(layoutDesc);
-        if(!rayTracingState().m_giBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI binding layout"));
-            rayTracingState().m_giProbeTracePipelineFailed = true;
+        // Surfel bindings (11 = constants CB, 12 = pool UAV). No push constants -- the trace derives the round-robin
+        // phase from frameIndex % divisor in the CB.
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // surfel pool
+        rayTracingState().m_surfelTraceBindingLayout = device->createBindingLayout(layoutDesc);
+        if(!rayTracingState().m_surfelTraceBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace binding layout"));
+            rayTracingState().m_surfelTracePipelineFailed = true;
             return false;
         }
     }
 
     if(!m_renderer.shaderSystem().loadShader(
-        rayTracingState().m_giProbeTraceShader,
-        AssetsGraphicsGi::s_ProbeTraceSwShaderName,
+        rayTracingState().m_surfelTraceShader,
+        AssetsGraphicsGi::s_SurfelTraceShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
-        "ECSRender_GiProbeTraceSw"
+        "ECSRender_SurfelTrace"
     )){
-        rayTracingState().m_giProbeTracePipelineFailed = true;
+        rayTracingState().m_surfelTracePipelineFailed = true;
         return false;
     }
 
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
-        .setComputeShader(rayTracingState().m_giProbeTraceShader)
-        .addBindingLayout(rayTracingState().m_giBindingLayout)
+        .setComputeShader(rayTracingState().m_surfelTraceShader)
+        .addBindingLayout(rayTracingState().m_surfelTraceBindingLayout)
     ;
-    rayTracingState().m_giProbeTracePipeline = device->createComputePipeline(pipelineDesc);
-    if(!rayTracingState().m_giProbeTracePipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI probe trace compute pipeline"));
-        rayTracingState().m_giProbeTracePipelineFailed = true;
+    rayTracingState().m_surfelTracePipeline = device->createComputePipeline(pipelineDesc);
+    if(!rayTracingState().m_surfelTracePipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace compute pipeline"));
+        rayTracingState().m_surfelTracePipelineFailed = true;
         return false;
     }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created GI probe trace compute pipeline"));
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel trace compute pipeline"));
     return true;
 }
 
@@ -6235,117 +6316,94 @@ bool RendererRayTracingSystem::ensureGiTracePipeline(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureGiResources(){
-    // Create the atlas/ray-data/grid-CB resources lazily. Atlases live on RendererRayTracingState (NOT
-    // DeferredFrameTargets) so a window resize does not reset probe convergence. See .helper/ddgi_plan.md §2.
-    if(!hasGiWork())
+bool RendererRayTracingSystem::ensureSurfelResources(){
+    // Create the persistent pool / cell-head / counter / params buffers lazily. They live on RendererRayTracingState
+    // (NOT DeferredFrameTargets) so a window resize does not reset surfel convergence. See .helper/surfel_gi_plan.md.
+    if(!hasSurfelWork())
         return true;
 
-    const u32 probeCount = rayTracingState().m_giGridSizeX * rayTracingState().m_giGridSizeY * rayTracingState().m_giGridSizeZ;
-    if(probeCount == 0u)
+    const u32 poolCapacity = rayTracingState().m_surfelPoolCapacity;
+    const u32 cellCount = rayTracingState().m_surfelHashCellCount;
+    if(poolCapacity == 0u || cellCount == 0u)
         return false;
-    const u32 raysPerProbe = rayTracingState().m_giRaysPerProbe;
 
-    // Ray-data texture (RGBA16F: rgb = irradiance, a = hitT). Width = probe count, height = rays/probe.
-    if(!rayTracingState().m_giRayData){
-        Core::TextureDesc rayDataDesc;
-        rayDataDesc
-            .setWidth(probeCount)
-            .setHeight(raysPerProbe)
-            .setFormat(Core::Format::RGBA16_FLOAT)
-            .setInUAV(true)
-            .setName("engine/gi/ray_data")
-        ;
-        rayTracingState().m_giRayData = graphics().createTexture(rayDataDesc);
-        if(!rayTracingState().m_giRayData){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI ray-data texture"));
-            return false;
-        }
-    }
-
-    // Grid constant buffer (6 x Float4 = 96 bytes, matches NwbGiGridConstants).
-    if(!rayTracingState().m_giGridConstants){
-        Core::BufferDesc gridCbDesc;
-        gridCbDesc
-            .setByteSize(sizeof(NwbGiGridConstantsGpu))
-            .setDebugName(Name("gi_grid_constants"))
+    // Surfel pool (poolCapacity * 64B). UAV-writable (the spawn/hash-build/trace passes write it); the gather binds it
+    // as an SRV. On (re)creation, request the one-shot clear (this function has no command list) + reset the seed.
+    if(!rayTracingState().m_surfelPoolBuffer){
+        Core::BufferDesc desc;
+        desc
+            .setByteSize(static_cast<u64>(NWB_SURFEL_RECORD_SIZE) * poolCapacity)
+            .setStructStride(NWB_SURFEL_RECORD_SIZE)
+            .setCanHaveUAVs(true)
+            .setDebugName(Name("surfel_pool"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        rayTracingState().m_giGridConstants = graphics().createBuffer(gridCbDesc);
-        if(!rayTracingState().m_giGridConstants){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI grid constant buffer"));
+        rayTracingState().m_surfelPoolBuffer = graphics().createBuffer(desc);
+        if(!rayTracingState().m_surfelPoolBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel pool buffer"));
             return false;
         }
+        rayTracingState().m_surfelSeeded = false;
+        rayTracingState().m_surfelResourcesNeedClear = true;
     }
 
-    // Irradiance + distance ping-pong atlases. Each probe owns one square tile (interior + 1-texel border), packed
-    // into a 2D grid of NWB_GI_ATLAS_TILES_PER_ROW columns: width = tilesPerRow * tile, height = ceil(probeCount /
-    // tilesPerRow) * tile. (A single-ROW packing -- width = probeCount * tile -- overflows the GPU maxImageDimension2D
-    // of 16384 at the Default 2048-probe distance tile: 2048*16 = 32768 -> invalid texture -> device fault when the
-    // consumer samples it.) Black-cleared atlases are the additive identity so lighting stays branchless when GI is
-    // off. m_giSeeded is reset on atlas (re)creation so the blend's hysteresis is 0 on the next frame.
-    const u32 irrTile = NWB_GI_IRRADIANCE_ATLAS_TILE;
-    const u32 distTile = NWB_GI_DISTANCE_ATLAS_TILE;
-    const auto createAtlasPair = [this, probeCount](const u32 tile, const Core::Format::Enum format, const char* nameA, const char* nameB) -> bool{
-        const u32 atlasTilesPerRow = NWB_GI_ATLAS_TILES_PER_ROW;
-        const u32 atlasRows = DivideUp(probeCount, atlasTilesPerRow);
-        Core::TextureDesc desc;
+    // Cell-head buffer (cellCount uints -- one linked-list head per hash cell). Cleared to 0xFFFFFFFF (empty).
+    if(!rayTracingState().m_surfelCellHeadBuffer){
+        Core::BufferDesc desc;
         desc
-            .setWidth(atlasTilesPerRow * tile)
-            .setHeight(atlasRows * tile)
-            .setFormat(format)
-            .setInUAV(true)
+            .setByteSize(static_cast<u64>(sizeof(u32)) * cellCount)
+            .setStructStride(sizeof(u32))
+            .setCanHaveUAVs(true)
+            .setDebugName(Name("surfel_cell_head"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        desc.setName(Name(nameA));
-        const Core::TextureHandle a = graphics().createTexture(desc);
-        if(!a){
-            // nameA is a narrow const char* the wide formatter cannot consume; keep the message argument-free.
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI atlas-A"));
+        rayTracingState().m_surfelCellHeadBuffer = graphics().createBuffer(desc);
+        if(!rayTracingState().m_surfelCellHeadBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel cell-head buffer"));
             return false;
         }
-        desc.setName(Name(nameB));
-        const Core::TextureHandle b = graphics().createTexture(desc);
-        if(!b){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI atlas-B"));
-            return false;
-        }
-        // Stash into the right pair via the caller's comparison below.
-        if(format == Core::Format::RGBA16_FLOAT){
-            rayTracingState().m_giIrradianceAtlasA = a;
-            rayTracingState().m_giIrradianceAtlasB = b;
-        }
-        else{
-            rayTracingState().m_giDistanceAtlasA = a;
-            rayTracingState().m_giDistanceAtlasB = b;
-        }
-        return true;
-    };
-
-    if(!rayTracingState().m_giIrradianceAtlasA || !rayTracingState().m_giIrradianceAtlasB){
-        if(!createAtlasPair(irrTile, Core::Format::RGBA16_FLOAT, "engine/gi/irradiance_a", "engine/gi/irradiance_b"))
-            return false;
-        // The freshly-created atlases hold uninitialised memory. Reset the EMA seed (hysteresis 0 on the next blend)
-        // and request a black clear from prepareGiResources (this function has no command list of its own). Black is
-        // the additive identity so the consumer stays branchless while GI converges.
-        rayTracingState().m_giSeeded = false;
-        rayTracingState().m_giAtlasesNeedClear = true;
-    }
-    if(!rayTracingState().m_giDistanceAtlasA || !rayTracingState().m_giDistanceAtlasB){
-        if(!createAtlasPair(distTile, Core::Format::RG16_FLOAT, "engine/gi/distance_a", "engine/gi/distance_b"))
-            return false;
-        rayTracingState().m_giSeeded = false;
-        rayTracingState().m_giAtlasesNeedClear = true;
+        rayTracingState().m_surfelResourcesNeedClear = true;
     }
 
-    // Build the pipelines + binding sets. Non-fatal: a sub-failure leaves the pipeline handle null and the render
-    // dispatch guards each on its own handle before issuing.
-    if(!ensureGiTracePipeline())
+    // Allocation counter (bump top + free top). Cleared to 0.
+    if(!rayTracingState().m_surfelCounterBuffer){
+        Core::BufferDesc desc;
+        desc
+            .setByteSize(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE)
+            .setStructStride(sizeof(u32))
+            .setCanHaveUAVs(true)
+            .setDebugName(Name("surfel_counter"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        rayTracingState().m_surfelCounterBuffer = graphics().createBuffer(desc);
+        if(!rayTracingState().m_surfelCounterBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel counter buffer"));
+            return false;
+        }
+        rayTracingState().m_surfelResourcesNeedClear = true;
+    }
+
+    // Params CB (5 x Float4). Uploaded each rendered frame in prepareSurfelResources.
+    if(!rayTracingState().m_surfelConstants){
+        Core::BufferDesc cbDesc;
+        cbDesc
+            .setByteSize(sizeof(NwbSurfelConstantsGpu))
+            .setDebugName(Name("surfel_constants"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        rayTracingState().m_surfelConstants = graphics().createBuffer(cbDesc);
+        if(!rayTracingState().m_surfelConstants){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel constant buffer"));
+            return false;
+        }
+    }
+
+    // Build the pipelines + the hash-build binding set (which depends only on the persistent buffers, so it is built
+    // once here). The spawn + trace sets depend on per-frame targets/BVH, so they build in renderSurfelGi. Non-fatal:
+    // a sub-failure leaves the pipeline handle null and the render dispatch guards each on its own handle.
+    if(!ensureSurfelSpawnPipeline() || !ensureSurfelHashBuildPipeline() || !ensureSurfelTracePipeline())
         return false;
-    if(!ensureGiBlendIrradiancePipeline() || !ensureGiBlendDistancePipeline() || !ensureGiBorderPipeline())
-        return false;
-    if(!ensureGiBlendIrradianceBindingSet() || !ensureGiBlendDistanceBindingSet())
-        return false;
-    if(!ensureGiBorderBindingSets())
+    if(!ensureSurfelHashBuildBindingSet())
         return false;
     return true;
 }
@@ -6354,391 +6412,108 @@ bool RendererRayTracingSystem::ensureGiResources(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// U4 blend + border pipelines. The irradiance + distance blend share the SAME binding layout (CB + ray-data SRV +
-// front-atlas SRV + back-atlas UAV); the binding set decides which textures are bound at the front/back slots
-// (ping-pong). The border pass has its own layout (CB + irradiance UAV + distance UAV) + a push constant selecting
-// the format, dispatched twice (once per atlas).
+// The spawn binding set: the surfel buffers + the G-buffer world-position / normal the spawn samples. Rebuilt when the
+// G-buffer targets change (on resize); the surfel buffers themselves are persistent.
+bool RendererRayTracingSystem::ensureSurfelSpawnBindingSet(DeferredFrameTargets& targets){
+    NWB_ASSERT(rayTracingState().m_surfelSpawnBindingLayout);
+    NWB_ASSERT(rayTracingState().m_surfelConstants);
+    NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
+    NWB_ASSERT(rayTracingState().m_surfelCellHeadBuffer);
+    NWB_ASSERT(rayTracingState().m_surfelCounterBuffer);
+    NWB_ASSERT(targets.worldPosition);
+    NWB_ASSERT(targets.normal);
 
-bool RendererRayTracingSystem::ensureGiBlendIrradiancePipeline(){
-    if(rayTracingState().m_giProbeBlendIrradiancePipeline)
+    const Core::Texture* worldPosition = targets.worldPosition.get();
+    const Core::Texture* normal = targets.normal.get();
+    if(
+        rayTracingState().m_surfelSpawnBindingSet
+        && rayTracingState().m_surfelSpawnBindingSetWorldPosition == worldPosition
+        && rayTracingState().m_surfelSpawnBindingSetNormal == normal
+    )
         return true;
-    if(rayTracingState().m_giProbeBlendIrradiancePipelineFailed)
-        return false;
-
-    auto* device = graphics().getDevice();
-
-    if(!rayTracingState().m_giBlendBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(arena());
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_BLEND_BINDING_GRID_CONSTANTS, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_GI_BLEND_BINDING_RAY_DATA, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_GI_BLEND_BINDING_FRONT_ATLAS, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_GI_BLEND_BINDING_BACK_ATLAS, 1));
-        rayTracingState().m_giBlendBindingLayout = device->createBindingLayout(layoutDesc);
-        if(!rayTracingState().m_giBlendBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI blend binding layout"));
-            rayTracingState().m_giProbeBlendIrradiancePipelineFailed = true;
-            rayTracingState().m_giProbeBlendDistancePipelineFailed = true;
-            return false;
-        }
-    }
-
-    if(!m_renderer.shaderSystem().loadShader(
-        rayTracingState().m_giProbeBlendIrradianceShader,
-        AssetsGraphicsGi::s_ProbeBlendIrradianceShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
-        "ECSRender_GiProbeBlendIrradiance"
-    )){
-        rayTracingState().m_giProbeBlendIrradiancePipelineFailed = true;
-        return false;
-    }
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(rayTracingState().m_giProbeBlendIrradianceShader)
-        .addBindingLayout(rayTracingState().m_giBlendBindingLayout)
-    ;
-    rayTracingState().m_giProbeBlendIrradiancePipeline = device->createComputePipeline(pipelineDesc);
-    if(!rayTracingState().m_giProbeBlendIrradiancePipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI probe blend irradiance compute pipeline"));
-        rayTracingState().m_giProbeBlendIrradiancePipelineFailed = true;
-        return false;
-    }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created GI probe blend irradiance compute pipeline"));
-    return true;
-}
-
-bool RendererRayTracingSystem::ensureGiBlendDistancePipeline(){
-    if(rayTracingState().m_giProbeBlendDistancePipeline)
-        return true;
-    if(rayTracingState().m_giProbeBlendDistancePipelineFailed)
-        return false;
-
-    // Shares the irradiance blend's layout (CB + ray-data SRV + front/back atlas). Build it first so the layout is
-    // resident.
-    if(!ensureGiBlendIrradiancePipeline())
-        return false;
-
-    auto* device = graphics().getDevice();
-
-    if(!m_renderer.shaderSystem().loadShader(
-        rayTracingState().m_giProbeBlendDistanceShader,
-        AssetsGraphicsGi::s_ProbeBlendDistanceShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
-        "ECSRender_GiProbeBlendDistance"
-    )){
-        rayTracingState().m_giProbeBlendDistancePipelineFailed = true;
-        return false;
-    }
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(rayTracingState().m_giProbeBlendDistanceShader)
-        .addBindingLayout(rayTracingState().m_giBlendBindingLayout)
-    ;
-    rayTracingState().m_giProbeBlendDistancePipeline = device->createComputePipeline(pipelineDesc);
-    if(!rayTracingState().m_giProbeBlendDistancePipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI probe blend distance compute pipeline"));
-        rayTracingState().m_giProbeBlendDistancePipelineFailed = true;
-        return false;
-    }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created GI probe blend distance compute pipeline"));
-    return true;
-}
-
-bool RendererRayTracingSystem::ensureGiBorderPipeline(){
-    if(rayTracingState().m_giProbeBorderPipeline)
-        return true;
-    if(rayTracingState().m_giProbeBorderPipelineFailed)
-        return false;
-
-    auto* device = graphics().getDevice();
-
-    if(!rayTracingState().m_giBorderBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(arena());
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_BORDER_BINDING_GRID_CONSTANTS, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_GI_BORDER_BINDING_IRRADIANCE, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_GI_BORDER_BINDING_DISTANCE, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(NwbGiBorderPushConstantsGpu)));
-        rayTracingState().m_giBorderBindingLayout = device->createBindingLayout(layoutDesc);
-        if(!rayTracingState().m_giBorderBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI border binding layout"));
-            rayTracingState().m_giProbeBorderPipelineFailed = true;
-            return false;
-        }
-    }
-
-    if(!m_renderer.shaderSystem().loadShader(
-        rayTracingState().m_giProbeBorderShader,
-        AssetsGraphicsGi::s_ProbeBorderShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
-        "ECSRender_GiProbeBorder"
-    )){
-        rayTracingState().m_giProbeBorderPipelineFailed = true;
-        return false;
-    }
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(rayTracingState().m_giProbeBorderShader)
-        .addBindingLayout(rayTracingState().m_giBorderBindingLayout)
-    ;
-    rayTracingState().m_giProbeBorderPipeline = device->createComputePipeline(pipelineDesc);
-    if(!rayTracingState().m_giProbeBorderPipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI probe border compute pipeline"));
-        rayTracingState().m_giProbeBorderPipelineFailed = true;
-        return false;
-    }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created GI probe border compute pipeline"));
-    return true;
-}
-
-bool RendererRayTracingSystem::ensureGiBlendIrradianceBindingSet(){
-    NWB_ASSERT(rayTracingState().m_giBlendBindingLayout);
-    NWB_ASSERT(rayTracingState().m_giGridConstants);
-    NWB_ASSERT(rayTracingState().m_giRayData);
-    NWB_ASSERT(rayTracingState().m_giIrradianceAtlasA);
-    NWB_ASSERT(rayTracingState().m_giIrradianceAtlasB);
-
-    // Ping-pong: front = history-in (SRV), back = history-out (UAV). The trace reads PREV-front (last frame's
-    // back), the blend writes THIS frame's back. The render flips m_giHistoryFrontIsA at block end so next frame's
-    // front is this frame's back.
-    Core::Texture* frontAtlas = (rayTracingState().m_giHistoryFrontIsA != 0u)
-        ? rayTracingState().m_giIrradianceAtlasA.get()
-        : rayTracingState().m_giIrradianceAtlasB.get()
-    ;
-    Core::Texture* backAtlas = (rayTracingState().m_giHistoryFrontIsA != 0u)
-        ? rayTracingState().m_giIrradianceAtlasB.get()
-        : rayTracingState().m_giIrradianceAtlasA.get()
-    ;
 
     Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_BLEND_BINDING_GRID_CONSTANTS, rayTracingState().m_giGridConstants.get()));
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get()));
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get()));
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_CELL_HEAD, rayTracingState().m_surfelCellHeadBuffer.get()));
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_COUNTER, rayTracingState().m_surfelCounterBuffer.get()));
     desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_GI_BLEND_BINDING_RAY_DATA,
-        rayTracingState().m_giRayData.get(),
-        Core::Format::RGBA16_FLOAT,
+        NWB_SURFEL_BINDING_GBUFFER_WORLD_POSITION,
+        targets.worldPosition.get(),
+        targets.worldPositionFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_GI_BLEND_BINDING_FRONT_ATLAS,
-        frontAtlas,
-        Core::Format::RGBA16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_UAV(
-        NWB_GI_BLEND_BINDING_BACK_ATLAS,
-        backAtlas,
-        Core::Format::RGBA16_FLOAT,
+        NWB_SURFEL_BINDING_GBUFFER_NORMAL,
+        targets.normal.get(),
+        targets.normalFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
 
-    // The irradiance blend set is rebuilt every frame (the ping-pong front/back swap each frame), so release the
-    // old set + create the new one unconditionally.
-    rayTracingState().m_giBlendIrradianceBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_giBlendBindingLayout);
-    if(!rayTracingState().m_giBlendIrradianceBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI blend irradiance binding set"));
+    rayTracingState().m_surfelSpawnBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelSpawnBindingLayout);
+    if(!rayTracingState().m_surfelSpawnBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn binding set"));
+        rayTracingState().m_surfelSpawnBindingSetWorldPosition = nullptr;
+        rayTracingState().m_surfelSpawnBindingSetNormal = nullptr;
         return false;
     }
+    rayTracingState().m_surfelSpawnBindingSetWorldPosition = worldPosition;
+    rayTracingState().m_surfelSpawnBindingSetNormal = normal;
     return true;
 }
 
-bool RendererRayTracingSystem::ensureGiBlendDistanceBindingSet(){
-    NWB_ASSERT(rayTracingState().m_giBlendBindingLayout);
-    NWB_ASSERT(rayTracingState().m_giGridConstants);
-    NWB_ASSERT(rayTracingState().m_giRayData);
-    NWB_ASSERT(rayTracingState().m_giDistanceAtlasA);
-    NWB_ASSERT(rayTracingState().m_giDistanceAtlasB);
-
-    Core::Texture* frontAtlas = (rayTracingState().m_giHistoryFrontIsA != 0u)
-        ? rayTracingState().m_giDistanceAtlasA.get()
-        : rayTracingState().m_giDistanceAtlasB.get()
-    ;
-    Core::Texture* backAtlas = (rayTracingState().m_giHistoryFrontIsA != 0u)
-        ? rayTracingState().m_giDistanceAtlasB.get()
-        : rayTracingState().m_giDistanceAtlasA.get()
-    ;
+// The hash-build binding set: the surfel buffers only (constants + pool UAV + cell-head UAV). All persistent, so this
+// is built once (from ensureSurfelResources) and reused.
+bool RendererRayTracingSystem::ensureSurfelHashBuildBindingSet(){
+    if(rayTracingState().m_surfelHashBuildBindingSet)
+        return true;
+    NWB_ASSERT(rayTracingState().m_surfelHashBuildBindingLayout);
+    NWB_ASSERT(rayTracingState().m_surfelConstants);
+    NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
+    NWB_ASSERT(rayTracingState().m_surfelCellHeadBuffer);
 
     Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_BLEND_BINDING_GRID_CONSTANTS, rayTracingState().m_giGridConstants.get()));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_GI_BLEND_BINDING_RAY_DATA,
-        rayTracingState().m_giRayData.get(),
-        Core::Format::RGBA16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_GI_BLEND_BINDING_FRONT_ATLAS,
-        frontAtlas,
-        Core::Format::RG16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_UAV(
-        NWB_GI_BLEND_BINDING_BACK_ATLAS,
-        backAtlas,
-        Core::Format::RG16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get()));
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get()));
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_CELL_HEAD, rayTracingState().m_surfelCellHeadBuffer.get()));
 
-    rayTracingState().m_giBlendDistanceBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_giBlendBindingLayout);
-    if(!rayTracingState().m_giBlendDistanceBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI blend distance binding set"));
+    rayTracingState().m_surfelHashBuildBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelHashBuildBindingLayout);
+    if(!rayTracingState().m_surfelHashBuildBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel hash-build binding set"));
         return false;
     }
     return true;
 }
 
-bool RendererRayTracingSystem::ensureGiBorderBindingSets(){
-    NWB_ASSERT(rayTracingState().m_giBorderBindingLayout);
-    NWB_ASSERT(rayTracingState().m_giGridConstants);
-    NWB_ASSERT(rayTracingState().m_giIrradianceAtlasA);
-    NWB_ASSERT(rayTracingState().m_giIrradianceAtlasB);
-    NWB_ASSERT(rayTracingState().m_giDistanceAtlasA);
-    NWB_ASSERT(rayTracingState().m_giDistanceAtlasB);
-
-    // The border runs AFTER the blend on the BACK atlas (this frame's history-out, which the consumer reads next
-    // frame), so the border set binds the BACK atlas at BOTH slots (the float4 slot for irradiance, the float2 slot
-    // for distance). Each dispatch's push constant selects which slot the kernel reads/writes.
-    auto* device = graphics().getDevice();
-
-    {
-        Core::Texture* backIrr = (rayTracingState().m_giHistoryFrontIsA != 0u)
-            ? rayTracingState().m_giIrradianceAtlasB.get()
-            : rayTracingState().m_giIrradianceAtlasA.get()
-        ;
-        Core::BindingSetDesc desc(arena());
-        desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_BORDER_BINDING_GRID_CONSTANTS, rayTracingState().m_giGridConstants.get()));
-        desc.addItem(Core::BindingSetItem::Texture_UAV(
-            NWB_GI_BORDER_BINDING_IRRADIANCE,
-            backIrr,
-            Core::Format::RGBA16_FLOAT,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        // The distance slot is bound to the SAME irradiance atlas (the kernel writes only the slot the push-constant
-        // mode selects, so the unused slot's format is irrelevant -- it just needs a valid UAV binding). Pointing it
-        // at the irradiance atlas keeps both slots the same format (RGBA16F) so the descriptor is valid.
-        desc.addItem(Core::BindingSetItem::Texture_UAV(
-            NWB_GI_BORDER_BINDING_DISTANCE,
-            backIrr,
-            Core::Format::RGBA16_FLOAT,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        rayTracingState().m_giBorderIrradianceBindingSet = device->createBindingSet(desc, rayTracingState().m_giBorderBindingLayout);
-        if(!rayTracingState().m_giBorderIrradianceBindingSet){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI border irradiance binding set"));
-            return false;
-        }
-    }
-
-    {
-        Core::Texture* backDist = (rayTracingState().m_giHistoryFrontIsA != 0u)
-            ? rayTracingState().m_giDistanceAtlasB.get()
-            : rayTracingState().m_giDistanceAtlasA.get()
-        ;
-        Core::BindingSetDesc desc(arena());
-        desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_BORDER_BINDING_GRID_CONSTANTS, rayTracingState().m_giGridConstants.get()));
-        // Mirror: the irradiance slot is bound to the SAME distance atlas so both slots are RG16F.
-        desc.addItem(Core::BindingSetItem::Texture_UAV(
-            NWB_GI_BORDER_BINDING_IRRADIANCE,
-            backDist,
-            Core::Format::RG16_FLOAT,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_UAV(
-            NWB_GI_BORDER_BINDING_DISTANCE,
-            backDist,
-            Core::Format::RG16_FLOAT,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        rayTracingState().m_giBorderDistanceBindingSet = device->createBindingSet(desc, rayTracingState().m_giBorderBindingLayout);
-        if(!rayTracingState().m_giBorderDistanceBindingSet){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI border distance binding set"));
-            return false;
-        }
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// U5: the per-instance flat-albedo buffer the trace's Lambert hit-shade reads. CPU-built from the gathered occluders;
-// each instance's albedo defaults to NWB_GI_DEFAULT_ALBEDO_FLOAT3 until a resolved-material path exists. Grows by
-// doubling like the shadow instance-material table.
-bool RendererRayTracingSystem::ensureGiHitAlbedoBuffer(){
-    const u32 instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-    if(instanceCount == 0u)
-        return true;
-    if(rayTracingState().m_giHitAlbedo && rayTracingState().m_giHitAlbedoCapacity >= instanceCount)
-        return true;
-
-    usize capacity = rayTracingState().m_giHitAlbedoCapacity > 0u ? rayTracingState().m_giHitAlbedoCapacity : 32u;
-    while(capacity < instanceCount)
-        capacity *= 2u;
-
-    Core::BufferDesc desc;
-    desc
-        .setByteSize(static_cast<u64>(sizeof(f32) * 3u * capacity))
-        .setStructStride(sizeof(f32) * 3u)
-        .setDebugName(Name("gi_hit_albedo"))
-        .enableAutomaticStateTracking(Core::ResourceStates::Common)
-    ;
-    rayTracingState().m_giHitAlbedo = graphics().createBuffer(desc);
-    if(!rayTracingState().m_giHitAlbedo){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI hit-albedo buffer"));
-        return false;
-    }
-    rayTracingState().m_giHitAlbedoCapacity = capacity;
-    return true;
-}
-
-// U5: the trace binding set. Mirrors the SW shadow binding layout (scene BVH + instances + per-mesh descriptor arrays +
-// scene/light CBs) and adds the GI-specific I/O (grid CB, ray-data UAV, prev-front atlas SRVs, hit-albedo SRV). Built
-// when the SW scene BVH is resident; rebuilt when the scene-BVH/instance buffers or the distinct-mesh count change.
-bool RendererRayTracingSystem::ensureGiTraceBindingSet(){
-    NWB_ASSERT(rayTracingState().m_giBindingLayout);
-    NWB_ASSERT(rayTracingState().m_giGridConstants);
-    NWB_ASSERT(rayTracingState().m_giRayData);
-    NWB_ASSERT(rayTracingState().m_giIrradianceAtlasA);
-    NWB_ASSERT(rayTracingState().m_giIrradianceAtlasB);
-    NWB_ASSERT(rayTracingState().m_giDistanceAtlasA);
-    NWB_ASSERT(rayTracingState().m_giDistanceAtlasB);
-    NWB_ASSERT(rayTracingState().m_giHitAlbedo);
+// The trace binding set: the SW scene BVH (slots 0-10; the same geometry the SW shadow trace uses) + the surfel
+// constants CB + the surfel pool UAV. Rebuilt when the scene-BVH / instance buffers or the distinct-mesh count change,
+// mirroring the SW shadow set's rebuild guard.
+bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
+    NWB_ASSERT(rayTracingState().m_surfelTraceBindingLayout);
+    NWB_ASSERT(rayTracingState().m_surfelConstants);
+    NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
     NWB_ASSERT(rayTracingState().m_sceneBvhNodeBuffer);
     NWB_ASSERT(rayTracingState().m_sceneInstanceBuffer);
+    NWB_ASSERT(rayTracingState().m_shadowInstanceMaterialBuffer);
+    NWB_ASSERT(rayTracingState().m_shadowMaterialTypedBuffer);
+    NWB_ASSERT(rayTracingState().m_shadowInstanceBuffer);
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
     NWB_ASSERT(deferredState().m_lightBuffer);
 
-    // Rebuild when any tracked input changes (mirrors the SW shadow set): the scene node/instance buffers, the
-    // shadow-owned material context, the distinct-mesh count, and the GI grid/ray-data/atlases (resident on
-    // RendererRayTracingState, recreated only on grid-param change or device reset).
     Core::Buffer* sceneNodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
     Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
     Core::Buffer* materialTypedBuffer = rayTracingState().m_shadowMaterialTypedBuffer.get();
     Core::Buffer* meshInstanceBuffer = rayTracingState().m_shadowInstanceBuffer.get();
     const u32 meshCount = rayTracingState().m_swShadowMeshCount;
     if(
-        rayTracingState().m_giTraceBindingSet
-        && rayTracingState().m_giTraceBindingSetSceneNodes == sceneNodeBuffer
-        && rayTracingState().m_giTraceBindingSetInstances == instanceBuffer
-        && rayTracingState().m_giTraceBindingSetMaterialTyped == materialTypedBuffer
-        && rayTracingState().m_giTraceBindingSetMeshInstances == meshInstanceBuffer
-        && rayTracingState().m_giTraceBindingSetMeshCount == meshCount
+        rayTracingState().m_surfelTraceBindingSet
+        && rayTracingState().m_surfelTraceBindingSetSceneNodes == sceneNodeBuffer
+        && rayTracingState().m_surfelTraceBindingSetInstances == instanceBuffer
+        && rayTracingState().m_surfelTraceBindingSetMaterialTyped == materialTypedBuffer
+        && rayTracingState().m_surfelTraceBindingSetMeshInstances == meshInstanceBuffer
+        && rayTracingState().m_surfelTraceBindingSetMeshCount == meshCount
     )
         return true;
 
@@ -6748,9 +6523,9 @@ bool RendererRayTracingSystem::ensureGiTraceBindingSet(){
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, sceneNodeBuffer)); // scene nodes
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, instanceBuffer)); // scene instances
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(4, rayTracingState().m_shadowInstanceMaterialBuffer.get())); // instance material
-    // Per-mesh descriptor arrays: bind every slot; pad unused tail with the last real mesh (the trace only indexes
+    // Per-mesh descriptor arrays: bind every slot; pad the unused tail with the last real mesh (the trace only indexes
     // meshIndex < meshCount), mirroring the SW shadow set.
-    for(u32 slot = 0u; slot < NWB_GI_SW_MAX_MESHES; ++slot){
+    for(u32 slot = 0u; slot < NWB_SW_SHADOW_MAX_MESHES; ++slot){
         const u32 source = (slot < meshCount) ? slot : (meshCount > 0u ? (meshCount - 1u) : 0u);
         desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(5, rayTracingState().m_swShadowMeshNodeBuffers[source]).setArrayElement(slot));
         desc.addItem(Core::BindingSetItem::RawBuffer_SRV(6, rayTracingState().m_swShadowMeshPositionBuffers[source]).setArrayElement(slot));
@@ -6759,51 +6534,24 @@ bool RendererRayTracingSystem::ensureGiTraceBindingSet(){
     }
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(9, materialTypedBuffer)); // material typed
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(10, meshInstanceBuffer)); // mesh instances
-    // GI-specific bindings.
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(11, rayTracingState().m_giGridConstants.get())); // grid constants
-    desc.addItem(Core::BindingSetItem::Texture_UAV(
-        12,
-        rayTracingState().m_giRayData.get(),
-        Core::Format::RGBA16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    )); // ray data
-    // Prev-front atlases (SRV): the trace reads last frame's front for the infinite-bounce term. m_giHistoryFrontIsA
-    // is flipped at the END of the previous frame's GI block, so at trace time it already points at the PREV front
-    // (the one the consumer will read THIS frame, which the trace should NOT read). The trace wants the OTHER atlas
-    // (the one that was BACK last frame = the older front). So invert the selector here.
-    const bool prevFrontIsA = (rayTracingState().m_giHistoryFrontIsA == 0u);
-    Core::Texture* prevIrr = prevFrontIsA ? rayTracingState().m_giIrradianceAtlasA.get() : rayTracingState().m_giIrradianceAtlasB.get();
-    Core::Texture* prevDist = prevFrontIsA ? rayTracingState().m_giDistanceAtlasA.get() : rayTracingState().m_giDistanceAtlasB.get();
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        13, prevIrr,
-        Core::Format::RGBA16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    )); // prev irradiance
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        14, prevDist,
-        Core::Format::RG16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    )); // prev distance
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(15, rayTracingState().m_giHitAlbedo.get())); // hit albedo
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get())); // surfel constants
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get())); // surfel pool
 
-    rayTracingState().m_giTraceBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_giBindingLayout);
-    if(!rayTracingState().m_giTraceBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create GI trace binding set"));
-        rayTracingState().m_giTraceBindingSetSceneNodes = nullptr;
-        rayTracingState().m_giTraceBindingSetInstances = nullptr;
-        rayTracingState().m_giTraceBindingSetMaterialTyped = nullptr;
-        rayTracingState().m_giTraceBindingSetMeshInstances = nullptr;
-        rayTracingState().m_giTraceBindingSetMeshCount = 0u;
+    rayTracingState().m_surfelTraceBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelTraceBindingLayout);
+    if(!rayTracingState().m_surfelTraceBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace binding set"));
+        rayTracingState().m_surfelTraceBindingSetSceneNodes = nullptr;
+        rayTracingState().m_surfelTraceBindingSetInstances = nullptr;
+        rayTracingState().m_surfelTraceBindingSetMaterialTyped = nullptr;
+        rayTracingState().m_surfelTraceBindingSetMeshInstances = nullptr;
+        rayTracingState().m_surfelTraceBindingSetMeshCount = 0u;
         return false;
     }
-    rayTracingState().m_giTraceBindingSetSceneNodes = sceneNodeBuffer;
-    rayTracingState().m_giTraceBindingSetInstances = instanceBuffer;
-    rayTracingState().m_giTraceBindingSetMaterialTyped = materialTypedBuffer;
-    rayTracingState().m_giTraceBindingSetMeshInstances = meshInstanceBuffer;
-    rayTracingState().m_giTraceBindingSetMeshCount = meshCount;
+    rayTracingState().m_surfelTraceBindingSetSceneNodes = sceneNodeBuffer;
+    rayTracingState().m_surfelTraceBindingSetInstances = instanceBuffer;
+    rayTracingState().m_surfelTraceBindingSetMaterialTyped = materialTypedBuffer;
+    rayTracingState().m_surfelTraceBindingSetMeshInstances = meshInstanceBuffer;
+    rayTracingState().m_surfelTraceBindingSetMeshCount = meshCount;
     return true;
 }
 
@@ -6811,118 +6559,150 @@ bool RendererRayTracingSystem::ensureGiTraceBindingSet(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::hasGiWork()const noexcept{
-    // GI is disabled until m_giEnabled is set. Black-cleared atlases are the additive identity, so lighting stays
-    // branchless. See .helper/ddgi_plan.md §2 (Ownership + wiring).
-    return rayTracingState().m_giEnabled;
+bool RendererRayTracingSystem::hasSurfelWork()const noexcept{
+    // Surfel GI is disabled until m_surfelEnabled is set (in prepareShadowVisibilityResources, once the SW scene BVH is
+    // resident). A zero-init pool + 0xFFFFFFFF cell heads make the gather a no-op (-> hemiAmbient) until then.
+    return rayTracingState().m_surfelEnabled;
 }
 
-bool RendererRayTracingSystem::prepareGiResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    static_cast<void>(targets);
-    if(!hasGiWork())
+bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    if(!hasSurfelWork())
         return true;
 
-    // Lazily create the atlas/ray-data/grid-CB/pipeline resources. Atlases live on RendererRayTracingState so a
-    // window resize does not reset probe convergence.
-    if(!ensureGiResources())
+    // Lazily create the persistent buffers + pipelines. They live on RendererRayTracingState so a window resize does
+    // not reset surfel convergence.
+    if(!ensureSurfelResources())
         return false;
 
-    // One-shot black clear of the freshly-created ping-pong atlases (ensureGiResources has no command list, so it
-    // only raised the request). Black = the additive identity, so the consumer stays branchless and any not-yet-traced
-    // probe tile reads as "no bounce" instead of uninitialised garbage/NaN. Both ping-pong halves are cleared so the
-    // frame-0 history-in read is also black. Cleared exactly once per (re)creation.
-    if(rayTracingState().m_giAtlasesNeedClear){
-        const Core::Color black(0.f, 0.f, 0.f, 0.f);
-        Core::TextureHandle giAtlases[] = {
-            rayTracingState().m_giIrradianceAtlasA,
-            rayTracingState().m_giIrradianceAtlasB,
-            rayTracingState().m_giDistanceAtlasA,
-            rayTracingState().m_giDistanceAtlasB,
-        };
-        for(const Core::TextureHandle& atlas : giAtlases){
-            Core::Texture* tex = atlas.get();
-            if(!tex)
-                continue;
-            commandList.setTextureState(tex, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-            commandList.commitBarriers();
-            commandList.clearTextureFloat(tex, ECSRenderDetail::s_FramebufferSubresources, black);
-        }
-        rayTracingState().m_giAtlasesNeedClear = false;
+    // One-shot clear of the freshly-created buffers (ensureSurfelResources has no command list). Pool -> zero (alive ==
+    // 0 everywhere), cell-head -> 0xFFFFFFFF (empty lists), counter -> 0 (bump top at slot 0). Cleared exactly once per
+    // (re)creation; the pool then accumulates surfels across frames (recycling lands in U1).
+    if(rayTracingState().m_surfelResourcesNeedClear){
+        Core::Buffer* pool = rayTracingState().m_surfelPoolBuffer.get();
+        Core::Buffer* cellHead = rayTracingState().m_surfelCellHeadBuffer.get();
+        Core::Buffer* counter = rayTracingState().m_surfelCounterBuffer.get();
+        commandList.setBufferState(pool, Core::ResourceStates::CopyDest);
+        commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
+        commandList.setBufferState(counter, Core::ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.clearBufferUInt(pool, 0u);
+        commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
+        commandList.clearBufferUInt(counter, 0u);
+        commandList.setBufferState(pool, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(cellHead, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(counter, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+        rayTracingState().m_surfelResourcesNeedClear = false;
     }
 
-    // Upload the grid constant buffer. The frame counter seeds the per-frame R2 rotation; the update cursor is the
-    // round-robin offset (1/Nth of probes per frame); the hysteresis is 0 on frame 0 (m_giSeeded false -> pure
-    // current sample) and s_GiDefaultHysteresis afterward.
-    const u32 probeCount = rayTracingState().m_giGridSizeX * rayTracingState().m_giGridSizeY * rayTracingState().m_giGridSizeZ;
-    const f32 hysteresis = rayTracingState().m_giSeeded ? s_GiDefaultHysteresis : 0.0f;
-    // First GI frame (not yet seeded): trace ALL probes (divisor 1) so the whole volume is seeded in one frame --
-    // no round-robin garbage-vs-EMA on the probes that would otherwise wait 1..divisor-1 frames for their first data,
-    // and a single bootstrap frame already shows a full bounce. Steady state reverts to the round-robin divisor.
-    const u32 updateDivisor = rayTracingState().m_giSeeded ? Max<u32>(NWB_GI_DEFAULT_UPDATE_DIVISOR, 1u) : 1u;
-    NwbGiGridConstantsGpu grid;
-    grid.gridOrigin = Float4(NWB_GI_DEFAULT_GRID_ORIGIN_X, NWB_GI_DEFAULT_GRID_ORIGIN_Y, NWB_GI_DEFAULT_GRID_ORIGIN_Z, 0.0f);
-    grid.gridSpacing = Float4(NWB_GI_DEFAULT_GRID_SPACING, NWB_GI_DEFAULT_GRID_SPACING, NWB_GI_DEFAULT_GRID_SPACING, 0.0f);
-    grid.gridDims = Float4(
-        static_cast<f32>(rayTracingState().m_giGridSizeX),
-        static_cast<f32>(rayTracingState().m_giGridSizeY),
-        static_cast<f32>(rayTracingState().m_giGridSizeZ),
-        static_cast<f32>(probeCount)
-    );
-    grid.params0 = Float4(
-        static_cast<f32>(rayTracingState().m_giRaysPerProbe),
-        static_cast<f32>(updateDivisor),
-        static_cast<f32>(rayTracingState().m_giFrameIndex),
-        static_cast<f32>(rayTracingState().m_giHistoryFrontIsA)
-    );
-    grid.params1 = Float4(hysteresis, 0.0f, 0.15f, 0.0f);
-    grid.params2 = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // Upload the params CB. The cell size is 2 * default radius (a surfel overlaps only its own + 26 neighbour cells).
+    // The update divisor is 1 on the first (not-yet-seeded) frame so EVERY surfel traces to bootstrap in ONE frame --
+    // the unfocused smoke app renders only that frame -- then reverts to the round-robin divisor. Hysteresis is 0 until
+    // seeded (the trace also forces 0 while sampleCount == 0). The camera position rides xyz for U6's distance scaling.
+    const u32 updateDivisor = rayTracingState().m_surfelSeeded ? Max<u32>(NWB_SURFEL_UPDATE_DIVISOR, 1u) : 1u;
+    const f32 hysteresis = rayTracingState().m_surfelSeeded ? s_SurfelDefaultHysteresis : 0.0f;
+    const f32 cellSize = 2.0f * NWB_SURFEL_DEFAULT_RADIUS;
 
-    Core::Buffer* gridCb = rayTracingState().m_giGridConstants.get();
-    commandList.setBufferState(gridCb, Core::ResourceStates::CopyDest);
+    NwbSurfelConstantsGpu params;
+    params.cameraPositionCellSize = Float4(0.0f, 0.0f, 0.0f, cellSize);
+    params.hashPoolFrameDivisor = Float4(
+        static_cast<f32>(rayTracingState().m_surfelHashCellCount),
+        static_cast<f32>(rayTracingState().m_surfelPoolCapacity),
+        static_cast<f32>(rayTracingState().m_surfelFrameIndex),
+        static_cast<f32>(updateDivisor)
+    );
+    params.coverageRadiusBiasHyst = Float4(NWB_SURFEL_COVERAGE_THRESHOLD, NWB_SURFEL_DEFAULT_RADIUS, s_SurfelNormalBias, hysteresis);
+    params.ageRaysTileScreen = Float4(
+        static_cast<f32>(NWB_SURFEL_MAX_AGE),
+        static_cast<f32>(NWB_SURFEL_RAYS_PER_SURFEL),
+        static_cast<f32>(NWB_SURFEL_SPAWN_TILE),
+        static_cast<f32>(targets.width)
+    );
+    params.screenHeightPad = Float4(static_cast<f32>(targets.height), 0.0f, 0.0f, 0.0f);
+
+    Core::Buffer* cb = rayTracingState().m_surfelConstants.get();
+    commandList.setBufferState(cb, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
-    commandList.writeBuffer(gridCb, &grid, sizeof(grid));
-    commandList.setBufferState(gridCb, Core::ResourceStates::ShaderResource);
+    commandList.writeBuffer(cb, &params, sizeof(params));
+    commandList.setBufferState(cb, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
     return true;
 }
 
-bool RendererRayTracingSystem::renderGi(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    static_cast<void>(targets);
-    if(!hasGiWork())
+bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    if(!hasSurfelWork())
         return true;
 
-    // Guard: every pass needs its pipeline + binding set. A missing handle (a prior ensure failure) leaves the
-    // dispatch inert this frame rather than crashing.
+    // Guard: every pass needs its pipeline (a prior ensure failure leaves the block inert this frame).
     if(
-        !rayTracingState().m_giProbeTracePipeline
-        || !rayTracingState().m_giProbeBlendIrradiancePipeline
-        || !rayTracingState().m_giProbeBlendDistancePipeline
-        || !rayTracingState().m_giProbeBorderPipeline
-        || !rayTracingState().m_giBlendIrradianceBindingSet
-        || !rayTracingState().m_giBlendDistanceBindingSet
-        || !rayTracingState().m_giBorderIrradianceBindingSet
-        || !rayTracingState().m_giBorderDistanceBindingSet
+        !rayTracingState().m_surfelSpawnPipeline
+        || !rayTracingState().m_surfelHashBuildPipeline
+        || !rayTracingState().m_surfelTracePipeline
     )
         return true;
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_GiProbeBlend, graphics().getDevice(), commandList);
+    // Build the per-frame binding sets: the spawn set needs the G-buffer (recreated on resize); the trace set needs the
+    // SW scene BVH (built this frame in prepareShadowVisibilityResources). Non-fatal: skip the whole block on failure.
+    if(
+        !ensureSurfelSpawnBindingSet(targets)
+        || !ensureSurfelHashBuildBindingSet()
+        || !ensureSurfelTraceBindingSet()
+        || !rayTracingState().m_surfelSpawnBindingSet
+        || !rayTracingState().m_surfelHashBuildBindingSet
+        || !rayTracingState().m_surfelTraceBindingSet
+    )
+        return true;
 
-    const u32 probeCount = rayTracingState().m_giGridSizeX * rayTracingState().m_giGridSizeY * rayTracingState().m_giGridSizeZ;
-    const u32 raysPerProbe = rayTracingState().m_giRaysPerProbe;
-    const u32 groupSize = NWB_GI_GROUP_SIZE;
-    // 2D atlas tile-grid dims: tiles pack NWB_GI_ATLAS_TILES_PER_ROW per row, ceil(probeCount/perRow) rows. The blend
-    // and border dispatches cover (tilesPerRow, rows) tiles; the kernels map thread -> (tileX, tileY) -> probeIndex.
-    const u32 atlasTilesPerRow = NWB_GI_ATLAS_TILES_PER_ROW;
-    const u32 atlasRows = DivideUp(probeCount, atlasTilesPerRow);
+    const u32 poolCapacity = rayTracingState().m_surfelPoolCapacity;
+    const u32 updateDivisor = rayTracingState().m_surfelSeeded ? Max<u32>(NWB_SURFEL_UPDATE_DIVISOR, 1u) : 1u;
+    const u32 activeSurfelCount = DivideUp(poolCapacity, updateDivisor);
 
-    // (1) Trace: workgroup-per-probe. The trace needs the SW scene BVH (the same geometry the SW shadow trace
-    // built) + the hit-albedo buffer. Build both here (renderGi runs AFTER prepareShadowVisibilityResources, so the
-    // SW BVH is resident); then dispatch the trace with its push constants before the blend reads the ray-data.
-    if(!ensureGiHitAlbedoBuffer() || !ensureGiTraceBindingSet() || !rayTracingState().m_giTraceBindingSet)
-        return true; // non-fatal: skip the whole GI block this frame
+    // The three passes UAV-write the surfel buffers then UAV/SRV-read them next; enable automatic UAV barriers so the
+    // commitBarriers between passes serialises the writes.
+    commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelPoolBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelCellHeadBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelCounterBuffer.get(), true);
 
+    // (1) Spawn: one thread per screen tile. Reads the PREVIOUS frame's hash (cell-head SRV) for coverage; bump-
+    // allocates a surfel where coverage is below threshold. [numthreads(8,8,1)] over (screen / spawnTile) tiles.
     {
-        // Stage the SW BVH per-mesh geometry + the shadow-owned material context to ShaderResource for the trace.
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelSpawn, graphics().getDevice(), commandList);
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelSpawnBindingSet.get());
+        commandList.commitBarriers();
+        Core::ComputeState state;
+        state.setPipeline(rayTracingState().m_surfelSpawnPipeline.get());
+        state.addBindingSet(rayTracingState().m_surfelSpawnBindingSet.get());
+        commandList.setComputeState(state);
+        const u32 tilesX = DivideUp(targets.width, NWB_SURFEL_SPAWN_TILE);
+        const u32 tilesY = DivideUp(targets.height, NWB_SURFEL_SPAWN_TILE);
+        commandList.dispatch(DivideUp(tilesX, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), DivideUp(tilesY, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), 1u);
+    }
+
+    // (2) Clear the cell-head to empty BEFORE the hash-build re-links this frame's live surfels. The spawn above already
+    // consumed the previous frame's hash. (The enabled UAV barrier + this state transition serialise it after spawn.)
+    {
+        Core::Buffer* cellHead = rayTracingState().m_surfelCellHeadBuffer.get();
+        commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
+    }
+
+    // (3) Hash-build: one thread per pool slot; link each live surfel into its cell's list. [numthreads(64,1,1)].
+    {
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelHashBuild, graphics().getDevice(), commandList);
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelHashBuildBindingSet.get());
+        commandList.commitBarriers();
+        Core::ComputeState state;
+        state.setPipeline(rayTracingState().m_surfelHashBuildPipeline.get());
+        state.addBindingSet(rayTracingState().m_surfelHashBuildBindingSet.get());
+        commandList.setComputeState(state);
+        commandList.dispatch(DivideUp(poolCapacity, 64u), 1u, 1u);
+    }
+
+    // (4) Trace: one workgroup per active surfel (64 threads = 64 hemisphere rays through the SW scene BVH). Stage the
+    // per-mesh geometry + shadow-owned material context to ShaderResource for the trace, then dispatch.
+    {
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelTrace, graphics().getDevice(), commandList);
         for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
             commandList.setBufferState(rayTracingState().m_swShadowMeshNodeBuffers[slot], Core::ResourceStates::ShaderResource);
             commandList.setBufferState(rayTracingState().m_swShadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
@@ -6931,137 +6711,24 @@ bool RendererRayTracingSystem::renderGi(Core::CommandList& commandList, Deferred
         }
         commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_giHitAlbedo.get(), Core::ResourceStates::ShaderResource);
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_giTraceBindingSet.get());
-        commandList.commitBarriers();
-
-        // Upload the hit-albedo buffer (all instances get the default albedo for now; a resolved-material path can
-        // refine this per-instance later). Done each frame on the render command list so it stays in sync with the
-        // per-frame instance gather.
-        {
-            const u32 instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-            if(instanceCount > 0u){
-                // Build a flat f32 array (3 per instance) of the default albedo (NWB_GI_DEFAULT_ALBEDO_FLOAT3 =
-                // 0.5,0.5,0.5). The macro expands to 3 comma-separated floats, so a constexpr f3[] is simplest.
-                constexpr f32 s_DefaultAlbedo[3] = { NWB_GI_DEFAULT_ALBEDO_FLOAT3 };
-                // Use a scratch-arena Vector (matches the existing scratchArena Vector pattern in this TU).
-                Core::Alloc::ScratchArena albedoArena(RendererArenaScope::s_RayTracingBuildArena, static_cast<usize>(instanceCount) * 3u * sizeof(f32) + 64u);
-                Vector<f32, Core::Alloc::ScratchArena> albedos{ albedoArena };
-                albedos.resize(static_cast<usize>(instanceCount) * 3u);
-                for(u32 i = 0u; i < instanceCount; ++i){
-                    albedos[i * 3u + 0u] = s_DefaultAlbedo[0];
-                    albedos[i * 3u + 1u] = s_DefaultAlbedo[1];
-                    albedos[i * 3u + 2u] = s_DefaultAlbedo[2];
-                }
-                Core::Buffer* hitAlbedo = rayTracingState().m_giHitAlbedo.get();
-                commandList.setBufferState(hitAlbedo, Core::ResourceStates::CopyDest);
-                commandList.commitBarriers();
-                commandList.writeBuffer(hitAlbedo, albedos.data(), albedos.size() * sizeof(f32));
-                commandList.setBufferState(hitAlbedo, Core::ResourceStates::ShaderResource);
-                commandList.commitBarriers();
-            }
-        }
-
-        // Trace dispatch: [numthreads(64, 1, 1)] workgroup-per-ACTIVE-probe (64 threads = 64 rays). Dispatch ONE
-        // workgroup per active probe along X: activeProbeCount = ceil(probeCount / updateDivisor) covers the largest
-        // round-robin phase (cursor 0); the shader guards probeIndex < probeCount for the smaller phases. (The earlier
-        // dispatch(DivideUp(activeProbeCount, 64), ...) packed 64 probes per group and, combined with the shader
-        // indexing the probe off the structurally-zero dispatchThreadID.y, collapsed the trace to one probe/frame.)
-        // First GI frame traces ALL probes (divisor 1) to seed the whole volume in one frame; steady state uses the
-        // round-robin divisor. MUST match the divisor written into the grid CB (params0.y) so the trace-written set
-        // and the blend-consumed set are identical.
-        const u32 updateDivisor = rayTracingState().m_giSeeded ? Max<u32>(NWB_GI_DEFAULT_UPDATE_DIVISOR, 1u) : 1u;
-        const u32 activeProbeCount = DivideUp(probeCount, updateDivisor);
-
-        NwbGiTracePushConstantsGpu tracePush;
-        tracePush.activeProbeCount = activeProbeCount;
-        tracePush.updateCursor = rayTracingState().m_giUpdateCursor;
-        tracePush.frameIndex = rayTracingState().m_giFrameIndex;
-        tracePush.raysPerProbe = raysPerProbe;
-
-        Core::ComputeState traceState;
-        traceState.setPipeline(rayTracingState().m_giProbeTracePipeline.get());
-        traceState.addBindingSet(rayTracingState().m_giTraceBindingSet.get());
-        commandList.setComputeState(traceState);
-        commandList.setPushConstants(&tracePush, sizeof(tracePush));
-        commandList.dispatch(activeProbeCount, 1u, 1u);
-
-        // Sync the ray-data UAV write -> the blend's SRV read.
-        commandList.setTextureState(rayTracingState().m_giRayData.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.commitBarriers();
-
-        // Advance the round-robin cursor for next frame.
-        rayTracingState().m_giUpdateCursor = (rayTracingState().m_giUpdateCursor + 1u) % Max<u32>(updateDivisor, 1u);
-    }
-
-    // (2) Blend irradiance: one thread per interior atlas texel over the 2D tile grid.
-    {
-        const u32 interior = NWB_GI_IRRADIANCE_ATLAS_INTERIOR;
-        const u32 groupsX = DivideUp(atlasTilesPerRow * interior, groupSize);
-        const u32 groupsY = DivideUp(atlasRows * interior, groupSize);
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_giBlendIrradianceBindingSet.get());
+        commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelTraceBindingSet.get());
         commandList.commitBarriers();
         Core::ComputeState state;
-        state.setPipeline(rayTracingState().m_giProbeBlendIrradiancePipeline.get());
-        state.addBindingSet(rayTracingState().m_giBlendIrradianceBindingSet.get());
+        state.setPipeline(rayTracingState().m_surfelTracePipeline.get());
+        state.addBindingSet(rayTracingState().m_surfelTraceBindingSet.get());
         commandList.setComputeState(state);
-        commandList.dispatch(groupsX, groupsY, 1u);
+        commandList.dispatch(activeSurfelCount, 1u, 1u);
     }
 
-    // (3) Blend distance: one thread per interior atlas texel over the 2D tile grid.
-    {
-        const u32 interior = NWB_GI_DISTANCE_ATLAS_INTERIOR;
-        const u32 groupsX = DivideUp(atlasTilesPerRow * interior, groupSize);
-        const u32 groupsY = DivideUp(atlasRows * interior, groupSize);
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_giBlendDistanceBindingSet.get());
-        commandList.commitBarriers();
-        Core::ComputeState state;
-        state.setPipeline(rayTracingState().m_giProbeBlendDistancePipeline.get());
-        state.addBindingSet(rayTracingState().m_giBlendDistanceBindingSet.get());
-        commandList.setComputeState(state);
-        commandList.dispatch(groupsX, groupsY, 1u);
-    }
+    // (5) Sync the pool + cell-head UAV writes -> the deferred-lighting gather's SRV reads.
+    commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(rayTracingState().m_surfelCellHeadBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.commitBarriers();
 
-    // (4) Border: dispatched twice (once per atlas) with a push constant selecting the format + tile size. Each
-    // dispatch covers the whole 2D tile-grid atlas (tilesPerRow * tile, rows * tile) and the kernel skips interior texels.
-    {
-        const u32 irrTile = NWB_GI_IRRADIANCE_ATLAS_TILE;
-        const u32 groupsX = DivideUp(atlasTilesPerRow * irrTile, groupSize);
-        const u32 groupsY = DivideUp(atlasRows * irrTile, groupSize);
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_giBorderIrradianceBindingSet.get());
-        commandList.commitBarriers();
-        NwbGiBorderPushConstantsGpu irrPush;
-        irrPush.tile = irrTile;
-        irrPush.mode = 0u; // irradiance (float4)
-        Core::ComputeState state;
-        state.setPipeline(rayTracingState().m_giProbeBorderPipeline.get());
-        state.addBindingSet(rayTracingState().m_giBorderIrradianceBindingSet.get());
-        commandList.setComputeState(state);
-        commandList.setPushConstants(&irrPush, sizeof(irrPush));
-        commandList.dispatch(groupsX, groupsY, 1u);
-    }
-    {
-        const u32 distTile = NWB_GI_DISTANCE_ATLAS_TILE;
-        const u32 groupsX = DivideUp(atlasTilesPerRow * distTile, groupSize);
-        const u32 groupsY = DivideUp(atlasRows * distTile, groupSize);
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_giBorderDistanceBindingSet.get());
-        commandList.commitBarriers();
-        NwbGiBorderPushConstantsGpu distPush;
-        distPush.tile = distTile;
-        distPush.mode = 1u; // distance (float2)
-        Core::ComputeState state;
-        state.setPipeline(rayTracingState().m_giProbeBorderPipeline.get());
-        state.addBindingSet(rayTracingState().m_giBorderDistanceBindingSet.get());
-        commandList.setComputeState(state);
-        commandList.setPushConstants(&distPush, sizeof(distPush));
-        commandList.dispatch(groupsX, groupsY, 1u);
-    }
-
-    // (5) Flip the ping-pong front selector so next frame's front is this frame's back (the blended + bordered
-    // atlas). m_giSeeded is set true so the next blend's hysteresis is nonzero (EMA accumulation begins).
-    rayTracingState().m_giHistoryFrontIsA ^= 1u;
-    rayTracingState().m_giSeeded = true;
-    rayTracingState().m_giFrameIndex = rayTracingState().m_giFrameIndex + 1u;
+    // Advance the frame counter (seeds the ray rotation + round-robin) and mark seeded so the next frame uses the
+    // steady-state divisor + EMA hysteresis.
+    rayTracingState().m_surfelSeeded = true;
+    rayTracingState().m_surfelFrameIndex = rayTracingState().m_surfelFrameIndex + 1u;
     return true;
 }
 

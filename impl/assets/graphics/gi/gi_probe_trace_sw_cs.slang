@@ -231,10 +231,10 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
                 closest.t = triHit.t;
                 closest.worldPos = worldOrigin + worldDirection * triHit.t;
                 closest.normal = nwbSafeNormalize(nwbGiSwTransformNormal(instance, triHit.normal), float3(0.0, 0.0, 1.0));
-                // Per-instance flat albedo from the CPU-built buffer (NWB_GI_DEFAULT_ALBEDO fallback).
-                const uint albedoIndex = instanceIndex;
-                const uint albedoCount = NWB_GI_SW_MAX_MESHES; // placeholder; actual count passed via grid CB in a later refinement
-                closest.albedo = g_NwbGiHitAlbedo[albedoIndex];
+                // Per-instance base colour (the entity's authored tint) packed into the instance-material record by
+                // the CPU gather (AssignInstanceBaseColor), read back with asfloat. This makes the bounce carry the
+                // surface's real colour (e.g. a red wall bounces red) instead of a flat default.
+                closest.albedo = float3(asfloat(material.baseColorR), asfloat(material.baseColorG), asfloat(material.baseColorB));
             }
             active = false;
         }
@@ -398,20 +398,25 @@ float3 nwbGiSwShadeHit(const NwbGiProbeHit hit, const float3 rayDir){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Workgroup-per-probe: one workgroup per active probe, one thread per ray.
-// dispatch(activeProbeCount, 1, 1) with [numthreads(64, 1, 1)].
+// Workgroup-per-active-probe, one thread per ray: dispatch(activeProbeCount, 1, 1) with [numthreads(64, 1, 1)].
+// groupID.x selects the active-probe SLOT; groupThreadID.x selects the ray. (SV_DispatchThreadID.y is STRUCTURALLY 0
+// for a (N,1,1) dispatch, so the earlier main() -- which indexed the probe off .y -- only ever traced one probe/frame.)
 [numthreads(64, 1, 1)]
-void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    const uint probeOffset = dispatchThreadID.x; // ray index within the probe
-    const uint probeIndex = (dispatchThreadID.y + g_NwbGiPushConstants.updateCursor) % nwbGiProbeCount(g_NwbGiGrid);
-
-    // Only active probes trace (round-robin: 1/Nth per frame).
-    if(!nwbGiProbeActiveThisFrame(probeIndex, g_NwbGiGrid))
-        return;
-
-    const uint rayIndex = dispatchThreadID.y * 64u + dispatchThreadID.x;
+void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
+    const uint rayIndex = groupThreadID.x;
     const uint raysPerProbe = g_NwbGiPushConstants.raysPerProbe;
     if(rayIndex >= raysPerProbe)
+        return;
+
+    // Map this workgroup's slot to the STRIDED round-robin probe the blend consumes. The active set is
+    // { cursor, cursor+divisor, cursor+2*divisor, ... } with cursor = frameIndex % divisor -- driven off the SAME
+    // grid.params0.z that nwbGiProbeActiveThisFrame() uses in the blend, so probeIndex % divisor == cursor BY
+    // CONSTRUCTION and the trace-written probes exactly match the blend-consumed set (no contiguous-vs-strided mismatch).
+    const uint probeCount = nwbGiProbeCount(g_NwbGiGrid);
+    const uint updateDivisor = max(uint(g_NwbGiGrid.params0.y), 1u);
+    const uint cursor = uint(g_NwbGiGrid.params0.z) % updateDivisor;
+    const uint probeIndex = cursor + groupID.x * updateDivisor;
+    if(probeIndex >= probeCount)
         return;
 
     // De-linearize the probe index to 3D.
@@ -422,8 +427,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint3 probeCoord = uint3(ix, iy, iz);
     const float3 probePos = nwbGiProbeWorldPos(probeCoord, g_NwbGiGrid);
 
-    // Fibonacci ray direction with per-frame R2 rotation.
-    const float2 rotation = nwbGiFrameRotation(g_NwbGiPushConstants.frameIndex);
+    // Fibonacci ray direction with the per-frame R2 rotation, driven off grid.params0.z (the SAME frame index the
+    // blend uses to reconstruct ray directions) so the traced set and the gathered set are bit-identical.
+    const float2 rotation = nwbGiFrameRotation(uint(g_NwbGiGrid.params0.z));
     const float3 rayDir = nwbGiFibonacciDirection(rayIndex, raysPerProbe, rotation);
 
     // Trace.

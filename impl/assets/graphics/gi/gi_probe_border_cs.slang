@@ -12,7 +12,7 @@
 // irradiance atlas at BOTH slots -- the distance slot is bound to the SAME irradiance atlas so the float4 write is
 // always valid), and once with the distance border binding set (which binds the distance atlas at BOTH slots
 // likewise). The push constant `mode` selects which slot the kernel reads/writes (0 = irradiance, 1 = distance).
-// The dispatch grid is sized CPU-side to the bound atlas's tile geometry (probeCount * tile, tile). See
+// The dispatch grid is sized CPU-side to the bound atlas's 2D tile geometry (tilesPerRow * tile, rows * tile). See
 // .helper/ddgi_plan.md 2/3 (U4).
 //
 // Octahedral projection is continuous across the equator seams by construction, so the only wrap risk is the tile
@@ -69,15 +69,20 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(tile == 0u)
         return;
 
-    const uint atlasWidth = probeCount * tile;
+    // Tiles pack into a 2D grid of NWB_GI_ATLAS_TILES_PER_ROW columns: the dispatch grid is
+    // (tilesPerRow * tile, ceil(probeCount/tilesPerRow) * tile). Map the thread back to (tileX, tileY) + tile-local.
+    const uint tilesPerRow = NWB_GI_ATLAS_TILES_PER_ROW;
     const uint texelX = dispatchThreadID.x;
     const uint texelY = dispatchThreadID.y;
-    if(texelX >= atlasWidth || texelY >= tile)
+    if(texelX >= tilesPerRow * tile)
         return;
 
-    const uint probeIndex = texelX / tile;
+    const uint tileX = texelX / tile;
+    const uint tileY = texelY / tile;
     const uint localX = texelX % tile;
-    const uint2 localInTile = uint2(localX, texelY);
+    const uint localY = texelY % tile;
+    const uint probeIndex = tileY * tilesPerRow + tileX;
+    const uint2 localInTile = uint2(localX, localY);
     if(probeIndex >= probeCount)
         return;
 

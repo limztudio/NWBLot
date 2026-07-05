@@ -15,17 +15,19 @@
 // the transmittance and stop); meshSlot indexes the per-mesh attribute buffers the trace interpolates;
 // materialConstantByteOffset locates the occluder's constant block in g_NwbMaterialTypedWords and
 // meshInstanceIndex indexes g_NwbMeshInstances (the mutable storage offset) -- together they reconstruct the
-// material-constants context the surface hook reads. pad0/pad1/pad2 round the record to 32 bytes / two float4
-// lanes (std430), mirroring the C++ NwbRtInstanceMaterialGpu.
+// material-constants context the surface hook reads. baseColorR/G/B carry the instance's authored linear-RGB base
+// colour (asuint) so the software probe/photon producers (GI, caustics) can shade a bounce with the real surface
+// colour; the shadow trace ignores them. They round the record to 32 bytes / two float4 lanes (std430), mirroring
+// the C++ NwbRtInstanceMaterialGpu.
 struct NwbRtInstanceMaterial{
     uint shadowTransmittanceModelId;
     uint flags;
     uint meshSlot;
     uint materialConstantByteOffset;
     uint meshInstanceIndex;
-    uint pad0;
-    uint pad1;
-    uint pad2;
+    uint baseColorR;
+    uint baseColorG;
+    uint baseColorB;
 };
 
 #define NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT 0x1u

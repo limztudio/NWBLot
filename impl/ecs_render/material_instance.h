@@ -248,6 +248,41 @@ template<typename TValue>
     return SetMaterialMutableValue(world, entity, materialInterface, parameterName, packedValue);
 }
 
+// Reads back a material instance's mutable half4/float4 override (the inverse of SetMaterialMutableHalf4). Returns
+// false when the component has no override with that name, leaving outValue untouched so the caller keeps its default.
+// Used by the software probe/photon producers (GI, caustics) to shade a hit with the instance's authored tint colour,
+// which is stored as a per-instance mutable rather than a material-static constant.
+[[nodiscard]] inline bool GetMaterialMutableHalf4(
+    const MaterialInstanceComponent& component,
+    const AStringView parameterName,
+    Float4& outValue
+){
+    const Name queryName(parameterName);
+    for(const MaterialInstanceParameter& parameter : component.overrides){
+        if(parameter.parameterName != queryName)
+            continue;
+        if(parameter.fieldType == MaterialLayoutFieldType::Half4){
+            Half components[4];
+            NWB_MEMCPY(components, sizeof(components), parameter.value.raw, sizeof(components));
+            outValue = Float4(
+                ConvertHalfToFloat(components[0]),
+                ConvertHalfToFloat(components[1]),
+                ConvertHalfToFloat(components[2]),
+                ConvertHalfToFloat(components[3])
+            );
+            return true;
+        }
+        if(parameter.fieldType == MaterialLayoutFieldType::Float4){
+            f32 components[4];
+            NWB_MEMCPY(components, sizeof(components), parameter.value.raw, sizeof(components));
+            outValue = Float4(components[0], components[1], components[2], components[3]);
+            return true;
+        }
+        return false;
+    }
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

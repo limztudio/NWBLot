@@ -188,10 +188,9 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     auto& device = *m_graphics.getDevice();
 
     m_shadowPrepareCommandList->open();
-    // DDGI prepare hook: GI resources are prepared alongside the shadow/caustic prepare. U1 scaffold: inert
-    // no-op (hasGiWork returns false, m_giEnabled defaults false). See .helper/ddgi_plan.md §2.
-    if(!m_raytracingSystem.prepareGiResources(*m_shadowPrepareCommandList, deferredTargets))
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GI resource preparation failed"));
+    // DDGI resources are prepared INSIDE prepareShadowVisibilityResources, right after the SW scene BVH is built and
+    // the probe volume is enabled -- so the trace/blend can run on the same frame (no startup latency). See
+    // .helper/ddgi_plan.md §2.
     const bool shadowResourcesPrepared = m_raytracingSystem.prepareShadowVisibilityResources(
         *m_shadowPrepareCommandList,
         deferredTargets,

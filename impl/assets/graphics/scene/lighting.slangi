@@ -230,12 +230,15 @@ half3 nwbBxdfIndirectIrradiance(float3 worldPosition, float3 normalVector){
 #else
     const NwbGiGridConstants grid = g_NwbGiGridConstants;
 
-    // Normal bias: offset the sample position back along the surface normal so the probe fetch does not
-    // self-occlude. The plan's (0.2N+0.8V)·0.75·minSpacing reduces to a normal-only push here (view is not
-    // available at this evaluation point); the grid-CB's params1.z carries the runtime bias (0 = auto).
+    // Normal bias: offset the sample position OUTWARD along the surface normal (away from the surface, into the
+    // volume the probes see) so the probe fetch does not self-occlude against the surface it is shading. The push
+    // must be +N: pushing -N buries the sample inside/behind the surface -- e.g. a floor at the grid's y=0 boundary
+    // biased to y<0 falls OUTSIDE the volume and silently reverts to hemiAmbient (no bounce). The plan's
+    // (0.2N+0.8V)·0.75·minSpacing reduces to a normal-only push here (view is not available at this evaluation
+    // point); the grid-CB's params1.z carries the runtime bias (0 = auto).
     const float minSpacing = min(min(grid.gridSpacing.x, grid.gridSpacing.y), grid.gridSpacing.z);
     const float normalBias = (grid.params1.z > 0.0) ? grid.params1.z : (0.2 * 0.75 * minSpacing);
-    const float3 samplePos = worldPosition - normalVector * normalBias;
+    const float3 samplePos = worldPosition + normalVector * normalBias;
 
     // Fractional grid coordinate of the biased position.
     const float3 gridCoord = (samplePos - grid.gridOrigin.xyz) / grid.gridSpacing.xyz;

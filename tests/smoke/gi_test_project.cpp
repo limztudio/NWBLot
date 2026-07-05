@@ -42,18 +42,19 @@ using NWB::Tests::Smoke::AddSmokeRenderSystems;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// DEDICATED GI scene (DDGI U5): a WHITE OPEN-TOP BOX with ONE SATURATED-RED WALL, lit by a single DIRECTIONAL
-// light aimed so the red wall is lit but the adjacent FLOOR is in DIRECT SHADOW. The indirect red bleed onto the
-// shadowed floor is the unfakeable pass signal -- the hemiAmbient replacement makes this true GI detection (a
-// constant ambient term cannot produce a colored bounce). No refractive casters (caustics gate off = the scene is
-// GI-funded).
+// DEDICATED GI scene (DDGI U5): an OPEN-TOP BOX with a SATURATED-RED wall (+X) and a SATURATED-BLUE wall (-X) on
+// opposite sides, lit by a single DIRECTIONAL light aimed so the walls are lit but the FLOOR between them is in
+// DIRECT SHADOW. The indirect bleed onto the shadowed floor -- RED near the red wall, BLUE near the blue wall, a
+// red-to-blue gradient across the middle -- is the unfakeable pass signal: the hemiAmbient replacement makes this
+// true GI detection (a constant ambient term cannot produce a two-colour directional bounce). No refractive casters
+// (caustics gate off = the scene is GI-funded).
 //
 // The box is built from five opaque planes (four walls + one floor; open top so the directional light reaches the
-// interior). One wall is tinted saturated red; the other three walls + the floor are near-white. The directional
-// light grazes the red wall at an angle that lights it fully while leaving the floor below in its cast shadow, so
-// the only light reaching the shadowed floor is the red bounce off the lit wall.
+// interior). One wall is tinted saturated red, the opposite wall saturated blue; the two remaining walls + the floor
+// are near-white. The directional light grazes the walls at an angle that lights them while leaving the floor between
+// them in cast shadow, so the only light reaching the shadowed floor is the colored bounce off the lit walls.
 //
-// Reuses the benchmark's cooked ground material (no new assets).
+// Reuses the benchmark's cooked ground material + the per-instance colour_tint mutable (no new assets).
 
 static constexpr AStringView s_GroundMeshPath = "project/meshes/shadow_plane";
 static constexpr AStringView s_OpaqueMaterialPath = "project/smoke/transparent_multi/materials/ground";  // opaque lambert
@@ -64,11 +65,14 @@ static constexpr f32 s_BoxHalfExtent = 2.0f;       // half the box's X/Z extent
 static constexpr f32 s_BoxHeight = 2.0f;            // wall height
 static constexpr f32 s_BoxScale = 4.0f;             // plane scale (matches s_BoxHalfExtent * 2)
 
-// Camera: looking INTO the open-top box from a slightly elevated angle so the shadowed floor + the lit red wall
-// are both visible.
-static constexpr f32 s_CameraDistance = 5.5f;
-static constexpr f32 s_CameraHeight = 3.0f;
-static constexpr f32 s_CameraPitch = 0.45f;         // tilt down to see the box interior
+// Camera: elevated ABOVE the box (higher than the wall top) looking DOWN into the open top at a moderate angle, so
+// it looks OVER the near wall (which would otherwise fill the frame now the walls are two-sided) and frames the
+// floor + its coloured bounce below with the red (+X) and blue (-X) side walls' inner faces rising at the left/right
+// and the far (+Z) wall across the back. A near-level camera sat below the wall tops and the near wall occluded
+// everything; a too-steep top-down angle foreshortened the walls to slivers -- this is the middle ground.
+static constexpr f32 s_CameraDistance = 7.5f;
+static constexpr f32 s_CameraHeight = 3.6f;
+static constexpr f32 s_CameraPitch = 0.42f;         // pulled back + elevated to frame the whole box interior
 
 // Directional light: aimed so the RED wall (at +X) is lit but the FLOOR is in shadow. A high pitch (steep angle)
 // lights the wall; the yaw is chosen so the light rakes ACROSS the red wall and its shadow falls on the floor
@@ -167,38 +171,37 @@ public:
         m_redWallEntity = createWall(
             Float4(s_BoxHalfExtent, s_BoxHeight * 0.5f, 0.0f, 0.0f),  // position at +X edge, half-height up
             Float4(0.80f, 0.08f, 0.08f, 1.0f),                          // saturated red
-            90.0f                                                        // rotate 90deg around Z so the plane faces -X (inward)
+            -90.0f                                                       // yaw so the single-sided plane's front faces -X (inward)
         );
 
-        // The three WHITE walls (-X, +Z, -Z sides): near-white, same orientation logic.
-        m_whiteWallNegX = createWall(
+        // The BLUE wall (-X side, opposite the red wall): a saturated blue so its indirect bounce onto the shadowed
+        // floor is a distinct colour from the red wall's. Red bleed on the +X-side floor + blue bleed on the -X-side
+        // floor = an unmistakable colored-GI signal (a constant ambient term cannot produce a red-to-blue gradient).
+        m_blueWallNegX = createWall(
             Float4(-s_BoxHalfExtent, s_BoxHeight * 0.5f, 0.0f, 0.0f),
-            Float4(0.88f, 0.88f, 0.88f, 1.0f),
-            -90.0f
+            Float4(0.08f, 0.08f, 0.80f, 1.0f),
+            90.0f                                                        // yaw so the single-sided plane's front faces +X (inward)
         );
+        // The far WHITE wall (+Z side): the box's back wall. The two-sided material makes it render whichever way it
+        // faces. The -Z side is left OPEN (Cornell-box style) -- a near wall there would sit between the camera and
+        // the interior and occlude the whole view, so it is omitted; the open front is where the camera looks in.
         m_whiteWallPosZ = createWall(
             Float4(0.0f, s_BoxHeight * 0.5f, s_BoxHalfExtent, 0.0f),
             Float4(0.88f, 0.88f, 0.88f, 1.0f),
             180.0f
-        );
-        m_whiteWallNegZ = createWall(
-            Float4(0.0f, s_BoxHeight * 0.5f, -s_BoxHalfExtent, 0.0f),
-            Float4(0.88f, 0.88f, 0.88f, 1.0f),
-            0.0f
         );
 
         NWB_FATAL_ASSERT_MSG(
             activeCamera.camera.valid()
             && m_floorEntity.valid()
             && m_redWallEntity.valid()
-            && m_whiteWallNegX.valid()
-            && m_whiteWallPosZ.valid()
-            && m_whiteWallNegZ.valid(),
+            && m_blueWallNegX.valid()
+            && m_whiteWallPosZ.valid(),
             NWB_TEXT("GiTestSmokeProject failed to create all scene entities")
         );
 
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("GiTestSmokeProject: white open-top box + red wall, directional light -> indirect red bleed on shadowed floor")
+            NWB_TEXT("GiTestSmokeProject: open-top box + red/blue opposite walls, directional light -> indirect red+blue bleed on shadowed floor")
         );
         return true;
     }
@@ -255,9 +258,8 @@ private:
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Core::ECS::EntityID m_floorEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_redWallEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_whiteWallNegX = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_blueWallNegX = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_whiteWallPosZ = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_whiteWallNegZ = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("GiTestSmokeProject") };
     ArrowYawInputHandler m_arrowYawInput;
 };

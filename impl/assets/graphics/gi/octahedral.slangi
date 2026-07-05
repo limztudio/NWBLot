@@ -6,6 +6,9 @@
 #define NWB_GRAPHICS_GI_OCTAHEDRAL_SLANGI
 
 
+#include "binding_slots.h"  // NWB_GI_ATLAS_TILES_PER_ROW (shared 2D tile-grid layout)
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -53,9 +56,13 @@ float3 nwbGiOctahedralDecode(float2 uv){
 }
 
 
-// Atlas tile origin (top-left, in atlas texels) for a probe's linear index.
+// Atlas tile origin (top-left, in atlas texels) for a probe's linear index. Tiles pack into a 2D grid of
+// NWB_GI_ATLAS_TILES_PER_ROW columns (row-major) so neither atlas dimension overflows the GPU 2D image limit.
 uint2 nwbGiAtlasTileOrigin(const uint probeIndex, const uint tile){
-    return uint2(probeIndex * tile, 0u);
+    const uint tilesPerRow = NWB_GI_ATLAS_TILES_PER_ROW;
+    const uint tileX = probeIndex % tilesPerRow;
+    const uint tileY = probeIndex / tilesPerRow;
+    return uint2(tileX * tile, tileY * tile);
 }
 
 

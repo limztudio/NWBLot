@@ -5,6 +5,7 @@
 #include "raytracing_system.h"
 
 #include "renderer_private.h"
+#include "material_instance.h"  // GetMaterialMutableHalf4 (per-instance GI/caustic hit colour)
 #include "arena_names.h"
 
 #include <impl/assets/graphics/shadow/binding_slots.h>
@@ -149,9 +150,12 @@ struct NwbRtInstanceMaterialGpu{
     u32 meshSlot = 0u;
     u32 materialConstantByteOffset = 0u;
     u32 meshInstanceIndex = 0u;
-    u32 pad0 = 0u;
-    u32 pad1 = 0u;
-    u32 pad2 = 0u;
+    // Per-instance base colour (asuint of the linear RGB), formerly padding. The software probe/photon producers
+    // (GI, caustics) read this to shade a bounce with the surface's authored colour instead of a flat default; the
+    // shadow trace ignores it. Defaults to the neutral GI albedo so an unresolved material still bounces mid-grey.
+    u32 baseColorR = 0u;
+    u32 baseColorG = 0u;
+    u32 baseColorB = 0u;
 };
 static_assert(sizeof(NwbRtInstanceMaterialGpu) == 32u, "NwbRtInstanceMaterialGpu must match the shader NwbRtInstanceMaterial std430 layout (8 x uint)");
 
@@ -580,6 +584,29 @@ u32 BuildSceneBvhNode(
     return material;
 }
 
+// Bit-cast a float to its u32 representation (the software producers store base colour as asuint in the u32-typed
+// instance-material fields; the shader reads them back with asfloat).
+[[nodiscard]] u32 FloatToUintBits(const f32 value){
+    u32 bits = 0u;
+    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
+    return bits;
+}
+
+// Resolves + writes the per-instance base colour the software probe/photon producers shade bounces with: the entity's
+// authored per-instance tint (mutable "runtime.color_tint", which the scenes set and which flows to the G-buffer base
+// colour), else the neutral GI default. Always runs (even for an unresolved material) so a bounce is never black.
+void AssignInstanceBaseColor(NwbRtInstanceMaterialGpu& material, Core::ECS::World& world, const Core::ECS::EntityID entity){
+    Float4 color(NWB_GI_DEFAULT_ALBEDO_FLOAT3, 1.0f);
+    if(const MaterialInstanceComponent* materialInstance = world.tryGetComponent<MaterialInstanceComponent>(entity)){
+        Float4 tint;
+        if(GetMaterialMutableHalf4(*materialInstance, "runtime.color_tint", tint))
+            color = tint;
+    }
+    material.baseColorR = FloatToUintBits(color.x);
+    material.baseColorG = FloatToUintBits(color.y);
+    material.baseColorB = FloatToUintBits(color.z);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -802,6 +829,8 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
                 return false;
             instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
         }
+        // Colour this instance's probe/photon bounces with its authored base colour (GI/caustic hit albedo).
+        __hidden_raytracing_system::AssignInstanceBaseColor(instanceMaterial, world(), entity);
 
         instances.push_back(instanceDesc);
         instanceMaterials.push_back(instanceMaterial);
@@ -1025,6 +1054,8 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
                 return false;
             instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
         }
+        // Colour this instance's probe/photon bounces with its authored base colour (GI/caustic hit albedo).
+        __hidden_raytracing_system::AssignInstanceBaseColor(instanceMaterial, world(), entity);
 
         Float4 storedWorldMin;
         Float4 storedWorldMax;
@@ -1367,11 +1398,17 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         return true;
     }
 
-    // U5: enable DDGI on the SW path (the GI trace reuses the SW scene BVH the SW shadow/caustic paths built).
-    // The prepareGiResources hook (called before this) lazily creates the GI atlases/pipelines; setting
-    // m_giEnabled here lets the next frame's prepare + render run the full trace -> blend -> border chain.
-    if(rayTracingState().m_sceneBvhInstanceCount > 0u && rayTracingState().m_swShadowMeshCount > 0u)
+    // U5: enable DDGI on the SW path (the GI trace reuses the SW scene BVH the SW shadow/caustic paths built) and
+    // create its resources THIS frame -- here, in the prepare phase, right after the SW scene BVH is resident. Doing
+    // the lazy creation after the enable (instead of a frame earlier, before the enable) removes DDGI's one-frame
+    // startup latency: renderGi in the render phase can trace/blend/border on the very same frame the probe volume
+    // becomes active, so a single bootstrap frame already shows a bounce. The atlas/pipeline resources live on
+    // RendererRayTracingState so a window resize does not reset probe convergence.
+    if(rayTracingState().m_sceneBvhInstanceCount > 0u && rayTracingState().m_swShadowMeshCount > 0u){
         rayTracingState().m_giEnabled = true;
+        if(!prepareGiResources(commandList, targets))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GI resource preparation failed"));
+    }
 
     if(rayTracingState().m_sceneBvhInstanceCount == 0u)
         return true;
@@ -6241,17 +6278,21 @@ bool RendererRayTracingSystem::ensureGiResources(){
         }
     }
 
-    // Irradiance + distance ping-pong atlases. Each probe owns one square tile (interior + 1-texel border). The
-    // atlas width = probeCount * tile, height = tile. Black-cleared atlases are the additive identity so lighting
-    // stays branchless when GI is off. m_giSeeded is reset on atlas (re)creation so the blend's hysteresis is 0 on
-    // the next frame (pure current sample).
+    // Irradiance + distance ping-pong atlases. Each probe owns one square tile (interior + 1-texel border), packed
+    // into a 2D grid of NWB_GI_ATLAS_TILES_PER_ROW columns: width = tilesPerRow * tile, height = ceil(probeCount /
+    // tilesPerRow) * tile. (A single-ROW packing -- width = probeCount * tile -- overflows the GPU maxImageDimension2D
+    // of 16384 at the Default 2048-probe distance tile: 2048*16 = 32768 -> invalid texture -> device fault when the
+    // consumer samples it.) Black-cleared atlases are the additive identity so lighting stays branchless when GI is
+    // off. m_giSeeded is reset on atlas (re)creation so the blend's hysteresis is 0 on the next frame.
     const u32 irrTile = NWB_GI_IRRADIANCE_ATLAS_TILE;
     const u32 distTile = NWB_GI_DISTANCE_ATLAS_TILE;
     const auto createAtlasPair = [this, probeCount](const u32 tile, const Core::Format::Enum format, const char* nameA, const char* nameB) -> bool{
+        const u32 atlasTilesPerRow = NWB_GI_ATLAS_TILES_PER_ROW;
+        const u32 atlasRows = DivideUp(probeCount, atlasTilesPerRow);
         Core::TextureDesc desc;
         desc
-            .setWidth(probeCount * tile)
-            .setHeight(tile)
+            .setWidth(atlasTilesPerRow * tile)
+            .setHeight(atlasRows * tile)
             .setFormat(format)
             .setInUAV(true)
         ;
@@ -6283,13 +6324,17 @@ bool RendererRayTracingSystem::ensureGiResources(){
     if(!rayTracingState().m_giIrradianceAtlasA || !rayTracingState().m_giIrradianceAtlasB){
         if(!createAtlasPair(irrTile, Core::Format::RGBA16_FLOAT, "engine/gi/irradiance_a", "engine/gi/irradiance_b"))
             return false;
-        // Clear the freshly-created atlases to black (the additive identity) so the consumer is branchless.
+        // The freshly-created atlases hold uninitialised memory. Reset the EMA seed (hysteresis 0 on the next blend)
+        // and request a black clear from prepareGiResources (this function has no command list of its own). Black is
+        // the additive identity so the consumer stays branchless while GI converges.
         rayTracingState().m_giSeeded = false;
+        rayTracingState().m_giAtlasesNeedClear = true;
     }
     if(!rayTracingState().m_giDistanceAtlasA || !rayTracingState().m_giDistanceAtlasB){
         if(!createAtlasPair(distTile, Core::Format::RG16_FLOAT, "engine/gi/distance_a", "engine/gi/distance_b"))
             return false;
         rayTracingState().m_giSeeded = false;
+        rayTracingState().m_giAtlasesNeedClear = true;
     }
 
     // Build the pipelines + binding sets. Non-fatal: a sub-failure leaves the pipeline handle null and the render
@@ -6782,11 +6827,38 @@ bool RendererRayTracingSystem::prepareGiResources(Core::CommandList& commandList
     if(!ensureGiResources())
         return false;
 
+    // One-shot black clear of the freshly-created ping-pong atlases (ensureGiResources has no command list, so it
+    // only raised the request). Black = the additive identity, so the consumer stays branchless and any not-yet-traced
+    // probe tile reads as "no bounce" instead of uninitialised garbage/NaN. Both ping-pong halves are cleared so the
+    // frame-0 history-in read is also black. Cleared exactly once per (re)creation.
+    if(rayTracingState().m_giAtlasesNeedClear){
+        const Core::Color black(0.f, 0.f, 0.f, 0.f);
+        Core::TextureHandle giAtlases[] = {
+            rayTracingState().m_giIrradianceAtlasA,
+            rayTracingState().m_giIrradianceAtlasB,
+            rayTracingState().m_giDistanceAtlasA,
+            rayTracingState().m_giDistanceAtlasB,
+        };
+        for(const Core::TextureHandle& atlas : giAtlases){
+            Core::Texture* tex = atlas.get();
+            if(!tex)
+                continue;
+            commandList.setTextureState(tex, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+            commandList.commitBarriers();
+            commandList.clearTextureFloat(tex, ECSRenderDetail::s_FramebufferSubresources, black);
+        }
+        rayTracingState().m_giAtlasesNeedClear = false;
+    }
+
     // Upload the grid constant buffer. The frame counter seeds the per-frame R2 rotation; the update cursor is the
     // round-robin offset (1/Nth of probes per frame); the hysteresis is 0 on frame 0 (m_giSeeded false -> pure
     // current sample) and s_GiDefaultHysteresis afterward.
     const u32 probeCount = rayTracingState().m_giGridSizeX * rayTracingState().m_giGridSizeY * rayTracingState().m_giGridSizeZ;
     const f32 hysteresis = rayTracingState().m_giSeeded ? s_GiDefaultHysteresis : 0.0f;
+    // First GI frame (not yet seeded): trace ALL probes (divisor 1) so the whole volume is seeded in one frame --
+    // no round-robin garbage-vs-EMA on the probes that would otherwise wait 1..divisor-1 frames for their first data,
+    // and a single bootstrap frame already shows a full bounce. Steady state reverts to the round-robin divisor.
+    const u32 updateDivisor = rayTracingState().m_giSeeded ? Max<u32>(NWB_GI_DEFAULT_UPDATE_DIVISOR, 1u) : 1u;
     NwbGiGridConstantsGpu grid;
     grid.gridOrigin = Float4(NWB_GI_DEFAULT_GRID_ORIGIN_X, NWB_GI_DEFAULT_GRID_ORIGIN_Y, NWB_GI_DEFAULT_GRID_ORIGIN_Z, 0.0f);
     grid.gridSpacing = Float4(NWB_GI_DEFAULT_GRID_SPACING, NWB_GI_DEFAULT_GRID_SPACING, NWB_GI_DEFAULT_GRID_SPACING, 0.0f);
@@ -6798,7 +6870,7 @@ bool RendererRayTracingSystem::prepareGiResources(Core::CommandList& commandList
     );
     grid.params0 = Float4(
         static_cast<f32>(rayTracingState().m_giRaysPerProbe),
-        static_cast<f32>(NWB_GI_DEFAULT_UPDATE_DIVISOR),
+        static_cast<f32>(updateDivisor),
         static_cast<f32>(rayTracingState().m_giFrameIndex),
         static_cast<f32>(rayTracingState().m_giHistoryFrontIsA)
     );
@@ -6838,6 +6910,10 @@ bool RendererRayTracingSystem::renderGi(Core::CommandList& commandList, Deferred
     const u32 probeCount = rayTracingState().m_giGridSizeX * rayTracingState().m_giGridSizeY * rayTracingState().m_giGridSizeZ;
     const u32 raysPerProbe = rayTracingState().m_giRaysPerProbe;
     const u32 groupSize = NWB_GI_GROUP_SIZE;
+    // 2D atlas tile-grid dims: tiles pack NWB_GI_ATLAS_TILES_PER_ROW per row, ceil(probeCount/perRow) rows. The blend
+    // and border dispatches cover (tilesPerRow, rows) tiles; the kernels map thread -> (tileX, tileY) -> probeIndex.
+    const u32 atlasTilesPerRow = NWB_GI_ATLAS_TILES_PER_ROW;
+    const u32 atlasRows = DivideUp(probeCount, atlasTilesPerRow);
 
     // (1) Trace: workgroup-per-probe. The trace needs the SW scene BVH (the same geometry the SW shadow trace
     // built) + the hit-albedo buffer. Build both here (renderGi runs AFTER prepareShadowVisibilityResources, so the
@@ -6886,11 +6962,16 @@ bool RendererRayTracingSystem::renderGi(Core::CommandList& commandList, Deferred
             }
         }
 
-        // Trace dispatch: [numthreads(64, 1, 1)] workgroup-per-probe. The active probe count this frame =
-        // ceil(probeCount / updateDivisor); dispatch one workgroup per active probe along X.
-        const u32 updateDivisor = Max<u32>(NWB_GI_DEFAULT_UPDATE_DIVISOR, 1u);
+        // Trace dispatch: [numthreads(64, 1, 1)] workgroup-per-ACTIVE-probe (64 threads = 64 rays). Dispatch ONE
+        // workgroup per active probe along X: activeProbeCount = ceil(probeCount / updateDivisor) covers the largest
+        // round-robin phase (cursor 0); the shader guards probeIndex < probeCount for the smaller phases. (The earlier
+        // dispatch(DivideUp(activeProbeCount, 64), ...) packed 64 probes per group and, combined with the shader
+        // indexing the probe off the structurally-zero dispatchThreadID.y, collapsed the trace to one probe/frame.)
+        // First GI frame traces ALL probes (divisor 1) to seed the whole volume in one frame; steady state uses the
+        // round-robin divisor. MUST match the divisor written into the grid CB (params0.y) so the trace-written set
+        // and the blend-consumed set are identical.
+        const u32 updateDivisor = rayTracingState().m_giSeeded ? Max<u32>(NWB_GI_DEFAULT_UPDATE_DIVISOR, 1u) : 1u;
         const u32 activeProbeCount = DivideUp(probeCount, updateDivisor);
-        const u32 traceGroupsX = DivideUp(activeProbeCount, 64u);
 
         NwbGiTracePushConstantsGpu tracePush;
         tracePush.activeProbeCount = activeProbeCount;
@@ -6903,7 +6984,7 @@ bool RendererRayTracingSystem::renderGi(Core::CommandList& commandList, Deferred
         traceState.addBindingSet(rayTracingState().m_giTraceBindingSet.get());
         commandList.setComputeState(traceState);
         commandList.setPushConstants(&tracePush, sizeof(tracePush));
-        commandList.dispatch(traceGroupsX, 1u, 1u);
+        commandList.dispatch(activeProbeCount, 1u, 1u);
 
         // Sync the ray-data UAV write -> the blend's SRV read.
         commandList.setTextureState(rayTracingState().m_giRayData.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
@@ -6913,11 +6994,11 @@ bool RendererRayTracingSystem::renderGi(Core::CommandList& commandList, Deferred
         rayTracingState().m_giUpdateCursor = (rayTracingState().m_giUpdateCursor + 1u) % Max<u32>(updateDivisor, 1u);
     }
 
-    // (2) Blend irradiance: one thread per interior atlas texel. dispatch(probeCount * interior, interior).
+    // (2) Blend irradiance: one thread per interior atlas texel over the 2D tile grid.
     {
         const u32 interior = NWB_GI_IRRADIANCE_ATLAS_INTERIOR;
-        const u32 groupsX = DivideUp(probeCount * interior, groupSize);
-        const u32 groupsY = DivideUp(interior, groupSize);
+        const u32 groupsX = DivideUp(atlasTilesPerRow * interior, groupSize);
+        const u32 groupsY = DivideUp(atlasRows * interior, groupSize);
         commandList.setResourceStatesForBindingSet(rayTracingState().m_giBlendIrradianceBindingSet.get());
         commandList.commitBarriers();
         Core::ComputeState state;
@@ -6927,11 +7008,11 @@ bool RendererRayTracingSystem::renderGi(Core::CommandList& commandList, Deferred
         commandList.dispatch(groupsX, groupsY, 1u);
     }
 
-    // (3) Blend distance: one thread per interior atlas texel. dispatch(probeCount * interior, interior).
+    // (3) Blend distance: one thread per interior atlas texel over the 2D tile grid.
     {
         const u32 interior = NWB_GI_DISTANCE_ATLAS_INTERIOR;
-        const u32 groupsX = DivideUp(probeCount * interior, groupSize);
-        const u32 groupsY = DivideUp(interior, groupSize);
+        const u32 groupsX = DivideUp(atlasTilesPerRow * interior, groupSize);
+        const u32 groupsY = DivideUp(atlasRows * interior, groupSize);
         commandList.setResourceStatesForBindingSet(rayTracingState().m_giBlendDistanceBindingSet.get());
         commandList.commitBarriers();
         Core::ComputeState state;
@@ -6942,11 +7023,11 @@ bool RendererRayTracingSystem::renderGi(Core::CommandList& commandList, Deferred
     }
 
     // (4) Border: dispatched twice (once per atlas) with a push constant selecting the format + tile size. Each
-    // dispatch covers the whole atlas (probeCount * tile, tile) and the kernel skips interior texels.
+    // dispatch covers the whole 2D tile-grid atlas (tilesPerRow * tile, rows * tile) and the kernel skips interior texels.
     {
         const u32 irrTile = NWB_GI_IRRADIANCE_ATLAS_TILE;
-        const u32 groupsX = DivideUp(probeCount * irrTile, groupSize);
-        const u32 groupsY = DivideUp(irrTile, groupSize);
+        const u32 groupsX = DivideUp(atlasTilesPerRow * irrTile, groupSize);
+        const u32 groupsY = DivideUp(atlasRows * irrTile, groupSize);
         commandList.setResourceStatesForBindingSet(rayTracingState().m_giBorderIrradianceBindingSet.get());
         commandList.commitBarriers();
         NwbGiBorderPushConstantsGpu irrPush;
@@ -6961,8 +7042,8 @@ bool RendererRayTracingSystem::renderGi(Core::CommandList& commandList, Deferred
     }
     {
         const u32 distTile = NWB_GI_DISTANCE_ATLAS_TILE;
-        const u32 groupsX = DivideUp(probeCount * distTile, groupSize);
-        const u32 groupsY = DivideUp(distTile, groupSize);
+        const u32 groupsX = DivideUp(atlasTilesPerRow * distTile, groupSize);
+        const u32 groupsY = DivideUp(atlasRows * distTile, groupSize);
         commandList.setResourceStatesForBindingSet(rayTracingState().m_giBorderDistanceBindingSet.get());
         commandList.commitBarriers();
         NwbGiBorderPushConstantsGpu distPush;

@@ -44,22 +44,28 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint interior = NWB_GI_DISTANCE_ATLAS_INTERIOR;
     const uint border = 1u;
 
-    // One thread per interior texel of one probe tile. The dispatch grid is (probeCount * interior, interior).
+    // One thread per interior texel of one probe tile. Tiles pack into a 2D grid of NWB_GI_ATLAS_TILES_PER_ROW
+    // columns, so the dispatch grid is (tilesPerRow * interior, ceil(probeCount/tilesPerRow) * interior). Map the
+    // thread's atlas-interior coordinate back to (tileX, tileY) and the linear probe index.
+    const uint tilesPerRow = NWB_GI_ATLAS_TILES_PER_ROW;
     const uint texelX = dispatchThreadID.x;
     const uint texelY = dispatchThreadID.y;
-    if(texelX >= probeCount * interior || texelY >= interior)
+    if(texelX >= tilesPerRow * interior)
         return;
 
-    const uint probeIndex = texelX / interior;
+    const uint tileX = texelX / interior;
+    const uint tileY = texelY / interior;
     const uint localX = texelX % interior;
+    const uint localY = texelY % interior;
+    const uint probeIndex = tileY * tilesPerRow + tileX;
     if(probeIndex >= probeCount)
         return;
 
     // The texel's atlas coordinate (interior offset by the border).
-    const uint2 atlasCoord = nwbGiAtlasTileOrigin(probeIndex, tile) + uint2(localX + border, texelY + border);
+    const uint2 atlasCoord = nwbGiAtlasTileOrigin(probeIndex, tile) + uint2(localX + border, localY + border);
 
     // Reconstruct the direction this texel represents.
-    const float2 uv = (float2(localX, texelY) + 0.5) / float(interior);
+    const float2 uv = (float2(localX, localY) + 0.5) / float(interior);
     const float3 texelDir = nwbGiOctahedralDecode(uv);
 
     // Round-robin: only updated probes have fresh ray-data this frame. A non-updated probe pass-through-copies its
@@ -77,8 +83,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float gridDiagonal = length(dims * spacing);
     const float tClamp = gridDiagonal * 1.5;
 
-    // Gather the mean + mean-squared hit distance over the rays matching this texel's hemisphere lobe.
-    const uint raysPerProbe = uint(g_NwbGiGrid.params0.x);
+    // Gather the mean + mean-squared hit distance over the rays matching this texel's hemisphere lobe. Clamp the
+    // CB-sourced ray count so a stray/garbage params0.x can never spin the loop into a GPU hang (defensive).
+    const uint raysPerProbe = min(uint(g_NwbGiGrid.params0.x), NWB_GI_PROBE_MAX_RAY_COUNT);
     const float2 rotation = nwbGiFrameRotation(uint(g_NwbGiGrid.params0.z));
     float distSum = 0.0;
     float distSqSum = 0.0;

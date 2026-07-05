@@ -88,14 +88,24 @@
 #define NWB_GI_DEFAULT_RAYS_PER_PROBE 64u
 #define NWB_GI_DEFAULT_UPDATE_DIVISOR 4u
 
+// Hard ceiling on the per-probe ray count. The blend kernels clamp the CB-sourced ray count to this so a stray or
+// mis-encoded params0.x can never spin the gather loop into a GPU hang. Generous headroom above the Default 64.
+#define NWB_GI_PROBE_MAX_RAY_COUNT 256u
+
 // Hit shadow rays toward the dominant light per hit (D4 = 1; U3 measures both 1 and 0).
 #define NWB_GI_HIT_SHADOW_RAYS 1
 
 
-// Octahedral atlas tile geometry. Each probe owns one square tile in the atlas; the atlas packs tiles in one row
-// (atlas width = probeCount * tile, height = tile). The interior holds the octahedrally-projected irradiance /
-// distance samples; the 1-texel border is filled by the border pass so octahedral sampling at the edge does not
-// wrap into the neighbour probe's texels. See .helper/ddgi_plan.md §2 (Blend).
+// Octahedral atlas tile geometry. Each probe owns one square tile in the atlas; tiles pack into a 2D grid of
+// NWB_GI_ATLAS_TILES_PER_ROW columns (atlas width = tilesPerRow * tile, height = ceil(probeCount/tilesPerRow) * tile).
+// A single-ROW packing (width = probeCount * tile) overflows the GPU's maxImageDimension2D (16384) for the Default
+// 2048-probe tier at the distance tile (2048*16 = 32768) -> invalid texture -> device fault; the 2D grid keeps both
+// atlas dimensions small (e.g. 2048 probes -> irradiance 512x256, distance 1024x512). The interior holds the
+// octahedrally-projected irradiance / distance samples; the 1-texel border is filled by the border pass so octahedral
+// sampling at the edge does not wrap into the neighbour probe's texels. tilesPerRow is a compile-time constant so the
+// CPU (atlas alloc + dispatch extents), the blend/border kernels, and the lighting consumer all agree on the layout
+// without a runtime value. See .helper/ddgi_plan.md §2 (Blend).
+#define NWB_GI_ATLAS_TILES_PER_ROW 64u
 #define NWB_GI_IRRADIANCE_ATLAS_INTERIOR 6
 #define NWB_GI_IRRADIANCE_ATLAS_TILE 8    // 6 interior + 2 * 1-texel border
 #define NWB_GI_DISTANCE_ATLAS_INTERIOR 14

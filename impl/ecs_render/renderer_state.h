@@ -736,6 +736,11 @@ private:
     // m_giSeeded: false on frame 0 / after atlas (re)creation -> the blend's hysteresis is 0 (pure current sample);
     // set true after the first blend. Mirrors the caustic accumulator seed precedent.
     bool m_giSeeded = false;
+    // m_giAtlasesNeedClear: set true when the ping-pong atlases are (re)created in ensureGiResources() -- which has
+    // no command list -- and consumed once in prepareGiResources() (which does) to clear all four to black BEFORE the
+    // first trace/blend. Without this the consumer samples uninitialised atlas memory (garbage / NaN) until a probe
+    // happens to write each tile, which the round-robin defers for many frames.
+    bool m_giAtlasesNeedClear = false;
     // Feature gate + per-pipeline-failed flags (mirrors the caustic / shadow precedent).
     bool m_giEnabled = false;
     bool m_giProbeTracePipelineFailed = false;

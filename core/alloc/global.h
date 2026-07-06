@@ -10,6 +10,7 @@
 #include <global/compile.h>
 #include <global/platform.h>
 #include <global/type.h>
+#include <global/allocation_size.h>
 #include <global/call_traits.h>
 #include <global/unique_ptr.h>
 #include <global/containers.h>
@@ -19,6 +20,7 @@
 #include <global/atomic.h>
 #include <global/sync.h>
 #include <global/thread.h>
+#include <global/inplace_function.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,38 +49,6 @@ namespace CoreAffinity{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<usize size>
-constexpr inline usize SizeOf(usize count){
-    constexpr auto overflowIsPossible = size > 1;
-
-    if constexpr(overflowIsPossible){
-        constexpr auto maxPossible = static_cast<usize>(-1) / size;
-        if(count > maxPossible)
-            throw std::bad_array_new_length{};
-    }
-
-    return count * size;
-}
-
-constexpr inline usize AddSize(usize lhs, usize rhs){
-    if(lhs > static_cast<usize>(-1) - rhs)
-        throw std::bad_array_new_length{};
-
-    return lhs + rhs;
-}
-
-constexpr inline usize Alignment(usize align, usize size){
-    if(align <= 1)
-        return size;
-
-    const usize remainder = size % align;
-    if(remainder == 0)
-        return size;
-
-    return AddSize(size, align - remainder);
-}
 
 
 extern usize CachelineSize();

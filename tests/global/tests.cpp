@@ -6,6 +6,7 @@
 #include <tests/test_context.h>
 #include <gtest/gtest.h>
 
+#include <global/allocation_size.h>
 #include <global/binary.h>
 #include <global/blocking_io.h>
 #include <global/compile.h>
@@ -16,6 +17,7 @@
 #include <global/filesystem/utility.h>
 #include <global/filesystem/volume_naming.h>
 #include <global/hash_utils.h>
+#include <global/inplace_function.h>
 #include <global/limit.h>
 #include <global/text_utils.h>
 
@@ -151,6 +153,36 @@ TEST(Global, PodRoundTrip){
     readValue = 0u;
     EXPECT_TRUE(ReadPOD(byteView, cursor, readValue));
     EXPECT_EQ(readValue, writtenValue);
+}
+
+TEST(Global, AllocationSizeHelpers){
+    EXPECT_EQ(SizeOf<sizeof(u32)>(3u), sizeof(u32) * 3u);
+    EXPECT_EQ(AddSize(17u, 25u), 42u);
+    EXPECT_EQ(Alignment(1u, 37u), 37u);
+    EXPECT_EQ(Alignment(8u, 37u), 40u);
+    EXPECT_EQ(Alignment(16u, 48u), 48u);
+}
+
+TEST(Global, InplaceFunctionInvokesAndMoves){
+    i32 value = 0;
+    InplaceFunction<64u> func([&value](){ value += 3; });
+
+    EXPECT_TRUE(static_cast<bool>(func));
+    func();
+    EXPECT_EQ(value, 3);
+
+    InplaceFunction<64u> moved(Move(func));
+    EXPECT_FALSE(static_cast<bool>(func));
+    ASSERT_TRUE(static_cast<bool>(moved));
+    moved();
+    EXPECT_EQ(value, 6);
+
+    moved = [&value](){ value *= 2; };
+    moved();
+    EXPECT_EQ(value, 12);
+
+    moved.reset();
+    EXPECT_FALSE(static_cast<bool>(moved));
 }
 
 TEST(Global, RuntimeNameSymbolsRecordStringViewNames){

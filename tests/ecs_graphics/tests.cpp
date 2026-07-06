@@ -464,16 +464,13 @@ static NWB::Impl::SkeletonJointMatrix MakeIdentityJointMatrix(){
 }
 
 static void CheckJointRotationQuaternion(
-    const NWB::Impl::SkeletonJointMatrix& joint,
+    const SIMDMatrix& joint,
     const f32 x,
     const f32 y,
     const f32 z,
     const f32 w){
     SIMDVector quaternion = QuaternionIdentity();
-    ASSERT_TRUE(NWB::Impl::SkeletonRuntime::TryBuildJointRotationQuaternion(
-            LoadFloat(joint),
-            quaternion
-        ));
+    ASSERT_TRUE(NWB::Impl::SkeletonRuntime::TryBuildJointRotationQuaternion(joint, quaternion));
     EXPECT_TRUE(NearlyEqual(VectorGetX(quaternion), x));
     EXPECT_TRUE(NearlyEqual(VectorGetY(quaternion), y));
     EXPECT_TRUE(NearlyEqual(VectorGetZ(quaternion), z));
@@ -483,11 +480,11 @@ static void CheckJointRotationQuaternion(
 TEST(EcsGraphics, JointRotationQuaternionBuildsColumnVectorRotations){
     constexpr f32 s_HalfSqrtTwo = 0.70710678118f;
 
-    CheckJointRotationQuaternion(MakeIdentityJointMatrix(), 0.0f, 0.0f, 0.0f, 1.0f);
-    CheckJointRotationQuaternion(MakeZQuarterTurnJointMatrix(), 0.0f, 0.0f, s_HalfSqrtTwo, s_HalfSqrtTwo);
-    CheckJointRotationQuaternion(MakeXHalfTurnJointMatrix(), 1.0f, 0.0f, 0.0f, 0.0f);
-    CheckJointRotationQuaternion(MakeYHalfTurnJointMatrix(), 0.0f, 1.0f, 0.0f, 0.0f);
-    CheckJointRotationQuaternion(MakeZHalfTurnJointMatrix(), 0.0f, 0.0f, 1.0f, 0.0f);
+    CheckJointRotationQuaternion(LoadFloat(MakeIdentityJointMatrix()), 0.0f, 0.0f, 0.0f, 1.0f);
+    CheckJointRotationQuaternion(LoadFloat(MakeZQuarterTurnJointMatrix()), 0.0f, 0.0f, s_HalfSqrtTwo, s_HalfSqrtTwo);
+    CheckJointRotationQuaternion(LoadFloat(MakeXHalfTurnJointMatrix()), 1.0f, 0.0f, 0.0f, 0.0f);
+    CheckJointRotationQuaternion(LoadFloat(MakeYHalfTurnJointMatrix()), 0.0f, 1.0f, 0.0f, 0.0f);
+    CheckJointRotationQuaternion(LoadFloat(MakeZHalfTurnJointMatrix()), 0.0f, 0.0f, 1.0f, 0.0f);
 
     SIMDVector quaternion = QuaternionIdentity();
     EXPECT_FALSE(NWB::Impl::SkeletonRuntime::TryBuildJointRotationQuaternion(

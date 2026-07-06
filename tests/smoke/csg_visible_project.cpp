@@ -184,12 +184,12 @@ static void ApplyCutterTransform(
     NWB::Core::Alloc::GlobalArena& arena,
     const usize shapeSlot,
     const Name receiverGroup,
-    const Float4& center
+    const SIMDVector center
 ){
     auto cutterEntity = world.createEntity();
     auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(arena);
     cutter.receiverGroup = receiverGroup;
-    AssignCsgCutterTransform(cutter, LoadFloat(center), QuaternionIdentity());
+    AssignCsgCutterTransform(cutter, center, QuaternionIdentity());
 
     switch(shapeSlot){
     case CsgVisibleShapeSlot::Plane:{
@@ -306,9 +306,9 @@ public:
 
         for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
             const Float4 receiverPosition = CsgVisibleShapePosition(shapeSlot);
-            const Float4 cutterLocalOffset = CsgVisibleCutterLocalOffset(shapeSlot);
-            Float4 cutterPosition;
-            StoreFloat(VectorSetW(VectorAdd(LoadFloat(receiverPosition), LoadFloat(cutterLocalOffset)), 0.0f), &cutterPosition);
+            const SIMDVector receiverPositionVector = LoadFloat(receiverPosition);
+            const SIMDVector cutterLocalOffset = LoadFloat(CsgVisibleCutterLocalOffset(shapeSlot));
+            const SIMDVector cutterPosition = VectorSetW(VectorAdd(receiverPositionVector, cutterLocalOffset), 0.0f);
             m_receivers[shapeSlot] = CreateSolidCubeEntity(
                 *m_world,
                 m_context.objectArena,

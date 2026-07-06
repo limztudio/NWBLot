@@ -8,52 +8,29 @@
 // or a bug in the formula itself, fails the test. The oracle it is checked against is Vector3Refract
 // (global/math/vector.h), the runtime path RefractV backs, so the mirror, the shader, and the engine math all agree on
 // the same definition including the TIR-returns-zero branch.
-static SIMDVector CausticRefractCpuMirrorVector(const SIMDVector incident, const SIMDVector normal, const float eta){
-    const SIMDVector etaVector = VectorReplicate(eta);
+static SIMDVector CausticRefractCpuMirrorVector(const SIMDVector incident, const SIMDVector normal, const SIMDVector eta){
     const SIMDVector cosI = Vector3Dot(incident, normal);
     const SIMDVector k = VectorSubtract(
         s_SIMDOne,
-        VectorMultiply(VectorMultiply(etaVector, etaVector), VectorSubtract(s_SIMDOne, VectorMultiply(cosI, cosI)))
+        VectorMultiply(VectorMultiply(eta, eta), VectorSubtract(s_SIMDOne, VectorMultiply(cosI, cosI)))
     );
     if(VectorGetX(k) < 0.0f)
         return VectorZero();
 
-    const SIMDVector scale = VectorMultiplyAdd(etaVector, cosI, VectorSqrt(k));
-    return VectorSubtract(VectorMultiply(etaVector, incident), VectorMultiply(scale, normal));
+    const SIMDVector scale = VectorMultiplyAdd(eta, cosI, VectorSqrt(k));
+    return VectorSubtract(VectorMultiply(eta, incident), VectorMultiply(scale, normal));
 }
 
-static void CausticRefractCpuMirror(const float incident[3], const float normal[3], const float eta, float outRefracted[3]){
-    const SIMDVector refracted = CausticRefractCpuMirrorVector(
-        VectorSet(incident[0], incident[1], incident[2], 0.0f),
-        VectorSet(normal[0], normal[1], normal[2], 0.0f),
-        eta
-    );
-    outRefracted[0] = VectorGetX(refracted);
-    outRefracted[1] = VectorGetY(refracted);
-    outRefracted[2] = VectorGetZ(refracted);
-}
-
-static float CausticVector3LengthSquared(const float value[3]){
-    const SIMDVector lengthSquared = Vector3LengthSq(VectorSet(value[0], value[1], value[2], 0.0f));
+static f32 CausticVector3LengthSquared(const SIMDVector value){
+    const SIMDVector lengthSquared = Vector3LengthSq(value);
     return VectorGetX(lengthSquared);
-}
-
-static void CausticRefractReference(const float incident[3], const float normal[3], const float eta, float outRefracted[3]){
-    const SIMDVector refracted = Vector3Refract(
-        VectorSet(incident[0], incident[1], incident[2], 0.0f),
-        VectorSet(normal[0], normal[1], normal[2], 0.0f),
-        eta
-    );
-    outRefracted[0] = VectorGetX(refracted);
-    outRefracted[1] = VectorGetY(refracted);
-    outRefracted[2] = VectorGetZ(refracted);
 }
 
 struct CausticRefractCase{
     const char* name;
-    float incident[3];
-    float normal[3];
-    float eta;
+    Float3U incident;
+    Float3U normal;
+    f32 eta;
     bool expectTotalInternalReflection;
 };
 
@@ -62,37 +39,37 @@ TEST(AssetsGraphics, CausticRefractMatchesVector3Refract){
     // (so cosI < 0), matching the RefractV / Vector3Refract convention. eta = n_from / n_to: eta < 1 enters a denser
     // medium (air->glass, 1/1.5), eta > 1 exits to a thinner one (glass->air, 1.5). The grazing exit case drives the
     // discriminant negative -> total internal reflection -> a zero result on BOTH the mirror and the reference.
-    static const float s_InvSqrt2 = 0.70710678f;
+    static const f32 s_InvSqrt2 = 0.70710678f;
     const CausticRefractCase cases[] = {
-        { "straight_on_entering", { 0.0f, 0.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, 1.0f / 1.5f, false },
-        { "oblique_entering", { s_InvSqrt2, 0.0f, -s_InvSqrt2 }, { 0.0f, 0.0f, 1.0f }, 1.0f / 1.5f, false },
-        { "oblique_exiting", { 0.5f, 0.0f, -0.86602540f }, { 0.0f, 0.0f, 1.0f }, 1.5f, false },
-        { "tilted_axis_entering", { 0.6f, -0.48f, -0.64f }, { -0.42426407f, 0.56568542f, 0.70710678f }, 1.0f / 1.33f, false },
-        { "grazing_total_internal_reflection", { 0.99619469f, 0.0f, -0.08715574f }, { 0.0f, 0.0f, 1.0f }, 1.5f, true },
+        { "straight_on_entering", Float3U(0.0f, 0.0f, -1.0f), Float3U(0.0f, 0.0f, 1.0f), 1.0f / 1.5f, false },
+        { "oblique_entering", Float3U(s_InvSqrt2, 0.0f, -s_InvSqrt2), Float3U(0.0f, 0.0f, 1.0f), 1.0f / 1.5f, false },
+        { "oblique_exiting", Float3U(0.5f, 0.0f, -0.86602540f), Float3U(0.0f, 0.0f, 1.0f), 1.5f, false },
+        { "tilted_axis_entering", Float3U(0.6f, -0.48f, -0.64f), Float3U(-0.42426407f, 0.56568542f, 0.70710678f), 1.0f / 1.33f, false },
+        { "grazing_total_internal_reflection", Float3U(0.99619469f, 0.0f, -0.08715574f), Float3U(0.0f, 0.0f, 1.0f), 1.5f, true },
     };
 
     for(const CausticRefractCase& testCase : cases){
-        float mirror[3];
-        float reference[3];
-        CausticRefractCpuMirror(testCase.incident, testCase.normal, testCase.eta, mirror);
-        CausticRefractReference(testCase.incident, testCase.normal, testCase.eta, reference);
+        const SIMDVector incident = LoadFloat(testCase.incident);
+        const SIMDVector normal = LoadFloat(testCase.normal);
+        const SIMDVector mirror = CausticRefractCpuMirrorVector(incident, normal, VectorReplicate(testCase.eta));
+        const SIMDVector reference = Vector3Refract(incident, normal, testCase.eta);
 
         if(testCase.expectTotalInternalReflection){
-            EXPECT_FLOAT_EQ(mirror[0], 0.0f) << testCase.name;
-            EXPECT_FLOAT_EQ(mirror[1], 0.0f) << testCase.name;
-            EXPECT_FLOAT_EQ(mirror[2], 0.0f) << testCase.name;
-            EXPECT_FLOAT_EQ(reference[0], 0.0f) << testCase.name;
-            EXPECT_FLOAT_EQ(reference[1], 0.0f) << testCase.name;
-            EXPECT_FLOAT_EQ(reference[2], 0.0f) << testCase.name;
+            EXPECT_FLOAT_EQ(VectorGetX(mirror), 0.0f) << testCase.name;
+            EXPECT_FLOAT_EQ(VectorGetY(mirror), 0.0f) << testCase.name;
+            EXPECT_FLOAT_EQ(VectorGetZ(mirror), 0.0f) << testCase.name;
+            EXPECT_FLOAT_EQ(VectorGetX(reference), 0.0f) << testCase.name;
+            EXPECT_FLOAT_EQ(VectorGetY(reference), 0.0f) << testCase.name;
+            EXPECT_FLOAT_EQ(VectorGetZ(reference), 0.0f) << testCase.name;
             continue;
         }
 
         // A refracting case must produce a non-degenerate direction (so the TIR check above is not vacuously passing
         // on a zero everywhere), and it must match the SIMD reference within float tolerance.
         EXPECT_GT(CausticVector3LengthSquared(mirror), 0.25f) << testCase.name;
-        EXPECT_NEAR(mirror[0], reference[0], 1e-5f) << testCase.name;
-        EXPECT_NEAR(mirror[1], reference[1], 1e-5f) << testCase.name;
-        EXPECT_NEAR(mirror[2], reference[2], 1e-5f) << testCase.name;
+        EXPECT_NEAR(VectorGetX(mirror), VectorGetX(reference), 1e-5f) << testCase.name;
+        EXPECT_NEAR(VectorGetY(mirror), VectorGetY(reference), 1e-5f) << testCase.name;
+        EXPECT_NEAR(VectorGetZ(mirror), VectorGetZ(reference), 1e-5f) << testCase.name;
     }
 }
 

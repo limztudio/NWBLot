@@ -141,7 +141,7 @@ static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_m
 static void ApplyTransparentSceneTransform(
     NWB::Core::ECS::World& world,
     const NWB::Core::ECS::EntityID entity,
-    const Float4& basePosition,
+    const SIMDVector basePosition,
     const SIMDVector sceneRotation,
     const SIMDVector localRotation
 ){
@@ -149,7 +149,7 @@ static void ApplyTransparentSceneTransform(
     if(!transform)
         return;
 
-    StoreFloat(RotateTransparentBasePosition(LoadFloat(basePosition), sceneRotation), &transform->position);
+    StoreFloat(RotateTransparentBasePosition(basePosition, sceneRotation), &transform->position);
     StoreFloat(QuaternionNormalize(QuaternionMultiply(sceneRotation, localRotation)), &transform->rotation);
 }
 
@@ -163,10 +163,11 @@ static void ApplyTransparentCsgSceneTransform(
     NWB::Core::ECS::World& world,
     const NWB::Core::ECS::EntityID receiverEntity,
     const NWB::Core::ECS::EntityID cutterEntity,
+    const SIMDVector receiverBasePosition,
     const SIMDVector sceneRotation,
     const SIMDVector localRotation
 ){
-    const SIMDVector receiverPosition = RotateTransparentBasePosition(LoadFloat(TransparentCenterShapeBasePosition()), sceneRotation);
+    const SIMDVector receiverPosition = RotateTransparentBasePosition(receiverBasePosition, sceneRotation);
     const SIMDVector receiverRotation = QuaternionNormalize(QuaternionMultiply(sceneRotation, localRotation));
 
     if(auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiverEntity)){
@@ -190,7 +191,7 @@ static void ApplyTransparentCsgSceneTransform(
     NWB::Impl::CsgPlaneShapeParameters parameters;
     parameters.normalDistance = Float4(0.0f, -1.0f, 0.0f, 0.0f);
     AssignCsgCutterParameters(cutter, parameters);
-    AssignCsgCutterTransform(cutter, LoadFloat(Float4(0.0f, s_CameraTargetY, 0.0f, 0.0f)), QuaternionIdentity());
+    AssignCsgCutterTransform(cutter, VectorSet(0.0f, s_CameraTargetY, 0.0f, 0.0f), QuaternionIdentity());
     return cutterEntity.id();
 }
 #endif
@@ -477,18 +478,25 @@ private:
     void updateTransparentSceneTransforms(){
         const f32 sceneYaw = m_sceneYaw.yaw();
         const SIMDVector sceneRotation = BuildTransparentSceneRotation(sceneYaw);
-        ApplyTransparentSceneTransform(*m_world, m_leftShape, TransparentLeftShapeBasePosition(), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_leftShape, LoadFloat(TransparentLeftShapeBasePosition()), sceneRotation, QuaternionIdentity());
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-        ApplyTransparentCsgSceneTransform(*m_world, m_csgReceiver, m_csgCutter, sceneRotation, BuildTransparentCsgRotation(sceneYaw));
+        ApplyTransparentCsgSceneTransform(
+            *m_world,
+            m_csgReceiver,
+            m_csgCutter,
+            LoadFloat(TransparentCenterShapeBasePosition()),
+            sceneRotation,
+            BuildTransparentCsgRotation(sceneYaw)
+        );
 #else
-        ApplyTransparentSceneTransform(*m_world, m_centerShape, TransparentCenterShapeBasePosition(), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_centerShape, LoadFloat(TransparentCenterShapeBasePosition()), sceneRotation, QuaternionIdentity());
 #endif
-        ApplyTransparentSceneTransform(*m_world, m_rightShape, TransparentRightShapeBasePosition(), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_rightShape, LoadFloat(TransparentRightShapeBasePosition()), sceneRotation, QuaternionIdentity());
         // Opaque occluders orbit with the same scene rotation (no-op when invalid, e.g. the caustic-sphere build); their
         // hard hardware shadows sweep across the colored transparent shadows so the multiplicative combine is exercised
         // continuously, not just at one static overlap.
-        ApplyTransparentSceneTransform(*m_world, m_opaqueLeftShape, OpaqueLeftShapeBasePosition(), sceneRotation, QuaternionIdentity());
-        ApplyTransparentSceneTransform(*m_world, m_opaqueRightShape, OpaqueRightShapeBasePosition(), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_opaqueLeftShape, LoadFloat(OpaqueLeftShapeBasePosition()), sceneRotation, QuaternionIdentity());
+        ApplyTransparentSceneTransform(*m_world, m_opaqueRightShape, LoadFloat(OpaqueRightShapeBasePosition()), sceneRotation, QuaternionIdentity());
     }
 
     NWB::ProjectRuntimeContext& m_context;

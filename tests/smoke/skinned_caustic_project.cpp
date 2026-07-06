@@ -77,8 +77,8 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 // Oscillate each joint around its bind pose so the skinned surface deforms every frame. The root joint (index 0) is
 // left at bind so the body stays planted over the ground while the limbs/torso undulate -- enough deformation to move
 // the refractive shadow + caustic footprint visibly.
-[[nodiscard]] static NWB::Impl::SkeletonJointMatrix BuildWaveJointMatrix(
-    const NWB::Impl::SkeletonJointMatrix& bindJoint,
+[[nodiscard]] static SIMDMatrix BuildWaveJointMatrix(
+    const SIMDMatrix& bindJoint,
     const u32 jointIndex,
     const f32 timeSeconds
 ){
@@ -90,13 +90,11 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
     const f32 angle = VectorGetX(waves) * s_PoseAnimationAngle;
 
     const SIMDMatrix rotation = MatrixRotationRollPitchYaw(angle * 0.4f, angle, angle * 0.25f);
-    const SIMDMatrix animated = NWB::Impl::SkeletonRuntime::MultiplyJointMatrices(LoadFloat(bindJoint), rotation);
+    const SIMDMatrix animated = NWB::Impl::SkeletonRuntime::MultiplyJointMatrices(bindJoint, rotation);
     if(!NWB::Impl::SkeletonRuntime::IsInvertibleAffineJointMatrix(animated))
         return bindJoint;
 
-    NWB::Impl::SkeletonJointMatrix stored{};
-    StoreFloat(animated, &stored);
-    return stored;
+    return animated;
 }
 
 
@@ -188,8 +186,10 @@ private:
             return;
 
         const f32 timeSeconds = static_cast<f32>(m_animationTime);
-        for(u32 jointIndex = 0u; jointIndex < pose->localJoints.size() && jointIndex < m_bindJoints.size(); ++jointIndex)
-            pose->localJoints[jointIndex] = BuildWaveJointMatrix(m_bindJoints[jointIndex], jointIndex, timeSeconds);
+        for(u32 jointIndex = 0u; jointIndex < pose->localJoints.size() && jointIndex < m_bindJoints.size(); ++jointIndex){
+            const SIMDMatrix animatedJoint = BuildWaveJointMatrix(LoadFloat(m_bindJoints[jointIndex]), jointIndex, timeSeconds);
+            StoreFloat(animatedJoint, &pose->localJoints[jointIndex]);
+        }
     }
 
 

@@ -1131,8 +1131,8 @@ public:
 public:
     [[nodiscard]] const ShaderDesc& getDescription()const{ return m_desc; }
     void getBytecode(const void** ppBytecode, usize* pSize)const{
-        *ppBytecode = m_bytecode.data();
-        *pSize = m_bytecode.size();
+        *ppBytecode = m_spirvWords.data();
+        *pSize = m_spirvWords.size() * sizeof(u32);
     }
 
 
@@ -1144,7 +1144,7 @@ private:
     ShaderDesc m_desc;
     VkShaderModule m_shaderModule = VK_NULL_HANDLE;
 
-    Vector<u8, Alloc::GlobalArena> m_bytecode;
+    Vector<u32, Alloc::GlobalArena> m_spirvWords;
     GraphicsString m_entryPointName;
 
     Vector<VkSpecializationMapEntry, Alloc::GlobalArena> m_specializationEntries;
@@ -1199,7 +1199,7 @@ public:
 
 
 private:
-    Vector<u8, Alloc::GlobalArena> m_bytecode;
+    Vector<u32, Alloc::GlobalArena> m_spirvWords;
     HashMap<ShaderLibraryKey, Handle<Shader>, ShaderLibraryKeyHasher, EqualTo<ShaderLibraryKey>, GraphicsArena> m_shaders;
 
     const VulkanContext& m_context;

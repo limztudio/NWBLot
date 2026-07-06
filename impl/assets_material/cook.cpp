@@ -110,6 +110,37 @@ bool ResolveMaterialBindDependencyInterface(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using OptionalAvboitPixelShaderSetter = void(Material::*)(const Core::Assets::AssetRef<Shader>&);
+
+static bool SetOptionalAvboitPixelShader(
+    const MaterialCookEntry& materialEntry,
+    const MaterialCookString& shaderNameText,
+    const AStringView passLabel,
+    const OptionalAvboitPixelShaderSetter setter,
+    Material& outMaterial
+){
+    if(shaderNameText.empty())
+        return true;
+
+    const Name shaderName = ToName(AStringView(shaderNameText));
+    if(!shaderName){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT {} pixel shader name")
+            , StringConvert(materialEntry.virtualPath.c_str())
+            , StringConvert(passLabel)
+        );
+        return false;
+    }
+
+    Core::Assets::AssetRef<Shader> shaderRef;
+    shaderRef.virtualPath = shaderName;
+    (outMaterial.*setter)(shaderRef);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMaterial){
     Core::Assets::AssetArena& arena = materialEntry.shaderVariant.get_allocator().arena();
     if(materialEntry.materialInterface.empty()){
@@ -136,42 +167,30 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
     outMaterial.setMaterialInterface(Name(AStringView(materialEntry.materialInterface)));
     outMaterial.setShadingModelId(materialEntry.shadingModelId);
     outMaterial.setShadowTransmittanceModelId(materialEntry.shadowTransmittanceModelId);
-    if(!materialEntry.avboitAccumulatePixelShaderName.empty()){
-        const Name avboitAccumulatePixelShaderName = ToName(AStringView(materialEntry.avboitAccumulatePixelShaderName));
-        if(!avboitAccumulatePixelShaderName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT accumulate pixel shader name")
-                , StringConvert(materialEntry.virtualPath.c_str())
-            );
-            return false;
-        }
-        Core::Assets::AssetRef<Shader> avboitAccumulatePixelShaderRef;
-        avboitAccumulatePixelShaderRef.virtualPath = avboitAccumulatePixelShaderName;
-        outMaterial.setAvboitAccumulatePixelShader(avboitAccumulatePixelShaderRef);
-    }
-    if(!materialEntry.avboitOccupancyPixelShaderName.empty()){
-        const Name avboitOccupancyPixelShaderName = ToName(AStringView(materialEntry.avboitOccupancyPixelShaderName));
-        if(!avboitOccupancyPixelShaderName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT occupancy pixel shader name")
-                , StringConvert(materialEntry.virtualPath.c_str())
-            );
-            return false;
-        }
-        Core::Assets::AssetRef<Shader> avboitOccupancyPixelShaderRef;
-        avboitOccupancyPixelShaderRef.virtualPath = avboitOccupancyPixelShaderName;
-        outMaterial.setAvboitOccupancyPixelShader(avboitOccupancyPixelShaderRef);
-    }
-    if(!materialEntry.avboitExtinctionPixelShaderName.empty()){
-        const Name avboitExtinctionPixelShaderName = ToName(AStringView(materialEntry.avboitExtinctionPixelShaderName));
-        if(!avboitExtinctionPixelShaderName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT extinction pixel shader name")
-                , StringConvert(materialEntry.virtualPath.c_str())
-            );
-            return false;
-        }
-        Core::Assets::AssetRef<Shader> avboitExtinctionPixelShaderRef;
-        avboitExtinctionPixelShaderRef.virtualPath = avboitExtinctionPixelShaderName;
-        outMaterial.setAvboitExtinctionPixelShader(avboitExtinctionPixelShaderRef);
-    }
+    if(!SetOptionalAvboitPixelShader(
+        materialEntry,
+        materialEntry.avboitAccumulatePixelShaderName,
+        AStringView("accumulate"),
+        &Material::setAvboitAccumulatePixelShader,
+        outMaterial
+    ))
+        return false;
+    if(!SetOptionalAvboitPixelShader(
+        materialEntry,
+        materialEntry.avboitOccupancyPixelShaderName,
+        AStringView("occupancy"),
+        &Material::setAvboitOccupancyPixelShader,
+        outMaterial
+    ))
+        return false;
+    if(!SetOptionalAvboitPixelShader(
+        materialEntry,
+        materialEntry.avboitExtinctionPixelShaderName,
+        AStringView("extinction"),
+        &Material::setAvboitExtinctionPixelShader,
+        outMaterial
+    ))
+        return false;
     outMaterial.setTransparent(materialEntry.transparent);
     outMaterial.setTwoSided(materialEntry.twoSided);
     outMaterial.setRefractive(materialEntry.refractive);

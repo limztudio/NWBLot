@@ -106,6 +106,86 @@ struct MaterialPipelineCsgBindingLayouts{
     const Core::BindingLayoutHandle& avboitEmpty;
 };
 
+struct MaterialPipelineAvboitPixelShaderSelection{
+    const Core::Assets::AssetRef<Shader>* materialShader = nullptr;
+    Core::ShaderHandle fallbackShader;
+    Name fallbackShaderName = NAME_NONE;
+    const char* debugName = nullptr;
+
+    [[nodiscard]] bool materialDriven()const{ return materialShader != nullptr && materialShader->valid(); }
+    [[nodiscard]] Core::ShaderHandle preloadedShader()const{
+        return materialDriven() ? Core::ShaderHandle() : fallbackShader;
+    }
+    [[nodiscard]] Name shaderName()const{ return materialDriven() ? materialShader->name() : fallbackShaderName; }
+};
+
+[[nodiscard]] MaterialPipelineAvboitPixelShaderSelection SelectAvboitPixelShader(
+    const MaterialPipelinePass::Enum pass,
+    const MaterialSurfaceInfo& materialInfo,
+    const Core::ShaderHandle& occupancyFallback,
+    const Core::ShaderHandle& extinctionFallback,
+    const Core::ShaderHandle& accumulateFallback
+){
+    MaterialPipelineAvboitPixelShaderSelection selection;
+    switch(pass){
+    case MaterialPipelinePass::AvboitOccupancy:
+        selection.materialShader = &materialInfo.avboitOccupancyPixelShader;
+        selection.fallbackShader = occupancyFallback;
+        selection.fallbackShaderName = AssetsGraphicsAvboit::s_OccupancyPixelShaderName;
+        selection.debugName = "ECSRender_AvboitOccupancyPS";
+        break;
+    case MaterialPipelinePass::AvboitExtinction:
+        selection.materialShader = &materialInfo.avboitExtinctionPixelShader;
+        selection.fallbackShader = extinctionFallback;
+        selection.fallbackShaderName = AssetsGraphicsAvboit::s_ExtinctionPixelShaderName;
+        selection.debugName = "ECSRender_AvboitExtinctionPS";
+        break;
+    case MaterialPipelinePass::AvboitAccumulate:
+        selection.materialShader = &materialInfo.avboitAccumulatePixelShader;
+        selection.fallbackShader = accumulateFallback;
+        selection.fallbackShaderName = AssetsGraphicsAvboit::s_AccumulatePixelShaderName;
+        selection.debugName = "ECSRender_AvboitAccumulatePS";
+        break;
+    default:
+        break;
+    }
+    return selection;
+}
+
+struct MaterialPipelineAvboitBindingLayouts{
+    const Core::BindingLayoutHandle& occupancy;
+    const Core::BindingLayoutHandle& extinction;
+    const Core::BindingLayoutHandle& accumulate;
+};
+
+template<typename PipelineDesc>
+[[nodiscard]] bool AddAvboitBindingLayout(
+    PipelineDesc& pipelineDesc,
+    const MaterialPipelinePass::Enum pass,
+    const MaterialPipelineAvboitBindingLayouts& bindingLayouts
+){
+    const Core::BindingLayoutHandle* bindingLayout = nullptr;
+    switch(pass){
+    case MaterialPipelinePass::AvboitOccupancy:
+        bindingLayout = &bindingLayouts.occupancy;
+        break;
+    case MaterialPipelinePass::AvboitExtinction:
+        bindingLayout = &bindingLayouts.extinction;
+        break;
+    case MaterialPipelinePass::AvboitAccumulate:
+        bindingLayout = &bindingLayouts.accumulate;
+        break;
+    default:
+        return true;
+    }
+
+    if(!*bindingLayout)
+        return false;
+
+    pipelineDesc.addBindingLayout(*bindingLayout);
+    return true;
+}
+
 template<typename PipelineDesc>
 [[nodiscard]] bool AddCsgGraphicsBindingLayouts(
     PipelineDesc& pipelineDesc,
@@ -212,23 +292,6 @@ bool RendererMaterialSystem::createRendererPipeline(
         MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
     const bool csgClipPipeline = csgBindingUse.clip;
     const bool avboitCsgClipPipeline = csgBindingUse.avboitClip;
-    const bool materialDrivenAvboitOccupancy =
-        pass == MaterialPipelinePass::AvboitOccupancy
-        && materialInfo.avboitOccupancyPixelShader.valid()
-    ;
-    const bool materialDrivenAvboitExtinction =
-        pass == MaterialPipelinePass::AvboitExtinction
-        && materialInfo.avboitExtinctionPixelShader.valid()
-    ;
-    const bool materialDrivenAvboitAccumulate =
-        pass == MaterialPipelinePass::AvboitAccumulate
-        && materialInfo.avboitAccumulatePixelShader.valid()
-    ;
-    const bool materialDrivenAvboitPass =
-        materialDrivenAvboitOccupancy
-        || materialDrivenAvboitExtinction
-        || materialDrivenAvboitAccumulate
-    ;
     ACompactString csgProjectEvaluatorModuleInclude;
     Core::GraphicsString csgProjectEvaluatorModuleAssignment(arena());
     AStringView materialProjectEvaluatorModuleAssignmentToAdd;
@@ -315,6 +378,19 @@ bool RendererMaterialSystem::createRendererPipeline(
     Core::ShaderHandle passPixelShader;
     Name passPixelShaderName = NAME_NONE;
     const char* passPixelShaderDebugName = nullptr;
+    __hidden_material_pipeline::MaterialPipelineAvboitPixelShaderSelection avboitPixelShaderSelection;
+    if(MaterialPipelinePassUsesRendererAvboit(pass)){
+        if(!m_renderer.avboitSystem().createAvboitResources())
+            return failMaterialPipeline();
+        avboitPixelShaderSelection = __hidden_material_pipeline::SelectAvboitPixelShader(
+            pass,
+            materialInfo,
+            avboitState().m_occupancyPixelShader,
+            avboitState().m_extinctionPixelShader,
+            avboitState().m_accumulatePixelShader
+        );
+    }
+    const bool materialDrivenAvboitPass = avboitPixelShaderSelection.materialDriven();
 
     switch(pass){
     case MaterialPipelinePass::Opaque:
@@ -324,50 +400,11 @@ bool RendererMaterialSystem::createRendererPipeline(
         passPixelShaderDebugName = "ECSRender_CsgReceiverSurfacePS";
         break;
     case MaterialPipelinePass::AvboitOccupancy:
-        if(!m_renderer.avboitSystem().createAvboitResources())
-            return failMaterialPipeline();
-        // Mirror the accumulate pass: bind this material's cook-generated per-material occupancy PS so the coverage
-        // it marks comes from the material's own surface.renderCoverage (the SAME coverage the extinction + accumulate passes
-        // read). A material without one falls back to the engine's fixed occupancy PS (vertex-alpha).
-        if(materialDrivenAvboitOccupancy){
-            passPixelShaderName = materialInfo.avboitOccupancyPixelShader.name();
-        }
-        else{
-            passPixelShader = avboitState().m_occupancyPixelShader;
-            passPixelShaderName = AssetsGraphicsAvboit::s_OccupancyPixelShaderName;
-        }
-        passPixelShaderDebugName = "ECSRender_AvboitOccupancyPS";
-        break;
     case MaterialPipelinePass::AvboitExtinction:
-        if(!m_renderer.avboitSystem().createAvboitResources())
-            return failMaterialPipeline();
-        // Mirror the accumulate pass: bind this material's cook-generated per-material extinction PS so the volume
-        // it splats comes from the material's own surface.renderCoverage (the SAME coverage the occupancy + accumulate passes
-        // read). A material without one falls back to the engine's fixed extinction PS (vertex-alpha).
-        if(materialDrivenAvboitExtinction){
-            passPixelShaderName = materialInfo.avboitExtinctionPixelShader.name();
-        }
-        else{
-            passPixelShader = avboitState().m_extinctionPixelShader;
-            passPixelShaderName = AssetsGraphicsAvboit::s_ExtinctionPixelShaderName;
-        }
-        passPixelShaderDebugName = "ECSRender_AvboitExtinctionPS";
-        break;
     case MaterialPipelinePass::AvboitAccumulate:
-        if(!m_renderer.avboitSystem().createAvboitResources())
-            return failMaterialPipeline();
-        // Mirror the opaque G-buffer draw: bind this material's cook-generated per-material accumulate PS (so the
-        // transparent fragment is shaded by the material's own surface hook + BXDF, matching the colored shadow it
-        // casts). A material without one -- a transparent material authored with explicit `shaders` -- falls back
-        // to the engine's fixed accumulate PS.
-        if(materialDrivenAvboitAccumulate){
-            passPixelShaderName = materialInfo.avboitAccumulatePixelShader.name();
-        }
-        else{
-            passPixelShader = avboitState().m_accumulatePixelShader;
-            passPixelShaderName = AssetsGraphicsAvboit::s_AccumulatePixelShaderName;
-        }
-        passPixelShaderDebugName = "ECSRender_AvboitAccumulatePS";
+        passPixelShader = avboitPixelShaderSelection.preloadedShader();
+        passPixelShaderName = avboitPixelShaderSelection.shaderName();
+        passPixelShaderDebugName = avboitPixelShaderSelection.debugName;
         break;
     default:
         break;
@@ -380,6 +417,11 @@ bool RendererMaterialSystem::createRendererPipeline(
         csgState().m_receiverSurfaceBindingLayout,
         csgState().m_intervalSampleBindingLayout,
         avboitState().m_emptyBindingLayout
+    };
+    const __hidden_material_pipeline::MaterialPipelineAvboitBindingLayouts avboitBindingLayouts{
+        avboitState().m_occupancyBindingLayout,
+        avboitState().m_extinctionBindingLayout,
+        avboitState().m_accumulateBindingLayout
     };
 
     auto tryBuildMeshPipeline = [&]() -> bool{
@@ -414,20 +456,8 @@ bool RendererMaterialSystem::createRendererPipeline(
         pipelineDesc.setPixelShader(resources.pixelShader);
         pipelineDesc.setRenderState(renderState);
         pipelineDesc.addBindingLayout(drawState().m_meshBindingLayout);
-        switch(pass){
-        case MaterialPipelinePass::AvboitOccupancy:
-            pipelineDesc.addBindingLayout(avboitState().m_occupancyBindingLayout);
-            break;
-        case MaterialPipelinePass::AvboitExtinction:
-            pipelineDesc.addBindingLayout(avboitState().m_extinctionBindingLayout);
-            break;
-        case MaterialPipelinePass::AvboitAccumulate:
-            pipelineDesc.addBindingLayout(avboitState().m_accumulateBindingLayout);
-            break;
-        case MaterialPipelinePass::Opaque:
-        default:
-            break;
-        }
+        if(!__hidden_material_pipeline::AddAvboitBindingLayout(pipelineDesc, pass, avboitBindingLayouts))
+            return false;
         if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(pipelineDesc, csgBindingUse, csgBindingLayouts))
             return false;
 
@@ -504,23 +534,13 @@ bool RendererMaterialSystem::createRendererPipeline(
             ? drawState().m_emulationViewBindingLayout
             : avboitState().m_emptyBindingLayout
         ;
-        switch(pass){
-        case MaterialPipelinePass::AvboitOccupancy:
+        if(MaterialPipelinePassUsesRendererAvboit(pass)){
             emulationDesc.addBindingLayout(avboitViewBindingLayout);
-            emulationDesc.addBindingLayout(avboitState().m_occupancyBindingLayout);
-            break;
-        case MaterialPipelinePass::AvboitExtinction:
-            emulationDesc.addBindingLayout(avboitViewBindingLayout);
-            emulationDesc.addBindingLayout(avboitState().m_extinctionBindingLayout);
-            break;
-        case MaterialPipelinePass::AvboitAccumulate:
-            emulationDesc.addBindingLayout(avboitViewBindingLayout);
-            emulationDesc.addBindingLayout(avboitState().m_accumulateBindingLayout);
-            break;
-        case MaterialPipelinePass::Opaque:
-        default:
+            if(!__hidden_material_pipeline::AddAvboitBindingLayout(emulationDesc, pass, avboitBindingLayouts))
+                return false;
+        }
+        else{
             emulationDesc.addBindingLayout(drawState().m_emulationViewBindingLayout);
-            break;
         }
         if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(emulationDesc, csgBindingUse, csgBindingLayouts))
             return false;

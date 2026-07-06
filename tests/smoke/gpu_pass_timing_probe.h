@@ -8,12 +8,11 @@
 #include <core/common/log.h>
 #include <core/perf/timing.h>
 #include <global/basic_string.h>
+#include <global/environment.h>
+#include <global/filesystem.h>
 #include <global/name.h>
 #include <global/simplemath.h>
 #include <global/type.h>
-
-#include <cstdio>  // optional NWB_GPU_TIMING_FILE sink (bounded profiling A/B -- see report())
-#include <cstdlib>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -110,14 +109,16 @@ private:
             , m_intervalSeconds
         );
 
-        // Optional FILE sink for bounded profiling A/B: the smoke app is a GUI process with no stdout, and its logger routes
+        // Optional file sink for bounded profiling A/B: the smoke app is a GUI process with no stdout, and its logger routes
         // to the logserver's WINDOW, so an automated harness cannot scrape these numbers. When NWB_GPU_TIMING_FILE is set,
         // ALSO append each interval's per-pass averages there (Name::c_str() is the readable scope text in a dbg build).
-        std::FILE* timingFile = nullptr;
-        if(const char* timingPath = std::getenv("NWB_GPU_TIMING_FILE"))
-            timingFile = std::fopen(timingPath, "a");
-        if(timingFile)
-            std::fprintf(timingFile, "=== interval: %u frames / %.4fs ===\n", static_cast<unsigned>(m_intervalFrames), m_intervalSeconds);
+        OutputFileStream timingFile;
+        OpenTimingFile(timingFile);
+        if(timingFile.is_open()){
+            timingFile.setf(std::ios::fixed, std::ios::floatfield);
+            timingFile.precision(4);
+            timingFile << "=== interval: " << static_cast<unsigned>(m_intervalFrames) << " frames / " << m_intervalSeconds << "s ===\n";
+        }
 
         const usize scopeCount = Min(gpuTiming.scopeCount(), s_MaxScopes);
         for(usize i = 0u; i < scopeCount; ++i){
@@ -135,13 +136,25 @@ private:
                 , accum.maxSeconds * 1000.0
                 , accum.frames
             );
-            if(timingFile)
-                std::fprintf(timingFile, "  %s: avg=%.4f min=%.4f max=%.4f samples=%u\n"
-                    , scopeName.c_str(), averageMs, accum.minSeconds * 1000.0, accum.maxSeconds * 1000.0
-                    , static_cast<unsigned>(accum.frames));
+            if(timingFile.is_open()){
+                timingFile
+                    << "  " << scopeName.c_str()
+                    << ": avg=" << averageMs
+                    << " min=" << accum.minSeconds * 1000.0
+                    << " max=" << accum.maxSeconds * 1000.0
+                    << " samples=" << static_cast<unsigned>(accum.frames)
+                    << '\n'
+                ;
+            }
         }
-        if(timingFile)
-            std::fclose(timingFile);
+    }
+
+    static void OpenTimingFile(OutputFileStream& timingFile){
+        char timingPath[1024] = {};
+        if(!ReadEnvironmentVariableBuffer("NWB_GPU_TIMING_FILE", timingPath, sizeof(timingPath)))
+            return;
+
+        timingFile.open(timingPath, s_FileOpenAppend);
     }
 
     void resetInterval(){

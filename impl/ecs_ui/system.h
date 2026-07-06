@@ -12,7 +12,6 @@
 #include <core/ecs/system.h>
 #include <core/graphics/api.h>
 #include <core/graphics/render_pass.h>
-#include <core/graphics/backend_selection.h>
 #include <core/input/module.h>
 
 #include <imgui.h>

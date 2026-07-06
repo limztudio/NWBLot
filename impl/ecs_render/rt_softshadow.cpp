@@ -31,7 +31,7 @@ struct SoftShadowResolveBindingSetInputs{
 
 [[nodiscard]] Core::BindingSetHandle CreateSoftShadowResolveBindingSet(
     Core::Alloc::GlobalArena& arena,
-    Core::GraphicsBackend::Device& device,
+    Core::Device& device,
     Core::BindingLayoutHandle& layout,
     DeferredFrameTargets& targets,
     Core::Texture* const geometry,
@@ -112,7 +112,7 @@ struct SoftShadowResolveBindingSetInputs{
 
 [[nodiscard]] Core::BindingSetHandle CreateShadowReprojectMergeBindingSet(
     Core::Alloc::GlobalArena& arena,
-    Core::GraphicsBackend::Device& device,
+    Core::Device& device,
     Core::BindingLayoutHandle& layout,
     DeferredFrameTargets& targets,
     Core::Texture* const softTrace,

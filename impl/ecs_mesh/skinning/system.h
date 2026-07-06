@@ -9,7 +9,6 @@
 
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
-#include <core/graphics/backend_selection.h>
 #include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/ecs_mesh/runtime/mesh.h>
 #include <impl/ecs_mesh/components.h>

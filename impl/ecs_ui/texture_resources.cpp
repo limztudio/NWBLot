@@ -4,6 +4,7 @@
 
 #include "system.h"
 
+#include <core/graphics/backend_selection.h>
 #include <core/graphics/module.h>
 #include <global/text_utils.h>
 #include <impl/assets/graphics/imgui/binding_slots.h>

@@ -8,6 +8,7 @@
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>
+#include <core/graphics/backend_selection.h>
 #include <core/graphics/module.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 

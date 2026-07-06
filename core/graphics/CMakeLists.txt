@@ -4,6 +4,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/api.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/pipeline_helpers.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shader_archive.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/spirv_entry_point.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/allocator.cpp"

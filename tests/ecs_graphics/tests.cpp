@@ -19,8 +19,8 @@
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_csg/module.h>
-#include <impl/ecs_render/material_typed_private.h>
-#include <impl/ecs_render/material_instance.h>
+#include <impl/ecs_render/material/material_typed_private.h>
+#include <impl/ecs_render/material/material_instance.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skin_types.h>

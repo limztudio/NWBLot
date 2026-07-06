@@ -18,8 +18,8 @@
 #include <impl/assets_material/asset.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/ecs_mesh/module.h>
-#include <impl/ecs_render/material_instance.h>
-#include <impl/ecs_render/module.h>
+#include <impl/ecs_render/material/material_instance.h>
+#include <impl/ecs_render/kernel/module.h>
 #include <impl/ecs_scene/module.h>
 
 

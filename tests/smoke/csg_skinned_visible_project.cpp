@@ -16,9 +16,9 @@
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>
-#include <impl/ecs_render/model_renderer.h>
-#include <impl/ecs_render/module.h>
-#include <impl/ecs_render/material_instance.h>
+#include <impl/ecs_render/mesh/model_renderer.h>
+#include <impl/ecs_render/kernel/module.h>
+#include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
 #include "csg_smoke_helpers.h"

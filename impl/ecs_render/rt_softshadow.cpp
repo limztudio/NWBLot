@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace{
+namespace __hidden_rt_softshadow{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -108,7 +108,7 @@ struct SoftShadowResolveBindingSetInputs{
     ));
     desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SHADOW_RESOLVE_BINDING_SCENE_SHADING, sceneShading));
     return device.createBindingSet(desc, layout);
-}
+};
 
 [[nodiscard]] Core::BindingSetHandle CreateShadowReprojectMergeBindingSet(
     Core::Alloc::GlobalArena& arena,
@@ -750,14 +750,14 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
     // buffer (the accumulated moments this frame's a-trous should read); for the non-temporal sets it is a valid-but-unused
     // dummy (any half-res array) -- the shader guards the read behind push.momentsValid == 0, so the dummy is never sampled.
     const auto buildSet = [&](Core::Texture* softHalfTex, Core::Texture* outputTex, Core::Format::Enum outputFormat, Core::TextureDimension::Enum outputDim, Core::Texture* inputTex, Core::Texture* momentsTex) -> Core::BindingSetHandle {
-        SoftShadowResolveBindingSetInputs inputs;
+        __hidden_rt_softshadow::SoftShadowResolveBindingSetInputs inputs;
         inputs.softHalf = softHalfTex;
         inputs.output = outputTex;
         inputs.inputColor = inputTex;
         inputs.moments = momentsTex;
         inputs.outputFormat = outputFormat;
         inputs.outputDimension = outputDim;
-        return CreateSoftShadowResolveBindingSet(
+        return __hidden_rt_softshadow::CreateSoftShadowResolveBindingSet(
             arena(),
             *device,
             rayTracingState().m_shadowResolveBindingLayout,
@@ -892,14 +892,14 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolveBindingSet(DeferredFr
     // SRVs here; the OUTPUT UAV is always the ping-pong scratch (soft-A/soft-B), distinct from all of them; the VISIBILITY
     // UAV (the fold target) is a separate resource. (The upsample's OUTPUT is bound-but-unused -> soft-B, still no alias.)
     const auto buildSet = [&](Core::Texture* softHalfTex, Core::Texture* outputTex, Core::Texture* inputTex, Core::Texture* momentsTex) -> Core::BindingSetHandle {
-        SoftShadowResolveBindingSetInputs inputs;
+        __hidden_rt_softshadow::SoftShadowResolveBindingSetInputs inputs;
         inputs.softHalf = softHalfTex;
         inputs.output = outputTex;
         inputs.inputColor = inputTex;
         inputs.moments = momentsTex;
         inputs.outputFormat = targets.shadowSoftFormat;
         inputs.outputDimension = Core::TextureDimension::Texture2DArray;
-        return CreateSoftShadowResolveBindingSet(
+        return __hidden_rt_softshadow::CreateSoftShadowResolveBindingSet(
             arena(),
             *device,
             rayTracingState().m_shadowResolveBindingLayout,
@@ -1149,7 +1149,7 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergeBindingSet(DeferredFram
     //  - BtoA: histIn/momIn = B -> histOut/momOut = A  (the mirror; A becomes the accumulated buffer the resolve reads).
     // All other bindings are shared: SOFT_TRACE=soft-A, GEOMETRY_CURR/PREV, WORLDPOS=the full-res world-position G-buffer.
     const auto buildSet = [&](Core::Texture* histInTex, Core::Texture* momInTex, Core::Texture* histOutTex, Core::Texture* momOutTex) -> Core::BindingSetHandle {
-        return CreateShadowReprojectMergeBindingSet(
+        return __hidden_rt_softshadow::CreateShadowReprojectMergeBindingSet(
             arena(),
             *device,
             rayTracingState().m_shadowReprojectMergeBindingLayout,
@@ -1239,7 +1239,7 @@ bool RendererRayTracingSystem::ensureShadowTransparentReprojectMergeBindingSet(D
     auto* device = graphics().getDevice();
 
     const auto buildSet = [&](Core::Texture* histInTex, Core::Texture* momInTex, Core::Texture* histOutTex, Core::Texture* momOutTex) -> Core::BindingSetHandle {
-        return CreateShadowReprojectMergeBindingSet(
+        return __hidden_rt_softshadow::CreateShadowReprojectMergeBindingSet(
             arena(),
             *device,
             rayTracingState().m_shadowReprojectMergeBindingLayout,

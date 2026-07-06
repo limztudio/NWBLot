@@ -62,8 +62,38 @@
 #define NWB_SURFEL_RESOLVE_BINDING_CELL_HEAD 2             // StructuredBuffer<uint> (SRV)
 #define NWB_SURFEL_RESOLVE_BINDING_GBUFFER_WORLD_POSITION 3
 #define NWB_SURFEL_RESOLVE_BINDING_GBUFFER_NORMAL 4
-#define NWB_SURFEL_RESOLVE_BINDING_OUTPUT 5                // RWTexture2D<float4> (screen-space irradiance)
+#define NWB_SURFEL_RESOLVE_BINDING_OUTPUT 5                // RWTexture2D<float4> (HALF-res irradiance; upsampled to full)
 #define NWB_SURFEL_RESOLVE_GROUP_SIZE 8
+// Half-res resolve factor (U6): the resolve gather -- the (2*EXTENT+1)^3 = 5x5x5 = 125-cell hotspot -- runs at 1/FACTOR^2
+// the pixels, then the upsample reconstructs full-res. FACTOR 2 quarters the gather threads (a half-res 5x5x5 ~= the old
+// full-res 3x3x3 in cost), which is what pays back the seam fix's 27->125 cell widening.
+#define NWB_SURFEL_RESOLVE_HALF_FACTOR 2
+
+// Upsample set (surfel_upsample_cs, U6): a full-res joint-bilinear reconstruction of the half-res surfel irradiance,
+// gated by surface similarity (normal + world distance) so GI never bleeds across a silhouette or a crease. Dims come
+// from the bound textures' GetDimensions (no CB). Output keeps the exact lighting contract: rgb = irradiance, a = 0/1
+// coverage (so deferred lighting's point-Load + a>0.5 ? gi : hemiAmbient is unchanged). A covered tap must also be
+// same-surface to contribute; a fully-uncovered/rejected window writes a=0 -> hemiAmbient.
+#define NWB_SURFEL_UPSAMPLE_SET 0
+#define NWB_SURFEL_UPSAMPLE_BINDING_HALF_IRRADIANCE 0        // Texture2D<float4> SRV (half-res resolve output)
+#define NWB_SURFEL_UPSAMPLE_BINDING_GBUFFER_NORMAL 1         // Texture2D<float4> SRV (full-res)
+#define NWB_SURFEL_UPSAMPLE_BINDING_GBUFFER_WORLD_POSITION 2 // Texture2D<float4> SRV (full-res)
+#define NWB_SURFEL_UPSAMPLE_BINDING_OUTPUT 3                 // RWTexture2D<float4> (full-res surfelIrradiance)
+#define NWB_SURFEL_UPSAMPLE_GROUP_SIZE 8
+// Reject a half-res tap whose surface normal is >60deg from the full-res pixel's (cos < gate): stops GI leaking across a
+// crease (e.g. the Cornell red<->blue wall corner -- adjacent in screen space, 90deg apart, near-equal world position so
+// a distance-only stop would NOT catch it).
+#define NWB_SURFEL_UPSAMPLE_NORMAL_GATE 0.5f
+
+// Trace build-indirect-args set (surfel_trace_buildargs_cs, U6): a 1-thread pass that reads the allocation high-water
+// BUMP_TOP + the update divisor (surfel CB .w) and writes the trace's DispatchIndirectArguments{ceil(BUMP_TOP/divisor),
+// 1,1}. The trace then dispatches one workgroup per LIVE surfel instead of the fixed ceil(poolCapacity/divisor) -- with a
+// generously-sized pool that is a large per-frame over-dispatch of dead-slot workgroups. Both SW + HW trace consume the
+// same args buffer (identical round-robin). Runs AFTER spawn (BUMP_TOP includes this frame's new surfels), BEFORE trace.
+#define NWB_SURFEL_TRACE_BUILDARGS_SET 0
+#define NWB_SURFEL_TRACE_BUILDARGS_BINDING_CONSTANTS 0   // ConstantBuffer<NwbSurfelConstants> (update divisor = .w)
+#define NWB_SURFEL_TRACE_BUILDARGS_BINDING_COUNTER 1     // RWStructuredBuffer<uint> (read BUMP_TOP)
+#define NWB_SURFEL_TRACE_BUILDARGS_BINDING_ARGS 2        // RWStructuredBuffer<uint> (DispatchIndirectArguments, 3 u32)
 
 // g_SurfelCounter layout: index 0 = bump-allocation top (fresh slots ever handed out; CAS-capped at poolCapacity so
 // it is a true high-water mark, never overshoots), index 1 = free-list top (live LIFO depth of recycled ids, U1).

@@ -55,6 +55,7 @@ inline constexpr Name s_SurfelAgeFree("render.surfel_age_free");
 inline constexpr Name s_SurfelHashBuild("render.surfel_hash_build");
 inline constexpr Name s_SurfelTrace("render.surfel_trace");
 inline constexpr Name s_SurfelResolve("render.surfel_resolve");
+inline constexpr Name s_SurfelUpsample("render.surfel_upsample");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

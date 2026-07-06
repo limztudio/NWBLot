@@ -33,6 +33,8 @@ inline constexpr Name s_SurfelHashBuildShaderName("engine/graphics/gi/surfel/sur
 inline constexpr Name s_SurfelTraceShaderName("engine/graphics/gi/surfel/surfel_trace_cs");
 inline constexpr Name s_SurfelTraceHwShaderName("engine/graphics/gi/surfel/surfel_trace_hw_cs");
 inline constexpr Name s_SurfelResolveShaderName("engine/graphics/gi/surfel/surfel_resolve_cs");
+inline constexpr Name s_SurfelUpsampleShaderName("engine/graphics/gi/surfel/surfel_upsample_cs");
+inline constexpr Name s_SurfelTraceBuildArgsShaderName("engine/graphics/gi/surfel/surfel_trace_buildargs_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -22,6 +22,7 @@
 #include <impl/assets/graphics/bvh/names.h>
 #include <impl/assets/graphics/gi/names.h>
 #include <impl/assets/graphics/gi/sw_binding_slots.h>
+#include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 #include <global/environment.h>
 #include <global/text_utils.h>
 

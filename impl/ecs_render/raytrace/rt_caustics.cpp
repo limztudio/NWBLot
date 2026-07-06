@@ -203,6 +203,22 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         return false;
     }
 
+    // U6 half-res surfel producer: the resolve gathers into this (1/HALF_FACTOR each axis); surfel_upsample_cs reconstructs
+    // the full-res surfelIrradiance above. Same RGBA16F format; transient (no clear -- written + read within the GI block).
+    Core::TextureDesc surfelIrradianceHalfDesc;
+    surfelIrradianceHalfDesc
+        .setWidth(DivideUp(targets.width, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR)))
+        .setHeight(DivideUp(targets.height, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR)))
+        .setFormat(targets.surfelIrradianceFormat)
+        .setInUAV(true)
+        .setName("engine/gi/surfel_irradiance_half")
+    ;
+    targets.surfelIrradianceHalf = graphics().createTexture(surfelIrradianceHalfDesc);
+    if(!targets.surfelIrradianceHalf){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel half-res irradiance target"));
+        return false;
+    }
+
     Core::TextureDesc accumulatorDesc;
     accumulatorDesc
         .setWidth(targets.width)

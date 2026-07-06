@@ -744,6 +744,26 @@ struct RtSurfelGiState{
     const Core::Texture* m_surfelResolveBindingSetWorldPosition = nullptr;
     const Core::Texture* m_surfelResolveBindingSetNormal = nullptr;
     const Core::Texture* m_surfelResolveBindingSetOutput = nullptr;
+    // U6 half-res producer: the resolve writes surfelIrradianceHalf; this upsample pass reconstructs the full-res
+    // surfelIrradiance with a surface-gated joint-bilinear filter (surfel_upsample_cs). Binds the half-res irradiance +
+    // full-res G-buffer normal/world-position (SRVs) + the full-res surfelIrradiance (UAV). Rebuilt on resize.
+    Core::BindingLayoutHandle m_surfelUpsampleBindingLayout;
+    Core::ShaderHandle m_surfelUpsampleShader;
+    Core::ComputePipelineHandle m_surfelUpsamplePipeline;
+    Core::BindingSetHandle m_surfelUpsampleBindingSet;
+    const Core::Texture* m_surfelUpsampleBindingSetHalfIrradiance = nullptr;
+    const Core::Texture* m_surfelUpsampleBindingSetNormal = nullptr;
+    const Core::Texture* m_surfelUpsampleBindingSetWorldPosition = nullptr;
+    const Core::Texture* m_surfelUpsampleBindingSetOutput = nullptr;
+    // U6 trace dispatchIndirect: a 1-thread build-args pass (surfel_trace_buildargs_cs) reads the live high-water
+    // BUMP_TOP + the update divisor (surfel CB) and writes the trace's DispatchIndirectArguments into
+    // m_surfelTraceIndirectArgsBuffer, so the trace dispatches one workgroup per LIVE surfel instead of the fixed
+    // ceil(poolCapacity/divisor). Binds only persistent buffers (constants + counter + args) so it is built ONCE
+    // (no per-target rebuild, like the hash-build set). Both SW + HW trace consume the same args buffer.
+    Core::BindingLayoutHandle m_surfelTraceBuildArgsBindingLayout;
+    Core::ShaderHandle m_surfelTraceBuildArgsShader;
+    Core::ComputePipelineHandle m_surfelTraceBuildArgsPipeline;
+    Core::BindingSetHandle m_surfelTraceBuildArgsBindingSet;
     // Tracked pointers for the spawn set rebuild (the G-buffer world-position + normal are recreated on resize).
     const Core::Texture* m_surfelSpawnBindingSetWorldPosition = nullptr;
     const Core::Texture* m_surfelSpawnBindingSetNormal = nullptr;
@@ -773,6 +793,8 @@ struct RtSurfelGiState{
     Core::BufferHandle m_surfelPoolBuffer;
     Core::BufferHandle m_surfelCellHeadBuffer;
     Core::BufferHandle m_surfelCounterBuffer;
+    // U6 trace dispatchIndirect args (3 u32 = DispatchIndirectArguments), rewritten by the build-args pass each frame.
+    Core::BufferHandle m_surfelTraceIndirectArgsBuffer;
     // Free-list (U1): persistent LIFO stack of recycled surfel ids (poolCapacity uints). Pushed by age-free, popped by
     // spawn; the stack depth lives in counter[FREE_TOP]. Same barrier/state-tracking as the pool.
     Core::BufferHandle m_surfelFreeListBuffer;
@@ -805,6 +827,8 @@ struct RtSurfelGiState{
     bool m_surfelHashBuildPipelineFailed = false;
     bool m_surfelTracePipelineFailed = false;
     bool m_surfelResolvePipelineFailed = false;
+    bool m_surfelUpsamplePipelineFailed = false;
+    bool m_surfelTraceBuildArgsPipelineFailed = false;
     bool m_surfelDispatchLogged = false;
 };
 

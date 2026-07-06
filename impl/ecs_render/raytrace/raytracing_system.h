@@ -100,6 +100,15 @@ public:
     // target change).
     [[nodiscard]] bool ensureSurfelResolvePipeline();
     [[nodiscard]] bool ensureSurfelResolveBindingSet(DeferredFrameTargets& targets);
+    // U6 half-res upsample: reconstructs the full-res surfelIrradiance from the half-res resolve output with a surface-
+    // gated joint-bilinear filter (half-res irradiance + full-res G-buffer normal/world-position SRVs -> full-res UAV).
+    [[nodiscard]] bool ensureSurfelUpsamplePipeline();
+    [[nodiscard]] bool ensureSurfelUpsampleBindingSet(DeferredFrameTargets& targets);
+    // U6 trace dispatchIndirect: a 1-thread build-args pass writes ceil(BUMP_TOP/divisor) into the trace's indirect-args
+    // buffer, so the trace dispatches per LIVE surfel. Binds only persistent buffers (constants + counter + args), so the
+    // set is built once and reused (no per-target rebuild).
+    [[nodiscard]] bool ensureSurfelTraceBuildArgsPipeline();
+    [[nodiscard]] bool ensureSurfelTraceBuildArgsBindingSet();
     // True when the prepare built the hybrid transparent-shadow software resources this frame (RT hardware + the scene
     // has a transparent occluder). Used as the !softTransparentShadowReady fallback that folds colored transparent shadow
     // onto the HW opaque pass with renderGpuBvhShadowVisibility(..., multiplyOntoOpaque=true).

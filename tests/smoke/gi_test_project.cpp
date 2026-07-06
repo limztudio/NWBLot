@@ -20,6 +20,7 @@
 #include <impl/ecs_mesh/skinning/module.h>
 
 #include "fps_probe.h"
+#include "gpu_pass_timing_probe.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 
@@ -122,6 +123,9 @@ public:
 
 public:
     virtual bool onStartup()override{
+        // Emit per-pass GPU timings (render.surfel_*) so U6 perf work can A/B via NWB_GPU_TIMING_FILE.
+        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
 
         // ONE directional light: aimed so the red wall is lit but the floor beside it is in direct shadow. The
@@ -197,6 +201,7 @@ public:
     virtual bool onUpdate(const f32 delta)override{
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
+        m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
         m_world->tick(safeDelta);
         return true;
     }
@@ -243,6 +248,7 @@ private:
     NWB::Core::ECS::EntityID m_blueWallNegX = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_whiteWallPosZ = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("GiTestSmokeProject") };
+    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("GiTestSmokeProject") };
 };
 
 

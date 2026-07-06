@@ -1,5 +1,46 @@
 # Surfel GI Plan (pivot from the world-grid DDGI)
 
+## U6 — PERF (half-res resolve + trace dispatchIndirect) DONE + VERIFIED (2026-07-06, HW+SW, review-clean)
+MEASUREMENT-DRIVEN (wired GpuPassTimingProbe into gi_test_project.cpp -> NWB_GPU_TIMING_FILE). Baseline hotspot was the
+RESOLVE at **2.60ms** (~38% of a 6.9ms frame) -- because the seam fix widened the gather 27->125 cells; the TRACE was
+already only 0.084ms. So the plan's stated order (dispatchIndirect first) was inverted by the data.
+- **U6a HALF-RES RESOLVE + UPSAMPLE (the win).** The resolve (surfel_resolve_cs) now dispatches at half dims
+  (NWB_SURFEL_RESOLVE_HALF_FACTOR=2, DivideUp(w/h,2)) and point-samples the full-res G-buffer at the half texel's TOP-LEFT
+  full pixel (halfPixel*factor), writing a NEW half-res target `targets.surfelIrradianceHalf` (rt_caustics.cpp
+  setupDeferredTargets). A NEW **surfel_upsample_cs** runs full-res and reconstructs the full-res surfelIrradiance (the
+  lighting SRV, UNCHANGED) with a 2x2 joint-bilinear filter modelled on caustic_resolve stage-2, GATED by a normal cos
+  gate (NWB_SURFEL_UPSAMPLE_NORMAL_GATE 0.5) + a world-distance edge-stop (sigma=spacing*3), over COVERED taps only,
+  coverage OR-reduced. GI-SPECIFIC DELTAS vs the shadow/caustic upsample: **no [0,1] clamp** (irradiance is HDR), **0
+  identity** (uncovered->hemiAmbient), coverage preserved so lighting's point-Load a>0.5 contract is intact. Half-index
+  map is `src = pixel/factor` (NOT the texel-centre (pixel+0.5)/f-0.5) to match the top-left resolve sample -- a review
+  finding; the centre formula mis-registers ~1/4 tap. RESULT: resolve **2.60->0.65ms** (~4x) + upsample **0.38ms** =
+  ~1.03ms vs 2.60ms (**~1.5ms saved**); frame ~6.9->~4.8ms. Verified seam-free + crease-CLEAN (red<->blue corner crisp,
+  no GI leak) + region samples == full-res reference, HW+SW, --gpudbg 0 warnings.
+- **U6b TRACE dispatchIndirect (architecture, not perf).** The trace dispatched a FIXED ceil(poolCapacity/divisor)=
+  ceil(16384/4)=4096 workgroups every steady frame -- but gi_test has only **220 live surfels** (ceil(220/4)=55 needed),
+  a **74x over-dispatch** of dead early-out workgroups. NEW 1-thread **surfel_trace_buildargs_cs** reads counter[BUMP_TOP]
+  + the divisor (surfel CB .w = seeded?4:1) and writes {ceil(BUMP_TOP/divisor),1,1} into a new isDrawIndirectArgs buffer;
+  stage (3b) after spawn, before trace; the trace (SW+HW, shared site) does setIndirectParams+dispatchIndirect(0). Count
+  MUST derive from BUMP_TOP (alive scattered in [0,BUMP_TOP), pool never compacted); the round-robin surfelIndex +
+  existing guard cover the partial last group. Modelled on sw_shadow_transparent_buildargs. Verified byte-IDENTICAL output
+  + --gpudbg 0 warnings, HW+SW. PERF ~FLAT (trace 0.084->0.078ms): the cost is the ~55 ACTIVE ray-tracing workgroups, not
+  the cheap dead ones -- so it removes the wart + decouples dispatch from pool sizing (pool can be generous without a
+  per-frame tax) but is not a clock win here. Kept because it is correct architecture + a listed deliverable + low-risk.
+- **DEFERRED: depth-scaled spawn radius + multi-res cells.** Per the U6 map + measurement: (1) NOT measurable in a
+  single-depth Cornell box; (2) the resolve hotspot is per-PIXEL (screen), which multi-res (per-surfel-count) barely
+  touches; (3) multi-res is a large re-architecture (re-keys the hash, all 4 gathers, the one-per-bucket invariant, adds
+  level-boundary seams); (4) depth-scaled RADIUS couples directly to the just-fixed seam invariant (window extent >=
+  ceil(maxRadius/cellSize)) -- an unbounded scale reintroduces seams OR blows up the gather (radius 1.8 -> 7x7x7 343
+  cells). SAFE FUTURE FORM if pursued: a CLAMPED radius multiplier with maxRadius <= EXTENT*cellSize (raise EXTENT once to
+  ceil(maxRadius/cellSize)); keep multi-res OUT unless a real large-depth scene shows the need.
+- **Review**: 4-dimension adversarial review (barriers / half-res dims+upsample / indirect coverage / lifecycle-resize),
+  each finding refutation-verified. Barriers dimension = 0 findings. All others LOW; the ONE actioned is the src
+  registration fix above. Noted-not-fixed (LOW, pre-existing/out-of-scope): frameIndex-as-f32 round-robin precision past
+  2^24 (~77h continuous); dispatchIndirect drops the CPU device-limit check (safe while pool 16384 < 65535, documented in
+  the buildargs shader); null-only (not staleness) binding-set guards on a resize-during-transient-BVH-drop (pre-existing
+  pattern shared by resolve/spawn). NEXT: surfel GI is feature-complete (U0-U6); any future work = the deferred multi-res
+  or the noted LOW items.
+
 ## SEAM FIX — gather window must cover the falloff radius (2026-07-06, post-U5, verified HW+SW)
 User spotted a visible GI seam: a horizontal band across both walls at a fixed WORLD height + blocky bright-red patches at
 the red-wall base. Root cause (latent since U0): all three gathers -- the resolve gather (surfel_gather.slangi) + both U4

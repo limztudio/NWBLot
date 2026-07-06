@@ -211,6 +211,11 @@ struct DeferredFrameTargets{
     // caustic accumulator), eliminating the frames-in-flight pool race. Cleared to 0 each frame (a = 0 -> hemiAmbient
     // fallback) so a disabled/absent GI producer is a pixel-identical no-op.
     Core::TextureHandle surfelIrradiance;
+    // U6 half-res producer: the resolve gathers into this HALF-res (RGBA16F, DivideUp(w/h, HALF_FACTOR)) target, and the
+    // surfel_upsample_cs pass reconstructs the full-res surfelIrradiance above with a surface-gated joint-bilinear filter.
+    // The costly (2*EXTENT+1)^3 gather thus runs at 1/FACTOR^2 the pixels. Transient (written + read within the GI block
+    // each frame) so it needs no clear. surfelIrradiance stays the lighting-facing SRV, so the consumer is unchanged.
+    Core::TextureHandle surfelIrradianceHalf;
     Core::TextureHandle causticAccumulator;
     // The two HALF-res RGBA16F ping-pong buffers for the half-res a-trous wavelet (caustic_resolve_cs.slang): the prepare
     // pass writes causticHistory (half-A), the wavelet alternates causticHistory <-> causticResolveHalf, and the final

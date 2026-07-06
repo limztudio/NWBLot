@@ -18,6 +18,44 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_material_pass_resources{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MaterialPassCsgBindingSets{
+    const Core::BindingSetHandle& clip;
+    const Core::BindingSetHandle& receiverSurface;
+    const Core::BindingSetHandle& intervalSample;
+};
+
+[[nodiscard]] static bool CsgResourcesReadyForPipelineKey(
+    const MaterialPipelineKey& pipelineKey,
+    const MaterialPipelinePass::Enum pass,
+    const MaterialPassCsgBindingSets& bindingSets,
+    const bool requireIntervalSample
+){
+    const MaterialPipelineCsgBindingUse csgBindingUse = MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
+    if(csgBindingUse.clip && !bindingSets.clip)
+        return false;
+    if(csgBindingUse.receiverSurface && !bindingSets.receiverSurface)
+        return false;
+    if(requireIntervalSample && csgBindingUse.intervalSample && !bindingSets.intervalSample)
+        return false;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererMaterialSystem::createMeshShaderResources(){
     if(drawState().m_meshBindingLayout)
         return true;
@@ -120,7 +158,7 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
     return true;
 }
 
-bool RendererMaterialSystem::createEmulationViewResources(){
+bool RendererMaterialSystem::createEmulationViewBindingLayout(){
     auto* device = graphics().getDevice();
     if(!drawState().m_emulationViewBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
@@ -134,6 +172,14 @@ bool RendererMaterialSystem::createEmulationViewResources(){
             return false;
         }
     }
+
+    return true;
+}
+
+bool RendererMaterialSystem::createEmulationViewResources(){
+    auto* device = graphics().getDevice();
+    if(!createEmulationViewBindingLayout())
+        return false;
 
     if(drawState().m_emulationViewBindingSet)
         return true;
@@ -150,6 +196,80 @@ bool RendererMaterialSystem::createEmulationViewResources(){
     }
 
     return true;
+}
+
+bool RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems){
+    return prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems)
+        && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems)
+    ;
+}
+
+bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems){
+    bool ready = true;
+    const __hidden_material_pass_resources::MaterialPassCsgBindingSets csgBindingSets{
+        csgState().m_clipBindingSet,
+        csgState().m_receiverSurfaceBindingSet,
+        csgState().m_intervalSampleBindingSet
+    };
+    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+        if(!ready)
+            return;
+        NWB_ASSERT(pipelineResources.meshletPipeline);
+        if(!pipelineResources.meshletPipeline){
+            ready = false;
+            return;
+        }
+        if(!mesh.meshBindingSet && !m_renderer.meshSystem().createMeshBindingSet(mesh)){
+            ready = false;
+            return;
+        }
+
+        if(!__hidden_material_pass_resources::CsgResourcesReadyForPipelineKey(
+            drawItem.pipelineKey,
+            drawItem.pipelineKey.pass,
+            csgBindingSets,
+            false
+        ))
+            ready = false;
+    });
+    return ready;
+}
+
+bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems){
+    if(drawItems.empty())
+        return true;
+    if(!createEmulationViewResources() || !drawState().m_emulationViewBindingSet)
+        return false;
+
+    bool ready = true;
+    const __hidden_material_pass_resources::MaterialPassCsgBindingSets csgBindingSets{
+        csgState().m_clipBindingSet,
+        csgState().m_receiverSurfaceBindingSet,
+        csgState().m_intervalSampleBindingSet
+    };
+    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+        if(!ready)
+            return;
+        NWB_ASSERT(pipelineResources.computePipeline);
+        NWB_ASSERT(pipelineResources.emulationPipeline);
+        if(!pipelineResources.computePipeline || !pipelineResources.emulationPipeline){
+            ready = false;
+            return;
+        }
+        if(!mesh.computeBindingSet && !m_renderer.meshSystem().createComputeBindingSet(mesh)){
+            ready = false;
+            return;
+        }
+
+        if(!__hidden_material_pass_resources::CsgResourcesReadyForPipelineKey(
+            drawItem.pipelineKey,
+            drawItem.pipelineKey.pass,
+            csgBindingSets,
+            false
+        ))
+            ready = false;
+    });
+    return ready;
 }
 
 bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceCount){

@@ -26,8 +26,10 @@ void RendererMeshSystem::destroyMeshBindingSets(){
 bool RendererMeshSystem::createMeshBindingSet(MeshResources& mesh){
     if(mesh.meshBindingSet)
         return true;
-    if(!m_renderer.materialSystem().createMeshShaderResources())
+    if(!drawState().m_meshBindingLayout){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh shader binding layout was not validated before mesh binding-set creation"));
         return false;
+    }
     if(!meshFrameBindingResourcesReady(NWB_TEXT("mesh binding set")))
         return false;
 
@@ -47,8 +49,10 @@ bool RendererMeshSystem::createMeshBindingSet(MeshResources& mesh){
 bool RendererMeshSystem::createComputeBindingSet(MeshResources& mesh){
     if(mesh.computeBindingSet)
         return true;
-    if(!m_renderer.materialSystem().createComputeEmulationResources())
+    if(!drawState().m_computeBindingLayout){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute-emulation binding layout was not validated before mesh binding-set creation"));
         return false;
+    }
     if(!meshFrameBindingResourcesReady(NWB_TEXT("compute binding set")))
         return false;
 

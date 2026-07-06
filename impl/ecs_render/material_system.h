@@ -49,6 +49,7 @@ public:
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
     [[nodiscard]] bool createMeshShaderResources();
     [[nodiscard]] bool createComputeEmulationResources();
+    [[nodiscard]] bool createEmulationViewBindingLayout();
     [[nodiscard]] bool createEmulationViewResources();
     void renderMaterialPass(
         Core::CommandList& commandList,
@@ -120,9 +121,9 @@ public:
     [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems);
     [[nodiscard]] bool meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
-    [[nodiscard]] bool prepareMaterialPassDrawResources(const MaterialPassDrawItems& drawItems);
-    [[nodiscard]] bool prepareMeshMaterialPassDrawResources(const MaterialPassDrawItemVector& drawItems);
-    [[nodiscard]] bool prepareComputeMaterialPassDrawResources(const MaterialPassDrawItemVector& drawItems);
+    [[nodiscard]] bool prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems);
+    [[nodiscard]] bool prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
+    [[nodiscard]] bool prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] u32 meshDispatchFlags(const MeshResources& mesh, MaterialPipelinePass::Enum pass, bool twoSided, bool meshletConeCullScaleSafe)const;
     [[nodiscard]] u32 materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MeshResources& mesh)const;
     void setMaterialPassCommonBufferStates(Core::CommandList& commandList, const MeshResources& mesh);

@@ -83,6 +83,17 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     if(!m_avboitSystem.createAvboitPipelines())
         return false;
 
+    if(!m_materialSystem.createMeshShaderResources())
+        return false;
+
+    if(!m_graphics.queryFeatureSupport(Core::Feature::Meshlets)){
+        if(!m_materialSystem.createComputeEmulationResources())
+            return false;
+
+        if(!m_materialSystem.createEmulationViewBindingLayout())
+            return false;
+    }
+
     if(!m_meshSystem.createMeshViewBuffer())
         return false;
 

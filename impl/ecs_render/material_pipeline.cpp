@@ -380,8 +380,18 @@ bool RendererMaterialSystem::createRendererPipeline(
     const char* passPixelShaderDebugName = nullptr;
     __hidden_material_pipeline::MaterialPipelineAvboitPixelShaderSelection avboitPixelShaderSelection;
     if(MaterialPipelinePassUsesRendererAvboit(pass)){
-        if(!m_renderer.avboitSystem().createAvboitResources())
+        if(
+            !avboitState().m_emptyBindingLayout
+            || !avboitState().m_occupancyBindingLayout
+            || !avboitState().m_extinctionBindingLayout
+            || !avboitState().m_accumulateBindingLayout
+            || !avboitState().m_occupancyPixelShader
+            || !avboitState().m_extinctionPixelShader
+            || !avboitState().m_accumulatePixelShader
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT resources were not validated before material pipeline creation"));
             return failMaterialPipeline();
+        }
         avboitPixelShaderSelection = __hidden_material_pipeline::SelectAvboitPixelShader(
             pass,
             materialInfo,
@@ -425,8 +435,10 @@ bool RendererMaterialSystem::createRendererPipeline(
     };
 
     auto tryBuildMeshPipeline = [&]() -> bool{
-        if(!createMeshShaderResources())
+        if(!drawState().m_meshBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh shader resources were not validated before material pipeline creation"));
             return false;
+        }
         if(!m_renderer.shaderSystem().loadShader(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, Core::ShaderType::Mesh, "ECSRender_RendererMesh"))
             return false;
         if(pass == MaterialPipelinePass::Opaque){
@@ -472,8 +484,15 @@ bool RendererMaterialSystem::createRendererPipeline(
     };
 
     auto tryBuildComputePipeline = [&]() -> bool{
-        if(!createComputeEmulationResources())
+        if(
+            !drawState().m_computeBindingLayout
+            || !drawState().m_emulationViewBindingLayout
+            || !drawState().m_emulationVertexShader
+            || !drawState().m_emulationInputLayout
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute-emulation resources were not validated before material pipeline creation"));
             return false;
+        }
         const Name& meshComputeArchiveStageName = MaterialShaderStageNames::s_MeshComputeArchiveStageName;
         if(!m_renderer.shaderSystem().loadShader(
             resources.computeShader,
@@ -506,9 +525,6 @@ bool RendererMaterialSystem::createRendererPipeline(
         else{
             resources.pixelShader = passPixelShader;
         }
-        if(!createEmulationViewResources())
-            return false;
-
         Core::ComputePipelineDesc computeDesc;
         computeDesc.setComputeShader(resources.computeShader);
         computeDesc.addBindingLayout(drawState().m_computeBindingLayout);

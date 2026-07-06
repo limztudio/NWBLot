@@ -33,7 +33,7 @@ struct NwbMeshRasterVertex{
 
 NwbMeshRasterVertex nwbMeshBuildRasterVertex(
     const float4 position,
-    const float4 color,
+    const half4 color,
     const float3 normal,
     const float4 tangent,
     const float2 uv0,

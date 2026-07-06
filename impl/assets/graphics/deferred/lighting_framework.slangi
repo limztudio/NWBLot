@@ -77,7 +77,7 @@ half3 nwbBxdfResolvedIndirect(float2 uv, float3 normalVector){
     uint height;
     g_NwbSurfelIrradiance.GetDimensions(width, height);
     const int2 pixel = int2(uv * float2(width, height));
-    const float4 resolved = g_NwbSurfelIrradiance.Load(int3(pixel, 0));
+    const half4 resolved = half4(g_NwbSurfelIrradiance.Load(int3(pixel, 0)));
     return resolved.a > 0.5 ? half3(resolved.rgb) : nwbGiHemiAmbient(normalVector);
 }
 

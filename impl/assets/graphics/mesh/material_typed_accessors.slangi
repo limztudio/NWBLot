@@ -131,8 +131,7 @@ NWB_MATERIAL_TYPED_SCALAR_LOAD(Float, float, asfloat(nwbMaterialLoadRawUIntAtBas
 #undef NWB_MATERIAL_TYPED_SCALAR_LOAD
 
 half2 nwbMaterialLoadPackedHalf2AtBase(const uint storageByteOffset, const uint byteOffset){
-    const float2 value = nwbUnpackHalf2x16(nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset));
-    return half2(half(value.x), half(value.y));
+    return half2(nwbUnpackHalf2x16(nwbMaterialLoadRawUIntAtBase(storageByteOffset, byteOffset)));
 }
 
 half nwbMaterialLoadHalfAtBase(const uint storageByteOffset, const uint byteOffset){
@@ -140,8 +139,7 @@ half nwbMaterialLoadHalfAtBase(const uint storageByteOffset, const uint byteOffs
     const uint word = g_NwbMaterialTypedWords[absoluteByteOffset >> NWB_MATERIAL_TYPED_WORD_BYTE_SHIFT];
     const uint byteLane = absoluteByteOffset & NWB_MATERIAL_TYPED_BYTE_LANE_MASK;
     if(byteLane == 0u || byteLane == NWB_MATERIAL_TYPED_U16_BYTE_LANE_MASK){
-        const float2 unpacked = nwbUnpackHalf2x16(word);
-        const half2 value = half2(half(unpacked.x), half(unpacked.y));
+        const half2 value = half2(nwbUnpackHalf2x16(word));
         return half(byteLane == 0u ? value.x : value.y);
     }
 

@@ -60,9 +60,9 @@ float3 nwbSurfelBounceGather(const float3 worldPosition, const float3 queryNorma
     float3 irradianceSum = float3(0.0, 0.0, 0.0);
     float totalWeight = 0.0;
     const int3 baseCell = nwbSurfelCellCoord(biasedPosition, cellSize);
-    for(int dz = -1; dz <= 1; ++dz)
-    for(int dy = -1; dy <= 1; ++dy)
-    for(int dx = -1; dx <= 1; ++dx){
+    for(int dz = -NWB_SURFEL_GATHER_CELL_EXTENT; dz <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dz)
+    for(int dy = -NWB_SURFEL_GATHER_CELL_EXTENT; dy <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dy)
+    for(int dx = -NWB_SURFEL_GATHER_CELL_EXTENT; dx <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dx){
         const uint bucket = nwbSurfelHashCell(baseCell + int3(dx, dy, dz), cellCount);
         uint id = g_NwbSurfelSnapshotCellHead[bucket];
         uint walk = 0u;

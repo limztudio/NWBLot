@@ -94,9 +94,17 @@
 #define NWB_SURFEL_POOL_CAPACITY 16384u        // 16384 * 96B = 1.5 MB pool (U3 record; the U4 snapshot mirrors it)
 #define NWB_SURFEL_HASH_CELL_COUNT 262144u     // 2^18 * 4B = 1 MB cell-head table
 // One surfel per hash cell: the CELL_SIZE sets the surfel spacing (GI resolution); the RADIUS is a bit larger so the
-// gather's 3x3x3 distance-weighted blend of neighbouring cells' surfels overlaps smoothly without coverage gaps.
+// gather's distance-weighted blend of neighbouring cells' surfels overlaps smoothly without coverage gaps.
 #define NWB_SURFEL_CELL_SIZE 0.6f              // world units -- hash cell edge = surfel spacing (depth-scaled in U6)
 #define NWB_SURFEL_DEFAULT_RADIUS 0.9f         // world units -- gather falloff radius (~1.5x cell for neighbour overlap)
+// Gather window half-extent in cells: the resolve + bounce gathers walk a (2*EXTENT+1)^3 cell neighbourhood. It MUST be
+// >= ceil(DEFAULT_RADIUS / CELL_SIZE) so a surfel whose falloff sphere reaches the query is ALWAYS inside the walked
+// window no matter where the query lands within its cell. If it is smaller, a surfel near the window edge pops in/out as
+// the query crosses a cell boundary, so the blended irradiance jumps -- a hard seam then runs along every cell boundary
+// (a horizontal band across a wall, blocky patches on the floor). ceil(0.9 / 0.6) = 2 -> a 5x5x5 walk. The distance
+// weight still clamps the actual blend to the radius, so the wider walk only recovers the missed near surfels, it does
+// not over-blur. Revisit this if U6 makes the cell size depth-scaled (the ratio -- not the extent -- is what must hold).
+#define NWB_SURFEL_GATHER_CELL_EXTENT 2
 #define NWB_SURFEL_SPAWN_TILE 16u              // one spawn candidate per 16x16 screen tile
 #define NWB_SURFEL_RAYS_PER_SURFEL 64u         // one workgroup (64 threads) per surfel
 #define NWB_SURFEL_UPDATE_DIVISOR 4u           // steady-state: trace 1/Nth of surfels per frame (all on the bootstrap frame)

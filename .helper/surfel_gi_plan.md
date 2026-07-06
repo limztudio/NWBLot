@@ -1,5 +1,57 @@
 # Surfel GI Plan (pivot from the world-grid DDGI)
 
+## SEAM FIX — gather window must cover the falloff radius (2026-07-06, post-U5, verified HW+SW)
+User spotted a visible GI seam: a horizontal band across both walls at a fixed WORLD height + blocky bright-red patches at
+the red-wall base. Root cause (latent since U0): all three gathers -- the resolve gather (surfel_gather.slangi) + both U4
+bounce gathers (surfel_trace_cs / surfel_trace_hw_cs) -- walked a fixed **+/-1 (3x3x3)** cell window, but the distance
+falloff uses surfel.radius = NWB_SURFEL_DEFAULT_RADIUS 0.9 which is **1.5x the CELL_SIZE 0.6**. Since ceil(radius/cellSize)
+= ceil(1.5) = 2, a surfel whose 0.9 falloff still reaches the query can live **2 cells away** -- OUTSIDE the +/-1 window.
+As a query crosses a cell boundary that still-influential surfel pops in/out of the walked set, so the blended irradiance
+JUMPS -> a hard seam along every cell boundary. (Cannot be dodged by snapping surfels to cell centres: surfels sit on the
+surface, so their in-cell offset is arbitrary.) Fix: derive **NWB_SURFEL_GATHER_CELL_EXTENT = 2** (>= ceil(radius/cell))
+in surfel_binding_slots.h and walk +/-EXTENT (5x5x5) in all three gathers. The distance weight still clamps the actual
+blend to the radius, so the wider walk only recovers the previously-missed near surfels (no over-blur). Verified: seam +
+blocky patches GONE on both HW (gi_test_smoke) and SW (gi_test_sw_smoke); both --gpudbg captures RC=0, 0 warnings, correct
+trace pipeline each. PERF: resolve gather is now 125 cells vs 27 (mostly empty-cell cellHead reads, ~1MB table -> L2); if
+it bites, U6 half-reses the resolve. If U6 depth-scales CELL_SIZE, the EXTENT must track ceil(maxRadius/cellSize).
+
+## U5 — HW RAYQUERY TRACE TWIN COMPLETE + VERIFIED (2026-07-06, committed e3d96711 on shadow_render)
+Dual-path: a HW inline-RayQuery trace beside the SW BVH walk, sharing the whole body via a SEAM. Also LIT UP GI ON REAL
+RT HARDWARE for the first time -- surfels were previously enabled ONLY on the SW branch (raytracing_system.cpp), so on
+an RT-capable GPU GI was OFF entirely. Design adversarially parity-checked (workflow wf_41db5f56, 10 divergence risks).
+- **SEAM REFACTOR (SW byte-identical):** extracted NwbGiProbeHit + the Lambert shade into NEW gi_trace_common.slangi
+  (the shade re-enters the traversal for the dominant-light occlusion ray, so the shadow ray is part of the seam);
+  renamed nwbGiSwTraceClosest -> nwbGiTraceClosest (SW def stays in gi_sw_trace.slangi, byte-for-byte) and
+  nwbGiSwShadeHit -> nwbGiShadeHit; surfel_trace_cs.slang just renames its 2 call sites. Verified SW render matches the
+  pre-refactor baseline (floors byte-tight).
+- **HW BACKEND (NEW gi_hw_trace.slangi):** RayQuery<RAY_FLAG_FORCE_OPAQUE> over the TLAS; Proceed() once (FORCE_OPAQUE +
+  triangle-only commits the geometric nearest at once, no candidate filtering -> hits ANY surface like the SW walk).
+  Reconstructs NwbGiProbeHit FIELD-FOR-FIELD: worldPos = origin+dir*CommittedRayT (t is affine-invariant, unit rayDir);
+  geometric face normal = normalize(cross(v1-v0,v2-v0)) from CommittedPrimitiveIndex -> g_NwbGiHwMeshPositions/Indices
+  [material.meshSlot] (SAME edge order/sign as nwbGiSwRayTriangle) -> nwbGiHwTransformNormal(CommittedWorldToObject3x4);
+  albedo from g_NwbGiHwInstanceMaterial[CommittedInstanceID] (hardware InstanceID == SW scene-BVH leaf index). KEY: the
+  HW branch does NOT have the SW per-mesh buffers resident (buildSceneSwBvh only runs there for transparent occluders),
+  so the HW trace reads the HW-resident m_shadowMesh{Position,Index} buffers (indexed by material.meshSlot) the shadow
+  path already binds -- NOT the SW g_NwbGiSwMesh* slots. NEW hw_binding_slots.h (dual-consumed; slots 0/1 scene+light
+  match SW, 2=TLAS, 3=material, 4/5=mesh pos/idx; surfel tail 11/12/19/20 shared).
+- **surfel_trace_hw_cs.slang(+.nwb):** = surfel_trace_cs with ONE include swapped (gi_sw_trace -> gi_hw_trace); main() +
+  SH reduce + U4 bounce byte-identical (the seam hides the backend from main()).
+- **C++ (rt_surfel_gi.cpp + shared/renderer_state):** ensureSurfelTraceHwPipeline (gated on RayQuery+accel-struct, TLAS
+  layout item = BindingLayoutItem::RayTracingAccelStruct) + ensureSurfelTraceHwBindingSet (binds m_tlas +
+  m_shadowInstanceMaterialBuffer + m_shadowMesh* padded over NWB_SHADOW_RT_MAX_MESHES, rebuild-guard on {tlas,material,
+  meshCount}); m_surfelUseHwTrace selects SW vs HW in ensureSurfelResources / prepareSurfelResources / renderSurfelGi
+  (pipeline+set picked once, trace pass stages HW mesh pos/idx vs SW mesh+material-context). Enabled on the HW-shadow
+  branch gated on m_tlasInstanceCount>0 (NOT m_sceneBvhInstanceCount -- that's the SW-only count; the first gate bug was
+  it read 0 on the pure-HW branch so no HW surfel pipeline was created). BindingSetItem::RayTracingAccelStruct needs a
+  NON-const AccelStruct* (m_tlas.get()).
+- **VERIFIED (this machine HAS real RT: accel-struct/pipeline/ray-query all true):** SW forced-emu (gi_test_sw_smoke)
+  validation-clean, SW trace pipeline, no HW pipeline; HW (gi_test_smoke, real RT) validation-clean under --gpudbg, all
+  6 surfel pipelines incl "created surfel HW trace compute pipeline"; HW-vs-SW A/B ~0.1% (walls EXACT, floors <=0.2/255,
+  amplified diff = symmetric zero-mean green/red speckle, NO structured seam at any geometry edge -> Monte-Carlo ray-set
+  noise, not a normal/winding divergence) -- beats the 0.55% caustic precedent. Both paths warning-free. Tools:
+  scratchpad/shot.py (region samples) + u4_diff.py (amplified HW-vs-SW heatmap). NEXT: U6 perf (dispatchIndirect off the
+  live counter; depth-scaled spawn; half-res apply).
+
 ## U4 — SURFEL->SURFEL INFINITE BOUNCE COMPLETE + VERIFIED (2026-07-05, uncommitted on shadow_render)
 Jacobi radiosity: each trace ray's radiance now = albedo * (E_direct + E_indirect) instead of albedo * E_direct only.
 E_indirect at the ray HIT point is gathered from a SNAPSHOT of the PREVIOUS frame's converged surfel field, so the

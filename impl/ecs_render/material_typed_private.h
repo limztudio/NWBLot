@@ -221,21 +221,15 @@ template<typename MaterialTypedByteVector>
     const MaterialTypedByteVector& materialTypedBytes,
     usize& outUploadByteCount
 ){
-    outUploadByteCount = 0u;
-    if(materialTypedBytes.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload is empty"));
-        return false;
-    }
-    if((materialTypedBytes.size() & (s_MaterialTypedWordBytes - 1u)) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload is not word-aligned"));
-        return false;
-    }
-
     outUploadByteCount = materialTypedBytes.size();
-    if(!AlignUpChecked(outUploadByteCount, s_MaterialTypedWordBytes, outUploadByteCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload size overflows alignment"));
-        return false;
-    }
+    NWB_ASSERT_MSG(
+        outUploadByteCount != 0u,
+        NWB_TEXT("RendererSystem: material typed data upload is empty")
+    );
+    NWB_ASSERT_MSG(
+        (outUploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u,
+        NWB_TEXT("RendererSystem: material typed data upload is not word-aligned")
+    );
 
     return true;
 }

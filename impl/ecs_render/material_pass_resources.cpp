@@ -242,13 +242,8 @@ bool RendererMaterialSystem::materialPassDrawBuffersReady(
     if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadBytes))
         return false;
 
-    usize requiredMaterialTypedBytes = Max<usize>(uploadBytes, sizeof(u32));
-#if defined(NWB_DEBUG)
-    if(!AlignUpChecked(requiredMaterialTypedBytes, sizeof(u32), requiredMaterialTypedBytes))
-        return false;
-#else
-    requiredMaterialTypedBytes = AlignUp(requiredMaterialTypedBytes, sizeof(u32));
-#endif
+    const usize requiredMaterialTypedBytes = Max<usize>(uploadBytes, sizeof(u32));
+    NWB_ASSERT((requiredMaterialTypedBytes & (sizeof(u32) - 1u)) == 0u);
 
     return
         (instanceData.empty() || (drawState().m_instanceBuffer && drawState().m_instanceBufferCapacity >= instanceData.size()))

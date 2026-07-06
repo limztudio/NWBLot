@@ -66,8 +66,8 @@ public:
     // Surfel GI: the feature gate + prep + render hooks. hasSurfelWork returns m_surfelEnabled (set in
     // prepareShadowVisibilityResources once the SW scene BVH is resident). prepareSurfelResources creates the
     // persistent pool/hash/counter/params buffers + pipelines, clears them on (re)creation, and uploads the params
-    // CB. renderSurfelGi runs the spawn -> hash-build -> trace passes (the SW trace reuses the SW scene BVH). See
-    // .helper/surfel_gi_plan.md.
+    // CB and all binding sets. renderSurfelGi consumes the prepared sets and runs the spawn -> hash-build -> trace
+    // passes (the SW trace reuses the SW scene BVH). See .helper/surfel_gi_plan.md.
     [[nodiscard]] bool hasSurfelWork()const noexcept;
     [[nodiscard]] bool prepareSurfelResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets);
@@ -85,7 +85,7 @@ public:
     [[nodiscard]] bool ensureSurfelTracePipeline();
     // The spawn set (surfel buffers + G-buffer world-position/normal; rebuilt on G-buffer change) + the hash-build set
     // (surfel buffers only; built once) + the trace set (SW scene BVH + per-mesh arrays + surfel constants/pool;
-    // rebuilt when the scene BVH / distinct-mesh count changes, mirroring the SW shadow set).
+    // rebuilt during prepare when the scene BVH / distinct-mesh count changes, mirroring the SW shadow set).
     [[nodiscard]] bool ensureSurfelSpawnBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureSurfelAgeFreeBindingSet();
     [[nodiscard]] bool ensureSurfelHashBuildBindingSet();
@@ -97,14 +97,12 @@ public:
     [[nodiscard]] bool ensureSurfelResolvePipeline();
     [[nodiscard]] bool ensureSurfelResolveBindingSet(DeferredFrameTargets& targets);
     // True when the prepare built the hybrid transparent-shadow software resources this frame (RT hardware + the scene
-    // has a transparent occluder). The render then runs renderGpuBvhShadowVisibility(..., multiplyOntoOpaque=true) after
-    // the HW opaque pass, folding the colored transparent shadow onto the binary opaque mask -- ONLY as the
-    // !softTransparentShadowReady fallback (Phase 2 moved the colored fold inside renderShadowVisibility's soft chain).
+    // has a transparent occluder). Used as the !softTransparentShadowReady fallback that folds colored transparent shadow
+    // onto the HW opaque pass with renderGpuBvhShadowVisibility(..., multiplyOntoOpaque=true).
     [[nodiscard]] bool hybridTransparentShadowReady()const noexcept;
     // True when the prepare built the soft transparent trace+fold resources this frame (the HW/SW opaque soft path is
     // ready AND the transparent SW scene BVH + RGB resolve/merge sets built). When true, the colored TRANSPARENT shadow
-    // is traced + denoised + multiplied onto the soft-opaque visibility INSIDE renderShadowVisibility's soft chain, so
-    // the old hybrid multiply (renderGpuBvhShadowVisibility, multiplyOntoOpaque=true) is skipped as redundant.
+    // is traced + denoised + multiplied onto the soft-opaque visibility inside renderShadowVisibility's soft chain.
     [[nodiscard]] bool softTransparentShadowReady()const noexcept;
 
 
@@ -168,8 +166,8 @@ private:
     // Backend-agnostic soft-shadow denoise + transparent fold, run AFTER whichever backend (SW BVH or HW RayQuery) wrote
     // the half-res soft opaque trace into shadowSoftHalfA (and synced it to UnorderedAccess): geometry downsample ->
     // per-slot [temporal reproject-merge -> a-trous resolve OVERWRITE] -> the guarded soft colored-transparent trace+fold
-    // (SW-only in Phase 1) -> temporal history swap. Reads ONLY the shared soft/temporal buffers + the G-buffer, so the
-    // SAME chain denoises both backends. softGroupsX/Y are the half-res dispatch grid; frameIndex seeds the trace jitter.
+    // -> temporal history swap. Reads only the shared soft/temporal buffers + the G-buffer, so the same chain denoises both
+    // backends. softGroupsX/Y are the half-res dispatch grid; frameIndex seeds the trace jitter.
     void dispatchSoftShadowDenoiseAndTransparentFold(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 frameIndex, u32 softGroupsX, u32 softGroupsY);
     // Soft opaque shadow TEMPORAL accumulation: the reproject-merge pass
     // inserted per slot between the soft trace and the a-trous resolve. ensureShadowReprojectMergePipeline builds its

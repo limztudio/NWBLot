@@ -67,6 +67,23 @@ static constexpr f32 s_CutterAnimationSpeed = 0.18f;
 static constexpr f32 s_ReceiverYawSpeed = 0.92f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 static constexpr f32 s_InitialAnimationTime = s_PIDIV2 / s_ReceiverYawSpeed;
+static constexpr u16 s_FrameClientWidth = 1280u;
+static constexpr u16 s_FrameClientHeight = 900u;
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+static constexpr f32 s_TransparentReceiverAlpha = 0.44f;
+#endif
+static constexpr f32 s_ReceiverOffsetX = 0.48f;
+static constexpr f32 s_CutterGentleRollSpeed = 0.18f;
+static constexpr f32 s_CutterAnchorFallbackY = 0.90f;
+#if defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+static constexpr f32 s_SphereCutterRadius = 0.18f;
+#else
+static constexpr f32 s_CapsuleCutterRadius = 0.105f;
+static constexpr f32 s_CapsuleCutterHalfHeight = 0.27f;
+#endif
+static constexpr Float4 s_PlainReceiverTint = Float4(0.86f, 0.88f, 0.90f, 1.0f);
+static constexpr Float4 s_CsgReceiverTint = Float4(0.85f, 0.72f, 1.0f, 1.0f);
+static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,7 +107,7 @@ static constexpr f32 s_InitialAnimationTime = s_PIDIV2 / s_ReceiverYawSpeed;
 
 [[nodiscard]] static f32 ReceiverAlpha(){
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-    return 0.44f;
+    return s_TransparentReceiverAlpha;
 #else
     return 1.0f;
 #endif
@@ -102,12 +119,12 @@ static constexpr f32 s_InitialAnimationTime = s_PIDIV2 / s_ReceiverYawSpeed;
 }
 
 [[nodiscard]] static SIMDVector BuildCsgReceiverPosition(){
-    return VectorSet(0.48f, 0.0f, 0.0f, 0.0f);
+    return VectorSet(s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f);
 }
 
 [[nodiscard]] static SIMDVector BuildCutterLocalRotation(const f32 animationTime){
     const SIMDVector horizontalCapsule = QuaternionRotationRollPitchYaw(s_PIDIV2, s_PIDIV2, 0.0f);
-    const SIMDVector gentleRoll = QuaternionRotationRollPitchYaw(0.0f, animationTime * 0.18f, 0.0f);
+    const SIMDVector gentleRoll = QuaternionRotationRollPitchYaw(0.0f, animationTime * s_CutterGentleRollSpeed, 0.0f);
     return QuaternionNormalize(QuaternionMultiply(horizontalCapsule, gentleRoll));
 }
 
@@ -188,19 +205,19 @@ private:
 
     void createReceiver(){
         m_plainReceiver = createSkinnedReceiverInstance(
-            Float4(-0.48f, 0.0f, 0.0f, 0.0f),
-            Float4(0.86f, 0.88f, 0.90f, ReceiverAlpha()),
+            Float4(-s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f),
+            Float4(s_PlainReceiverTint.x, s_PlainReceiverTint.y, s_PlainReceiverTint.z, ReceiverAlpha()),
             false
         );
         m_receiver = createSkinnedReceiverInstance(
-            Float4(0.48f, 0.0f, 0.0f, 0.0f),
-            Float4(0.85f, 0.72f, 1.0f, ReceiverAlpha()),
+            Float4(s_ReceiverOffsetX, 0.0f, 0.0f, 0.0f),
+            Float4(s_CsgReceiverTint.x, s_CsgReceiverTint.y, s_CsgReceiverTint.z, ReceiverAlpha()),
             true
         );
     }
 
-    [[nodiscard]] SIMDVector resolveCutterAnchorLocalCenter()const{
-        const SIMDVector fallback = VectorSet(0.0f, 0.90f, 0.0f, 0.0f);
+    [[nodiscard]] Float4 resolveCutterAnchorLocalCenter()const{
+        const Float4 fallback(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
 
         UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
         if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), Name(s_ModelPath), modelAsset) || !modelAsset){
@@ -236,7 +253,12 @@ private:
             boneToModel = MatrixMultiply(LoadFloat(skeleton->joints()[parentIndex].localBindPose), boneToModel);
 
         // The bone origin in model space is the translation column (M*v convention); receiver scale is 1.
-        return VectorSet(VectorGetW(boneToModel.v[0]), VectorGetW(boneToModel.v[1]), VectorGetW(boneToModel.v[2]), 0.0f);
+        Float4 result;
+        StoreFloat(
+            VectorSet(VectorGetW(boneToModel.v[0]), VectorGetW(boneToModel.v[1]), VectorGetW(boneToModel.v[2]), 0.0f),
+            &result
+        );
+        return result;
     }
 
     void createCutter(){
@@ -251,10 +273,10 @@ private:
 
 #if defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
         NWB::Impl::CsgSphereShapeParameters parameters;
-        parameters.radius = Float4(0.18f, 0.0f, 0.0f, 0.0f);
+        parameters.radius = Float4(s_SphereCutterRadius, 0.0f, 0.0f, 0.0f);
 #else
         NWB::Impl::CsgCapsuleShapeParameters parameters;
-        parameters.radiusHalfHeight = Float4(0.105f, 0.27f, 0.0f, 0.0f);
+        parameters.radiusHalfHeight = Float4(s_CapsuleCutterRadius, s_CapsuleCutterHalfHeight, 0.0f, 0.0f);
 #endif
         AssignCsgCutterParameters(cutter, parameters);
         const SIMDVector receiverRotation = BuildReceiverRotation(0.0f);
@@ -267,27 +289,27 @@ private:
         m_cutter = entity.id();
     }
 
-    void updateReceiverRotation(const NWB::Core::ECS::EntityID entity, const SIMDVector receiverRotation){
+    void updateReceiverRotation(const NWB::Core::ECS::EntityID entity, const Float4& receiverRotation){
         auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         if(!transform)
             return;
 
-        StoreFloat(receiverRotation, &transform->rotation);
+        transform->rotation = receiverRotation;
     }
 
-    void updateReceiverTransforms(const SIMDVector receiverRotation){
+    void updateReceiverTransforms(const Float4& receiverRotation){
         updateReceiverRotation(m_plainReceiver, receiverRotation);
         updateReceiverRotation(m_receiver, receiverRotation);
     }
 
-    void updateCutterTransform(const SIMDVector receiverRotation){
+    void updateCutterTransform(const SIMDVector receiverRotation, const SIMDVector cutterLocalCenter){
         auto* cutter = m_world->tryGetComponent<NWB::Impl::CsgCutterComponent>(m_cutter);
         if(!cutter)
             return;
 
         AssignCsgCutterTransform(
             *cutter,
-            BuildCutterWorldCenter(LoadFloat(m_cutterLocalCenter), receiverRotation),
+            BuildCutterWorldCenter(cutterLocalCenter, receiverRotation),
             BuildCutterWorldRotation(m_animationTime, receiverRotation)
         );
     }
@@ -317,14 +339,14 @@ public:
             s_DefaultDirectionalLightPitch,
             s_DefaultDirectionalLightYaw,
             0.0f,
-            Float4(1.0f, 0.96f, 0.88f),
+            s_WarmDirectionalLightColor,
             s_DefaultDirectionalLightIntensity
         );
 
         createReceiver();
         SyncSmokeModelRuntimes(*m_world);
         const bool receiverReady = installCsgReceiverOnSpawnedModelObject();
-        StoreFloat(resolveCutterAnchorLocalCenter(), &m_cutterLocalCenter);
+        m_cutterLocalCenter = resolveCutterAnchorLocalCenter();
         createCutter();
         NWB_FATAL_ASSERT_MSG(
             activeCamera.camera.valid()
@@ -358,8 +380,10 @@ public:
         m_fpsProbe.recordFrame(safeDelta);
         m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_CutterAnimationSpeed;
         const SIMDVector receiverRotation = BuildReceiverRotation(m_animationTime);
-        updateReceiverTransforms(receiverRotation);
-        updateCutterTransform(receiverRotation);
+        Float4 storedReceiverRotation;
+        StoreFloat(receiverRotation, &storedReceiverRotation);
+        updateReceiverTransforms(storedReceiverRotation);
+        updateCutterTransform(receiverRotation, LoadFloat(m_cutterLocalCenter));
 
         m_world->tick(safeDelta);
         return true;
@@ -373,7 +397,7 @@ private:
     NWB::Core::ECS::EntityID m_receiver = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_receiverObject = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_cutter = NWB::Core::ECS::ENTITY_ID_INVALID;
-    Float4 m_cutterLocalCenter = Float4(0.0f, 0.90f, 0.0f, 0.0f);
+    Float4 m_cutterLocalCenter = Float4(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ CsgSkinnedVisibleFpsLabel() };
     f32 m_animationTime = s_InitialAnimationTime;
 };
@@ -389,7 +413,10 @@ private:
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { 1280, 900 };
+    return {
+        __hidden_csg_skinned_visible_smoke::s_FrameClientWidth,
+        __hidden_csg_skinned_visible_smoke::s_FrameClientHeight
+    };
 }
 
 

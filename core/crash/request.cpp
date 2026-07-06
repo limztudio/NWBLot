@@ -204,7 +204,8 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
         ErrorCode error;
         if(EnsureDirectories(packageDirectory, error)){
             if(!options.gpuReport.empty()){
-                [[maybe_unused]] const bool gpuReportWritten = WriteTextFile(packageDirectory / PackageNames::s_GpuCrashReportFileName, options.gpuReport);
+                if(!WriteTextFile(packageDirectory / PackageNames::s_GpuCrashReportFileName, options.gpuReport))
+                    return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
             }
             if(!options.gpuDump.empty()){
                 const char* gpuDumpFileName = nullptr;
@@ -214,10 +215,13 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
                     gpuDumpFileName = PackageNames::s_AftermathGpuDumpFileName;
 
                 if(gpuDumpFileName){
-                    [[maybe_unused]] const bool gpuDumpWritten = WriteTextFile(packageDirectory / gpuDumpFileName, options.gpuDump);
+                    if(!WriteTextFile(packageDirectory / gpuDumpFileName, options.gpuDump))
+                        return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
                 }
             }
         }
+        else
+            return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
     }
 
     const CrashDumpTransportStatus::Enum transportStatus = RequestCrashHandler(request, options.waitMilliseconds);

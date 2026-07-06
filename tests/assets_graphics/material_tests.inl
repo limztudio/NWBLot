@@ -802,7 +802,7 @@ static bool BuildMaterialFromBindAndMeta(
 
     if(!bindRoot.empty()){
         ErrorCode errorCode;
-        [[maybe_unused]] const bool removed = RemoveAllIfExists(bindRoot, errorCode);
+        built = RemoveAllIfExists(bindRoot, errorCode) && built;
     }
     return built;
 }

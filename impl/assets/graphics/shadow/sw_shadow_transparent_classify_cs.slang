@@ -95,16 +95,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const uint slot = uint(slotF);
         ++totalRays;
 
-        const float3 t00 = g_NwbSwShadowCoarse[uint3(c0.x, c0.y, slot)].rgb;
-        const float3 t10 = g_NwbSwShadowCoarse[uint3(c1.x, c0.y, slot)].rgb;
-        const float3 t01 = g_NwbSwShadowCoarse[uint3(c0.x, c1.y, slot)].rgb;
-        const float3 t11 = g_NwbSwShadowCoarse[uint3(c1.x, c1.y, slot)].rgb;
+        const half3 t00 = half3(g_NwbSwShadowCoarse[uint3(c0.x, c0.y, slot)].rgb);
+        const half3 t10 = half3(g_NwbSwShadowCoarse[uint3(c1.x, c0.y, slot)].rgb);
+        const half3 t01 = half3(g_NwbSwShadowCoarse[uint3(c0.x, c1.y, slot)].rgb);
+        const half3 t11 = half3(g_NwbSwShadowCoarse[uint3(c1.x, c1.y, slot)].rgb);
 
-        const float3 lo = min(min(t00, t10), min(t01, t11));
-        const float3 hi = max(max(t00, t10), max(t01, t11));
-        const float range = max(max(hi.x - lo.x, hi.y - lo.y), hi.z - lo.z);
+        const half3 lo = min(min(t00, t10), min(t01, t11));
+        const half3 hi = max(max(t00, t10), max(t01, t11));
+        const half range = max(max(hi.x - lo.x, hi.y - lo.y), hi.z - lo.z);
 
-        if(range > edgeThreshold){
+        if(float(range) > edgeThreshold){
             // EDGE: append (pixel, lightIndex) to the compacted list; DO NOT trace and DO NOT write the texel -- leave
             // the pristine opaque mask for the indirect trace's single overwrite. Always increment the counter (so the
             // true edge total is measured) but guard the indexed write to the allocated capacity.
@@ -119,19 +119,19 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             else{
                 // OVERFLOW: this edge will not be traced, so degrade it to the interpolated fallback (Stage-1 quality)
                 // rather than leaving the un-tinted opaque mask. Near-impossible at the allocated capacity.
-                const float3 tx0 = lerp(t00, t10, w.x);
-                const float3 tx1 = lerp(t01, t11, w.x);
-                const float3 interp = lerp(tx0, tx1, w.y);
-                const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb;
+                const half3 tx0 = lerp(t00, t10, half(w.x));
+                const half3 tx1 = lerp(t01, t11, half(w.x));
+                const half3 interp = lerp(tx0, tx1, half(w.y));
+                const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
                 g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * interp, 1.0);
             }
         }
         else{
             // FLAT interior: interpolate the coarse transmittance and fold onto the pristine opaque mask in place.
-            const float3 tx0 = lerp(t00, t10, w.x);
-            const float3 tx1 = lerp(t01, t11, w.x);
-            const float3 interp = lerp(tx0, tx1, w.y);
-            const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb;
+            const half3 tx0 = lerp(t00, t10, half(w.x));
+            const half3 tx1 = lerp(t01, t11, half(w.x));
+            const half3 interp = lerp(tx0, tx1, half(w.y));
+            const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
             g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * interp, 1.0);
         }
     }

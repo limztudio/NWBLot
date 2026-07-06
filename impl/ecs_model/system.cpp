@@ -82,17 +82,6 @@ SIMDMatrix MakeStaticAttachmentWorldTransform(
     return MatrixMultiply(worldTransform, localTransform);
 }
 
-SIMDMatrix MakeComponentTransformMatrix(const Scene::TransformComponent* transform){
-    return transform
-        ? MakeTransformMatrix(
-            LoadFloat(transform->scale),
-            LoadFloat(transform->rotation),
-            LoadFloat(transform->position)
-        )
-        : MatrixIdentity()
-    ;
-}
-
 void StoreResolvedTransform(
     Scene::TransformComponent& transform,
     const SIMDMatrix& worldTransform
@@ -114,10 +103,20 @@ void StoreObjectWorldTransform(
     const SkeletonJointMatrix& localTransform,
     Scene::TransformComponent& transform
 ){
+    const Scene::TransformComponent* ownerTransform = world.tryGetComponent<Scene::TransformComponent>(owner);
+    const SIMDMatrix ownerMatrix = ownerTransform
+        ? MakeTransformMatrix(
+            LoadFloat(ownerTransform->scale),
+            LoadFloat(ownerTransform->rotation),
+            LoadFloat(ownerTransform->position)
+        )
+        : MatrixIdentity()
+    ;
+
     StoreResolvedTransform(
         transform,
         MakeWorldTransform(
-            MakeComponentTransformMatrix(world.tryGetComponent<Scene::TransformComponent>(owner)),
+            ownerMatrix,
             LoadFloat(localTransform)
         )
     );
@@ -163,7 +162,8 @@ bool LoadSkeleton(
     }
 
     outSkeleton = checked_cast<const Skeleton*>(outAsset.get());
-    return outSkeleton != nullptr;
+    NWB_ASSERT(outSkeleton != nullptr);
+    return true;
 }
 
 
@@ -495,9 +495,20 @@ void ModelSystem::updateStaticMeshAttachments(){
             const Scene::TransformComponent* parentTransform = attachment.parentEntity.valid()
                 ? m_world.tryGetComponent<Scene::TransformComponent>(attachment.parentEntity)
                 : ownerTransform;
-            const SIMDMatrix ownerMatrix = __hidden_model_system::MakeComponentTransformMatrix(ownerTransform);
+            const SIMDMatrix ownerMatrix = ownerTransform
+                ? __hidden_model_system::MakeTransformMatrix(
+                    LoadFloat(ownerTransform->scale),
+                    LoadFloat(ownerTransform->rotation),
+                    LoadFloat(ownerTransform->position)
+                )
+                : MatrixIdentity()
+            ;
             const SIMDMatrix parentMatrix = parentTransform
-                ? __hidden_model_system::MakeComponentTransformMatrix(parentTransform)
+                ? __hidden_model_system::MakeTransformMatrix(
+                    LoadFloat(parentTransform->scale),
+                    LoadFloat(parentTransform->rotation),
+                    LoadFloat(parentTransform->position)
+                )
                 : ownerMatrix
             ;
             const SIMDMatrix localMatrix = LoadFloat(attachment.localTransform);

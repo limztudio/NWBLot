@@ -5,6 +5,7 @@
 #include "diagnostic.h"
 
 #include <core/common/log.h>
+#include <global/assert.h>
 #include <global/binary.h>
 
 
@@ -198,6 +199,7 @@ DiagnosticCaptureGuard::DiagnosticCaptureGuard(Recorder& recorder)
                 nullptr,
                 MemoryOrder::acq_rel
             );
+            NWB_ASSERT(clearedGuard);
         }
     }
 }
@@ -212,6 +214,7 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
         nullptr,
         MemoryOrder::acq_rel
     );
+    NWB_ASSERT(clearedCallback);
 
     DiagnosticCaptureGuard* expected = this;
     [[maybe_unused]] const bool clearedGuard = __hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(
@@ -219,6 +222,7 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
         nullptr,
         MemoryOrder::acq_rel
     );
+    NWB_ASSERT(clearedGuard);
 }
 
 bool DiagnosticCaptureGuard::capture(const DiagnosticEventRecord& record){

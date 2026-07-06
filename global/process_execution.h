@@ -36,13 +36,21 @@ namespace ProcessExecutionDetail{
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 inline constexpr usize s_DefaultCaptureProcessOutputTimeoutMilliseconds = 3000u;
+inline constexpr u64 s_MillisecondsPerSecond = 1000u;
+inline constexpr u64 s_NanosecondsPerMillisecond = 1000000u;
+inline constexpr int s_ProcessPollSleepMilliseconds = 1;
+inline constexpr int s_ExecFailureExitCode = 127;
+inline constexpr usize s_DefaultCaptureOutputMaxBytes = 8192u;
+inline constexpr usize s_CaptureReadBufferBytes = 256u;
 
 inline void CloseFileDescriptor(int& fd)noexcept{
     if(fd < 0)
         return;
 
-    [[maybe_unused]] const int closeResult = ::close(fd);
+    const int closeResult = ::close(fd);
     fd = -1;
+    if(closeResult != 0)
+        return;
 }
 
 [[nodiscard]] inline u64 MonotonicMilliseconds()noexcept{
@@ -50,7 +58,7 @@ inline void CloseFileDescriptor(int& fd)noexcept{
     if(::clock_gettime(CLOCK_MONOTONIC, &time) != 0)
         return 0u;
 
-    return static_cast<u64>(time.tv_sec) * 1000u + static_cast<u64>(time.tv_nsec / 1000000L);
+    return static_cast<u64>(time.tv_sec) * s_MillisecondsPerSecond + static_cast<u64>(time.tv_nsec / s_NanosecondsPerMillisecond);
 }
 
 [[nodiscard]] inline bool TimeoutExpired(const u64 deadlineMilliseconds)noexcept{
@@ -76,7 +84,10 @@ inline void KillAndReapProcess(const pid_t childPid)noexcept{
     if(childPid <= 0)
         return;
 
-    [[maybe_unused]] const int killResult = ::kill(childPid, SIGKILL);
+    const int killResult = ::kill(childPid, SIGKILL);
+    if(killResult != 0 && errno != ESRCH)
+        return;
+
     int status = 0;
     while(::waitpid(childPid, &status, 0) < 0 && errno == EINTR){
     }
@@ -95,7 +106,9 @@ inline void KillAndReapProcess(const pid_t childPid)noexcept{
             return false;
         }
 
-        [[maybe_unused]] const int pollResult = ::poll(nullptr, 0, 1);
+        const int pollResult = ::poll(nullptr, 0, s_ProcessPollSleepMilliseconds);
+        if(pollResult < 0 && errno != EINTR)
+            return false;
     }
 }
 #endif
@@ -162,8 +175,8 @@ template<typename StringT>
 [[nodiscard]] inline bool CaptureProcessOutput(
     StringT& outOutput,
     const char* const* argv,
-    const usize maxOutputBytes = 8192u,
-    const usize readBufferBytes = 256u,
+    const usize maxOutputBytes = ProcessExecutionDetail::s_DefaultCaptureOutputMaxBytes,
+    const usize readBufferBytes = ProcessExecutionDetail::s_CaptureReadBufferBytes,
     const usize timeoutMilliseconds = ProcessExecutionDetail::s_DefaultCaptureProcessOutputTimeoutMilliseconds
 ){
     outOutput.clear();
@@ -185,17 +198,22 @@ template<typename StringT>
     if(childPid == 0){
         const int devNull = ::open("/dev/null", O_WRONLY);
         if(devNull >= 0){
-            [[maybe_unused]] const int dupStderrResult = ::dup2(devNull, STDERR_FILENO);
+            if(::dup2(devNull, STDERR_FILENO) < 0)
+                _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
             if(devNull != STDERR_FILENO){
-                [[maybe_unused]] const int closeDevNullResult = ::close(devNull);
+                if(::close(devNull) != 0)
+                    _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
             }
         }
 
-        [[maybe_unused]] const int dupStdoutResult = ::dup2(pipeFds[1], STDOUT_FILENO);
-        [[maybe_unused]] const int closeReadEndResult = ::close(pipeFds[0]);
-        [[maybe_unused]] const int closeWriteEndResult = ::close(pipeFds[1]);
+        if(::dup2(pipeFds[1], STDOUT_FILENO) < 0)
+            _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
+        if(::close(pipeFds[0]) != 0)
+            _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
+        if(::close(pipeFds[1]) != 0)
+            _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
         ::execvp(argv[0], const_cast<char* const*>(argv));
-        _exit(127);
+        _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
     }
 
     ProcessExecutionDetail::CloseFileDescriptor(pipeFds[1]);
@@ -207,10 +225,14 @@ template<typename StringT>
 
     const int flags = ::fcntl(pipeFds[0], F_GETFL, 0);
     if(flags >= 0){
-        [[maybe_unused]] const int setFlagsResult = ::fcntl(pipeFds[0], F_SETFL, flags | O_NONBLOCK);
+        if(::fcntl(pipeFds[0], F_SETFL, flags | O_NONBLOCK) < 0){
+            ProcessExecutionDetail::CloseFileDescriptor(pipeFds[0]);
+            ProcessExecutionDetail::KillAndReapProcess(childPid);
+            return false;
+        }
     }
 
-    char buffer[256] = {};
+    char buffer[ProcessExecutionDetail::s_CaptureReadBufferBytes] = {};
     const usize effectiveReadBufferBytes = readBufferBytes < sizeof(buffer)
         ? readBufferBytes
         : sizeof(buffer)

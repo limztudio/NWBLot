@@ -7,7 +7,7 @@
 #include "aftermath.h"
 
 #include <core/filesystem/module.h>
-#include <core/filesystem/volume_naming.h>
+#include <global/filesystem/volume_naming.h>
 #include <core/common/log.h>
 
 
@@ -56,7 +56,7 @@ static bool RuntimeCacheVolumeExists(const Path& directory, const AStringView vo
     if(!IsDirectory(directory, errorCode) || errorCode)
         return false;
 
-    const Path segmentPath = directory / Filesystem::MakeVolumeSegmentFileName(volumeName, 0).c_str();
+    const Path segmentPath = directory / ::MakeVolumeSegmentFileName(volumeName, 0).c_str();
     errorCode.clear();
     return FileExists(segmentPath, errorCode) && !errorCode;
 }

@@ -82,30 +82,30 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         ++totalRays;
 
         // 2x2 coarse neighbourhood transmittances around this pixel.
-        const float3 t00 = g_NwbSwShadowCoarse[uint3(c0.x, c0.y, slot)].rgb;
-        const float3 t10 = g_NwbSwShadowCoarse[uint3(c1.x, c0.y, slot)].rgb;
-        const float3 t01 = g_NwbSwShadowCoarse[uint3(c0.x, c1.y, slot)].rgb;
-        const float3 t11 = g_NwbSwShadowCoarse[uint3(c1.x, c1.y, slot)].rgb;
+        const half3 t00 = half3(g_NwbSwShadowCoarse[uint3(c0.x, c0.y, slot)].rgb);
+        const half3 t10 = half3(g_NwbSwShadowCoarse[uint3(c1.x, c0.y, slot)].rgb);
+        const half3 t01 = half3(g_NwbSwShadowCoarse[uint3(c0.x, c1.y, slot)].rgb);
+        const half3 t11 = half3(g_NwbSwShadowCoarse[uint3(c1.x, c1.y, slot)].rgb);
 
         // Edge metric: worst per-channel range across the 4 coarse samples.
-        const float3 lo = min(min(t00, t10), min(t01, t11));
-        const float3 hi = max(max(t00, t10), max(t01, t11));
-        const float range = max(max(hi.x - lo.x, hi.y - lo.y), hi.z - lo.z);
+        const half3 lo = min(min(t00, t10), min(t01, t11));
+        const half3 hi = max(max(t00, t10), max(t01, t11));
+        const half range = max(max(hi.x - lo.x, hi.y - lo.y), hi.z - lo.z);
 
-        float3 transmittance;
-        if(range > edgeThreshold){
+        half3 transmittance;
+        if(float(range) > edgeThreshold){
             // Edge block: re-trace this exact full-res pixel.
-            transmittance = float3(nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i], float2(0.0, 0.0)));
+            transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i], float2(0.0, 0.0));
             ++tracedRays;
         }
         else{
             // Flat interior: bilinearly interpolate the coarse transmittance.
-            const float3 tx0 = lerp(t00, t10, w.x);
-            const float3 tx1 = lerp(t01, t11, w.x);
-            transmittance = lerp(tx0, tx1, w.y);
+            const half3 tx0 = lerp(t00, t10, half(w.x));
+            const half3 tx1 = lerp(t01, t11, half(w.x));
+            transmittance = lerp(tx0, tx1, half(w.y));
         }
 
-        const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb;
+        const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
         g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * transmittance, 1.0);
     }
 

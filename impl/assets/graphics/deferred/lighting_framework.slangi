@@ -70,9 +70,8 @@
 [[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_IRRADIANCE, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_NwbSurfelIrradiance;
 
 // Indirect irradiance for the OPAQUE deferred path: read the resolved surfel texture at THIS pixel; where no surfel
-// covered it (a < 0.5) fall back to the hemiAmbient ambient term. Replaces the old in-pixel nwbSurfelGather. The
-// resolve texture is 1:1 with the screen, so a point Load (not a bilinear Sample) reproduces the old per-pixel gather
-// exactly -- a bilinear tap would blend the coverage flag + irradiance across the covered/uncovered boundary.
+// covered it (a < 0.5) fall back to the hemiAmbient ambient term. The resolve texture is 1:1 with the screen, so use a
+// point Load; a bilinear tap would blend the coverage flag + irradiance across the covered/uncovered boundary.
 half3 nwbBxdfResolvedIndirect(float2 uv, float3 normalVector){
     uint width;
     uint height;

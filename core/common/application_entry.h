@@ -48,20 +48,23 @@ template<typename Invoke>
         InitializerGuard commonInitializerGuard;
         if(!commonInitializerGuard.initialize()){
 #if defined(NWB_BUILDMODE)
-            [[maybe_unused]] const bool wroteNameSymbols = NameSymbols::WriteDefaultFile();
+            if(!NameSymbols::WriteDefaultFile())
+                return -1;
 #endif
             return -1;
         }
 
         const int result = Forward<Invoke>(invoke)();
 #if defined(NWB_BUILDMODE)
-        [[maybe_unused]] const bool wroteNameSymbols = NameSymbols::WriteDefaultFile();
+        if(!NameSymbols::WriteDefaultFile())
+            return -1;
 #endif
         return result;
     }
     catch(...){
 #if defined(NWB_BUILDMODE)
-        [[maybe_unused]] const bool wroteNameSymbols = NameSymbols::WriteDefaultFile();
+        if(!NameSymbols::WriteDefaultFile())
+            return -1;
 #endif
         return -1;
     }

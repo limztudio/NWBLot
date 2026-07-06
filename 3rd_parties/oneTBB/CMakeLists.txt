@@ -112,7 +112,15 @@ else()
 
     find_package(TBB CONFIG QUIET)
     if(TARGET TBB::tbb)
-        nwb_normalize_tbb_imported_config(TBB::tbb)
+        foreach(_nwb_tbb_imported_target
+                TBB::tbb
+                TBB::tbbmalloc
+                TBB::tbbmalloc_proxy
+                TBB::tbbbind_2_5
+                TBB::irml)
+            nwb_normalize_tbb_imported_config(${_nwb_tbb_imported_target})
+        endforeach()
+
         if(NOT TARGET TBB::tbbmalloc)
             find_library(_tbbmalloc_library NAMES tbbmalloc libtbbmalloc.so.2 libtbbmalloc)
             if(NOT _tbbmalloc_library)

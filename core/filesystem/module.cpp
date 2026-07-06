@@ -4,13 +4,13 @@
 
 #include "module.h"
 #include "arena_names.h"
-#include "volume_naming.h"
 
 
 #include <core/common/log.h>
 #include <core/alloc/core.h>
 #include <core/alloc/scratch.h>
 #include <global/binary.h>
+#include <global/filesystem/volume_naming.h>
 
 #include <cerrno>
 
@@ -624,7 +624,7 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
     };
 
     for(usize segmentIndex = 0;; ++segmentIndex){
-        const Path currentPath = fromDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
+        const Path currentPath = fromDirectory / ::MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
         const bool exists = FileExists(currentPath, errorCode);
         if(errorCode){
             NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to query volume segment '{}': {}")
@@ -697,7 +697,7 @@ static bool MoveStagedVolumeSegments(const Path& fromDirectory, const Path& toDi
     }
 
     for(usize segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex){
-        const Path fileName(fromDirectory.arena(), MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str());
+        const Path fileName(fromDirectory.arena(), ::MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str());
         const Path sourcePath = fromDirectory / fileName;
         const Path destinationPath = toDirectory / fileName;
         if(!RenamePath(sourcePath, destinationPath, errorCode)){
@@ -719,7 +719,7 @@ static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, 
     ErrorCode errorCode;
 
     for(usize segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex){
-        const Path segmentPath = outputDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
+        const Path segmentPath = outputDirectory / ::MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
         errorCode.clear();
         if(!RemoveFile(segmentPath, errorCode)){
             NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to remove promoted segment '{}' after failed promotion: {}")
@@ -783,7 +783,7 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
     }
 
     for(usize segmentIndex = 0;; ++segmentIndex){
-        const Path hashedPath = outputDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
+        const Path hashedPath = outputDirectory / ::MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
 
         const bool exists = FileExists(hashedPath, errorCode);
         if(errorCode){
@@ -1423,7 +1423,7 @@ bool VolumeFileSystem::scanSegmentsLocked(){
     m_segmentPaths.clear();
 
     for(usize segmentIndex = 0;; ++segmentIndex){
-        const Path hashedSegmentPath = m_mountDirectory / MakeVolumeSegmentFileName(m_volumeName.view(), segmentIndex).c_str();
+        const Path hashedSegmentPath = m_mountDirectory / ::MakeVolumeSegmentFileName(m_volumeName.view(), segmentIndex).c_str();
 
         const bool exists = FileExists(hashedSegmentPath, errorCode);
         if(errorCode){
@@ -1986,7 +1986,7 @@ void VolumeFileSystem::unmountLocked(){
 }
 
 Path VolumeFileSystem::segmentPath(const usize segmentIndex)const{
-    return m_mountDirectory / MakeVolumeSegmentFileName(m_volumeName.view(), segmentIndex).c_str();
+    return m_mountDirectory / ::MakeVolumeSegmentFileName(m_volumeName.view(), segmentIndex).c_str();
 }
 
 

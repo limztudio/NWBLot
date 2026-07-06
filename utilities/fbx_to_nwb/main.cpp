@@ -35,8 +35,8 @@ int Run(const int argc, char** argv){
     if(prompted){
         NWB_COUT << "Press Enter to exit...";
         NWB::FbxToNwb::AString line;
-        // Interactive pause prompt: we only block until the user presses Enter, so the read result carries nothing to act on.
-        [[maybe_unused]] const bool readLine = ReadTextLine(NWB_CIN, line);
+        if(!ReadTextLine(NWB_CIN, line))
+            NWB_COUT << "\n";
     }
     return result;
 }

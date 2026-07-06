@@ -9,13 +9,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-pixel surfel gather for the deferred-lighting consumer. Replaces the retired probe grid's 8-probe trilinear +
-// Chebyshev fetch inside nwbBxdfIndirectIrradiance (which keeps its signature + hemiAmbient fallback + normal bias).
-// Biases the shaded point outward along the normal, hashes it, walks the 3x3x3 neighbour cells' surfel lists (capped),
-// and weights each surfel by normal alignment * distance falloff * confidence (samples integrated). Returns false when
-// no surfel covers the point, so the caller falls back to hemiAmbient. The pool + cell-head + params are bound in the
-// deferred-lighting set via the NWB_SCENE_GI_SURFEL_* slot macros (lighting_framework.slangi); declared here so the
-// gather is self-contained. See .helper/surfel_gi_plan.md (Application).
+// Per-pixel surfel gather for the deferred-lighting consumer. Biases the shaded point outward along the normal, hashes it,
+// walks the 3x3x3 neighbour cells' surfel lists (capped), and weights each surfel by normal alignment * distance falloff *
+// confidence (samples integrated). Returns false when no surfel covers the point, so the caller falls back to hemiAmbient.
+// The pool + cell-head + params are bound via the NWB_SCENE_GI_SURFEL_* slot macros.
 
 
 #include "surfel_record.slangi"

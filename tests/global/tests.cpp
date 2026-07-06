@@ -14,6 +14,7 @@
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
 #include <global/filesystem/utility.h>
+#include <global/filesystem/volume_naming.h>
 #include <global/hash_utils.h>
 #include <global/limit.h>
 #include <global/text_utils.h>
@@ -187,7 +188,8 @@ TEST(Global, NameSymbolsWriteDefaultFile){
     namesymPath.replace_extension(NWB_TEXT(".namesym"));
 
     ErrorCode removeError;
-    [[maybe_unused]] const bool removedOldNamesym = RemoveFile(namesymPath, removeError);
+    if(!RemoveFile(namesymPath, removeError))
+        ASSERT_FALSE(removeError);
 
     EXPECT_TRUE(NWB::Core::Common::NameSymbols::WriteDefaultFile());
 
@@ -196,7 +198,8 @@ TEST(Global, NameSymbolsWriteDefaultFile){
     EXPECT_NE(namesymText.find("nwb_namesym_v1"), AString::npos);
     EXPECT_NE(namesymText.find("write/default/namesym"), AString::npos);
 
-    [[maybe_unused]] const bool removedNamesym = RemoveFile(namesymPath, removeError);
+    if(!RemoveFile(namesymPath, removeError))
+        EXPECT_FALSE(removeError);
 }
 
 TEST(Global, NameSymbolsSerializeRoundTrip){
@@ -404,6 +407,18 @@ TEST(Global, FilesystemUtilityHelpers){
     EXPECT_FALSE(TextFileContains(textFile, AStringView("gamma")));
 
     EXPECT_TRUE(RemoveAllIfExists(root, error));
+}
+
+TEST(Global, FilesystemVolumeSegmentNaming){
+    const ACompactString firstSegment = MakeVolumeSegmentFileName("graphics", 0u);
+    const ACompactString sameSegment = MakeVolumeSegmentFileName("graphics", 0u);
+    const ACompactString nextSegment = MakeVolumeSegmentFileName("graphics", 1u);
+
+    EXPECT_EQ(firstSegment.view(), sameSegment.view());
+    EXPECT_NE(firstSegment.view(), nextSegment.view());
+    EXPECT_EQ(firstSegment.view().size(), s_HexU64DigitCount + AStringView(".vol").size());
+    EXPECT_EQ(firstSegment.view().substr(s_HexU64DigitCount), AStringView(".vol"));
+    EXPECT_EQ(HashVolumeSegmentFileName("graphics", 0u), HashVolumeSegmentFileName("graphics", 0u));
 }
 
 TEST(Global, StringTableText){

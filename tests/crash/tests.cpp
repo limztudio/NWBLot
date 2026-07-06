@@ -74,7 +74,8 @@ inline constexpr Name s_SignalChildInstallArena("tests/crash/signal_child_instal
 
 static void RemoveTestArtifacts(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
     ErrorCode error;
-    [[maybe_unused]] const bool removed = RemoveAllIfExists(TestCaseDirectory(arena, testGroup), error);
+    if(!RemoveAllIfExists(TestCaseDirectory(arena, testGroup), error))
+        EXPECT_FALSE(error);
 }
 
 [[nodiscard]] static bool CreatePackageDirectory(

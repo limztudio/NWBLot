@@ -138,7 +138,9 @@ static void __hidden_capture_frame_pointer_callstack(
 
 static void __hidden_warm_up_unwinder()noexcept{
     void* warmUpAddresses[Detail::s_MaxCallstackFrames] = {};
-    [[maybe_unused]] const int warmedFrameCount = backtrace(warmUpAddresses, static_cast<int>(Detail::s_MaxCallstackFrames));
+    const int warmedFrameCount = backtrace(warmUpAddresses, static_cast<int>(Detail::s_MaxCallstackFrames));
+    if(warmedFrameCount <= 0)
+        return;
 }
 #endif
 
@@ -216,7 +218,8 @@ static void __hidden_signal_handler(const int signalNumber, siginfo_t* signalInf
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     // std::terminate runs in a normal thread context, so unwind a callstack directly instead of relying on the
     // follow-up SIGABRT to carry it.
-    [[maybe_unused]] const bool unwoundTerminateCallstack = __hidden_capture_eh_frame_callstack(options, 0u);
+    if(!__hidden_capture_eh_frame_callstack(options, 0u))
+        options.callstackFrameCount = 0u;
 #endif
     Detail::NotifyCrashHandler(Detail::CrashReasonKind::Terminate, 0u, options);
     abort();
@@ -297,11 +300,14 @@ static void __hidden_redirect_stdio_to_null()noexcept{
     if(nullFd < 0)
         return;
 
-    [[maybe_unused]] const int stdinRedirectFd = dup2(nullFd, STDIN_FILENO);
-    [[maybe_unused]] const int stdoutRedirectFd = dup2(nullFd, STDOUT_FILENO);
-    [[maybe_unused]] const int stderrRedirectFd = dup2(nullFd, STDERR_FILENO);
-    if(nullFd > STDERR_FILENO)
-        close(nullFd);
+    if(dup2(nullFd, STDIN_FILENO) < 0)
+        return;
+    if(dup2(nullFd, STDOUT_FILENO) < 0)
+        return;
+    if(dup2(nullFd, STDERR_FILENO) < 0)
+        return;
+    if(nullFd > STDERR_FILENO && close(nullFd) != 0)
+        return;
 }
 
 static void __hidden_silence_child_process(int& requestReadFd, int& ackWriteFd)noexcept{
@@ -310,7 +316,11 @@ static void __hidden_silence_child_process(int& requestReadFd, int& ackWriteFd)n
     if(!__hidden_move_fd_above_stdio(ackWriteFd))
         return;
 
-    [[maybe_unused]] const pid_t sessionId = setsid();
+    const pid_t sessionId = setsid();
+    if(sessionId < 0){
+        __hidden_redirect_stdio_to_null();
+        return;
+    }
     __hidden_redirect_stdio_to_null();
 }
 
@@ -401,7 +411,8 @@ static void __hidden_wait_for_child_process(const pid_t pid)noexcept{
         ? 0u
         : now + s_HandlerExitWaitMilliseconds
     ;
-    [[maybe_unused]] const bool childProcessSucceeded = ProcessExecutionDetail::WaitForProcessSuccess(pid, deadline);
+    if(!ProcessExecutionDetail::WaitForProcessSuccess(pid, deadline))
+        return;
 }
 #endif
 
@@ -482,7 +493,9 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options)noexcept{
     CrashDumpRequestOptions requestOptions = options;
     requestOptions.waitMilliseconds = s_PlatformCrashHandlerWaitMilliseconds;
-    [[maybe_unused]] const CrashDumpResult requestResult = RequestCrashDump(reasonKind, reasonCode, requestOptions);
+    const CrashDumpResult requestResult = RequestCrashDump(reasonKind, reasonCode, requestOptions);
+    if(!requestResult.requestAccepted())
+        return;
 }
 
 template<typename ArenaT>

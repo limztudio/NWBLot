@@ -104,12 +104,10 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow preparation failed; transparent shadows absent this frame"));
         }
 
-        // HW soft-shadow unification (Phase 1): route the HW OPAQUE shadow through the SAME half-res soft denoise chain
-        // the SW path uses, so the HW opaque shadow becomes a half-res jittered -> temporal -> a-trous -> upsampled soft
-        // shadow. The HW opaque-soft trace (m_shadowSoftPipeline) writes the SAME shadowSoftHalfA buffer, then the shared
-        // geometry-downsample + a-trous resolve (+ temporal reproject-merge) denoise it -- writing the SAME m_softShadow*
-        // state the SW branch writes (NOT a fork), so the render's soft block is backend-agnostic. Non-fatal: a failure
-        // leaves m_softShadowReady false and the HW render falls back to the existing full-res 1-spp hard-ish trace.
+        // Route the HW opaque shadow through the same half-res soft denoise chain the SW path uses: half-res jittered trace
+        // -> temporal reproject-merge -> a-trous resolve -> upsample. The HW opaque-soft trace writes shadowSoftHalfA, then
+        // the shared soft block denoises it through the same m_softShadow* state as the SW branch. Non-fatal: a failure
+        // leaves m_softShadowReady false and the HW render falls back to the full-res 1-spp trace.
         rayTracingState().m_softShadowReady =
             outBackendReady
             && ensureShadowSoftPipeline()
@@ -132,18 +130,11 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         if(rayTracingState().m_softShadowReady && !rayTracingState().m_softShadowTemporalReady)
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
 
-        // HW soft-shadow unification (Phase 2): the colored TRANSPARENT shadow now rides the SAME soft transparent
-        // trace+fold the SW path uses (traced against the transparent-only software scene BVH built above via
-        // m_hybridTransparentShadowReady), folded (multiplied) onto the soft-opaque visibility inside the shared
-        // dispatchSoftShadowDenoiseAndTransparentFold -- retiring the old hybrid multiply (renderGpuBvhShadowVisibility,
-        // multiplyOntoOpaque=true), which system.cpp now keeps only as the !softTransparentReady fallback. Gated on BOTH
-        // the HW opaque soft path (m_softShadowReady -- the fold folds onto its visibility) AND the transparent SW BVH
-        // being ready (m_hybridTransparentShadowReady -- guarantees m_swShadowBindingSet + m_swShadowTransparentSoftPipeline
-        // + the transparent-only scene BVH exist for the trace). Opaque-only scenes leave m_hybridTransparentShadowReady
-        // false, so m_softTransparentReady stays false and the transparent block is skipped (correct). Same ensure* the
-        // SW branch calls -- they build the RGB resolve pipeline + transparent resolve/merge binding sets over the
-        // transparent half-res buffers. Non-fatal: a sub-ensure failure leaves the state false and the fallback multiply
-        // runs.
+        // Colored transparent shadow uses the same soft transparent trace+fold path on the HW and SW shadow branches:
+        // trace against the transparent-only software scene BVH, then multiply the denoised result onto soft-opaque
+        // visibility inside dispatchSoftShadowDenoiseAndTransparentFold. Gate this on the HW opaque soft path and the
+        // transparent SW BVH resources; opaque-only scenes leave m_softTransparentReady false. Non-fatal: a sub-ensure
+        // failure leaves the state false and system.cpp can run the hybrid multiply fallback.
         rayTracingState().m_softTransparentReady =
             rayTracingState().m_softShadowReady
             && rayTracingState().m_hybridTransparentShadowReady

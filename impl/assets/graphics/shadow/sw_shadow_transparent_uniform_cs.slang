@@ -7,10 +7,9 @@
 // resolution while the soft colored transparent shadow is shared 2x2. Kept for A/B comparison against the adaptive path
 // (dispatched when NWB_SW_SHADOW_ADAPTIVE=0).
 //
-// PRESERVED-AS-IS: the block stride is a LITERAL *2u / 2x2 fold, NOT NWB_SW_SHADOW_COARSE_FACTOR. This pass predates the
-// adaptive coarse factor and always downscaled by exactly 2; at the current COARSE_SHIFT=2 the dispatch grid is the
-// COARSE grid (quarter-res), so a *2u block covers only half the screen. That is a PRE-EXISTING latent property of this
-// A/B-only baseline; it is carried forward byte-for-byte here (this is a behavior-preserving decomposition, not a fix).
+// The block stride is a LITERAL *2u / 2x2 fold, NOT NWB_SW_SHADOW_COARSE_FACTOR. At the current COARSE_SHIFT=2 the
+// dispatch grid is the COARSE grid (quarter-res), so a *2u block covers only half the screen. This A/B-only baseline keeps
+// that behaviour for comparison with the adaptive path.
 
 
 #include "sw_binding_slots.h"
@@ -76,8 +75,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const uint2 sub = base + uint2(dx, dy);
             if(sub.x >= g_NwbSwShadowPush.width || sub.y >= g_NwbSwShadowPush.height)
                 continue;
-            const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(sub, uint(slot))].rgb;
-            g_NwbSwShadowVisibility[uint3(sub, uint(slot))] = float4(opaqueMask * float3(transmittance), 1.0);
+            const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(sub, uint(slot))].rgb);
+            g_NwbSwShadowVisibility[uint3(sub, uint(slot))] = float4(opaqueMask * transmittance, 1.0);
         }
     }
 }

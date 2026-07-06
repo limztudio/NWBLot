@@ -8,8 +8,8 @@
 // COMPUTE (spawn / hash-build / trace / this resolve), never by the pixel shader, so the frames-in-flight race (the
 // pixel gather of frame N overlapping the compute RMW of frame N+1 on the shared single-buffered pool) is eliminated.
 // Output alpha = 1 where a surfel covered the pixel (rgb = gathered irradiance); 0 elsewhere (background or no coverage)
-// so the lighting falls back to hemiAmbient. Matches the OLD in-pixel gather exactly: the query normal is decoded from
-// the G-buffer the same way the lighting decodes it (encode = n*0.5+0.5), so the surfel normalWeight is unchanged.
+// so the lighting falls back to hemiAmbient. Decode the query normal the same way lighting does (encode = n*0.5+0.5), so
+// the surfel normalWeight matches the deferred path.
 
 
 // Point the gather's pool / hash / params bindings at the resolve set BEFORE surfel_gather declares them.

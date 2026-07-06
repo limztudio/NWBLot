@@ -476,7 +476,9 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         // Ingest a remote client's uploaded symbol table into the server registry so DecodeHashTokens can rewrite
         // that client's debug-hash tokens back to readable names. Silent: symbol pushes are routine, not log-worthy.
         const AStringView nameSymbolBody(reinterpret_cast<const char*>(info->buffer), info->size);
-        [[maybe_unused]] const bool loadedNameSymbols = Core::Common::NameSymbols::LoadFromMemory(nameSymbolBody);
+        if(!Core::Common::NameSymbols::LoadFromMemory(nameSymbolBody)){
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an empty or malformed name-symbol upload"), Type::Warning);
+        }
     }
     else{
         MessageType message = MakeMessageType(thisPtr->arena());

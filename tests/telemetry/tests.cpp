@@ -594,13 +594,14 @@ TEST(Telemetry, RecorderAcceptsConcurrentRecords){
     for(u32 threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
         threads[threadIndex] = std::thread([&recorder, threadIndex](){
             for(u32 eventIndex = 0u; eventIndex < eventsPerThread; ++eventIndex){
-                [[maybe_unused]] const bool recorded = Telemetry::RecordTextLog(
+                if(!Telemetry::RecordTextLog(
                     recorder,
                     NWB::Core::Common::LogType::Info,
                     NWB_TEXT("concurrent telemetry record"),
                     eventIndex,
                     threadIndex
-                );
+                ))
+                    return;
             }
         });
     }
@@ -653,8 +654,10 @@ class PendingNameFrameGraphContributor final : public Telemetry::IFrameGraphCont
 public:
     virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
         const Telemetry::FrameGraphNodeHandle source = builder.addPass(Name("source"), "Source");
-        [[maybe_unused]] const Telemetry::FrameGraphNodeHandle target = builder.addResource(Name("target"), "Target");
-        [[maybe_unused]] const Telemetry::FrameGraphNodeHandle duplicateTarget = builder.addResource(Name("target"), "Duplicate Target");
+        const Telemetry::FrameGraphNodeHandle target = builder.addResource(Name("target"), "Target");
+        const Telemetry::FrameGraphNodeHandle duplicateTarget = builder.addResource(Name("target"), "Duplicate Target");
+        if(!target.valid() || !duplicateTarget.valid())
+            return false;
 
         builder.dependsOnByName(source, Name("target"), 7u);
         builder.dependsOnByName(source, Name("missing"), 9u);

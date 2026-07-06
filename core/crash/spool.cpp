@@ -32,6 +32,12 @@ Alloc::PersistentArena& DumpArena(){
     return s_Arena;
 }
 
+void InitializeDumpArena()noexcept{
+    const Alloc::ArenaMemoryStats stats = DumpArena().memoryStats();
+    if(stats.reservedBytes != 0u)
+        return;
+}
+
 template<typename ArenaT>
 bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory){
     ErrorCode error;

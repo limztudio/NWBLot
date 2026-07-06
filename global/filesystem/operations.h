@@ -478,7 +478,9 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline bool EnsureDirectories(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-    [[maybe_unused]] const bool createdAny = CreateDirectories(path, outError);
+    if(CreateDirectories(path, outError))
+        return true;
+
     return !outError;
 }
 
@@ -534,6 +536,7 @@ template<typename ArenaT>
         return RemoveFile(path, outError) ? 1u : 0u;
     }
 
+    u64 removedCount = 0u;
     Path<ArenaT> pattern = path / NWB_TEXT("*");
     WIN32_FIND_DATA data = {};
     HANDLE findHandle = FindFirstFile(pattern.c_str(), &data);
@@ -544,10 +547,10 @@ template<typename ArenaT>
                 continue;
 
             const Path<ArenaT> child = path / fileName;
-            [[maybe_unused]] const u64 removedChildCount = RemoveAllImpl(child, outError);
+            removedCount += RemoveAllImpl(child, outError);
             if(outError){
                 FindClose(findHandle);
-                return 0u;
+                return removedCount;
             }
         }while(FindNextFile(findHandle, &data));
         FindClose(findHandle);
@@ -555,11 +558,11 @@ template<typename ArenaT>
 
     if(RemoveDirectory(path.c_str())){
         ClearError(outError);
-        return 1u;
+        return removedCount + 1u;
     }
 
     SetLastSystemError(outError);
-    return 0u;
+    return removedCount;
 #else
     struct stat pathStat;
     if(lstat(path.c_str(), &pathStat) != 0){
@@ -654,8 +657,14 @@ template<typename ArenaT>
         return !outError;
 
     outError.clear();
-    [[maybe_unused]] const u64 removedCount = RemoveAll(path, outError);
-    return !outError;
+    const u64 removedCount = RemoveAll(path, outError);
+    if(outError)
+        return false;
+    if(removedCount != 0u)
+        return true;
+
+    const bool stillExists = FileExists(path, outError);
+    return !outError && !stillExists;
 }
 
 template<typename ArenaT>

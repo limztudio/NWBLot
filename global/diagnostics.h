@@ -431,7 +431,9 @@ inline void SetDiagnosticEventCallback(const DiagnosticEventCallback callback)no
 
 inline void ClearDiagnosticEventCallback(const DiagnosticEventCallback callback)noexcept{
     DiagnosticEventCallback expected = callback;
-    [[maybe_unused]] const bool clearedCallback = DiagnosticDetail::g_EventCallback.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel);
+    const bool clearedCallback = DiagnosticDetail::g_EventCallback.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel);
+    if(clearedCallback)
+        return;
 }
 
 NWB_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{

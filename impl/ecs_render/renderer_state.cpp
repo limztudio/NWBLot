@@ -417,8 +417,8 @@ void RendererRayTracingState::invalidateResources(){
     m_causticAccumulatorDecayBindingSet.reset();
     m_causticAccumulatorDecayAccumulator = nullptr;
     m_causticAccumulatorDecayPipelineFailed = false;
-    // The accumulator target is released on invalidation (deferred targets are recreated), so its splat-space history is
-    // gone -- re-seed the EMA (the next enabled frame clears instead of decaying).
+    // The accumulator target is released on invalidation (deferred targets are recreated), so re-seed the EMA; the next
+    // enabled frame clears instead of decaying.
     m_causticAccumulatorInitialized = false;
     // Surfel GI. The persistent pool/cell-head/counter/params buffers live on this state (not DeferredFrameTargets), so
     // a resize does not reset convergence -- but a full invalidate (device reset) does release + re-seed them.

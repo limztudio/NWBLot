@@ -13,8 +13,8 @@
 
 half3 nwbProjectUvDebug(const float2 uv0){
     const half2 wrappedUv = half2(frac(uv0));
-    const float2 checkerCell = floor(float2(wrappedUv) * 8.0);
-    const half checker = half(fmod(checkerCell.x + checkerCell.y, 2.0));
+    const half2 checkerCell = floor(wrappedUv * half(8.0));
+    const half checker = fmod(checkerCell.x + checkerCell.y, half(2.0));
     const half3 uvColor = half3(wrappedUv, half(1.0) - wrappedUv.x);
     return lerp(uvColor * half(0.55), uvColor, checker);
 }

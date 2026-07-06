@@ -27,14 +27,20 @@ namespace __hidden_ui{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr usize s_TextureNameIdBufferBytes = 32u;
+static constexpr usize s_TextureNameBufferBytes = 64u;
+static constexpr usize s_RgbaPixelBytes = 4u;
+static constexpr usize s_RgbaAlphaByteOffset = 3u;
+static constexpr u8 s_OpaqueAlpha = 255u;
+
 static Name UiTextureName(const usize uniqueId){
     static constexpr AStringView s_Prefix("ecs_ui/imgui_texture_");
-    char idBuffer[32] = {};
+    char idBuffer[s_TextureNameIdBufferBytes] = {};
     const AStringView idText = FormatDecimal(uniqueId, idBuffer);
     if(idText.empty())
         return Name("ecs_ui/imgui_texture");
 
-    char nameBuffer[64] = {};
+    char nameBuffer[s_TextureNameBufferBytes] = {};
     const usize nameSize = s_Prefix.size() + idText.size();
     if(nameSize > sizeof(nameBuffer))
         return Name("ecs_ui/imgui_texture");
@@ -61,13 +67,13 @@ static bool BuildUploadPixels(ImTextureData& textureData, ByteVector& scratch, c
 
     const usize width = static_cast<usize>(textureData.Width);
     const usize height = static_cast<usize>(textureData.Height);
-    if(width > Limit<usize>::s_Max / height || width * height > Limit<usize>::s_Max / 4u){
+    if(width > Limit<usize>::s_Max / height || width * height > Limit<usize>::s_Max / s_RgbaPixelBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: ImGui texture upload size overflows"));
         return false;
     }
 
     const usize pixelCount = width * height;
-    const usize rowPitch = width * 4u;
+    const usize rowPitch = width * s_RgbaPixelBytes;
     if(textureData.Format == ImTextureFormat_RGBA32){
         outPixels = textureData.Pixels;
         outRowPitch = rowPitch;
@@ -78,10 +84,10 @@ static bool BuildUploadPixels(ImTextureData& textureData, ByteVector& scratch, c
         return false;
     }
 
-    scratch.assign(pixelCount * 4u, 255u);
+    scratch.assign(pixelCount * s_RgbaPixelBytes, s_OpaqueAlpha);
     const u8* src = textureData.Pixels;
-    u8* dstAlpha = scratch.data() + 3u;
-    for(usize i = 0; i < pixelCount; ++i, dstAlpha += 4u)
+    u8* dstAlpha = scratch.data() + s_RgbaAlphaByteOffset;
+    for(usize i = 0; i < pixelCount; ++i, dstAlpha += s_RgbaPixelBytes)
         *dstAlpha = src[i];
 
     outPixels = scratch.data();

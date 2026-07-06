@@ -665,13 +665,21 @@ template<typename ElementT, usize ComponentCount>
 }
 
 [[nodiscard]] bool IsAllowedMeshAssetField(const Core::Metascript::MStringView fieldName){
-    return fieldName == Core::Metascript::MStringView("positions", 9u)
-        || fieldName == Core::Metascript::MStringView("normals", 7u)
-        || fieldName == Core::Metascript::MStringView("tangents", 8u)
-        || fieldName == Core::Metascript::MStringView("uv0", 3u)
-        || fieldName == Core::Metascript::MStringView("colors", 6u)
-        || fieldName == Core::Metascript::MStringView("vertex_refs", 11u)
-        || fieldName == Core::Metascript::MStringView("indices", 7u)
+    static constexpr AStringView s_PositionsField = "positions";
+    static constexpr AStringView s_NormalsField = "normals";
+    static constexpr AStringView s_TangentsField = "tangents";
+    static constexpr AStringView s_Uv0Field = "uv0";
+    static constexpr AStringView s_ColorsField = "colors";
+    static constexpr AStringView s_VertexRefsField = "vertex_refs";
+    static constexpr AStringView s_IndicesField = "indices";
+
+    return fieldName == Core::Metascript::MStringView(s_PositionsField.data(), s_PositionsField.size())
+        || fieldName == Core::Metascript::MStringView(s_NormalsField.data(), s_NormalsField.size())
+        || fieldName == Core::Metascript::MStringView(s_TangentsField.data(), s_TangentsField.size())
+        || fieldName == Core::Metascript::MStringView(s_Uv0Field.data(), s_Uv0Field.size())
+        || fieldName == Core::Metascript::MStringView(s_ColorsField.data(), s_ColorsField.size())
+        || fieldName == Core::Metascript::MStringView(s_VertexRefsField.data(), s_VertexRefsField.size())
+        || fieldName == Core::Metascript::MStringView(s_IndicesField.data(), s_IndicesField.size())
     ;
 }
 
@@ -1016,8 +1024,9 @@ template<typename Value, typename WriteValue>
 }
 
 void NormalizeLineEndings(AString& inOutSource, const bool useCrlf){
+    static constexpr usize s_CrlfReserveGrowthDivisor = 16u;
     AString normalized;
-    normalized.reserve(useCrlf ? inOutSource.size() + inOutSource.size() / 16u : inOutSource.size());
+    normalized.reserve(useCrlf ? inOutSource.size() + inOutSource.size() / s_CrlfReserveGrowthDivisor : inOutSource.size());
 
     for(usize i = 0u; i < inOutSource.size(); ++i){
         const char c = inOutSource[i];

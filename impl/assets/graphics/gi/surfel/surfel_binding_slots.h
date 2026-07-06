@@ -53,9 +53,9 @@
 
 // RESOLVE pass: a COMPUTE pass that gathers the surfel irradiance ONCE PER PIXEL into a screen-space texture, which
 // the deferred-lighting PIXEL shader then samples. This decouples the pixel consumer from the read-write surfel pool:
-// the pool is now touched ONLY by compute (like the caustic accumulator), so the frames-in-flight pixel-read-vs-next-
-// frame-compute-write race is gone. Output alpha = 1 where a surfel covered the pixel (rgb = gathered irradiance), 0
-// otherwise (the lighting falls back to hemiAmbient). Its own binding set.
+// the pool is touched only by compute (like the caustic accumulator), avoiding frames-in-flight pixel-read-vs-next-frame
+// compute-write races. Output alpha = 1 where a surfel covered the pixel (rgb = gathered irradiance), 0 otherwise (the
+// lighting falls back to hemiAmbient). Its own binding set.
 #define NWB_SURFEL_RESOLVE_SET 0
 #define NWB_SURFEL_RESOLVE_BINDING_CONSTANTS 0              // ConstantBuffer<NwbSurfelConstants>
 #define NWB_SURFEL_RESOLVE_BINDING_POOL 1                  // StructuredBuffer<NwbSurfel> (SRV)
@@ -94,8 +94,7 @@
 #define NWB_SURFEL_POOL_CAPACITY 16384u        // 16384 * 96B = 1.5 MB pool (U3 record; the U4 snapshot mirrors it)
 #define NWB_SURFEL_HASH_CELL_COUNT 262144u     // 2^18 * 4B = 1 MB cell-head table
 // One surfel per hash cell: the CELL_SIZE sets the surfel spacing (GI resolution); the RADIUS is a bit larger so the
-// gather's 3x3x3 distance-weighted blend of neighbouring cells' surfels overlaps smoothly (no coverage gaps). Decoupled
-// (radius != cellSize) because the density is now the cell grid, not the old coverage-sum that needed radius = cellSize/2.
+// gather's 3x3x3 distance-weighted blend of neighbouring cells' surfels overlaps smoothly without coverage gaps.
 #define NWB_SURFEL_CELL_SIZE 0.6f              // world units -- hash cell edge = surfel spacing (depth-scaled in U6)
 #define NWB_SURFEL_DEFAULT_RADIUS 0.9f         // world units -- gather falloff radius (~1.5x cell for neighbour overlap)
 #define NWB_SURFEL_SPAWN_TILE 16u              // one spawn candidate per 16x16 screen tile

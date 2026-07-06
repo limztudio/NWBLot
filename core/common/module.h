@@ -220,15 +220,21 @@ public:
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
 class WinFrame : public FrameData{
+private:
+    static constexpr usize s_ActiveFlagByteIndex = sizeof(u16) * 2u;
+    static constexpr usize s_InstancePointerSlot = 1u;
+    static constexpr usize s_WindowPointerSlot = 2u;
+
+
 public:
-    inline bool isActive()const{ return m_data.u8[4] != 0; }
-    inline void setActive(bool value){ m_data.u8[4] = value ? 1u : 0u; }
+    inline bool isActive()const{ return m_data.u8[s_ActiveFlagByteIndex] != 0; }
+    inline void setActive(bool value){ m_data.u8[s_ActiveFlagByteIndex] = value ? 1u : 0u; }
 
-    inline HINSTANCE instance()const{ return static_cast<HINSTANCE>(m_data.ptr[1]); }
-    inline void setInstance(HINSTANCE value){ m_data.ptr[1] = value; }
+    inline HINSTANCE instance()const{ return static_cast<HINSTANCE>(m_data.ptr[s_InstancePointerSlot]); }
+    inline void setInstance(HINSTANCE value){ m_data.ptr[s_InstancePointerSlot] = value; }
 
-    inline HWND hwnd()const{ return static_cast<HWND>(m_data.ptr[2]); }
-    inline void setHwnd(HWND value){ m_data.ptr[2] = value; }
+    inline HWND hwnd()const{ return static_cast<HWND>(m_data.ptr[s_WindowPointerSlot]); }
+    inline void setHwnd(HWND value){ m_data.ptr[s_WindowPointerSlot] = value; }
 };
 #elif defined(NWB_PLATFORM_LINUX)
 namespace LinuxFrameBackend{

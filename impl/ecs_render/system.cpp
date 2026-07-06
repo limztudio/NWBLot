@@ -371,21 +371,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         bool shadowVisibilityWritten = false;
         if(m_preparedShadowVisibilityReady && hardwareShadowSupported){
-            // HW soft-shadow unification (Phase 2): renderShadowVisibility casts the OPAQUE shadow through the half-res
-            // soft denoise chain AND, when the scene holds a transparent occluder (softTransparentShadowReady), folds the
-            // colored TRANSPARENT shadow onto it inside that same chain -- traced against the transparent-only software
-            // scene BVH and multiplied at the upsample (final = opaqueSoft * transparentSoft). The transparent shadow
-            // stays on the software Moeller-Trumbore path (not RayQuery): the HW intersector and the SW traversal disagree
-            // by +/-1 crossing at grazing silhouettes -- invisible for the binary opaque test, but it corrupts the colored
-            // chord, so the colored transmittance is always software-traced.
+            // renderShadowVisibility casts the opaque shadow through the half-res soft denoise chain and, when
+            // softTransparentShadowReady is true, folds colored transparent shadow into that same chain. Transparent shadow
+            // stays on the software Moeller-Trumbore path: HW RayQuery and SW traversal can disagree by +/-1 crossing at
+            // grazing silhouettes, which corrupts the colored chord even though the binary opaque test is unaffected.
             shadowVisibilityWritten = m_raytracingSystem.renderShadowVisibility(*commandList, deferredTargets);
             if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
-            // Hybrid multiply FALLBACK: only when the soft transparent fold did NOT run (a rare resolve-build failure this
-            // frame, so softTransparentShadowReady is false) but the scene still has a transparent occluder with the SW BVH
-            // ready. It re-runs the old software traversal as a second pass that MULTIPLIES the colored transparent shadow
-            // onto the opaque mask. When softTransparentShadowReady is true the colored fold already happened inside
-            // renderShadowVisibility, so this is skipped (no double-fold).
+            // Hybrid multiply fallback: if the soft transparent fold did not run but the scene still has a transparent
+            // occluder with a ready SW BVH, run the transparent software trace as a second pass and multiply it onto the
+            // opaque mask. Skip it when renderShadowVisibility already folded the colored shadow.
             else if(!m_raytracingSystem.softTransparentShadowReady() && m_raytracingSystem.hybridTransparentShadowReady()){
                 if(!m_raytracingSystem.renderGpuBvhShadowVisibility(*commandList, deferredTargets, true))
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow pass failed"));

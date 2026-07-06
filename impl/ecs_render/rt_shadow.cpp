@@ -250,12 +250,10 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
 
-    // HW soft-shadow unification (Phase 1): when the soft resources are ready this frame AND at least one light holds a
-    // shadow slot, route the HW OPAQUE shadow through the SAME half-res soft denoise chain the SW path uses. The HW
-    // opaque-soft RayQuery trace (m_shadowSoftPipeline + m_shadowSoftBindingSet) casts SPP cone-jittered opaque rays per
-    // HALF-res pixel into shadowSoftHalfA (the SAME buffer the SW soft trace writes), then the shared
-    // dispatchSoftShadowDenoiseAndTransparentFold denoises it into the full-res visibility. Mirrors the SW soft block's
-    // barrier/UAV-enable/commit sequence exactly.
+    // When the soft resources are ready this frame and at least one light holds a shadow slot, route the HW opaque shadow
+    // through the same half-res soft denoise chain the SW path uses. The HW opaque-soft RayQuery trace casts SPP
+    // cone-jittered opaque rays per half-res pixel into shadowSoftHalfA, then the shared
+    // dispatchSoftShadowDenoiseAndTransparentFold denoises it into the full-res visibility.
     if(rayTracingState().m_softShadowReady && rayTracingState().m_shadowSoftPipeline && rayTracingState().m_shadowSoftBindingSet && rayTracingState().m_softShadowSlotMask != 0u){
         const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
         const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -303,12 +301,10 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
-        // Denoise the half-res soft-A trace into the full-res visibility (backend-agnostic; the SAME chain the SW path
-        // runs). Phase 2: when m_softTransparentReady (the scene has a transparent occluder + the SW transparent BVH and
-        // resolve resources built), the transparent trace+fold inside ALSO runs on the HW path -- tracing the colored
-        // transmittance against the transparent-only software scene BVH and multiplying its denoised soft result onto the
-        // soft-opaque visibility, retiring the old hybrid multiply. If that state is false (opaque-only scene, or a rare
-        // resolve-build failure) this produces the soft OPAQUE shadow only and system.cpp runs the hybrid multiply fallback.
+        // Denoise the half-res soft-A trace into the full-res visibility. When m_softTransparentReady is true, the same
+        // chain also traces colored transmittance against the transparent-only software scene BVH and multiplies the
+        // denoised result onto the soft-opaque visibility. Otherwise this produces only the soft opaque shadow, and
+        // system.cpp may run the hybrid multiply fallback.
         dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, frameIndex, softGroupsX, softGroupsY);
         return true;
     }
@@ -445,7 +441,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         // -> the transparent pass reads+multiplies it: a write->read/write hazard the visibility UAV barrier covers, so it
         // stays UnorderedAccess. The transparent coarse pass writes the coarse buffer next, so stage it as ShaderResource
         // here; setComputeState emits the ShaderResource->UnorderedAccess barrier that orders it. Both are cheap state
-        // transitions kept unconditional so the rare soft-not-transparent-ready fallback's old transparent path stays ordered.
+        // transitions kept unconditional so the soft-not-transparent-ready fallback stays ordered.
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();

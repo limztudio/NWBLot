@@ -13,10 +13,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u32 s_NameHashLaneCount = 8u;
+
 struct NameHash{
-    u64 qwords[8];
+    u64 qwords[s_NameHashLaneCount];
 };
-static_assert(sizeof(NameHash) == 64, "NameHash size must stay stable");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,8 +36,13 @@ namespace NameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_HashLaneCount = 8;
+inline constexpr u32 s_HashLaneCount = s_NameHashLaneCount;
 inline constexpr usize s_DebugNameCapacity = 256u;
+inline constexpr usize s_NameHashBytes = sizeof(u64) * s_HashLaneCount;
+inline constexpr usize s_HexDigitsPerHashLane = sizeof(u64) * 2u;
+inline constexpr usize s_EncodedNameHashLength = s_HexDigitsPerHashLane * s_HashLaneCount;
+
+static_assert(sizeof(NameHash) == s_NameHashBytes, "NameHash size must stay stable");
 
 inline constexpr u64 LANE_SEEDS[s_HashLaneCount] = {
     FNV64_OFFSET_BASIS,
@@ -270,7 +276,7 @@ inline void RecordNameSymbolText(
         // back to the Name's hash. Emitting real UTF-8 here would make the symbol text hash to a DIFFERENT NameHash.
         // Names are effectively ASCII identifiers/paths in this engine; a non-ASCII wide Name records as truncated
         // bytes (consistent with its hash, just not human-readable) -- acceptable given no non-ASCII Names exist.
-        char narrowText[1024] = {};
+        char narrowText[s_SymbolTextBufferLength] = {};
         usize copiedCount = 0u;
         for(const CharT ch : text){
             if(ch == CharT{})
@@ -306,7 +312,7 @@ inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstS
 
     static constexpr char s_Hex[] = "0123456789abcdef";
 
-    const usize requiredLength = (16 * s_HashLaneCount) + (s_HashLaneCount - 1);
+    const usize requiredLength = s_EncodedNameHashLength + (s_HashLaneCount - 1u);
     if(dstSize <= requiredLength){
         dst[0] = CharT{};
         return;
@@ -670,14 +676,11 @@ template<typename CharT, typename ArenaT>
 
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> EncodeNameHash(ArenaT& arena, const Name& name){
-    static constexpr u32 s_NameHashLaneCount = 8;
-    static constexpr usize s_NameHashHexLength = s_NameHashLaneCount * 16;
-
     BasicString<CharT, ArenaT> encoded{arena};
-    encoded.reserve(s_NameHashHexLength);
+    encoded.reserve(NameDetail::s_EncodedNameHashLength);
 
     const NameHash& hash = name.hash();
-    for(u32 lane = 0; lane < s_NameHashLaneCount; ++lane)
+    for(u32 lane = 0; lane < NameDetail::s_HashLaneCount; ++lane)
         AppendHexU64<CharT>(hash.qwords[lane], encoded);
 
     return encoded;
@@ -686,16 +689,13 @@ template<typename CharT, typename ArenaT>
 
 template<typename CharT>
 [[nodiscard]] inline bool DecodeNameHash(const BasicStringView<CharT> encodedHash, Name& outName){
-    static constexpr u32 s_NameHashLaneCount = 8;
-    static constexpr usize s_NameHashHexLength = s_NameHashLaneCount * 16;
-
-    if(encodedHash.size() != s_NameHashHexLength)
+    if(encodedHash.size() != NameDetail::s_EncodedNameHashLength)
         return false;
 
     NameHash hash = {};
-    for(u32 lane = 0; lane < s_NameHashLaneCount; ++lane){
-        const usize begin = static_cast<usize>(lane) * 16;
-        const BasicStringView<CharT> laneHex = encodedHash.substr(begin, 16);
+    for(u32 lane = 0; lane < NameDetail::s_HashLaneCount; ++lane){
+        const usize begin = static_cast<usize>(lane) * NameDetail::s_HexDigitsPerHashLane;
+        const BasicStringView<CharT> laneHex = encodedHash.substr(begin, NameDetail::s_HexDigitsPerHashLane);
 
         if(!ParseHexU64<CharT>(laneHex, hash.qwords[lane]))
             return false;

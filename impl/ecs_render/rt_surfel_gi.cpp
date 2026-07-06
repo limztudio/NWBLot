@@ -428,9 +428,9 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         }
     }
 
-    // Build the pipelines + the hash-build binding set (which depends only on the persistent buffers, so it is built
-    // once here). The spawn + trace sets depend on per-frame targets/BVH, so they build in renderSurfelGi. Non-fatal:
-    // a sub-failure leaves the pipeline handle null and the render dispatch guards each on its own handle.
+    // Build the pipelines + persistent binding sets. Target/BVH-dependent binding sets are built by
+    // prepareSurfelResources after the per-frame SW scene BVH is resident, so renderSurfelGi only consumes ready
+    // resources.
     if(!ensureSurfelSpawnPipeline() || !ensureSurfelAgeFreePipeline() || !ensureSurfelHashBuildPipeline() || !ensureSurfelTracePipeline() || !ensureSurfelResolvePipeline())
         return false;
     if(!ensureSurfelHashBuildBindingSet() || !ensureSurfelAgeFreeBindingSet())
@@ -772,6 +772,14 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
     if(!ensureSurfelResources())
         return false;
 
+    if(
+        !ensureSurfelSpawnBindingSet(targets)
+        || !ensureSurfelHashBuildBindingSet()
+        || !ensureSurfelTraceBindingSet()
+        || !ensureSurfelResolveBindingSet(targets)
+    )
+        return false;
+
     // One-shot clear of the freshly-created buffers (ensureSurfelResources has no command list). Pool -> zero (alive ==
     // 0 everywhere), cell-head -> 0xFFFFFFFF (empty lists), counter -> 0 (bump top at slot 0). Cleared exactly once per
     // (re)creation; the pool then accumulates surfels across frames (recycling lands in U1).
@@ -851,15 +859,8 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     )
         return true;
 
-    // Build the per-frame binding sets: the spawn + resolve sets need the G-buffer + surfelIrradiance (recreated on
-    // resize); the trace set needs the SW scene BVH (built this frame in prepareShadowVisibilityResources). Non-fatal:
-    // skip the whole block on failure.
     if(
-        !ensureSurfelSpawnBindingSet(targets)
-        || !ensureSurfelHashBuildBindingSet()
-        || !ensureSurfelTraceBindingSet()
-        || !ensureSurfelResolveBindingSet(targets)
-        || !rayTracingState().m_surfelSpawnBindingSet
+        !rayTracingState().m_surfelSpawnBindingSet
         || !rayTracingState().m_surfelAgeFreeBindingSet
         || !rayTracingState().m_surfelHashBuildBindingSet
         || !rayTracingState().m_surfelTraceBindingSet

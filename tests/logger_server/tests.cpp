@@ -124,8 +124,14 @@ static void LinuxSilenceExpectedCrashChildConsole(){
     if(nullFd < 0)
         return;
 
-    [[maybe_unused]] const int stdoutRedirectFd = dup2(nullFd, STDOUT_FILENO);
-    [[maybe_unused]] const int stderrRedirectFd = dup2(nullFd, STDERR_FILENO);
+    if(dup2(nullFd, STDOUT_FILENO) < 0){
+        close(nullFd);
+        return;
+    }
+    if(dup2(nullFd, STDERR_FILENO) < 0){
+        close(nullFd);
+        return;
+    }
     if(nullFd > STDERR_FILENO)
         close(nullFd);
 }

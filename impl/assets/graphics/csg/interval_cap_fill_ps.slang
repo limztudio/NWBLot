@@ -56,13 +56,13 @@ struct NwbCsgIntervalCapFillPixelOutput{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-float3 nwbCsgCapFillEncodeNormal(const float3 normal){
+half3 nwbCsgCapFillEncodeNormal(const float3 normal){
     const float lengthSquared = dot(normal, normal);
     const float3 normalVector = lengthSquared > 0.000001
         ? normal * rsqrt(lengthSquared)
         : float3(0.0, 0.0, 1.0)
     ;
-    return normalVector * 0.5 + 0.5;
+    return half3(normalVector * 0.5 + 0.5);
 }
 
 
@@ -79,10 +79,10 @@ NwbCsgIntervalCapFillPixelOutput main(const NwbCsgIntervalCapFillPixelInput inpu
     NwbCsgIntervalCapFillPixelOutput output;
     // baseColor.rgb = receiver base color, baseColor.a = receiver cook-assigned shading-model id so
     // the carved cap is lit + shadowed by the same per-material BXDF as the receiver surface.
-    output.baseColor = float4(receiver.baseColor.rgb, float(receiver.rangeInfo.w));
+    output.baseColor = float4(half3(receiver.baseColor.rgb), half(float(receiver.rangeInfo.w)));
     // The mesh G-buffer PS packs spare BXDF params into normal.a / worldPosition.a; lambert/toon ignore
     // them, so 0.0 keeps default parameters for the carved cap.
-    output.normal = float4(nwbCsgCapFillEncodeNormal(cap.normal), 0.0);
+    output.normal = float4(nwbCsgCapFillEncodeNormal(cap.normal), half(0.0));
     output.worldPosition = float4(cap.worldPosition, 0.0);
     output.depth = cap.depth;
     return output;

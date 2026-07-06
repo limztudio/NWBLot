@@ -13,8 +13,8 @@
 // pass converts the R32_UINT fixed-point splat accumulators into RGBA16F irradiance (un-scale the fixed point, divide
 // by the receiver area subtended per pixel -- the photon-DENSITY -> physical-BRIGHTNESS conversion -- and apply the
 // causticIntensity exposure) AND does the first wavelet step; later passes only run the wavelet at a doubled dilation.
-// This replaces the temporal-EMA + variance-clamp + motion-vector path: purely spatial -> ghost-free for any (even
-// non-rigid / morphing) caustic motion. The output of the final pass is the irradiance buffer the lighting adds.
+// Purely spatial filtering avoids ghosting under non-rigid / morphing caustic motion. The output of the final pass is the
+// irradiance buffer the lighting adds.
 #define NWB_CAUSTIC_RESOLVE_SET 0
 
 // The R32_UINT accumulators (Texture2DArray, one layer per RGB channel) read as an SRV (first pass only).

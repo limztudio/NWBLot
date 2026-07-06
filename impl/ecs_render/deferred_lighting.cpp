@@ -192,8 +192,8 @@ bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandLi
     NWB_ASSERT(targets.opaqueLightingFramebuffer);
     NWB_ASSERT(deferredState().m_lightingPipeline);
 
-    // The resolved surfel-irradiance texture is created with the deferred targets and bound at creation, so the
-    // lighting binding set needs no per-frame rebuild for GI (the old ping-pong/lazy-pool rebuild is gone).
+    // The resolved surfel-irradiance texture is created with the deferred targets and bound at creation, so the lighting
+    // binding set needs no per-frame rebuild for GI.
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, graphics().getDevice(), commandList);
 

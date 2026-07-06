@@ -23,7 +23,7 @@
 #include <core/assets/auto_registration.h>
 #include <core/graphics/shader_archive.h>
 #include <core/filesystem/module.h>
-#include <core/filesystem/volume_naming.h>
+#include <global/filesystem/volume_naming.h>
 
 #include "project_entry.h"
 
@@ -108,7 +108,7 @@ bool HasGraphicsVolumeSegment(const Path& mountDirectory){
     if(!IsDirectory(mountDirectory, errorCode) || errorCode)
         return false;
 
-    const Path segmentPath = mountDirectory / NWB::Core::Filesystem::MakeVolumeSegmentFileName("graphics", 0).c_str();
+    const Path segmentPath = mountDirectory / ::MakeVolumeSegmentFileName("graphics", 0).c_str();
     errorCode.clear();
     return FileExists(segmentPath, errorCode) && !errorCode;
 }

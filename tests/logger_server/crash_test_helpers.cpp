@@ -89,7 +89,8 @@ CrashTestPath InvalidArchivePath(Core::Alloc::GlobalArena& arena, const AStringV
 
 void RemoveTestArtifacts(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
     ErrorCode error;
-    [[maybe_unused]] const bool removed = RemoveAllIfExists(TestCaseDirectory(arena, testGroup), error);
+    if(!RemoveAllIfExists(TestCaseDirectory(arena, testGroup), error))
+        EXPECT_FALSE(error);
 }
 
 void AppendArchiveFile(CrashTestText& archive, const AStringView relativePath, const AStringView content){

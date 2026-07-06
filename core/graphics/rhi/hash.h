@@ -17,14 +17,6 @@ namespace std{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T>
-struct hash<RefCountPtr<T>>{
-    size_t operator()(RefCountPtr<T> const& s)const noexcept{
-        hash<T*> pointerHash;
-        return pointerHash(s.Get());
-    }
-};
-
 template<>
 struct hash<NWB::Core::TextureSubresourceSet>{
     size_t operator()(NWB::Core::TextureSubresourceSet const& s)const noexcept{

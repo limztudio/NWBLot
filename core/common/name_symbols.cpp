@@ -270,7 +270,8 @@ void RecordSymbol(
     if(!registry)
         return;
 
-    [[maybe_unused]] const bool inserted = registry->insert(hash, text);
+    if(!registry->insert(hash, text))
+        return;
 }
 
 [[nodiscard]] bool ResolveSymbol(

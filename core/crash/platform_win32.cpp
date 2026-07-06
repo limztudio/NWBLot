@@ -239,7 +239,9 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options)noexcept{
     CrashDumpRequestOptions requestOptions = options;
     requestOptions.waitMilliseconds = s_PlatformCrashHandlerWaitMilliseconds;
-    [[maybe_unused]] const CrashDumpResult requestResult = RequestCrashDump(reasonKind, reasonCode, requestOptions);
+    const CrashDumpResult requestResult = RequestCrashDump(reasonKind, reasonCode, requestOptions);
+    if(!requestResult.requestAccepted())
+        return;
 }
 
 template<typename ArenaT>

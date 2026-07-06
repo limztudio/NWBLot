@@ -299,6 +299,7 @@ void NotifyCrashHandler(CrashReasonKind::Enum reasonKind, u32 reasonCode, const 
 template<typename ArenaT>
 [[nodiscard]] bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory);
 [[nodiscard]] Alloc::PersistentArena& DumpArena();
+void InitializeDumpArena()noexcept;
 
 template<typename ArenaT>
 [[nodiscard]] bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath);

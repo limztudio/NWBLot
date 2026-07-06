@@ -100,7 +100,7 @@ static void __hidden_silence_process()noexcept{
 
 int RunCrashHandlerProcess(const isize argc, tchar** argv){
     __hidden_crash_handler::__hidden_silence_process();
-    [[maybe_unused]] Alloc::PersistentArena& dumpArena = Detail::DumpArena();
+    Detail::InitializeDumpArena();
 
 #if defined(NWB_PLATFORM_WINDOWS)
     HANDLE requestReadHandle = INVALID_HANDLE_VALUE;
@@ -130,12 +130,14 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         const bool packageWritten = Detail::WriteCrashPackage(request);
         if(ackWriteHandle != INVALID_HANDLE_VALUE){
             const Detail::CrashAck ack = __hidden_crash_handler::__hidden_make_ack(request, packageWritten);
-            [[maybe_unused]] const bool ackWritten = WriteAllWin32Handle(ackWriteHandle, &ack, sizeof(ack));
+            if(!WriteAllWin32Handle(ackWriteHandle, &ack, sizeof(ack)))
+                break;
         }
         if(ackEvent)
             SetEvent(ackEvent);
         if(packageWritten){
-            [[maybe_unused]] const bool reportsFlushed = Detail::FlushCrashReportsForRequest(request);
+            if(!Detail::FlushCrashReportsForRequest(request))
+                continue;
         }
     }
 
@@ -164,10 +166,12 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
         const bool packageWritten = Detail::WriteCrashPackage(request);
         if(ackWriteFd >= 0){
             const Detail::CrashAck ack = __hidden_crash_handler::__hidden_make_ack(request, packageWritten);
-            [[maybe_unused]] const bool ackWritten = WriteAllFileDescriptor(ackWriteFd, &ack, sizeof(ack));
+            if(!WriteAllFileDescriptor(ackWriteFd, &ack, sizeof(ack)))
+                break;
         }
         if(packageWritten){
-            [[maybe_unused]] const bool reportsFlushed = Detail::FlushCrashReportsForRequest(request);
+            if(!Detail::FlushCrashReportsForRequest(request))
+                continue;
         }
     }
 

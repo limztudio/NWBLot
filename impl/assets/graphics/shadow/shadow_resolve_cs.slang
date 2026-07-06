@@ -320,10 +320,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     // UPSAMPLE (stage 2, FULL-res dispatch): per slot, a FAST GUIDED FILTER (He 2010) resample of the final half-res
     // visibility into the full-res visibility buffer. For each output pixel we fit a local linear model vis ~= a*dist + b
     // over a small half-res window (valid same-surface taps) from its box-filtered moments, then evaluate it at THIS full-res
-    // pixel's own camera distance. Unlike the old 2x2 joint-bilateral it NEVER collapses to a single tap -- every window tap
-    // feeds the moment sums, so on a curved receiver (where the per-tap normal stop used to starve the average down to one
-    // noisy tap -> clustered grain) the output is a smooth regression that averages the trace noise out, while a
-    // depth-correlated silhouette is still tracked by the `a` term and a crease is excluded by the wide same-surface gate.
+    // pixel's own camera distance. Every window tap feeds the moment sums, so on a curved receiver the output is a smooth
+    // regression that averages the trace noise out, while a depth-correlated silhouette is still tracked by the `a` term
+    // and a crease is excluded by the wide same-surface gate.
     if(stage == 2u){
         const uint2 pixel = dispatchThreadID.xy;
         if(pixel.x >= g_NwbShadowResolvePushConstants.width || pixel.y >= g_NwbShadowResolvePushConstants.height)

@@ -58,9 +58,9 @@ void nwbSwShadowIndirectTrace(const uint linearId){
     const int3 texel = int3(int2(pixel), 0);
     const float3 worldPosition = nwbSwShadowLoadWorldPosition(texel);
     const float3 normal = nwbSwShadowLoadNormal(texel);
-    const float3 transmittance = float3(nwbSwShadowLightVisible(worldPosition, normal, light, float2(0.0, 0.0)));
+    const half3 transmittance = nwbSwShadowLightVisible(worldPosition, normal, light, float2(0.0, 0.0));
 
-    const float3 opaqueMask = g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb;
+    const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
     g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * transmittance, 1.0);
 }
 

@@ -1988,8 +1988,8 @@ void BackendContext::destroy(){
         m_vulkanInstance = VK_NULL_HANDLE;
     }
 
-    // Process-global: re-establish any Nsight monitor settings now that this backend's device/instance are
-    // gone. Safe when Aftermath was never enabled.
+    // Process-global: re-establish any Nsight monitor settings after this backend clears its device/instance handles.
+    // Safe when Aftermath was never enabled.
     Aftermath::Shutdown();
 }
 

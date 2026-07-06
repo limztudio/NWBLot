@@ -78,6 +78,7 @@ static constexpr AStringView s_AssetTypeShader = "shader";
 static constexpr AStringView s_AssetTypeInclude = "include";
 static constexpr AStringView s_SlangSourceExtension = ".slang";
 static constexpr AStringView s_SlangIncludeExtension = ".slangi";
+static constexpr usize s_BaseCompilerArgumentCount = 15u;
 
 struct NormalizedDependencyRootAlias{
     Path root;
@@ -144,7 +145,8 @@ static bool TryMapStageToSlangStage(const AStringView stage, AStringView& outSta
 }
 
 #if defined(NWB_PLATFORM_WINDOWS)
-static void AppendWindowsCommandLineArgument(CookString& inOutCommand, const AStringView value){
+template<typename StringT>
+static void AppendWindowsCommandLineArgument(StringT& inOutCommand, const AStringView value){
     if(!inOutCommand.empty())
         inOutCommand += ' ';
 
@@ -188,11 +190,14 @@ static void AppendWindowsCommandLineArgument(CookString& inOutCommand, const ASt
 }
 #endif
 
-static void PushCompilerArgument(ShaderCook::CookArena& arena, CookVector<CookString>& inOutArguments, const AStringView value){
-    inOutArguments.push_back(CookString(value, arena));
+template<typename ArenaT, typename ArgumentVectorT>
+static void PushCompilerArgument(ArenaT& arena, ArgumentVectorT& inOutArguments, const AStringView value){
+    using StringT = typename ArgumentVectorT::value_type;
+    inOutArguments.push_back(StringT(value, arena));
 }
 
-static bool ReadDiagnostics(const Path& diagnosticsPath, CookString& outDiagnostics){
+template<typename StringT>
+static bool ReadDiagnostics(const Path& diagnosticsPath, StringT& outDiagnostics){
     outDiagnostics.clear();
 
     ErrorCode errorCode;
@@ -254,6 +259,10 @@ private:
 };
 
 #if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+static constexpr int s_SignalExitCodeBase = 128;
+static constexpr int s_ExecFailureExitCode = 127;
+static constexpr mode_t s_DiagnosticsFileMode = 0666;
+
 static int WaitForCompilerProcess(const pid_t childPid)noexcept{
     int status = 0;
     pid_t waitedPid = -1;
@@ -266,27 +275,28 @@ static int WaitForCompilerProcess(const pid_t childPid)noexcept{
     if(WIFEXITED(status))
         return WEXITSTATUS(status);
     if(WIFSIGNALED(status))
-        return 128 + WTERMSIG(status);
+        return s_SignalExitCodeBase + WTERMSIG(status);
     return -1;
 }
 #endif
 
+template<typename ArenaT, typename ArgumentVectorT>
 static int RunCompilerProcessRedirected(
-    ShaderCook::CookArena& arena,
-    const CookVector<CookString>& arguments,
+    ArenaT& arena,
+    const ArgumentVectorT& arguments,
     const Path& diagnosticsPath
 ){
     if(arguments.empty())
         return -1;
 
-    CookVector<const char*> argv(arena);
+    Vector<const char*, ArenaT> argv(arena);
     argv.reserve(arguments.size() + 1u);
-    for(const CookString& argument : arguments)
+    for(const auto& argument : arguments)
         argv.push_back(argument.c_str());
     argv.push_back(nullptr);
 
 #if defined(NWB_PLATFORM_WINDOWS)
-    const CookString diagnosticsPathText = PathToString<char>(arena, diagnosticsPath);
+    const AString<ArenaT> diagnosticsPathText = PathToString<char>(arena, diagnosticsPath);
     SECURITY_ATTRIBUTES securityAttributes = {};
     securityAttributes.nLength = sizeof(securityAttributes);
     securityAttributes.bInheritHandle = TRUE;
@@ -303,8 +313,8 @@ static int RunCompilerProcessRedirected(
     if(diagnosticsHandle == INVALID_HANDLE_VALUE)
         return -1;
 
-    CookString commandLine{arena};
-    for(const CookString& argument : arguments)
+    AString<ArenaT> commandLine{arena};
+    for(const auto& argument : arguments)
         AppendWindowsCommandLineArgument(commandLine, AStringView(argument));
 
     STARTUPINFOA startupInfo = {};
@@ -339,27 +349,35 @@ static int RunCompilerProcessRedirected(
     CloseHandle(processInfo.hProcess);
     return static_cast<int>(exitCode);
 #elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
-    const CookString diagnosticsPathText = PathToString<char>(arena, diagnosticsPath);
-    const int diagnosticsFd = ::open(diagnosticsPathText.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0666);
+    const AString<ArenaT> diagnosticsPathText = PathToString<char>(arena, diagnosticsPath);
+    const int diagnosticsFd = ::open(diagnosticsPathText.c_str(), O_CREAT | O_TRUNC | O_WRONLY, s_DiagnosticsFileMode);
     if(diagnosticsFd < 0)
         return -1;
 
     const pid_t childPid = ::fork();
     if(childPid < 0){
-        [[maybe_unused]] const int closeResult = ::close(diagnosticsFd);
+        const int closeResult = ::close(diagnosticsFd);
+        if(closeResult != 0)
+            return -1;
         return -1;
     }
 
     if(childPid == 0){
-        [[maybe_unused]] const int dupStdoutResult = ::dup2(diagnosticsFd, STDOUT_FILENO);
-        [[maybe_unused]] const int dupStderrResult = ::dup2(diagnosticsFd, STDERR_FILENO);
-        [[maybe_unused]] const int closeChildResult = ::close(diagnosticsFd);
+        if(::dup2(diagnosticsFd, STDOUT_FILENO) < 0)
+            _exit(s_ExecFailureExitCode);
+        if(::dup2(diagnosticsFd, STDERR_FILENO) < 0)
+            _exit(s_ExecFailureExitCode);
+        if(::close(diagnosticsFd) != 0)
+            _exit(s_ExecFailureExitCode);
         ::execvp(argv.front(), const_cast<char* const*>(argv.data()));
-        _exit(127);
+        _exit(s_ExecFailureExitCode);
     }
 
-    [[maybe_unused]] const int closeParentResult = ::close(diagnosticsFd);
-    return WaitForCompilerProcess(childPid);
+    const int closeParentResult = ::close(diagnosticsFd);
+    const int compilerExitCode = WaitForCompilerProcess(childPid);
+    if(closeParentResult != 0)
+        return -1;
+    return compilerExitCode;
 #else
     static_cast<void>(diagnosticsPath);
     return -1;
@@ -410,31 +428,32 @@ public:
         ScopedFileCleanupGuard outputCleanup(request.outputPath);
         ScopedFileCleanupGuard diagnosticsCleanup(diagnosticsPath);
 
-        CookVector<CookString> arguments(m_memoryArena);
-        arguments.reserve(15u + static_cast<usize>(request.includeDirectories.size()) * 2u + static_cast<usize>(request.defineCount));
-        PushCompilerArgument(m_memoryArena, arguments, AStringView(NWB_SLANGC_EXECUTABLE));
+        Alloc::ScratchArena argumentArena(AssetsShaderArenaScope::s_CompilerArgumentsArena);
+        ScratchVector<ScratchString> arguments(argumentArena);
+        arguments.reserve(s_BaseCompilerArgumentCount + static_cast<usize>(request.includeDirectories.size()) * 2u + static_cast<usize>(request.defineCount));
+        PushCompilerArgument(argumentArena, arguments, AStringView(NWB_SLANGC_EXECUTABLE));
 
-        CookString sourcePathText = PathToString<char>(m_memoryArena, request.sourcePath);
+        ScratchString sourcePathText = PathToString<char>(argumentArena, request.sourcePath);
         arguments.push_back(Move(sourcePathText));
-        PushCompilerArgument(m_memoryArena, arguments, "-target");
-        PushCompilerArgument(m_memoryArena, arguments, "spirv");
-        PushCompilerArgument(m_memoryArena, arguments, "-emit-spirv-directly");
-        PushCompilerArgument(m_memoryArena, arguments, "-profile");
-        PushCompilerArgument(m_memoryArena, arguments, request.targetProfile);
-        PushCompilerArgument(m_memoryArena, arguments, "-entry");
-        PushCompilerArgument(m_memoryArena, arguments, request.entryPoint);
-        PushCompilerArgument(m_memoryArena, arguments, "-stage");
-        PushCompilerArgument(m_memoryArena, arguments, slangStage);
+        PushCompilerArgument(argumentArena, arguments, "-target");
+        PushCompilerArgument(argumentArena, arguments, "spirv");
+        PushCompilerArgument(argumentArena, arguments, "-emit-spirv-directly");
+        PushCompilerArgument(argumentArena, arguments, "-profile");
+        PushCompilerArgument(argumentArena, arguments, request.targetProfile);
+        PushCompilerArgument(argumentArena, arguments, "-entry");
+        PushCompilerArgument(argumentArena, arguments, request.entryPoint);
+        PushCompilerArgument(argumentArena, arguments, "-stage");
+        PushCompilerArgument(argumentArena, arguments, slangStage);
 
         for(const Path& includeDirectory : request.includeDirectories){
-            PushCompilerArgument(m_memoryArena, arguments, "-I");
-            CookString includeDirectoryText = PathToString<char>(m_memoryArena, includeDirectory);
+            PushCompilerArgument(argumentArena, arguments, "-I");
+            ScratchString includeDirectoryText = PathToString<char>(argumentArena, includeDirectory);
             arguments.push_back(Move(includeDirectoryText));
         }
 
         for(u32 i = 0; i < request.defineCount; ++i){
             const ShaderCook::ShaderMacroDefinition& define = request.defines[i];
-            CookString defineArgument("-D", m_memoryArena);
+            ScratchString defineArgument("-D", argumentArena);
             defineArgument += define.name;
             if(!define.value.empty()){
                 defineArgument += '=';
@@ -443,13 +462,13 @@ public:
             arguments.push_back(Move(defineArgument));
         }
 
-        PushCompilerArgument(m_memoryArena, arguments, "-o");
-        CookString outputPathText = PathToString<char>(m_memoryArena, request.outputPath);
+        PushCompilerArgument(argumentArena, arguments, "-o");
+        ScratchString outputPathText = PathToString<char>(argumentArena, request.outputPath);
         arguments.push_back(Move(outputPathText));
 
-        const int exitCode = RunCompilerProcessRedirected(m_memoryArena, arguments, diagnosticsPath);
+        const int exitCode = RunCompilerProcessRedirected(argumentArena, arguments, diagnosticsPath);
         if(exitCode != 0){
-            CookString diagnostics{m_memoryArena};
+            ScratchString diagnostics{argumentArena};
             if(ReadDiagnostics(diagnosticsPath, diagnostics) && !diagnostics.empty()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') :\n{}")
                     , StringConvert(request.shaderName)

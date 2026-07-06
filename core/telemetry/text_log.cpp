@@ -165,8 +165,8 @@ void TextLogCaptureLogger::enqueue(const Common::LogString& str, const Common::L
 }
 
 void TextLogCaptureLogger::capture(const TStringView message, const Common::LogType::Enum type){
-    // This runs inside the logger sink itself; routing a failure through NWB_LOGGER_* would re-enter capture(), so the dropped-record result is intentionally ignored here.
-    [[maybe_unused]] const bool recorded = RecordTextLog(m_recorder, type, message, m_frameIndex, m_streamId);
+    if(!RecordTextLog(m_recorder, type, message, m_frameIndex, m_streamId))
+        return;
 }
 
 

@@ -18,12 +18,9 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
     // Backend-agnostic soft-shadow denoise + transparent fold, run AFTER whichever backend (SW or HW) wrote the half-res
     // soft opaque trace into shadowSoftHalfA (and synced it to UnorderedAccess): geometry downsample -> per-slot [temporal
     // reproject-merge -> a-trous resolve OVERWRITE] -> the guarded soft COLORED-TRANSPARENT trace+fold -> temporal history
-    // swap. It reads ONLY the shared soft/temporal DeferredFrameTargets buffers + the G-buffer, so the identical chain
-    // denoises the HW RayQuery opaque-soft trace and the SW BVH opaque-soft trace. Extracted from the SW soft block; the
-    // barrier/UAV-enable/commit sequence is unchanged. Phase 2: the transparent trace+fold (m_softTransparentReady) now
-    // runs on BOTH backends -- it always traces against the SW transparent-only scene BVH via m_swShadowBindingSet, so on
-    // the HW path (where the opaque trace used m_shadowSoftBindingSet) the block first STAGES the SW set's resources
-    // (see (a2) below) before the transparent trace, a no-op on the SW path (already staged at the top of the SW render).
+    // swap. It reads only the shared soft/temporal DeferredFrameTargets buffers + the G-buffer, so the same chain denoises
+    // HW RayQuery and SW BVH opaque-soft traces. The transparent trace+fold always traces against the SW transparent-only
+    // scene BVH via m_swShadowBindingSet; on the HW path this block stages those resources before the transparent trace.
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
     const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
 
@@ -81,9 +78,9 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         && rayTracingState().m_softShadowTemporalSeeded) ? 1u : 0u;
 
     // Active slot SPAN: the merge + resolve shaders loop [slotStart, slotStart+slotCount) per pixel over the per-slot
-    // Texture2DArray layers, so ONE dispatch over the whole span replaces the former per-set-bit dispatch chain (3
-    // shadow-slot lights -> 1 dispatch), cutting the dispatch/barrier count ~3x. This is COMPUTE-PRESERVING: each layer
-    // is independent and the shader does the identical per-slot work; only HOW MANY dispatches issue it changes.
+    // Texture2DArray layers, so one dispatch can cover the whole span (3 shadow-slot lights -> 1 dispatch), cutting the
+    // dispatch/barrier count ~3x. This is compute-preserving: each layer is independent and the shader does the identical
+    // per-slot work.
     // Cover [0, highestSetBit+1). For the normal contiguous case (lights get slots 0,1,2) this IS the active count; any
     // gap-slot inside the range is harmless (its unused visibility layer is trivially re-denoised into a dead target).
     u32 slotSpan = 0u;
@@ -145,9 +142,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
     // ---- Soft COLORED TRANSPARENT shadow, FOLD-MULTIPLIED onto the soft-opaque visibility ----
     // A parallel colored pipeline, separately traced + temporally denoised + RGB a-trous'd, folded (multiplied) onto
     // the opaque visibility only at the final upsample: visibility = opaqueSoftUpsampled * transparentSoftUpsampled.
-    // The opaque binary Bernoulli signal and colored chord-variance RGB signal have different noise stats, so they
-    // are denoised independently. Phase 2: runs on BOTH backends (the HW prepare now sets m_softTransparentReady when the
-    // scene has a transparent occluder), tracing the colored transmittance against the SW transparent-only scene BVH.
+    // The opaque binary Bernoulli signal and colored chord-variance RGB signal have different noise stats, so they are
+    // denoised independently. This traces colored transmittance against the SW transparent-only scene BVH on both backends.
     if(rayTracingState().m_softTransparentReady){
         // (a) UAV barrier: the opaque UPSAMPLE's visibility WRITES must be ordered before the transparent UPSAMPLE's
         // read-modify-write READS the same image (a WAW/RAW hazard on shadowVisibility). The visibility UAV barrier

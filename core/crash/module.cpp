@@ -222,7 +222,7 @@ bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config){
     Detail::g_State.diagnosticCaptureCount = 0u;
     for(Detail::FixedDiagnosticSite& site : Detail::g_State.diagnosticSites)
         site = Detail::FixedDiagnosticSite{};
-    [[maybe_unused]] Alloc::PersistentArena& dumpArena = Detail::DumpArena();
+    Detail::InitializeDumpArena();
     const AString<ArenaT> spoolDirectoryText = PathToString<char>(arena, spoolDirectory);
     CopyFixedBuffer(Detail::g_State.spoolDirectoryText, AStringView(spoolDirectoryText.data(), spoolDirectoryText.size()));
     const AString<ArenaT> handlerExecutablePathText = PathToString<char>(arena, handlerExecutablePath);

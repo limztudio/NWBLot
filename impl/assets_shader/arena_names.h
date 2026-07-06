@@ -24,6 +24,7 @@ namespace AssetsShaderArenaScope{
 
 
 inline constexpr Name s_MergeInheritedDefinesArena("impl/assets_shader/cook_merge_defines");
+inline constexpr Name s_CompilerArgumentsArena("impl/assets_shader/compiler_arguments");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

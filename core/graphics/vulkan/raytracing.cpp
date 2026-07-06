@@ -25,6 +25,10 @@ namespace VulkanDetail{
 
 static_assert(sizeof(AffineTransform) == sizeof(VkTransformMatrixKHR), "AffineTransform must match VkTransformMatrixKHR");
 
+inline constexpr u32 s_LssVerticesPerPrimitive = 2u;
+inline constexpr u32 s_LssListIndicesPerPrimitive = 2u;
+inline constexpr u32 s_LssSuccessiveIndicesPerPrimitive = 1u;
+
 
 VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset){
     if(!bufferResource)
@@ -536,11 +540,11 @@ bool FillBlasGeometryForSizeQuery(
         if(lss.indexBuffer)
             requiredVertexCount = lss.vertexCount;
         else{
-            if(lss.primitiveCount > UINT32_MAX / 2u){
+            if(lss.primitiveCount > UINT32_MAX / s_LssVerticesPerPrimitive){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS primitive count overflows vertex consumption"), operation);
                 return false;
             }
-            requiredVertexCount = lss.primitiveCount * 2u;
+            requiredVertexCount = lss.primitiveCount * s_LssVerticesPerPrimitive;
             if(lss.vertexCount < requiredVertexCount){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS vertex count is smaller than the non-indexed primitive consumption"), operation);
                 return false;
@@ -577,7 +581,7 @@ bool FillBlasGeometryForSizeQuery(
                 return false;
             }
             const u64 indexElementSize = GetRayTracingIndexElementSize(lss.indexFormat);
-            const u32 indicesPerPrimitive = lss.primitiveFormat == RayTracingGeometryLssPrimitiveFormat::List ? 2u : 1u;
+            const u32 indicesPerPrimitive = lss.primitiveFormat == RayTracingGeometryLssPrimitiveFormat::List ? s_LssListIndicesPerPrimitive : s_LssSuccessiveIndicesPerPrimitive;
             if(lss.primitiveCount > UINT32_MAX / indicesPerPrimitive){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS primitive count overflows index consumption"), operation);
                 return false;

@@ -36,6 +36,9 @@ using ScratchString = AString<Alloc::ScratchArena>;
 using ScratchStringStream = AStringStream<Alloc::ScratchArena>;
 using ScratchStringSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, Alloc::ScratchArena>;
 
+static constexpr u64 s_BytesPerMiB = 1024ull * 1024ull;
+static constexpr usize s_SwapChainQueueFamilyIndexCount = 2u;
+
 static ScratchStringStream MakeScratchStringStream(Alloc::ScratchArena& arena){
     return ScratchStringStream(std::ios_base::out, arena);
 }
@@ -45,10 +48,12 @@ static ScratchString MakeScratchString(Alloc::ScratchArena& arena, const AString
 }
 
 #if defined(NWB_GPU_FAULT_INJECTION)
+static constexpr usize s_GpuFaultInjectionScratchBytes = 1024u;
+
 static bool ReadGpuFaultInjectionValue(u64& outFaultDeviceAddress){
     outFaultDeviceAddress = 0u;
 
-    Alloc::ScratchArena arena(VulkanArenaScope::s_DeviceExtensionSetupArena, 1024);
+    Alloc::ScratchArena arena(VulkanArenaScope::s_DeviceExtensionSetupArena, s_GpuFaultInjectionScratchBytes);
     ScratchString value(arena);
     if(!ReadEnvironmentVariable("NWB_DEBUG_GPU_FAULT_INJECTION", value))
         return false;
@@ -254,7 +259,7 @@ static u64 GetDeviceLocalMemoryBytes(VkPhysicalDevice physicalDevice){
 }
 
 static u64 BytesToMiB(u64 bytes){
-    return bytes / (1024ull * 1024ull);
+    return bytes / s_BytesPerMiB;
 }
 
 static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSet& requested, const OptionalDeviceFeatureSet& supported, DeviceExtensionFeature::Enum feature){
@@ -1677,7 +1682,7 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    uint32_t queueFamilyIndices[2] = { static_cast<uint32_t>(m_graphicsQueueFamily), static_cast<uint32_t>(m_presentQueueFamily) };
+    uint32_t queueFamilyIndices[VulkanDetail::s_SwapChainQueueFamilyIndexCount] = { static_cast<uint32_t>(m_graphicsQueueFamily), static_cast<uint32_t>(m_presentQueueFamily) };
     uint32_t queueFamilyIndexCount = 1;
     if(m_presentQueueFamily != m_graphicsQueueFamily){
         queueFamilyIndices[queueFamilyIndexCount] = static_cast<uint32_t>(m_presentQueueFamily);

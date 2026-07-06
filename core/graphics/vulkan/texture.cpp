@@ -24,6 +24,19 @@ namespace __hidden_vulkan_texture{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u32 s_TextureCubeLayerCount = 6u;
+inline constexpr u32 s_TextureClearColorComponentCount = 3u;
+inline constexpr u32 s_TextureClearRGComponentCount = 2u;
+inline constexpr u32 s_TextureClearRGBAComponentCount = 4u;
+inline constexpr u32 s_TextureClearDepthPatternBytes = 4u;
+inline constexpr u32 s_TextureClearStencilPatternBytes = 1u;
+inline constexpr u32 s_TextureClearMaxPatternBytes = 16u;
+inline constexpr u64 s_TextureClearUploadAlignment = 4ull;
+inline constexpr u32 s_BCSingleClearBlockBytes = 8u;
+inline constexpr u32 s_BCDoubleClearBlockBytes = 16u;
+inline constexpr u32 s_BC4EndpointByteCount = 2u;
+inline constexpr u32 s_BC2AlphaTexelCount = 16u;
+
 struct TextureCreateMetadata{
     VkFormat format = VK_FORMAT_UNDEFINED;
     VulkanDetail::TextureFormatBlockLayout formatLayout;
@@ -133,11 +146,11 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
 }
 
 inline bool ValidateTextureViewShape(const TextureDimension::Enum dimension, const TextureSubresourceSet& subresources){
-    if(dimension == TextureDimension::TextureCube && subresources.numArraySlices != 6){
+    if(dimension == TextureDimension::TextureCube && subresources.numArraySlices != s_TextureCubeLayerCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: cube views must include exactly 6 array layers"));
         return false;
     }
-    if(dimension == TextureDimension::TextureCubeArray && (subresources.numArraySlices < 6 || (subresources.numArraySlices % 6) != 0)){
+    if(dimension == TextureDimension::TextureCubeArray && (subresources.numArraySlices < s_TextureCubeLayerCount || (subresources.numArraySlices % s_TextureCubeLayerCount) != 0)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: cube array views must include a positive multiple of 6 array layers"));
         return false;
     }
@@ -550,7 +563,7 @@ inline void WriteBC4UNormClearBlock(u8* outPattern, const f32 value){
     const u8 endpoint = static_cast<u8>(FloatToUNormClearValue(value, static_cast<u32>(Limit<u8>::s_Max)));
     outPattern[0] = endpoint;
     outPattern[1] = endpoint;
-    for(u32 byteIndex = 2u; byteIndex < 8u; ++byteIndex)
+    for(u32 byteIndex = s_BC4EndpointByteCount; byteIndex < s_BCSingleClearBlockBytes; ++byteIndex)
         outPattern[byteIndex] = 0u;
 }
 
@@ -558,7 +571,7 @@ inline void WriteBC4SNormClearBlock(u8* outPattern, const f32 value){
     const i8 endpoint = static_cast<i8>(FloatToSNormClearValue(value, static_cast<i32>(Limit<i8>::s_Max)));
     outPattern[0] = static_cast<u8>(endpoint);
     outPattern[1] = static_cast<u8>(endpoint);
-    for(u32 byteIndex = 2u; byteIndex < 8u; ++byteIndex)
+    for(u32 byteIndex = s_BC4EndpointByteCount; byteIndex < s_BCSingleClearBlockBytes; ++byteIndex)
         outPattern[byteIndex] = 0u;
 }
 
@@ -609,7 +622,7 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
 
     auto writeUNorm8Components = [&](const u32 componentCount, const bool srgb){
         for(u32 component = 0u; component < componentCount; ++component){
-            const bool colorComponent = component < 3u;
+            const bool colorComponent = component < s_TextureClearColorComponentCount;
             const f32 value = srgb && colorComponent ? LinearToSRGBClearValue(values[component]) : values[component];
             const u8 packed = static_cast<u8>(FloatToUNormClearValue(value, static_cast<u32>(Limit<u8>::s_Max)));
             WriteClearPatternValue(outPattern + component * sizeof(packed), sizeof(packed), &packed, sizeof(packed));
@@ -619,13 +632,13 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
     };
     auto writeUNorm8BGRAComponents = [&](const bool srgb){
         const f32 orderedValues[] = { values[2], values[1], values[0], values[3] };
-        for(u32 component = 0u; component < 4u; ++component){
-            const bool colorComponent = component < 3u;
+        for(u32 component = 0u; component < s_TextureClearRGBAComponentCount; ++component){
+            const bool colorComponent = component < s_TextureClearColorComponentCount;
             const f32 value = srgb && colorComponent ? LinearToSRGBClearValue(orderedValues[component]) : orderedValues[component];
             const u8 packed = static_cast<u8>(FloatToUNormClearValue(value, static_cast<u32>(Limit<u8>::s_Max)));
             WriteClearPatternValue(outPattern + component * sizeof(packed), sizeof(packed), &packed, sizeof(packed));
         }
-        outPatternSize = 4u * static_cast<u32>(sizeof(u8));
+        outPatternSize = s_TextureClearRGBAComponentCount * static_cast<u32>(sizeof(u8));
         return true;
     };
     auto writeSNorm8Components = [&](const u32 componentCount){
@@ -720,56 +733,56 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
     };
     auto writeBC1Components = [&](const bool srgb){
         WriteBC1ColorClearBlock(outPattern, values[0], values[1], values[2], values[3], srgb);
-        outPatternSize = 8u;
+        outPatternSize = s_BCSingleClearBlockBytes;
         return true;
     };
     auto writeBC2Components = [&](const bool srgb){
         const u8 alpha = static_cast<u8>(FloatToUNormClearBits(values[3], 4u));
         u64 alphaBits = 0u;
-        for(u32 texelIndex = 0u; texelIndex < 16u; ++texelIndex)
+        for(u32 texelIndex = 0u; texelIndex < s_BC2AlphaTexelCount; ++texelIndex)
             alphaBits |= static_cast<u64>(alpha) << (texelIndex * 4u);
         WriteClearPatternValue(outPattern, sizeof(alphaBits), &alphaBits, sizeof(alphaBits));
         WriteBC1ColorClearBlock(outPattern + sizeof(alphaBits), values[0], values[1], values[2], 1.0f, srgb);
-        outPatternSize = 16u;
+        outPatternSize = s_BCDoubleClearBlockBytes;
         return true;
     };
     auto writeBC3Components = [&](const bool srgb){
         WriteBC4UNormClearBlock(outPattern, values[3]);
-        WriteBC1ColorClearBlock(outPattern + 8u, values[0], values[1], values[2], 1.0f, srgb);
-        outPatternSize = 16u;
+        WriteBC1ColorClearBlock(outPattern + s_BCSingleClearBlockBytes, values[0], values[1], values[2], 1.0f, srgb);
+        outPatternSize = s_BCDoubleClearBlockBytes;
         return true;
     };
     auto writeBC4UNormComponents = [&](){
         WriteBC4UNormClearBlock(outPattern, values[0]);
-        outPatternSize = 8u;
+        outPatternSize = s_BCSingleClearBlockBytes;
         return true;
     };
     auto writeBC4SNormComponents = [&](){
         WriteBC4SNormClearBlock(outPattern, values[0]);
-        outPatternSize = 8u;
+        outPatternSize = s_BCSingleClearBlockBytes;
         return true;
     };
     auto writeBC5UNormComponents = [&](){
         WriteBC4UNormClearBlock(outPattern, values[0]);
-        WriteBC4UNormClearBlock(outPattern + 8u, values[1]);
-        outPatternSize = 16u;
+        WriteBC4UNormClearBlock(outPattern + s_BCSingleClearBlockBytes, values[1]);
+        outPatternSize = s_BCDoubleClearBlockBytes;
         return true;
     };
     auto writeBC5SNormComponents = [&](){
         WriteBC4SNormClearBlock(outPattern, values[0]);
-        WriteBC4SNormClearBlock(outPattern + 8u, values[1]);
-        outPatternSize = 16u;
+        WriteBC4SNormClearBlock(outPattern + s_BCSingleClearBlockBytes, values[1]);
+        outPatternSize = s_BCDoubleClearBlockBytes;
         return true;
     };
 
     switch(format){
     case Format::R8_UNORM: return writeUNorm8Components(1u, false);
     case Format::R8_SNORM: return writeSNorm8Components(1u);
-    case Format::RG8_UNORM: return writeUNorm8Components(2u, false);
-    case Format::RG8_SNORM: return writeSNorm8Components(2u);
-    case Format::RGBA8_UNORM: return writeUNorm8Components(4u, false);
-    case Format::RGBA8_SNORM: return writeSNorm8Components(4u);
-    case Format::RGBA8_UNORM_SRGB: return writeUNorm8Components(4u, true);
+    case Format::RG8_UNORM: return writeUNorm8Components(s_TextureClearRGComponentCount, false);
+    case Format::RG8_SNORM: return writeSNorm8Components(s_TextureClearRGComponentCount);
+    case Format::RGBA8_UNORM: return writeUNorm8Components(s_TextureClearRGBAComponentCount, false);
+    case Format::RGBA8_SNORM: return writeSNorm8Components(s_TextureClearRGBAComponentCount);
+    case Format::RGBA8_UNORM_SRGB: return writeUNorm8Components(s_TextureClearRGBAComponentCount, true);
     case Format::BGRA8_UNORM: return writeUNorm8BGRAComponents(false);
     case Format::BGRA8_UNORM_SRGB: return writeUNorm8BGRAComponents(true);
     case Format::BGRA4_UNORM: return writeUNorm4BGRAComponents();
@@ -780,16 +793,16 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
     case Format::R16_UNORM: return writeUNorm16Components(1u);
     case Format::R16_SNORM: return writeSNorm16Components(1u);
     case Format::R16_FLOAT: return writeHalfComponents(1u);
-    case Format::RG16_UNORM: return writeUNorm16Components(2u);
-    case Format::RG16_SNORM: return writeSNorm16Components(2u);
-    case Format::RG16_FLOAT: return writeHalfComponents(2u);
-    case Format::RGBA16_UNORM: return writeUNorm16Components(4u);
-    case Format::RGBA16_SNORM: return writeSNorm16Components(4u);
-    case Format::RGBA16_FLOAT: return writeHalfComponents(4u);
+    case Format::RG16_UNORM: return writeUNorm16Components(s_TextureClearRGComponentCount);
+    case Format::RG16_SNORM: return writeSNorm16Components(s_TextureClearRGComponentCount);
+    case Format::RG16_FLOAT: return writeHalfComponents(s_TextureClearRGComponentCount);
+    case Format::RGBA16_UNORM: return writeUNorm16Components(s_TextureClearRGBAComponentCount);
+    case Format::RGBA16_SNORM: return writeSNorm16Components(s_TextureClearRGBAComponentCount);
+    case Format::RGBA16_FLOAT: return writeHalfComponents(s_TextureClearRGBAComponentCount);
     case Format::R32_FLOAT: return writeFloatComponents(1u);
-    case Format::RG32_FLOAT: return writeFloatComponents(2u);
-    case Format::RGB32_FLOAT: return writeFloatComponents(3u);
-    case Format::RGBA32_FLOAT: return writeFloatComponents(4u);
+    case Format::RG32_FLOAT: return writeFloatComponents(s_TextureClearRGComponentCount);
+    case Format::RGB32_FLOAT: return writeFloatComponents(s_TextureClearColorComponentCount);
+    case Format::RGBA32_FLOAT: return writeFloatComponents(s_TextureClearRGBAComponentCount);
     case Format::BC1_UNORM: return writeBC1Components(false);
     case Format::BC1_UNORM_SRGB: return writeBC1Components(true);
     case Format::BC2_UNORM: return writeBC2Components(false);
@@ -840,15 +853,15 @@ inline bool BuildTextureUIntClearPattern(const Format::Enum format, const VkClea
 
     switch(format){
     case Format::R8_UINT: return writeU8Components(1u);
-    case Format::RG8_UINT: return writeU8Components(2u);
-    case Format::RGBA8_UINT: return writeU8Components(4u);
+    case Format::RG8_UINT: return writeU8Components(s_TextureClearRGComponentCount);
+    case Format::RGBA8_UINT: return writeU8Components(s_TextureClearRGBAComponentCount);
     case Format::R16_UINT: return writeU16Components(1u);
-    case Format::RG16_UINT: return writeU16Components(2u);
-    case Format::RGBA16_UINT: return writeU16Components(4u);
+    case Format::RG16_UINT: return writeU16Components(s_TextureClearRGComponentCount);
+    case Format::RGBA16_UINT: return writeU16Components(s_TextureClearRGBAComponentCount);
     case Format::R32_UINT: return writeU32Components(1u);
-    case Format::RG32_UINT: return writeU32Components(2u);
-    case Format::RGB32_UINT: return writeU32Components(3u);
-    case Format::RGBA32_UINT: return writeU32Components(4u);
+    case Format::RG32_UINT: return writeU32Components(s_TextureClearRGComponentCount);
+    case Format::RGB32_UINT: return writeU32Components(s_TextureClearColorComponentCount);
+    case Format::RGBA32_UINT: return writeU32Components(s_TextureClearRGBAComponentCount);
     default:
         return false;
     }
@@ -895,15 +908,15 @@ inline bool BuildTextureIntClearPattern(const Format::Enum format, const VkClear
 
     switch(format){
     case Format::R8_SINT: return writeI8Components(1u);
-    case Format::RG8_SINT: return writeI8Components(2u);
-    case Format::RGBA8_SINT: return writeI8Components(4u);
+    case Format::RG8_SINT: return writeI8Components(s_TextureClearRGComponentCount);
+    case Format::RGBA8_SINT: return writeI8Components(s_TextureClearRGBAComponentCount);
     case Format::R16_SINT: return writeI16Components(1u);
-    case Format::RG16_SINT: return writeI16Components(2u);
-    case Format::RGBA16_SINT: return writeI16Components(4u);
+    case Format::RG16_SINT: return writeI16Components(s_TextureClearRGComponentCount);
+    case Format::RGBA16_SINT: return writeI16Components(s_TextureClearRGBAComponentCount);
     case Format::R32_SINT: return writeI32Components(1u);
-    case Format::RG32_SINT: return writeI32Components(2u);
-    case Format::RGB32_SINT: return writeI32Components(3u);
-    case Format::RGBA32_SINT: return writeI32Components(4u);
+    case Format::RG32_SINT: return writeI32Components(s_TextureClearRGComponentCount);
+    case Format::RGB32_SINT: return writeI32Components(s_TextureClearColorComponentCount);
+    case Format::RGBA32_SINT: return writeI32Components(s_TextureClearRGBAComponentCount);
     default:
         return false;
     }
@@ -1026,11 +1039,11 @@ bool ValidateTextureShape(const TextureDesc& desc, const tchar* operationName){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube textures must have equal width and height"), operationName);
             return false;
         }
-        if(desc.dimension == TextureDimension::TextureCube && desc.arraySize != 6){
+        if(desc.dimension == TextureDimension::TextureCube && desc.arraySize != __hidden_vulkan_texture::s_TextureCubeLayerCount){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube textures must have exactly 6 array layers"), operationName);
             return false;
         }
-        if(desc.dimension == TextureDimension::TextureCubeArray && (desc.arraySize < 6 || (desc.arraySize % 6) != 0)){
+        if(desc.dimension == TextureDimension::TextureCubeArray && (desc.arraySize < __hidden_vulkan_texture::s_TextureCubeLayerCount || (desc.arraySize % __hidden_vulkan_texture::s_TextureCubeLayerCount) != 0)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube texture arrays must have a positive multiple of 6 array layers"), operationName);
             return false;
         }
@@ -1713,7 +1726,7 @@ void CommandList::clearDepthStencilTextureBox(
     if(desc.dimension == TextureDimension::Texture3D)
         return;
 
-    u8 depthPattern[4] = {};
+    u8 depthPattern[__hidden_vulkan_texture::s_TextureClearDepthPatternBytes] = {};
     u32 depthPatternSize = 0u;
     if(clearDepth && !__hidden_vulkan_texture::BuildTextureDepthClearPattern(desc.format, depth, depthPattern, depthPatternSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded depth box clears do not support texture format {}"), StringConvert(GetFormatInfo(desc.format).name));
@@ -1721,7 +1734,7 @@ void CommandList::clearDepthStencilTextureBox(
         return;
     }
 
-    u8 stencilPattern[1] = {};
+    u8 stencilPattern[__hidden_vulkan_texture::s_TextureClearStencilPatternBytes] = {};
     u32 stencilPatternSize = 0u;
     if(clearStencil && !__hidden_vulkan_texture::BuildTextureStencilClearPattern(desc.format, stencil, stencilPattern, stencilPatternSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded stencil box clears do not support texture format {}"), StringConvert(GetFormatInfo(desc.format).name));
@@ -1758,7 +1771,7 @@ void CommandList::clearDepthStencilTextureBox(
 
             const u64 uploadSize64 = texelCount * clearPatternSize;
             u64 layerPitch64 = uploadSize64;
-            if(!AlignUpU64Checked(layerPitch64, 4ull, layerPitch64)){
+            if(!AlignUpU64Checked(layerPitch64, __hidden_vulkan_texture::s_TextureClearUploadAlignment, layerPitch64)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
                 NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
                 return false;
@@ -2251,7 +2264,7 @@ void CommandList::clearColorTextureBox(
         return;
     }
 
-    u8 clearPattern[16] = {};
+    u8 clearPattern[__hidden_vulkan_texture::s_TextureClearMaxPatternBytes] = {};
     u32 clearPatternSize = 0u;
     const bool patternReady = !integerValue
         ? __hidden_vulkan_texture::BuildTextureFloatClearPattern(desc.format, clearValue, clearPattern, clearPatternSize)

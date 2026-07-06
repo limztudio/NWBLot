@@ -8,6 +8,8 @@
 #include <core/ecs/module.h>
 #include <core/graphics/module.h>
 #include <core/mesh/frame_math.h>
+#include <global/math/constant.h>
+#include <global/math/quaternion.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
@@ -69,7 +71,16 @@ static constexpr f32 s_CharacterSpacingX = 0.72f;                     // tight s
 static constexpr f32 s_TransparentRowZ = -0.55f;                      // even index -> front of the zigzag
 static constexpr f32 s_OpaqueRowZ = 0.55f;                            // odd index  -> back of the zigzag
 static constexpr f32 s_CharacterLift = 0.0f;
-static constexpr f32 s_GroundScale = 8.0f;
+
+// GI CORNELL BOX (added to see the surfel GI bounce): three coloured walls (-X blue, +X red, +Z green BACK wall) + a
+// ceiling enclose the spinning crowd so each wall's coloured indirect bounce lands on the characters + floor. The camera
+// sits on -Z looking toward +Z, so the green BACK wall is at +Z (the far end, IN VIEW) and the box is OPEN on the -Z side
+// (behind the camera) -- all three wall colours + the ceiling are visible. Reuses the ground plane mesh + opaque material
+// + per-instance colour_tint (no new assets).
+static constexpr f32 s_BoxHalfX = 4.0f;                    // side walls at +-4 (just outside the +-3.24 character spread)
+static constexpr f32 s_BoxHalfZ = 4.5f;                    // +Z back wall at +4.5; open -Z front at -4.5 (camera at -4.8 looks in)
+static constexpr f32 s_BoxHeight = 4.0f;                   // wall height / ceiling y (point light at 2.6 stays inside)
+static constexpr f32 s_GroundScale = 2.0f * s_BoxHalfZ;    // floor spans the box depth (+-4.5) so it meets the side + back walls
 
 static constexpr f32 s_CameraDistance = 4.8f;
 static constexpr f32 s_CameraHeight = 1.8f;
@@ -166,6 +177,56 @@ private:
         return entity;
     }
 
+    // A coloured wall: a scaled ground plane stood VERTICAL (90deg pitch) then yawed to face inward, mirroring the GI-test
+    // box builder. `spanScale` is the wall's horizontal length (X for the -Z wall, Z for the side walls); the height is
+    // s_BoxHeight. Reuses the opaque ground material + the per-instance colour tint (no new assets).
+    [[nodiscard]] NWB::Core::ECS::EntityID createWall(const Float4& position, const Float4& colorTint, const f32 yawDeg, const f32 spanScale){
+        const SIMDVector pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);   // stand the plane up (vertical)
+        const f32 yawRad = yawDeg * (s_PI / 180.0f);
+        const SIMDVector yawQuat = QuaternionRotationRollPitchYaw(0.0f, yawRad, 0.0f);
+        // QuaternionMultiply(A, B) applies B FIRST then A, so pass (yaw, pitch) to stand the plane up (pitch) THEN orient
+        // it (yaw). Passing (pitch, yaw) yaws the still-flat plane first, which leaves the +-X walls facing the camera
+        // (spanning X) instead of facing inward (spanning Z) -- the 90-degrees-off "backdrop" look.
+        const SIMDVector wallRotation = QuaternionMultiply(yawQuat, pitchQuat);
+
+        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
+            *m_world,
+            m_context.objectArena,
+            s_GroundMeshPath,
+            s_OpaqueMaterialPath,
+            s_SmokeSurfaceMaterialInterface,
+            colorTint,
+            position,
+            Float4(spanScale, 1.0f, s_BoxHeight, 0.0f)
+        );
+        if(entity.valid()){
+            if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
+                StoreFloat(wallRotation, &transform->rotation);
+        }
+        return entity;
+    }
+
+    // The ceiling: a scaled ground plane at the box top, FLIPPED (180deg pitch) so its lit face points DOWN into the box,
+    // bouncing indirect fill onto the crowd. Covers the full box footprint (2*halfX by 2*halfZ).
+    [[nodiscard]] NWB::Core::ECS::EntityID createCeiling(const Float4& colorTint){
+        const SIMDVector ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);   // face -Y (down into the box)
+        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
+            *m_world,
+            m_context.objectArena,
+            s_GroundMeshPath,
+            s_OpaqueMaterialPath,
+            s_SmokeSurfaceMaterialInterface,
+            colorTint,
+            Float4(0.0f, s_BoxHeight, 0.0f, 0.0f),
+            Float4(2.0f * s_BoxHalfX, 1.0f, 2.0f * s_BoxHalfZ, 0.0f)
+        );
+        if(entity.valid()){
+            if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
+                StoreFloat(ceilingRotation, &transform->rotation);
+        }
+        return entity;
+    }
+
     // Spin every character about its vertical (Y) axis around its fixed position; a per-character phase staggers the
     // start angles so the crowd isn't in lockstep. Only the root transform's rotation changes -- the skinned bodies
     // stay in bind pose -- so each frame the instance/scene BVH + the two lights' shadows re-resolve as they turn.
@@ -241,6 +302,13 @@ public:
             Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f)
         );
 
+        // GI box: three coloured walls + a ceiling around the crowd (see the s_BoxHalf* notes). Distinct saturated hues so
+        // each wall's indirect bounce reads as a different colour on the floor + characters; the ceiling is a warm fill.
+        m_wallPosX = createWall(Float4(s_BoxHalfX, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.80f, 0.08f, 0.08f, 1.0f), -90.0f, 2.0f * s_BoxHalfZ); // +X red
+        m_wallNegX = createWall(Float4(-s_BoxHalfX, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.08f, 0.12f, 0.80f, 1.0f), 90.0f, 2.0f * s_BoxHalfZ); // -X blue
+        m_wallPosZ = createWall(Float4(0.0f, s_BoxHeight * 0.5f, s_BoxHalfZ, 0.0f), Float4(0.10f, 0.72f, 0.14f, 1.0f), 180.0f, 2.0f * s_BoxHalfX); // +Z green (far back wall, faces -Z toward the crowd)
+        m_ceiling = createCeiling(Float4(0.90f, 0.86f, 0.72f, 1.0f));                                                                             // warm off-white ceiling
+
         m_characterOwners.reserve(s_CharacterCount);
         for(u32 index = 0u; index < s_CharacterCount; ++index)
             m_characterOwners.push_back(createCharacter(index));
@@ -252,7 +320,8 @@ public:
             allCharactersValid = allCharactersValid && owner.valid();
 
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.valid() && m_groundEntity.valid() && allCharactersValid,
+            activeCamera.valid() && m_groundEntity.valid() && allCharactersValid
+            && m_wallPosX.valid() && m_wallNegX.valid() && m_wallPosZ.valid() && m_ceiling.valid(),
             NWB_TEXT("StressTestSmokeProject failed to create all scene entities")
         );
 
@@ -291,6 +360,10 @@ private:
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> m_characterOwners;
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_wallPosX = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_wallNegX = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_wallPosZ = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_ceiling = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("StressTestSmokeProject") };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("StressTestSmokeProject") };
     NWB::Tests::Smoke::YawSpinController m_yaw;

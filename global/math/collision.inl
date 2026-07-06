@@ -1110,18 +1110,22 @@ inline void SIMDCALL BoundingSphere::transform(
     f32& outDistance
 )const noexcept{
     const SIMDVector sphereValue = LoadFloat(centerRadius);
-    const f32 sphereRadius = CollisionDetail::SphereRadius(sphereValue);
+    const SIMDVector sphereRadius = VectorReplicate(CollisionDetail::SphereRadius(sphereValue));
     const SIMDVector localOrigin = VectorSubtract(origin, CollisionDetail::SphereCenter(sphereValue));
-    const f32 b = VectorGetX(Vector3Dot(localOrigin, direction));
-    const f32 c = VectorGetX(Vector3LengthSq(localOrigin)) - sphereRadius * sphereRadius;
+    const SIMDVector bVector = Vector3Dot(localOrigin, direction);
+    const SIMDVector cVector = VectorSubtract(Vector3LengthSq(localOrigin), VectorMultiply(sphereRadius, sphereRadius));
+    const f32 b = VectorGetX(bVector);
+    const f32 c = VectorGetX(cVector);
     if(c > 0.0f && b > 0.0f)
         return false;
 
-    const f32 discriminant = b * b - c;
+    const SIMDVector discriminantVector = VectorSubtract(VectorMultiply(bVector, bVector), cVector);
+    const f32 discriminant = VectorGetX(discriminantVector);
     if(discriminant < 0.0f)
         return false;
 
-    outDistance = Max(0.0f, -b - Sqrt(discriminant));
+    const SIMDVector distance = VectorSubtract(VectorNegate(bVector), VectorSqrt(discriminantVector));
+    outDistance = Max(0.0f, VectorGetX(distance));
     return true;
 }
 
@@ -1161,7 +1165,8 @@ inline void BoundingSphere::createMerged(
     const f32 radius0 = CollisionDetail::SphereRadius(sphereValue0);
     const f32 radius1 = CollisionDetail::SphereRadius(sphereValue1);
     const SIMDVector delta = VectorSubtract(center1, center0);
-    const f32 distanceSq = VectorGetX(Vector3LengthSq(delta));
+    const SIMDVector distanceSquared = Vector3LengthSq(delta);
+    const f32 distanceSq = VectorGetX(distanceSquared);
     const f32 radiusDelta = radius0 - radius1;
 
     if(radiusDelta * radiusDelta >= distanceSq){
@@ -1169,8 +1174,13 @@ inline void BoundingSphere::createMerged(
         return;
     }
 
-    const f32 distance = Sqrt(distanceSq);
-    const f32 newRadius = (distance + radius0 + radius1) * 0.5f;
+    const SIMDVector distanceVector = VectorSqrt(distanceSquared);
+    const f32 distance = VectorGetX(distanceVector);
+    const SIMDVector newRadiusVector = VectorMultiply(
+        VectorAdd(distanceVector, VectorReplicate(radius0 + radius1)),
+        s_SIMDOneHalf
+    );
+    const f32 newRadius = VectorGetX(newRadiusVector);
     SIMDVector newCenter = center0;
     if(distance > CollisionDetail::s_RayEpsilon)
         newCenter = VectorMultiplyAdd(delta, VectorReplicate((newRadius - radius0) / distance), center0);

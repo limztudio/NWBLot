@@ -543,39 +543,39 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixScalingFromVector(SIMDVector scale)noexcept
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationX(f32 angle)noexcept{
-    f32 sinAngle{};
-    f32 cosAngle{};
-    SIMDVectorDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
+    SIMDVector sinAngle{};
+    SIMDVector cosAngle{};
+    VectorSinCos(&sinAngle, &cosAngle, VectorReplicate(angle));
 
     SIMDMatrix matrix{};
     matrix.v[0] = s_SIMDIdentityR0;
-    matrix.v[1] = VectorSet(0.0f, cosAngle, -sinAngle, 0.0f);
-    matrix.v[2] = VectorSet(0.0f, sinAngle, cosAngle, 0.0f);
+    matrix.v[1] = VectorMergeX(VectorZero(), cosAngle, VectorNegate(sinAngle), VectorZero());
+    matrix.v[2] = VectorMergeX(VectorZero(), sinAngle, cosAngle, VectorZero());
     matrix.v[3] = s_SIMDIdentityR3;
     return matrix;
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationY(f32 angle)noexcept{
-    f32 sinAngle{};
-    f32 cosAngle{};
-    SIMDVectorDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
+    SIMDVector sinAngle{};
+    SIMDVector cosAngle{};
+    VectorSinCos(&sinAngle, &cosAngle, VectorReplicate(angle));
 
     SIMDMatrix matrix{};
-    matrix.v[0] = VectorSet(cosAngle, 0.0f, sinAngle, 0.0f);
+    matrix.v[0] = VectorMergeX(cosAngle, VectorZero(), sinAngle, VectorZero());
     matrix.v[1] = s_SIMDIdentityR1;
-    matrix.v[2] = VectorSet(-sinAngle, 0.0f, cosAngle, 0.0f);
+    matrix.v[2] = VectorMergeX(VectorNegate(sinAngle), VectorZero(), cosAngle, VectorZero());
     matrix.v[3] = s_SIMDIdentityR3;
     return matrix;
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationZ(f32 angle)noexcept{
-    f32 sinAngle{};
-    f32 cosAngle{};
-    SIMDVectorDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
+    SIMDVector sinAngle{};
+    SIMDVector cosAngle{};
+    VectorSinCos(&sinAngle, &cosAngle, VectorReplicate(angle));
 
     SIMDMatrix matrix{};
-    matrix.v[0] = VectorSet(cosAngle, -sinAngle, 0.0f, 0.0f);
-    matrix.v[1] = VectorSet(sinAngle, cosAngle, 0.0f, 0.0f);
+    matrix.v[0] = VectorMergeX(cosAngle, VectorNegate(sinAngle), VectorZero(), VectorZero());
+    matrix.v[1] = VectorMergeX(sinAngle, cosAngle, VectorZero(), VectorZero());
     matrix.v[2] = s_SIMDIdentityR2;
     matrix.v[3] = s_SIMDIdentityR3;
     return matrix;
@@ -625,12 +625,13 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationRollPitchYaw(f32 pitch, f32 yaw, f3
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationNormal(SIMDVector normalAxis, f32 angle)noexcept{
-    f32 sinAngle{};
-    f32 cosAngle{};
-    SIMDVectorDetail::ScalarSinCos(&sinAngle, &cosAngle, angle);
+    SIMDVector sinAngle{};
+    SIMDVector cosAngle{};
+    VectorSinCos(&sinAngle, &cosAngle, VectorReplicate(angle));
+    const SIMDVector oneMinusCosAngle = VectorSubtract(s_SIMDOne, cosAngle);
 
 #if defined(NWB_HAS_SCALAR) || defined(NWB_HAS_NEON)
-    const SIMDVector a = VectorSet(-sinAngle, cosAngle, 1.0f - cosAngle, 0.0f);
+    const SIMDVector a = VectorMergeX(VectorNegate(sinAngle), cosAngle, oneMinusCosAngle, VectorZero());
     const SIMDVector c2 = VectorSplatZ(a);
     const SIMDVector c1 = VectorSplatY(a);
     const SIMDVector c0 = VectorSplatX(a);
@@ -659,9 +660,9 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationNormal(SIMDVector normalAxis, f32 a
     matrix.v[3] = s_SIMDIdentityR3;
     return matrix;
 #else
-    const SIMDVector c2 = _mm_set1_ps(1.0f - cosAngle);
-    const SIMDVector c1 = _mm_set1_ps(cosAngle);
-    const SIMDVector c0 = _mm_set1_ps(-sinAngle);
+    const SIMDVector c2 = oneMinusCosAngle;
+    const SIMDVector c1 = cosAngle;
+    const SIMDVector c0 = VectorNegate(sinAngle);
 
 #if defined(NWB_HAS_AVX2)
     const SIMDVector n0 = _mm_permute_ps(normalAxis, _MM_SHUFFLE(3, 0, 2, 1));
@@ -973,10 +974,10 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovImpl(
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0f, 0.00001f));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, 0.00001f));
 
-    f32 sinFov{};
-    f32 cosFov{};
-    SIMDVectorDetail::ScalarSinCos(&sinFov, &cosFov, 0.5f * fovAngleY);
-    const f32 height = cosFov / sinFov;
+    SIMDVector sinFov{};
+    SIMDVector cosFov{};
+    VectorSinCos(&sinFov, &cosFov, VectorReplicate(0.5f * fovAngleY));
+    const f32 height = VectorGetX(VectorDivide(cosFov, sinFov));
     const f32 width = height / aspectRatio;
     const f32 range = farZ / rangeDenominator;
     return MatrixSet(

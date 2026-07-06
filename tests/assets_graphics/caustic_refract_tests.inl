@@ -4,23 +4,38 @@
 
 // CPU mirror of caustic/refract.slangi's nwbCausticRefract -- the SAME explicit Snell form the shader emits
 // (k = 1 - eta*eta*(1 - cosI*cosI); k < 0 -> float3(0); else eta*i - (eta*cosI + sqrt(k))*n). It deliberately
-// reimplements the formula with scalars (not a call into the math library) so that a divergence between this
-// formula and the shader's, or a bug in the formula itself, fails the test. The oracle it is checked against is
-// Vector3Refract (global/math/vector.h), the runtime path RefractV backs, so the mirror, the shader, and the
-// engine math all agree on the same definition including the TIR-returns-zero branch.
+// reimplements the formula without calling Vector3Refract so that a divergence between this formula and the shader's,
+// or a bug in the formula itself, fails the test. The oracle it is checked against is Vector3Refract
+// (global/math/vector.h), the runtime path RefractV backs, so the mirror, the shader, and the engine math all agree on
+// the same definition including the TIR-returns-zero branch.
+static SIMDVector CausticRefractCpuMirrorVector(const SIMDVector incident, const SIMDVector normal, const float eta){
+    const SIMDVector etaVector = VectorReplicate(eta);
+    const SIMDVector cosI = Vector3Dot(incident, normal);
+    const SIMDVector k = VectorSubtract(
+        s_SIMDOne,
+        VectorMultiply(VectorMultiply(etaVector, etaVector), VectorSubtract(s_SIMDOne, VectorMultiply(cosI, cosI)))
+    );
+    if(VectorGetX(k) < 0.0f)
+        return VectorZero();
+
+    const SIMDVector scale = VectorMultiplyAdd(etaVector, cosI, VectorSqrt(k));
+    return VectorSubtract(VectorMultiply(etaVector, incident), VectorMultiply(scale, normal));
+}
+
 static void CausticRefractCpuMirror(const float incident[3], const float normal[3], const float eta, float outRefracted[3]){
-    const float cosI = incident[0] * normal[0] + incident[1] * normal[1] + incident[2] * normal[2];
-    const float k = 1.0f - eta * eta * (1.0f - cosI * cosI);
-    if(k < 0.0f){
-        outRefracted[0] = 0.0f;
-        outRefracted[1] = 0.0f;
-        outRefracted[2] = 0.0f;
-        return;
-    }
-    const float scale = eta * cosI + std::sqrt(k);
-    outRefracted[0] = eta * incident[0] - scale * normal[0];
-    outRefracted[1] = eta * incident[1] - scale * normal[1];
-    outRefracted[2] = eta * incident[2] - scale * normal[2];
+    const SIMDVector refracted = CausticRefractCpuMirrorVector(
+        VectorSet(incident[0], incident[1], incident[2], 0.0f),
+        VectorSet(normal[0], normal[1], normal[2], 0.0f),
+        eta
+    );
+    outRefracted[0] = VectorGetX(refracted);
+    outRefracted[1] = VectorGetY(refracted);
+    outRefracted[2] = VectorGetZ(refracted);
+}
+
+static float CausticVector3LengthSquared(const float value[3]){
+    const SIMDVector lengthSquared = Vector3LengthSq(VectorSet(value[0], value[1], value[2], 0.0f));
+    return VectorGetX(lengthSquared);
 }
 
 static void CausticRefractReference(const float incident[3], const float normal[3], const float eta, float outRefracted[3]){
@@ -74,8 +89,7 @@ TEST(AssetsGraphics, CausticRefractMatchesVector3Refract){
 
         // A refracting case must produce a non-degenerate direction (so the TIR check above is not vacuously passing
         // on a zero everywhere), and it must match the SIMD reference within float tolerance.
-        const float mirrorLengthSq = mirror[0] * mirror[0] + mirror[1] * mirror[1] + mirror[2] * mirror[2];
-        EXPECT_GT(mirrorLengthSq, 0.25f) << testCase.name;
+        EXPECT_GT(CausticVector3LengthSquared(mirror), 0.25f) << testCase.name;
         EXPECT_NEAR(mirror[0], reference[0], 1e-5f) << testCase.name;
         EXPECT_NEAR(mirror[1], reference[1], 1e-5f) << testCase.name;
         EXPECT_NEAR(mirror[2], reference[2], 1e-5f) << testCase.name;

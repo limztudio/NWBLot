@@ -13,7 +13,6 @@
 #include <core/assets/ref.h>
 #include <core/ecs/world.h>
 #include <core/graphics/module.h>
-#include <core/graphics/backend_selection.h>
 #include <core/telemetry/frame_graph_registry.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_mesh/asset.h>

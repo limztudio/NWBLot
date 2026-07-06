@@ -11,8 +11,7 @@
 
 // Software-shadow ray/primitive intersection math: the slab ray/AABB overlap test, the safe reciprocal-direction, and
 // the watertight Woop ray/triangle test. PURE float math -- declares NO bindings and pulls NO other concern, so any BVH
-// traversal (scene or per-mesh) can compose it. (It is BVH-general and could later move to the bvh module; kept in
-// shadow/ for now to keep the software-shadow decomposition self-contained.)
+// traversal (scene or per-mesh) can compose it. Kept in shadow/ to keep the software-shadow decomposition self-contained.
 
 
 #define NWB_SW_SHADOW_AABB_PADDING 1e-4

@@ -67,7 +67,7 @@ static constexpr f32 s_BoxHeight = 2.0f;            // wall height
 static constexpr f32 s_BoxScale = 4.0f;             // plane scale (matches s_BoxHalfExtent * 2)
 
 // Camera: elevated ABOVE the box (higher than the wall top) looking DOWN into the open top at a moderate angle, so
-// it looks OVER the near wall (which would otherwise fill the frame now the walls are two-sided) and frames the
+// it looks OVER the near wall (which would otherwise fill the frame because the walls are two-sided) and frames the
 // floor + its coloured bounce below with the red (+X) and blue (-X) side walls' inner faces rising at the left/right
 // and the far (+Z) wall across the back. A near-level camera sat below the wall tops and the near wall occluded
 // everything; a too-steep top-down angle foreshortened the walls to slivers -- this is the middle ground.

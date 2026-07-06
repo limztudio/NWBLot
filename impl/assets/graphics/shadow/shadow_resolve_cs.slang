@@ -150,7 +150,7 @@ bool nwbShadowResolveValidAtHalf(const int2 halfTexel){
 static const float s_NwbShadowResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0 };
 
 // Normal edge-stop exponent: taps whose receiver normal diverges from the centre's fall off as pow(max(dot,0), N). This is
-// DELIBERATELY GENTLE (8, not the 32 it was): the receiver normal is a HALF-res point-sampled cache, and on a smoothly
+// deliberately gentle: the receiver normal is a HALF-res point-sampled cache, and on a smoothly
 // CURVING receiver (a character torso/hip) adjacent half-res texels legitimately differ by ~10-20deg while the far a-trous
 // taps (dilation up to 16) diverge much more. A pow-32 stop (half-weight at ~11deg) treated that smooth curvature as an
 // orientation crease and starved every reconstruction stage (wavelet + upsample) down to 1-2 near-parallel taps, so the
@@ -194,7 +194,7 @@ float nwbShadowResolveNormalWeightVec(const float3 centerNormal, const float2 ta
 // the lit plane. The geometry edge-stop alone cannot do this -- a FLAT receiver has no depth/normal discontinuity AT the
 // shadow edge, so without this term a wide a-trous Gaussian-blurs the shadow across the plane until it washes out.
 //
-// STAGE 4A (SVGF variance-coupled): the sigma is now DRIVEN PER PIXEL by the luminance variance instead of a single fixed
+// STAGE 4A (SVGF variance-coupled): the sigma is driven per pixel by the luminance variance instead of a single fixed
 // constant. sigma_l = SIGMA_LUM * sqrt(variance) + EPS. HIGH variance (freshly disoccluded / noisy) -> large sigma ->
 // loose stop -> aggressive fill; LOW variance (temporally converged) -> sigma ~= EPS -> tight stop -> the sharp penumbra
 // is preserved. The variance is the temporal moment variance (max(m2 - m1^2, 0)) where history is long enough to trust

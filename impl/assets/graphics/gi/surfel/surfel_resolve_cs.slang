@@ -4,7 +4,7 @@
 
 // Surfel resolve: one thread per screen pixel. Reads the G-buffer world position + normal, gathers the surfel
 // irradiance (nwbSurfelGather -- the 3x3x3 hash walk, reused verbatim), and writes it to a screen-space texture the
-// deferred-lighting PIXEL shader samples. This is the caustic-style decoupling: the surfel pool is now touched ONLY by
+// deferred-lighting PIXEL shader samples. This is the caustic-style decoupling: the surfel pool is touched ONLY by
 // COMPUTE (spawn / hash-build / trace / this resolve), never by the pixel shader, so the frames-in-flight race (the
 // pixel gather of frame N overlapping the compute RMW of frame N+1 on the shared single-buffered pool) is eliminated.
 // Output alpha = 1 where a surfel covered the pixel (rgb = gathered irradiance); 0 elsewhere (background or no coverage)

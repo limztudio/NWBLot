@@ -38,7 +38,7 @@
 #define NWB_SHADOW_RT_BINDING_MESH_POSITIONS 12
 
 // Maximum distinct meshes the per-mesh descriptor arrays (index + attribute + position) can address in one frame;
-// meshes beyond it cast a colorless (opaque) shadow that frame (logged once). The hardware shadow trace is now an
+// meshes beyond it cast a colorless (opaque) shadow that frame (logged once). The hardware shadow trace is an
 // inline-RayQuery COMPUTE pass, and the compute pipeline's single-stage descriptor budget is tighter than the RT
 // pipeline's (which spread these three count-N SRV arrays across its raygen/miss/any-hit stages): 64 (3*64=192
 // array descriptors) corrupted the compute binding set + broke the following deferred pass, while 32 (3*32=96) is

@@ -150,7 +150,7 @@ struct NwbRtInstanceMaterialGpu{
     u32 meshSlot = 0u;
     u32 materialConstantByteOffset = 0u;
     u32 meshInstanceIndex = 0u;
-    // Per-instance base colour (asuint of the linear RGB), formerly padding. The software probe/photon producers
+    // Per-instance base colour (asuint of the linear RGB). The software probe/photon producers
     // (GI, caustics) read this to shade a bounce with the surface's authored colour instead of a flat default; the
     // shadow trace ignores it. Defaults to the neutral GI albedo so an unresolved material still bounces mid-grey.
     u32 baseColorR = 0u;

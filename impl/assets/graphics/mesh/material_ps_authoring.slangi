@@ -18,8 +18,8 @@
 // Engine-owned authoring header for a material's G-buffer pixel shader. A material's pixel shader includes
 // this + its `.bind` interface + its surface hook; the engine owns the entry (gbuffer_ps.slangi) + the
 // G-buffer write, and the material's nwbMaterialSurface() reads the typed `.bind` material constants per-pixel
-// via the accessors below. The typed-binding contract that used to gate the mesh shader now gates the pixel
-// shader, because the pixel shader is the stage that reads typed material data.
+// via the accessors below. The pixel shader owns the typed-binding contract because it is the stage that reads
+// typed material data.
 #ifndef NWB_MATERIAL_TYPED_BINDING
 #error "material pixel shaders must include a generated .bind material interface"
 #endif
@@ -30,7 +30,7 @@
 
 // gbuffer_ps.slangi pulls gbuffer_io.slangi (the G-buffer write + the per-draw instance / material-offset
 // accessors + the typed buffer declarations). material_typed_accessors.slangi then provides the typed-word
-// load families the generated .bind accessors build on -- usable here because the pixel shader now has the
+// load families the generated .bind accessors build on -- usable here because the pixel shader has the
 // instance (nwbMeshLoadInstance) + the material constant byte offset (nwbMeshMaterialConstantByteOffset).
 #include "gbuffer_ps.slangi"
 #include "material_typed_accessors.slangi"

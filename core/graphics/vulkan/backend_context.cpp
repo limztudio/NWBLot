@@ -1401,8 +1401,7 @@ bool BackendContext::createVulkanDevice(){
     vulkan12features.shaderSubgroupExtendedTypes = supportedVulkan12Features.shaderSubgroupExtendedTypes;
     vulkan12features.scalarBlockLayout = supportedVulkan12Features.scalarBlockLayout;
     // The GPU timing path resets timer query pools HOST-side (Device::resetTimerQuery -> vkResetQueryPool), which requires
-    // the hostQueryReset feature (core in Vulkan 1.2). It was never enabled, so every per-pass timer reset tripped a
-    // validation error under the debug runtime. Enable it where the device advertises it.
+    // the hostQueryReset feature (core in Vulkan 1.2). Enable it where the device advertises it.
     vulkan12features.hostQueryReset = supportedVulkan12Features.hostQueryReset;
     if(isDeviceExtensionEnabled(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME))
         vulkan12features.samplerFilterMinmax = supportedVulkan12Features.samplerFilterMinmax;

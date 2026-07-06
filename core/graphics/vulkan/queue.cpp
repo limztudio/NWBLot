@@ -24,7 +24,6 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, u32 que
     , m_referencedAccelStructHandles(context.objectArena)
     , m_context(context)
 {
-    // Use TRANSIENT flag to hint that command buffers are short-lived
     auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
     poolInfo.queueFamilyIndex = queueFamilyIndex;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
@@ -295,7 +294,6 @@ u64 Queue::submit(CommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
         signalInfos.push_back(signalInfo);
     }
 
-    // Requires VK_KHR_synchronization2 extension to be enabled
     auto submitInfo = VulkanDetail::MakeVkStruct<VkSubmitInfo2>(VK_STRUCTURE_TYPE_SUBMIT_INFO_2);
     submitInfo.waitSemaphoreInfoCount = static_cast<uint32_t>(waitInfos.size());
     submitInfo.pWaitSemaphoreInfos = waitInfos.data();
@@ -320,7 +318,6 @@ u64 Queue::submit(CommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
         }
 
         for(auto& tracked : trackedBuffers){
-            // Submission failed; command lists were not executed.
             recycleCommandBuffer(Move(tracked));
         }
 

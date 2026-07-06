@@ -25,7 +25,7 @@
 
 // The mesh shader is engine-owned + generic (shared_ms.slang): it does not read typed material data, so it
 // requires no .bind interface. A material's constants are read per-pixel in its surface hook (see
-// material_ps_authoring.slangi); the typed-binding contract now gates the pixel shader, not the mesh shader.
+// material_ps_authoring.slangi); the typed-binding contract gates the pixel shader, not the mesh shader.
 
 #include "runtime.slangi"
 #include "encoding.slangi"

@@ -20,11 +20,11 @@ NwbMeshSurface nwbMaterialSurface(){
     // ONE authored transparency, two consistent consumers: `density` (the tint's ALPHA channel) = how solid the glass
     // is, and `tint` (the tint RGB) = the colour its shadow keeps when solid. nwbMakeGlassSurface seeds BOTH from them
     // -- renderCoverage (the AVBOIT opacity all three passes read) = density, and shadowAbsorptionTint =
-    // lerp(white, tint, density) -- so a solid glass is opaque on screen AND casts a matching coloured shadow; the two
-    // can no longer disagree (a bright tint = a light glass = a faint shadow, which is now honest, not a surprise;
-    // pick a DARKER/more-saturated tint for a darker shadow). The ENGINE still integrates the shadow over the true
-    // entry->exit volume path (per-crossing Fresnel from refractionIor + signed Beer-Lambert), since only the trace
-    // sees both faces. To DELIBERATELY decouple the look from the shadow, set result.renderCoverage after this call --
+    // lerp(white, tint, density) -- so a solid glass is opaque on screen AND casts a matching coloured shadow. A bright
+    // tint means a light glass and a faint shadow; pick a DARKER/more-saturated tint for a darker shadow. The ENGINE
+    // still integrates the shadow over the true entry->exit volume path (per-crossing Fresnel from refractionIor +
+    // signed Beer-Lambert), since only the trace sees both faces. To DELIBERATELY decouple the look from the shadow,
+    // set result.renderCoverage after this call --
     // a visible, intentional exception. The base color stays the rasterized appearance (the G-buffer discards the
     // optical params + coverage).
     return nwbMakeGlassSurface(baseColor, inNormal, NWB_SURFACE_IOR_GLASS, tinted.rgb, tinted.a);

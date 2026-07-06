@@ -1250,7 +1250,7 @@ static bool CookMaterialBindShaderProbe(
     const Path assetRoot = outRoot / "assets";
     if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
         return false;
-    // The typed-binding probe is now a pixel shader (it reads typed material data + includes the generated bind).
+    // The typed-binding probe is a pixel shader because it reads typed material data and includes the generated bind.
     if(!WriteMaterialBindShaderProbeSource(
         testArena,
         assetRoot,

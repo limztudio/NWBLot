@@ -671,9 +671,9 @@ TEST(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess){
 
     CrashTestText archive(arena);
     BeginArchiveWithManifest(arena, archive, "gpu-detective-test", "windows", "crash", "windows_exception", 0xC0000005u);
-    // A non-RDF blob. The Radeon GPU Detective capture is now decoded in-process (no rgd.exe subprocess), so this
-    // exercises that decoder end to end: it must reject the garbage gracefully — no crash, no exception escaping
-    // the boundary — and surface a decode failure rather than aborting the surrounding crash ingest.
+    // A non-RDF blob exercises the in-process Radeon GPU Detective decoder end to end: it must reject the garbage
+    // gracefully, with no crash or exception escaping the boundary, and surface a decode failure rather than aborting
+    // the surrounding crash ingest.
     AppendArchiveFile(archive, CrashNames::s_GpuDetectiveCaptureFileName, "not a valid radeon gpu detective capture\n");
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);

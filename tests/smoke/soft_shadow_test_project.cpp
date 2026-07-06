@@ -281,7 +281,7 @@ public:
             s_ModelPath,
             s_TransparentMaterialPath,
             s_SmokeSurfaceMaterialInterface,
-            // Glass tint is now (shadow colour . DENSITY): the RGB is the colour the shadow KEEPS, the A is the glass
+            // Glass tint is (shadow colour . DENSITY): the RGB is the colour the shadow KEEPS, the A is the glass
             // DENSITY (how solid). nwbMakeGlassSurface (smoke_transparent.surface) seeds BOTH consumers together --
             // renderCoverage = density, shadowAbsorptionTint = lerp(white, rgb, density) -- so a denser glass is more
             // opaque on screen AND casts a darker, matching shadow. Because this body is a THIN SHELL, the engine floors

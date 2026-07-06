@@ -158,8 +158,8 @@ void RendererRayTracingSystem::runBvhBuildSelfTest(){
     }
     auto* device = graphics().getDevice();
 
-    // Per-mesh BVH storage now lives with the caller (here, the self-test); the build/refit helpers create
-    // and reuse these on first use, mirroring how MeshResources will own them on the real path.
+    // Per-mesh BVH storage lives with the caller (here, the self-test); the build/refit helpers create
+    // and reuse these on first use, mirroring MeshResources on the real path.
     Core::BufferHandle testNodeBuffer;
     Core::BufferHandle testParentBuffer;
     Core::BindingSetHandle testBindingSet;

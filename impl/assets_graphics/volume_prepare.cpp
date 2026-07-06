@@ -346,7 +346,7 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     // shadowTransmittanceModelId to its surface hook). Runs alongside the BXDF dispatch -- before shader
     // preparation (so its include root is registered + each `.surface` it #includes is covered by the
     // dependency checksum) and after the surface ids are assigned. The trace shaders #include it in a later
-    // unit; emitting it now keeps the cook + the rasterizer unchanged.
+    // unit; emitting it here keeps the cook + the rasterizer unchanged.
     Path shadowTransmittanceIncludeRoot(context.arena);
     if(!EmitShadowTransmittanceDispatchModule(
         context.resolvedPaths.cacheDirectory,

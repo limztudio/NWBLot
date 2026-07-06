@@ -33,8 +33,8 @@ namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
 
 // AMD Radeon GPU Detective decodes a '.rgd' GPU-crash capture that the engine writes into the package on a TDR.
-// The decode now runs fully IN-PROCESS through the vendored RGD backend (nwb::rgd_backend) — there is no rgd.exe
-// subprocess and no external Radeon Developer Tool Suite install to resolve. It mirrors the Aftermath path: a
+// The decode runs in-process through the vendored RGD backend (nwb::rgd_backend), with no rgd.exe subprocess
+// or external Radeon Developer Tool Suite install to resolve. It mirrors the Aftermath path: a
 // best-effort decode that runs only when a capture is present in the package, appended under its own report
 // section, and it never fails the surrounding ingest (ProcessCrashUpload rejects on a thrown exception, and
 // DecodeCrashDumpToText contains all exceptions on its side of the boundary).

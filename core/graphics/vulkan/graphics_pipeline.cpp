@@ -471,7 +471,6 @@ void CommandList::setGraphicsState(const GraphicsState& state){
 
     setViewportState(state.viewport);
 
-    // Bind vertex buffers
     if(!state.vertexBuffers.empty()){
         for(u32 i = 0; i < static_cast<u32>(state.vertexBuffers.size()); ++i){
             const auto& binding = state.vertexBuffers[i];
@@ -506,7 +505,6 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         }
     }
 
-    // Bind index buffer
     if(state.indexBuffer.buffer){
         auto* ib = state.indexBuffer.buffer;
 #if defined(NWB_DEBUG)

@@ -131,7 +131,7 @@
 
 // Per-frame samples-per-pixel for the soft opaque trace. Temporal accumulation (the reproject-merge pass) supplies the
 // source-area samples over frames, so this is pinned at 1 -- leaning FULLY on the temporal history + the a-trous for
-// moving-region noise. Trade (was 2): in a freshly-disoccluded / gate-B-clamped region (a spinning occluder's leading edge)
+// moving-region noise. Trade: in a freshly-disoccluded / gate-B-clamped region (a spinning occluder's leading edge)
 // the effective history collapses to ~0 and the pixel falls back to a single binary ray whose dithered penumbra the a-trous
 // cannot fully smooth in ONE frame, so 1 spp shows more moving-region shimmer than 2 did. Halves the (already cheap half-res
 // binary) opaque trace's ray count; the aggregate shadow_visibility win is small because the opaque trace is a minority of it.

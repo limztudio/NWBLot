@@ -252,29 +252,145 @@ private:
     bool m_targetsNeedClear = true;
 };
 
-class RendererRayTracingState final : NoCopy{
-    friend class RendererSystem;
-    friend class RendererShaderSystem;
-    friend class RendererMeshSystem;
-    friend class RendererMaterialSystem;
-    friend class RendererCsgSystem;
-    friend class RendererDeferredSystem;
-    friend class RendererAvboitSystem;
-    friend class RendererRayTracingSystem;
+// RendererRayTracingState is decomposed into per-concern PUBLIC-membered state structs (below) that the class
+// inherits, so a feature's ray-tracing state lives in its own struct while every rayTracingState().m_* access
+// site keeps working unchanged. Grouping is by concern; the shared SW-BVH substrate + generic flags sit in
+// RtSceneBvhState.
 
-public:
-    RendererRayTracingState() = default;
-
-
-public:
-    void invalidateResources();
-
-
-private:
+struct RtSceneBvhState{
     Core::RayTracingAccelStructHandle m_tlas;
     usize m_tlasMaxInstances = 0u;
     u64 m_tlasDeviceAddress = 0u;
     u32 m_tlasInstanceCount = 0u; // live TLAS instance count (set by buildSceneTlas); the HW caustic raygen's non-zero guard
+    Core::BindingLayoutHandle m_bvhSortBindingLayout;
+    Core::ShaderHandle m_bvhSortShader;
+    Core::ComputePipelineHandle m_bvhSortPipeline;
+    Core::BufferHandle m_bvhSortKeysBuffer;
+    Core::BufferHandle m_bvhSortPayloadBuffer;
+    Core::BindingSetHandle m_bvhSortBindingSet;
+    const Core::Buffer* m_bvhSortBindingSetKeys = nullptr;
+    usize m_bvhSortCapacity = 0u;
+    Core::BindingLayoutHandle m_bvhBuildBindingLayout;
+    Core::ShaderHandle m_bvhMortonShader;
+    Core::ComputePipelineHandle m_bvhMortonPipeline;
+    Core::ShaderHandle m_bvhTopologyShader;
+    Core::ComputePipelineHandle m_bvhTopologyPipeline;
+    Core::ShaderHandle m_bvhFitShader;
+    Core::ComputePipelineHandle m_bvhFitPipeline;
+    Core::BufferHandle m_bvhVisitCounterBuffer;
+    usize m_bvhBuildCapacity = 0u;
+    Core::BufferHandle m_sceneBvhNodeBuffer;  // CPU-built scene/instance LBVH (TLAS-analog), uploaded each frame
+    Core::BufferHandle m_sceneInstanceBuffer; // per-instance world->object transform + per-mesh refs
+    usize m_sceneBvhNodeCapacity = 0u;
+    usize m_sceneInstanceCapacity = 0u;
+    u32 m_sceneBvhInstanceCount = 0u;
+    // HYBRID shadow split (RT hardware): the HW RayQuery pass casts the binary OPAQUE shadow; when the scene holds a
+    // transparent occluder, the software traversal additionally casts the colored TRANSPARENT shadow and multiplies it
+    // onto the opaque mask. m_sceneHasTransparentOccluder (set by buildSceneTlas) gates building the software BVH on RT
+    // hardware; m_hybridTransparentShadowReady (set by the prepare) tells the render to run the SW multiply pass.
+    bool m_sceneHasTransparentOccluder = false;
+    bool m_hybridTransparentShadowReady = false;
+    // Soft opaque shadow TEMPORAL accumulation: the reproject-merge pass
+    // inserted per slot between the soft trace and the a-trous resolve, plus the CPU-side state it needs. There are NO
+    // motion vectors / prev-G-buffer in this engine (the view is rebuilt fresh each frame), so the merge reprojects the
+    // current world position through a STASHED previous-frame worldToClip -- exact for a static receiver regardless of how
+    // the occluder moved, collapsing the moving-occluder anti-ghost to a value-agreement test. See shadow_reproject_merge_cs.
+    //  - m_prevWorldToClip: last frame's worldToClip (raw 16-float row-major dump of drawState().m_meshViewGpuData's
+    //    worldToClip), stashed at the end of renderGpuBvhShadowVisibility for NEXT frame's reprojection push constant.
+    //    m_prevWorldToClipValid is false on frame 0 / after a resize (invalidated in createShadowVisibilityTarget) -> the
+    //    merge's historyValid gate forces pure-current so it can't reproject through a stale matrix into fresh garbage.
+    Float44U m_prevWorldToClip = {};
+    bool m_prevWorldToClipValid = false;
+    // The five transparent resolve binding-set variants, built over transparentSoftHalf / transparentHistA/B / transparent
+    // MomentsA/B as SOFT_HALF/INPUT + the SAME half-res soft-A/soft-B as the ping-pong OUTPUT scratch (the a-trous ping-pong
+    // is signal-agnostic -- it just needs two half-res arrays) + the SAME full-res shadowVisibility as VISIBILITY (the fold
+    // target). Selected exactly like the opaque set (output-A/output-B/upsample + two temporal-hist variants).
+    Core::BindingSetHandle m_transparentResolveBindingSetOutputHalfA;
+    Core::BindingSetHandle m_transparentResolveBindingSetOutputHalfB;
+    Core::BindingSetHandle m_transparentResolveBindingSetUpsample;
+    Core::BindingSetHandle m_transparentResolveBindingSetTemporalHistA;
+    Core::BindingSetHandle m_transparentResolveBindingSetTemporalHistB;
+    const Core::Texture* m_transparentResolveBindingSetSoftHalf = nullptr;   // transparentSoftHalf (the raw colored trace)
+    const Core::Texture* m_transparentResolveBindingSetScratchA = nullptr;   // soft-A ping-pong scratch (shared with opaque)
+    const Core::Texture* m_transparentResolveBindingSetScratchB = nullptr;   // soft-B ping-pong scratch (shared with opaque)
+    const Core::Texture* m_transparentResolveBindingSetGeometry = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetDepth = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetVisibility = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetHistA = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetHistB = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetMomentsA = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetMomentsB = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetWorldPos = nullptr;
+    const Core::Texture* m_transparentResolveBindingSetNormal = nullptr;
+    // The two front/back TRANSPARENT reproject-merge binding sets (SAME m_shadowReprojectMergePipeline/Layout drive both;
+    // the merge shader is fully RGB-safe and reused verbatim). Built over transparentSoftHalf (SOFT_TRACE) + transparentHist
+    // A/B (history) + transparentMomentsA/B (moments) + the SHARED shadowSoftGeometry/Prev + full-res world-position.
+    Core::BindingSetHandle m_transparentReprojectMergeBindingSetAtoB; // histIn/momIn = A -> histOut/momOut = B
+    Core::BindingSetHandle m_transparentReprojectMergeBindingSetBtoA; // histIn/momIn = B -> histOut/momOut = A
+    const Core::Texture* m_transparentReprojectMergeSoftTrace = nullptr;
+    const Core::Texture* m_transparentReprojectMergeHistA = nullptr;
+    const Core::Texture* m_transparentReprojectMergeHistB = nullptr;
+    const Core::Texture* m_transparentReprojectMergeMomentsA = nullptr;
+    const Core::Texture* m_transparentReprojectMergeMomentsB = nullptr;
+    const Core::Texture* m_transparentReprojectMergeGeometryCurr = nullptr;
+    const Core::Texture* m_transparentReprojectMergeGeometryPrev = nullptr;
+    const Core::Texture* m_transparentReprojectMergeWorldPosition = nullptr;
+    // Software caustic photon producer (P3) — the no-hardware-ray-tracing fallback. It reuses the same software
+    // scene/instance + per-mesh BVH buffers the SW shadow trace builds (NWB_CAUSTIC_SW_MAX_MESHES ==
+    // NWB_SW_SHADOW_MAX_MESHES, so the m_swShadowMesh* arrays serve both), and adds the caustic-specific inputs
+    // (the P1 emission-target buffer, the camera view buffer, the G-buffer depth) + output (the R32_UINT
+    // accumulators). The binding set is rebuilt when any cached input changes, mirroring the SW shadow set.
+    Core::BindingLayoutHandle m_swCausticBindingLayout;
+    Core::ShaderHandle m_swCausticShader;
+    Core::ComputePipelineHandle m_swCausticPipeline;
+    Core::BindingSetHandle m_swCausticBindingSet;
+    const Core::Buffer* m_swCausticBindingSetSceneNodes = nullptr;
+    const Core::Buffer* m_swCausticBindingSetInstances = nullptr;
+    const Core::Buffer* m_swCausticBindingSetInstanceMaterial = nullptr;
+    const Core::Buffer* m_swCausticBindingSetMaterialTyped = nullptr;
+    const Core::Buffer* m_swCausticBindingSetMeshInstances = nullptr;
+    const Core::Buffer* m_swCausticBindingSetEmissionTargets = nullptr;
+    const Core::Buffer* m_swCausticBindingSetView = nullptr;
+    const Core::Texture* m_swCausticBindingSetDepth = nullptr;
+    const Core::Texture* m_swCausticBindingSetWorldPosition = nullptr;
+    const Core::Texture* m_swCausticBindingSetAccumulator = nullptr;
+    u32 m_swCausticBindingSetMeshCount = 0u;
+    // Hardware ray-traced caustic photon producer (P4) -- the byte-parallel sibling of the SW producer. Mirrors the
+    // shadow RT pipeline and REUSES m_tlas + the shadow instance-material / material-context / per-mesh
+    // index+attribute buffers verbatim (the refraction bends on the interpolated SHADING normal from the attribute
+    // buffer, so no per-mesh position array is needed). Feeds the SAME R32_UINT accumulator + the SAME resolve the SW
+    // path uses. The binding set is rebuilt when any cached input changes, mirroring the shadow set.
+    Core::BindingLayoutHandle m_hwCausticBindingLayout;
+    Core::RayTracingPipelineHandle m_hwCausticPipeline;
+    Core::RayTracingShaderTableHandle m_hwCausticShaderTable;
+    Core::BindingSetHandle m_hwCausticBindingSet;
+    const Core::RayTracingAccelStruct* m_hwCausticBindingSetTlas = nullptr;
+    const Core::Buffer* m_hwCausticBindingSetInstanceMaterial = nullptr;
+    const Core::Buffer* m_hwCausticBindingSetMaterialTyped = nullptr;
+    const Core::Buffer* m_hwCausticBindingSetMeshInstances = nullptr;
+    const Core::Buffer* m_hwCausticBindingSetEmissionTargets = nullptr;
+    const Core::Buffer* m_hwCausticBindingSetView = nullptr;
+    const Core::Texture* m_hwCausticBindingSetDepth = nullptr;
+    const Core::Texture* m_hwCausticBindingSetWorldPosition = nullptr;
+    const Core::Texture* m_hwCausticBindingSetAccumulator = nullptr;
+    u32 m_hwCausticBindingSetMeshCount = 0u;
+    bool m_hwCausticPipelineFailed = false;
+    bool m_hwCausticDispatchLogged = false;
+    bool m_capabilityLogged = false;
+    bool m_bvhSortPipelineFailed = false;
+    bool m_bvhSortSelfTestDone = false;
+    bool m_bvhBuildPipelineFailed = false;
+    bool m_bvhBuildSelfTestDone = false;
+    bool m_sceneBvhSelfTestDone = false;
+    bool m_swCausticPipelineFailed = false;
+    bool m_swCausticDispatchLogged = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct RtShadowState{
     Core::BindingLayoutHandle m_shadowBindingLayout;
     // Hardware shadow trace is an inline-RayQuery COMPUTE pass (shadow_rayquery_cs); the per-occluder optical-depth
     // accumulator lives in a compute local, which a hardware ray payload could not index safely.
@@ -286,21 +402,6 @@ private:
     const Core::Buffer* m_shadowBindingSetMaterialTyped = nullptr;
     const Core::Buffer* m_shadowBindingSetMeshInstances = nullptr;
     u32 m_shadowBindingSetMeshCount = 0u;
-    // Hardware (RayQuery) SOFT OPAQUE half-res trace pipeline + its binding set (shadow_rayquery_soft_cs). It REUSES the
-    // shared m_shadowBindingLayout (identical trace context; only the bound visibility-output texture differs -- the soft
-    // set binds shadowSoftHalfA as the UAV output instead of the full-res shadowVisibility), so the HW opaque shadow can
-    // run the SAME half-res -> temporal -> a-trous -> upsample soft-shadow denoise chain as the SW path. The binding set
-    // rebuilds on the SAME tracked-pointer keys as m_shadowBindingSet (TLAS / instance-material / material-context /
-    // mesh-count), so a TLAS/G-buffer/target change rebuilds it.
-    Core::ShaderHandle m_shadowSoftShader;
-    Core::ComputePipelineHandle m_shadowSoftPipeline;
-    bool m_shadowSoftPipelineFailed = false;
-    Core::BindingSetHandle m_shadowSoftBindingSet;
-    const Core::RayTracingAccelStruct* m_shadowSoftBindingSetTlas = nullptr;
-    const Core::Buffer* m_shadowSoftBindingSetInstanceMaterial = nullptr;
-    const Core::Buffer* m_shadowSoftBindingSetMaterialTyped = nullptr;
-    const Core::Buffer* m_shadowSoftBindingSetMeshInstances = nullptr;
-    u32 m_shadowSoftBindingSetMeshCount = 0u;
     // Active shadow slots this frame (= min(lightCount, NWB_SCENE_SHADOW_SLOT_COUNT)), set during the light upload and
     // read by the edge-adaptive shadow resolve so it only processes the slots that hold a light.
     u32 m_shadowSlotCount = 0u;
@@ -330,57 +431,6 @@ private:
     Core::Buffer* m_shadowMeshPositionBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
     u32 m_shadowMeshCount = 0u;
     bool m_shadowMeshCapReported = false;
-    Core::BindingLayoutHandle m_bvhSortBindingLayout;
-    Core::ShaderHandle m_bvhSortShader;
-    Core::ComputePipelineHandle m_bvhSortPipeline;
-    Core::BufferHandle m_bvhSortKeysBuffer;
-    Core::BufferHandle m_bvhSortPayloadBuffer;
-    Core::BindingSetHandle m_bvhSortBindingSet;
-    const Core::Buffer* m_bvhSortBindingSetKeys = nullptr;
-    usize m_bvhSortCapacity = 0u;
-    Core::BindingLayoutHandle m_bvhBuildBindingLayout;
-    Core::ShaderHandle m_bvhMortonShader;
-    Core::ComputePipelineHandle m_bvhMortonPipeline;
-    Core::ShaderHandle m_bvhTopologyShader;
-    Core::ComputePipelineHandle m_bvhTopologyPipeline;
-    Core::ShaderHandle m_bvhFitShader;
-    Core::ComputePipelineHandle m_bvhFitPipeline;
-    Core::BufferHandle m_bvhVisitCounterBuffer;
-    usize m_bvhBuildCapacity = 0u;
-    Core::BufferHandle m_sceneBvhNodeBuffer;  // CPU-built scene/instance LBVH (TLAS-analog), uploaded each frame
-    Core::BufferHandle m_sceneInstanceBuffer; // per-instance world->object transform + per-mesh refs
-    usize m_sceneBvhNodeCapacity = 0u;
-    usize m_sceneInstanceCapacity = 0u;
-    u32 m_sceneBvhInstanceCount = 0u;
-    // HYBRID shadow split (RT hardware): the HW RayQuery pass casts the binary OPAQUE shadow; when the scene holds a
-    // transparent occluder, the software traversal additionally casts the colored TRANSPARENT shadow and multiplies it
-    // onto the opaque mask. m_sceneHasTransparentOccluder (set by buildSceneTlas) gates building the software BVH on RT
-    // hardware; m_hybridTransparentShadowReady (set by the prepare) tells the render to run the SW multiply pass.
-    bool m_sceneHasTransparentOccluder = false;
-    bool m_hybridTransparentShadowReady = false;
-    // Caustic emission targets (P1): per-frame world-space AABBs of every refractive instance, the domain the caustic
-    // photon producer aims at. A single global list is shared by all caustic lights. Resident structured SRV
-    // ({ float4 aabbMin; float4 aabbMax; }), CPU-written each frame, grows by doubling, never shrinks; the count gates
-    // caustic-light assignment together with per-light opt-in (zero refractive instances or zero opted-in lights ->
-    // zero caustic lights). m_causticTargetBoundsMin/Max hold the combined extent over all targets (for the P1 gate
-    // log); m_causticEmissionGateLogged rate-limits that log.
-    Core::BufferHandle m_causticEmissionTargetBuffer;
-    usize m_causticEmissionTargetCapacity = 0u;
-    u32 m_causticRefractiveInstanceCount = 0u;
-    // Caustic-light count assigned this frame by ResolveCausticLights (cached in updateSceneShadingBuffer). Gates
-    // the software caustic producer dispatch: the producer runs only when this AND m_causticRefractiveInstanceCount
-    // are both > 0 (else the black-cleared irradiance buffer is the additive no-op).
-    u32 m_causticLightCount = 0u;
-    Float4 m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
-    Float4 m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
-    // The caustic resolve is a purely SPATIAL a-trous wavelet denoise. The one bit of temporal state is the SPLAT-SPACE
-    // EMA in the R32_UINT accumulator (m_causticTemporalDecay > 0): the accumulator is decayed then re-splatted each
-    // frame instead of cleared, so the sparkle-flicker of a moving caustic averages out WITHOUT any image-space
-    // reprojection (reprojection would ghost). Fixed at 0.85 (a moderate ~6-7 frame time constant). The static steady
-    // state is photons/(1-decay), so the resolve pre-multiplies causticIntensity by (1-decay) to keep the STATIC
-    // brightness byte-unchanged.
-    f32 m_causticTemporalDecay = 0.85f;
-    bool m_causticEmissionGateLogged = false;
     // Software (compute) shadow traversal, decomposed into one named pipeline per pass. All passes share one binding
     // layout + one binding set: each pass's kernel references only its own subset of the slot map, and the bound resources
     // at every slot are identical regardless of pass. The shared layout's push-constant range is sized to the largest pass
@@ -441,20 +491,6 @@ private:
     Core::BufferHandle m_swShadowEdgeStatsReadback;
     u32 m_swShadowEdgeStatsTick = 0u;
     bool m_swShadowEdgeStatsPending = false;
-    // Soft opaque shadow (soft-ray-traced-shadow feature): a per-frame counter seeding the per-pixel low-discrepancy
-    // cone-jitter sample. Incremented once per frame by whichever primary shadow producer runs (the HW RayQuery opaque
-    // trace on the HW path, the no-RT software traversal otherwise -- mutually exclusive per frame), so each pixel's
-    // single jittered ray walks the source across frames. No temporal reuse this stage, so this only decorrelates the
-    // per-frame sample (a later stage feeds it into a temporal accumulator).
-    u32 m_softShadowFrameIndex = 0u;
-    // The set of shadow slots this frame that hold a shadow slot (params.z >= 0), regardless of light type -- the slots
-    // the soft opaque path traces + denoises + upsamples. A directional light softens by its constant angular radius
-    // (params2.x), a point/spot light by the distance-dependent cone its source sphere (params2.y) subtends; both are
-    // handled inside the trace, so every slot light is soft. A bitmask (slot k -> bit k) over the
-    // NWB_SCENE_SHADOW_SLOT_COUNT pool, filled by updateSceneShadingBuffer from the resolved light data. The resolve
-    // dispatches once per set bit (its lightSlotStart/lightSlotCount address a single slot), so the scattered slot
-    // assignment (a light can land on any slot index) is handled without a contiguous range assumption.
-    u32 m_softShadowSlotMask = 0u;
     // Soft opaque shadow RESOLVE: the a-trous wavelet denoise pipeline (cloned from the caustic resolve)
     // dispatched per pass with two ping-pong binding sets that swap the (output UAV, input-color SRV) pair between the
     // half-res soft-A / soft-B buffers; the upsample set writes the full-res visibility. All sets share the geometry
@@ -477,6 +513,71 @@ private:
     const Core::Texture* m_shadowResolveBindingSetMomentsB = nullptr;
     const Core::Texture* m_shadowResolveBindingSetWorldPos = nullptr;
     const Core::Texture* m_shadowResolveBindingSetNormal = nullptr;
+    // Two EXTRA soft-shadow resolve binding-set variants whose SOFT_HALF (the PREPARE stage's input) is a temporal history
+    // buffer (shadowHistA / shadowHistB) instead of the raw shadowSoftHalfA. The dispatch selects the one matching the merge's
+    // history-out buffer this frame (B when frontIsA, A otherwise) so the a-trous denoises the ACCUMULATED visibility. Neither
+    // binds its SOFT_HALF as the wavelet OUTPUT (the ping-pong output is soft-A/soft-B, distinct from the hist buffers), so no
+    // SRV+UAV alias -- the same constraint the base three resolve sets document. Built alongside them in ensureSoftShadowResolveBindingSet.
+    Core::BindingSetHandle m_shadowResolveBindingSetTemporalHistA; // PREPARE reads shadowHistA as SOFT_HALF
+    Core::BindingSetHandle m_shadowResolveBindingSetTemporalHistB; // PREPARE reads shadowHistB as SOFT_HALF
+    const Core::Texture* m_shadowResolveBindingSetTemporalHistATex = nullptr;
+    const Core::Texture* m_shadowResolveBindingSetTemporalHistBTex = nullptr;
+    // ---- Parallel soft COLORED TRANSPARENT denoise state (mirrors the opaque m_shadowResolve* / merge blocks) ----
+    // The RGB a-trous resolve pipeline: the SAME shadow_resolve source cooked with NWB_SHADOW_RESOLVE_CHANNELS=3 (via the
+    // shadow_resolve_rgb_cs wrapper). It shares the resolve BINDING LAYOUT (identical bindings; only the wavelet channel
+    // count + a runtime fold flag differ), so only a distinct shader + pipeline handle are needed, not a new layout.
+    Core::ShaderHandle m_shadowResolveRgbShader;
+    Core::ComputePipelineHandle m_shadowResolveRgbPipeline;
+    bool m_shadowResolveRgbPipelineFailed = false;
+    u32 m_swShadowEdgeStatsPendingTick = 0u;
+    // Stage-3 compaction resources: the per-frame append counter (2 u32: [0] append count, [1] clamped trace count), the
+    // compacted edge-record list (recreated on resize, sized in records), and the persistent indirect dispatch-args
+    // buffer (created UAV + isDrawIndirectArgs). The edge list is recreated alongside the visibility target, so the
+    // binding-set rebuild already triggers on the tracked visibility pointer.
+    Core::BufferHandle m_swShadowEdgeCounterBuffer;
+    Core::BufferHandle m_swShadowEdgeListBuffer;
+    u32 m_swShadowEdgeListCapacity = 0u; // capacity in RECORDS
+    Core::BufferHandle m_swShadowIndirectArgsBuffer;
+    bool m_shadowPipelineFailed = false;
+    bool m_swShadowPipelineFailed = false;
+    bool m_swShadowDispatchLogged = false;
+    bool m_swShadowMeshCapReported = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct RtSoftShadowState{
+    // Hardware (RayQuery) SOFT OPAQUE half-res trace pipeline + its binding set (shadow_rayquery_soft_cs). It REUSES the
+    // shared m_shadowBindingLayout (identical trace context; only the bound visibility-output texture differs -- the soft
+    // set binds shadowSoftHalfA as the UAV output instead of the full-res shadowVisibility), so the HW opaque shadow can
+    // run the SAME half-res -> temporal -> a-trous -> upsample soft-shadow denoise chain as the SW path. The binding set
+    // rebuilds on the SAME tracked-pointer keys as m_shadowBindingSet (TLAS / instance-material / material-context /
+    // mesh-count), so a TLAS/G-buffer/target change rebuilds it.
+    Core::ShaderHandle m_shadowSoftShader;
+    Core::ComputePipelineHandle m_shadowSoftPipeline;
+    bool m_shadowSoftPipelineFailed = false;
+    Core::BindingSetHandle m_shadowSoftBindingSet;
+    const Core::RayTracingAccelStruct* m_shadowSoftBindingSetTlas = nullptr;
+    const Core::Buffer* m_shadowSoftBindingSetInstanceMaterial = nullptr;
+    const Core::Buffer* m_shadowSoftBindingSetMaterialTyped = nullptr;
+    const Core::Buffer* m_shadowSoftBindingSetMeshInstances = nullptr;
+    u32 m_shadowSoftBindingSetMeshCount = 0u;
+    // Soft opaque shadow (soft-ray-traced-shadow feature): a per-frame counter seeding the per-pixel low-discrepancy
+    // cone-jitter sample. Incremented once per frame by whichever primary shadow producer runs (the HW RayQuery opaque
+    // trace on the HW path, the no-RT software traversal otherwise -- mutually exclusive per frame), so each pixel's
+    // single jittered ray walks the source across frames. No temporal reuse this stage, so this only decorrelates the
+    // per-frame sample (a later stage feeds it into a temporal accumulator).
+    u32 m_softShadowFrameIndex = 0u;
+    // The set of shadow slots this frame that hold a shadow slot (params.z >= 0), regardless of light type -- the slots
+    // the soft opaque path traces + denoises + upsamples. A directional light softens by its constant angular radius
+    // (params2.x), a point/spot light by the distance-dependent cone its source sphere (params2.y) subtends; both are
+    // handled inside the trace, so every slot light is soft. A bitmask (slot k -> bit k) over the
+    // NWB_SCENE_SHADOW_SLOT_COUNT pool, filled by updateSceneShadingBuffer from the resolved light data. The resolve
+    // dispatches once per set bit (its lightSlotStart/lightSlotCount address a single slot), so the scattered slot
+    // assignment (a light can land on any slot index) is handled without a contiguous range assumption.
+    u32 m_softShadowSlotMask = 0u;
     // Shadow geometry downsample pre-pass (its own pipeline): fills the half-res packed geometry cache (octahedral
     // normal + camera distance + validity) the resolve passes read for the edge-stop, so they tap one half-res texel.
     Core::BindingLayoutHandle m_shadowGeometryDownsampleBindingLayout;
@@ -492,17 +593,6 @@ private:
     // pipelines AND binding sets are all ready this frame; gates the render's soft opaque trace + resolve dispatch.
     // A failure here is non-fatal to shadows -- the slot lights simply keep their hard opaque mask this frame.
     bool m_softShadowReady = false;
-    // Soft opaque shadow TEMPORAL accumulation: the reproject-merge pass
-    // inserted per slot between the soft trace and the a-trous resolve, plus the CPU-side state it needs. There are NO
-    // motion vectors / prev-G-buffer in this engine (the view is rebuilt fresh each frame), so the merge reprojects the
-    // current world position through a STASHED previous-frame worldToClip -- exact for a static receiver regardless of how
-    // the occluder moved, collapsing the moving-occluder anti-ghost to a value-agreement test. See shadow_reproject_merge_cs.
-    //  - m_prevWorldToClip: last frame's worldToClip (raw 16-float row-major dump of drawState().m_meshViewGpuData's
-    //    worldToClip), stashed at the end of renderGpuBvhShadowVisibility for NEXT frame's reprojection push constant.
-    //    m_prevWorldToClipValid is false on frame 0 / after a resize (invalidated in createShadowVisibilityTarget) -> the
-    //    merge's historyValid gate forces pure-current so it can't reproject through a stale matrix into fresh garbage.
-    Float44U m_prevWorldToClip = {};
-    bool m_prevWorldToClipValid = false;
     // Ping-pong selector: 1 = shadowHistA/MomentsA hold the INCOMING history this frame (merge writes B), 0 = the reverse.
     // Flipped by the frame-end swap. Also selects which merge binding set + which temporal resolve SOFT_HALF source is used.
     u32 m_softShadowHistoryFrontIsA = 1u;
@@ -531,112 +621,42 @@ private:
     const Core::Texture* m_shadowReprojectMergeGeometryCurr = nullptr;
     const Core::Texture* m_shadowReprojectMergeGeometryPrev = nullptr;
     const Core::Texture* m_shadowReprojectMergeWorldPosition = nullptr;
-    // Two EXTRA soft-shadow resolve binding-set variants whose SOFT_HALF (the PREPARE stage's input) is a temporal history
-    // buffer (shadowHistA / shadowHistB) instead of the raw shadowSoftHalfA. The dispatch selects the one matching the merge's
-    // history-out buffer this frame (B when frontIsA, A otherwise) so the a-trous denoises the ACCUMULATED visibility. Neither
-    // binds its SOFT_HALF as the wavelet OUTPUT (the ping-pong output is soft-A/soft-B, distinct from the hist buffers), so no
-    // SRV+UAV alias -- the same constraint the base three resolve sets document. Built alongside them in ensureSoftShadowResolveBindingSet.
-    Core::BindingSetHandle m_shadowResolveBindingSetTemporalHistA; // PREPARE reads shadowHistA as SOFT_HALF
-    Core::BindingSetHandle m_shadowResolveBindingSetTemporalHistB; // PREPARE reads shadowHistB as SOFT_HALF
-    const Core::Texture* m_shadowResolveBindingSetTemporalHistATex = nullptr;
-    const Core::Texture* m_shadowResolveBindingSetTemporalHistBTex = nullptr;
-    // ---- Parallel soft COLORED TRANSPARENT denoise state (mirrors the opaque m_shadowResolve* / merge blocks) ----
-    // The RGB a-trous resolve pipeline: the SAME shadow_resolve source cooked with NWB_SHADOW_RESOLVE_CHANNELS=3 (via the
-    // shadow_resolve_rgb_cs wrapper). It shares the resolve BINDING LAYOUT (identical bindings; only the wavelet channel
-    // count + a runtime fold flag differ), so only a distinct shader + pipeline handle are needed, not a new layout.
-    Core::ShaderHandle m_shadowResolveRgbShader;
-    Core::ComputePipelineHandle m_shadowResolveRgbPipeline;
-    bool m_shadowResolveRgbPipelineFailed = false;
-    // The five transparent resolve binding-set variants, built over transparentSoftHalf / transparentHistA/B / transparent
-    // MomentsA/B as SOFT_HALF/INPUT + the SAME half-res soft-A/soft-B as the ping-pong OUTPUT scratch (the a-trous ping-pong
-    // is signal-agnostic -- it just needs two half-res arrays) + the SAME full-res shadowVisibility as VISIBILITY (the fold
-    // target). Selected exactly like the opaque set (output-A/output-B/upsample + two temporal-hist variants).
-    Core::BindingSetHandle m_transparentResolveBindingSetOutputHalfA;
-    Core::BindingSetHandle m_transparentResolveBindingSetOutputHalfB;
-    Core::BindingSetHandle m_transparentResolveBindingSetUpsample;
-    Core::BindingSetHandle m_transparentResolveBindingSetTemporalHistA;
-    Core::BindingSetHandle m_transparentResolveBindingSetTemporalHistB;
-    const Core::Texture* m_transparentResolveBindingSetSoftHalf = nullptr;   // transparentSoftHalf (the raw colored trace)
-    const Core::Texture* m_transparentResolveBindingSetScratchA = nullptr;   // soft-A ping-pong scratch (shared with opaque)
-    const Core::Texture* m_transparentResolveBindingSetScratchB = nullptr;   // soft-B ping-pong scratch (shared with opaque)
-    const Core::Texture* m_transparentResolveBindingSetGeometry = nullptr;
-    const Core::Texture* m_transparentResolveBindingSetDepth = nullptr;
-    const Core::Texture* m_transparentResolveBindingSetVisibility = nullptr;
-    const Core::Texture* m_transparentResolveBindingSetHistA = nullptr;
-    const Core::Texture* m_transparentResolveBindingSetHistB = nullptr;
-    const Core::Texture* m_transparentResolveBindingSetMomentsA = nullptr;
-    const Core::Texture* m_transparentResolveBindingSetMomentsB = nullptr;
-    const Core::Texture* m_transparentResolveBindingSetWorldPos = nullptr;
-    const Core::Texture* m_transparentResolveBindingSetNormal = nullptr;
-    // The two front/back TRANSPARENT reproject-merge binding sets (SAME m_shadowReprojectMergePipeline/Layout drive both;
-    // the merge shader is fully RGB-safe and reused verbatim). Built over transparentSoftHalf (SOFT_TRACE) + transparentHist
-    // A/B (history) + transparentMomentsA/B (moments) + the SHARED shadowSoftGeometry/Prev + full-res world-position.
-    Core::BindingSetHandle m_transparentReprojectMergeBindingSetAtoB; // histIn/momIn = A -> histOut/momOut = B
-    Core::BindingSetHandle m_transparentReprojectMergeBindingSetBtoA; // histIn/momIn = B -> histOut/momOut = A
-    const Core::Texture* m_transparentReprojectMergeSoftTrace = nullptr;
-    const Core::Texture* m_transparentReprojectMergeHistA = nullptr;
-    const Core::Texture* m_transparentReprojectMergeHistB = nullptr;
-    const Core::Texture* m_transparentReprojectMergeMomentsA = nullptr;
-    const Core::Texture* m_transparentReprojectMergeMomentsB = nullptr;
-    const Core::Texture* m_transparentReprojectMergeGeometryCurr = nullptr;
-    const Core::Texture* m_transparentReprojectMergeGeometryPrev = nullptr;
-    const Core::Texture* m_transparentReprojectMergeWorldPosition = nullptr;
     // Gates (mirror m_softShadowReady / m_softShadowTemporalReady): set by prepareShadowVisibilityResources when the RGB
     // resolve pipeline + the transparent resolve binding sets (and, for temporal, the transparent merge pipeline is shared +
     // its two binding sets) are all ready this frame. Non-fatal: a failure leaves the soft transparent path off; the
     // transparent coarse/adaptive path then runs its colored multiply, with no double-fold because the paths are exclusive.
     bool m_softTransparentReady = false;
     bool m_softTransparentTemporalReady = false;
-    u32 m_swShadowEdgeStatsPendingTick = 0u;
-    // Stage-3 compaction resources: the per-frame append counter (2 u32: [0] append count, [1] clamped trace count), the
-    // compacted edge-record list (recreated on resize, sized in records), and the persistent indirect dispatch-args
-    // buffer (created UAV + isDrawIndirectArgs). The edge list is recreated alongside the visibility target, so the
-    // binding-set rebuild already triggers on the tracked visibility pointer.
-    Core::BufferHandle m_swShadowEdgeCounterBuffer;
-    Core::BufferHandle m_swShadowEdgeListBuffer;
-    u32 m_swShadowEdgeListCapacity = 0u; // capacity in RECORDS
-    Core::BufferHandle m_swShadowIndirectArgsBuffer;
-    // Software caustic photon producer (P3) — the no-hardware-ray-tracing fallback. It reuses the same software
-    // scene/instance + per-mesh BVH buffers the SW shadow trace builds (NWB_CAUSTIC_SW_MAX_MESHES ==
-    // NWB_SW_SHADOW_MAX_MESHES, so the m_swShadowMesh* arrays serve both), and adds the caustic-specific inputs
-    // (the P1 emission-target buffer, the camera view buffer, the G-buffer depth) + output (the R32_UINT
-    // accumulators). The binding set is rebuilt when any cached input changes, mirroring the SW shadow set.
-    Core::BindingLayoutHandle m_swCausticBindingLayout;
-    Core::ShaderHandle m_swCausticShader;
-    Core::ComputePipelineHandle m_swCausticPipeline;
-    Core::BindingSetHandle m_swCausticBindingSet;
-    const Core::Buffer* m_swCausticBindingSetSceneNodes = nullptr;
-    const Core::Buffer* m_swCausticBindingSetInstances = nullptr;
-    const Core::Buffer* m_swCausticBindingSetInstanceMaterial = nullptr;
-    const Core::Buffer* m_swCausticBindingSetMaterialTyped = nullptr;
-    const Core::Buffer* m_swCausticBindingSetMeshInstances = nullptr;
-    const Core::Buffer* m_swCausticBindingSetEmissionTargets = nullptr;
-    const Core::Buffer* m_swCausticBindingSetView = nullptr;
-    const Core::Texture* m_swCausticBindingSetDepth = nullptr;
-    const Core::Texture* m_swCausticBindingSetWorldPosition = nullptr;
-    const Core::Texture* m_swCausticBindingSetAccumulator = nullptr;
-    u32 m_swCausticBindingSetMeshCount = 0u;
-    // Hardware ray-traced caustic photon producer (P4) -- the byte-parallel sibling of the SW producer. Mirrors the
-    // shadow RT pipeline and REUSES m_tlas + the shadow instance-material / material-context / per-mesh
-    // index+attribute buffers verbatim (the refraction bends on the interpolated SHADING normal from the attribute
-    // buffer, so no per-mesh position array is needed). Feeds the SAME R32_UINT accumulator + the SAME resolve the SW
-    // path uses. The binding set is rebuilt when any cached input changes, mirroring the shadow set.
-    Core::BindingLayoutHandle m_hwCausticBindingLayout;
-    Core::RayTracingPipelineHandle m_hwCausticPipeline;
-    Core::RayTracingShaderTableHandle m_hwCausticShaderTable;
-    Core::BindingSetHandle m_hwCausticBindingSet;
-    const Core::RayTracingAccelStruct* m_hwCausticBindingSetTlas = nullptr;
-    const Core::Buffer* m_hwCausticBindingSetInstanceMaterial = nullptr;
-    const Core::Buffer* m_hwCausticBindingSetMaterialTyped = nullptr;
-    const Core::Buffer* m_hwCausticBindingSetMeshInstances = nullptr;
-    const Core::Buffer* m_hwCausticBindingSetEmissionTargets = nullptr;
-    const Core::Buffer* m_hwCausticBindingSetView = nullptr;
-    const Core::Texture* m_hwCausticBindingSetDepth = nullptr;
-    const Core::Texture* m_hwCausticBindingSetWorldPosition = nullptr;
-    const Core::Texture* m_hwCausticBindingSetAccumulator = nullptr;
-    u32 m_hwCausticBindingSetMeshCount = 0u;
-    bool m_hwCausticPipelineFailed = false;
-    bool m_hwCausticDispatchLogged = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct RtCausticState{
+    // Caustic emission targets (P1): per-frame world-space AABBs of every refractive instance, the domain the caustic
+    // photon producer aims at. A single global list is shared by all caustic lights. Resident structured SRV
+    // ({ float4 aabbMin; float4 aabbMax; }), CPU-written each frame, grows by doubling, never shrinks; the count gates
+    // caustic-light assignment together with per-light opt-in (zero refractive instances or zero opted-in lights ->
+    // zero caustic lights). m_causticTargetBoundsMin/Max hold the combined extent over all targets (for the P1 gate
+    // log); m_causticEmissionGateLogged rate-limits that log.
+    Core::BufferHandle m_causticEmissionTargetBuffer;
+    usize m_causticEmissionTargetCapacity = 0u;
+    u32 m_causticRefractiveInstanceCount = 0u;
+    // Caustic-light count assigned this frame by ResolveCausticLights (cached in updateSceneShadingBuffer). Gates
+    // the software caustic producer dispatch: the producer runs only when this AND m_causticRefractiveInstanceCount
+    // are both > 0 (else the black-cleared irradiance buffer is the additive no-op).
+    u32 m_causticLightCount = 0u;
+    Float4 m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
+    Float4 m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
+    // The caustic resolve is a purely SPATIAL a-trous wavelet denoise. The one bit of temporal state is the SPLAT-SPACE
+    // EMA in the R32_UINT accumulator (m_causticTemporalDecay > 0): the accumulator is decayed then re-splatted each
+    // frame instead of cleared, so the sparkle-flicker of a moving caustic averages out WITHOUT any image-space
+    // reprojection (reprojection would ghost). Fixed at 0.85 (a moderate ~6-7 frame time constant). The static steady
+    // state is photons/(1-decay), so the resolve pre-multiplies causticIntensity by (1-decay) to keep the STATIC
+    // brightness byte-unchanged.
+    f32 m_causticTemporalDecay = 0.85f;
+    bool m_causticEmissionGateLogged = false;
     // Caustic resolve pass (P3): an N-pass edge-avoiding a-trous wavelet denoise. The single compute pipeline is
     // dispatched per pass with two ping-pong binding sets that swap the (output UAV, input-color SRV) pair: one outputs
     // the irradiance buffer, the other the scratch buffer; the loop alternates so the final pass writes irradiance.
@@ -676,6 +696,14 @@ private:
     const Core::Texture* m_causticAccumulatorDecayAccumulator = nullptr;
     bool m_causticAccumulatorDecayPipelineFailed = false;
     bool m_causticAccumulatorInitialized = false;
+    bool m_causticResolvePipelineFailed = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct RtSurfelGiState{
     // ---- Surfel GI state ----
     // Screen-spawned, world-hashed surfels integrate one-bounce diffuse GI. The persistent buffers (pool / cell-head /
     // counter / params CB) live HERE (beside the caustic block), NOT on DeferredFrameTargets, which is torn down on
@@ -765,19 +793,30 @@ private:
     bool m_surfelTracePipelineFailed = false;
     bool m_surfelResolvePipelineFailed = false;
     bool m_surfelDispatchLogged = false;
-    bool m_capabilityLogged = false;
-    bool m_shadowPipelineFailed = false;
-    bool m_bvhSortPipelineFailed = false;
-    bool m_bvhSortSelfTestDone = false;
-    bool m_bvhBuildPipelineFailed = false;
-    bool m_bvhBuildSelfTestDone = false;
-    bool m_sceneBvhSelfTestDone = false;
-    bool m_swShadowPipelineFailed = false;
-    bool m_swShadowDispatchLogged = false;
-    bool m_swShadowMeshCapReported = false;
-    bool m_swCausticPipelineFailed = false;
-    bool m_causticResolvePipelineFailed = false;
-    bool m_swCausticDispatchLogged = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtShadowState, public RtSoftShadowState, public RtCausticState, public RtSurfelGiState{
+    friend class RendererSystem;
+    friend class RendererShaderSystem;
+    friend class RendererMeshSystem;
+    friend class RendererMaterialSystem;
+    friend class RendererCsgSystem;
+    friend class RendererDeferredSystem;
+    friend class RendererAvboitSystem;
+    friend class RendererRayTracingSystem;
+
+public:
+    RendererRayTracingState() = default;
+
+
+public:
+    void invalidateResources();
+
+
 };
 
 

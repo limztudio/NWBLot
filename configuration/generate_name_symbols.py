@@ -20,6 +20,7 @@
 import argparse
 import glob
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -27,6 +28,31 @@ import sys
 
 def log(message):
     print("[namesym] {}".format(message), flush=True)
+
+
+# Resolve the CMake executable the same way launcher.py does: CMAKE_COMMAND overrides everything, otherwise fall back to
+# the bare "cmake"/"ctest" on PATH. The project's CMake lives in a local Python venv that is not on PATH, so honoring
+# CMAKE_COMMAND lets the namesym target drive it without each caller having to edit the tree.
+def resolve_cmake_command():
+    return shlex.split(os.environ.get("CMAKE_COMMAND", "")) or ["cmake"]
+
+
+def resolve_ctest_command():
+    # ctest lives alongside cmake. When CMAKE_COMMAND names a cmake binary, derive ctest by replacing the basename's
+    # "cmake" with "ctest" (handles both real binaries and the venv's "cmake"/"ctest" wrapper pair). We deliberately do
+    # NOT validate with os.path.isfile here: this script's CWD is the build directory (ninja runs custom commands there),
+    # while run_command() invokes ctest with cwd=source-dir, so a relative path only resolves correctly there. Shelling
+    # out with a path that is valid relative to source-dir is exactly what we want.
+    cmake_command = resolve_cmake_command()
+    if cmake_command == ["cmake"]:
+        return ["ctest"]
+    cmake_path = cmake_command[0]
+    directory = os.path.dirname(cmake_path)
+    base = os.path.basename(cmake_path)
+    ctest_base = "ctest.exe" if os.name == "nt" and base.lower().endswith(".exe") else "ctest"
+    if directory:
+        return [os.path.join(directory, ctest_base)]
+    return [ctest_base]
 
 
 def run_command(command, cwd=None):
@@ -65,12 +91,14 @@ def configure_and_build(arguments):
         log("skipping buildmode configure + build (--skip-build)")
         return True
 
+    cmake = resolve_cmake_command()
+
     if not arguments.skip_configure:
-        if run_command(["cmake", "--preset", arguments.configure_preset], cwd=arguments.source_dir) != 0:
+        if run_command(cmake + ["--preset", arguments.configure_preset], cwd=arguments.source_dir) != 0:
             log("buildmode configure failed")
             return False
 
-    if run_command(["cmake", "--build", "--preset", arguments.build_preset], cwd=arguments.source_dir) != 0:
+    if run_command(cmake + ["--build", "--preset", arguments.build_preset], cwd=arguments.source_dir) != 0:
         log("buildmode build failed")
         return False
 
@@ -117,9 +145,10 @@ def run_workloads(arguments):
     # GUI runs via ctest. IMPORTANT: a window-capture test that HARD-KILLS its app (TerminateProcess) prevents the
     # app's graceful-exit sidecar write -- such a target must support a graceful / auto-quit shutdown to contribute
     # symbols (otherwise this run produces nothing and is caught by --expect-sidecar below).
+    ctest = resolve_ctest_command()
     for regex in arguments.ctest_regex:
         rc = run_command(
-            ["ctest", "--test-dir", arguments.build_dir, "-C", arguments.config, "-R", regex, "--output-on-failure"],
+            ctest + ["--test-dir", arguments.build_dir, "-C", arguments.config, "-R", regex, "--output-on-failure"],
             cwd=arguments.source_dir,
         )
         if rc == 8:

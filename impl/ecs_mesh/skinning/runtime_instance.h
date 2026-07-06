@@ -36,10 +36,11 @@ struct MeshSkinningRuntimeInstance{
     using MeshletPrimitiveIndexVector = Vector<u8, Core::Alloc::GlobalArena>;
     using AttributeSkinVector = Vector<u32, Core::Alloc::GlobalArena>;
 
-    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     RuntimeMeshHandle handle;
-    Name sourceName = NAME_NONE;
+    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     u32 meshClass = Core::Mesh::MeshClass::Skinned;
+    Name sourceName = NAME_NONE;
+    RuntimeMeshLocalBounds localBounds;
     PositionVector restPositions;
     Half4Vector restNormals;
     Half4Vector restTangents;
@@ -52,8 +53,6 @@ struct MeshSkinningRuntimeInstance{
     MeshletLocalVertexRefVector meshletLocalVertexRefs;
     MeshletPrimitiveIndexVector meshletPrimitiveIndices;
     AttributeSkinVector attributeSkins;
-    RuntimeMeshLocalBounds localBounds;
-    u32 skeletonJointCount = 0;
     SkinVector skin;
     JointVector inverseBindMatrices;
     Core::BufferHandle restPositionBuffer;
@@ -73,6 +72,7 @@ struct MeshSkinningRuntimeInstance{
     Core::BufferHandle attributeSkinBuffer;
     Core::BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported
     Core::BufferHandle attributeBuffer;       // RT-only flat per-triangle-corner trace attributes (bind-pose); null when ray tracing is unsupported
+    u32 skeletonJointCount = 0;
     u32 meshletPositionRefCount = 0u;
     u32 meshletAttributeRefCount = 0u;
     u32 editRevision = 0;

@@ -193,13 +193,13 @@ struct MaterialSurfaceInfo{
 };
 
 struct MaterialPipelineResources{
-    RenderPath::Enum renderPath = RenderPath::MeshShader;
     Core::GraphicsPipelineHandle emulationPipeline;
     Core::MeshletPipelineHandle meshletPipeline;
     Core::ComputePipelineHandle computePipeline;
     Core::ShaderHandle pixelShader;
     Core::ShaderHandle meshShader;
     Core::ShaderHandle computeShader;
+    RenderPath::Enum renderPath = RenderPath::MeshShader;
     bool emulationGraphicsUsesMeshFrameSet = false;
 };
 

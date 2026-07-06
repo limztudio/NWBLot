@@ -30,13 +30,13 @@ enum Enum : u8{
 };
 
 struct CsgResolvedClipCutter{
-    const CsgCutterComponent* cutter = nullptr;
-    CsgShapeTypeInfo shapeType;
-    const u8* parameterBytes = nullptr;
-    usize parameterByteSize = 0u;
     SIMDMatrix worldToShape;
     SIMDVector workMinBounds;
     SIMDVector workMaxBounds;
+    CsgShapeTypeInfo shapeType;
+    const CsgCutterComponent* cutter = nullptr;
+    const u8* parameterBytes = nullptr;
+    usize parameterByteSize = 0u;
     bool workBoundsValid = false;
 };
 

@@ -64,10 +64,10 @@ static_assert(IsTriviallyCopyable_V<ModelRuntimeComponent>, "ModelRuntimeCompone
 
 
 struct ModelObjectComponent{
-    Core::ECS::EntityID owner = Core::ECS::ENTITY_ID_INVALID;
     Name model = NAME_NONE;
     Name object = NAME_NONE;
     SkeletonJointMatrix localTransform = MakeIdentitySkeletonJointMatrix();
+    Core::ECS::EntityID owner = Core::ECS::ENTITY_ID_INVALID;
     u32 kind = ModelObjectKind::StaticMesh;
 };
 

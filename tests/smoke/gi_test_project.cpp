@@ -19,8 +19,8 @@
 #include <impl/ecs_render/material_instance.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
-#include "arrow_yaw_input_handler.h"
 #include "fps_probe.h"
+#include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 
 
@@ -33,7 +33,8 @@ namespace __hidden_gi_test_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using NWB::Tests::Smoke::ArrowYawInputHandler;
+using NWB::Tests::Smoke::CreateSmokeCamera;
+using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
 using NWB::Tests::Smoke::AddSmokeRenderSystems;
@@ -88,15 +89,7 @@ static constexpr f32 s_DirectionalLightIntensity = 2.0f;
 class GiTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.threadPool);
-        if(!world){
-            NWB_LOGGER_FATAL(NWB_TEXT("GiTestSmokeProject initialization failed: ECS world allocation failed"));
-            throw RuntimeException("GiTestSmokeProject initialization failed");
-        }
-        if(!context.shaderPathResolver){
-            NWB_LOGGER_FATAL(NWB_TEXT("GiTestSmokeProject initialization failed: shader path resolver callback is null"));
-            throw RuntimeException("GiTestSmokeProject initialization failed");
-        }
+        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("GiTestSmokeProject"));
 
         // Force ray-tracing emulation so the SOFTWARE GI path runs even on RT-capable hardware -- the SW path is
         // the one that runs the full DDGI chain (probe trace -> blend -> border -> flip), so the _sw_smoke build
@@ -108,7 +101,7 @@ private:
 #endif
 
         AddSmokeRenderSystems(*world, context);
-        return MakeNotNullUnique(Move(world));
+        return world;
     }
 
     void destroyWorld(){
@@ -123,23 +116,13 @@ public:
     {}
 
     virtual ~GiTestSmokeProject()override{
-        m_context.input.removeHandler(m_arrowYawInput);
         destroyWorld();
     }
 
 
 public:
     virtual bool onStartup()override{
-        m_context.input.addHandlerToBack(m_arrowYawInput);
-
-        auto activeCameraEntity = m_world->createEntity();
-        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(
-            *m_world,
-            Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f)
-        );
-        if(auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera))
-            StoreFloat(QuaternionRotationRollPitchYaw(s_CameraPitch, 0.0f, 0.0f), &cameraTransform->rotation);
+        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
 
         // ONE directional light: aimed so the red wall is lit but the floor beside it is in direct shadow. The
         // indirect red bounce off the lit wall onto the shadowed floor is the DDGI pass signal.
@@ -192,7 +175,7 @@ public:
         );
 
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.camera.valid()
+            activeCamera.valid()
             && m_floorEntity.valid()
             && m_redWallEntity.valid()
             && m_blueWallNegX.valid()
@@ -207,7 +190,6 @@ public:
     }
 
     virtual void onShutdown()override{
-        m_context.input.removeHandler(m_arrowYawInput);
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: shutdown"));
     }
@@ -261,7 +243,6 @@ private:
     NWB::Core::ECS::EntityID m_blueWallNegX = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_whiteWallPosZ = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("GiTestSmokeProject") };
-    ArrowYawInputHandler m_arrowYawInput;
 };
 
 

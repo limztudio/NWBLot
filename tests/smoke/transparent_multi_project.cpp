@@ -19,14 +19,15 @@
 #include "arrow_yaw_input_handler.h"
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
+#include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 #include "csg_smoke_helpers.h"
 #endif
 
 #include <global/environment.h>   // ReadEnvironmentVariableBuffer -- the NWB_TRANSPARENT_MULTI_SPIN_SPEED diagnostic override
-#include <global/math/constant.h> // s_PI / s_2PI -- normalising the displayed yaw into [0, 2pi) for the title bar
-#include <global/simplemath.h>    // FMod -- wrapping the accumulated manual yaw for display
+#include <global/math/constant.h> // s_2PI -- normalising the displayed yaw into [0, 2pi) for the title bar
+#include <global/simplemath.h>    // IsFinite -- env override validation
 #include <global/text_utils.h>    // ParseF32FromChars -- env float diagnostics
 
 
@@ -41,8 +42,11 @@ namespace __hidden_transparent_multi_smoke{
 
 using NWB::Tests::Smoke::AddSmokeRenderSystems;
 using NWB::Tests::Smoke::ArrowYawInputHandler;
+using NWB::Tests::Smoke::CreateSmokeCamera;
+using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
+using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 using NWB::Tests::Smoke::AddStaticCsgMeshReceiver;
 using NWB::Tests::Smoke::AssignCsgCutterParameters;
@@ -229,15 +233,7 @@ static void ApplyTransparentCsgSceneTransform(
 class TransparentMultiSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.threadPool);
-        if(!world){
-            NWB_LOGGER_FATAL(NWB_TEXT("TransparentMultiSmokeProject initialization failed: ECS world allocation failed"));
-            throw RuntimeException("TransparentMultiSmokeProject initialization failed");
-        }
-        if(!context.shaderPathResolver){
-            NWB_LOGGER_FATAL(NWB_TEXT("TransparentMultiSmokeProject initialization failed: shader path resolver callback is null"));
-            throw RuntimeException("TransparentMultiSmokeProject initialization failed");
-        }
+        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("TransparentMultiSmokeProject"));
 
         // Force ray-tracing emulation so the software shadow path runs even on RT-capable hardware; for caustic-focused
         // builds this also A/Bs the SW caustic producer against the hardware ray-traced producer.
@@ -257,7 +253,7 @@ private:
             throw RuntimeException("TransparentMultiSmokeProject initialization failed");
         }
 
-        return MakeNotNullUnique(Move(world));
+        return world;
     }
 
     void destroyWorld(){
@@ -289,12 +285,7 @@ public:
         // at the arrow keys; it consumes only Left/Right and passes everything else through.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
-        auto activeCameraEntity = m_world->createEntity();
-        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(
-            *m_world,
-            Float4(0.0f, s_CameraTargetY, -s_CameraStartDepth)
-        );
+        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraTargetY, s_CameraStartDepth, 0.0f);
         // Shadow-check key light: a single directional source makes the transparent CSG tetrahedra cast a readable
         // tinted transmittance shadow onto the receiver plane below.
         const auto lightEntity = NWB::Impl::Scene::CreateDirectionalLightEntity(
@@ -419,7 +410,7 @@ public:
 #endif
         updateTransparentSceneTransforms();
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.camera.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid,
+            activeCamera.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid,
             NWB_TEXT("TransparentMultiSmokeProject failed to create all scene entities")
         );
 
@@ -443,20 +434,9 @@ public:
         //     the scene on a precise angle (read off the title bar) to report exactly where an artifact appears.
         //  3. Auto-spin -- the default continuous rotation.
         const f32 frozenAngle = effectiveFrozenAngle();
-        if(IsFinite(frozenAngle)){
-            m_animationTime = frozenAngle;
-        }
-        else{
-            const f32 manualAxis = m_arrowYawInput.axis();
-            if(manualAxis != 0.0f)
-                m_manualYawControl = true; // latch: first arrow input takes over from auto-spin
-            if(m_manualYawControl)
-                m_animationTime += manualAxis * s_ManualYawSpeed * safeDelta;
-            else
-                m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * effectiveRotationSpeed();
-        }
+        m_sceneYaw.update(safeDelta, frozenAngle, IsFinite(frozenAngle), m_arrowYawInput, s_ManualYawSpeed, effectiveRotationSpeed(), s_MaxAnimationDelta);
         updateTransparentSceneTransforms();
-        updateWindowTitleYaw();
+        SetSmokeYawWindowTitle(m_context, m_sceneYaw.yaw(), m_sceneYaw.manualControl(), s_2PI);
         m_world->tick(safeDelta);
         return true;
     }
@@ -495,10 +475,11 @@ public:
 
 private:
     void updateTransparentSceneTransforms(){
-        const SIMDVector sceneRotation = BuildTransparentSceneRotation(m_animationTime);
+        const f32 sceneYaw = m_sceneYaw.yaw();
+        const SIMDVector sceneRotation = BuildTransparentSceneRotation(sceneYaw);
         ApplyTransparentSceneTransform(*m_world, m_leftShape, TransparentLeftShapeBasePosition(), sceneRotation, QuaternionIdentity());
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-        ApplyTransparentCsgSceneTransform(*m_world, m_csgReceiver, m_csgCutter, sceneRotation, BuildTransparentCsgRotation(m_animationTime));
+        ApplyTransparentCsgSceneTransform(*m_world, m_csgReceiver, m_csgCutter, sceneRotation, BuildTransparentCsgRotation(sceneYaw));
 #else
         ApplyTransparentSceneTransform(*m_world, m_centerShape, TransparentCenterShapeBasePosition(), sceneRotation, QuaternionIdentity());
 #endif
@@ -510,31 +491,6 @@ private:
         ApplyTransparentSceneTransform(*m_world, m_opaqueRightShape, OpaqueRightShapeBasePosition(), sceneRotation, QuaternionIdentity());
     }
 
-    // Reflect the current scene yaw in the window title so the exact orientation can be read off and reported. The
-    // accumulated yaw is wrapped into [0, 2pi) -- the rotation is periodic, so the wrapped value is itself a valid
-    // NWB_TRANSPARENT_MULTI_SPIN_ANGLE for reproducing the orientation. setWindowTitle copies the string and the frame
-    // loop only re-applies it to the OS window when it actually changes, so calling this every frame is cheap.
-    void updateWindowTitleYaw(){
-        f32 wrapped = FMod(m_animationTime, s_2PI);
-        if(wrapped < 0.0f)
-            wrapped += s_2PI;
-        const f32 degrees = wrapped * (180.0f / s_PI);
-
-        static constexpr usize s_TitleCapacity = 192u;
-        tchar title[s_TitleCapacity];
-        NWB_TSPRINTF(
-            title,
-            s_TitleCapacity,
-            NWB_TEXT("%s  |  yaw %.4f rad (%.2f deg)%s"),
-            NWB::QueryProjectWindowTitle(),
-            wrapped,
-            degrees,
-            m_manualYawControl ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
-        );
-        const tchar* titlePtr = title;
-        m_context.graphics.setWindowTitle(MakeNotNull(titlePtr));
-    }
-
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ TransparentMultiFpsLabel() };
@@ -544,9 +500,8 @@ private:
     NWB::Core::ECS::EntityID m_rightShape = {};
     NWB::Core::ECS::EntityID m_opaqueLeftShape = {};
     NWB::Core::ECS::EntityID m_opaqueRightShape = {};
-    f32 m_animationTime = 0.0f;
+    NWB::Tests::Smoke::YawSpinController m_sceneYaw;
     ArrowYawInputHandler m_arrowYawInput;
-    bool m_manualYawControl = false; // latched true once the user first drives the yaw with an arrow key
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     NWB::Core::ECS::EntityID m_csgReceiver = {};
     NWB::Core::ECS::EntityID m_csgCutter = {};

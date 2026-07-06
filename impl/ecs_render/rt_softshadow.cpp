@@ -14,6 +14,186 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct SoftShadowResolveBindingSetInputs{
+    Core::Texture* softHalf = nullptr;
+    Core::Texture* output = nullptr;
+    Core::Texture* inputColor = nullptr;
+    Core::Texture* moments = nullptr;
+    Core::Format::Enum outputFormat = Core::Format::UNKNOWN;
+    Core::TextureDimension::Enum outputDimension = Core::TextureDimension::Unknown;
+};
+
+[[nodiscard]] Core::BindingSetHandle CreateSoftShadowResolveBindingSet(
+    Core::Alloc::GlobalArena& arena,
+    Core::GraphicsBackend::Device& device,
+    Core::BindingLayoutHandle& layout,
+    DeferredFrameTargets& targets,
+    Core::Texture* const geometry,
+    Core::Texture* const depth,
+    Core::Texture* const visibility,
+    Core::Texture* const worldPosition,
+    Core::Texture* const normal,
+    Core::Buffer* const sceneShading,
+    const SoftShadowResolveBindingSetInputs& inputs
+){
+    Core::BindingSetDesc desc(arena);
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF,
+        inputs.softHalf,
+        targets.shadowSoftFormat,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_RESOLVE_BINDING_GEOMETRY,
+        geometry,
+        targets.shadowSoftGeometryFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_RESOLVE_BINDING_GBUFFER_DEPTH,
+        depth,
+        targets.depthFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_SHADOW_RESOLVE_BINDING_OUTPUT,
+        inputs.output,
+        inputs.outputFormat,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        inputs.outputDimension
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_RESOLVE_BINDING_INPUT_COLOR,
+        inputs.inputColor,
+        targets.shadowSoftFormat,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_SHADOW_RESOLVE_BINDING_VISIBILITY,
+        visibility,
+        targets.shadowVisibilityFormat,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_RESOLVE_BINDING_MOMENTS,
+        inputs.moments,
+        targets.shadowSoftFormat,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_RESOLVE_BINDING_GBUFFER_WORLDPOS,
+        worldPosition,
+        targets.worldPositionFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_RESOLVE_BINDING_GBUFFER_NORMAL,
+        normal,
+        targets.normalFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SHADOW_RESOLVE_BINDING_SCENE_SHADING, sceneShading));
+    return device.createBindingSet(desc, layout);
+}
+
+[[nodiscard]] Core::BindingSetHandle CreateShadowReprojectMergeBindingSet(
+    Core::Alloc::GlobalArena& arena,
+    Core::GraphicsBackend::Device& device,
+    Core::BindingLayoutHandle& layout,
+    DeferredFrameTargets& targets,
+    Core::Texture* const softTrace,
+    Core::Texture* const geometryCurr,
+    Core::Texture* const geometryPrev,
+    Core::Texture* const worldPosition,
+    Core::Texture* const histIn,
+    Core::Texture* const momentsIn,
+    Core::Texture* const histOut,
+    Core::Texture* const momentsOut
+){
+    Core::BindingSetDesc desc(arena);
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_REPROJECT_MERGE_BINDING_SOFT_TRACE,
+        softTrace,
+        targets.shadowSoftFormat,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_IN,
+        histIn,
+        targets.shadowSoftFormat,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_IN,
+        momentsIn,
+        targets.shadowSoftFormat,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_CURR,
+        geometryCurr,
+        targets.shadowSoftGeometryFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_PREV,
+        geometryPrev,
+        targets.shadowSoftGeometryFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_SHADOW_REPROJECT_MERGE_BINDING_GBUFFER_WORLDPOS,
+        worldPosition,
+        targets.worldPositionFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_OUT,
+        histOut,
+        targets.shadowSoftFormat,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    desc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_OUT,
+        momentsOut,
+        targets.shadowSoftFormat,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    return device.createBindingSet(desc, layout);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 frameIndex, u32 softGroupsX, u32 softGroupsY){
     // Backend-agnostic soft-shadow denoise + transparent fold, run AFTER whichever backend (SW or HW) wrote the half-res
     // soft opaque trace into shadowSoftHalfA (and synced it to UnorderedAccess): geometry downsample -> per-slot [temporal
@@ -570,77 +750,26 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
     // buffer (the accumulated moments this frame's a-trous should read); for the non-temporal sets it is a valid-but-unused
     // dummy (any half-res array) -- the shader guards the read behind push.momentsValid == 0, so the dummy is never sampled.
     const auto buildSet = [&](Core::Texture* softHalfTex, Core::Texture* outputTex, Core::Format::Enum outputFormat, Core::TextureDimension::Enum outputDim, Core::Texture* inputTex, Core::Texture* momentsTex) -> Core::BindingSetHandle {
-        Core::BindingSetDesc desc(arena());
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF,
-            softHalfTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_GEOMETRY,
+        SoftShadowResolveBindingSetInputs inputs;
+        inputs.softHalf = softHalfTex;
+        inputs.output = outputTex;
+        inputs.inputColor = inputTex;
+        inputs.moments = momentsTex;
+        inputs.outputFormat = outputFormat;
+        inputs.outputDimension = outputDim;
+        return CreateSoftShadowResolveBindingSet(
+            arena(),
+            *device,
+            rayTracingState().m_shadowResolveBindingLayout,
+            targets,
             geometryTarget,
-            targets.shadowSoftGeometryFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_GBUFFER_DEPTH,
             depthTarget,
-            targets.depthFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_UAV(
-            NWB_SHADOW_RESOLVE_BINDING_OUTPUT,
-            outputTex,
-            outputFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            outputDim
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_INPUT_COLOR,
-            inputTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_UAV(
-            NWB_SHADOW_RESOLVE_BINDING_VISIBILITY,
             visibilityTarget,
-            targets.shadowVisibilityFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        // Stage 4A: the temporal moments SRV (per-set source above). Same half-res array format/subresources as the hist
-        // buffers (a Texture2DArray, one layer per slot). Dummy-bound + shader-guarded on the non-temporal sets.
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_MOMENTS,
-            momentsTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        // Stage 4B: the full-res world-position + normal G-buffers -- the guided upsample's bilateral centre.
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_GBUFFER_WORLDPOS,
             worldPositionTarget,
-            targets.worldPositionFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_GBUFFER_NORMAL,
             normalTarget,
-            targets.normalFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        // The scene-shading CB (camera world position) -- the upsample centre's camera distance (same buffer + slot pattern
-        // the geometry downsample binds).
-        desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SHADOW_RESOLVE_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
-        return device->createBindingSet(desc, rayTracingState().m_shadowResolveBindingLayout);
+            deferredState().m_sceneShadingBuffer.get(),
+            inputs
+        );
     };
 
     // OUTPUT is a half-res Texture2DArray for the ping-pong sets; for the upsample it is UNUSED (the upsample writes the
@@ -763,72 +892,26 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolveBindingSet(DeferredFr
     // SRVs here; the OUTPUT UAV is always the ping-pong scratch (soft-A/soft-B), distinct from all of them; the VISIBILITY
     // UAV (the fold target) is a separate resource. (The upsample's OUTPUT is bound-but-unused -> soft-B, still no alias.)
     const auto buildSet = [&](Core::Texture* softHalfTex, Core::Texture* outputTex, Core::Texture* inputTex, Core::Texture* momentsTex) -> Core::BindingSetHandle {
-        Core::BindingSetDesc desc(arena());
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF,
-            softHalfTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_GEOMETRY,
+        SoftShadowResolveBindingSetInputs inputs;
+        inputs.softHalf = softHalfTex;
+        inputs.output = outputTex;
+        inputs.inputColor = inputTex;
+        inputs.moments = momentsTex;
+        inputs.outputFormat = targets.shadowSoftFormat;
+        inputs.outputDimension = Core::TextureDimension::Texture2DArray;
+        return CreateSoftShadowResolveBindingSet(
+            arena(),
+            *device,
+            rayTracingState().m_shadowResolveBindingLayout,
+            targets,
             geometryTarget,
-            targets.shadowSoftGeometryFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_GBUFFER_DEPTH,
             depthTarget,
-            targets.depthFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_UAV(
-            NWB_SHADOW_RESOLVE_BINDING_OUTPUT,
-            outputTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_INPUT_COLOR,
-            inputTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_UAV(
-            NWB_SHADOW_RESOLVE_BINDING_VISIBILITY,
             visibilityTarget,
-            targets.shadowVisibilityFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_MOMENTS,
-            momentsTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_GBUFFER_WORLDPOS,
             worldPositionTarget,
-            targets.worldPositionFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_RESOLVE_BINDING_GBUFFER_NORMAL,
             normalTarget,
-            targets.normalFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SHADOW_RESOLVE_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
-        return device->createBindingSet(desc, rayTracingState().m_shadowResolveBindingLayout);
+            deferredState().m_sceneShadingBuffer.get(),
+            inputs
+        );
     };
 
     // outputHalfB: PREPARE (SOFT_HALF = the raw colored trace -> soft-B) + even wavelets (INPUT_COLOR = soft-A -> soft-B).
@@ -1066,64 +1149,20 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergeBindingSet(DeferredFram
     //  - BtoA: histIn/momIn = B -> histOut/momOut = A  (the mirror; A becomes the accumulated buffer the resolve reads).
     // All other bindings are shared: SOFT_TRACE=soft-A, GEOMETRY_CURR/PREV, WORLDPOS=the full-res world-position G-buffer.
     const auto buildSet = [&](Core::Texture* histInTex, Core::Texture* momInTex, Core::Texture* histOutTex, Core::Texture* momOutTex) -> Core::BindingSetHandle {
-        Core::BindingSetDesc desc(arena());
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_SOFT_TRACE,
+        return CreateShadowReprojectMergeBindingSet(
+            arena(),
+            *device,
+            rayTracingState().m_shadowReprojectMergeBindingLayout,
+            targets,
             softTraceTarget,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_IN,
-            histInTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_IN,
-            momInTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_CURR,
             geometryCurrTarget,
-            targets.shadowSoftGeometryFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_PREV,
             geometryPrevTarget,
-            targets.shadowSoftGeometryFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_GBUFFER_WORLDPOS,
             worldPositionTarget,
-            targets.worldPositionFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_UAV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_OUT,
+            histInTex,
+            momInTex,
             histOutTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_UAV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_OUT,
-            momOutTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        return device->createBindingSet(desc, rayTracingState().m_shadowReprojectMergeBindingLayout);
+            momOutTex
+        );
     };
 
     Core::BindingSetHandle setAtoB = buildSet(histATarget, momentsATarget, histBTarget, momentsBTarget);
@@ -1200,64 +1239,20 @@ bool RendererRayTracingSystem::ensureShadowTransparentReprojectMergeBindingSet(D
     auto* device = graphics().getDevice();
 
     const auto buildSet = [&](Core::Texture* histInTex, Core::Texture* momInTex, Core::Texture* histOutTex, Core::Texture* momOutTex) -> Core::BindingSetHandle {
-        Core::BindingSetDesc desc(arena());
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_SOFT_TRACE,
+        return CreateShadowReprojectMergeBindingSet(
+            arena(),
+            *device,
+            rayTracingState().m_shadowReprojectMergeBindingLayout,
+            targets,
             softTraceTarget,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_IN,
-            histInTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_IN,
-            momInTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_CURR,
             geometryCurrTarget,
-            targets.shadowSoftGeometryFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_PREV,
             geometryPrevTarget,
-            targets.shadowSoftGeometryFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_GBUFFER_WORLDPOS,
             worldPositionTarget,
-            targets.worldPositionFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_UAV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_OUT,
+            histInTex,
+            momInTex,
             histOutTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_UAV(
-            NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_OUT,
-            momOutTex,
-            targets.shadowSoftFormat,
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        return device->createBindingSet(desc, rayTracingState().m_shadowReprojectMergeBindingLayout);
+            momOutTex
+        );
     };
 
     Core::BindingSetHandle setAtoB = buildSet(histATarget, momentsATarget, histBTarget, momentsBTarget);

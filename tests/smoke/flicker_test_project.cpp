@@ -19,12 +19,11 @@
 
 #include "arrow_yaw_input_handler.h"
 #include "fps_probe.h"
+#include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
-#include <global/environment.h>   // ReadEnvironmentVariableBuffer -- NWB_FLICKER_TEST_SPIN_ANGLE freeze for deterministic A/B
-#include <global/simplemath.h>     // FMod -- wrapping the displayed yaw into [0, 2pi)
-#include <global/text_utils.h>     // ParseF32FromChars -- env float diagnostics
+#include <global/environment.h>   // ReadEnvironmentVariableBuffer -- NWB_FLICKER_TEST_NO_CAUSTICS toggle
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,9 +37,13 @@ namespace __hidden_flicker_test_smoke{
 
 using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
 using NWB::Tests::Smoke::ArrowYawInputHandler;
+using NWB::Tests::Smoke::CreateSmokeCamera;
+using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
+using NWB::Tests::Smoke::ReadSmokeFrozenYawFromEnvironment;
+using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
 
@@ -90,15 +93,7 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;                  // clamp hu
 class FlickerTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.threadPool);
-        if(!world){
-            NWB_LOGGER_FATAL(NWB_TEXT("FlickerTestSmokeProject initialization failed: ECS world allocation failed"));
-            throw RuntimeException("FlickerTestSmokeProject initialization failed");
-        }
-        if(!context.shaderPathResolver){
-            NWB_LOGGER_FATAL(NWB_TEXT("FlickerTestSmokeProject initialization failed: shader path resolver callback is null"));
-            throw RuntimeException("FlickerTestSmokeProject initialization failed");
-        }
+        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("FlickerTestSmokeProject"));
 
         // Force ray-tracing emulation so the SOFTWARE shadow path runs even on RT-capable hardware -- the A/B sibling of
         // the hardware path. Default OFF: the demo runs the hardware (hybrid) path.
@@ -109,7 +104,7 @@ private:
 #endif
 
         AddSmokeSkinnedRenderSystems(*world, context);
-        return MakeNotNullUnique(Move(world));
+        return world;
     }
 
     void destroyWorld(){
@@ -119,13 +114,7 @@ private:
     // Diagnostic freeze (read once): NWB_FLICKER_TEST_SPIN_ANGLE pins the yaw to a fixed radians value so the character
     // holds one orientation -- two captures then differ only via non-determinism (a flicker/race), not motion.
     static f32 frozenYaw(){
-        static const f32 s_yaw = [](){
-            char value[32] = {};
-            if(!ReadEnvironmentVariableBuffer("NWB_FLICKER_TEST_SPIN_ANGLE", value, sizeof(value)))
-                return -1.0f;
-            f32 parsed = -1.0f;
-            return ParseF32FromChars(value, value + NWB_STRLEN(value), parsed) ? parsed : -1.0f;
-        }();
+        static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_FLICKER_TEST_SPIN_ANGLE");
         return s_yaw;
     }
 
@@ -134,7 +123,7 @@ private:
             auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(owner);
             if(!transform)
                 continue;
-            StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw, 0.0f), &transform->rotation);
+            StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw.yaw(), 0.0f), &transform->rotation);
         }
     }
 
@@ -158,15 +147,7 @@ public:
         // scrubber first crack at the arrow keys; it consumes only Left/Right.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
-        auto activeCameraEntity = m_world->createEntity();
-        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(
-            *m_world,
-            Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f)
-        );
-        // Tilt the camera down slightly so the character + her ground shadow are framed.
-        if(auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera))
-            StoreFloat(QuaternionRotationRollPitchYaw(s_CameraPitch, 0.0f, 0.0f), &cameraTransform->rotation);
+        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
 
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
@@ -240,7 +221,7 @@ public:
         SyncSmokeModelRuntimes(*m_world);
 
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.camera.valid() && m_groundEntity.valid() && m_opaqueOwner.valid() && m_transparentOwner.valid(),
+            activeCamera.valid() && m_groundEntity.valid() && m_opaqueOwner.valid() && m_transparentOwner.valid(),
             NWB_TEXT("FlickerTestSmokeProject failed to create all scene entities")
         );
 
@@ -262,45 +243,11 @@ public:
         // Yaw selection: 1) NWB_FLICKER_TEST_SPIN_ANGLE env freeze (pins one orientation); 2) manual arrow scrub (latches off
         // auto-spin the moment Left/Right is first pressed, so the character can be parked on a precise angle); 3) auto-spin.
         const f32 frozen = frozenYaw();
-        if(frozen >= 0.0f){
-            m_yaw = frozen;
-        }
-        else{
-            const f32 manualAxis = m_arrowYawInput.axis();
-            if(manualAxis != 0.0f)
-                m_manualYawControl = true; // latch: first arrow input takes over from auto-spin
-            if(m_manualYawControl)
-                m_yaw += manualAxis * s_ManualYawSpeed * safeDelta;
-            else
-                m_yaw += Min(safeDelta, s_MaxSpinDelta) * s_SpinSpeed;
-        }
+        m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCharacters();
-        updateWindowTitleYaw();
+        SetSmokeYawWindowTitle(m_context, m_yaw.yaw(), m_yaw.manualControl(), s_TwoPi);
         m_world->tick(safeDelta);
         return true;
-    }
-
-    // Reflect the current character yaw in the title bar (wrapped to [0, 2pi)) so the exact orientation a flicker appears at
-    // can be read off and reproduced via NWB_FLICKER_TEST_SPIN_ANGLE.
-    void updateWindowTitleYaw(){
-        f32 wrapped = FMod(m_yaw, s_TwoPi);
-        if(wrapped < 0.0f)
-            wrapped += s_TwoPi;
-        const f32 degrees = wrapped * (360.0f / s_TwoPi);
-
-        static constexpr usize s_TitleCapacity = 192u;
-        tchar title[s_TitleCapacity];
-        NWB_TSPRINTF(
-            title,
-            s_TitleCapacity,
-            NWB_TEXT("%s  |  yaw %.4f rad (%.2f deg)%s"),
-            NWB::QueryProjectWindowTitle(),
-            wrapped,
-            degrees,
-            m_manualYawControl ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
-        );
-        const tchar* titlePtr = title;
-        m_context.graphics.setWindowTitle(MakeNotNull(titlePtr));
     }
 
 
@@ -311,9 +258,8 @@ private:
     NWB::Core::ECS::EntityID m_transparentOwner = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("FlickerTestSmokeProject") };
-    f32 m_yaw = 0.0f;                  // accumulated character yaw (radians): env-freeze / arrow-scrub / auto-spin
+    NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
-    bool m_manualYawControl = false;   // latched true once an arrow key first drives the yaw
 };
 
 

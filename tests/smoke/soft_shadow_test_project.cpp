@@ -19,11 +19,11 @@
 
 #include "arrow_yaw_input_handler.h"
 #include "fps_probe.h"
+#include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
 #include <global/environment.h>   // ReadEnvironmentVariableBuffer -- NWB_SOFT_SHADOW_TEST_ANGLE / _SPIN_ANGLE
-#include <global/simplemath.h>     // FMod -- wrapping the displayed yaw into [0, 2pi)
 #include <global/text_utils.h>     // ParseF32FromChars -- env float parse
 
 
@@ -38,9 +38,13 @@ namespace __hidden_soft_shadow_test_smoke{
 
 using NWB::Tests::Smoke::AddSmokeSkinnedRenderSystems;
 using NWB::Tests::Smoke::ArrowYawInputHandler;
+using NWB::Tests::Smoke::CreateSmokeCamera;
+using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
+using NWB::Tests::Smoke::MakeSmokeYawDisplay;
+using NWB::Tests::Smoke::ReadSmokeFrozenYawFromEnvironment;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
 
@@ -112,15 +116,7 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;                  // clamp hu
 class SoftShadowTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.threadPool);
-        if(!world){
-            NWB_LOGGER_FATAL(NWB_TEXT("SoftShadowTestSmokeProject initialization failed: ECS world allocation failed"));
-            throw RuntimeException("SoftShadowTestSmokeProject initialization failed");
-        }
-        if(!context.shaderPathResolver){
-            NWB_LOGGER_FATAL(NWB_TEXT("SoftShadowTestSmokeProject initialization failed: shader path resolver callback is null"));
-            throw RuntimeException("SoftShadowTestSmokeProject initialization failed");
-        }
+        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("SoftShadowTestSmokeProject"));
 
         // Force ray-tracing emulation so the SOFTWARE shadow path runs even on RT-capable hardware -- the software path is
         // the one that runs the FULL soft pipeline (half-res jittered trace -> a-trous denoise -> bilateral upsample), so
@@ -132,7 +128,7 @@ private:
 #endif
 
         AddSmokeSkinnedRenderSystems(*world, context);
-        return MakeNotNullUnique(Move(world));
+        return world;
     }
 
     void destroyWorld(){
@@ -173,13 +169,7 @@ private:
     // Diagnostic freeze (read once): NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins the yaw to a fixed radians value so the character
     // holds one orientation -- two captures then differ only via non-determinism (shimmer), not motion.
     static f32 frozenYaw(){
-        static const f32 s_yaw = [](){
-            char value[32] = {};
-            if(!ReadEnvironmentVariableBuffer("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE", value, sizeof(value)))
-                return -1.0f;
-            f32 parsed = -1.0f;
-            return ParseF32FromChars(value, value + NWB_STRLEN(value), parsed) ? parsed : -1.0f;
-        }();
+        static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE");
         return s_yaw;
     }
 
@@ -187,7 +177,7 @@ private:
         for(const NWB::Core::ECS::EntityID owner : { m_characterOwner, m_glassOwner }){
             auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(owner);
             if(transform)
-                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw, 0.0f), &transform->rotation);
+                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw.yaw(), 0.0f), &transform->rotation);
         }
     }
 
@@ -209,15 +199,7 @@ public:
         // addHandlerToBack gives this scrubber first crack at the arrow keys; it consumes only Left/Right.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
-        auto activeCameraEntity = m_world->createEntity();
-        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(
-            *m_world,
-            Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f)
-        );
-        // Tilt the camera down slightly so the character + her cast ground shadow are framed.
-        if(auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera))
-            StoreFloat(QuaternionRotationRollPitchYaw(s_CameraPitch, 0.0f, 0.0f), &cameraTransform->rotation);
+        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
 
         // THREE differently-coloured soft-shadowed lights AT ONCE (not a chooser): a warm-white DIRECTIONAL sun (rakes its
         // shadow to one side), a RED POINT light on the opposite side (rakes the other way), and a BLUE SPOT overhead (a
@@ -319,7 +301,7 @@ public:
         SyncSmokeModelRuntimes(*m_world);
 
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.camera.valid() && m_groundEntity.valid() && m_characterOwner.valid() && m_glassOwner.valid(),
+            activeCamera.valid() && m_groundEntity.valid() && m_characterOwner.valid() && m_glassOwner.valid(),
             NWB_TEXT("SoftShadowTestSmokeProject failed to create all scene entities")
         );
 
@@ -342,18 +324,7 @@ public:
         // Yaw selection: 1) NWB_SOFT_SHADOW_TEST_SPIN_ANGLE env freeze (pins one orientation); 2) manual arrow scrub
         // (latches off auto-spin the moment Left/Right is first pressed); 3) auto-spin.
         const f32 frozen = frozenYaw();
-        if(frozen >= 0.0f){
-            m_yaw = frozen;
-        }
-        else{
-            const f32 manualAxis = m_arrowYawInput.axis();
-            if(manualAxis != 0.0f)
-                m_manualYawControl = true; // latch: first arrow input takes over from auto-spin
-            if(m_manualYawControl)
-                m_yaw += manualAxis * s_ManualYawSpeed * safeDelta;
-            else
-                m_yaw += Min(safeDelta, s_MaxSpinDelta) * s_SpinSpeed;
-        }
+        m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCasters();
         updateWindowTitle();
         m_world->tick(safeDelta);
@@ -363,10 +334,7 @@ public:
     // Reflect the current yaw (wrapped to [0, 2pi)) + both soft source sizes (the directional sun angle in deg + the
     // point/spot radius in world units) in the title bar, so the parameters in effect can be read off at a glance.
     void updateWindowTitle(){
-        f32 wrapped = FMod(m_yaw, s_TwoPi);
-        if(wrapped < 0.0f)
-            wrapped += s_TwoPi;
-        const f32 yawDegrees = wrapped * (360.0f / s_TwoPi);
+        const auto yawDisplay = MakeSmokeYawDisplay(m_yaw.yaw(), s_TwoPi);
         const f32 angleDegrees = configuredAngularRadius() * (360.0f / s_TwoPi);
 
         static constexpr usize s_TitleCapacity = 256u;
@@ -374,8 +342,8 @@ public:
         NWB_TSPRINTF(
             title, s_TitleCapacity,
             NWB_TEXT("%s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
-            NWB::QueryProjectWindowTitle(), yawDegrees, angleDegrees, configuredSourceRadius(),
-            m_manualYawControl ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
+            NWB::QueryProjectWindowTitle(), yawDisplay.degrees, angleDegrees, configuredSourceRadius(),
+            m_yaw.manualControl() ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
         );
         const tchar* titlePtr = title;
         m_context.graphics.setWindowTitle(MakeNotNull(titlePtr));
@@ -389,9 +357,8 @@ private:
     NWB::Core::ECS::EntityID m_glassOwner = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("SoftShadowTestSmokeProject") };
-    f32 m_yaw = 0.0f;                  // accumulated character yaw (radians): env-freeze / arrow-scrub / auto-spin
+    NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
-    bool m_manualYawControl = false;   // latched true once an arrow key first drives the yaw
 };
 
 

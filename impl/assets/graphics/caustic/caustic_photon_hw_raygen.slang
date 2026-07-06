@@ -64,7 +64,7 @@ void main(){
         return;
 
     NwbSceneLight light;
-    if(!nwbCausticHwPickLight(photonIndex, light))
+    if(!nwbCausticPickLight(photonIndex, light))
         return;
 
     // The light's principal travel direction (FROM the light); photons travel along the emission axis.

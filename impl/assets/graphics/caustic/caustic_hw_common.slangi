@@ -35,6 +35,7 @@
 // transport (caustic_trace.slangi) -- only the raygen needs the bounce loop, so the closest-hit/miss stay free of
 // the backend hook + TraceRay.
 #include "splat_constants.slangi"
+#include "light_pick.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -213,39 +214,6 @@ void nwbCausticHwSplat(const float3 worldPos, const float3 flux){
         nwbCausticHwAccumulate(t01, channel, nwbCausticFluxToFixedPoint(fluxChannel * w01));
         nwbCausticHwAccumulate(t11, channel, nwbCausticFluxToFixedPoint(fluxChannel * w11));
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Picks the caustic light for this photon, matching the SW producer: round-robin across the lights that hold a
-// caustic slot (params.w >= 0). Returns false when no caustic light exists.
-bool nwbCausticHwPickLight(const uint photonIndex, out NwbSceneLight outLight){
-    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
-    uint causticLightCount = 0u;
-    for(uint i = 0u; i < lightCount; ++i){
-        if(g_NwbSceneLights[i].params.w >= 0.0)
-            ++causticLightCount;
-    }
-    if(causticLightCount == 0u){
-        outLight = g_NwbSceneLights[0];
-        return false;
-    }
-
-    const uint pick = photonIndex % causticLightCount;
-    uint seen = 0u;
-    for(uint i = 0u; i < lightCount; ++i){
-        if(g_NwbSceneLights[i].params.w < 0.0)
-            continue;
-        if(seen == pick){
-            outLight = g_NwbSceneLights[i];
-            return true;
-        }
-        ++seen;
-    }
-    outLight = g_NwbSceneLights[0];
-    return true;
 }
 
 

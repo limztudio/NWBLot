@@ -1,0 +1,49 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CAUSTIC_LIGHT_PICK_SLANGI
+#define NWB_GRAPHICS_CAUSTIC_LIGHT_PICK_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Picks the caustic light for this photon. Round-robin across lights that hold a caustic slot (params.w >= 0), so each
+// caustic light gets a fair share of the budget. Returns false when no caustic light exists.
+bool nwbCausticPickLight(const uint photonIndex, out NwbSceneLight outLight){
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
+    uint causticLightCount = 0u;
+    for(uint i = 0u; i < lightCount; ++i){
+        if(g_NwbSceneLights[i].params.w >= 0.0)
+            ++causticLightCount;
+    }
+    if(causticLightCount == 0u){
+        outLight = g_NwbSceneLights[0];
+        return false;
+    }
+
+    const uint pick = photonIndex % causticLightCount;
+    uint seen = 0u;
+    for(uint i = 0u; i < lightCount; ++i){
+        if(g_NwbSceneLights[i].params.w < 0.0)
+            continue;
+        if(seen == pick){
+            outLight = g_NwbSceneLights[i];
+            return true;
+        }
+        ++seen;
+    }
+    outLight = g_NwbSceneLights[0];
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

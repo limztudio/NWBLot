@@ -33,6 +33,7 @@
 // The shared caustic transport layer: the photon struct, the emission aim, the iterative bounce loop, the splat
 // math. It declares the backend closest-hit hook nwbCausticTraceClosest, defined below over this pass's BVH fetch.
 #include "caustic_trace.slangi"
+#include "light_pick.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -522,40 +523,6 @@ void nwbCausticSwSplat(const float3 worldPos, const float3 flux){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Picks the caustic light for this photon. Round-robin across lights that hold a caustic slot (params.w >= 0), so each
-// caustic light gets a fair share of the budget. Returns false when no caustic light exists.
-bool nwbCausticSwPickLight(const uint photonIndex, out NwbSceneLight outLight){
-    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
-    uint causticLightCount = 0u;
-    // First pass: count caustic lights.
-    for(uint i = 0u; i < lightCount; ++i){
-        if(g_NwbSceneLights[i].params.w >= 0.0)
-            ++causticLightCount;
-    }
-    if(causticLightCount == 0u){
-        outLight = g_NwbSceneLights[0];
-        return false;
-    }
-
-    const uint pick = photonIndex % causticLightCount;
-    uint seen = 0u;
-    for(uint i = 0u; i < lightCount; ++i){
-        if(g_NwbSceneLights[i].params.w < 0.0)
-            continue;
-        if(seen == pick){
-            outLight = g_NwbSceneLights[i];
-            return true;
-        }
-        ++seen;
-    }
-    outLight = g_NwbSceneLights[0];
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [numthreads(NWB_CAUSTIC_SW_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint photonIndex = dispatchThreadID.x;
@@ -565,7 +532,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     NwbSceneLight light;
-    if(!nwbCausticSwPickLight(photonIndex, light))
+    if(!nwbCausticPickLight(photonIndex, light))
         return;
 
     // The light's principal travel direction (FROM the light). NwbSceneLight.direction is the toward-light /

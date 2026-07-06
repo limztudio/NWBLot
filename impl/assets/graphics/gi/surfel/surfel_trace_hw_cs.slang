@@ -2,9 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surfel trace: ONE workgroup per surfel, 64 threads = 64 hemisphere rays. Each ray closest-hits the SW BVH (reusing
-// gi_sw_trace.slangi verbatim) and Lambert-shades the hit with the per-instance base colour, so a red wall bounces
-// red. The 64 shaded radiances reduce in GROUPSHARED (one workgroup owns one surfel -> zero cross-workgroup
+// Surfel trace (HARDWARE twin): ONE workgroup per surfel, 64 threads = 64 hemisphere rays. IDENTICAL to surfel_trace_cs
+// except the trace backend -- it includes gi_hw_trace.slangi (inline RayQuery over the TLAS) instead of gi_sw_trace, so
+// nwbGiTraceClosest/nwbGiShadeHit resolve to the HW path; main() + the SH reduce + the U4 bounce are byte-for-byte the
+// SW file's. Each ray closest-hits the scene and Lambert-shades the hit with the per-instance base colour, so a red
+// wall bounces red. The 64 shaded radiances reduce in GROUPSHARED (one workgroup owns one surfel -> zero cross-workgroup
 // contention -> NO float atomics) into the cosine-weighted hemispherical irradiance, then accumulate into the surfel's
 // meanIrradiance in place as a BOUNDED RUNNING MEAN (weight 1/(n+1) until n hits NWB_SURFEL_MAX_ACCUM, then a bounded
 // EMA). A true running mean -- not a fixed-alpha EMA -- is required because each frame rotates the ray set, so the
@@ -13,7 +15,7 @@
 // surfels per frame (divisor), ALL on the bootstrap frame (divisor 1). See .helper/surfel_gi_plan.md (Ray budget).
 
 
-#include "../gi_sw_trace.slangi"     // BVH bindings (0-10) + nwbGiTraceClosest / nwbGiShadeHit
+#include "../gi_hw_trace.slangi"     // HW TLAS + nwbGiTraceClosest / nwbGiShadeHit
 #include "../sampling.slangi"        // nwbGiFibonacciDirection + nwbGiFrameRotation
 #include "surfel_record.slangi"
 #include "surfel_constants.slangi"

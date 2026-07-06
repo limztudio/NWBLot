@@ -1,0 +1,115 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_GI_TRACE_COMMON_SLANGI
+#define NWB_GRAPHICS_GI_TRACE_COMMON_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Backend-agnostic GI trace body shared by the SW-BVH walk (gi_sw_trace.slangi) and the HW inline-RayQuery
+// (gi_hw_trace.slangi): the NwbGiProbeHit closest-hit result + the Lambert shade nwbGiShadeHit. The TRAVERSAL is the
+// SEAM -- each backend defines nwbGiTraceClosest, and the shade re-enters it for the dominant-light occlusion ray, so
+// the same shade runs on both paths. The including backend MUST set the scene-shading + light-list binding macros
+// (NWB_SCENE_SHADING_SET/_BINDING, NWB_SCENE_LIGHT_LIST_SET/_BINDING) + NWB_GI_HIT_SHADOW_RAYS before this include.
+
+
+#include "../scene/buffer.slangi"
+#include "../scene/lighting.slangi"
+#include "../common/math.slangi"
+#include "../shadow/instance_material.slangi"
+
+
+// Default bounce albedo when a hit's per-instance base colour is unresolved (a colourless mid-grey reflectance).
+#ifndef NWB_GI_SW_TRACE_DEFAULT_ALBEDO
+#define NWB_GI_SW_TRACE_DEFAULT_ALBEDO 0.5, 0.5, 0.5
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Closest-hit result: the world-space hit point, the geometric face normal (Lambert uses it), and the hit instance's
+// authored base colour for the bounce.
+struct NwbGiProbeHit{
+    bool hit;
+    float t;
+    float3 worldPos;
+    float3 normal;
+    float3 albedo;
+};
+
+// The traversal SEAM: each backend (SW BVH walk / HW inline RayQuery) defines this to return the nearest hit. Declared
+// here so the shared shade can re-enter it for the occlusion ray before the backend supplies the definition.
+NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, float tMax);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Lambert hit shade: direct light (<=8 lights, unshadowed base + optional dominant-light shadow ray) * per-instance
+// base colour. The caller adds any multi-bounce term (U4 surfel-to-surfel). The occlusion ray re-enters the traversal
+// seam (nwbGiTraceClosest), so it uses whichever backend the producer selected.
+float3 nwbGiShadeHit(const NwbGiProbeHit hit, const float3 rayDir){
+    float3 irradiance = float3(0.0, 0.0, 0.0);
+
+    const float3 normal = hit.normal;
+    // Face-forward the normal against the ray (the ray could hit a back face -- use the face the ray sees).
+    const float3 facingNormal = dot(normal, rayDir) < 0.0 ? normal : -normal;
+
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
+    for(uint i = 0u; i < lightCount; ++i){
+        const NwbSceneLight light = g_NwbSceneLights[i];
+        float3 lightVector;
+        half3 lightRadiance;
+        nwbSceneResolveLight(light, hit.worldPos, lightVector, lightRadiance);
+        if(all(lightRadiance <= half3(0.0)))
+            continue;
+        const float ndotl = max(dot(facingNormal, lightVector), 0.0);
+        irradiance += float3(lightRadiance) * ndotl;
+    }
+
+#if NWB_GI_HIT_SHADOW_RAYS
+    // One occlusion ray toward the DOMINANT light (the highest-NdotL lit light): miss -> lit, hit -> shadowed.
+    {
+        float bestNdotl = 0.0;
+        float3 dominantLightDir = float3(0.0, 1.0, 0.0);
+        uint dominantLightIndex = 0xFFFFFFFFu;
+        for(uint i = 0u; i < lightCount; ++i){
+            const NwbSceneLight light = g_NwbSceneLights[i];
+            float3 lv;
+            half3 lr;
+            nwbSceneResolveLight(light, hit.worldPos, lv, lr);
+            if(all(lr <= half3(0.0)))
+                continue;
+            const float ndotl = max(dot(facingNormal, lv), 0.0);
+            if(ndotl > bestNdotl){
+                bestNdotl = ndotl;
+                dominantLightDir = lv;
+                dominantLightIndex = i;
+            }
+        }
+        if(dominantLightIndex != 0xFFFFFFFFu && bestNdotl > 0.0){
+            const float shadowTMax = 1.0e4;
+            const NwbGiProbeHit shadowHit = nwbGiTraceClosest(hit.worldPos + facingNormal * 0.001, dominantLightDir, 0.001, shadowTMax);
+            if(shadowHit.hit)
+                irradiance *= 0.0; // fully shadowed by the dominant-light occlusion ray
+        }
+    }
+#endif
+
+    // Apply the per-instance base colour (the bounce's diffuse reflectance).
+    irradiance *= hit.albedo;
+    return irradiance;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

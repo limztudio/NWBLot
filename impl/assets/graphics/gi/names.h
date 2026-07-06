@@ -31,6 +31,7 @@ inline constexpr Name s_SurfelSpawnShaderName("engine/graphics/gi/surfel/surfel_
 inline constexpr Name s_SurfelAgeFreeShaderName("engine/graphics/gi/surfel/surfel_age_free_cs");
 inline constexpr Name s_SurfelHashBuildShaderName("engine/graphics/gi/surfel/surfel_hash_build_cs");
 inline constexpr Name s_SurfelTraceShaderName("engine/graphics/gi/surfel/surfel_trace_cs");
+inline constexpr Name s_SurfelTraceHwShaderName("engine/graphics/gi/surfel/surfel_trace_hw_cs");
 inline constexpr Name s_SurfelResolveShaderName("engine/graphics/gi/surfel/surfel_resolve_cs");
 
 

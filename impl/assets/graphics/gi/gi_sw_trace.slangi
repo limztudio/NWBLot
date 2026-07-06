@@ -9,13 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Software closest-hit trace + Lambert shade, shared by any GI producer that walks the SW scene/instance/per-mesh BVH
-// the SW shadow/caustic path already builds. It declares the BVH bindings (slots 0-10 of NWB_GI_SW_SET) + the scene
-// light list + the per-instance material record, and provides nwbGiSwTraceClosest / nwbGiSwInstanceClosest /
-// nwbGiSwShadeHit (Lambert direct light + optional dominant-light shadow ray + the per-instance authored base colour,
-// so a red wall bounces red). The producer's own shader supplies the OUTPUT bindings + main(): the retired probe grid
-// wrote an octahedral ray-data texture; the surfel path reduces the rays in groupshared and EMAs them into a surfel
-// record. Nothing here references a grid CB, atlas, or ray-data buffer.
+// The SOFTWARE backend of the GI trace seam: walks the SW scene/instance/per-mesh BVH the SW shadow/caustic path
+// already builds and defines nwbGiTraceClosest (+ nwbGiSwInstanceClosest) accordingly. It declares the BVH bindings
+// (slots 0-10 of NWB_GI_SW_SET) via gi_trace_common.slangi (which also brings NwbGiProbeHit + the shared nwbGiShadeHit
+// Lambert shade + the scene light list). The HW twin is gi_hw_trace.slangi (inline RayQuery over the TLAS); both share
+// the common shade + NwbGiProbeHit, so a red wall bounces red identically. The producer's own shader supplies the
+// OUTPUT bindings + main() (the surfel path reduces rays in groupshared and running-means them into a surfel record).
 
 
 #include "sw_binding_slots.h"
@@ -29,17 +28,10 @@
 #define NWB_MESH_BINDING_MATERIAL_TYPED NWB_GI_SW_BINDING_MATERIAL_TYPED
 #define NWB_MESH_BINDING_INSTANCE NWB_GI_SW_BINDING_MESH_INSTANCES
 
-#include "../scene/buffer.slangi"
-#include "../scene/lighting.slangi"
+// The shared trace body: NwbGiProbeHit + nwbGiShadeHit + the scene/light bindings + the nwbGiTraceClosest seam decl.
+#include "gi_trace_common.slangi"
+// SW-only: the CPU-built scene/instance/per-mesh BVH node type.
 #include "../bvh/bvh_common.slangi"
-#include "../common/math.slangi"
-#include "../shadow/instance_material.slangi"
-
-
-// Default bounce albedo when a hit's per-instance base colour is unresolved (a colourless mid-grey reflectance).
-#ifndef NWB_GI_SW_TRACE_DEFAULT_ALBEDO
-#define NWB_GI_SW_TRACE_DEFAULT_ALBEDO 0.5, 0.5, 0.5
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -186,16 +178,6 @@ NwbGiSwTriangleHit nwbGiSwRayTriangle(const float3 origin, const float3 directio
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Closest-hit result: the world-space hit point, the geometric face normal (Lambert uses it), and the hit instance's
-// authored base colour for the bounce.
-struct NwbGiProbeHit{
-    bool hit;
-    float t;
-    float3 worldPos;
-    float3 normal;
-    float3 albedo;
-};
-
 // Per-instance closest-hit refinement: push the world ray into object space, walk the mesh BVH front-to-back, keep the
 // nearest triangle crossing. On hit, compute the geometric face normal (inverse-transpose) + read the per-instance
 // base colour packed into the instance-material record by the CPU gather (AssignInstanceBaseColor).
@@ -265,7 +247,7 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
 }
 
 // Scene-BVH closest-hit over all instances (front-to-back ordered). Returns the nearest hit across all meshes.
-NwbGiProbeHit nwbGiSwTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
+NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
     NwbGiProbeHit closest;
     closest.hit = false;
     closest.t = tMax;
@@ -318,65 +300,6 @@ NwbGiProbeHit nwbGiSwTraceClosest(float3 origin, float3 direction, float tMin, f
     }
 
     return closest;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Lambert hit shade: direct light (<=8 lights, unshadowed base + optional dominant-light shadow ray) * per-instance
-// base colour. The caller adds any multi-bounce term (U4 surfel-to-surfel).
-float3 nwbGiSwShadeHit(const NwbGiProbeHit hit, const float3 rayDir){
-    float3 irradiance = float3(0.0, 0.0, 0.0);
-
-    const float3 normal = hit.normal;
-    // Face-forward the normal against the ray (the ray could hit a back face -- use the face the ray sees).
-    const float3 facingNormal = dot(normal, rayDir) < 0.0 ? normal : -normal;
-
-    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
-    for(uint i = 0u; i < lightCount; ++i){
-        const NwbSceneLight light = g_NwbSceneLights[i];
-        float3 lightVector;
-        half3 lightRadiance;
-        nwbSceneResolveLight(light, hit.worldPos, lightVector, lightRadiance);
-        if(all(lightRadiance <= half3(0.0)))
-            continue;
-        const float ndotl = max(dot(facingNormal, lightVector), 0.0);
-        irradiance += float3(lightRadiance) * ndotl;
-    }
-
-#if NWB_GI_HIT_SHADOW_RAYS
-    // One occlusion ray toward the DOMINANT light (the highest-NdotL lit light): miss -> lit, hit -> shadowed.
-    {
-        float bestNdotl = 0.0;
-        float3 dominantLightDir = float3(0.0, 1.0, 0.0);
-        uint dominantLightIndex = 0xFFFFFFFFu;
-        for(uint i = 0u; i < lightCount; ++i){
-            const NwbSceneLight light = g_NwbSceneLights[i];
-            float3 lv;
-            half3 lr;
-            nwbSceneResolveLight(light, hit.worldPos, lv, lr);
-            if(all(lr <= half3(0.0)))
-                continue;
-            const float ndotl = max(dot(facingNormal, lv), 0.0);
-            if(ndotl > bestNdotl){
-                bestNdotl = ndotl;
-                dominantLightDir = lv;
-                dominantLightIndex = i;
-            }
-        }
-        if(dominantLightIndex != 0xFFFFFFFFu && bestNdotl > 0.0){
-            const float shadowTMax = 1.0e4;
-            const NwbGiProbeHit shadowHit = nwbGiSwTraceClosest(hit.worldPos + facingNormal * 0.001, dominantLightDir, 0.001, shadowTMax);
-            if(shadowHit.hit)
-                irradiance *= 0.0; // fully shadowed by the dominant-light occlusion ray
-        }
-    }
-#endif
-
-    // Apply the per-instance base colour (the bounce's diffuse reflectance).
-    irradiance *= hit.albedo;
-    return irradiance;
 }
 
 

@@ -1,0 +1,113 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_GI_HW_TRACE_SLANGI
+#define NWB_GRAPHICS_GI_HW_TRACE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The HARDWARE backend of the GI trace seam: inline RayQuery over the scene TLAS. Defines nwbGiTraceClosest to return
+// the nearest hit, reconstructing NwbGiProbeHit IDENTICALLY to the SW backend (gi_sw_trace.slangi) -- worldPos from the
+// committed ray-t, the GEOMETRIC face normal from the committed primitive's positions (same edge order + cross sign, so
+// HW==SW to sub-ULP), and the base colour from the SAME InstanceID-indexed material record (hardware InstanceID() == SW
+// scene-BVH leaf index). Reads the HW-resident per-mesh position/index buffers (indexed by material.meshSlot) the
+// shadow path already binds. Shares NwbGiProbeHit + the Lambert shade with the SW path via gi_trace_common.slangi.
+
+
+#include "hw_binding_slots.h"
+
+#define NWB_SCENE_SHADING_SET NWB_GI_HW_SET
+#define NWB_SCENE_SHADING_BINDING NWB_GI_HW_BINDING_SCENE_SHADING
+#define NWB_SCENE_LIGHT_LIST_SET NWB_GI_HW_SET
+#define NWB_SCENE_LIGHT_LIST_BINDING NWB_GI_HW_BINDING_LIGHT_LIST
+
+#include "gi_trace_common.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[vk::binding(NWB_GI_HW_BINDING_TLAS, NWB_GI_HW_SET)]]
+RaytracingAccelerationStructure g_NwbGiHwTlas;
+
+[[vk::binding(NWB_GI_HW_BINDING_INSTANCE_MATERIAL, NWB_GI_HW_SET)]]
+StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbGiHwInstanceMaterial;
+
+[[vk::binding(NWB_GI_HW_BINDING_MESH_POSITIONS, NWB_GI_HW_SET)]]
+ByteAddressBuffer g_NwbGiHwMeshPositions[NWB_GI_HW_MAX_MESHES];
+
+[[vk::binding(NWB_GI_HW_BINDING_MESH_INDICES, NWB_GI_HW_SET)]]
+ByteAddressBuffer g_NwbGiHwMeshIndices[NWB_GI_HW_MAX_MESHES];
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// worldToObject^T * objectNormal -- byte-matches nwbGiSwTransformNormal (gi_sw_trace.slangi), but fed the driver's
+// TLAS-baked world->object rows instead of the CPU-uploaded instance record (both derive from the same world matrix).
+float3 nwbGiHwTransformNormal(const float3x4 worldToObject, const float3 objectNormal){
+    return float3(
+        dot(float3(worldToObject[0].x, worldToObject[1].x, worldToObject[2].x), objectNormal),
+        dot(float3(worldToObject[0].y, worldToObject[1].y, worldToObject[2].y), objectNormal),
+        dot(float3(worldToObject[0].z, worldToObject[1].z, worldToObject[2].z), objectNormal)
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The seam definition: closest hit via inline RayQuery. RAY_FLAG_FORCE_OPAQUE makes Proceed() commit the geometric
+// nearest triangle at once (no per-material filtering -- the GI ray hits ANY surface, exactly like the SW traversal),
+// then reconstruct the hit fields to match the SW path field-for-field.
+NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
+    NwbGiProbeHit closest;
+    closest.hit = false;
+    closest.t = tMax;
+    closest.worldPos = float3(0.0, 0.0, 0.0);
+    closest.normal = float3(0.0, 0.0, 1.0);
+    closest.albedo = float3(NWB_GI_SW_TRACE_DEFAULT_ALBEDO);
+
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = tMin;
+    ray.TMax = tMax;
+
+    RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+    query.TraceRayInline(g_NwbGiHwTlas, RAY_FLAG_FORCE_OPAQUE, 0xFFu, ray);
+    query.Proceed();   // FORCE_OPAQUE + triangle-only -> commits the nearest at once, returns false
+    if(query.CommittedStatus() != COMMITTED_TRIANGLE_HIT)
+        return closest;
+
+    const uint instanceIndex = query.CommittedInstanceID();
+    const NwbRtInstanceMaterial material = g_NwbGiHwInstanceMaterial[instanceIndex];
+    const uint meshSlot = material.meshSlot;
+    const uint triangle = query.CommittedPrimitiveIndex();
+
+    const uint indexBase = triangle * 3u;
+    const uint3 tri = g_NwbGiHwMeshIndices[NonUniformResourceIndex(meshSlot)].Load3(indexBase * 4u);
+    const float3 v0 = asfloat(g_NwbGiHwMeshPositions[NonUniformResourceIndex(meshSlot)].Load3(tri.x * 12u));
+    const float3 v1 = asfloat(g_NwbGiHwMeshPositions[NonUniformResourceIndex(meshSlot)].Load3(tri.y * 12u));
+    const float3 v2 = asfloat(g_NwbGiHwMeshPositions[NonUniformResourceIndex(meshSlot)].Load3(tri.z * 12u));
+    const float3 objNormal = normalize(cross(v1 - v0, v2 - v0));   // same edges/order/sign as nwbGiSwRayTriangle
+
+    closest.hit = true;
+    closest.t = query.CommittedRayT();
+    closest.worldPos = ray.Origin + ray.Direction * closest.t;
+    closest.normal = nwbSafeNormalize(nwbGiHwTransformNormal(query.CommittedWorldToObject3x4(), objNormal), float3(0.0, 0.0, 1.0));
+    closest.albedo = float3(asfloat(material.baseColorR), asfloat(material.baseColorG), asfloat(material.baseColorB));
+    return closest;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

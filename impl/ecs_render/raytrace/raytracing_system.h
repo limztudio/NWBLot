@@ -83,6 +83,9 @@ public:
     [[nodiscard]] bool ensureSurfelAgeFreePipeline();
     [[nodiscard]] bool ensureSurfelHashBuildPipeline();
     [[nodiscard]] bool ensureSurfelTracePipeline();
+    // U5 HW-RayQuery trace twin: the same surfel trace over the TLAS (inline RayQuery) instead of the SW BVH. Selected
+    // by m_surfelUseHwTrace on the HW-shadow branch; gated on RayQuery + accel-struct support (like ensureShadowPipeline).
+    [[nodiscard]] bool ensureSurfelTraceHwPipeline();
     // The spawn set (surfel buffers + G-buffer world-position/normal; rebuilt on G-buffer change) + the hash-build set
     // (surfel buffers only; built once) + the trace set (SW scene BVH + per-mesh arrays + surfel constants/pool;
     // rebuilt during prepare when the scene BVH / distinct-mesh count changes, mirroring the SW shadow set).
@@ -90,6 +93,7 @@ public:
     [[nodiscard]] bool ensureSurfelAgeFreeBindingSet();
     [[nodiscard]] bool ensureSurfelHashBuildBindingSet();
     [[nodiscard]] bool ensureSurfelTraceBindingSet();
+    [[nodiscard]] bool ensureSurfelTraceHwBindingSet();   // U5 HW twin: TLAS + HW-resident per-mesh buffers
     // The resolve pass: a COMPUTE gather-once-per-pixel into the screen-space surfelIrradiance texture the deferred
     // lighting samples (keeps the RW pool off the pixel shader -> no frames-in-flight pool race). Pipeline + its set
     // (surfel constants/pool SRV/cell-head SRV + G-buffer world-position/normal + surfelIrradiance UAV; rebuilt on a

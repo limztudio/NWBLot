@@ -158,6 +158,18 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         if(!prepareHwCausticResources(targets))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic producer resource preparation failed"));
 
+        // Enable surfel GI on the HW path (U5): the HW RayQuery trace twin reuses the TLAS + the HW-resident per-mesh
+        // geometry + InstanceID-material record the shadow/caustic path already built -- this is the ONLY place surfels
+        // run on real RT hardware. Gated on the HW shadow backend being ready (so the TLAS + material context are
+        // resident) + a non-empty TLAS. m_tlasInstanceCount (NOT m_sceneBvhInstanceCount, which the SW-only scene BVH
+        // sets) is the HW instance count. Non-fatal: a failure leaves GI off this frame (the lighting uses hemiAmbient).
+        if(outBackendReady && rayTracingState().m_tlasInstanceCount > 0u && rayTracingState().m_shadowMeshCount > 0u){
+            rayTracingState().m_surfelEnabled = true;
+            rayTracingState().m_surfelUseHwTrace = true;
+            if(!prepareSurfelResources(commandList, targets))
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW surfel GI resource preparation failed"));
+        }
+
         return true;
     }
 
@@ -178,6 +190,7 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
     // frame). The pool/hash/pipeline resources live on RendererRayTracingState so a resize does not reset convergence.
     if(rayTracingState().m_sceneBvhInstanceCount > 0u && rayTracingState().m_swShadowMeshCount > 0u){
         rayTracingState().m_surfelEnabled = true;
+        rayTracingState().m_surfelUseHwTrace = false;   // SW branch: the surfel trace walks the SW scene BVH
         if(!prepareSurfelResources(commandList, targets))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI resource preparation failed"));
     }

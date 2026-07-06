@@ -753,6 +753,19 @@ struct RtSurfelGiState{
     const Core::Buffer* m_surfelTraceBindingSetMaterialTyped = nullptr;
     const Core::Buffer* m_surfelTraceBindingSetMeshInstances = nullptr;
     u32 m_surfelTraceBindingSetMeshCount = 0u;
+    // U5 HW-RayQuery trace twin (surfel_trace_hw_cs / gi_hw_trace.slangi): a parallel pipeline + binding set that reads
+    // the scene TLAS + the HW-resident per-mesh position/index buffers instead of the SW BVH, reconstructing the hit
+    // identically. m_surfelUseHwTrace selects the path in ensureSurfelResources / prepareSurfelResources / renderSurfelGi
+    // (set true by the HW-shadow branch, false by the SW branch). Rebuild guard on {TLAS, instance-material, meshCount}.
+    Core::BindingLayoutHandle m_surfelTraceHwBindingLayout;
+    Core::ShaderHandle m_surfelTraceHwShader;
+    Core::ComputePipelineHandle m_surfelTraceHwPipeline;
+    Core::BindingSetHandle m_surfelTraceHwBindingSet;
+    bool m_surfelTraceHwPipelineFailed = false;
+    const Core::RayTracingAccelStruct* m_surfelTraceHwBindingSetTlas = nullptr;
+    const Core::Buffer* m_surfelTraceHwBindingSetInstanceMaterial = nullptr;
+    u32 m_surfelTraceHwBindingSetMeshCount = 0u;
+    bool m_surfelUseHwTrace = false;
     // Persistent surfel buffers (created once, never resized with the window). The pool holds the NwbSurfel records; the
     // cell-head buffer is the spatial-hash linked-list heads (one uint per cell); the counter is 2 u32 (bump top, free
     // top). All UAV-writable; the gather binds the pool + cell-head as SRVs. One-shot init on creation: pool zeroed,

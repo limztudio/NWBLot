@@ -750,29 +750,50 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
     Core::Buffer* keysBuffer = rayTracingState().m_bvhSortKeysBuffer.get();
     Core::Buffer* payloadBuffer = rayTracingState().m_bvhSortPayloadBuffer.get();
 
-    // Each (sequenceSize, compareDistance) step reads and writes the same buffers, so consecutive steps
-    // must be serialized with UAV barriers: enable per-buffer UAV barriers, then commit one per step.
+    // Each step reads and writes the same buffers, so consecutive steps must be serialized with UAV barriers:
+    // enable per-buffer UAV barriers, then commit one per step.
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
 
     const u32 groupCount = paddedCount / static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE);
-    for(u32 sequenceSize = 2u; sequenceSize <= paddedCount; sequenceSize <<= 1u){
-        for(u32 compareDistance = sequenceSize >> 1u; compareDistance > 0u; compareDistance >>= 1u){
-            Core::ComputeState computeState;
-            computeState.setPipeline(rayTracingState().m_bvhSortPipeline.get());
-            computeState.addBindingSet(rayTracingState().m_bvhSortBindingSet.get());
-            commandList.setComputeState(computeState);
 
+    const auto dispatchSort = [this, &commandList](const BvhSortPushConstants& pushConstants, const u32 groups){
+        Core::ComputeState computeState;
+        computeState.setPipeline(rayTracingState().m_bvhSortPipeline.get());
+        computeState.addBindingSet(rayTracingState().m_bvhSortBindingSet.get());
+        commandList.setComputeState(computeState);
+        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        commandList.dispatch(groups, 1u, 1u);
+    };
+    const auto bvhSortBarrier = [&commandList, keysBuffer, payloadBuffer](){
+        commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+    };
+
+    // Phase A — LOCAL_TILE: one dispatch fully sorts every GROUP_SIZE tile in groupshared, replacing the
+    // sequenceSize 2..GROUP_SIZE portion of the merge loop (which would otherwise be one dispatch per
+    // (sequenceSize, compareDistance) sub-step). Produces a sorted (hence bitonic) run per tile.
+    {
+        BvhSortPushConstants pushConstants;
+        pushConstants.elementCount = elementCount;
+        pushConstants.mode = 0u;        // LOCAL_TILE
+        dispatchSort(pushConstants, groupCount);
+        bvhSortBarrier();
+    }
+
+    // Phase B — GLOBAL merge: the standard bitonic merge steps for sequenceSize > GROUP_SIZE. Each thread owns
+    // one element and the XOR partner lands in a different tile, so these are plain global-memory swaps. This
+    // merges the per-tile sorted runs into the globally sorted sequence.
+    for(u32 sequenceSize = static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE) << 1u; sequenceSize <= paddedCount; sequenceSize <<= 1u){
+        for(u32 compareDistance = sequenceSize >> 1u; compareDistance > 0u; compareDistance >>= 1u){
             BvhSortPushConstants pushConstants;
             pushConstants.elementCount = elementCount;
             pushConstants.compareDistance = compareDistance;
             pushConstants.sequenceSize = sequenceSize;
-            commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-            commandList.dispatch(groupCount, 1u, 1u);
-
-            commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
-            commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
-            commandList.commitBarriers();
+            pushConstants.mode = 1u;    // GLOBAL
+            dispatchSort(pushConstants, groupCount);
+            bvhSortBarrier();
         }
     }
     return true;

@@ -84,12 +84,14 @@ inline constexpr usize s_BvhSortInitialCapacity = 1024u;
 inline constexpr u32 s_SwShadowEdgeStatsPeriod = 120u;
 inline constexpr u32 s_SwShadowEdgeStatsLogDelay = 8u;
 
-// CPU mirror of the shader NwbBvhBitonicSortPushConstants block (one bitonic compare-exchange step).
+// CPU mirror of the shader NwbBvhBitonicSortPushConstants block. `mode` selects the shader regime:
+// 0 = LOCAL_TILE (one dispatch sorts each GROUP_SIZE tile in groupshared), 1 = GLOBAL (one merge step for a
+// sequenceSize > GROUP_SIZE, global-memory compare-exchange). compareDistance/sequenceSize are GLOBAL-only.
 struct BvhSortPushConstants{
     u32 elementCount = 0u;
     u32 compareDistance = 0u;
     u32 sequenceSize = 0u;
-    u32 pad0 = 0u;
+    u32 mode = 0u;
 };
 static_assert(sizeof(BvhSortPushConstants) == sizeof(u32) * 4u, "BvhSortPushConstants must match the shader NwbBvhBitonicSortPushConstants layout");
 

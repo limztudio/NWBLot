@@ -194,28 +194,6 @@ inline void nwbBvhQuantizeBounds(
     packedMax = qxMax | (qyMax << 8u) | (qzMax << 16u);
 }
 
-// Dequantize one coordinate's min cell edge (a SUPERSET lower bound) against the reference box.
-[[nodiscard]] inline f32 nwbBvhDequantize1(const u32 q, const f32 refMin, const f32 extent)noexcept{
-    return refMin + (static_cast<f32>(q) * (1.0f / 256.0f)) * extent;
-}
-
-// Unpack a quantized node's min/max against the global reference box. Each dequantized coordinate is the cell
-// boundary of a SUPERSET box (min edge = lower cell bound, max edge = (q+1)/256*extent), so the returned box never
-// shrinks below the original -- ray-box tests stay conservative (false positives only, never a missed true hit).
-inline void nwbBvhDequantizeBounds(
-    const NwbBvhNodeQGpu& node,
-    const Float4 refMin, const Float4 refMax,
-    Float4& boxMin, Float4& boxMax
-)noexcept{
-    const Float4 extent{refMax.x - refMin.x, refMax.y - refMin.y, refMax.z - refMin.z, 0.0f};
-    boxMin.x = nwbBvhDequantize1((node.packedMin >> 0u) & 0xFFu, refMin.x, extent.x);
-    boxMin.y = nwbBvhDequantize1((node.packedMin >> 8u) & 0xFFu, refMin.y, extent.y);
-    boxMin.z = nwbBvhDequantize1((node.packedMin >> 16u) & 0xFFu, refMin.z, extent.z);
-    boxMax.x = nwbBvhDequantize1((node.packedMax >> 0u) & 0xFFu, refMin.x, extent.x) + (extent.x * (1.0f / 256.0f));
-    boxMax.y = nwbBvhDequantize1((node.packedMax >> 8u) & 0xFFu, refMin.y, extent.y) + (extent.y * (1.0f / 256.0f));
-    boxMax.z = nwbBvhDequantize1((node.packedMax >> 16u) & 0xFFu, refMin.z, extent.z) + (extent.z * (1.0f / 256.0f));
-}
-
 // Initial scene/instance BVH instance capacity; grows by doubling like the hardware TLAS.
 inline constexpr usize s_SceneBvhInitialInstanceCapacity = 64u;
 

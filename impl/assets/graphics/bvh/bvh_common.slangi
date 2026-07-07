@@ -108,28 +108,6 @@ void nwbBvhQuantizeBounds(
     packedMax = qxMax | (qyMax << 8u) | (qzMax << 16u);
 }
 
-// Dequantize the min edge of one axis: refMin + (q/256)*extent (the cell's lower bound -- a SUPERSET lower edge).
-float nwbBvhDequantize1(const uint q, const float refMin, const float extent){
-    return refMin + ((float)q * (1.0 / 256.0)) * extent;
-}
-
-// Unpack an NwbBvhNodeQ's quantized min/max against the global reference box into float3 min/max. Each dequantized
-// coordinate is the cell boundary of a SUPERSET box (min edge = lower cell bound, max edge = (q+1)/256*extent), so
-// the returned box never shrinks below the original and ray-box tests stay conservative (false positives only).
-void nwbBvhDequantizeBounds(
-    const NwbBvhNodeQ node,
-    const float3 refMin, const float3 refMax,
-    out float3 boxMin, out float3 boxMax
-){
-    const float3 extent = refMax - refMin;
-    boxMin.x = nwbBvhDequantize1((node.packedMin >> 0u) & 0xFFu, refMin.x, extent.x);
-    boxMin.y = nwbBvhDequantize1((node.packedMin >> 8u) & 0xFFu, refMin.y, extent.y);
-    boxMin.z = nwbBvhDequantize1((node.packedMin >> 16u) & 0xFFu, refMin.z, extent.z);
-    boxMax.x = nwbBvhDequantize1((node.packedMax >> 0u) & 0xFFu, refMin.x, extent.x) + (extent.x * (1.0 / 256.0));
-    boxMax.y = nwbBvhDequantize1((node.packedMax >> 8u) & 0xFFu, refMin.y, extent.y) + (extent.y * (1.0 / 256.0));
-    boxMax.z = nwbBvhDequantize1((node.packedMax >> 16u) & 0xFFu, refMin.z, extent.z) + (extent.z * (1.0 / 256.0));
-}
-
 // Leaf/link accessors mirror NwbBvhNode's encoding so a quantized tree uses the same parent/child/leaf ABI.
 bool nwbBvhQNodeIsLeaf(const NwbBvhNodeQ node){
     return (node.leftChild & NWB_BVH_LEAF_FLAG) != 0u;

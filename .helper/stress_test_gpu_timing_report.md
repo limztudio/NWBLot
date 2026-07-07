@@ -129,3 +129,42 @@ Shadow share of the frame dropped 50% → 47%. The win is concentrated in `rende
 the traversal runs in), and the control passes are flat — confirming it is the algorithm change, not noise. The
 shadow path is still the frame's single largest cost, so further gains (e.g. quantized-AABB node compression, or a
 refit→rebuild scene-BVH quality pass) remain open as future items.
+
+## 3. BLOCKER — quantized-node rerun cannot start (asset-cook, not traversal)
+
+The post-quantization rerun (commit `28b17082` "Migrate SW BVH traversal to quantized nodes", then cleanup
+`826c6915`) never reaches a frame: the opt and dbg stress binaries both `trace/breakpoint trap` at startup with
+the crash-handler breadcrumb
+
+```
+VolumeSession::loadData failed to read 'project/characters/body/model'
+  core/filesystem/module.h:333
+```
+
+This is **not** the quantization work. Diagnosis:
+
+- The failure is at asset load — before any render/BVH code runs — and is **pre-existing**: identical breadcrumbs
+  appear in the 09:xx crash dumps today, i.e. before commit `28b17082` (22:07). So it blocks every stress run,
+  not just the quantized one.
+- `tests/smoke/assets/characters/body.nwb` declares six top-level assets (`mesh`, `skeleton`, `skin`,
+  `skinned_mesh`, `mesh_wrapper`, `model`) wrapped in an `asset_bunch bunch = [mesh, skeleton, skin, model]`.
+  Running the resource cooker directly (`resource_cooker --asset-root impl/assets --asset-root tests/smoke/assets …`)
+  in **both** opt and dbg emits only the **mesh** meta for `body.nwb` and packs `volume='graphics', files=105` —
+  the model/skeleton/skin entries never land, so `project/characters/body/model` has nothing to resolve at runtime.
+  The opt asset cache confirms it: `model` cache entries = 0 (vs `mesh`=20, `skin`=10).
+- The loader mounts only the single `graphics` volume (`graphicsVolume.load("graphics", …)`, loader/main.cpp:316),
+  and the cooker emits only that volume, so the missing model is not in a sibling volume — it was simply not
+  written. The bunch-expander path (`impl/assets_bunch/cook.cpp::ExpandAssetBunchForAssetCook` → `ExpandAssetBunch`)
+  recognises the `asset_bunch` declaration and resolves all four items without error, yet only `mesh` survives
+  into the cooked output. The model-entry cook (`impl/assets_model/volume_entry.cpp` + `cook.cpp`) produces no
+  "model" log line at all.
+
+Likely culprit to investigate next: the model-cook entry's `BuildModelCookedAsset` is silently dropping the entry
+(or the model asset is being filtered before volume write) — the bunch expander hands the model through, but
+nothing downstream logs or writes it. The mesh/skin entries clearly take the same path and do get written, so the
+regression is specific to the `model` asset-type cook, not the bunch machinery.
+
+Note: the quantization change itself is sound by inspection — `bvh_common.slangi::nwbBvhQDequantizeAabb` is the sole
+unpack (min edge `refMin + q·extent/256`, max edge `refMin + (q+1)·extent/256`, a conservative superbox), and the
+duplicate dequant helpers removed in `826c6915` were dead code. Once the asset-cook blocker is fixed, the
+quantized-vs-DFS shadow-timing comparison (the actual point of this rerun) can be measured.

@@ -35,6 +35,7 @@ namespace AssetsVolumeCookDetail{
 struct CookedObjectPayloadView{
     const u8* data = nullptr;
     usize size = 0u;
+    AssetVolumePayloadIdentity identity;
 };
 
 [[nodiscard]] bool BuildRegistryObjectManifestEntries(

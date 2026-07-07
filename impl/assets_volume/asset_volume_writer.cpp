@@ -88,6 +88,17 @@ static bool PushManifestObjectFilePayloadToVolume(
     AssetsVolumeCookDetail::CookedObjectPayloadView payload;
     if(!AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes, payload))
         return false;
+    if(
+        payload.identity.payloadSize != entry.identity.payloadSize
+        || payload.identity.payloadHash != entry.identity.payloadHash
+        || payload.identity.cookKeyHash != entry.identity.cookKeyHash
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: object cache identity mismatch '{}' for '{}'")
+            , PathToString<tchar>(entry.objectPath)
+            , StringConvert(entry.virtualPath.c_str())
+        );
+        return false;
+    }
 
     if(volumeSession.pushDataDeferred(entry.virtualPath, payload.data, payload.size))
         return true;
@@ -103,6 +114,13 @@ static bool PushManifestEntryToVolume(
 ){
     switch(entry.source){
     case AssetsVolumeCookDetail::AssetVolumePackEntrySource::PayloadBytes:
+        if(
+            entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size())
+            || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: manifest payload identity mismatch '{}'"), StringConvert(entry.virtualPath.c_str()));
+            return false;
+        }
         if(volumeSession.pushDataDeferred(entry.virtualPath, entry.payloadBytes))
             return true;
 

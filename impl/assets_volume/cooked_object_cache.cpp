@@ -46,6 +46,7 @@ struct AssetVolumeObjectFileHeader{
     NameHash assetTypeHash = {};
     u64 payloadSize = 0u;
     u64 payloadHash = 0u;
+    u64 cookKeyHash = 0u;
 };
 
 
@@ -68,8 +69,10 @@ static Path BuildObjectFilePath(
     AppendEncodedNameHashText(header.assetTypeHash, assetTypeDirectory);
 
     ScratchString objectFileName{scratchArena};
-    objectFileName.reserve(2u + 1u + 16u + 2u + 16u + 7u);
+    objectFileName.reserve(2u + 1u + 16u + 2u + 16u + 2u + 16u + 7u);
     objectFileName += "v2_";
+    AppendHexU64(header.cookKeyHash, objectFileName);
+    objectFileName += "__";
     AppendHexU64(header.payloadHash, objectFileName);
     objectFileName += "__";
     AppendHexU64(header.payloadSize, objectFileName);
@@ -80,12 +83,24 @@ static Path BuildObjectFilePath(
 
 static AssetVolumeObjectFileHeader BuildObjectFileHeader(
     const Core::Assets::IAssetCodec& codec,
-    const Core::Assets::AssetBytes& payload
+    const Core::Assets::AssetBytes& payload,
+    const AStringView configurationSafeName
 ){
+    static constexpr u32 s_ObjectCookKeyVersion = 1u;
+
     AssetVolumeObjectFileHeader header;
     header.assetTypeHash = codec.assetType().hash();
     header.payloadSize = static_cast<u64>(payload.size());
     header.payloadHash = ComputeFnv64Bytes(payload.data(), payload.size());
+    const u64 configurationHash = ComputeFnv64Text(configurationSafeName);
+    u64 cookKeyHash = FNV64_OFFSET_BASIS;
+    Fnv64AppendValue(cookKeyHash, s_ObjectCookKeyVersion);
+    Fnv64AppendValue(cookKeyHash, s_ObjectFileVersion);
+    Fnv64AppendValue(cookKeyHash, configurationHash);
+    Fnv64AppendValue(cookKeyHash, header.assetTypeHash);
+    Fnv64AppendValue(cookKeyHash, header.payloadSize);
+    Fnv64AppendValue(cookKeyHash, header.payloadHash);
+    header.cookKeyHash = cookKeyHash;
     return header;
 }
 
@@ -99,6 +114,7 @@ static bool HeaderMatches(
         && lhs.assetTypeHash == rhs.assetTypeHash
         && lhs.payloadSize == rhs.payloadSize
         && lhs.payloadHash == rhs.payloadHash
+        && lhs.cookKeyHash == rhs.cookKeyHash
     ;
 }
 
@@ -218,7 +234,7 @@ public:
             return false;
         }
 
-        const AssetVolumeObjectFileHeader header = BuildObjectFileHeader(codec, m_payloadBinary);
+        const AssetVolumeObjectFileHeader header = BuildObjectFileHeader(codec, m_payloadBinary, m_configurationSafeName);
         const Path objectPath = BuildObjectFilePath(
             m_cacheDirectory,
             m_configurationSafeName,
@@ -228,7 +244,16 @@ public:
         if(!UpdateObjectFileIfChanged(objectPath, header, m_payloadBinary, m_objectBinary))
             return false;
 
-        return AssetsVolumeCookDetail::AppendObjectFilePayloadToManifest(m_manifest, virtualPath, objectPath);
+        return AssetsVolumeCookDetail::AppendObjectFilePayloadToManifest(
+            m_manifest,
+            virtualPath,
+            objectPath,
+            AssetsVolumeCookDetail::AssetVolumePayloadIdentity{
+                header.payloadSize,
+                header.payloadHash,
+                header.cookKeyHash
+            }
+        );
     }
 
 private:
@@ -298,6 +323,11 @@ bool ReadCookedObjectPayload(
     }
     outPayload.data = objectBytes.data() + payloadOffset;
     outPayload.size = static_cast<usize>(header.payloadSize);
+    outPayload.identity = AssetVolumePayloadIdentity{
+        header.payloadSize,
+        header.payloadHash,
+        header.cookKeyHash
+    };
     return true;
 }
 

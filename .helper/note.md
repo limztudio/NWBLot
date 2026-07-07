@@ -1,6 +1,6 @@
 # NWBLot Notes
 
-Updated: 2026-06-03
+Updated: 2026-07-07
 
 ## Important Rules
 
@@ -71,6 +71,7 @@ Updated: 2026-06-03
 65. Runtime material typed storage is split by block class: material-constant bytes are immutable material identity, while material-mutable defaults may be overridden through `MaterialInstanceComponent`. Overrides must target `material_mutable` fields on the matching interface; current per-pass uploads deduplicate constant ranges by material/layout and mutable ranges by byte content/revision, with finer dirty-row uploads remaining an optimization rather than an authoring-contract change.
 66. Frame, view, camera, light, and pass values are not material parameters; keep them in existing frame/view/pass buffers.
 67. Renderer frame-target resources and texture-bound binding sets must be created in resource/target setup, not lazily from `update()`, `render()`, draw submission, or material pipeline hot paths. CSG interval peel/sample resources are created with deferred targets and renderer resource validation; draw and pipeline code may only consume the existing layouts/binding sets and fail/assert if setup is missing.
+68. The logger server is the sole name-symbol resolver; the logger client must not load, serialize, or upload name-symbol tables. `logger/client/module.{cpp,h}` must not `#include <core/common/name_symbols.h>` and must not carry `pickNameSymbolPayload()`, the `/namesym` upload URL/dispatch, `ClientPayloadKind::NameSymbol`, or the related upload bookkeeping fields. Adding a name-symbol dependency back into the client is a regression.
 
 ## Scheduler Architecture
 

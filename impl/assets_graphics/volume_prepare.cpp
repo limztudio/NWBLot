@@ -483,18 +483,18 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
     if(!Core::Assets::AddPlannedFileCount(graphicsMetadata.preparedPlan.plannedFileCount, context.plannedFileCount))
         return false;
 
-    context.externalWriters.emplace_back([&context](
-        Core::Filesystem::VolumeSession& volumeSession,
+    context.manifestCookers.emplace_back([&context](
+        AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
         Core::Assets::CookEntryPathHashSet& seenVirtualPathHashes,
         Core::Assets::ScratchArena& writeScratchArena
     ){
-        return AssetsGraphicsCookDetail::AppendPreparedShadersToVolume(
+        return AssetsGraphicsCookDetail::AppendPreparedShadersToManifest(
             context.arena,
             GraphicsMetadata(context.parsedMetadata).shaderCook,
             context.resolvedPaths.cacheDirectory,
             context.configurationSafeName,
             GraphicsMetadata(context.parsedMetadata).preparedPlan.preparedEntries,
-            volumeSession,
+            manifest,
             seenVirtualPathHashes,
             writeScratchArena
         );

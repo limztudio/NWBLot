@@ -61,8 +61,10 @@ struct AssetVolumeWriteResult{
     u64 segmentCount = 0;
 };
 
-using AssetVolumeExternalWriter = Function<bool(Core::Filesystem::VolumeSession&, VirtualPathHashSet&, ScratchArena&)>;
-using AssetVolumeExternalWriterVector = CookVector<AssetVolumeExternalWriter>;
+struct AssetVolumePackManifest;
+
+using AssetVolumeManifestCooker = Function<bool(AssetVolumePackManifest&, VirtualPathHashSet&, ScratchArena&)>;
+using AssetVolumeManifestCookerVector = CookVector<AssetVolumeManifestCooker>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

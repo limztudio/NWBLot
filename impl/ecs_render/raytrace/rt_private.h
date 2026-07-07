@@ -42,6 +42,35 @@ NWB_IMPL_BEGIN
 // restores it. This is the quality/cost knob for skinned ray-traced geometry.
 inline constexpr u32 s_BlasMaxRefitsBeforeRebuild = 8u;
 
+// Adaptive refit-to-rebuild budget. The full-rebuild cost scales ~primitiveCount while the per-frame refit cost is
+// nearly topology-size-independent, so a larger mesh amortizes its (proportionally larger) rebuild over more refits
+// — refitting a 50k-triangle skinned mesh 8 times then rebuilding costs less than rebuilding it every frame, but
+// rebuilding it every 8 frames still over-pays relative to a 1k-triangle mesh doing the same. The budget therefore
+// grows with triangle count: budget(prims) = clamp(s_BlasMaxRefitsBeforeRebuild << floor(log2(prims)/3), min, cap).
+// The /3 makes the budget track N^(1/3) (cube root, in power-of-two steps), which is the cost/quality-optimal
+// rebuild cadence for a topology whose rebuild cost is O(N) and whose quality drift ~ surface area is O(N^(2/3)).
+// The flat constant remains the budget at the reference size (1..7 triangles); s_BlasMinRefitsBeforeRebuild is the
+// hard floor (quality-leaning meshes still rebuild often) and s_BlasMaxRefitsBeforeRebuildCap bounds drift for
+// very large meshes. Used by both the HW BLAS and the SW BVH update paths so the two move together.
+inline constexpr u32 s_BlasMinRefitsBeforeRebuild = 4u;
+inline constexpr u32 s_BlasMaxRefitsBeforeRebuildCap = 64u;
+
+// Adaptive refit budget for a mesh of `primitiveCount` triangles: the cube-root-scaled value above, clamped to
+// [s_BlasMinRefitsBeforeRebuild, s_BlasMaxRefitsBeforeRebuildCap]. Pure-integer (power-of-two cube root via
+// shifts), so no transcendental dependency.
+[[nodiscard]] inline constexpr u32 adaptiveRefitsBeforeRebuild(const u32 primitiveCount)noexcept{
+    u32 log2 = 0u;
+    u32 n = primitiveCount;
+    while(n > 1u){ n >>= 1u; ++log2; }
+    // Cube root in power-of-two steps: every tripling of the exponent adds one budget doubling.
+    u32 budget = s_BlasMaxRefitsBeforeRebuild << (log2 / 3u);
+    if(budget < s_BlasMinRefitsBeforeRebuild)
+        budget = s_BlasMinRefitsBeforeRebuild;
+    if(budget > s_BlasMaxRefitsBeforeRebuildCap)
+        budget = s_BlasMaxRefitsBeforeRebuildCap;
+    return budget;
+}
+
 // Initial scene-TLAS instance capacity; grows by doubling when the live instance count exceeds it.
 inline constexpr usize s_TlasInitialInstanceCapacity = 128u;
 

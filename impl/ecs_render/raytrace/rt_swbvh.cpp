@@ -562,8 +562,9 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
     ;
 
     // Runtime (skinned) meshes keep a single resident BLAS built with AllowUpdate and refit it in
-    // place from the freshly skinned positions each frame, forcing a full rebuild every
-    // s_BlasMaxRefitsBeforeRebuild frames to restore BVH quality. Static meshes build once.
+    // place from the freshly skinned positions each frame, forcing a full rebuild once the adaptive
+    // refit budget (scales ~cube-root of triangle count) is exhausted to restore BVH quality. Static
+    // meshes build once.
     Core::RayTracingAccelStructBuildFlags::Mask buildFlags = Core::RayTracingAccelStructBuildFlags::PreferFastTrace;
     if(meshResources.runtimeMesh)
         buildFlags |= Core::RayTracingAccelStructBuildFlags::AllowUpdate;
@@ -590,7 +591,7 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
     const bool performRefit =
         meshResources.runtimeMesh
         && !firstBuild
-        && meshResources.blasRefitsSinceRebuild < s_BlasMaxRefitsBeforeRebuild
+        && meshResources.blasRefitsSinceRebuild < adaptiveRefitsBeforeRebuild(meshResources.meshletPrimitiveIndexCount / 3u)
     ;
     if(performRefit)
         buildFlags |= Core::RayTracingAccelStructBuildFlags::PerformUpdate;
@@ -1159,13 +1160,14 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
     commandList.commitBarriers();
 
     // Skinned (runtime) meshes deform every frame: refit the build-pose topology in place from the freshly
-    // skinned positions, forcing a full rebuild every s_BlasMaxRefitsBeforeRebuild frames to restore tree
-    // quality. Static meshes build once. A mesh's first appearance is always a full build.
+    // skinned positions, forcing a full rebuild once the adaptive refit budget (scales ~cube-root of triangle
+    // count) is exhausted to restore tree quality. Static meshes build once. A mesh's first appearance is
+    // always a full build.
     const bool firstBuild = !meshResources.swBvhNodeBuffer;
     const bool performRefit =
         meshResources.runtimeMesh
         && !firstBuild
-        && meshResources.swBvhRefitsSinceRebuild < s_BlasMaxRefitsBeforeRebuild
+        && meshResources.swBvhRefitsSinceRebuild < adaptiveRefitsBeforeRebuild(primitiveCount)
     ;
 
     bool built = false;

@@ -10,6 +10,8 @@
 
 #include "cooked_object_cache.h"
 
+#include "arena_names.h"
+
 #include <core/assets/module.h>
 #include <core/filesystem/module.h>
 
@@ -208,12 +210,14 @@ public:
         const Path& cacheDirectory,
         const AStringView configurationSafeName,
         AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-        ScratchArena& scratchArena
+        ScratchArena& scratchArena,
+        Futex& objectCacheWriteMutex
     )
         : m_cacheDirectory(cacheDirectory)
         , m_configurationSafeName(configurationSafeName)
         , m_manifest(manifest)
         , m_scratchArena(scratchArena)
+        , m_objectCacheWriteMutex(objectCacheWriteMutex)
         , m_payloadBinary(arena)
         , m_objectBinary(arena)
     {}
@@ -241,8 +245,11 @@ public:
             header,
             m_scratchArena
         );
-        if(!UpdateObjectFileIfChanged(objectPath, header, m_payloadBinary, m_objectBinary))
-            return false;
+        {
+            ScopedLock lock(m_objectCacheWriteMutex);
+            if(!UpdateObjectFileIfChanged(objectPath, header, m_payloadBinary, m_objectBinary))
+                return false;
+        }
 
         return AssetsVolumeCookDetail::AppendObjectFilePayloadToManifest(
             m_manifest,
@@ -261,9 +268,81 @@ private:
     AStringView m_configurationSafeName;
     AssetsVolumeCookDetail::AssetVolumePackManifest& m_manifest;
     ScratchArena& m_scratchArena;
+    Futex& m_objectCacheWriteMutex;
     Core::Assets::AssetBytes m_payloadBinary;
     Core::Assets::AssetBytes m_objectBinary;
 };
+
+struct RegistryObjectBucketManifest{
+    AssetsVolumeCookDetail::AssetVolumePackManifest manifest;
+    Core::Assets::CookEntryPathHashSet seenVirtualPathHashes;
+
+    explicit RegistryObjectBucketManifest(Core::Assets::AssetArena& arena)
+        : manifest(arena)
+        , seenVirtualPathHashes(0, Hasher<NameHash>(), EqualTo<NameHash>(), arena)
+    {}
+};
+
+using RegistryObjectBucketManifestVector = Core::Assets::CookVector<RegistryObjectBucketManifest>;
+
+static bool BuildRegistryObjectBucketManifestEntries(
+    Core::Alloc::GlobalArena& arena,
+    const AssetsVolumeCookDetail::ResolvedCookPaths& resolvedPaths,
+    const AStringView configurationSafeName,
+    Core::Assets::CookEntryRegistry& entryRegistry,
+    const usize bucketIndex,
+    AssetsVolumeCookDetail::AssetVolumePackManifest& bucketManifest,
+    Core::Assets::CookEntryPathHashSet& bucketSeenVirtualPathHashes,
+    Futex& objectCacheWriteMutex
+){
+    Core::Alloc::ScratchArena scratchArena(AssetsVolumeArenaScope::s_CookArena);
+    AssetVolumeObjectCacheWriter cookedAssetWriter(
+        arena,
+        resolvedPaths.cacheDirectory,
+        configurationSafeName,
+        bucketManifest,
+        scratchArena,
+        objectCacheWriteMutex
+    );
+    Core::Assets::CookEntryWriteContext cookEntryWriteContext{
+        cookedAssetWriter,
+        bucketSeenVirtualPathHashes
+    };
+    return entryRegistry.writeBucket(bucketIndex, cookEntryWriteContext);
+}
+
+static bool RegisterMergedManifestVirtualPath(
+    const Name& virtualPath,
+    AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes
+){
+    if(!virtualPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: registry manifest produced an empty virtual path"));
+        return false;
+    }
+
+    if(seenVirtualPathHashes.insert(virtualPath.hash()).second)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate registry manifest virtual path '{}'"), StringConvert(virtualPath.c_str()));
+    return false;
+}
+
+static bool MergeRegistryObjectBucketManifests(
+    RegistryObjectBucketManifestVector& bucketManifests,
+    AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
+    AssetsVolumeCookDetail::VirtualPathHashSet& seenVirtualPathHashes
+){
+    for(RegistryObjectBucketManifest& bucketManifest : bucketManifests){
+        for(AssetsVolumeCookDetail::AssetVolumePackEntry& entry : bucketManifest.manifest.entries){
+            if(!RegisterMergedManifestVirtualPath(entry.virtualPath, seenVirtualPathHashes))
+                return false;
+
+            manifest.entries.push_back(Move(entry));
+        }
+    }
+
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -283,6 +362,7 @@ namespace AssetsVolumeCookDetail{
 
 bool BuildRegistryObjectManifestEntries(
     Core::Alloc::GlobalArena& arena,
+    Core::Alloc::ThreadPool& threadPool,
     const ResolvedCookPaths& resolvedPaths,
     const AStringView configurationSafeName,
     ParsedAssetMetadata& parsedMetadata,
@@ -290,18 +370,46 @@ bool BuildRegistryObjectManifestEntries(
     VirtualPathHashSet& seenVirtualPathHashes,
     ScratchArena& scratchArena
 ){
-    __hidden_cooked_object_cache::AssetVolumeObjectCacheWriter cookedAssetWriter(
-        arena,
-        resolvedPaths.cacheDirectory,
-        configurationSafeName,
+    static_cast<void>(scratchArena);
+
+    const usize bucketCount = parsedMetadata.entryRegistry.bucketCount();
+    if(bucketCount == 0u)
+        return true;
+
+    __hidden_cooked_object_cache::RegistryObjectBucketManifestVector bucketManifests(arena);
+    bucketManifests.reserve(bucketCount);
+    for(usize bucketIndex = 0u; bucketIndex < bucketCount; ++bucketIndex)
+        bucketManifests.emplace_back(arena);
+
+    Futex objectCacheWriteMutex;
+    Atomic<bool> failed{ false };
+    threadPool.parallelFor(static_cast<usize>(0u), bucketCount, [&](const usize bucketIndex){
+        if(failed.load(MemoryOrder::acquire))
+            return;
+
+        __hidden_cooked_object_cache::RegistryObjectBucketManifest& bucketManifest = bucketManifests[bucketIndex];
+        if(__hidden_cooked_object_cache::BuildRegistryObjectBucketManifestEntries(
+            arena,
+            resolvedPaths,
+            configurationSafeName,
+            parsedMetadata.entryRegistry,
+            bucketIndex,
+            bucketManifest.manifest,
+            bucketManifest.seenVirtualPathHashes,
+            objectCacheWriteMutex
+        ))
+            return;
+
+        failed.store(true, MemoryOrder::release);
+    });
+    if(failed.load(MemoryOrder::acquire))
+        return false;
+
+    return __hidden_cooked_object_cache::MergeRegistryObjectBucketManifests(
+        bucketManifests,
         manifest,
-        scratchArena
-    );
-    Core::Assets::CookEntryWriteContext cookEntryWriteContext{
-        cookedAssetWriter,
         seenVirtualPathHashes
-    };
-    return parsedMetadata.entryRegistry.writeAll(cookEntryWriteContext);
+    );
 }
 
 bool ReadCookedObjectPayload(

@@ -479,6 +479,19 @@ public:
         return true;
     }
 
+    [[nodiscard]] usize bucketCount()const{
+        return m_buckets.size();
+    }
+
+    [[nodiscard]] bool writeBucket(const usize bucketIndex, CookEntryWriteContext& context){
+        if(bucketIndex >= m_buckets.size()){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid cook entry bucket index {}"), bucketIndex);
+            return false;
+        }
+
+        return m_buckets[bucketIndex]->writeCookedAssets(context);
+    }
+
     [[nodiscard]] u64 entryCount()const{
         u64 count = 0;
         for(const BucketPtr& bucket : m_buckets){

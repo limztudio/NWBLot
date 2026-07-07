@@ -40,6 +40,7 @@ struct CookedObjectPayloadView{
 
 [[nodiscard]] bool BuildRegistryObjectManifestEntries(
     Core::Alloc::GlobalArena& arena,
+    Core::Alloc::ThreadPool& threadPool,
     const ResolvedCookPaths& resolvedPaths,
     AStringView configurationSafeName,
     ParsedAssetMetadata& parsedMetadata,

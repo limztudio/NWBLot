@@ -139,6 +139,7 @@ bool AssetVolumeCooker::cookAssetVolume(const Core::Assets::AssetCookOptions& op
     }
     if(!AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(
         m_arena,
+        options.services.threadPool,
         resolvedPaths,
         configurationSafeName,
         parsedMetadata,

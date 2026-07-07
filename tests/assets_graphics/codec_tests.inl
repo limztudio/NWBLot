@@ -307,7 +307,7 @@ TEST(AssetsGraphics, AssetVolumeCookWritesRegistryObjectCache){
     const Path assetRoot = root / "assets";
     const Path metaPath = assetRoot / "meshes" / "minimal_mesh.nwb";
     EXPECT_TRUE(WriteTextFile(metaPath, s_MinimalMeshMeta));
-    EXPECT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    EXPECT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, 2u));
 
     Path objectPath(testArena.arena);
     ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / "cache", objectPath));
@@ -318,7 +318,7 @@ TEST(AssetsGraphics, AssetVolumeCookWritesRegistryObjectCache){
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     EXPECT_TRUE(LoadCookedMinimalMesh(testArena, outputDirectory, loadedAsset));
 
-    EXPECT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    EXPECT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, 2u));
     Path unchangedObjectPath(testArena.arena);
     ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / "cache", unchangedObjectPath));
     EXPECT_EQ(unchangedObjectPath, objectPath);
@@ -328,7 +328,7 @@ TEST(AssetsGraphics, AssetVolumeCookWritesRegistryObjectCache){
     EXPECT_TRUE(AssetBytesEqual(firstObjectBytes, unchangedObjectBytes));
 
     EXPECT_TRUE(WriteTextFile(metaPath, s_DefaultColorMeshMeta));
-    EXPECT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    EXPECT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, 2u));
     Path changedObjectPath(testArena.arena);
     ASSERT_TRUE(FindNewAssetObjectCachePath(testArena, root / "cache", objectPath, changedObjectPath));
     EXPECT_NE(changedObjectPath, objectPath);

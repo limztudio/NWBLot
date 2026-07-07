@@ -92,10 +92,7 @@ public:
     virtual ~ICookEntryBucket() = default;
 
 public:
-    [[nodiscard]] virtual const Name& assetType()const noexcept = 0;
-    [[nodiscard]] virtual const tchar* assetKindText()const noexcept = 0;
     [[nodiscard]] virtual usize size()const noexcept = 0;
-    [[nodiscard]] virtual bool empty()const noexcept = 0;
 
 public:
     virtual void reserve(usize entryCount) = 0;
@@ -241,10 +238,7 @@ public:
     {}
 
 public:
-    [[nodiscard]] virtual const Name& assetType()const noexcept override{ return m_assetType; }
-    [[nodiscard]] virtual const tchar* assetKindText()const noexcept override{ return m_assetKindText; }
     [[nodiscard]] virtual usize size()const noexcept override{ return m_entries.size(); }
-    [[nodiscard]] virtual bool empty()const noexcept override{ return m_entries.empty(); }
     [[nodiscard]] virtual CookVector<EntryT>& entries()noexcept override{ return m_entries; }
     [[nodiscard]] virtual const CookVector<EntryT>& entries()const noexcept override{ return m_entries; }
 
@@ -493,14 +487,6 @@ public:
             count += bucketSize;
         }
         return count;
-    }
-
-    [[nodiscard]] bool empty()const{
-        for(const BucketPtr& bucket : m_buckets){
-            if(!bucket->empty())
-                return false;
-        }
-        return true;
     }
 
 private:

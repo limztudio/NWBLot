@@ -38,6 +38,9 @@
 #define NWB_BVH_BUILD_BINDING_NODES 4
 #define NWB_BVH_BUILD_BINDING_PARENT 5
 #define NWB_BVH_BUILD_BINDING_VISIT_COUNTER 6
+// Quantized (16B NwbBvhNodeQ) mirror of NODES the fit writes alongside the 32B float tree, so traversal reads the
+// half-bandwidth form while the build/refit/self-test keep reading the exact float tree for their unions.
+#define NWB_BVH_BUILD_BINDING_QNODES 7
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

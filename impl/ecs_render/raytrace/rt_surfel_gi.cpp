@@ -224,6 +224,7 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(8, NWB_SW_SHADOW_MAX_MESHES)); // mesh attributes
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(9, 1)); // material typed
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(10, 1)); // mesh instances
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_BVH_REF_BOUNDS, 1)); // BVH reference boxes
         // Surfel bindings (11 = constants CB, 12 = pool UAV, 19/20 = prev-frame snapshot pool/cell-head SRVs the U4
         // bounce gather reads). No push constants -- the trace derives the round-robin phase from frameIndex % divisor.
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
@@ -617,6 +618,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
     desc.addItem(Core::BindingSetItem::ConstantBuffer(0, deferredState().m_sceneShadingBuffer.get())); // scene shading
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, deferredState().m_lightBuffer.get())); // light list
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, sceneNodeBuffer)); // scene nodes
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_BVH_REF_BOUNDS, rayTracingState().m_bvhRefBoundsBuffer.get())); // BVH reference boxes
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, instanceBuffer)); // scene instances
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(4, rayTracingState().m_shadowInstanceMaterialBuffer.get())); // instance material
     // Per-mesh descriptor arrays: bind every slot; pad the unused tail with the last real mesh (the trace only indexes

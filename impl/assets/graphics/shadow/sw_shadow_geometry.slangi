@@ -27,7 +27,12 @@
 
 
 [[vk::binding(NWB_SW_SHADOW_BINDING_SCENE_NODES, NWB_SW_SHADOW_SET)]]
-StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbSwShadowSceneNodes;
+StructuredBuffer<NwbBvhNodeQ, Std430DataLayout> g_NwbSwShadowSceneNodes;
+
+// Out-of-band reference boxes the traversal dequantizes the quantized scene + per-mesh nodes against: element [0]
+// = the scene world-space reference, element [1 + meshIndex] = that mesh's object-space reference.
+[[vk::binding(NWB_SW_SHADOW_BINDING_BVH_REF_BOUNDS, NWB_SW_SHADOW_SET)]]
+StructuredBuffer<NwbBvhRefBoundsQ, Std430DataLayout> g_NwbSwShadowBvhRefBounds;
 
 // Per-instance record: the affine world->object transform (3 rows) + the slot into the parallel per-mesh
 // descriptor arrays. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes).
@@ -49,7 +54,7 @@ StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbSwShadowInstanceM
 
 // Parallel per-mesh arrays (slot k = mesh k): triangle BVH nodes + raw position / index byte buffers.
 [[vk::binding(NWB_SW_SHADOW_BINDING_MESH_NODES, NWB_SW_SHADOW_SET)]]
-StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbSwShadowMeshNodes[NWB_SW_SHADOW_MAX_MESHES];
+StructuredBuffer<NwbBvhNodeQ, Std430DataLayout> g_NwbSwShadowMeshNodes[NWB_SW_SHADOW_MAX_MESHES];
 
 [[vk::binding(NWB_SW_SHADOW_BINDING_MESH_POSITIONS, NWB_SW_SHADOW_SET)]]
 ByteAddressBuffer g_NwbSwShadowMeshPositions[NWB_SW_SHADOW_MAX_MESHES];

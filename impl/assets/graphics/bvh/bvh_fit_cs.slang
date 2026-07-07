@@ -24,6 +24,13 @@ RWStructuredBuffer<uint> g_NwbBvhPayload;
 [[vk::binding(NWB_BVH_BUILD_BINDING_NODES, NWB_BVH_BUILD_SET)]]
 globallycoherent RWStructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbBvhNodes;
 
+// Quantized (16B NwbBvhNodeQ) mirror of the float tree the traversal reads. The fit writes both: the float tree
+// (g_NwbBvhNodes) for its own sibling-read unions / refit / self-test, and this quantized mirror for the traversal's
+// half-bandwidth reads. The reference box is the build push-constants aabbMin/aabbMax (the mesh OBJECT-space bounds),
+// matching the CPU-published per-mesh ref-bounds element [1 + meshIndex].
+[[vk::binding(NWB_BVH_BUILD_BINDING_QNODES, NWB_BVH_BUILD_SET)]]
+RWStructuredBuffer<NwbBvhNodeQ, Std430DataLayout> g_NwbBvhQNodes;
+
 [[vk::binding(NWB_BVH_BUILD_BINDING_PARENT, NWB_BVH_BUILD_SET)]]
 RWStructuredBuffer<uint> g_NwbBvhParent;
 
@@ -56,6 +63,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint triangle = refit
         ? (g_NwbBvhNodes[leafNodeIndex].leftChild & ~NWB_BVH_LEAF_FLAG)
         : g_NwbBvhPayload[leaf];
+
+    // The mesh OBJECT-space reference box (build push constants) is the same box the CPU publishes to the
+    // traversal's per-mesh ref-bounds element [1 + meshIndex], so the quantized mirror dequantizes to a superset
+    // of the float tree. invExtent is per-axis 1/max(extent,1e-8).
+    const float3 refMin = g_NwbBvhBuildPushConstants.aabbMin.xyz;
+    const float3 refExtent = max(g_NwbBvhBuildPushConstants.aabbMax.xyz - refMin, float3(1e-8, 1e-8, 1e-8));
+    const float3 invExtent = float3(1.0, 1.0, 1.0) / refExtent;
     const uint indexBase = triangle * 3u;
     const uint i0 = g_NwbBvhTriangleIndices.Load(indexBase * 4u);
     const uint i1 = g_NwbBvhTriangleIndices.Load((indexBase + 1u) * 4u);
@@ -70,6 +84,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         g_NwbBvhNodes[leafNodeIndex].leftChild = NWB_BVH_LEAF_FLAG | triangle;
         g_NwbBvhNodes[leafNodeIndex].rightChild = 1u;
     }
+    // Quantized mirror of this leaf node (same child links; packed quantized box against the mesh reference).
+    {
+        const float3 boxMin = min(p0, min(p1, p2));
+        const float3 boxMax = max(p0, max(p1, p2));
+        uint packedMin, packedMax;
+        nwbBvhQuantizeBounds(boxMin, boxMax, refMin, invExtent, packedMin, packedMax);
+        g_NwbBvhQNodes[leafNodeIndex].packedMin = packedMin;
+        g_NwbBvhQNodes[leafNodeIndex].packedMax = packedMax;
+        g_NwbBvhQNodes[leafNodeIndex].leftChild = g_NwbBvhNodes[leafNodeIndex].leftChild;
+        g_NwbBvhQNodes[leafNodeIndex].rightChild = g_NwbBvhNodes[leafNodeIndex].rightChild;
+    }
 
     DeviceMemoryBarrier();
 
@@ -82,8 +107,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
         const uint leftChild = g_NwbBvhNodes[nodeIndex].leftChild;
         const uint rightChild = g_NwbBvhNodes[nodeIndex].rightChild;
-        g_NwbBvhNodes[nodeIndex].aabbMin = min(g_NwbBvhNodes[leftChild].aabbMin, g_NwbBvhNodes[rightChild].aabbMin);
-        g_NwbBvhNodes[nodeIndex].aabbMax = max(g_NwbBvhNodes[leftChild].aabbMax, g_NwbBvhNodes[rightChild].aabbMax);
+        const float3 childMin = min(g_NwbBvhNodes[leftChild].aabbMin, g_NwbBvhNodes[rightChild].aabbMin);
+        const float3 childMax = max(g_NwbBvhNodes[leftChild].aabbMax, g_NwbBvhNodes[rightChild].aabbMax);
+        g_NwbBvhNodes[nodeIndex].aabbMin = childMin;
+        g_NwbBvhNodes[nodeIndex].aabbMax = childMax;
+        // Quantized mirror of this internal node (same child links; packed unioned box against the mesh reference).
+        uint packedMin, packedMax;
+        nwbBvhQuantizeBounds(childMin, childMax, refMin, invExtent, packedMin, packedMax);
+        g_NwbBvhQNodes[nodeIndex].packedMin = packedMin;
+        g_NwbBvhQNodes[nodeIndex].packedMax = packedMax;
+        g_NwbBvhQNodes[nodeIndex].leftChild = leftChild;
+        g_NwbBvhQNodes[nodeIndex].rightChild = rightChild;
 
         DeviceMemoryBarrier();
 

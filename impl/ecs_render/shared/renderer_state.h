@@ -279,10 +279,16 @@ struct RtSceneBvhState{
     Core::ComputePipelineHandle m_bvhFitPipeline;
     Core::BufferHandle m_bvhVisitCounterBuffer;
     usize m_bvhBuildCapacity = 0u;
-    Core::BufferHandle m_sceneBvhNodeBuffer;  // CPU-built scene/instance LBVH (TLAS-analog), uploaded each frame
+    Core::BufferHandle m_sceneBvhNodeBuffer;  // CPU-built scene/instance LBVH (TLAS-analog), uploaded each frame as NwbBvhNodeQGpu (16B global-root-quantized)
     Core::BufferHandle m_sceneInstanceBuffer; // per-instance world->object transform + per-mesh refs
+    // Out-of-band reference boxes the traversal dequantizes the quantized scene + per-mesh nodes against. Element [0]
+    // is the SCENE world-space reference; element [1 + meshIndex] is a per-mesh OBJECT-space reference. Shared by the
+    // shadow / GI / caustic SW traversal (one dedicated StructuredBuffer<NwbBvhRefBoundsQ> per family), so its capacity
+    // follows the mesh cap (1 + NWB_SW_SHADOW_MAX_MESHES) and it is CPU-uploaded once per frame after the scene BVH.
+    Core::BufferHandle m_bvhRefBoundsBuffer;
     usize m_sceneBvhNodeCapacity = 0u;
     usize m_sceneInstanceCapacity = 0u;
+    usize m_bvhRefBoundsCapacity = 0u;
     u32 m_sceneBvhInstanceCount = 0u;
     // HYBRID shadow split (RT hardware): the HW RayQuery pass casts the binary OPAQUE shadow; when the scene holds a
     // transparent occluder, the software traversal additionally casts the colored TRANSPARENT shadow and multiplies it
@@ -469,6 +475,9 @@ struct RtShadowState{
     // Per-frame distinct meshes referenced by the software scene BVH (filled by buildSceneSwBvh); the per-mesh
     // descriptor arrays bind these (parallel: slot k = mesh k's node/position/index buffers). Sized by the
     // shared shader cap so the C++ arrays and the shader's `[NWB_SW_SHADOW_MAX_MESHES]` stay one definition.
+    // m_swShadowMeshNodeBuffers holds the 16B quantized nodes (the traversal form); m_swShadowMeshKeyBuffers
+    // holds the 32B float tree (a stable per-mesh identity for the dedup key, never bound to traversal).
+    Core::Buffer* m_swShadowMeshKeyBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
     Core::Buffer* m_swShadowMeshNodeBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
     Core::Buffer* m_swShadowMeshPositionBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
     Core::Buffer* m_swShadowMeshIndexBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};

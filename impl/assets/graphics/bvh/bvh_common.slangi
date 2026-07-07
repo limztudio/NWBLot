@@ -45,6 +45,18 @@ struct NwbBvhNodeQ{
     uint rightChild;  //   "         "        "        "
 };
 
+// Out-of-band reference box for a quantized tree (NwbBvhNodeQ), shared by every node of one tree and carried in a
+// dedicated StructuredBuffer<NwbBvhRefBoundsQ> bound alongside the node buffer. Element [0] is the SCENE world-space
+// reference (the union of all instance world AABBs the CPU build quantizes the scene/instance nodes against); element
+// [1 + meshIndex] is a per-mesh OBJECT-space reference (the mesh's own object-space bounds the GPU quantize pass
+// quantizes that mesh's triangle nodes against). std430 lays a float3 at 16 bytes (vec3 rounds up), so the record is
+// 32 bytes / two float4 lanes (the w lanes are unused padding for the lane alignment) -- the CPU mirror stores the
+// same two Float4 lanes so a single writeBuffer/upload is bit-identical across the ABI.
+struct NwbBvhRefBoundsQ{
+    float3 refMin;
+    float3 refMax;
+};
+
 // Per-dispatch constants shared by the LBVH build kernels (Morton, topology, fit). aabbMin/aabbMax are the
 // mesh object-space bounds used to quantize triangle centroids into Morton codes.
 struct NwbBvhBuildPushConstants{
@@ -125,6 +137,25 @@ bool nwbBvhQNodeIsLeaf(const NwbBvhNodeQ node){
 
 uint nwbBvhQLeafPrimitive(const NwbBvhNodeQ node){
     return node.leftChild & ~NWB_BVH_LEAF_FLAG;
+}
+
+// Dequantize a quantized node's AABB against the reference box into float3 min/max, returning BOTH edges through
+// out-params (the min edge is the cell lower bound, the max edge the NEXT cell boundary -- a SUPERSET box whose ray-box
+// tests never lose a true hit). This is the single unpack the traversal paths call before every ray-box test, so the
+// quantized-node walk is structurally identical to the raw-node walk: load node -> unpack -> slab test.
+void nwbBvhQDequantizeAabb(
+    const NwbBvhNodeQ node,
+    const float3 refMin, const float3 refMax,
+    out float3 boxMin, out float3 boxMax
+){
+    const float3 extent = refMax - refMin;
+    const float3 invCell = extent * (1.0 / 256.0);
+    boxMin.x = refMin.x + (float((node.packedMin >> 0u)  & 0xFFu) * invCell.x);
+    boxMin.y = refMin.y + (float((node.packedMin >> 8u)  & 0xFFu) * invCell.y);
+    boxMin.z = refMin.z + (float((node.packedMin >> 16u) & 0xFFu) * invCell.z);
+    boxMax.x = refMin.x + (float(((node.packedMax >> 0u)  & 0xFFu) + 1u) * invCell.x);
+    boxMax.y = refMin.y + (float(((node.packedMax >> 8u)  & 0xFFu) + 1u) * invCell.y);
+    boxMax.z = refMin.z + (float(((node.packedMax >> 16u) & 0xFFu) + 1u) * invCell.z);
 }
 
 // Count leading zero bits (0..32); firstbithigh returns -1 for zero, which this maps to 32.

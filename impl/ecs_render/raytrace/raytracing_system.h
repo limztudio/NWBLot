@@ -220,11 +220,11 @@ private:
     [[nodiscard]] bool bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount);
     [[nodiscard]] bool ensureBvhBuildPipeline();
     [[nodiscard]] bool ensureBvhVisitCounterBuffer(usize primitiveCount);
-    [[nodiscard]] bool createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer);
-    [[nodiscard]] bool ensureMeshBvhBindingSet(Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, Core::Buffer* nodeBuffer, Core::Buffer* parentBuffer, Core::BindingSetHandle& bindingSet);
-    [[nodiscard]] bool ensureMeshSwBvhResources(Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
-    [[nodiscard]] bool buildMeshSwBvh(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
-    [[nodiscard]] bool refitMeshSwBvh(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
+    [[nodiscard]] bool createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& qNodeBuffer, Core::BufferHandle& parentBuffer);
+    [[nodiscard]] bool ensureMeshBvhBindingSet(Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, Core::Buffer* nodeBuffer, Core::Buffer* qNodeBuffer, Core::Buffer* parentBuffer, Core::BindingSetHandle& bindingSet);
+    [[nodiscard]] bool ensureMeshSwBvhResources(Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& qNodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
+    [[nodiscard]] bool buildMeshSwBvh(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& qNodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
+    [[nodiscard]] bool refitMeshSwBvh(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& qNodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
     [[nodiscard]] bool updateMeshSwBvh(Core::CommandList& commandList, MeshResources& meshResources);
     [[nodiscard]] bool ensureSceneBvhBuffers(u32 instanceCount);
     [[nodiscard]] bool ensureCausticEmissionTargetBuffer(usize targetCount);

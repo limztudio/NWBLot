@@ -123,6 +123,18 @@ struct NwbBvhNodeQGpu{
 };
 static_assert(sizeof(NwbBvhNodeQGpu) == 16u, "NwbBvhNodeQGpu must match the shader NwbBvhNodeQ std430 layout");
 
+// CPU mirror of the shader NwbBvhRefBoundsQ (std430, 32 bytes): the out-of-band reference box a quantized tree
+// (NwbBvhNodeQ) dequantizes against, shared by every node of one tree. std430 aligns each float3 (vec3) to 16 bytes
+// (vec4 alignment), so the record is two Float4 lanes (the .w lanes are unused padding) and a single writeBuffer
+// upload is bit-identical across the ABI. Carried in a dedicated StructuredBuffer<NwbBvhRefBoundsQ>: element [0] is
+// the SCENE world-space reference (union of instance world AABBs); element [1 + meshIndex] is a per-mesh OBJECT-space
+// reference (the mesh's own object-space bounds).
+struct NwbBvhRefBoundsQGpu{
+    Float4 refMin = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+    Float4 refMax = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+};
+static_assert(sizeof(NwbBvhRefBoundsQGpu) == 32u, "NwbBvhRefBoundsQGpu must match the shader NwbBvhRefBoundsQ std430 layout");
+
 struct SceneBvhNodeBuildData{
     Float4 aabbMin;
     Float4 aabbMax;

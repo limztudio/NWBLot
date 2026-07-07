@@ -40,7 +40,7 @@
 
 
 [[vk::binding(NWB_CAUSTIC_SW_BINDING_SCENE_NODES, NWB_CAUSTIC_SW_SET)]]
-StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbCausticSwSceneNodes;
+StructuredBuffer<NwbBvhNodeQ, Std430DataLayout> g_NwbCausticSwSceneNodes;
 
 // Per-instance record: the affine world->object transform (3 rows) + the slot into the parallel per-mesh
 // descriptor arrays. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes) / the SW shadow NwbSwShadowInstance.
@@ -61,7 +61,12 @@ StructuredBuffer<NwbCausticSwInstance, Std430DataLayout> g_NwbCausticSwInstances
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticSwInstanceMaterial;
 
 [[vk::binding(NWB_CAUSTIC_SW_BINDING_MESH_NODES, NWB_CAUSTIC_SW_SET)]]
-StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbCausticSwMeshNodes[NWB_CAUSTIC_SW_MAX_MESHES];
+StructuredBuffer<NwbBvhNodeQ, Std430DataLayout> g_NwbCausticSwMeshNodes[NWB_CAUSTIC_SW_MAX_MESHES];
+
+// Out-of-band reference boxes the traversal dequantizes the quantized scene + per-mesh nodes against (element [0]
+// = scene world ref, [1 + meshIndex] = mesh object ref).
+[[vk::binding(NWB_CAUSTIC_SW_BINDING_BVH_REF_BOUNDS, NWB_CAUSTIC_SW_SET)]]
+StructuredBuffer<NwbBvhRefBoundsQ, Std430DataLayout> g_NwbCausticSwBvhRefBounds;
 
 [[vk::binding(NWB_CAUSTIC_SW_BINDING_MESH_POSITIONS, NWB_CAUSTIC_SW_SET)]]
 ByteAddressBuffer g_NwbCausticSwMeshPositions[NWB_CAUSTIC_SW_MAX_MESHES];
@@ -284,12 +289,15 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     // The stack holds only deferred FAR children (<= tree depth).
     uint stack[NWB_CAUSTIC_SW_MESH_STACK_SIZE];
     uint stackPointer = 0u;
-    NwbBvhNode node = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][0u]; // per-mesh root
-    bool active = nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax);
+    const NwbBvhRefBoundsQ meshRef = g_NwbCausticSwBvhRefBounds[1u + meshIndex];
+    NwbBvhNodeQ node = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][0u]; // per-mesh root
+    float3 nodeMin, nodeMax;
+    nwbBvhQDequantizeAabb(node, meshRef.refMin, meshRef.refMax, nodeMin, nodeMax);
+    bool active = nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, nodeMin, nodeMax);
 
     [loop] while(active){
-        if(nwbBvhNodeIsLeaf(node)){
-            const uint triangle = nwbBvhLeafPrimitive(node);
+        if(nwbBvhQNodeIsLeaf(node)){
+            const uint triangle = nwbBvhQLeafPrimitive(node);
             const uint indexBase = triangle * 3u;
             // The 3 triangle indices are contiguous -> one Load3 instead of three Loads (bit-identical, one request).
             const uint3 triIndices = g_NwbCausticSwMeshIndices[NonUniformResourceIndex(meshIndex)].Load3(indexBase * 4u);
@@ -341,12 +349,16 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
             active = false; // leaf done -> pop the next deferred node below
         }
         else{
-            const NwbBvhNode leftNode = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.leftChild];
-            const NwbBvhNode rightNode = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.rightChild];
+            const NwbBvhNodeQ leftNode = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.leftChild];
+            const NwbBvhNodeQ rightNode = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.rightChild];
+            float3 leftMin, leftMax;
+            nwbBvhQDequantizeAabb(leftNode, meshRef.refMin, meshRef.refMax, leftMin, leftMax);
+            float3 rightMin, rightMax;
+            nwbBvhQDequantizeAabb(rightNode, meshRef.refMin, meshRef.refMax, rightMin, rightMax);
             float tLeft;
-            const bool hitLeft = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, tLeft);
+            const bool hitLeft = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, leftMin, leftMax, tLeft);
             float tRight;
-            const bool hitRight = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, tRight);
+            const bool hitRight = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, rightMin, rightMax, tRight);
             if(hitLeft && hitRight){
                 // Descend the nearer child; defer the farther. A full stack drops that farther subtree rather than
                 // corrupting traversal state.
@@ -368,7 +380,8 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
         // Pop the next deferred node that still survives the (now-smaller) closest.t cull; drain -> done.
         [loop] while(stackPointer > 0u){
             node = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][stack[--stackPointer]];
-            if(nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax)){
+            nwbBvhQDequantizeAabb(node, meshRef.refMin, meshRef.refMax, nodeMin, nodeMax);
+            if(nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, nodeMin, nodeMax)){
                 active = true;
                 break;
             }
@@ -400,21 +413,28 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     // identical (closest-hit is order-independent).
     uint stack[NWB_CAUSTIC_SW_SCENE_STACK_SIZE];
     uint stackPointer = 0u;
-    NwbBvhNode node = g_NwbCausticSwSceneNodes[0u]; // root
-    bool active = nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax);
+    const NwbBvhRefBoundsQ sceneRef = g_NwbCausticSwBvhRefBounds[0u];
+    NwbBvhNodeQ node = g_NwbCausticSwSceneNodes[0u]; // root
+    float3 nodeMin, nodeMax;
+    nwbBvhQDequantizeAabb(node, sceneRef.refMin, sceneRef.refMax, nodeMin, nodeMax);
+    bool active = nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, nodeMin, nodeMax);
 
     [loop] while(active){
-        if(nwbBvhNodeIsLeaf(node)){
-            nwbCausticSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
+        if(nwbBvhQNodeIsLeaf(node)){
+            nwbCausticSwInstanceClosest(nwbBvhQLeafPrimitive(node), origin, direction, tMin, closest);
             active = false; // -> pop below
         }
         else{
-            const NwbBvhNode leftNode = g_NwbCausticSwSceneNodes[node.leftChild];
-            const NwbBvhNode rightNode = g_NwbCausticSwSceneNodes[node.rightChild];
+            const NwbBvhNodeQ leftNode = g_NwbCausticSwSceneNodes[node.leftChild];
+            const NwbBvhNodeQ rightNode = g_NwbCausticSwSceneNodes[node.rightChild];
+            float3 leftMin, leftMax;
+            nwbBvhQDequantizeAabb(leftNode, sceneRef.refMin, sceneRef.refMax, leftMin, leftMax);
+            float3 rightMin, rightMax;
+            nwbBvhQDequantizeAabb(rightNode, sceneRef.refMin, sceneRef.refMax, rightMin, rightMax);
             float tLeft;
-            const bool hitLeft = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, tLeft);
+            const bool hitLeft = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, leftMin, leftMax, tLeft);
             float tRight;
-            const bool hitRight = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, tRight);
+            const bool hitRight = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, rightMin, rightMax, tRight);
             if(hitLeft && hitRight){
                 if(tLeft <= tRight){
                     if(stackPointer < NWB_CAUSTIC_SW_SCENE_STACK_SIZE) stack[stackPointer++] = node.rightChild;
@@ -433,7 +453,8 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 
         [loop] while(stackPointer > 0u){
             node = g_NwbCausticSwSceneNodes[stack[--stackPointer]];
-            if(nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax)){
+            nwbBvhQDequantizeAabb(node, sceneRef.refMin, sceneRef.refMax, nodeMin, nodeMax);
+            if(nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, nodeMin, nodeMax)){
                 active = true;
                 break;
             }

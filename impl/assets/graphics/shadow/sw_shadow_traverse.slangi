@@ -113,17 +113,24 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     uint stackPointer = 0u;
     uint nodeIndex = 0u; // per-mesh root
 
+    // The per-mesh quantized-tree reference box (OBJECT-space bounds the GPU build quantized this mesh's nodes
+    // against): element [1 + meshIndex] of the out-of-band ref-bounds buffer. Fetched once; every node of this
+    // walk dequantizes against the same refMin/refMax.
+    const NwbBvhRefBoundsQ meshRef = g_NwbSwShadowBvhRefBounds[1u + meshIndex];
+
     while(true){
-        const NwbBvhNode node = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][nodeIndex];
-        if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax)){
+        const NwbBvhNodeQ node = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][nodeIndex];
+        float3 nodeMin, nodeMax;
+        nwbBvhQDequantizeAabb(node, meshRef.refMin, meshRef.refMax, nodeMin, nodeMax);
+        if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, nodeMin, nodeMax)){
             if(stackPointer == 0u)
                 return; // whole mesh exhausted: no further occluder
             nodeIndex = stack[--stackPointer];
             continue;
         }
 
-        if(nwbBvhNodeIsLeaf(node)){
-            const uint triangle = nwbBvhLeafPrimitive(node);
+        if(nwbBvhQNodeIsLeaf(node)){
+            const uint triangle = nwbBvhQLeafPrimitive(node);
             const uint indexBase = triangle * 3u;
             // One Load3 (a single 12-byte / 3-u32 transaction) fetches the whole index triple, instead of three
             // separate Load() calls (three transactions over the same 12 contiguous bytes). Same bytes, 1/3 the
@@ -189,10 +196,14 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
         else{
             const uint left = node.leftChild;
             const uint right = node.rightChild;
-            const NwbBvhNode leftNode = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][left];
-            const NwbBvhNode rightNode = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][right];
-            const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax);
-            const float tRight = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax);
+            const NwbBvhNodeQ leftNode = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][left];
+            const NwbBvhNodeQ rightNode = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][right];
+            float3 leftMin, leftMax;
+            nwbBvhQDequantizeAabb(leftNode, meshRef.refMin, meshRef.refMax, leftMin, leftMax);
+            float3 rightMin, rightMax;
+            nwbBvhQDequantizeAabb(rightNode, meshRef.refMin, meshRef.refMax, rightMin, rightMax);
+            const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftMin, leftMax);
+            const float tRight = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightMin, rightMax);
             const bool leftMiss = (tLeft >= NWB_SW_SHADOW_AABB_MISS);
             const bool rightMiss = (tRight >= NWB_SW_SHADOW_AABB_MISS);
 
@@ -246,17 +257,23 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
     uint stackPointer = 0u;
     uint nodeIndex = 0u; // root
 
+    // The scene quantized-tree reference box (the scene world AABB): element [0] of the out-of-band ref-bounds
+    // buffer. Every scene node dequantizes against the same refMin/refMax.
+    const NwbBvhRefBoundsQ sceneRef = g_NwbSwShadowBvhRefBounds[0u];
+
     while(true){
-        const NwbBvhNode node = g_NwbSwShadowSceneNodes[nodeIndex];
-        if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax)){
+        const NwbBvhNodeQ node = g_NwbSwShadowSceneNodes[nodeIndex];
+        float3 nodeMin, nodeMax;
+        nwbBvhQDequantizeAabb(node, sceneRef.refMin, sceneRef.refMax, nodeMin, nodeMax);
+        if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, nodeMin, nodeMax)){
             if(stackPointer == 0u)
                 return; // whole scene exhausted
             nodeIndex = stack[--stackPointer];
             continue;
         }
 
-        if(nwbBvhNodeIsLeaf(node)){
-            nwbSwShadowInstanceOccluded(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax, acc);
+        if(nwbBvhQNodeIsLeaf(node)){
+            nwbSwShadowInstanceOccluded(nwbBvhQLeafPrimitive(node), origin, direction, tMin, tMax, acc);
             if(max(max(acc.transmittance.x, acc.transmittance.y), acc.transmittance.z) < NWB_SW_SHADOW_TRANSMITTANCE_EPSILON)
                 return;
             if(stackPointer == 0u)
@@ -266,10 +283,14 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
         else{
             const uint left = node.leftChild;
             const uint right = node.rightChild;
-            const NwbBvhNode leftNode = g_NwbSwShadowSceneNodes[left];
-            const NwbBvhNode rightNode = g_NwbSwShadowSceneNodes[right];
-            const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax);
-            const float tRight = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax);
+            const NwbBvhNodeQ leftNode = g_NwbSwShadowSceneNodes[left];
+            const NwbBvhNodeQ rightNode = g_NwbSwShadowSceneNodes[right];
+            float3 leftMin, leftMax;
+            nwbBvhQDequantizeAabb(leftNode, sceneRef.refMin, sceneRef.refMax, leftMin, leftMax);
+            float3 rightMin, rightMax;
+            nwbBvhQDequantizeAabb(rightNode, sceneRef.refMin, sceneRef.refMax, rightMin, rightMax);
+            const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftMin, leftMax);
+            const float tRight = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightMin, rightMax);
             const bool leftMiss = (tLeft >= NWB_SW_SHADOW_AABB_MISS);
             const bool rightMiss = (tRight >= NWB_SW_SHADOW_AABB_MISS);
 

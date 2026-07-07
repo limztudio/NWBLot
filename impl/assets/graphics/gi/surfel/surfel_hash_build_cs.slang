@@ -6,7 +6,7 @@
 // InterlockedExchange the cell head to this surfel id (one integer atomic, no float atomics) and store the previous
 // head as this surfel's nextInCell. The gather + the next frame's spawn walk these lists. The cell-head table is
 // cleared to NWB_SURFEL_CELL_INVALID by the CPU each frame BEFORE this pass (a buffer clear), so the linking starts
-// from empty lists. See .helper/surfel_gi_plan.md (Acceleration).
+// from empty lists.
 
 
 #include "surfel_record.slangi"

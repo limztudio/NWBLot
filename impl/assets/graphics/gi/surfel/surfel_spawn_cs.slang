@@ -9,7 +9,7 @@
 // the bootstrap frame, so the empty-cell claim is atomic -- CompareExchange(INVALID -> PENDING) -- and only the winning
 // tile allocates; losers skip (no wasted slots). Keeping every cell list length 1 is what makes the gather's fixed-order
 // walk deterministic (the flicker was overstuffed cells walked in non-deterministic order + truncated). Background
-// pixels (no G-buffer normal) are skipped. Recycling / keep-alive land in U1. See .helper/surfel_gi_plan.md (Allocation).
+// pixels (no G-buffer normal) are skipped. Recycling / keep-alive are handled in the age-free pass and this spawn pass.
 
 
 #include "surfel_record.slangi"

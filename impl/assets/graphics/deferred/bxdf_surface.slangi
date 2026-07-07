@@ -24,10 +24,9 @@ struct NwbBxdfSurface{
     half   param0;
     half   param1;
     bool   isBackground;    // no geometry at this pixel (sky); lighting shaders pass the base color through
-    // DDGI indirect irradiance (D3 contract extension): the diffuse irradiance the probe atlas evaluates for this
-    // surface, filled by nwbBxdfLoadSurface from nwbBxdfIndirectIrradiance. Materials DECIDE how to consume it
-    // (lambert adds albedo*irradiance; toon may quantize). U2 scaffold: holds the hemiAmbient fallback value;
-    // later units fill it from the atlas. See .helper/ddgi_plan.md §2 (Lighting entry, D3).
+    // Indirect diffuse irradiance for this surface. The deferred path fills it from the resolved surfel-GI
+    // irradiance texture, while disabled/transparent paths receive the hemiAmbient fallback. Materials decide how
+    // to consume it (lambert adds albedo*irradiance; toon may quantize).
     half3  indirectIrradiance;
 };
 

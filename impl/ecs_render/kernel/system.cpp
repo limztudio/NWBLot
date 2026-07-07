@@ -199,9 +199,8 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     auto& device = *m_graphics.getDevice();
 
     m_shadowPrepareCommandList->open();
-    // DDGI resources are prepared INSIDE prepareShadowVisibilityResources, right after the SW scene BVH is built and
-    // the probe volume is enabled -- so the trace/blend can run on the same frame (no startup latency). See
-    // .helper/ddgi_plan.md §2.
+    // Surfel GI resources are prepared inside prepareShadowVisibilityResources, after the ray-tracing scene
+    // structures are resident, so the producer can run on the same frame without startup latency.
     const bool shadowResourcesPrepared = m_raytracingSystem.prepareShadowVisibilityResources(
         *m_shadowPrepareCommandList,
         deferredTargets,

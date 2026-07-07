@@ -7,7 +7,7 @@
 // LIFO stack (InterlockedAdd on counter[FREE_TOP], one integer atomic, no float atomics). The spawn pass POPS these ids
 // before bump-allocating, so the pool stays bounded by the visible working set instead of growing monotonically. This
 // pass runs FIRST each frame (before the cell-head clear + hash-build), reading lastSeenFrame written by the PREVIOUS
-// frame's spawn keep-alive. See .helper/surfel_gi_plan.md (U1).
+// frame's spawn keep-alive.
 
 
 #include "surfel_record.slangi"

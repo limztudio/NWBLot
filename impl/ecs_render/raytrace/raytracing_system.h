@@ -67,7 +67,7 @@ public:
     // prepareShadowVisibilityResources once the SW scene BVH is resident). prepareSurfelResources creates the
     // persistent pool/hash/counter/params buffers + pipelines, clears them on (re)creation, and uploads the params
     // CB and all binding sets. renderSurfelGi consumes the prepared sets and runs the spawn -> hash-build -> trace
-    // passes (the SW trace reuses the SW scene BVH). See .helper/surfel_gi_plan.md.
+    // passes (the SW trace reuses the SW scene BVH).
     [[nodiscard]] bool hasSurfelWork()const noexcept;
     [[nodiscard]] bool prepareSurfelResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets);

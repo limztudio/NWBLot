@@ -270,7 +270,7 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
 
 bool RendererRayTracingSystem::ensureSurfelResources(){
     // Create the persistent pool / cell-head / counter / params buffers lazily. They live on RendererRayTracingState
-    // (NOT DeferredFrameTargets) so a window resize does not reset surfel convergence. See .helper/surfel_gi_plan.md.
+    // (NOT DeferredFrameTargets) so a window resize does not reset surfel convergence.
     if(!hasSurfelWork())
         return true;
 

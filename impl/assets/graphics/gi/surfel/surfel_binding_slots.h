@@ -24,7 +24,7 @@
 // wins a given empty bucket per frame (bootstrap packs many tiles into one near-camera cell). This keeps every cell
 // list length 1, so the gather's fixed-order walk is deterministic -- the flicker cause was overstuffed cells (hundreds
 // of tile-surfels per cell) walked in the hash-build's non-deterministic InterlockedExchange order and truncated at
-// NWB_SURFEL_MAX_WALK, so the walked subset's surface mix churned frame to frame. See .helper/surfel_gi_plan.md.
+// NWB_SURFEL_MAX_WALK, so the walked subset's surface mix churned frame to frame.
 
 #define NWB_SURFEL_SET 0
 
@@ -42,7 +42,7 @@
 
 // Free-list (U1 recycling): a persistent LIFO stack of recycled surfel ids. The age-free pass PUSHES an id (dead surfel)
 // via InterlockedAdd on counter[FREE_TOP]; the spawn POPS one (before bump-allocating) via a CAS loop. Bound UAV in the
-// age-free + spawn sets. See .helper/surfel_gi_plan.md (U1).
+// age-free + spawn sets.
 #define NWB_SURFEL_BINDING_FREE_LIST 19   // RWStructuredBuffer<uint> (UAV) -- capacity poolCapacity, depth = counter[FREE_TOP]
 
 // Snapshot of the PREVIOUS frame's converged field (U4 infinite bounce), bound as SRVs in the TRACE set: the trace's

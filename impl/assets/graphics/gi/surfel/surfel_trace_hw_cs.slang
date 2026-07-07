@@ -12,7 +12,7 @@
 // EMA). A true running mean -- not a fixed-alpha EMA -- is required because each frame rotates the ray set, so the
 // estimates are decorrelated Monte-Carlo samples: the running mean drives variance -> 0 (a fixed EMA leaves a
 // permanent noise residual = flicker). n==0 on the first trace seeds directly (no dark bias). Round-robin: 1/Nth of
-// surfels per frame (divisor), ALL on the bootstrap frame (divisor 1). See .helper/surfel_gi_plan.md (Ray budget).
+// surfels per frame (divisor), ALL on the bootstrap frame (divisor 1).
 
 
 #include "../gi_hw_trace.slangi"     // HW TLAS + nwbGiTraceClosest / nwbGiShadeHit

@@ -1,7 +1,7 @@
 # NWBLot Inferred Code Standard
 
 Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_parties/`).
-Updated: 2026-05-31
+Updated: 2026-07-08
 
 ## 1. File and module structure
 - Use lowercase `snake_case` filenames for C++ source and headers.
@@ -474,3 +474,18 @@ Updated: 2026-05-31
 - Core modules must not own implementation ECS components or world-query helpers. Current production scene transform, view-basis, camera, active-camera, and light components/helpers live in `impl/ecs_scene` under `NWB::Impl::Scene` and target `nwb_ecs_scene`.
 - Avoid compatibility aliases that expose implementation ECS component types from `core/*`; they preserve the wrong dependency direction.
 - Test-only fixture components may stay local to the test source file that defines them.
+
+## 17. Third-Party Packages
+- Every vendored package lives as one flat top-level directory under `3rd_parties/<name>`. Do not keep nested `external/`, `imported/`, `third_party/`, or bundled duplicate copies inside another package; lift shared dependencies to their own top-level package.
+- When duplicate vendored copies exist, keep one shared top-level package. If versions differ, keep the latest usable version and update consumers rather than restoring an older duplicate for compatibility.
+- Register vendored packages with `add_subdirectory(<name>)` in `3rd_parties/CMakeLists.txt` before packages that consume them.
+- Rewriting a vendored `CMakeLists.txt` is allowed when needed to remove download steps, flatten include paths, match the engine toolchain, force static builds, or suppress vendor warnings through `nwb_disable_vendor_warnings(<target>)`.
+- Static C/C++ vendor libraries linked into engine targets must match the engine CRT and `_ITERATOR_DEBUG_LEVEL`; add those targets to the `nwb_match_engine_runtime` list in `3rd_parties/CMakeLists.txt`.
+- Each top-level package must carry an ASCII `nwb_update.txt` with `package`, `version`, `updated_utc`, and `source`. Use `notes` for pruned files, lifted dependencies, rewritten CMake, template-generated config headers, or other steps that a future re-vendor must repeat.
+
+## 18. Source Architecture Hygiene
+- Keep render-feature code physically sliced by ownership (`kernel`, `raytrace`, `deferred`, `material`, `mesh`, `avboit`, `csg`, etc.) instead of letting new behavior pile into shared god files.
+- Do not add new declarations to mega-header umbrellas such as graphics API, backend, math, or global aggregate headers when a narrow per-concern header exists or can be introduced.
+- A `.cpp` that mixes unrelated concern owners or grows past roughly 800 lines is a review smell. Split by concrete owner and concern instead of adding another section to the same file.
+- Private state for a feature should live with that feature. Cross-feature data flow should use explicit public contracts or shared ABI headers, not friend access to a shared all-features state object.
+- For file moves, prefer a content-free `git mv` commit followed by a separate content edit. Do not move and rewrite a source file in one commit unless the history cost is intentionally accepted.

@@ -710,7 +710,7 @@ struct RtSurfelGiState{
     // every window resize and would silently reset surfel convergence. Lifetime = device reset only. Three compute
     // passes per frame: spawn (screen tiles -> bump-allocate a surfel where existing coverage is low) -> hash-build
     // (link live surfels into the spatial-hash cell lists) -> trace (one workgroup per surfel, 64 SW rays -> EMA
-    // irradiance). The deferred-lighting gather walks the hash at each shaded point. See .helper/surfel_gi_plan.md.
+    // irradiance), then resolve to the screen-space texture the deferred lighting pass samples.
     // The three passes have DISTINCT binding layouts: the cell-head is an SRV at spawn (reads the previous frame) but a
     // UAV at hash-build (writes the links), so they cannot share one layout the way the SW-shadow passes do.
     Core::BindingLayoutHandle m_surfelSpawnBindingLayout;

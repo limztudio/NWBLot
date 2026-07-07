@@ -257,3 +257,61 @@ quantization** — the whole-scene world extent quantized to 256³ inflates inte
 visits a large fraction of instances per ray instead of ~log(N). Next step: instrument `render.shadow_visibility` with a
 temporary `shadow_diag_*` sub-scope split (scene-walk node-fetches vs per-mesh-walk node-fetches vs triangle tests), or
 temporarily A/B the scene BVH at full float vs quantized to localize the inflation to the scene level.
+
+## 6. RESOLUTION: per-node 16-bit quantization restores the baseline
+
+The §6-precursor diagnosis was correct: the 8-bit / 256-cell granularity inflated the scene BVH's interior boxes so
+badly that the front-to-back walk lost its culling power and revisited most instances per ray. The fix is **not** to
+revert to the 32-byte float node but to raise the per-coordinate precision from 8 to **16 bits**, the next power-of-two
+quantization step that keeps the conservative-superbox property while shrinking the reconstructed-box error from
+`extent/256` to `extent/65536` (256× finer).
+
+### Node layout change (`NwbBvhNodeQ`, was 16 B → now 20 B)
+
+Each axis packs **both its edges** into one uint (min edge low 16, max edge high 16), so the record is three axis
+uints + two link uints = 20 bytes — a 37.5 % bandwidth cut vs the 32-byte float node, and the conservative-superbox
+invariant is preserved unchanged (the max edge still dequantizes to the next cell boundary `refMin + (q+1)·extent/65536`).
+
+| field (old 8-bit) | → | field (new 16-bit) |
+|---|---|---|
+| `packedMin` (qminX·qminY·qminZ, 8b each) | → | `qX` (qminX low16, qmaxX high16) |
+| `packedMax` (qmaxX·qmaxY·qmaxZ, 8b each) | → | `qY` (qminY low16, qmaxY high16) |
+| — | → | `qZ` (qminZ low16, qmaxZ high16) |
+| `leftChild` / `rightChild` | → | unchanged |
+
+The quantize/dequant helpers (`nwbBvhQuantize1`, `nwbBvhQuantizeBounds`, `nwbBvhQDequantizeAabb`) are kept in
+lockstep across the GPU (`bvh_common.slangi` + `bvh_fit_cs.slang`) and CPU (`rt_private.h` + `rt_swbvh.cpp`) halves;
+the fit kernel writes `qX/qY/qZ` and the three traversal readers (shadow / GI / caustic) consume nodes only through
+the accessor helpers, so the ABI change is fully consistent. `setStructStride(sizeof(NwbBvhNodeQGpu))` auto-computes
+the new 20-byte stride for both the per-mesh and scene node buffers; `sizeof(NwbBvhNodeQGpu)==20u` is asserted on the
+CPU side. Build + resource cook pass clean (105 files, no slang errors); the float-tree build/refit/topology/scene-BVH
+self-tests run unmodified (they validate the float tree, not the quantized mirror).
+
+### Measured (opt, steady state, frozen stress scene) — 16-bit vs the pre-quantization baseline
+
+Same harness as §2/§6: `cd __cmake/build/linux-clang-x64/Testing/skinning_culling_benchmark_runtime/opt` then
+`NWB_GPU_TIMING_FILE=… timeout --signal=INT 25 …/stress_test_smoke`; opt scope-name hashes are stable across builds, so
+the §2 baseline-probe tokens map 1:1 to the 16-bit run (26 matched tokens, all at 38 samples / interval). The
+non-shadow controls match to ±0.05 ms (noise); only the two shadow-pass tokens move:
+
+| pass | float baseline (§2) | 8-bit regressed (§6) | **16-bit (now)** | vs baseline |
+|---|---|---|---|---|
+| **render.shadow_visibility** | 5.08 ms | **30.22 ms** (+495 %) | **5.48 ms** | **+0.40 ms (+7.9 %)** |
+| **render.frame** | 10.20 ms | 35.44 ms (+247 %) | **10.62 ms** | **+0.42 ms (+4.1 %)** |
+| render.opaque_regular (control) | 0.81 | — | 0.82 | +0.01 |
+| render.caustic_resolve (control) | 0.99 | — | 1.00 | +0.01 |
+| render.mesh_dispatch | 1.72 | — | 1.73 | +0.01 |
+
+The 6× visit explosion is gone: the shadow pass recovers from 30.22 ms to **within 8 % of the exact-float baseline**
+(5.48 vs 5.08 ms), and shadow's share of the frame falls back from 85 % to ~52 %. The residual +0.4 ms over the float
+node is the expected cost of the still-conservative superbox (16-bit quantization still produces *some* false-positive
+node visits, just 256× fewer than 8-bit) plus the dequant ALU — an acceptable price for the 37.5 % bandwidth cut and a
+clean, single-pass win over the original 8-bit scheme. No correctness change: the reconstructed box remains a provable
+superset of the float box, so ray-box tests still never lose a true hit.
+
+| time | event |
+|---|---|
+| 09:44 | `12808b1e` front-to-back traversal → 4.61 ms opt baseline |
+| 22:07 | `28b17082` 8-bit quantized traversal → 30.22 ms regression |
+| 22:44 | `826c6915` dead dequant-helper cleanup |
+| now | per-node 16-bit quantization → **5.48 ms** (within 8 % of float baseline, −37.5 % bandwidth) |

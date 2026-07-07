@@ -24,9 +24,9 @@ RWStructuredBuffer<uint> g_NwbBvhPayload;
 [[vk::binding(NWB_BVH_BUILD_BINDING_NODES, NWB_BVH_BUILD_SET)]]
 globallycoherent RWStructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbBvhNodes;
 
-// Quantized (16B NwbBvhNodeQ) mirror of the float tree the traversal reads. The fit writes both: the float tree
+// Quantized (20B NwbBvhNodeQ) mirror of the float tree the traversal reads. The fit writes both: the float tree
 // (g_NwbBvhNodes) for its own sibling-read unions / refit / self-test, and this quantized mirror for the traversal's
-// half-bandwidth reads. The reference box is the build push-constants aabbMin/aabbMax (the mesh OBJECT-space bounds),
+// reduced-bandwidth reads. The reference box is the build push-constants aabbMin/aabbMax (the mesh OBJECT-space bounds),
 // matching the CPU-published per-mesh ref-bounds element [1 + meshIndex].
 [[vk::binding(NWB_BVH_BUILD_BINDING_QNODES, NWB_BVH_BUILD_SET)]]
 RWStructuredBuffer<NwbBvhNodeQ, Std430DataLayout> g_NwbBvhQNodes;
@@ -88,10 +88,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     {
         const float3 boxMin = min(p0, min(p1, p2));
         const float3 boxMax = max(p0, max(p1, p2));
-        uint packedMin, packedMax;
-        nwbBvhQuantizeBounds(boxMin, boxMax, refMin, invExtent, packedMin, packedMax);
-        g_NwbBvhQNodes[leafNodeIndex].packedMin = packedMin;
-        g_NwbBvhQNodes[leafNodeIndex].packedMax = packedMax;
+        uint qX, qY, qZ;
+        nwbBvhQuantizeBounds(boxMin, boxMax, refMin, invExtent, qX, qY, qZ);
+        g_NwbBvhQNodes[leafNodeIndex].qX = qX;
+        g_NwbBvhQNodes[leafNodeIndex].qY = qY;
+        g_NwbBvhQNodes[leafNodeIndex].qZ = qZ;
         g_NwbBvhQNodes[leafNodeIndex].leftChild = g_NwbBvhNodes[leafNodeIndex].leftChild;
         g_NwbBvhQNodes[leafNodeIndex].rightChild = g_NwbBvhNodes[leafNodeIndex].rightChild;
     }
@@ -112,10 +113,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         g_NwbBvhNodes[nodeIndex].aabbMin = childMin;
         g_NwbBvhNodes[nodeIndex].aabbMax = childMax;
         // Quantized mirror of this internal node (same child links; packed unioned box against the mesh reference).
-        uint packedMin, packedMax;
-        nwbBvhQuantizeBounds(childMin, childMax, refMin, invExtent, packedMin, packedMax);
-        g_NwbBvhQNodes[nodeIndex].packedMin = packedMin;
-        g_NwbBvhQNodes[nodeIndex].packedMax = packedMax;
+        uint qX, qY, qZ;
+        nwbBvhQuantizeBounds(childMin, childMax, refMin, invExtent, qX, qY, qZ);
+        g_NwbBvhQNodes[nodeIndex].qX = qX;
+        g_NwbBvhQNodes[nodeIndex].qY = qY;
+        g_NwbBvhQNodes[nodeIndex].qZ = qZ;
         g_NwbBvhQNodes[nodeIndex].leftChild = leftChild;
         g_NwbBvhQNodes[nodeIndex].rightChild = rightChild;
 

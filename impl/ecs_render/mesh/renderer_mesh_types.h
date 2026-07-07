@@ -61,7 +61,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     Core::BindingSetHandle meshBindingSet;
     Core::BindingSetHandle computeBindingSet;
     Core::BufferHandle swBvhNodeBuffer;     // per-mesh software LBVH float nodes (32B; build/refit/self-test read the float tree)
-    Core::BufferHandle swBvhQNodeBuffer;    // per-mesh software LBVH quantized nodes (16B NwbBvhNodeQ; the fit mirrors the float tree here, traversal binds this)
+    Core::BufferHandle swBvhQNodeBuffer;    // per-mesh software LBVH quantized nodes (20B NwbBvhNodeQ; the fit mirrors the float tree here, traversal binds this)
     Core::BufferHandle swBvhParentBuffer;   // per-mesh software LBVH parent links (persist across refits)
     Core::BindingSetHandle swBvhBindingSet; // per-mesh software LBVH build/refit binding set
     u32 meshletCount = 0;

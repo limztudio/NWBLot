@@ -110,18 +110,19 @@ struct NwbBvhNodeGpu{
 };
 static_assert(sizeof(NwbBvhNodeGpu) == 32u, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
 
-// CPU mirror of the shader NwbBvhNodeQ (std430, 16 bytes): global-root 8-bit relative AABB quantization.
-// packedMin/packedMax each carry three 8-bit quantized extents + an unused high byte; leftChild/rightChild reuse
+// CPU mirror of the shader NwbBvhNodeQ (std430, 20 bytes): global-root 16-bit per-coordinate relative AABB quantization.
+// qX/qY/qZ each carry one axis's BOTH edges (min edge low 16, max edge high 16); leftChild/rightChild reuse
 // the NwbBvhNode link encoding (leaf flag / primitive index) so a quantized tree keeps the same parent/child/leaf
 // ABI. The reference box (refMin/refMax) is carried out-of-band by the producer (the mesh object-space bounds via
 // BvhBuildPushConstants for the per-mesh BVH, the scene world bounds for the instance BVH), never in the node.
 struct NwbBvhNodeQGpu{
-    u32 packedMin = 0u;
-    u32 packedMax = 0u;
+    u32 qX = 0u;
+    u32 qY = 0u;
+    u32 qZ = 0u;
     u32 leftChild = 0u;
     u32 rightChild = 0u;
 };
-static_assert(sizeof(NwbBvhNodeQGpu) == 16u, "NwbBvhNodeQGpu must match the shader NwbBvhNodeQ std430 layout");
+static_assert(sizeof(NwbBvhNodeQGpu) == 20u, "NwbBvhNodeQGpu must match the shader NwbBvhNodeQ std430 layout");
 
 // CPU mirror of the shader NwbBvhRefBoundsQ (std430, 32 bytes): the out-of-band reference box a quantized tree
 // (NwbBvhNodeQ) dequantizes against, shared by every node of one tree. std430 aligns each float3 (vec3) to 16 bytes
@@ -164,25 +165,26 @@ namespace BvhNodeIndex{
     };
 }
 
-// Global-root 8-bit relative AABB quantization (CPU mirror of the shader helpers in bvh_common.slangi).
-// Quantizes one coordinate into [0,255] against the reference box by TRUNCATION (matching the shader's
+// Global-root 16-bit per-coordinate relative AABB quantization (CPU mirror of the shader helpers in bvh_common.slangi).
+// Quantizes one coordinate into [0,65535] against the reference box by TRUNCATION (matching the shader's
 // (uint)scaled rule); invExtent is 1/max(refMax-refMin,1e-8) per axis, precomputed once per tree by the producer.
 // A point outside [refMin,refMax] is clamped to the cell range -- a defensive fallback only, since the reference
 // box MUST be the true root bounds. (Any in-cell rounding keeps the dequantized box a superset, but the CPU and GPU
 // producers share one ABI, so the rule is kept identical to avoid an off-by-one between a tree and its mirror.)
 [[nodiscard]] inline u32 nwbBvhQuantize1(const f32 p, const f32 refMin, const f32 invExtent)noexcept{
-    const f32 scaled = (p - refMin) * invExtent * 256.0f;
+    const f32 scaled = (p - refMin) * invExtent * 65536.0f;
     if(scaled <= 0.0f)
         return 0u;
     const u32 q = static_cast<u32>(scaled);   // truncation toward zero, safe: scaled > 0 here
-    return (q < 255u) ? q : 255u;
+    return (q < 65535u) ? q : 65535u;
 }
 
-// Pack a float3 min/max pair against the global reference box into a quantized node's packedMin/packedMax words.
+// Pack a float3 min/max pair against the global reference box into a quantized node's three per-axis uints. Each
+// axis uint carries its own min edge in [0:15] and max edge in [16:31], so quantize and dequant stay axis-local.
 inline void nwbBvhQuantizeBounds(
     const Float4 boxMin, const Float4 boxMax,
     const Float4 refMin, const Float4 invExtent,
-    u32& packedMin, u32& packedMax
+    u32& qX, u32& qY, u32& qZ
 )noexcept{
     const u32 qxMin = nwbBvhQuantize1(boxMin.x, refMin.x, invExtent.x);
     const u32 qyMin = nwbBvhQuantize1(boxMin.y, refMin.y, invExtent.y);
@@ -190,8 +192,9 @@ inline void nwbBvhQuantizeBounds(
     const u32 qxMax = nwbBvhQuantize1(boxMax.x, refMin.x, invExtent.x);
     const u32 qyMax = nwbBvhQuantize1(boxMax.y, refMin.y, invExtent.y);
     const u32 qzMax = nwbBvhQuantize1(boxMax.z, refMin.z, invExtent.z);
-    packedMin = qxMin | (qyMin << 8u) | (qzMin << 16u);
-    packedMax = qxMax | (qyMax << 8u) | (qzMax << 16u);
+    qX = qxMin | (qxMax << 16u);
+    qY = qyMin | (qyMax << 16u);
+    qZ = qzMin | (qzMax << 16u);
 }
 
 // Initial scene/instance BVH instance capacity; grows by doubling like the hardware TLAS.

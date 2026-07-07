@@ -354,7 +354,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         // Dedupe to a per-mesh descriptor-array slot: instances sharing a mesh share its node/position/index
         // buffers. Once the per-frame mesh cap is reached, the instance casts no software shadow this frame.
         // The dedup key is the mesh's 32B float-tree buffer (a stable per-mesh identity shared by all its
-        // instances); the traversal slot binds the mesh's 16B quantized mirror (the half-bandwidth form the
+        // instances); the traversal slot binds the mesh's 20B quantized mirror (the reduced-bandwidth form the
         // fit writes alongside the float tree). Both are 1:1 per mesh, so keying on one and binding the other
         // stays correct.
         Core::Buffer* meshNodeBuffer = mesh->swBvhNodeBuffer.get();
@@ -525,7 +525,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     for(const SceneBvhNodeBuildData& buildNode : buildNodes){
         NwbBvhNodeQGpu node;
         // Quantize this node's box against the scene world AABB; the CPU helper mirrors the shader's quantize rule.
-        nwbBvhQuantizeBounds(buildNode.aabbMin, buildNode.aabbMax, sceneRefMin, sceneInvExtent, node.packedMin, node.packedMax);
+        nwbBvhQuantizeBounds(buildNode.aabbMin, buildNode.aabbMax, sceneRefMin, sceneInvExtent, node.qX, node.qY, node.qZ);
         node.leftChild = buildNode.leftChild;
         node.rightChild = buildNode.rightChild;
         nodes.push_back(node);
@@ -952,8 +952,8 @@ bool RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::
         return false;
     }
 
-    // The quantized (16B NwbBvhNodeQ) mirror the fit writes alongside the float tree, sized to the same node count.
-    // The traversal binds THIS buffer (half the bandwidth); the build/refit/self-test keep reading the 32B float tree.
+    // The quantized (20B NwbBvhNodeQ) mirror the fit writes alongside the float tree, sized to the same node count.
+    // The traversal binds THIS buffer (the reduced-bandwidth form); the build/refit/self-test keep reading the 32B float tree.
     Core::BufferDesc qNodeBufferDesc;
     qNodeBufferDesc
         .setByteSize(static_cast<u64>(sizeof(NwbBvhNodeQGpu) * nodeCount))
@@ -1311,8 +1311,8 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
             capacity *= 2u;
 
         // The scene/instance LBVH is CPU-built each frame and uploaded already quantized against the scene world AABB
-        // (the root node's box), so the traversal reads NwbBvhNodeQGpu (16B) -- half the raw node bandwidth. The
-        // reference box rides the out-of-band m_bvhRefBoundsBuffer element [0], so the node buffer stores only the
+        // (the root node's box), so the traversal reads NwbBvhNodeQGpu (20B) -- 37.5% less bandwidth than the raw node.
+        // The reference box rides the out-of-band m_bvhRefBoundsBuffer element [0], so the node buffer stores only the
         // packed quantized extents + child links.
         Core::BufferDesc nodeBufferDesc;
         nodeBufferDesc

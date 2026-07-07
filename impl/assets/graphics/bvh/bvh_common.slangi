@@ -27,20 +27,24 @@ struct NwbBvhNode{
     uint rightChild;
 };
 
-// Compressed BVH node: global-root 8-bit relative AABB quantization, a true 16 bytes / 4 uint32 lanes. The six
-// box coordinates (min.xyz, max.xyz) are each quantized to 8 bits against a SINGLE global reference box
-// (refMin, refMax) shared by the whole tree -- the mesh object-space bounds for a per-mesh BVH, the scene world
-// bounds for the instance BVH -- so the reference is carried out-of-band (the same BvhBuildPushConstants the LBVH
-// kernels already read / the scene-BVH upload already computes) and the node stores only the packed quantized
-// extents + the two child links. Halves the bandwidth of NwbBvhNode and packs two nodes per cache line.
+// Compressed BVH node: global-root 16-bit per-coordinate relative AABB quantization. The six box coordinates
+// (min.xyz, max.xyz) are each quantized to 16 bits against a SINGLE global reference box (refMin, refMax) shared by
+// the whole tree -- the mesh object-space bounds for a per-mesh BVH, the scene world bounds for the instance BVH
+// -- so the reference is carried out-of-band (the same BvhBuildPushConstants the LBVH kernels already read / the
+// scene-BVH upload already computes) and the node stores only the packed quantized extents + the two child links.
+// Each axis packs BOTH its edges into one uint (min edge low 16, max edge high 16), so the record is three axis
+// uints + two link uints = 20 bytes, a 37.5% bandwidth cut vs the 32-byte float node. 16 bits per axis (vs the
+// earlier 8-bit / 256-cell scheme) keeps the reconstructed boxes within extent/65536 of the true boxes, eliminating
+// the visit explosion the 256-cell granularity caused on the scene/mesh BVH walk.
 //
-// The 256-cell scheme is conservative by construction: quantizing q = clamp(floor((p-refMin)/extent*256),0,255)
-// and dequantizing the min edge to refMin + (q/256)*extent and the max edge to refMin + ((q+1)/256)*extent yields a
-// reconstructed box that is a SUPERSET of the original (each coordinate's cell fully contains the coordinate), so
+// The 65536-cell scheme is conservative by construction: quantizing q = clamp(floor((p-refMin)/extent*65536),0,65535)
+// and dequantizing the min edge to refMin + (q/65536)*extent and the max edge to refMin + ((q+1)/65536)*extent yields
+// a reconstructed box that is a SUPERSET of the original (each coordinate's cell fully contains the coordinate), so
 // ray-box tests never lose a true hit -- only false-positive nodes are tested, the standard quantization tradeoff.
 struct NwbBvhNodeQ{
-    uint packedMin;   // (qminX) | (qminY << 8) | (qminZ << 16) | (pad << 24)
-    uint packedMax;   // (qmaxX) | (qmaxY << 8) | (qmaxZ << 16) | (pad << 24)
+    uint qX;          // [0:15] qminX, [16:31] qmaxX
+    uint qY;          // [0:15] qminY, [16:31] qmaxY
+    uint qZ;          // [0:15] qminZ, [16:31] qmaxZ
     uint leftChild;   // same link encoding as NwbBvhNode (leaf flag / primitive index)
     uint rightChild;  //   "         "        "        "
 };
@@ -80,23 +84,24 @@ uint nwbBvhLeafPrimitive(const NwbBvhNode node){
     return node.leftChild & ~NWB_BVH_LEAF_FLAG;
 }
 
-// ---- Global-root 8-bit quantization (NwbBvhNodeQ) ----------------------------------------------
+// ---- Global-root 16-bit quantization (NwbBvhNodeQ) ---------------------------------------------
 //
-// Quantize one coordinate into [0,255] against the global reference box. extent is pre-floored to 1e-8 by the
+// Quantize one coordinate into [0,65535] against the global reference box. extent is pre-floored to 1e-8 by the
 // caller so the divide is safe; p outside [refMin, refMax] is clamped to the cell range (a coordinate beyond the
 // reference box is itself an error -- the reference MUST be the true root -- so clamping is a defensive fallback,
 // not a normal path).
 uint nwbBvhQuantize1(const float p, const float refMin, const float invExtent){
-    const float scaled = (p - refMin) * invExtent * 256.0;
-    return clamp((uint)scaled, 0u, 255u);
+    const float scaled = (p - refMin) * invExtent * 65536.0;
+    return clamp((uint)scaled, 0u, 65535u);
 }
 
-// Pack two 3D points into the packedMin/packedMax words of an NwbBvhNodeQ against the global reference box
-// (refMin/refMax). invExtent is per-axis 1/max(refMax-refMin, 1e-8); the caller computes it once per tree.
+// Pack two 3D points into the three per-axis uints of an NwbBvhNodeQ against the global reference box
+// (refMin/refMax). invExtent is per-axis 1/max(refMax-refMin, 1e-8); the caller computes it once per tree. Each
+// axis uint carries its own min edge in [0:15] and max edge in [16:31], so quantize and dequant stay axis-local.
 void nwbBvhQuantizeBounds(
     const float3 boxMin, const float3 boxMax,
     const float3 refMin, const float3 invExtent,
-    out uint packedMin, out uint packedMax
+    out uint qX, out uint qY, out uint qZ
 ){
     const uint qxMin = nwbBvhQuantize1(boxMin.x, refMin.x, invExtent.x);
     const uint qyMin = nwbBvhQuantize1(boxMin.y, refMin.y, invExtent.y);
@@ -104,8 +109,9 @@ void nwbBvhQuantizeBounds(
     const uint qxMax = nwbBvhQuantize1(boxMax.x, refMin.x, invExtent.x);
     const uint qyMax = nwbBvhQuantize1(boxMax.y, refMin.y, invExtent.y);
     const uint qzMax = nwbBvhQuantize1(boxMax.z, refMin.z, invExtent.z);
-    packedMin = qxMin | (qyMin << 8u) | (qzMin << 16u);
-    packedMax = qxMax | (qyMax << 8u) | (qzMax << 16u);
+    qX = qxMin | (qxMax << 16u);
+    qY = qyMin | (qyMax << 16u);
+    qZ = qzMin | (qzMax << 16u);
 }
 
 // Leaf/link accessors mirror NwbBvhNode's encoding so a quantized tree uses the same parent/child/leaf ABI.
@@ -127,13 +133,13 @@ void nwbBvhQDequantizeAabb(
     out float3 boxMin, out float3 boxMax
 ){
     const float3 extent = refMax - refMin;
-    const float3 invCell = extent * (1.0 / 256.0);
-    boxMin.x = refMin.x + (float((node.packedMin >> 0u)  & 0xFFu) * invCell.x);
-    boxMin.y = refMin.y + (float((node.packedMin >> 8u)  & 0xFFu) * invCell.y);
-    boxMin.z = refMin.z + (float((node.packedMin >> 16u) & 0xFFu) * invCell.z);
-    boxMax.x = refMin.x + (float(((node.packedMax >> 0u)  & 0xFFu) + 1u) * invCell.x);
-    boxMax.y = refMin.y + (float(((node.packedMax >> 8u)  & 0xFFu) + 1u) * invCell.y);
-    boxMax.z = refMin.z + (float(((node.packedMax >> 16u) & 0xFFu) + 1u) * invCell.z);
+    const float3 invCell = extent * (1.0 / 65536.0);
+    boxMin.x = refMin.x + (float(node.qX & 0xFFFFu)     * invCell.x);
+    boxMax.x = refMin.x + (float((node.qX >> 16u) + 1u) * invCell.x);
+    boxMin.y = refMin.y + (float(node.qY & 0xFFFFu)     * invCell.y);
+    boxMax.y = refMin.y + (float((node.qY >> 16u) + 1u) * invCell.y);
+    boxMin.z = refMin.z + (float(node.qZ & 0xFFFFu)     * invCell.z);
+    boxMax.z = refMin.z + (float((node.qZ >> 16u) + 1u) * invCell.z);
 }
 
 // Count leading zero bits (0..32); firstbithigh returns -1 for zero, which this maps to 32.

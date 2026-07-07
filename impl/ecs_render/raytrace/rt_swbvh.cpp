@@ -477,7 +477,12 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     const usize nodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
     Vector<SceneBvhNodeBuildData, Core::Alloc::ScratchArena> buildNodes{ scratchArena };
     buildNodes.reserve(nodeCount);
-    __hidden_raytracing_system::BuildSceneBvhNode(indices.data(), 0u, instanceCount, instanceAabbMin.data(), instanceAabbMax.data(), instanceCentroid.data(), buildNodes);
+    // Per-instance leaf cost = primitive count, so a large instance biases the SAH tree like a large primitive.
+    Vector<u32, Core::Alloc::ScratchArena> instanceLeafCost{ scratchArena };
+    instanceLeafCost.reserve(instanceCount);
+    for(u32 i = 0u; i < instanceCount; ++i)
+        instanceLeafCost.push_back(instances[i].primitiveCount);
+    __hidden_raytracing_system::BuildSceneBvhNode(indices.data(), 0u, instanceCount, instanceAabbMin.data(), instanceAabbMax.data(), instanceCentroid.data(), buildNodes, instanceLeafCost.data());
     NWB_ASSERT(buildNodes.size() == nodeCount);
 
     Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };

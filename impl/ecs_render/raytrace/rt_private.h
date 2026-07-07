@@ -113,6 +113,17 @@ namespace BvhNodeIndex{
 // Initial scene/instance BVH instance capacity; grows by doubling like the hardware TLAS.
 inline constexpr usize s_SceneBvhInitialInstanceCapacity = 64u;
 
+// Binned-SAH scene-BVH build tuning. BuildSceneBvhNode evaluates a fixed-grid SAH over all three centroid axes at
+// every split and takes the lowest-cost bin boundary, replacing the old largest-axis spatial-median split. Each
+// instance carries a leaf cost (its primitive count in production) so a large instance biases the tree like a large
+// primitive would; when none is supplied every instance counts uniformly (the self-test path). Leaves remain
+// single-instance (the NwbBvhNode leaf ABI encodes one instance), so SAH here only chooses split axis + position;
+// s_SceneBvhSahBinCount is the per-axis bin grid size, s_SceneBvhSahTraversalCost the classic ct of the
+// cost = ct + (SA_L*cost_L + SA_R*cost_R)/SA_parent model (the per-instance intersection cost ci is folded into the
+// leaf-cost weight itself, so a uniform-weight build is implicitly ci = 1).
+inline constexpr u32 s_SceneBvhSahBinCount = 12u;
+inline constexpr f32 s_SceneBvhSahTraversalCost = 1.0f;
+
 // CPU mirror of the per-instance record the software shadow traversal (U5) consumes. Holds the affine
 // world->object transform (so a world-space ray can be pushed into each instance's object space) plus the
 // per-mesh BVH / geometry references resolved when traversal is wired. 64 bytes / std430-friendly.
@@ -485,6 +496,7 @@ namespace __hidden_raytracing_system{
 
 
 [[nodiscard]] f32 SceneBvhAxisComponent(const SIMDVector value, const u32 axis)noexcept;
+[[nodiscard]] f32 SceneBvhAabbSurfaceArea(const SIMDVector aabbMin, const SIMDVector aabbMax)noexcept;
 void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noexcept;
 u32 BuildSceneBvhNode(
     u32* indices,
@@ -493,7 +505,8 @@ u32 BuildSceneBvhNode(
     const Float4* instanceAabbMin,
     const Float4* instanceAabbMax,
     const Float4* instanceCentroid,
-    Vector<SceneBvhNodeBuildData, Core::Alloc::ScratchArena>& nodes
+    Vector<SceneBvhNodeBuildData, Core::Alloc::ScratchArena>& nodes,
+    const u32* instanceLeafCost = nullptr
 );
 [[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(
     const MaterialSurfaceInfo& materialInfo,

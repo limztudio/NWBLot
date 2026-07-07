@@ -176,6 +176,7 @@ private:
     bool flushMetadataLocked();
     bool canFitMetadataForFileCountLocked(u64 fileCount)const;
     bool readFileRecordLocked(const Name& virtualPath, FileRecord& outRecord)const;
+    bool computePhysicalCapacityLocked(u64& outCapacityBytes)const;
 
     bool readBytesLocked(u64 offset, void* data, u64 byteCount)const;
     bool writeBytesLocked(u64 offset, const void* data, u64 byteCount);

@@ -13,6 +13,11 @@
 #include <global/filesystem/volume_naming.h>
 
 #include <cerrno>
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -224,6 +229,53 @@ static bool ToStreamSize(const u64 value, GlobalFilesystemDetail::StreamSize& ou
     return true;
 }
 
+static bool ResizeFile(const Path& path, const u64 byteCount, ErrorCode& outError){
+#if defined(NWB_PLATFORM_WINDOWS)
+    if(byteCount > static_cast<u64>(Limit<LONGLONG>::s_Max)){
+        outError = std::make_error_code(std::errc::value_too_large);
+        return false;
+    }
+
+    HANDLE file = CreateFile(
+        path.c_str(),
+        GENERIC_WRITE,
+        FILE_SHARE_READ,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr
+    );
+    if(file == INVALID_HANDLE_VALUE){
+        GlobalFilesystemDetail::SetLastSystemError(outError);
+        return false;
+    }
+
+    LARGE_INTEGER offset{};
+    offset.QuadPart = static_cast<LONGLONG>(byteCount);
+    const bool seekSucceeded = SetFilePointerEx(file, offset, nullptr, FILE_BEGIN) != 0;
+    const bool resizeSucceeded = seekSucceeded && SetEndOfFile(file) != 0;
+    if(resizeSucceeded)
+        GlobalFilesystemDetail::ClearError(outError);
+    else
+        GlobalFilesystemDetail::SetLastSystemError(outError);
+    CloseHandle(file);
+    return resizeSucceeded;
+#else
+    if(!CanRepresentU64<off_t>(byteCount)){
+        outError = std::make_error_code(std::errc::value_too_large);
+        return false;
+    }
+
+    if(::truncate(path.c_str(), static_cast<off_t>(byteCount)) == 0){
+        GlobalFilesystemDetail::ClearError(outError);
+        return true;
+    }
+
+    GlobalFilesystemDetail::SetLastSystemError(outError);
+    return false;
+#endif
+}
+
 static bool LessName(const Name& lhs, const Name& rhs){
     return ::LessNameHash(lhs.hash(), rhs.hash());
 }
@@ -270,6 +322,35 @@ static void LogFailureWithFsError(AStringView volumeName, AStringView operation,
         , errorCode.value()
         , StringConvert(errorCode.message())
     );
+}
+
+static bool ReadVolumeHeaderFromSegment(
+    const AStringView volumeName,
+    const Path& segmentPath,
+    VolumeHeaderDisk& outHeader
+){
+    outHeader = {};
+
+    GlobalFilesystemDetail::InputFileStream stream(
+        segmentPath,
+        GlobalFilesystemDetail::InputFileStream::binary
+    );
+    if(!stream.is_open()){
+        LogFailureWithPath(volumeName, "mount:open_header", segmentPath, LastErrnoMessage());
+        return false;
+    }
+
+    stream.read(
+        reinterpret_cast<char*>(&outHeader),
+        static_cast<GlobalFilesystemDetail::StreamSize>(sizeof(outHeader))
+    );
+    if(stream.good())
+        return true;
+    if(stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(sizeof(outHeader)))
+        return true;
+
+    LogFailureWithPath(volumeName, "mount:read_header", segmentPath, LastErrnoMessage());
+    return false;
 }
 
 template<typename SegmentPaths, typename ChunkFunc>
@@ -984,33 +1065,66 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
     }
     else{
-        const u64 discoveredSegmentSize = FileSize(m_segmentPaths[0], errorCode);
-        if(errorCode || discoveredSegmentSize == 0){
-            if(errorCode)
-                __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:file_size", m_segmentPaths[0], errorCode);
-            else
-                __hidden_filesystem::LogFailureWithPath(m_volumeName, "mount:file_size", m_segmentPaths[0], "segment size is zero");
+        __hidden_filesystem::VolumeHeaderDisk discoveredHeader{};
+        if(!__hidden_filesystem::ReadVolumeHeaderFromSegment(m_volumeName, m_segmentPaths[0], discoveredHeader)){
             unmountLocked();
             return false;
         }
-        m_segmentSize = discoveredSegmentSize;
+        if(NWB_MEMCMP(discoveredHeader.magic, __hidden_filesystem::s_VolumeMagic, sizeof(discoveredHeader.magic)) != 0){
+            __hidden_filesystem::LogFailure(m_volumeName, "mount", "magic mismatch");
+            unmountLocked();
+            return false;
+        }
+        if(discoveredHeader.segmentSize == 0){
+            __hidden_filesystem::LogFailure(m_volumeName, "mount", "segment size is zero");
+            unmountLocked();
+            return false;
+        }
+        m_segmentSize = discoveredHeader.segmentSize;
 
-        for(const Path& segmentPath : m_segmentPaths){
+        for(usize segmentIndex = 0; segmentIndex < m_segmentPaths.size(); ++segmentIndex){
+            const Path& segmentPath = m_segmentPaths[segmentIndex];
             const u64 segmentFileSize = FileSize(segmentPath, errorCode);
-            if(errorCode || segmentFileSize != m_segmentSize){
+            if(errorCode || segmentFileSize == 0){
                 if(errorCode)
                     __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:file_size", segmentPath, errorCode);
-                else{
-                    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}")
-                        , StringConvert(m_volumeName)
-                        , StringConvert(segmentPath.string())
-                        , segmentFileSize
-                        , m_segmentSize
-                    );
-                }
+                else
+                    __hidden_filesystem::LogFailureWithPath(m_volumeName, "mount:file_size", segmentPath, "segment size is zero");
                 unmountLocked();
                 return false;
             }
+
+            const bool isLastSegment = segmentIndex + 1u == m_segmentPaths.size();
+            if(!isLastSegment && segmentFileSize != m_segmentSize){
+                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}")
+                    , StringConvert(m_volumeName)
+                    , StringConvert(segmentPath.string())
+                    , segmentFileSize
+                    , m_segmentSize
+                );
+                unmountLocked();
+                return false;
+            }
+            if(isLastSegment && segmentFileSize > m_segmentSize){
+                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: final segment '{}' has size {}, exceeding logical segment size {}")
+                    , StringConvert(m_volumeName)
+                    , StringConvert(segmentPath.string())
+                    , segmentFileSize
+                    , m_segmentSize
+                );
+                unmountLocked();
+                return false;
+            }
+        }
+
+        const u64 firstSegmentFileSize = FileSize(m_segmentPaths[0], errorCode);
+        if(errorCode || firstSegmentFileSize < sizeof(__hidden_filesystem::VolumeHeaderDisk)){
+            if(errorCode)
+                __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:file_size", m_segmentPaths[0], errorCode);
+            else
+                __hidden_filesystem::LogFailureWithPath(m_volumeName, "mount:file_size", m_segmentPaths[0], "segment is smaller than the volume header");
+            unmountLocked();
+            return false;
         }
 
         if(desc.segmentSize != 0 && desc.segmentSize != m_segmentSize){
@@ -1604,6 +1718,13 @@ bool VolumeFileSystem::loadMetadataLocked(){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "next free offset exceeds volume capacity");
         return false;
     }
+    u64 physicalCapacityBytes = 0;
+    if(!computePhysicalCapacityLocked(physicalCapacityBytes))
+        return false;
+    if(header.nextFreeOffset > physicalCapacityBytes){
+        __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "next free offset exceeds physical volume bytes");
+        return false;
+    }
     if(header.indexBytes > static_cast<u64>(Limit<usize>::s_Max)){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "index byte count exceeds runtime addressable range");
         return false;
@@ -1786,6 +1907,39 @@ bool VolumeFileSystem::canFitMetadataForFileCountLocked(const u64 fileCount)cons
     return metadataBytes <= m_metadataBytes;
 }
 
+bool VolumeFileSystem::computePhysicalCapacityLocked(u64& outCapacityBytes)const{
+    outCapacityBytes = 0;
+
+    if(m_segmentPaths.empty() || m_segmentSize == 0){
+        __hidden_filesystem::LogFailure(m_volumeName, "physicalCapacity", "no mounted segments or segment size is zero");
+        return false;
+    }
+
+    const usize fullSegmentCount = m_segmentPaths.size() - 1u;
+    if(static_cast<u64>(fullSegmentCount) > Limit<u64>::s_Max / m_segmentSize){
+        __hidden_filesystem::LogFailure(m_volumeName, "physicalCapacity", "segment capacity overflow");
+        return false;
+    }
+
+    ErrorCode errorCode;
+    const u64 lastSegmentBytes = FileSize(m_segmentPaths.back(), errorCode);
+    if(errorCode){
+        __hidden_filesystem::LogFailureWithFsError(m_volumeName, "physicalCapacity:file_size", m_segmentPaths.back(), errorCode);
+        return false;
+    }
+    if(lastSegmentBytes == 0 || lastSegmentBytes > m_segmentSize){
+        __hidden_filesystem::LogFailure(m_volumeName, "physicalCapacity", "final segment size is outside logical bounds");
+        return false;
+    }
+
+    const u64 fullSegmentBytes = static_cast<u64>(fullSegmentCount) * m_segmentSize;
+    if(__hidden_filesystem::AddNoOverflow(fullSegmentBytes, lastSegmentBytes, outCapacityBytes))
+        return true;
+
+    __hidden_filesystem::LogFailure(m_volumeName, "physicalCapacity", "capacity overflow while adding final segment");
+    return false;
+}
+
 bool VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 byteCount)const{
     if(byteCount == 0)
         return true;
@@ -1965,6 +2119,24 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
         m_segmentPaths.pop_back();
     }
 
+    u64 requiredLastSegmentBytes = requiredBytes % m_segmentSize;
+    if(requiredLastSegmentBytes == 0)
+        requiredLastSegmentBytes = m_segmentSize;
+
+    const Path& lastSegmentPath = m_segmentPaths.back();
+    const u64 currentLastSegmentBytes = FileSize(lastSegmentPath, errorCode);
+    if(errorCode){
+        __hidden_filesystem::LogFailureWithFsError(m_volumeName, "trimSegments:file_size", lastSegmentPath, errorCode);
+        return false;
+    }
+    if(currentLastSegmentBytes == requiredLastSegmentBytes)
+        return true;
+
+    if(!__hidden_filesystem::ResizeFile(lastSegmentPath, requiredLastSegmentBytes, errorCode)){
+        __hidden_filesystem::LogFailureWithFsError(m_volumeName, "trimSegments:resize", lastSegmentPath, errorCode);
+        return false;
+    }
+
     return true;
 }
 
@@ -2119,10 +2291,10 @@ bool VolumeSession::flush(){
         return false;
     }
 
-    if(m_volumeFileSystem.flushMetadata())
+    if(m_volumeFileSystem.compact(true))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::flush failed to write metadata"));
+    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::flush failed to finalize volume"));
     return false;
 }
 

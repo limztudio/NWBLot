@@ -16,6 +16,10 @@
 
 #define NWB_SW_SHADOW_AABB_PADDING 1e-4
 #define NWB_SW_SHADOW_BARYCENTRIC_EPSILON 1e-5
+// Sentinel returned by nwbSwShadowRayAabbEntryT for a box the ray misses: a finite value that sorts AFTER any real
+// entry distance (so a missed box is never picked as the near child in front-to-back traversal) but is safe to
+// compare with plain <= (no inf/NaN hazards).
+#define NWB_SW_SHADOW_AABB_MISS 1.0e30
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,6 +35,21 @@ bool nwbSwShadowRayAabb(const float3 origin, const float3 invDir, const float tM
     const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
     const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
     return tNear <= tFar;
+}
+
+// Entry distance of the ray into the box (the slab tNear, clamped into [tMin,tMax]); NWB_SW_SHADOW_AABB_MISS on miss.
+// The ORDERING twin of nwbSwShadowRayAabb above: the accept/reject decision is ALWAYS made by that bool test, so a box
+// rejected here as the miss sentinel is exactly the box nwbSwShadowRayAabb would reject. Sharing the exact slab math
+// (same padding, same min/max) keeps the miss set identical; this only RANKS two sibling boxes so the nearer one is
+// visited first -- it can never cull a real hit.
+float nwbSwShadowRayAabbEntryT(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
+    const float3 t0 = (boxMin - NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
+    const float3 t1 = (boxMax + NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
+    const float3 tSmall = min(t0, t1);
+    const float3 tLarge = max(t0, t1);
+    const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
+    const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
+    return (tNear <= tFar) ? tNear : NWB_SW_SHADOW_AABB_MISS;
 }
 
 // Reciprocal of the ray direction with each component nudged off exactly zero, so an axis-aligned ray gets

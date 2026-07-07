@@ -82,9 +82,44 @@ at only 0.5 ms (7× cheaper). The same hotspot holds in opt. Every "reduce SPP /
 lever is already pulled (each carries a measured quality tradeoff in its comment), so further wins must
 come from the traversal algorithm itself, not from spending fewer samples.
 
-## 4. Open: the optimization (pending direction)
+## 4. Optimization 1 — SW BVH traversal: front-to-back descent + coalesced index fetch (DONE)
 
-Reducing the shadow GPU time *without sacrificing quality* is a deep, shader-level change with several
-valid directions (e.g. early-exit/occupancy pruning in the SW BVH walk, better ray ordering, moving more
-of the transparent trace onto HW RayQuery where the silhouette-disagreement risk is acceptable). Awaiting
-confirmation on which direction to pursue before the larger, harder-to-reverse shader edits.
+The shadow SW BVH walk (`sw_shadow_traverse.slangi::nwbSwShadowInstanceOccluded` per-mesh loop +
+`nwbSwShadowOccluded` scene loop) was an **arbitrary-order DFS**: both children were pushed to the stack with no
+regard for which is nearer the ray, so the first opaque hit and the near-zero-transmittance early-out fired only
+after a full ray-agnostic deep dive. Two quality-neutral changes landed:
+
+1. **Front-to-back descent.** Each internal node now reads both children, ranks them by ray-entry distance
+   (`nwbSwShadowRayAabbEntryT`, a fetch-neutral ordering twin of the existing bool slab test — same math, same miss
+   set, only ranks sibling boxes), descends the NEAR child inline, and defers ONLY the FAR child to the stack. The
+   near subtree is always processed first, so the opaque `return` and the transmittance-ε floor fire at the earliest
+   possible node, skipping farther subtrees. The stack holds only deferred far nodes (one per internal node, half
+   the old two), so the exhaustion guard dropped `+2 → +1` and the same stack depth covers a 2× deeper tree.
+2. **Coalesced triangle index fetch.** The per-leaf triangle fetch was three separate `ByteAddressBuffer.Load()`
+   over three contiguous u32; replaced with one `Load3()` (a single 12-byte transaction). Same bytes, 1/3 the index
+   fetch traffic. Helps both the opaque and the transparent trace.
+
+**Order-independence proof (so this is pure perf, never a quality change):** the integrator
+(`shadow_integrate.slangi::nwbShadowIntegrateCrossing` + `nwbShadowFinalizeVisibility`) bins crossings PER OCCLUDER
+and the finalize SORTS each bin's hit distances before pairing them into chords, so the result depends only on the
+SET of crossings found in `[tMin,tMax]` — never their visit order. Reordering the walk only changes WHICH nodes are
+visited: an opaque hit stops the walk the instant that triangle is tested (as before), and a transparent trace
+must still collect every crossing, so near-first only interleaves them earlier. The far child's deferral is bounded
+by the same slab test, so the miss set is identical. **tMax is NOT narrowed** (a transparent crossing cannot bound
+later occluders, so narrowing it would drop real crossings and change the result). The non-shadow control passes
+are bit-identical before/after (timing-confirmed below), which a corrupting change could not be.
+
+### Measured (opt, steady state, frozen stress scene)
+
+| pass | before (DFS) | after (front-to-back + Load3) | Δ |
+|---|---|---|---|
+| **render.shadow_visibility** | **5.16 ms** | **4.61 ms** | **−0.55 ms (−10.7%)** |
+| **render.frame** | **10.32 ms** | **9.75 ms** | **−0.57 ms (−5.5%)** |
+| render.opaque_regular (control) | 0.81 | 0.81 | 0.00 |
+| render.caustic_resolve (control) | 0.99 | 0.99 | 0.00 |
+| render.mesh_dispatch | 1.72 | 1.68 | −0.04 |
+
+Shadow share of the frame dropped 50% → 47%. The win is concentrated in `render.shadow_visibility` (the only pass
+the traversal runs in), and the control passes are flat — confirming it is the algorithm change, not noise. The
+shadow path is still the frame's single largest cost, so further gains (e.g. quantized-AABB node compression, or a
+refit→rebuild scene-BVH quality pass) remain open as future items.

@@ -158,18 +158,26 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
 
     GroupMemoryBarrierWithGroupSync();
 
-    // Thread 0 reduces the 64 per-ray SH projections -> this frame's directional-irradiance SH estimate -> running-mean
-    // into the surfel's SH.
-    if(rayIndex == 0u && active){
-        float4 sumR = float4(0.0, 0.0, 0.0, 0.0);
-        float4 sumG = float4(0.0, 0.0, 0.0, 0.0);
-        float4 sumB = float4(0.0, 0.0, 0.0, 0.0);
-        [unroll]
-        for(uint i = 0u; i < NWB_SURFEL_RAYS_PER_SURFEL; ++i){
-            sumR += s_surfelShR[i];
-            sumG += s_surfelShG[i];
-            sumB += s_surfelShB[i];
+    // Logarithmic tree reduction of the 64 per-ray SH projections in groupshared: all 64 threads participate
+    // (six stride-halving rounds) instead of thread 0 serially walking all 64 slots, so the sequential add
+    // depth drops from 64 to 6. The whole workgroup owns ONE surfel, so `active` is group-uniform -- every
+    // thread hits every barrier, inactive rays were zeroed above and contribute nothing, and only thread 0's
+    // final running-mean store is guarded by `active`.
+    [unroll]
+    for(uint stride = NWB_SURFEL_RAYS_PER_SURFEL >> 1; stride > 0u; stride >>= 1){
+        if(rayIndex < stride){
+            s_surfelShR[rayIndex] += s_surfelShR[rayIndex + stride];
+            s_surfelShG[rayIndex] += s_surfelShG[rayIndex + stride];
+            s_surfelShB[rayIndex] += s_surfelShB[rayIndex + stride];
         }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    // Thread 0 scales the reduced sum -> this frame's directional-irradiance SH estimate -> running mean into the surfel.
+    if(rayIndex == 0u && active){
+        const float4 sumR = s_surfelShR[0];
+        const float4 sumG = s_surfelShG[0];
+        const float4 sumB = s_surfelShB[0];
         const float projectionScale = nwbSurfelShProjectionScale(NWB_SURFEL_RAYS_PER_SURFEL);   // 2*pi / N
         const float4 frameShR = sumR * projectionScale;
         const float4 frameShG = sumG * projectionScale;

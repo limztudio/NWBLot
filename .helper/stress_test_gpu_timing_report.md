@@ -168,3 +168,43 @@ Note: the quantization change itself is sound by inspection — `bvh_common.slan
 unpack (min edge `refMin + q·extent/256`, max edge `refMin + (q+1)·extent/256`, a conservative superbox), and the
 duplicate dequant helpers removed in `826c6915` were dead code. Once the asset-cook blocker is fixed, the
 quantized-vs-DFS shadow-timing comparison (the actual point of this rerun) can be measured.
+
+### 3.1 Follow-up instrumentation (model IS cooked + pushed, failure is volume read-back)
+
+The "Likely culprit" hypothesis above was disproven by instrumenting the cook path (temporarily, since reverted).
+Adding logs to `impl/assets_model/volume_entry.cpp::ParseModelValue`, `impl/assets_model/cook.cpp::BuildModelAsset`,
+and `impl/assets_volume/asset_volume_writer.cpp::AssetVolumeCookedAssetWriter::writeCookedAsset`, then re-cooking
+dbg, shows the model **does** flow end to end:
+
+```
+[DEBUG-COOK] ParseModelValue entered virtualPath='project/characters/body/model'
+[DEBUG-COOK] ParseModelValue virtualPath='project/characters/body/model' result=true
+[DEBUG-COOK] BuildModelAsset entered virtualPath='project/characters/body/model'
+[DEBUG-WRITE] pushed model 'project/characters/body/model' bytes=576
+Asset volume cook complete [dbg] - volume='graphics', files=105
+```
+
+So `ParseModelValue` succeeds, `BuildModelAsset` runs (validatePayload passes), and `writeCookedAsset` calls
+`pushDataDeferred("project/characters/body/model", 576)` which returns true (no push error). The skeleton (43408 B)
+and skin (659912 B) are pushed the same way. The cook reports `files=105` and exits 0. Yet the freshly-cooked
+volume, copied into the runtime `res/` dir, still fails `loadData` for exactly `project/characters/body/model`.
+
+Revised localization: the model data is written through `VolumeFileSystem::writeFileDeferred`
+(`MetadataFlushMode::Deferred`) and the cook calls `flush()` before publish, so the deferred index entry *should*
+survive the staged→publish transition — but the runtime `readFile` → `m_files.find(virtualPath)` returns
+"file was not found" for the model Name while other assets in the same volume resolve. The cooker-process and
+runtime-process compute the same `Name("project/characters/body/model")` hash (deterministic FNV), and no path
+transformation is applied (`ToCookEntryName` is identity for `Name`). This points at the **volume read-back /
+staged-publish layer** (`core/filesystem/module.cpp` `writeFileDeferred` → `flushMetadata` → `PublishStagedVolume`
+→ `VolumeSession::load`), where a deferred-writes index entry for one asset can be dropped or mis-segmented.
+This is the next thing to trace — it is a filesystem-layer regression, not a model/asset-cook or traversal issue.
+
+### Timeline
+
+| time | event |
+|---|---|
+| 09:44 | `12808b1e` front-to-back traversal lands; the 4.61 ms opt baseline above measured OK |
+| ~10:14 | report mtime (section 2 baseline was captured successfully) |
+| 09:xx–now | every stress rerun dumps core on `body/model` load (pre-existing, blocks all configs) |
+| 22:07 | `28b17082` quantized traversal — benchmark blocked by the asset-cook issue above, not by quantization |
+| 22:44 | `826c6915` dead dequant-helper cleanup (provably perf-neutral) |

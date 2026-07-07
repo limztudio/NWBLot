@@ -124,12 +124,11 @@ static bool ReadObjectFileHeader(
     const Path& objectPath,
     Core::Assets::AssetBytes& objectBytes,
     AssetVolumeObjectFileHeader& outHeader,
-    usize& outPayloadOffset,
-    const bool logReadFailure
+    usize& outPayloadOffset
 ){
     ErrorCode errorCode;
     if(!ReadBinaryFile(objectPath, objectBytes, errorCode)){
-        if(logReadFailure && errorCode && !IsMissingPathError(errorCode)){
+        if(errorCode && !IsMissingPathError(errorCode)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to read object cache '{}': {}")
                 , PathToString<tchar>(objectPath)
                 , StringConvert(errorCode.message())
@@ -197,7 +196,7 @@ static bool UpdateObjectFileIfChanged(
 ){
     AssetVolumeObjectFileHeader cachedHeader;
     usize payloadOffset = 0u;
-    if(ReadObjectFileHeader(objectPath, objectBytes, cachedHeader, payloadOffset, true) && HeaderMatches(cachedHeader, header))
+    if(ReadObjectFileHeader(objectPath, objectBytes, cachedHeader, payloadOffset) && HeaderMatches(cachedHeader, header))
         return true;
 
     return WriteObjectFile(objectPath, header, payload, objectBytes);
@@ -367,11 +366,8 @@ bool BuildRegistryObjectManifestEntries(
     const AStringView configurationSafeName,
     ParsedAssetMetadata& parsedMetadata,
     AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& seenVirtualPathHashes,
-    ScratchArena& scratchArena
+    VirtualPathHashSet& seenVirtualPathHashes
 ){
-    static_cast<void>(scratchArena);
-
     const usize bucketCount = parsedMetadata.entryRegistry.bucketCount();
     if(bucketCount == 0u)
         return true;
@@ -422,7 +418,7 @@ bool ReadCookedObjectPayload(
 
     __hidden_cooked_object_cache::AssetVolumeObjectFileHeader header;
     usize payloadOffset = 0u;
-    if(!__hidden_cooked_object_cache::ReadObjectFileHeader(objectPath, objectBytes, header, payloadOffset, true)){
+    if(!__hidden_cooked_object_cache::ReadObjectFileHeader(objectPath, objectBytes, header, payloadOffset)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: invalid object cache '{}' for '{}'")
             , PathToString<tchar>(objectPath)
             , StringConvert(expectedVirtualPath.c_str())

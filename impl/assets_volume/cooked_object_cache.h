@@ -45,8 +45,7 @@ struct CookedObjectPayloadView{
     AStringView configurationSafeName,
     ParsedAssetMetadata& parsedMetadata,
     AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& seenVirtualPathHashes,
-    ScratchArena& scratchArena
+    VirtualPathHashSet& seenVirtualPathHashes
 );
 [[nodiscard]] bool ReadCookedObjectPayload(
     const Path& objectPath,

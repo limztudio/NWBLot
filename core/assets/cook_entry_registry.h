@@ -471,14 +471,6 @@ public:
         return false;
     }
 
-    [[nodiscard]] bool writeAll(CookEntryWriteContext& context){
-        for(BucketPtr& bucket : m_buckets){
-            if(!bucket->writeCookedAssets(context))
-                return false;
-        }
-        return true;
-    }
-
     [[nodiscard]] usize bucketCount()const{
         return m_buckets.size();
     }

@@ -144,8 +144,7 @@ bool AssetVolumeCooker::cookAssetVolume(const Core::Assets::AssetCookOptions& op
         configurationSafeName,
         parsedMetadata,
         manifest,
-        seenVirtualPathHashes,
-        scratchArena
+        seenVirtualPathHashes
     ))
         return false;
 

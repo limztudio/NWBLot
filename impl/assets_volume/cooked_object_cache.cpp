@@ -37,14 +37,13 @@ using ScratchArena = AssetsVolumeCookDetail::ScratchArena;
 using ScratchString = AssetsVolumeCookDetail::ScratchString;
 
 static constexpr u32 s_ObjectFileMagic = 0x4f4a424e; // NBJO
-static constexpr u16 s_ObjectFileVersion = 1u;
+static constexpr u16 s_ObjectFileVersion = 2u;
 
 struct AssetVolumeObjectFileHeader{
     u32 magic = s_ObjectFileMagic;
     u16 version = s_ObjectFileVersion;
     u16 headerSize = sizeof(AssetVolumeObjectFileHeader);
     NameHash assetTypeHash = {};
-    NameHash virtualPathHash = {};
     u64 payloadSize = 0u;
     u64 payloadHash = 0u;
 };
@@ -53,26 +52,38 @@ struct AssetVolumeObjectFileHeader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static void AppendEncodedNameHashText(const NameHash& hash, ScratchString& outText){
+    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane)
+        AppendHexU64(hash.qwords[lane], outText);
+}
+
 static Path BuildObjectFilePath(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    const Name& virtualPath,
+    const AssetVolumeObjectFileHeader& header,
     ScratchArena& scratchArena
 ){
-    ScratchString objectFileName = EncodeNameHash<char>(scratchArena, virtualPath);
+    ScratchString assetTypeDirectory{scratchArena};
+    assetTypeDirectory.reserve(NameDetail::s_EncodedNameHashLength);
+    AppendEncodedNameHashText(header.assetTypeHash, assetTypeDirectory);
+
+    ScratchString objectFileName{scratchArena};
+    objectFileName.reserve(2u + 1u + 16u + 2u + 16u + 7u);
+    objectFileName += "v2_";
+    AppendHexU64(header.payloadHash, objectFileName);
+    objectFileName += "__";
+    AppendHexU64(header.payloadSize, objectFileName);
     objectFileName += ".nwbobj";
 
-    return cacheDirectory / configurationSafeName / "objects" / objectFileName;
+    return cacheDirectory / configurationSafeName / "objects" / assetTypeDirectory / objectFileName;
 }
 
 static AssetVolumeObjectFileHeader BuildObjectFileHeader(
     const Core::Assets::IAssetCodec& codec,
-    const Name& virtualPath,
     const Core::Assets::AssetBytes& payload
 ){
     AssetVolumeObjectFileHeader header;
     header.assetTypeHash = codec.assetType().hash();
-    header.virtualPathHash = virtualPath.hash();
     header.payloadSize = static_cast<u64>(payload.size());
     header.payloadHash = ComputeFnv64Bytes(payload.data(), payload.size());
     return header;
@@ -86,7 +97,6 @@ static bool HeaderMatches(
         && lhs.version == rhs.version
         && lhs.headerSize == rhs.headerSize
         && lhs.assetTypeHash == rhs.assetTypeHash
-        && lhs.virtualPathHash == rhs.virtualPathHash
         && lhs.payloadSize == rhs.payloadSize
         && lhs.payloadHash == rhs.payloadHash
     ;
@@ -208,13 +218,13 @@ public:
             return false;
         }
 
+        const AssetVolumeObjectFileHeader header = BuildObjectFileHeader(codec, m_payloadBinary);
         const Path objectPath = BuildObjectFilePath(
             m_cacheDirectory,
             m_configurationSafeName,
-            virtualPath,
+            header,
             m_scratchArena
         );
-        const AssetVolumeObjectFileHeader header = BuildObjectFileHeader(codec, virtualPath, m_payloadBinary);
         if(!UpdateObjectFileIfChanged(objectPath, header, m_payloadBinary, m_objectBinary))
             return false;
 
@@ -286,11 +296,6 @@ bool ReadCookedObjectPayload(
         );
         return false;
     }
-    if(header.virtualPathHash != expectedVirtualPath.hash()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: object cache virtual path mismatch '{}'"), PathToString<tchar>(objectPath));
-        return false;
-    }
-
     outPayload.data = objectBytes.data() + payloadOffset;
     outPayload.size = static_cast<usize>(header.payloadSize);
     return true;

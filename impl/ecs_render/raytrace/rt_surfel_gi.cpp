@@ -211,7 +211,7 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
     if(!rayTracingState().m_surfelTraceBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // SW scene BVH + instance + light list + per-mesh descriptor arrays (slots 0-10; identical to the SW
+        // SW scene BVH + instance + light list + per-mesh descriptor arrays (slots 0-11; identical to the SW
         // shadow/caustic trace -- the trace body is gi_sw_trace.slangi, reused verbatim).
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(0, 1)); // scene shading
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1)); // light list
@@ -225,7 +225,7 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(9, 1)); // material typed
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(10, 1)); // mesh instances
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_BVH_REF_BOUNDS, 1)); // BVH reference boxes
-        // Surfel bindings (11 = constants CB, 12 = pool UAV, 19/20 = prev-frame snapshot pool/cell-head SRVs the U4
+        // Surfel bindings (12 = constants CB, 13 = pool UAV, 20/21 = prev-frame snapshot pool/cell-head SRVs the U4
         // bounce gather reads). No push constants -- the trace derives the round-robin phase from frameIndex % divisor.
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // surfel pool

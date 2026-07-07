@@ -28,28 +28,28 @@
 
 #define NWB_SURFEL_SET 0
 
-// SW-BVH slots 0-10 the TRACE reuses -- provided by the shared trace include (gi_sw_trace.slangi -> sw_binding_slots.h).
+// SW-BVH slots 0-11 the TRACE reuses -- provided by the shared trace include (gi_sw_trace.slangi -> sw_binding_slots.h).
 // The surfel-specific bindings live at the tail so they never collide with the BVH slots the trace body declares.
-#define NWB_SURFEL_BINDING_CONSTANTS 11   // ConstantBuffer<NwbSurfelConstants>
-#define NWB_SURFEL_BINDING_POOL 12        // RWStructuredBuffer<NwbSurfel> (UAV) / StructuredBuffer (SRV at the gather)
-#define NWB_SURFEL_BINDING_CELL_HEAD 13   // RWStructuredBuffer<uint> (UAV build) / StructuredBuffer (SRV spawn+gather)
-#define NWB_SURFEL_BINDING_COUNTER 14     // RWStructuredBuffer<uint> (bump top + free top)
+#define NWB_SURFEL_BINDING_CONSTANTS 12   // ConstantBuffer<NwbSurfelConstants>
+#define NWB_SURFEL_BINDING_POOL 13        // RWStructuredBuffer<NwbSurfel> (UAV) / StructuredBuffer (SRV at the gather)
+#define NWB_SURFEL_BINDING_CELL_HEAD 14   // RWStructuredBuffer<uint> (UAV build) / StructuredBuffer (SRV spawn+gather)
+#define NWB_SURFEL_BINDING_COUNTER 15     // RWStructuredBuffer<uint> (bump top + free top)
 
 // Spawn-only G-buffer inputs (the same deferred targets the lighting pass reads: world position + normal + depth).
-#define NWB_SURFEL_BINDING_GBUFFER_WORLD_POSITION 15
-#define NWB_SURFEL_BINDING_GBUFFER_NORMAL 16
-#define NWB_SURFEL_BINDING_GBUFFER_DEPTH 17
+#define NWB_SURFEL_BINDING_GBUFFER_WORLD_POSITION 16
+#define NWB_SURFEL_BINDING_GBUFFER_NORMAL 17
+#define NWB_SURFEL_BINDING_GBUFFER_DEPTH 18
 
 // Free-list (U1 recycling): a persistent LIFO stack of recycled surfel ids. The age-free pass PUSHES an id (dead surfel)
 // via InterlockedAdd on counter[FREE_TOP]; the spawn POPS one (before bump-allocating) via a CAS loop. Bound UAV in the
 // age-free + spawn sets. See .helper/surfel_gi_plan.md (U1).
-#define NWB_SURFEL_BINDING_FREE_LIST 18   // RWStructuredBuffer<uint> (UAV) -- capacity poolCapacity, depth = counter[FREE_TOP]
+#define NWB_SURFEL_BINDING_FREE_LIST 19   // RWStructuredBuffer<uint> (UAV) -- capacity poolCapacity, depth = counter[FREE_TOP]
 
 // Snapshot of the PREVIOUS frame's converged field (U4 infinite bounce), bound as SRVs in the TRACE set: the trace's
 // per-ray bounce gather reads these (never the live pool being written this frame), so surfel->surfel feedback reads a
 // stable prev-frame field. Copied at the TOP of renderSurfelGi (pool + cell-head, so the walk is mutually consistent).
-#define NWB_SURFEL_BINDING_SNAPSHOT_POOL 19       // StructuredBuffer<NwbSurfel> (SRV) -- prev-frame pool copy
-#define NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD 20  // StructuredBuffer<uint> (SRV) -- prev-frame cell-head copy
+#define NWB_SURFEL_BINDING_SNAPSHOT_POOL 20       // StructuredBuffer<NwbSurfel> (SRV) -- prev-frame pool copy
+#define NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD 21  // StructuredBuffer<uint> (SRV) -- prev-frame cell-head copy
 
 // RESOLVE pass: a COMPUTE pass that gathers the surfel irradiance ONCE PER PIXEL into a screen-space texture, which
 // the deferred-lighting PIXEL shader then samples. This decouples the pixel consumer from the read-write surfel pool:

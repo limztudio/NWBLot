@@ -473,6 +473,9 @@ static constexpr AStringView s_BlockScopedMaterialMeta = R"NWB_META(material ass
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -496,6 +499,9 @@ static constexpr AStringView s_HalfMaterialMeta = R"NWB_META(material asset;
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -518,6 +524,9 @@ static constexpr AStringView s_MixedHalfMaterialMeta = R"NWB_META(material asset
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -541,6 +550,9 @@ static constexpr AStringView s_CompactIntegerMaterialMeta = R"NWB_META(material 
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -565,6 +577,8 @@ static constexpr AStringView s_TransparentMaterialMeta = R"NWB_META(material ass
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
 asset.transparent = 1;
+asset.two_sided = 0;
+asset.refractive = 0;
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -588,7 +602,9 @@ static constexpr AStringView s_TwoSidedMaterialMeta = R"NWB_META(material asset;
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
 asset.two_sided = 1;
+asset.refractive = 0;
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -613,6 +629,7 @@ static constexpr AStringView s_RefractiveMaterialMeta = R"NWB_META(material asse
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
 asset.transparent = 1;
+asset.two_sided = 0;
 asset.refractive = 1;
 
 asset.shaders = {
@@ -667,6 +684,9 @@ static constexpr AStringView s_UnknownInterfaceParameterMaterialMeta = R"NWB_MET
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -686,6 +706,9 @@ static constexpr AStringView s_FlatInterfaceParameterMaterialMeta = R"NWB_META(m
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -703,6 +726,9 @@ static constexpr AStringView s_UntypedMaterialParameterMeta = R"NWB_META(materia
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -722,6 +748,9 @@ static constexpr AStringView s_VectorAliasMaterialParameterMeta = R"NWB_META(mat
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",

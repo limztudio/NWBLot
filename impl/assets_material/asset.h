@@ -298,7 +298,7 @@ public:
     [[nodiscard]] bool twoSided()const{ return m_twoSided; }
     // The dedicated refractive-caster classification flag (SEPARATE from `transparent`). The material decides only
     // this boolean; the refraction VALUES (refractionIor / shadowAbsorptionTint) are shader-side, returned by the `.surface`
-    // hook via NwbMeshSurface. Default false (not a refractive caster) -- a material declaring none is unchanged.
+    // hook via NwbMeshSurface. Authored metadata must provide the value explicitly.
     [[nodiscard]] bool refractive()const{ return m_refractive; }
 
 

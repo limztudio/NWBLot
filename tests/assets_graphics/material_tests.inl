@@ -1013,10 +1013,9 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
         return;
 
     EXPECT_FALSE(material.transparent());
-    EXPECT_EQ(material.materialInterface(), Name("project/material_interfaces/test_surface"));
-
-    // A material declaring no `refractive` flag keeps the backward-compatible default (not a refractive caster).
+    EXPECT_FALSE(material.twoSided());
     EXPECT_FALSE(material.refractive());
+    EXPECT_EQ(material.materialInterface(), Name("project/material_interfaces/test_surface"));
 
     NWB::Impl::Material transparentMaterial(testArena.arena);
     EXPECT_TRUE(BuildMaterialFromBindAndMeta(
@@ -1040,6 +1039,7 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     ));
     EXPECT_TRUE(twoSidedMaterial.twoSided());
     EXPECT_FALSE(twoSidedMaterial.transparent());
+    EXPECT_FALSE(twoSidedMaterial.refractive());
 
     NWB::Impl::Material refractiveMaterial(testArena.arena);
     EXPECT_TRUE(BuildMaterialFromBindAndMeta(
@@ -1056,6 +1056,35 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
+TEST(AssetsGraphics, MaterialMetadataRejectsMissingRenderProperties){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    static constexpr AStringView s_MissingRefractiveMaterialMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+)NWB_META";
+
+    TestArena testArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
+    NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
+    EXPECT_FALSE(ParseMaterialEntryFromMetaText(s_MissingRefractiveMaterialMeta, testArena, materialEntry, scratchArena));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'refractive' is required and must be 0 or 1")));
+#else
+#endif
+}
+
 TEST(AssetsGraphics, MaterialMetadataRejectsEngineRootedPolicySelectors){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
@@ -1065,6 +1094,9 @@ TEST(AssetsGraphics, MaterialMetadataRejectsEngineRootedPolicySelectors){
 
 asset.interface = "engine/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -1079,6 +1111,9 @@ asset.shader_variant = "default";
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.surface = "engine/shaders/surface.surface";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
 
 )NWB_META";
 
@@ -1086,6 +1121,9 @@ asset.bxdf = "project/shaders/material_bxdf.bxdf";
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "engine/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
 
 asset.shaders = {
     "mesh": "project/shaders/material_mesh",
@@ -1099,6 +1137,9 @@ asset.shader_variant = "default";
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
 
 asset.shaders = {
     "mesh": "engine/graphics/mesh/shared_ms",

@@ -3,6 +3,9 @@ material asset;
 asset.interface = "project/shaders/surface.bind";
 asset.surface = "project/shaders/surface.surface";
 asset.bxdf = "project/shaders/lambert.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
 asset.parameters = {
     "surface": {
         "base_color": "half4(0.78, 0.35, 1.0, 1.0)",

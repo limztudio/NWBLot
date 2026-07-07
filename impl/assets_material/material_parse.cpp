@@ -560,8 +560,13 @@ static bool ParseMaterialBoolProperty(
     outValue = false;
 
     const auto* propertyValue = asset.findField(fieldName);
-    if(!propertyValue)
-        return true;
+    if(!propertyValue){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' is required and must be 0 or 1")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
     if(!propertyValue->isInteger()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' must be 0 or 1")
             , PathToString<tchar>(nwbFilePath)

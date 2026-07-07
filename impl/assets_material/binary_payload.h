@@ -29,10 +29,9 @@ inline constexpr u32 s_MaterialMagic = 0x4D544C35u; // MTL5 (added per-material 
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
 // Material render-property flags packed into the serialized materialFlags word (decoded in Material::loadBinary),
 // mirroring the authored `transparent`/`two_sided`/`refractive` booleans. `Refractive` is the dedicated
-// refractive-caster classification (SEPARATE from `Transparent`); it rides the existing flags word -- no POD
-// layout change, so the MTL4 format stays backward-compatible (older data has bit2 = 0 = not refractive). The
-// refraction VALUES (refractionIor / shadowAbsorptionTint) are shader-side (NwbMeshSurface), not in this payload. `All` is
-// the mask of supported bits; loadBinary rejects any bit outside it.
+// refractive-caster classification (SEPARATE from `Transparent`). The refraction VALUES (refractionIor /
+// shadowAbsorptionTint) are shader-side (NwbMeshSurface), not in this payload. `All` is the mask of supported bits;
+// loadBinary rejects any bit outside it.
 namespace MaterialFlag{
     enum Mask : u32{
         None = 0u,

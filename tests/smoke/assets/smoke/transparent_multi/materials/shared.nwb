@@ -4,6 +4,7 @@ asset.interface = "project/shaders/smoke_surface.bind";
 asset.surface = "project/shaders/smoke_transparent.surface";
 asset.bxdf = "project/shaders/smoke_lambert.bxdf";
 asset.transparent = 1;
+asset.two_sided = 0;
 asset.refractive = 1;
 asset.parameters = {
     "surface": {

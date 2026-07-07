@@ -16,7 +16,6 @@
 #include <core/common/command_line.h>
 #include <logger/client/logger.h>
 #include <core/common/module.h>
-#include <core/common/name_symbols.h>
 #include <core/crash/module.h>
 #include <core/frame/module.h>
 #include <core/assets/registry.h>
@@ -280,11 +279,10 @@ static int RunProjectRuntime(
     NWB::Log::Client* telemetryClient
 ){
     try{
-        // Load any .namesym sidecars sitting next to this executable (the on-demand nwb_namesym target writes them into
-        // the release output root). In opt/fin the scope Names resolve to hashes unless this table is loaded; loading it
-        // here makes per-pass GPU-timing labels and all other Name::c_str() output read as readable source text, matching
-        // the dbg build. Best-effort: missing/empty sidecars just leave hashes, which is never fatal.
-        [[maybe_unused]] const bool loadedNameSymbols = NWB::Core::Common::NameSymbols::LoadDefaultFile(arena);
+        // Name symbols are a server-side concern: this client emits debug-hash tokens, and the log server loads the
+        // .namesym sidecars (NameSymbols::LoadDefaultFile) + ingests uploads (LoadFromMemory) and rewrites those tokens
+        // to readable text centrally (DecodeHashTokens). Do NOT load them here -- Name::c_str() intentionally falls back
+        // to the hash hex in release, which the server resolves.
 
         const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
         if(frameClientSize.width == 0 || frameClientSize.height == 0){

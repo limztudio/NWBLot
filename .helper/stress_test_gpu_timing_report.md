@@ -36,11 +36,17 @@ In opt/fin, `Name::c_str()` returns a hash unless a `.namesym` sidecar is loaded
    its X11 window gracefully (`tests/smoke/x11_graceful_close.py`, sends `WM_DELETE_WINDOW`; SIGTERM
    skips the buildmode sidecar write) — `stress_test_smoke.namesym` (the render/skinned/surfel scopes).
    Copied into the release output roots so the non-buildmode exes load them.
-3. **`loader/main.cpp` now calls `NameSymbols::LoadDefaultFile()` at startup.** Previously only the
-   logserver loaded sidecars; the runtime apps (stress test, testbed, …) never did, so their opt logs
-   stayed hashed. This one-line best-effort load makes every loader-based app resolve its hashes.
+3. **Name symbols are a server-side concern only.** Clients emit debug-hash tokens; the log server is the
+   sole resolver: it loads all `.namesym` sidecars from its exe dir (`NameSymbols::LoadDefaultFile`) and
+   ingests client uploads (`LoadFromMemory`), then rewrites every debug-hash token in received messages to
+   readable text (`DecodeHashTokens`) before logging them. `loader/main.cpp` deliberately does **not** load
+   sidecars — `Name::c_str()` falls back to the hash hex in opt/fin on the client.
 
-Result: opt GPU-timing output is now fully readable (`render.shadow_visibility`, `render.mesh_dispatch`, …).
+   **Caveat for local benchmarking:** `NWB_GPU_TIMING_FILE` is written by the client process via
+   `scopeName.c_str()`, so in opt/fin its per-pass labels are now raw hash tokens (e.g.
+   `0a1b2c3d..._...`) rather than readable names. To read them, decode the file against the log server's
+   symbol table (`NameSymbols::DecodeHashTokens` over each line), or benchmark via the server's log output
+   instead of the local file. In dbg, `c_str()` still returns readable text directly.
 
 ## 1. How opt GPU timing is measured
 

@@ -113,24 +113,17 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     uint stackPointer = 0u;
     uint nodeIndex = 0u; // per-mesh root
 
-    // The per-mesh quantized-tree reference box (OBJECT-space bounds the GPU build quantized this mesh's nodes
-    // against): element [1 + meshIndex] of the out-of-band ref-bounds buffer. Fetched once; every node of this
-    // walk dequantizes against the same refMin/refMax.
-    const NwbBvhRefBoundsQ meshRef = g_NwbSwShadowBvhRefBounds[1u + meshIndex];
-
     while(true){
-        const NwbBvhNodeQ node = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][nodeIndex];
-        float3 nodeMin, nodeMax;
-        nwbBvhQDequantizeAabb(node, meshRef.refMin, meshRef.refMax, nodeMin, nodeMax);
-        if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, nodeMin, nodeMax)){
+        const NwbBvhNode node = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][nodeIndex];
+        if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax)){
             if(stackPointer == 0u)
                 return; // whole mesh exhausted: no further occluder
             nodeIndex = stack[--stackPointer];
             continue;
         }
 
-        if(nwbBvhQNodeIsLeaf(node)){
-            const uint triangle = nwbBvhQLeafPrimitive(node);
+        if(nwbBvhNodeIsLeaf(node)){
+            const uint triangle = nwbBvhLeafPrimitive(node);
             const uint indexBase = triangle * 3u;
             // One Load3 (a single 12-byte / 3-u32 transaction) fetches the whole index triple, instead of three
             // separate Load() calls (three transactions over the same 12 contiguous bytes). Same bytes, 1/3 the
@@ -196,14 +189,10 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
         else{
             const uint left = node.leftChild;
             const uint right = node.rightChild;
-            const NwbBvhNodeQ leftNode = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][left];
-            const NwbBvhNodeQ rightNode = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][right];
-            float3 leftMin, leftMax;
-            nwbBvhQDequantizeAabb(leftNode, meshRef.refMin, meshRef.refMax, leftMin, leftMax);
-            float3 rightMin, rightMax;
-            nwbBvhQDequantizeAabb(rightNode, meshRef.refMin, meshRef.refMax, rightMin, rightMax);
-            const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftMin, leftMax);
-            const float tRight = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightMin, rightMax);
+            const NwbBvhNode leftNode = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][left];
+            const NwbBvhNode rightNode = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][right];
+            const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax);
+            const float tRight = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax);
             const bool leftMiss = (tLeft >= NWB_SW_SHADOW_AABB_MISS);
             const bool rightMiss = (tRight >= NWB_SW_SHADOW_AABB_MISS);
 
@@ -258,12 +247,8 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
     uint nodeIndex = 0u; // root
 
     while(true){
-        // Scene/instance BVH carries exact float boxes (HYBRID: unquantized at this level), so the AABB is read
-        // directly -- no dequant against a global reference box.
         const NwbBvhNode node = g_NwbSwShadowSceneNodes[nodeIndex];
-        const float3 nodeMin = node.aabbMin;
-        const float3 nodeMax = node.aabbMax;
-        if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, nodeMin, nodeMax)){
+        if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax)){
             if(stackPointer == 0u)
                 return; // whole scene exhausted
             nodeIndex = stack[--stackPointer];
@@ -283,12 +268,8 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
             const uint right = node.rightChild;
             const NwbBvhNode leftNode = g_NwbSwShadowSceneNodes[left];
             const NwbBvhNode rightNode = g_NwbSwShadowSceneNodes[right];
-            const float3 leftMin = leftNode.aabbMin;
-            const float3 leftMax = leftNode.aabbMax;
-            const float3 rightMin = rightNode.aabbMin;
-            const float3 rightMax = rightNode.aabbMax;
-            const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftMin, leftMax);
-            const float tRight = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightMin, rightMax);
+            const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax);
+            const float tRight = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax);
             const bool leftMiss = (tLeft >= NWB_SW_SHADOW_AABB_MISS);
             const bool rightMiss = (tRight >= NWB_SW_SHADOW_AABB_MISS);
 

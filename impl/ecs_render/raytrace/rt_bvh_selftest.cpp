@@ -161,7 +161,6 @@ void RendererRayTracingSystem::runBvhBuildSelfTest(){
     // Per-mesh BVH storage lives with the caller (here, the self-test); the build/refit helpers create
     // and reuse these on first use, mirroring MeshResources on the real path.
     Core::BufferHandle testNodeBuffer;
-    Core::BufferHandle testQNodeBuffer;
     Core::BufferHandle testParentBuffer;
     Core::BindingSetHandle testBindingSet;
 
@@ -216,7 +215,7 @@ void RendererRayTracingSystem::runBvhBuildSelfTest(){
     commandList->setBufferState(indexBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList->commitBarriers();
 
-    if(!buildMeshSwBvh(*commandList, positionBuffer.get(), indexBuffer.get(), triangleCount, boundsMinVector, boundsMaxVector, testNodeBuffer, testQNodeBuffer, testParentBuffer, testBindingSet)){
+    if(!buildMeshSwBvh(*commandList, positionBuffer.get(), indexBuffer.get(), triangleCount, boundsMinVector, boundsMaxVector, testNodeBuffer, testParentBuffer, testBindingSet)){
         commandList->close();
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH build self-test build failed"));
         return;
@@ -321,7 +320,7 @@ void RendererRayTracingSystem::runBvhBuildSelfTest(){
     refitCommandList->setBufferState(positionBuffer.get(), Core::ResourceStates::ShaderResource);
     refitCommandList->commitBarriers();
 
-    if(!refitMeshSwBvh(*refitCommandList, positionBuffer.get(), indexBuffer.get(), triangleCount, testNodeBuffer, testQNodeBuffer, testParentBuffer, testBindingSet)){
+    if(!refitMeshSwBvh(*refitCommandList, positionBuffer.get(), indexBuffer.get(), triangleCount, testNodeBuffer, testParentBuffer, testBindingSet)){
         refitCommandList->close();
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: BVH refit self-test refit failed"));
         return;

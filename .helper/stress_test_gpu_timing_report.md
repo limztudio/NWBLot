@@ -366,4 +366,37 @@ ordering / ray coalescing / wider nodes) — but node quantization is exhausted 
 | 22:07 | `28b17082` 8-bit quantized traversal → 30.22 ms regression |
 | 22:44 | `826c6915` dead dequant-helper cleanup |
 | prior | per-node 16-bit quantization → 5.48 ms (within 8 % of float baseline) |
-| now | hybrid (float scene + 16-bit mesh) → **5.90 ms** — no win, NET LOSS vs 16-bit → revert |
+| prior | hybrid (float scene + 16-bit mesh) → **5.90 ms** — no win, NET LOSS vs 16-bit → revert |
+
+### §8 Revert to float nodes (final) — baseline recovered
+
+All SW BVH node quantization reverted: the 32-byte float `NwbBvhNode` is restored for BOTH scene/instance and
+per-mesh traversal. The revert restores the source files touched by the five quant commits (`149408fc` 8-bit type,
+`28b17082` migrate, `826c6915` dequant cleanup, `221e11b4` 16-bit, `015363ae` hybrid) to the state of `f9265dc1`
+(the commit immediately before quantization began). The two non-quantization improvements landed in the same window
+— binned-SAH scene-BVH build (`a1cea7f1`) and refit-to-rebuild budget scaling with mesh size (`f9265dc1`) — are
+OUTSIDE that commit range and are therefore preserved.
+
+Verified clean: no `NwbBvhNodeQ` / `NwbBvhRefBounds*` / `nwbBvhQuantize*` / `nwbBvhQDequant*` references remain in
+source; build + resource cook pass clean (105 files, no slang errors); the SAH/refit improvements are intact.
+
+### Measured (opt, steady state, frozen stress scene) — reverted float vs all quantized variants
+
+Same harness as §2/§6/§7: `cd __cmake/build/linux-clang-x64/Testing/skinning_culling_benchmark_runtime/opt` then
+`NWB_GPU_TIMING_FILE=… timeout --signal=INT 25 …/stress_test_smoke`; two independent runs. Steady-state filter:
+intervals with `avg > 1.0 ms` and `samples ≥ 20`.
+
+| pass | float baseline (§1/§2) | 8-bit (§6) | 16-bit (§6) | hybrid (§7) | **revert float (now)** |
+|---|---|---|---|---|---|
+| **render.shadow_visibility** | 4.61 / 5.08 ms | 30.22 ms | 5.48 ms | 5.90 ms | **4.52 / 4.59 ms (med 4.55)** |
+| **render.frame** | 9.75 / 10.20 ms | 35.44 ms | 10.62 ms | 11.05 ms | **9.71 / 9.76 ms (med 9.74)** |
+
+Reverted-float steady medians (`avg > 1.0`, n=12/6): shadow_visibility p25–p75 = 4.45–4.56 ms (run 1) / 4.53–4.60
+ms (run 2); render.frame p25–p75 = 9.64–9.77 ms (run 1) / 9.65–9.78 ms (run 2).
+
+**Conclusion: the float node is the fastest node format for this workload and the revert recovers the baseline to
+within run-to-run noise.** Node quantization is a confirmed dead end — the SW shadow walk is ALU/branch/visit-latency
+bound, not memory-bandwidth bound, so the 37.5 % node-size reduction never converts to wall-clock time and the
+quantizer's false-positive visits cost more than the bandwidth saves. All quantized infrastructure (`NwbBvhNodeQ`,
+`NwbBvhRefBoundsQ`, the quantize/dequant helpers, the `g_NwbBvhQNodes` mirror, the per-mesh/scene ref-bounds buffer
+and its bindings) has been removed.

@@ -1027,7 +1027,6 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SW_SHADOW_BINDING_SCENE_SHADING, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_LIGHT_LIST, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_NODES, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_BVH_REF_BOUNDS, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_INSTANCES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MESH_NODES, NWB_SW_SHADOW_MAX_MESHES));
@@ -1266,7 +1265,6 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SW_SHADOW_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_NODES, sceneNodeBuffer));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_BVH_REF_BOUNDS, rayTracingState().m_bvhRefBoundsBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
         NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT,
         targets.shadowVisibility.get(),

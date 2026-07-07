@@ -611,7 +611,6 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_SCENE_SHADING, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_LIGHT_LIST, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_NODES, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_BVH_REF_BOUNDS, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_INSTANCES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_NODES, NWB_CAUSTIC_SW_MAX_MESHES));
@@ -711,7 +710,6 @@ bool RendererRayTracingSystem::ensureSwCausticBindingSet(DeferredFrameTargets& t
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_NODES, sceneNodeBuffer));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_BVH_REF_BOUNDS, rayTracingState().m_bvhRefBoundsBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_INSTANCES, instanceBuffer));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL, instanceMaterialBuffer));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MATERIAL_TYPED, materialTypedBuffer));

@@ -111,11 +111,6 @@
 // Maximum distinct meshes the per-mesh descriptor arrays can address in one frame.
 #define NWB_SW_SHADOW_MAX_MESHES 64
 
-// Out-of-band reference boxes the traversal dequantizes the quantized scene + per-mesh nodes against. Element [0]
-// is the SCENE world-space reference; element [1 + meshIndex] is a per-mesh OBJECT-space reference. One
-// StructuredBuffer<NwbBvhRefBoundsQ> shared by both the scene-node and the per-mesh-node walks of this pass.
-#define NWB_SW_SHADOW_BINDING_BVH_REF_BOUNDS 22
-
 // Occluder class the per-mesh traversal filters to. Each pass kernel that traces #defines NWB_SW_SHADOW_OCCLUDER to
 // one of these BEFORE including sw_shadow_traverse.slangi; the filter in nwbSwShadowInstanceOccluded then skips the
 // other class. The class is a compile-time identity baked into each pass, not a runtime push value:

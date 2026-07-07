@@ -28,9 +28,6 @@
 #define NWB_GI_SW_BINDING_MESH_ATTRIBUTES 8
 #define NWB_GI_SW_BINDING_MATERIAL_TYPED 9
 #define NWB_GI_SW_BINDING_MESH_INSTANCES 10
-// Out-of-band reference boxes the traversal dequantizes the quantized scene + per-mesh nodes against (element [0]
-// = scene world ref, [1 + meshIndex] = mesh object ref). Mirrors NWB_SW_SHADOW_BINDING_BVH_REF_BOUNDS.
-#define NWB_GI_SW_BINDING_BVH_REF_BOUNDS 11
 
 // Reuse the SAME per-mesh cap as the SW shadow/caustic (they share the buildSceneSwBvh output). The shadow SW
 // binding slots header defines NWB_SW_SHADOW_MAX_MESHES.

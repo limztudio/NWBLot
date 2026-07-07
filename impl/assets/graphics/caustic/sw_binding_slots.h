@@ -45,9 +45,6 @@
 #define NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS 11
 #define NWB_CAUSTIC_SW_BINDING_VIEW 12
 #define NWB_CAUSTIC_SW_BINDING_GBUFFER_DEPTH 13
-// Out-of-band reference boxes the traversal dequantizes the quantized scene + per-mesh nodes against (element [0]
-// = scene world ref, [1 + meshIndex] = mesh object ref). Mirrors NWB_SW_SHADOW_BINDING_BVH_REF_BOUNDS.
-#define NWB_CAUSTIC_SW_BINDING_BVH_REF_BOUNDS 16
 #define NWB_CAUSTIC_SW_BINDING_ACCUMULATOR 14
 #define NWB_CAUSTIC_SW_BINDING_GBUFFER_WORLD_POSITION 15
 

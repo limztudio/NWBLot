@@ -304,11 +304,6 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     // Per-instance occluder material, built lockstep with `instances` (same push order) so the uploaded table
     // indexes by the scene-BVH leaf instance index the software traversal reads.
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
-    // Per-mesh OBJECT-space reference bounds (element [meshSlot]) the traversal dequantizes that mesh's quantized
-    // triangle nodes against. Captured here during the gather and published to the ref-bounds buffer at elements
-    // [1 + meshSlot] (element [0] is the scene world-space reference) after the scene BVH is quantized.
-    Vector<NwbBvhRefBoundsQGpu, Core::Alloc::ScratchArena> meshRefBounds{ scratchArena };
-    meshRefBounds.resize(NWB_SW_SHADOW_MAX_MESHES);
     // Shadow-OWNED combined material-constants context, built lockstep with `instances` (see buildSceneTlas): the
     // per-occluder InstanceGpuData (g_NwbMeshInstances for the trace) + the combined typed bytes
     // (g_NwbMaterialTypedWords for the trace). The draw pass's buffers hold only one transparency class at trace
@@ -353,14 +348,10 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
 
         // Dedupe to a per-mesh descriptor-array slot: instances sharing a mesh share its node/position/index
         // buffers. Once the per-frame mesh cap is reached, the instance casts no software shadow this frame.
-        // The dedup key is the mesh's 32B float-tree buffer (a stable per-mesh identity shared by all its
-        // instances); the traversal slot binds the mesh's 20B quantized mirror (the reduced-bandwidth form the
-        // fit writes alongside the float tree). Both are 1:1 per mesh, so keying on one and binding the other
-        // stays correct.
         Core::Buffer* meshNodeBuffer = mesh->swBvhNodeBuffer.get();
         u32 meshSlot = NWB_SW_SHADOW_MAX_MESHES;
         for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
-            if(rayTracingState().m_swShadowMeshKeyBuffers[slot] == meshNodeBuffer){
+            if(rayTracingState().m_swShadowMeshNodeBuffers[slot] == meshNodeBuffer){
                 meshSlot = slot;
                 break;
             }
@@ -376,19 +367,12 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
                 continue;
             }
             meshSlot = rayTracingState().m_swShadowMeshCount++;
-            rayTracingState().m_swShadowMeshKeyBuffers[meshSlot] = meshNodeBuffer;
-            rayTracingState().m_swShadowMeshNodeBuffers[meshSlot] = mesh->swBvhQNodeBuffer.get();
+            rayTracingState().m_swShadowMeshNodeBuffers[meshSlot] = meshNodeBuffer;
             rayTracingState().m_swShadowMeshPositionBuffers[meshSlot] = mesh->positionBuffer.get();
             rayTracingState().m_swShadowMeshIndexBuffers[meshSlot] = mesh->triangleIndexBuffer.get();
             // The U2 per-triangle-corner shadow-trace attribute buffer (normal/uv0), parallel to the triangle index
             // buffer so the trace interpolates the exact raster corner attributes.
             rayTracingState().m_swShadowMeshAttributeBuffers[meshSlot] = mesh->attributeBuffer.get();
-            // Cache this mesh's OBJECT-space bounds as its quantized-tree reference (the GPU build quantized that
-            // mesh's triangle nodes against the same csgLocalBounds); published to ref-bounds [1 + meshSlot].
-            const SIMDVector meshLocalMin = LoadFloatInt(mesh->csgLocalBounds.minBounds);
-            const SIMDVector meshLocalMax = LoadFloatInt(mesh->csgLocalBounds.maxBounds);
-            StoreFloat(meshLocalMin, &meshRefBounds[meshSlot].refMin);
-            StoreFloat(meshLocalMax, &meshRefBounds[meshSlot].refMax);
         }
 
         // object->world from the decomposed transform (identity when absent), matching buildSceneTlas.
@@ -503,20 +487,10 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
 
     Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };
     nodes.reserve(buildNodes.size());
-
-    // HYBRID: the scene/instance BVH is uploaded as EXACT float nodes (NwbBvhNodeGpu, 32 B), NOT quantized. The
-    // whole-scene world extent is the worst-conditioned reference a global-root quantizer can pick, and quantizing
-    // it inflates interior boxes until the front-to-back walk loses its culling power and revisits a large fraction
-    // of instances per ray (stress_test_gpu_timing_report.md sec.6: shadow_visibility 4.61 -> 30.22 ms at 8-bit,
-    // only 5.48 ms at 16-bit). The instance count is small (2N-1 nodes for N instances), so the bandwidth cost of
-    // the exact node is negligible here; the per-mesh TRIANGLE tree -- huge node count, tight object-space reference
-    // -- stays 16-bit quantized, where the bandwidth win is real and the precision loss nil.
-    const Float4 sceneRefMin = buildNodes[0].aabbMin;
-    const Float4 sceneRefMax = buildNodes[0].aabbMax;
     for(const SceneBvhNodeBuildData& buildNode : buildNodes){
         NwbBvhNodeGpu node;
-        node.aabbMinLeftChild  = Float3UInt(buildNode.aabbMin.x, buildNode.aabbMin.y, buildNode.aabbMin.z, buildNode.leftChild);
-        node.aabbMaxRightChild = Float3UInt(buildNode.aabbMax.x, buildNode.aabbMax.y, buildNode.aabbMax.z, buildNode.rightChild);
+        StoreFloatInt(LoadFloat(buildNode.aabbMin), buildNode.leftChild, &node.aabbMinLeftChild);
+        StoreFloatInt(LoadFloat(buildNode.aabbMax), buildNode.rightChild, &node.aabbMaxRightChild);
         nodes.push_back(node);
     }
 
@@ -528,29 +502,17 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     Core::Buffer* nodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
     Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
     Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-    Core::Buffer* refBoundsBuffer = rayTracingState().m_bvhRefBoundsBuffer.get();
 
     commandList.setBufferState(nodeBuffer, Core::ResourceStates::CopyDest);
     commandList.setBufferState(instanceBuffer, Core::ResourceStates::CopyDest);
     commandList.setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
-    commandList.setBufferState(refBoundsBuffer, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.writeBuffer(nodeBuffer, nodes.data(), nodes.size() * sizeof(NwbBvhNodeGpu));
     commandList.writeBuffer(instanceBuffer, instances.data(), instances.size() * sizeof(SceneSwBvhInstanceGpu));
     commandList.writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
-    // Element [0] carries the scene world-space AABB (reserved: scene/instance nodes are now exact float, so nothing
-    // dequantizes against it). Kept so the per-mesh references keep their [1 + meshSlot] indexing unchanged.
-    const NwbBvhRefBoundsQGpu sceneRefBounds{sceneRefMin, sceneRefMax};
-    commandList.writeBuffer(refBoundsBuffer, &sceneRefBounds, sizeof(NwbBvhRefBoundsQGpu));
-    // Publish each gathered mesh's OBJECT-space reference at element [1 + meshSlot] so the traversal dequantizes that
-    // mesh's quantized triangle nodes against the bounds the GPU build quantized them with.
-    for(u32 meshSlot = 0u; meshSlot < rayTracingState().m_swShadowMeshCount; ++meshSlot){
-        commandList.writeBuffer(refBoundsBuffer, &meshRefBounds[meshSlot], sizeof(NwbBvhRefBoundsQGpu), static_cast<u64>(1u + meshSlot) * sizeof(NwbBvhRefBoundsQGpu));
-    }
     commandList.setBufferState(nodeBuffer, Core::ResourceStates::ShaderResource);
     commandList.setBufferState(instanceBuffer, Core::ResourceStates::ShaderResource);
     commandList.setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(refBoundsBuffer, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 
     // Upload the shadow-owned combined material-constants context the software traversal's per-hit transmittance
@@ -842,7 +804,6 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_NODES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PARENT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_VISIT_COUNTER, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_QNODES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhBuildPushConstants)));
 
         rayTracingState().m_bvhBuildBindingLayout = device->createBindingLayout(layoutDesc);
@@ -920,8 +881,8 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& qNodeBuffer, Core::BufferHandle& parentBuffer){
-    if(nodeBuffer && qNodeBuffer && parentBuffer)
+bool RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer){
+    if(nodeBuffer && parentBuffer)
         return true;
 
     // A binary LBVH over N primitives has exactly 2N-1 nodes (internal [0,N-1) + leaves [N-1,2N-1)). These
@@ -942,23 +903,6 @@ bool RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::
         return false;
     }
 
-    // The quantized (20B NwbBvhNodeQ) mirror the fit writes alongside the float tree, sized to the same node count.
-    // The traversal binds THIS buffer (the reduced-bandwidth form); the build/refit/self-test keep reading the 32B float tree.
-    Core::BufferDesc qNodeBufferDesc;
-    qNodeBufferDesc
-        .setByteSize(static_cast<u64>(sizeof(NwbBvhNodeQGpu) * nodeCount))
-        .setStructStride(sizeof(NwbBvhNodeQGpu))
-        .setCanHaveUAVs(true)
-        .setDebugName(Name("bvh_mesh_qnodes"))
-        .enableAutomaticStateTracking(Core::ResourceStates::Common)
-    ;
-    qNodeBuffer = graphics().createBuffer(qNodeBufferDesc);
-    if(!qNodeBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create per-mesh BVH quantized node buffer"));
-        nodeBuffer.reset();
-        return false;
-    }
-
     Core::BufferDesc parentBufferDesc;
     parentBufferDesc
         .setByteSize(static_cast<u64>(sizeof(u32) * nodeCount))
@@ -971,7 +915,6 @@ bool RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::
     if(!parentBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create per-mesh BVH parent buffer"));
         nodeBuffer.reset();
-        qNodeBuffer.reset();
         return false;
     }
     return true;
@@ -985,7 +928,6 @@ bool RendererRayTracingSystem::ensureMeshBvhBindingSet(
     Core::Buffer* positionBuffer,
     Core::Buffer* triangleIndexBuffer,
     Core::Buffer* nodeBuffer,
-    Core::Buffer* qNodeBuffer,
     Core::Buffer* parentBuffer,
     Core::BindingSetHandle& bindingSet
 ){
@@ -999,10 +941,9 @@ bool RendererRayTracingSystem::ensureMeshBvhBindingSet(
     NWB_ASSERT(positionBuffer);
     NWB_ASSERT(triangleIndexBuffer);
     NWB_ASSERT(nodeBuffer);
-    NWB_ASSERT(qNodeBuffer);
     NWB_ASSERT(parentBuffer);
 
-    // The set binds this mesh's per-mesh nodes/qnodes/parent + the shared sort keys/payload + the shared visit
+    // The set binds this mesh's per-mesh nodes/parent + the shared sort keys/payload + the shared visit
     // counter + this mesh's raw position/index buffers.
     Core::BindingSetDesc bindingSetDesc(arena());
     bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_BVH_BUILD_BINDING_POSITIONS, positionBuffer));
@@ -1012,7 +953,6 @@ bool RendererRayTracingSystem::ensureMeshBvhBindingSet(
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_NODES, nodeBuffer));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PARENT, parentBuffer));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_VISIT_COUNTER, rayTracingState().m_bvhVisitCounterBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_QNODES, qNodeBuffer));
 
     bindingSet = graphics().getDevice()->createBindingSet(bindingSetDesc, rayTracingState().m_bvhBuildBindingLayout);
     if(!bindingSet){
@@ -1031,7 +971,6 @@ bool RendererRayTracingSystem::ensureMeshSwBvhResources(
     Core::Buffer* triangleIndexBuffer,
     u32 primitiveCount,
     Core::BufferHandle& nodeBuffer,
-    Core::BufferHandle& qNodeBuffer,
     Core::BufferHandle& parentBuffer,
     Core::BindingSetHandle& bindingSet
 ){
@@ -1054,9 +993,9 @@ bool RendererRayTracingSystem::ensureMeshSwBvhResources(
         return false;
     if(!ensureBvhVisitCounterBuffer(s_BvhMaxPrimitivesPerMesh))
         return false;
-    if(!createMeshBvhStorage(primitiveCount, nodeBuffer, qNodeBuffer, parentBuffer))
+    if(!createMeshBvhStorage(primitiveCount, nodeBuffer, parentBuffer))
         return false;
-    return ensureMeshBvhBindingSet(positionBuffer, triangleIndexBuffer, nodeBuffer.get(), qNodeBuffer.get(), parentBuffer.get(), bindingSet);
+    return ensureMeshBvhBindingSet(positionBuffer, triangleIndexBuffer, nodeBuffer.get(), parentBuffer.get(), bindingSet);
 }
 
 
@@ -1071,13 +1010,12 @@ bool RendererRayTracingSystem::buildMeshSwBvh(
     const SIMDVector aabbMin,
     const SIMDVector aabbMax,
     Core::BufferHandle& nodeBuffer,
-    Core::BufferHandle& qNodeBuffer,
     Core::BufferHandle& parentBuffer,
     Core::BindingSetHandle& bindingSet
 ){
     if(primitiveCount == 0u)
         return false;
-    if(!ensureMeshSwBvhResources(positionBuffer, triangleIndexBuffer, primitiveCount, nodeBuffer, qNodeBuffer, parentBuffer, bindingSet))
+    if(!ensureMeshSwBvhResources(positionBuffer, triangleIndexBuffer, primitiveCount, nodeBuffer, parentBuffer, bindingSet))
         return false;
 
     u32 paddedCount = static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE);
@@ -1088,7 +1026,6 @@ bool RendererRayTracingSystem::buildMeshSwBvh(
     Core::Buffer* payloadBuffer = rayTracingState().m_bvhSortPayloadBuffer.get();
     Core::Buffer* visitCounterBuffer = rayTracingState().m_bvhVisitCounterBuffer.get();
     Core::Buffer* meshNodeBuffer = nodeBuffer.get();
-    Core::Buffer* meshQNodeBuffer = qNodeBuffer.get();
     Core::Buffer* meshParentBuffer = parentBuffer.get();
     Core::BindingSet* meshBindingSet = bindingSet.get();
 
@@ -1111,15 +1048,13 @@ bool RendererRayTracingSystem::buildMeshSwBvh(
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
     commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
-    commandList.setEnableUavBarriersForBuffer(meshQNodeBuffer, true);
     commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
     commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
 
-    const auto bvhBuildBarrier = [&commandList, keysBuffer, payloadBuffer, meshNodeBuffer, meshQNodeBuffer, meshParentBuffer, visitCounterBuffer](){
+    const auto bvhBuildBarrier = [&commandList, keysBuffer, payloadBuffer, meshNodeBuffer, meshParentBuffer, visitCounterBuffer](){
         commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(meshQNodeBuffer, Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(meshParentBuffer, Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
@@ -1163,17 +1098,15 @@ bool RendererRayTracingSystem::refitMeshSwBvh(
     Core::Buffer* triangleIndexBuffer,
     u32 primitiveCount,
     Core::BufferHandle& nodeBuffer,
-    Core::BufferHandle& qNodeBuffer,
     Core::BufferHandle& parentBuffer,
     Core::BindingSetHandle& bindingSet
 ){
     if(primitiveCount == 0u)
         return false;
-    if(!ensureMeshSwBvhResources(positionBuffer, triangleIndexBuffer, primitiveCount, nodeBuffer, qNodeBuffer, parentBuffer, bindingSet))
+    if(!ensureMeshSwBvhResources(positionBuffer, triangleIndexBuffer, primitiveCount, nodeBuffer, parentBuffer, bindingSet))
         return false;
 
     Core::Buffer* meshNodeBuffer = nodeBuffer.get();
-    Core::Buffer* meshQNodeBuffer = qNodeBuffer.get();
     Core::Buffer* meshParentBuffer = parentBuffer.get();
     Core::Buffer* visitCounterBuffer = rayTracingState().m_bvhVisitCounterBuffer.get();
 
@@ -1189,11 +1122,9 @@ bool RendererRayTracingSystem::refitMeshSwBvh(
     commandList.clearBufferUInt(visitCounterBuffer, 0u);
 
     commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
-    commandList.setEnableUavBarriersForBuffer(meshQNodeBuffer, true);
     commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
     commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
     commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);
-    commandList.setBufferState(meshQNodeBuffer, Core::ResourceStates::UnorderedAccess);
     commandList.setBufferState(meshParentBuffer, Core::ResourceStates::UnorderedAccess);
     commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
@@ -1206,7 +1137,6 @@ bool RendererRayTracingSystem::refitMeshSwBvh(
     commandList.dispatch(DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)), 1u, 1u);
 
     commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);
-    commandList.setBufferState(meshQNodeBuffer, Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
     return true;
 }
@@ -1248,7 +1178,6 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
             meshResources.triangleIndexBuffer.get(),
             primitiveCount,
             meshResources.swBvhNodeBuffer,
-            meshResources.swBvhQNodeBuffer,
             meshResources.swBvhParentBuffer,
             meshResources.swBvhBindingSet
         );
@@ -1264,7 +1193,6 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
             aabbMin,
             aabbMax,
             meshResources.swBvhNodeBuffer,
-            meshResources.swBvhQNodeBuffer,
             meshResources.swBvhParentBuffer,
             meshResources.swBvhBindingSet
         );
@@ -1300,9 +1228,6 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
         while(capacity < requiredNodes)
             capacity *= 2u;
 
-        // The scene/instance LBVH is CPU-built each frame and uploaded as EXACT float nodes (NwbBvhNodeGpu, 32 B): the
-        // scene world extent is too coarse a quantization reference (see buildSceneBvh / stress report sec.6), so the
-        // traversal reads the raw 32-B node here while the per-mesh triangle tree reads the 20-B quantized mirror.
         Core::BufferDesc nodeBufferDesc;
         nodeBufferDesc
             .setByteSize(static_cast<u64>(sizeof(NwbBvhNodeGpu) * capacity))
@@ -1342,26 +1267,6 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created software scene BVH buffers (capacity {} instances)")
             , static_cast<u64>(capacity)
         );
-    }
-
-    // The out-of-band reference-box buffer: element [0] is the scene world-space reference, elements
-    // [1 + meshIndex] are per-mesh object-space references. One element per mesh + the scene head, sized to the
-    // mesh cap so it never reallocates within a frame (the same bound buffer serves shadow / GI / caustic).
-    const usize requiredRefBounds = 1u + static_cast<usize>(NWB_SW_SHADOW_MAX_MESHES);
-    if(!rayTracingState().m_bvhRefBoundsBuffer || rayTracingState().m_bvhRefBoundsCapacity < requiredRefBounds){
-        Core::BufferDesc refBoundsBufferDesc;
-        refBoundsBufferDesc
-            .setByteSize(static_cast<u64>(sizeof(NwbBvhRefBoundsQGpu) * requiredRefBounds))
-            .setStructStride(sizeof(NwbBvhRefBoundsQGpu))
-            .setDebugName(Name("bvh_ref_bounds"))
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
-        rayTracingState().m_bvhRefBoundsBuffer = graphics().createBuffer(refBoundsBufferDesc);
-        if(!rayTracingState().m_bvhRefBoundsBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH reference-bounds buffer"));
-            return false;
-        }
-        rayTracingState().m_bvhRefBoundsCapacity = requiredRefBounds;
     }
     return true;
 }

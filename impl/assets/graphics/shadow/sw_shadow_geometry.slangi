@@ -27,10 +27,13 @@
 
 
 [[vk::binding(NWB_SW_SHADOW_BINDING_SCENE_NODES, NWB_SW_SHADOW_SET)]]
-StructuredBuffer<NwbBvhNodeQ, Std430DataLayout> g_NwbSwShadowSceneNodes;
+// HYBRID: the scene/instance BVH stores EXACT float nodes (32 B) -- the scene world extent is too coarse a
+// quantization reference (see stress_test_gpu_timing_report.md sec.6), so it is left unquantized; the per-mesh
+// TRIANGLE BVH stays 16-bit quantized (20 B), where the bandwidth win is real and the precision loss nil.
+StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbSwShadowSceneNodes;
 
-// Out-of-band reference boxes the traversal dequantizes the quantized scene + per-mesh nodes against: element [0]
-// = the scene world-space reference, element [1 + meshIndex] = that mesh's object-space reference.
+// Out-of-band reference boxes the traversal dequantizes the quantized PER-MESH nodes against: element [0] is
+// reserved (scene nodes are exact float), element [1 + meshIndex] = that mesh's object-space reference.
 [[vk::binding(NWB_SW_SHADOW_BINDING_BVH_REF_BOUNDS, NWB_SW_SHADOW_SET)]]
 StructuredBuffer<NwbBvhRefBoundsQ, Std430DataLayout> g_NwbSwShadowBvhRefBounds;
 

@@ -40,7 +40,8 @@
 // --- BVH bindings (slots 0-10; identical to the SW shadow/caustic trace) ---
 
 [[vk::binding(NWB_GI_SW_BINDING_SCENE_NODES, NWB_GI_SW_SET)]]
-StructuredBuffer<NwbBvhNodeQ, Std430DataLayout> g_NwbGiSwSceneNodes;
+// HYBRID: scene/instance BVH = exact float nodes (32 B); per-mesh triangle BVH = 16-bit quantized (20 B).
+StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbGiSwSceneNodes;
 
 struct NwbGiSwInstance{
     float4 worldToObjectRow0;
@@ -61,8 +62,8 @@ StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbGiSwInstanceMater
 [[vk::binding(NWB_GI_SW_BINDING_MESH_NODES, NWB_GI_SW_SET)]]
 StructuredBuffer<NwbBvhNodeQ, Std430DataLayout> g_NwbGiSwMeshNodes[NWB_GI_SW_MAX_MESHES];
 
-// Out-of-band reference boxes the traversal dequantizes the quantized scene + per-mesh nodes against (element [0]
-// = scene world ref, [1 + meshIndex] = mesh object ref).
+// Out-of-band reference boxes the traversal dequantizes the quantized PER-MESH nodes against (element [0] is
+// reserved -- scene nodes are exact float; [1 + meshIndex] = mesh object ref).
 [[vk::binding(NWB_GI_SW_BINDING_BVH_REF_BOUNDS, NWB_GI_SW_SET)]]
 StructuredBuffer<NwbBvhRefBoundsQ, Std430DataLayout> g_NwbGiSwBvhRefBounds;
 
@@ -272,24 +273,24 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 
     uint stack[NWB_GI_SW_SCENE_STACK_SIZE];
     uint stackPointer = 0u;
-    const NwbBvhRefBoundsQ sceneRef = g_NwbGiSwBvhRefBounds[0u];
-    NwbBvhNodeQ node = g_NwbGiSwSceneNodes[0u];
-    float3 nodeMin, nodeMax;
-    nwbBvhQDequantizeAabb(node, sceneRef.refMin, sceneRef.refMax, nodeMin, nodeMax);
+    // HYBRID: scene/instance BVH carries exact float boxes, so the AABB is read directly (no dequant).
+    NwbBvhNode node = g_NwbGiSwSceneNodes[0u];
+    float3 nodeMin = node.aabbMin;
+    float3 nodeMax = node.aabbMax;
     bool active = nwbGiSwRayAabb(origin, invDir, tMin, closest.t, nodeMin, nodeMax);
 
     [loop] while(active){
-        if(nwbBvhQNodeIsLeaf(node)){
-            nwbGiSwInstanceClosest(nwbBvhQLeafPrimitive(node), origin, direction, tMin, closest);
+        if(nwbBvhNodeIsLeaf(node)){
+            nwbGiSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
             active = false;
         }
         else{
-            const NwbBvhNodeQ leftNode = g_NwbGiSwSceneNodes[node.leftChild];
-            const NwbBvhNodeQ rightNode = g_NwbGiSwSceneNodes[node.rightChild];
-            float3 leftMin, leftMax;
-            nwbBvhQDequantizeAabb(leftNode, sceneRef.refMin, sceneRef.refMax, leftMin, leftMax);
-            float3 rightMin, rightMax;
-            nwbBvhQDequantizeAabb(rightNode, sceneRef.refMin, sceneRef.refMax, rightMin, rightMax);
+            const NwbBvhNode leftNode = g_NwbGiSwSceneNodes[node.leftChild];
+            const NwbBvhNode rightNode = g_NwbGiSwSceneNodes[node.rightChild];
+            const float3 leftMin = leftNode.aabbMin;
+            const float3 leftMax = leftNode.aabbMax;
+            const float3 rightMin = rightNode.aabbMin;
+            const float3 rightMax = rightNode.aabbMax;
             float tLeft;
             const bool hitLeft = nwbGiSwRayAabbT(origin, invDir, tMin, closest.t, leftMin, leftMax, tLeft);
             float tRight;
@@ -312,7 +313,8 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 
         [loop] while(stackPointer > 0u){
             node = g_NwbGiSwSceneNodes[stack[--stackPointer]];
-            nwbBvhQDequantizeAabb(node, sceneRef.refMin, sceneRef.refMax, nodeMin, nodeMax);
+            nodeMin = node.aabbMin;
+            nodeMax = node.aabbMax;
             if(nwbGiSwRayAabb(origin, invDir, tMin, closest.t, nodeMin, nodeMax)){
                 active = true;
                 break;

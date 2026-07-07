@@ -257,14 +257,12 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
     uint stackPointer = 0u;
     uint nodeIndex = 0u; // root
 
-    // The scene quantized-tree reference box (the scene world AABB): element [0] of the out-of-band ref-bounds
-    // buffer. Every scene node dequantizes against the same refMin/refMax.
-    const NwbBvhRefBoundsQ sceneRef = g_NwbSwShadowBvhRefBounds[0u];
-
     while(true){
-        const NwbBvhNodeQ node = g_NwbSwShadowSceneNodes[nodeIndex];
-        float3 nodeMin, nodeMax;
-        nwbBvhQDequantizeAabb(node, sceneRef.refMin, sceneRef.refMax, nodeMin, nodeMax);
+        // Scene/instance BVH carries exact float boxes (HYBRID: unquantized at this level), so the AABB is read
+        // directly -- no dequant against a global reference box.
+        const NwbBvhNode node = g_NwbSwShadowSceneNodes[nodeIndex];
+        const float3 nodeMin = node.aabbMin;
+        const float3 nodeMax = node.aabbMax;
         if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, nodeMin, nodeMax)){
             if(stackPointer == 0u)
                 return; // whole scene exhausted
@@ -272,8 +270,8 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
             continue;
         }
 
-        if(nwbBvhQNodeIsLeaf(node)){
-            nwbSwShadowInstanceOccluded(nwbBvhQLeafPrimitive(node), origin, direction, tMin, tMax, acc);
+        if(nwbBvhNodeIsLeaf(node)){
+            nwbSwShadowInstanceOccluded(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax, acc);
             if(max(max(acc.transmittance.x, acc.transmittance.y), acc.transmittance.z) < NWB_SW_SHADOW_TRANSMITTANCE_EPSILON)
                 return;
             if(stackPointer == 0u)
@@ -283,12 +281,12 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
         else{
             const uint left = node.leftChild;
             const uint right = node.rightChild;
-            const NwbBvhNodeQ leftNode = g_NwbSwShadowSceneNodes[left];
-            const NwbBvhNodeQ rightNode = g_NwbSwShadowSceneNodes[right];
-            float3 leftMin, leftMax;
-            nwbBvhQDequantizeAabb(leftNode, sceneRef.refMin, sceneRef.refMax, leftMin, leftMax);
-            float3 rightMin, rightMax;
-            nwbBvhQDequantizeAabb(rightNode, sceneRef.refMin, sceneRef.refMax, rightMin, rightMax);
+            const NwbBvhNode leftNode = g_NwbSwShadowSceneNodes[left];
+            const NwbBvhNode rightNode = g_NwbSwShadowSceneNodes[right];
+            const float3 leftMin = leftNode.aabbMin;
+            const float3 leftMax = leftNode.aabbMax;
+            const float3 rightMin = rightNode.aabbMin;
+            const float3 rightMax = rightNode.aabbMax;
             const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftMin, leftMax);
             const float tRight = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightMin, rightMax);
             const bool leftMiss = (tLeft >= NWB_SW_SHADOW_AABB_MISS);

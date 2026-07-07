@@ -501,33 +501,22 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     __hidden_raytracing_system::BuildSceneBvhNode(indices.data(), 0u, instanceCount, instanceAabbMin.data(), instanceAabbMax.data(), instanceCentroid.data(), buildNodes, instanceLeafCost.data());
     NWB_ASSERT(buildNodes.size() == nodeCount);
 
-    Vector<NwbBvhNodeQGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };
+    Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };
     nodes.reserve(buildNodes.size());
 
-    // The scene world AABB (root node box, index 0) is the global reference the traversal dequantizes every scene
-    // node against, so compute it once and quantize every node against it. The root box MUST contain every node
-    // (it is the union the CPU build formed), so no coordinate quantizes out of range. invExtent is per-axis
-    // 1/max(extent,1e-8), matching the shader/CPU helper's "pre-floored to 1e-8" contract.
+    // HYBRID: the scene/instance BVH is uploaded as EXACT float nodes (NwbBvhNodeGpu, 32 B), NOT quantized. The
+    // whole-scene world extent is the worst-conditioned reference a global-root quantizer can pick, and quantizing
+    // it inflates interior boxes until the front-to-back walk loses its culling power and revisits a large fraction
+    // of instances per ray (stress_test_gpu_timing_report.md sec.6: shadow_visibility 4.61 -> 30.22 ms at 8-bit,
+    // only 5.48 ms at 16-bit). The instance count is small (2N-1 nodes for N instances), so the bandwidth cost of
+    // the exact node is negligible here; the per-mesh TRIANGLE tree -- huge node count, tight object-space reference
+    // -- stays 16-bit quantized, where the bandwidth win is real and the precision loss nil.
     const Float4 sceneRefMin = buildNodes[0].aabbMin;
     const Float4 sceneRefMax = buildNodes[0].aabbMax;
-    const Float4 sceneExtent{
-        sceneRefMax.x - sceneRefMin.x,
-        sceneRefMax.y - sceneRefMin.y,
-        sceneRefMax.z - sceneRefMin.z,
-        0.0f
-    };
-    const Float4 sceneInvExtent{
-        sceneExtent.x > 1e-8f ? (1.0f / sceneExtent.x) : (1.0f / 1e-8f),
-        sceneExtent.y > 1e-8f ? (1.0f / sceneExtent.y) : (1.0f / 1e-8f),
-        sceneExtent.z > 1e-8f ? (1.0f / sceneExtent.z) : (1.0f / 1e-8f),
-        0.0f
-    };
     for(const SceneBvhNodeBuildData& buildNode : buildNodes){
-        NwbBvhNodeQGpu node;
-        // Quantize this node's box against the scene world AABB; the CPU helper mirrors the shader's quantize rule.
-        nwbBvhQuantizeBounds(buildNode.aabbMin, buildNode.aabbMax, sceneRefMin, sceneInvExtent, node.qX, node.qY, node.qZ);
-        node.leftChild = buildNode.leftChild;
-        node.rightChild = buildNode.rightChild;
+        NwbBvhNodeGpu node;
+        node.aabbMinLeftChild  = Float3UInt(buildNode.aabbMin.x, buildNode.aabbMin.y, buildNode.aabbMin.z, buildNode.leftChild);
+        node.aabbMaxRightChild = Float3UInt(buildNode.aabbMax.x, buildNode.aabbMax.y, buildNode.aabbMax.z, buildNode.rightChild);
         nodes.push_back(node);
     }
 
@@ -546,10 +535,11 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     commandList.setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
     commandList.setBufferState(refBoundsBuffer, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
-    commandList.writeBuffer(nodeBuffer, nodes.data(), nodes.size() * sizeof(NwbBvhNodeQGpu));
+    commandList.writeBuffer(nodeBuffer, nodes.data(), nodes.size() * sizeof(NwbBvhNodeGpu));
     commandList.writeBuffer(instanceBuffer, instances.data(), instances.size() * sizeof(SceneSwBvhInstanceGpu));
     commandList.writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
-    // Publish the scene world-space reference at element [0] so the traversal dequantizes every scene node against it.
+    // Element [0] carries the scene world-space AABB (reserved: scene/instance nodes are now exact float, so nothing
+    // dequantizes against it). Kept so the per-mesh references keep their [1 + meshSlot] indexing unchanged.
     const NwbBvhRefBoundsQGpu sceneRefBounds{sceneRefMin, sceneRefMax};
     commandList.writeBuffer(refBoundsBuffer, &sceneRefBounds, sizeof(NwbBvhRefBoundsQGpu));
     // Publish each gathered mesh's OBJECT-space reference at element [1 + meshSlot] so the traversal dequantizes that
@@ -1310,14 +1300,13 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
         while(capacity < requiredNodes)
             capacity *= 2u;
 
-        // The scene/instance LBVH is CPU-built each frame and uploaded already quantized against the scene world AABB
-        // (the root node's box), so the traversal reads NwbBvhNodeQGpu (20B) -- 37.5% less bandwidth than the raw node.
-        // The reference box rides the out-of-band m_bvhRefBoundsBuffer element [0], so the node buffer stores only the
-        // packed quantized extents + child links.
+        // The scene/instance LBVH is CPU-built each frame and uploaded as EXACT float nodes (NwbBvhNodeGpu, 32 B): the
+        // scene world extent is too coarse a quantization reference (see buildSceneBvh / stress report sec.6), so the
+        // traversal reads the raw 32-B node here while the per-mesh triangle tree reads the 20-B quantized mirror.
         Core::BufferDesc nodeBufferDesc;
         nodeBufferDesc
-            .setByteSize(static_cast<u64>(sizeof(NwbBvhNodeQGpu) * capacity))
-            .setStructStride(sizeof(NwbBvhNodeQGpu))
+            .setByteSize(static_cast<u64>(sizeof(NwbBvhNodeGpu) * capacity))
+            .setStructStride(sizeof(NwbBvhNodeGpu))
             .setDebugName(Name("scene_bvh_nodes"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;

@@ -309,9 +309,61 @@ node visits, just 256× fewer than 8-bit) plus the dequant ALU — an acceptable
 clean, single-pass win over the original 8-bit scheme. No correctness change: the reconstructed box remains a provable
 superset of the float box, so ray-box tests still never lose a true hit.
 
+## 7. HYBRID attempt: exact-float scene BVH + 16-bit per-mesh BVH (no win → revert)
+
+### Hypothesis
+
+The §6 diagnosis pinned the 8-bit explosion to the **scene/instance BVH's global-root quantization** (the whole-scene
+world extent is the worst-conditioned reference). The 16-bit scheme (§6-resolution) fixed the explosion everywhere, but
+left a +0.4 ms residual over the float baseline. The hybrid hypothesis: keep the **scene/instance BVH exact float
+(32 B)** — few nodes (2N−1 for N instances, tiny) and no precision loss at the worst-conditioned level — while keeping
+the **per-mesh triangle BVH 16-bit quantized (20 B)** — huge node count where the bandwidth win is real, tight
+object-space reference where precision loss is nil. Expected to recover the scene-level residual for free.
+
+### Change (reverted at end of §7; see decision)
+
+`rt_swbvh.cpp::buildSceneBvh` uploaded `NwbBvhNodeGpu` (32 B) instead of quantizing to `NwbBvhNodeQGpu` (20 B);
+`ensureSceneBvhBuffers` sized the scene node buffer at `sizeof(NwbBvhNodeGpu)`. The three traversal consumers
+(`sw_shadow_traverse.slangi`, `gi_sw_trace.slangi`, `caustic_photon_sw_cs.slang`) flipped ONLY their scene-node walk to
+`NwbBvhNode` + direct `aabbMin/aabbMax` read (no `sceneRef` dequant); the per-mesh triangle walk stayed
+`NwbBvhNodeQ` + `meshRef[1+meshIndex]` dequant. `g_Nwb*BvhRefBounds[0]` became reserved (kept so per-mesh `[1+meshSlot]`
+indexing is unchanged). Build + cook clean (105 files). The per-mesh path, build/fit/self-test untouched.
+
+### Measured (opt, two runs combined, n=25 non-zero shadow intervals)
+
+| pass | float baseline (§2) | 8-bit (§6) | 16-bit (§6-res) | **hybrid (now)** | hybrid vs baseline |
+|---|---|---|---|---|---|
+| **render.shadow_visibility** | 5.08 ms | 30.22 ms | 5.48 ms | **5.90 ms (median)** | **+0.82 ms (+16 %)** |
+| **render.frame** | 10.20 ms | 35.44 ms | 10.62 ms | **11.05 ms (median)** | **+0.85 ms (+8 %)** |
+| render.opaque_regular (control) | 0.81 | — | 0.82 | 0.86 | +0.05 |
+| render.mesh_dispatch | 1.72 | — | 1.73 | 0.32–1.75 | noise |
+
+Hybrid shadow_visibility: p25–p75 = 5.35–6.76 ms, mean 5.75, n=25.
+
+### Conclusion: hybrid is a NET LOSS vs the pure 16-bit scheme → revert to §6-resolution (16-bit)
+
+The hybrid is **not better** — it is marginally *worse* than the 16-bit scheme it was meant to improve (5.90 vs 5.48 ms)
+and **+16 % over the float baseline** (vs +8 % for 16-bit). Two independent runs agree (5.85 / 6.23 ms medians). This
+**refutes the hypothesis**: the §6 residual is **NOT** dominated by scene-BVH quantization loss. The 16-bit scene
+quantization was already fine enough (65536 cells) that its reconstructed boxes were not materially inflated — the
+explosion was fixed at 16 bits, and there was almost no scene-level residual left to recover. Meanwhile reverting the
+scene node to 32 B gives back nothing measurable and removes the (small) uniformity of a single node format.
+
+**The honest read of all three measurements:** every quantized variant we've tried sits at +8 %..+16 % over the exact
+float node, and the float node (4.61–5.08 ms) remains the fastest. The optimization premise — that shrinking node
+bandwidth would speed up this traversal — does not hold for this workload: the walk is **ALU/branch/visit-latency
+bound, not memory-bandwidth bound**, so the 37.5 % node-size reduction never converts to wall-clock time, and the
+residual false-positive visits the quantizer introduces (however few) cost more than the bandwidth saves.
+
+**Decision: revert the hybrid (this commit). The best performer is the original float node.** The next step is to
+either (a) revert the SW BVH to the 32-byte float `NwbBvhNode` for BOTH scene and mesh (accept that this workload is
+not bandwidth-bound and stop chasing node compression), or (b) keep investigating non-node-size levers (triangle
+ordering / ray coalescing / wider nodes) — but node quantization is exhausted as a win for this trace.
+
 | time | event |
 |---|---|
 | 09:44 | `12808b1e` front-to-back traversal → 4.61 ms opt baseline |
 | 22:07 | `28b17082` 8-bit quantized traversal → 30.22 ms regression |
 | 22:44 | `826c6915` dead dequant-helper cleanup |
-| now | per-node 16-bit quantization → **5.48 ms** (within 8 % of float baseline, −37.5 % bandwidth) |
+| prior | per-node 16-bit quantization → 5.48 ms (within 8 % of float baseline) |
+| now | hybrid (float scene + 16-bit mesh) → **5.90 ms** — no win, NET LOSS vs 16-bit → revert |

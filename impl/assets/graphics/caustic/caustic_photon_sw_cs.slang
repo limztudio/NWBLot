@@ -40,7 +40,8 @@
 
 
 [[vk::binding(NWB_CAUSTIC_SW_BINDING_SCENE_NODES, NWB_CAUSTIC_SW_SET)]]
-StructuredBuffer<NwbBvhNodeQ, Std430DataLayout> g_NwbCausticSwSceneNodes;
+// HYBRID: scene/instance BVH = exact float nodes (32 B); per-mesh triangle BVH = 16-bit quantized (20 B).
+StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbCausticSwSceneNodes;
 
 // Per-instance record: the affine world->object transform (3 rows) + the slot into the parallel per-mesh
 // descriptor arrays. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes) / the SW shadow NwbSwShadowInstance.
@@ -413,24 +414,24 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     // identical (closest-hit is order-independent).
     uint stack[NWB_CAUSTIC_SW_SCENE_STACK_SIZE];
     uint stackPointer = 0u;
-    const NwbBvhRefBoundsQ sceneRef = g_NwbCausticSwBvhRefBounds[0u];
-    NwbBvhNodeQ node = g_NwbCausticSwSceneNodes[0u]; // root
-    float3 nodeMin, nodeMax;
-    nwbBvhQDequantizeAabb(node, sceneRef.refMin, sceneRef.refMax, nodeMin, nodeMax);
+    // HYBRID: scene/instance BVH carries exact float boxes, so the AABB is read directly (no dequant).
+    NwbBvhNode node = g_NwbCausticSwSceneNodes[0u]; // root
+    float3 nodeMin = node.aabbMin;
+    float3 nodeMax = node.aabbMax;
     bool active = nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, nodeMin, nodeMax);
 
     [loop] while(active){
-        if(nwbBvhQNodeIsLeaf(node)){
-            nwbCausticSwInstanceClosest(nwbBvhQLeafPrimitive(node), origin, direction, tMin, closest);
+        if(nwbBvhNodeIsLeaf(node)){
+            nwbCausticSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
             active = false; // -> pop below
         }
         else{
-            const NwbBvhNodeQ leftNode = g_NwbCausticSwSceneNodes[node.leftChild];
-            const NwbBvhNodeQ rightNode = g_NwbCausticSwSceneNodes[node.rightChild];
-            float3 leftMin, leftMax;
-            nwbBvhQDequantizeAabb(leftNode, sceneRef.refMin, sceneRef.refMax, leftMin, leftMax);
-            float3 rightMin, rightMax;
-            nwbBvhQDequantizeAabb(rightNode, sceneRef.refMin, sceneRef.refMax, rightMin, rightMax);
+            const NwbBvhNode leftNode = g_NwbCausticSwSceneNodes[node.leftChild];
+            const NwbBvhNode rightNode = g_NwbCausticSwSceneNodes[node.rightChild];
+            const float3 leftMin = leftNode.aabbMin;
+            const float3 leftMax = leftNode.aabbMax;
+            const float3 rightMin = rightNode.aabbMin;
+            const float3 rightMax = rightNode.aabbMax;
             float tLeft;
             const bool hitLeft = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, leftMin, leftMax, tLeft);
             float tRight;
@@ -453,7 +454,8 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 
         [loop] while(stackPointer > 0u){
             node = g_NwbCausticSwSceneNodes[stack[--stackPointer]];
-            nwbBvhQDequantizeAabb(node, sceneRef.refMin, sceneRef.refMax, nodeMin, nodeMax);
+            nodeMin = node.aabbMin;
+            nodeMax = node.aabbMax;
             if(nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, nodeMin, nodeMax)){
                 active = true;
                 break;

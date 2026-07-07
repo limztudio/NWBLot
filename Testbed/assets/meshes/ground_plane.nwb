@@ -42,7 +42,9 @@ plane.indices = [
 model model;
 
 model.static_meshes = {
-    "plane": plane,
+    "plane": {
+        "mesh": plane,
+    },
 };
 
 

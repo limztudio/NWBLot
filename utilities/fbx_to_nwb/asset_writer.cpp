@@ -749,9 +749,11 @@ void WriteModelAssetBody(
 ){
     if(skeletonName){
         file << variableName << ".skeletons = {\n";
-        file << "    \"skeleton\": ";
+        file << "    \"skeleton\": {\n";
+        file << "        \"skeleton\": ";
         WriteReferenceValue(file, *skeletonName, quoteAssetReferences);
         file << ",\n";
+        file << "    },\n";
         file << "};\n\n";
 
         file << variableName << ".skinned_meshes = {\n";
@@ -770,53 +772,13 @@ void WriteModelAssetBody(
     }
     else{
         file << variableName << ".static_meshes = {\n";
-        file << "    \"base\": ";
+        file << "    \"base\": {\n";
+        file << "        \"mesh\": ";
         WriteReferenceValue(file, meshName, quoteAssetReferences);
         file << ",\n";
+        file << "    },\n";
         file << "};\n";
     }
-}
-
-template<typename Stream>
-void WriteSkinnedMeshWrapperBody(
-    Stream& file,
-    const AStringView variableName,
-    const AString& meshName,
-    const AString& skinName,
-    const AString& skeletonName,
-    const bool quoteReferences
-){
-    file << variableName << ".mesh = ";
-    WriteReferenceValue(file, meshName, quoteReferences);
-    file << ";\n";
-    file << variableName << ".skin = ";
-    WriteReferenceValue(file, skinName, quoteReferences);
-    file << ";\n";
-    file << variableName << ".skeleton = ";
-    WriteReferenceValue(file, skeletonName, quoteReferences);
-    file << ";\n";
-}
-
-template<typename Stream>
-void WriteModelAssetBodyWithSkinnedMeshWrapper(
-    Stream& file,
-    const AStringView variableName,
-    const AString& skeletonName,
-    const AString& skinnedMeshWrapperName,
-    const bool quoteAssetReferences,
-    const bool quoteSkinnedMeshReference
-){
-    file << variableName << ".skeletons = {\n";
-    file << "    \"skeleton\": ";
-    WriteReferenceValue(file, skeletonName, quoteAssetReferences);
-    file << ",\n";
-    file << "};\n\n";
-
-    file << variableName << ".skinned_meshes = {\n";
-    file << "    \"mesh\": ";
-    WriteReferenceValue(file, skinnedMeshWrapperName, quoteSkinnedMeshReference);
-    file << ",\n";
-    file << "};\n";
 }
 
 bool WriteModelAsset(
@@ -879,16 +841,13 @@ bool WriteAssetBunch(
     }
 
     const bool skinnedBunch = skinName && skeletonName && skinInfluences;
-    if(skinnedBunch){
-        file << "\n\n";
-        file << "skinned_mesh mesh_wrapper;\n\n";
-        WriteSkinnedMeshWrapperBody(file, "mesh_wrapper", "mesh", "skin", "skeleton", false);
-    }
-
     file << "\n\n";
     file << "model model;\n\n";
     if(skinnedBunch){
-        WriteModelAssetBodyWithSkinnedMeshWrapper(file, "model", "skeleton", "mesh_wrapper", false, false);
+        const AString localMeshName("mesh");
+        const AString localSkinName("skin");
+        const AString localSkeletonName("skeleton");
+        WriteModelAssetBody(file, "model", localMeshName, &localSkinName, &localSkeletonName, "skeleton", false, true);
     }
     else{
         WriteModelAssetBody(file, "model", "mesh", nullptr, nullptr, "skeleton", false, false);

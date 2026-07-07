@@ -507,8 +507,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
         source += idView;
         source += "(hit);\n";
     }
-    // Unknown id: a neutral surface (ior = 1, transmission = white -> no Fresnel attenuation, no absorption), so a
-    // no-match occluder behaves as the prior all-light default.
+    // Unknown id: a neutral surface (ior = 1, transmission = white -> no Fresnel attenuation, no absorption).
     source += "    default: return nwbMakeMeshSurface(half3(0.0, 0.0, 0.0), hit.worldNormal, half(0.0), half(0.0));\n";
     source += "    }\n";
     source += "}\n\n#endif\n";

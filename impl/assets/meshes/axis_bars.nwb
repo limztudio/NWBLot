@@ -250,9 +250,15 @@ z.indices = [
 model model;
 
 model.static_meshes = {
-    "x": x,
-    "y": y,
-    "z": z,
+    "x": {
+        "mesh": x,
+    },
+    "y": {
+        "mesh": y,
+    },
+    "z": {
+        "mesh": z,
+    },
 };
 
 

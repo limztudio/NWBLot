@@ -347,13 +347,8 @@ template<typename ObjectVectorT, typename ParseObjectFn>
 
 [[nodiscard]] bool ParseSkeletonObject(const Path& nwbFilePath, const Value& objectValue, ModelSkeletonObject& outObject){
     static constexpr AStringView s_ObjectKind = "Model skeleton object";
-    if(objectValue.isString()){
-        outObject.skeleton.virtualPath = Name(AStringView(objectValue.asString().data(), objectValue.asString().size()));
-        return outObject.skeleton.valid();
-    }
-
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be an asset reference or map")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map")
             , StringConvert(s_ObjectKind)
             , PathToString<tchar>(nwbFilePath)
         );
@@ -369,13 +364,8 @@ template<typename ObjectVectorT, typename ParseObjectFn>
 
 [[nodiscard]] bool ParseStaticMeshObject(const Path& nwbFilePath, const Value& objectValue, ModelStaticMeshObject& outObject){
     static constexpr AStringView s_ObjectKind = "Model static mesh object";
-    if(objectValue.isString()){
-        outObject.mesh.virtualPath = Name(AStringView(objectValue.asString().data(), objectValue.asString().size()));
-        return outObject.mesh.valid();
-    }
-
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be an asset reference or map")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map")
             , StringConvert(s_ObjectKind)
             , PathToString<tchar>(nwbFilePath)
         );

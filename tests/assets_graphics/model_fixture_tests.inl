@@ -82,24 +82,10 @@ skin.inverse_bind_matrices = [
 
 )";
 
-static constexpr AStringView s_ModelFixtureWrapperMeta =
-R"(skinned_mesh body_wrapper;
-body_wrapper.mesh = mesh;
-body_wrapper.skin = skin;
-body_wrapper.skeleton = skeleton;
-
-skinned_mesh detail_wrapper;
-detail_wrapper.mesh = mesh;
-detail_wrapper.skin = skin;
-detail_wrapper.skeleton = skeleton;
-
-)";
-
 static void AppendModelFixtureBase(AString& inOutMeta){
     AppendTestMeta(inOutMeta, s_ModelFixtureMeshMeta);
     AppendTestMeta(inOutMeta, s_ModelFixtureSkeletonMeta);
     AppendTestMeta(inOutMeta, s_ModelFixtureSkinMeta);
-    AppendTestMeta(inOutMeta, s_ModelFixtureWrapperMeta);
 }
 
 static AString BuildValidModelBunchFixture(){
@@ -109,12 +95,22 @@ static AString BuildValidModelBunchFixture(){
     AppendTestMeta(meta, R"(model model;
 
 model.skeletons = {
-    "rig": skeleton,
+    "rig": {
+        "skeleton": skeleton,
+    },
 };
 
 model.skinned_meshes = {
-    "body": body_wrapper,
-    "detail": detail_wrapper,
+    "body": {
+        "mesh": mesh,
+        "skin": skin,
+        "skeleton": "rig",
+    },
+    "detail": {
+        "mesh": mesh,
+        "skin": skin,
+        "skeleton": "rig",
+    },
 };
 
 asset_bunch bunch = [
@@ -232,7 +228,9 @@ static AString BuildStaticAttachmentModelBunchFixture(){
     AppendTestMeta(meta, R"(model model;
 
 model.skeletons = {
-    "rig": skeleton,
+    "rig": {
+        "skeleton": skeleton,
+    },
 };
 
 model.static_meshes = {
@@ -343,7 +341,9 @@ TEST(AssetsGraphics, ModelBunchRejectsDuplicateLocalReference){
     AppendTestMeta(meta, R"(model model;
 
 model.skeletons = {
-    "rig": "project/characters/shared/skeleton",
+    "rig": {
+        "skeleton": "project/characters/shared/skeleton",
+    },
 };
 
 asset_bunch bunch = [
@@ -382,7 +382,9 @@ TEST(AssetsGraphics, ModelBunchRejectsMissingLocalReference){
     AppendTestMeta(meta, R"(model model;
 
 model.skeletons = {
-    "rig": missing_skeleton,
+    "rig": {
+        "skeleton": missing_skeleton,
+    },
 };
 
 asset_bunch bunch = [

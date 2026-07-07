@@ -208,3 +208,52 @@ This is the next thing to trace — it is a filesystem-layer regression, not a m
 | 09:xx–now | every stress rerun dumps core on `body/model` load (pre-existing, blocks all configs) |
 | 22:07 | `28b17082` quantized traversal — benchmark blocked by the asset-cook issue above, not by quantization |
 | 22:44 | `826c6915` dead dequant-helper cleanup (provably perf-neutral) |
+
+## 5. RESOLUTION: the asset blocker was a stale-volume misdeployment (not a filesystem bug)
+
+Sections 3 / 3.1's "deferred index entry dropped/mis-segmented" and "volume read-back layer" hypotheses were **wrong**.
+The blocker is a **stale deployed volume**, found by parsing the on-disk volume index directly (header = 48 B
+`<magic8 segmentSize metadataBytes fileCount indexBytes nextFreeOffset>`; then `fileCount × 80 B`
+`{NameHash hash(u64×8) ; u64 offset ; u64 size}`; `NameHash` is the 512-bit `global/name.h` FNV).
+
+- **Fresh / complete volume** = `__cmake/build/linux-clang-x64/Testing/skinning_culling_benchmark_runtime/opt/res/eda18e57f4796c04.vol`
+  → **105 entries**, model (576 B) / skeleton (43408) / skin (659912) ALL present, 0 duplicate hashes, 105 distinct offsets.
+  This is the volume sections 3 / 3.1 instrumented and proved clean.
+- **Actually-mounted volume** = `__exec/linux/x64/full/res/eda18e57f4796c04.vol` → **only 82 entries**, same hash filename,
+  **different md5** (`bf53b4…` vs fresh `c43d02…`); model/skeleton/skin hashes are ABSENT. This is an older cook that predates
+  the character assets.
+- Why it mounted there: `loader/main.cpp::ResolveResourceMountDirectory` tries `cwd/res`, then `exeDir/res`, then
+  `exeDir.parent()/res`, else literal `"res"`. Running from `__exec/linux/x64/full/opt/` (which has no `res/`) walks up to
+  the parent's stale `full/res/`. The crash `breadcrumbs.txt` (cwd = `…/full/opt`) and `emergency.txt` (`reason=manual_dump`,
+  `trigger_category=logger_Error` — a deliberate dump on the error-level log, NOT a segfault) confirm it.
+- The cook is correct; the publish/deploy step that copies the freshly-cooked volume into the `__exec/…/full/res/` mirror is stale.
+- **Fix for benchmarking only:** run from `Testing/skinning_culling_benchmark_runtime/opt/` (cwd `/res` wins), or copy the
+  fresh volume into the mounted location. A real deploy-pipeline fix is a separate task.
+
+## 6. Quantized traversal: measured 6× shadow regression (correct math, node-visit inflation)
+
+With the stale-volume bypass (run from the fresh-volume cwd), the stale `__exec/…/opt/stress_test_smoke` binary
+(built 22:16, i.e. AFTER `28b17082` quantized traversal, BEFORE the perf-neutral `826c6915` cleanup — so it IS on the
+quantized path) ran cleanly for 30 s → 56 steady-state intervals. Scope names decoded against
+`stress_test_smoke.namesym`. Every NON-shadow pass matches the DFS baseline to the digit (caustic 0.99, opaque 0.81,
+mesh_dispatch 1.68), so the regression is isolated to the SW shadow traversal that now consumes `NwbBvhNodeQ`:
+
+| pass | DFS baseline (§2) | quantized (now) | Δ |
+|---|---|---|---|
+| **render.shadow_visibility** | **4.61 ms** | **30.22 ms** | **+25.6 ms (+556 %)** |
+| **render.frame** | **9.75 ms** | **35.44 ms** | **+25.7 ms (+263 %)** |
+
+Shadow share of the frame: 47 % → **85 %**. A 6× slowdown is far beyond the extra ALU a dequant costs, so the cause is
+**node-visit explosion**, not the unpack arithmetic.
+
+Correctness verified (so this is NOT a misquantize bug): quantize truncates `q = clamp(floor((p-ref)/ext*256),0,255)`,
+dequant gives `min = ref + q·ext/256 ≤ p` and `max = ref + (q+1)·ext/256 ≥ p` — a provably-conservative superbox that never
+loses a true hit. Producer/consumer ref boxes also agree: `bvh_fit_cs.slang` quantizes against the build push-constants
+`aabbMin/aabbMax`, and `rt_swbvh.cpp` stores the SAME `mesh->csgLocalBounds` at ref-bounds `[1+meshSlot]`; the scene root AABB
+is stored at `[0]` and every scene node quantizes against it.
+
+Most likely cause (to confirm with per-node visit counters): **8-bit precision collapse on the scene BVH's global-root
+quantization** — the whole-scene world extent quantized to 256³ inflates interior boxes until culling degrades and the walk
+visits a large fraction of instances per ray instead of ~log(N). Next step: instrument `render.shadow_visibility` with a
+temporary `shadow_diag_*` sub-scope split (scene-walk node-fetches vs per-mesh-walk node-fetches vs triangle tests), or
+temporarily A/B the scene BVH at full float vs quantized to localize the inflation to the scene level.

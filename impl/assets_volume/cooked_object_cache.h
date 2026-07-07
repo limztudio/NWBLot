@@ -14,9 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "shader_cook_plan.h"
-
-#include <impl/assets_volume/pack_manifest.h>
+#include "pack_manifest.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,21 +26,33 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetsGraphicsCookDetail{
+namespace AssetsVolumeCookDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AppendPreparedShadersToManifest(
-    ShaderCook::CookArena& cookArena,
-    ShaderCook& shaderCook,
-    const Path& cacheDirectory,
+struct CookedObjectPayloadView{
+    const u8* data = nullptr;
+    usize size = 0u;
+    AssetVolumePayloadIdentity identity;
+};
+
+[[nodiscard]] bool BuildRegistryObjectManifestEntries(
+    Core::Alloc::GlobalArena& arena,
+    Core::Alloc::ThreadPool& threadPool,
+    const ResolvedCookPaths& resolvedPaths,
     AStringView configurationSafeName,
-    PreparedShaderVector& preparedEntries,
-    AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& inOutSeenVirtualPathHashes,
+    ParsedAssetMetadata& parsedMetadata,
+    AssetVolumePackManifest& manifest,
+    VirtualPathHashSet& seenVirtualPathHashes,
     ScratchArena& scratchArena
+);
+[[nodiscard]] bool ReadCookedObjectPayload(
+    const Path& objectPath,
+    const Name& expectedVirtualPath,
+    Core::Assets::AssetBytes& objectBytes,
+    CookedObjectPayloadView& outPayload
 );
 
 
@@ -65,4 +75,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

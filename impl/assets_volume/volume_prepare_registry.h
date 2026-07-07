@@ -38,7 +38,7 @@ struct AssetVolumePrepareContext{
     CookString& configurationSafeName;
     ParsedAssetMetadata& parsedMetadata;
     u64& plannedFileCount;
-    AssetVolumeExternalWriterVector& externalWriters;
+    AssetVolumeManifestCookerVector& manifestCookers;
     ScratchArena& scratchArena;
 };
 

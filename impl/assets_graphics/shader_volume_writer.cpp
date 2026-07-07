@@ -15,6 +15,7 @@
 #include <impl/assets_shader/binary_payload.h>
 
 #include <core/graphics/shader_archive.h>
+#include <core/filesystem/module.h>
 
 #include <core/common/log.h>
 
@@ -270,10 +271,10 @@ static bool ReserveShaderIndexRecords(
     return true;
 }
 
-static bool PushShaderIndexToVolume(
+static bool AppendShaderIndexToManifest(
     ShaderCook::CookArena& cookArena,
     const Core::GraphicsVector<Core::ShaderArchive::Record>& shaderIndexRecords,
-    Core::Filesystem::VolumeSession& volumeSession,
+    AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
     const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
@@ -289,11 +290,25 @@ static bool PushShaderIndexToVolume(
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to serialize shader index"));
         return false;
     }
-    if(volumeSession.pushDataDeferred(shaderIndexVirtualPath, indexBinary))
+    if(AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, shaderIndexVirtualPath, indexBinary))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to push shader index"));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to append shader index to manifest"));
     return false;
+}
+
+static u64 BuildShaderVariantCookKeyHash(
+    const NameHash& virtualPathHash,
+    const u64 sourceChecksum,
+    const u64 bytecodeChecksum
+){
+    static constexpr u32 s_ShaderVariantCookKeyVersion = 1u;
+    u64 hash = FNV64_OFFSET_BASIS;
+    Fnv64AppendValue(hash, s_ShaderVariantCookKeyVersion);
+    Fnv64AppendValue(hash, virtualPathHash);
+    Fnv64AppendValue(hash, sourceChecksum);
+    Fnv64AppendValue(hash, bytecodeChecksum);
+    return hash;
 }
 
 
@@ -312,13 +327,13 @@ namespace AssetsGraphicsCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AppendPreparedShadersToVolume(
+bool AppendPreparedShadersToManifest(
     ShaderCook::CookArena& cookArena,
     ShaderCook& shaderCook,
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     PreparedShaderVector& preparedEntries,
-    Core::Filesystem::VolumeSession& volumeSession,
+    AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
     VirtualPathHashSet& inOutSeenVirtualPathHashes,
     ScratchArena& scratchArena
 ){
@@ -403,8 +418,14 @@ bool AppendPreparedShadersToVolume(
                 return false;
             }
 
-            if(!volumeSession.pushDataDeferred(virtualPath, cookedBytecode)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to push shader bytecode '{}'"), StringConvert(virtualPath.c_str()));
+            const u64 bytecodeChecksum = ComputeFnv64Bytes(cookedBytecode.data(), cookedBytecode.size());
+            const u64 cookKeyHash = __hidden_shader_volume_writer::BuildShaderVariantCookKeyHash(
+                virtualPathHash,
+                sourceChecksum,
+                bytecodeChecksum
+            );
+            if(!AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, virtualPath, cookedBytecode, cookKeyHash)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to append shader bytecode '{}' to manifest"), StringConvert(virtualPath.c_str()));
                 return false;
             }
 
@@ -413,7 +434,7 @@ bool AppendPreparedShadersToVolume(
             record.variantName = generatedVariantName;
             record.stage = stageName;
             record.sourceChecksum = sourceChecksum;
-            record.bytecodeChecksum = ComputeFnv64Bytes(cookedBytecode.data(), cookedBytecode.size());
+            record.bytecodeChecksum = bytecodeChecksum;
             record.virtualPathHash = virtualPathHash;
             if(shaderIndexRecords.size() >= shaderRecordCount){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: shader record count exceeded prepared capacity"));
@@ -460,10 +481,10 @@ bool AppendPreparedShadersToVolume(
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: shader record count mismatch after cook"));
         return false;
     }
-    return __hidden_shader_volume_writer::PushShaderIndexToVolume(
+    return __hidden_shader_volume_writer::AppendShaderIndexToManifest(
         cookArena,
         shaderIndexRecords,
-        volumeSession,
+        manifest,
         inOutSeenVirtualPathHashes
     );
 }

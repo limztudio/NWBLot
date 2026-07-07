@@ -13,6 +13,8 @@
 #include "arena_names.h"
 #include "asset_volume_writer.h"
 #include "cook_paths.h"
+#include "cooked_object_cache.h"
+#include "pack_manifest.h"
 #include "volume_prepare_registry.h"
 
 #include <core/assets/auto_registration.h>
@@ -108,14 +110,14 @@ bool AssetVolumeCooker::cookAssetVolume(const Core::Assets::AssetCookOptions& op
         configurationSafeName = "default";
 
     u64 plannedFileCount = 0u;
-    AssetsVolumeCookDetail::AssetVolumeExternalWriterVector externalWriters(m_arena);
+    AssetsVolumeCookDetail::AssetVolumeManifestCookerVector manifestCookers(m_arena);
     AssetsVolumeCookDetail::AssetVolumePrepareContext prepareContext{
         m_arena,
         resolvedPaths,
         configurationSafeName,
         parsedMetadata,
         plannedFileCount,
-        externalWriters,
+        manifestCookers,
         scratchArena
     };
     if(!AssetsVolumeCookDetail::RegisterAutoCollectedAssetVolumePreparers(prepareContext))
@@ -123,14 +125,36 @@ bool AssetVolumeCooker::cookAssetVolume(const Core::Assets::AssetCookOptions& op
     if(!Core::Assets::AddPlannedFileCount(parsedMetadata.entryRegistry.entryCount(), plannedFileCount))
         return false;
 
+    AssetsVolumeCookDetail::AssetVolumePackManifest manifest(m_arena);
+    if(!AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(manifest, plannedFileCount))
+        return false;
+
+    AssetsVolumeCookDetail::VirtualPathHashSet seenVirtualPathHashes{m_arena};
+    if(plannedFileCount <= static_cast<u64>(Limit<usize>::s_Max))
+        seenVirtualPathHashes.reserve(static_cast<usize>(plannedFileCount));
+
+    for(const AssetsVolumeCookDetail::AssetVolumeManifestCooker& manifestCooker : manifestCookers){
+        if(!manifestCooker(manifest, seenVirtualPathHashes, scratchArena))
+            return false;
+    }
+    if(!AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(
+        m_arena,
+        options.services.threadPool,
+        resolvedPaths,
+        configurationSafeName,
+        parsedMetadata,
+        manifest,
+        seenVirtualPathHashes,
+        scratchArena
+    ))
+        return false;
+
     AssetsVolumeCookDetail::AssetVolumeWriteResult volumeResult;
     if(!AssetsVolumeCookDetail::WriteAssetVolume(
         m_arena,
         resolvedPaths,
         configurationSafeName,
-        plannedFileCount,
-        externalWriters,
-        parsedMetadata,
+        manifest,
         volumeResult,
         scratchArena
     ))

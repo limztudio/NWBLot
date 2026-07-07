@@ -15,6 +15,7 @@
 
 
 #include "cook_types.h"
+#include "pack_manifest.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,9 +37,7 @@ namespace AssetsVolumeCookDetail{
     Core::Alloc::GlobalArena& arena,
     const ResolvedCookPaths& resolvedPaths,
     AStringView configurationSafeName,
-    u64 plannedFileCount,
-    const AssetVolumeExternalWriterVector& externalWriters,
-    ParsedAssetMetadata& parsedMetadata,
+    const AssetVolumePackManifest& manifest,
     AssetVolumeWriteResult& outResult,
     ScratchArena& scratchArena
 );

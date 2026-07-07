@@ -167,6 +167,27 @@ TEST(AssetsGraphics, VolumeSessionAcceptsScratchBytes){
                         EXPECT_EQ(readback[2], 3u);
                         EXPECT_EQ(readback[3], 4u);
                     }
+
+                    ErrorCode sizeError;
+                    const Path segmentPath = root / "volume" / MakeVolumeSegmentFileName(config.volumeName.view(), 0u).c_str();
+                    const u64 segmentFileSize = FileSize(segmentPath, sizeError);
+                    EXPECT_FALSE(sizeError);
+                    EXPECT_EQ(segmentFileSize, config.metadataSize + payload.size());
+                    EXPECT_LT(segmentFileSize, config.segmentSize);
+
+                    NWB::Core::Filesystem::VolumeSession reloadedSession(testArena.arena);
+                    const bool reloaded = reloadedSession.load(config.volumeName.view(), root / "volume");
+                    EXPECT_TRUE(reloaded);
+                    if(reloaded){
+                        NWB::Core::Assets::AssetBytes reloadedReadback = MakeAssetBytes(testArena);
+                        const bool reloadedData = reloadedSession.loadData(virtualPath, reloadedReadback);
+                        EXPECT_TRUE(reloadedData);
+                        if(reloadedData){
+                            ASSERT_EQ(reloadedReadback.size(), readback.size());
+                            for(usize i = 0u; i < readback.size(); ++i)
+                                EXPECT_EQ(reloadedReadback[i], readback[i]);
+                        }
+                    }
                 }
             }
         }
@@ -174,6 +195,154 @@ TEST(AssetsGraphics, VolumeSessionAcceptsScratchBytes){
 
     ErrorCode errorCode;
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+}
+
+using AssetObjectCachePathVector = Vector<Path, NWB::Core::Alloc::GlobalArena>;
+
+static bool FindAssetObjectCachePaths(TestArena& testArena, const Path& cacheDirectory, AssetObjectCachePathVector& outPaths){
+    outPaths.clear();
+
+    ErrorCode errorCode;
+    RecursiveDirectoryIterator<Path::Arena> cacheEntries(cacheDirectory, errorCode);
+    EXPECT_FALSE(errorCode);
+    if(errorCode)
+        return false;
+
+    for(const auto& entry : cacheEntries){
+        errorCode.clear();
+        const bool isRegularFile = entry.is_regular_file(errorCode);
+        EXPECT_FALSE(errorCode);
+        if(errorCode)
+            return false;
+        if(!isRegularFile)
+            continue;
+
+        const auto extension = PathToString(testArena.arena, entry.path().extension());
+        if(extension != ".nwbobj")
+            continue;
+
+        outPaths.push_back(entry.path());
+    }
+
+    return true;
+}
+
+static bool FindSingleAssetObjectCachePath(TestArena& testArena, const Path& cacheDirectory, Path& outPath){
+    outPath.clear();
+
+    AssetObjectCachePathVector objectPaths(testArena.arena);
+    if(!FindAssetObjectCachePaths(testArena, cacheDirectory, objectPaths))
+        return false;
+
+    EXPECT_EQ(objectPaths.size(), 1u);
+    if(objectPaths.size() != 1u)
+        return false;
+
+    outPath = objectPaths[0u];
+    return true;
+}
+
+static bool FindNewAssetObjectCachePath(
+    TestArena& testArena,
+    const Path& cacheDirectory,
+    const Path& oldPath,
+    Path& outPath
+){
+    outPath.clear();
+
+    AssetObjectCachePathVector objectPaths(testArena.arena);
+    if(!FindAssetObjectCachePaths(testArena, cacheDirectory, objectPaths))
+        return false;
+
+    EXPECT_EQ(objectPaths.size(), 2u);
+    if(objectPaths.size() != 2u)
+        return false;
+
+    usize newPathCount = 0u;
+    for(const Path& objectPath : objectPaths){
+        if(objectPath == oldPath)
+            continue;
+
+        outPath = objectPath;
+        ++newPathCount;
+    }
+
+    EXPECT_EQ(newPathCount, 1u);
+    return newPathCount == 1u;
+}
+
+static bool ReadAssetObjectCacheBytes(const Path& objectPath, NWB::Core::Assets::AssetBytes& outBytes){
+    ErrorCode errorCode;
+    const bool read = ReadBinaryFile(objectPath, outBytes, errorCode);
+    EXPECT_TRUE(read);
+    EXPECT_FALSE(errorCode);
+    EXPECT_FALSE(outBytes.empty());
+    return read && !errorCode && !outBytes.empty();
+}
+
+static bool AssetBytesEqual(const NWB::Core::Assets::AssetBytes& lhs, const NWB::Core::Assets::AssetBytes& rhs){
+    if(lhs.size() != rhs.size())
+        return false;
+    for(usize i = 0u; i < lhs.size(); ++i){
+        if(lhs[i] != rhs[i])
+            return false;
+    }
+    return true;
+}
+
+TEST(AssetsGraphics, AssetVolumeCookWritesRegistryObjectCache){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
+    EXPECT_TRUE(PrepareAssetsGraphicsCookCase(
+        testArena,
+        "asset_volume_registry_object_cache",
+        root,
+        outputDirectory
+    ));
+
+    const Path assetRoot = root / "assets";
+    const Path metaPath = assetRoot / "meshes" / "minimal_mesh.nwb";
+    EXPECT_TRUE(WriteTextFile(metaPath, s_MinimalMeshMeta));
+    EXPECT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, 2u));
+
+    Path objectPath(testArena.arena);
+    ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / "cache", objectPath));
+
+    NWB::Core::Assets::AssetBytes firstObjectBytes = MakeAssetBytes(testArena);
+    ASSERT_TRUE(ReadAssetObjectCacheBytes(objectPath, firstObjectBytes));
+
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    EXPECT_TRUE(LoadCookedMinimalMesh(testArena, outputDirectory, loadedAsset));
+
+    EXPECT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, 2u));
+    Path unchangedObjectPath(testArena.arena);
+    ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / "cache", unchangedObjectPath));
+    EXPECT_EQ(unchangedObjectPath, objectPath);
+
+    NWB::Core::Assets::AssetBytes unchangedObjectBytes = MakeAssetBytes(testArena);
+    ASSERT_TRUE(ReadAssetObjectCacheBytes(unchangedObjectPath, unchangedObjectBytes));
+    EXPECT_TRUE(AssetBytesEqual(firstObjectBytes, unchangedObjectBytes));
+
+    EXPECT_TRUE(WriteTextFile(metaPath, s_DefaultColorMeshMeta));
+    EXPECT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, 2u));
+    Path changedObjectPath(testArena.arena);
+    ASSERT_TRUE(FindNewAssetObjectCachePath(testArena, root / "cache", objectPath, changedObjectPath));
+    EXPECT_NE(changedObjectPath, objectPath);
+
+    NWB::Core::Assets::AssetBytes changedObjectBytes = MakeAssetBytes(testArena);
+    ASSERT_TRUE(ReadAssetObjectCacheBytes(changedObjectPath, changedObjectBytes));
+    EXPECT_FALSE(AssetBytesEqual(firstObjectBytes, changedObjectBytes));
+
+    loadedAsset.reset();
+    EXPECT_TRUE(LoadCookedMinimalMesh(testArena, outputDirectory, loadedAsset));
+
+    ErrorCode errorCode;
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    EXPECT_EQ(logger.errorCount(), 0u);
 }
 
 static NWB::Impl::MeshletBounds MakeTestMeshletBounds(){

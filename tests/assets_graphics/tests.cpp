@@ -1008,9 +1008,10 @@ static bool CookPreparedGraphicsAssetRoots(
     TestArena& testArena,
     const Path& root,
     const Path& outputDirectory,
-    const InitializerList<Path> assetRoots
+    const InitializerList<Path> assetRoots,
+    const u32 workerThreadCount = 0u
 ){
-    NWB::Core::Alloc::ThreadPool cookThreadPool(0u, NWB::Core::Alloc::CoreAffinity::Any);
+    NWB::Core::Alloc::ThreadPool cookThreadPool(workerThreadCount, NWB::Core::Alloc::CoreAffinity::Any);
     NWB::Core::Assets::AssetCookOptions options(testArena.arena, cookThreadPool);
     options.repoRoot = PathToString(testArena.arena, AssetsGraphicsTestRepoRoot(testArena));
     options.assetRoots.reserve(assetRoots.size());

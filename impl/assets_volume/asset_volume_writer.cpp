@@ -10,9 +10,9 @@
 
 #include "asset_volume_writer.h"
 
+#include "cooked_object_cache.h"
 #include "cook_paths.h"
 
-#include <core/assets/module.h>
 #include <core/filesystem/module.h>
 
 #include <core/common/log.h>
@@ -32,6 +32,8 @@ namespace __hidden_asset_volume_writer{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+using ScratchArena = AssetsVolumeCookDetail::ScratchArena;
 
 static constexpr u64 s_DefaultSegmentSize = 512ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
@@ -78,43 +80,86 @@ static bool ConfigureVolumeSizing(const u64 plannedFileCount, Core::Filesystem::
     return true;
 }
 
-class AssetVolumeCookedAssetWriter final : public Core::Assets::ICookedAssetWriter{
-public:
-    AssetVolumeCookedAssetWriter(Core::Assets::AssetArena& arena, Core::Filesystem::VolumeSession& volumeSession)
-        : m_volumeSession(volumeSession)
-        , m_scratchBinary(arena)
-    {}
-
-public:
-    virtual bool writeCookedAsset(
-        const tchar* assetKind,
-        const Name& virtualPath,
-        const Core::Assets::IAsset& asset,
-        const Core::Assets::IAssetCodec& codec
-    )override{
-        m_scratchBinary.clear();
-        if(!codec.serialize(asset, m_scratchBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to serialize {} '{}'")
-                , assetKind
-                , StringConvert(virtualPath.c_str())
-            );
-            return false;
-        }
-
-        if(m_volumeSession.pushDataDeferred(virtualPath, m_scratchBinary))
-            return true;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to push {} '{}'")
-            , assetKind
-            , StringConvert(virtualPath.c_str())
+static bool PushManifestObjectFilePayloadToVolume(
+    const AssetsVolumeCookDetail::AssetVolumePackEntry& entry,
+    Core::Assets::AssetBytes& objectBytes,
+    Core::Filesystem::VolumeSession& volumeSession
+){
+    AssetsVolumeCookDetail::CookedObjectPayloadView payload;
+    if(!AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes, payload))
+        return false;
+    if(
+        payload.identity.payloadSize != entry.identity.payloadSize
+        || payload.identity.payloadHash != entry.identity.payloadHash
+        || payload.identity.cookKeyHash != entry.identity.cookKeyHash
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: object cache identity mismatch '{}' for '{}'")
+            , PathToString<tchar>(entry.objectPath)
+            , StringConvert(entry.virtualPath.c_str())
         );
         return false;
     }
 
-private:
-    Core::Filesystem::VolumeSession& m_volumeSession;
-    Core::Assets::AssetBytes m_scratchBinary;
-};
+    if(volumeSession.pushDataDeferred(entry.virtualPath, payload.data, payload.size))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to push cached asset '{}'"), StringConvert(entry.virtualPath.c_str()));
+    return false;
+}
+
+static bool PushManifestEntryToVolume(
+    const AssetsVolumeCookDetail::AssetVolumePackEntry& entry,
+    Core::Assets::AssetBytes& objectBytes,
+    Core::Filesystem::VolumeSession& volumeSession
+){
+    switch(entry.source){
+    case AssetsVolumeCookDetail::AssetVolumePackEntrySource::PayloadBytes:
+        if(
+            entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size())
+            || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: manifest payload identity mismatch '{}'"), StringConvert(entry.virtualPath.c_str()));
+            return false;
+        }
+        if(volumeSession.pushDataDeferred(entry.virtualPath, entry.payloadBytes))
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to push manifest payload '{}'"), StringConvert(entry.virtualPath.c_str()));
+        return false;
+    case AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload:
+        return PushManifestObjectFilePayloadToVolume(entry, objectBytes, volumeSession);
+    default:
+        break;
+    }
+
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: manifest entry '{}' has an unknown source"), StringConvert(entry.virtualPath.c_str()));
+    return false;
+}
+
+static bool PushManifestToVolume(
+    Core::Assets::AssetArena& arena,
+    const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
+    Core::Filesystem::VolumeSession& volumeSession
+){
+    Core::Assets::AssetBytes objectBytes(arena);
+    for(const AssetsVolumeCookDetail::AssetVolumePackEntry& entry : manifest.entries){
+        if(!PushManifestEntryToVolume(entry, objectBytes, volumeSession))
+            return false;
+    }
+
+    return true;
+}
+
+static bool ValidateManifestEntryCount(const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest){
+    if(static_cast<u64>(manifest.entries.size()) == manifest.plannedFileCount)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: manifest file count mismatch, planned {} but produced {}")
+        , manifest.plannedFileCount
+        , manifest.entries.size()
+    );
+    return false;
+}
 
 };
 
@@ -132,20 +177,17 @@ bool WriteAssetVolume(
     Core::Alloc::GlobalArena& arena,
     const ResolvedCookPaths& resolvedPaths,
     const AStringView configurationSafeName,
-    const u64 plannedFileCount,
-    const AssetVolumeExternalWriterVector& externalWriters,
-    ParsedAssetMetadata& parsedMetadata,
+    const AssetVolumePackManifest& manifest,
     AssetVolumeWriteResult& outResult,
     ScratchArena& scratchArena
 ){
     outResult = {};
 
-    VirtualPathHashSet seenVirtualPathHashes{arena};
-    if(plannedFileCount <= static_cast<u64>(Limit<usize>::s_Max))
-        seenVirtualPathHashes.reserve(static_cast<usize>(plannedFileCount));
+    if(!__hidden_asset_volume_writer::ValidateManifestEntryCount(manifest))
+        return false;
 
     Core::Filesystem::VolumeBuildConfig volumeConfig;
-    if(!__hidden_asset_volume_writer::ConfigureVolumeSizing(plannedFileCount, volumeConfig))
+    if(!__hidden_asset_volume_writer::ConfigureVolumeSizing(manifest.plannedFileCount, volumeConfig))
         return false;
 
     const StagedVolumePaths stagedVolumePaths = BuildStagedVolumePaths(
@@ -180,17 +222,7 @@ bool WriteAssetVolume(
             return false;
         }
 
-        for(const AssetVolumeExternalWriter& externalWriter : externalWriters){
-            if(!externalWriter(volumeSession, seenVirtualPathHashes, scratchArena))
-                return false;
-        }
-
-        __hidden_asset_volume_writer::AssetVolumeCookedAssetWriter cookedAssetWriter(arena, volumeSession);
-        Core::Assets::CookEntryWriteContext cookEntryWriteContext{
-            cookedAssetWriter,
-            seenVirtualPathHashes
-        };
-        if(!parsedMetadata.entryRegistry.writeAll(cookEntryWriteContext))
+        if(!__hidden_asset_volume_writer::PushManifestToVolume(arena, manifest, volumeSession))
             return false;
         if(!volumeSession.flush()){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to flush staged volume metadata"));

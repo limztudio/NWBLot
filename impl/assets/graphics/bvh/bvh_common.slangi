@@ -27,6 +27,24 @@ struct NwbBvhNode{
     uint rightChild;
 };
 
+// Compressed BVH node: global-root 8-bit relative AABB quantization, a true 16 bytes / 4 uint32 lanes. The six
+// box coordinates (min.xyz, max.xyz) are each quantized to 8 bits against a SINGLE global reference box
+// (refMin, refMax) shared by the whole tree -- the mesh object-space bounds for a per-mesh BVH, the scene world
+// bounds for the instance BVH -- so the reference is carried out-of-band (the same BvhBuildPushConstants the LBVH
+// kernels already read / the scene-BVH upload already computes) and the node stores only the packed quantized
+// extents + the two child links. Halves the bandwidth of NwbBvhNode and packs two nodes per cache line.
+//
+// The 256-cell scheme is conservative by construction: quantizing q = clamp(floor((p-refMin)/extent*256),0,255)
+// and dequantizing the min edge to refMin + (q/256)*extent and the max edge to refMin + ((q+1)/256)*extent yields a
+// reconstructed box that is a SUPERSET of the original (each coordinate's cell fully contains the coordinate), so
+// ray-box tests never lose a true hit -- only false-positive nodes are tested, the standard quantization tradeoff.
+struct NwbBvhNodeQ{
+    uint packedMin;   // (qminX) | (qminY << 8) | (qminZ << 16) | (pad << 24)
+    uint packedMax;   // (qmaxX) | (qmaxY << 8) | (qmaxZ << 16) | (pad << 24)
+    uint leftChild;   // same link encoding as NwbBvhNode (leaf flag / primitive index)
+    uint rightChild;  //   "         "        "        "
+};
+
 // Per-dispatch constants shared by the LBVH build kernels (Morton, topology, fit). aabbMin/aabbMax are the
 // mesh object-space bounds used to quantize triangle centroids into Morton codes.
 struct NwbBvhBuildPushConstants{
@@ -47,6 +65,65 @@ bool nwbBvhNodeIsLeaf(const NwbBvhNode node){
 }
 
 uint nwbBvhLeafPrimitive(const NwbBvhNode node){
+    return node.leftChild & ~NWB_BVH_LEAF_FLAG;
+}
+
+// ---- Global-root 8-bit quantization (NwbBvhNodeQ) ----------------------------------------------
+//
+// Quantize one coordinate into [0,255] against the global reference box. extent is pre-floored to 1e-8 by the
+// caller so the divide is safe; p outside [refMin, refMax] is clamped to the cell range (a coordinate beyond the
+// reference box is itself an error -- the reference MUST be the true root -- so clamping is a defensive fallback,
+// not a normal path).
+uint nwbBvhQuantize1(const float p, const float refMin, const float invExtent){
+    const float scaled = (p - refMin) * invExtent * 256.0;
+    return clamp((uint)scaled, 0u, 255u);
+}
+
+// Pack two 3D points into the packedMin/packedMax words of an NwbBvhNodeQ against the global reference box
+// (refMin/refMax). invExtent is per-axis 1/max(refMax-refMin, 1e-8); the caller computes it once per tree.
+void nwbBvhQuantizeBounds(
+    const float3 boxMin, const float3 boxMax,
+    const float3 refMin, const float3 invExtent,
+    out uint packedMin, out uint packedMax
+){
+    const uint qxMin = nwbBvhQuantize1(boxMin.x, refMin.x, invExtent.x);
+    const uint qyMin = nwbBvhQuantize1(boxMin.y, refMin.y, invExtent.y);
+    const uint qzMin = nwbBvhQuantize1(boxMin.z, refMin.z, invExtent.z);
+    const uint qxMax = nwbBvhQuantize1(boxMax.x, refMin.x, invExtent.x);
+    const uint qyMax = nwbBvhQuantize1(boxMax.y, refMin.y, invExtent.y);
+    const uint qzMax = nwbBvhQuantize1(boxMax.z, refMin.z, invExtent.z);
+    packedMin = qxMin | (qyMin << 8u) | (qzMin << 16u);
+    packedMax = qxMax | (qyMax << 8u) | (qzMax << 16u);
+}
+
+// Dequantize the min edge of one axis: refMin + (q/256)*extent (the cell's lower bound -- a SUPERSET lower edge).
+float nwbBvhDequantize1(const uint q, const float refMin, const float extent){
+    return refMin + ((float)q * (1.0 / 256.0)) * extent;
+}
+
+// Unpack an NwbBvhNodeQ's quantized min/max against the global reference box into float3 min/max. Each dequantized
+// coordinate is the cell boundary of a SUPERSET box (min edge = lower cell bound, max edge = (q+1)/256*extent), so
+// the returned box never shrinks below the original and ray-box tests stay conservative (false positives only).
+void nwbBvhDequantizeBounds(
+    const NwbBvhNodeQ node,
+    const float3 refMin, const float3 refMax,
+    out float3 boxMin, out float3 boxMax
+){
+    const float3 extent = refMax - refMin;
+    boxMin.x = nwbBvhDequantize1((node.packedMin >> 0u) & 0xFFu, refMin.x, extent.x);
+    boxMin.y = nwbBvhDequantize1((node.packedMin >> 8u) & 0xFFu, refMin.y, extent.y);
+    boxMin.z = nwbBvhDequantize1((node.packedMin >> 16u) & 0xFFu, refMin.z, extent.z);
+    boxMax.x = nwbBvhDequantize1((node.packedMax >> 0u) & 0xFFu, refMin.x, extent.x) + (extent.x * (1.0 / 256.0));
+    boxMax.y = nwbBvhDequantize1((node.packedMax >> 8u) & 0xFFu, refMin.y, extent.y) + (extent.y * (1.0 / 256.0));
+    boxMax.z = nwbBvhDequantize1((node.packedMax >> 16u) & 0xFFu, refMin.z, extent.z) + (extent.z * (1.0 / 256.0));
+}
+
+// Leaf/link accessors mirror NwbBvhNode's encoding so a quantized tree uses the same parent/child/leaf ABI.
+bool nwbBvhQNodeIsLeaf(const NwbBvhNodeQ node){
+    return (node.leftChild & NWB_BVH_LEAF_FLAG) != 0u;
+}
+
+uint nwbBvhQLeafPrimitive(const NwbBvhNodeQ node){
     return node.leftChild & ~NWB_BVH_LEAF_FLAG;
 }
 

@@ -102,13 +102,26 @@ inline constexpr usize s_BvhBuildInitialCapacity = 1024u;
 // any realistic shadow caster; oversized meshes are skipped (their shadows fall back to "all lit").
 inline constexpr u32 s_BvhMaxPrimitivesPerMesh = 262144u;
 
-// CPU mirror of the shader NwbBvhNode (std430, 32 bytes): AABB + child node indices, or a leaf-flagged
+// CPU mirror of the shader NwbBvh (std430, 32 bytes): AABB + child node indices, or a leaf-flagged
 // primitive index in leftChild with rightChild = primitive count (see bvh_common.slangi).
 struct NwbBvhNodeGpu{
     Float3UInt aabbMinLeftChild;
     Float3UInt aabbMaxRightChild;
 };
 static_assert(sizeof(NwbBvhNodeGpu) == 32u, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
+
+// CPU mirror of the shader NwbBvhNodeQ (std430, 16 bytes): global-root 8-bit relative AABB quantization.
+// packedMin/packedMax each carry three 8-bit quantized extents + an unused high byte; leftChild/rightChild reuse
+// the NwbBvhNode link encoding (leaf flag / primitive index) so a quantized tree keeps the same parent/child/leaf
+// ABI. The reference box (refMin/refMax) is carried out-of-band by the producer (the mesh object-space bounds via
+// BvhBuildPushConstants for the per-mesh BVH, the scene world bounds for the instance BVH), never in the node.
+struct NwbBvhNodeQGpu{
+    u32 packedMin = 0u;
+    u32 packedMax = 0u;
+    u32 leftChild = 0u;
+    u32 rightChild = 0u;
+};
+static_assert(sizeof(NwbBvhNodeQGpu) == 16u, "NwbBvhNodeQGpu must match the shader NwbBvhNodeQ std430 layout");
 
 struct SceneBvhNodeBuildData{
     Float4 aabbMin;
@@ -137,6 +150,58 @@ namespace BvhNodeIndex{
         LeafFlag = 0x80000000u,
         Invalid = 0xFFFFFFFFu,
     };
+}
+
+// Global-root 8-bit relative AABB quantization (CPU mirror of the shader helpers in bvh_common.slangi).
+// Quantizes one coordinate into [0,255] against the reference box by TRUNCATION (matching the shader's
+// (uint)scaled rule); invExtent is 1/max(refMax-refMin,1e-8) per axis, precomputed once per tree by the producer.
+// A point outside [refMin,refMax] is clamped to the cell range -- a defensive fallback only, since the reference
+// box MUST be the true root bounds. (Any in-cell rounding keeps the dequantized box a superset, but the CPU and GPU
+// producers share one ABI, so the rule is kept identical to avoid an off-by-one between a tree and its mirror.)
+[[nodiscard]] inline u32 nwbBvhQuantize1(const f32 p, const f32 refMin, const f32 invExtent)noexcept{
+    const f32 scaled = (p - refMin) * invExtent * 256.0f;
+    if(scaled <= 0.0f)
+        return 0u;
+    const u32 q = static_cast<u32>(scaled);   // truncation toward zero, safe: scaled > 0 here
+    return (q < 255u) ? q : 255u;
+}
+
+// Pack a float3 min/max pair against the global reference box into a quantized node's packedMin/packedMax words.
+inline void nwbBvhQuantizeBounds(
+    const Float4 boxMin, const Float4 boxMax,
+    const Float4 refMin, const Float4 invExtent,
+    u32& packedMin, u32& packedMax
+)noexcept{
+    const u32 qxMin = nwbBvhQuantize1(boxMin.x, refMin.x, invExtent.x);
+    const u32 qyMin = nwbBvhQuantize1(boxMin.y, refMin.y, invExtent.y);
+    const u32 qzMin = nwbBvhQuantize1(boxMin.z, refMin.z, invExtent.z);
+    const u32 qxMax = nwbBvhQuantize1(boxMax.x, refMin.x, invExtent.x);
+    const u32 qyMax = nwbBvhQuantize1(boxMax.y, refMin.y, invExtent.y);
+    const u32 qzMax = nwbBvhQuantize1(boxMax.z, refMin.z, invExtent.z);
+    packedMin = qxMin | (qyMin << 8u) | (qzMin << 16u);
+    packedMax = qxMax | (qyMax << 8u) | (qzMax << 16u);
+}
+
+// Dequantize one coordinate's min cell edge (a SUPERSET lower bound) against the reference box.
+[[nodiscard]] inline f32 nwbBvhDequantize1(const u32 q, const f32 refMin, const f32 extent)noexcept{
+    return refMin + (static_cast<f32>(q) * (1.0f / 256.0f)) * extent;
+}
+
+// Unpack a quantized node's min/max against the global reference box. Each dequantized coordinate is the cell
+// boundary of a SUPERSET box (min edge = lower cell bound, max edge = (q+1)/256*extent), so the returned box never
+// shrinks below the original -- ray-box tests stay conservative (false positives only, never a missed true hit).
+inline void nwbBvhDequantizeBounds(
+    const NwbBvhNodeQGpu& node,
+    const Float4 refMin, const Float4 refMax,
+    Float4& boxMin, Float4& boxMax
+)noexcept{
+    const Float4 extent{refMax.x - refMin.x, refMax.y - refMin.y, refMax.z - refMin.z, 0.0f};
+    boxMin.x = nwbBvhDequantize1((node.packedMin >> 0u) & 0xFFu, refMin.x, extent.x);
+    boxMin.y = nwbBvhDequantize1((node.packedMin >> 8u) & 0xFFu, refMin.y, extent.y);
+    boxMin.z = nwbBvhDequantize1((node.packedMin >> 16u) & 0xFFu, refMin.z, extent.z);
+    boxMax.x = nwbBvhDequantize1((node.packedMax >> 0u) & 0xFFu, refMin.x, extent.x) + (extent.x * (1.0f / 256.0f));
+    boxMax.y = nwbBvhDequantize1((node.packedMax >> 8u) & 0xFFu, refMin.y, extent.y) + (extent.y * (1.0f / 256.0f));
+    boxMax.z = nwbBvhDequantize1((node.packedMax >> 16u) & 0xFFu, refMin.z, extent.z) + (extent.z * (1.0f / 256.0f));
 }
 
 // Initial scene/instance BVH instance capacity; grows by doubling like the hardware TLAS.

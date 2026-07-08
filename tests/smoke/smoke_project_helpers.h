@@ -8,6 +8,7 @@
 #define NWB_TESTS_SMOKE_PROJECT_HELPERS_H
 
 #include "arrow_yaw_input_handler.h"
+#include "smoke_environment.h"
 
 #include <loader/project_entry.h>
 
@@ -15,9 +16,7 @@
 #include <core/ecs/world.h>
 #include <core/graphics/module.h>
 #include <core/mesh/frame_math.h>
-#include <global/environment.h>
 #include <global/simplemath.h>
-#include <global/text_utils.h>
 #include <impl/ecs_scene/module.h>
 
 
@@ -66,12 +65,8 @@ namespace NWB::Tests::Smoke{
 }
 
 [[nodiscard]] inline f32 ReadSmokeFrozenYawFromEnvironment(const char* const variableName){
-    char value[32] = {};
-    if(!ReadEnvironmentVariableBuffer(variableName, value, sizeof(value)))
-        return -1.0f;
-
     f32 parsed = -1.0f;
-    return ParseF32FromChars(value, value + NWB_STRLEN(value), parsed) ? parsed : -1.0f;
+    return ReadSmokeEnvironmentF32(variableName, parsed) ? parsed : -1.0f;
 }
 
 class YawSpinController final{

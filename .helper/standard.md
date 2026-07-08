@@ -258,6 +258,9 @@ Updated: 2026-07-08
 - Prefer project C-runtime wrapper macros from `global/compile.h` for memory/string operations (`NWB_MEMCPY`, `NWB_MEMSET`, `NWB_MEMCMP`, `NWB_STRCPY`, etc.) instead of direct `std::`/CRT calls when equivalent wrappers exist.
 - For console I/O, prefer project stream macros from `global/compile.h` (`NWB_COUT`, `NWB_CERR`, `NWB_TCOUT`, `NWB_TCERR`) instead of direct `std::cout`/`std::cerr` or `fprintf(stdout/stderr, ...)`.
 - For standalone command-line utilities that own logger setup, initialize `NWB::Log::ClientStandalone` in the entry point and route non-interactive status, validation, failure, and listing output through `NWB_LOGGER_*` macros. Keep direct stream output only for interactive prompts, CLI help/error routing, terminal pause prompts, and logger-initialization fallback messages.
+- Do not use raw/fixed-buffer environment-variable probes for production, runtime, or cooker feature/configuration control.
+  - Test suites and smoke-test diagnostics may use test-local environment helpers.
+  - For engine/runtime/cook behavior, prefer explicit typed configuration paths such as command-line options, CMake cache options, project metadata, or existing config objects. Platform/session discovery and explicit debug diagnostic gates must stay isolated in named helpers and use project string APIs instead of caller-provided raw buffers.
 - When exposing inherited member functions without changing behavior, prefer `using BaseType::functionName;` over trivial forwarding wrappers like `inline foo(...){ return BaseType::foo(...); }`.
 - Keep forwarding wrappers only when they add behavior, transform contracts, or intentionally change the exposed API shape.
 - Do not add inline/local wrappers that only rename one operation or one function call, such as `return VectorAdd(...)`, `return LoadFoo(...)`, or `return SomeHelper(...)`.

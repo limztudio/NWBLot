@@ -23,9 +23,6 @@
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
-#include <global/environment.h>   // ReadEnvironmentVariableBuffer -- NWB_FLICKER_TEST_NO_CAUSTICS toggle
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -42,8 +39,10 @@ using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
+using NWB::Tests::Smoke::ReadSmokeEnvironmentText;
 using NWB::Tests::Smoke::ReadSmokeFrozenYawFromEnvironment;
 using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
+using NWB::Tests::Smoke::SmokeEnvironmentString;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
 
@@ -169,8 +168,9 @@ public:
         // false) -> the refractive glass female casts NO caustic irradiance (black-cleared additive no-op), the flicker-
         // free reference.
         static const bool s_disableCaustics = [](){
-            char value[8] = {};
-            return ReadEnvironmentVariableBuffer("NWB_FLICKER_TEST_NO_CAUSTICS", value, sizeof(value)) && value[0] == '1';
+            NWB::Core::Alloc::GlobalArena arena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+            SmokeEnvironmentString value(arena);
+            return ReadSmokeEnvironmentText("NWB_FLICKER_TEST_NO_CAUSTICS", value) && value[0] == '1';
         }();
         if(s_disableCaustics){
             for(const NWB::Core::ECS::EntityID lightEntity : { directionalLight, pointLight }){

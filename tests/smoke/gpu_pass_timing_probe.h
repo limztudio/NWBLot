@@ -5,10 +5,11 @@
 #pragma once
 
 
+#include "smoke_environment.h"
+
 #include <core/common/log.h>
 #include <core/perf/timing.h>
 #include <global/basic_string.h>
-#include <global/environment.h>
 #include <global/filesystem.h>
 #include <global/name.h>
 #include <global/simplemath.h>
@@ -150,11 +151,12 @@ private:
     }
 
     static void OpenTimingFile(OutputFileStream& timingFile){
-        char timingPath[1024] = {};
-        if(!ReadEnvironmentVariableBuffer("NWB_GPU_TIMING_FILE", timingPath, sizeof(timingPath)))
+        Core::Alloc::GlobalArena arena(s_SmokeEnvironmentArena);
+        SmokeEnvironmentString timingPath(arena);
+        if(!ReadSmokeEnvironmentText("NWB_GPU_TIMING_FILE", timingPath))
             return;
 
-        timingFile.open(timingPath, s_FileOpenAppend);
+        timingFile.open(timingPath.c_str(), s_FileOpenAppend);
     }
 
     void resetInterval(){

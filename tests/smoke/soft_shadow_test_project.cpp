@@ -23,10 +23,6 @@
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
-#include <global/environment.h>   // ReadEnvironmentVariableBuffer -- NWB_SOFT_SHADOW_TEST_ANGLE / _SPIN_ANGLE
-#include <global/text_utils.h>     // ParseF32FromChars -- env float parse
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -44,6 +40,7 @@ using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::MakeSmokeYawDisplay;
+using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
 using NWB::Tests::Smoke::ReadSmokeFrozenYawFromEnvironment;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
@@ -139,11 +136,8 @@ private:
     // Larger = softer penumbra; clamped to a sane [0, 0.2] rad (0..~11.5deg) so a typo can't blow the penumbra out.
     static f32 configuredAngularRadius(){
         static const f32 s_angle = [](){
-            char value[32] = {};
-            if(!ReadEnvironmentVariableBuffer("NWB_SOFT_SHADOW_TEST_ANGLE", value, sizeof(value)))
-                return s_DefaultAngularRadius;
             f32 parsed = s_DefaultAngularRadius;
-            if(!ParseF32FromChars(value, value + NWB_STRLEN(value), parsed))
+            if(!ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE", parsed))
                 return s_DefaultAngularRadius;
             return Min(Max(parsed, 0.0f), 0.2f);
         }();
@@ -155,11 +149,8 @@ private:
     // (the source subtends asin(radius/dist)), so moving the light softens it too -- radius is only half the story.
     static f32 configuredSourceRadius(){
         static const f32 s_radius = [](){
-            char value[32] = {};
-            if(!ReadEnvironmentVariableBuffer("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS", value, sizeof(value)))
-                return s_DefaultSourceRadius;
             f32 parsed = s_DefaultSourceRadius;
-            if(!ParseF32FromChars(value, value + NWB_STRLEN(value), parsed))
+            if(!ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS", parsed))
                 return s_DefaultSourceRadius;
             return Min(Max(parsed, 0.0f), 1.0f);
         }();

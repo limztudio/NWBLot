@@ -25,10 +25,8 @@
 #include "csg_smoke_helpers.h"
 #endif
 
-#include <global/environment.h>   // ReadEnvironmentVariableBuffer -- the NWB_TRANSPARENT_MULTI_SPIN_SPEED diagnostic override
 #include <global/math/constant.h> // s_2PI -- normalising the displayed yaw into [0, 2pi) for the title bar
 #include <global/simplemath.h>    // IsFinite -- env override validation
-#include <global/text_utils.h>    // ParseF32FromChars -- env float diagnostics
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,6 +44,7 @@ using NWB::Tests::Smoke::CreateSmokeCamera;
 using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
+using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
 using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 using NWB::Tests::Smoke::AddStaticCsgMeshReceiver;
@@ -447,11 +446,8 @@ public:
     // vector reprojection across a rotation). Unset / unparseable keeps s_TransparentSceneRotationSpeed.
     static f32 effectiveRotationSpeed(){
         static const f32 s_speed = [](){
-            char value[32] = {};
-            if(!ReadEnvironmentVariableBuffer("NWB_TRANSPARENT_MULTI_SPIN_SPEED", value, sizeof(value)))
-                return s_TransparentSceneRotationSpeed;
             f32 parsed = 0.0f;
-            if(!ParseF32FromChars(value, value + NWB_STRLEN(value), parsed))
+            if(!ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_SPEED", parsed))
                 return s_TransparentSceneRotationSpeed;
             return IsFinite(parsed) && (parsed >= 0.0f) ? parsed : s_TransparentSceneRotationSpeed;
         }();
@@ -462,11 +458,8 @@ public:
     // for deterministic frame-exact A/B captures. Returns a non-finite sentinel when unset so the normal spin runs.
     static f32 effectiveFrozenAngle(){
         static const f32 s_angle = [](){
-            char value[32] = {};
-            if(!ReadEnvironmentVariableBuffer("NWB_TRANSPARENT_MULTI_SPIN_ANGLE", value, sizeof(value)))
-                return Limit<f32>::s_QuietNaN;
             f32 parsed = 0.0f;
-            if(!ParseF32FromChars(value, value + NWB_STRLEN(value), parsed))
+            if(!ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE", parsed))
                 return Limit<f32>::s_QuietNaN;
             return IsFinite(parsed) ? parsed : Limit<f32>::s_QuietNaN;
         }();

@@ -1095,8 +1095,15 @@ bool RendererRayTracingSystem::buildMeshSwBvh(
     dispatchBuildKernel(rayTracingState().m_bvhMortonPipeline.get(), DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
     bvhBuildBarrier();
 
-    if(!bvhBitonicSort(commandList, primitiveCount, paddedCount))
-        return false;
+    // The bitonic sort is the rebuild step whose intra-tile collapse (c996a917) is the perf change under
+    // measurement; give it its own scope so its cost is separable from the surrounding morton/topology/fit work.
+    // Per-mesh (buildMeshSwBvh runs once per rebuild), so all sort dispatches in a frame accumulate into one
+    // render.sw_bvh_sort average. Scoped here, not in bvhBitonicSort(), so the one-shot self-test sort stays out.
+    {
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SwBvhSort, graphics().getDevice(), commandList);
+        if(!bvhBitonicSort(commandList, primitiveCount, paddedCount))
+            return false;
+    }
     bvhBuildBarrier();
 
     if(primitiveCount > 1u){

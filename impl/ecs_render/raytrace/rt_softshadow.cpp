@@ -1027,8 +1027,8 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     // Half-res a-trous wavelet passes at a doubling dilation, starting from soft-B. Each pass writes the buffer NOT
     // holding its input (outputHalfA reads soft-B writes soft-A; outputHalfB reads soft-A writes soft-B). srcIsHalfB
     // tracks where the latest result lives; PREPARE left it in soft-B so it starts true.
-    // The per-signal pass count (opaque = NWB_SHADOW_RESOLVE_PASS_COUNT 5, transparent = NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT
-    // 3). Both must be ODD so the final result lands in soft-A (see the assert below); both literals are compile-time odd.
+    // The per-signal pass count (opaque = NWB_SHADOW_RESOLVE_PASS_COUNT 1, transparent = NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT
+    // 1). Both must be ODD so the final result lands in soft-A (see the assert below); both literals are compile-time odd.
     static_assert((NWB_SHADOW_RESOLVE_PASS_COUNT % 2) == 1, "opaque resolve pass count must be ODD (final result must land in soft-A for the upsample)");
     static_assert((NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT % 2) == 1, "transparent resolve pass count must be ODD (final result must land in soft-A for the upsample)");
     bool srcIsHalfB = true;
@@ -1039,7 +1039,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     }
 
     // UPSAMPLE (full-res): edge-aware bilateral resample of the FINAL half-res visibility into the full-res visibility
-    // slot. The final wavelet result lives in soft-A when waveletPassCount is ODD (5 opaque / 3 transparent) -- srcIsHalfB is
+    // slot. The final wavelet result lives in soft-A when waveletPassCount is ODD (1 opaque / 1 transparent) -- srcIsHalfB is
     // now false. Both upsample sets read soft-A (INPUT_COLOR) by construction; assert the parity so a pass-count change is caught.
     NWB_ASSERT(!srcIsHalfB); // waveletPassCount must be odd for the final result to land in soft-A (the upsample's input)
     runPass(dispatch.upsample, 1u, ShadowResolveStage::Upsample, fullGroupsX, fullGroupsY);

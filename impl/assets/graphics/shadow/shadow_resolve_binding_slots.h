@@ -90,14 +90,14 @@
 #define NWB_SHADOW_RESOLVE_CHANNELS_RGB    3
 
 // A-trous wavelet pass count (the dispatch runs a PREPARE copy first, then this many wavelet passes at dilation 1<<pass).
-// Run at HALF resolution. REDUCED 5 -> 3 as a product-perf trade (measured ~11% off render.shadow_visibility on the stress
-// scene): 3 passes run dilations 1,2,4 (== 2,4,8 full-equivalent, ~16px support), DROPPING the wide 8,16 passes that did most
-// of the low-frequency reconstruction of the noisy single-sample penumbra -- so this trades some smoothing (more grain on a
-// curved self-shadow / freshly-disoccluded region, the accepted cost). MUST stay ODD so the final wavelet lands in soft-A
-// (the upsample's input; see the dispatch static_assert). NOTE: if the grain is too much, keeping the WIDE 3 dilations
-// (4,8,16) instead of 1,2,4 reconstructs wider at the same pass cost -- that is a dispatch-schedule change (the 1<<pass
-// derivation), not just this count.
-#define NWB_SHADOW_RESOLVE_PASS_COUNT 3
+// Run at HALF resolution. REDUCED 5 -> 3 -> 1: render.shadow_visibility was the only SW pass over the 1ms cutoff on the
+// stress scene, and the a-trous wavelet passes were its largest single cost. 1 pass keeps only the dilation-1 (2px
+// full-equivalent) tap -- the cheapest possible denoise that still runs the edge-avoiding wavelet kernel once -- and the
+// temporal reproject-merge upstream (plus the bilateral upsample downstream) carry the bulk of the low-frequency
+// reconstruction the wider passes used to do. The accepted cost is noticeably MORE penumbra grain on a curved self-shadow /
+// freshly-disoccluded region. MUST stay ODD so the final wavelet lands in soft-A (the upsample's input; see the dispatch
+// static_assert).
+#define NWB_SHADOW_RESOLVE_PASS_COUNT 1
 
 // A-trous wavelet pass count for the soft COLORED-TRANSPARENT resolve. Set to ONE (vs the opaque 5), for VISIBILITY not just
 // perf: the colored glass tint is a WEAK, low-contrast signal, and every extra a-trous pass SPREADS that faint tint thinner

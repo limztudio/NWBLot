@@ -782,11 +782,15 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
         bvhSortBarrier();
     }
 
-    // Phase B — GLOBAL merge: the standard bitonic merge steps for sequenceSize > GROUP_SIZE. Each thread owns
-    // one element and the XOR partner lands in a different tile, so these are plain global-memory swaps. This
-    // merges the per-tile sorted runs into the globally sorted sequence.
+    // Phase B — GLOBAL merge: the standard bitonic merging steps for sequenceSize > GROUP_SIZE. Each step is
+    // split by compareDistance relative to the tile stride GROUP_SIZE:
+    //   - compareDistance >= GROUP_SIZE : the XOR partner lands in a DIFFERENT tile, so these stay plain
+    //     global-memory swaps — one dispatch each (GLOBAL).
+    //   - compareDistance <  GROUP_SIZE : the XOR partner stays in the SAME tile, so the 8 steps from
+    //     GROUP_SIZE/2 down to 1 run in one groupshared dispatch per sequenceSize (GLOBAL_TAIL), collapsing
+    //     what would otherwise be 8 dispatches + 8 UAV barriers per sequenceSize into one.
     for(u32 sequenceSize = static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE) << 1u; sequenceSize <= paddedCount; sequenceSize <<= 1u){
-        for(u32 compareDistance = sequenceSize >> 1u; compareDistance > 0u; compareDistance >>= 1u){
+        for(u32 compareDistance = sequenceSize >> 1u; compareDistance >= static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE); compareDistance >>= 1u){
             BvhSortPushConstants pushConstants;
             pushConstants.elementCount = elementCount;
             pushConstants.compareDistance = compareDistance;
@@ -795,6 +799,13 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
             dispatchSort(pushConstants, groupCount);
             bvhSortBarrier();
         }
+
+        BvhSortPushConstants tailPushConstants;
+        tailPushConstants.elementCount = elementCount;
+        tailPushConstants.sequenceSize = sequenceSize;
+        tailPushConstants.mode = 2u;    // GLOBAL_TAIL
+        dispatchSort(tailPushConstants, groupCount);
+        bvhSortBarrier();
     }
     return true;
 }

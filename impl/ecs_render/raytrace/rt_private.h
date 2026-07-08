@@ -85,8 +85,10 @@ inline constexpr u32 s_SwShadowEdgeStatsPeriod = 120u;
 inline constexpr u32 s_SwShadowEdgeStatsLogDelay = 8u;
 
 // CPU mirror of the shader NwbBvhBitonicSortPushConstants block. `mode` selects the shader regime:
-// 0 = LOCAL_TILE (one dispatch sorts each GROUP_SIZE tile in groupshared), 1 = GLOBAL (one merge step for a
-// sequenceSize > GROUP_SIZE, global-memory compare-exchange). compareDistance/sequenceSize are GLOBAL-only.
+// 0 = LOCAL_TILE (one dispatch sorts each GROUP_SIZE tile in groupshared), 1 = GLOBAL (one INTER-tile merge
+// step for a sequenceSize > GROUP_SIZE with compareDistance >= GROUP_SIZE, global-memory compare-exchange),
+// 2 = GLOBAL_TAIL (the per-sequenceSize INTRA-tile tail: one groupshared dispatch for the 8 compareDistance
+// < GROUP_SIZE steps). compareDistance is GLOBAL-only; sequenceSize is GLOBAL/GLOBAL_TAIL-only.
 struct BvhSortPushConstants{
     u32 elementCount = 0u;
     u32 compareDistance = 0u;

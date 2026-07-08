@@ -113,14 +113,21 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     uint stackPointer = 0u;
     uint nodeIndex = 0u; // per-mesh root
 
+    // Only the ROOT can fail the slab test. Every other node the loop reaches -- the near child descended inline or the
+    // far child popped from the stack -- was already proven to intersect by its parent's entry-distance ranking
+    // (nwbSwShadowRayAabbEntryT), whose accept/reject is byte-identical to nwbSwShadowRayAabb (same slab math, same
+    // padding -- "the miss set is identical"). Testing the root once up front lets the loop drop a redundant full slab
+    // test on every visited node. The internal-node branch still tests BOTH children (their tight boxes can both miss a
+    // padded parent), so the accept/reject set is unchanged; only the per-node redundant re-test is removed.
+    {
+        const NwbBvhNode root = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][nodeIndex];
+        if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, root.aabbMin, root.aabbMax))
+            return; // whole mesh missed: no occluder
+    }
+
     while(true){
         const NwbBvhNode node = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][nodeIndex];
-        if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax)){
-            if(stackPointer == 0u)
-                return; // whole mesh exhausted: no further occluder
-            nodeIndex = stack[--stackPointer];
-            continue;
-        }
+        // No loop-top box test: this node is the pre-proven root or a parent-ranked child (see above).
 
         if(nwbBvhNodeIsLeaf(node)){
             const uint triangle = nwbBvhLeafPrimitive(node);
@@ -246,14 +253,17 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
     uint stackPointer = 0u;
     uint nodeIndex = 0u; // root
 
+    // Root-only slab test (see the per-mesh traversal): every other node the loop reaches is already proven to
+    // intersect by its parent's entry-distance ranking, so the loop drops the per-node redundant re-test.
+    {
+        const NwbBvhNode root = g_NwbSwShadowSceneNodes[nodeIndex];
+        if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, root.aabbMin, root.aabbMax))
+            return; // whole scene missed
+    }
+
     while(true){
         const NwbBvhNode node = g_NwbSwShadowSceneNodes[nodeIndex];
-        if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax)){
-            if(stackPointer == 0u)
-                return; // whole scene exhausted
-            nodeIndex = stack[--stackPointer];
-            continue;
-        }
+        // No loop-top box test: this node is the pre-proven root or a parent-ranked child (see above).
 
         if(nwbBvhNodeIsLeaf(node)){
             nwbSwShadowInstanceOccluded(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax, acc);

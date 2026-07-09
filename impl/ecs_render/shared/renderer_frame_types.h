@@ -116,6 +116,9 @@ struct DeferredFrameTargets{
     Core::Format::Enum csgRemovedIntervalCapNormalFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgRemovedIntervalDataFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgRemovedIntervalCountFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum shadowCoarseTransmittanceFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum shadowSoftFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum shadowSoftGeometryFormat = Core::Format::UNKNOWN;
     u32 csgPeelLayerCount = 0u;
     u32 csgReceiverEventLayerCount = 0u;
     u32 csgReceiverSpanLayerCount = 0u;
@@ -145,7 +148,6 @@ struct DeferredFrameTargets{
     // reads it to bilinearly interpolate the flat shadow interior and re-trace only the edge blocks at full resolution.
     // Soft/low-frequency colored signal, so half-res sampling + edge refine is the soft-shadow analog of an irradiance
     // cache. Needs no clear (the coarse trace fully overwrites every block it samples). Null when adaptive is disabled.
-    Core::Format::Enum shadowCoarseTransmittanceFormat = Core::Format::UNKNOWN;
     Core::TextureHandle shadowCoarseTransmittance;
     // Soft opaque shadow HALF-res targets:
     //  - shadowSoftHalfA / shadowSoftHalfB: two HALF-res RGBA16F Texture2DArrays (NWB_SCENE_SHADOW_SLOT_COUNT layers),
@@ -155,10 +157,8 @@ struct DeferredFrameTargets{
     //    overwrites, and the trace writes the LIT identity for background or inactive slots).
     //  - shadowSoftGeometry: a HALF-res RGBA16F single-layer geometry cache (xy = octahedral receiver normal, z =
     //    camera distance, w = validity) the geometry downsample pre-pass fills once per frame for the edge-stop.
-    Core::Format::Enum shadowSoftFormat = Core::Format::UNKNOWN;
     Core::TextureHandle shadowSoftHalfA;
     Core::TextureHandle shadowSoftHalfB;
-    Core::Format::Enum shadowSoftGeometryFormat = Core::Format::UNKNOWN;
     Core::TextureHandle shadowSoftGeometry;
     // Soft opaque shadow TEMPORAL accumulation HALF-res targets. The
     // reproject-merge pass (inserted per slot between the soft trace and the a-trous resolve) accumulates the noisy per-

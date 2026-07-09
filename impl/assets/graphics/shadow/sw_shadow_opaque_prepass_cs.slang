@@ -4,8 +4,7 @@
 
 // Software-shadow OPAQUE pre-pass (full resolution). One thread per full-res pixel: trace one OPAQUE-only occlusion ray
 // per shadowed light and OVERWRITE the visibility with the binary blocker mask -- the software analog of the HW RayQuery
-// opaque pass, run before the transparent multiply. The A/B baseline for the adaptive-opaque coarse+resolve path
-// (dispatched when NWB_SW_SHADOW_ADAPTIVE_OPAQUE=0). No coarse buffer; the whole grid is traced full-res.
+// opaque pass, run before the transparent multiply. No coarse buffer; the whole grid is traced full-res.
 
 
 #include "sw_binding_slots.h"

@@ -117,8 +117,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 g_NwbSwShadowEdgeList[base + 1u] = i;
             }
             else{
-                // OVERFLOW: this edge will not be traced, so degrade it to the interpolated fallback (Stage-1 quality)
-                // rather than leaving the un-tinted opaque mask. Near-impossible at the allocated capacity.
+                // OVERFLOW: this edge will not be traced, so degrade it to the interpolated fallback rather than leaving
+                // the un-tinted opaque mask. Near-impossible at the allocated capacity.
                 const half3 tx0 = lerp(t00, t10, half(w.x));
                 const half3 tx1 = lerp(t01, t11, half(w.x));
                 const half3 interp = lerp(tx0, tx1, half(w.y));

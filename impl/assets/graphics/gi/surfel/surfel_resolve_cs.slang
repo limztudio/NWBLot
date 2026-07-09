@@ -5,7 +5,7 @@
 // Surfel resolve: one thread per HALF-res pixel (U6). Reads the G-buffer world position + normal, gathers the surfel
 // irradiance (nwbSurfelGather -- the (2*EXTENT+1)^3 hash walk, reused verbatim), and writes it to a HALF-res texture
 // that surfel_upsample_cs then reconstructs into the full-res surfelIrradiance the deferred-lighting PIXEL shader samples.
-// Running the 125-cell gather at 1/FACTOR^2 the pixels is the U6 perf win (a half-res 5x5x5 ~= the old full-res 3x3x3).
+// Running the 125-cell gather at 1/FACTOR^2 the pixels is the U6 perf win (a half-res 5x5x5 ~= a full-res 3x3x3).
 // This is the caustic-style decoupling: the surfel pool is touched ONLY by COMPUTE (spawn / hash-build / trace / this
 // resolve), never by the pixel shader, so the frames-in-flight race (the pixel gather of frame N overlapping the compute
 // RMW of frame N+1 on the shared single-buffered pool) is eliminated.

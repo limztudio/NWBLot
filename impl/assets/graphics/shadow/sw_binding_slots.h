@@ -114,8 +114,8 @@
 // Occluder class the per-mesh traversal filters to. Each pass kernel that traces #defines NWB_SW_SHADOW_OCCLUDER to
 // one of these BEFORE including sw_shadow_traverse.slangi; the filter in nwbSwShadowInstanceOccluded then skips the
 // other class. The class is a compile-time identity baked into each pass, not a runtime push value:
-//  - OPAQUE      -> skip TRANSPARENT occluders: a binary blocker mask. The opaque prepass / adaptive-opaque coarse +
-//                   resolve / soft opaque half-res trace (the SW analog of the HW RayQuery opaque mask).
+//  - OPAQUE      -> skip TRANSPARENT occluders: a binary blocker mask. Used by the opaque prepass and soft opaque
+//                   half-res trace, the SW analogs of the HW RayQuery opaque mask.
 //  - TRANSPARENT -> skip OPAQUE occluders: the colored Beer-Lambert tint MULTIPLIED onto an existing opaque mask
 //                   (the transparent coarse / resolve / indirect re-trace / uniform half-res multiply). The opaque
 //                   shadow already came from the HW mask (hybrid) or the opaque prepass (software), so tracing opaque

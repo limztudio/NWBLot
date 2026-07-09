@@ -4,12 +4,10 @@
 
 // UNIFORM transparent multiply at HALF resolution (the non-adaptive Stage-1 baseline). One transparent trace per 2x2
 // block, folded onto EACH of the block's four full-res pixels' own opaque mask -- so the opaque (hard) shadow keeps full
-// resolution while the soft colored transparent shadow is shared 2x2. Kept for A/B comparison against the adaptive path
-// (dispatched when NWB_SW_SHADOW_ADAPTIVE=0).
+// resolution while the soft colored transparent shadow is shared 2x2. Dispatched when NWB_SW_SHADOW_ADAPTIVE=0.
 //
 // The block stride is a LITERAL *2u / 2x2 fold, NOT NWB_SW_SHADOW_COARSE_FACTOR. At the current COARSE_SHIFT=2 the
-// dispatch grid is the COARSE grid (quarter-res), so a *2u block covers only half the screen. This A/B-only baseline keeps
-// that behaviour for comparison with the adaptive path.
+// dispatch grid is the COARSE grid (quarter-res), so a *2u block covers only half the screen.
 
 
 #include "sw_binding_slots.h"
@@ -45,7 +43,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     // HALF-res: each thread owns a 2x2 full-res block, sampling the G-buffer at (and tracing once from) the block's
-    // top-left full-res texel. LITERAL *2u -- see the preserved-as-is note above.
+    // top-left full-res texel.
     const uint2 base = pixel * 2u;
     if(base.x >= g_NwbSwShadowPush.width || base.y >= g_NwbSwShadowPush.height)
         return;

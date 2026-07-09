@@ -11,8 +11,8 @@
 
 // Surfel GI bindings. Three compute passes + the deferred-lighting gather share the surfel pool / hash / counter /
 // constants; the TRACE pass additionally reuses the SW-BVH bindings (scene/instance/per-mesh, slots 0-10) the SW
-// shadow/caustic path already builds, exactly like the retired probe trace did -- so the trace body
-// (gi_sw_trace.slangi: nwbGiSwTraceClosest + nwbGiSwShadeHit + per-instance baseColor tint) is reused verbatim.
+// shadow/caustic path already builds, so the trace body (gi_sw_trace.slangi: nwbGiSwTraceClosest +
+// nwbGiSwShadeHit + per-instance baseColor tint) is reused verbatim.
 //
 //   HASH_BUILD: constants + pool(UAV) + cellHead(UAV)                                  [runs BEFORE spawn]
 //   SPAWN     : constants + pool(UAV) + cellHead(UAV, this frame) + counter(UAV) + G-buffer worldPos/normal(SRV)
@@ -65,7 +65,7 @@
 #define NWB_SURFEL_RESOLVE_BINDING_OUTPUT 5                // RWTexture2D<float4> (HALF-res irradiance; upsampled to full)
 #define NWB_SURFEL_RESOLVE_GROUP_SIZE 8
 // Half-res resolve factor (U6): the resolve gather -- the (2*EXTENT+1)^3 = 5x5x5 = 125-cell hotspot -- runs at 1/FACTOR^2
-// the pixels, then the upsample reconstructs full-res. FACTOR 2 quarters the gather threads (a half-res 5x5x5 ~= the old
+// the pixels, then the upsample reconstructs full-res. FACTOR 2 quarters the gather threads (a half-res 5x5x5 ~= a
 // full-res 3x3x3 in cost), which is what pays back the seam fix's 27->125 cell widening.
 #define NWB_SURFEL_RESOLVE_HALF_FACTOR 2
 

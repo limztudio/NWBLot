@@ -421,11 +421,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     // transparent colored shadow onto it. This mirrors the hybrid path (HW opaque mask + transparent) while keeping hard
     // opaque shadows full-res sharp.
     if(!multiplyOntoOpaque){
-        // The soft pipeline OVERWRITES every slot's visibility (fold=Overwrite at the upsample), so when it will run the
-        // full-res opaque prepass is PURE WASTED WORK -- a full-res software-BVH trace over every pixel x every light,
-        // immediately overwritten by the soft resolve. SKIP it when soft will run; keep it ONLY as the fallback when soft
-        // is not ready this frame (its full-res binary mask is then the shadow). Retiring the half-res adaptive-opaque
-        // economizer (Stage 6) while leaving this full-res prepass unconditional was the SW-path perf regression.
+        // The soft pipeline overwrites every slot's visibility at upsample, so skip the full-res opaque prepass when
+        // soft will run; keep it as the fallback when soft is not ready this frame.
         const bool softWillRun = rayTracingState().m_softShadowReady && rayTracingState().m_softShadowSlotMask != 0u;
         if(!softWillRun){
             SwShadowOpaquePrepassPushConstants opaquePush;
@@ -1064,8 +1061,8 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
             return false;
         }
 
-        // The Stage-2 adaptive config is fixed at its shipping defaults (adaptive ON, compact ON, adaptiveOpaque ON, edge
-        // threshold 0.1, stats OFF -- see renderer_state.h). Create the persistent edge-fraction counter + its CPU-readable
+        // The transparent adaptive config is fixed at its shipping defaults (adaptive ON, compact ON, edge threshold 0.1,
+        // stats OFF -- see renderer_state.h). Create the persistent edge-fraction counter + its CPU-readable
         // snapshot: both are tiny and always bound (the shader always declares slots 15/16), so they exist alongside the
         // layout regardless of the config -- the config only selects the dispatched mode + whether stats are tallied.
 

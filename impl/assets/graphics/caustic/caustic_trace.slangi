@@ -186,7 +186,7 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
 
         const float3 refracted = nwbCausticRefract(direction, normal, eta);
         if(dot(refracted, refracted) < 1e-12)
-            return splat; // total internal reflection -> dropped in v1 (documented)
+            return splat;
 
         // A real glass transmission happened (passed the TIR early-out), so this photon now carries a caustic: mark
         // it so the opaque-receiver branch keeps its deposit (vs dropping un-refracted direct light).

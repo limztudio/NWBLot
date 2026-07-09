@@ -26,6 +26,7 @@ static constexpr usize s_MeshSkinInfluenceCount = s_Vector4ComponentCount;
 static constexpr usize s_JointMatrixRowCount = 3u;
 static constexpr usize s_TriangleIndexCount = 3u;
 static constexpr usize s_AuthoredVertexRefComponentCount = 5u;
+static constexpr usize s_MaxSkeletonJointCount = static_cast<usize>(Limit<u16>::s_Max) + 1u;
 
 struct MeshSkinInfluence{
     u16 joint[s_MeshSkinInfluenceCount] = {};

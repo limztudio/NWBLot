@@ -73,7 +73,7 @@ template<typename CookEntryT>
             continue;
         }
 
-        const f32 coneCutoff = static_cast<f32>(MeshletConePackedCutoff(bounds)) * (1.0f / 255.0f);
+        const f32 coneCutoff = static_cast<f32>(MeshletConePackedCutoff(bounds)) * (1.0f / s_MeshletUnorm8Max);
         ++metrics.coneEnabledCount;
         metrics.coneCutoffSum += coneCutoff;
         metrics.worstConeCutoff = Min(metrics.worstConeCutoff, coneCutoff);

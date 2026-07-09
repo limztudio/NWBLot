@@ -25,6 +25,8 @@ namespace __hidden_mesh{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr usize s_RayTracingReconstructionScratchPaddingBytes = 4096u;
+
 template<typename PayloadT, typename PayloadVector>
 [[nodiscard]] static Core::BufferHandle SetupMeshBuffer(
     Core::Graphics& graphics,
@@ -326,7 +328,10 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     // byte buffer. blasBuildPending / swBvhBuildPending route the mesh to whichever backend is active.
     {
         const usize indexCount = static_cast<usize>(createdMesh.meshletPrimitiveIndexCount);
-        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RayTracingBuildArena, indexCount * sizeof(u32) + 4096u);
+        Core::Alloc::ScratchArena scratchArena(
+            RendererArenaScope::s_RayTracingBuildArena,
+            indexCount * sizeof(u32) + __hidden_mesh::s_RayTracingReconstructionScratchPaddingBytes
+        );
         Vector<u32, Core::Alloc::ScratchArena> triangleIndices{ scratchArena };
         triangleIndices.reserve(indexCount);
         if(!BuildMeshletTriangleIndices(mesh, triangleIndices)){
@@ -382,7 +387,10 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     // ByteAddressBuffer, so it always carries a raw view; the structured stride also exposes a plain SRV.
     {
         const usize attributeCount = mesh.meshletPrimitiveIndices().size();
-        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RayTracingAttributeArena, attributeCount * sizeof(AttribGpu) + 4096u);
+        Core::Alloc::ScratchArena scratchArena(
+            RendererArenaScope::s_RayTracingAttributeArena,
+            attributeCount * sizeof(AttribGpu) + __hidden_mesh::s_RayTracingReconstructionScratchPaddingBytes
+        );
         Vector<AttribGpu, Core::Alloc::ScratchArena> triangleAttributes{ scratchArena };
         if(!BuildMeshletTriangleAttributes(mesh, triangleAttributes)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle attributes for mesh '{}'")

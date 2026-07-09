@@ -40,6 +40,9 @@ class ThreadPool : NoCopy{
 private:
     static constexpr usize s_TaskInlineStorageBytes = 128;
     static constexpr usize s_ChunkOversubscription = 4;
+    static constexpr usize s_TaskQueueSlotsPerThread = 8;
+    static constexpr usize s_DefaultArenaScratchBytes = 4096;
+    static constexpr usize s_MinDefaultArenaBytes = 32768;
 
 
 private:
@@ -100,10 +103,10 @@ private:
     static inline usize defaultArenaSize(u32 threadCount){
         const usize workerCount = AddSize(static_cast<usize>(threadCount), 1);
         const usize workerBytes = SizeOf<sizeof(JoiningThread)>(workerCount);
-        const usize taskCount = SizeOf<8>(static_cast<usize>(threadCount));
+        const usize taskCount = SizeOf<s_TaskQueueSlotsPerThread>(static_cast<usize>(threadCount));
         const usize taskBytes = SizeOf<sizeof(TaskItem)>(taskCount);
-        const usize total = AddSize(AddSize(workerBytes, taskBytes), 4096);
-        return PersistentArena::StructureAlignedSize(total > 32768 ? total : 32768);
+        const usize total = AddSize(AddSize(workerBytes, taskBytes), s_DefaultArenaScratchBytes);
+        return PersistentArena::StructureAlignedSize(total > s_MinDefaultArenaBytes ? total : s_MinDefaultArenaBytes);
     }
 
     static inline usize computeChunkCount(usize maxChunks, usize totalThreads){

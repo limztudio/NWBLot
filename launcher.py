@@ -19,11 +19,20 @@ CONFIGURATIONS = ("dbg", "opt", "fin")
 DEFAULT_ARCH = "x64"
 DEFAULT_CONFIG = "dbg"
 DEFAULT_DOMAIN = "full"
+DEFAULT_BUILD_JOBS = "8"
 SMOKE_SCRIPT = Path("tests") / "smoke" / "launcher.py"
 PROFILE_LOGSERVER_TARGET = "nwb_logserver"
 PROFILE_LOGSERVER_EXECUTABLE = "logserver"
 PROFILE_LOG_ADDRESS = "http://localhost"
 PROFILE_LOGSERVER_TIMEOUT_SECONDS = 10.0
+PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS = 5.0
+PROFILE_LOG_HOST = "127.0.0.1"
+PROFILE_LOG_PORT_AUTO = 0
+PROFILE_LOG_PORT_MIN = 0
+PROFILE_LOG_PORT_MAX = 65535
+PROFILE_LOG_DRY_RUN_PORT = 7117
+PROFILE_LOG_CONNECT_TIMEOUT_SECONDS = 0.25
+PROFILE_LOG_READY_POLL_SECONDS = 0.05
 PROFILE_REQUIRED_DEFINES = {
     "NWB_BUILD_LOGSERVER": "ON",
 }
@@ -470,7 +479,7 @@ def validate_launch_paths(executable: Path, working_directory: Path, dry_run: bo
         raise SystemExit(f"missing working directory: {working_directory}")
 
 
-def terminate_process(process: Optional[subprocess.Popen], label: str, timeout_seconds: float = 5.0) -> None:
+def terminate_process(process: Optional[subprocess.Popen], label: str, timeout_seconds: float = PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS) -> None:
     if process is None or process.poll() is not None:
         return
 
@@ -487,28 +496,28 @@ def terminate_process(process: Optional[subprocess.Popen], label: str, timeout_s
 
 def choose_free_tcp_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
-        listener.bind(("127.0.0.1", 0))
+        listener.bind((PROFILE_LOG_HOST, PROFILE_LOG_PORT_AUTO))
         return int(listener.getsockname()[1])
 
 
 def ensure_tcp_port_available(port: int) -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         try:
-            listener.bind(("127.0.0.1", port))
+            listener.bind((PROFILE_LOG_HOST, port))
         except OSError as exc:
             raise SystemExit(f"profile log port {port} is not available: {exc}") from exc
 
 
 def resolve_profile_log_port(args) -> int:
     port = int(args.profile_log_port)
-    if port < 0 or port > 65535:
-        raise SystemExit("--profile-log-port must be between 0 and 65535")
-    if port != 0:
+    if port < PROFILE_LOG_PORT_MIN or port > PROFILE_LOG_PORT_MAX:
+        raise SystemExit(f"--profile-log-port must be between {PROFILE_LOG_PORT_MIN} and {PROFILE_LOG_PORT_MAX}")
+    if port != PROFILE_LOG_PORT_AUTO:
         if not args.dry_run:
             ensure_tcp_port_available(port)
         return port
     if args.dry_run:
-        return 7117
+        return PROFILE_LOG_DRY_RUN_PORT
     return choose_free_tcp_port()
 
 
@@ -520,11 +529,11 @@ def wait_for_tcp_port(port: int, timeout_seconds: float, process: Optional[subpr
             raise SystemExit(f"logserver exited before port {port} became ready (exit {process.returncode})")
 
         try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.25):
+            with socket.create_connection((PROFILE_LOG_HOST, port), timeout=PROFILE_LOG_CONNECT_TIMEOUT_SECONDS):
                 return
         except OSError as exc:
             last_error = exc
-            time.sleep(0.05)
+            time.sleep(PROFILE_LOG_READY_POLL_SECONDS)
 
     suffix = f": {last_error}" if last_error is not None else ""
     raise SystemExit(f"logserver did not accept TCP connections on port {port} within {timeout_seconds:.1f}s{suffix}")
@@ -715,7 +724,7 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--build-dir", type=Path, help="CMake build directory.")
     parser.add_argument("--cmake", type=Path, help="CMake executable. Defaults to CMAKE_COMMAND, repo-local CMake, or cmake on PATH.")
     parser.add_argument("--config", choices=CONFIGURATIONS, default=DEFAULT_CONFIG)
-    parser.add_argument("--jobs", default="8", help="Parallel build jobs passed to cmake --build.")
+    parser.add_argument("--jobs", default=DEFAULT_BUILD_JOBS, help="Parallel build jobs passed to cmake --build.")
     parser.add_argument(
         "--configure",
         choices=("auto", "always", "never"),
@@ -741,7 +750,7 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--profile-log-port",
         type=int,
-        default=0,
+        default=PROFILE_LOG_PORT_AUTO,
         help="Logserver port for --with-profile. Defaults to an available localhost port.",
     )
     parser.add_argument(

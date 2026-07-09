@@ -908,6 +908,9 @@ namespace SIMDMatrixDetail{
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr f32 s_MatrixProjectionNearEqualEpsilon = 0.00001f;
+inline constexpr f32 s_MatrixPerspectiveFovNearEqualEpsilon = s_MatrixProjectionNearEqualEpsilon * 2.0f;
+
 NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveImpl(
     const f32 viewWidth,
     const f32 viewHeight,
@@ -918,9 +921,9 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveImpl(
     const f32 forwardZ)noexcept
 {
     NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0f, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0f, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, 0.00001f));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0f, s_MatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0f, s_MatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, s_MatrixProjectionNearEqualEpsilon));
 
     const f32 twoNearZ = nearZ + nearZ;
     const f32 range = farZ / rangeDenominator;
@@ -970,9 +973,9 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovImpl(
     const f32 forwardZ)noexcept
 {
     NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0f, 0.00002f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0f, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, 0.00001f));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0f, s_MatrixPerspectiveFovNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0f, s_MatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, s_MatrixProjectionNearEqualEpsilon));
 
     SIMDVector sinFov{};
     SIMDVector cosFov{};
@@ -1001,9 +1004,9 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveOffCenterImpl(
     const f32 forwardZ)noexcept
 {
     NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, 0.00001f));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, s_MatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_MatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, s_MatrixProjectionNearEqualEpsilon));
 
     const f32 twoNearZ = nearZ + nearZ;
     const f32 reciprocalWidth = 1.0f / (viewRight - viewLeft);
@@ -1024,9 +1027,9 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicImpl(
     const f32 rangeDenominator,
     const f32 rangeNearScale)noexcept
 {
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0f, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0f, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, 0.00001f));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0f, s_MatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0f, s_MatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, s_MatrixProjectionNearEqualEpsilon));
 
     const f32 range = 1.0f / rangeDenominator;
     return MatrixSet(
@@ -1046,9 +1049,9 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicOffCenterImpl(
     const f32 rangeDenominator,
     const f32 rangeNearScale)noexcept
 {
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, 0.00001f));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, s_MatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_MatrixProjectionNearEqualEpsilon));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, s_MatrixProjectionNearEqualEpsilon));
 
     const f32 reciprocalWidth = 1.0f / (viewRight - viewLeft);
     const f32 reciprocalHeight = 1.0f / (viewTop - viewBottom);

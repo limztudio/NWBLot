@@ -87,7 +87,9 @@ inline AtomicFlag g_EventActive;
 inline constexpr usize s_MaxEventTextBytes = 2048u;
 inline constexpr usize s_NumberTextBufferBytes = 128u;
 inline constexpr const char* s_NullText = "(null)";
+inline constexpr const char* s_PointerHexPrefix = "0x";
 inline constexpr const char* s_UnprintableText = "<unprintable>";
+inline constexpr i32 s_PointerTextRadix = 16;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -189,11 +191,11 @@ inline void AppendEventPointer(char (&outText)[s_MaxEventTextBytes], usize& outC
 
     char buffer[s_NumberTextBufferBytes] = {};
     const usize address = reinterpret_cast<usize>(value);
-    const auto result = std::to_chars(buffer, buffer + sizeof(buffer), address, 16);
+    const auto result = std::to_chars(buffer, buffer + sizeof(buffer), address, s_PointerTextRadix);
     if(result.ec != std::errc{})
         return;
 
-    AppendEventText(outText, outCursor, std::string_view("0x"));
+    AppendEventText(outText, outCursor, std::string_view(s_PointerHexPrefix));
     AppendEventText(outText, outCursor, std::string_view(buffer, static_cast<usize>(result.ptr - buffer)));
 }
 

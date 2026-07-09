@@ -42,6 +42,8 @@ using FileStream = std::fstream;
 using StreamOffset = std::streamoff;
 using StreamSize = std::streamsize;
 
+inline constexpr usize s_InitialPathBufferCapacity = 256u;
+
 
 [[nodiscard]] inline bool CanRepresentStreamSize(const u64 byteCount)noexcept{
     return byteCount <= static_cast<u64>(Limit<StreamSize>::s_Max);
@@ -127,7 +129,7 @@ template<typename ArenaT>
     return false;
 #else
     TString<ArenaT> buffer(outPath.arena());
-    usize capacity = 256u;
+    usize capacity = GlobalFilesystemDetail::s_InitialPathBufferCapacity;
     for(;;){
         buffer.resize(capacity);
         const ssize_t copiedBytes = readlink(path.c_str(), buffer.data(), buffer.size());
@@ -165,7 +167,7 @@ template<typename ArenaT>
         capacity = copiedLength + 1u;
     }
 #else
-    usize capacity = 256u;
+    usize capacity = GlobalFilesystemDetail::s_InitialPathBufferCapacity;
     for(;;){
         buffer.resize(capacity);
         if(getcwd(buffer.data(), buffer.size()) != nullptr){

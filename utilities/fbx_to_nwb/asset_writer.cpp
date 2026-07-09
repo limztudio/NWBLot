@@ -258,8 +258,8 @@ bool BuildSkeletonOutputData(
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: joint count must match inverse bind matrix count"));
         return false;
     }
-    if(joints.size() > static_cast<usize>(Limit<u16>::s_Max) + 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton has more than 65536 joints"));
+    if(joints.size() > s_MaxSkeletonJointCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton has more than {} joints"), s_MaxSkeletonJointCount);
         return false;
     }
 

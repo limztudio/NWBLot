@@ -28,6 +28,10 @@ static const SIMDVectorConstF s_SIMDQuaternionColumnWSign = { { { 1.0f, -1.0f, 1
 static const SIMDVectorConstU s_SIMDQuaternionSignMask2 = { { { 0x80000000, 0x00000000, 0x00000000, 0x00000000 } } };
 static const SIMDVectorConstU s_SIMDQuaternionSelect0110 = { { { s_SELECT_0, s_SELECT_1, s_SELECT_1, s_SELECT_0 } } };
 static const SIMDVectorConstU s_SIMDQuaternionSelect0010 = { { { s_SELECT_0, s_SELECT_0, s_SELECT_1, s_SELECT_0 } } };
+inline constexpr f32 s_QuaternionInterpolationEpsilon = 0.00001f;
+inline constexpr f32 s_QuaternionBarycentricVectorEpsilon = 1.0f / 65536.0f;
+inline constexpr f32 s_QuaternionSquadControlScale = -0.25f;
+inline constexpr f32 s_QuaternionHalfAngleScale = 0.5f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,7 +154,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionInverse(SIMDVector q)noexcept{
 }
 
 NWB_INLINE SIMDVector SIMDCALL QuaternionLn(SIMDVector q)noexcept{
-    const SIMDVector oneMinusEpsilon = VectorReplicate(1.0f - 0.00001f);
+    const SIMDVector oneMinusEpsilon = VectorReplicate(1.0f - SIMDQuaternionDetail::s_QuaternionInterpolationEpsilon);
     const SIMDVector qw = VectorSplatW(q);
     const SIMDVector q0 = VectorAndInt(q, s_SIMDMask3);
     const SIMDVector controlW = VectorInBounds(qw, oneMinusEpsilon);
@@ -177,7 +181,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionSlerpV(SIMDVector q0, SIMDVector q1, SI
     NWB_ASSERT((VectorGetY(t) == VectorGetX(t)) && (VectorGetZ(t) == VectorGetX(t)) && (VectorGetW(t) == VectorGetX(t)));
 
 #if defined(NWB_HAS_SCALAR) || defined(NWB_HAS_NEON)
-    const SIMDVector oneMinusEpsilon = VectorReplicate(1.0f - 0.00001f);
+    const SIMDVector oneMinusEpsilon = VectorReplicate(1.0f - SIMDQuaternionDetail::s_QuaternionInterpolationEpsilon);
     SIMDVector cosOmega = QuaternionDot(q0, q1);
     SIMDVector control = VectorLess(cosOmega, VectorZero());
     SIMDVector sign = VectorSelect(s_SIMDOne, s_SIMDNegativeOne, control);
@@ -207,7 +211,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionSlerpV(SIMDVector q0, SIMDVector q1, SI
     SIMDVector result = VectorMultiply(q0, s0);
     return VectorMultiplyAdd(q1, s1, result);
 #else
-    const SIMDVector oneMinusEpsilon = VectorReplicate(1.0f - 0.00001f);
+    const SIMDVector oneMinusEpsilon = VectorReplicate(1.0f - SIMDQuaternionDetail::s_QuaternionInterpolationEpsilon);
     SIMDVector cosOmega = QuaternionDot(q0, q1);
     SIMDVector control = _mm_cmplt_ps(cosOmega, s_SIMDZero);
     SIMDVector sign = VectorSelect(s_SIMDOne, s_SIMDNegativeOne, control);
@@ -300,8 +304,8 @@ NWB_INLINE void SIMDCALL QuaternionSquadSetup(SIMDVector* outA, SIMDVector* outB
     const SIMDVector lnQ1 = QuaternionLn(QuaternionMultiply(invQ2, q1));
     const SIMDVector lnQ3 = QuaternionLn(QuaternionMultiply(invQ2, sq3));
 
-    SIMDVector expQ02 = VectorScale(VectorAdd(lnQ0, lnQ2), -0.25f);
-    SIMDVector expQ13 = VectorScale(VectorAdd(lnQ1, lnQ3), -0.25f);
+    SIMDVector expQ02 = VectorScale(VectorAdd(lnQ0, lnQ2), SIMDQuaternionDetail::s_QuaternionSquadControlScale);
+    SIMDVector expQ13 = VectorScale(VectorAdd(lnQ1, lnQ3), SIMDQuaternionDetail::s_QuaternionSquadControlScale);
     expQ02 = QuaternionExp(expQ02);
     expQ13 = QuaternionExp(expQ13);
 
@@ -314,7 +318,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionBaryCentric(SIMDVector q0, SIMDVector q
     const SIMDVector fVector = VectorReplicate(f);
     const SIMDVector gVector = VectorReplicate(g);
     const SIMDVector s = VectorAdd(fVector, gVector);
-    if(Vector4InBounds(s, VectorReplicate(0.00001f)))
+    if(Vector4InBounds(s, VectorReplicate(SIMDQuaternionDetail::s_QuaternionInterpolationEpsilon)))
         return q0;
 
     const SIMDVector q01 = QuaternionSlerpV(q0, q1, s);
@@ -327,7 +331,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionBaryCentricV(SIMDVector q0, SIMDVector 
     NWB_ASSERT((VectorGetY(g) == VectorGetX(g)) && (VectorGetZ(g) == VectorGetX(g)) && (VectorGetW(g) == VectorGetX(g)));
 
     const SIMDVector s = VectorAdd(f, g);
-    if(Vector4InBounds(s, VectorReplicate(1.0f / 65536.0f)))
+    if(Vector4InBounds(s, VectorReplicate(SIMDQuaternionDetail::s_QuaternionBarycentricVectorEpsilon)))
         return q0;
 
     const SIMDVector q01 = QuaternionSlerpV(q0, q1, s);
@@ -348,7 +352,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationNormal(SIMDVector normalAxis, f
     const SIMDVector n = VectorSelect(s_SIMDIdentityR3, normalAxis, s_SIMDSelect1110);
     SIMDVector sinAngle{};
     SIMDVector cosAngle{};
-    VectorSinCos(&sinAngle, &cosAngle, VectorReplicate(0.5f * angle));
+    VectorSinCos(&sinAngle, &cosAngle, VectorReplicate(SIMDQuaternionDetail::s_QuaternionHalfAngleScale * angle));
     const SIMDVector scale = VectorSelect(cosAngle, sinAngle, s_SIMDSelect1110);
     return VectorMultiply(n, scale);
 #else
@@ -357,7 +361,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationNormal(SIMDVector normalAxis, f
 
     SIMDVector sinAngle{};
     SIMDVector cosAngle{};
-    VectorSinCos(&sinAngle, &cosAngle, _mm_set1_ps(0.5f * angle));
+    VectorSinCos(&sinAngle, &cosAngle, _mm_set1_ps(SIMDQuaternionDetail::s_QuaternionHalfAngleScale * angle));
 
     sinAngle = _mm_and_ps(sinAngle, s_SIMDMask3);
     cosAngle = _mm_and_ps(cosAngle, s_SIMDMaskW);

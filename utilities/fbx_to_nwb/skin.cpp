@@ -154,8 +154,8 @@ bool FindOrAddJoint(
         return true;
     }
 
-    if(context.joints.size() > static_cast<usize>(Limit<u16>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skeleton has more than 65536 joints"));
+    if(context.joints.size() >= s_MaxSkeletonJointCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skeleton has more than {} joints"), s_MaxSkeletonJointCount);
         return false;
     }
 

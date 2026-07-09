@@ -27,6 +27,8 @@ using LogBytes = Vector<u8, LogArena>;
 
 inline constexpr const char* s_TelemetryUploadEndpoint = "/telemetry";
 inline constexpr const char* s_NameSymbolUploadEndpoint = "/namesym";
+inline constexpr i32 s_LocalTimeYearBase = 1900;
+inline constexpr i32 s_LocalTimeMonthBase = 1;
 
 [[nodiscard]] inline MessageType MakeMessageType(LogArena& arena){
     return MakeTuple(Timer{}, Type::Info, LogString(arena));
@@ -201,8 +203,8 @@ public:
             m_arena,
             NWB_TEXT("{}_{:04}{:02}{:02}_{:02}{:02}{:02}.log"),
             fileNameBase,
-            localTime.tm_year + 1900,
-            localTime.tm_mon + 1,
+            localTime.tm_year + s_LocalTimeYearBase,
+            localTime.tm_mon + s_LocalTimeMonthBase,
             localTime.tm_mday,
             localTime.tm_hour,
             localTime.tm_min,

@@ -40,6 +40,18 @@ using ScratchString = AssetsVolumeCookDetail::ScratchString;
 
 static constexpr u32 s_ObjectFileMagic = 0x4f4a424e; // NBJO
 static constexpr u16 s_ObjectFileVersion = 2u;
+static constexpr char s_ObjectFileVersionPrefix[] = "v2_";
+static constexpr char s_ObjectFileHashSeparator[] = "__";
+static constexpr char s_ObjectFileExtension[] = ".nwbobj";
+static constexpr char s_ObjectCacheDirectoryName[] = "objects";
+static constexpr usize s_ObjectFileHashFieldCount = 3u;
+static constexpr usize s_ObjectFileHashSeparatorCount = s_ObjectFileHashFieldCount - 1u;
+static constexpr usize s_ObjectFileNameReserveBytes =
+    (sizeof(s_ObjectFileVersionPrefix) - 1u)
+    + (NameDetail::s_HexDigitsPerHashLane * s_ObjectFileHashFieldCount)
+    + ((sizeof(s_ObjectFileHashSeparator) - 1u) * s_ObjectFileHashSeparatorCount)
+    + (sizeof(s_ObjectFileExtension) - 1u)
+;
 
 struct AssetVolumeObjectFileHeader{
     u32 magic = s_ObjectFileMagic;
@@ -71,16 +83,16 @@ static Path BuildObjectFilePath(
     AppendEncodedNameHashText(header.assetTypeHash, assetTypeDirectory);
 
     ScratchString objectFileName{scratchArena};
-    objectFileName.reserve(2u + 1u + 16u + 2u + 16u + 2u + 16u + 7u);
-    objectFileName += "v2_";
+    objectFileName.reserve(s_ObjectFileNameReserveBytes);
+    objectFileName += s_ObjectFileVersionPrefix;
     AppendHexU64(header.cookKeyHash, objectFileName);
-    objectFileName += "__";
+    objectFileName += s_ObjectFileHashSeparator;
     AppendHexU64(header.payloadHash, objectFileName);
-    objectFileName += "__";
+    objectFileName += s_ObjectFileHashSeparator;
     AppendHexU64(header.payloadSize, objectFileName);
-    objectFileName += ".nwbobj";
+    objectFileName += s_ObjectFileExtension;
 
-    return cacheDirectory / configurationSafeName / "objects" / assetTypeDirectory / objectFileName;
+    return cacheDirectory / configurationSafeName / s_ObjectCacheDirectoryName / assetTypeDirectory / objectFileName;
 }
 
 static AssetVolumeObjectFileHeader BuildObjectFileHeader(

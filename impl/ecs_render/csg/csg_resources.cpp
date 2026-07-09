@@ -22,6 +22,9 @@ namespace __hidden_csg_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr f32 s_MinClipWForWorkRegion = 0.000001f;
+static constexpr i32 s_WorkRegionPixelPadding = 2;
+
 namespace CsgClipCutterResolveResult{
 enum Enum : u8{
     Skipped,
@@ -148,7 +151,6 @@ static void ExpandCsgFrameWorkRegionForWorldBounds(
         return;
     }
 
-    constexpr i32 s_WorkRegionPixelPadding = 2;
     f32 minPixelX = static_cast<f32>(frameWidth);
     f32 minPixelY = static_cast<f32>(frameHeight);
     f32 maxPixelX = 0.0f;
@@ -158,7 +160,7 @@ static void ExpandCsgFrameWorkRegionForWorldBounds(
         const SIMDVector worldPosition = VectorSetW(VectorSelect(minBounds, maxBounds, cornerSelect), 1.0f);
         const SIMDVector clipPosition = Vector4Transform(worldPosition, worldToClip);
         const f32 clipW = VectorGetW(clipPosition);
-        if(!IsFinite(clipW) || clipW <= 0.000001f){
+        if(!IsFinite(clipW) || clipW <= s_MinClipWForWorkRegion){
             csgFrameData.workRegion.expandFull();
             return;
         }

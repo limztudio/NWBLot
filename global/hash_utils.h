@@ -294,14 +294,14 @@ inline void AppendHexU64(const u64 value, StringT& outText){
 template<typename ArenaT>
 [[nodiscard]] inline AString<ArenaT> FormatHex64A(ArenaT& arena, const u64 value){
     AString<ArenaT> result{arena};
-    result.reserve(16);
+    result.reserve(s_HexU64DigitCount);
     AppendHexU64(value, result);
     return result;
 }
 template<typename ArenaT>
 [[nodiscard]] inline WString<ArenaT> FormatHex64W(ArenaT& arena, const u64 value){
     WString<ArenaT> result{arena};
-    result.reserve(16);
+    result.reserve(s_HexU64DigitCount);
     AppendHexU64(value, result);
     return result;
 }

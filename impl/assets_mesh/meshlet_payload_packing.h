@@ -32,6 +32,8 @@ inline constexpr u32 s_MeshletPackedHalfwordMask = NWB_MESHLET_PACKED_HALFWORD_M
 inline constexpr u32 s_MeshletConeAxisFallback = NWB_MESHLET_CONE_AXIS_FALLBACK;
 inline constexpr f32 s_MeshletConeAxisLengthEpsilon = static_cast<f32>(NWB_MESHLET_CONE_AXIS_LENGTH_EPSILON);
 inline constexpr f32 s_MeshletConeAxisLengthSquaredEpsilon = static_cast<f32>(NWB_MESHLET_CONE_AXIS_LENGTH_SQUARED_EPSILON);
+inline constexpr f32 s_MeshletUnorm8Max = static_cast<f32>(Limit<u8>::s_Max);
+inline constexpr f32 s_MeshletUnorm8RoundingBias = 0.5f;
 inline constexpr u32 s_MeshletRefEncodingWidthMask = NWB_MESHLET_REF_ENCODING_WIDTH_MASK;
 inline constexpr u32 s_MeshletRefEncodingPositionShift = NWB_MESHLET_REF_ENCODING_POSITION_SHIFT;
 inline constexpr u32 s_MeshletRefEncodingSkinShift = NWB_MESHLET_REF_ENCODING_SKIN_SHIFT;
@@ -129,11 +131,11 @@ namespace MeshletRefDeltaWidth{
 }
 
 [[nodiscard]] NWB_INLINE u32 PackMeshletConeUnorm8(const f32 value){
-    return static_cast<u32>(Saturate(value) * 255.0f + 0.5f);
+    return static_cast<u32>(Saturate(value) * s_MeshletUnorm8Max + s_MeshletUnorm8RoundingBias);
 }
 
 [[nodiscard]] NWB_INLINE u32 PackMeshletConeCutoffUnorm8(const f32 value){
-    return static_cast<u32>(Saturate(value) * 255.0f);
+    return static_cast<u32>(Saturate(value) * s_MeshletUnorm8Max);
 }
 
 [[nodiscard]] NWB_INLINE SIMDVector FoldMeshletConeOctAxis(SIMDVector axis){
@@ -164,7 +166,7 @@ namespace MeshletRefDeltaWidth{
 }
 
 [[nodiscard]] NWB_INLINE f32 UnpackMeshletConeUnorm8(const u32 value, const u32 bitShift){
-    return static_cast<f32>((value >> bitShift) & s_MeshletPackedByteMask) * (1.0f / 255.0f);
+    return static_cast<f32>((value >> bitShift) & s_MeshletPackedByteMask) * (1.0f / s_MeshletUnorm8Max);
 }
 
 [[nodiscard]] NWB_INLINE SIMDVector UnpackMeshletConeOct16Axis(const u32 conePacked){

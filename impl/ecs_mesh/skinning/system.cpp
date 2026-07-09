@@ -5,6 +5,7 @@
 #include "system.h"
 
 #include "resource_names.h"
+#include "timing_names.h"
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>
@@ -109,7 +110,22 @@ bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, co
     if(width == 0 || height == 0)
         return true;
 
-    return ensureFrameCommandList();
+    if(!ensureFrameCommandList())
+        return false;
+
+    auto* device = m_graphics.getDevice();
+    if(!device)
+        return false;
+
+    constexpr u32 s_PerRuntimeMeshTimingQueries = 128u;
+    const bool timingReady =
+        m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_Skinning, device, s_PerRuntimeMeshTimingQueries)
+        && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_MeshletBounds, device, s_PerRuntimeMeshTimingQueries)
+        && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_RepackNormals, device, s_PerRuntimeMeshTimingQueries)
+    ;
+    if(!timingReady)
+        NWB_LOGGER_WARNING(NWB_TEXT("MeshSkinningSystem: GPU timing scope preparation failed; timing samples may be skipped"));
+    return true;
 }
 
 bool MeshSkinningSystem::ensureFrameCommandList(){

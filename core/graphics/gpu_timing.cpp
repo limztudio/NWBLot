@@ -39,8 +39,7 @@ void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
     // Reset every pool this accumulator owns on the device timeline. A pool with a still-pending result would be
     // clobbered, but collect() polls and clears every pending record before this runs each frame, so only settled
     // (or never-used) pools are reset here. Recording the reset here also marks the pool deviceReady, which gates
-    // its first timestamp write: a pool created mid-frame (inside a render pass) cannot be device-reset until the
-    // NEXT frame open, so its first write waits until then rather than tripping the validator on a host-only reset.
+    // render-pass timestamp writes to query pools that were explicitly prepared before the frame render.
     for(QueryRecord& record : m_queries){
         if(record.query){
             commandList.resetTimerQuery(record.query.get());
@@ -58,17 +57,21 @@ GpuTimingScope GpuTimingAccumulator::beginQuery(
     if(!m_enabled)
         return {};
 
-    const u32 index = acquireQuery(device);
+    u32 index = findAvailableQuery();
+    if(index == Limit<u32>::s_Max){
+        if(!commandList.canResetTimerQueryHere())
+            return {};
+
+        index = appendQuery(device);
+    }
     if(index == Limit<u32>::s_Max)
         return {};
 
     QueryRecord& record = m_queries[index];
     // beginTimerQuery self-resets the pool on the device timeline when it is called outside a render pass, so an
-    // outside-pass scope is always safe. Inside a render pass that reset is illegal, so a pool that has not yet
-    // been device-reset at a frame open (a brand-new pool first acquired inside a render pass) must not be written
-    // this frame -- doing so would trip VUID-vkCmdWriteTimestamp-None-00830. Defer its first use one frame, until
-    // recordFrameReset() has made it deviceReady; the skipped scope simply reports no sample that one frame, a
-    // negligible startup/growth gap the interval averaging absorbs.
+    // outside-pass scope can grow on demand. Inside a render pass that reset is illegal, so only prewarmed pools that
+    // recordFrameReset() made deviceReady are eligible; if validation under-reserved a scope, that sample is skipped
+    // rather than creating a query pool while rendering.
     if(!record.deviceReady && !commandList.canResetTimerQueryHere())
         return {};
 
@@ -90,12 +93,24 @@ void GpuTimingAccumulator::endQuery(CommandList& commandList, const GpuTimingSco
     record.pending = true;
 }
 
-u32 GpuTimingAccumulator::acquireQuery(Device& device){
+bool GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
+    while(m_queries.size() < static_cast<usize>(queryCount)){
+        if(appendQuery(device) == Limit<u32>::s_Max)
+            return false;
+    }
+    return true;
+}
+
+u32 GpuTimingAccumulator::findAvailableQuery()const{
     for(usize i = 0u; i < m_queries.size(); ++i){
         if(!m_queries[i].pending)
             return static_cast<u32>(i);
     }
 
+    return Limit<u32>::s_Max;
+}
+
+u32 GpuTimingAccumulator::appendQuery(Device& device){
     QueryRecord record;
     record.query = device.createTimerQuery();
     if(!record.query)
@@ -145,6 +160,20 @@ void GpuTimingRecorder::beginFrame(const u64 frameIndex){
     m_currentFrameIndex = frameIndex;
 }
 
+bool GpuTimingRecorder::prepareScopeQueries(const Name& scopeName, Device* device, const u32 queryCount){
+    syncActiveState();
+    if(!m_accumulatorsActive)
+        return true;
+    if(!scopeName || !device)
+        return false;
+
+    GpuTimingAccumulator* accumulator = findOrCreateAccumulator(scopeName);
+    if(!accumulator)
+        return false;
+
+    return accumulator->reserveQueries(*device, queryCount);
+}
+
 void GpuTimingRecorder::recordFrameReset(CommandList& commandList){
     syncActiveState();
     if(!m_accumulatorsActive)
@@ -159,7 +188,16 @@ GpuTimingScope GpuTimingRecorder::beginScope(const Name& scopeName, Device* devi
     if(!m_accumulatorsActive || !scopeName || !device)
         return {};
 
-    GpuTimingAccumulator* accumulator = findOrCreateAccumulator(scopeName);
+    GpuTimingAccumulator* accumulator = nullptr;
+    auto found = m_accumulators.find(scopeName);
+    if(found != m_accumulators.end())
+        accumulator = found.value().get();
+    else{
+        if(!commandList.canResetTimerQueryHere())
+            return {};
+
+        accumulator = findOrCreateAccumulator(scopeName);
+    }
     if(!accumulator)
         return {};
 

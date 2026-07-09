@@ -68,6 +68,9 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     if(!ensureFrameCommandLists())
         return false;
 
+    if(!prepareGpuTimingScopes())
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
+
     DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
     bool targetsReady = deferredTargets.valid() && deferredTargets.width == width && deferredTargets.height == height;
     if(!targetsReady)
@@ -139,6 +142,62 @@ bool RendererSystem::ensureFrameCommandLists(){
         m_shadowPrepareCommandList = device.createCommandList();
         if(!m_shadowPrepareCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow preparation command list"));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool RendererSystem::prepareGpuTimingScopes(){
+    auto* device = m_graphics.getDevice();
+    if(!device)
+        return false;
+
+    struct ScopeReservation{
+        const Name* scopeName;
+        u32 queryCount;
+    };
+    const ScopeReservation scopeReservations[] = {
+        { &RendererGpuTimingScope::s_MeshDispatch, 128u },
+        { &RendererGpuTimingScope::s_Raster, 128u },
+        { &RendererGpuTimingScope::s_Frame, 2u },
+        { &RendererGpuTimingScope::s_DeferredClear, 2u },
+        { &RendererGpuTimingScope::s_ShadowVisibility, 2u },
+        { &RendererGpuTimingScope::s_SwBvhSort, 4u },
+        { &RendererGpuTimingScope::s_CausticPhotons, 2u },
+        { &RendererGpuTimingScope::s_CausticResolve, 2u },
+        { &RendererGpuTimingScope::s_DeferredLighting, 2u },
+        { &RendererGpuTimingScope::s_DeferredComposite, 2u },
+        { &RendererGpuTimingScope::s_MaterialUpload, 2u },
+        { &RendererGpuTimingScope::s_OpaqueRegular, 2u },
+        { &RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, 2u },
+        { &RendererGpuTimingScope::s_OpaqueCsg, 2u },
+        { &RendererGpuTimingScope::s_CsgUpload, 2u },
+        { &RendererGpuTimingScope::s_CsgSampleStateUpload, 2u },
+        { &RendererGpuTimingScope::s_CsgIntervalClear, 4u },
+        { &RendererGpuTimingScope::s_CsgIntervalPeel, 2u },
+        { &RendererGpuTimingScope::s_CsgReceiverSpanBuild, 2u },
+        { &RendererGpuTimingScope::s_CsgIntervalCombine, 2u },
+        { &RendererGpuTimingScope::s_CsgCapFill, 2u },
+        { &RendererGpuTimingScope::s_TransparentCsgIntervals, 2u },
+        { &RendererGpuTimingScope::s_AvboitClear, 2u },
+        { &RendererGpuTimingScope::s_AvboitOccupancy, 2u },
+        { &RendererGpuTimingScope::s_AvboitDepthWarp, 2u },
+        { &RendererGpuTimingScope::s_AvboitExtinction, 2u },
+        { &RendererGpuTimingScope::s_AvboitIntegration, 2u },
+        { &RendererGpuTimingScope::s_AvboitAccumulate, 2u },
+        { &RendererGpuTimingScope::s_SurfelSpawn, 2u },
+        { &RendererGpuTimingScope::s_SurfelAgeFree, 2u },
+        { &RendererGpuTimingScope::s_SurfelHashBuild, 2u },
+        { &RendererGpuTimingScope::s_SurfelTrace, 2u },
+        { &RendererGpuTimingScope::s_SurfelResolve, 2u },
+        { &RendererGpuTimingScope::s_SurfelUpsample, 2u },
+    };
+
+    for(const ScopeReservation& reservation : scopeReservations){
+        if(!m_graphics.gpuTiming().prepareScopeQueries(*reservation.scopeName, device, reservation.queryCount)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to prepare GPU timing scope '{}'"), reservation.scopeName->c_str());
             return false;
         }
     }

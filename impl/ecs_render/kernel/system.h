@@ -103,6 +103,7 @@ public:
 
 private:
     [[nodiscard]] bool ensureFrameCommandLists();
+    [[nodiscard]] bool prepareGpuTimingScopes();
     [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
     [[nodiscard]] Core::ECS::World& world()noexcept{ return m_world; }
     [[nodiscard]] Core::Graphics& graphics()noexcept{ return m_graphics; }

@@ -1457,7 +1457,8 @@ class robin_hash : private Hash, private KeyEqual, private GrowthPolicy {
         if (dist_from_ideal_bucket !=
             bucket_entry::EMPTY_MARKER_DIST_FROM_IDEAL_BUCKET) {
           if (hash_stored_for_bucket) {
-            TSL_RH_UNUSED(deserialize_value<std::uint32_t>(deserializer));
+            [[maybe_unused]] const std::uint32_t skipped_hash =
+                deserialize_value<std::uint32_t>(deserializer);
           }
 
           insert(deserialize_value<value_type>(deserializer));

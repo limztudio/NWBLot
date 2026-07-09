@@ -1,0 +1,56 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_AVBOIT_MATERIAL_ALPHA_AUTHORING_SLANGI
+#define NWB_GRAPHICS_AVBOIT_MATERIAL_ALPHA_AUTHORING_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shared alpha path for AVBOIT material occupancy/extinction authoring. Include after the material surface hook is in
+// scope and after the pass declares g_OpaqueDepth / g_PointSampler.
+
+
+bool nwbAvboitLoadAcceptedMaterialAlpha(
+    const float4 position,
+    const float4 color,
+    const float3 normal,
+    const float4 tangent,
+    const float2 uv0,
+    const float4 worldPosition,
+    out half outAlpha
+){
+    NwbMeshSurfaceInputs surfaceInputs;
+    surfaceInputs.color = half4(color);
+    surfaceInputs.normal = normal;
+    surfaceInputs.tangent = tangent;
+    surfaceInputs.uv0 = uv0;
+    surfaceInputs.worldPosition = worldPosition.xyz;
+    surfaceInputs.incidentDirection = -normal;
+    nwbLoadMeshSurfaceInputs(surfaceInputs);
+
+#if NWB_CSG_ENABLED
+    if(nwbAvboitCsgPixelDiscard(
+        nwbAvboitFullRasterPositionFromLowFragCoord(position),
+        worldPosition
+    ))
+        return false;
+#endif
+
+    const NwbMeshSurface surface = nwbMaterialSurface();
+
+    outAlpha = half(clamp(surface.renderCoverage, 0.0, 1.0));
+    uint virtualSlice;
+    return nwbAvboitAcceptLowDepthFragment(g_OpaqueDepth, g_PointSampler, position, outAlpha, virtualSlice);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

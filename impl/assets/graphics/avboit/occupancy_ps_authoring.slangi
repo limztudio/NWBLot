@@ -37,21 +37,8 @@
 #include "common.slangi"
 #include "../mesh/gbuffer_io.slangi"
 
-// Per-draw material context from the AVBOIT draw push constant -- the same accessors the accumulate header defines
-// (gbuffer_io.slangi suppresses its own under NWB_MESH_MATERIAL_CONTEXT_PROVIDED). Defined before
-// material_typed_accessors.slangi so its Constant-storage load family expands these definitions.
-uint nwbMeshShadingModelId(){
-    return (g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
-}
-uint nwbMeshInstanceIndex(){
-    return g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
-}
-uint nwbMeshMaterialConstantByteOffset(){
-    return g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET];
-}
-NwbMeshInstanceData nwbMeshLoadInstance(){
-    return g_NwbMeshInstances[nwbMeshInstanceIndex()];
-}
+// Per-draw material context from the AVBOIT draw push constant.
+#include "material_context_authoring.slangi"
 
 // The typed-word load families the generated .bind accessors build on, then the surface contract (NwbMeshSurface
 // / nwbMaterialSurface). The AVBOIT main loads the surface-input statics + invokes nwbMaterialSurface() directly
@@ -77,6 +64,7 @@ struct NwbAvboitOccupancyPixelInput{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "material_alpha_authoring.slangi"
 #include "coverage_splat.slangi"
 
 
@@ -84,32 +72,16 @@ struct NwbAvboitOccupancyPixelInput{
 
 
 void main(NwbAvboitOccupancyPixelInput input){
-    NwbMeshSurfaceInputs surfaceInputs;
-    surfaceInputs.color = half4(input.color);
-    surfaceInputs.normal = input.normal;
-    surfaceInputs.tangent = input.tangent;
-    surfaceInputs.uv0 = input.uv0;
-    surfaceInputs.worldPosition = input.worldPosition.xyz;
-    // This pass binds no scene shading buffer, so the true view direction is unavailable; use the documented dummy
-    // -normal exactly as the rasterizer G-buffer does. It is harmless here -- this pass reads only surface.renderCoverage
-    // (the optical params ior/transmission are read only by the shadow trace).
-    surfaceInputs.incidentDirection = -input.normal;
-    nwbLoadMeshSurfaceInputs(surfaceInputs);
-#if NWB_CSG_ENABLED
-    if(nwbAvboitCsgPixelDiscard(
-        nwbAvboitFullRasterPositionFromLowFragCoord(input.position),
-        input.worldPosition
+    half alpha;
+    if(!nwbAvboitLoadAcceptedMaterialAlpha(
+        input.position,
+        input.color,
+        input.normal,
+        input.tangent,
+        input.uv0,
+        input.worldPosition,
+        alpha
     ))
-        discard;
-#endif
-
-    // The material's surface hook decides the AVBOIT opacity (surface.renderCoverage) -- the SAME value the extinction +
-    // accumulate passes read, so the coverage this pass marks matches the volume they build.
-    const NwbMeshSurface surface = nwbMaterialSurface();
-
-    const half alpha = half(clamp(surface.renderCoverage, 0.0, 1.0));
-    uint virtualSlice;
-    if(!nwbAvboitAcceptLowDepthFragment(g_OpaqueDepth, g_PointSampler, input.position, alpha, virtualSlice))
         discard;
 
     nwbAvboitMarkCoverageFromDepth(input.position.z);

@@ -56,21 +56,8 @@
 #include "../scene/lighting.slangi"
 #include "../mesh/gbuffer_io.slangi"
 
-// Per-draw material context from the AVBOIT draw push constant -- the transparent-pass equivalent of the
-// rasterizer accessors gbuffer_io.slangi defines from its own push constant (suppressed above). Defined before
-// material_typed_accessors.slangi so its Constant-storage load family expands these definitions.
-uint nwbMeshShadingModelId(){
-    return (g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
-}
-uint nwbMeshInstanceIndex(){
-    return g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
-}
-uint nwbMeshMaterialConstantByteOffset(){
-    return g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET];
-}
-NwbMeshInstanceData nwbMeshLoadInstance(){
-    return g_NwbMeshInstances[nwbMeshInstanceIndex()];
-}
+// Per-draw material context from the AVBOIT draw push constant.
+#include "material_context_authoring.slangi"
 
 // The typed-word load families the generated .bind accessors build on, then the surface contract (NwbMeshSurface
 // / nwbMaterialSurface). The NWB_MESH_MATERIAL_CONTEXT_PROVIDED set above suppresses surface.slangi's

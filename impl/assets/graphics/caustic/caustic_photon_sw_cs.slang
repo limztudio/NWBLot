@@ -194,8 +194,7 @@ struct NwbCausticSwTriangleHit{
     float w;
 };
 
-// Moeller-Trumbore ray/triangle test (two-sided), reporting a hit strictly inside (tMin, tMax) with barycentrics.
-// Identical math to the SW shadow trace's nwbSwShadowRayTriangle.
+// Moller-Trumbore ray/triangle test (two-sided), reporting a hit strictly inside (tMin, tMax) with barycentrics.
 NwbCausticSwTriangleHit nwbCausticSwRayTriangle(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
     NwbCausticSwTriangleHit result;
     result.hit = false;
@@ -204,33 +203,12 @@ NwbCausticSwTriangleHit nwbCausticSwRayTriangle(const float3 origin, const float
     result.v = 0.0;
     result.w = 0.0;
 
-    const float3 edge1 = v1 - v0;
-    const float3 edge2 = v2 - v0;
-    const float3 pVec = cross(direction, edge2);
-    const float det = dot(edge1, pVec);
-    if(abs(det) < 1e-12)
-        return result;
-
-    const float invDet = 1.0 / det;
-    const float3 tVec = origin - v0;
-    const float u = dot(tVec, pVec) * invDet;
-    if(u < 0.0 || u > 1.0)
-        return result;
-
-    const float3 qVec = cross(tVec, edge1);
-    const float v = dot(direction, qVec) * invDet;
-    if(v < 0.0 || (u + v) > 1.0)
-        return result;
-
-    const float t = dot(edge2, qVec) * invDet;
-    if(t <= tMin || t >= tMax)
-        return result;
-
-    result.hit = true;
-    result.t = t;
-    result.u = u;
-    result.v = v;
-    result.w = 1.0 - u - v;
+    const NwbRayTriangleHit hit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, tMax, v0, v1, v2);
+    result.hit = hit.hit;
+    result.t = hit.t;
+    result.u = hit.u;
+    result.v = hit.v;
+    result.w = hit.w;
     return result;
 }
 

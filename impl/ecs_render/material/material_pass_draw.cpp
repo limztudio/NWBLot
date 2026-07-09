@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/kernel/renderer_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/material/material_pass_csg_private.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,28 +21,6 @@ namespace __hidden_material_pass_draw{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct MaterialPassCsgBindingSets{
-    const Core::BindingSetHandle& clip;
-    const Core::BindingSetHandle& receiverSurface;
-    const Core::BindingSetHandle& intervalSample;
-};
-
-[[nodiscard]] static bool CsgResourcesReadyForPipelineKey(
-    const MaterialPipelineKey& pipelineKey,
-    const MaterialPipelinePass::Enum pass,
-    const MaterialPassCsgBindingSets& bindingSets,
-    const bool requireIntervalSample
-){
-    const MaterialPipelineCsgBindingUse csgBindingUse = MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
-    if(csgBindingUse.clip && !bindingSets.clip)
-        return false;
-    if(csgBindingUse.receiverSurface && !bindingSets.receiverSurface)
-        return false;
-    if(requireIntervalSample && csgBindingUse.intervalSample && !bindingSets.intervalSample)
-        return false;
-    return true;
-}
 
 static void AssertCsgBindingSetsReady(
     [[maybe_unused]] const MaterialPipelineCsgBindingUse& csgBindingUse,
@@ -120,7 +99,7 @@ bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassDr
 }
 
 bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems){
-    const __hidden_material_pass_draw::MaterialPassCsgBindingSets csgBindingSets{
+    const MaterialPassCsgBindingSets csgBindingSets{
         csgState().m_clipBindingSet,
         csgState().m_receiverSurfaceBindingSet,
         csgState().m_intervalSampleBindingSet
@@ -136,7 +115,7 @@ bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const MaterialPa
             return false;
         }
 
-        if(!__hidden_material_pass_draw::CsgResourcesReadyForPipelineKey(
+        if(!MaterialPassCsgResourcesReadyForPipelineKey(
             drawItem.pipelineKey,
             drawItem.pipelineKey.pass,
             csgBindingSets,
@@ -153,7 +132,7 @@ bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const Materia
     if(!drawState().m_emulationViewBindingSet)
         return false;
 
-    const __hidden_material_pass_draw::MaterialPassCsgBindingSets csgBindingSets{
+    const MaterialPassCsgBindingSets csgBindingSets{
         csgState().m_clipBindingSet,
         csgState().m_receiverSurfaceBindingSet,
         csgState().m_intervalSampleBindingSet
@@ -175,7 +154,7 @@ bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const Materia
             return false;
         }
 
-        if(!__hidden_material_pass_draw::CsgResourcesReadyForPipelineKey(
+        if(!MaterialPassCsgResourcesReadyForPipelineKey(
             drawItem.pipelineKey,
             drawItem.pipelineKey.pass,
             csgBindingSets,
@@ -266,7 +245,7 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
-    const __hidden_material_pass_draw::MaterialPassCsgBindingSets csgBindingSets{
+    const MaterialPassCsgBindingSets csgBindingSets{
         csgState().m_clipBindingSet,
         csgState().m_receiverSurfaceBindingSet,
         csgState().m_intervalSampleBindingSet
@@ -320,7 +299,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
     NWB_ASSERT(drawState().m_emulationViewBindingSet);
 
     const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
-    const __hidden_material_pass_draw::MaterialPassCsgBindingSets csgBindingSets{
+    const MaterialPassCsgBindingSets csgBindingSets{
         csgState().m_clipBindingSet,
         csgState().m_receiverSurfaceBindingSet,
         csgState().m_intervalSampleBindingSet

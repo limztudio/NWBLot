@@ -49,6 +49,55 @@ float3 nwbSafeFrameNormalize(const float3 value, const float3 fallback){
     return nwbSafeNormalizeMinLengthSquared(value, fallback, 0.00000001);
 }
 
+struct NwbRayTriangleHit{
+    bool hit;
+    float t;
+    float u;
+    float v;
+    float w;
+    float3 normal;
+};
+
+NwbRayTriangleHit nwbRayTriangleMollerTrumbore(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
+    NwbRayTriangleHit result;
+    result.hit = false;
+    result.t = 0.0;
+    result.u = 0.0;
+    result.v = 0.0;
+    result.w = 0.0;
+    result.normal = float3(0.0, 0.0, 1.0);
+
+    const float3 edge1 = v1 - v0;
+    const float3 edge2 = v2 - v0;
+    const float3 pVec = cross(direction, edge2);
+    const float det = dot(edge1, pVec);
+    if(abs(det) < 1e-12)
+        return result;
+
+    const float invDet = 1.0 / det;
+    const float3 tVec = origin - v0;
+    const float u = dot(tVec, pVec) * invDet;
+    if(u < 0.0 || u > 1.0)
+        return result;
+
+    const float3 qVec = cross(tVec, edge1);
+    const float v = dot(direction, qVec) * invDet;
+    if(v < 0.0 || (u + v) > 1.0)
+        return result;
+
+    const float t = dot(edge2, qVec) * invDet;
+    if(t <= tMin || t >= tMax)
+        return result;
+
+    result.hit = true;
+    result.t = t;
+    result.u = u;
+    result.v = v;
+    result.w = 1.0 - u - v;
+    result.normal = normalize(cross(edge1, edge2));
+    return result;
+}
+
 bool nwbValidFrameDirection(const float3 value){
     return nwbFiniteFloat3(value) && dot(value, value) > 0.00000001;
 }

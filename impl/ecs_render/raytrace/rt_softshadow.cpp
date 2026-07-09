@@ -184,6 +184,128 @@ struct SoftShadowResolveBindingSetInputs{
     return device.createBindingSet(desc, layout);
 }
 
+struct ShadowReprojectMergeTextures{
+    Core::Texture* softTrace = nullptr;
+    Core::Texture* geometryCurr = nullptr;
+    Core::Texture* geometryPrev = nullptr;
+    Core::Texture* worldPosition = nullptr;
+    Core::Texture* histA = nullptr;
+    Core::Texture* histB = nullptr;
+    Core::Texture* momentsA = nullptr;
+    Core::Texture* momentsB = nullptr;
+};
+
+struct ShadowReprojectMergeBindingCache{
+    Core::BindingSetHandle& setAtoB;
+    Core::BindingSetHandle& setBtoA;
+    const Core::Texture*& softTrace;
+    const Core::Texture*& geometryCurr;
+    const Core::Texture*& geometryPrev;
+    const Core::Texture*& worldPosition;
+    const Core::Texture*& histA;
+    const Core::Texture*& histB;
+    const Core::Texture*& momentsA;
+    const Core::Texture*& momentsB;
+};
+
+[[nodiscard]] bool ShadowReprojectMergeCacheMatches(
+    const ShadowReprojectMergeBindingCache& cache,
+    const ShadowReprojectMergeTextures& textures
+){
+    return cache.setAtoB
+        && cache.setBtoA
+        && cache.softTrace == textures.softTrace
+        && cache.geometryCurr == textures.geometryCurr
+        && cache.geometryPrev == textures.geometryPrev
+        && cache.worldPosition == textures.worldPosition
+        && cache.histA == textures.histA
+        && cache.histB == textures.histB
+        && cache.momentsA == textures.momentsA
+        && cache.momentsB == textures.momentsB
+    ;
+}
+
+void ClearShadowReprojectMergeCache(const ShadowReprojectMergeBindingCache& cache){
+    cache.setAtoB = nullptr;
+    cache.setBtoA = nullptr;
+    cache.softTrace = nullptr;
+    cache.geometryCurr = nullptr;
+    cache.geometryPrev = nullptr;
+    cache.worldPosition = nullptr;
+    cache.histA = nullptr;
+    cache.histB = nullptr;
+    cache.momentsA = nullptr;
+    cache.momentsB = nullptr;
+}
+
+void StoreShadowReprojectMergeCache(
+    const ShadowReprojectMergeBindingCache& cache,
+    const ShadowReprojectMergeTextures& textures,
+    Core::BindingSetHandle&& setAtoB,
+    Core::BindingSetHandle&& setBtoA
+){
+    cache.setAtoB = Move(setAtoB);
+    cache.setBtoA = Move(setBtoA);
+    cache.softTrace = textures.softTrace;
+    cache.geometryCurr = textures.geometryCurr;
+    cache.geometryPrev = textures.geometryPrev;
+    cache.worldPosition = textures.worldPosition;
+    cache.histA = textures.histA;
+    cache.histB = textures.histB;
+    cache.momentsA = textures.momentsA;
+    cache.momentsB = textures.momentsB;
+}
+
+[[nodiscard]] bool EnsureShadowReprojectMergeBindingSets(
+    Core::Alloc::GlobalArena& arena,
+    Core::Device& device,
+    Core::BindingLayoutHandle& layout,
+    DeferredFrameTargets& targets,
+    const ShadowReprojectMergeTextures& textures,
+    const ShadowReprojectMergeBindingCache& cache,
+    const tchar* const failureMessage
+){
+    if(ShadowReprojectMergeCacheMatches(cache, textures))
+        return true;
+
+    Core::BindingSetHandle setAtoB = CreateShadowReprojectMergeBindingSet(
+        arena,
+        device,
+        layout,
+        targets,
+        textures.softTrace,
+        textures.geometryCurr,
+        textures.geometryPrev,
+        textures.worldPosition,
+        textures.histA,
+        textures.momentsA,
+        textures.histB,
+        textures.momentsB
+    );
+    Core::BindingSetHandle setBtoA = CreateShadowReprojectMergeBindingSet(
+        arena,
+        device,
+        layout,
+        targets,
+        textures.softTrace,
+        textures.geometryCurr,
+        textures.geometryPrev,
+        textures.worldPosition,
+        textures.histB,
+        textures.momentsB,
+        textures.histA,
+        textures.momentsA
+    );
+    if(!setAtoB || !setBtoA){
+        NWB_LOGGER_ERROR(failureMessage);
+        ClearShadowReprojectMergeCache(cache);
+        return false;
+    }
+
+    StoreShadowReprojectMergeCache(cache, textures, Move(setAtoB), Move(setBtoA));
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1118,80 +1240,44 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergeBindingSet(DeferredFram
     NWB_ASSERT(targets.shadowMomentsA);
     NWB_ASSERT(targets.shadowMomentsB);
 
-    Core::Texture* softTraceTarget = targets.shadowSoftHalfA.get();
-    Core::Texture* geometryCurrTarget = targets.shadowSoftGeometry.get();
-    Core::Texture* geometryPrevTarget = targets.shadowSoftGeometryPrev.get();
-    Core::Texture* worldPositionTarget = targets.worldPosition.get();
-    Core::Texture* histATarget = targets.shadowHistA.get();
-    Core::Texture* histBTarget = targets.shadowHistB.get();
-    Core::Texture* momentsATarget = targets.shadowMomentsA.get();
-    Core::Texture* momentsBTarget = targets.shadowMomentsB.get();
-    if(
-        rayTracingState().m_shadowReprojectMergeBindingSetAtoB
-        && rayTracingState().m_shadowReprojectMergeBindingSetBtoA
-        && rayTracingState().m_shadowReprojectMergeSoftTrace == softTraceTarget
-        && rayTracingState().m_shadowReprojectMergeGeometryCurr == geometryCurrTarget
-        && rayTracingState().m_shadowReprojectMergeGeometryPrev == geometryPrevTarget
-        && rayTracingState().m_shadowReprojectMergeWorldPosition == worldPositionTarget
-        && rayTracingState().m_shadowReprojectMergeHistA == histATarget
-        && rayTracingState().m_shadowReprojectMergeHistB == histBTarget
-        && rayTracingState().m_shadowReprojectMergeMomentsA == momentsATarget
-        && rayTracingState().m_shadowReprojectMergeMomentsB == momentsBTarget
-    )
-        return true;
-
-    auto* device = graphics().getDevice();
-
     // Two front/back sets so the accumulated-history SRV (history-in) and the accumulated-history UAV (history-out) never
     // bind the SAME texture (the resource-state framework cannot resolve one texture to both SRV and UAV in one set):
     //  - AtoB: histIn/momIn = A -> histOut/momOut = B  (used when m_softShadowHistoryFrontIsA == 1, i.e. A holds this frame's
     //          incoming history; the merge writes B, which the temporal-histB resolve variant then denoises).
     //  - BtoA: histIn/momIn = B -> histOut/momOut = A  (the mirror; A becomes the accumulated buffer the resolve reads).
     // All other bindings are shared: SOFT_TRACE=soft-A, GEOMETRY_CURR/PREV, WORLDPOS=the full-res world-position G-buffer.
-    const auto buildSet = [&](Core::Texture* histInTex, Core::Texture* momInTex, Core::Texture* histOutTex, Core::Texture* momOutTex) -> Core::BindingSetHandle {
-        return __hidden_rt_softshadow::CreateShadowReprojectMergeBindingSet(
-            arena(),
-            *device,
-            rayTracingState().m_shadowReprojectMergeBindingLayout,
-            targets,
-            softTraceTarget,
-            geometryCurrTarget,
-            geometryPrevTarget,
-            worldPositionTarget,
-            histInTex,
-            momInTex,
-            histOutTex,
-            momOutTex
-        );
+    auto* device = graphics().getDevice();
+    const __hidden_rt_softshadow::ShadowReprojectMergeTextures textures{
+        targets.shadowSoftHalfA.get(),
+        targets.shadowSoftGeometry.get(),
+        targets.shadowSoftGeometryPrev.get(),
+        targets.worldPosition.get(),
+        targets.shadowHistA.get(),
+        targets.shadowHistB.get(),
+        targets.shadowMomentsA.get(),
+        targets.shadowMomentsB.get()
     };
-
-    Core::BindingSetHandle setAtoB = buildSet(histATarget, momentsATarget, histBTarget, momentsBTarget);
-    Core::BindingSetHandle setBtoA = buildSet(histBTarget, momentsBTarget, histATarget, momentsATarget);
-    if(!setAtoB || !setBtoA){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow reproject-merge binding sets"));
-        rayTracingState().m_shadowReprojectMergeBindingSetAtoB = nullptr;
-        rayTracingState().m_shadowReprojectMergeBindingSetBtoA = nullptr;
-        rayTracingState().m_shadowReprojectMergeSoftTrace = nullptr;
-        rayTracingState().m_shadowReprojectMergeGeometryCurr = nullptr;
-        rayTracingState().m_shadowReprojectMergeGeometryPrev = nullptr;
-        rayTracingState().m_shadowReprojectMergeWorldPosition = nullptr;
-        rayTracingState().m_shadowReprojectMergeHistA = nullptr;
-        rayTracingState().m_shadowReprojectMergeHistB = nullptr;
-        rayTracingState().m_shadowReprojectMergeMomentsA = nullptr;
-        rayTracingState().m_shadowReprojectMergeMomentsB = nullptr;
-        return false;
-    }
-    rayTracingState().m_shadowReprojectMergeBindingSetAtoB = Move(setAtoB);
-    rayTracingState().m_shadowReprojectMergeBindingSetBtoA = Move(setBtoA);
-    rayTracingState().m_shadowReprojectMergeSoftTrace = softTraceTarget;
-    rayTracingState().m_shadowReprojectMergeGeometryCurr = geometryCurrTarget;
-    rayTracingState().m_shadowReprojectMergeGeometryPrev = geometryPrevTarget;
-    rayTracingState().m_shadowReprojectMergeWorldPosition = worldPositionTarget;
-    rayTracingState().m_shadowReprojectMergeHistA = histATarget;
-    rayTracingState().m_shadowReprojectMergeHistB = histBTarget;
-    rayTracingState().m_shadowReprojectMergeMomentsA = momentsATarget;
-    rayTracingState().m_shadowReprojectMergeMomentsB = momentsBTarget;
-    return true;
+    const __hidden_rt_softshadow::ShadowReprojectMergeBindingCache cache{
+        rayTracingState().m_shadowReprojectMergeBindingSetAtoB,
+        rayTracingState().m_shadowReprojectMergeBindingSetBtoA,
+        rayTracingState().m_shadowReprojectMergeSoftTrace,
+        rayTracingState().m_shadowReprojectMergeGeometryCurr,
+        rayTracingState().m_shadowReprojectMergeGeometryPrev,
+        rayTracingState().m_shadowReprojectMergeWorldPosition,
+        rayTracingState().m_shadowReprojectMergeHistA,
+        rayTracingState().m_shadowReprojectMergeHistB,
+        rayTracingState().m_shadowReprojectMergeMomentsA,
+        rayTracingState().m_shadowReprojectMergeMomentsB
+    };
+    return __hidden_rt_softshadow::EnsureShadowReprojectMergeBindingSets(
+        arena(),
+        *device,
+        rayTracingState().m_shadowReprojectMergeBindingLayout,
+        targets,
+        textures,
+        cache,
+        NWB_TEXT("RendererSystem: failed to create shadow reproject-merge binding sets")
+    );
 }
 
 
@@ -1214,74 +1300,38 @@ bool RendererRayTracingSystem::ensureShadowTransparentReprojectMergeBindingSet(D
     NWB_ASSERT(targets.transparentMomentsA);
     NWB_ASSERT(targets.transparentMomentsB);
 
-    Core::Texture* softTraceTarget = targets.transparentSoftHalf.get();
-    Core::Texture* geometryCurrTarget = targets.shadowSoftGeometry.get();
-    Core::Texture* geometryPrevTarget = targets.shadowSoftGeometryPrev.get();
-    Core::Texture* worldPositionTarget = targets.worldPosition.get();
-    Core::Texture* histATarget = targets.transparentHistA.get();
-    Core::Texture* histBTarget = targets.transparentHistB.get();
-    Core::Texture* momentsATarget = targets.transparentMomentsA.get();
-    Core::Texture* momentsBTarget = targets.transparentMomentsB.get();
-    if(
-        rayTracingState().m_transparentReprojectMergeBindingSetAtoB
-        && rayTracingState().m_transparentReprojectMergeBindingSetBtoA
-        && rayTracingState().m_transparentReprojectMergeSoftTrace == softTraceTarget
-        && rayTracingState().m_transparentReprojectMergeGeometryCurr == geometryCurrTarget
-        && rayTracingState().m_transparentReprojectMergeGeometryPrev == geometryPrevTarget
-        && rayTracingState().m_transparentReprojectMergeWorldPosition == worldPositionTarget
-        && rayTracingState().m_transparentReprojectMergeHistA == histATarget
-        && rayTracingState().m_transparentReprojectMergeHistB == histBTarget
-        && rayTracingState().m_transparentReprojectMergeMomentsA == momentsATarget
-        && rayTracingState().m_transparentReprojectMergeMomentsB == momentsBTarget
-    )
-        return true;
-
     auto* device = graphics().getDevice();
-
-    const auto buildSet = [&](Core::Texture* histInTex, Core::Texture* momInTex, Core::Texture* histOutTex, Core::Texture* momOutTex) -> Core::BindingSetHandle {
-        return __hidden_rt_softshadow::CreateShadowReprojectMergeBindingSet(
-            arena(),
-            *device,
-            rayTracingState().m_shadowReprojectMergeBindingLayout,
-            targets,
-            softTraceTarget,
-            geometryCurrTarget,
-            geometryPrevTarget,
-            worldPositionTarget,
-            histInTex,
-            momInTex,
-            histOutTex,
-            momOutTex
-        );
+    const __hidden_rt_softshadow::ShadowReprojectMergeTextures textures{
+        targets.transparentSoftHalf.get(),
+        targets.shadowSoftGeometry.get(),
+        targets.shadowSoftGeometryPrev.get(),
+        targets.worldPosition.get(),
+        targets.transparentHistA.get(),
+        targets.transparentHistB.get(),
+        targets.transparentMomentsA.get(),
+        targets.transparentMomentsB.get()
     };
-
-    Core::BindingSetHandle setAtoB = buildSet(histATarget, momentsATarget, histBTarget, momentsBTarget);
-    Core::BindingSetHandle setBtoA = buildSet(histBTarget, momentsBTarget, histATarget, momentsATarget);
-    if(!setAtoB || !setBtoA){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft transparent shadow reproject-merge binding sets"));
-        rayTracingState().m_transparentReprojectMergeBindingSetAtoB = nullptr;
-        rayTracingState().m_transparentReprojectMergeBindingSetBtoA = nullptr;
-        rayTracingState().m_transparentReprojectMergeSoftTrace = nullptr;
-        rayTracingState().m_transparentReprojectMergeGeometryCurr = nullptr;
-        rayTracingState().m_transparentReprojectMergeGeometryPrev = nullptr;
-        rayTracingState().m_transparentReprojectMergeWorldPosition = nullptr;
-        rayTracingState().m_transparentReprojectMergeHistA = nullptr;
-        rayTracingState().m_transparentReprojectMergeHistB = nullptr;
-        rayTracingState().m_transparentReprojectMergeMomentsA = nullptr;
-        rayTracingState().m_transparentReprojectMergeMomentsB = nullptr;
-        return false;
-    }
-    rayTracingState().m_transparentReprojectMergeBindingSetAtoB = Move(setAtoB);
-    rayTracingState().m_transparentReprojectMergeBindingSetBtoA = Move(setBtoA);
-    rayTracingState().m_transparentReprojectMergeSoftTrace = softTraceTarget;
-    rayTracingState().m_transparentReprojectMergeGeometryCurr = geometryCurrTarget;
-    rayTracingState().m_transparentReprojectMergeGeometryPrev = geometryPrevTarget;
-    rayTracingState().m_transparentReprojectMergeWorldPosition = worldPositionTarget;
-    rayTracingState().m_transparentReprojectMergeHistA = histATarget;
-    rayTracingState().m_transparentReprojectMergeHistB = histBTarget;
-    rayTracingState().m_transparentReprojectMergeMomentsA = momentsATarget;
-    rayTracingState().m_transparentReprojectMergeMomentsB = momentsBTarget;
-    return true;
+    const __hidden_rt_softshadow::ShadowReprojectMergeBindingCache cache{
+        rayTracingState().m_transparentReprojectMergeBindingSetAtoB,
+        rayTracingState().m_transparentReprojectMergeBindingSetBtoA,
+        rayTracingState().m_transparentReprojectMergeSoftTrace,
+        rayTracingState().m_transparentReprojectMergeGeometryCurr,
+        rayTracingState().m_transparentReprojectMergeGeometryPrev,
+        rayTracingState().m_transparentReprojectMergeWorldPosition,
+        rayTracingState().m_transparentReprojectMergeHistA,
+        rayTracingState().m_transparentReprojectMergeHistB,
+        rayTracingState().m_transparentReprojectMergeMomentsA,
+        rayTracingState().m_transparentReprojectMergeMomentsB
+    };
+    return __hidden_rt_softshadow::EnsureShadowReprojectMergeBindingSets(
+        arena(),
+        *device,
+        rayTracingState().m_shadowReprojectMergeBindingLayout,
+        targets,
+        textures,
+        cache,
+        NWB_TEXT("RendererSystem: failed to create soft transparent shadow reproject-merge binding sets")
+    );
 }
 
 

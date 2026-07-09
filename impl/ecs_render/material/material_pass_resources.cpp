@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/kernel/renderer_private.h>
+#include <impl/ecs_render/material/material_pass_csg_private.h>
 
 #include <impl/ecs_render/kernel/renderer_capacity_private.h>
 
@@ -13,44 +14,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_material_pass_resources{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct MaterialPassCsgBindingSets{
-    const Core::BindingSetHandle& clip;
-    const Core::BindingSetHandle& receiverSurface;
-    const Core::BindingSetHandle& intervalSample;
-};
-
-[[nodiscard]] static bool CsgResourcesReadyForPipelineKey(
-    const MaterialPipelineKey& pipelineKey,
-    const MaterialPipelinePass::Enum pass,
-    const MaterialPassCsgBindingSets& bindingSets,
-    const bool requireIntervalSample
-){
-    const MaterialPipelineCsgBindingUse csgBindingUse = MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
-    if(csgBindingUse.clip && !bindingSets.clip)
-        return false;
-    if(csgBindingUse.receiverSurface && !bindingSets.receiverSurface)
-        return false;
-    if(requireIntervalSample && csgBindingUse.intervalSample && !bindingSets.intervalSample)
-        return false;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -206,7 +169,7 @@ bool RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialP
 
 bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems){
     bool ready = true;
-    const __hidden_material_pass_resources::MaterialPassCsgBindingSets csgBindingSets{
+    const MaterialPassCsgBindingSets csgBindingSets{
         csgState().m_clipBindingSet,
         csgState().m_receiverSurfaceBindingSet,
         csgState().m_intervalSampleBindingSet
@@ -224,7 +187,7 @@ bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Mater
             return;
         }
 
-        if(!__hidden_material_pass_resources::CsgResourcesReadyForPipelineKey(
+        if(!MaterialPassCsgResourcesReadyForPipelineKey(
             drawItem.pipelineKey,
             drawItem.pipelineKey.pass,
             csgBindingSets,
@@ -242,7 +205,7 @@ bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Ma
         return false;
 
     bool ready = true;
-    const __hidden_material_pass_resources::MaterialPassCsgBindingSets csgBindingSets{
+    const MaterialPassCsgBindingSets csgBindingSets{
         csgState().m_clipBindingSet,
         csgState().m_receiverSurfaceBindingSet,
         csgState().m_intervalSampleBindingSet
@@ -261,7 +224,7 @@ bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Ma
             return;
         }
 
-        if(!__hidden_material_pass_resources::CsgResourcesReadyForPipelineKey(
+        if(!MaterialPassCsgResourcesReadyForPipelineKey(
             drawItem.pipelineKey,
             drawItem.pipelineKey.pass,
             csgBindingSets,

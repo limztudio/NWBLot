@@ -1,0 +1,39 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_AVBOIT_MATERIAL_CONTEXT_AUTHORING_SLANGI
+#define NWB_GRAPHICS_AVBOIT_MATERIAL_CONTEXT_AUTHORING_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Per-draw material context from the AVBOIT draw push constant. Include after common.slangi and gbuffer_io.slangi,
+// before material_typed_accessors.slangi expands its Constant-storage load helpers.
+
+
+uint nwbMeshShadingModelId(){
+    return (g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
+}
+
+uint nwbMeshInstanceIndex(){
+    return g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
+}
+
+uint nwbMeshMaterialConstantByteOffset(){
+    return g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET];
+}
+
+NwbMeshInstanceData nwbMeshLoadInstance(){
+    return g_NwbMeshInstances[nwbMeshInstanceIndex()];
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

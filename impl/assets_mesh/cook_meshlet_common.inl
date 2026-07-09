@@ -39,6 +39,28 @@ struct MeshletTriangleData{
     Float4 areaNormal = {};
 };
 
+struct MeshletTriangleVectors{
+    SIMDVector positions[3] = {};
+    SIMDVector centroid = {};
+    SIMDVector areaNormal = {};
+};
+
+[[nodiscard]] static SIMDVector LoadMeshletTriangleAreaNormal(const MeshletTriangleData& triangle){
+    return LoadFloat(triangle.areaNormal);
+}
+
+[[nodiscard]] static MeshletTriangleVectors LoadMeshletTriangleVectors(const MeshletTriangleData& triangle){
+    return MeshletTriangleVectors{
+        {
+            LoadFloat(triangle.positionVectors[0u]),
+            LoadFloat(triangle.positionVectors[1u]),
+            LoadFloat(triangle.positionVectors[2u]),
+        },
+        LoadFloat(triangle.centroid),
+        LoadMeshletTriangleAreaNormal(triangle)
+    };
+}
+
 struct MeshletTrianglePrecompute{
     Core::Assets::AssetVector<MeshletTriangleData> triangles;
     Core::Assets::AssetVector<u32> positionTriangleOffsets;

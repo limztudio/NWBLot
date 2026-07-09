@@ -126,11 +126,11 @@ template<typename TriangleIndexVectorT>
     bool hasNormal = false;
     f32 coneCutoff = 1.0f;
     for(const u32 triangleIndex : triangleIndices){
-        const SIMDVector triangleAreaNormal = LoadFloat(trianglePrecompute.triangles[triangleIndex].areaNormal);
+        const SIMDVector triangleAreaNormal = LoadMeshletTriangleAreaNormal(trianglePrecompute.triangles[triangleIndex]);
         UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
     }
     if(hasExtraTriangle){
-        const SIMDVector triangleAreaNormal = LoadFloat(trianglePrecompute.triangles[extraTriangleIndex].areaNormal);
+        const SIMDVector triangleAreaNormal = LoadMeshletTriangleAreaNormal(trianglePrecompute.triangles[extraTriangleIndex]);
         UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
     }
 
@@ -179,23 +179,17 @@ template<typename TriangleIndexVectorT>
     const bool disconnected
 ){
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
-    const SIMDVector trianglePositions[3] = {
-        LoadFloat(triangle.positionVectors[0u]),
-        LoadFloat(triangle.positionVectors[1u]),
-        LoadFloat(triangle.positionVectors[2u]),
-    };
-    const SIMDVector triangleCentroid = LoadFloat(triangle.centroid);
-    const SIMDVector triangleAreaNormal = LoadFloat(triangle.areaNormal);
-    const f32 predictedRadius = PredictMeshletScoreRadius(state, trianglePositions);
+    const MeshletTriangleVectors triangleVectors = LoadMeshletTriangleVectors(triangle);
+    const f32 predictedRadius = PredictMeshletScoreRadius(state, triangleVectors.positions);
     const f32 predictedRadiusGrowth = Max(0.0f, predictedRadius - state.radius);
-    const f32 centroidDistance = MeshletScoreCentroidDistance(state, triangleCentroid);
-    const f32 normalCoherence = MeshletScoreNormalCoherence(state, triangleAreaNormal);
+    const f32 centroidDistance = MeshletScoreCentroidDistance(state, triangleVectors.centroid);
+    const f32 normalCoherence = MeshletScoreNormalCoherence(state, triangleVectors.areaNormal);
     const f32 coneWidening = PredictMeshletScoreConeWidening(
         trianglePrecompute,
         triangleIndices,
         state,
         triangleIndex,
-        triangleAreaNormal
+        triangleVectors.areaNormal
     );
     return s_MeshletScoreSharedVertexWeight * static_cast<f32>(sharedVertexCount)
         - s_MeshletScoreNewVertexWeight * static_cast<f32>(missingVertexCount)

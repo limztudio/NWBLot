@@ -83,17 +83,11 @@ static void AddMeshletTriangleToScoreState(
     const MeshletTriangleData& triangle,
     MeshletScoreState& state
 ){
-    const SIMDVector trianglePositions[3] = {
-        LoadFloat(triangle.positionVectors[0u]),
-        LoadFloat(triangle.positionVectors[1u]),
-        LoadFloat(triangle.positionVectors[2u]),
-    };
-    AccumulateMeshletScoreBounds(trianglePositions, state.minBounds, state.maxBounds);
-    const SIMDVector triangleCentroid = LoadFloat(triangle.centroid);
-    const SIMDVector triangleAreaNormal = LoadFloat(triangle.areaNormal);
+    const MeshletTriangleVectors triangleVectors = LoadMeshletTriangleVectors(triangle);
+    AccumulateMeshletScoreBounds(triangleVectors.positions, state.minBounds, state.maxBounds);
     state.radius = AabbTests::Radius(state.minBounds, state.maxBounds);
-    state.centroidSum = VectorAdd(state.centroidSum, triangleCentroid);
-    state.normalSum = VectorAdd(state.normalSum, triangleAreaNormal);
+    state.centroidSum = VectorAdd(state.centroidSum, triangleVectors.centroid);
+    state.normalSum = VectorAdd(state.normalSum, triangleVectors.areaNormal);
     state.normalAxis = NormalizeMeshletDirectionOrZero(state.normalSum);
     ++state.primitiveCount;
     state.coneCutoff = ComputeMeshletScoreConeCutoff(

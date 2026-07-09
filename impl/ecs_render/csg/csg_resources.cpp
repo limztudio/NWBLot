@@ -40,6 +40,18 @@ struct CsgResolvedClipCutter{
     bool workBoundsValid = false;
 };
 
+struct CsgCutterMatrices{
+    SIMDMatrix shapeToWorld;
+    SIMDMatrix worldToShape;
+};
+
+[[nodiscard]] static CsgCutterMatrices LoadCsgCutterMatrices(const CsgCutterComponent& cutter){
+    return CsgCutterMatrices{
+        LoadFloat(cutter.shapeToWorld),
+        LoadFloat(cutter.worldToShape)
+    };
+}
+
 [[nodiscard]] static SIMDVector ComputeWorldToShapeScaleBound(const SIMDMatrix& worldToShape){
     const SIMDVector row0 = VectorSetW(worldToShape.v[0], 0.0f);
     const SIMDVector row1 = VectorSetW(worldToShape.v[1], 0.0f);
@@ -310,14 +322,13 @@ template<typename CutterHandler>
             if(!resolved)
                 return;
 
-            const SIMDMatrix cutterShapeToWorld = LoadFloat(cutter.shapeToWorld);
-            const SIMDMatrix cutterWorldToShape = LoadFloat(cutter.worldToShape);
+            const CsgCutterMatrices cutterMatrices = LoadCsgCutterMatrices(cutter);
             CsgResolvedClipCutter resolvedCutter;
             const CsgClipCutterResolveResult::Enum resolveResult = ResolveReceiverClipCutter(
                 shapeRegistry,
                 cutter,
-                cutterShapeToWorld,
-                cutterWorldToShape,
+                cutterMatrices.shapeToWorld,
+                cutterMatrices.worldToShape,
                 receiverLocalMinBounds,
                 receiverLocalMaxBounds,
                 receiverBoundsValid,

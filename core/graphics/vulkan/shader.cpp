@@ -186,13 +186,8 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
     Shader* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc.shaderType = shaderType;
     shader->m_desc.entryName = requestedEntryName;
+    NWB_ASSERT(!m_spirvWords.empty());
     shader->m_spirvWords = m_spirvWords;
-
-    if(shader->m_spirvWords.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload for entry '{}'"), StringConvert(requestedEntryName));
-        DestroyArenaObject(m_context.objectArena, shader);
-        return nullptr;
-    }
 
     if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords.data(), shader->m_spirvWords.size(), AStringView(requestedEntryName), shaderType, "shader library", shader->m_entryPointName)){
         DestroyArenaObject(m_context.objectArena, shader);
@@ -267,14 +262,9 @@ ShaderHandle Device::createShaderSpecialization(Shader* baseShader, const Shader
     auto* base = static_cast<Shader*>(baseShader);
     auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc = base->m_desc;
+    NWB_ASSERT(!base->m_spirvWords.empty());
     shader->m_spirvWords = base->m_spirvWords;
     shader->m_entryPointName = base->m_entryPointName;
-
-    if(shader->m_spirvWords.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload for specialization"));
-        DestroyArenaObject(m_context.objectArena, shader);
-        return nullptr;
-    }
 
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;

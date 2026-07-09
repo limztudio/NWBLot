@@ -4,17 +4,17 @@
 
 #include "project.h"
 
-#include <core/ecs/module.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/module.h>
-#include <core/telemetry/frame_graph_registry.h>
+#include <global/core/ecs/module.h>
+#include <global/core/graphics/backend_selection.h>
+#include <global/core/graphics/module.h>
+#include <global/core/telemetry/frame_graph_registry.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>
 #include <impl/ecs_render/mesh/model_renderer.h>
 #include <impl/ecs_render/kernel/module.h>
 #include <impl/ecs_ui/module.h>
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

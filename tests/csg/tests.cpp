@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/common/module.h>
-#include <core/ecs/module.h>
+#include <global/core/common/module.h>
+#include <global/core/ecs/module.h>
 #include <impl/ecs_csg/module.h>
 
 #include <tests/ecs_test_world.h>

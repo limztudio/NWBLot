@@ -4,8 +4,8 @@
 
 #include "module.h"
 
-#include <core/common/application_entry.h>
-#include <core/common/module.h>
+#include <global/core/common/application_entry.h>
+#include <global/core/common/module.h>
 #include <logger/client/logger.h>
 
 

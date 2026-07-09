@@ -1,0 +1,2423 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "backend.h"
+#include "arena_names.h"
+
+#include <global/core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace VulkanDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(sizeof(AffineTransform) == sizeof(VkTransformMatrixKHR), "AffineTransform must match VkTransformMatrixKHR");
+
+inline constexpr u32 s_LssVerticesPerPrimitive = 2u;
+inline constexpr u32 s_LssListIndicesPerPrimitive = 2u;
+inline constexpr u32 s_LssSuccessiveIndicesPerPrimitive = 1u;
+
+
+VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset){
+    if(!bufferResource)
+        return 0;
+
+    auto* buffer = bufferResource;
+    return buffer->m_deviceAddress + offset;
+}
+
+bool GetRayTracingIndexType(Format::Enum format, VkIndexType& indexType){
+    if(format == Format::R16_UINT){
+        indexType = VK_INDEX_TYPE_UINT16;
+        return true;
+    }
+    if(format == Format::R32_UINT){
+        indexType = VK_INDEX_TYPE_UINT32;
+        return true;
+    }
+
+    return false;
+}
+
+u64 GetRayTracingIndexElementSize(Format::Enum format){
+    if(format == Format::R16_UINT)
+        return sizeof(u16);
+    if(format == Format::R32_UINT)
+        return sizeof(u32);
+    return 0;
+}
+
+VkRayTracingLssIndexingModeNV ConvertRayTracingLssIndexingMode(RayTracingGeometryLssPrimitiveFormat::Enum format){
+    switch(format){
+    case RayTracingGeometryLssPrimitiveFormat::List:
+        return VK_RAY_TRACING_LSS_INDEXING_MODE_LIST_NV;
+    case RayTracingGeometryLssPrimitiveFormat::SuccessiveImplicit:
+        return VK_RAY_TRACING_LSS_INDEXING_MODE_SUCCESSIVE_NV;
+    default:
+        return VK_RAY_TRACING_LSS_INDEXING_MODE_MAX_ENUM_NV;
+    }
+}
+
+VkRayTracingLssPrimitiveEndCapsModeNV ConvertRayTracingLssEndcapMode(RayTracingGeometryLssEndcapMode::Enum mode){
+    switch(mode){
+    case RayTracingGeometryLssEndcapMode::None:
+        return VK_RAY_TRACING_LSS_PRIMITIVE_END_CAPS_MODE_NONE_NV;
+    case RayTracingGeometryLssEndcapMode::Chained:
+        return VK_RAY_TRACING_LSS_PRIMITIVE_END_CAPS_MODE_CHAINED_NV;
+    default:
+        return VK_RAY_TRACING_LSS_PRIMITIVE_END_CAPS_MODE_MAX_ENUM_NV;
+    }
+}
+
+bool ComputeStridedRangeByteSize(u32 elementCount, u64 stride, u64 elementSize, u64& outByteSize){
+    if(elementCount == 0){
+        outByteSize = 0;
+        return true;
+    }
+
+    const u64 spanCount = static_cast<u64>(elementCount - 1);
+    if(stride != 0 && spanCount > (UINT64_MAX - elementSize) / stride)
+        return false;
+
+    outByteSize = spanCount * stride + elementSize;
+    return true;
+}
+
+bool ComputeRayTracingHandleLayout(const VulkanContext& context, u32& outHandleSize, u32& outHandleSizeAligned, u32& outBaseAlignment, const tchar* operation){
+    const u32 handleSize = context.rayTracingPipelineProperties.shaderGroupHandleSize;
+    const u32 handleAlignment = context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
+    const u32 baseAlignment = context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
+
+    if(handleAlignment == 0 || (handleAlignment & (handleAlignment - 1u)) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle alignment is invalid"), operation);
+        return false;
+    }
+    if(baseAlignment == 0 || (baseAlignment & (baseAlignment - 1u)) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group base alignment is invalid"), operation);
+        return false;
+    }
+    u32 handleSizeAligned = 0;
+    if(!AlignUpU32Checked(handleSize, handleAlignment, handleSizeAligned)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle size alignment overflows"), operation);
+        return false;
+    }
+    if(handleSizeAligned == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle size is invalid"), operation);
+        return false;
+    }
+
+    outHandleSize = handleSize;
+    outHandleSizeAligned = handleSizeAligned;
+    outBaseAlignment = baseAlignment;
+    return true;
+}
+
+bool ComputeShaderTableByteSize(u32 recordCount, u32 handleSizeAligned, u32 baseAlignment, u64& outByteSize, const tchar* operation){
+    if(recordCount == 0 || handleSizeAligned == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table record count or stride is invalid"), operation);
+        return false;
+    }
+    if(static_cast<u64>(recordCount) > Limit<u64>::s_Max / static_cast<u64>(handleSizeAligned)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table size overflows"), operation);
+        return false;
+    }
+
+    const u64 rawSize = static_cast<u64>(recordCount) * static_cast<u64>(handleSizeAligned);
+    if(!AlignUpU64Checked(rawSize, static_cast<u64>(baseAlignment), outByteSize)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table alignment overflows"), operation);
+        return false;
+    }
+
+    return true;
+}
+
+using MicromapUsageVector = Vector<VkMicromapUsageEXT, Alloc::ScratchArena>;
+using BlasGeometryVector = Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchArena>;
+using BlasSpheresDataVector = Vector<VkAccelerationStructureGeometrySpheresDataNV, Alloc::ScratchArena>;
+using BlasLssDataVector = Vector<VkAccelerationStructureGeometryLinearSweptSpheresDataNV, Alloc::ScratchArena>;
+using BlasRangeInfoVector = Vector<VkAccelerationStructureBuildRangeInfoKHR, Alloc::ScratchArena>;
+using BlasPrimitiveCountVector = Vector<uint32_t, Alloc::ScratchArena>;
+using BlasTransformOffsetVector = Vector<usize, Alloc::ScratchArena>;
+
+struct BlasGeometryScratch{
+    BlasGeometryVector geometries;
+    BlasSpheresDataVector spheresData;
+    BlasLssDataVector lssData;
+    BlasRangeInfoVector rangeInfos;
+    BlasPrimitiveCountVector primitiveCounts;
+    BlasTransformOffsetVector transformOffsets;
+
+    explicit BlasGeometryScratch(Alloc::ScratchArena& scratchArena)
+        : geometries(scratchArena)
+        , spheresData(scratchArena)
+        , lssData(scratchArena)
+        , rangeInfos(scratchArena)
+        , primitiveCounts(scratchArena)
+        , transformOffsets(scratchArena)
+    {}
+
+    void resizeForSizeQuery(usize geometryCount){
+        geometries.resize(geometryCount);
+        spheresData.resize(geometryCount);
+        lssData.resize(geometryCount);
+        primitiveCounts.resize(geometryCount);
+    }
+
+    void resizeForBuild(usize geometryCount){
+        geometries.resize(geometryCount);
+        spheresData.resize(geometryCount);
+        lssData.resize(geometryCount);
+        rangeInfos.resize(geometryCount);
+        primitiveCounts.resize(geometryCount);
+        transformOffsets.resize(geometryCount);
+    }
+};
+
+VkOpacityMicromapFormatEXT ConvertOpacityMicromapFormat(const OpacityMicromapFormat::Enum format){
+    switch(format){
+    case OpacityMicromapFormat::OC1_2_State:
+        return VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT;
+    case OpacityMicromapFormat::OC1_4_State:
+        return VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT;
+    default:
+        return VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_EXT;
+    }
+}
+
+bool BuildOpacityMicromapUsageCounts(const GraphicsVector<RayTracingOpacityMicromapUsageCount>& counts, MicromapUsageVector& outUsageCounts, const tchar* operation){
+    outUsageCounts.clear();
+    outUsageCounts.reserve(counts.size());
+
+    for(usize i = 0; i < counts.size(); ++i){
+        const RayTracingOpacityMicromapUsageCount& count = counts[i];
+        const VkOpacityMicromapFormatEXT format = ConvertOpacityMicromapFormat(count.format);
+        if(format == VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_EXT){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: opacity micromap usage count {} has invalid format {}")
+                , operation
+                , i
+                , static_cast<u32>(count.format)
+            );
+            outUsageCounts.clear();
+            return false;
+        }
+
+        VkMicromapUsageEXT usageCount = {};
+        usageCount.count = count.count;
+        usageCount.subdivisionLevel = count.subdivisionLevel;
+        usageCount.format = static_cast<u32>(format);
+        outUsageCounts.push_back(usageCount);
+    }
+
+    return true;
+}
+
+bool ValidateAccelStructBuildInputRange(Buffer* bufferResource, u64 offset, u64 byteSize, const tchar* operation, const tchar* resourceName){
+    auto* buffer = bufferResource;
+    if(!buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer is invalid"), operation, resourceName);
+        return false;
+    }
+
+    const BufferDesc& desc = buffer->getDescription();
+    if(!desc.isAccelStructBuildInput){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer was not created with acceleration-structure build input usage"), operation, resourceName);
+        return false;
+    }
+    if(!IsBufferRangeInBounds(desc, offset, byteSize)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer range is outside the buffer"), operation, resourceName);
+        return false;
+    }
+
+    return true;
+}
+
+bool ValidateStridedBuildInputRange(
+    Buffer* buffer,
+    u64 offset,
+    u32 elementCount,
+    u64 stride,
+    u64 elementSize,
+    const tchar* operation,
+    const tchar* resourceName
+){
+    u64 byteSize = 0;
+    if(!ComputeStridedRangeByteSize(elementCount, stride, elementSize, byteSize)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer range overflows"), operation, resourceName);
+        return false;
+    }
+
+    return ValidateAccelStructBuildInputRange(buffer, offset, byteSize, operation, resourceName);
+}
+
+bool FillBlasGeometryForSizeQuery(
+    const VulkanContext& context,
+    const RayTracingGeometryDesc& geomDesc,
+    VkAccelerationStructureGeometryKHR& geometry,
+    VkAccelerationStructureGeometrySpheresDataNV& spheresData,
+    VkAccelerationStructureGeometryLinearSweptSpheresDataNV& lssData,
+    u32& primitiveCount,
+    const tchar* operation,
+    bool requireBuffers
+){
+    geometry = MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
+    spheresData = MakeVkStruct<VkAccelerationStructureGeometrySpheresDataNV>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_SPHERES_DATA_NV);
+    lssData = MakeVkStruct<VkAccelerationStructureGeometryLinearSweptSpheresDataNV>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_LINEAR_SWEPT_SPHERES_DATA_NV);
+    primitiveCount = 0;
+
+    if(geomDesc.geometryType == RayTracingGeometryType::Triangles){
+        const auto& triangles = geomDesc.geometryData.triangles;
+        const VkFormat vertexFormat = ConvertFormat(triangles.vertexFormat);
+        if(vertexFormat == VK_FORMAT_UNDEFINED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex format is invalid"), operation);
+            return false;
+        }
+        if(requireBuffers && !triangles.vertexBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex buffer is null"), operation);
+            return false;
+        }
+        if(triangles.vertexCount > 0 && triangles.vertexStride == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex stride is zero"), operation);
+            return false;
+        }
+        const FormatInfo& vertexFormatInfo = GetFormatInfo(triangles.vertexFormat);
+        if(vertexFormatInfo.bytesPerBlock == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex format size is invalid"), operation);
+            return false;
+        }
+        if(triangles.vertexCount > 0 && triangles.vertexStride < vertexFormatInfo.bytesPerBlock){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex stride is smaller than the vertex format size"), operation);
+            return false;
+        }
+        if(requireBuffers){
+            u64 vertexByteSize = 0;
+            if(!ComputeStridedRangeByteSize(triangles.vertexCount, triangles.vertexStride, vertexFormatInfo.bytesPerBlock, vertexByteSize)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex buffer range overflows"), operation);
+                return false;
+            }
+            if(!ValidateAccelStructBuildInputRange(triangles.vertexBuffer, triangles.vertexOffset, vertexByteSize, operation, NWB_TEXT("triangle vertex")))
+                return false;
+        }
+
+        geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+        geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+        geometry.geometry.triangles.vertexFormat = vertexFormat;
+        geometry.geometry.triangles.vertexStride = triangles.vertexStride;
+        geometry.geometry.triangles.maxVertex = triangles.vertexCount > 0 ? triangles.vertexCount - 1 : 0;
+
+        if(triangles.indexBuffer){
+            if(!GetRayTracingIndexType(triangles.indexFormat, geometry.geometry.triangles.indexType)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle index format must be R16_UINT or R32_UINT"), operation);
+                return false;
+            }
+            if(requireBuffers){
+                const u64 indexElementSize = triangles.indexFormat == Format::R16_UINT ? sizeof(u16) : sizeof(u32);
+                const u64 indexByteSize = static_cast<u64>(triangles.indexCount) * indexElementSize;
+                if(!ValidateAccelStructBuildInputRange(triangles.indexBuffer, triangles.indexOffset, indexByteSize, operation, NWB_TEXT("triangle index")))
+                    return false;
+            }
+            primitiveCount = triangles.indexCount / s_TrianglesPerPrimitive;
+        }
+        else{
+            geometry.geometry.triangles.indexType = VK_INDEX_TYPE_NONE_KHR;
+            primitiveCount = triangles.vertexCount / s_TrianglesPerPrimitive;
+        }
+    }
+    else if(geomDesc.geometryType == RayTracingGeometryType::AABBs){
+        const auto& aabbs = geomDesc.geometryData.aabbs;
+        if(requireBuffers && !aabbs.buffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB buffer is null"), operation);
+            return false;
+        }
+        if(aabbs.count > 0 && aabbs.stride == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB stride is zero"), operation);
+            return false;
+        }
+        if(requireBuffers){
+            u64 aabbByteSize = 0;
+            if(!ComputeStridedRangeByteSize(aabbs.count, aabbs.stride, sizeof(RayTracingGeometryAABB), aabbByteSize)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB buffer range overflows"), operation);
+                return false;
+            }
+            if(!ValidateAccelStructBuildInputRange(aabbs.buffer, aabbs.offset, aabbByteSize, operation, NWB_TEXT("AABB")))
+                return false;
+        }
+
+        geometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
+        geometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
+        geometry.geometry.aabbs.stride = aabbs.stride;
+        primitiveCount = aabbs.count;
+    }
+    else if(geomDesc.geometryType == RayTracingGeometryType::Spheres){
+        if(
+            !context.extensions.NV_ray_tracing_linear_swept_spheres
+            || context.rayTracingLinearSweptSpheresFeatures.spheres != VK_TRUE
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere geometry requires VK_NV_ray_tracing_linear_swept_spheres with spheres support"), operation);
+            return false;
+        }
+
+        const auto& spheres = geomDesc.geometryData.spheres;
+        const VkFormat vertexFormat = ConvertFormat(spheres.vertexPositionFormat);
+        const VkFormat radiusFormat = ConvertFormat(spheres.vertexRadiusFormat);
+        if(vertexFormat == VK_FORMAT_UNDEFINED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere position format is invalid"), operation);
+            return false;
+        }
+        if(radiusFormat == VK_FORMAT_UNDEFINED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere radius format is invalid"), operation);
+            return false;
+        }
+        if(requireBuffers && !spheres.vertexBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere vertex buffer is null"), operation);
+            return false;
+        }
+        if(spheres.vertexCount > 0 && spheres.vertexPositionStride == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere position stride is zero"), operation);
+            return false;
+        }
+        if(spheres.vertexCount > 0 && spheres.vertexRadiusStride == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere radius stride is zero"), operation);
+            return false;
+        }
+
+        const FormatInfo& vertexFormatInfo = GetFormatInfo(spheres.vertexPositionFormat);
+        const FormatInfo& radiusFormatInfo = GetFormatInfo(spheres.vertexRadiusFormat);
+        if(vertexFormatInfo.bytesPerBlock == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere position format size is invalid"), operation);
+            return false;
+        }
+        if(radiusFormatInfo.bytesPerBlock == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere radius format size is invalid"), operation);
+            return false;
+        }
+        if(spheres.vertexCount > 0 && spheres.vertexPositionStride < vertexFormatInfo.bytesPerBlock){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere position stride is smaller than the position format size"), operation);
+            return false;
+        }
+        if(spheres.vertexCount > 0 && spheres.vertexRadiusStride < radiusFormatInfo.bytesPerBlock){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere radius stride is smaller than the radius format size"), operation);
+            return false;
+        }
+        if(requireBuffers){
+            if(!ValidateStridedBuildInputRange(
+                spheres.vertexBuffer,
+                spheres.vertexPositionOffset,
+                spheres.vertexCount,
+                spheres.vertexPositionStride,
+                vertexFormatInfo.bytesPerBlock,
+                operation,
+                NWB_TEXT("sphere position")
+            ))
+                return false;
+            if(!ValidateStridedBuildInputRange(
+                spheres.vertexBuffer,
+                spheres.vertexRadiusOffset,
+                spheres.vertexCount,
+                spheres.vertexRadiusStride,
+                radiusFormatInfo.bytesPerBlock,
+                operation,
+                NWB_TEXT("sphere radius")
+            ))
+                return false;
+        }
+
+        spheresData.indexType = VK_INDEX_TYPE_NONE_KHR;
+        if(spheres.indexBuffer){
+            if(!GetRayTracingIndexType(spheres.indexFormat, spheresData.indexType)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere index format must be R16_UINT or R32_UINT"), operation);
+                return false;
+            }
+            const u64 indexElementSize = GetRayTracingIndexElementSize(spheres.indexFormat);
+            if(spheres.indexCount > 0 && spheres.indexStride == 0){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere index stride is zero"), operation);
+                return false;
+            }
+            if(spheres.indexCount > 0 && spheres.indexStride < indexElementSize){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: sphere index stride is smaller than the index format size"), operation);
+                return false;
+            }
+            if(requireBuffers){
+                if(!ValidateStridedBuildInputRange(
+                    spheres.indexBuffer,
+                    spheres.indexOffset,
+                    spheres.indexCount,
+                    spheres.indexStride,
+                    indexElementSize,
+                    operation,
+                    NWB_TEXT("sphere index")
+                ))
+                    return false;
+            }
+            primitiveCount = spheres.indexCount;
+        }
+        else
+            primitiveCount = spheres.vertexCount;
+
+        geometry.geometryType = VK_GEOMETRY_TYPE_SPHERES_NV;
+        geometry.pNext = &spheresData;
+        spheresData.vertexFormat = vertexFormat;
+        spheresData.vertexStride = spheres.vertexPositionStride;
+        spheresData.radiusFormat = radiusFormat;
+        spheresData.radiusStride = spheres.vertexRadiusStride;
+        spheresData.indexStride = spheres.indexBuffer ? spheres.indexStride : 0;
+    }
+    else if(geomDesc.geometryType == RayTracingGeometryType::Lss){
+        if(
+            !context.extensions.NV_ray_tracing_linear_swept_spheres
+            || context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres != VK_TRUE
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS geometry requires VK_NV_ray_tracing_linear_swept_spheres with linearSweptSpheres support"), operation);
+            return false;
+        }
+
+        const auto& lss = geomDesc.geometryData.lss;
+        const VkFormat vertexFormat = ConvertFormat(lss.vertexPositionFormat);
+        const VkFormat radiusFormat = ConvertFormat(lss.vertexRadiusFormat);
+        if(vertexFormat == VK_FORMAT_UNDEFINED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS position format is invalid"), operation);
+            return false;
+        }
+        if(radiusFormat == VK_FORMAT_UNDEFINED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS radius format is invalid"), operation);
+            return false;
+        }
+        if(requireBuffers && !lss.vertexBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS vertex buffer is null"), operation);
+            return false;
+        }
+        if(lss.vertexCount > 0 && lss.vertexPositionStride == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS position stride is zero"), operation);
+            return false;
+        }
+        if(lss.vertexCount > 0 && lss.vertexRadiusStride == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS radius stride is zero"), operation);
+            return false;
+        }
+
+        const VkRayTracingLssIndexingModeNV indexingMode = ConvertRayTracingLssIndexingMode(lss.primitiveFormat);
+        const VkRayTracingLssPrimitiveEndCapsModeNV endCapsMode = ConvertRayTracingLssEndcapMode(lss.endcapMode);
+        if(indexingMode == VK_RAY_TRACING_LSS_INDEXING_MODE_MAX_ENUM_NV){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS primitive format is invalid"), operation);
+            return false;
+        }
+        if(endCapsMode == VK_RAY_TRACING_LSS_PRIMITIVE_END_CAPS_MODE_MAX_ENUM_NV){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS endcap mode is invalid"), operation);
+            return false;
+        }
+
+        const FormatInfo& vertexFormatInfo = GetFormatInfo(lss.vertexPositionFormat);
+        const FormatInfo& radiusFormatInfo = GetFormatInfo(lss.vertexRadiusFormat);
+        if(vertexFormatInfo.bytesPerBlock == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS position format size is invalid"), operation);
+            return false;
+        }
+        if(radiusFormatInfo.bytesPerBlock == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS radius format size is invalid"), operation);
+            return false;
+        }
+        if(lss.vertexCount > 0 && lss.vertexPositionStride < vertexFormatInfo.bytesPerBlock){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS position stride is smaller than the position format size"), operation);
+            return false;
+        }
+        if(lss.vertexCount > 0 && lss.vertexRadiusStride < radiusFormatInfo.bytesPerBlock){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS radius stride is smaller than the radius format size"), operation);
+            return false;
+        }
+
+        u32 requiredVertexCount = 0;
+        if(lss.indexBuffer)
+            requiredVertexCount = lss.vertexCount;
+        else{
+            if(lss.primitiveCount > UINT32_MAX / s_LssVerticesPerPrimitive){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS primitive count overflows vertex consumption"), operation);
+                return false;
+            }
+            requiredVertexCount = lss.primitiveCount * s_LssVerticesPerPrimitive;
+            if(lss.vertexCount < requiredVertexCount){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS vertex count is smaller than the non-indexed primitive consumption"), operation);
+                return false;
+            }
+        }
+
+        if(requireBuffers){
+            if(!ValidateStridedBuildInputRange(
+                lss.vertexBuffer,
+                lss.vertexPositionOffset,
+                requiredVertexCount,
+                lss.vertexPositionStride,
+                vertexFormatInfo.bytesPerBlock,
+                operation,
+                NWB_TEXT("LSS position")
+            ))
+                return false;
+            if(!ValidateStridedBuildInputRange(
+                lss.vertexBuffer,
+                lss.vertexRadiusOffset,
+                requiredVertexCount,
+                lss.vertexRadiusStride,
+                radiusFormatInfo.bytesPerBlock,
+                operation,
+                NWB_TEXT("LSS radius")
+            ))
+                return false;
+        }
+
+        lssData.indexType = VK_INDEX_TYPE_NONE_KHR;
+        if(lss.indexBuffer){
+            if(!GetRayTracingIndexType(lss.indexFormat, lssData.indexType)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS index format must be R16_UINT or R32_UINT"), operation);
+                return false;
+            }
+            const u64 indexElementSize = GetRayTracingIndexElementSize(lss.indexFormat);
+            const u32 indicesPerPrimitive = lss.primitiveFormat == RayTracingGeometryLssPrimitiveFormat::List ? s_LssListIndicesPerPrimitive : s_LssSuccessiveIndicesPerPrimitive;
+            if(lss.primitiveCount > UINT32_MAX / indicesPerPrimitive){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS primitive count overflows index consumption"), operation);
+                return false;
+            }
+            const u32 requiredIndexCount = lss.primitiveCount * indicesPerPrimitive;
+            if(lss.indexCount < requiredIndexCount){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS index count is smaller than the selected primitive indexing mode requires"), operation);
+                return false;
+            }
+            if(requiredIndexCount > 0 && lss.indexStride == 0){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS index stride is zero"), operation);
+                return false;
+            }
+            if(requiredIndexCount > 0 && lss.indexStride < indexElementSize){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS index stride is smaller than the index format size"), operation);
+                return false;
+            }
+            if(requireBuffers){
+                if(!ValidateStridedBuildInputRange(
+                    lss.indexBuffer,
+                    lss.indexOffset,
+                    requiredIndexCount,
+                    lss.indexStride,
+                    indexElementSize,
+                    operation,
+                    NWB_TEXT("LSS index")
+                ))
+                    return false;
+            }
+            lssData.indexStride = lss.indexStride;
+        }
+
+        geometry.geometryType = VK_GEOMETRY_TYPE_LINEAR_SWEPT_SPHERES_NV;
+        geometry.pNext = &lssData;
+        lssData.vertexFormat = vertexFormat;
+        lssData.vertexStride = lss.vertexPositionStride;
+        lssData.radiusFormat = radiusFormat;
+        lssData.radiusStride = lss.vertexRadiusStride;
+        lssData.indexingMode = indexingMode;
+        lssData.endCapsMode = endCapsMode;
+        primitiveCount = lss.primitiveCount;
+    }
+    else{
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: geometry type is not supported by the Vulkan backend"), operation);
+        return false;
+    }
+
+    geometry.flags = 0;
+    if(geomDesc.flags & RayTracingGeometryFlags::Opaque)
+        geometry.flags |= VK_GEOMETRY_OPAQUE_BIT_KHR;
+    if(geomDesc.flags & RayTracingGeometryFlags::NoDuplicateAnyHitInvocation)
+        geometry.flags |= VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR;
+
+    return true;
+}
+
+VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(
+    RayTracingAccelStructBuildFlags::Mask buildFlags,
+    AccelStructCompactionMode::Enum compactionMode
+){
+    VkBuildAccelerationStructureFlagsKHR flags = 0;
+
+    if(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)
+        flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+    if(
+        compactionMode == AccelStructCompactionMode::Allowed
+        && (buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction)
+    )
+        flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
+    if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastTrace)
+        flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastBuild)
+        flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+
+    return flags;
+}
+
+bool BuildClusterOperationInputInfo(
+    const RayTracingClusterOperationParams& params,
+    VkClusterAccelerationStructureInputInfoNV& outInputInfo,
+    VkClusterAccelerationStructureMoveObjectsInputNV& outMoveInput,
+    VkClusterAccelerationStructureTriangleClusterInputNV& outClusterInput,
+    VkClusterAccelerationStructureClustersBottomLevelInputNV& outBlasInput,
+    const tchar* operationName
+){
+    VkClusterAccelerationStructureOpTypeNV opType;
+    switch(params.type){
+    case RayTracingClusterOperationType::Move:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_MOVE_OBJECTS_NV;
+        break;
+    case RayTracingClusterOperationType::ClasBuild:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_TRIANGLE_CLUSTER_NV;
+        break;
+    case RayTracingClusterOperationType::ClasBuildTemplates:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_TRIANGLE_CLUSTER_TEMPLATE_NV;
+        break;
+    case RayTracingClusterOperationType::ClasInstantiateTemplates:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_INSTANTIATE_TRIANGLE_CLUSTER_NV;
+        break;
+    case RayTracingClusterOperationType::BlasBuild:
+        opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_CLUSTERS_BOTTOM_LEVEL_NV;
+        break;
+    default:
+        return false;
+    }
+
+    VkClusterAccelerationStructureOpModeNV opMode;
+    switch(params.mode){
+    case RayTracingClusterOperationMode::ImplicitDestinations:
+        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_IMPLICIT_DESTINATIONS_NV;
+        break;
+    case RayTracingClusterOperationMode::ExplicitDestinations:
+        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_EXPLICIT_DESTINATIONS_NV;
+        break;
+    case RayTracingClusterOperationMode::GetSizes:
+        opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_COMPUTE_SIZES_NV;
+        break;
+    default:
+        return false;
+    }
+
+    VkBuildAccelerationStructureFlagsKHR opFlags = 0;
+    if(params.flags & RayTracingClusterOperationFlags::FastTrace)
+        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    if(!(params.flags & RayTracingClusterOperationFlags::FastTrace) && (params.flags & RayTracingClusterOperationFlags::FastBuild))
+        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+    if(params.flags & RayTracingClusterOperationFlags::AllowOMM)
+        opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_OPACITY_MICROMAP_UPDATE_EXT;
+
+    outInputInfo = MakeVkStruct<VkClusterAccelerationStructureInputInfoNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_INPUT_INFO_NV);
+    outInputInfo.maxAccelerationStructureCount = params.maxArgCount;
+    outInputInfo.flags = opFlags;
+    outInputInfo.opType = opType;
+    outInputInfo.opMode = opMode;
+
+    outMoveInput = MakeVkStruct<VkClusterAccelerationStructureMoveObjectsInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_MOVE_OBJECTS_INPUT_NV);
+    outClusterInput = MakeVkStruct<VkClusterAccelerationStructureTriangleClusterInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_TRIANGLE_CLUSTER_INPUT_NV);
+    outBlasInput = MakeVkStruct<VkClusterAccelerationStructureClustersBottomLevelInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_CLUSTERS_BOTTOM_LEVEL_INPUT_NV);
+
+    switch(params.type){
+    case RayTracingClusterOperationType::Move:{
+        VkClusterAccelerationStructureTypeNV moveType;
+        switch(params.move.type){
+        case RayTracingClusterOperationMoveType::BottomLevel:  moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_CLUSTERS_BOTTOM_LEVEL_NV; break;
+        case RayTracingClusterOperationMoveType::ClusterLevel: moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_NV; break;
+        case RayTracingClusterOperationMoveType::Template:     moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_TEMPLATE_NV; break;
+        default: moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_CLUSTERS_BOTTOM_LEVEL_NV; break;
+        }
+        outMoveInput.type = moveType;
+        outMoveInput.noMoveOverlap = (params.flags & RayTracingClusterOperationFlags::NoOverlap) ? VK_TRUE : VK_FALSE;
+        outMoveInput.maxMovedBytes = params.move.maxBytes;
+        outInputInfo.opInput.pMoveObjects = &outMoveInput;
+        break;
+    }
+    case RayTracingClusterOperationType::ClasBuild:
+    case RayTracingClusterOperationType::ClasBuildTemplates:
+    case RayTracingClusterOperationType::ClasInstantiateTemplates:{
+        const VkFormat vertexFormat = ConvertFormat(params.clas.vertexFormat);
+        if(vertexFormat == VK_FORMAT_UNDEFINED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: vertex format is unsupported"), operationName);
+            return false;
+        }
+        outClusterInput.vertexFormat = vertexFormat;
+        outClusterInput.maxGeometryIndexValue = params.clas.maxGeometryIndex;
+        outClusterInput.maxClusterUniqueGeometryCount = params.clas.maxUniqueGeometryCount;
+        outClusterInput.maxClusterTriangleCount = params.clas.maxTriangleCount;
+        outClusterInput.maxClusterVertexCount = params.clas.maxVertexCount;
+        outClusterInput.maxTotalTriangleCount = params.clas.maxTotalTriangleCount;
+        outClusterInput.maxTotalVertexCount = params.clas.maxTotalVertexCount;
+        outClusterInput.minPositionTruncateBitCount = params.clas.minPositionTruncateBitCount;
+        outInputInfo.opInput.pTriangleClusters = &outClusterInput;
+        break;
+    }
+    case RayTracingClusterOperationType::BlasBuild:{
+        outBlasInput.maxClusterCountPerAccelerationStructure = params.blas.maxClasPerBlasCount;
+        outBlasInput.maxTotalClusterCount = params.blas.maxTotalClasCount;
+        outInputInfo.opInput.pClustersBottomLevel = &outBlasInput;
+        break;
+    }
+    default:
+        break;
+    }
+
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+AccelStruct::AccelStruct(const VulkanContext& context)
+    : RefCounter<GraphicsResource>(context.threadPool)
+    , m_desc(context.objectArena)
+    , m_context(context)
+{}
+AccelStruct::~AccelStruct(){
+    if(m_compactionQueryPool != VK_NULL_HANDLE){
+        vkDestroyQueryPool(m_context.device, m_compactionQueryPool, m_context.allocationCallbacks);
+        m_compactionQueryPool = VK_NULL_HANDLE;
+    }
+
+    if(m_accelStruct){
+        vkDestroyAccelerationStructureKHR(m_context.device, m_accelStruct, m_context.allocationCallbacks);
+        m_accelStruct = VK_NULL_HANDLE;
+    }
+
+    m_buffer.reset();
+}
+
+Object AccelStruct::getNativeHandle(ObjectType objectType){
+    if(objectType == ObjectTypes::VK_AccelerationStructureKHR)
+        return Object(m_accelStruct);
+    return Object(nullptr);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+OpacityMicromap::OpacityMicromap(const VulkanContext& context)
+    : RefCounter<GraphicsResource>(context.threadPool)
+    , m_desc(context.objectArena)
+    , m_context(context)
+{}
+OpacityMicromap::~OpacityMicromap(){
+    if(m_micromap != VK_NULL_HANDLE){
+        vkDestroyMicromapEXT(m_context.device, m_micromap, m_context.allocationCallbacks);
+        m_micromap = VK_NULL_HANDLE;
+    }
+    m_dataBuffer.reset();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& device)
+    : RefCounter<GraphicsResource>(context.threadPool)
+    , m_desc(context.objectArena)
+    , m_shaderGroupHandles(context.objectArena)
+    , m_context(context)
+    , m_device(device)
+{}
+RayTracingPipeline::~RayTracingPipeline(){
+    VulkanDetail::DestroyPipelineResource(m_context, *this, m_pipeline);
+}
+
+Object RayTracingPipeline::getNativeHandle(ObjectType objectType){
+    return VulkanDetail::GetPipelineNativeHandle(m_pipeline, objectType);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStructDesc& desc){
+    VkResult res = VK_SUCCESS;
+
+    if(!m_context.extensions.KHR_acceleration_structure){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Acceleration structure extension is required to create ray tracing acceleration structures."));
+        return nullptr;
+    }
+
+    auto* as = NewArenaObject<AccelStruct>(m_context.objectArena, m_context);
+    as->m_desc = desc;
+
+    VkAccelerationStructureTypeKHR asType = desc.isTopLevel ? VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR : VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+
+    u64 accelStructSize = s_DefaultTopLevelASBufferSize;
+    if(desc.isTopLevel && desc.topLevelMaxInstances > 0){
+        if(desc.topLevelMaxInstances > UINT32_MAX){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acceleration structure: TLAS instance capacity exceeds Vulkan limit"));
+            DestroyArenaObject(m_context.objectArena, as);
+            return nullptr;
+        }
+
+        auto geometry = VulkanDetail::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
+        geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+        geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+        geometry.geometry.instances.arrayOfPointers = VK_FALSE;
+
+        auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+        buildInfo.type = asType;
+        buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
+            desc.buildFlags,
+            VulkanDetail::AccelStructCompactionMode::Disabled
+        );
+        buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        buildInfo.geometryCount = 1;
+        buildInfo.pGeometries = &geometry;
+
+        u32 primitiveCount = static_cast<u32>(desc.topLevelMaxInstances);
+        auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+        vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
+        if(sizeInfo.accelerationStructureSize > 0)
+            accelStructSize = sizeInfo.accelerationStructureSize;
+    }
+    else if(!desc.isTopLevel && !desc.bottomLevelGeometries.empty()){
+        if(desc.bottomLevelGeometries.size() > UINT32_MAX){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create BLAS: geometry count exceeds Vulkan limit"));
+            DestroyArenaObject(m_context.objectArena, as);
+            return nullptr;
+        }
+
+        Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena, s_RayTracingScratchArenaBytes);
+        VulkanDetail::BlasGeometryScratch blasScratch(scratchArena);
+        const usize geometryCount = desc.bottomLevelGeometries.size();
+        blasScratch.resizeForSizeQuery(geometryCount);
+
+        for(usize i = 0; i < geometryCount; ++i){
+            if(
+                !VulkanDetail::FillBlasGeometryForSizeQuery(
+                    m_context,
+                    desc.bottomLevelGeometries[i],
+                    blasScratch.geometries[i],
+                    blasScratch.spheresData[i],
+                    blasScratch.lssData[i],
+                    blasScratch.primitiveCounts[i],
+                    NWB_TEXT("create BLAS"),
+                    false
+                )
+            ){
+                DestroyArenaObject(m_context.objectArena, as);
+                return nullptr;
+            }
+        }
+
+        auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+        buildInfo.type = asType;
+        buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
+            desc.buildFlags,
+            VulkanDetail::AccelStructCompactionMode::Allowed
+        );
+        buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        buildInfo.geometryCount = static_cast<u32>(blasScratch.geometries.size());
+        buildInfo.pGeometries = blasScratch.geometries.data();
+
+        auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+        vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, blasScratch.primitiveCounts.data(), &sizeInfo);
+        if(sizeInfo.accelerationStructureSize > 0)
+            accelStructSize = sizeInfo.accelerationStructureSize;
+    }
+
+    BufferDesc bufferDesc;
+    bufferDesc.byteSize = accelStructSize;
+    bufferDesc.isAccelStructStorage = true;
+    bufferDesc.debugName = "AccelStructBuffer";
+    bufferDesc.isVirtual = desc.isVirtual;
+
+    as->m_buffer = createBuffer(bufferDesc);
+    if(!as->m_buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate acceleration structure storage buffer"));
+        DestroyArenaObject(m_context.objectArena, as);
+        return nullptr;
+    }
+
+    auto createInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureCreateInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
+    createInfo.buffer = as->m_buffer->m_buffer;
+    createInfo.offset = 0;
+    createInfo.size = bufferDesc.byteSize;
+    createInfo.type = asType;
+
+    res = vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &as->m_accelStruct);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acceleration structure: {}"), ResultToString(res));
+        DestroyArenaObject(m_context.objectArena, as);
+        return nullptr;
+    }
+
+    auto addressInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
+    addressInfo.accelerationStructure = as->m_accelStruct;
+    if(!desc.isVirtual)
+        as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
+
+    return RayTracingAccelStructHandle(as, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena), AdoptRef);
+}
+
+RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc){
+    VkResult res = VK_SUCCESS;
+
+    if(!m_context.extensions.EXT_opacity_micromap){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Opacity micromap extension is required to create opacity micromaps."));
+        return nullptr;
+    }
+    if(desc.counts.size() > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create opacity micromap: usage-count count exceeds Vulkan limit"));
+        return nullptr;
+    }
+
+    VkBuildMicromapFlagBitsEXT buildFlags = static_cast<VkBuildMicromapFlagBitsEXT>(0);
+    if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastTrace)
+        buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
+    else if(desc.flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
+        buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
+
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena);
+    VulkanDetail::MicromapUsageVector usageCounts{ scratchArena };
+    if(!VulkanDetail::BuildOpacityMicromapUsageCounts(desc.counts, usageCounts, NWB_TEXT("create opacity micromap")))
+        return nullptr;
+
+    auto buildInfo = VulkanDetail::MakeVkStruct<VkMicromapBuildInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT);
+    buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
+    buildInfo.flags = buildFlags;
+    buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
+    buildInfo.usageCountsCount = static_cast<u32>(usageCounts.size());
+    buildInfo.pUsageCounts = usageCounts.empty() ? nullptr : usageCounts.data();
+
+    auto buildSize = VulkanDetail::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
+    vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
+
+    auto* om = NewArenaObject<OpacityMicromap>(m_context.objectArena, m_context);
+    om->m_desc = desc;
+
+    BufferDesc bufferDesc;
+    bufferDesc.canHaveUAVs = true;
+    bufferDesc.byteSize = buildSize.micromapSize;
+    bufferDesc.initialState = ResourceStates::OpacityMicromapWrite;
+    bufferDesc.keepInitialState = true;
+    bufferDesc.isAccelStructStorage = true;
+    bufferDesc.debugName = desc.debugName;
+
+    om->m_dataBuffer = createBuffer(bufferDesc);
+    if(!om->m_dataBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate opacity micromap storage buffer"));
+        DestroyArenaObject(m_context.objectArena, om);
+        return nullptr;
+    }
+
+    auto* buffer = om->m_dataBuffer.get();
+
+    auto createInfo = VulkanDetail::MakeVkStruct<VkMicromapCreateInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT);
+    createInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
+    createInfo.buffer = buffer->m_buffer;
+    createInfo.size = buildSize.micromapSize;
+    createInfo.deviceAddress = buffer->m_deviceAddress;
+
+    res = vkCreateMicromapEXT(m_context.device, &createInfo, m_context.allocationCallbacks, &om->m_micromap);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create opacity micromap: {}"), ResultToString(res));
+        DestroyArenaObject(m_context.objectArena, om);
+        return nullptr;
+    }
+
+    return RayTracingOpacityMicromapHandle(om, RayTracingOpacityMicromapHandle::deleter_type(&m_context.objectArena), AdoptRef);
+}
+
+MemoryRequirements Device::getAccelStructMemoryRequirements(RayTracingAccelStruct* accelStructResource){
+    MemoryRequirements requirements = {};
+
+    auto* as = accelStructResource;
+    if(as->m_buffer){
+        requirements.size = as->m_buffer->getDescription().byteSize;
+        requirements.alignment = s_AccelerationStructureAlignment; // AS alignment requirement
+    }
+
+    return requirements;
+}
+
+RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params){
+    RayTracingClusterOperationSizeInfo info{};
+
+    if(!m_context.extensions.NV_cluster_acceleration_structure)
+        return info;
+
+    VkClusterAccelerationStructureInputInfoNV inputInfo{};
+    VkClusterAccelerationStructureMoveObjectsInputNV moveInput{};
+    VkClusterAccelerationStructureTriangleClusterInputNV clusterInput{};
+    VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput{};
+    if(!VulkanDetail::BuildClusterOperationInputInfo(params, inputInfo, moveInput, clusterInput, blasInput, NWB_TEXT("query cluster operation sizes")))
+        return info;
+
+    auto vkSizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+    vkGetClusterAccelerationStructureBuildSizesNV(m_context.device, &inputInfo, &vkSizeInfo);
+
+    info.resultMaxSizeInBytes = vkSizeInfo.accelerationStructureSize;
+    info.scratchSizeInBytes = vkSizeInfo.buildScratchSize;
+
+    return info;
+}
+
+bool Device::bindAccelStructMemory(RayTracingAccelStruct* accelStructResource, Heap* heap, u64 offset){
+    if(!accelStructResource){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: acceleration structure is null"));
+        return false;
+    }
+    if(!heap){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: heap is null"));
+        return false;
+    }
+
+    auto* as = accelStructResource;
+    if(as->m_buffer){
+        if(!bindBufferMemory(as->m_buffer.get(), heap, offset))
+            return false;
+
+        auto addressInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
+        addressInfo.accelerationStructure = as->m_accelStruct;
+        as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
+        return true;
+    }
+
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: storage buffer is null"));
+    return false;
+}
+
+RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipelineDesc& desc){
+    VkResult res = VK_SUCCESS;
+
+    if(!m_context.extensions.KHR_ray_tracing_pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Ray tracing pipeline extension is required to create ray tracing pipelines."));
+        return nullptr;
+    }
+    if(desc.maxRecursionDepth > m_context.rayTracingPipelineProperties.maxRayRecursionDepth){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: max recursion depth {} exceeds device limit {}")
+            , desc.maxRecursionDepth
+            , m_context.rayTracingPipelineProperties.maxRayRecursionDepth
+        );
+        return nullptr;
+    }
+    if(
+        desc.allowSpheres
+        && (
+            !m_context.extensions.NV_ray_tracing_linear_swept_spheres
+            || m_context.rayTracingLinearSweptSpheresFeatures.spheres != VK_TRUE
+        )
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: sphere geometry pipeline support is unavailable"));
+        return nullptr;
+    }
+    if(
+        desc.allowLinearSweptSpheres
+        && (
+            !m_context.extensions.NV_ray_tracing_linear_swept_spheres
+            || m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres != VK_TRUE
+        )
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: linear swept sphere geometry pipeline support is unavailable"));
+        return nullptr;
+    }
+    if(desc.hitGroups.size() > (static_cast<usize>(-1) - desc.shaders.size()) / s_RayTracingHitGroupShaderStageCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader stage count overflows"));
+        return nullptr;
+    }
+    const usize maxShaderStages = desc.shaders.size() + desc.hitGroups.size() * s_RayTracingHitGroupShaderStageCount;
+    if(maxShaderStages > static_cast<usize>(UINT32_MAX)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader stage count exceeds Vulkan limit"));
+        return nullptr;
+    }
+
+    auto* pso = NewArenaObject<RayTracingPipeline>(m_context.objectArena, m_context, *this);
+    pso->m_desc = desc;
+
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena, s_RayTracingScratchArenaBytes);
+
+    PipelineShaderStageVector stages{ scratchArena };
+    Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchArena> groups{ scratchArena };
+    PipelineSpecializationInfoVector specInfos{ scratchArena };
+    PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
+
+    stages.reserve(maxShaderStages);
+    groups.reserve(desc.shaders.size() + desc.hitGroups.size());
+    specInfos.reserve(maxShaderStages);
+
+    auto addShaderSpecialization = [&](Shader* s, VkPipelineShaderStageCreateInfo& stageInfo){
+        if(s->m_specializationEntries.empty())
+            return;
+
+        specInfos.push_back(s->makeSpecializationInfo());
+        stageInfo.pSpecializationInfo = &specInfos.back();
+    };
+
+    for(const auto& shaderDesc : desc.shaders){
+        if(!shaderDesc.shader)
+            continue;
+
+        auto* s = shaderDesc.shader.get();
+
+        auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+        stageInfo.module = s->m_shaderModule;
+        stageInfo.pName = s->m_entryPointName.c_str();
+
+        switch(s->m_desc.shaderType){
+        case ShaderType::RayGeneration:
+            stageInfo.stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+            break;
+        case ShaderType::Miss:
+            stageInfo.stage = VK_SHADER_STAGE_MISS_BIT_KHR;
+            break;
+        case ShaderType::Callable:
+            stageInfo.stage = VK_SHADER_STAGE_CALLABLE_BIT_KHR;
+            break;
+        default:
+            continue;
+        }
+        addShaderSpecialization(s, stageInfo);
+
+        auto group = VulkanDetail::MakeVkStruct<VkRayTracingShaderGroupCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR);
+        group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+        group.generalShader = static_cast<u32>(stages.size());
+        group.closestHitShader = VK_SHADER_UNUSED_KHR;
+        group.anyHitShader = VK_SHADER_UNUSED_KHR;
+        group.intersectionShader = VK_SHADER_UNUSED_KHR;
+
+        stages.push_back(stageInfo);
+        groups.push_back(group);
+    }
+
+    for(const auto& hitGroup : desc.hitGroups){
+        auto group = VulkanDetail::MakeVkStruct<VkRayTracingShaderGroupCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR);
+        group.type = hitGroup.isProceduralPrimitive ? VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR : VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+        group.generalShader = VK_SHADER_UNUSED_KHR;
+        group.closestHitShader = VK_SHADER_UNUSED_KHR;
+        group.anyHitShader = VK_SHADER_UNUSED_KHR;
+        group.intersectionShader = VK_SHADER_UNUSED_KHR;
+
+        if(hitGroup.closestHitShader){
+            auto* s = hitGroup.closestHitShader.get();
+            auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+            stageInfo.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+            stageInfo.module = s->m_shaderModule;
+            stageInfo.pName = s->m_entryPointName.c_str();
+            addShaderSpecialization(s, stageInfo);
+            group.closestHitShader = static_cast<u32>(stages.size());
+            stages.push_back(stageInfo);
+        }
+        if(hitGroup.anyHitShader){
+            auto* s = hitGroup.anyHitShader.get();
+            auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+            stageInfo.stage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+            stageInfo.module = s->m_shaderModule;
+            stageInfo.pName = s->m_entryPointName.c_str();
+            addShaderSpecialization(s, stageInfo);
+            group.anyHitShader = static_cast<u32>(stages.size());
+            stages.push_back(stageInfo);
+        }
+        if(hitGroup.intersectionShader){
+            auto* s = hitGroup.intersectionShader.get();
+            auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+            stageInfo.stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
+            stageInfo.module = s->m_shaderModule;
+            stageInfo.pName = s->m_entryPointName.c_str();
+            addShaderSpecialization(s, stageInfo);
+            group.intersectionShader = static_cast<u32>(stages.size());
+            stages.push_back(stageInfo);
+        }
+        groups.push_back(group);
+    }
+
+    if(stages.empty() || groups.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: no shader stages or groups were provided"));
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
+    }
+
+    if(!configurePipelineBindingsOrDestroy(
+        desc.globalBindingLayouts,
+        NWB_TEXT("ray tracing pipeline"),
+        stages,
+        descriptorHeapScratch,
+        pso,
+        scratchArena
+    ))
+        return nullptr;
+
+    const bool enableSpherePipelineFlags = desc.allowSpheres || desc.allowLinearSweptSpheres;
+    auto pipelineFlags2 = VulkanDetail::MakeVkStruct<VkPipelineCreateFlags2CreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO);
+    if(enableSpherePipelineFlags)
+        pipelineFlags2.flags |= VK_PIPELINE_CREATE_2_RAY_TRACING_ALLOW_SPHERES_AND_LINEAR_SWEPT_SPHERES_BIT_NV;
+
+    auto createInfo = VulkanDetail::MakeVkStruct<VkRayTracingPipelineCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR);
+    if(pso->m_usesDescriptorHeap){
+        descriptorHeapScratch.flags2.flags |= pipelineFlags2.flags;
+        createInfo.pNext = descriptorHeapScratch.pNext();
+    }
+    else if(pipelineFlags2.flags != 0)
+        createInfo.pNext = &pipelineFlags2;
+    createInfo.stageCount = static_cast<u32>(stages.size());
+    createInfo.pStages = stages.data();
+    createInfo.groupCount = static_cast<u32>(groups.size());
+    createInfo.pGroups = groups.data();
+    createInfo.maxPipelineRayRecursionDepth = desc.maxRecursionDepth;
+    createInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pso->m_pipelineLayout;
+
+    res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->m_pipeline);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {}"), ResultToString(res));
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
+    }
+
+    u32 handleSize = 0;
+    u32 handleSizeAligned = 0;
+    u32 baseAlignment = 0;
+    if(!VulkanDetail::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("create ray tracing pipeline"))){
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
+    }
+
+    u32 groupCount = static_cast<u32>(groups.size());
+    if(handleSizeAligned == 0 || static_cast<usize>(groupCount) > Limit<usize>::s_Max / static_cast<usize>(handleSizeAligned)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group handle table size overflows"));
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
+    }
+
+    const usize shaderGroupHandleBytes = static_cast<usize>(groupCount) * static_cast<usize>(handleSize);
+    pso->m_shaderGroupHandles.resize(shaderGroupHandleBytes);
+    res = vkGetRayTracingShaderGroupHandlesKHR(
+        m_context.device,
+        pso->m_pipeline,
+        0,
+        groupCount,
+        pso->m_shaderGroupHandles.size(),
+        pso->m_shaderGroupHandles.data()
+    );
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to retrieve ray tracing shader group handles: {}"), ResultToString(res));
+        DestroyArenaObject(m_context.objectArena, pso);
+        return nullptr;
+    }
+
+    return RayTracingPipelineHandle(pso, RayTracingPipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ShaderTable::ShaderTable(const VulkanContext& context, Device& device)
+    : RefCounter<GraphicsResource>(context.threadPool)
+    , m_context(context)
+    , m_device(device)
+{}
+ShaderTable::~ShaderTable(){}
+
+RayTracingShaderTableHandle RayTracingPipeline::createShaderTable(){
+    auto* sbt = NewArenaObject<ShaderTable>(m_context.objectArena, m_context, m_device);
+    sbt->m_pipeline = Handle<RayTracingPipeline>(this, Handle<RayTracingPipeline>::deleter_type(&m_context.objectArena));
+    return RayTracingShaderTableHandle(sbt, RayTracingShaderTableHandle::deleter_type(&m_context.objectArena), AdoptRef);
+}
+
+u32 ShaderTable::findGroupIndex(const AStringView exportName)const{
+    if(!m_pipeline)
+        return UINT32_MAX;
+
+    u32 groupIndex = 0;
+    for(const auto& shaderDesc : m_pipeline->m_desc.shaders){
+        if(!shaderDesc.shader)
+            continue;
+
+        const ShaderDesc& desc = shaderDesc.shader->getDescription();
+        switch(desc.shaderType){
+        case ShaderType::RayGeneration:
+        case ShaderType::Miss:
+        case ShaderType::Callable:
+            break;
+        default:
+            continue;
+        }
+
+        const AStringView shaderExportName = !shaderDesc.exportName.empty()
+            ? AStringView(shaderDesc.exportName)
+            : AStringView(desc.entryName)
+        ;
+        if(shaderExportName == exportName)
+            return groupIndex;
+        ++groupIndex;
+    }
+    for(const auto& hitGroup : m_pipeline->m_desc.hitGroups){
+        if(AStringView(hitGroup.exportName) == exportName)
+            return groupIndex;
+        ++groupIndex;
+    }
+    return UINT32_MAX;
+}
+
+u32 ShaderTable::appendShaderRecord(
+    const AStringView exportName,
+    BufferHandle& buffer,
+    u64& offset,
+    u32& count,
+    const tchar* operationName,
+    const tchar* recordName,
+    const tchar* exportKind
+){
+    if(count == Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table record count exceeds u32 range"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to add shader table record: record count exceeds u32 range"));
+        return count;
+    }
+    if(!m_pipeline){
+        const u32 recordIndex = count;
+        ++count;
+        return recordIndex;
+    }
+
+    u32 handleSize = 0;
+    u32 handleSizeAligned = 0;
+    u32 baseAlignment = 0;
+    if(!VulkanDetail::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, operationName))
+        return count;
+
+    const u32 recordIndex = count;
+    const u32 newCount = recordIndex + 1;
+    u64 sbtSize = 0;
+    if(!VulkanDetail::ComputeShaderTableByteSize(newCount, handleSizeAligned, baseAlignment, sbtSize, operationName))
+        return count;
+
+    BufferHandle newBuffer;
+    allocateSBTBuffer(newBuffer, sbtSize);
+    if(!newBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate {} SBT buffer"), recordName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate shader table buffer"));
+        return count;
+    }
+
+    void* mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
+    if(!mapped){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map {} SBT buffer"), recordName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map shader table buffer"));
+        return count;
+    }
+
+    NWB_MEMSET(mapped, 0, static_cast<usize>(sbtSize));
+
+    if(buffer && count > 0){
+        void* oldMapped = m_device.mapBuffer(buffer.get(), CpuAccessMode::Read);
+        if(!oldMapped){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map previous {} SBT buffer"), recordName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map previous shader table buffer"));
+            m_device.unmapBuffer(newBuffer.get());
+            return count;
+        }
+        const usize copySize = static_cast<usize>(count) * handleSizeAligned;
+        VulkanDetail::CopyHostMemory(taskPool(), mapped, oldMapped, copySize);
+        m_device.unmapBuffer(buffer.get());
+    }
+
+    const u32 groupIndex = findGroupIndex(exportName);
+    if(groupIndex == UINT32_MAX){
+        m_device.unmapBuffer(newBuffer.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} export not found in pipeline"), exportKind);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Shader table export not found in pipeline"));
+        return count;
+    }
+
+    auto* dst = static_cast<u8*>(mapped) + recordIndex * handleSizeAligned;
+    const u8* handle = m_pipeline->m_shaderGroupHandles.data() + static_cast<usize>(groupIndex) * handleSize;
+    NWB_MEMCPY(dst, handleSizeAligned, handle, handleSize);
+    m_device.unmapBuffer(newBuffer.get());
+
+    buffer = newBuffer;
+    offset = 0;
+    ++count;
+    return recordIndex;
+}
+
+void ShaderTable::allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize){
+    BufferDesc bufferDesc;
+    bufferDesc.byteSize = sbtSize;
+    bufferDesc.debugName = "SBT_Buffer";
+    bufferDesc.isShaderBindingTable = true;
+    bufferDesc.cpuAccess = CpuAccessMode::Write;
+
+    outBuffer = m_device.createBuffer(bufferDesc);
+}
+
+void ShaderTable::setRayGenerationShader(const AStringView exportName, BindingSet* /*bindings*/){
+    if(!m_pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set ray generation shader: shader table has no pipeline"));
+        return;
+    }
+
+    u32 handleSize = 0;
+    u32 handleSizeAligned = 0;
+    u32 baseAlignment = 0;
+    if(!VulkanDetail::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("set ray generation shader")))
+        return;
+    u64 sbtSize = 0;
+    if(!VulkanDetail::ComputeShaderTableByteSize(1, handleSizeAligned, baseAlignment, sbtSize, NWB_TEXT("set ray generation shader")))
+        return;
+
+    u32 groupIndex = findGroupIndex(exportName);
+    if(groupIndex == UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Ray generation export not found in pipeline"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Ray generation export not found in pipeline"));
+        return;
+    }
+
+    allocateSBTBuffer(m_raygenBuffer, sbtSize);
+    if(!m_raygenBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate ray generation SBT buffer"));
+        return;
+    }
+
+    m_raygenOffset = 0;
+
+    void* mapped = m_device.mapBuffer(m_raygenBuffer.get(), CpuAccessMode::Write);
+    if(!mapped){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map ray generation SBT buffer"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map ray generation SBT buffer"));
+        return;
+    }
+
+    NWB_MEMSET(mapped, 0, static_cast<usize>(sbtSize));
+
+    const u8* handle = m_pipeline->m_shaderGroupHandles.data() + static_cast<usize>(groupIndex) * handleSize;
+    NWB_MEMCPY(mapped, handleSizeAligned, handle, handleSize);
+    m_device.unmapBuffer(m_raygenBuffer.get());
+}
+
+u32 ShaderTable::addMissShader(const AStringView exportName, BindingSet* /*bindings*/){
+    return appendShaderRecord(exportName, m_missBuffer, m_missOffset, m_missCount, NWB_TEXT("add miss shader"), NWB_TEXT("miss"), NWB_TEXT("Miss shader"));
+}
+
+u32 ShaderTable::addHitGroup(const AStringView exportName, BindingSet* /*bindings*/){
+    return appendShaderRecord(exportName, m_hitBuffer, m_hitOffset, m_hitCount, NWB_TEXT("add hit group"), NWB_TEXT("hit"), NWB_TEXT("Hit group"));
+}
+
+u32 ShaderTable::addCallableShader(const AStringView exportName, BindingSet* /*bindings*/){
+    return appendShaderRecord(exportName, m_callableBuffer, m_callableOffset, m_callableCount, NWB_TEXT("add callable shader"), NWB_TEXT("callable"), NWB_TEXT("Callable shader"));
+}
+
+void ShaderTable::clearMissShaders(){ m_missCount = 0; m_missBuffer = nullptr; }
+void ShaderTable::clearHitShaders(){ m_hitCount = 0; m_hitBuffer = nullptr; }
+void ShaderTable::clearCallableShaders(){ m_callableCount = 0; m_callableBuffer = nullptr; }
+
+Object ShaderTable::getNativeHandle(ObjectType objectType){
+    if(objectType == ObjectTypes::VK_Buffer && m_raygenBuffer){
+        auto* buf = m_raygenBuffer.get();
+        return Object(buf->m_buffer);
+    }
+    return Object{nullptr};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void CommandList::setRayTracingState(const RayTracingState& state){
+    endActiveRenderPass();
+    setResourceStatesForBindingSets(state.bindings);
+    commitBarriers();
+    m_currentGraphicsState = {};
+    m_currentComputeState = {};
+    m_currentMeshletState = {};
+    m_currentRayTracingState = state;
+
+    if(!state.shaderTable)
+        return;
+
+    auto* sbt = state.shaderTable;
+    if(!sbt)
+        return;
+
+    retainResource(state.shaderTable);
+
+    RayTracingPipeline* pipeline = sbt->m_pipeline.get();
+
+    if(!pipeline)
+        return;
+
+    vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipeline);
+
+    bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorHeap, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
+}
+
+
+bool CommandList::attachAccelStructBuildScratchBuffer(
+    VkAccelerationStructureBuildGeometryInfoKHR& buildInfo,
+    const u64 buildScratchSize,
+    const char* debugName,
+    const tchar* operationName
+){
+    if(buildScratchSize == 0)
+        return true;
+
+    // The build scratch device address must be aligned to minAccelerationStructureScratchOffsetAlignment (VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-03710).
+    // The buffer allocator does not guarantee that alignment, so over-allocate by the alignment and round the scratch address up into the buffer.
+    const u64 scratchAlignment = static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment);
+    const u64 scratchPadding = scratchAlignment > 1u ? scratchAlignment - 1u : 0u;
+
+    BufferDesc scratchDesc;
+    scratchDesc.byteSize = buildScratchSize + scratchPadding;
+    scratchDesc.structStride = 1;
+    scratchDesc.debugName = debugName;
+
+    BufferHandle scratchBuffer = m_device.createBuffer(scratchDesc);
+    if(!scratchBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate acceleration structure scratch buffer"));
+        return false;
+    }
+
+    buildInfo.scratchData.deviceAddress = AlignUp<u64>(VulkanDetail::GetBufferDeviceAddress(scratchBuffer.get()), scratchAlignment);
+    m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBuffer));
+    return true;
+}
+
+bool CommandList::buildTopLevelAccelStructFromInstanceData(
+    RayTracingAccelStruct& as,
+    const VkDeviceAddress instanceDataAddress,
+    const usize numInstances,
+    const RayTracingAccelStructBuildFlags::Mask buildFlags,
+    const tchar* operationName
+){
+    auto geometry = VulkanDetail::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
+    geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+    geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+    geometry.geometry.instances.arrayOfPointers = VK_FALSE;
+    geometry.geometry.instances.data.deviceAddress = instanceDataAddress;
+
+    auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+    buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
+        buildFlags,
+        VulkanDetail::AccelStructCompactionMode::Disabled
+    );
+    buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    buildInfo.dstAccelerationStructure = as.m_accelStruct;
+    buildInfo.geometryCount = 1;
+    buildInfo.pGeometries = &geometry;
+
+    auto primitiveCount = static_cast<uint32_t>(numInstances);
+    auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
+
+    auto* asBuffer = as.m_buffer.get();
+    if(!asBuffer || asBuffer->m_desc.byteSize < sizeInfo.accelerationStructureSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration structure storage is too small"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure storage is too small"));
+        return false;
+    }
+
+    if(!attachAccelStructBuildScratchBuffer(buildInfo, sizeInfo.buildScratchSize, "TLAS_BuildScratch", NWB_TEXT("allocate TLAS scratch buffer")))
+        return false;
+
+    // The TLAS build reads the referenced BLASes and writes the TLAS storage, so it must follow any acceleration-structure writes already recorded this frame (the BLAS builds/refits) as well as the
+    // previous frame's build of this same TLAS. On a single queue this barrier covers both the BLAS->TLAS read dependency and the cross-frame TLAS write-after-write.
+    {
+        auto reuseBarrier = VulkanDetail::MakeVkStruct<VkMemoryBarrier2>(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
+        reuseBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        reuseBarrier.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+        reuseBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        reuseBarrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+        auto reuseDepInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+        reuseDepInfo.memoryBarrierCount = 1;
+        reuseDepInfo.pMemoryBarriers = &reuseBarrier;
+        vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &reuseDepInfo);
+    }
+
+    VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
+    rangeInfo.primitiveCount = primitiveCount;
+    const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
+    vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
+
+    retainResource(&as);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags){
+    if(!accelStructResource){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is null"));
+        return;
+    }
+    if(!pGeometries && numGeometries > 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: geometry data is null"));
+        return;
+    }
+    if(numGeometries == 0)
+        return;
+    if(numGeometries > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: geometry count exceeds Vulkan limit"));
+        return;
+    }
+
+    if(!m_context.extensions.KHR_acceleration_structure)
+        return;
+
+    auto* as = accelStructResource;
+    if(!as || as->m_desc.isTopLevel){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is not bottom-level"));
+        return;
+    }
+
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena, s_RayTracingScratchArenaBytes);
+
+    VulkanDetail::BlasGeometryScratch blasScratch(scratchArena);
+    blasScratch.resizeForBuild(numGeometries);
+
+    usize transformCount = 0;
+    for(usize i = 0; i < numGeometries; ++i){
+        blasScratch.transformOffsets[i] = Limit<usize>::s_Max;
+        if(!VulkanDetail::FillBlasGeometryForSizeQuery(
+            m_context,
+            pGeometries[i],
+            blasScratch.geometries[i],
+            blasScratch.spheresData[i],
+            blasScratch.lssData[i],
+            blasScratch.primitiveCounts[i],
+            NWB_TEXT("build BLAS"),
+            true
+        ))
+            return;
+        if(pGeometries[i].useTransform){
+            if(pGeometries[i].geometryType != RayTracingGeometryType::Triangles){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: only triangle geometry supports per-geometry transforms"));
+                return;
+            }
+            ++transformCount;
+        }
+    }
+
+    BufferHandle transformBuffer;
+    VkDeviceAddress transformBaseAddress = 0;
+    if(transformCount > 0){
+        if(transformCount > Limit<usize>::s_Max / sizeof(VkTransformMatrixKHR)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: transform buffer size overflows"));
+            return;
+        }
+
+        const usize transformBufferSize = transformCount * sizeof(VkTransformMatrixKHR);
+
+        BufferDesc transformBufferDesc;
+        transformBufferDesc.byteSize = static_cast<u64>(transformBufferSize);
+        transformBufferDesc.cpuAccess = CpuAccessMode::Write;
+        transformBufferDesc.isAccelStructBuildInput = true;
+        transformBufferDesc.debugName = "BLAS_TransformBuffer";
+
+        transformBuffer = m_device.createBuffer(transformBufferDesc);
+        if(!transformBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate BLAS transform buffer"));
+            return;
+        }
+
+        auto* mappedTransforms = static_cast<u8*>(m_device.mapBuffer(transformBuffer.get(), CpuAccessMode::Write));
+        if(!mappedTransforms){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map BLAS transform buffer"));
+            return;
+        }
+
+        usize transformIndex = 0;
+        for(usize i = 0; i < numGeometries; ++i){
+            if(!pGeometries[i].useTransform)
+                continue;
+
+            const usize transformOffset = transformIndex * sizeof(VkTransformMatrixKHR);
+            NWB_MEMCPY(mappedTransforms + transformOffset, sizeof(VkTransformMatrixKHR), &pGeometries[i].transform, sizeof(VkTransformMatrixKHR));
+            blasScratch.transformOffsets[i] = transformOffset;
+            ++transformIndex;
+        }
+
+        m_device.unmapBuffer(transformBuffer.get());
+
+        transformBaseAddress = VulkanDetail::GetBufferDeviceAddress(transformBuffer.get());
+        if(transformBaseAddress == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: transform buffer device address is null"));
+            return;
+        }
+    }
+
+    auto buildGeometry = [&](usize i){
+        const auto& geomDesc = pGeometries[i];
+
+        VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
+        const u32 primitiveCount = blasScratch.primitiveCounts[i];
+
+        if(geomDesc.geometryType == RayTracingGeometryType::Triangles){
+            const auto& triangles = geomDesc.geometryData.triangles;
+
+            blasScratch.geometries[i].geometry.triangles.vertexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(triangles.vertexBuffer, triangles.vertexOffset);
+            if(blasScratch.transformOffsets[i] != Limit<usize>::s_Max)
+                blasScratch.geometries[i].geometry.triangles.transformData.deviceAddress = transformBaseAddress + static_cast<u64>(blasScratch.transformOffsets[i]);
+
+            if(triangles.indexBuffer)
+                blasScratch.geometries[i].geometry.triangles.indexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(triangles.indexBuffer, triangles.indexOffset);
+
+            rangeInfo.primitiveCount = primitiveCount;
+        }
+        else if(geomDesc.geometryType == RayTracingGeometryType::AABBs){
+            const auto& aabbs = geomDesc.geometryData.aabbs;
+
+            blasScratch.geometries[i].geometry.aabbs.data.deviceAddress = VulkanDetail::GetBufferDeviceAddress(aabbs.buffer, aabbs.offset);
+            rangeInfo.primitiveCount = primitiveCount;
+        }
+        else if(geomDesc.geometryType == RayTracingGeometryType::Spheres){
+            const auto& spheres = geomDesc.geometryData.spheres;
+
+            blasScratch.spheresData[i].vertexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(spheres.vertexBuffer, spheres.vertexPositionOffset);
+            blasScratch.spheresData[i].radiusData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(spheres.vertexBuffer, spheres.vertexRadiusOffset);
+            if(spheres.indexBuffer)
+                blasScratch.spheresData[i].indexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(spheres.indexBuffer, spheres.indexOffset);
+            rangeInfo.primitiveCount = primitiveCount;
+        }
+        else if(geomDesc.geometryType == RayTracingGeometryType::Lss){
+            const auto& lss = geomDesc.geometryData.lss;
+
+            blasScratch.lssData[i].vertexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(lss.vertexBuffer, lss.vertexPositionOffset);
+            blasScratch.lssData[i].radiusData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(lss.vertexBuffer, lss.vertexRadiusOffset);
+            if(lss.indexBuffer)
+                blasScratch.lssData[i].indexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(lss.indexBuffer, lss.indexOffset);
+            rangeInfo.primitiveCount = primitiveCount;
+        }
+
+        blasScratch.rangeInfos[i] = rangeInfo;
+    };
+
+    if(taskPool().isParallelEnabled() && numGeometries >= s_ParallelGeometryThreshold)
+        scheduleParallelFor(static_cast<usize>(0), numGeometries, s_GeometryGrainSize, buildGeometry);
+    else{
+        for(usize i = 0; i < numGeometries; ++i)
+            buildGeometry(i);
+    }
+
+    // An in-place refit (PerformUpdate) requires the structure to have been built with AllowUpdate and to already hold a built BLAS to read as the update source.
+    const bool performUpdate =
+        (buildFlags & RayTracingAccelStructBuildFlags::PerformUpdate)
+        && (buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)
+        && as->m_built
+    ;
+
+    auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+    buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+    buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
+        buildFlags,
+        VulkanDetail::AccelStructCompactionMode::Allowed
+    );
+    buildInfo.mode = performUpdate
+        ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR
+        : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR
+    ;
+    buildInfo.srcAccelerationStructure = performUpdate ? as->m_accelStruct : VK_NULL_HANDLE;
+    buildInfo.dstAccelerationStructure = as->m_accelStruct;
+    buildInfo.geometryCount = static_cast<u32>(blasScratch.geometries.size());
+    buildInfo.pGeometries = blasScratch.geometries.data();
+
+    auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, blasScratch.primitiveCounts.data(), &sizeInfo);
+
+    auto* asBuffer = as->m_buffer.get();
+    if(!asBuffer || asBuffer->m_desc.byteSize < sizeInfo.accelerationStructureSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is too small"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is too small"));
+        return;
+    }
+
+    const VkDeviceSize scratchSize = performUpdate ? sizeInfo.updateScratchSize : sizeInfo.buildScratchSize;
+    if(!attachAccelStructBuildScratchBuffer(buildInfo, scratchSize, "AS_BuildScratch", NWB_TEXT("allocate BLAS scratch buffer")))
+        return;
+
+    // Rebuilding or refitting a BLAS in place writes (and an update also reads) the same acceleration-structure storage the previous build wrote. Insert an acceleration-structure
+    // write barrier so the prior build finishes first; on a single queue this also covers the cross-frame dependency for per-frame skinned refits.
+    if(as->m_built){
+        auto reuseBarrier = VulkanDetail::MakeVkStruct<VkMemoryBarrier2>(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
+        reuseBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        reuseBarrier.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+        reuseBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        reuseBarrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+        auto reuseDepInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+        reuseDepInfo.memoryBarrierCount = 1;
+        reuseDepInfo.pMemoryBarriers = &reuseBarrier;
+        vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &reuseDepInfo);
+    }
+
+    const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = blasScratch.rangeInfos.data();
+    vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfos);
+
+    as->m_built = true;
+
+    if(transformBuffer)
+        m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(transformBuffer));
+
+    if(as->m_desc.trackLiveness){
+        for(usize i = 0; i < numGeometries; ++i){
+            const RayTracingGeometryDesc& geomDesc = pGeometries[i];
+            if(geomDesc.geometryType == RayTracingGeometryType::Triangles){
+                const RayTracingGeometryTriangles& triangles = geomDesc.geometryData.triangles;
+                if(triangles.vertexBuffer)
+                    retainResource(triangles.vertexBuffer);
+                if(triangles.indexBuffer)
+                    retainResource(triangles.indexBuffer);
+                if(triangles.opacityMicromap)
+                    retainResource(triangles.opacityMicromap);
+                if(triangles.ommIndexBuffer)
+                    retainResource(triangles.ommIndexBuffer);
+            }
+            else if(geomDesc.geometryType == RayTracingGeometryType::AABBs){
+                const RayTracingGeometryAABBs& aabbs = geomDesc.geometryData.aabbs;
+                if(aabbs.buffer)
+                    retainResource(aabbs.buffer);
+            }
+            else if(geomDesc.geometryType == RayTracingGeometryType::Spheres){
+                const RayTracingGeometrySpheres& spheres = geomDesc.geometryData.spheres;
+                if(spheres.vertexBuffer)
+                    retainResource(spheres.vertexBuffer);
+                if(spheres.indexBuffer)
+                    retainResource(spheres.indexBuffer);
+            }
+            else if(geomDesc.geometryType == RayTracingGeometryType::Lss){
+                const RayTracingGeometryLss& lss = geomDesc.geometryData.lss;
+                if(lss.vertexBuffer)
+                    retainResource(lss.vertexBuffer);
+                if(lss.indexBuffer)
+                    retainResource(lss.indexBuffer);
+            }
+        }
+    }
+
+    if(buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction)
+        m_pendingCompactions.push_back(as);
+
+    retainResource(accelStructResource);
+}
+
+void CommandList::compactBottomLevelAccelStructs(){
+    VkResult res = VK_SUCCESS;
+
+    if(!m_context.extensions.KHR_acceleration_structure)
+        return;
+
+    if(m_pendingCompactions.empty())
+        return;
+
+    bool recordedCompactionCopy = false;
+
+    for(auto& as : m_pendingCompactions){
+        if(as->m_compactionQueryPool == VK_NULL_HANDLE || as->m_compacted)
+            continue;
+
+        u64 compactedSize = 0;
+        res = vkGetQueryPoolResults(
+            m_context.device,
+            as->m_compactionQueryPool,
+            as->m_compactionQueryIndex,
+            1,
+            sizeof(u64),
+            &compactedSize,
+            sizeof(u64),
+            VK_QUERY_RESULT_64_BIT
+        );
+
+        if(res == VK_NOT_READY)
+            continue;
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to read BLAS compaction query result: {}"), ResultToString(res));
+            continue;
+        }
+        if(compactedSize == 0)
+            continue;
+
+        BufferDesc compactBufferDesc;
+        compactBufferDesc.byteSize = compactedSize;
+        compactBufferDesc.isAccelStructStorage = true;
+        compactBufferDesc.debugName = as->m_desc.debugName;
+
+        BufferHandle compactBuffer = m_device.createBuffer(compactBufferDesc);
+        if(!compactBuffer)
+            continue;
+
+        auto createInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureCreateInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
+        createInfo.buffer = compactBuffer->m_buffer;
+        createInfo.size = compactedSize;
+        createInfo.type = as->m_desc.isTopLevel
+            ? VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR
+            : VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR
+        ;
+
+        VkAccelerationStructureKHR newAS = VK_NULL_HANDLE;
+        res = vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &newAS);
+        if(res != VK_SUCCESS)
+            continue;
+
+        auto copyInfo = VulkanDetail::MakeVkStruct<VkCopyAccelerationStructureInfoKHR>(VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR);
+        copyInfo.src  = as->m_accelStruct; // original (still the copy source)
+        copyInfo.dst  = newAS;
+        copyInfo.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
+        vkCmdCopyAccelerationStructureKHR(m_currentCmdBuf->m_cmdBuf, &copyInfo);
+        recordedCompactionCopy = true;
+
+        m_currentCmdBuf->m_referencedAccelStructHandles.push_back(as->m_accelStruct);
+        m_currentCmdBuf->m_referencedStagingBuffers.push_back(as->m_buffer);
+        retainResource(as.get());
+
+        as->m_accelStruct = newAS;
+        as->m_buffer = Move(compactBuffer);
+
+        auto addrInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
+        addrInfo.accelerationStructure = as->m_accelStruct;
+        as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addrInfo);
+
+        vkDestroyQueryPool(m_context.device, as->m_compactionQueryPool, m_context.allocationCallbacks);
+        as->m_compactionQueryPool  = VK_NULL_HANDLE;
+        as->m_compactionQueryIndex = 0;
+        as->m_compacted = true;
+    }
+
+    if(recordedCompactionCopy){
+        auto barrier = VulkanDetail::MakeVkStruct<VkMemoryBarrier2>(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
+        barrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        barrier.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+        barrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+        barrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+        auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+        depInfo.memoryBarrierCount = 1;
+        depInfo.pMemoryBarriers = &barrier;
+        vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
+    }
+
+    for(auto& as : m_pendingCompactions){
+        if(as->m_compactionQueryPool != VK_NULL_HANDLE || as->m_compacted)
+            continue;
+
+        auto queryPoolInfo = VulkanDetail::MakeVkStruct<VkQueryPoolCreateInfo>(VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO);
+        queryPoolInfo.queryType  = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
+        queryPoolInfo.queryCount = s_SingleQueryCount;
+
+        VkQueryPool queryPool = VK_NULL_HANDLE;
+        res = vkCreateQueryPool(m_context.device, &queryPoolInfo, m_context.allocationCallbacks, &queryPool);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create BLAS compaction query pool: {}"), ResultToString(res));
+            continue;
+        }
+
+        vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, queryPool, s_TimerQueryBeginIndex, s_SingleQueryCount);
+
+        vkCmdWriteAccelerationStructuresPropertiesKHR(
+            m_currentCmdBuf->m_cmdBuf,
+            s_SingleQueryCount,
+            &as->m_accelStruct,
+            VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR,
+            queryPool,
+            s_TimerQueryBeginIndex
+        );
+
+        as->m_compactionQueryPool  = queryPool;
+        as->m_compactionQueryIndex = 0;
+    }
+
+    {
+        usize dst = 0;
+        for(usize i = 0; i < m_pendingCompactions.size(); ++i)
+            if(!m_pendingCompactions[i]->m_compacted){
+                m_pendingCompactions[dst] = Move(m_pendingCompactions[i]);
+                ++dst;
+            }
+        m_pendingCompactions.resize(dst);
+    }
+}
+
+void CommandList::buildTopLevelAccelStructFromBuffer(
+    RayTracingAccelStruct* accelStructResource,
+    Buffer* instanceBuffer,
+    u64 instanceBufferOffset,
+    usize numInstances,
+    RayTracingAccelStructBuildFlags::Mask buildFlags
+){
+    if(!accelStructResource){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is null"));
+        return;
+    }
+    if(!instanceBuffer && numInstances > 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is null"));
+        return;
+    }
+    if(numInstances == 0)
+        return;
+    if(numInstances > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance count exceeds Vulkan limit"));
+        return;
+    }
+
+    if(!m_context.extensions.KHR_acceleration_structure)
+        return;
+
+    auto* as = accelStructResource;
+    if(!as || !as->m_desc.isTopLevel){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is not top-level"));
+        return;
+    }
+
+    auto* instanceBufferImpl = instanceBuffer;
+    if(!instanceBufferImpl){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is invalid"));
+        return;
+    }
+    if(!instanceBufferImpl->m_desc.isAccelStructBuildInput){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer was not created with acceleration-structure build input usage"));
+        return;
+    }
+
+    const u64 instanceDataBytes = static_cast<u64>(numInstances) * sizeof(VkAccelerationStructureInstanceKHR);
+    if(!VulkanDetail::IsBufferRangeInBounds(instanceBufferImpl->m_desc, instanceBufferOffset, instanceDataBytes)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer range is outside the buffer"));
+        return;
+    }
+
+    const VkDeviceAddress instanceDataAddress = VulkanDetail::GetBufferDeviceAddress(instanceBuffer, instanceBufferOffset);
+    if(!buildTopLevelAccelStructFromInstanceData(*as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS from buffer")))
+        return;
+
+    retainResource(instanceBuffer);
+}
+
+void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
+    if(!accelStructResource){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is null"));
+        return;
+    }
+    if(!pInstances && numInstances > 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance data is null"));
+        return;
+    }
+    if(numInstances == 0)
+        return;
+    if(numInstances > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance count exceeds Vulkan limit"));
+        return;
+    }
+
+    if(!m_context.extensions.KHR_acceleration_structure)
+        return;
+
+    auto* as = accelStructResource;
+    if(!as || !as->m_desc.isTopLevel){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is not top-level"));
+        return;
+    }
+    for(usize i = 0; i < numInstances; ++i){
+        auto* blas = pInstances[i].bottomLevelAS;
+        if(!blas || blas->m_desc.isTopLevel || blas->m_deviceAddress == 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance {} references an invalid bottom-level acceleration structure"), i);
+            return;
+        }
+    }
+
+    u64 instanceBufferSize = numInstances * sizeof(VkAccelerationStructureInstanceKHR);
+    BufferDesc instanceBufferDesc;
+    instanceBufferDesc.byteSize = instanceBufferSize;
+    instanceBufferDesc.cpuAccess = CpuAccessMode::Write;
+    instanceBufferDesc.isAccelStructBuildInput = true;
+    instanceBufferDesc.debugName = "TLAS_InstanceBuffer";
+
+    BufferHandle instanceBuffer = m_device.createBuffer(instanceBufferDesc);
+    if(!instanceBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate TLAS instance buffer"));
+        return;
+    }
+
+    auto* mappedInstances = static_cast<VkAccelerationStructureInstanceKHR*>(m_device.mapBuffer(instanceBuffer.get(), CpuAccessMode::Write));
+    if(!mappedInstances){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map TLAS instance buffer"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map TLAS instance buffer"));
+        return;
+    }
+
+    auto buildVkInstance = [&](usize i){
+        const auto& inst = pInstances[i];
+        VkAccelerationStructureInstanceKHR& vkInst = mappedInstances[i];
+
+        NWB_MEMCPY(&vkInst.transform, sizeof(VkTransformMatrixKHR), &inst.transform, sizeof(VkTransformMatrixKHR));
+
+        vkInst.instanceCustomIndex = inst.instanceID & s_InstanceFieldMask24Bit;
+        vkInst.mask = inst.instanceMask;
+        vkInst.instanceShaderBindingTableRecordOffset = inst.instanceContributionToHitGroupIndex & s_InstanceFieldMask24Bit;
+        vkInst.flags = 0;
+
+        if(inst.flags & RayTracingInstanceFlags::TriangleCullDisable)
+            vkInst.flags |= VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+        if(inst.flags & RayTracingInstanceFlags::TriangleFrontCounterclockwise)
+            vkInst.flags |= VK_GEOMETRY_INSTANCE_TRIANGLE_FRONT_COUNTERCLOCKWISE_BIT_KHR;
+        if(inst.flags & RayTracingInstanceFlags::ForceOpaque)
+            vkInst.flags |= VK_GEOMETRY_INSTANCE_FORCE_OPAQUE_BIT_KHR;
+        if(inst.flags & RayTracingInstanceFlags::ForceNonOpaque)
+            vkInst.flags |= VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR;
+
+        auto* blas = inst.bottomLevelAS;
+        vkInst.accelerationStructureReference = blas ? blas->m_deviceAddress : 0;
+    };
+
+    // TLAS instance conversion is CPU-only and scales with scene instance count.
+    if(taskPool().isParallelEnabled() && numInstances >= s_ParallelTlasInstanceThreshold)
+        scheduleParallelFor(static_cast<usize>(0), numInstances, s_TlasInstanceGrainSize, buildVkInstance);
+    else{
+        for(usize i = 0; i < numInstances; ++i)
+            buildVkInstance(i);
+    }
+
+    m_device.unmapBuffer(instanceBuffer.get());
+
+    const VkDeviceAddress instanceDataAddress = VulkanDetail::GetBufferDeviceAddress(instanceBuffer.get());
+    if(!buildTopLevelAccelStructFromInstanceData(*as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS")))
+        return;
+
+    if(as->m_desc.trackLiveness){
+        for(usize i = 0; i < numInstances; ++i)
+            retainResource(pInstances[i].bottomLevelAS);
+    }
+
+    m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(instanceBuffer));
+}
+
+void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc){
+    if(!m_context.extensions.EXT_opacity_micromap)
+        return;
+
+    if(!opacityMicromapResource){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap is null"));
+        return;
+    }
+
+    auto* omm = opacityMicromapResource;
+    if(!omm){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap is invalid"));
+        return;
+    }
+    if(ommDesc.counts.size() > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: usage-count count exceeds Vulkan limit"));
+        return;
+    }
+
+    u64 triangleDescBytes = 0;
+    for(const RayTracingOpacityMicromapUsageCount& count : ommDesc.counts){
+        const u64 countBytes = static_cast<u64>(count.count) * sizeof(VkMicromapTriangleEXT);
+        if(triangleDescBytes > UINT64_MAX - countBytes){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor size overflows"));
+            return;
+        }
+        triangleDescBytes += countBytes;
+    }
+
+    auto* inputBuffer = ommDesc.inputBuffer;
+    if(!inputBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: input buffer is invalid"));
+        return;
+    }
+    if(!VulkanDetail::IsBufferRangeInBounds(inputBuffer->m_desc, ommDesc.inputBufferOffset, 1)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: input buffer offset is outside the buffer"));
+        return;
+    }
+
+    auto* perOmmDescs = ommDesc.perOmmDescs;
+    if(!perOmmDescs){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor buffer is invalid"));
+        return;
+    }
+    if(triangleDescBytes > 0 && !VulkanDetail::IsBufferRangeInBounds(perOmmDescs->m_desc, ommDesc.perOmmDescsOffset, triangleDescBytes)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor range is outside the buffer"));
+        return;
+    }
+
+    if(m_enableAutomaticBarriers){
+        if(ommDesc.inputBuffer)
+            setBufferState(ommDesc.inputBuffer, ResourceStates::OpacityMicromapBuildInput);
+        if(ommDesc.perOmmDescs)
+            setBufferState(ommDesc.perOmmDescs, ResourceStates::OpacityMicromapBuildInput);
+        if(omm->m_dataBuffer)
+            setBufferState(omm->m_dataBuffer.get(), ResourceStates::OpacityMicromapWrite);
+    }
+
+    if(ommDesc.trackLiveness){
+        if(ommDesc.inputBuffer)
+            retainResource(ommDesc.inputBuffer);
+        if(ommDesc.perOmmDescs)
+            retainResource(ommDesc.perOmmDescs);
+        if(omm->m_dataBuffer)
+            retainResource(omm->m_dataBuffer.get());
+    }
+
+    commitBarriers();
+
+    VkBuildMicromapFlagBitsEXT buildFlags = static_cast<VkBuildMicromapFlagBitsEXT>(0);
+    if(ommDesc.flags & RayTracingOpacityMicromapBuildFlags::FastTrace)
+        buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
+    else if(ommDesc.flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
+        buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
+
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena);
+    VulkanDetail::MicromapUsageVector usageCounts{ scratchArena };
+    if(!VulkanDetail::BuildOpacityMicromapUsageCounts(ommDesc.counts, usageCounts, NWB_TEXT("build opacity micromap")))
+        return;
+
+    auto buildInfo = VulkanDetail::MakeVkStruct<VkMicromapBuildInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT);
+    buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
+    buildInfo.flags = buildFlags;
+    buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
+    buildInfo.dstMicromap = omm->m_micromap;
+    buildInfo.usageCountsCount = static_cast<u32>(usageCounts.size());
+    buildInfo.pUsageCounts = usageCounts.empty() ? nullptr : usageCounts.data();
+    buildInfo.data.deviceAddress = VulkanDetail::GetBufferDeviceAddress(ommDesc.inputBuffer, ommDesc.inputBufferOffset);
+    buildInfo.triangleArray.deviceAddress = VulkanDetail::GetBufferDeviceAddress(ommDesc.perOmmDescs, ommDesc.perOmmDescsOffset);
+    buildInfo.triangleArrayStride = sizeof(VkMicromapTriangleEXT);
+
+    auto buildSize = VulkanDetail::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
+    vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
+
+    auto* dataBuffer = omm->m_dataBuffer.get();
+    if(!dataBuffer || dataBuffer->m_desc.byteSize < buildSize.micromapSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap storage is too small"));
+        return;
+    }
+
+    if(buildSize.buildScratchSize != 0){
+        BufferDesc scratchDesc;
+        scratchDesc.byteSize = buildSize.buildScratchSize;
+        scratchDesc.structStride = 1;
+        scratchDesc.debugName = "OMM_BuildScratch";
+        scratchDesc.canHaveUAVs = true;
+
+        BufferHandle scratchBuffer = m_device.createBuffer(scratchDesc);
+        if(!scratchBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate opacity micromap scratch buffer"));
+            return;
+        }
+
+        buildInfo.scratchData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(scratchBuffer.get());
+
+        vkCmdBuildMicromapsEXT(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo);
+
+        m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBuffer));
+    }
+    else
+        vkCmdBuildMicromapsEXT(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo);
+}
+
+void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
+    if(!m_context.extensions.KHR_ray_tracing_pipeline)
+        return;
+
+    RayTracingState& state = m_currentRayTracingState;
+    if(!state.shaderTable)
+        return;
+
+    auto* sbt = state.shaderTable;
+    if(!sbt->m_pipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch rays: shader table has no ray tracing pipeline"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch rays: shader table has no ray tracing pipeline"));
+        return;
+    }
+    if(!sbt->m_raygenBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch rays: ray generation shader is not set"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch rays: ray generation shader is not set"));
+        return;
+    }
+    if(args.width == 0 || args.height == 0 || args.depth == 0)
+        return;
+
+    const u64 widthHeight = static_cast<u64>(args.width) * args.height;
+    const u64 invocationCount = widthHeight * args.depth;
+    if(
+        (args.height != 0 && widthHeight / args.height != args.width)
+        || (args.depth != 0 && invocationCount / args.depth != widthHeight)
+        || invocationCount > m_context.rayTracingPipelineProperties.maxRayDispatchInvocationCount
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch rays: dispatch dimensions ({}, {}, {}) exceed ray dispatch limit {}")
+            , args.width
+            , args.height
+            , args.depth
+            , m_context.rayTracingPipelineProperties.maxRayDispatchInvocationCount
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch rays: dispatch dimensions exceed ray dispatch limit"));
+        return;
+    }
+
+    VkStridedDeviceAddressRegionKHR raygenRegion = {};
+    VkStridedDeviceAddressRegionKHR missRegion = {};
+    VkStridedDeviceAddressRegionKHR hitRegion = {};
+    VkStridedDeviceAddressRegionKHR callableRegion = {};
+
+    u32 handleSize = 0;
+    u32 handleSizeAligned = 0;
+    u32 baseAlignment = 0;
+    if(!VulkanDetail::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("dispatch rays"))){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch rays: invalid shader group handle layout"));
+        return;
+    }
+
+    auto computeRegionSize = [&](u32 recordCount, VkDeviceSize& outRegionSize, const tchar* regionName) -> bool{
+        if(static_cast<u64>(recordCount) > Limit<u64>::s_Max / static_cast<u64>(handleSizeAligned)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch rays: {} shader table region size overflows"), regionName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch rays: shader table region size overflows"));
+            return false;
+        }
+
+        outRegionSize = static_cast<u64>(recordCount) * static_cast<u64>(handleSizeAligned);
+        return true;
+    };
+
+    if(sbt->m_raygenBuffer){
+        raygenRegion.deviceAddress = VulkanDetail::GetBufferDeviceAddress(sbt->m_raygenBuffer.get(), sbt->m_raygenOffset);
+        raygenRegion.stride = handleSizeAligned;
+        raygenRegion.size = handleSizeAligned;
+    }
+
+    if(sbt->m_missBuffer){
+        missRegion.deviceAddress = VulkanDetail::GetBufferDeviceAddress(sbt->m_missBuffer.get(), sbt->m_missOffset);
+        missRegion.stride = handleSizeAligned;
+        if(!computeRegionSize(sbt->m_missCount, missRegion.size, NWB_TEXT("miss")))
+            return;
+    }
+
+    if(sbt->m_hitBuffer){
+        hitRegion.deviceAddress = VulkanDetail::GetBufferDeviceAddress(sbt->m_hitBuffer.get(), sbt->m_hitOffset);
+        hitRegion.stride = handleSizeAligned;
+        if(!computeRegionSize(sbt->m_hitCount, hitRegion.size, NWB_TEXT("hit")))
+            return;
+    }
+
+    if(sbt->m_callableBuffer){
+        callableRegion.deviceAddress = VulkanDetail::GetBufferDeviceAddress(sbt->m_callableBuffer.get(), sbt->m_callableOffset);
+        callableRegion.stride = handleSizeAligned;
+        if(!computeRegionSize(sbt->m_callableCount, callableRegion.size, NWB_TEXT("callable")))
+            return;
+    }
+
+    vkCmdTraceRaysKHR(m_currentCmdBuf->m_cmdBuf, &raygenRegion, &missRegion, &hitRegion, &callableRegion, args.width, args.height, args.depth);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

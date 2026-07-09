@@ -4,13 +4,13 @@
 
 #include "crash_symbolicate_internal.h"
 
-#include <core/crash/package_names.h>
+#include <global/core/crash/package_names.h>
 
 #if defined(NWB_WITH_AFTERMATH)
 #include <GFSDK_Aftermath_GpuCrashDump.h>
 #include <GFSDK_Aftermath_GpuCrashDumpDecoding.h>
 
-#include <core/common/aftermath_runtime.h>
+#include <global/core/common/aftermath_runtime.h>
 
 #include <global/shared_library.h>
 #endif

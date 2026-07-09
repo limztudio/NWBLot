@@ -7,7 +7,7 @@
 
 #include "components.h"
 
-#include <core/ecs/system.h>
+#include <global/core/ecs/system.h>
 #include <impl/ecs_mesh/runtime/mesh.h>
 
 

@@ -16,14 +16,14 @@
 #include "meshlet_ref_codec.h"
 #include "meshlet_payload_packing.h"
 
-#include <core/alloc/scratch.h>
-#include <core/alloc/thread.h>
-#include <core/assets/paths.h>
-#include <core/mesh/frame_math.h>
-#include <core/metascript/parser.h>
+#include <global/core/alloc/scratch.h>
+#include <global/core/alloc/thread.h>
+#include <global/core/assets/paths.h>
+#include <global/core/mesh/frame_math.h>
+#include <global/core/metascript/parser.h>
 #include <global/binary.h>
 #include <global/text_utils.h>
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

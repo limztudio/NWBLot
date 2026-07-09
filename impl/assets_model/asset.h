@@ -12,8 +12,8 @@
 #include <impl/assets_mesh/skin_asset.h>
 #include <impl/assets_skeleton/asset.h>
 
-#include <core/assets/module.h>
-#include <core/assets/ref.h>
+#include <global/core/assets/module.h>
+#include <global/core/assets/ref.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

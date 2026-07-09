@@ -8,28 +8,28 @@
 #include <impl/assets_model/asset.h>
 #include <impl/assets_bunch/cook.h>
 #include <impl/assets_volume/cooker.h>
-#include <core/assets/cook_entry_registry.h>
+#include <global/core/assets/cook_entry_registry.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/binary_payload.h>
 #include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/cook.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 
-#include <core/assets/paths.h>
+#include <global/core/assets/paths.h>
 #include <tests/capturing_logger.h>
 #include <tests/meshlet_ref_test_data.h>
 #include <tests/test_context.h>
 
 #include <gtest/gtest.h>
 
-#include <core/alloc/scratch.h>
-#include <core/alloc/thread.h>
-#include <core/common/module.h>
-#include <core/mesh/classification.h>
-#include <core/filesystem/module.h>
-#include <core/graphics/api.h>
-#include <core/graphics/shader_archive.h>
-#include <core/graphics/spirv_entry_point.h>
+#include <global/core/alloc/scratch.h>
+#include <global/core/alloc/thread.h>
+#include <global/core/common/module.h>
+#include <global/core/mesh/classification.h>
+#include <global/core/filesystem/module.h>
+#include <global/core/graphics/api.h>
+#include <global/core/graphics/shader_archive.h>
+#include <global/core/graphics/spirv_entry_point.h>
 
 #include <global/binary.h>
 #include <global/compile.h>
@@ -40,7 +40,7 @@
 
 #include <cmath>
 
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

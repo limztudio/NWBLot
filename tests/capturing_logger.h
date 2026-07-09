@@ -6,8 +6,8 @@
 
 
 #include <global/global.h>
-#include <core/alloc/general.h>
-#include <core/common/log.h>
+#include <global/core/alloc/general.h>
+#include <global/core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

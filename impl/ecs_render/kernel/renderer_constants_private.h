@@ -7,7 +7,7 @@
 
 #include <impl/ecs_render/kernel/renderer_types.h>
 
-#include <core/graphics/api.h>
+#include <global/core/graphics/api.h>
 #include <impl/assets/graphics/csg/constants.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>

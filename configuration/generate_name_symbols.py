@@ -6,7 +6,7 @@
 # Drives the three-step capture the user asked for so opt/fin logs read as text without anyone building twice by hand:
 #   1. configure + build a NWB_BUILDMODE variant (separate output domain "namesym", does not touch the release tree),
 #   2. run that variant's workloads so each executable records every Name literal it touches and, on exit, writes its
-#      "<exe>.namesym" sidecar next to itself (core/common/application_entry.h -> NameSymbols::WriteDefaultFile),
+#      "<exe>.namesym" sidecar next to itself (global/core/common/application_entry.h -> NameSymbols::WriteDefaultFile),
 #   3. copy those sidecars into the release output so the matching release exe loads them at startup
 #      (NameSymbols::LoadDefaultFile) and Name::c_str() resolves its own hashes locally.
 #

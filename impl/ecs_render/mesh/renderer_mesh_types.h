@@ -7,7 +7,7 @@
 
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 
-#include <core/graphics/api.h>
+#include <global/core/graphics/api.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_mesh/runtime/mesh.h>
 

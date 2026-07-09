@@ -7,9 +7,9 @@
 #include "arena_names.h"
 #include "resource_names.h"
 
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/graphics/module.h>
+#include <global/core/alloc/scratch.h>
+#include <global/core/common/log.h>
+#include <global/core/graphics/module.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_triangle_indices.h>
 #include <impl/assets_mesh/meshlet_vertex_attributes.h>

@@ -11,9 +11,9 @@
 #include <tests/test_context.h>
 #include <gtest/gtest.h>
 
-#include <core/common/module.h>
-#include <core/ecs/module.h>
-#include <core/mesh/classification.h>
+#include <global/core/common/module.h>
+#include <global/core/ecs/module.h>
+#include <global/core/mesh/classification.h>
 #include <impl/ecs_mesh/components.h>
 #include <impl/ecs_skeleton/components.h>
 #include <impl/ecs_mesh/module.h>
@@ -26,7 +26,7 @@
 #include <impl/assets_mesh/skin_types.h>
 #include <impl/assets_mesh/asset.h>
 
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 
 #include <global/binary.h>
 #include <global/compile.h>

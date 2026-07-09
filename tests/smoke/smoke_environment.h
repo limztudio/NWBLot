@@ -7,7 +7,7 @@
 #ifndef NWB_TESTS_SMOKE_ENVIRONMENT_H
 #define NWB_TESTS_SMOKE_ENVIRONMENT_H
 
-#include <core/alloc/general.h>
+#include <global/core/alloc/general.h>
 #include <global/environment.h>
 #include <global/name.h>
 #include <global/text_utils.h>

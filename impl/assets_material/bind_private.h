@@ -11,11 +11,11 @@
 #include "bind.h"
 #include "binary_payload.h"
 
-#include <core/alloc/scratch.h>
-#include <core/assets/paths.h>
-#include <core/metascript/parser.h>
+#include <global/core/alloc/scratch.h>
+#include <global/core/assets/paths.h>
+#include <global/core/metascript/parser.h>
 
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 #include <global/hash_utils.h>
 #include <global/math/convert.h>
 #include <global/text_utils.h>

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <core/assets/module.h>
+#include <global/core/assets/module.h>
 #include "runtime_instance.h"
 
 

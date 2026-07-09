@@ -7,12 +7,12 @@
 
 #include "components.h"
 
-#include <core/alloc/general.h>
-#include <core/assets/global.h>
-#include <core/ecs/system.h>
-#include <core/graphics/api.h>
-#include <core/graphics/render_pass.h>
-#include <core/input/module.h>
+#include <global/core/alloc/general.h>
+#include <global/core/assets/global.h>
+#include <global/core/ecs/system.h>
+#include <global/core/graphics/api.h>
+#include <global/core/graphics/render_pass.h>
+#include <global/core/input/module.h>
 
 #include <imgui.h>
 

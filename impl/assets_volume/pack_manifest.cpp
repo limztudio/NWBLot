@@ -10,7 +10,7 @@
 
 #include "pack_manifest.h"
 
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 
 #include <global/binary.h>
 

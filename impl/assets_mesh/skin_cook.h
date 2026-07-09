@@ -16,8 +16,8 @@
 
 #include "skin_asset.h"
 
-#include <core/alloc/scratch.h>
-#include <core/metascript/parser.h>
+#include <global/core/alloc/scratch.h>
+#include <global/core/metascript/parser.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -7,8 +7,8 @@
 
 #include "../global.h"
 
-#include <core/ecs/entity_id.h>
-#include <core/assets/ref.h>
+#include <global/core/ecs/entity_id.h>
+#include <global/core/assets/ref.h>
 #include <impl/assets_skeleton/joint_types.h>
 
 

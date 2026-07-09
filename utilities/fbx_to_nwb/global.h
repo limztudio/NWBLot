@@ -17,8 +17,8 @@
 #include <global/text_utils.h>
 #include <global/type.h>
 
-#include <core/alloc/module.h>
-#include <core/alloc/thread.h>
+#include <global/core/alloc/module.h>
+#include <global/core/alloc/thread.h>
 
 #include <ufbx.h>
 

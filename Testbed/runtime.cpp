@@ -4,9 +4,9 @@
 
 #include "project.h"
 
-#include <core/common/log.h>
-#include <core/mesh/frame_math.h>
-#include <core/graphics/module.h>
+#include <global/core/common/log.h>
+#include <global/core/mesh/frame_math.h>
+#include <global/core/graphics/module.h>
 #include <global/simplemath.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>

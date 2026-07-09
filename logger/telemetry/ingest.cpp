@@ -4,7 +4,7 @@
 
 #include "ingest.h"
 
-#include <core/telemetry/codec.h>
+#include <global/core/telemetry/codec.h>
 #include <global/binary.h>
 
 

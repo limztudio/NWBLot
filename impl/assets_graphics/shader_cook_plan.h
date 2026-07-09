@@ -16,8 +16,8 @@
 
 #include "shader_stage_key.h"
 
-#include <core/assets/cook_metadata.h>
-#include <core/assets/cook_paths.h>
+#include <global/core/assets/cook_metadata.h>
+#include <global/core/assets/cook_paths.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_shader/cook.h>
 

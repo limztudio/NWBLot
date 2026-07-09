@@ -7,10 +7,10 @@
 
 #include <logger/global.h>
 
-#include <core/telemetry/diagnostic.h>
-#include <core/telemetry/frame_graph.h>
-#include <core/telemetry/perf.h>
-#include <core/telemetry/text_log.h>
+#include <global/core/telemetry/diagnostic.h>
+#include <global/core/telemetry/frame_graph.h>
+#include <global/core/telemetry/perf.h>
+#include <global/core/telemetry/text_log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

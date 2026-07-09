@@ -9,10 +9,10 @@
 #include "skin_payload.h"
 #include "timing_names.h"
 
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/module.h>
+#include <global/core/alloc/scratch.h>
+#include <global/core/common/log.h>
+#include <global/core/graphics/backend_selection.h>
+#include <global/core/graphics/module.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 

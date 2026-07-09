@@ -10,9 +10,9 @@
 
 #include "material_validation.h"
 
-#include <core/graphics/shader_stage_names.h>
+#include <global/core/graphics/shader_stage_names.h>
 
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

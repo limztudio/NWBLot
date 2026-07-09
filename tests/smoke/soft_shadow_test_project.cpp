@@ -4,10 +4,10 @@
 
 #include <loader/project_entry.h>
 
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/module.h>
-#include <core/mesh/frame_math.h>
+#include <global/core/common/log.h>
+#include <global/core/ecs/module.h>
+#include <global/core/graphics/module.h>
+#include <global/core/mesh/frame_math.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>

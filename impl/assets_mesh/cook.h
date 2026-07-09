@@ -16,9 +16,9 @@
 
 #include "asset.h"
 
-#include <core/alloc/scratch.h>
-#include <core/alloc/thread.h>
-#include <core/metascript/parser.h>
+#include <global/core/alloc/scratch.h>
+#include <global/core/alloc/thread.h>
+#include <global/core/metascript/parser.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

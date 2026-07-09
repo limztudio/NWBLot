@@ -5,9 +5,9 @@
 #pragma once
 
 
-#include <core/alloc/general.h>
-#include <core/alloc/thread.h>
-#include <core/ecs/world.h>
+#include <global/core/alloc/general.h>
+#include <global/core/alloc/thread.h>
+#include <global/core/ecs/world.h>
 
 #include <global/global.h>
 

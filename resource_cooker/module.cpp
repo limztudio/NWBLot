@@ -4,9 +4,9 @@
 
 #include "module.h"
 
-#include <core/alloc/thread.h>
-#include <core/common/log.h>
-#include <core/assets/auto_registration.h>
+#include <global/core/alloc/thread.h>
+#include <global/core/common/log.h>
+#include <global/core/assets/auto_registration.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

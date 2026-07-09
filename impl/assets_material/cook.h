@@ -18,8 +18,8 @@
 #include "bind.h"
 #include "cook_types.h"
 
-#include <core/alloc/scratch.h>
-#include <core/metascript/parser.h>
+#include <global/core/alloc/scratch.h>
+#include <global/core/metascript/parser.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

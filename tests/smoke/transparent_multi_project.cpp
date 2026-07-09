@@ -4,10 +4,10 @@
 
 #include <loader/project_entry.h>
 
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/mesh/frame_math.h>
-#include <core/graphics/module.h>
+#include <global/core/common/log.h>
+#include <global/core/ecs/module.h>
+#include <global/core/mesh/frame_math.h>
+#include <global/core/graphics/module.h>
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 #include <impl/ecs_csg/module.h>
 #endif

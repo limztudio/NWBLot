@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include <core/assets/paths.h>
-#include <core/common/command_line.h>
+#include <global/core/assets/paths.h>
+#include <global/core/common/command_line.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

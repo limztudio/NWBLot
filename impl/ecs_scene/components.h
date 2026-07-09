@@ -7,7 +7,7 @@
 
 #include "global.h"
 
-#include <core/ecs/entity_id.h>
+#include <global/core/ecs/entity_id.h>
 
 #include <cstddef>
 

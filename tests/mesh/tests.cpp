@@ -2,14 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/mesh/frame_math.h>
-#include <core/mesh/classification.h>
-#include <core/mesh/tangent_frame_rebuild.h>
+#include <global/core/mesh/frame_math.h>
+#include <global/core/mesh/classification.h>
+#include <global/core/mesh/tangent_frame_rebuild.h>
 
 #include <tests/test_context.h>
 #include <gtest/gtest.h>
 
-#include <core/common/module.h>
+#include <global/core/common/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -4,13 +4,13 @@
 
 #include "system.h"
 
-#include <core/graphics/backend_selection.h>
-#include <core/graphics/module.h>
-#include <core/graphics/shader_archive.h>
+#include <global/core/graphics/backend_selection.h>
+#include <global/core/graphics/module.h>
+#include <global/core/graphics/shader_archive.h>
 #include <impl/assets/graphics/imgui/binding_slots.h>
 #include <impl/assets/graphics/imgui/names.h>
 #include <impl/assets_shader/loader.h>
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 
 #include <cstddef>
 

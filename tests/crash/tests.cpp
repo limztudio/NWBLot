@@ -6,7 +6,7 @@
 #include <tests/test_context.h>
 #include <gtest/gtest.h>
 
-#include <core/crash/package_internal.h>
+#include <global/core/crash/package_internal.h>
 
 #include <global/filesystem/operations.h>
 #include <global/thread.h>

@@ -8,7 +8,7 @@
 #include <impl/ecs_render/kernel/renderer_capacity_private.h>
 #include <impl/ecs_render/kernel/renderer_types.h>
 
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 #include <impl/assets/graphics/mesh/material_typed_constants.h>
 #include <impl/ecs_scene/components.h>
 

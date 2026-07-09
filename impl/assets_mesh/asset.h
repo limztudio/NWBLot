@@ -8,8 +8,8 @@
 #include "../global.h"
 #include "geometry_payload.h"
 
-#include <core/assets/module.h>
-#include <core/mesh/classification.h>
+#include <global/core/assets/module.h>
+#include <global/core/mesh/classification.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

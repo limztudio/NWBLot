@@ -9,8 +9,8 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/shared/renderer_state.h>
 
-#include <core/assets/global.h>
-#include <core/graphics/module.h>
+#include <global/core/assets/global.h>
+#include <global/core/graphics/module.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_csg/frame_state.h>

@@ -5,9 +5,9 @@
 #pragma once
 
 
-#include <core/assets/binary_payload_io.h>
+#include <global/core/assets/binary_payload_io.h>
 #include <global/binary.h>
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

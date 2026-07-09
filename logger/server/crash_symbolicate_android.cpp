@@ -4,7 +4,7 @@
 
 #include "crash_symbolicate_internal.h"
 
-#include <core/crash/package_names.h>
+#include <global/core/crash/package_names.h>
 #include <global/text_utils.h>
 
 

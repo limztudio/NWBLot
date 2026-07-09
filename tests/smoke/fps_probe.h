@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 #include <global/simplemath.h>
 #include <global/type.h>
 

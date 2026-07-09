@@ -17,7 +17,7 @@
 #include "asset.h"
 #include "cook_types.h"
 
-#include <core/alloc/scratch.h>
+#include <global/core/alloc/scratch.h>
 #include <impl/assets/graphics/mesh/material_typed_constants.h>
 
 

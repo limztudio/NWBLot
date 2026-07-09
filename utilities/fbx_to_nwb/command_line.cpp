@@ -6,7 +6,7 @@
 
 #include <CLI.hpp>
 
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 
 #include <string>
 

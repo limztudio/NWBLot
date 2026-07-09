@@ -10,7 +10,7 @@
 
 #include <gtest/gtest.h>
 
-#include <core/common/application_entry.h>
+#include <global/core/common/application_entry.h>
 
 #include <global/global.h>
 

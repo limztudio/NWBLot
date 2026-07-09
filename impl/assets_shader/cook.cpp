@@ -13,10 +13,10 @@
 #include "arena_names.h"
 #include "binary_payload.h"
 
-#include <core/assets/paths.h>
-#include <core/metascript/parser.h>
+#include <global/core/assets/paths.h>
+#include <global/core/metascript/parser.h>
 
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 #include <global/hash_utils.h>
 
 #if defined(NWB_PLATFORM_WINDOWS)

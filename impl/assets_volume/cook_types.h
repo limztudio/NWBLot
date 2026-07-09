@@ -16,10 +16,10 @@
 
 #include "../global.h"
 
-#include <core/assets/cook_metadata.h>
-#include <core/assets/cook_paths.h>
+#include <global/core/assets/cook_metadata.h>
+#include <global/core/assets/cook_paths.h>
 
-#include <core/alloc/scratch.h>
+#include <global/core/alloc/scratch.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

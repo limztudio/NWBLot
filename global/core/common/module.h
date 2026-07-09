@@ -1,0 +1,277 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "global.h"
+#include "arena_names.h"
+#include <global/frame_data.h>
+#include <global/core/alloc/general.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_COMMON_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace CommonDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class BaseInitializerable{
+public:
+    virtual ~BaseInitializerable() = default;
+
+
+public:
+    virtual bool initialize() = 0;
+    virtual void finalize() = 0;
+};
+class FunctionalInitializerable final : public BaseInitializerable{
+public:
+    template<typename INIT, typename FIN>
+    FunctionalInitializerable(INIT&& init, FIN&& fin)
+        : m_init(Forward<INIT>(init))
+        , m_fin(Forward<FIN>(fin))
+    {}
+
+
+public:
+    inline virtual bool initialize()override{ return m_init ? m_init() : true; }
+    inline virtual void finalize()override{
+        if(m_fin)
+            m_fin();
+    }
+
+
+private:
+    Function<bool()> m_init;
+    Function<void()> m_fin;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Initializerable : public CommonDetail::BaseInitializerable{
+public:
+    Initializerable();
+};
+
+
+class Initializer{
+public:
+    static Initializer& instance();
+
+
+private:
+    struct InitializerItem{
+        CommonDetail::BaseInitializerable* item = nullptr;
+        UniquePtr<CommonDetail::BaseInitializerable> ownedItem;
+
+        explicit InitializerItem(CommonDetail::BaseInitializerable* value)
+            : item(value)
+        {}
+        template<typename T>
+        explicit InitializerItem(UniquePtr<T>&& value)
+            : item(value.get())
+            , ownedItem(Move(value))
+        {}
+    };
+
+
+private:
+    Initializer()
+        : m_arena(CommonArenaScope::s_InitializerArena)
+        , m_items(m_arena)
+        , m_cursor(m_items.before_begin())
+    {}
+
+
+public:
+    inline bool initialize(){
+        m_initializedItemCount = 0u;
+        usize initializedItemCount = 0u;
+        for(auto& cur : m_items){
+            if(!cur.item->initialize()){
+                finalizeInitialized(initializedItemCount);
+                return false;
+            }
+            ++initializedItemCount;
+        }
+        m_initializedItemCount = initializedItemCount;
+        return true;
+    }
+    inline void finalize(){
+        finalizeInitialized(m_initializedItemCount);
+        m_initializedItemCount = 0u;
+    }
+    [[nodiscard]] inline bool acquire(){
+        if(m_activeCount > 0u){
+            ++m_activeCount;
+            return true;
+        }
+
+        if(!initialize())
+            return false;
+
+        m_activeCount = 1u;
+        return true;
+    }
+    inline void release(){
+        NWB_ASSERT(m_activeCount > 0u);
+        if(m_activeCount == 0u)
+            return;
+
+        --m_activeCount;
+        if(m_activeCount == 0u)
+            finalize();
+    }
+
+public:
+    inline void enqueue(Initializerable* item){ m_cursor = m_items.emplace_after(m_cursor, item); }
+    template<typename INITIALIZE, typename FINALIZE>
+    inline void enqueue(INITIALIZE&& initialize, FINALIZE&& finalize){
+        auto item = MakeUnique<CommonDetail::FunctionalInitializerable>(Forward<INITIALIZE>(initialize), Forward<FINALIZE>(finalize));
+        m_cursor = m_items.emplace_after(m_cursor, Move(item));
+    }
+
+
+private:
+    inline void finalizeInitialized(const usize initializedItemCount){
+        usize itemIndex = 0u;
+        for(auto& cur : m_items){
+            if(itemIndex >= initializedItemCount)
+                return;
+
+            cur.item->finalize();
+            ++itemIndex;
+        }
+    }
+
+
+private:
+    Alloc::GlobalArena m_arena;
+    ForwardList<InitializerItem, Alloc::GlobalArena> m_items;
+    decltype(m_items)::iterator m_cursor;
+    usize m_initializedItemCount = 0;
+    usize m_activeCount = 0;
+};
+
+class InitializerGuard : NoCopy{
+public:
+    ~InitializerGuard(){ finalize(); }
+
+
+public:
+    [[nodiscard]] bool initialize(){
+        if(m_active)
+            return true;
+
+        if(!Initializer::instance().acquire())
+            return false;
+
+        m_active = true;
+        return true;
+    }
+    void finalize(){
+        if(!m_active)
+            return;
+
+        Initializer::instance().release();
+        m_active = false;
+    }
+
+
+private:
+    bool m_active = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using FrameParam = FrameParamStorage<4>;
+class FrameData : public BasicFrameData<4>{
+public:
+    using BasicFrameData<4>::BasicFrameData;
+
+    inline u16& width(){ return m_data.u16[0]; }
+    inline const u16& width()const{ return m_data.u16[0]; }
+
+    inline u16& height(){ return m_data.u16[1]; }
+    inline const u16& height()const{ return m_data.u16[1]; }
+
+};
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <windows.h>
+class WinFrame : public FrameData{
+private:
+    static constexpr usize s_ActiveFlagByteIndex = sizeof(u16) * 2u;
+    static constexpr usize s_InstancePointerSlot = 1u;
+    static constexpr usize s_WindowPointerSlot = 2u;
+
+
+public:
+    inline bool isActive()const{ return m_data.u8[s_ActiveFlagByteIndex] != 0; }
+    inline void setActive(bool value){ m_data.u8[s_ActiveFlagByteIndex] = value ? 1u : 0u; }
+
+    inline HINSTANCE instance()const{ return static_cast<HINSTANCE>(m_data.ptr[s_InstancePointerSlot]); }
+    inline void setInstance(HINSTANCE value){ m_data.ptr[s_InstancePointerSlot] = value; }
+
+    inline HWND hwnd()const{ return static_cast<HWND>(m_data.ptr[s_WindowPointerSlot]); }
+    inline void setHwnd(HWND value){ m_data.ptr[s_WindowPointerSlot] = value; }
+};
+#elif defined(NWB_PLATFORM_LINUX)
+namespace LinuxFrameBackend{
+    enum Enum : u8{
+        None = 0,
+        X11,
+        Wayland,
+    };
+};
+class LinuxFrame : public FrameData{
+public:
+    inline bool isActive()const{ return m_data.u8[4] != 0; }
+    inline void setActive(bool value){ m_data.u8[4] = value ? 1u : 0u; }
+
+    inline LinuxFrameBackend::Enum backend()const{ return static_cast<LinuxFrameBackend::Enum>(m_data.u8[5]); }
+    inline void setBackend(LinuxFrameBackend::Enum value){ m_data.u8[5] = static_cast<u8>(value); }
+
+    inline void*& nativeDisplay(){ return m_data.ptr[1]; }
+    inline void* const& nativeDisplay()const{ return m_data.ptr[1]; }
+
+    inline u64& nativeWindowHandle(){ return m_data.u64[2]; }
+    inline const u64& nativeWindowHandle()const{ return m_data.u64[2]; }
+
+    inline void*& nativeState(){ return m_data.ptr[3]; }
+    inline void* const& nativeState()const{ return m_data.ptr[3]; }
+
+    inline u64& nativeAuxValue(){ return m_data.u64[3]; }
+    inline const u64& nativeAuxValue()const{ return m_data.u64[3]; }
+};
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_COMMON_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

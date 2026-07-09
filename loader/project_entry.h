@@ -5,9 +5,9 @@
 #pragma once
 
 
-#include <core/global.h>
-#include <core/perf/session.h>
-#include <core/telemetry/event.h>
+#include <global/core/global.h>
+#include <global/core/perf/session.h>
+#include <global/core/telemetry/event.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

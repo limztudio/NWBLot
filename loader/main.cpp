@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/alloc/standalone_runtime.h>
+#include <global/core/alloc/standalone_runtime.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -13,16 +13,16 @@
 #include <global/global.h>
 #include <global/filesystem.h>
 
-#include <core/common/command_line.h>
+#include <global/core/common/command_line.h>
 #include <logger/client/logger.h>
-#include <core/common/module.h>
-#include <core/crash/module.h>
-#include <core/frame/module.h>
-#include <core/assets/registry.h>
-#include <core/assets/manager.h>
-#include <core/assets/auto_registration.h>
-#include <core/graphics/shader_archive.h>
-#include <core/filesystem/module.h>
+#include <global/core/common/module.h>
+#include <global/core/crash/module.h>
+#include <global/core/frame/module.h>
+#include <global/core/assets/registry.h>
+#include <global/core/assets/manager.h>
+#include <global/core/assets/auto_registration.h>
+#include <global/core/graphics/shader_archive.h>
+#include <global/core/filesystem/module.h>
 #include <global/filesystem/volume_naming.h>
 
 #include "project_entry.h"
@@ -474,7 +474,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
 }
 
 
-#include <core/common/application_entry.h>
+#include <global/core/common/application_entry.h>
 
 NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 

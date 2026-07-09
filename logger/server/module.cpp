@@ -8,9 +8,9 @@
 #include "crash_paths.h"
 #include "frame.h"
 
-#include <core/crash/package_names.h>
-#include <core/alloc/standalone_runtime.h>
-#include <core/common/name_symbols.h>
+#include <global/core/crash/package_names.h>
+#include <global/core/alloc/standalone_runtime.h>
+#include <global/core/common/name_symbols.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -7,7 +7,7 @@
 
 #include "report.h"
 
-#include <core/telemetry/codec.h>
+#include <global/core/telemetry/codec.h>
 #include <global/filesystem/operations.h>
 
 

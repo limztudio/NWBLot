@@ -13,9 +13,9 @@
 #include "cooked_object_cache.h"
 #include "cook_paths.h"
 
-#include <core/filesystem/module.h>
+#include <global/core/filesystem/module.h>
 
-#include <core/common/log.h>
+#include <global/core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

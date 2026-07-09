@@ -10,9 +10,9 @@
 #include <impl/ecs_render/shared/renderer_state.h>
 #include <impl/ecs_render/kernel/subsystems.h>
 
-#include <core/ecs/system.h>
-#include <core/graphics/render_pass.h>
-#include <core/telemetry/frame_graph_contributor.h>
+#include <global/core/ecs/system.h>
+#include <global/core/graphics/render_pass.h>
+#include <global/core/telemetry/frame_graph_contributor.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_csg/frame_state.h>

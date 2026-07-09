@@ -412,16 +412,19 @@ static_assert(sizeof(ShadowReprojectMergePushConstants) == sizeof(f32) * 16u + s
 
 // CPU mirror of the caustic photon producer push constants, shared by BOTH the software compute producer
 // (caustic/caustic_photon_sw_cs.slang) and the hardware ray-traced producer (caustic/caustic_photon_hw_raygen.slang).
-// The byte-identical layout across the two backends is a parity invariant (same photon grid / flux).
+// The byte-identical layout across the two backends is a parity invariant (same photon grid / flux). frameIndex drives
+// the 2x temporal-reuse checkerboard phase on BOTH backends (each emits half the grid per frame; the splat-space EMA
+// recombines the two halves).
 struct CausticPhotonPushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 instanceCount = 0u;
-    u32 photonCount = 0u;
+    u32 photonCount = 0u; // the per-frame temporal-reuse budget (half the full grid) on BOTH the SW + HW producers
     u32 emissionTargetCount = 0u;
-    u32 gridSide = 0u; // sqrt(photonCount): runtime so the photon density scales per build config (dbg vs opt/fin)
+    u32 gridSide = 0u; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config (dbg vs opt/fin)
+    u32 frameIndex = 0u; // 2x temporal-reuse checkerboard phase: (frameIndex & 1) selects which half of the grid this frame emits (SW + HW)
 };
-static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 6u, "CausticPhotonPushConstants must match the shader push-constant layout");
+static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 7u, "CausticPhotonPushConstants must match the shader push-constant layout");
 
 // CPU mirror of the caustic resolve push constants (caustic/caustic_resolve_cs.slang). The resolve is an N-pass
 // edge-avoiding a-trous wavelet denoise: per pass it carries the wavelet dilation (stepWidth) and whether this is the

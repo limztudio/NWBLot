@@ -78,7 +78,8 @@ struct NwbCausticHwPushConstants{
     uint instanceCount;
     uint photonCount;
     uint emissionTargetCount;
-    uint gridSide; // sqrt(photonCount): the emission grid side, runtime so C++ can scale the photon density per build config
+    uint gridSide; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config
+    uint frameIndex; // HW 2x temporal-reuse checkerboard phase: (frameIndex & 1) selects which half of the grid this frame emits
 };
 
 

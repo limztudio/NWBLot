@@ -568,23 +568,31 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         pushConstants.width = targets.width;
         pushConstants.height = targets.height;
         pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-        pushConstants.photonCount = s_CausticSwPhotonCount;
+        // SW 2x temporal reuse: emit HALF the full grid each frame on a frame-parity checkerboard (the EMA recombines
+        // the two halves). gridSide stays the FULL emission grid side (the shader derives the per-frame checkerboard
+        // cells from it); photonCount is the per-frame budget = gridSide^2 / 2, so the physical flux formula doubles
+        // per photon and each frame deposits the full domain power over its half.
+        pushConstants.photonCount = s_CausticSwPhotonCount / 2u;
         pushConstants.emissionTargetCount = rayTracingState().m_causticRefractiveInstanceCount;
         pushConstants.gridSide = s_CausticSwPhotonGridSide;
+        pushConstants.frameIndex = rayTracingState().m_swCausticFrameIndex;
 
         Core::ComputeState computeState;
         computeState.setPipeline(rayTracingState().m_swCausticPipeline.get());
         computeState.addBindingSet(rayTracingState().m_swCausticBindingSet.get());
         commandList.setComputeState(computeState);
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-        commandList.dispatch(DivideUp(s_CausticSwPhotonCount, static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
+        commandList.dispatch(DivideUp(s_CausticSwPhotonCount / 2u, static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
+        // Advance the checkerboard phase for next frame.
+        rayTracingState().m_swCausticFrameIndex = rayTracingState().m_swCausticFrameIndex + 1u;
     }
 
     dispatchCausticResolve(commandList, targets);
 
     if(!rayTracingState().m_swCausticDispatchLogged){
         rayTracingState().m_swCausticDispatchLogged = true;
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: dispatched software caustic producer ({} photons, {} caustic lights, {} refractive instances)")
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: dispatched software caustic producer ({} photons/frame temporal-reuse over {} full-grid budget, {} caustic lights, {} refractive instances)")
+            , static_cast<u64>(s_CausticSwPhotonCount / 2u)
             , static_cast<u64>(s_CausticSwPhotonCount)
             , static_cast<u64>(rayTracingState().m_causticLightCount)
             , static_cast<u64>(rayTracingState().m_causticRefractiveInstanceCount)
@@ -1492,13 +1500,20 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         // Push constants byte-identical to the SW producer (same struct + same constants) so the photon grid / flux /
         // emission / jitter match the SW reference exactly. instanceCount is the live TLAS instance count (the SW
         // scene-BVH count is zero on the HW path), used only as the raygen's non-zero geometry guard.
+        //
+        // HW 2x temporal reuse: byte-identical to the SW producer -- emit HALF the full grid each frame on a
+        // frame-parity checkerboard (the EMA recombines the two halves). gridSide stays the FULL emission grid side
+        // (the raygen derives the per-frame checkerboard cells from it); photonCount is the per-frame budget =
+        // gridSide^2 / 2, so the physical flux formula doubles per photon and each frame deposits the full domain
+        // power over its half.
         CausticPhotonPushConstants pushConstants;
         pushConstants.width = targets.width;
         pushConstants.height = targets.height;
         pushConstants.instanceCount = rayTracingState().m_tlasInstanceCount;
-        pushConstants.photonCount = s_CausticHwPhotonCount;
+        pushConstants.photonCount = s_CausticHwPhotonCount / 2u;
         pushConstants.emissionTargetCount = rayTracingState().m_causticRefractiveInstanceCount;
         pushConstants.gridSide = s_CausticHwPhotonGridSide;
+        pushConstants.frameIndex = rayTracingState().m_hwCausticFrameIndex;
 
         Core::RayTracingState rayTracingPassState;
         rayTracingPassState.setShaderTable(rayTracingState().m_hwCausticShaderTable.get());
@@ -1506,12 +1521,15 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         commandList.setRayTracingState(rayTracingPassState);
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
-        // Dispatch one ray per photon over a gridSide x gridSide grid == the SW photon grid, so the raygen's
-        // photonIndex (y*W + x) equals the SW SV_DispatchThreadID index per photon. The grid side scales per build
-        // config (dbg 128 / opt+fin 512) -- the producer is energy-conserving, so the higher count just densifies.
+        // Dispatch one ray per photon over a gridSide x (gridSide/2) grid == the SW half-budget photon grid, so the
+        // raygen's photonIndex (y*W + x) equals the SW SV_DispatchThreadID index per photon and exactly the
+        // half-budget photonCount rays launch (no wasted early-out threads). The grid side scales per build config
+        // (dbg 128 / opt+fin 512) -- the producer is energy-conserving, so the higher count just densifies.
         Core::RayTracingDispatchRaysArguments dispatchArgs;
-        dispatchArgs.setDimensions(s_CausticHwPhotonGridSide, s_CausticHwPhotonGridSide, 1u);
+        dispatchArgs.setDimensions(s_CausticHwPhotonGridSide, s_CausticHwPhotonGridSide >> 1u, 1u);
         commandList.dispatchRays(dispatchArgs);
+        // Advance the checkerboard phase for next frame.
+        rayTracingState().m_hwCausticFrameIndex = rayTracingState().m_hwCausticFrameIndex + 1u;
     }
 
     // Identical resolve to the SW path (the SAME pipeline + ping-pong binding sets): the shared a-trous wavelet denoise.
@@ -1519,7 +1537,8 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
 
     if(!rayTracingState().m_hwCausticDispatchLogged){
         rayTracingState().m_hwCausticDispatchLogged = true;
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: dispatched hardware caustic producer ({} photons, {} caustic lights, {} refractive instances)")
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: dispatched hardware caustic producer ({} photons/frame temporal-reuse over {} full-grid budget, {} caustic lights, {} refractive instances)")
+            , static_cast<u64>(s_CausticHwPhotonCount / 2u)
             , static_cast<u64>(s_CausticHwPhotonCount)
             , static_cast<u64>(rayTracingState().m_causticLightCount)
             , static_cast<u64>(rayTracingState().m_causticRefractiveInstanceCount)

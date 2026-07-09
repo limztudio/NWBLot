@@ -656,6 +656,15 @@ struct RtCausticState{
     // state is photons/(1-decay), so the resolve pre-multiplies causticIntensity by (1-decay) to keep the STATIC
     // brightness byte-unchanged.
     f32 m_causticTemporalDecay = 0.85f;
+    // SW-only 2x temporal-reuse checkerboard phase: the software producer emits half the photon grid each frame, on a
+    // frame-parity checkerboard, so the two-frame union covers the full stratified domain at half the per-frame BVH
+    // cost (the splat-space EMA recombines the two halves). phase = m_swCausticFrameIndex & 1.
+    u32 m_swCausticFrameIndex = 0u;
+    // HW-only 2x temporal-reuse checkerboard phase: the byte-parallel hardware producer mirrors the SW scheme --
+    // emits half the photon grid each frame on a frame-parity checkerboard so the two-frame union covers the full
+    // stratified domain at half the per-frame TraceRay cost (the splat-space EMA recombines the two halves). phase =
+    // m_hwCausticFrameIndex & 1.
+    u32 m_hwCausticFrameIndex = 0u;
     bool m_causticEmissionGateLogged = false;
     // Caustic resolve pass (P3): an N-pass edge-avoiding a-trous wavelet denoise. The single compute pipeline is
     // dispatched per pass with two ping-pong binding sets that swap the (output UAV, input-color SRV) pair: one outputs

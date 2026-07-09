@@ -50,11 +50,12 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One thread per photon over a GRID_SIDE x GRID_SIDE DispatchRays grid. The photon index decompose + light pick +
-// per-target emission + stratified hash jitter + flux + the shared bounce loop + the splat are BYTE-IDENTICAL to the SW kernel
-// main() -- the only differences are the 2D->1D photon index (DispatchRaysIndex) and the HW splat handle. The grid
-// side == the SW grid side, so photonIndex = y*W + x equals the SW SV_DispatchThreadID index per photon (same
-// column/row, same light, same target).
+// One thread per photon over a GRID_SIDE x (GRID_SIDE/2) DispatchRays grid (the 2x temporal-reuse half budget). The
+// photon index decompose + light pick + per-target emission + stratified hash jitter + flux + the shared bounce loop +
+// the splat are BYTE-IDENTICAL to the SW kernel main() -- the only differences are the 2D->1D photon index
+// (DispatchRaysIndex) and the HW splat handle. The grid side == the SW grid side, so photonIndex = y*W + x equals the
+// SW SV_DispatchThreadID index per photon (same column/row, same light, same target); the row count is halved so the
+// dispatch launches exactly the half-budget photonCount (no wasted early-out threads).
 [shader("raygeneration")]
 void main(){
     const uint photonIndex = DispatchRaysIndex().y * DispatchRaysDimensions().x + DispatchRaysIndex().x;
@@ -82,10 +83,28 @@ void main(){
     // Per-photon grid cell with a PER-PHOTON deterministic stratified jitter (shared with the SW path so the two stay
     // byte-parallel per photon). Per-photon keeps a single frame's splat from being a rigid lattice (which a flat
     // refractor maps to visible stripes); frame-independent, so a static scene is flicker-free without temporal averaging.
+    //
+    // HW 2x TEMPORAL REUSE: byte-identical to the SW kernel -- this frame emits only HALF the grid, the cells whose
+    // (column ^ row) parity equals the frame phase (phase = frameIndex & 1). The complementary half is emitted next
+    // frame, so the two-frame union covers the FULL stratified domain at half the per-frame TraceRay cost, and the
+    // splat-space EMA recombines the two halves into the steady-state image. The per-frame photon budget (photonCount)
+    // is therefore gridSide^2/2, and the physical flux formula below doubles per photon (photonCount halved) so each
+    // frame deposits the FULL domain power over its half -- energy-conserving under the EMA. The per-photon jitter is
+    // keyed on the FULL-grid cell (column,row), NOT photonIndex, so the same physical cell keeps its fixed sub-point
+    // across the two frames that share it -- the stratification is preserved exactly as the full-grid reference.
     const uint gridSide = max(g_NwbCausticHwPushConstants.gridSide, 1u);
-    const uint column = photonIndex % gridSide;
-    const uint row = (photonIndex / gridSide) % gridSide;
-    const float2 jitter = nwbCausticEmissionJitter(photonIndex);
+    const uint phase = g_NwbCausticHwPushConstants.frameIndex & 1u;
+    // Index -> checkerboard cell bijection (parity-phase cells only). gridSide MUST be even (both dbg 128 and opt 512
+    // are): each row then holds exactly gridSide/2 cells of a given parity, and photonIndex decomposes into (row, pair)
+    // in HALF-column units. col is the phase-parity cell within that row (verified: the two phases' union is the full
+    // grid, no gaps/dupes). The first parity-phase column in an EVEN row is `phase`; in an ODD row the parities flip,
+    // so it is `phase ^ 1`. Byte-identical to the SW kernel.
+    const uint halfWidth = gridSide >> 1u;
+    const uint row = photonIndex / halfWidth;
+    const uint pair = photonIndex % halfWidth;
+    const uint parityColBase = ((row & 1u) != 0u) ? (phase ^ 1u) : phase;
+    const uint column = parityColBase + 2u * pair;
+    const float2 jitter = nwbCausticEmissionJitter(column + row * gridSide);
     const float2 cell = (float2(column, row) + jitter) / (float)gridSide;
 
     const NwbCausticEmission emission = nwbCausticEmitPhotonAtTarget(lightDir, targetAabbMin, targetAabbMax, cell);

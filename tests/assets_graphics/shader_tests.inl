@@ -73,6 +73,7 @@ TEST(AssetsGraphics, SpirvEntryPointLookup){
         0u,
     };
 
+    EXPECT_TRUE(NWB::Core::IsValidSpirvModuleWords(words, LengthOf(words)));
     EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
             words,
             LengthOf(words),
@@ -106,6 +107,29 @@ TEST(AssetsGraphics, SpirvEntryPointLookup){
     EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
             invalidWords,
             LengthOf(invalidWords),
+            "main",
+            NWB::Core::ShaderType::Pixel,
+            entryPoint
+        ), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
+    EXPECT_TRUE(entryPoint.empty());
+    EXPECT_FALSE(NWB::Core::IsValidSpirvModuleWords(invalidWords, LengthOf(invalidWords)));
+
+    const u32 malformedOtherStageEntryWords[] = {
+        0x07230203u,
+        0x00010500u,
+        0u,
+        16u,
+        0u,
+        (4u << 16u) | 15u,
+        0u,
+        1u,
+        PackSpirvStringWord('m', 'a', 'i', 'n'),
+    };
+
+    EXPECT_FALSE(NWB::Core::IsValidSpirvModuleWords(malformedOtherStageEntryWords, LengthOf(malformedOtherStageEntryWords)));
+    EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
+            malformedOtherStageEntryWords,
+            LengthOf(malformedOtherStageEntryWords),
             "main",
             NWB::Core::ShaderType::Pixel,
             entryPoint

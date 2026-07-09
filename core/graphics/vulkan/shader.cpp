@@ -24,15 +24,27 @@ namespace __hidden_vulkan_shader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool IsValidSpirvBytecode(const void* binary, const usize binarySize)noexcept{
+[[nodiscard]] inline bool IsValidSpirvBytecodeShape(const void* binary, const usize binarySize)noexcept{
     return binary && binarySize != 0u && (binarySize & s_SpirvWordAlignmentMask) == 0u;
 }
 
 template<typename WordVector>
-void AssignSpirvWords(const void* binary, const usize binarySize, WordVector& outWords){
+[[nodiscard]] bool AssignValidatedSpirvWords(const void* binary, const usize binarySize, WordVector& outWords){
+    outWords.clear();
+
+    if(!IsValidSpirvBytecodeShape(binary, binarySize))
+        return false;
+
     const usize wordCount = binarySize / sizeof(u32);
     outWords.resize(wordCount);
     NWB_MEMCPY(outWords.data(), binarySize, binary, binarySize);
+
+    if(!IsValidSpirvModuleWords(outWords.data(), outWords.size())){
+        outWords.clear();
+        return false;
+    }
+
+    return true;
 }
 
 template<typename WordVector>
@@ -211,14 +223,13 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
 
 
 ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize binarySize){
-    if(!__hidden_vulkan_shader::IsValidSpirvBytecode(binary, binarySize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload"));
-        return nullptr;
-    }
-
     auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc = d;
-    __hidden_vulkan_shader::AssignSpirvWords(binary, binarySize, shader->m_spirvWords);
+    if(!__hidden_vulkan_shader::AssignValidatedSpirvWords(binary, binarySize, shader->m_spirvWords)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload"));
+        DestroyArenaObject(m_context.objectArena, shader);
+        return nullptr;
+    }
 
     if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords.data(), shader->m_spirvWords.size(), d.entryName, d.shaderType, "standalone shader", shader->m_entryPointName)){
         DestroyArenaObject(m_context.objectArena, shader);
@@ -302,13 +313,12 @@ ShaderHandle Device::createShaderSpecialization(Shader* baseShader, const Shader
 }
 
 ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binarySize){
-    if(!__hidden_vulkan_shader::IsValidSpirvBytecode(binary, binarySize)){
+    auto* lib = NewArenaObject<ShaderLibrary>(m_context.objectArena, m_context);
+    if(!__hidden_vulkan_shader::AssignValidatedSpirvWords(binary, binarySize, lib->m_spirvWords)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload"));
+        DestroyArenaObject(m_context.objectArena, lib);
         return nullptr;
     }
-
-    auto* lib = NewArenaObject<ShaderLibrary>(m_context.objectArena, m_context);
-    __hidden_vulkan_shader::AssignSpirvWords(binary, binarySize, lib->m_spirvWords);
 
     return ShaderLibraryHandle(lib, ShaderLibraryHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }

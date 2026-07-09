@@ -26,6 +26,11 @@ namespace SpirvEntryPointLookupResult{
 };
 
 
+[[nodiscard]] bool IsValidSpirvModuleWords(
+    const u32* words,
+    usize wordCount
+);
+
 [[nodiscard]] SpirvEntryPointLookupResult::Enum ResolveSpirvEntryPointName(
     const u32* words,
     usize wordCount,

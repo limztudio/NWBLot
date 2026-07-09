@@ -24,6 +24,11 @@ inline constexpr u16 s_OpEntryPoint = 15u;
 inline constexpr u32 s_SpirvMagic = 0x07230203u;
 inline constexpr usize s_SpirvHeaderWords = 5u;
 
+struct SpirvEntryPointInstruction{
+    ShaderType::Mask shaderType = ShaderType::None;
+    AStringView name;
+};
+
 
 inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
     switch(executionModel){
@@ -47,12 +52,88 @@ inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
     }
 }
 
+[[nodiscard]] inline bool DecodeEntryPointInstruction(
+    const u32* instructionWords,
+    const u16 instructionWordCount,
+    SpirvEntryPointInstruction& outEntryPoint
+){
+    outEntryPoint = SpirvEntryPointInstruction();
+
+    if(instructionWordCount <= 3)
+        return false;
+
+    outEntryPoint.shaderType = ConvertExecutionModel(instructionWords[1]);
+
+    const auto* entryPointBytes = reinterpret_cast<const char*>(&instructionWords[3]);
+    const usize entryPointMaxBytes = (static_cast<usize>(instructionWordCount) - 3u) * sizeof(u32);
+
+    usize entryPointLength = 0;
+    while(entryPointLength < entryPointMaxBytes && entryPointBytes[entryPointLength] != '\0')
+        ++entryPointLength;
+
+    if(entryPointLength == entryPointMaxBytes)
+        return false;
+
+    outEntryPoint.name = AStringView(entryPointBytes, entryPointLength);
+    return true;
+}
+
+template<typename EntryPointCallback>
+[[nodiscard]] bool ScanSpirvEntryPoints(
+    const u32* words,
+    const usize wordCount,
+    EntryPointCallback entryPointCallback
+){
+    if(!words || wordCount < s_SpirvHeaderWords)
+        return false;
+
+    if(words[0] != s_SpirvMagic)
+        return false;
+
+    for(usize instructionIndex = s_SpirvHeaderWords; instructionIndex < wordCount; ){
+        const u32 instruction = words[instructionIndex];
+        const u16 opcode = static_cast<u16>(instruction & 0xFFFFu);
+        const u16 instructionWordCount = static_cast<u16>(instruction >> 16u);
+        if(instructionWordCount == 0)
+            return false;
+
+        if(static_cast<usize>(instructionWordCount) > wordCount - instructionIndex)
+            return false;
+
+        if(opcode == s_OpEntryPoint){
+            SpirvEntryPointInstruction entryPoint;
+            if(!DecodeEntryPointInstruction(words + instructionIndex, instructionWordCount, entryPoint))
+                return false;
+
+            entryPointCallback(entryPoint);
+        }
+
+        instructionIndex += instructionWordCount;
+    }
+
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool IsValidSpirvModuleWords(
+    const u32* words,
+    const usize wordCount
+){
+    return __hidden_spirv_entry_point::ScanSpirvEntryPoints(
+        words,
+        wordCount,
+        [](const __hidden_spirv_entry_point::SpirvEntryPointInstruction&){}
+    );
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,51 +150,24 @@ SpirvEntryPointLookupResult::Enum ResolveSpirvEntryPointName(
     if(entryName.empty() || shaderType == ShaderType::None)
         return SpirvEntryPointLookupResult::NotFound;
 
-    if(!words || wordCount < __hidden_spirv_entry_point::s_SpirvHeaderWords)
-        return SpirvEntryPointLookupResult::InvalidSpirv;
+    bool found = false;
+    const bool validModule = __hidden_spirv_entry_point::ScanSpirvEntryPoints(
+        words,
+        wordCount,
+        [&](const __hidden_spirv_entry_point::SpirvEntryPointInstruction& entryPoint){
+            if(found || entryPoint.shaderType == ShaderType::None || entryPoint.shaderType != shaderType || entryPoint.name != entryName)
+                return;
 
-    if(words[0] != __hidden_spirv_entry_point::s_SpirvMagic)
-        return SpirvEntryPointLookupResult::InvalidSpirv;
-
-    for(usize instructionIndex = __hidden_spirv_entry_point::s_SpirvHeaderWords; instructionIndex < wordCount; ){
-        const u32 instruction = words[instructionIndex];
-        const u16 opcode = static_cast<u16>(instruction & 0xFFFFu);
-        const u16 instructionWordCount = static_cast<u16>(instruction >> 16u);
-        if(instructionWordCount == 0)
-            return SpirvEntryPointLookupResult::InvalidSpirv;
-
-        if(static_cast<usize>(instructionWordCount) > wordCount - instructionIndex)
-            return SpirvEntryPointLookupResult::InvalidSpirv;
-
-        const usize nextInstructionIndex = instructionIndex + instructionWordCount;
-        if(opcode == __hidden_spirv_entry_point::s_OpEntryPoint){
-            if(instructionWordCount <= 3)
-                return SpirvEntryPointLookupResult::InvalidSpirv;
-
-            const ShaderType::Mask candidateShaderType = __hidden_spirv_entry_point::ConvertExecutionModel(words[instructionIndex + 1]);
-            if(candidateShaderType != ShaderType::None && candidateShaderType == shaderType){
-                const auto* entryPointBytes = reinterpret_cast<const char*>(&words[instructionIndex + 3]);
-                const usize entryPointMaxBytes = (instructionWordCount - 3u) * sizeof(u32);
-
-                usize entryPointLength = 0;
-                while(entryPointLength < entryPointMaxBytes && entryPointBytes[entryPointLength] != '\0')
-                    ++entryPointLength;
-
-                if(entryPointLength == entryPointMaxBytes)
-                    return SpirvEntryPointLookupResult::InvalidSpirv;
-
-                const AStringView candidateEntryPoint(entryPointBytes, entryPointLength);
-                if(candidateEntryPoint == entryName){
-                    outEntryPointName.assign(candidateEntryPoint.data(), candidateEntryPoint.size());
-                    return SpirvEntryPointLookupResult::Found;
-                }
-            }
+            outEntryPointName.assign(entryPoint.name.data(), entryPoint.name.size());
+            found = true;
         }
-
-        instructionIndex = nextInstructionIndex;
+    );
+    if(!validModule){
+        outEntryPointName.clear();
+        return SpirvEntryPointLookupResult::InvalidSpirv;
     }
 
-    return SpirvEntryPointLookupResult::NotFound;
+    return found ? SpirvEntryPointLookupResult::Found : SpirvEntryPointLookupResult::NotFound;
 }
 
 

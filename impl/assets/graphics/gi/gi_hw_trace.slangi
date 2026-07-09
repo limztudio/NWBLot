@@ -69,7 +69,7 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     closest.t = tMax;
     closest.worldPos = float3(0.0, 0.0, 0.0);
     closest.normal = float3(0.0, 0.0, 1.0);
-    closest.albedo = float3(NWB_GI_SW_TRACE_DEFAULT_ALBEDO);
+    closest.albedo = half3(NWB_GI_SW_TRACE_DEFAULT_ALBEDO);
 
     RayDesc ray;
     ray.Origin = origin;
@@ -99,7 +99,7 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     closest.t = query.CommittedRayT();
     closest.worldPos = ray.Origin + ray.Direction * closest.t;
     closest.normal = nwbSafeNormalize(nwbGiHwTransformNormal(query.CommittedWorldToObject3x4(), objNormal), float3(0.0, 0.0, 1.0));
-    closest.albedo = float3(asfloat(material.baseColorR), asfloat(material.baseColorG), asfloat(material.baseColorB));
+    closest.albedo = half3(asfloat(material.baseColorR), asfloat(material.baseColorG), asfloat(material.baseColorB));
     return closest;
 }
 

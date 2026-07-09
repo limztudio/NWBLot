@@ -287,7 +287,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                 closest.worldPos = worldOrigin + worldDirection * triangleHit.t;
                 closest.shadingNormal = float3(0.0, 0.0, 1.0); // filled with the real interpolated normal for a refractive hit below
                 closest.ior = 1.0;
-                closest.transmission = float3(1.0, 1.0, 1.0);
+                closest.transmission = half3(1.0, 1.0, 1.0);
 
                 if(refractive){
                     // Evaluate this material's surface hook for its optical params, the SAME way the shadow trace
@@ -366,7 +366,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     closest.ior = 1.0;
     closest.worldPos = float3(0.0, 0.0, 0.0);
     closest.shadingNormal = float3(0.0, 0.0, 1.0);
-    closest.transmission = float3(1.0, 1.0, 1.0);
+    closest.transmission = half3(1.0, 1.0, 1.0);
 
     if(g_NwbCausticSwPushConstants.instanceCount == 0u)
         return closest;

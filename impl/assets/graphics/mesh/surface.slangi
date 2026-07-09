@@ -122,9 +122,9 @@ float nwbShadowFresnelTransmittedFraction(float ior, float cosI){
 }
 
 // Per-channel Beer-Lambert absorption coefficient from a per-unit transmission color, so exp(-coeff * pathLength)
-// equals transmission ^ pathLength. transmission = float3(1) -> coeff = float3(0) (no absorption).
-float3 nwbShadowAbsorptionCoefficient(float3 transmission){
-    return -log(clamp(transmission, float3(1e-4), float3(1.0)));
+// equals transmission ^ pathLength. transmission = half3(1) -> coeff = float3(0) (no absorption).
+float3 nwbShadowAbsorptionCoefficient(half3 transmission){
+    return -log(clamp(float3(transmission), float3(1e-4), float3(1.0)));
 }
 
 

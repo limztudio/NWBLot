@@ -188,7 +188,7 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
                 closest.t = triHit.t;
                 closest.worldPos = worldOrigin + worldDirection * triHit.t;
                 closest.normal = nwbSafeNormalize(nwbGiSwTransformNormal(instance, triHit.normal), float3(0.0, 0.0, 1.0));
-                closest.albedo = float3(asfloat(material.baseColorR), asfloat(material.baseColorG), asfloat(material.baseColorB));
+                closest.albedo = half3(asfloat(material.baseColorR), asfloat(material.baseColorG), asfloat(material.baseColorB));
             }
             active = false;
         }
@@ -232,7 +232,7 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     closest.t = tMax;
     closest.worldPos = float3(0.0, 0.0, 0.0);
     closest.normal = float3(0.0, 0.0, 1.0);
-    closest.albedo = float3(NWB_GI_SW_TRACE_DEFAULT_ALBEDO);
+    closest.albedo = half3(NWB_GI_SW_TRACE_DEFAULT_ALBEDO);
 
     const float3 invDir = nwbGiSwSafeInvDir(direction);
 

@@ -38,7 +38,7 @@ struct NwbGiProbeHit{
     float t;
     float3 worldPos;
     float3 normal;
-    float3 albedo;
+    half3 albedo;
 };
 
 // The traversal SEAM: each backend (SW BVH walk / HW inline RayQuery) defines this to return the nearest hit. Declared
@@ -101,7 +101,7 @@ float3 nwbGiShadeHit(const NwbGiProbeHit hit, const float3 rayDir){
 #endif
 
     // Apply the per-instance base colour (the bounce's diffuse reflectance).
-    irradiance *= hit.albedo;
+    irradiance *= float3(hit.albedo);
     return irradiance;
 }
 

@@ -67,7 +67,7 @@ struct NwbCausticHit{
     float ior;
     float3 worldPos;
     float3 shadingNormal;
-    float3 transmission;
+    half3 transmission;
 };
 
 // Backend-provided. The shared loop calls it; HW + SW each define it over their own geometry fetch.

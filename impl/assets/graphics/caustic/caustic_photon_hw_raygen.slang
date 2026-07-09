@@ -42,7 +42,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     hit.ior = p.ior;
     hit.worldPos = p.worldPos;
     hit.shadingNormal = p.shadingNormal;
-    hit.transmission = p.transmission;
+    hit.transmission = half3(p.transmission);
     return hit;
 }
 

@@ -129,7 +129,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
             radiance = nwbGiShadeHit(hit, rayDir);
             const float3 facingNormal = dot(hit.normal, rayDir) < 0.0 ? hit.normal : -hit.normal;
             const float3 bounce = min(nwbSurfelBounceGather(hit.worldPos, facingNormal), float3(NWB_SURFEL_BOUNCE_CLAMP, NWB_SURFEL_BOUNCE_CLAMP, NWB_SURFEL_BOUNCE_CLAMP));
-            radiance += hit.albedo * bounce;
+            radiance += float3(hit.albedo) * bounce;
         }
 
         const float4 basis = nwbSurfelShBasis(rayDir);

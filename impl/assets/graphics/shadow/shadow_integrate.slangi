@@ -109,7 +109,7 @@ float nwbShadowSmoothNormalWeight(const float3 n0, const float3 n1, const float3
 // Optical depth is BINNED PER OCCLUDER by instance id, and each bin keeps merged hit distances; same-occluder
 // crossings at the same t are collapsed because edge/diagonal hits can report two triangles sharing one physical
 // surface.
-void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const uint instanceId, const float ior, const float3 transmission, const float3 geometricNormal, const float3 shadingNormal, const float smoothNormalWeight, const float3 rayDirection, const float t){
+void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const uint instanceId, const float ior, const half3 transmission, const float3 geometricNormal, const float3 shadingNormal, const float smoothNormalWeight, const float3 rayDirection, const float t){
     const float cosI = nwbShadowCosineToRay(geometricNormal, rayDirection);
 
     int slot = -1;

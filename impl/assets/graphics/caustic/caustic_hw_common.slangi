@@ -41,9 +41,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The closest-hit payload. Carries exactly the NwbCausticHit fields (caustic_trace.slangi) the shared bounce loop
-// consumes; the two bool fields ride as uint for stable HLSL payload packing. The closest-hit fills every field, the
-// miss clears `hit`, and the raygen hook converts it back to NwbCausticHit. 52 bytes -> declare MaxPayloadSize 64.
+// The closest-hit payload carries the NwbCausticHit fields (caustic_trace.slangi) the shared bounce loop consumes; the
+// transmission tint stays float3 here for stable ray-payload packing and is narrowed when the raygen builds NwbCausticHit.
+// The two bool fields ride as uint for stable HLSL payload packing. The closest-hit fills every field, the miss clears
+// `hit`, and the raygen hook converts it back to NwbCausticHit. 52 bytes -> declare MaxPayloadSize 64.
 struct NwbCausticHwPayload{
     float3 worldPos;
     float3 shadingNormal;

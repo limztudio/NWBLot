@@ -49,14 +49,12 @@ public:
     struct MeshSetupDesc{
         const void* vertexData = nullptr;
         usize vertexDataSize = 0;
-        u32 vertexStride = 0;
         Name vertexBufferName;
-
         const void* indexData = nullptr;
         usize indexDataSize = 0;
-        bool use32BitIndices = true;
         Name indexBufferName;
-
+        u32 vertexStride = 0;
+        bool use32BitIndices = true;
         CommandQueue::Enum queue = CommandQueue::Graphics;
     };
 

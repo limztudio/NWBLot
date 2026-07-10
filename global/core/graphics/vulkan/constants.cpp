@@ -22,12 +22,28 @@ namespace VulkanDetail{
 
 
 struct FormatMapping{
-    Format::Enum format;
     VkFormat vkFormat;
     u32 bytesPerPixel;
+    Format::Enum format;
     bool hasDepth;
     bool hasStencil;
     bool isCompressed;
+
+    constexpr FormatMapping(
+        const Format::Enum inFormat,
+        const VkFormat inVkFormat,
+        const u32 inBytesPerPixel,
+        const bool inHasDepth,
+        const bool inHasStencil,
+        const bool inIsCompressed
+    )
+        : vkFormat(inVkFormat)
+        , bytesPerPixel(inBytesPerPixel)
+        , format(inFormat)
+        , hasDepth(inHasDepth)
+        , hasStencil(inHasStencil)
+        , isCompressed(inIsCompressed)
+    {}
 };
 
 static constexpr FormatMapping s_FormatMappings[] = {

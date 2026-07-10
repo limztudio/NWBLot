@@ -43,12 +43,12 @@ struct TelemetryIngestResult{
     Path perfCsvPath;
     Path graphPath;
     Type::Enum type = Type::Info;
-    Telemetry::DecodeResult decode;
-    TelemetryReportSummary summary;
     bool storedRaw = false;
     bool wroteJson = false;
     bool wrotePerfCsv = false;
     bool wroteGraph = false;
+    Telemetry::DecodeResult decode;
+    TelemetryReportSummary summary;
 
     [[nodiscard]] bool ok()const{
         return storedRaw && decode.ok() && wroteJson && wrotePerfCsv && summary.parseFailureCount == 0u;

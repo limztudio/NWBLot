@@ -73,12 +73,12 @@ struct ViewIterator{
     using DenseIndexTuple = ViewDenseIndexTuple<Ts...>;
 
     ComponentTuple pools;
-    DenseIndexTuple denseIndices;
     const ViewEntityVector* anchorEntities;
-    EntityID entity;
     usize anchorPoolIndex;
     usize index;
     usize count;
+    DenseIndexTuple denseIndices;
+    EntityID entity;
 
     ViewIterator(
         ComponentTuple poolsValue,
@@ -90,10 +90,10 @@ struct ViewIterator{
     )
         : pools(Move(poolsValue))
         , anchorEntities(anchorEntitiesValue)
-        , entity(ENTITY_ID_INVALID)
         , anchorPoolIndex(anchorPoolIndexValue)
         , index(indexValue)
         , count(countValue)
+        , entity(ENTITY_ID_INVALID)
     {
         if(validValue)
             skipInvalid();

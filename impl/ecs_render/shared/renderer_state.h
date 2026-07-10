@@ -262,6 +262,8 @@ struct RtSceneBvhState{
     usize m_tlasMaxInstances = 0u;
     u64 m_tlasDeviceAddress = 0u;
     u32 m_tlasInstanceCount = 0u; // live TLAS instance count (set by buildSceneTlas); the HW caustic raygen's non-zero guard
+    u32 m_sceneBvhInstanceCount = 0u;
+    u32 m_hwCausticBindingSetMeshCount = 0u;
     // HYBRID shadow split (RT hardware): the HW RayQuery pass casts the binary OPAQUE shadow; when the scene holds a
     // transparent occluder, the software traversal additionally casts the colored TRANSPARENT shadow and multiplies it
     // onto the opaque mask. m_sceneHasTransparentOccluder (set by buildSceneTlas) gates building the software BVH on RT
@@ -291,7 +293,6 @@ struct RtSceneBvhState{
     Core::BufferHandle m_sceneInstanceBuffer; // per-instance world->object transform + per-mesh refs
     usize m_sceneBvhNodeCapacity = 0u;
     usize m_sceneInstanceCapacity = 0u;
-    u32 m_sceneBvhInstanceCount = 0u;
     // Soft opaque shadow TEMPORAL accumulation: the reproject-merge pass
     // inserted per slot between the soft trace and the a-trous resolve, plus the CPU-side state it needs. There are NO
     // motion vectors / prev-G-buffer in this engine (the view is rebuilt fresh each frame), so the merge reprojects the
@@ -378,7 +379,6 @@ struct RtSceneBvhState{
     const Core::Texture* m_hwCausticBindingSetDepth = nullptr;
     const Core::Texture* m_hwCausticBindingSetWorldPosition = nullptr;
     const Core::Texture* m_hwCausticBindingSetAccumulator = nullptr;
-    u32 m_hwCausticBindingSetMeshCount = 0u;
     bool m_bvhSortPipelineFailed = false;
     bool m_bvhSortSelfTestDone = false;
     bool m_bvhBuildPipelineFailed = false;

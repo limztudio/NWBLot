@@ -1292,13 +1292,13 @@ struct DescriptorHeapAllocation{
 };
 
 struct DescriptorHeapBindingMeta{
-    ResourceType::Enum resourceType = ResourceType::None;
     VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
-    DescriptorHeapKind::Enum heapKind = DescriptorHeapKind::None;
     u32 slot = 0;
     u32 arraySize = 0;
     u32 descriptorSize = 0;
     u32 descriptorStride = 0;
+    ResourceType::Enum resourceType = ResourceType::None;
+    DescriptorHeapKind::Enum heapKind = DescriptorHeapKind::None;
 };
 
 struct DescriptorHeapPushRange{
@@ -1909,11 +1909,11 @@ private:
 
 
 struct RenderPassParameters{
-    bool clearColorTargets = false;
     Color colorClearValues[s_MaxRenderTargets]{};
+    f32 depthClearValue = s_DepthClearValue;
+    bool clearColorTargets = false;
     u8 colorClearMask = static_cast<u8>((1u << s_MaxRenderTargets) - 1u);
     bool clearDepthTarget = false;
-    f32 depthClearValue = s_DepthClearValue;
     bool clearStencilTarget = false;
     u8 stencilClearValue = 0;
 

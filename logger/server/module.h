@@ -84,8 +84,8 @@ private:
     AString<LogArena> m_crashUploadToken;
     CrashUploadQueue m_crashUploads;
     Semaphore<> m_crashIngestSemaphore;
-    Thread m_crashIngestThread;
     Atomic<bool> m_crashIngestExit;
+    Thread m_crashIngestThread;
 };
 
 

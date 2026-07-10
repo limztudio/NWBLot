@@ -317,12 +317,12 @@ private:
     TypedBlockByteVector m_typedBlockBytes;
     StageShaderArray m_stageShaders;
     u32 m_stageShaderCount = 0;
-    Core::Assets::AssetRef<Shader> m_avboitAccumulatePixelShader;
-    Core::Assets::AssetRef<Shader> m_avboitOccupancyPixelShader;
-    Core::Assets::AssetRef<Shader> m_avboitExtinctionPixelShader;
     bool m_transparent = false;
     bool m_twoSided = false;
     bool m_refractive = false;
+    Core::Assets::AssetRef<Shader> m_avboitAccumulatePixelShader;
+    Core::Assets::AssetRef<Shader> m_avboitOccupancyPixelShader;
+    Core::Assets::AssetRef<Shader> m_avboitExtinctionPixelShader;
 };
 
 

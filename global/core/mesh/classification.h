@@ -30,14 +30,14 @@ namespace MeshClass{
 
 
 struct MeshClassInfo{
-    u32 meshClass = MeshClass::Invalid;
     AStringView text;
+    u32 meshClass = MeshClass::Invalid;
     bool usesSkinning = false;
 };
 
 inline constexpr MeshClassInfo s_MeshClassInfos[] = {
-    { MeshClass::Static, "static", false },
-    { MeshClass::Skinned, "skinned", true },
+    { "static", MeshClass::Static, false },
+    { "skinned", MeshClass::Skinned, true },
 };
 
 [[nodiscard]] inline const MeshClassInfo* FindMeshClassInfo(const u32 meshClass){

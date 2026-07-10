@@ -92,8 +92,8 @@ struct CrashConfigT{
     AStringView logServerUrl;
     AStringView crashUploadToken;
     AStringView handlerExecutablePath;
-    CrashCapturePolicy capturePolicy;
     CrashSpoolRetentionConfig spoolRetention;
+    CrashCapturePolicy capturePolicy;
     DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
 
     explicit CrashConfigT(ArenaT& arena)

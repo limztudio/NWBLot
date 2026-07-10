@@ -104,6 +104,7 @@ struct MeshletCookMetrics{
     u32 maxPrimitiveCount = 0u;
     u32 minVertexCount = Limit<u32>::s_Max;
     u32 maxVertexCount = 0u;
+    f32 worstConeCutoff = 1.0f;
     u64 primitiveCountSum = 0u;
     u64 vertexCountSum = 0u;
     u64 positionCountSum = 0u;
@@ -112,7 +113,6 @@ struct MeshletCookMetrics{
     u32 coneDisabledCount = 0u;
     u32 coneEnabledCount = 0u;
     f64 coneCutoffSum = 0.0;
-    f32 worstConeCutoff = 1.0f;
 };
 
 static constexpr f32 s_MeshletScoreSharedVertexWeight = 20.0f;

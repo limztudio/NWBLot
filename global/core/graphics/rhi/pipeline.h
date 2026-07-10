@@ -50,9 +50,9 @@ inline bool operator==(const SinglePassStereoState& lhs, const SinglePassStereoS
 inline bool operator!=(const SinglePassStereoState& lhs, const SinglePassStereoState& rhs){ return !(lhs == rhs); }
 
 struct RenderState{
+    RasterState rasterState;
     BlendState blendState;
     DepthStencilState depthStencilState;
-    RasterState rasterState;
     SinglePassStereoState singlePassStereo;
 
     constexpr RenderState& setBlendState(const BlendState& value){ blendState = value; return *this; }

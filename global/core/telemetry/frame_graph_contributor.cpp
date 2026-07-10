@@ -31,8 +31,8 @@ void FrameGraphBuilder::dependsOnByName(const FrameGraphNodeHandle from, const N
         return;
 
     m_pendingNameEdges.push_back(FrameGraphPendingNameEdge{
-        .fromNodeIndex = from.index,
         .toName = dependencyName,
+        .fromNodeIndex = from.index,
         .kind = FrameGraphEdgeKind::DependsOn,
         .flags = flags,
     });

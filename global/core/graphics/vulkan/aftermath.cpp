@@ -64,10 +64,10 @@ struct State{
     PFN_GFSDK_Aftermath_DisableGpuCrashDumps disable = nullptr;
     PFN_GFSDK_Aftermath_GetCrashDumpStatus getStatus = nullptr;
     bool active = false;
+    bool dumpReady = false;
 
     Futex dumpMutex;
     Vector<u8, Alloc::GlobalArena> dumpBytes;
-    bool dumpReady = false;
 
     State()
         : dumpBytes(DumpArena())

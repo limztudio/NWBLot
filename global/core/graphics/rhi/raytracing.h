@@ -351,8 +351,8 @@ namespace RayTracingAccelStructBuildFlags{
 struct RayTracingAccelStructDesc{
     usize topLevelMaxInstances = 0; // only applies when isTopLevel = true
     GraphicsVector<RayTracingGeometryDesc> bottomLevelGeometries; // only applies when isTopLevel = false
-    RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None;
     Name debugName;
+    RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None;
     bool trackLiveness = true;
     bool isTopLevel = false;
     bool isVirtual = false;

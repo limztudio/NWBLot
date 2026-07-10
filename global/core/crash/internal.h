@@ -172,12 +172,12 @@ struct CrashAck{
 
 struct CrashDumpRequestOptions{
     u32 waitMilliseconds = 0u;
+    u32 callstackFrameCount = 0u;
     u64 exceptionPointers = 0u;
     u64 faultAddress = 0u;
     u64 instructionPointer = 0u;
     u64 stackPointer = 0u;
     u64 framePointer = 0u;
-    u32 callstackFrameCount = 0u;
     u64 callstackFrames[s_MaxCallstackFrames] = {};
     AStringView event;
     AStringView triggerCategory;
@@ -201,31 +201,12 @@ struct ManualDumpContextStorage{
 };
 
 struct CrashState{
-    Futex mutex;
-    bool installed = false;
-    bool handlerStarted = false;
-    CrashCapturePolicy capturePolicy;
     CrashSpoolRetentionConfig spoolRetention;
-    DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
-    char applicationName[s_MaxShortText] = {};
-    char versionText[s_MaxShortText] = {};
-    char buildId[s_MaxMediumText] = {};
-    char logServerUrl[s_MaxUrlText] = {};
-    char crashUploadToken[s_MaxMediumText] = {};
-    char spoolDirectoryText[s_MaxPathText] = {};
-    char handlerExecutablePathText[s_MaxPathText] = {};
-    FixedMetadata metadata[s_MaxMetadata] = {};
     FixedBreadcrumb breadcrumbs[s_MaxBreadcrumbs] = {};
     FixedDiagnosticSite diagnosticSites[s_MaxDiagnosticSites] = {};
     usize nextBreadcrumb = 0u;
-    u32 diagnosticCaptureCount = 0u;
     Atomic<u64> breadcrumbOrder{ 1u };
     Atomic<u64> crashSequence{ 1u };
-    Atomic<u32> suppressedPlatformCrashCaptures{ 0u };
-    // Crash-transport channel guard: a single CAS claims the request pipe/event so concurrent faulting threads
-    // never interleave their fixed-POD writes. Deliberately distinct from `mutex` (which the assert/diagnostic
-    // path may already hold when a hard fault occurs), and an atomic (not a Futex) so it is signal/SEH-safe.
-    Atomic<u32> transportInFlight{ 0u };
 
 #if defined(NWB_PLATFORM_WINDOWS)
     HANDLE requestWriteHandle = INVALID_HANDLE_VALUE;
@@ -234,14 +215,39 @@ struct CrashState{
     PROCESS_INFORMATION handlerProcessInfo = {};
     LPTOP_LEVEL_EXCEPTION_FILTER previousExceptionFilter = nullptr;
 #elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+    stack_t previousSignalStack = {};
+#elif defined(NWB_PLATFORM_ANDROID)
+    stack_t previousSignalStack = {};
+#endif
+
+    CrashCapturePolicy capturePolicy;
+    Futex mutex;
+    u32 diagnosticCaptureCount = 0u;
+    Atomic<u32> suppressedPlatformCrashCaptures{ 0u };
+    // Crash-transport channel guard: a single CAS claims the request pipe/event so concurrent faulting threads
+    // never interleave their fixed-POD writes. Deliberately distinct from `mutex` (which the assert/diagnostic
+    // path may already hold when a hard fault occurs), and an atomic (not a Futex) so it is signal/SEH-safe.
+    Atomic<u32> transportInFlight{ 0u };
+
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     int requestWriteFd = -1;
     int ackReadFd = -1;
     pid_t handlerPid = -1;
-    stack_t previousSignalStack = {};
 #elif defined(NWB_PLATFORM_ANDROID)
     int emergencyWriteFd = -1;
-    stack_t previousSignalStack = {};
 #endif
+
+    FixedMetadata metadata[s_MaxMetadata] = {};
+    char logServerUrl[s_MaxUrlText] = {};
+    char spoolDirectoryText[s_MaxPathText] = {};
+    char handlerExecutablePathText[s_MaxPathText] = {};
+    char buildId[s_MaxMediumText] = {};
+    char crashUploadToken[s_MaxMediumText] = {};
+    char applicationName[s_MaxShortText] = {};
+    char versionText[s_MaxShortText] = {};
+    DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
+    bool installed = false;
+    bool handlerStarted = false;
 };
 
 

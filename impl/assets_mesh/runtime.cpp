@@ -31,10 +31,7 @@ namespace __hidden_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UniquePtr<Core::Assets::IAssetCodec> CreateMeshAssetCodec(){
-    return MakeUnique<MeshAssetCodec>();
-}
-Core::Assets::AssetCodecAutoRegistrar s_MeshAssetCodecAutoRegistrar(&CreateMeshAssetCodec);
+Core::Assets::AssetCodecAutoRegistrar s_MeshAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<MeshAssetCodec>);
 
 #include "runtime_validation.inl"
 

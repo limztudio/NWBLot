@@ -53,6 +53,19 @@ bool ContainsFactory(const FactoryVector& factories, const FactoryT factory){
 }
 
 template<typename FactoryT>
+bool InitializeAutoFactory(AssetVector<FactoryT>& factories, const FactoryT factory){
+    if(factory == nullptr)
+        return true;
+
+    auto& autoFactoryQueue = QueryAutoFactoryQueue();
+    ScopedLock lock(autoFactoryQueue.mutex);
+    if(!ContainsFactory(factories, factory))
+        factories.push_back(factory);
+
+    return true;
+}
+
+template<typename FactoryT>
 using ScratchFactoryVector = Vector<FactoryT, Alloc::ScratchArena>;
 
 template<typename FactoryT>
@@ -93,27 +106,13 @@ void RegisterFactoryProducts(
 
 
 bool AssetCodecAutoRegistrar::initialize(){
-    if(m_factory == nullptr)
-        return true;
-
     auto& autoFactoryQueue = __hidden_auto_registration::QueryAutoFactoryQueue();
-    ScopedLock lock(autoFactoryQueue.mutex);
-    if(!__hidden_auto_registration::ContainsFactory(autoFactoryQueue.codecFactories, m_factory))
-        autoFactoryQueue.codecFactories.push_back(m_factory);
-
-    return true;
+    return __hidden_auto_registration::InitializeAutoFactory(autoFactoryQueue.codecFactories, m_factory);
 }
 
 bool AssetCookerAutoRegistrar::initialize(){
-    if(m_factory == nullptr)
-        return true;
-
     auto& autoFactoryQueue = __hidden_auto_registration::QueryAutoFactoryQueue();
-    ScopedLock lock(autoFactoryQueue.mutex);
-    if(!__hidden_auto_registration::ContainsFactory(autoFactoryQueue.cookerFactories, m_factory))
-        autoFactoryQueue.cookerFactories.push_back(m_factory);
-
-    return true;
+    return __hidden_auto_registration::InitializeAutoFactory(autoFactoryQueue.cookerFactories, m_factory);
 }
 
 

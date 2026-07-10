@@ -24,10 +24,7 @@ namespace __hidden_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UniquePtr<Core::Assets::IAssetCodec> CreateMaterialAssetCodec(){
-    return MakeUnique<MaterialAssetCodec>();
-}
-Core::Assets::AssetCodecAutoRegistrar s_MaterialAssetCodecAutoRegistrar(&CreateMaterialAssetCodec);
+Core::Assets::AssetCodecAutoRegistrar s_MaterialAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<MaterialAssetCodec>);
 
 
 static bool ValidateMaterialTypedLayout(

@@ -40,10 +40,7 @@ namespace __hidden_cooker{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UniquePtr<Core::Assets::IAssetCooker> CreateAssetVolumeCooker(Core::Alloc::GlobalArena& arena){
-    return MakeUnique<AssetVolumeCooker>(arena);
-}
-Core::Assets::AssetCookerAutoRegistrar s_AssetVolumeCookerAutoRegistrar(&CreateAssetVolumeCooker);
+Core::Assets::AssetCookerAutoRegistrar s_AssetVolumeCookerAutoRegistrar(&Core::Assets::CreateAssetCooker<AssetVolumeCooker>);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -9,6 +9,7 @@
 #include <global/core/assets/binary_payload_io.h>
 #include <global/core/common/log.h>
 #include <global/binary.h>
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,10 +27,7 @@ namespace __hidden_model_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UniquePtr<Core::Assets::IAssetCodec> CreateModelAssetCodec(){
-    return MakeUnique<ModelAssetCodec>();
-}
-Core::Assets::AssetCodecAutoRegistrar s_ModelAssetCodecAutoRegistrar(&CreateModelAssetCodec);
+Core::Assets::AssetCodecAutoRegistrar s_ModelAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<ModelAssetCodec>);
 
 
 template<typename ObjectT>
@@ -41,28 +39,17 @@ template<typename ObjectT>
     return true;
 }
 
-[[nodiscard]] bool ModelSkeletonObjectExists(const Model::SkeletonObjectVector& skeletonObjects, const Name name){
-    for(const ModelSkeletonObject& object : skeletonObjects){
-        if(object.name == name)
-            return true;
-    }
-    return false;
+template<typename ObjectVector>
+[[nodiscard]] bool ModelObjectExists(const ObjectVector& objects, const Name name){
+    return FindIf(objects.begin(), objects.end(), [name](const auto& object){ return object.name == name; }) != objects.end();
 }
 
-[[nodiscard]] bool ModelStaticMeshObjectExists(const Model::StaticMeshObjectVector& staticMeshObjects, const Name name){
-    for(const ModelStaticMeshObject& object : staticMeshObjects){
-        if(object.name == name)
-            return true;
-    }
-    return false;
-}
-
-[[nodiscard]] bool ModelSkinnedMeshObjectExists(const Model::SkinnedMeshObjectVector& skinnedMeshObjects, const Name name){
-    for(const ModelSkinnedMeshObject& object : skinnedMeshObjects){
-        if(object.name == name)
-            return true;
-    }
-    return false;
+template<typename ObjectVector>
+[[nodiscard]] u32 CountModelObjects(const ObjectVector& objects, const Name name){
+    u32 count = 0u;
+    for(const auto& object : objects)
+        count += object.name == name ? 1u : 0u;
+    return count;
 }
 
 [[nodiscard]] bool ModelObjectNameIsUnique(
@@ -71,13 +58,10 @@ template<typename ObjectT>
     const Model::SkinnedMeshObjectVector& skinnedMeshObjects,
     const Name name
 ){
-    u32 count = 0u;
-    for(const ModelSkeletonObject& object : skeletonObjects)
-        count += object.name == name ? 1u : 0u;
-    for(const ModelStaticMeshObject& object : staticMeshObjects)
-        count += object.name == name ? 1u : 0u;
-    for(const ModelSkinnedMeshObject& object : skinnedMeshObjects)
-        count += object.name == name ? 1u : 0u;
+    const u32 count = CountModelObjects(skeletonObjects, name)
+        + CountModelObjects(staticMeshObjects, name)
+        + CountModelObjects(skinnedMeshObjects, name)
+    ;
     return count == 1u;
 }
 
@@ -139,9 +123,9 @@ bool Model::validatePayload()const{
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} has joint parent without object parent"), i);
             return false;
         }
-        if(object.parentObject && !__hidden_model_runtime::ModelSkeletonObjectExists(m_skeletonObjects, object.parentObject)){
-            if(__hidden_model_runtime::ModelStaticMeshObjectExists(m_staticMeshObjects, object.parentObject)
-                || __hidden_model_runtime::ModelSkinnedMeshObjectExists(m_skinnedMeshObjects, object.parentObject)
+        if(object.parentObject && !__hidden_model_runtime::ModelObjectExists(m_skeletonObjects, object.parentObject)){
+            if(__hidden_model_runtime::ModelObjectExists(m_staticMeshObjects, object.parentObject)
+                || __hidden_model_runtime::ModelObjectExists(m_skinnedMeshObjects, object.parentObject)
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} parent_object must reference a skeleton object"), i);
             }
@@ -170,7 +154,7 @@ bool Model::validatePayload()const{
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} name is duplicated in the model"), i);
             return false;
         }
-        if(!__hidden_model_runtime::ModelSkeletonObjectExists(m_skeletonObjects, object.skeletonObject)){
+        if(!__hidden_model_runtime::ModelObjectExists(m_skeletonObjects, object.skeletonObject)){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} targets a missing skeleton object"), i);
             return false;
         }

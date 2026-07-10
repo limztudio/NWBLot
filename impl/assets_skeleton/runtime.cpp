@@ -26,10 +26,7 @@ namespace __hidden_skeleton_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UniquePtr<Core::Assets::IAssetCodec> CreateSkeletonAssetCodec(){
-    return MakeUnique<SkeletonAssetCodec>();
-}
-Core::Assets::AssetCodecAutoRegistrar s_SkeletonAssetCodecAutoRegistrar(&CreateSkeletonAssetCodec);
+Core::Assets::AssetCodecAutoRegistrar s_SkeletonAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<SkeletonAssetCodec>);
 
 
 };

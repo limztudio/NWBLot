@@ -24,10 +24,7 @@ namespace __hidden_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UniquePtr<Core::Assets::IAssetCodec> CreateShaderAssetCodec(){
-    return MakeUnique<ShaderAssetCodec>();
-}
-Core::Assets::AssetCodecAutoRegistrar s_ShaderAssetCodecAutoRegistrar(&CreateShaderAssetCodec);
+Core::Assets::AssetCodecAutoRegistrar s_ShaderAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<ShaderAssetCodec>);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

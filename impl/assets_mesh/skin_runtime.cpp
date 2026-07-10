@@ -26,10 +26,7 @@ namespace __hidden_skin_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UniquePtr<Core::Assets::IAssetCodec> CreateSkinAssetCodec(){
-    return MakeUnique<SkinAssetCodec>();
-}
-Core::Assets::AssetCodecAutoRegistrar s_SkinAssetCodecAutoRegistrar(&CreateSkinAssetCodec);
+Core::Assets::AssetCodecAutoRegistrar s_SkinAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<SkinAssetCodec>);
 
 
 };

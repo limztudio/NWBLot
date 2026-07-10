@@ -23,6 +23,16 @@ using AssetCodecFactory = UniquePtr<IAssetCodec>(*)();
 using AssetCookerFactory = UniquePtr<IAssetCooker>(*)(AssetArena& arena);
 
 
+template<typename AssetCodecT>
+[[nodiscard]] inline UniquePtr<IAssetCodec> CreateAssetCodec(){
+    return MakeUnique<AssetCodecT>();
+}
+
+template<typename AssetCookerT>
+[[nodiscard]] inline UniquePtr<IAssetCooker> CreateAssetCooker(AssetArena& arena){
+    return MakeUnique<AssetCookerT>(arena);
+}
+
 class AssetCodecAutoRegistrar final : public Core::Common::Initializerable{
 public:
     explicit AssetCodecAutoRegistrar(AssetCodecFactory factory)

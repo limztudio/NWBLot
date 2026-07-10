@@ -469,11 +469,9 @@ bool ParseModelCookMetadata(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    ModelCookEntry& outEntry,
-    Core::Alloc::ScratchArena& scratchArena
+    ModelCookEntry& outEntry
 ){
     using namespace __hidden_model_cook;
-    static_cast<void>(scratchArena);
 
     outEntry = ModelCookEntry(outEntry.skeletonObjects.get_allocator().arena());
 
@@ -547,7 +545,7 @@ bool ParseModelCookMetadata(
     Name virtualPath = NAME_NONE;
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, virtualPath, scratchArena))
         return false;
-    return ParseModelCookMetadata(virtualPath, nwbFilePath, doc.asset(), outEntry, scratchArena);
+    return ParseModelCookMetadata(virtualPath, nwbFilePath, doc.asset(), outEntry);
 }
 
 bool BuildModelAsset(ModelCookEntry& modelEntry, Model& outModel){

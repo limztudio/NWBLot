@@ -357,7 +357,7 @@ public:
     }
 
     [[nodiscard]] Path stem()const{
-        const Path fileName = filename();
+        Path fileName = filename();
         const usize extensionBegin = fileName.extensionBegin();
         if(extensionBegin == fileName.m_text.size())
             return fileName;

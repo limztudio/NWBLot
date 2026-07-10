@@ -5,34 +5,38 @@
 #pragma once
 
 
-#include "global.h"
+#include <global/global.h>
+#include <global/core/assets/cooker.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ALLOC_BEGIN
+using CookOptions = NWB::Core::Assets::AssetCookOptions;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-extern void* CoreAlloc(usize size, const char* log);
-extern void* CoreRealloc(void* p, usize size, const char* log);
-extern void* CoreAllocAligned(usize size, usize align, const char* log);
-
-extern usize CoreMsize(void* ptr)noexcept;
-
-extern void CoreFree(void* ptr, const char* log)noexcept;
-extern void CoreFreeSize(void* ptr, usize size, const char* log)noexcept;
-extern void CoreFreeAligned(void* ptr, const char* log)noexcept;
-extern void CoreFreeSizeAligned(void* ptr, usize size, const char* log)noexcept;
+namespace CommandLineParseResult{
+    enum Enum : u8{
+        Success,
+        Help,
+        Error,
+    };
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ALLOC_END
+CommandLineParseResult::Enum ParseCommandLine(
+    int argc,
+    char** argv,
+    CookOptions& outOptions,
+    NWB::Core::Assets::AssetString& outError
+);
+void PrintUsage();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

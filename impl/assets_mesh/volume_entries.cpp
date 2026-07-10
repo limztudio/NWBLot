@@ -96,14 +96,13 @@ static bool ParseSkinValue(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     SkinCookEntry& outEntry,
-    Core::Assets::CookEntryParseContext& context
+    Core::Assets::CookEntryParseContext&
 ){
     return ParseSkinCookMetadata(
         virtualPath,
         nwbFilePath,
         asset,
-        outEntry,
-        context.scratchArena
+        outEntry
     );
 }
 

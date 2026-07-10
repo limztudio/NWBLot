@@ -459,11 +459,9 @@ bool ParseSkinCookMetadata(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    SkinCookEntry& outEntry,
-    Core::Alloc::ScratchArena& scratchArena
+    SkinCookEntry& outEntry
 ){
     using namespace __hidden_skin_cook;
-    static_cast<void>(scratchArena);
 
     outEntry = SkinCookEntry(outEntry.influences.get_allocator().arena());
 
@@ -506,7 +504,7 @@ bool ParseSkinCookMetadata(
     Name virtualPath = NAME_NONE;
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, virtualPath, scratchArena))
         return false;
-    return ParseSkinCookMetadata(virtualPath, nwbFilePath, doc.asset(), outEntry, scratchArena);
+    return ParseSkinCookMetadata(virtualPath, nwbFilePath, doc.asset(), outEntry);
 }
 
 bool BuildSkinAsset(SkinCookEntry& skinEntry, Skin& outSkin){

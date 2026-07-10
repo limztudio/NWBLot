@@ -51,14 +51,13 @@ static bool ParseModelValue(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     ModelCookEntry& outEntry,
-    Core::Assets::CookEntryParseContext& context
+    Core::Assets::CookEntryParseContext&
 ){
     return ParseModelCookMetadata(
         virtualPath,
         nwbFilePath,
         asset,
-        outEntry,
-        context.scratchArena
+        outEntry
     );
 }
 

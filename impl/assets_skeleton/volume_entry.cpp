@@ -51,14 +51,13 @@ static bool ParseSkeletonValue(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     SkeletonCookEntry& outEntry,
-    Core::Assets::CookEntryParseContext& context
+    Core::Assets::CookEntryParseContext&
 ){
     return ParseSkeletonCookMetadata(
         virtualPath,
         nwbFilePath,
         asset,
-        outEntry,
-        context.scratchArena
+        outEntry
     );
 }
 

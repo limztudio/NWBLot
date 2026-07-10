@@ -209,7 +209,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         return false;
     }
 
-    MeshResources createdMesh(arena());
+    MeshResources createdMesh;
     createdMesh.meshName = meshPath;
     createdMesh.meshletCount = static_cast<u32>(mesh.meshlets().size());
     createdMesh.meshletPrimitiveIndexCount = static_cast<u32>(mesh.meshletPrimitiveIndices().size());
@@ -473,7 +473,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
         }
     }
 
-    MeshResources createdMesh(arena());
+    MeshResources createdMesh;
     createdMesh.meshName = desc.meshKey;
     createdMesh.positionBuffer = desc.positionBuffer;
     createdMesh.normalBuffer = desc.normalBuffer;

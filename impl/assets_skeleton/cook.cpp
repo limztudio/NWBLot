@@ -254,11 +254,9 @@ bool ParseSkeletonCookMetadata(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    SkeletonCookEntry& outEntry,
-    Core::Alloc::ScratchArena& scratchArena
+    SkeletonCookEntry& outEntry
 ){
     using namespace __hidden_skeleton_cook;
-    static_cast<void>(scratchArena);
 
     outEntry = SkeletonCookEntry(outEntry.joints.get_allocator().arena());
 
@@ -327,7 +325,7 @@ bool ParseSkeletonCookMetadata(
     Name virtualPath = NAME_NONE;
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, virtualPath, scratchArena))
         return false;
-    return ParseSkeletonCookMetadata(virtualPath, nwbFilePath, doc.asset(), outEntry, scratchArena);
+    return ParseSkeletonCookMetadata(virtualPath, nwbFilePath, doc.asset(), outEntry);
 }
 
 bool BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Skeleton& outSkeleton){

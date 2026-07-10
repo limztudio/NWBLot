@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "module.h"
+#include "command_line.h"
 
 #include <CLI.hpp>
 
@@ -144,12 +144,9 @@ static void ConfigureCommandLineOptions(CLI::App& outApp, __hidden_command_line:
 CommandLineParseResult::Enum ParseCommandLine(
     const int argc,
     char** argv,
-    NWB::Core::Assets::AssetArena& arena,
     CookOptions& outOptions,
     NWB::Core::Assets::AssetString& outError
 ){
-    static_cast<void>(arena);
-
     outOptions.repoRoot.clear();
     outOptions.assetRoots.clear();
     outOptions.outputDirectory.clear();
@@ -211,8 +208,7 @@ CommandLineParseResult::Enum ParseCommandLine(
 }
 
 
-void PrintUsage(NWB::Core::Assets::AssetArena& arena){
-    static_cast<void>(arena);
+void PrintUsage(){
     __hidden_command_line::ParsedCookOptions options;
     CLI::App app{ "resource_cooker" };
     app.set_help_flag("-h,--help", "Show help");

@@ -145,7 +145,7 @@ class RendererCsgState final : NoCopy{
     friend class RendererAvboitSystem;
 
 public:
-    explicit RendererCsgState(Core::Alloc::GlobalArena& arena);
+    RendererCsgState() = default;
 
 
 public:

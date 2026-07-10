@@ -36,7 +36,6 @@ RendererSystem::RendererSystem(
     , m_csgShapeRegistry(arena)
     , m_meshState(arena)
     , m_materialState(arena)
-    , m_csgState(arena)
     , m_shaderSystem(*this)
     , m_meshSystem(*this)
     , m_materialSystem(*this)

@@ -75,11 +75,6 @@ struct MeshResources : public RuntimeMeshBuffers{
     u64 runtimeMeshVersion = 0u;
     CsgReceiverCpuBounds csgLocalBounds;
 
-    explicit MeshResources(Core::Alloc::GlobalArena& arena)
-    {
-        static_cast<void>(arena);
-    }
-
     [[nodiscard]] bool valid()const noexcept{
         return
             meshName != NAME_NONE

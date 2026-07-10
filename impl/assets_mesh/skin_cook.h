@@ -58,8 +58,7 @@ struct SkinCookEntry{
     Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    SkinCookEntry& outEntry,
-    Core::Alloc::ScratchArena& scratchArena
+    SkinCookEntry& outEntry
 );
 [[nodiscard]] bool BuildSkinAsset(SkinCookEntry& skinEntry, Skin& outSkin);
 

@@ -76,10 +76,6 @@ void RendererMaterialState::invalidateResources(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererCsgState::RendererCsgState(Core::Alloc::GlobalArena& arena){
-    static_cast<void>(arena);
-}
-
 void RendererCsgState::invalidateResources(){
     m_clipBindingLayout.reset();
     m_clipBindingSet.reset();

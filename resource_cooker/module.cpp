@@ -3,6 +3,7 @@
 
 
 #include "module.h"
+#include "command_line.h"
 
 #include <global/core/alloc/thread.h>
 #include <global/core/common/log.h>
@@ -52,11 +53,11 @@ int ResourceCookerMain(int argc, char** argv){
 
         CookOptions options(cookArena, cookThreadPool);
         NWB::Core::Assets::AssetString errorMessage{cookArena};
-        const CommandLineParseResult::Enum parseResult = ParseCommandLine(argc, argv, cookArena, options, errorMessage);
+        const CommandLineParseResult::Enum parseResult = ParseCommandLine(argc, argv, options, errorMessage);
         if(parseResult != CommandLineParseResult::Success){
             if(!errorMessage.empty())
                 NWB_LOGGER_WARNING(NWB_TEXT("Failed to parse command line: {}"), StringConvert(errorMessage));
-            PrintUsage(cookArena);
+            PrintUsage();
             return parseResult == CommandLineParseResult::Help ? 0 : -1;
         }
         const char* requestedAssetType = options.assetType.empty() ? "auto" : options.assetType.c_str();

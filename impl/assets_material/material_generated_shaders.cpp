@@ -105,14 +105,14 @@ bool EmitMaterialPixelShadersImpl(
         generatedSource += "// assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
         generatedSource += "#include \"mesh/material_ps_authoring.slangi\"\n";
         generatedSource += "#include \"";
-        generatedSource += entry.materialInterface.c_str();
+        generatedSource += entry.materialInterface;
         generatedSource += ".bind\"\n";
         generatedSource += "#include \"";
-        generatedSource += entry.surfaceSource.c_str();
+        generatedSource += entry.surfaceSource;
         generatedSource += "\"\n";
 
         CookString relativeFile(arena);
-        relativeFile += entry.virtualPath.c_str();
+        relativeFile += entry.virtualPath;
         relativeFile += ".slang";
         const Path outputPath = generatedRoot / relativeFile.c_str();
         errorCode.clear();
@@ -132,14 +132,14 @@ bool EmitMaterialPixelShadersImpl(
 
         GeneratedMaterialPixelShader generated(arena);
         generated.name += "generated/material_ps/";
-        generated.name += entry.virtualPath.c_str();
+        generated.name += entry.virtualPath;
         {
             ScratchString sourceText = PathToString(scratchArena, outputPath);
             for(char& ch : sourceText){
                 if(ch == '\\')
                     ch = '/';
             }
-            generated.source += sourceText.c_str();
+            generated.source += sourceText;
         }
 
         const Name pixelShaderName = ToName(AStringView(generated.name));
@@ -231,14 +231,14 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
         generatedSource += authoringHeaderInclude;
         generatedSource += "\"\n";
         generatedSource += "#include \"";
-        generatedSource += entry.materialInterface.c_str();
+        generatedSource += entry.materialInterface;
         generatedSource += ".bind\"\n";
         generatedSource += "#include \"";
-        generatedSource += entry.surfaceSource.c_str();
+        generatedSource += entry.surfaceSource;
         generatedSource += "\"\n";
 
         CookString relativeFile(arena);
-        relativeFile += entry.virtualPath.c_str();
+        relativeFile += entry.virtualPath;
         relativeFile += ".slang";
         const Path outputPath = generatedRoot / relativeFile.c_str();
         errorCode.clear();
@@ -260,14 +260,14 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
 
         GeneratedMaterialPixelShader generated(arena);
         generated.name += generatedNamePrefix;
-        generated.name += entry.virtualPath.c_str();
+        generated.name += entry.virtualPath;
         {
             ScratchString sourceText = PathToString(scratchArena, outputPath);
             for(char& ch : sourceText){
                 if(ch == '\\')
                     ch = '/';
             }
-            generated.source += sourceText.c_str();
+            generated.source += sourceText;
         }
 
         const Name pixelShaderName = ToName(AStringView(generated.name));

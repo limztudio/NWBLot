@@ -223,10 +223,7 @@ inline void AppendEventArgument(char (&outText)[s_MaxEventTextBytes], usize& out
     else if constexpr(std::is_pointer_v<RawT>){
         AppendEventPointer(outText, outCursor, value);
     }
-    else if constexpr(std::is_integral_v<RawT>){
-        AppendEventNumber(outText, outCursor, value);
-    }
-    else if constexpr(std::is_floating_point_v<RawT>){
+    else if constexpr(std::is_integral_v<RawT> || std::is_floating_point_v<RawT>){
         AppendEventNumber(outText, outCursor, value);
     }
     else if constexpr(std::is_enum_v<RawT>){

@@ -109,7 +109,7 @@ static void AddLocationMemoryRange(const DumpImage& dumpImage, DumpMemoryReader&
     AddMemoryRange(reader, begin, location.DataSize, static_cast<const u8*>(bytes));
 }
 
-static void BuildDumpMemoryReader(LogArena& arena, const DumpImage& dumpImage, DumpMemoryReader& outReader){
+static void BuildDumpMemoryReader(const DumpImage& dumpImage, DumpMemoryReader& outReader){
     void* threadStream = nullptr;
     ULONG threadStreamBytes = 0u;
     if(ReadMinidumpStream(dumpImage, ThreadListStream, threadStream, threadStreamBytes)){
@@ -138,8 +138,6 @@ static void BuildDumpMemoryReader(LogArena& arena, const DumpImage& dumpImage, D
             cursor += descriptor.DataSize;
         }
     }
-
-    static_cast<void>(arena);
 }
 
 static BOOL CALLBACK ReadProcessMemoryFromDump(HANDLE process, DWORD64 baseAddress, PVOID buffer, DWORD size, LPDWORD bytesRead){
@@ -273,7 +271,6 @@ static void LoadDumpModules(LogArena& arena, const HANDLE symbolProcess, const D
     char countBuffer[s_DecimalTextBufferCapacity] = {};
     outReport += FormatDecimal(static_cast<usize>(loadedCount), countBuffer);
     outReport += "\n";
-    static_cast<void>(arena);
 }
 
 static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, CrashReportText& outReport, const DWORD frameIndex, const DWORD64 address){
@@ -396,7 +393,7 @@ bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, c
     }
 
     DumpMemoryReader memoryReader(arena);
-    BuildDumpMemoryReader(arena, dumpImage, memoryReader);
+    BuildDumpMemoryReader(dumpImage, memoryReader);
     s_CurrentDumpMemoryReader = &memoryReader;
 
     outReport += "status=decoded\nresolver=windows_pdb_minidump\nsymbol_path=";

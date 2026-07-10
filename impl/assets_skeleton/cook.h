@@ -60,8 +60,7 @@ struct SkeletonCookEntry{
     Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    SkeletonCookEntry& outEntry,
-    Core::Alloc::ScratchArena& scratchArena
+    SkeletonCookEntry& outEntry
 );
 [[nodiscard]] bool BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Skeleton& outSkeleton);
 

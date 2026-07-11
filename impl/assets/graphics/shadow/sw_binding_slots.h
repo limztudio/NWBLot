@@ -130,13 +130,13 @@
 #define NWB_SW_SHADOW_BACKGROUND_DEPTH 0.999999
 
 // Per-frame samples-per-pixel for the soft opaque trace. Temporal accumulation (the reproject-merge pass) supplies the
-// source-area samples over frames, so this is pinned at 1 -- leaning FULLY on the temporal history + the a-trous for
-// moving-region noise. Trade: in a freshly-disoccluded / gate-B-clamped region (a spinning occluder's leading edge)
-// the effective history collapses to ~0 and the pixel falls back to a single binary ray whose dithered penumbra the a-trous
-// cannot fully smooth in ONE frame, so 1 spp shows more moving-region shimmer than 2 did. Halves the (already cheap half-res
-// binary) opaque trace's ray count; the aggregate shadow_visibility win is small because the opaque trace is a minority of it.
+// source-area samples over frames, but in a freshly-disoccluded / gate-B-clamped region (a spinning occluder's leading edge)
+// the effective history collapses to ~0 and the pixel falls back to this frame's binary rays whose dithered penumbra the
+// a-trous cannot fully smooth in ONE frame, so 1 spp shows visible moving-region shimmer there. 2 spp halves that shimmer
+// for a measured whole-frame cost of +0.36 ms / +3.9% over SPP1 (stress_test_smoke, AMD BC-250); 4 spp is +1.05 ms / +11.6%
+// for diminishing quality return -- so 2 is the price/quality sweet spot (~1/3 of the SPP4 overhead for most of the gain).
 // Contract-shared with the soft opaque pass.
-#define NWB_SW_SHADOW_SOFT_SPP 1u
+#define NWB_SW_SHADOW_SOFT_SPP 2u
 
 // Per-frame samples-per-pixel for the soft TRANSPARENT (colored Beer-Lambert/Fresnel) trace. Kept at 1 -- HALF the opaque
 // count -- on purpose: the colored transparent signal is a SMOOTH low-frequency tint (not the opaque path's sharp binary

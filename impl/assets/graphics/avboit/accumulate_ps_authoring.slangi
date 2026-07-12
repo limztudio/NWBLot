@@ -89,7 +89,7 @@ struct NwbAvboitAccumulatePixelInput{
 };
 
 struct NwbAvboitAccumulatePixelOutput{
-    [[vk::location(NWB_AVBOIT_ACCUM_COLOR_LOCATION)]] float4 accumColor : SV_Target0;
+    [[vk::location(NWB_AVBOIT_ACCUM_COLOR_LOCATION)]] half4 accumColor : SV_Target0;
     [[vk::location(NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION)]] float4 accumExtinction : SV_Target1;
 };
 
@@ -160,7 +160,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     );
 
     NwbAvboitAccumulatePixelOutput output;
-    output.accumColor = float4(shadedColor * weightedAlpha, weightedAlpha);
+    output.accumColor = half4(shadedColor * weightedAlpha, weightedAlpha);
     output.accumExtinction = float4(nwbAvboitExtinctionFromAlpha(alpha), 0.0, 0.0, 0.0);
     return output;
 }

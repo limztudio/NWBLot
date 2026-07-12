@@ -15,7 +15,7 @@
 [[vk::binding(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, NWB_AVBOIT_TRANSPARENT_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_CoverageWords;
 
 struct NwbAvboitOccupancyPixelInput{
-    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
+    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] half4 color : COLOR0;
 #if NWB_CSG_ENABLED
     [[vk::location(NWB_MESH_RASTER_WORLD_POSITION_LOCATION)]] float4 worldPosition : TEXCOORD1;
 #endif
@@ -34,7 +34,7 @@ static half4 inColor;
 
 
 void main(NwbAvboitOccupancyPixelInput input, float4 fragCoord : SV_Position){
-    inColor = half4(input.color);
+    inColor = input.color;
 #if NWB_CSG_ENABLED
     if(nwbAvboitCsgPixelDiscard(
         nwbAvboitFullRasterPositionFromLowFragCoord(fragCoord),

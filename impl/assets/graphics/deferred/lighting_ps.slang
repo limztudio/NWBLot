@@ -21,7 +21,7 @@ NwbDeferredLightingPixelOutput main(NwbDeferredLightingPixelInput input){
 
     const NwbBxdfSurface surface = nwbBxdfLoadSurface(input.uv);
     if(surface.isBackground){
-        output.color = float4(surface.baseColor, 1.0);
+        output.color = half4(surface.baseColor, half(1.0));
         return output;
     }
 
@@ -32,7 +32,7 @@ NwbDeferredLightingPixelOutput main(NwbDeferredLightingPixelInput input){
         half3(1.0)
     );
 
-    output.color = float4(shadedColor, 1.0);
+    output.color = half4(shadedColor, half(1.0));
     return output;
 }
 

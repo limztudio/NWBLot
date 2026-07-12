@@ -18,7 +18,7 @@
 [[vk::binding(NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH, NWB_AVBOIT_TRANSPARENT_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_ExtinctionOverflowDepth;
 
 struct NwbAvboitExtinctionPixelInput{
-    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
+    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] half4 color : COLOR0;
 #if NWB_CSG_ENABLED
     [[vk::location(NWB_MESH_RASTER_WORLD_POSITION_LOCATION)]] float4 worldPosition : TEXCOORD1;
 #endif
@@ -37,7 +37,7 @@ static half4 inColor;
 
 
 void main(NwbAvboitExtinctionPixelInput input, float4 fragCoord : SV_Position){
-    inColor = half4(input.color);
+    inColor = input.color;
 #if NWB_CSG_ENABLED
     if(nwbAvboitCsgPixelDiscard(
         nwbAvboitFullRasterPositionFromLowFragCoord(fragCoord),

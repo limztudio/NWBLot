@@ -16,7 +16,7 @@
 
 
 #define NWB_MESH_RASTER_PAYLOAD_FIELDS \
-    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0; \
+    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] half4 color : COLOR0; \
     [[vk::location(NWB_MESH_RASTER_NORMAL_LOCATION)]] float3 normal : NORMAL0; \
     [[vk::location(NWB_MESH_RASTER_TANGENT_LOCATION)]] float4 tangent : TANGENT0; \
     [[vk::location(NWB_MESH_RASTER_UV0_LOCATION)]] float2 uv0 : TEXCOORD0; \

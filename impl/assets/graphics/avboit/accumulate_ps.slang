@@ -23,14 +23,14 @@
 [[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, NWB_AVBOIT_TRANSPARENT_SET)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
 
 struct NwbAvboitAccumulatePixelInput{
-    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
+    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] half4 color : COLOR0;
     [[vk::location(NWB_MESH_RASTER_NORMAL_LOCATION)]] float3 normal : NORMAL0;
     [[vk::location(NWB_MESH_RASTER_TANGENT_LOCATION)]] float4 tangent : TANGENT0;
     [[vk::location(NWB_MESH_RASTER_WORLD_POSITION_LOCATION)]] float4 worldPosition : TEXCOORD1;
 };
 
 struct NwbAvboitAccumulatePixelOutput{
-    [[vk::location(NWB_AVBOIT_ACCUM_COLOR_LOCATION)]] float4 accumColor : SV_Target0;
+    [[vk::location(NWB_AVBOIT_ACCUM_COLOR_LOCATION)]] half4 accumColor : SV_Target0;
     [[vk::location(NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION)]] float4 accumExtinction : SV_Target1;
 };
 
@@ -50,7 +50,7 @@ static float3 inWorldPosition;
 
 
 NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input, float4 fragCoord : SV_Position){
-    inColor = half4(input.color);
+    inColor = input.color;
     inNormal = input.normal;
     inTangent = input.tangent;
     inWorldPosition = input.worldPosition.xyz;
@@ -78,7 +78,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input, float4 
     );
 
     NwbAvboitAccumulatePixelOutput output;
-    output.accumColor = float4(shadedColor * weightedAlpha, weightedAlpha);
+    output.accumColor = half4(shadedColor * weightedAlpha, weightedAlpha);
     output.accumExtinction = float4(nwbAvboitExtinctionFromAlpha(alpha), 0.0, 0.0, 0.0);
     return output;
 }

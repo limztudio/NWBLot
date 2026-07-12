@@ -13,11 +13,11 @@
 
 struct NwbImguiPixelInput{
     [[vk::location(NWB_IMGUI_RASTER_UV_LOCATION)]] float2 uv : TEXCOORD0;
-    [[vk::location(NWB_IMGUI_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
+    [[vk::location(NWB_IMGUI_RASTER_COLOR_LOCATION)]] half4 color : COLOR0;
 };
 
 struct NwbImguiPixelOutput{
-    [[vk::location(NWB_IMGUI_COLOR_TARGET_LOCATION)]] float4 color : SV_Target0;
+    [[vk::location(NWB_IMGUI_COLOR_TARGET_LOCATION)]] half4 color : SV_Target0;
 };
 
 
@@ -25,11 +25,11 @@ struct NwbImguiPixelOutput{
 
 
 NwbImguiPixelOutput main(NwbImguiPixelInput input){
-    const half4 color = half4(input.color);
+    const half4 color = input.color;
     const half4 texel = half4(g_UiTexture.Sample(g_UiSampler, input.uv));
 
     NwbImguiPixelOutput output;
-    output.color = float4(color * texel);
+    output.color = color * texel;
     return output;
 }
 

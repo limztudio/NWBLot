@@ -19,7 +19,7 @@ struct NwbDeferredCompositePixelInput{
 };
 
 struct NwbDeferredCompositePixelOutput{
-    [[vk::location(NWB_DEFERRED_COLOR_TARGET_LOCATION)]] float4 color : SV_Target0;
+    [[vk::location(NWB_DEFERRED_COLOR_TARGET_LOCATION)]] half4 color : SV_Target0;
 };
 
 
@@ -29,12 +29,12 @@ struct NwbDeferredCompositePixelOutput{
 NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     const half3 opaqueColor = half3(g_OpaqueColor.Sample(g_DeferredSampler, input.uv).rgb);
     const half4 transparentColorAccum = half4(g_AvboitAccumColor.Sample(g_DeferredSampler, input.uv));
-    const float transparentExtinction = g_AvboitAccumExtinction.Sample(g_DeferredSampler, input.uv).r;
-    const half totalTransmittance = half(exp(-min(transparentExtinction, NWB_AVBOIT_EXTINCTION_SATURATION)));
+    const half transparentExtinction = half(g_AvboitAccumExtinction.Sample(g_DeferredSampler, input.uv).r);
+    const half totalTransmittance = exp(-min(transparentExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
     const half3 compositeColor = transparentColorAccum.rgb + opaqueColor * totalTransmittance;
 
     NwbDeferredCompositePixelOutput output;
-    output.color = float4(compositeColor, 1.0);
+    output.color = half4(compositeColor, half(1.0));
     return output;
 }
 

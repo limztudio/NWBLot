@@ -1,6 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // Surfel age-free (U1 recycling): one thread per pool slot. A live surfel whose cell has not been "seen" (covered by a
 // visible spawn tile) for more than maxAge frames is freed -- alive = 0 -- and its slot id is PUSHED onto the free-list

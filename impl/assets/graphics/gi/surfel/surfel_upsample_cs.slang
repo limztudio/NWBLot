@@ -1,6 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // Surfel upsample (U6): reconstruct the full-res surfelIrradiance from the HALF-res surfel_resolve output. The costly
 // (2*EXTENT+1)^3 = 125-cell gather runs at half res; this pass restores full res with a JOINT-BILINEAR filter GATED by

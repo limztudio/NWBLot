@@ -1,6 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // Hardware RayQuery (inline ray tracing) FULL-resolution OPAQUE shadow trace. One compute thread per output pixel
 // inline-traces each light's occlusion ray against the TLAS (shared nwbShadowRqLightVisible) and writes a binary

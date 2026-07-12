@@ -1,6 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // The single engine-owned mesh shader, shared by every material. It is pure geometry: meshlet decode,
 // skinning/transform, culling, raster emit -- none of which is material-specific. It outputs the mesh's own

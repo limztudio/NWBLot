@@ -1,6 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // RGB variant of the soft-shadow a-trous resolve. The a-trous wavelet in shadow_resolve_cs.slang is
 // channel-count-parameterized by NWB_SHADOW_RESOLVE_CHANNELS: the default (scalar, =1) denoises the grayscale soft OPAQUE

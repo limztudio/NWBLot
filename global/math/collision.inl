@@ -1,6 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 #if !defined(NWB_MATH_COLLISION_INCLUDE_INLINE)
 #error "Do not include collision.inl directly. Include collision.h from global/math or simdmath.h elsewhere."

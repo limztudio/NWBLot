@@ -1,6 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // Stage-2 COARSE transparent trace (downscaled). One thread per coarse texel: trace ONE transparent occlusion ray per
 // shadowed light from the block's top-left full-res G-buffer texel and store the colored transmittance into the coarse

@@ -1,6 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // Shared GoogleTest entry point for the NWB test executables. Each test binary links this single object, which
 // performs the engine's common initialization once (Core::Common::InitializerGuard) and then runs every gtest

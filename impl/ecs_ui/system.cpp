@@ -31,6 +31,23 @@ static constexpr f32 s_DefaultFramebufferScale = 1.0f;
 
 static void DrawCallbackResetRenderState(const ImDrawList*, const ImDrawCmd*){}
 
+[[nodiscard]] static SIMDVector BuildUiScaleTranslate(const SIMDVector displayMin, const SIMDVector displaySize){
+    const SIMDVector displayMax = VectorAdd(displayMin, displaySize);
+    const SIMDVector displayExtent = VectorSubtract(displayMax, displayMin);
+    const SIMDVector displaySum = VectorAdd(displayMax, displayMin);
+    const SIMDVector numerators = VectorMergeX(
+        VectorReplicate(2.0f),
+        VectorReplicate(2.0f),
+        displaySum,
+        VectorSplatY(displaySum)
+    );
+    const SIMDVector denominators = VectorMultiply(
+        VectorSwizzle<0, 1, 0, 1>(displayExtent),
+        VectorSet(1.0f, -1.0f, -1.0f, 1.0f)
+    );
+    return VectorDivide(numerators, denominators);
+}
+
 static bool HasTextureRequests(const ImDrawData& drawData){
 #if defined(IMGUI_HAS_TEXTURES)
     if(!drawData.Textures)
@@ -393,19 +410,9 @@ void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer*
 
     const SIMDVector displayMin = VectorSet(drawData.DisplayPos.x, drawData.DisplayPos.y, 0.0f, 0.0f);
     const SIMDVector displaySize = VectorSet(drawData.DisplaySize.x, drawData.DisplaySize.y, 0.0f, 0.0f);
-    const SIMDVector displayMax = VectorAdd(displayMin, displaySize);
-    const f32 left = VectorGetX(displayMin);
-    const f32 right = VectorGetX(displayMax);
-    const f32 top = VectorGetY(displayMin);
-    const f32 bottom = VectorGetY(displayMax);
 
     UiPushConstants pushConstants;
-    pushConstants.scaleTranslate = Float4(
-        2.0f / (right - left),
-        2.0f / (top - bottom),
-        (right + left) / (left - right),
-        (top + bottom) / (bottom - top)
-    );
+    StoreFloat(__hidden_ui::BuildUiScaleTranslate(displayMin, displaySize), &pushConstants.scaleTranslate);
 
     const SIMDVector framebufferExtent = VectorMultiply(
         displaySize,

@@ -10,6 +10,7 @@
 
 #include "cook_metadata.h"
 #include "arena_names.h"
+#include "auto_registration.h"
 
 #include <global/core/common/log.h>
 
@@ -34,61 +35,14 @@ struct AutoMetadataParser{
     AssetValueMetadataParseFunction valueFunction = nullptr;
 };
 
-struct AutoMetadataParserQueue{
-    CookArena arena;
-    Futex mutex;
-    CookVector<AutoMetadataParser> parsers;
-
-    AutoMetadataParserQueue()
-        : arena(AssetsArenaScope::s_MetadataParserQueueArena)
-        , parsers(arena)
-    {}
-};
-
-struct AutoAssetBunchExpanderQueue{
-    CookArena arena;
-    Futex mutex;
-    CookVector<AssetBunchExpandFunction> functions;
-
-    AutoAssetBunchExpanderQueue()
-        : arena(AssetsArenaScope::s_BunchExpanderQueueArena)
-        , functions(arena)
-    {}
-};
-
-AutoMetadataParserQueue& QueryAutoMetadataParserQueue(){
-    static AutoMetadataParserQueue queue;
+AutoRegistrationQueue<AutoMetadataParser>& QueryAutoMetadataParserQueue(){
+    static AutoRegistrationQueue<AutoMetadataParser> queue(AssetsArenaScope::s_MetadataParserQueueArena);
     return queue;
 }
 
-AutoAssetBunchExpanderQueue& QueryAutoAssetBunchExpanderQueue(){
-    static AutoAssetBunchExpanderQueue queue;
+AutoRegistrationQueue<AssetBunchExpandFunction>& QueryAutoAssetBunchExpanderQueue(){
+    static AutoRegistrationQueue<AssetBunchExpandFunction> queue(AssetsArenaScope::s_BunchExpanderQueueArena);
     return queue;
-}
-
-static bool ContainsMetadataParser(
-    const CookVector<AutoMetadataParser>& parsers,
-    const AssetDocumentMetadataParseFunction documentFunction,
-    const AssetValueMetadataParseFunction valueFunction
-){
-    for(const AutoMetadataParser& current : parsers){
-        if(current.documentFunction == documentFunction && current.valueFunction == valueFunction)
-            return true;
-    }
-
-    return false;
-}
-
-static bool ContainsAssetBunchExpander(
-    const CookVector<AssetBunchExpandFunction>& functions,
-    const AssetBunchExpandFunction function
-){
-    for(const AssetBunchExpandFunction current : functions){
-        if(current == function)
-            return true;
-    }
-
-    return false;
 }
 
 [[nodiscard]] static bool ParseMetascriptDocument(CookArena& cookArena, const Path& nwbFilePath, Core::Metascript::Document& outDoc){
@@ -221,13 +175,15 @@ AssetMetadataParserAutoRegistrar::AssetMetadataParserAutoRegistrar(
         return;
 
     auto& queue = __hidden_cook_metadata::QueryAutoMetadataParserQueue();
-    ScopedLock lock(queue.mutex);
-    if(!__hidden_cook_metadata::ContainsMetadataParser(queue.parsers, documentFunction, valueFunction)){
-        queue.parsers.push_back(__hidden_cook_metadata::AutoMetadataParser{
+    queue.appendUnique(
+        __hidden_cook_metadata::AutoMetadataParser{
             documentFunction,
             valueFunction
-        });
-    }
+        },
+        [](const __hidden_cook_metadata::AutoMetadataParser& lhs, const __hidden_cook_metadata::AutoMetadataParser& rhs){
+            return lhs.documentFunction == rhs.documentFunction && lhs.valueFunction == rhs.valueFunction;
+        }
+    );
 }
 
 AssetBunchExpanderAutoRegistrar::AssetBunchExpanderAutoRegistrar(const AssetBunchExpandFunction function){
@@ -235,9 +191,7 @@ AssetBunchExpanderAutoRegistrar::AssetBunchExpanderAutoRegistrar(const AssetBunc
         return;
 
     auto& queue = __hidden_cook_metadata::QueryAutoAssetBunchExpanderQueue();
-    ScopedLock lock(queue.mutex);
-    if(!__hidden_cook_metadata::ContainsAssetBunchExpander(queue.functions, function))
-        queue.functions.push_back(function);
+    queue.appendUnique(function, [](const AssetBunchExpandFunction lhs, const AssetBunchExpandFunction rhs){ return lhs == rhs; });
 }
 
 bool DiscoverFilesWithExtension(
@@ -335,11 +289,7 @@ bool AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlannedFileCou
 AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context){
     Core::Alloc::ScratchArena scratchArena(AssetsArenaScope::s_DocumentMetadataParsersScratch);
     Vector<__hidden_cook_metadata::AutoMetadataParser, Core::Alloc::ScratchArena> parsers{scratchArena};
-    {
-        auto& queue = __hidden_cook_metadata::QueryAutoMetadataParserQueue();
-        ScopedLock lock(queue.mutex);
-        AssignTriviallyCopyableVector(parsers, queue.parsers);
-    }
+    __hidden_cook_metadata::QueryAutoMetadataParserQueue().copyTo(parsers);
 
     for(const __hidden_cook_metadata::AutoMetadataParser& parser : parsers){
         if(parser.documentFunction == nullptr)
@@ -357,11 +307,7 @@ AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocu
 AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context){
     Core::Alloc::ScratchArena scratchArena(AssetsArenaScope::s_ValueMetadataParsersScratch);
     Vector<__hidden_cook_metadata::AutoMetadataParser, Core::Alloc::ScratchArena> parsers{scratchArena};
-    {
-        auto& queue = __hidden_cook_metadata::QueryAutoMetadataParserQueue();
-        ScopedLock lock(queue.mutex);
-        AssignTriviallyCopyableVector(parsers, queue.parsers);
-    }
+    __hidden_cook_metadata::QueryAutoMetadataParserQueue().copyTo(parsers);
 
     for(const __hidden_cook_metadata::AutoMetadataParser& parser : parsers){
         if(parser.valueFunction == nullptr)
@@ -379,11 +325,7 @@ AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMe
 AssetBunchExpandResult::Enum TryAutoCollectedAssetBunchExpanders(AssetBunchExpandContext& context){
     Core::Alloc::ScratchArena scratchArena(AssetsArenaScope::s_AssetBunchExpandersScratch);
     Vector<AssetBunchExpandFunction, Core::Alloc::ScratchArena> functions{scratchArena};
-    {
-        auto& queue = __hidden_cook_metadata::QueryAutoAssetBunchExpanderQueue();
-        ScopedLock lock(queue.mutex);
-        AssignTriviallyCopyableVector(functions, queue.functions);
-    }
+    __hidden_cook_metadata::QueryAutoAssetBunchExpanderQueue().copyTo(functions);
 
     for(const AssetBunchExpandFunction function : functions){
         if(function == nullptr)

@@ -10,6 +10,7 @@
 
 #include "cook_entry_registry.h"
 #include "arena_names.h"
+#include "auto_registration.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,32 +28,9 @@ namespace __hidden_cook_entry_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AutoRegistrationQueue{
-    CookArena arena;
-    Futex mutex;
-    CookVector<CookEntryRegistrationFunction> functions;
-
-    AutoRegistrationQueue()
-        : arena(AssetsArenaScope::s_AutoRegistrationQueueArena)
-        , functions(arena)
-    {}
-};
-
-AutoRegistrationQueue& QueryAutoRegistrationQueue(){
-    static AutoRegistrationQueue queue;
+AutoRegistrationQueue<CookEntryRegistrationFunction>& QueryAutoRegistrationQueue(){
+    static AutoRegistrationQueue<CookEntryRegistrationFunction> queue(AssetsArenaScope::s_AutoRegistrationQueueArena);
     return queue;
-}
-
-static bool ContainsRegistrationFunction(
-    const CookVector<CookEntryRegistrationFunction>& functions,
-    const CookEntryRegistrationFunction function
-){
-    for(const CookEntryRegistrationFunction current : functions){
-        if(current == function)
-            return true;
-    }
-
-    return false;
 }
 
 
@@ -69,19 +47,13 @@ CookEntryAutoRegistrar::CookEntryAutoRegistrar(const CookEntryRegistrationFuncti
         return;
 
     auto& queue = __hidden_cook_entry_registry::QueryAutoRegistrationQueue();
-    ScopedLock lock(queue.mutex);
-    if(!__hidden_cook_entry_registry::ContainsRegistrationFunction(queue.functions, function))
-        queue.functions.push_back(function);
+    queue.appendUnique(function, [](const CookEntryRegistrationFunction lhs, const CookEntryRegistrationFunction rhs){ return lhs == rhs; });
 }
 
 bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry){
     Core::Alloc::ScratchArena scratchArena(AssetsArenaScope::s_RegisterAutoCollectedScratch);
     Vector<CookEntryRegistrationFunction, Core::Alloc::ScratchArena> functions{scratchArena};
-    {
-        auto& queue = __hidden_cook_entry_registry::QueryAutoRegistrationQueue();
-        ScopedLock lock(queue.mutex);
-        AssignTriviallyCopyableVector(functions, queue.functions);
-    }
+    __hidden_cook_entry_registry::QueryAutoRegistrationQueue().copyTo(functions);
 
     for(const CookEntryRegistrationFunction function : functions){
         if(function == nullptr)

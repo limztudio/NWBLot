@@ -2,6 +2,30 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(AssetsGraphics, AutoRegistrationQueueDeduplicatesAndSnapshots){
+    NWB::Core::Assets::AutoRegistrationQueue<u32> queue(s_AutoRegistrationQueueArena);
+    const auto equal = [](const u32 lhs, const u32 rhs){ return lhs == rhs; };
+
+    queue.appendUnique(7u, equal);
+    queue.appendUnique(7u, equal);
+    queue.appendUnique(19u, equal);
+
+    NWB::Core::Alloc::ScratchArena scratchArena(s_AutoRegistrationQueueArena);
+    Vector<u32, NWB::Core::Alloc::ScratchArena> values(scratchArena);
+    queue.copyTo(values);
+    ASSERT_EQ(values.size(), 2u);
+    EXPECT_EQ(values[0u], 7u);
+    EXPECT_EQ(values[1u], 19u);
+
+    queue.appendUnique(23u, equal);
+    EXPECT_EQ(values.size(), 2u);
+
+    queue.copyTo(values);
+    ASSERT_EQ(values.size(), 3u);
+    EXPECT_EQ(values[2u], 23u);
+}
+
+
 class ProjectProbeAsset final : public NWB::Core::Assets::TypedAsset<ProjectProbeAsset>{
 public:
     NWB_DEFINE_ASSET_TYPE("project_probe")

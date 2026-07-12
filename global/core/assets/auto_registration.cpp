@@ -24,53 +24,23 @@ namespace __hidden_auto_registration{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AutoFactoryQueue{
-    AssetArena arena;
-    Futex mutex;
-    AssetVector<AssetCodecFactory> codecFactories;
-    AssetVector<AssetCookerFactory> cookerFactories;
-
-    AutoFactoryQueue()
-        : arena(AssetsArenaScope::s_AutoFactoryQueueArena)
-        , codecFactories(arena)
-        , cookerFactories(arena)
-    {}
-};
-
-AutoFactoryQueue& QueryAutoFactoryQueue(){
-    static AutoFactoryQueue autoFactoryQueue;
-    return autoFactoryQueue;
+AutoRegistrationQueue<AssetCodecFactory>& QueryAutoCodecFactoryQueue(){
+    static AutoRegistrationQueue<AssetCodecFactory> queue(AssetsArenaScope::s_AutoCodecFactoryQueueArena);
+    return queue;
 }
 
-template<typename FactoryVector, typename FactoryT>
-bool ContainsFactory(const FactoryVector& factories, const FactoryT factory){
-    for(const FactoryT current : factories){
-        if(current == factory)
-            return true;
-    }
-
-    return false;
+AutoRegistrationQueue<AssetCookerFactory>& QueryAutoCookerFactoryQueue(){
+    static AutoRegistrationQueue<AssetCookerFactory> queue(AssetsArenaScope::s_AutoCookerFactoryQueueArena);
+    return queue;
 }
 
 template<typename FactoryT>
-bool InitializeAutoFactory(AssetVector<FactoryT>& factories, const FactoryT factory){
+bool InitializeAutoFactory(AutoRegistrationQueue<FactoryT>& queue, const FactoryT factory){
     if(factory == nullptr)
         return true;
 
-    auto& autoFactoryQueue = QueryAutoFactoryQueue();
-    ScopedLock lock(autoFactoryQueue.mutex);
-    if(!ContainsFactory(factories, factory))
-        factories.push_back(factory);
-
+    queue.appendUnique(factory, [](const FactoryT lhs, const FactoryT rhs){ return lhs == rhs; });
     return true;
-}
-
-template<typename FactoryT>
-using ScratchFactoryVector = Vector<FactoryT, Alloc::ScratchArena>;
-
-template<typename FactoryT>
-void CopyQueuedFactories(const AssetVector<FactoryT>& queuedFactories, ScratchFactoryVector<FactoryT>& outFactories){
-    AssignTriviallyCopyableVector(outFactories, queuedFactories);
 }
 
 template<typename FactoryVector, typename CreateProduct, typename RegisterProduct, typename LogNullProduct, typename LogRegisterFailure>
@@ -106,24 +76,24 @@ void RegisterFactoryProducts(
 
 
 bool AssetCodecAutoRegistrar::initialize(){
-    auto& autoFactoryQueue = __hidden_auto_registration::QueryAutoFactoryQueue();
-    return __hidden_auto_registration::InitializeAutoFactory(autoFactoryQueue.codecFactories, m_factory);
+    return __hidden_auto_registration::InitializeAutoFactory(
+        __hidden_auto_registration::QueryAutoCodecFactoryQueue(),
+        m_factory
+    );
 }
 
 bool AssetCookerAutoRegistrar::initialize(){
-    auto& autoFactoryQueue = __hidden_auto_registration::QueryAutoFactoryQueue();
-    return __hidden_auto_registration::InitializeAutoFactory(autoFactoryQueue.cookerFactories, m_factory);
+    return __hidden_auto_registration::InitializeAutoFactory(
+        __hidden_auto_registration::QueryAutoCookerFactoryQueue(),
+        m_factory
+    );
 }
 
 
 void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
     Alloc::ScratchArena scratchArena(AssetsArenaScope::s_RegisterCodecsScratch);
-    __hidden_auto_registration::ScratchFactoryVector<AssetCodecFactory> codecFactories{scratchArena};
-    {
-        auto& autoFactoryQueue = __hidden_auto_registration::QueryAutoFactoryQueue();
-        ScopedLock lock(autoFactoryQueue.mutex);
-        __hidden_auto_registration::CopyQueuedFactories(autoFactoryQueue.codecFactories, codecFactories);
-    }
+    Vector<AssetCodecFactory, Alloc::ScratchArena> codecFactories{scratchArena};
+    __hidden_auto_registration::QueryAutoCodecFactoryQueue().copyTo(codecFactories);
 
     __hidden_auto_registration::RegisterFactoryProducts(
         codecFactories,
@@ -136,12 +106,8 @@ void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
 
 void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, AssetArena& arena){
     Alloc::ScratchArena scratchArena(AssetsArenaScope::s_RegisterCookersScratch);
-    __hidden_auto_registration::ScratchFactoryVector<AssetCookerFactory> cookerFactories{scratchArena};
-    {
-        auto& autoFactoryQueue = __hidden_auto_registration::QueryAutoFactoryQueue();
-        ScopedLock lock(autoFactoryQueue.mutex);
-        __hidden_auto_registration::CopyQueuedFactories(autoFactoryQueue.cookerFactories, cookerFactories);
-    }
+    Vector<AssetCookerFactory, Alloc::ScratchArena> cookerFactories{scratchArena};
+    __hidden_auto_registration::QueryAutoCookerFactoryQueue().copyTo(cookerFactories);
 
     __hidden_auto_registration::RegisterFactoryProducts(
         cookerFactories,

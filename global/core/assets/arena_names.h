@@ -26,7 +26,8 @@ namespace AssetsArenaScope{
 inline constexpr Name s_ProcessPendingScratch("core/assets/manager_process_pending_scratch");
 inline constexpr Name s_DescribeAvailableCookersScratch("core/assets/describe_available_cookers_scratch");
 
-inline constexpr Name s_AutoFactoryQueueArena("core/assets/auto_factory_queue");
+inline constexpr Name s_AutoCodecFactoryQueueArena("core/assets/auto_codec_factory_queue");
+inline constexpr Name s_AutoCookerFactoryQueueArena("core/assets/auto_cooker_factory_queue");
 inline constexpr Name s_RegisterCodecsScratch("core/assets/register_auto_collected_codecs_scratch");
 inline constexpr Name s_RegisterCookersScratch("core/assets/register_auto_collected_cookers_scratch");
 

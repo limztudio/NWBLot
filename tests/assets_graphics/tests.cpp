@@ -8,6 +8,7 @@
 #include <impl/assets_model/asset.h>
 #include <impl/assets_bunch/cook.h>
 #include <impl/assets_volume/cooker.h>
+#include <global/core/assets/auto_registration.h>
 #include <global/core/assets/cook_entry_registry.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/binary_payload.h>
@@ -63,6 +64,7 @@ inline constexpr Name s_ShaderScratchArena("tests/assets_graphics/shader");
 inline constexpr Name s_ModelFixtureScratchArena("tests/assets_graphics/model_fixture");
 inline constexpr Name s_CodecScratchArena("tests/assets_graphics/codec");
 inline constexpr Name s_ProjectCookEntryArena("tests/assets_graphics/project_cook_entry");
+inline constexpr Name s_AutoRegistrationQueueArena("tests/assets_graphics/auto_registration_queue");
 
 
 struct AssetsGraphicsTestArenaTag{};

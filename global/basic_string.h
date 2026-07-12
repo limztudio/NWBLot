@@ -125,6 +125,35 @@ concept CanMakeCharView = requires(const In& input){ AStringView(input); };
 template<typename In>
 concept CanMakeWCharView = requires(const In& input){ WStringView(input); };
 
+inline constexpr u8 s_Utf8ContinuationMask = 0xC0u;
+inline constexpr u8 s_Utf8ContinuationMarker = 0x80u;
+inline constexpr u8 s_Utf8OneByteMaxExclusive = 0x80u;
+inline constexpr u8 s_Utf8TwoByteMask = 0xE0u;
+inline constexpr u8 s_Utf8TwoByteMarker = 0xC0u;
+inline constexpr u8 s_Utf8ThreeByteMask = 0xF0u;
+inline constexpr u8 s_Utf8ThreeByteMarker = 0xE0u;
+inline constexpr u8 s_Utf8FourByteMask = 0xF8u;
+inline constexpr u8 s_Utf8FourByteMarker = 0xF0u;
+inline constexpr u8 s_Utf8TwoBytePayloadMask = 0x1Fu;
+inline constexpr u8 s_Utf8ThreeBytePayloadMask = 0x0Fu;
+inline constexpr u8 s_Utf8FourBytePayloadMask = 0x07u;
+inline constexpr u8 s_Utf8ContinuationPayloadMask = 0x3Fu;
+inline constexpr u32 s_Utf8ContinuationPayloadBits = 6u;
+inline constexpr u32 s_Utf8OneByteMaxCodePoint = 0x7Fu;
+inline constexpr u32 s_Utf8TwoByteMaxCodePoint = 0x7FFu;
+inline constexpr u32 s_Utf8ThreeByteMaxCodePoint = 0xFFFFu;
+inline constexpr u32 s_Utf8TwoByteMinCodePoint = 0x80u;
+inline constexpr u32 s_Utf8ThreeByteMinCodePoint = 0x800u;
+inline constexpr u32 s_Utf8FourByteMinCodePoint = 0x10000u;
+inline constexpr u32 s_UnicodeMaxCodePoint = 0x10FFFFu;
+inline constexpr u32 s_UnicodeHighSurrogateMin = 0xD800u;
+inline constexpr u32 s_UnicodeHighSurrogateMax = 0xDBFFu;
+inline constexpr u32 s_UnicodeLowSurrogateMin = 0xDC00u;
+inline constexpr u32 s_UnicodeLowSurrogateMax = 0xDFFFu;
+inline constexpr u32 s_Utf16SurrogatePayloadBits = 10u;
+inline constexpr u32 s_Utf16SurrogatePayloadMask = 0x3FFu;
+inline constexpr u32 s_InvalidCodePointReplacement = static_cast<u32>('?');
+
 template<typename In>
 struct StringConvertArg{
     const In& value;
@@ -132,45 +161,45 @@ struct StringConvertArg{
 
 template<typename Out>
 inline void WriteUtf8CodePoint(Out& out, u32 codePoint){
-    if(codePoint <= 0x7F){
+    if(codePoint <= s_Utf8OneByteMaxCodePoint){
         *out++ = static_cast<char>(codePoint);
         return;
     }
 
-    if(codePoint <= 0x7FF){
-        *out++ = static_cast<char>(0xC0u | (codePoint >> 6));
-        *out++ = static_cast<char>(0x80u | (codePoint & 0x3Fu));
+    if(codePoint <= s_Utf8TwoByteMaxCodePoint){
+        *out++ = static_cast<char>(s_Utf8TwoByteMarker | (codePoint >> s_Utf8ContinuationPayloadBits));
+        *out++ = static_cast<char>(s_Utf8ContinuationMarker | (codePoint & s_Utf8ContinuationPayloadMask));
         return;
     }
 
-    if(codePoint <= 0xFFFF){
-        *out++ = static_cast<char>(0xE0u | (codePoint >> 12));
-        *out++ = static_cast<char>(0x80u | ((codePoint >> 6) & 0x3Fu));
-        *out++ = static_cast<char>(0x80u | (codePoint & 0x3Fu));
+    if(codePoint <= s_Utf8ThreeByteMaxCodePoint){
+        *out++ = static_cast<char>(s_Utf8ThreeByteMarker | (codePoint >> (s_Utf8ContinuationPayloadBits * 2u)));
+        *out++ = static_cast<char>(s_Utf8ContinuationMarker | ((codePoint >> s_Utf8ContinuationPayloadBits) & s_Utf8ContinuationPayloadMask));
+        *out++ = static_cast<char>(s_Utf8ContinuationMarker | (codePoint & s_Utf8ContinuationPayloadMask));
         return;
     }
 
-    if(codePoint <= 0x10FFFF){
-        *out++ = static_cast<char>(0xF0u | (codePoint >> 18));
-        *out++ = static_cast<char>(0x80u | ((codePoint >> 12) & 0x3Fu));
-        *out++ = static_cast<char>(0x80u | ((codePoint >> 6) & 0x3Fu));
-        *out++ = static_cast<char>(0x80u | (codePoint & 0x3Fu));
+    if(codePoint <= s_UnicodeMaxCodePoint){
+        *out++ = static_cast<char>(s_Utf8FourByteMarker | (codePoint >> (s_Utf8ContinuationPayloadBits * 3u)));
+        *out++ = static_cast<char>(s_Utf8ContinuationMarker | ((codePoint >> (s_Utf8ContinuationPayloadBits * 2u)) & s_Utf8ContinuationPayloadMask));
+        *out++ = static_cast<char>(s_Utf8ContinuationMarker | ((codePoint >> s_Utf8ContinuationPayloadBits) & s_Utf8ContinuationPayloadMask));
+        *out++ = static_cast<char>(s_Utf8ContinuationMarker | (codePoint & s_Utf8ContinuationPayloadMask));
         return;
     }
 
-    *out++ = '?';
+    *out++ = static_cast<char>(s_InvalidCodePointReplacement);
 }
 
 template<typename Out>
 inline void WriteWideCodePoint(Out& out, u32 codePoint){
-    if(codePoint > 0x10FFFF)
-        codePoint = static_cast<u32>('?');
+    if(codePoint > s_UnicodeMaxCodePoint)
+        codePoint = s_InvalidCodePointReplacement;
 
 #if WCHAR_MAX <= 0xFFFF
-    if(codePoint > 0xFFFF){
-        codePoint -= 0x10000u;
-        *out++ = static_cast<wchar>(0xD800u + (codePoint >> 10));
-        *out++ = static_cast<wchar>(0xDC00u + (codePoint & 0x3FFu));
+    if(codePoint > s_Utf8ThreeByteMaxCodePoint){
+        codePoint -= s_Utf8FourByteMinCodePoint;
+        *out++ = static_cast<wchar>(s_UnicodeHighSurrogateMin + (codePoint >> s_Utf16SurrogatePayloadBits));
+        *out++ = static_cast<wchar>(s_UnicodeLowSurrogateMin + (codePoint & s_Utf16SurrogatePayloadMask));
         return;
     }
 #endif
@@ -184,17 +213,18 @@ inline void WriteWStringAsUtf8(Out& out, const WStringView src){
         u32 codePoint = static_cast<u32>(src[i]);
 
 #if WCHAR_MAX <= 0xFFFF
-        if(codePoint >= 0xD800u && codePoint <= 0xDBFFu && (i + 1) < src.size()){
+        if(codePoint >= s_UnicodeHighSurrogateMin && codePoint <= s_UnicodeHighSurrogateMax && (i + 1) < src.size()){
             const u32 low = static_cast<u32>(src[i + 1]);
-            if(low >= 0xDC00u && low <= 0xDFFFu){
-                codePoint = 0x10000u + (((codePoint - 0xD800u) << 10) | (low - 0xDC00u));
+            if(low >= s_UnicodeLowSurrogateMin && low <= s_UnicodeLowSurrogateMax){
+                codePoint = s_Utf8FourByteMinCodePoint
+                    + (((codePoint - s_UnicodeHighSurrogateMin) << s_Utf16SurrogatePayloadBits) | (low - s_UnicodeLowSurrogateMin));
                 ++i;
             }
             else
-                codePoint = static_cast<u32>('?');
+                codePoint = s_InvalidCodePointReplacement;
         }
-        else if(codePoint >= 0xD800u && codePoint <= 0xDFFFu){
-            codePoint = static_cast<u32>('?');
+        else if(codePoint >= s_UnicodeHighSurrogateMin && codePoint <= s_UnicodeLowSurrogateMax){
+            codePoint = s_InvalidCodePointReplacement;
         }
 #endif
 
@@ -219,37 +249,46 @@ inline void WriteUtf8AsWString(Out& out, const AStringView src){
     usize i = 0u;
     while(i < src.size()){
         const u8 first = static_cast<u8>(src[i++]);
-        u32 codePoint = static_cast<u32>('?');
+        u32 codePoint = s_InvalidCodePointReplacement;
 
-        if(first < 0x80u){
+        if(first < s_Utf8OneByteMaxExclusive){
             codePoint = first;
         }
-        else if((first & 0xE0u) == 0xC0u && i < src.size()){
+        else if((first & s_Utf8TwoByteMask) == s_Utf8TwoByteMarker && i < src.size()){
             const u8 second = static_cast<u8>(src[i]);
-            if((second & 0xC0u) == 0x80u){
+            if((second & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker){
                 ++i;
-                codePoint = (static_cast<u32>(first & 0x1Fu) << 6) | static_cast<u32>(second & 0x3Fu);
+                codePoint = (static_cast<u32>(first & s_Utf8TwoBytePayloadMask) << s_Utf8ContinuationPayloadBits)
+                    | static_cast<u32>(second & s_Utf8ContinuationPayloadMask);
             }
         }
-        else if((first & 0xF0u) == 0xE0u && (i + 1u) < src.size()){
+        else if((first & s_Utf8ThreeByteMask) == s_Utf8ThreeByteMarker && (i + 1u) < src.size()){
             const u8 second = static_cast<u8>(src[i]);
             const u8 third = static_cast<u8>(src[i + 1u]);
-            if((second & 0xC0u) == 0x80u && (third & 0xC0u) == 0x80u){
+            if((second & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker && (third & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker){
                 i += 2u;
-                codePoint = (static_cast<u32>(first & 0x0Fu) << 12) | (static_cast<u32>(second & 0x3Fu) << 6) | static_cast<u32>(third & 0x3Fu);
+                codePoint =
+                    (static_cast<u32>(first & s_Utf8ThreeBytePayloadMask) << (s_Utf8ContinuationPayloadBits * 2u))
+                    | (static_cast<u32>(second & s_Utf8ContinuationPayloadMask) << s_Utf8ContinuationPayloadBits)
+                    | static_cast<u32>(third & s_Utf8ContinuationPayloadMask)
+                ;
             }
         }
-        else if((first & 0xF8u) == 0xF0u && (i + 2u) < src.size()){
+        else if((first & s_Utf8FourByteMask) == s_Utf8FourByteMarker && (i + 2u) < src.size()){
             const u8 second = static_cast<u8>(src[i]);
             const u8 third = static_cast<u8>(src[i + 1u]);
             const u8 fourth = static_cast<u8>(src[i + 2u]);
-            if((second & 0xC0u) == 0x80u && (third & 0xC0u) == 0x80u && (fourth & 0xC0u) == 0x80u){
+            if(
+                (second & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker
+                && (third & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker
+                && (fourth & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker
+            ){
                 i += 3u;
                 codePoint =
-                    (static_cast<u32>(first & 0x07u) << 18)
-                    | (static_cast<u32>(second & 0x3Fu) << 12)
-                    | (static_cast<u32>(third & 0x3Fu) << 6)
-                    | static_cast<u32>(fourth & 0x3Fu)
+                    (static_cast<u32>(first & s_Utf8FourBytePayloadMask) << (s_Utf8ContinuationPayloadBits * 3u))
+                    | (static_cast<u32>(second & s_Utf8ContinuationPayloadMask) << (s_Utf8ContinuationPayloadBits * 2u))
+                    | (static_cast<u32>(third & s_Utf8ContinuationPayloadMask) << s_Utf8ContinuationPayloadBits)
+                    | static_cast<u32>(fourth & s_Utf8ContinuationPayloadMask)
                 ;
             }
         }

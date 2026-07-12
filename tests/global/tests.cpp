@@ -163,6 +163,20 @@ TEST(Global, AllocationSizeHelpers){
     EXPECT_EQ(Alignment(16u, 48u), 48u);
 }
 
+TEST(Global, Utf8CodePointConversionsPreserveMultibyteText){
+    NWB::Tests::TestArena<> testArena;
+    const WStringView source(L"\u0024\u00A2\u20AC");
+    const AStringView expected("\x24\xC2\xA2\xE2\x82\xAC");
+
+    const auto encoded = BasicStringDetail::WideToUtf8(testArena.arena, source);
+    EXPECT_EQ(AStringView(encoded.data(), encoded.size()), expected);
+
+    BasicString<wchar, NWB::Core::Alloc::GlobalArena> decoded{testArena.arena};
+    auto output = std::back_inserter(decoded);
+    BasicStringDetail::WriteUtf8AsWString(output, expected);
+    EXPECT_EQ(WStringView(decoded.data(), decoded.size()), source);
+}
+
 TEST(Global, InplaceFunctionInvokesAndMoves){
     i32 value = 0;
     InplaceFunction<64u> func([&value](){ value += 3; });

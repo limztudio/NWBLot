@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/kernel/arena_names.h>
 
-#include <global/math/convert.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,96 +81,6 @@ struct MaterialTypedByteRangeCache{
     }
 }
 
-
-// CSG carved-cap surfaces are lit by the receiver material's BXDF; the cap-fill PS reads the receiver's
-// base color out of the per-receiver GPU range. By convention the receiver's albedo is the constant-class
-// typed field named "base_color"; a material that does not declare it falls back to a neutral default.
-inline constexpr Name s_CsgReceiverBaseColorFieldName("base_color");
-inline constexpr Float4 s_CsgReceiverDefaultBaseColor(0.78f, 0.72f, 0.76f, 1.0f);
-
-[[nodiscard]] static bool ReadMaterialFieldFloat4(
-    const MaterialTypedByteVector& blockBytes,
-    const u32 fieldByteOffset,
-    const MaterialLayoutFieldType::Enum fieldType,
-    Float4& outValue
-){
-    const u32 componentCount = MaterialLayoutFieldComponentCount(fieldType);
-    if(componentCount != 4u)
-        return false;
-
-    const u32 fieldByteSize = MaterialLayoutFieldByteSize(fieldType);
-    if(fieldByteSize == 0u
-        || fieldByteOffset > blockBytes.size()
-        || fieldByteSize > static_cast<u32>(blockBytes.size()) - fieldByteOffset
-    )
-        return false;
-
-    const u8* fieldBytes = blockBytes.data() + fieldByteOffset;
-    switch(MaterialLayoutFieldValueType(fieldType)){
-    case MaterialParameterValueType::Float:{
-        f32 components[4];
-        NWB_MEMCPY(components, sizeof(components), fieldBytes, sizeof(components));
-        outValue = Float4(components[0], components[1], components[2], components[3]);
-        return true;
-    }
-    case MaterialParameterValueType::Half:{
-        Half components[4];
-        NWB_MEMCPY(components, sizeof(components), fieldBytes, sizeof(components));
-        outValue = Float4(
-            ConvertHalfToFloat(components[0]),
-            ConvertHalfToFloat(components[1]),
-            ConvertHalfToFloat(components[2]),
-            ConvertHalfToFloat(components[3])
-        );
-        return true;
-    }
-    default:
-        return false;
-    }
-}
-
-// Walks the constant-class typed layout blocks (matching splitMaterialTypedBytesByClass ordering) to read
-// the receiver albedo. Returns the neutral default when the material has no float4/half4 "base_color".
-[[nodiscard]] static Float4 ResolveCsgReceiverBaseColor(const MaterialSurfaceInfo& materialInfo){
-    u32 constantBlockByteBegin = 0u;
-    for(const MaterialTypedLayoutBlock& block : materialInfo.typedLayoutBlocks){
-        if(block.blockClass != MaterialBlockClass::MaterialConstant)
-            continue;
-        if(block.byteSize > Limit<u32>::s_Max - constantBlockByteBegin)
-            break;
-
-        const usize fieldBegin = static_cast<usize>(block.fieldBegin);
-        const usize fieldCount = static_cast<usize>(block.fieldCount);
-        if(fieldBegin > materialInfo.typedLayoutFields.size()
-            || fieldCount > materialInfo.typedLayoutFields.size() - fieldBegin
-        ){
-            constantBlockByteBegin += block.byteSize;
-            continue;
-        }
-
-        for(usize fieldIndex = fieldBegin; fieldIndex < fieldBegin + fieldCount; ++fieldIndex){
-            const MaterialTypedLayoutField& field = materialInfo.typedLayoutFields[fieldIndex];
-            if(field.fieldName != s_CsgReceiverBaseColorFieldName)
-                continue;
-            if(field.offset > Limit<u32>::s_Max - constantBlockByteBegin)
-                break;
-
-            Float4 baseColor;
-            if(ReadMaterialFieldFloat4(
-                materialInfo.constantTypedBytes,
-                constantBlockByteBegin + field.offset,
-                field.fieldType,
-                baseColor
-            ))
-                return baseColor;
-            break;
-        }
-
-        constantBlockByteBegin += block.byteSize;
-    }
-
-    return s_CsgReceiverDefaultBaseColor;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -505,7 +414,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             csgClipCandidate
             && m_renderer.csgSystem().resolveCsgReceiverClipDrawInfo(
                 *csgReceiverLookupPtr,
-                entity,
+                csgReceiverState,
                 mesh.csgLocalBounds,
                 transform,
                 csgClipInfo
@@ -608,7 +517,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         if(csgClipActive){
             if(!m_renderer.csgSystem().appendCsgReceiverClipData(
                 *csgReceiverLookupPtr,
-                entity,
+                csgReceiverState,
                 mesh.csgLocalBounds,
                 transform,
                 framebufferInfo.width,
@@ -620,7 +529,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             // Carry the receiver's BXDF id + albedo so the CSG cap-fill pass lights the carved surface with
             // the receiver material's shading model instead of a hard-coded color.
             csgRange.shadingModelId = materialInfo->shadingModelId;
-            csgRange.baseColor = __hidden_material_pass::ResolveCsgReceiverBaseColor(*materialInfo);
+            csgRange.baseColor = materialInfo->csgReceiverBaseColor;
             NWB_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());
             csgFrameData.receiverRanges[instanceIndex] = csgRange;
         }

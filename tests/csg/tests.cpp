@@ -379,6 +379,26 @@ TEST(Csg, CsgFrameReceiverLookup){
         EXPECT_EQ(opaqueDrawState.receiverKind, NWB::Impl::CsgReceiverKind::Static);
         EXPECT_EQ(opaqueDrawState.cutterCount, 2u);
 
+        usize resolvedCutterCount = 0u;
+        {
+            NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+            const NWB::Impl::CsgFrameReceiverLookup receiverLookup(testWorld.world, scratchArena);
+            NWB::Impl::CsgReceiverDrawState resolvedDrawState;
+            ASSERT_TRUE(receiverLookup.resolveReceiverDrawState(
+                receiverEntity.id(),
+                NWB::Impl::CsgReceiverPass::Opaque,
+                resolvedDrawState
+            ));
+            receiverLookup.forEachReceiverCutter(
+                resolvedDrawState,
+                [&](const NWB::Core::ECS::EntityID, const NWB::Impl::CsgCutterComponent& resolvedCutter){
+                    EXPECT_EQ(resolvedCutter.receiverGroup, receiver.receiverGroup);
+                    ++resolvedCutterCount;
+                }
+            );
+        }
+        EXPECT_EQ(resolvedCutterCount, 2u);
+
         NWB::Impl::CsgReceiverDrawState transparentDrawState;
         EXPECT_TRUE(ResolveTestCsgReceiverDrawState(
             testWorld,

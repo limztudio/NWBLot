@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/kernel/renderer_private.h>
+#include <global/math/convert.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -12,6 +13,96 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_material_surface{
+
+
+inline constexpr Name s_CsgReceiverBaseColorFieldName("base_color");
+
+[[nodiscard]] static bool ReadMaterialFieldFloat4(
+    const MaterialTypedByteVector& blockBytes,
+    const u32 fieldByteOffset,
+    const MaterialLayoutFieldType::Enum fieldType,
+    Float4& outValue
+){
+    if(MaterialLayoutFieldComponentCount(fieldType) != 4u)
+        return false;
+
+    const u32 fieldByteSize = MaterialLayoutFieldByteSize(fieldType);
+    if(fieldByteSize == 0u
+        || fieldByteOffset > blockBytes.size()
+        || fieldByteSize > static_cast<u32>(blockBytes.size()) - fieldByteOffset
+    )
+        return false;
+
+    const u8* fieldBytes = blockBytes.data() + fieldByteOffset;
+    switch(MaterialLayoutFieldValueType(fieldType)){
+    case MaterialParameterValueType::Float:{
+        f32 components[4];
+        NWB_MEMCPY(components, sizeof(components), fieldBytes, sizeof(components));
+        outValue = Float4(components[0], components[1], components[2], components[3]);
+        return true;
+    }
+    case MaterialParameterValueType::Half:{
+        Half components[4];
+        NWB_MEMCPY(components, sizeof(components), fieldBytes, sizeof(components));
+        outValue = Float4(
+            ConvertHalfToFloat(components[0]),
+            ConvertHalfToFloat(components[1]),
+            ConvertHalfToFloat(components[2]),
+            ConvertHalfToFloat(components[3])
+        );
+        return true;
+    }
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] static Float4 ResolveCsgReceiverBaseColor(const MaterialSurfaceInfo& materialInfo){
+    u32 constantBlockByteBegin = 0u;
+    for(const MaterialTypedLayoutBlock& block : materialInfo.typedLayoutBlocks){
+        if(block.blockClass != MaterialBlockClass::MaterialConstant)
+            continue;
+        if(block.byteSize > Limit<u32>::s_Max - constantBlockByteBegin)
+            break;
+
+        const usize fieldBegin = static_cast<usize>(block.fieldBegin);
+        const usize fieldCount = static_cast<usize>(block.fieldCount);
+        if(fieldBegin > materialInfo.typedLayoutFields.size()
+            || fieldCount > materialInfo.typedLayoutFields.size() - fieldBegin
+        ){
+            constantBlockByteBegin += block.byteSize;
+            continue;
+        }
+
+        for(usize fieldIndex = fieldBegin; fieldIndex < fieldBegin + fieldCount; ++fieldIndex){
+            const MaterialTypedLayoutField& field = materialInfo.typedLayoutFields[fieldIndex];
+            if(field.fieldName != s_CsgReceiverBaseColorFieldName)
+                continue;
+            if(field.offset > Limit<u32>::s_Max - constantBlockByteBegin)
+                break;
+
+            Float4 baseColor;
+            if(ReadMaterialFieldFloat4(
+                materialInfo.constantTypedBytes,
+                constantBlockByteBegin + field.offset,
+                field.fieldType,
+                baseColor
+            ))
+                return baseColor;
+            break;
+        }
+
+        constantBlockByteBegin += block.byteSize;
+    }
+
+    return materialInfo.csgReceiverBaseColor;
+}
+
+
+};
 
 
 bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
@@ -167,6 +258,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         createdInfo.mutableDefaultTypedBytes
     ))
         return false;
+    createdInfo.csgReceiverBaseColor = __hidden_material_surface::ResolveCsgReceiverBaseColor(createdInfo);
 
     createdInfo.shadingModelId = material.shadingModelId();
     createdInfo.shadowTransmittanceModelId = material.shadowTransmittanceModelId();

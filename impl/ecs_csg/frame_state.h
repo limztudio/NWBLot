@@ -41,6 +41,9 @@ namespace CsgReceiverPass{
 struct CsgReceiverDrawState{
     bool active = false;
     CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
+    // Resolved with cutterCount so render-side CSG work can iterate the lookup-owned
+    // range directly instead of resolving the receiver component and group again.
+    u32 firstCutter = 0u;
     u32 cutterCount = 0u;
 };
 
@@ -117,19 +120,35 @@ public:
         CsgReceiverDrawState& outState
     )const;
     template<typename CutterHandler>
-    void forEachReceiverCutter(const Core::ECS::EntityID entity, CutterHandler&& handler)const{
-        CsgFrameCutterRange range;
-        if(!resolveReceiverCutterRange(entity, range))
+    void forEachReceiverCutter(const CsgReceiverDrawState& drawState, CutterHandler&& handler)const{
+        if(!drawState.active || drawState.cutterCount == 0u)
             return;
 
-        const usize firstCutter = static_cast<usize>(range.firstCutter);
-        const usize cutterEnd = firstCutter + static_cast<usize>(range.cutterCount);
-        NWB_ASSERT(cutterEnd <= m_cutterRefs.size());
+        const usize firstCutter = static_cast<usize>(drawState.firstCutter);
+        const usize cutterCount = static_cast<usize>(drawState.cutterCount);
+        if(firstCutter > m_cutterRefs.size() || cutterCount > m_cutterRefs.size() - firstCutter){
+            NWB_ASSERT(false);
+            return;
+        }
+
+        const usize cutterEnd = firstCutter + cutterCount;
         for(usize cutterIndex = firstCutter; cutterIndex < cutterEnd; ++cutterIndex){
             const CsgFrameCutterRef& cutterRef = m_cutterRefs[cutterIndex];
             NWB_ASSERT(cutterRef.cutter != nullptr);
             handler(cutterRef.entity, *cutterRef.cutter);
         }
+    }
+    template<typename CutterHandler>
+    void forEachReceiverCutter(const Core::ECS::EntityID entity, CutterHandler&& handler)const{
+        CsgFrameCutterRange range;
+        if(!resolveReceiverCutterRange(entity, range))
+            return;
+
+        CsgReceiverDrawState drawState;
+        drawState.active = true;
+        drawState.firstCutter = range.firstCutter;
+        drawState.cutterCount = range.cutterCount;
+        forEachReceiverCutter(drawState, handler);
     }
 
 

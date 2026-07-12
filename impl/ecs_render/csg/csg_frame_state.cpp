@@ -169,7 +169,7 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
                 return 0u;
 
             CsgReceiverClipDrawInfo clipInfo;
-            if(!resolveCsgReceiverClipDrawInfo(receiverLookup, entity, mesh->csgLocalBounds, transform, clipInfo))
+            if(!resolveCsgReceiverClipDrawInfo(receiverLookup, drawState, mesh->csgLocalBounds, transform, clipInfo))
                 return 0u;
             if(clipInfo.cutterCount == 0u)
                 return 0u;

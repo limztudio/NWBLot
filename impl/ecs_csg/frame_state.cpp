@@ -181,6 +181,7 @@ bool CsgFrameReceiverLookup::resolveReceiverDrawState(
 
     outState.active = true;
     outState.receiverKind = receiverKind;
+    outState.firstCutter = foundCutterRange.value().firstCutter;
     outState.cutterCount = foundCutterRange.value().cutterCount;
     return true;
 }

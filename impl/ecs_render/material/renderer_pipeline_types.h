@@ -176,6 +176,9 @@ struct MaterialSurfaceInfo{
     MaterialTypedByteVector mutableDefaultTypedBytes;
     u32 shadingModelId = 0u;
     u32 shadowTransmittanceModelId = 0u;
+    // CSG cap fill uses the receiver material's constant-class base color. Cache this immutable material value
+    // when the surface info is created so every clipped draw can copy it without rescanning the typed layout.
+    Float4 csgReceiverBaseColor = Float4(0.78f, 0.72f, 0.76f, 1.0f);
     // The dedicated refractive-caster classification flag, copied from the cooked Material. The RT instance
     // occluder record (U0-2) reads it. The refraction VALUES (refractionIor / shadowAbsorptionTint) are shader-side
     // (NwbMeshSurface), not here. Default false (not a refractive caster) -- a material declaring none is unchanged.

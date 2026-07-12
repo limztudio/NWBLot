@@ -51,14 +51,14 @@ public:
     void setCsgClipBufferStates(Core::CommandList& commandList);
     [[nodiscard]] bool resolveCsgReceiverClipDrawInfo(
         const CsgFrameReceiverLookup& receiverLookup,
-        Core::ECS::EntityID entity,
+        const CsgReceiverDrawState& receiverDrawState,
         const CsgReceiverCpuBounds& receiverBounds,
         const NWB::Impl::Scene::TransformComponent* transform,
         CsgReceiverClipDrawInfo& outInfo
     )const;
     [[nodiscard]] bool appendCsgReceiverClipData(
         const CsgFrameReceiverLookup& receiverLookup,
-        Core::ECS::EntityID entity,
+        const CsgReceiverDrawState& receiverDrawState,
         const CsgReceiverCpuBounds& receiverBounds,
         const NWB::Impl::Scene::TransformComponent* transform,
         u32 frameWidth,

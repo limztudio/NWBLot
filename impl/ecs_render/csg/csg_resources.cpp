@@ -310,7 +310,7 @@ template<typename CutterHandler>
 [[nodiscard]] static bool ForEachReceiverClipCutter(
     const CsgShapeRegistry& shapeRegistry,
     const CsgFrameReceiverLookup& receiverLookup,
-    const Core::ECS::EntityID entity,
+    const CsgReceiverDrawState& receiverDrawState,
     const SIMDVector receiverLocalMinBounds,
     const SIMDVector receiverLocalMaxBounds,
     const bool receiverBoundsValid,
@@ -319,7 +319,7 @@ template<typename CutterHandler>
 ){
     bool resolved = true;
     receiverLookup.forEachReceiverCutter(
-        entity,
+        receiverDrawState,
         [&](const Core::ECS::EntityID, const CsgCutterComponent& cutter){
             if(!resolved)
                 return;
@@ -500,7 +500,7 @@ void RendererCsgSystem::setCsgClipBufferStates(Core::CommandList& commandList){
 
 bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
     const CsgFrameReceiverLookup& receiverLookup,
-    const Core::ECS::EntityID entity,
+    const CsgReceiverDrawState& receiverDrawState,
     const CsgReceiverCpuBounds& receiverBounds,
     const Scene::TransformComponent* transform,
     CsgReceiverClipDrawInfo& outInfo
@@ -525,7 +525,7 @@ bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
     return __hidden_csg_resources::ForEachReceiverClipCutter(
         csgShapeRegistry(),
         receiverLookup,
-        entity,
+        receiverDrawState,
         receiverLocalMinBounds,
         receiverLocalMaxBounds,
         receiverBoundsValid,
@@ -547,7 +547,7 @@ bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
 
 bool RendererCsgSystem::appendCsgReceiverClipData(
     const CsgFrameReceiverLookup& receiverLookup,
-    const Core::ECS::EntityID entity,
+    const CsgReceiverDrawState& receiverDrawState,
     const CsgReceiverCpuBounds& receiverBounds,
     const Scene::TransformComponent* transform,
     const u32 frameWidth,
@@ -596,7 +596,7 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
     const bool appended = __hidden_csg_resources::ForEachReceiverClipCutter(
         csgShapeRegistry(),
         receiverLookup,
-        entity,
+        receiverDrawState,
         receiverLocalMinBounds,
         receiverLocalMaxBounds,
         receiverBoundsValid,

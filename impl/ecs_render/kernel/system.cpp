@@ -149,9 +149,7 @@ bool RendererSystem::ensureFrameCommandLists(){
 }
 
 bool RendererSystem::prepareGpuTimingScopes(){
-    auto* device = m_graphics.getDevice();
-    if(!device)
-        return false;
+    auto& device = *m_graphics.getDevice();
 
     struct ScopeReservation{
         const Name* scopeName;
@@ -195,7 +193,7 @@ bool RendererSystem::prepareGpuTimingScopes(){
     };
 
     for(const ScopeReservation& reservation : scopeReservations){
-        if(!m_graphics.gpuTiming().prepareScopeQueries(*reservation.scopeName, device, reservation.queryCount)){
+        if(!m_graphics.gpuTiming().prepareScopeQueries(*reservation.scopeName, &device, reservation.queryCount)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to prepare GPU timing scope '{}'"), reservation.scopeName->c_str());
             return false;
         }

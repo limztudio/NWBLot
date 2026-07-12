@@ -237,6 +237,14 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     return CrashDumpResult{ CrashDumpStatus::PackageWritten };
 }
 
+void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options)noexcept{
+    CrashDumpRequestOptions requestOptions = options;
+    requestOptions.waitMilliseconds = s_PlatformCrashHandlerWaitMilliseconds;
+    const CrashDumpResult requestResult = RequestCrashDump(reasonKind, reasonCode, requestOptions);
+    if(!requestResult.requestAccepted())
+        return;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

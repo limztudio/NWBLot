@@ -40,56 +40,21 @@ ConstantBuffer<NwbSwShadowSoftOpaquePushConstants> g_NwbSwShadowPush;
 [[vk::binding(NWB_SW_SHADOW_BINDING_SOFT_HALF, NWB_SW_SHADOW_SET)]]
 RWTexture2DArray<float4> g_NwbSwShadowSoftHalf;
 
+#define NWB_SW_SHADOW_SOFT_TRACE_OUTPUT g_NwbSwShadowSoftHalf
+#define NWB_SW_SHADOW_SOFT_TRACE_SPP NWB_SW_SHADOW_SOFT_SPP
+#define NWB_SW_SHADOW_SOFT_TRACE_JITTER_SALT 0u
+#include "sw_shadow_soft_trace.slangi"
+#undef NWB_SW_SHADOW_SOFT_TRACE_JITTER_SALT
+#undef NWB_SW_SHADOW_SOFT_TRACE_SPP
+#undef NWB_SW_SHADOW_SOFT_TRACE_OUTPUT
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [numthreads(NWB_SW_SHADOW_GROUP_SIZE, NWB_SW_SHADOW_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    const uint2 halfPixel = dispatchThreadID.xy;
-    // The half-res grid is width>>SOFT_SHIFT: guard against the padded tail. The trace samples the block's top-left
-    // full-res texel (matching the geometry downsample's + resolve's 2x point sample).
-    const uint halfWidth = (g_NwbSwShadowPush.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) >> NWB_SW_SHADOW_SOFT_SHIFT;
-    const uint halfHeight = (g_NwbSwShadowPush.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) >> NWB_SW_SHADOW_SOFT_SHIFT;
-    if(halfPixel.x >= halfWidth || halfPixel.y >= halfHeight)
-        return;
-
-    const uint2 base = halfPixel << NWB_SW_SHADOW_SOFT_SHIFT;
-    const int3 texel = int3(int2(min(base.x, g_NwbSwShadowPush.width - 1u), min(base.y, g_NwbSwShadowPush.height - 1u)), 0);
-
-    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
-
-    // Background: fully LIT (white) for every slot -- the multiplicative identity the resolve carries and the value the
-    // upsample writes for a background full-res pixel, so the two agree at the geometry/background edge.
-    if(nwbSwShadowIsBackground(texel)){
-        for(uint i = 0u; i < lightCount; ++i){
-            const float slot = g_NwbSceneLights[i].params.z;
-            if(slot < 0.0)
-                continue;
-            g_NwbSwShadowSoftHalf[uint3(halfPixel, uint(slot))] = float4(1.0, 1.0, 1.0, 1.0);
-        }
-        return;
-    }
-
-    const float3 worldPosition = nwbSwShadowLoadWorldPosition(texel);
-    const float3 normal = nwbSwShadowLoadNormal(texel);
-    for(uint i = 0u; i < lightCount; ++i){
-        const float slot = g_NwbSceneLights[i].params.z;
-        if(slot < 0.0)
-            continue;
-        // OPAQUE-only jittered occlusion. Each sample is binary; averaging NWB_SW_SHADOW_SOFT_SPP of them per frame --
-        // each walking the source via its OWN low-discrepancy 2D point (per pixel, per frame, per sample index) --
-        // yields the smooth 0..1 coverage the value-aware resolve needs (a single binary sample would leave a dithered
-        // penumbra the a-trous could not smooth without washing the umbra out). Temporal accumulation carries the sampling
-        // across frames.
-        half3 accum = half3(0.0, 0.0, 0.0);
-        [loop] for(uint s = 0u; s < NWB_SW_SHADOW_SOFT_SPP; ++s){
-            const float2 sampleJitter = nwbShadowLowDiscrepancy2D(halfPixel, g_NwbSwShadowPush.frameIndex * NWB_SW_SHADOW_SOFT_SPP + s);
-            accum += nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i], sampleJitter);
-        }
-        const half3 transmittance = accum * half(1.0 / float(NWB_SW_SHADOW_SOFT_SPP));
-        g_NwbSwShadowSoftHalf[uint3(halfPixel, uint(slot))] = float4(transmittance, 1.0);
-    }
+    nwbSwShadowTraceSoft(dispatchThreadID);
 }
 
 

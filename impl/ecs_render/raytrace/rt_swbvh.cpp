@@ -389,24 +389,13 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         SIMDVector determinant;
         const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
 
-        // World AABB = bounds of the 8 object-space corners transformed to world space (exact under rotation).
+        // Shared with caustic-target gathering: exact world bounds of all eight object-space corners.
         const SIMDVector localMin = LoadFloatInt(mesh->csgLocalBounds.minBounds);
         const SIMDVector localMax = LoadFloatInt(mesh->csgLocalBounds.maxBounds);
-        const f32 minX = VectorGetX(localMin), minY = VectorGetY(localMin), minZ = VectorGetZ(localMin);
-        const f32 maxX = VectorGetX(localMax), maxY = VectorGetY(localMax), maxZ = VectorGetZ(localMax);
-        SIMDVector worldMin = VectorReplicate(1e30f);
-        SIMDVector worldMax = VectorReplicate(-1e30f);
-        for(u32 corner = 0u; corner < 8u; ++corner){
-            const SIMDVector localCorner = VectorSet(
-                (corner & 1u) != 0u ? maxX : minX,
-                (corner & 2u) != 0u ? maxY : minY,
-                (corner & 4u) != 0u ? maxZ : minZ,
-                1.0f
-            );
-            const SIMDVector worldCorner = Vector3TransformCoord(localCorner, objectToWorld);
-            worldMin = VectorMin(worldMin, worldCorner);
-            worldMax = VectorMax(worldMax, worldCorner);
-        }
+        SIMDVector worldMin{};
+        SIMDVector worldMax{};
+        if(!AabbTests::Transform(objectToWorld, localMin, localMax, worldMin, worldMax))
+            continue;
         __hidden_raytracing_system::InflateSwShadowSceneBounds(worldMin, worldMax);
 
         SceneSwBvhInstanceGpu instance;

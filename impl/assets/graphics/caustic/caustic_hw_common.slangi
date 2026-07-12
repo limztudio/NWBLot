@@ -154,69 +154,17 @@ NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint meshIndex, cons
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Deposits one fixed-point value into the accumulator pixel + channel. Guarded so out-of-bounds pixels are no-ops.
-// Byte-identical to the SW kernel's nwbCausticSwAccumulate (the SAME R32_UINT accumulator, the SAME InterlockedAdd).
-void nwbCausticHwAccumulate(const int2 pixel, const uint channel, const uint value){
-    if(value == 0u)
-        return;
-    if(pixel.x < 0 || pixel.y < 0 || pixel.x >= (int)g_NwbCausticHwPushConstants.width || pixel.y >= (int)g_NwbCausticHwPushConstants.height)
-        return;
-    InterlockedAdd(g_NwbCausticHwAccumulator[uint3(uint2(pixel), channel)], value);
-}
-
-// Splats the surviving flux at the receiver world hit -- a VERBATIM copy of the SW kernel's nwbCausticSwSplat (only
-// the bound-resource handle names differ), so the two producers deposit byte-identically: same worldToClip
-// projection, same NDC cull, same world-distance screen-leak reject (1-texel-x spacing tolerance), same 2x2 tent,
-// same fixed-point conversion + InterlockedAdd into the SAME accumulator.
-void nwbCausticHwSplat(const float3 worldPos, const float3 flux){
-    const float4 clip = mul(g_NwbCausticHwView.worldToClip, float4(worldPos, 1.0));
-    if(clip.w <= 1e-6)
-        return;
-
-    const float3 ndc = clip.xyz / clip.w;
-    if(ndc.x < -1.0 || ndc.x > 1.0 || ndc.y < -1.0 || ndc.y > 1.0)
-        return;
-    if(ndc.z < 0.0 || ndc.z > 1.0)
-        return;
-
-    const float2 uv = float2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-    const float2 screen = uv * float2((float)g_NwbCausticHwPushConstants.width, (float)g_NwbCausticHwPushConstants.height) - 0.5;
-
-    const int2 baseTexel = int2(floor(screen));
-    if(baseTexel.x < 0 || baseTexel.y < 0 || baseTexel.x >= (int)g_NwbCausticHwPushConstants.width || baseTexel.y >= (int)g_NwbCausticHwPushConstants.height)
-        return;
-
-    const float sceneDepth = g_NwbCausticHwGBufferDepth.Load(int3(baseTexel, 0)).r;
-    if(sceneDepth >= 0.999999)
-        return; // background pixel (no receiver)
-
-    const float3 sceneWorldPos = g_NwbCausticHwGBufferWorldPosition.Load(int3(baseTexel, 0)).xyz;
-    const int2 rightTexel = int2(min(baseTexel.x + 1, (int)g_NwbCausticHwPushConstants.width - 1), baseTexel.y);
-    const float3 sceneWorldPosRight = g_NwbCausticHwGBufferWorldPosition.Load(int3(rightTexel, 0)).xyz;
-    const float pixelWorldSpacing = length(sceneWorldPosRight - sceneWorldPos);
-    const float rejectTolerance = max(pixelWorldSpacing * 4.0, 0.05);
-    if(length(worldPos - sceneWorldPos) > rejectTolerance)
-        return;
-
-    const float2 frac = screen - float2(baseTexel);
-    const float w00 = (1.0 - frac.x) * (1.0 - frac.y);
-    const float w10 = frac.x * (1.0 - frac.y);
-    const float w01 = (1.0 - frac.x) * frac.y;
-    const float w11 = frac.x * frac.y;
-
-    const int2 t00 = baseTexel;
-    const int2 t10 = baseTexel + int2(1, 0);
-    const int2 t01 = baseTexel + int2(0, 1);
-    const int2 t11 = baseTexel + int2(1, 1);
-
-    for(uint channel = 0u; channel < 3u; ++channel){
-        const float fluxChannel = flux[channel];
-        nwbCausticHwAccumulate(t00, channel, nwbCausticFluxToFixedPoint(fluxChannel * w00));
-        nwbCausticHwAccumulate(t10, channel, nwbCausticFluxToFixedPoint(fluxChannel * w10));
-        nwbCausticHwAccumulate(t01, channel, nwbCausticFluxToFixedPoint(fluxChannel * w01));
-        nwbCausticHwAccumulate(t11, channel, nwbCausticFluxToFixedPoint(fluxChannel * w11));
-    }
-}
+#define NWB_CAUSTIC_SPLAT_VIEW g_NwbCausticHwView
+#define NWB_CAUSTIC_SPLAT_PUSH g_NwbCausticHwPushConstants
+#define NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH g_NwbCausticHwGBufferDepth
+#define NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION g_NwbCausticHwGBufferWorldPosition
+#define NWB_CAUSTIC_SPLAT_ACCUMULATOR g_NwbCausticHwAccumulator
+#include "splat.slangi"
+#undef NWB_CAUSTIC_SPLAT_ACCUMULATOR
+#undef NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION
+#undef NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH
+#undef NWB_CAUSTIC_SPLAT_PUSH
+#undef NWB_CAUSTIC_SPLAT_VIEW
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

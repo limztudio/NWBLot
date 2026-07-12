@@ -73,7 +73,7 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
             );
         }
 
-        // World AABB = bounds of the 8 object-space corners transformed to world space (exact under rotation).
+        // Use the shared 8-corner transform so caustic targets and the scene BVH retain identical world bounds.
         SIMDVector localMin = LoadFloatInt(mesh->csgLocalBounds.minBounds);
         SIMDVector localMax = LoadFloatInt(mesh->csgLocalBounds.maxBounds);
         if(resolvedMesh.runtime){
@@ -85,21 +85,10 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
             localMin = VectorSubtract(center, half);
             localMax = VectorAdd(center, half);
         }
-        const f32 minX = VectorGetX(localMin), minY = VectorGetY(localMin), minZ = VectorGetZ(localMin);
-        const f32 maxX = VectorGetX(localMax), maxY = VectorGetY(localMax), maxZ = VectorGetZ(localMax);
-        SIMDVector worldMin = VectorReplicate(1e30f);
-        SIMDVector worldMax = VectorReplicate(-1e30f);
-        for(u32 corner = 0u; corner < 8u; ++corner){
-            const SIMDVector localCorner = VectorSet(
-                (corner & 1u) != 0u ? maxX : minX,
-                (corner & 2u) != 0u ? maxY : minY,
-                (corner & 4u) != 0u ? maxZ : minZ,
-                1.0f
-            );
-            const SIMDVector worldCorner = Vector3TransformCoord(localCorner, objectToWorld);
-            worldMin = VectorMin(worldMin, worldCorner);
-            worldMax = VectorMax(worldMax, worldCorner);
-        }
+        SIMDVector worldMin{};
+        SIMDVector worldMax{};
+        if(!AabbTests::Transform(objectToWorld, localMin, localMax, worldMin, worldMax))
+            continue;
 
         combinedMin = VectorMin(combinedMin, worldMin);
         combinedMax = VectorMax(combinedMax, worldMax);

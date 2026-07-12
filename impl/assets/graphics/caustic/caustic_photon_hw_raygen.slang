@@ -129,7 +129,7 @@ void main(){
     if(!splat.valid)
         return;
 
-    nwbCausticHwSplat(splat.worldPos, splat.flux);
+    nwbCausticSplat(splat.worldPos, splat.flux);
 }
 
 

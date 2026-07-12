@@ -1,0 +1,49 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_SW_SHADOW_COARSE_SAMPLES_SLANGI
+#define NWB_GRAPHICS_SHADOW_SW_SHADOW_COARSE_SAMPLES_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The adaptive transparent resolve and compacted classify pass use the same 2x2 coarse neighbourhood. Keep loading,
+// edge classification, and interpolation together so the two paths cannot diverge at an edge threshold.
+struct NwbSwShadowCoarseSamples{
+    half3 t00;
+    half3 t10;
+    half3 t01;
+    half3 t11;
+};
+
+NwbSwShadowCoarseSamples nwbSwShadowLoadCoarseSamples(const uint2 c0, const uint2 c1, const uint slot){
+    NwbSwShadowCoarseSamples samples;
+    samples.t00 = half3(g_NwbSwShadowCoarse[uint3(c0.x, c0.y, slot)].rgb);
+    samples.t10 = half3(g_NwbSwShadowCoarse[uint3(c1.x, c0.y, slot)].rgb);
+    samples.t01 = half3(g_NwbSwShadowCoarse[uint3(c0.x, c1.y, slot)].rgb);
+    samples.t11 = half3(g_NwbSwShadowCoarse[uint3(c1.x, c1.y, slot)].rgb);
+    return samples;
+}
+
+half nwbSwShadowCoarseRange(const NwbSwShadowCoarseSamples samples){
+    const half3 lo = min(min(samples.t00, samples.t10), min(samples.t01, samples.t11));
+    const half3 hi = max(max(samples.t00, samples.t10), max(samples.t01, samples.t11));
+    return max(max(hi.x - lo.x, hi.y - lo.y), hi.z - lo.z);
+}
+
+half3 nwbSwShadowInterpolateCoarse(const NwbSwShadowCoarseSamples samples, const float2 weights){
+    const half3 tx0 = lerp(samples.t00, samples.t10, half(weights.x));
+    const half3 tx1 = lerp(samples.t01, samples.t11, half(weights.x));
+    return lerp(tx0, tx1, half(weights.y));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

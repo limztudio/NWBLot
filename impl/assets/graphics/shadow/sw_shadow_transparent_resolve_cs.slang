@@ -38,6 +38,8 @@ ConstantBuffer<NwbSwShadowTransparentResolvePushConstants> g_NwbSwShadowPush;
 [[vk::binding(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, NWB_SW_SHADOW_SET)]]
 RWTexture2DArray<float4> g_NwbSwShadowVisibility;
 
+#include "sw_shadow_coarse_samples.slangi"
+
 // Edge-fraction instrumentation counter ([0] full-res traced rays, [1] total candidate rays). Tallied only when
 // collectStats is set; read back to the log to decide the Stage-3 payoff.
 [[vk::binding(NWB_SW_SHADOW_BINDING_EDGE_STATS, NWB_SW_SHADOW_SET)]]
@@ -81,16 +83,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const uint slot = uint(slotF);
         ++totalRays;
 
-        // 2x2 coarse neighbourhood transmittances around this pixel.
-        const half3 t00 = half3(g_NwbSwShadowCoarse[uint3(c0.x, c0.y, slot)].rgb);
-        const half3 t10 = half3(g_NwbSwShadowCoarse[uint3(c1.x, c0.y, slot)].rgb);
-        const half3 t01 = half3(g_NwbSwShadowCoarse[uint3(c0.x, c1.y, slot)].rgb);
-        const half3 t11 = half3(g_NwbSwShadowCoarse[uint3(c1.x, c1.y, slot)].rgb);
-
-        // Edge metric: worst per-channel range across the 4 coarse samples.
-        const half3 lo = min(min(t00, t10), min(t01, t11));
-        const half3 hi = max(max(t00, t10), max(t01, t11));
-        const half range = max(max(hi.x - lo.x, hi.y - lo.y), hi.z - lo.z);
+        const NwbSwShadowCoarseSamples samples = nwbSwShadowLoadCoarseSamples(c0, c1, slot);
+        const half range = nwbSwShadowCoarseRange(samples);
 
         half3 transmittance;
         if(float(range) > edgeThreshold){
@@ -100,9 +94,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
         else{
             // Flat interior: bilinearly interpolate the coarse transmittance.
-            const half3 tx0 = lerp(t00, t10, half(w.x));
-            const half3 tx1 = lerp(t01, t11, half(w.x));
-            transmittance = lerp(tx0, tx1, half(w.y));
+            transmittance = nwbSwShadowInterpolateCoarse(samples, w);
         }
 
         const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);

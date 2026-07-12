@@ -33,6 +33,7 @@
 #include "../scene/buffer.slangi"
 // The soft cone-jitter, shared with the software traversal so the HW opaque path softens IDENTICALLY.
 #include "shadow_sampling.slangi"
+#include "shadow_ray_setup.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,32 +50,9 @@
 // radius / angular radius -> a zero cone half-angle -> nwbShadowJitterCone returns the axis exactly -> the hard path).
 half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter){
     float3 toLight;
-    float tMax;
-    if(light.params.y < 0.5){
-        toLight = nwbShadowJitterCone(normalize(light.direction.xyz), light.params2.x, jitter);
-        tMax = 1.0e7;
-    }
-    else{
-        const float3 delta = light.position.xyz - worldPosition;
-        tMax = length(delta);
-        const float3 centerDir = (tMax > 1.0e-5) ? (delta / tMax) : float3(0.0, 1.0, 0.0);
-        // Punctual soft: the source sphere (radius params2.y) subtends a cone of half-angle asin(R/dist); jitter the
-        // toward-light ray inside it. tMax stays the distance to the light CENTRE (the small jittered-direction vs
-        // centre-distance discrepancy is negligible; only occluders ALONG the ray matter). R==0 -> the hard path.
-        const float sinHalf = (tMax > 1.0e-5) ? min(light.params2.y / tMax, 0.999) : 0.0;
-        toLight = nwbShadowJitterCone(centerDir, asin(sinHalf), jitter);
-    }
-
-    // Back-face receiver cull: a surface facing away from the light receives no direct light
-    // (the deferred lighting clamps NdotL to 0), so tracing its occlusion ray is wasted work.
-    // Return fully lit and skip the trace -- the standard shadow-ray optimization that trims
-    // roughly half the per-light trace work with no visible change on the directly-lit image.
-    if(dot(normal, toLight) <= 0.0)
-        return half3(1.0, 1.0, 1.0);
-
-    const float tMin = 0.001;
-    const float tEnd = tMax - 0.002;
-    if(tEnd <= tMin)
+    float tMin;
+    float tEnd;
+    if(!nwbShadowBuildLightRay(worldPosition, normal, light, jitter, toLight, tMin, tEnd))
         return half3(1.0, 1.0, 1.0);
 
     RayDesc ray;

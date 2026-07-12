@@ -236,14 +236,6 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     return status;
 }
 
-void NotifyCrashHandler(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options)noexcept{
-    CrashDumpRequestOptions requestOptions = options;
-    requestOptions.waitMilliseconds = s_PlatformCrashHandlerWaitMilliseconds;
-    const CrashDumpResult requestResult = RequestCrashDump(reasonKind, reasonCode, requestOptions);
-    if(!requestResult.requestAccepted())
-        return;
-}
-
 template<typename ArenaT>
 bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
     if(g_State.handlerStarted)

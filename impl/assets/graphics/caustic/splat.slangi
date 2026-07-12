@@ -1,0 +1,100 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CAUSTIC_SPLAT_SLANGI
+#define NWB_GRAPHICS_CAUSTIC_SPLAT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Backend-independent receiver splat. The including producer supplies its view, push constants, G-buffer, and shared
+// R32_UINT accumulator through the macros below; both HW TraceRay and SW BVH paths therefore project, reject, weight,
+// and atomically deposit a surviving photon identically.
+#if !defined(NWB_CAUSTIC_SPLAT_VIEW) \
+    || !defined(NWB_CAUSTIC_SPLAT_PUSH) \
+    || !defined(NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH) \
+    || !defined(NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION) \
+    || !defined(NWB_CAUSTIC_SPLAT_ACCUMULATOR)
+#error "caustic/splat.slangi requires the backend resource macros"
+#endif
+
+void nwbCausticAccumulate(const int2 pixel, const uint channel, const uint value){
+    if(value == 0u)
+        return;
+    if(
+        pixel.x < 0 || pixel.y < 0
+        || pixel.x >= (int)NWB_CAUSTIC_SPLAT_PUSH.width
+        || pixel.y >= (int)NWB_CAUSTIC_SPLAT_PUSH.height
+    )
+        return;
+    InterlockedAdd(NWB_CAUSTIC_SPLAT_ACCUMULATOR[uint3(uint2(pixel), channel)], value);
+}
+
+void nwbCausticSplat(const float3 worldPos, const float3 flux){
+    const float4 clip = mul(NWB_CAUSTIC_SPLAT_VIEW.worldToClip, float4(worldPos, 1.0));
+    if(clip.w <= 1e-6)
+        return;
+
+    const float3 ndc = clip.xyz / clip.w;
+    if(ndc.x < -1.0 || ndc.x > 1.0 || ndc.y < -1.0 || ndc.y > 1.0)
+        return;
+    if(ndc.z < 0.0 || ndc.z > 1.0)
+        return;
+
+    const float2 uv = float2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    const float2 screen = uv * float2(
+        (float)NWB_CAUSTIC_SPLAT_PUSH.width,
+        (float)NWB_CAUSTIC_SPLAT_PUSH.height
+    ) - 0.5;
+    const int2 baseTexel = int2(floor(screen));
+    if(
+        baseTexel.x < 0 || baseTexel.y < 0
+        || baseTexel.x >= (int)NWB_CAUSTIC_SPLAT_PUSH.width
+        || baseTexel.y >= (int)NWB_CAUSTIC_SPLAT_PUSH.height
+    )
+        return;
+
+    // Receiver identity is validated in world space so the tolerance follows scene scale and grazing-angle gradients.
+    const float sceneDepth = NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH.Load(int3(baseTexel, 0)).r;
+    if(sceneDepth >= 0.999999)
+        return;
+
+    const float3 sceneWorldPos = NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION.Load(int3(baseTexel, 0)).xyz;
+    const int2 rightTexel = int2(
+        min(baseTexel.x + 1, (int)NWB_CAUSTIC_SPLAT_PUSH.width - 1),
+        baseTexel.y
+    );
+    const float3 sceneWorldPosRight = NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION.Load(int3(rightTexel, 0)).xyz;
+    const float rejectTolerance = max(length(sceneWorldPosRight - sceneWorldPos) * 4.0, 0.05);
+    if(length(worldPos - sceneWorldPos) > rejectTolerance)
+        return;
+
+    const float2 frac = screen - float2(baseTexel);
+    const float w00 = (1.0 - frac.x) * (1.0 - frac.y);
+    const float w10 = frac.x * (1.0 - frac.y);
+    const float w01 = (1.0 - frac.x) * frac.y;
+    const float w11 = frac.x * frac.y;
+    const int2 t00 = baseTexel;
+    const int2 t10 = baseTexel + int2(1, 0);
+    const int2 t01 = baseTexel + int2(0, 1);
+    const int2 t11 = baseTexel + int2(1, 1);
+
+    for(uint channel = 0u; channel < 3u; ++channel){
+        const float fluxChannel = flux[channel];
+        nwbCausticAccumulate(t00, channel, nwbCausticFluxToFixedPoint(fluxChannel * w00));
+        nwbCausticAccumulate(t10, channel, nwbCausticFluxToFixedPoint(fluxChannel * w10));
+        nwbCausticAccumulate(t01, channel, nwbCausticFluxToFixedPoint(fluxChannel * w01));
+        nwbCausticAccumulate(t11, channel, nwbCausticFluxToFixedPoint(fluxChannel * w11));
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

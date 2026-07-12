@@ -33,6 +33,7 @@
 // ray so a physical source (a sun disk for directional, a source sphere for point/spot) casts a penumbra
 // (nwbShadowJitterCone; the soft pass also uses nwbShadowLowDiscrepancy2D directly).
 #include "shadow_sampling.slangi"
+#include "shadow_ray_setup.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,35 +51,9 @@
 // source radius / angular radius is zero -> the cone half-angle is zero -> nwbShadowJitterCone returns the axis exactly).
 half3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter){
     float3 toLight;
-    float tMax;
-    if(light.params.y < 0.5){
-        // Directional: jitter the toward-light axis inside the cone of half-angle params2.x (the sun angular radius).
-        // halfAngle 0 (a point-source directional) returns the axis exactly -> the hard shadow, no branch needed.
-        toLight = nwbShadowJitterCone(normalize(light.direction.xyz), light.params2.x, jitter);
-        tMax = 1.0e7;
-    }
-    else{
-        const float3 delta = light.position.xyz - worldPosition;
-        tMax = length(delta);
-        const float3 centerDir = (tMax > 1.0e-5) ? (delta / tMax) : float3(0.0, 1.0, 0.0);
-        // Punctual soft: the source sphere (radius params2.y) subtends a cone of half-angle asin(R/dist); jitter the
-        // toward-light ray inside it. R==0 -> asin(0)=0 -> nwbShadowJitterCone returns centerDir exactly (the hard path).
-        // tMax stays the distance to the light CENTRE: the jittered-direction vs centre-distance discrepancy is
-        // negligible (the source is small next to the light distance) and only occluders ALONG the ray matter.
-        const float sinHalf = (tMax > 1.0e-5) ? min(light.params2.y / tMax, 0.999) : 0.0;
-        toLight = nwbShadowJitterCone(centerDir, asin(sinHalf), jitter);
-    }
-
-    // Back-face receiver cull: a surface facing away from the light receives no direct light
-    // (the deferred lighting clamps NdotL to 0), so tracing its occlusion ray is wasted work.
-    // Return fully lit and skip the traversal -- the standard shadow-ray optimization, applied
-    // here too so the SW path matches the HW RayQuery path's early-out (HW/SW parity).
-    if(dot(normal, toLight) <= 0.0)
-        return half3(1.0, 1.0, 1.0);
-
-    const float tMin = 0.001;
-    const float tEnd = tMax - 0.002;
-    if(tEnd <= tMin)
+    float tMin;
+    float tEnd;
+    if(!nwbShadowBuildLightRay(worldPosition, normal, light, jitter, toLight, tMin, tEnd))
         return half3(1.0, 1.0, 1.0);
 
     const float3 origin = worldPosition + normal * tMin;

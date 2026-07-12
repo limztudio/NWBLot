@@ -426,77 +426,17 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Deposits one fixed-point value into the accumulator pixel + channel with the given tent weight (already folded
-// into `value`). Guarded so out-of-bounds pixels are no-ops.
-void nwbCausticSwAccumulate(const int2 pixel, const uint channel, const uint value){
-    if(value == 0u)
-        return;
-    if(pixel.x < 0 || pixel.y < 0 || pixel.x >= (int)g_NwbCausticSwPushConstants.width || pixel.y >= (int)g_NwbCausticSwPushConstants.height)
-        return;
-    InterlockedAdd(g_NwbCausticSwAccumulator[uint3(uint2(pixel), channel)], value);
-}
-
-// Splats the surviving flux at the receiver world hit: project through the camera worldToClip to a pixel, reject if
-// the projected depth is beyond the G-buffer depth there (kills screen-space leak onto surfaces the eye can't see
-// at that pixel), then deposit the per-channel fixed-point flux into a 2x2 tent footprint (the splat-side AA).
-void nwbCausticSwSplat(const float3 worldPos, const float3 flux){
-    const float4 clip = mul(g_NwbCausticSwView.worldToClip, float4(worldPos, 1.0));
-    if(clip.w <= 1e-6)
-        return;
-
-    const float3 ndc = clip.xyz / clip.w;
-    if(ndc.x < -1.0 || ndc.x > 1.0 || ndc.y < -1.0 || ndc.y > 1.0)
-        return;
-    if(ndc.z < 0.0 || ndc.z > 1.0)
-        return;
-
-    // NDC -> screen UV (y flipped) -> pixel-center coordinate.
-    const float2 uv = float2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-    const float2 screen = uv * float2((float)g_NwbCausticSwPushConstants.width, (float)g_NwbCausticSwPushConstants.height) - 0.5;
-
-    const int2 baseTexel = int2(floor(screen));
-    if(baseTexel.x < 0 || baseTexel.y < 0 || baseTexel.x >= (int)g_NwbCausticSwPushConstants.width || baseTexel.y >= (int)g_NwbCausticSwPushConstants.height)
-        return;
-
-    // Screen-space-leak reject: the photon's receiver hit must be the SAME world surface the camera sees at this
-    // pixel, else the caustic would leak onto geometry occluded from the eye here. Compare WORLD POSITIONS, not
-    // device depth: at the grazing angles a near-edge-on ground plane is viewed at, the device-depth gradient
-    // across a single pixel can exceed any fixed device-depth tolerance, so a device-depth match test rejects every
-    // valid splat (the zero-deposit bug). A world-distance test is space-consistent and gradient-robust -- the
-    // tolerance scales with the receiver's world spacing per pixel. Background (sky) still skips via the depth read.
-    const float sceneDepth = g_NwbCausticSwGBufferDepth.Load(int3(baseTexel, 0)).r;
-    if(sceneDepth >= 0.999999)
-        return; // background pixel (no receiver)
-
-    const float3 sceneWorldPos = g_NwbCausticSwGBufferWorldPosition.Load(int3(baseTexel, 0)).xyz;
-    // Per-pixel world spacing along x (a robust, scene-scale-relative tolerance) -- one texel to the right.
-    const int2 rightTexel = int2(min(baseTexel.x + 1, (int)g_NwbCausticSwPushConstants.width - 1), baseTexel.y);
-    const float3 sceneWorldPosRight = g_NwbCausticSwGBufferWorldPosition.Load(int3(rightTexel, 0)).xyz;
-    const float pixelWorldSpacing = length(sceneWorldPosRight - sceneWorldPos);
-    const float rejectTolerance = max(pixelWorldSpacing * 4.0, 0.05);
-    if(length(worldPos - sceneWorldPos) > rejectTolerance)
-        return;
-
-    // 2x2 bilinear tent weights from the sub-pixel fraction.
-    const float2 frac = screen - float2(baseTexel);
-    const float w00 = (1.0 - frac.x) * (1.0 - frac.y);
-    const float w10 = frac.x * (1.0 - frac.y);
-    const float w01 = (1.0 - frac.x) * frac.y;
-    const float w11 = frac.x * frac.y;
-
-    const int2 t00 = baseTexel;
-    const int2 t10 = baseTexel + int2(1, 0);
-    const int2 t01 = baseTexel + int2(0, 1);
-    const int2 t11 = baseTexel + int2(1, 1);
-
-    for(uint channel = 0u; channel < 3u; ++channel){
-        const float fluxChannel = flux[channel];
-        nwbCausticSwAccumulate(t00, channel, nwbCausticFluxToFixedPoint(fluxChannel * w00));
-        nwbCausticSwAccumulate(t10, channel, nwbCausticFluxToFixedPoint(fluxChannel * w10));
-        nwbCausticSwAccumulate(t01, channel, nwbCausticFluxToFixedPoint(fluxChannel * w01));
-        nwbCausticSwAccumulate(t11, channel, nwbCausticFluxToFixedPoint(fluxChannel * w11));
-    }
-}
+#define NWB_CAUSTIC_SPLAT_VIEW g_NwbCausticSwView
+#define NWB_CAUSTIC_SPLAT_PUSH g_NwbCausticSwPushConstants
+#define NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH g_NwbCausticSwGBufferDepth
+#define NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION g_NwbCausticSwGBufferWorldPosition
+#define NWB_CAUSTIC_SPLAT_ACCUMULATOR g_NwbCausticSwAccumulator
+#include "splat.slangi"
+#undef NWB_CAUSTIC_SPLAT_ACCUMULATOR
+#undef NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION
+#undef NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH
+#undef NWB_CAUSTIC_SPLAT_PUSH
+#undef NWB_CAUSTIC_SPLAT_VIEW
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -588,7 +528,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(!splat.valid)
         return;
 
-    nwbCausticSwSplat(splat.worldPos, splat.flux);
+    nwbCausticSplat(splat.worldPos, splat.flux);
 }
 
 

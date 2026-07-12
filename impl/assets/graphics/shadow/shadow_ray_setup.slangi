@@ -1,0 +1,58 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_RAY_SETUP_SLANGI
+#define NWB_GRAPHICS_SHADOW_RAY_SETUP_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Builds the shared direct-light shadow segment. Both the hardware RayQuery path and the software BVH traversal use
+// this exact direction, finite extent, receiver-side bias, and back-face early-out so their soft-shadow coverage stays
+// in lockstep. Callers include scene/buffer.slangi and shadow_sampling.slangi before this helper.
+bool nwbShadowBuildLightRay(
+    const float3 worldPosition,
+    const float3 normal,
+    const NwbSceneLight light,
+    const float2 jitter,
+    out float3 outDirection,
+    out float outTMin,
+    out float outTEnd
+){
+    outDirection = float3(0.0, 1.0, 0.0);
+    outTMin = 0.001;
+    outTEnd = 0.0;
+
+    float tMax;
+    if(light.params.y < 0.5){
+        // Directional lights use their constant angular source radius; zero keeps the exact hard-shadow axis.
+        outDirection = nwbShadowJitterCone(normalize(light.direction.xyz), light.params2.x, jitter);
+        tMax = 1.0e7;
+    }
+    else{
+        const float3 delta = light.position.xyz - worldPosition;
+        tMax = length(delta);
+        const float3 centerDir = (tMax > 1.0e-5) ? (delta / tMax) : float3(0.0, 1.0, 0.0);
+        // A punctual source sphere subtends asin(radius / distance); the center distance remains the trace extent.
+        const float sinHalf = (tMax > 1.0e-5) ? min(light.params2.y / tMax, 0.999) : 0.0;
+        outDirection = nwbShadowJitterCone(centerDir, asin(sinHalf), jitter);
+    }
+
+    // Deferred lighting already clamps NdotL, so a back-facing receiver is unshadowed without a trace.
+    if(dot(normal, outDirection) <= 0.0)
+        return false;
+
+    outTEnd = tMax - 0.002;
+    return outTEnd > outTMin;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

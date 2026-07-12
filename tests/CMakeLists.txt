@@ -10,6 +10,15 @@ function(nwb_declare_gtest_executable target)
     add_test(NAME ${target} COMMAND ${target})
 endfunction()
 
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(
+    NAME nwb_return_value_handling
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/return_value_handling.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+
 add_subdirectory(global)
 if(TARGET nwb_crash)
     add_subdirectory(crash)

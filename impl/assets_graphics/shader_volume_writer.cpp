@@ -274,7 +274,7 @@ static bool ReserveShaderIndexRecords(
 static bool AppendShaderIndexToManifest(
     ShaderCook::CookArena& cookArena,
     const Core::GraphicsVector<Core::ShaderArchive::Record>& shaderIndexRecords,
-    AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
+    Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
     const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
@@ -290,7 +290,7 @@ static bool AppendShaderIndexToManifest(
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to serialize shader index"));
         return false;
     }
-    if(AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, shaderIndexVirtualPath, indexBinary))
+    if(Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, shaderIndexVirtualPath, indexBinary))
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to append shader index to manifest"));
@@ -333,7 +333,7 @@ bool AppendPreparedShadersToManifest(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     PreparedShaderVector& preparedEntries,
-    AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
+    Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
     VirtualPathHashSet& inOutSeenVirtualPathHashes,
     ScratchArena& scratchArena
 ){
@@ -424,7 +424,7 @@ bool AppendPreparedShadersToManifest(
                 sourceChecksum,
                 bytecodeChecksum
             );
-            if(!AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, virtualPath, cookedBytecode, cookKeyHash)){
+            if(!Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, virtualPath, cookedBytecode, cookKeyHash)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to append shader bytecode '{}' to manifest"), StringConvert(virtualPath.c_str()));
                 return false;
             }

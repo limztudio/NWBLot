@@ -6,8 +6,8 @@
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_model/asset.h>
-#include <impl/assets_bunch/cook.h>
-#include <impl/assets_volume/cooker.h>
+#include <global/core/assets/bunch/cook.h>
+#include <global/core/assets/volume/cooker.h>
 #include <global/core/assets/auto_registration.h>
 #include <global/core/assets/cook_entry_registry.h>
 #include <impl/assets_material/cook.h>
@@ -1069,7 +1069,7 @@ static bool CookPreparedGraphicsAssetRoots(
     if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))
         return false;
 
-    NWB::Impl::AssetVolumeCooker cooker(testArena.arena);
+    NWB::Core::Assets::AssetVolumeCooker cooker(testArena.arena);
     return cooker.cook(options);
 }
 

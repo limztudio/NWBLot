@@ -16,7 +16,7 @@
 #include <impl/assets_material/cook.h>
 #include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/cook.h>
-#include <impl/assets_volume/volume_prepare_registry.h>
+#include <global/core/assets/volume/volume_prepare_registry.h>
 
 #include <global/core/assets/cook_metadata.h>
 #include <global/core/assets/paths.h>
@@ -184,7 +184,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
     return AssetMetadataParseResult::Unsupported;
 }
 
-static bool ParseMaterialBindFiles(AssetsVolumeCookDetail::AssetVolumePrepareContext& context, GraphicsVolumeMetadata& graphicsMetadata){
+static bool ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context, GraphicsVolumeMetadata& graphicsMetadata){
     Core::Assets::DiscoveredBindFileVector bindFiles{ context.arena };
     if(!Core::Assets::DiscoverFilesWithExtension(
         context.resolvedPaths.assetRoots,
@@ -214,7 +214,7 @@ static bool ParseMaterialBindFiles(AssetsVolumeCookDetail::AssetVolumePrepareCon
     return true;
 }
 
-static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepareContext& context){
+static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context){
     GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
     if(!ParseMaterialBindFiles(context, graphicsMetadata))
         return false;
@@ -484,7 +484,7 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
         return false;
 
     context.manifestCookers.emplace_back([&context](
-        AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
+        Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
         Core::Assets::CookEntryPathHashSet& seenVirtualPathHashes,
         Core::Assets::ScratchArena& writeScratchArena
     ){
@@ -506,7 +506,7 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar s_PrepareGraphicsVolumeAssetsRegistrar(&PrepareGraphicsVolumeAssets);
+Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar s_PrepareGraphicsVolumeAssetsRegistrar(&PrepareGraphicsVolumeAssets);
 Core::Assets::AssetMetadataParserAutoRegistrar s_GraphicsVolumeMetadataParserRegistrar(
     &ParseGraphicsDocumentMetadata,
     nullptr

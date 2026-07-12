@@ -14,48 +14,44 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../global.h"
-
-#include <global/core/alloc/scratch.h>
-#include <global/core/metascript/parser.h>
+#include "pack_manifest.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+NWB_ASSETS_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetsBunchCook{
+namespace AssetsVolumeCookDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ScratchArena = Core::Alloc::ScratchArena;
-
-struct ExpandedAsset{
-    Name assetType = NAME_NONE;
-    Name virtualPath = NAME_NONE;
-    const Core::Metascript::Value* value = nullptr;
+struct CookedObjectPayloadView{
+    const u8* data = nullptr;
+    usize size = 0u;
+    AssetVolumePayloadIdentity identity;
 };
 
-using ExpandedAssetVector = Vector<ExpandedAsset, ScratchArena>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] bool ExpandAssetBunch(
-    const Path& assetRoot,
-    AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    ExpandedAssetVector& outAssets,
-    ScratchArena& scratchArena
+[[nodiscard]] bool BuildRegistryObjectManifestEntries(
+    Core::Alloc::GlobalArena& arena,
+    Core::Alloc::ThreadPool& threadPool,
+    const ResolvedCookPaths& resolvedPaths,
+    AStringView configurationSafeName,
+    ParsedAssetMetadata& parsedMetadata,
+    AssetVolumePackManifest& manifest,
+    VirtualPathHashSet& seenVirtualPathHashes
+);
+[[nodiscard]] bool ReadCookedObjectPayload(
+    const Path& objectPath,
+    const Name& expectedVirtualPath,
+    Core::Assets::AssetBytes& objectBytes,
+    CookedObjectPayloadView& outPayload
 );
 
 
@@ -68,7 +64,7 @@ using ExpandedAssetVector = Vector<ExpandedAsset, ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
+NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

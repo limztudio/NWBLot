@@ -2,21 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#pragma once
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "cook_paths.h"
-
-#include <global/core/common/log.h>
+#include "cook_types.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+NWB_ASSETS_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,26 +32,24 @@ namespace AssetsVolumeCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr char s_StagedVolumePathTokenSeparator = '_';
-static constexpr usize s_StagedVolumePathTokenSeparatorCount = 2u;
-static constexpr usize s_StagedVolumePathHashDigits = sizeof(u64) * 2u;
+struct AssetVolumePrepareContext{
+    Core::Alloc::GlobalArena& arena;
+    const ResolvedCookPaths& resolvedPaths;
+    CookString& configurationSafeName;
+    ParsedAssetMetadata& parsedMetadata;
+    u64& plannedFileCount;
+    AssetVolumeManifestCookerVector& manifestCookers;
+    ScratchArena& scratchArena;
+};
 
-StagedVolumePaths BuildStagedVolumePaths(
-    const Path& outputDirectory,
-    const AStringView volumeName,
-    const AStringView configurationSafeName,
-    ScratchArena& scratchArena
-){
-    const ScratchString volumeSafeName = BuildCanonicalSafeCacheName(scratchArena, volumeName);
-    ScratchString stageToken{scratchArena};
-    stageToken.reserve(volumeSafeName.size() + configurationSafeName.size() + s_StagedVolumePathTokenSeparatorCount + s_StagedVolumePathHashDigits);
-    stageToken += volumeSafeName;
-    stageToken += s_StagedVolumePathTokenSeparator;
-    stageToken += configurationSafeName;
-    stageToken += s_StagedVolumePathTokenSeparator;
-    AppendHexU64(ComputeFnv64Text(PathToString(scratchArena, outputDirectory)), stageToken);
-    return BuildStagedDirectoryPaths(scratchArena, outputDirectory, stageToken);
-}
+using AssetVolumePrepareFunction = bool (*)(AssetVolumePrepareContext& context);
+
+class AssetVolumePrepareAutoRegistrar final{
+public:
+    explicit AssetVolumePrepareAutoRegistrar(AssetVolumePrepareFunction function);
+};
+
+[[nodiscard]] bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& context);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,7 +61,7 @@ StagedVolumePaths BuildStagedVolumePaths(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
+NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

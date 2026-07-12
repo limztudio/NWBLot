@@ -14,54 +14,45 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "cook_types.h"
+#include <global/core/assets/global.h>
+
+#include <global/core/assets/cooker.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+NWB_ASSETS_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetsVolumeCookDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct AssetVolumePrepareContext{
-    Core::Alloc::GlobalArena& arena;
-    const ResolvedCookPaths& resolvedPaths;
-    CookString& configurationSafeName;
-    ParsedAssetMetadata& parsedMetadata;
-    u64& plannedFileCount;
-    AssetVolumeManifestCookerVector& manifestCookers;
-    ScratchArena& scratchArena;
+struct AssetVolumeCookResult{
+    ACompactString volumeName;
+    u64 fileCount = 0;
+    u64 segmentCount = 0;
 };
 
-using AssetVolumePrepareFunction = bool (*)(AssetVolumePrepareContext& context);
 
-class AssetVolumePrepareAutoRegistrar final{
+class AssetVolumeCooker final : public Core::Assets::IAssetCooker{
 public:
-    explicit AssetVolumePrepareAutoRegistrar(AssetVolumePrepareFunction function);
-};
+    explicit AssetVolumeCooker(Core::Alloc::GlobalArena& arena)
+        : IAssetCooker(arena, ACompactString("graphics"))
+    {}
 
-[[nodiscard]] bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& context);
+    virtual bool cook(const Core::Assets::AssetCookOptions& options)override;
+
+
+private:
+    bool cookAssetVolume(const Core::Assets::AssetCookOptions& options, AssetVolumeCookResult& outResult);
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
+NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

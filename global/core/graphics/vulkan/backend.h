@@ -911,14 +911,14 @@ private:
     VulkanAllocationHandle m_allocation = nullptr;
     u64 m_deviceAddress = 0;
     void* m_mappedMemory = nullptr;
-    bool m_persistentlyMapped = false;
-    bool m_requiresInvalidate = false;
 
     Vector<u64, Alloc::GlobalArena> m_versionTracking;
     Vector<BufferViewEntry, Alloc::GlobalArena> m_bufferViews;
-    Futex m_bufferViewsMutex;
     VolatileBufferState m_volatileState;
+    Futex m_bufferViewsMutex;
 
+    bool m_persistentlyMapped = false;
+    bool m_requiresInvalidate = false;
     bool m_managed = true; // if true, owns the VkBuffer or VMA allocation
 
     const VulkanContext& m_context;
@@ -1633,22 +1633,21 @@ private:
     Handle<RayTracingPipeline> m_pipeline;
 
     BufferHandle m_raygenBuffer;
-    u64 m_raygenOffset = 0;
-
     BufferHandle m_missBuffer;
-    u64 m_missOffset = 0;
-    u32 m_missCount = 0;
-
     BufferHandle m_hitBuffer;
-    u64 m_hitOffset = 0;
-    u32 m_hitCount = 0;
-
     BufferHandle m_callableBuffer;
+
+    u64 m_raygenOffset = 0;
+    u64 m_missOffset = 0;
+    u64 m_hitOffset = 0;
     u64 m_callableOffset = 0;
-    u32 m_callableCount = 0;
 
     const VulkanContext& m_context;
     Device& m_device;
+
+    u32 m_missCount = 0;
+    u32 m_hitCount = 0;
+    u32 m_callableCount = 0;
 };
 
 
@@ -1681,15 +1680,15 @@ public:
 private:
     BindingLayoutDesc m_desc;
     BindlessLayoutDesc m_bindlessDesc;
-    bool m_isBindless = false;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout, Alloc::GlobalArena> m_descriptorSetLayouts;
-    bool m_descriptorHeapCompatible = false;
-    u32 m_pushConstantByteSize = 0;
     Vector<DescriptorHeapBindingMeta, Alloc::GlobalArena> m_descriptorHeapBindings;
     HashMap<u32, usize, Hasher<u32>, EqualTo<u32>, Alloc::GlobalArena> m_descriptorHeapBindingLookup;
 
     const VulkanContext& m_context;
+    u32 m_pushConstantByteSize = 0;
+    bool m_isBindless = false;
+    bool m_descriptorHeapCompatible = false;
 };
 
 
@@ -1783,13 +1782,12 @@ private:
     VkAccelerationStructureKHR m_accelStruct = VK_NULL_HANDLE;
     BufferHandle m_buffer;
     u64 m_deviceAddress = 0;
-    bool m_compacted = false;
-    bool m_built = false;
-
     VkQueryPool m_compactionQueryPool = VK_NULL_HANDLE;
-    u32 m_compactionQueryIndex = 0;
 
     const VulkanContext& m_context;
+    u32 m_compactionQueryIndex = 0;
+    bool m_compacted = false;
+    bool m_built = false;
 };
 
 

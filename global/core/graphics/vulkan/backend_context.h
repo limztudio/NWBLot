@@ -207,21 +207,21 @@ private:
 
     VkSurfaceFormatKHR m_swapChainFormat = {};
     VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
-    bool m_swapChainMutableFormatSupported = false;
 
     GraphicsVector<SwapChainImage> m_swapChainImages;
-    u32 m_swapChainIndex = static_cast<u32>(-1);
-
     DeviceHandle m_rhiDevice;
 
     SemaphoreVector m_acquireSemaphores;
     SemaphoreVector m_presentSemaphores;
-    u32 m_acquireSemaphoreIndex = 0;
 
     ::Queue<EventQueryHandle, Alloc::GlobalArena> m_framesInFlight;
     Vector<EventQueryHandle, Alloc::GlobalArena> m_queryPool;
+
+    u32 m_swapChainIndex = static_cast<u32>(-1);
+    u32 m_acquireSemaphoreIndex = 0;
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;
 
+    bool m_swapChainMutableFormatSupported = false;
     bool m_bufferDeviceAddressSupported = false;
     bool m_dynamicRenderingSupported = false;
     bool m_synchronization2Supported = false;

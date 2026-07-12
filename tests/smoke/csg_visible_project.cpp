@@ -154,13 +154,13 @@ static void ApplyCubeRotation(
     }
 }
 
-[[nodiscard]] static Float4 CsgVisibleCutterLocalOffset(const usize shapeSlot){
+[[nodiscard]] static SIMDVector CsgVisibleCutterLocalOffset(const usize shapeSlot){
     switch(shapeSlot){
-    case CsgVisibleShapeSlot::Plane: return Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Box: return Float4(0.0f, 0.0f, -0.30f * s_CutterScale, 0.0f);
-    case CsgVisibleShapeSlot::Sphere: return Float4(0.0f, 0.0f, -0.32f * s_CutterScale, 0.0f);
-    case CsgVisibleShapeSlot::Capsule: return Float4(0.0f, 0.0f, -0.32f * s_CutterScale, 0.0f);
-    default: return Float4(0.0f, 0.0f, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Plane: return VectorZero();
+    case CsgVisibleShapeSlot::Box: return VectorSet(0.0f, 0.0f, -0.30f * s_CutterScale, 0.0f);
+    case CsgVisibleShapeSlot::Sphere: return VectorSet(0.0f, 0.0f, -0.32f * s_CutterScale, 0.0f);
+    case CsgVisibleShapeSlot::Capsule: return VectorSet(0.0f, 0.0f, -0.32f * s_CutterScale, 0.0f);
+    default: return VectorZero();
     }
 }
 
@@ -307,7 +307,7 @@ public:
         for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
             const Float4 receiverPosition = CsgVisibleShapePosition(shapeSlot);
             const SIMDVector receiverPositionVector = LoadFloat(receiverPosition);
-            const SIMDVector cutterLocalOffset = LoadFloat(CsgVisibleCutterLocalOffset(shapeSlot));
+            const SIMDVector cutterLocalOffset = CsgVisibleCutterLocalOffset(shapeSlot);
             const SIMDVector cutterPosition = VectorSetW(VectorAdd(receiverPositionVector, cutterLocalOffset), 0.0f);
             m_receivers[shapeSlot] = CreateSolidCubeEntity(
                 *m_world,
@@ -358,7 +358,7 @@ public:
                 m_cutters[shapeSlot],
                 LoadFloat(m_receiverCenters[shapeSlot]),
                 rotation,
-                LoadFloat(CsgVisibleCutterLocalOffset(shapeSlot))
+                CsgVisibleCutterLocalOffset(shapeSlot)
             );
         }
 

@@ -216,8 +216,8 @@ private:
         );
     }
 
-    [[nodiscard]] Float4 resolveCutterAnchorLocalCenter()const{
-        const Float4 fallback(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
+    [[nodiscard]] SIMDVector resolveCutterAnchorLocalCenter()const{
+        const SIMDVector fallback = VectorSet(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
 
         UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
         if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), Name(s_ModelPath), modelAsset) || !modelAsset){
@@ -253,15 +253,15 @@ private:
             boneToModel = MatrixMultiply(LoadFloat(skeleton->joints()[parentIndex].localBindPose), boneToModel);
 
         // The bone origin in model space is the translation column (M*v convention); receiver scale is 1.
-        Float4 result;
-        StoreFloat(
-            VectorSet(VectorGetW(boneToModel.v[0]), VectorGetW(boneToModel.v[1]), VectorGetW(boneToModel.v[2]), 0.0f),
-            &result
+        return VectorSet(
+            VectorGetW(boneToModel.v[0]),
+            VectorGetW(boneToModel.v[1]),
+            VectorGetW(boneToModel.v[2]),
+            0.0f
         );
-        return result;
     }
 
-    void createCutter(){
+    void createCutter(const SIMDVector cutterLocalCenter){
         auto entity = m_world->createEntity();
         auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>(m_context.objectArena);
         cutter.receiverGroup = s_ReceiverGroup;
@@ -282,22 +282,22 @@ private:
         const SIMDVector receiverRotation = BuildReceiverRotation(0.0f);
         AssignCsgCutterTransform(
             cutter,
-            BuildCutterWorldCenter(LoadFloat(m_cutterLocalCenter), receiverRotation),
+            BuildCutterWorldCenter(cutterLocalCenter, receiverRotation),
             BuildCutterWorldRotation(0.0f, receiverRotation)
         );
 
         m_cutter = entity.id();
     }
 
-    void updateReceiverRotation(const NWB::Core::ECS::EntityID entity, const Float4& receiverRotation){
+    void updateReceiverRotation(const NWB::Core::ECS::EntityID entity, const SIMDVector receiverRotation){
         auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         if(!transform)
             return;
 
-        transform->rotation = receiverRotation;
+        StoreFloat(receiverRotation, &transform->rotation);
     }
 
-    void updateReceiverTransforms(const Float4& receiverRotation){
+    void updateReceiverTransforms(const SIMDVector receiverRotation){
         updateReceiverRotation(m_plainReceiver, receiverRotation);
         updateReceiverRotation(m_receiver, receiverRotation);
     }
@@ -346,8 +346,9 @@ public:
         createReceiver();
         SyncSmokeModelRuntimes(*m_world);
         const bool receiverReady = installCsgReceiverOnSpawnedModelObject();
-        m_cutterLocalCenter = resolveCutterAnchorLocalCenter();
-        createCutter();
+        const SIMDVector cutterLocalCenter = resolveCutterAnchorLocalCenter();
+        StoreFloat(cutterLocalCenter, &m_cutterLocalCenter);
+        createCutter(cutterLocalCenter);
         NWB_FATAL_ASSERT_MSG(
             activeCamera.camera.valid()
                 && m_plainReceiver.valid()
@@ -380,9 +381,7 @@ public:
         m_fpsProbe.recordFrame(safeDelta);
         m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_CutterAnimationSpeed;
         const SIMDVector receiverRotation = BuildReceiverRotation(m_animationTime);
-        Float4 storedReceiverRotation;
-        StoreFloat(receiverRotation, &storedReceiverRotation);
-        updateReceiverTransforms(storedReceiverRotation);
+        updateReceiverTransforms(receiverRotation);
         updateCutterTransform(receiverRotation, LoadFloat(m_cutterLocalCenter));
 
         m_world->tick(safeDelta);

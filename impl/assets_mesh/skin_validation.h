@@ -8,8 +8,6 @@
 #include "payload_validation.h"
 #include "skin_types.h"
 
-#include <global/core/assets/module.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -77,19 +75,13 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
     return VectorIsFinite(determinant, 0xFu) && Vector4Greater(VectorAbs(determinant), VectorReplicate(s_Epsilon));
 }
 
-[[nodiscard]] inline bool ValidInverseBindMatrices(
-    const Core::Assets::AssetVector<SkeletonJointMatrix>& inverseBindMatrices,
+[[nodiscard]] inline bool ValidInverseBindMatrixCount(
+    const usize inverseBindMatrixCount,
     const u32 skeletonJointCount){
-    if(inverseBindMatrices.empty())
+    if(inverseBindMatrixCount == 0u)
         return true;
-    if(skeletonJointCount == 0u || inverseBindMatrices.size() != skeletonJointCount)
-        return false;
 
-    for(const SkeletonJointMatrix& matrix : inverseBindMatrices){
-        if(!ValidAffineJointMatrix(LoadFloat(matrix)))
-            return false;
-    }
-    return true;
+    return skeletonJointCount != 0u && inverseBindMatrixCount == static_cast<usize>(skeletonJointCount);
 }
 
 

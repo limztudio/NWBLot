@@ -66,7 +66,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
     }
     NWB_ASSERT(instance.skeletonJointCount != 0u);
     NWB_ASSERT(instance.skeletonJointCount <= static_cast<u32>(Limit<u16>::s_Max) + 1u);
-    NWB_ASSERT(SkinValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount));
+    NWB_ASSERT(SkinValidation::ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount));
     NWB_ASSERT(instance.skin.size() <= static_cast<usize>(Limit<u32>::s_Max));
     NWB_ASSERT(sourceJoints.size() <= static_cast<usize>(Limit<u32>::s_Max));
     if(sourceJoints.size() < static_cast<usize>(instance.skeletonJointCount)){
@@ -92,6 +92,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
             ? LoadFloat(instance.inverseBindMatrices[jointIndex])
             : SIMDMatrix{}
         ;
+        NWB_ASSERT(!hasInverseBindMatrices || SkinValidation::ValidAffineJointMatrix(inverseBind));
         SIMDMatrix jointMatrix;
         if(
             !SkeletonRuntime::ResolveSkinningJointMatrix(

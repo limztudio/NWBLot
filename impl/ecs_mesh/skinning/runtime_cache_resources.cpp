@@ -99,7 +99,17 @@ namespace __hidden_runtime_cache_resources{
         );
         return false;
     }
-    if(!SkinValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount)){
+    if(!SkinValidation::ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid")
+            , TStringView(sourceText)
+        );
+        return false;
+    }
+    for(const SkeletonJointMatrix& storedInverseBind : instance.inverseBindMatrices){
+        const SIMDMatrix inverseBind = LoadFloat(storedInverseBind);
+        if(SkinValidation::ValidAffineJointMatrix(inverseBind))
+            continue;
+
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid")
             , TStringView(sourceText)
         );

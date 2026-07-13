@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/kernel/subsystem_base.h>
 
-#include <global/core/alloc/scratch.h>
+#include <core/alloc/scratch.h>
 #include <global/simdmath.h>
 
 

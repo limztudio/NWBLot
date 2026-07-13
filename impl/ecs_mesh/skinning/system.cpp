@@ -4,10 +4,10 @@
 #include "resource_names.h"
 #include "timing_names.h"
 
-#include <global/core/common/log.h>
-#include <global/core/ecs/world.h>
-#include <global/core/graphics/backend_selection.h>
-#include <global/core/graphics/module.h>
+#include <core/common/log.h>
+#include <core/ecs/world.h>
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/module.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 
 

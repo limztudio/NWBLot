@@ -1,10 +1,10 @@
 
 #include "system.h"
 
-#include <global/core/assets/manager.h>
-#include <global/core/common/log.h>
-#include <global/core/ecs/entity.h>
-#include <global/core/ecs/world.h>
+#include <core/assets/manager.h>
+#include <core/common/log.h>
+#include <core/ecs/entity.h>
+#include <core/ecs/world.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_skeleton/asset.h>
 #include <impl/ecs_mesh/components.h>

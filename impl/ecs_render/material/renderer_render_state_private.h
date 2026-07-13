@@ -5,7 +5,7 @@
 #include <impl/ecs_render/avboit/avboit.h>
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
 
-#include <global/core/graphics/api.h>
+#include <core/graphics/api.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

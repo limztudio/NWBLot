@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
-#include <global/core/ecs/world.h>
+#include <core/ecs/world.h>
 #include <impl/ecs_scene/module.h>
 
 

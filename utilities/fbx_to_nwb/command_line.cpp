@@ -3,7 +3,7 @@
 
 #include <CLI.hpp>
 
-#include <global/core/common/log.h>
+#include <core/common/log.h>
 
 #include <string>
 

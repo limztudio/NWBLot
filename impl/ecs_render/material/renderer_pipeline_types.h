@@ -4,9 +4,9 @@
 
 #include <impl/ecs_render/kernel/components.h>
 
-#include <global/core/alloc/scratch.h>
-#include <global/core/assets/global.h>
-#include <global/core/graphics/api.h>
+#include <core/alloc/scratch.h>
+#include <core/assets/global.h>
+#include <core/graphics/api.h>
 #include <impl/assets_material/asset.h>
 
 #include <global/containers.h>

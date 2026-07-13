@@ -4,9 +4,9 @@
 
 #include "../global.h"
 
-#include <global/core/assets/module.h>
-#include <global/core/assets/ref.h>
-#include <global/core/graphics/api.h>
+#include <core/assets/module.h>
+#include <core/assets/ref.h>
+#include <core/graphics/api.h>
 #include <impl/assets/graphics/mesh/material_typed_constants.h>
 
 

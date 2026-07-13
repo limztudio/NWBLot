@@ -2,8 +2,8 @@
 #include "module.h"
 #include <global/text_write.h>
 
-#include <global/core/common/log.h>
-#include <global/core/metascript/parser.h>
+#include <core/common/log.h>
+#include <core/metascript/parser.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

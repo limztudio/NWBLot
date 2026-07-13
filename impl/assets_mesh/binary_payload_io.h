@@ -2,9 +2,9 @@
 #pragma once
 
 
-#include <global/core/assets/binary_payload_io.h>
+#include <core/assets/binary_payload_io.h>
 #include <global/binary.h>
-#include <global/core/common/log.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

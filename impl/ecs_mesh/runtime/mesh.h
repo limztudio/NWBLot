@@ -4,10 +4,10 @@
 
 #include "../../global.h"
 
-#include <global/core/alloc/general.h>
-#include <global/core/assets/ref.h>
-#include <global/core/ecs/entity_id.h>
-#include <global/core/graphics/api.h>
+#include <core/alloc/general.h>
+#include <core/assets/ref.h>
+#include <core/ecs/entity_id.h>
+#include <core/graphics/api.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

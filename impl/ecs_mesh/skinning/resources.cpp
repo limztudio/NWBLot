@@ -5,9 +5,9 @@
 #include "resource_names.h"
 #include "skin_payload.h"
 
-#include <global/core/common/log.h>
-#include <global/core/graphics/backend_selection.h>
-#include <global/core/graphics/module.h>
+#include <core/common/log.h>
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/module.h>
 #include <impl/assets/graphics/skinned_mesh/binding_slots.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
 

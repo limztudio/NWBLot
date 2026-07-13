@@ -2,7 +2,7 @@
 #include "crash_ingest.h"
 #include "crash_paths.h"
 
-#include <global/core/crash/package_names.h>
+#include <core/crash/package_names.h>
 
 #include <global/binary.h>
 #include <global/filesystem/archive.h>

@@ -2,8 +2,8 @@
 #pragma once
 
 
-#include <global/core/alloc/core.h>
-#include <global/core/alloc/general.h>
+#include <core/alloc/core.h>
+#include <core/alloc/general.h>
 
 #include <global/global.h>
 

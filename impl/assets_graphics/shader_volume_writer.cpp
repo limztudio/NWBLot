@@ -11,10 +11,10 @@
 
 #include <impl/assets_shader/binary_payload.h>
 
-#include <global/core/graphics/shader_archive.h>
-#include <global/core/filesystem/module.h>
+#include <core/graphics/shader_archive.h>
+#include <core/filesystem/module.h>
 
-#include <global/core/common/log.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

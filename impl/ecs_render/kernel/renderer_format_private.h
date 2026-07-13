@@ -4,8 +4,8 @@
 
 #include <impl/ecs_render/kernel/renderer_types.h>
 
-#include <global/core/graphics/module.h>
-#include <global/core/graphics/backend_selection.h>
+#include <core/graphics/module.h>
+#include <core/graphics/backend_selection.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

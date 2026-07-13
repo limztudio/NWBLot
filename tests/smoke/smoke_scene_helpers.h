@@ -7,11 +7,11 @@
 
 #include <loader/project_entry.h>
 
-#include <global/core/assets/ref.h>
-#include <global/core/ecs/world.h>
-#include <global/core/graphics/backend_selection.h>
-#include <global/core/graphics/module.h>
-#include <global/core/telemetry/frame_graph_registry.h>
+#include <core/assets/ref.h>
+#include <core/ecs/world.h>
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/module.h>
+#include <core/telemetry/frame_graph_registry.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/ecs_mesh/module.h>

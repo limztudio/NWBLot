@@ -10,8 +10,8 @@
 #include <impl/assets/graphics/avboit/names.h>
 #include <impl/assets_shader/asset.h>
 
-#include <global/core/graphics/shader_stage_names.h>
-#include <global/core/common/log.h>
+#include <core/graphics/shader_stage_names.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

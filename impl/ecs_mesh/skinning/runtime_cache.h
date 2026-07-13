@@ -2,7 +2,7 @@
 #pragma once
 
 
-#include <global/core/assets/module.h>
+#include <core/assets/module.h>
 #include "runtime_instance.h"
 
 

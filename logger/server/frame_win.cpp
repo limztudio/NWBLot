@@ -1,5 +1,5 @@
 
-#include <global/core/alloc/standalone_runtime.h>
+#include <core/alloc/standalone_runtime.h>
 #include "frame.h"
 
 
@@ -13,7 +13,7 @@
 
 
 #include <windows.h>
-#include <global/core/common/win32_message_loop.h>
+#include <core/common/win32_message_loop.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

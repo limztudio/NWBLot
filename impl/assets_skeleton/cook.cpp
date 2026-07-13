@@ -9,10 +9,10 @@
 #include "binary_payload.h"
 #include "cook_matrix.h"
 
-#include <global/core/assets/binary_payload_io.h>
-#include <global/core/assets/paths.h>
-#include <global/core/common/log.h>
-#include <global/core/metascript/parser.h>
+#include <core/assets/binary_payload_io.h>
+#include <core/assets/paths.h>
+#include <core/common/log.h>
+#include <core/metascript/parser.h>
 #include <global/binary.h>
 
 

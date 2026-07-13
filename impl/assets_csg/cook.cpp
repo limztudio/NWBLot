@@ -9,8 +9,8 @@
 
 #include "arena_names.h"
 
-#include <global/core/assets/paths.h>
-#include <global/core/common/log.h>
+#include <core/assets/paths.h>
+#include <core/common/log.h>
 #include <global/text_utils.h>
 
 

@@ -2,7 +2,7 @@
 #pragma once
 
 
-#include <global/core/common/log.h>
+#include <core/common/log.h>
 #include <global/simplemath.h>
 #include <global/type.h>
 

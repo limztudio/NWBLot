@@ -2,8 +2,8 @@
 #include "asset.h"
 #include "binary_payload.h"
 
-#include <global/core/common/log.h>
-#include <global/core/assets/auto_registration.h>
+#include <core/common/log.h>
+#include <core/assets/auto_registration.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

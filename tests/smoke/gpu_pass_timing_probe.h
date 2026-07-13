@@ -4,8 +4,8 @@
 
 #include "smoke_environment.h"
 
-#include <global/core/common/log.h>
-#include <global/core/perf/timing.h>
+#include <core/common/log.h>
+#include <core/perf/timing.h>
 #include <global/basic_string.h>
 #include <global/filesystem.h>
 #include <global/name.h>

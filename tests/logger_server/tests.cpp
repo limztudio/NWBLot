@@ -6,9 +6,9 @@
 
 #include <gtest/gtest.h>
 
-#include <global/core/crash/module.h>
-#include <global/core/crash/package_names.h>
-#include <global/core/common/log.h>
+#include <core/crash/module.h>
+#include <core/crash/package_names.h>
+#include <core/common/log.h>
 #include <global/assert.h>
 #include <global/environment.h>
 #include <global/filesystem/directory_iterator.h>

@@ -1,7 +1,7 @@
 
 #include "crash_symbolicate_internal.h"
 
-#include <global/core/crash/package_names.h>
+#include <core/crash/package_names.h>
 
 #include <nwb_rgd_decode.h>
 

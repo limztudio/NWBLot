@@ -3,8 +3,8 @@
 
 #include <gtest/gtest.h>
 
-#include <global/core/crash/package_internal.h>
-#include <global/core/crash/package_names.h>
+#include <core/crash/package_internal.h>
+#include <core/crash/package_names.h>
 #include <global/environment.h>
 #include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>

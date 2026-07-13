@@ -1,11 +1,11 @@
 
 #include "system.h"
 
-#include <global/core/ecs/world.h>
-#include <global/core/graphics/backend_selection.h>
-#include <global/core/graphics/module.h>
+#include <core/ecs/world.h>
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/module.h>
 #include <impl/assets/graphics/imgui/binding_slots.h>
-#include <global/core/common/log.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

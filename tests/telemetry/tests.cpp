@@ -3,8 +3,8 @@
 #include <gtest/gtest.h>
 #include <tests/capturing_logger.h>
 
-#include <global/core/telemetry/module.h>
-#include <global/core/telemetry/frame_graph_registry.h>
+#include <core/telemetry/module.h>
+#include <core/telemetry/frame_graph_registry.h>
 #include <logger/telemetry/ingest.h>
 #include <logger/telemetry/report.h>
 

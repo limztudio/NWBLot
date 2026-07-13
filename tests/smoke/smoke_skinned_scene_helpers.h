@@ -7,7 +7,7 @@
 
 #include "smoke_scene_helpers.h"
 
-#include <global/core/common/log.h>
+#include <core/common/log.h>
 #include <impl/assets_model/asset.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_model/module.h>

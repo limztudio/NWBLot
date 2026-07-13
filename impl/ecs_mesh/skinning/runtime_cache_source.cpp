@@ -3,9 +3,9 @@
 
 #include "arena_names.h"
 
-#include <global/core/assets/manager.h>
-#include <global/core/alloc/scratch.h>
-#include <global/core/common/log.h>
+#include <core/assets/manager.h>
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>

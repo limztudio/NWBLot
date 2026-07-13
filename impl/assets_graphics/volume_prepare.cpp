@@ -13,11 +13,11 @@
 #include <impl/assets_material/cook.h>
 #include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/cook.h>
-#include <global/core/assets/volume/volume_prepare_registry.h>
+#include <core/assets/volume/volume_prepare_registry.h>
 
-#include <global/core/assets/cook_metadata.h>
-#include <global/core/assets/paths.h>
-#include <global/core/common/log.h>
+#include <core/assets/cook_metadata.h>
+#include <core/assets/paths.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

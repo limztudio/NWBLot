@@ -2,9 +2,9 @@
 #include "asset.h"
 #include "binary_payload.h"
 
-#include <global/core/assets/auto_registration.h>
-#include <global/core/assets/binary_payload_io.h>
-#include <global/core/common/log.h>
+#include <core/assets/auto_registration.h>
+#include <core/assets/binary_payload_io.h>
+#include <core/common/log.h>
 #include <global/binary.h>
 
 

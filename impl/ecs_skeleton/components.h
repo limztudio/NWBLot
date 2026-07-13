@@ -4,7 +4,7 @@
 
 #include "../global.h"
 
-#include <global/core/alloc/general.h>
+#include <core/alloc/general.h>
 #include <impl/assets_skeleton/joint_types.h>
 
 

@@ -2,8 +2,8 @@
 #include "crash_symbolicate_internal.h"
 #include "crash_paths.h"
 
-#include <global/core/crash/package_names.h>
-#include <global/core/crash/reason_names.h>
+#include <core/crash/package_names.h>
+#include <core/crash/reason_names.h>
 #include <global/text_utils.h>
 
 

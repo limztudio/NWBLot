@@ -1,5 +1,5 @@
 
-#include <global/core/metascript/parser.h>
+#include <core/metascript/parser.h>
 
 #include <tests/test_context.h>
 #include <gtest/gtest.h>

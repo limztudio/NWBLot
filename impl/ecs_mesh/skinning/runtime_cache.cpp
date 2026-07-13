@@ -1,8 +1,8 @@
 
 #include "runtime_cache.h"
 
-#include <global/core/common/log.h>
-#include <global/core/ecs/world.h>
+#include <core/common/log.h>
+#include <core/ecs/world.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets_mesh/skin_asset.h>
 

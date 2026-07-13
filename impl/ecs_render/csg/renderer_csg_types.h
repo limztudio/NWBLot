@@ -4,8 +4,8 @@
 
 #include <impl/ecs_render/kernel/components.h>
 
-#include <global/core/alloc/scratch.h>
-#include <global/core/graphics/api.h>
+#include <core/alloc/scratch.h>
+#include <core/graphics/api.h>
 #include <impl/assets/graphics/csg/constants.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_csg/frame_state.h>

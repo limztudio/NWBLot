@@ -12,8 +12,8 @@
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/shader_stage_names.h>
 
-#include <global/core/assets/paths.h>
-#include <global/core/common/log.h>
+#include <core/assets/paths.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

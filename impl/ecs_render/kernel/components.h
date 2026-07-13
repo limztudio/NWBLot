@@ -4,7 +4,7 @@
 
 #include <impl/global.h>
 
-#include <global/core/assets/ref.h>
+#include <core/assets/ref.h>
 #include <impl/assets_material/asset.h>
 
 

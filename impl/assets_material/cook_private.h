@@ -9,16 +9,16 @@
 #include "metadata.h"
 #include "binary_payload.h"
 
-#include <global/core/alloc/scratch.h>
-#include <global/core/assets/paths.h>
-#include <global/core/filesystem/module.h>
-#include <global/core/graphics/shader_archive.h>
-#include <global/core/graphics/shader_stage_names.h>
-#include <global/core/metascript/parser.h>
+#include <core/alloc/scratch.h>
+#include <core/assets/paths.h>
+#include <core/filesystem/module.h>
+#include <core/graphics/shader_archive.h>
+#include <core/graphics/shader_stage_names.h>
+#include <core/metascript/parser.h>
 #include <global/hash_utils.h>
 #include <global/text_utils.h>
 #include <global/math/convert.h>
-#include <global/core/common/log.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

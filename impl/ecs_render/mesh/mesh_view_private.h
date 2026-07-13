@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/kernel/system.h>
 
-#include <global/core/ecs/world.h>
+#include <core/ecs/world.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_scene/module.h>
 

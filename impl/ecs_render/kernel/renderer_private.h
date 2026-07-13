@@ -14,11 +14,11 @@
 #include <impl/ecs_render/deferred/renderer_scene_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
-#include <global/core/assets/manager.h>
-#include <global/core/common/log.h>
-#include <global/core/ecs/world.h>
-#include <global/core/graphics/module.h>
-#include <global/core/graphics/shader_archive.h>
+#include <core/assets/manager.h>
+#include <core/common/log.h>
+#include <core/ecs/world.h>
+#include <core/graphics/module.h>
+#include <core/graphics/shader_archive.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets/graphics/avboit/binding_slots.h>
 #include <impl/assets/graphics/avboit/constants.h>

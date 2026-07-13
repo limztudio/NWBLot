@@ -8,9 +8,9 @@
 #include "meshlet_payload_packing.h"
 #include "payload_validation.h"
 
-#include <global/core/alloc/scratch.h>
-#include <global/core/common/log.h>
-#include <global/core/assets/auto_registration.h>
+#include <core/alloc/scratch.h>
+#include <core/common/log.h>
+#include <core/assets/auto_registration.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

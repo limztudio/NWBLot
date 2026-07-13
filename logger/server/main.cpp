@@ -1,5 +1,5 @@
 
-#include <global/core/alloc/standalone_runtime.h>
+#include <core/alloc/standalone_runtime.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -7,8 +7,8 @@
 
 #include <CLI.hpp>
 
-#include <global/core/common/command_line.h>
-#include <global/core/common/module.h>
+#include <core/common/command_line.h>
+#include <core/common/module.h>
 #include "module.h"
 #include "frame.h"
 
@@ -120,7 +120,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
 }
 
 
-#include <global/core/common/application_entry.h>
+#include <core/common/application_entry.h>
 
 NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 

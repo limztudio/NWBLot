@@ -1,5 +1,5 @@
 
-#include <global/core/common/module.h>
+#include <core/common/module.h>
 
 #include <tests/test_context.h>
 #include <gtest/gtest.h>

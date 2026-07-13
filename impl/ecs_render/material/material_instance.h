@@ -4,8 +4,8 @@
 
 #include <impl/ecs_render/kernel/components.h>
 
-#include <global/core/common/log.h>
-#include <global/core/ecs/world.h>
+#include <core/common/log.h>
+#include <core/ecs/world.h>
 #include <global/math/convert.h>
 
 

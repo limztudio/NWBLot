@@ -1,7 +1,7 @@
 
 #include <impl/ecs_scene/module.h>
 
-#include <global/core/common/module.h>
+#include <core/common/module.h>
 
 #include <global/compile.h>
 

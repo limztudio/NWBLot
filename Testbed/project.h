@@ -4,8 +4,8 @@
 
 #include <loader/project_entry.h>
 
-#include <global/core/ecs/module.h>
-#include <global/core/input/module.h>
+#include <core/ecs/module.h>
+#include <core/input/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

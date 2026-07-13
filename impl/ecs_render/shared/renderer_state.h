@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/kernel/renderer_types.h>
 
-#include <global/core/ecs/entity_id.h>
+#include <core/ecs/entity_id.h>
 
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>

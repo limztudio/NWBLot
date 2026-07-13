@@ -7,7 +7,7 @@
 #include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/assets_mesh/skin_validation.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
-#include <global/core/common/log.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

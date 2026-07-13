@@ -1,3 +1,6 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // Stage-3 INDIRECT TRACE + SCATTER (compacted transparent resolve). DispatchIndirect, one compacted edge record per
 // thread: unpack the pixel + light, re-trace that single light full-res via nwbSwShadowLightVisible (preserving the

@@ -1,3 +1,6 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #include "shadow_reproject_merge_binding_slots.h"
 #include "shadow_resolve_binding_slots.h" // NWB_SHADOW_RESOLVE_GROUP_SIZE (the merge shares the resolve's group size)

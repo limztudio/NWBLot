@@ -1,3 +1,6 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // SOFT TRANSPARENT half-res trace (all light types). The COLORED
 // (Beer-Lambert / Fresnel) analog of sw_shadow_soft_opaque_cs: one thread per HALF-res pixel casts NWB_SW_SHADOW_TRANSPARENT_SPP

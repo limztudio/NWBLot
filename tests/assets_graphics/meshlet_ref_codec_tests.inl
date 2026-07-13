@@ -1,3 +1,6 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 TEST(AssetsGraphics, MeshletRefEncodingWidthRules){
     EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(0u), NWB::Impl::MeshletRefDeltaWidth::U8);

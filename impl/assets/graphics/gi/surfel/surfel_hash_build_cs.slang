@@ -1,3 +1,6 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // Surfel hash build: one thread per pool slot. A live surfel links itself into its cell's singly-linked list --
 // InterlockedExchange the cell head to this surfel id (one integer atomic, no float atomics) and store the previous

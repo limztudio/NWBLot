@@ -1,3 +1,6 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // UNIFORM transparent multiply at HALF resolution (the non-adaptive Stage-1 baseline). One transparent trace per 2x2
 // block, folded onto EACH of the block's four full-res pixels' own opaque mask -- so the opaque (hard) shadow keeps full

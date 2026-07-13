@@ -1,3 +1,6 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // SOFT OPAQUE half-res trace (soft-ray-traced-shadow feature, all light types). One thread per HALF-res pixel: for each
 // light holding a shadow slot, cast NWB_SW_SHADOW_SOFT_SPP OPAQUE occlusion rays CONE-JITTERED inside the cone the

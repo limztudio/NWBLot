@@ -1,5 +1,5 @@
 package: tsl
 version: robin-map 1.4.1
-updated_utc: 2026-06-20T15:40:47Z
+updated_utc: 2026-07-14T16:03:35Z
 source: https://github.com/Tessil/robin-map/releases/tag/v1.4.1
-notes: tsl::robin_map open-addressing hash map. Header-only.
+notes: tsl::robin_map open-addressing hash map. Header-only. NWB retains a skipped deserialize hash in a [[maybe_unused]] local so its return value is not hidden.

@@ -1,5 +1,5 @@
 package: curl
 version: 8.21.0
-updated_utc: 2026-06-30T16:04:00Z
+updated_utc: 2026-07-14T16:03:35Z
 source: https://curl.se/download/curl-8.21.0.tar.xz
-notes: libcurl transport for the log client. Public headers + lib/ are vendored from the official release tarball; generated autoconf Makefile.in files are pruned, and NWB CMake is local integration. The Windows vendored build generates curl_config.h into the CMake binary tree from lib/curl_config-cmake.h.in using upstream-style Windows cache values.
+notes: libcurl transport for the log client. Public headers + lib/ are vendored from the official release tarball; generated autoconf Makefile.in files are pruned, and NWB CMake is local integration. The Windows vendored build generates curl_config.h into the CMake binary tree from lib/curl_config-cmake.h.in using upstream-style Windows cache values. The NWB static target is runtime-matched through the top-level CMake policy.

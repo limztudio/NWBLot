@@ -46,6 +46,19 @@ add_subdirectory(googletest)                       # unit-test framework (gtest)
 nwb_match_engine_runtime(gtest)
 add_subdirectory(wmi)
 
+# Policy section 17: static C/C++ vendor libraries linked by engine targets must use the engine CRT and
+# _ITERATOR_DEBUG_LEVEL. The helper is guarded so platform-specific targets (for example vendored curl) are safe.
+foreach(_nwb_engine_static_vendor_target
+    nwb_vendor_imgui
+    nwb_vendor_volk
+    nwb_vendor_ufbx
+    nwb_vendor_curl
+    nwb_vendor_microhttpd
+    nwb_vendor_miniz
+)
+    nwb_match_engine_runtime(${_nwb_engine_static_vendor_target})
+endforeach()
+
 # Radeon GPU Detective (RGD) in-process .rgd decoder + its vendored dependencies.
 add_subdirectory(zstd)                             # rdf's compression backend (flattened out of rdf/imported)
 add_subdirectory(rdf)

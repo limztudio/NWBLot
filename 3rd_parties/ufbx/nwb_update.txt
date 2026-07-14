@@ -1,5 +1,5 @@
 package: ufbx
 version: 0.23.0
-updated_utc: 2026-06-30T16:04:00Z
+updated_utc: 2026-07-14T16:03:35Z
 source: https://github.com/ufbx/ufbx/releases/tag/v0.23.0
-notes: Single-file FBX loader.
+notes: Single-file FBX loader. The NWB static target is runtime-matched through the top-level CMake policy.

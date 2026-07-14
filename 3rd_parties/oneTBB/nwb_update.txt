@@ -1,5 +1,5 @@
 package: oneTBB
 version: 2023.0.0 (TBB 12)
-updated_utc: 2026-06-15
+updated_utc: 2026-07-14T16:03:35Z
 source: https://github.com/oneapi-src/oneTBB
-notes: Intel oneTBB task scheduler / scalable allocator.
+notes: Intel oneTBB task scheduler / scalable allocator. NWB CMake normalizes custom dbg/opt/fin configurations for imported Linux TBB auxiliary targets as well as tbb and tbbmalloc.

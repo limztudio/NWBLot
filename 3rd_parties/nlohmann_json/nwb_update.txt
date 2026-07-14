@@ -1,5 +1,5 @@
 package: nlohmann_json
 version: 3.12.0
-updated_utc: 2026-06-20T15:40:47Z
+updated_utc: 2026-07-14T16:03:35Z
 source: https://github.com/nlohmann/json/releases/tag/v3.12.0
-notes: Single-header JSON. Single shared top-level copy; consumers include <nlohmann/json.hpp>.
+notes: Single-header JSON. Single shared top-level copy; consumers include <nlohmann/json.hpp>. NWB applies a local checked snprintf-result handling patch for warning-clean builds.

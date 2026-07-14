@@ -1,5 +1,5 @@
 package: radeon_gpu_detective
 version: 1.6.3.0
-updated_utc: 2026-06-23T16:02:45Z
+updated_utc: 2026-07-14T16:03:35Z
 source: https://github.com/GPUOpen-Tools/radeon_gpu_detective/releases/tag/v1.6.3
-notes: Top-level CMake wrapper builds the in-process .rgd GPU-crash decoder backend (rgd_backend / nwb_rgd_decode); summary decode only. Consumes flattened dev_driver via nwb::dev_driver_headers. The disassembler/DXBC/code-object .cpp+.h are EXCLUDED from the build but KEPT on disk as a deferred ISA-disasm feature. Pruned dead non-build files and upstream pix_events_decoder CMake; kept License.txt + RGD_NOTICES.txt.
+notes: Top-level CMake wrapper builds the in-process .rgd GPU-crash decoder backend (rgd_backend / nwb_rgd_decode); summary decode only. Consumes flattened dev_driver via nwb::dev_driver_headers. The NWB-authored nwb_rgd_decode shim suppresses backend console output under a mutex while parsing. The disassembler/DXBC/code-object .cpp+.h are EXCLUDED from the build but KEPT on disk as a deferred ISA-disasm feature. Pruned dead non-build files and upstream pix_events_decoder CMake; kept License.txt + RGD_NOTICES.txt.

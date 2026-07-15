@@ -125,6 +125,37 @@ void nwbSkinnedMeshBoundsStore(const uint meshletIndex, const float4 sphere, con
 }
 
 void nwbSkinnedMeshBoundsReduceMinMax(const uint groupThreadIndex){
+#if NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE
+    // Two-stage fold. Intra-wave: each lane reads ONLY its own groupshared slot (the value the
+    // caller just wrote), so WaveActiveMin/Max combine register values across the wave with no
+    // barrier -- the same property the surfel SH reduce relies on. Lane 0 of each wave then holds
+    // the per-wave min/max. Cross-wave: lane 0 of each wave stores its result, one barrier, then a
+    // log2(waveCount)-stride tree folds the per-wave results into slot 0. 128-thread group ->
+    // waveCount 2 on AMD BC-250 (subgroup 64) / 4 on NVIDIA (subgroup 32); 8 baseline barriers -> 2.
+    const uint waveLaneCount = WaveGetLaneCount();
+    const uint laneIndex = WaveGetLaneIndex();
+    const uint waveIndex = groupThreadIndex / waveLaneCount;
+    const float3 waveMin = WaveReadLaneFirst(WaveActiveMin(g_NwbSkinnedMeshBoundsMin[groupThreadIndex]));
+    const float3 waveMax = WaveReadLaneFirst(WaveActiveMax(g_NwbSkinnedMeshBoundsMax[groupThreadIndex]));
+    if(laneIndex == 0u){
+        g_NwbSkinnedMeshBoundsMin[waveIndex] = waveMin;
+        g_NwbSkinnedMeshBoundsMax[waveIndex] = waveMax;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    for(uint stride = (NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X / waveLaneCount) >> 1u; stride > 0u; stride >>= 1u){
+        if(groupThreadIndex < stride){
+            g_NwbSkinnedMeshBoundsMin[groupThreadIndex] = min(
+                g_NwbSkinnedMeshBoundsMin[groupThreadIndex],
+                g_NwbSkinnedMeshBoundsMin[groupThreadIndex + stride]
+            );
+            g_NwbSkinnedMeshBoundsMax[groupThreadIndex] = max(
+                g_NwbSkinnedMeshBoundsMax[groupThreadIndex],
+                g_NwbSkinnedMeshBoundsMax[groupThreadIndex + stride]
+            );
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+#else
     GroupMemoryBarrierWithGroupSync();
     for(uint stride = NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X >> 1u; stride > 0u; stride >>= 1u){
         if(groupThreadIndex < stride){
@@ -139,18 +170,51 @@ void nwbSkinnedMeshBoundsReduceMinMax(const uint groupThreadIndex){
         }
         GroupMemoryBarrierWithGroupSync();
     }
+#endif
 }
 
 void nwbSkinnedMeshBoundsReduceValidPositionCount(const uint groupThreadIndex){
+#if NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE
+    const uint waveLaneCount = WaveGetLaneCount();
+    const uint laneIndex = WaveGetLaneIndex();
+    const uint waveIndex = groupThreadIndex / waveLaneCount;
+    const uint waveSum = WaveReadLaneFirst(WaveActiveSum(g_NwbSkinnedMeshBoundsValidPositionCount[groupThreadIndex]));
+    if(laneIndex == 0u)
+        g_NwbSkinnedMeshBoundsValidPositionCount[waveIndex] = waveSum;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint stride = (NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X / waveLaneCount) >> 1u; stride > 0u; stride >>= 1u){
+        if(groupThreadIndex < stride)
+            g_NwbSkinnedMeshBoundsValidPositionCount[groupThreadIndex] += g_NwbSkinnedMeshBoundsValidPositionCount[groupThreadIndex + stride];
+        GroupMemoryBarrierWithGroupSync();
+    }
+#else
     GroupMemoryBarrierWithGroupSync();
     for(uint stride = NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X >> 1u; stride > 0u; stride >>= 1u){
         if(groupThreadIndex < stride)
             g_NwbSkinnedMeshBoundsValidPositionCount[groupThreadIndex] += g_NwbSkinnedMeshBoundsValidPositionCount[groupThreadIndex + stride];
         GroupMemoryBarrierWithGroupSync();
     }
+#endif
 }
 
 void nwbSkinnedMeshBoundsReduceRadius(const uint groupThreadIndex){
+#if NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE
+    const uint waveLaneCount = WaveGetLaneCount();
+    const uint laneIndex = WaveGetLaneIndex();
+    const uint waveIndex = groupThreadIndex / waveLaneCount;
+    const float waveMax = WaveReadLaneFirst(WaveActiveMax(g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex]));
+    if(laneIndex == 0u)
+        g_NwbSkinnedMeshBoundsRadiusSq[waveIndex] = waveMax;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint stride = (NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X / waveLaneCount) >> 1u; stride > 0u; stride >>= 1u){
+        if(groupThreadIndex < stride)
+            g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex] = max(
+                g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex],
+                g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex + stride]
+            );
+        GroupMemoryBarrierWithGroupSync();
+    }
+#else
     GroupMemoryBarrierWithGroupSync();
     for(uint stride = NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X >> 1u; stride > 0u; stride >>= 1u){
         if(groupThreadIndex < stride)
@@ -160,27 +224,75 @@ void nwbSkinnedMeshBoundsReduceRadius(const uint groupThreadIndex){
             );
         GroupMemoryBarrierWithGroupSync();
     }
+#endif
 }
 
 void nwbSkinnedMeshBoundsReduceAreaNormal(const uint groupThreadIndex){
+#if NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE
+    const uint waveLaneCount = WaveGetLaneCount();
+    const uint laneIndex = WaveGetLaneIndex();
+    const uint waveIndex = groupThreadIndex / waveLaneCount;
+    const float3 waveSum = WaveReadLaneFirst(WaveActiveSum(g_NwbSkinnedMeshBoundsAreaNormal[groupThreadIndex]));
+    if(laneIndex == 0u)
+        g_NwbSkinnedMeshBoundsAreaNormal[waveIndex] = waveSum;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint stride = (NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X / waveLaneCount) >> 1u; stride > 0u; stride >>= 1u){
+        if(groupThreadIndex < stride)
+            g_NwbSkinnedMeshBoundsAreaNormal[groupThreadIndex] += g_NwbSkinnedMeshBoundsAreaNormal[groupThreadIndex + stride];
+        GroupMemoryBarrierWithGroupSync();
+    }
+#else
     GroupMemoryBarrierWithGroupSync();
     for(uint stride = NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X >> 1u; stride > 0u; stride >>= 1u){
         if(groupThreadIndex < stride)
             g_NwbSkinnedMeshBoundsAreaNormal[groupThreadIndex] += g_NwbSkinnedMeshBoundsAreaNormal[groupThreadIndex + stride];
         GroupMemoryBarrierWithGroupSync();
     }
+#endif
 }
 
 void nwbSkinnedMeshBoundsReduceValidFaceNormalCount(const uint groupThreadIndex){
+#if NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE
+    const uint waveLaneCount = WaveGetLaneCount();
+    const uint laneIndex = WaveGetLaneIndex();
+    const uint waveIndex = groupThreadIndex / waveLaneCount;
+    const uint waveSum = WaveReadLaneFirst(WaveActiveSum(g_NwbSkinnedMeshBoundsValidFaceNormalCount[groupThreadIndex]));
+    if(laneIndex == 0u)
+        g_NwbSkinnedMeshBoundsValidFaceNormalCount[waveIndex] = waveSum;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint stride = (NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X / waveLaneCount) >> 1u; stride > 0u; stride >>= 1u){
+        if(groupThreadIndex < stride)
+            g_NwbSkinnedMeshBoundsValidFaceNormalCount[groupThreadIndex] += g_NwbSkinnedMeshBoundsValidFaceNormalCount[groupThreadIndex + stride];
+        GroupMemoryBarrierWithGroupSync();
+    }
+#else
     GroupMemoryBarrierWithGroupSync();
     for(uint stride = NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X >> 1u; stride > 0u; stride >>= 1u){
         if(groupThreadIndex < stride)
             g_NwbSkinnedMeshBoundsValidFaceNormalCount[groupThreadIndex] += g_NwbSkinnedMeshBoundsValidFaceNormalCount[groupThreadIndex + stride];
         GroupMemoryBarrierWithGroupSync();
     }
+#endif
 }
 
 void nwbSkinnedMeshBoundsReduceConeCutoff(const uint groupThreadIndex){
+#if NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE
+    const uint waveLaneCount = WaveGetLaneCount();
+    const uint laneIndex = WaveGetLaneIndex();
+    const uint waveIndex = groupThreadIndex / waveLaneCount;
+    const float waveMin = WaveReadLaneFirst(WaveActiveMin(g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex]));
+    if(laneIndex == 0u)
+        g_NwbSkinnedMeshBoundsConeCutoff[waveIndex] = waveMin;
+    GroupMemoryBarrierWithGroupSync();
+    for(uint stride = (NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X / waveLaneCount) >> 1u; stride > 0u; stride >>= 1u){
+        if(groupThreadIndex < stride)
+            g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex] = min(
+                g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex],
+                g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex + stride]
+            );
+        GroupMemoryBarrierWithGroupSync();
+    }
+#else
     GroupMemoryBarrierWithGroupSync();
     for(uint stride = NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X >> 1u; stride > 0u; stride >>= 1u){
         if(groupThreadIndex < stride)
@@ -190,10 +302,8 @@ void nwbSkinnedMeshBoundsReduceConeCutoff(const uint groupThreadIndex){
             );
         GroupMemoryBarrierWithGroupSync();
     }
+#endif
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [numthreads(NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X, 1, 1)]

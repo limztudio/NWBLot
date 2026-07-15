@@ -487,6 +487,8 @@ Updated: 2026-07-08
 - Each top-level package must carry an ASCII `nwb_update.txt` with `package`, `version`, `updated_utc`, and `source`. Use `notes` for pruned files, lifted dependencies, rewritten CMake, template-generated config headers, or other steps that a future re-vendor must repeat.
 
 ## 18. Source Architecture Hygiene
+- `global` and `core` are separate architectural domains. Keep `core/` as a top-level sibling of `global/`; never create, restore, or move source back under `global/core/`.
+- Do not use broad reverts or history restores that reintroduce the former `global/core` tree. When reverting or moving affected files, preserve the current `core/` paths and review the resulting path changes explicitly.
 - Keep render-feature code physically sliced by ownership (`kernel`, `raytrace`, `deferred`, `material`, `mesh`, `avboit`, `csg`, etc.) instead of letting new behavior pile into shared god files.
 - Do not add new declarations to mega-header umbrellas such as graphics API, backend, math, or global aggregate headers when a narrow per-concern header exists or can be introduced.
 - A `.cpp` that mixes unrelated concern owners or grows past roughly 800 lines is a review smell. Split by concrete owner and concern instead of adding another section to the same file.

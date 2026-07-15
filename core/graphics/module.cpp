@@ -911,6 +911,15 @@ bool Graphics::queryFeatureSupport(const Feature::Enum feature, void* featureInf
     return device && device->queryFeatureSupport(feature, featureInfo, featureInfoSize);
 }
 
+u32 Graphics::queryWaveLaneCount()const noexcept{
+    WaveLaneCountMinMaxFeatureInfo info{};
+    if(queryFeatureSupport(Feature::WaveLaneCountMinMax, &info, sizeof(info)) && info.maxWaveLaneCount > 0u)
+        return info.maxWaveLaneCount;
+    // Conservative fallback for backends/paths that cannot report a wave size: 64 lanes is the safe upper
+    // bound across all desktop GPUs and keeps groupshared reductions correct without wave intrinsics.
+    return 64u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -112,6 +112,9 @@ public:
     [[nodiscard]] GraphicsBackend::Device* getDevice()const noexcept;
     [[nodiscard]] bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters);
     [[nodiscard]] bool queryFeatureSupport(Feature::Enum feature, void* featureInfo = nullptr, usize featureInfoSize = 0)const;
+    // Resolves the GPU wave/subgroup size, or returns a conservative fallback (64) when the device cannot report it.
+    // Use the returned value to size groupshared reductions and wave-intrinsic shader specializations.
+    [[nodiscard]] u32 queryWaveLaneCount()const noexcept;
 #if !defined(NWB_FINAL)
     void setFeatureSupportDisabledForTesting(Feature::Enum feature, bool disabled);
     void clearFeatureSupportDisabledForTesting();

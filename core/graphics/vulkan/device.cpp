@@ -357,6 +357,11 @@ Device::Device(const DeviceDesc& desc)
         auto props2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
         void* pNext = nullptr;
 
+        // Subgroup (wave) properties are core Vulkan 1.1 -- the engine floor is 1.3, so this is always available.
+        m_context.subgroupProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+        m_context.subgroupProperties.pNext = pNext;
+        pNext = &m_context.subgroupProperties;
+
         if(m_context.extensions.KHR_ray_tracing_pipeline){
             m_context.rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
             m_context.rayTracingPipelineProperties.pNext = pNext;
@@ -954,7 +959,7 @@ void Device::runGarbageCollection(){
 }
 
 
-bool Device::queryFeatureSupport(Feature::Enum feature, void*, usize){
+bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize featureInfoSize){
     switch(feature){
     case Feature::DeferredCommandLists:
         return true;
@@ -982,6 +987,15 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void*, usize){
         return m_context.extensions.EXT_mesh_shader && m_context.meshShaderFeatures.meshShader == VK_TRUE && vkCmdDrawMeshTasksEXT;
     case Feature::VariableRateShading:
         return m_context.extensions.KHR_fragment_shading_rate;
+    case Feature::WaveLaneCountMinMax:{
+        // Wave/subgroup size is core Vulkan 1.1 (engine floor is 1.3), so this is always supported.
+        auto* out = static_cast<WaveLaneCountMinMaxFeatureInfo*>(featureInfo);
+        if(out && featureInfoSize >= sizeof(WaveLaneCountMinMaxFeatureInfo)){
+            out->minWaveLaneCount = m_context.subgroupProperties.subgroupSize;
+            out->maxWaveLaneCount = m_context.subgroupProperties.subgroupSize;
+        }
+        return true;
+    }
     case Feature::SamplerFeedback:
         return false;
     case Feature::VirtualResources:

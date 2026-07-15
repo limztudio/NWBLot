@@ -602,6 +602,8 @@ struct VulkanContext{
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
     VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheresFeatures{};
     VkPhysicalDeviceClusterAccelerationStructurePropertiesNV nvClusterAccelerationStructureProperties{};
+    // Core Vulkan 1.1 (engine floor is 1.3), so always populated. Holds the device wave/subgroup size.
+    VkPhysicalDeviceSubgroupProperties subgroupProperties{};
     DescriptorHeapManager* descriptorHeapManager = nullptr;
 
 

@@ -137,6 +137,12 @@
 #define NWB_SURFEL_GATHER_CELL_EXTENT 2
 #define NWB_SURFEL_SPAWN_TILE 16u              // one spawn candidate per 16x16 screen tile
 #define NWB_SURFEL_RAYS_PER_SURFEL 64u         // one workgroup (64 threads) per surfel
+// A/B switch for the per-surfel SH reduction. The group == wave size on AMD BC-250/RADV (subgroup 64), so the wave
+// path replaces the 6-stride barriered groupshared tree reduce with a single WaveActiveSum (no barriers, no shared
+// memory). `active` is uniform across the wave (it depends only on surfelIndex, which is per-group, not per-lane), so
+// the wave reduce is correct: inactive groups sum zeros, active groups sum their radiance*basis. Leave OFF (0) for the
+// groupshared baseline; set to 1 to enable the wave-intrinsic path.
+#define NWB_SURFEL_USE_WAVE_REDUCE 0u
 #define NWB_SURFEL_UPDATE_DIVISOR 4u           // steady-state: trace 1/Nth of surfels per frame (all on the bootstrap frame)
 // Bounded running-mean window for the trace's temporal accumulation. The trace blends each new 64-ray estimate as a
 // true incremental average (weight 1/(n+1)) until n reaches this cap, then holds a bounded EMA (weight 1/(cap+1)). A

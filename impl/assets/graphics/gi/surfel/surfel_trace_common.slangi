@@ -138,6 +138,18 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         s_surfelShB[rayIndex] = radiance.b * basis;
     }
 
+#if NWB_SURFEL_USE_WAVE_REDUCE
+    // Wave-intrinsic reduction: the workgroup == the wave on this device (subgroup 64 == NWB_SURFEL_RAYS_PER_SURFEL),
+    // so the entire barriered groupshared tree reduce collapses to one subgroup op with no barriers and no shared
+    // memory. `active` is uniform across the wave (per-group, not per-lane), so inactive waves sum zeros and the lane-0
+    // broadcast below yields the correct per-surfel SH sum.
+    const float4 waveR = WaveActiveSum(s_surfelShR[rayIndex]);
+    const float4 waveG = WaveActiveSum(s_surfelShG[rayIndex]);
+    const float4 waveB = WaveActiveSum(s_surfelShB[rayIndex]);
+    const float4 sumR = WaveReadLaneFirst(waveR);
+    const float4 sumG = WaveReadLaneFirst(waveG);
+    const float4 sumB = WaveReadLaneFirst(waveB);
+#else
     GroupMemoryBarrierWithGroupSync();
 
     [unroll]
@@ -150,10 +162,12 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         GroupMemoryBarrierWithGroupSync();
     }
 
+    const float4 sumR = s_surfelShR[0];
+    const float4 sumG = s_surfelShG[0];
+    const float4 sumB = s_surfelShB[0];
+#endif
+
     if(rayIndex == 0u && active){
-        const float4 sumR = s_surfelShR[0];
-        const float4 sumG = s_surfelShG[0];
-        const float4 sumB = s_surfelShB[0];
         const float projectionScale = nwbSurfelShProjectionScale(NWB_SURFEL_RAYS_PER_SURFEL);
         const float4 frameShR = sumR * projectionScale;
         const float4 frameShG = sumG * projectionScale;

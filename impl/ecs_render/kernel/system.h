@@ -143,6 +143,7 @@ private:
     Core::CommandListHandle m_renderCommandList;
     Core::CommandListHandle m_shadowPrepareCommandList;
     bool m_preparedCsgFrameStateValid = false;
+    bool m_preparedHasTransparentRenderers = false;
     bool m_preparedShadowVisibilityReady = false;
 
 private:

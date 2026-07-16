@@ -196,7 +196,8 @@ bool RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRe
     return true;
 }
 
-void RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
+bool RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
+    bool hasTransparentRenderers = false;
     auto rendererView = world().view<RendererComponent>();
     for(auto&& [entity, renderer] : rendererView){
         static_cast<void>(entity);
@@ -207,7 +208,11 @@ void RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
         if(!createMaterialSurfaceInfo(renderer.material, materialInfo))
             continue;
         NWB_ASSERT(materialInfo);
+        if(materialInfo->transparent)
+            hasTransparentRenderers = true;
     }
+
+    return hasTransparentRenderers;
 }
 
 bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLookupMode::Enum lookupMode){

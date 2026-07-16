@@ -108,6 +108,7 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
 void RendererSystem::invalidateResources(){
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
+    m_preparedHasTransparentRenderers = false;
     m_preparedShadowVisibilityReady = false;
     m_renderCommandList.reset();
     m_shadowPrepareCommandList.reset();
@@ -204,12 +205,13 @@ bool RendererSystem::prepareGpuTimingScopes(){
 
 bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     m_preparedShadowVisibilityReady = false;
+    m_preparedHasTransparentRenderers = false;
 
     if(!framebuffer)
         return false;
 
     m_meshSystem.pruneRuntimeMeshResources();
-    m_materialSystem.prepareVisibleMaterialSurfaceInfos();
+    m_preparedHasTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
 
@@ -237,7 +239,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
 
     if(
-        m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly)
+        m_preparedHasTransparentRenderers
         && !m_avboitSystem.prepareAvboitPassResources(deferredTargets, m_preparedCsgFrameState)
     )
         return false;
@@ -492,7 +494,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         commandListReady = m_deferredSystem.renderDeferredLighting(*commandList, deferredTargets);
         if(commandListReady){
-            const bool hasTransparentRenderers = m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly);
+            const bool hasTransparentRenderers = m_preparedHasTransparentRenderers;
             if(hasTransparentRenderers || m_avboitState.m_targetsNeedClear){
                 m_avboitSystem.clearAvboitTargets(*commandList, deferredTargets.avboit);
                 m_avboitState.m_targetsNeedClear = hasTransparentRenderers;

@@ -2,4 +2,4 @@ package: system_info_utils
 version: 2.3
 updated_utc: 2026-06-23T16:02:45Z
 source: https://github.com/GPUOpen-Tools/system_info_utils/releases/tag/v2.3
-notes: Top-level CMake wrapper builds the system_info static lib (source/{system_info_reader,driver_overrides_reader}.cpp). nlohmann json from shared nwb::nlohmann_json; bundled third_party dependencies remain flattened/unused. Built with vendor warnings suppressed.
+notes: Top-level CMake wrapper builds the system_info static lib (source/{system_info_reader,driver_overrides_reader}.cpp) using shared nwb::rapidjson. RDF C-API interfaces are enabled by SYSTEM_INFO_BUILD_RDF_INTERFACES; the lifted WMI dependency remains unused. Built with vendor warnings suppressed.

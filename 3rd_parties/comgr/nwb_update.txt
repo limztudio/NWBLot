@@ -1,5 +1,5 @@
 package: comgr
-version: AMD_COMGR_INTERFACE_VERSION 3.0 (COMGR windows build 93)
+version: rdts-2025-11-03 / COMGR_windows_93.zip (AMD_COMGR_INTERFACE_VERSION 3.0)
 updated_utc: 2026-06-23T16:02:45Z
-source: https://github.com/GPUOpen-Tools/comgr_utils
-notes: amd_comgr.h header only (the ~135MB amd_comgr LLVM runtime lib is dlopen'd, not linked). Flattened out of comgr_utils/external to top-level; registered as nwb::comgr_headers for consumers.
+source: https://github.com/GPUOpen-Tools/comgr_utils/releases/download/rdts-2025-11-03/COMGR_windows_93.zip
+notes: amd_comgr.h header only, extracted from COMGR_windows_93.zip. The ~135MB amd_comgr LLVM runtime lib is dlopen'd, not linked. Flattened out of comgr_utils/external to top-level and registered as nwb::comgr_headers for consumers.

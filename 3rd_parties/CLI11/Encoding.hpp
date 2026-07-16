@@ -14,13 +14,14 @@
 // [CLI11:public_includes:end]
 
 // [CLI11:encoding_includes:verbatim]
-#if defined(CLI11_CPP17) || (defined(CLI11_HAS_FILESYSTEM) && CLI11_HAS_FILESYSTEM > 0)
+#ifdef CLI11_CPP17
 #include <string_view>
+#endif  // CLI11_CPP17
+
 #if defined CLI11_HAS_FILESYSTEM && CLI11_HAS_FILESYSTEM > 0
 #include <filesystem>
-#endif
-#endif
-
+#include <string_view>  // NOLINT(build/include)
+#endif                  // CLI11_HAS_FILESYSTEM
 // [CLI11:encoding_includes:end]
 
 namespace CLI {

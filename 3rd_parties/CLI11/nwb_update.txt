@@ -1,5 +1,5 @@
 package: CLI11
-version: 2.6.2
-updated_utc: 2026-04-21
-source: https://github.com/CLIUtils/CLI11
-notes: Header-only command-line parser.
+version: 2.6.2 (tag v2.6.2, commit 37bb6edc5317e99af72ef48405e65d9ca5218861)
+updated_utc: 2026-07-16T14:49:33Z
+source: https://github.com/CLIUtils/CLI11/archive/refs/tags/v2.6.2.zip
+notes: Header-only command-line parser. Pristine v2.6.2 release snapshot replacing the prior v2.6.2-13-g68bdbdb tree; NWB CMake wrapper exposes nwb::cli11_headers.

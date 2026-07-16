@@ -602,11 +602,6 @@ class PermissionValidator : public Validator {
 };
 }  // namespace detail
 
-class FileSizeValidator : public Validator {
-  public:
-    explicit FileSizeValidator(std::uint64_t min_size, std::uint64_t max_size = 0);
-};
-
 /// Check that the file exist and available for read
 const detail::PermissionValidator ReadPermissions(detail::Permission::read);
 
@@ -615,9 +610,6 @@ const detail::PermissionValidator WritePermissions(detail::Permission::write);
 
 /// Check that the file exist and available for write
 const detail::PermissionValidator ExecPermissions(detail::Permission::exec);
-
-/// Check that the file exists and is not empty
-const FileSizeValidator NonEmptyFile(1, 0);
 #endif
 
 #endif

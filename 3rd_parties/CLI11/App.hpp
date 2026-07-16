@@ -500,15 +500,15 @@ class App {
         return this;
     }
 
-    /// Enable or disable prefix command mode. If enabled, parsing stops at the
-    /// first unrecognized option and all remaining arguments are stored in
-    /// remaining args.
+    /// Do not parse anything after the first unrecognized option (if true) all remaining arguments are stored in
+    /// remaining args
     App *prefix_command(bool is_prefix = true) {
         prefix_command_ = is_prefix ? PrefixCommandMode::On : PrefixCommandMode::Off;
         return this;
     }
 
-    /// Set the prefix command mode directly.
+    /// Do not parse anything after the first unrecognized option (if true) all remaining arguments are stored in
+    /// remaining args
     App *prefix_command(PrefixCommandMode mode) {
         prefix_command_ = mode;
         return this;
@@ -776,7 +776,6 @@ class App {
             throw IncorrectConstruction("option group names may not contain newlines or null characters");
         }
         auto option_group = std::make_shared<T>(std::move(group_description), group_name, this);
-        option_group->fallthrough(false);
         auto *ptr = option_group.get();
         // move to App_p for overload resolution on older gcc versions
         App_p app_ptr = std::static_pointer_cast<App>(option_group);
@@ -1077,19 +1076,8 @@ class App {
     }
     /// Produce a string that could be read in as a config of the current values of the App. Set default_also to
     /// include default arguments. write_descriptions will print a description for the App and for each option.
-    CLI11_NODISCARD std::string config_to_str() const { return config_to_str(ConfigOutputMode::Active, false); }
-
-    /// Produce a string that could be read in as a config of the current values of the App.
-    CLI11_NODISCARD std::string config_to_str(ConfigOutputMode mode, bool write_description = false) const {
-        return config_formatter_->to_config(this, mode, write_description, "");
-    }
-
-    /// Produce a string that could be read in as a config of the current values of the App. Set default_also to
-    /// include default arguments. write_descriptions will print a description for the App and for each option.
-    /// This will be deprecated soon, use the version that takes a ConfigOutputMode instead.
-    CLI11_NODISCARD std::string config_to_str(bool default_also, bool write_description = false) const {
-        return config_to_str(default_also ? ConfigOutputMode::AllDefaults : ConfigOutputMode::Active,
-                             write_description);
+    CLI11_NODISCARD std::string config_to_str(bool default_also = false, bool write_description = false) const {
+        return config_formatter_->to_config(this, default_also, write_description, "");
     }
 
     /// Makes a help message, using the currently configured formatter
@@ -1140,10 +1128,22 @@ class App {
     CLI11_NODISCARD const Option *get_option_no_throw(std::string option_name) const noexcept;
 
     /// Get an option by name
-    CLI11_NODISCARD const Option *get_option(std::string option_name) const;
+    CLI11_NODISCARD const Option *get_option(std::string option_name) const {
+        const auto *opt = get_option_no_throw(option_name);
+        if(opt == nullptr) {
+            throw OptionNotFound(option_name);
+        }
+        return opt;
+    }
 
     /// Get an option by name (non-const version)
-    CLI11_NODISCARD Option *get_option(std::string option_name);
+    CLI11_NODISCARD Option *get_option(std::string option_name) {
+        auto *opt = get_option_no_throw(option_name);
+        if(opt == nullptr) {
+            throw OptionNotFound(option_name);
+        }
+        return opt;
+    }
 
     /// Shortcut bracket operator for getting a pointer to an option
     const Option *operator[](const std::string &option_name) const { return get_option(option_name); }

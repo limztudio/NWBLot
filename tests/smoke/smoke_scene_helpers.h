@@ -74,6 +74,12 @@ namespace Smoke{
     return entity.id();
 }
 
+inline void DisableSmokeRayTracingForTesting(ProjectRuntimeContext& context){
+    context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayTracingAccelStruct, true);
+    context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayTracingPipeline, true);
+    context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayQuery, true);
+}
+
 inline Impl::RendererSystem& AddSmokeRenderSystems(
     Core::ECS::World& world,
     ProjectRuntimeContext& context

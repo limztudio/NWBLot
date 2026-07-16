@@ -36,6 +36,16 @@ static_assert(sizeof(MeshSkinInfluence) == sizeof(u16) * s_MeshSkinInfluenceCoun
 static_assert(alignof(MeshSkinInfluence) == alignof(f32));
 static_assert(IsTriviallyCopyable_V<MeshSkinInfluence>);
 
+struct MeshSkinInfluenceEqual{
+    bool operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const{
+        for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
+            if(lhs.joint[i] != rhs.joint[i] || FloatHashBits(lhs.weight[i]) != FloatHashBits(rhs.weight[i]))
+                return false;
+        }
+        return true;
+    }
+};
+
 struct JointMatrix{
     Vec4 rows[s_JointMatrixRowCount];
 };

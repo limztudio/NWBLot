@@ -117,9 +117,7 @@ private:
         // Force ray-tracing emulation so the SOFTWARE shadow + caustic path runs even on RT-capable hardware -- the
         // A/B sibling of the hardware ray-traced path. Default OFF: the demo runs the hardware path.
 #if defined(NWB_SKINNED_CAUSTIC_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
-        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingAccelStruct, true);
-        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingPipeline, true);
-        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayQuery, true);
+        NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
 #endif
 
         AddSmokeSkinnedRenderSystems(*world, context);

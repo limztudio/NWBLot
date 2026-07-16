@@ -209,11 +209,15 @@ static void ApplyFlyCameraInputToMainCamera(
     StoreFloat(resolvedPosition, &cameraView.transform->position);
 }
 
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateSkinnedCharacterEntity(NWB::Core::ECS::World& world){
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateModelEntity(
+    NWB::Core::ECS::World& world,
+    const AStringView modelPath,
+    const AStringView materialPath
+){
     TestbedModelRef model;
-    model.virtualPath = Name(s_FemaleModelPath);
+    model.virtualPath = Name(modelPath);
     TestbedMaterialRef material;
-    material.virtualPath = Name(s_ModelMaterialPath);
+    material.virtualPath = Name(materialPath);
 
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
@@ -228,23 +232,12 @@ static void ApplyFlyCameraInputToMainCamera(
     return entity.id();
 }
 
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateSkinnedCharacterEntity(NWB::Core::ECS::World& world){
+    return CreateModelEntity(world, s_FemaleModelPath, s_ModelMaterialPath);
+}
+
 static NWB::Core::ECS::EntityID CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world){
-    TestbedModelRef model;
-    model.virtualPath = Name(s_GroundPlaneModelPath);
-    TestbedMaterialRef material;
-    material.virtualPath = Name(s_GroundPlaneMaterialPath);
-
-    auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
-    transform.position = Float4(0.0f, 0.0f, 0.0f);
-    transform.scale = Float4(1.0f, 1.0f, 1.0f);
-
-    auto& modelComponent = entity.addComponent<NWB::Impl::ModelComponent>();
-    modelComponent.model = model;
-
-    auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
-    renderer.material = material;
-    return entity.id();
+    return CreateModelEntity(world, s_GroundPlaneModelPath, s_GroundPlaneMaterialPath);
 }
 
 

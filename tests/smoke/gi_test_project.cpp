@@ -96,9 +96,7 @@ private:
         // the one that runs the full DDGI chain (probe trace -> blend -> border -> flip), so the _sw_smoke build
         // is the intended way to see the indirect bounce. Default OFF: the HW (hybrid) path.
 #if defined(NWB_GI_TEST_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
-        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingAccelStruct, true);
-        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingPipeline, true);
-        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayQuery, true);
+        NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
 #endif
 
         AddSmokeRenderSystems(*world, context);

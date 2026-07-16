@@ -8,6 +8,7 @@
 #include "base.h"
 #include "global.h"
 #include "core.h"
+#include "arena_object.h"
 
 #include "tlsf.h"
 
@@ -132,24 +133,15 @@ NWB_CORE_BEGIN
 
 
 template<typename T>
-using PersistentUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::PersistentArena>>;
+using PersistentUniquePtr = Alloc::ArenaUniquePtr<T, Alloc::PersistentArena>;
 
 template<typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, Args&&... args){
-    auto* mem = arena.template allocate<T>(1);
-    if(!mem)
-        return PersistentUniquePtr<T>(nullptr, typename PersistentUniquePtr<T>::deleter_type(arena));
-
-    return PersistentUniquePtr<T>(new(mem) T(Forward<Args>(args)...), typename PersistentUniquePtr<T>::deleter_type(arena));
+    return Alloc::MakeArenaUnique<T>(arena, Forward<Args>(args)...);
 }
 template<typename T>
 inline typename EnableIf<IsUnboundedArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, usize n){
-    typedef typename RemoveExtent<T>::type TBase;
-    auto* mem = arena.template allocate<TBase>(n);
-    if(!mem)
-        return PersistentUniquePtr<T>(static_cast<TBase*>(nullptr), typename PersistentUniquePtr<T>::deleter_type(arena, n));
-
-    return PersistentUniquePtr<T>(new(mem) TBase[n], typename PersistentUniquePtr<T>::deleter_type(arena, n));
+    return Alloc::MakeArenaUnique<T>(arena, n);
 }
 template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type

@@ -105,16 +105,6 @@ struct MeshSkinInfluenceHasher{
     }
 };
 
-struct MeshSkinInfluenceEqual{
-    bool operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const{
-        for(usize i = 0u; i < 4u; ++i){
-            if(lhs.joint[i] != rhs.joint[i] || FloatHashBits(lhs.weight[i]) != FloatHashBits(rhs.weight[i]))
-                return false;
-        }
-        return true;
-    }
-};
-
 struct SourceVertexRefHasher{
     usize operator()(const SourceVertexRef& value)const{
         usize seed = Hasher<u32>{}(value.position);

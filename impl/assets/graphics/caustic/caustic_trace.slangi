@@ -285,6 +285,21 @@ float2 nwbCausticEmissionJitter(uint photonIndex){
     return float2((float)(h0 >> 8) * (1.0 / 16777216.0), (float)(h1 >> 8) * (1.0 / 16777216.0));
 }
 
+// Maps a half-budget photon index to the temporally selected half of the full jittered emission grid. Keep this shared
+// between the HW and SW producers: both phases must cover every full-grid cell exactly once across two frames, and the
+// jitter must remain keyed to that full-grid cell rather than the compacted photon index.
+float2 nwbCausticJitteredCheckerboardCell(const uint photonIndex, const uint gridSide, const uint frameIndex){
+    const uint fullGridSide = max(gridSide, 1u);
+    const uint phase = frameIndex & 1u;
+    const uint halfWidth = fullGridSide >> 1u;
+    const uint row = photonIndex / halfWidth;
+    const uint pair = photonIndex % halfWidth;
+    const uint parityColBase = ((row & 1u) != 0u) ? (phase ^ 1u) : phase;
+    const uint column = parityColBase + 2u * pair;
+    const float2 jitter = nwbCausticEmissionJitter(column + row * fullGridSide);
+    return (float2(column, row) + jitter) / (float)fullGridSide;
+}
+
 // Aims one photon at ONE refractive target's world AABB (per-target emission -- the make-or-break aim). Aiming each
 // photon at a SINGLE target's box (round-robined across targets by the caller) keeps the domain tight on actual
 // glass: a COMBINED box over several spread refractors centres the domain in the GAP between them and wastes most
@@ -322,6 +337,30 @@ NwbCausticEmission nwbCausticEmitPhotonAtTarget(float3 lightDir, float3 aabbMin,
     emission.direction = axis;
     emission.valid = true;
     return emission;
+}
+
+// Clamp the directional/spot intensity exactly once for both producers. This is deliberately independent of any
+// pass-local resource name so the HW raygen and SW compute entry points retain their own binding interfaces.
+float3 nwbCausticLightColor(const float4 colorIntensity){
+    return clamp(colorIntensity.xyz, float3(0.0), float3(1.5)) * min(max(colorIntensity.w, 0.0), 2.0);
+}
+
+// Converts one aimed emission sample into the initial photon transport state. The target and photon counts are passed
+// explicitly because their containing push-constant blocks remain pass-local ABI contracts.
+NwbCausticPhoton nwbCausticCreatePhoton(
+    const NwbCausticEmission emission,
+    const float3 lightColor,
+    const uint emissionTargetCount,
+    const uint photonCount
+){
+    const float perPhoton = emission.domainArea * (float)emissionTargetCount / (float)max(photonCount, 1u);
+
+    NwbCausticPhoton photon;
+    photon.origin = emission.origin;
+    photon.direction = emission.direction;
+    photon.flux = lightColor * perPhoton;
+    photon.inside = false;
+    return photon;
 }
 
 

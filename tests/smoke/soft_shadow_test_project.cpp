@@ -119,9 +119,7 @@ private:
         // the one that runs the FULL soft pipeline (half-res jittered trace -> a-trous denoise -> bilateral upsample), so
         // the _sw_smoke build is the intended way to see the denoised soft shadow. Default OFF: the HW (hybrid) path.
 #if defined(NWB_SOFT_SHADOW_TEST_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
-        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingAccelStruct, true);
-        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingPipeline, true);
-        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayQuery, true);
+        NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
 #endif
 
         AddSmokeSkinnedRenderSystems(*world, context);

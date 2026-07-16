@@ -33,16 +33,6 @@ using TextWrite::s_OutputFloatPrecision;
 static constexpr AStringView s_MeshMetaKind = "Mesh";
 static constexpr usize s_DeduplicateParallelGrainSize = 4096u;
 
-struct MeshSkinInfluenceEqual{
-    bool operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const{
-        for(usize i = 0u; i < 4u; ++i){
-            if(lhs.joint[i] != rhs.joint[i] || FloatHashBits(lhs.weight[i]) != FloatHashBits(rhs.weight[i]))
-                return false;
-        }
-        return true;
-    }
-};
-
 struct TextReplacement{
     usize begin = 0u;
     usize end = 0u;

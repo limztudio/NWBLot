@@ -472,57 +472,22 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 targetAabbMin = g_NwbCausticSwEmissionTargets[targetIndex].aabbMin.xyz;
     const float3 targetAabbMax = g_NwbCausticSwEmissionTargets[targetIndex].aabbMax.xyz;
 
-    // Per-photon grid cell in [0,1)^2 with a PER-PHOTON deterministic stratified jitter. The photon index maps to a
-    // (column, row) on a square grid, and each cell is sampled at its OWN fixed sub-point. Per-photon keeps a single
-    // frame's splat from being a rigid lattice -- a flat refractor maps a rigid lattice to visible stripes, whereas
-    // stratified noise reads as honest grain the spatial a-trous resolve smooths. The per-photon jitter itself is
-    // FRAME-INDEPENDENT (no per-frame variation in the sub-cell sample), so a static scene is flicker-free without
-    // temporal averaging -- shared with the HW producer (parity).
-    //
-    // SW 2x TEMPORAL REUSE: this frame emits only HALF the grid -- the cells whose (column ^ row) parity equals the
-    // frame phase (phase = frameIndex & 1). The complementary half is emitted next frame, so the two-frame union
-    // covers the FULL stratified domain at half the per-frame BVH-traversal cost, and the splat-space EMA recombines
-    // the two halves into the steady-state image. The per-frame photon budget (photonCount) is therefore gridSide^2/2,
-    // and the PHYSICAL flux below doubles per photon (photonCount halved) so each frame deposits the FULL domain power
-    // over its half -- energy-conserving under the EMA (see the flux comment). The per-photon jitter is keyed on the
-    // FULL-grid cell (column,row), NOT photonIndex, so the same physical cell keeps its fixed sub-point across the two
-    // frames that share it -- the stratification is preserved exactly as the full-grid (HW) reference.
-    const uint gridSide = max(g_NwbCausticSwPushConstants.gridSide, 1u);
-    const uint phase = g_NwbCausticSwPushConstants.frameIndex & 1u;
-    // Index -> checkerboard cell bijection (parity-phase cells only). gridSide MUST be even (both dbg 128 and opt 512
-    // are): each row then holds exactly gridSide/2 cells of a given parity, and photonIndex decomposes into (row, pair)
-    // in HALF-column units. col is the phase-parity cell within that row (verified: the two phases' union is the full
-    // grid, no gaps/dupes). The first parity-phase column in an EVEN row is `phase`; in an ODD row the parities flip,
-    // so it is `phase ^ 1`.
-    const uint halfWidth = gridSide >> 1u;
-    const uint row = photonIndex / halfWidth;
-    const uint pair = photonIndex % halfWidth;
-    const uint parityColBase = ((row & 1u) != 0u) ? (phase ^ 1u) : phase;
-    const uint column = parityColBase + 2u * pair;
-    // The per-cell stratified jitter is keyed on the FULL-grid cell index (column + row*gridSide), NOT photonIndex:
-    // the same physical cell keeps its fixed sub-point across the two frames, so the stratification matches the
-    // full-grid (HW) reference exactly. Frame-independent sub-point -> a static scene is flicker-free under the EMA.
-    const float2 jitter = nwbCausticEmissionJitter(column + row * gridSide);
-    const float2 cell = (float2(column, row) + jitter) / (float)gridSide;
+    const float2 cell = nwbCausticJitteredCheckerboardCell(
+        photonIndex,
+        g_NwbCausticSwPushConstants.gridSide,
+        g_NwbCausticSwPushConstants.frameIndex
+    );
 
     const NwbCausticEmission emission = nwbCausticEmitPhotonAtTarget(lightDir, targetAabbMin, targetAabbMax, cell);
     if(!emission.valid)
         return;
 
-    // PHYSICAL per-photon flux (energy conservation): the power through this target's emission domain is
-    // lightIrradiance * domainArea, carried by the ~photonCount/emissionTargetCount photons aimed at it, so
-    // perPhoton = lightColor * domainArea * emissionTargetCount / photonCount. Doubling photonCount halves per-photon
-    // flux (per-frame image brightness unchanged); the loose domain cancels (dropped photons carry their share). No
-    // fudge constant -- the focused caustic is physically bright while sparse far prism-scatter falls below the exposure
-    // floor. Byte-identical to the HW raygen (shared emission.domainArea + the same push fields).
-    const float3 lightColor = clamp(light.colorIntensity.xyz, float3(0.0), float3(1.5)) * min(max(light.colorIntensity.w, 0.0), 2.0);
-    const float perPhoton = emission.domainArea * (float)g_NwbCausticSwPushConstants.emissionTargetCount / (float)max(g_NwbCausticSwPushConstants.photonCount, 1u);
-
-    NwbCausticPhoton photon;
-    photon.origin = emission.origin;
-    photon.direction = emission.direction;
-    photon.flux = lightColor * perPhoton;
-    photon.inside = false;
+    const NwbCausticPhoton photon = nwbCausticCreatePhoton(
+        emission,
+        nwbCausticLightColor(light.colorIntensity),
+        g_NwbCausticSwPushConstants.emissionTargetCount,
+        g_NwbCausticSwPushConstants.photonCount
+    );
 
     const NwbCausticSplat splat = nwbCausticTracePhoton(photon);
     if(!splat.valid)

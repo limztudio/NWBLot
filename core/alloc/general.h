@@ -7,6 +7,7 @@
 
 #include "base.h"
 #include "core.h"
+#include "arena_object.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -97,24 +98,15 @@ NWB_CORE_BEGIN
 
 
 template<typename T>
-using GlobalUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::GlobalArena>>;
+using GlobalUniquePtr = Alloc::ArenaUniquePtr<T, Alloc::GlobalArena>;
 
 template<typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, GlobalUniquePtr<T>>::type MakeGlobalUnique(NWB::Core::Alloc::GlobalArena& arena, Args&&... args){
-    auto* mem = arena.template allocate<T>(1);
-    if(!mem)
-        return GlobalUniquePtr<T>(nullptr, typename GlobalUniquePtr<T>::deleter_type(arena));
-
-    return GlobalUniquePtr<T>(new(mem) T(Forward<Args>(args)...), typename GlobalUniquePtr<T>::deleter_type(arena));
+    return Alloc::MakeArenaUnique<T>(arena, Forward<Args>(args)...);
 }
 template<typename T>
 inline typename EnableIf<IsUnboundedArray<T>::value, GlobalUniquePtr<T>>::type MakeGlobalUnique(NWB::Core::Alloc::GlobalArena& arena, usize n){
-    typedef typename RemoveExtent<T>::type TBase;
-    auto* mem = arena.template allocate<TBase>(n);
-    if(!mem)
-        return GlobalUniquePtr<T>(static_cast<TBase*>(nullptr), typename GlobalUniquePtr<T>::deleter_type(arena, n));
-
-    return GlobalUniquePtr<T>(new(mem) TBase[n], typename GlobalUniquePtr<T>::deleter_type(arena, n));
+    return Alloc::MakeArenaUnique<T>(arena, n);
 }
 template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type

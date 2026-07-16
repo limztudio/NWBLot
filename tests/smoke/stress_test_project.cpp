@@ -136,9 +136,7 @@ private:
         // Force ray-tracing emulation so the SOFTWARE shadow path runs even on RT-capable hardware -- the A/B sibling of
         // the hardware path. Default OFF: the demo runs the hardware (hybrid) path.
 #if defined(NWB_STRESS_TEST_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
-        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingAccelStruct, true);
-        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayTracingPipeline, true);
-        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::RayQuery, true);
+        NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
 #endif
 
         AddSmokeSkinnedRenderSystems(*world, context);

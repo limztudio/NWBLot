@@ -20,11 +20,11 @@
 // surfel SH reduce (group == wave) one WaveActive* does NOT span the group: the wave path
 // is a two-stage fold -- one WaveActive* per wave (no barrier), then a single barrier plus
 // a tiny cross-wave tree of the per-wave results (2 waves here). That drops each of the six
-// reduces from 8 group-wide barriers to ~2. Leave OFF (0) for the groupshared-tree baseline;
-// set to 1 to enable the wave-intrinsic path. Shader-only define -> each arm is a fresh .vol
-// recook of the same namesym-domain binary (no per-arm C++ rebuild), mirroring
+// reduces from 8 group-wide barriers to ~2. Leave ON (1) for the wave-intrinsic path; set to
+// 0 to fall back to the groupshared-tree baseline. Shader-only define -> each arm is a fresh
+// .vol recook of the same namesym-domain binary (no per-arm C++ rebuild), mirroring
 // NWB_SURFEL_USE_WAVE_REDUCE.
-#define NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE 0u
+#define NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE 1u
 #define NWB_SKINNED_MESH_EPSILON 0.000001
 #define NWB_SKINNED_MESH_SKIN_INFLUENCE_FLOAT_COUNT 8u
 #define NWB_SKINNED_MESH_JOINT_MATRIX_FLOAT_COUNT 12u

@@ -29,7 +29,7 @@ HEAD     : 66cf9ce8 ("Add wave-intrinsic A/B switch for surfel SH reduction"). W
            discovery plumbing (queryWaveLaneCount + VkPhysicalDeviceSubgroupProperties)
            is COMMITTED at this HEAD and does NOT touch the surfel shader at runtime.
            Both arms built from this exact tree (clean namesym opt rebuild per arm).
-CAPTURE  : Testing/shadow_spp_ab_v3/capture.sh (direct binary, namesym logserver for
+CAPTURE  : tests/ab/shadow_spp_ab_v3/capture.sh (direct binary, namesym logserver for
            READABLE scope names, NWB_RENDER_UNFOCUSED=1, NWB_GPU_TIMING_FILE, ~90s,
            0.5s report interval). baseline=143 intervals (frame in 100%), wave=133
            intervals (frame in 100%). Clean captures, no focus-stall.

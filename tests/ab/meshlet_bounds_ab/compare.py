@@ -4,7 +4,7 @@
 # so no name-hash decoding is needed.
 #
 # Statistic = nonzero-median (the agreed sparse-comparison statistic; see
-# Testing/wave_ab/README.txt and Testing/shadow_spp_ab_v3/README.txt).
+# tests/ab/wave_ab/README.txt and tests/ab/shadow_spp_ab_v3/README.txt).
 import sys, re, statistics
 
 BASELINE = "baseline_timing.txt"

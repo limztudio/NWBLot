@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Launch stress_test_smoke (namesym-domain opt) against the freshly-recooked namesym RT
 # res, with the namesym logserver (name-symbol resolver) so GPU-timing scope names are
-# READABLE. Direct-binary capture, mirrors Testing/shadow_spp_ab_v3/capture.sh but points
+# READABLE. Direct-binary capture, mirrors tests/ab/shadow_spp_ab_v3/capture.sh but points
 # RT at the namesym build's skinning_culling_benchmark_runtime (where the .vol recook of
 # the just-flipped NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE define lands).
 #

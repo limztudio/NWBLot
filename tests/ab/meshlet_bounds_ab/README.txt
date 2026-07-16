@@ -39,8 +39,8 @@ CAPTURE  : capture.sh (namesym-domain opt binary + namesym logserver for READABL
           (where the just-flipped .vol recook lands). baseline=143 intervals, wave=154.
 
 STATISTIC
-  Nonzero-median (the agreed sparse-comparison statistic; see Testing/wave_ab/README.txt
-  and Testing/shadow_spp_ab_v3/README.txt). Means are also valid here because the pass
+  Nonzero-median (the agreed sparse-comparison statistic; see tests/ab/wave_ab/README.txt
+  and tests/ab/shadow_spp_ab_v3/README.txt). Means are also valid here because the pass
   under test fired 100% nonzero in BOTH arms (no fold-zeroing on it).
 
 RAW RESULTS (ms)

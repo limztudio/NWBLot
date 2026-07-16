@@ -24,7 +24,7 @@ r = subprocess.run(["ninja","-f","build-opt.ninja","nwb_skinning_culling_benchma
 print("recook exit", r.returncode, "vol", list((RT/"res").glob("*.vol"))[0].stat().st_size)
 
 # 3. screenshot
-r2 = subprocess.run([sys.executable, str(REPO/"Testing/shadow_spp_ab_v3/screenshot.py"), str(OUT_BMP)],
+r2 = subprocess.run([sys.executable, str(REPO/"tests/ab/shadow_spp_ab_v3/screenshot.py"), str(OUT_BMP)],
                     capture_output=True, text=True, timeout=90)
 print(r2.stdout.strip().splitlines()[-1] if r2.stdout.strip() else r2.stderr.strip().splitlines()[-1:])
 print("bmp", OUT_BMP, OUT_BMP.stat().st_size if OUT_BMP.exists() else "MISSING")

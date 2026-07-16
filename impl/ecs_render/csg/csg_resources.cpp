@@ -151,34 +151,54 @@ static void ExpandCsgFrameWorkRegionForWorldBounds(
         return;
     }
 
-    f32 minPixelX = static_cast<f32>(frameWidth);
-    f32 minPixelY = static_cast<f32>(frameHeight);
-    f32 maxPixelX = 0.0f;
-    f32 maxPixelY = 0.0f;
+    const SIMDVector frameExtent = VectorSet(
+        static_cast<f32>(frameWidth),
+        static_cast<f32>(frameHeight),
+        0.0f,
+        0.0f
+    );
+    SIMDVector minPixel = frameExtent;
+    SIMDVector maxPixel = VectorZero();
     for(u32 corner = 0u; corner < 8u; ++corner){
         const SIMDVector cornerSelect = VectorSelectControl(corner & 1u, (corner >> 1u) & 1u, (corner >> 2u) & 1u, 0u);
         const SIMDVector worldPosition = VectorSetW(VectorSelect(minBounds, maxBounds, cornerSelect), 1.0f);
         const SIMDVector clipPosition = Vector4Transform(worldPosition, worldToClip);
-        const f32 clipW = VectorGetW(clipPosition);
-        if(!IsFinite(clipW) || clipW <= s_MinClipWForWorkRegion){
+        const SIMDVector clipW = VectorSplatW(clipPosition);
+        if(
+            !VectorIsFinite(clipW, 0xFu)
+            || !Vector4Greater(clipW, VectorReplicate(s_MinClipWForWorkRegion))
+        ){
             csgFrameData.workRegion.expandFull();
             return;
         }
 
-        const f32 ndcX = VectorGetX(clipPosition) / clipW;
-        const f32 ndcY = VectorGetY(clipPosition) / clipW;
-        if(!IsFinite(ndcX) || !IsFinite(ndcY)){
+        const SIMDVector ndcPosition = VectorDivide(clipPosition, clipW);
+        if(!VectorIsFinite(ndcPosition, 0x3u)){
             csgFrameData.workRegion.expandFull();
             return;
         }
 
-        const f32 pixelX = (ndcX * 0.5f + 0.5f) * static_cast<f32>(frameWidth);
-        const f32 pixelY = (1.0f - (ndcY * 0.5f + 0.5f)) * static_cast<f32>(frameHeight);
-        minPixelX = Min(minPixelX, pixelX);
-        minPixelY = Min(minPixelY, pixelY);
-        maxPixelX = Max(maxPixelX, pixelX);
-        maxPixelY = Max(maxPixelY, pixelY);
+        SIMDVector normalizedPosition = VectorAdd(
+            VectorMultiply(ndcPosition, s_SIMDOneHalf),
+            s_SIMDOneHalf
+        );
+        normalizedPosition = VectorSelect(
+            normalizedPosition,
+            VectorSubtract(s_SIMDOne, normalizedPosition),
+            s_SIMDMaskY
+        );
+        const SIMDVector pixelPosition = VectorAndInt(
+            VectorMultiply(normalizedPosition, frameExtent),
+            s_SIMDMaskXY
+        );
+        minPixel = VectorMin(minPixel, pixelPosition);
+        maxPixel = VectorMax(maxPixel, pixelPosition);
     }
+
+    const f32 minPixelX = VectorGetX(minPixel);
+    const f32 minPixelY = VectorGetY(minPixel);
+    const f32 maxPixelX = VectorGetX(maxPixel);
+    const f32 maxPixelY = VectorGetY(maxPixel);
 
     if(maxPixelX < 0.0f || maxPixelY < 0.0f || minPixelX > static_cast<f32>(frameWidth) || minPixelY > static_cast<f32>(frameHeight))
         return;

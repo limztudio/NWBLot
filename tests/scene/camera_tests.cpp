@@ -26,6 +26,7 @@ TEST(Scene, CameraProjectionHelpers){
     f32 tanHalfFov = 0.0f;
     EXPECT_TRUE(NWB::Impl::Scene::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov));
     EXPECT_GT(tanHalfFov, 0.0f);
+    EXPECT_NEAR(tanHalfFov, 0.577350269f, 0.0001f);
     EXPECT_TRUE(NWB::Impl::Scene::CameraClipRangeValid(camera));
     EXPECT_EQ(NWB::Impl::Scene::ResolveCameraAspectRatio(camera, 1.5f), 1.5f);
 

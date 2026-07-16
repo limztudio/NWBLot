@@ -61,23 +61,29 @@ inline SIMDMatrix BuildWorldToClipMatrix(
     const SIMDVector forward,
     const SIMDVector projection
 ){
-    const f32 translationX = -VectorGetX(Vector3Dot(positionDepthBias, right));
-    const f32 translationY = -VectorGetX(Vector3Dot(positionDepthBias, up));
-    const f32 translationZ = -VectorGetX(Vector3Dot(positionDepthBias, forward)) + VectorGetW(positionDepthBias);
+    const SIMDVector translation = VectorAdd(
+        VectorNegate(VectorMergeX(
+            Vector3Dot(positionDepthBias, right),
+            Vector3Dot(positionDepthBias, up),
+            Vector3Dot(positionDepthBias, forward),
+            VectorZero()
+        )),
+        VectorAndInt(VectorSplatW(positionDepthBias), s_SIMDMaskZ)
+    );
 
     // World-to-view: basis vectors as rows, view-space translation in the fourth column (M*v form).
     SIMDMatrix worldToView{};
-    worldToView.v[0] = VectorSetW(right, translationX);
-    worldToView.v[1] = VectorSetW(up, translationY);
-    worldToView.v[2] = VectorSetW(forward, translationZ);
+    worldToView.v[0] = VectorSelect(right, VectorSplatX(translation), s_SIMDMaskW);
+    worldToView.v[1] = VectorSelect(up, VectorSplatY(translation), s_SIMDMaskW);
+    worldToView.v[2] = VectorSelect(forward, VectorSplatZ(translation), s_SIMDMaskW);
     worldToView.v[3] = s_SIMDIdentityR3;
 
     // View-to-clip: projection lanes are x/y scale, z scale, and z bias; clip.w carries view-space z.
     SIMDMatrix viewToClip{};
-    viewToClip.v[0] = VectorSet(VectorGetX(projection), 0.0f, 0.0f, 0.0f);
-    viewToClip.v[1] = VectorSet(0.0f, VectorGetY(projection), 0.0f, 0.0f);
-    viewToClip.v[2] = VectorSet(0.0f, 0.0f, VectorGetZ(projection), VectorGetW(projection));
-    viewToClip.v[3] = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+    viewToClip.v[0] = VectorAndInt(projection, s_SIMDMaskX);
+    viewToClip.v[1] = VectorAndInt(projection, s_SIMDMaskY);
+    viewToClip.v[2] = VectorSelect(VectorAndInt(projection, s_SIMDMaskZ), VectorSplatW(projection), s_SIMDMaskW);
+    viewToClip.v[3] = s_SIMDIdentityR2;
 
     return MatrixMultiply(viewToClip, worldToView);
 }

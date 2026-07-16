@@ -28,10 +28,18 @@ namespace __hidden_raytracing_system{
 // Surface area of an AABB from its min/max SIMD corners (the SA term in the binned-SAH split cost).
 [[nodiscard]] f32 SceneBvhAabbSurfaceArea(const SIMDVector aabbMin, const SIMDVector aabbMax)noexcept{
     const SIMDVector extent = VectorSubtract(aabbMax, aabbMin);
-    const f32 ex = VectorGetX(extent);
-    const f32 ey = VectorGetY(extent);
-    const f32 ez = VectorGetZ(extent);
-    return 2.0f * (ex * ey + ex * ez + ey * ez);
+    const SIMDVector pairProducts = VectorMultiply(
+        extent,
+        VectorSwizzle<1, 2, 0, 3>(extent)
+    );
+    const SIMDVector area = VectorScale(
+        VectorAdd(
+            VectorAdd(VectorSplatX(pairProducts), VectorSplatZ(pairProducts)),
+            VectorSplatY(pairProducts)
+        ),
+        2.0f
+    );
+    return VectorGetX(area);
 }
 
 void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noexcept{

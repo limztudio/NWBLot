@@ -22,6 +22,7 @@
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/material/material_typed_private.h>
 #include <impl/ecs_render/material/material_instance.h>
+#include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skin_types.h>
@@ -135,6 +136,34 @@ TEST(EcsGraphics, LightComponents){
     EXPECT_EQ(lightViewCount, 2u);
     EXPECT_EQ(directionalLightCount, 1u);
     EXPECT_EQ(pointLightCount, 1u);
+}
+
+TEST(EcsGraphics, MeshViewWorldToClipMatrixKeepsVectorLanesIntact){
+    const SIMDMatrix worldToClip = NWB::Impl::ECSRenderDetail::BuildWorldToClipMatrix(
+        VectorSet(3.0f, -2.0f, 5.0f, 0.75f),
+        s_SIMDIdentityR0,
+        s_SIMDIdentityR1,
+        s_SIMDIdentityR2,
+        VectorSet(2.0f, 3.0f, 4.0f, -1.0f)
+    );
+
+    Float44 matrix = {};
+    StoreFloat(worldToClip, &matrix);
+    EXPECT_FLOAT_EQ(matrix._11, 2.0f);
+    EXPECT_FLOAT_EQ(matrix._14, -6.0f);
+    EXPECT_FLOAT_EQ(matrix._22, 3.0f);
+    EXPECT_FLOAT_EQ(matrix._24, 6.0f);
+    EXPECT_FLOAT_EQ(matrix._33, 4.0f);
+    EXPECT_FLOAT_EQ(matrix._34, -18.0f);
+    EXPECT_FLOAT_EQ(matrix._43, 1.0f);
+    EXPECT_FLOAT_EQ(matrix._44, -4.25f);
+
+    Float4 clipPosition;
+    StoreFloat(Vector4Transform(VectorSet(3.0f, -2.0f, 5.0f, 1.0f), worldToClip), &clipPosition);
+    EXPECT_FLOAT_EQ(clipPosition.x, 0.0f);
+    EXPECT_FLOAT_EQ(clipPosition.y, 0.0f);
+    EXPECT_FLOAT_EQ(clipPosition.z, 2.0f);
+    EXPECT_FLOAT_EQ(clipPosition.w, 0.75f);
 }
 
 TEST(EcsGraphics, MeshSystemResolvesMeshComponent){

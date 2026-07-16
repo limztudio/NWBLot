@@ -47,17 +47,22 @@ static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectio
     SIMDVector sinHalfFovVector;
     SIMDVector cosHalfFovVector;
     VectorSinCos(&sinHalfFovVector, &cosHalfFovVector, VectorReplicate(verticalFovRadians * 0.5f));
-    const f32 sinHalfFov = VectorGetX(sinHalfFovVector);
-    const f32 cosHalfFov = VectorGetX(cosHalfFovVector);
     if(
-        !IsFinite(sinHalfFov)
-        || !IsFinite(cosHalfFov)
-        || (cosHalfFov > -s_CameraFovCosEpsilon && cosHalfFov < s_CameraFovCosEpsilon)
+        !VectorIsFinite(sinHalfFovVector, 0xFu)
+        || !VectorIsFinite(cosHalfFovVector, 0xFu)
+        || !Vector4GreaterOrEqual(
+            VectorAbs(cosHalfFovVector),
+            VectorReplicate(s_CameraFovCosEpsilon)
+        )
     )
         return false;
 
-    outTanHalfFov = sinHalfFov / cosHalfFov;
-    return IsFinite(outTanHalfFov) && outTanHalfFov > 0.0f;
+    const SIMDVector tanHalfFovVector = VectorDivide(sinHalfFovVector, cosHalfFovVector);
+    if(!VectorIsFinite(tanHalfFovVector, 0xFu) || !Vector4Greater(tanHalfFovVector, VectorZero()))
+        return false;
+
+    outTanHalfFov = VectorGetX(tanHalfFovVector);
+    return true;
 }
 
 [[nodiscard]] inline bool CameraClipRangeValid(const CameraComponent& camera){

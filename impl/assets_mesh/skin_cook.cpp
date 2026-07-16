@@ -370,6 +370,10 @@ template<usize ComponentCount>
     return true;
 }
 
+[[nodiscard]] SIMDMatrix LoadInverseBindMatrix(const SkeletonJointMatrix& matrix){
+    return LoadFloat(matrix);
+}
+
 [[nodiscard]] bool ParseInverseBindMatrices(
     const Path& nwbFilePath,
     const Value& asset,
@@ -399,7 +403,7 @@ template<usize ComponentCount>
         ))
             return false;
 
-        if(!SkinValidation::ValidAffineJointMatrix(LoadFloat(matrix))){
+        if(!SkinValidation::ValidAffineJointMatrix(LoadInverseBindMatrix(matrix))){
             NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix")
                 , PathToString<tchar>(nwbFilePath)
                 , matrixIndex

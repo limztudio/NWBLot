@@ -76,14 +76,13 @@ template<typename VertexRefVectorT, typename PrimitiveIndexVectorT>
     return true;
 }
 
-template<typename TriangleIndexVectorT>
+template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
 static void AddMeshletTriangleToScoreState(
-    const MeshletTrianglePrecompute& trianglePrecompute,
     const TriangleIndexVectorT& triangleIndices,
-    const MeshletTriangleData& triangle,
+    const MeshletTriangleVectors& triangleVectors,
+    const TriangleAreaNormalAtT& triangleAreaNormalAt,
     MeshletScoreState& state
 ){
-    const MeshletTriangleVectors triangleVectors = LoadMeshletTriangleVectors(triangle);
     AccumulateMeshletScoreBounds(triangleVectors.positions, state.minBounds, state.maxBounds);
     state.radius = AabbTests::Radius(state.minBounds, state.maxBounds);
     state.centroidSum = VectorAdd(state.centroidSum, triangleVectors.centroid);
@@ -91,11 +90,11 @@ static void AddMeshletTriangleToScoreState(
     state.normalAxis = NormalizeMeshletDirectionOrZero(state.normalSum);
     ++state.primitiveCount;
     state.coneCutoff = ComputeMeshletScoreConeCutoff(
-        trianglePrecompute,
         triangleIndices,
         state.normalAxis,
         0u,
         false,
+        triangleAreaNormalAt,
         state.coneEnabled
     );
 }
@@ -118,7 +117,11 @@ static void AddMeshletTriangleToScoreState(
         return false;
 
     localTriangleIndices.push_back(triangleIndex);
-    AddMeshletTriangleToScoreState(trianglePrecompute, localTriangleIndices, triangle, scoreState);
+    const MeshletTriangleVectors triangleVectors = LoadMeshletTriangleVectors(triangle);
+    const auto triangleAreaNormalAt = [&](const u32 otherTriangleIndex){
+        return LoadMeshletTriangleAreaNormal(trianglePrecompute.triangles[otherTriangleIndex]);
+    };
+    AddMeshletTriangleToScoreState(localTriangleIndices, triangleVectors, triangleAreaNormalAt, scoreState);
     trianglePrecompute.visitedTriangles[triangleIndex] = 1u;
     AddMeshletTriangleNeighborsToFrontier(trianglePrecompute, triangleIndex, frontier, frontierFlags);
     return true;

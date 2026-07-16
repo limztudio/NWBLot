@@ -98,6 +98,26 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return true;
 }
 
+[[nodiscard]] NWB_INLINE bool ResolveStoredSkeletonPoseJointMatrix(
+    const SkeletonJointMatrix& localJoint,
+    const SkeletonJointMatrix* parentJoint,
+    SkeletonJointMatrix& outMatrix
+){
+    SIMDMatrix parentJointMatrix{};
+    const SIMDMatrix* parentJointMatrixPtr = nullptr;
+    if(parentJoint){
+        parentJointMatrix = LoadFloat(*parentJoint);
+        parentJointMatrixPtr = &parentJointMatrix;
+    }
+
+    SIMDMatrix resolvedJointMatrix{};
+    if(!ResolveSkeletonPoseJointMatrix(LoadFloat(localJoint), parentJointMatrixPtr, resolvedJointMatrix))
+        return false;
+
+    StoreFloat(resolvedJointMatrix, &outMatrix);
+    return true;
+}
+
 template<typename JointMatrixVector>
 [[nodiscard]] inline bool BuildStoredJointPaletteFromSkeletonPose(
     const SkeletonPoseComponent& pose,
@@ -122,22 +142,21 @@ template<typename JointMatrixVector>
     outJointPalette.reserve(jointCount);
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
         const u32 parentJoint = pose.parentJoints[jointIndex];
-        SIMDMatrix parentJointMatrix;
-        const SIMDMatrix* parentJointMatrixPtr = nullptr;
+        const SkeletonJointMatrix* parentStoredJoint = nullptr;
         if(parentJoint != s_SkeletonRootParent){
             if(parentJoint >= jointIndex)
                 return false;
 
-            parentJointMatrix = LoadFloat(outJointPalette[parentJoint]);
-            parentJointMatrixPtr = &parentJointMatrix;
+            parentStoredJoint = &outJointPalette[parentJoint];
         }
 
-        SIMDMatrix jointMatrix;
-        if(!ResolveSkeletonPoseJointMatrix(LoadFloat(pose.localJoints[jointIndex]), parentJointMatrixPtr, jointMatrix))
-            return false;
-
         SkeletonJointMatrix storedJointMatrix{};
-        StoreFloat(jointMatrix, &storedJointMatrix);
+        if(!ResolveStoredSkeletonPoseJointMatrix(
+            pose.localJoints[jointIndex],
+            parentStoredJoint,
+            storedJointMatrix
+        ))
+            return false;
         outJointPalette.push_back(storedJointMatrix);
     }
 

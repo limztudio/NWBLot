@@ -110,13 +110,13 @@ static void UpdateMeshletScoreConeCutoff(
     coneCutoff = Min(coneCutoff, VectorGetX(Vector3Dot(axis, faceNormal)));
 }
 
-template<typename TriangleIndexVectorT>
+template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
 [[nodiscard]] static f32 ComputeMeshletScoreConeCutoff(
-    const MeshletTrianglePrecompute& trianglePrecompute,
     const TriangleIndexVectorT& triangleIndices,
     const SIMDVector axis,
     const u32 extraTriangleIndex,
     const bool hasExtraTriangle,
+    const TriangleAreaNormalAtT& triangleAreaNormalAt,
     bool& outConeEnabled
 ){
     outConeEnabled = false;
@@ -126,11 +126,11 @@ template<typename TriangleIndexVectorT>
     bool hasNormal = false;
     f32 coneCutoff = 1.0f;
     for(const u32 triangleIndex : triangleIndices){
-        const SIMDVector triangleAreaNormal = LoadMeshletTriangleAreaNormal(trianglePrecompute.triangles[triangleIndex]);
+        const SIMDVector triangleAreaNormal = triangleAreaNormalAt(triangleIndex);
         UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
     }
     if(hasExtraTriangle){
-        const SIMDVector triangleAreaNormal = LoadMeshletTriangleAreaNormal(trianglePrecompute.triangles[extraTriangleIndex]);
+        const SIMDVector triangleAreaNormal = triangleAreaNormalAt(extraTriangleIndex);
         UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
     }
 
@@ -141,13 +141,13 @@ template<typename TriangleIndexVectorT>
     return coneCutoff;
 }
 
-template<typename TriangleIndexVectorT>
+template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
 [[nodiscard]] static f32 PredictMeshletScoreConeWidening(
-    const MeshletTrianglePrecompute& trianglePrecompute,
     const TriangleIndexVectorT& triangleIndices,
     const MeshletScoreState& state,
     const u32 triangleIndex,
-    const SIMDVector triangleAreaNormal
+    const SIMDVector triangleAreaNormal,
+    const TriangleAreaNormalAtT& triangleAreaNormalAt
 ){
     if(!state.coneEnabled)
         return 0.0f;
@@ -155,11 +155,11 @@ template<typename TriangleIndexVectorT>
     const SIMDVector predictedAxis = NormalizeMeshletDirectionOrZero(VectorAdd(state.normalSum, triangleAreaNormal));
     bool predictedConeEnabled = false;
     const f32 predictedConeCutoff = ComputeMeshletScoreConeCutoff(
-        trianglePrecompute,
         triangleIndices,
         predictedAxis,
         triangleIndex,
         true,
+        triangleAreaNormalAt,
         predictedConeEnabled
     );
     if(!predictedConeEnabled)
@@ -168,28 +168,27 @@ template<typename TriangleIndexVectorT>
     return Max(0.0f, state.coneCutoff - predictedConeCutoff);
 }
 
-template<typename TriangleIndexVectorT>
+template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
 [[nodiscard]] static f32 ScoreMeshletCandidate(
-    const MeshletTrianglePrecompute& trianglePrecompute,
     const TriangleIndexVectorT& triangleIndices,
     const MeshletScoreState& state,
     const u32 triangleIndex,
+    const MeshletTriangleVectors& triangleVectors,
+    const TriangleAreaNormalAtT& triangleAreaNormalAt,
     const u32 sharedVertexCount,
     const u32 missingVertexCount,
     const bool disconnected
 ){
-    const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
-    const MeshletTriangleVectors triangleVectors = LoadMeshletTriangleVectors(triangle);
     const f32 predictedRadius = PredictMeshletScoreRadius(state, triangleVectors.positions);
     const f32 predictedRadiusGrowth = Max(0.0f, predictedRadius - state.radius);
     const f32 centroidDistance = MeshletScoreCentroidDistance(state, triangleVectors.centroid);
     const f32 normalCoherence = MeshletScoreNormalCoherence(state, triangleVectors.areaNormal);
     const f32 coneWidening = PredictMeshletScoreConeWidening(
-        trianglePrecompute,
         triangleIndices,
         state,
         triangleIndex,
-        triangleVectors.areaNormal
+        triangleVectors.areaNormal,
+        triangleAreaNormalAt
     );
     return s_MeshletScoreSharedVertexWeight * static_cast<f32>(sharedVertexCount)
         - s_MeshletScoreNewVertexWeight * static_cast<f32>(missingVertexCount)

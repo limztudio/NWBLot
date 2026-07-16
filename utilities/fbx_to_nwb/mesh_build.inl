@@ -43,6 +43,18 @@ template<typename VisitTriangle>
     return true;
 }
 
+static void StoreSmoothPosition(const SIMDVector position, Vec3& outPosition){
+    StoreFloat(position, &outPosition);
+}
+
+[[nodiscard]] static SIMDVector LoadSmoothNormal(const Vec3& normal){
+    return LoadFloat(normal);
+}
+
+static void StoreSmoothNormal(const SIMDVector normal, Vec3& outNormal){
+    StoreFloat(normal, &outNormal);
+}
+
 [[nodiscard]] bool BuildSmoothPositionNormals(
     const ufbx_mesh& mesh,
     const ufbx_node& node,
@@ -57,13 +69,13 @@ template<typename VisitTriangle>
     if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
         Vec3 positions[s_TriangleIndexCount] = {};
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex){
-            StoreFloat(BuildCornerOutputPositionVector(
+            StoreSmoothPosition(BuildCornerOutputPositionVector(
                 mesh,
                 node,
                 options,
                 wantsSkinning,
                 cornerIndices[triangleCornerIndex]
-            ), &positions[triangleCornerIndex]);
+            ), positions[triangleCornerIndex]);
         }
 
         const TriangleAreaNormal64 areaNormal64 = BuildTriangleAreaNormal64(positions[0u], positions[1u], positions[2u]);
@@ -81,7 +93,10 @@ template<typename VisitTriangle>
             auto result = outNormals.emplace(key, areaNormal);
             if(!result.second){
                 Vec3& normal = result.first.value();
-                StoreFloat(VectorAdd(LoadFloat(normal), LoadFloat(areaNormal)), &normal);
+                StoreSmoothNormal(
+                    VectorAdd(LoadSmoothNormal(normal), LoadSmoothNormal(areaNormal)),
+                    normal
+                );
             }
         }
         return true;
@@ -90,11 +105,11 @@ template<typename VisitTriangle>
 
     for(auto it = outNormals.begin(); it != outNormals.end(); ++it){
         SIMDVector normal;
-        if(!Normalize(LoadFloat(it.value()), normal)){
+        if(!Normalize(LoadSmoothNormal(it.value()), normal)){
             NWB_LOGGER_WARNING(NWB_TEXT("Mesh build: degenerate accumulated vertex normal left un-normalized"));
             continue;
         }
-        StoreFloat(normal, &it.value());
+        StoreSmoothNormal(normal, it.value());
     }
     return true;
 }

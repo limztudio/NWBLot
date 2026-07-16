@@ -442,6 +442,8 @@ NWB_INLINE void SIMDCALL StoreInt4Sse(SIMDVector src, i32* dst)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// SIMDVector and SIMDMatrix are calculation values. Persistent CPU/GPU data must use the typed Float#/Int#/UInt#
+// storage layouts and cross into SIMD only through these conversion boundaries.
 NWB_INLINE SIMDVector SIMDCALL LoadFloat(const Float4& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(src.x, src.y, src.z, src.w);

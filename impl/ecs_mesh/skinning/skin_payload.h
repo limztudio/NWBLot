@@ -45,6 +45,49 @@ namespace MeshSkinningPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace JointPayloadBuildResult{
+enum Enum : u8{
+    Ready,
+    InvalidJointMatrix,
+    InvalidDualQuaternion
+};
+};
+
+[[nodiscard]] inline JointPayloadBuildResult::Enum BuildStoredJointPayload(
+    const SkeletonJointMatrix& poseJoint,
+    const SkeletonJointMatrix* inverseBind,
+    const bool useDualQuaternionPayload,
+    SkeletonJointMatrix& outJointPayload
+){
+    const bool hasInverseBind = inverseBind != nullptr;
+    const SIMDMatrix inverseBindMatrix = hasInverseBind ? LoadFloat(*inverseBind) : SIMDMatrix{};
+    NWB_ASSERT(!hasInverseBind || SkinValidation::ValidAffineJointMatrix(inverseBindMatrix));
+
+    SIMDMatrix jointMatrix{};
+    if(!SkeletonRuntime::ResolveSkinningJointMatrix(
+        LoadFloat(poseJoint),
+        hasInverseBind,
+        inverseBindMatrix,
+        jointMatrix
+    ))
+        return JointPayloadBuildResult::InvalidJointMatrix;
+
+    outJointPayload = SkeletonJointMatrix{};
+    if(!useDualQuaternionPayload){
+        StoreFloat(jointMatrix, &outJointPayload);
+        return JointPayloadBuildResult::Ready;
+    }
+
+    SIMDVector real = QuaternionIdentity();
+    SIMDVector dual = VectorZero();
+    if(!SkeletonRuntime::TryBuildJointDualQuaternion(jointMatrix, real, dual))
+        return JointPayloadBuildResult::InvalidDualQuaternion;
+
+    StoreFloat(real, &outJointPayload.rows[0]);
+    StoreFloat(dual, &outJointPayload.rows[1]);
+    return JointPayloadBuildResult::Ready;
+}
+
 template<typename SourceJointVector, typename SkinInfluenceVector, typename JointPaletteVector>
 [[nodiscard]] bool BuildSkinPayloadFromJointMatrices(
     const MeshSkinningRuntimeInstance& instance,
@@ -87,47 +130,33 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
     for(usize jointIndex = 0; jointIndex < jointCount; ++jointIndex){
         NWB_ASSERT(!hasInverseBindMatrices || jointIndex < instance.inverseBindMatrices.size());
 
-        const SIMDMatrix poseJoint = LoadFloat(sourceJoints[jointIndex]);
-        const SIMDMatrix inverseBind = hasInverseBindMatrices
-            ? LoadFloat(instance.inverseBindMatrices[jointIndex])
-            : SIMDMatrix{}
+        const SkeletonJointMatrix* inverseBind = hasInverseBindMatrices
+            ? &instance.inverseBindMatrices[jointIndex]
+            : nullptr
         ;
-        NWB_ASSERT(!hasInverseBindMatrices || SkinValidation::ValidAffineJointMatrix(inverseBind));
-        SIMDMatrix jointMatrix;
-        if(
-            !SkeletonRuntime::ResolveSkinningJointMatrix(
-                poseJoint,
-                hasInverseBindMatrices,
-                inverseBind,
-                jointMatrix
-            )
-        ){
+        SkeletonJointMatrix storedJointMatrix{};
+        const JointPayloadBuildResult::Enum buildResult = BuildStoredJointPayload(
+            sourceJoints[jointIndex],
+            inverseBind,
+            useDualQuaternionPayload,
+            storedJointMatrix
+        );
+        if(buildResult == JointPayloadBuildResult::InvalidJointMatrix){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix")
                 , instance.handle.value
                 , jointIndex
             );
             return false;
         }
-        if(useDualQuaternionPayload){
-            SIMDVector real = QuaternionIdentity();
-            SIMDVector dual = VectorZero();
-            if(!SkeletonRuntime::TryBuildJointDualQuaternion(jointMatrix, real, dual)){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build")
-                    , instance.handle.value
-                    , jointIndex
-                );
-                return false;
-            }
-            SkeletonJointMatrix storedJointMatrix{};
-            StoreFloat(real, &storedJointMatrix.rows[0]);
-            StoreFloat(dual, &storedJointMatrix.rows[1]);
-            outJointPalette.push_back(storedJointMatrix);
+        if(buildResult == JointPayloadBuildResult::InvalidDualQuaternion){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build")
+                , instance.handle.value
+                , jointIndex
+            );
+            return false;
         }
-        else{
-            SkeletonJointMatrix storedJointMatrix{};
-            StoreFloat(jointMatrix, &storedJointMatrix);
-            outJointPalette.push_back(storedJointMatrix);
-        }
+        NWB_ASSERT(buildResult == JointPayloadBuildResult::Ready);
+        outJointPalette.push_back(storedJointMatrix);
     }
 
     outSkinInfluences.reserve(skinCount);

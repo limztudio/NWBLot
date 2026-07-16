@@ -2,6 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] static SIMDVector LoadMeshletBoundsSphere(const MeshletBounds& bounds){
+    return LoadFloat(bounds.sphere);
+}
+
 [[nodiscard]] static bool ValidateMeshletAttributeSkinSharing(
     const Core::Assets::AssetVector<u8>& positionRefDeltas,
     const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
@@ -200,7 +204,7 @@
         }
 
         const MeshletBounds& bounds = meshletBounds[meshletIndex];
-        const SIMDVector sphere = LoadFloat(bounds.sphere);
+        const SIMDVector sphere = LoadMeshletBoundsSphere(bounds);
         if(!VectorIsFinite(sphere, 0xFu) || VectorGetW(sphere) < 0.0f){
             return FailMeshletPayloadValidation(
                 contextText,

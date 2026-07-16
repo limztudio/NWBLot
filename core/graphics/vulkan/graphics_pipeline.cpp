@@ -296,8 +296,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
 bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPassParameters& params){
     auto* fb = framebuffer;
-    if(!fb)
-        return false;
+    NWB_ASSERT(fb);
 
     if(fb->m_framebufferInfo.width == 0 || fb->m_framebufferInfo.height == 0 || fb->m_framebufferInfo.arraySize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));

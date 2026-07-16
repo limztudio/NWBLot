@@ -107,8 +107,10 @@ inline void KillAndReapProcess(const pid_t childPid)noexcept{
         }
 
         const int pollResult = ::poll(nullptr, 0, s_ProcessPollSleepMilliseconds);
-        if(pollResult < 0 && errno != EINTR)
+        if(pollResult < 0 && errno != EINTR){
+            KillAndReapProcess(childPid);
             return false;
+        }
     }
 }
 #endif
@@ -295,9 +297,10 @@ template<typename StringT>
         return false;
     }
 
+    const bool processSucceeded = ProcessExecutionDetail::WaitForProcessSuccess(childPid, deadlineMilliseconds);
     return readSucceeded
         && !outputTruncated
-        && ProcessExecutionDetail::WaitForProcessSuccess(childPid, deadlineMilliseconds)
+        && processSucceeded
         && !outOutput.empty()
     ;
 }

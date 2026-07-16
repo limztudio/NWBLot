@@ -1056,6 +1056,35 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
+TEST(AssetsGraphics, MaterialMetadataRejectsMissingShaderVariant){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    static constexpr AStringView s_MissingShaderVariantMaterialMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+
+)NWB_META";
+
+    TestArena testArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
+    NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
+    EXPECT_FALSE(ParseMaterialEntryFromMetaText(s_MissingShaderVariantMaterialMeta, testArena, materialEntry, scratchArena));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("field 'shader_variant' is required")));
+#else
+#endif
+}
+
 TEST(AssetsGraphics, MaterialMetadataRejectsMissingRenderProperties){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
@@ -1114,6 +1143,7 @@ asset.bxdf = "project/shaders/material_bxdf.bxdf";
 asset.transparent = 0;
 asset.two_sided = 0;
 asset.refractive = 0;
+asset.shader_variant = "default";
 
 )NWB_META";
 

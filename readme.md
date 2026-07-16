@@ -14,7 +14,7 @@
   - engine-only build: `cmake --build --preset windows-clang-engine-dbg --target nwb_resource_cooker`
   - testbed configure: `cmake --preset windows-clang-testbed-x64`
   - testbed build: `cmake --build --preset windows-clang-testbed-dbg --target testbed`
-  - full configure preset: `cmake --preset windows-clang-x64`
+  - full configure/test preset: `cmake --preset windows-clang-x64`
   - Visual Studio can still open the repository root as a CMake project, but the build now goes through Ninja + `clang`/`clang++` instead of MSBuild projects.
 
 - Windows requirements
@@ -26,13 +26,13 @@
 
 - Linux status
   - Local verification should use the repo-bundled CMake and CTest binaries under `__cmake/tool-venv/bin/` when system `cmake` / `ctest` are not on `PATH`.
-  - full configure preset: `linux-clang-x64`
+  - full configure/test preset: `linux-clang-x64`
   - engine-only configure preset: `linux-clang-engine-x64`
   - testbed configure preset: `linux-clang-testbed-x64`
   - Linux uses the same CMake + Ninja + Clang flow and `dbg` / `opt` / `fin` build configurations as Windows.
   - `slangc` is required when `NWB_BUILD_RESOURCE_COOKER` is enabled.
   - `nwb_frame`, `nwb_loader`, `nwb_logserver`, `nwb_resource_cooker`, and `testbed` are configured through the CMake build options and platform dependencies.
-  - Full Linux configure: `cmake --preset linux-clang-x64`.
+  - Full Linux configure (includes internal validation targets): `cmake --preset linux-clang-x64`.
   - Debug test verification: `cmake --build --preset linux-clang-dbg`, then `ctest --test-dir __cmake/build/linux-clang-x64 -C dbg --output-on-failure`.
   - Transparent multi capture verification: configure with `cmake --preset linux-clang-x64`, build the executable/assets with `cmake --build --preset linux-clang-dbg --target nwb_transparent_multi_smoke`, then run `ctest --test-dir __cmake/build/linux-clang-x64 -C dbg -R "^nwb_transparent_multi_capture_smoke$" --output-on-failure`.
   - `nwb_transparent_multi_capture_smoke` is a CTest entry, not a Ninja build target. The latest capture is written to `__cmake/build/linux-clang-x64/Testing/smoke/dbg/transparent_multi_capture_latest.png`.

@@ -3,6 +3,7 @@ material asset;
 asset.two_sided = 1;
 asset.transparent = 0;
 asset.refractive = 0;
+asset.shader_variant = "default";
 
 asset.interface = "project/shaders/smoke_surface.bind";
 asset.surface = "project/shaders/smoke_surface.surface";

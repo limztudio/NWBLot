@@ -6,6 +6,7 @@ asset.bxdf = "project/shaders/toon.bxdf";
 asset.transparent = 0;
 asset.two_sided = 0;
 asset.refractive = 0;
+asset.shader_variant = "default";
 asset.parameters = {
     "surface": {
         "base_color": "half4(0.78, 0.35, 1.0, 1.0)",

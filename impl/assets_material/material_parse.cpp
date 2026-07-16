@@ -44,11 +44,11 @@ static bool ParseVariantField(
 
     const auto* variantValue = asset.findField(fieldName);
     if(!variantValue){
-        // Optional: a material with no explicit variant uses the default variant (valid only when its shaders
-        // declare no defines). Cook-generated shaders declare none; an explicit-`shaders` material may opt into a
-        // specific variant.
-        outVariant = Core::ShaderArchive::s_DefaultVariant;
-        return true;
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' is required")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
     }
 
     CookString rawVariant{arena};

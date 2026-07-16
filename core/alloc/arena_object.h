@@ -20,6 +20,9 @@ NWB_ALLOC_BEGIN
 template<typename Concrete, typename Arena, typename... Args>
 Concrete* NewArenaObject(Arena& arena, Args&&... args){
     auto* mem = arena.template allocate<Concrete>(1);
+    if(!mem)
+        return nullptr;
+
     return new(mem) Concrete(Forward<Args>(args)...);
 }
 

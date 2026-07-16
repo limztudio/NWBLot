@@ -34,6 +34,11 @@ void* CoreRealloc(void* p, usize size, const char* log){
     void* cur = scalable_realloc(p, size);
     return cur;
 }
+void* CoreReallocAligned(void* p, usize size, usize align, const char* log){
+    static_cast<void>(log);
+    void* cur = scalable_aligned_realloc(p, size, align);
+    return cur;
+}
 void* CoreAllocAligned(usize size, usize align, const char* log){
     static_cast<void>(log);
     void* cur = scalable_aligned_malloc(size, align);

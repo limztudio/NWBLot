@@ -19,8 +19,10 @@
 #include <global/hash_utils.h>
 #include <global/inplace_function.h>
 #include <global/limit.h>
+#include <global/process_execution.h>
 #include <global/text_utils.h>
 
+#include <core/alloc/persistent.h>
 #include <core/common/name_symbols.h>
 
 
@@ -50,6 +52,33 @@ static char s_DiagnosticEventCategoryText[s_DiagnosticEventCaptureTextBytes] = {
 static char s_DiagnosticEventExpressionText[s_DiagnosticEventCaptureTextBytes] = {};
 static char s_DiagnosticEventMessageText[s_DiagnosticEventCaptureTextBytes] = {};
 static char s_DiagnosticEventFileText[s_DiagnosticEventCaptureTextBytes] = {};
+
+template<typename Arena>
+static void VerifyAlignedReallocation(Arena& arena){
+    constexpr usize s_Alignment = 256u;
+    constexpr usize s_InitialBytes = s_Alignment;
+    constexpr usize s_BlockerBytes = s_Alignment;
+    constexpr usize s_GrownBytes = s_Alignment * 4u;
+
+    EXPECT_EQ(arena.reallocate(nullptr, s_Alignment, 0u), nullptr);
+    auto* initial = static_cast<u8*>(arena.reallocate(nullptr, s_Alignment, s_InitialBytes));
+    ASSERT_NE(initial, nullptr);
+    EXPECT_EQ(reinterpret_cast<usize>(initial) % s_Alignment, 0u);
+    for(usize i = 0u; i < s_InitialBytes; ++i)
+        initial[i] = static_cast<u8>(i);
+
+    void* blocker = arena.allocate(1u, s_BlockerBytes);
+    ASSERT_NE(blocker, nullptr);
+
+    auto* resized = static_cast<u8*>(arena.reallocate(initial, s_Alignment, s_GrownBytes));
+    ASSERT_NE(resized, nullptr);
+    EXPECT_EQ(reinterpret_cast<usize>(resized) % s_Alignment, 0u);
+    for(usize i = 0u; i < s_InitialBytes; ++i)
+        EXPECT_EQ(resized[i], static_cast<u8>(i));
+
+    arena.deallocate(blocker, 1u, s_BlockerBytes);
+    EXPECT_EQ(arena.reallocate(resized, s_Alignment, 0u), nullptr);
+}
 
 static const char* CopyDiagnosticEventText(char (&outText)[s_DiagnosticEventCaptureTextBytes], const char* const text)noexcept{
     const char* const source = text ? text : "";
@@ -161,6 +190,19 @@ TEST(Global, AllocationSizeHelpers){
     EXPECT_EQ(Alignment(1u, 37u), 37u);
     EXPECT_EQ(Alignment(8u, 37u), 40u);
     EXPECT_EQ(Alignment(16u, 48u), 48u);
+}
+
+TEST(Global, GlobalArenaReallocationPreservesAlignment){
+    NWB::Core::Alloc::GlobalArena arena(NWB::Tests::s_TestArena);
+    VerifyAlignedReallocation(arena);
+}
+
+TEST(Global, PersistentArenaReallocationPreservesAlignment){
+    NWB::Core::Alloc::PersistentArena arena(
+        NWB::Tests::s_TestArena,
+        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(16u * 1024u)
+    );
+    VerifyAlignedReallocation(arena);
 }
 
 TEST(Global, Utf8CodePointConversionsPreserveMultibyteText){
@@ -410,6 +452,38 @@ TEST(Global, BlockingFileDescriptorRoundTrip){
 
     ::close(fds[0]);
     ::close(fds[1]);
+}
+#endif
+
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+TEST(Global, CaptureProcessOutputReapsTruncatedChild){
+    const char* const argv[] = {
+        "/bin/sh",
+        "-c",
+        "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done",
+        nullptr
+    };
+    AString output;
+    EXPECT_FALSE(CaptureProcessOutput(output, argv, 16u, 64u, 250u));
+
+    const usize lineEnd = output.find('\n');
+    ASSERT_NE(lineEnd, AString::npos);
+
+    u64 childPidValue = 0u;
+    ASSERT_TRUE(ParseU64(AStringView(output.data(), lineEnd), childPidValue));
+    ASSERT_GT(childPidValue, 0u);
+    ASSERT_LE(childPidValue, static_cast<u64>(Limit<pid_t>::s_Max));
+
+    const pid_t childPid = static_cast<pid_t>(childPidValue);
+    int status = 0;
+    errno = 0;
+    const pid_t waitResult = ::waitpid(childPid, &status, WNOHANG);
+    const int waitError = errno;
+    if(waitResult == 0)
+        ProcessExecutionDetail::KillAndReapProcess(childPid);
+
+    EXPECT_EQ(waitResult, -1);
+    EXPECT_EQ(waitError, ECHILD);
 }
 #endif
 

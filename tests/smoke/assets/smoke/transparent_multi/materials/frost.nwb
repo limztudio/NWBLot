@@ -12,6 +12,7 @@ asset.bxdf = "project/shaders/smoke_lambert.bxdf";
 asset.transparent = 0;
 asset.two_sided = 0;
 asset.refractive = 0;
+asset.shader_variant = "default";
 asset.parameters = {
     "frost": {
         "frost_albedo": "half4(0.2, 0.4, 0.9, 1.0)",

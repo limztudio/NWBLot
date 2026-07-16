@@ -6,6 +6,7 @@ asset.bxdf = "project/shaders/smoke_lambert.bxdf";
 asset.transparent = 1;
 asset.two_sided = 0;
 asset.refractive = 1;
+asset.shader_variant = "default";
 asset.parameters = {
     "surface": {
         "base_color": "half4(1.0, 1.0, 1.0, 1.0)",

@@ -9,6 +9,7 @@ import socket
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 
 
@@ -21,6 +22,12 @@ class SmokeSkip(Exception):
 
 class SmokeFailure(Exception):
     pass
+
+
+@dataclass
+class ProcessOutputCapture:
+    path: Path
+    stream: object
 
 
 @dataclass(frozen=True)
@@ -160,31 +167,90 @@ def request_windows_graceful_exit(pid):
     return bool(targets)
 
 
-def terminate_process(process, name):
-    if process is None or process.poll() is not None:
+def create_process_output_capture(working_directory, name):
+    try:
+        stream = tempfile.NamedTemporaryFile(
+            mode="w+b",
+            prefix=f".nwb_window_capture_{name}_",
+            suffix=".log",
+            dir=working_directory,
+            delete=False,
+        )
+    except OSError as error:
+        raise SmokeFailure(f"failed to create {name} output capture in '{working_directory}': {error}") from error
+
+    return ProcessOutputCapture(Path(stream.name), stream)
+
+
+def dispose_process_output_capture(capture):
+    if capture is None:
         return
 
-    # Prefer a graceful shutdown so the app's normal exit path runs (e.g. the NWB_BUILDMODE Name-symbol sidecar write);
-    # a hard terminate() (TerminateProcess on Windows) would skip it. The window capture has already happened by the
-    # time we tear down, so this never affects what was captured -- only how the app exits.
-    if platform.system() == "Windows":
-        try:
-            if request_windows_graceful_exit(process.pid):
-                try:
-                    process.wait(timeout=10.0)
-                    return
-                except subprocess.TimeoutExpired:
-                    write_status(f"{name}: did not exit after WM_CLOSE; terminating")
-        except OSError as error:
-            write_status(f"{name}: graceful WM_CLOSE failed ({error}); terminating")
-
-    process.terminate()
     try:
-        process.wait(timeout=5.0)
-    except subprocess.TimeoutExpired:
-        write_status(f"{name}: did not exit after terminate; killing")
-        process.kill()
-        process.wait(timeout=5.0)
+        capture.stream.close()
+    except OSError as error:
+        write_status(f"failed to close process output capture '{capture.path}': {error}")
+
+    try:
+        capture.path.unlink()
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        write_status(f"failed to remove process output capture '{capture.path}': {error}")
+
+
+def launch_captured_process(command, working_directory, env, name):
+    capture = create_process_output_capture(working_directory, name)
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=working_directory,
+            env=env,
+            stdout=capture.stream,
+            stderr=subprocess.STDOUT,
+        )
+    except OSError:
+        dispose_process_output_capture(capture)
+        raise
+
+    process._nwb_output_capture = capture
+    return process
+
+
+def terminate_process(process, name):
+    if process is None:
+        return
+
+    try:
+        if process.poll() is not None:
+            return
+
+        # Prefer a graceful shutdown so the app's normal exit path runs (e.g. the NWB_BUILDMODE Name-symbol sidecar write);
+        # a hard terminate() (TerminateProcess on Windows) would skip it. The window capture has already happened by the
+        # time we tear down, so this never affects what was captured -- only how the app exits.
+        if platform.system() == "Windows":
+            try:
+                if request_windows_graceful_exit(process.pid):
+                    try:
+                        process.wait(timeout=10.0)
+                        return
+                    except subprocess.TimeoutExpired:
+                        write_status(f"{name}: did not exit after WM_CLOSE; terminating")
+            except OSError as error:
+                write_status(f"{name}: graceful WM_CLOSE failed ({error}); terminating")
+
+        process.terminate()
+        try:
+            process.wait(timeout=5.0)
+        except subprocess.TimeoutExpired:
+            write_status(f"{name}: did not exit after terminate; killing")
+            process.kill()
+            process.wait(timeout=5.0)
+    finally:
+        if process.poll() is not None:
+            capture = getattr(process, "_nwb_output_capture", None)
+            process._nwb_output_capture = None
+            dispose_process_output_capture(capture)
 
 
 def clamp_relative_point(width, height, relative_x, relative_y):
@@ -213,17 +279,26 @@ def require_unit_interval_arg(parser, name, value):
         parser.error(f"{name} must be between 0.0 and 1.0")
 
 
+def read_file_tail(path, max_bytes=65536):
+    try:
+        with path.open("rb") as log_file:
+            log_file.seek(0, os.SEEK_END)
+            start = max(log_file.tell() - max_bytes, 0)
+            log_file.seek(start)
+            return log_file.read().decode("utf-8", "replace")
+    except OSError:
+        return ""
+
+
 def read_process_tail(process):
     if process is None:
         return ""
 
-    output = ""
-    if process.stdout:
-        try:
-            output = process.stdout.read()
-        except OSError:
-            output = ""
+    capture = getattr(process, "_nwb_output_capture", None)
+    if capture is None:
+        return ""
 
+    output = read_file_tail(capture.path)
     if not output:
         return ""
 
@@ -1361,18 +1436,19 @@ def launch_logserver(args, executable, env):
     log_pattern = "logserver_*.log"
     log_baseline = snapshot_log_files(log_directory, log_pattern)
     port = args.log_port if args.log_port else choose_free_port()
-    process = subprocess.Popen(
+    process = launch_captured_process(
         [str(logserver), "-p", str(port)],
-        cwd=args.working_directory,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
+        args.working_directory,
+        env,
+        "logserver",
     )
     try:
         wait_for_tcp_port(port, min(args.timeout, 10.0))
-    except Exception:
+    except Exception as error:
+        tail = read_process_tail(process)
         terminate_process(process, "logserver")
+        if tail:
+            raise SmokeFailure(f"{error}\n{tail}") from error
         raise
 
     return process, port, log_directory, log_baseline, log_pattern
@@ -1386,13 +1462,11 @@ def launch_testbed(args, executable, env, log_port):
         command.extend(["-a", "", "-p", "0"])
     command.extend(args.application_arg)
 
-    return subprocess.Popen(
+    return launch_captured_process(
         command,
-        cwd=args.working_directory,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
+        args.working_directory,
+        env,
+        "testbed",
     )
 
 

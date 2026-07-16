@@ -69,10 +69,33 @@ public:
     inline void* reallocate(void* p, usize align, usize size){
         size = Alignment(align, size);
 
-        const u64 oldBytes = static_cast<u64>(tlsf_block_size(p));
-        void* next = tlsf_realloc(m_handle, p, size);
-        if(next || size == 0u)
-            m_memoryStats.recordReallocation(oldBytes, static_cast<u64>(tlsf_block_size(next)));
+        if(!p)
+            return size ? allocate(align, size) : nullptr;
+
+        const usize oldSize = tlsf_block_size(p);
+        const u64 oldBytes = static_cast<u64>(oldSize);
+        if(size == 0u){
+            tlsf_free(m_handle, p);
+            m_memoryStats.recordReallocation(oldBytes, 0u);
+            return nullptr;
+        }
+
+        if(align <= static_cast<usize>(tlsf_align_size()) || size <= oldSize){
+            void* next = tlsf_realloc(m_handle, p, size);
+            if(next)
+                m_memoryStats.recordReallocation(oldBytes, static_cast<u64>(tlsf_block_size(next)));
+            return next;
+        }
+
+        void* next = tlsf_memalign(m_handle, align, size);
+        if(!next)
+            return nullptr;
+
+        const usize newSize = tlsf_block_size(next);
+        const usize copySize = Min(oldSize, size);
+        NWB_MEMCPY(next, newSize, p, copySize);
+        tlsf_free(m_handle, p);
+        m_memoryStats.recordReallocation(oldBytes, static_cast<u64>(newSize));
         return next;
     }
 
@@ -113,12 +136,20 @@ using PersistentUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::Persi
 
 template<typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, Args&&... args){
-    return PersistentUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...), typename PersistentUniquePtr<T>::deleter_type(arena));
+    auto* mem = arena.template allocate<T>(1);
+    if(!mem)
+        return PersistentUniquePtr<T>(nullptr, typename PersistentUniquePtr<T>::deleter_type(arena));
+
+    return PersistentUniquePtr<T>(new(mem) T(Forward<Args>(args)...), typename PersistentUniquePtr<T>::deleter_type(arena));
 }
 template<typename T>
 inline typename EnableIf<IsUnboundedArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, usize n){
     typedef typename RemoveExtent<T>::type TBase;
-    return PersistentUniquePtr<T>(new(arena.allocate<TBase>(n)) TBase[n], typename PersistentUniquePtr<T>::deleter_type(arena, n));
+    auto* mem = arena.template allocate<TBase>(n);
+    if(!mem)
+        return PersistentUniquePtr<T>(static_cast<TBase*>(nullptr), typename PersistentUniquePtr<T>::deleter_type(arena, n));
+
+    return PersistentUniquePtr<T>(new(mem) TBase[n], typename PersistentUniquePtr<T>::deleter_type(arena, n));
 }
 template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type

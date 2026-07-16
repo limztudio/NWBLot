@@ -9,6 +9,8 @@
 #include "global.h"
 #include "core.h"
 
+#include <new>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -34,6 +36,14 @@ private:
 
 
     public:
+        [[nodiscard]] static inline Chunk* create(usize align, usize size, const char* log){
+            auto* chunk = new(std::nothrow) Chunk(align, size, log);
+            if(!chunk || !chunk->m_buffer){
+                delete chunk;
+                return nullptr;
+            }
+            return chunk;
+        }
         static inline void destroy(Chunk* chunk, const char* log){
             CoreFreeAligned(chunk->m_buffer, log);
             delete chunk;
@@ -165,18 +175,29 @@ public:
         auto& bucket = m_bucket[bucketIndex];
 
         size = Alignment(align, size);
-        if(size > bucket.size)
-            bucket.size = (size > (static_cast<usize>(-1) >> 1)) ? size : (size << 1);
+        usize chunkSize = bucket.size;
+        if(size > chunkSize)
+            chunkSize = (size > (static_cast<usize>(-1) >> 1)) ? size : (size << 1);
 
         if(!bucket.head){
-            bucket.head = new Chunk(align, bucket.size, Base::log());
-            m_memoryStats.addReservedBytes(static_cast<u64>(bucket.head->m_size));
-            bucket.last = bucket.head;
+            auto* chunk = Chunk::create(align, chunkSize, Base::log());
+            if(!chunk)
+                return nullptr;
+
+            bucket.head = chunk;
+            bucket.last = chunk;
+            bucket.size = chunkSize;
+            m_memoryStats.addReservedBytes(static_cast<u64>(chunk->m_size));
         }
         else if(size > bucket.last->m_remaining){
-            bucket.last->add(new Chunk(align, bucket.size, Base::log()));
-            bucket.last = bucket.last->m_next;
-            m_memoryStats.addReservedBytes(static_cast<u64>(bucket.last->m_size));
+            auto* chunk = Chunk::create(align, chunkSize, Base::log());
+            if(!chunk)
+                return nullptr;
+
+            bucket.last->add(chunk);
+            bucket.last = chunk;
+            bucket.size = chunkSize;
+            m_memoryStats.addReservedBytes(static_cast<u64>(chunk->m_size));
         }
 
         void* p = bucket.last->allocate(size);

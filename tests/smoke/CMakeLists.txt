@@ -7,6 +7,12 @@ if(Python3_Interpreter_FOUND)
             "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/launcher_tests.py"
     )
+    add_test(
+        NAME nwb_testbed_window_capture_unit
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_LIST_DIR}/testbed_window_capture_tests.py"
+    )
 
     function(nwb_add_window_capture_smoke TEST_NAME OUTPUT_NAME EXECUTABLE_PATH WORKING_DIRECTORY WINDOW_TITLE)
         if(TARGET nwb_logserver)

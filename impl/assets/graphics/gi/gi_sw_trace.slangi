@@ -28,6 +28,12 @@
 #define NWB_MESH_BINDING_MATERIAL_TYPED NWB_GI_SW_BINDING_MATERIAL_TYPED
 #define NWB_MESH_BINDING_INSTANCE NWB_GI_SW_BINDING_MESH_INSTANCES
 
+// The generated shadow dispatch is also the material-surface evaluator for GI. It reads the typed material constants
+// and mutable instance storage through the mapped bindings above, so GI evaluates the authored NwbMeshSurface instead
+// of guessing one project-interface field.
+#include "../shadow/shadow_surface.slangi"
+#include "shadow/generated/transmittance_dispatch.slangi"
+
 // The shared trace body: NwbGiProbeHit + nwbGiShadeHit + the scene/light bindings + the nwbGiTraceClosest seam decl.
 #include "gi_trace_common.slangi"
 // SW-only: the CPU-built scene/instance/per-mesh BVH node type.
@@ -69,6 +75,28 @@ ByteAddressBuffer g_NwbGiSwMeshIndices[NWB_GI_SW_MAX_MESHES];
 
 [[vk::binding(NWB_GI_SW_BINDING_MESH_ATTRIBUTES, NWB_GI_SW_SET)]]
 ByteAddressBuffer g_NwbGiSwMeshAttributes[NWB_GI_SW_MAX_MESHES];
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Per-triangle-corner inputs for the material surface evaluator. This is the same 16-byte ray-trace attribute layout
+// the shadow and caustic paths use: Half4 normal at +0 and Float2 uv0 at +8.
+struct NwbGiSwVertexAttrib{
+    float3 normal;
+    float2 uv0;
+};
+
+NwbGiSwVertexAttrib nwbGiSwLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
+    const uint4 packed = g_NwbGiSwMeshAttributes[NonUniformResourceIndex(meshIndex)].Load4(attributeIndex * 16u);
+    NwbGiSwVertexAttrib attrib;
+    attrib.normal = float3(
+        nwbUnpackHalf2x16(packed.x),
+        nwbUnpackHalf2x16(packed.y).x
+    );
+    attrib.uv0 = asfloat(packed.zw);
+    return attrib;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -137,6 +165,9 @@ float3 nwbGiSwTransformNormal(const NwbGiSwInstance instance, const float3 objec
 struct NwbGiSwTriangleHit{
     bool hit;
     float t;
+    float u;
+    float v;
+    float w;
     float3 normal;
 };
 
@@ -144,11 +175,17 @@ NwbGiSwTriangleHit nwbGiSwRayTriangle(const float3 origin, const float3 directio
     NwbGiSwTriangleHit result;
     result.hit = false;
     result.t = 0.0;
+    result.u = 0.0;
+    result.v = 0.0;
+    result.w = 0.0;
     result.normal = float3(0.0, 0.0, 1.0);
 
     const NwbRayTriangleHit hit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, tMax, v0, v1, v2);
     result.hit = hit.hit;
     result.t = hit.t;
+    result.u = hit.u;
+    result.v = hit.v;
+    result.w = hit.w;
     result.normal = hit.normal;
     return result;
 }
@@ -158,8 +195,8 @@ NwbGiSwTriangleHit nwbGiSwRayTriangle(const float3 origin, const float3 directio
 
 
 // Per-instance closest-hit refinement: push the world ray into object space, walk the mesh BVH front-to-back, keep the
-// nearest triangle crossing. On hit, compute the geometric face normal (inverse-transpose) + read the per-instance
-// base colour packed into the instance-material record by the CPU gather (AssignInstanceBaseColor).
+// nearest triangle crossing. On hit, compute the geometric face normal for Lambert lighting and reconstruct the
+// authored material-surface inputs (normal + uv0 + typed material context) for the GI bounce albedo.
 void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbGiProbeHit closest){
     const NwbGiSwInstance instance = g_NwbGiSwInstances[instanceIndex];
     const NwbRtInstanceMaterial material = g_NwbGiSwInstanceMaterial[instanceIndex];
@@ -184,11 +221,27 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
             const float3 v2 = asfloat(g_NwbGiSwMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(triIndices.z * 12u));
             const NwbGiSwTriangleHit triHit = nwbGiSwRayTriangle(origin, direction, tMin, closest.t, v0, v1, v2);
             if(triHit.hit){
+                const uint attributeBase = triangle * 3u;
+                const NwbGiSwVertexAttrib a0 = nwbGiSwLoadVertexAttrib(meshIndex, attributeBase);
+                const NwbGiSwVertexAttrib a1 = nwbGiSwLoadVertexAttrib(meshIndex, attributeBase + 1u);
+                const NwbGiSwVertexAttrib a2 = nwbGiSwLoadVertexAttrib(meshIndex, attributeBase + 2u);
+                const float3 objectShadingNormal = a0.normal * triHit.w + a1.normal * triHit.u + a2.normal * triHit.v;
+
+                NwbShadowHit surfaceHit;
+                surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
+                surfaceHit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+                surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
+                surfaceHit.uv0 = a0.uv0 * triHit.w + a1.uv0 * triHit.u + a2.uv0 * triHit.v;
+                surfaceHit.worldNormal = nwbSafeNormalize(nwbGiSwTransformNormal(instance, objectShadingNormal), float3(0.0, 0.0, 1.0));
+                surfaceHit.worldPosition = worldOrigin + worldDirection * triHit.t;
+                surfaceHit.rayDirection = worldDirection;
+
+                const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit);
                 closest.hit = true;
                 closest.t = triHit.t;
-                closest.worldPos = worldOrigin + worldDirection * triHit.t;
+                closest.worldPos = surfaceHit.worldPosition;
                 closest.normal = nwbSafeNormalize(nwbGiSwTransformNormal(instance, triHit.normal), float3(0.0, 0.0, 1.0));
-                closest.albedo = half3(asfloat(material.baseColorR), asfloat(material.baseColorG), asfloat(material.baseColorB));
+                closest.albedo = surface.baseColor;
             }
             active = false;
         }

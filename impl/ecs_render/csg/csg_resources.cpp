@@ -399,6 +399,44 @@ void RendererCsgSystem::destroyCsgClipBindingSet(){
     csgState().m_clipBindingSet.reset();
 }
 
+void RendererCsgSystem::destroyCsgIntervalCapFillMaterialBindingSet(){
+    csgState().m_intervalCapFillMaterialBindingSet.reset();
+}
+
+bool RendererCsgSystem::prepareCsgIntervalCapFillMaterialResources(){
+    if(csgState().m_intervalCapFillMaterialBindingSet)
+        return true;
+    if(
+        !csgState().m_intervalCapFillMaterialBindingLayout
+        || !drawState().m_materialTypedBuffer
+        || !drawState().m_instanceBuffer
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval cap fill requires typed material and instance buffers"));
+        return false;
+    }
+
+    Core::BindingSetDesc bindingSetDesc(arena());
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(
+        NWB_MESH_BINDING_MATERIAL_TYPED,
+        drawState().m_materialTypedBuffer.get()
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(
+        NWB_MESH_BINDING_INSTANCE,
+        drawState().m_instanceBuffer.get()
+    ));
+
+    csgState().m_intervalCapFillMaterialBindingSet = graphics().getDevice()->createBindingSet(
+        bindingSetDesc,
+        csgState().m_intervalCapFillMaterialBindingLayout
+    );
+    if(!csgState().m_intervalCapFillMaterialBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval cap fill material binding set"));
+        return false;
+    }
+
+    return true;
+}
+
 bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCount){
     const usize oldCapacity = csgState().m_receiverRangeBufferCapacity;
     if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(
@@ -438,14 +476,22 @@ bool RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
 }
 
 bool RendererCsgSystem::prepareCsgFrameBuffers(const CsgFrameGpuData& csgFrameData){
-    if(!csgFrameData.hasWork())
-        return true;
+    if(!csgFrameData.hasWork()){
+        // Material-pass preparation can grow the shared typed/instance buffers after an earlier CSG pass prepared
+        // its cap set. Refresh the set during setup (never from the render path) so it always tracks the latest
+        // buffers before an opaque cap fill consumes them.
+        if(!csgState().m_intervalCapFillMaterialBindingLayout)
+            return true;
+        return prepareCsgIntervalCapFillMaterialResources();
+    }
     if(
         !reserveCsgReceiverRangeBufferCapacity(csgFrameData.receiverRanges.size())
         || !reserveCsgCutterBufferCapacity(csgFrameData.cutters.size())
     )
         return false;
     if(!csgState().m_clipBindingSet && !createCsgClipResources())
+        return false;
+    if(!prepareCsgIntervalCapFillMaterialResources())
         return false;
 
     return true;
@@ -461,6 +507,7 @@ bool RendererCsgSystem::csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData
         && csgState().m_cutterBuffer
         && csgState().m_cutterBufferCapacity >= csgFrameData.cutters.size()
         && csgState().m_clipBindingSet
+        && csgState().m_intervalCapFillMaterialBindingSet
     ;
 }
 

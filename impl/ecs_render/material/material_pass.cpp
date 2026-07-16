@@ -134,7 +134,7 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
 
     const bool drawBuffersReady = prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes);
     const bool regularDrawResourcesReady = prepareMaterialPassResourceBindings(drawItems.regular);
-    const bool csgResourcesReady = !csgFrameData.hasWork() || m_renderer.csgSystem().prepareCsgFrameBuffers(csgFrameData);
+    const bool csgResourcesReady = m_renderer.csgSystem().prepareCsgFrameBuffers(csgFrameData);
     const bool csgDrawResourcesReady = csgResourcesReady && (drawItems.csg.empty() || prepareMaterialPassResourceBindings(drawItems.csg));
     const bool csgReceiverSurfaceDrawResourcesReady =
         csgResourcesReady
@@ -404,11 +404,20 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         pipelineKey.framebufferInfo = framebufferInfo;
         pipelineKey.pass = pass;
         pipelineKey.twoSided = materialInfo->twoSided;
-        const bool csgClipCandidate =
+        const bool csgClipRequested =
             csgReceiverLookupPtr
             && csgReceiverState.active
             && MaterialPipelinePassUsesRendererCsgClip(pass, transparent)
         ;
+        if(csgClipRequested && !materialInfo->csgCapSurfaceDispatchAvailable){
+            if(!materialInfo->csgCapSurfaceDispatchUnavailableLogged){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG receiver material '{}' has no cook-generated surface hook; clipping is disabled because cap fill requires the declared typed surface contract")
+                    , StringConvert(materialInfo->materialName.c_str())
+                );
+                materialInfo->csgCapSurfaceDispatchUnavailableLogged = true;
+            }
+        }
+        const bool csgClipCandidate = csgClipRequested && materialInfo->csgCapSurfaceDispatchAvailable;
         CsgReceiverClipDrawInfo csgClipInfo;
         const bool csgClipInfoReady =
             csgClipCandidate
@@ -526,10 +535,12 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 csgRange
             ))
                 return false;
-            // Carry the receiver's BXDF id + albedo so the CSG cap-fill pass lights the carved surface with
-            // the receiver material's shading model instead of a hard-coded color.
+            // The cap shader evaluates the same cook-generated surface hook as the receiver using this typed
+            // material context; rangeInfo.w still carries the deferred BXDF id for the G-buffer target.
             csgRange.shadingModelId = materialInfo->shadingModelId;
-            csgRange.baseColor = materialInfo->csgReceiverBaseColor;
+            csgRange.surfaceDispatchId = materialInfo->shadowTransmittanceModelId;
+            csgRange.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
+            csgRange.meshInstanceIndex = instanceIndex;
             NWB_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());
             csgFrameData.receiverRanges[instanceIndex] = csgRange;
         }

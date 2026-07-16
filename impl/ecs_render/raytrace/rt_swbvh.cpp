@@ -211,9 +211,6 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
                 return false;
             instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
         }
-        // Colour this instance's probe/photon bounces with its authored base colour (GI/caustic hit albedo).
-        __hidden_raytracing_system::AssignInstanceBaseColor(instanceMaterial, world(), entity);
-
         instances.push_back(instanceDesc);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
@@ -429,9 +426,6 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
                 return false;
             instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
         }
-        // Colour this instance's probe/photon bounces with its authored base colour (GI/caustic hit albedo).
-        __hidden_raytracing_system::AssignInstanceBaseColor(instanceMaterial, world(), entity);
-
         Float4 storedWorldMin;
         Float4 storedWorldMax;
         Float4 storedCentroid;

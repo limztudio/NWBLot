@@ -231,12 +231,14 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     NWB_ASSERT(csgState().m_intervalCapFillPipeline);
     NWB_ASSERT(csgState().m_intervalSampleBindingSet);
     NWB_ASSERT(csgState().m_clipBindingSet);
+    NWB_ASSERT(csgState().m_intervalCapFillMaterialBindingSet);
     NWB_ASSERT(targets.framebuffer);
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, graphics().getDevice(), commandList);
 
     commandList.setResourceStatesForBindingSet(csgState().m_intervalSampleBindingSet.get());
     commandList.setResourceStatesForBindingSet(csgState().m_clipBindingSet.get());
+    commandList.setResourceStatesForBindingSet(csgState().m_intervalCapFillMaterialBindingSet.get());
     setCsgClipBufferStates(commandList);
     commandList.commitBarriers();
 
@@ -252,6 +254,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     graphicsState.setViewport(viewportState);
     graphicsState.addBindingSet(csgState().m_intervalSampleBindingSet.get());
     graphicsState.addBindingSet(csgState().m_clipBindingSet.get());
+    graphicsState.addBindingSet(csgState().m_intervalCapFillMaterialBindingSet.get());
     commandList.setGraphicsState(graphicsState);
 
     Core::DrawArguments drawArgs;

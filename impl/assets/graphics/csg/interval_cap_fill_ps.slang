@@ -9,6 +9,15 @@
 #include "../deferred/binding_slots.h"
 #include "../mesh/runtime_constants.h"
 
+// CSG caps have no source triangle, but they still evaluate the receiver's COMPLETE cook-generated surface hook.
+// Keep the typed words + per-instance mutable storage in a dedicated third binding set; this lets heterogeneous
+// .bind interfaces share the generated surface dispatcher without guessing an albedo field.
+#undef NWB_MESH_SET
+#define NWB_MESH_SET NWB_CSG_CAP_FILL_MATERIAL_SET
+#include "../shadow/shadow_surface.slangi"
+#include "shadow/generated/transmittance_dispatch.slangi"
+#undef NWB_MESH_SET
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,7 +39,7 @@ struct NwbCsgCapFillReceiverRange{
     float4 worldToReceiverRow1;
     float4 worldToReceiverRow2;
     NwbCsgCapFillBounds localBounds;
-    float4 baseColor;
+    uint4 materialContext; // x: surface dispatch id, y: constant byte offset, z: mesh instance index
 };
 
 [[vk::binding(NWB_CSG_BINDING_RECEIVER_RANGES, NWB_CSG_CLIP_SET)]]
@@ -75,15 +84,23 @@ NwbCsgIntervalCapFillPixelOutput main(const NwbCsgIntervalCapFillPixelInput inpu
         discard;
 
     const NwbCsgCapFillReceiverRange receiver = g_NwbCsgCapFillReceiverRanges[cap.receiverIndex];
+    NwbShadowHit hit;
+    hit.meshInstanceIndex = receiver.materialContext.z;
+    hit.shadowTransmittanceModelId = receiver.materialContext.x;
+    hit.materialConstantByteOffset = receiver.materialContext.y;
+    // A cap has no receiver-triangle UV/color/tangent. Match the documented non-rasterized surface inputs used by
+    // the generated dispatcher, while preserving every declared typed material field and both BXDF parameters.
+    hit.uv0 = float2(0.0);
+    hit.worldNormal = cap.normal;
+    hit.worldPosition = cap.worldPosition;
+    hit.rayDirection = -cap.normal;
+    const NwbMeshSurface surface = nwbShadowDispatchSurface(hit.shadowTransmittanceModelId, hit);
 
     NwbCsgIntervalCapFillPixelOutput output;
-    // baseColor.rgb = receiver base color, baseColor.a = receiver cook-assigned shading-model id so
-    // the carved cap is lit + shadowed by the same per-material BXDF as the receiver surface.
-    output.baseColor = float4(half3(receiver.baseColor.rgb), half(float(receiver.rangeInfo.w)));
-    // The mesh G-buffer PS packs spare BXDF params into normal.a / worldPosition.a; lambert/toon ignore
-    // them, so 0.0 keeps default parameters for the carved cap.
-    output.normal = float4(nwbCsgCapFillEncodeNormal(cap.normal), half(0.0));
-    output.worldPosition = float4(cap.worldPosition, 0.0);
+    // baseColor.a carries the deferred BXDF id, while the other packed fields exactly match the mesh G-buffer.
+    output.baseColor = float4(clamp(surface.baseColor, half3(0.0), half3(1.0)), half(float(receiver.rangeInfo.w)));
+    output.normal = float4(nwbCsgCapFillEncodeNormal(surface.normal), surface.param0);
+    output.worldPosition = float4(cap.worldPosition, surface.param1);
     output.depth = cap.depth;
     return output;
 }

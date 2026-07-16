@@ -12,9 +12,10 @@
 // The HARDWARE backend of the GI trace seam: inline RayQuery over the scene TLAS. Defines nwbGiTraceClosest to return
 // the nearest hit, reconstructing NwbGiProbeHit IDENTICALLY to the SW backend (gi_sw_trace.slangi) -- worldPos from the
 // committed ray-t, the GEOMETRIC face normal from the committed primitive's positions (same edge order + cross sign, so
-// HW==SW to sub-ULP), and the base colour from the SAME InstanceID-indexed material record (hardware InstanceID() == SW
-// scene-BVH leaf index). Reads the HW-resident per-mesh position/index buffers (indexed by material.meshSlot) the
-// shadow path already binds. Shares NwbGiProbeHit + the Lambert shade with the SW path via gi_trace_common.slangi.
+// HW==SW to sub-ULP), then evaluates the authored material surface with the SAME InstanceID-indexed material context
+// (hardware InstanceID() == SW scene-BVH leaf index). Reads the HW-resident per-mesh position/index/attribute buffers
+// (indexed by material.meshSlot) and typed material storage that the shadow path already binds. Shares NwbGiProbeHit +
+// the Lambert shade with the SW path via gi_trace_common.slangi.
 
 
 #include "hw_binding_slots.h"
@@ -23,6 +24,14 @@
 #define NWB_SCENE_SHADING_BINDING NWB_GI_HW_BINDING_SCENE_SHADING
 #define NWB_SCENE_LIGHT_LIST_SET NWB_GI_HW_SET
 #define NWB_SCENE_LIGHT_LIST_BINDING NWB_GI_HW_BINDING_LIGHT_LIST
+#define NWB_MESH_SET NWB_GI_HW_SET
+#define NWB_MESH_BINDING_MATERIAL_TYPED NWB_GI_HW_BINDING_MATERIAL_TYPED
+#define NWB_MESH_BINDING_INSTANCE NWB_GI_HW_BINDING_MESH_INSTANCES
+
+// Reuse the cook-generated material-surface dispatch for GI albedo. The binding redirects above give the evaluator the
+// same typed constants and mutable instance storage its raster/shadow invocation reads.
+#include "../shadow/shadow_surface.slangi"
+#include "shadow/generated/transmittance_dispatch.slangi"
 
 #include "gi_trace_common.slangi"
 
@@ -41,6 +50,31 @@ ByteAddressBuffer g_NwbGiHwMeshPositions[NWB_GI_HW_MAX_MESHES];
 
 [[vk::binding(NWB_GI_HW_BINDING_MESH_INDICES, NWB_GI_HW_SET)]]
 ByteAddressBuffer g_NwbGiHwMeshIndices[NWB_GI_HW_MAX_MESHES];
+
+[[vk::binding(NWB_GI_HW_BINDING_MESH_ATTRIBUTES, NWB_GI_HW_SET)]]
+ByteAddressBuffer g_NwbGiHwMeshAttributes[NWB_GI_HW_MAX_MESHES];
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Per-triangle-corner normal + uv0, in the shared 16-byte ray-trace attribute layout. GI needs these inputs to
+// evaluate the material surface hook exactly through its declared contract rather than inferring an interface field.
+struct NwbGiHwVertexAttrib{
+    float3 normal;
+    float2 uv0;
+};
+
+NwbGiHwVertexAttrib nwbGiHwLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
+    const uint4 packed = g_NwbGiHwMeshAttributes[NonUniformResourceIndex(meshIndex)].Load4(attributeIndex * 16u);
+    NwbGiHwVertexAttrib attrib;
+    attrib.normal = float3(
+        nwbUnpackHalf2x16(packed.x),
+        nwbUnpackHalf2x16(packed.y).x
+    );
+    attrib.uv0 = asfloat(packed.zw);
+    return attrib;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -94,12 +128,30 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     const float3 v1 = asfloat(g_NwbGiHwMeshPositions[NonUniformResourceIndex(meshSlot)].Load3(tri.y * 12u));
     const float3 v2 = asfloat(g_NwbGiHwMeshPositions[NonUniformResourceIndex(meshSlot)].Load3(tri.z * 12u));
     const float3 objNormal = normalize(cross(v1 - v0, v2 - v0));   // same edges/order/sign as nwbGiSwRayTriangle
+    const float2 bary = query.CommittedTriangleBarycentrics();
+    const float3 weights = float3(1.0 - bary.x - bary.y, bary.x, bary.y);
+    const uint attributeBase = triangle * 3u;
+    const NwbGiHwVertexAttrib a0 = nwbGiHwLoadVertexAttrib(meshSlot, attributeBase);
+    const NwbGiHwVertexAttrib a1 = nwbGiHwLoadVertexAttrib(meshSlot, attributeBase + 1u);
+    const NwbGiHwVertexAttrib a2 = nwbGiHwLoadVertexAttrib(meshSlot, attributeBase + 2u);
+    const float3 objectShadingNormal = a0.normal * weights.x + a1.normal * weights.y + a2.normal * weights.z;
+
+    NwbShadowHit surfaceHit;
+    surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
+    surfaceHit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+    surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
+    surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
+    surfaceHit.worldNormal = nwbSafeNormalize(nwbGiHwTransformNormal(query.CommittedWorldToObject3x4(), objectShadingNormal), float3(0.0, 0.0, 1.0));
+    surfaceHit.worldPosition = ray.Origin + ray.Direction * query.CommittedRayT();
+    surfaceHit.rayDirection = ray.Direction;
+
+    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit);
 
     closest.hit = true;
     closest.t = query.CommittedRayT();
-    closest.worldPos = ray.Origin + ray.Direction * closest.t;
+    closest.worldPos = surfaceHit.worldPosition;
     closest.normal = nwbSafeNormalize(nwbGiHwTransformNormal(query.CommittedWorldToObject3x4(), objNormal), float3(0.0, 0.0, 1.0));
-    closest.albedo = half3(asfloat(material.baseColorR), asfloat(material.baseColorG), asfloat(material.baseColorB));
+    closest.albedo = surface.baseColor;
     return closest;
 }
 

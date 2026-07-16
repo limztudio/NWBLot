@@ -161,12 +161,12 @@ struct MaterialSurfaceInfo{
     Core::Assets::AssetRef<Shader> pixelShader;
     Core::Assets::AssetRef<Shader> meshShader;
     // The cook-generated per-material AVBOIT accumulate pixel shader (transparent-pass twin of pixelShader),
-    // valid only for a surface-authored transparent material; the transparent draw binds it. Invalid otherwise
-    // (the draw then uses the engine's fixed accumulate PS).
+    // valid for a surface-authored transparent material; the transparent draw binds it. It is invalid for an
+    // opaque material. A missing shader on a transparent material is a cook/runtime contract failure.
     Core::Assets::AssetRef<Shader> avboitAccumulatePixelShader;
     // The occupancy/extinction twins, bound for those AVBOIT passes so all three read the material's SAME
-    // shader-decided surface.renderCoverage. Valid only for a surface-authored transparent material; invalid otherwise
-    // (the pass then uses the engine's fixed occupancy/extinction PS).
+    // shader-decided surface.renderCoverage. They are valid for a surface-authored transparent material and invalid
+    // for an opaque material. A missing shader on a transparent material is a cook/runtime contract failure.
     Core::Assets::AssetRef<Shader> avboitOccupancyPixelShader;
     Core::Assets::AssetRef<Shader> avboitExtinctionPixelShader;
     u64 typedLayoutHash = 0u;
@@ -176,9 +176,10 @@ struct MaterialSurfaceInfo{
     MaterialTypedByteVector mutableDefaultTypedBytes;
     u32 shadingModelId = 0u;
     u32 shadowTransmittanceModelId = 0u;
-    // CSG cap fill uses the receiver material's constant-class base color. Cache this immutable material value
-    // when the surface info is created so every clipped draw can copy it without rescanning the typed layout.
-    Float4 csgReceiverBaseColor = Float4(0.78f, 0.72f, 0.76f, 1.0f);
+    // CSG caps evaluate the cook-generated surface hook with this material's typed constants and mutable instance
+    // storage. Explicit opaque stage shaders have no hook, so clipping is deliberately disabled for them.
+    bool csgCapSurfaceDispatchAvailable = false;
+    bool csgCapSurfaceDispatchUnavailableLogged = false;
     // The dedicated refractive-caster classification flag, copied from the cooked Material. The RT instance
     // occluder record (U0-2) reads it. The refraction VALUES (refractionIor / shadowAbsorptionTint) are shader-side
     // (NwbMeshSurface), not here. Default false (not a refractive caster) -- a material declaring none is unchanged.

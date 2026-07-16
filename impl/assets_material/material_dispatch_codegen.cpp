@@ -41,11 +41,11 @@ static constexpr AStringView s_DeferredBxdfModuleSubPath = "deferred/generated/b
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Sentinel shadow-transmittance id for a material that contributes NO surface hook (it declares explicit
+// Sentinel shadow-transmittance id for a material that contributes NO surface hook (it declares explicit opaque
 // `shaders` instead of a `.surface`). The dense surface-authored ids start at 0, so a surface-less material must
 // NOT reuse 0 (that aliases the first real surface hook). This reserved id is never emitted as a `case` in the
-// generated dispatch switch, so a hit on such an occluder falls through to `default: return half3(1)` -- the
-// occluder passes all light untinted, the only correct behavior for a material with no transmittance hook.
+// generated dispatch switch. The shadow path never evaluates a surface for that opaque caster; GI reaches the
+// dispatch's documented no-surface fallback instead of accidentally invoking model zero.
 static constexpr u32 s_ShadowTransmittanceNoSurfaceModelId = Limit<u32>::s_Max;
 
 
@@ -97,10 +97,9 @@ bool AssignMaterialShadingModelIdsImpl(
     }
 
     // Assign each material a separate shadow-transmittance id deduped over the unique `.surface` sources (the
-    // surface hook computes the per-hit transmittance the shadow trace returns). A material that declares
-    // explicit `shaders` instead of a `surface` gets the reserved no-surface sentinel id (NOT 0, which is the
-    // first real surface hook); the generated dispatch routes that sentinel to its `default` -> float3(1), so a
-    // transparent surface-less occluder passes all light untinted instead of evaluating an unrelated material.
+    // surface hook supplies the per-hit optical values and GI base color). An opaque material that declares explicit
+    // `shaders` instead gets the reserved no-surface sentinel id (NOT 0, which is the first real surface hook), so
+    // GI reaches the generated dispatch's documented neutral fallback rather than evaluating an unrelated hook.
     Vector<AStringView, ScratchArena> uniqueSurfaces(scratchArena);
     uniqueSurfaces.reserve(materialEntries.size());
     for(const MaterialCookEntry& entry : materialEntries){
@@ -507,8 +506,10 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
         source += idView;
         source += "(hit);\n";
     }
-    // Unknown id: a neutral surface (ior = 1, transmission = white -> no Fresnel attenuation, no absorption).
-    source += "    default: return nwbMakeMeshSurface(half3(0.0, 0.0, 0.0), hit.worldNormal, half(0.0), half(0.0));\n";
+    // Unknown id: no material surface is available (for example, an explicit opaque-stage material). Shadow consumes
+    // only the neutral optical fields; GI may consume baseColor, where the fixed mid-grey is an explicit no-surface
+    // fallback rather than an inferred project-material albedo.
+    source += "    default: return nwbMakeMeshSurface(half3(0.5, 0.5, 0.5), hit.worldNormal, half(0.0), half(0.0));\n";
     source += "    }\n";
     source += "}\n\n#endif\n";
 

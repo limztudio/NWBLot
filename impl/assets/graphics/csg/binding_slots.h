@@ -24,6 +24,12 @@
 #define NWB_CSG_INTERVAL_SAMPLE_SET 2
 #endif
 
+// interval_cap_fill_ps overrides NWB_CSG_INTERVAL_SAMPLE_SET to 0, leaving this distinct third layout for the
+// full typed material surface evaluator (shadow_surface.slangi + generated transmittance dispatch).
+#ifndef NWB_CSG_CAP_FILL_MATERIAL_SET
+#define NWB_CSG_CAP_FILL_MATERIAL_SET 2
+#endif
+
 #define NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL 0
 #define NWB_CSG_INTERVAL_BINDING_DEPTH 1
 #define NWB_CSG_INTERVAL_BINDING_ID 2

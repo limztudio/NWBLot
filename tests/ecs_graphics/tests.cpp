@@ -19,6 +19,7 @@
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_csg/module.h>
+#include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/material/material_typed_private.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
@@ -341,6 +342,23 @@ TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
         uploadBytes
     );
 #endif
+}
+
+TEST(EcsGraphics, CsgReceiverRangeCarriesMaterialSurfaceContext){
+    const NWB::Impl::CsgReceiverRangeGpuData defaultRange;
+    EXPECT_EQ(defaultRange.surfaceDispatchId, Limit<u32>::s_Max);
+    EXPECT_EQ(defaultRange.materialConstantByteOffset, 0u);
+    EXPECT_EQ(defaultRange.meshInstanceIndex, 0u);
+    EXPECT_EQ(defaultRange.materialContextPadding, 0u);
+
+    NWB::Impl::CsgReceiverRangeGpuData range;
+    range.surfaceDispatchId = 19u;
+    range.materialConstantByteOffset = 96u;
+    range.meshInstanceIndex = 7u;
+
+    EXPECT_EQ(range.surfaceDispatchId, 19u);
+    EXPECT_EQ(range.materialConstantByteOffset, 96u);
+    EXPECT_EQ(range.meshInstanceIndex, 7u);
 }
 
 static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){

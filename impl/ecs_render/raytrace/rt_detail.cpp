@@ -255,29 +255,6 @@ u32 BuildSceneBvhNode(
     return material;
 }
 
-// Bit-cast a float to its u32 representation (the software producers store base colour as asuint in the u32-typed
-// instance-material fields; the shader reads them back with asfloat).
-[[nodiscard]] u32 FloatToUintBits(const f32 value){
-    u32 bits = 0u;
-    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
-    return bits;
-}
-
-// Resolves + writes the per-instance base colour the software probe/photon producers shade bounces with: the entity's
-// authored per-instance tint (mutable "runtime.color_tint", which the scenes set and which flows to the G-buffer base
-// colour), else the neutral GI default. Always runs (even for an unresolved material) so a bounce is never black.
-void AssignInstanceBaseColor(NwbRtInstanceMaterialGpu& material, Core::ECS::World& world, const Core::ECS::EntityID entity){
-    Float4 color(NWB_SURFEL_DEFAULT_ALBEDO_FLOAT3, 1.0f);
-    if(const MaterialInstanceComponent* materialInstance = world.tryGetComponent<MaterialInstanceComponent>(entity)){
-        Float4 tint;
-        if(GetMaterialMutableHalf4(*materialInstance, "runtime.color_tint", tint))
-            color = tint;
-    }
-    material.baseColorR = FloatToUintBits(color.x);
-    material.baseColorG = FloatToUintBits(color.y);
-    material.baseColorB = FloatToUintBits(color.z);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

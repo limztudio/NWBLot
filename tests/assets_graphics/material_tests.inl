@@ -1114,6 +1114,27 @@ asset.shader_variant = "default";
 #endif
 }
 
+TEST(AssetsGraphics, MaterialMetadataRejectsExplicitOpticalStages){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
+    const auto expectRejected = [&](const AStringView metaText){
+        NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
+        EXPECT_FALSE(ParseMaterialEntryFromMetaText(metaText, testArena, materialEntry, scratchArena));
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
+            "explicit 'shaders' cannot be used with transparent/refractive materials"
+        )));
+    };
+
+    expectRejected(s_ExplicitTransparentMaterialMeta);
+    expectRejected(s_ExplicitRefractiveMaterialMeta);
+#else
+#endif
+}
+
 TEST(AssetsGraphics, MaterialMetadataRejectsEngineRootedPolicySelectors){
 #if defined(NWB_FINAL)
     CapturingLogger logger;

@@ -578,14 +578,10 @@ static constexpr AStringView s_TransparentMaterialMeta = R"NWB_META(material ass
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.surface = "project/shaders/material_surface.surface";
 asset.transparent = 1;
 asset.two_sided = 0;
 asset.refractive = 0;
-
-asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-};
 asset.shader_variant = "default";
 
 asset.parameters = {
@@ -630,14 +626,10 @@ static constexpr AStringView s_RefractiveMaterialMeta = R"NWB_META(material asse
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.surface = "project/shaders/material_surface.surface";
 asset.transparent = 1;
 asset.two_sided = 0;
 asset.refractive = 1;
-
-asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-};
 asset.shader_variant = "default";
 
 asset.parameters = {
@@ -651,6 +643,40 @@ asset.parameters = {
 };
 
 )NWB_META";
+
+#if defined(NWB_FINAL)
+static constexpr AStringView s_ExplicitTransparentMaterialMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 1;
+asset.two_sided = 0;
+asset.refractive = 0;
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+)NWB_META";
+
+static constexpr AStringView s_ExplicitRefractiveMaterialMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 1;
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+)NWB_META";
+#endif
 
 #if defined(NWB_FINAL)
 static constexpr AStringView s_MissingInterfaceMaterialMeta = R"NWB_META(material asset;

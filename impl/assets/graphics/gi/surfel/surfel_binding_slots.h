@@ -11,8 +11,8 @@
 
 // Surfel GI bindings. Three compute passes + the deferred-lighting gather share the surfel pool / hash / counter /
 // constants; the TRACE pass additionally reuses the SW-BVH bindings (scene/instance/per-mesh, slots 0-10) the SW
-// shadow/caustic path already builds, so the trace body (gi_sw_trace.slangi: nwbGiSwTraceClosest +
-// nwbGiSwShadeHit + per-instance baseColor tint) is reused verbatim.
+// shadow/caustic path already builds, so the trace body (gi_sw_trace.slangi: nwbGiTraceClosest +
+// nwbGiShadeHit + the cook-generated material-surface dispatch) is reused verbatim.
 //
 //   HASH_BUILD: constants + pool(UAV) + cellHead(UAV)                                  [runs BEFORE spawn]
 //   SPAWN     : constants + pool(UAV) + cellHead(UAV, this frame) + counter(UAV) + G-buffer worldPos/normal(SRV)
@@ -161,11 +161,6 @@
 // converges to <= ~5x the first bounce at albedo 0.80), tight enough to stop unbounded creep. Validated by the
 // energy-stability test (the plateau must not creep toward the clamp).
 #define NWB_SURFEL_BOUNCE_CLAMP 4.0f
-
-// Default per-instance base colour the CPU writes into the shadow instance-material record (AssignInstanceBaseColor)
-// when an entity has no authored tint, so a bounce is never black. Mirrors the shader's NWB_GI_SW_TRACE_DEFAULT_ALBEDO.
-#define NWB_SURFEL_DEFAULT_ALBEDO_FLOAT3 0.5f, 0.5f, 0.5f
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

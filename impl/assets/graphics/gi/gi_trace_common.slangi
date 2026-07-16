@@ -22,7 +22,8 @@
 #include "../shadow/instance_material.slangi"
 
 
-// Default bounce albedo when a hit's per-instance base colour is unresolved (a colourless mid-grey reflectance).
+// Neutral albedo for an unconsumed miss result. A hit without an authored material surface gets the same fixed
+// mid-grey only through the generated dispatch's explicit no-surface fallback, never by probing a named .bind field.
 #ifndef NWB_GI_SW_TRACE_DEFAULT_ALBEDO
 #define NWB_GI_SW_TRACE_DEFAULT_ALBEDO 0.5, 0.5, 0.5
 #endif
@@ -31,8 +32,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Closest-hit result: the world-space hit point, the geometric face normal (Lambert uses it), and the hit instance's
-// authored base colour for the bounce.
+// Closest-hit result: the world-space hit point, the geometric face normal (Lambert uses it), and the authored
+// material-surface baseColor for the bounce.
 struct NwbGiProbeHit{
     bool hit;
     float t;
@@ -49,8 +50,8 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Lambert hit shade: direct light (<=8 lights, unshadowed base + optional dominant-light shadow ray) * per-instance
-// base colour. The caller adds any multi-bounce term (U4 surfel-to-surfel). The occlusion ray re-enters the traversal
+// Lambert hit shade: direct light (<=8 lights, unshadowed base + optional dominant-light shadow ray) * the authored
+// material-surface base colour. The caller adds any multi-bounce term (U4 surfel-to-surfel). The occlusion ray re-enters the traversal
 // seam (nwbGiTraceClosest), so it uses whichever backend the producer selected.
 float3 nwbGiShadeHit(const NwbGiProbeHit hit, const float3 rayDir){
     float3 irradiance = float3(0.0, 0.0, 0.0);
@@ -100,7 +101,7 @@ float3 nwbGiShadeHit(const NwbGiProbeHit hit, const float3 rayDir){
     }
 #endif
 
-    // Apply the per-instance base colour (the bounce's diffuse reflectance).
+    // Apply the authored material-surface base colour (the bounce's diffuse reflectance).
     irradiance *= float3(hit.albedo);
     return irradiance;
 }

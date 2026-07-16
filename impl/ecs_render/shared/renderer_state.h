@@ -165,6 +165,8 @@ private:
     Core::BindingSetHandle m_receiverSurfaceBindingSet;
     Core::BindingLayoutHandle m_intervalSampleBindingLayout;
     Core::BindingSetHandle m_intervalSampleBindingSet;
+    Core::BindingLayoutHandle m_intervalCapFillMaterialBindingLayout;
+    Core::BindingSetHandle m_intervalCapFillMaterialBindingSet;
     Core::ShaderHandle m_intervalPeelComputeShader;
     Core::ShaderHandle m_receiverSpanBuildComputeShader;
     Core::ShaderHandle m_intervalCombineComputeShader;
@@ -787,15 +789,18 @@ struct RtSurfelGiState{
     bool m_surfelCountReadbackPending = false;
     bool m_surfelDispatchLogged = false;
     // U5 HW-RayQuery trace twin (surfel_trace_hw_cs / gi_hw_trace.slangi): a parallel pipeline + binding set that reads
-    // the scene TLAS + the HW-resident per-mesh position/index buffers instead of the SW BVH, reconstructing the hit
-    // identically. m_surfelUseHwTrace selects the path in ensureSurfelResources / prepareSurfelResources / renderSurfelGi
-    // (set true by the HW-shadow branch, false by the SW branch). Rebuild guard on {TLAS, instance-material, meshCount}.
+    // the scene TLAS + the HW-resident per-mesh position/index/attribute buffers and the shadow-owned typed material
+    // context instead of the SW BVH, reconstructing the authored surface at the hit. m_surfelUseHwTrace selects the
+    // path in ensureSurfelResources / prepareSurfelResources / renderSurfelGi (set true by the HW-shadow branch, false
+    // by the SW branch). Rebuild guard on {TLAS, instance-material, material-typed, mesh-instances, meshCount}.
     Core::BindingLayoutHandle m_surfelTraceHwBindingLayout;
     Core::ShaderHandle m_surfelTraceHwShader;
     Core::ComputePipelineHandle m_surfelTraceHwPipeline;
     Core::BindingSetHandle m_surfelTraceHwBindingSet;
     const Core::RayTracingAccelStruct* m_surfelTraceHwBindingSetTlas = nullptr;
     const Core::Buffer* m_surfelTraceHwBindingSetInstanceMaterial = nullptr;
+    const Core::Buffer* m_surfelTraceHwBindingSetMaterialTyped = nullptr;
+    const Core::Buffer* m_surfelTraceHwBindingSetMeshInstances = nullptr;
     u32 m_surfelTraceHwBindingSetMeshCount = 0u;
     bool m_surfelTraceBuildArgsPipelineFailed = false;
     bool m_surfelUpsamplePipelineFailed = false;

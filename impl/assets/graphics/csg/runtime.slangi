@@ -39,7 +39,7 @@ struct NwbCsgReceiverRange{
     float4 worldToReceiverRow1;
     float4 worldToReceiverRow2;
     NwbCsgBounds localBounds;
-    float4 baseColor;
+    uint4 materialContext; // x: surface dispatch id, y: constant byte offset, z: mesh instance index
 };
 
 struct NwbCsgSample{

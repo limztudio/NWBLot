@@ -7,7 +7,6 @@
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/kernel/renderer_private.h>
-#include <impl/ecs_render/material/material_instance.h>  // GetMaterialMutableHalf4 (per-instance GI/caustic hit colour)
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/assets/graphics/shadow/binding_slots.h>
 #include <impl/assets/graphics/shadow/sw_binding_slots.h>
@@ -182,7 +181,7 @@ struct NwbCausticEmissionTargetGpu{
 };
 static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCausticEmissionTargetGpu must stay a tight 32-byte std430 record");
 
-// CPU mirror of the shader NwbRtInstanceMaterial (shadow/instance_material.slangi, 32 bytes / two float4 lanes,
+// CPU mirror of the shader NwbRtInstanceMaterial (shadow/instance_material.slangi, 20 bytes / five uints,
 // std430): the per-instance shadow-occluder transmittance-model id + flags + per-mesh attribute slot + the
 // material-constants context the surface hook needs (the constant block byte offset into g_NwbMaterialTypedWords
 // and the g_NwbMeshInstances index that resolves the mutable storage offset). Built per frame into one structured
@@ -190,19 +189,13 @@ static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCa
 // hardware any-hit and the software traversal read the same record for the same entity. The model id dispatches
 // the per-hit transmittance hook; meshSlot indexes the per-mesh attribute buffers the shadow trace interpolates.
 struct NwbRtInstanceMaterialGpu{
-    u32 shadowTransmittanceModelId = 0u;
+    u32 shadowTransmittanceModelId = Limit<u32>::s_Max;
     u32 flags = 0u;
     u32 meshSlot = 0u;
     u32 materialConstantByteOffset = 0u;
     u32 meshInstanceIndex = 0u;
-    // Per-instance base colour (asuint of the linear RGB). The software probe/photon producers
-    // (GI, caustics) read this to shade a bounce with the surface's authored colour instead of a flat default; the
-    // shadow trace ignores it. Defaults to the neutral GI albedo so an unresolved material still bounces mid-grey.
-    u32 baseColorR = 0u;
-    u32 baseColorG = 0u;
-    u32 baseColorB = 0u;
 };
-static_assert(sizeof(NwbRtInstanceMaterialGpu) == 32u, "NwbRtInstanceMaterialGpu must match the shader NwbRtInstanceMaterial std430 layout (8 x uint)");
+static_assert(sizeof(NwbRtInstanceMaterialGpu) == 20u, "NwbRtInstanceMaterialGpu must match the shader NwbRtInstanceMaterial std430 layout (5 x uint)");
 
 // Per-instance shadow-occluder flags (NwbRtInstanceMaterialGpu.flags), mirroring the shader-side
 // NWB_RT_INSTANCE_MATERIAL_FLAG_* defines: `Transparent` = evaluate the per-hit transmittance hook; `Refractive` =
@@ -550,8 +543,6 @@ u32 BuildSceneBvhNode(
     const u32 materialConstantByteOffset,
     const u32 meshInstanceIndex
 );
-[[nodiscard]] u32 FloatToUintBits(const f32 value);
-void AssignInstanceBaseColor(NwbRtInstanceMaterialGpu& material, Core::ECS::World& world, const Core::ECS::EntityID entity);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

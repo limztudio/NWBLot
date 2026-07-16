@@ -30,11 +30,13 @@ static constexpr AStringView s_InterfaceField = "interface";
 // hook (the per-pixel G-buffer surface: base color + normal + BXDF params). When present (and `shaders` is
 // absent), the cook generates this material's G-buffer pixel shader by wrapping the fragment with the engine
 // pixel-shader authoring + the material's typed `.bind`, and points the material's mesh stage at the shared
-// engine mesh shader. A material declares either `surface` (cook generates its shaders) or `shaders` (explicit),
-// not both.
+// engine mesh shader. Transparent or refractive materials must use this project-owned hook: AVBOIT and shadow
+// optical passes consume the same surface contract. A material declares either `surface` (cook generates its
+// shaders) or `shaders` (explicit), not both.
 static constexpr AStringView s_SurfaceField = "surface";
 // Optional. Explicit stage->project-shader virtual-name map. When omitted, the cook generates the pixel shader from
-// `surface` and assigns the shared engine mesh shader.
+// `surface` and assigns the shared engine mesh shader. Explicit stages are supported only for opaque,
+// non-refractive materials because the current schema has no separate AVBOIT/shadow optical hook.
 static constexpr AStringView s_ShadersField = "shaders";
 static constexpr AStringView s_ShaderVariantField = "shader_variant";
 static constexpr AStringView s_ParametersField = "parameters";

@@ -17,8 +17,8 @@ Capture  : direct binary invocation with NWB_GPU_TIMING_FILE, NWB_RENDER_UNFOCUS
 
 WHAT CHANGED vs v1 (the methodological fix)
 -------------------------------------------
-The focus-stall root cause: Graphics::animateRenderPresent() (global/core/graphics/
-module.cpp:667) skips render() entirely while the window is unfocused. On this KDE
+The focus-stall root cause: Graphics::animateRenderPresent() (core/graphics/
+module.cpp:662) skips render() entirely while the window is unfocused. On this KDE
 Wayland host the XWayland focus cannot be driven reliably from a headless shell
 (xset/xhost/xauth unavailable; Python X11 focus-keeping is fragile against the
 compositor). So instead, shouldRenderUnfocused() now returns true when

@@ -284,14 +284,15 @@ public:
     [[nodiscard]] const StageShaderArray& stageShaders()const{ return m_stageShaders; }
     [[nodiscard]] u32 stageShaderCount()const{ return m_stageShaderCount; }
     // The cook-generated per-material AVBOIT accumulate pixel shader bound for this material's transparent draw
-    // (the transparent-pass twin of the G-buffer pixel shader). Valid only for a transparent material authored
-    // with a `surface`; invalid otherwise (the transparent draw then falls back to the engine's fixed accumulate
-    // PS). Unlike the stage shaders this is not a graphics stage -- a material has a single pixel stage (the
-    // G-buffer PS); this is a second, transparent-only pixel shader the renderer selects by pass.
+    // (the transparent-pass twin of the G-buffer pixel shader). Valid for a transparent material authored with a
+    // `surface`; invalid for an opaque material. A missing shader on a transparent material is a cook/runtime
+    // contract failure. Unlike the stage shaders this is not a graphics stage -- a material has a single pixel
+    // stage (the G-buffer PS); this is a second, transparent-only pixel shader the renderer selects by pass.
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitAccumulatePixelShader()const{ return m_avboitAccumulatePixelShader; }
     // The occupancy/extinction twins of avboitAccumulatePixelShader, bound for this material's transparent draw so
-    // all three AVBOIT passes read the material's SAME shader-decided surface.renderCoverage. Valid only for a transparent
-    // material authored with a `surface`; invalid otherwise (the draw then uses the engine's fixed pass PS).
+    // all three AVBOIT passes read the material's SAME shader-decided surface.renderCoverage. They are valid for a
+    // surface-authored transparent material and invalid for an opaque material. A missing shader on a transparent
+    // material is a cook/runtime contract failure.
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitOccupancyPixelShader()const{ return m_avboitOccupancyPixelShader; }
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitExtinctionPixelShader()const{ return m_avboitExtinctionPixelShader; }
     [[nodiscard]] bool transparent()const{ return m_transparent; }

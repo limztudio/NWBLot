@@ -89,6 +89,8 @@ void RendererCsgState::invalidateResources(){
     m_receiverSurfaceBindingSet.reset();
     m_intervalSampleBindingLayout.reset();
     m_intervalSampleBindingSet.reset();
+    m_intervalCapFillMaterialBindingLayout.reset();
+    m_intervalCapFillMaterialBindingSet.reset();
     m_intervalPeelComputeShader.reset();
     m_receiverSpanBuildComputeShader.reset();
     m_intervalCombineComputeShader.reset();
@@ -466,6 +468,8 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelTraceHwBindingSet.reset();
     m_surfelTraceHwBindingSetTlas = nullptr;
     m_surfelTraceHwBindingSetInstanceMaterial = nullptr;
+    m_surfelTraceHwBindingSetMaterialTyped = nullptr;
+    m_surfelTraceHwBindingSetMeshInstances = nullptr;
     m_surfelTraceHwBindingSetMeshCount = 0u;
     m_surfelUseHwTrace = false;
     m_surfelPoolBuffer.reset();

@@ -266,6 +266,7 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
     drawState().m_instanceBuffer = Move(instanceBuffer);
     drawState().m_instanceBufferCapacity = capacity;
     m_renderer.meshSystem().destroyMeshBindingSets();
+    m_renderer.csgSystem().destroyCsgIntervalCapFillMaterialBindingSet();
     return true;
 }
 
@@ -303,6 +304,7 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
     drawState().m_materialTypedBuffer = Move(materialTypedBuffer);
     drawState().m_materialTypedBufferCapacity = capacity;
     m_renderer.meshSystem().destroyMeshBindingSets();
+    m_renderer.csgSystem().destroyCsgIntervalCapFillMaterialBindingSet();
     return true;
 }
 

@@ -399,6 +399,10 @@ bool RendererMaterialSystem::createRendererPipeline(
             avboitState().m_extinctionPixelShader,
             avboitState().m_accumulatePixelShader
         );
+        if(materialInfo.transparent && !avboitPixelShaderSelection.materialDriven()){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: transparent material '{}' is missing its cook-generated AVBOIT pass pixel shader"), StringConvert(materialKey.c_str()));
+            return failMaterialPipeline();
+        }
     }
     const bool materialDrivenAvboitPass = avboitPixelShaderSelection.materialDriven();
 

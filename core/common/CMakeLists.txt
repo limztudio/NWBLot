@@ -10,6 +10,5 @@ target_sources(nwb_common PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/log.h"
     "${CMAKE_CURRENT_LIST_DIR}/name_symbols.h"
-    "${CMAKE_CURRENT_LIST_DIR}/win32_message_loop.h"
 )
 target_link_libraries(nwb_common PUBLIC nwb_alloc nwb::tbb)

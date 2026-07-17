@@ -19,7 +19,7 @@
 #include <core/alloc/scratch.h>
 #include <core/alloc/thread.h>
 #include <core/assets/paths.h>
-#include <core/mesh/frame_math.h>
+#include <global/math/frame.h>
 #include <core/metascript/parser.h>
 #include <global/binary.h>
 #include <global/text_utils.h>

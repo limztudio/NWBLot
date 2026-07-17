@@ -105,7 +105,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
         app.add_option(__hidden_logger_server_main::s_CrashRetainInvalidOption, crashRetentionConfig.maxInvalidArchives, "Maximum invalid crash uploads to keep; zero disables pruning");
 
         try{
-            NWB::Core::Common::ArgParseApp(app, argc, argv);
+            CommandLineParseApp(app, argc, argv);
         }
         catch(const CLI::ParseError& e){
             app.exit(e, NWB_COUT, NWB_CERR);

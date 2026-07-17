@@ -9,7 +9,7 @@
 #define NWB_TESTS_SMOKE_CSG_SMOKE_HELPERS_H
 
 #include <core/ecs/world.h>
-#include <core/mesh/frame_math.h>
+#include <global/math/frame.h>
 #include <impl/ecs_csg/components.h>
 
 

@@ -514,7 +514,7 @@ template<typename Value, typename Lookup>
         const Float4& p2 = rebuildVertices[i2].position;
         const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(p0, p1, p2);
         const f64 areaLengthSquared = TriangleAreaNormalLengthSquared(areaNormal);
-        if(!IsFinite(areaLengthSquared) || areaLengthSquared <= static_cast<f64>(Core::Mesh::s_FrameDirectionEpsilon))
+        if(!IsFinite(areaLengthSquared) || areaLengthSquared <= static_cast<f64>(::s_FrameDirectionEpsilon))
             continue;
 
         rebuildIndices.push_back(i0);
@@ -539,21 +539,21 @@ template<typename Value, typename Lookup>
         SourceVertexRef& ref = mesh.vertexRefs[vertexRefIndex];
         const Vec3& storedNormal = mesh.normals[ref.normal];
         const Float4& storedTangent = rebuildVertices[vertexRefIndex].tangent;
-        const SIMDVector normal = Core::Mesh::FrameNormalizeDirection(
+        const SIMDVector normal = ::FrameNormalizeDirection(
             LoadFloat(storedNormal),
             VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
         );
-        const SIMDVector tangent = Core::Mesh::FrameResolveTangent(
+        const SIMDVector tangent = ::FrameResolveTangent(
             normal,
             VectorSetW(LoadFloat(storedTangent), 0.0f),
-            Core::Mesh::FrameFallbackTangent(normal)
+            ::FrameFallbackTangent(normal)
         );
-        if(!Core::Mesh::FrameValidDirection(tangent)){
+        if(!::FrameValidDirection(tangent)){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to resolve generated source tangent"));
             return false;
         }
 
-        const f32 handedness = Core::Mesh::FrameTangentHandedness(rebuildVertices[vertexRefIndex].tangent.w, 1.0f);
+        const f32 handedness = ::FrameTangentHandedness(rebuildVertices[vertexRefIndex].tangent.w, 1.0f);
         Vec4 generatedTangent;
         StoreFloat(VectorSetW(tangent, handedness), &generatedTangent);
         if(!InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, "tangent", ref.tangent))

@@ -5,7 +5,7 @@
 #include "project.h"
 
 #include <core/common/log.h>
-#include <core/mesh/frame_math.h>
+#include <global/math/frame.h>
 #include <core/graphics/module.h>
 #include <global/simplemath.h>
 #include <impl/assets_model/asset.h>

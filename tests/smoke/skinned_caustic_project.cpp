@@ -8,7 +8,7 @@
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/module.h>
-#include <core/mesh/frame_math.h>
+#include <global/math/frame.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_skeleton/asset.h>

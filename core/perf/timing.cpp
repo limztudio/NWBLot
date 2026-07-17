@@ -3,7 +3,7 @@
 
 
 #include "timing.h"
-#include "scope_registry.h"
+#include <global/named_registry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,7 +73,7 @@ void TimingRecorder::clear(){
 }
 
 TimingScopeId TimingRecorder::registerScope(const Name& scopeName){
-    return RegisterNamedScope<TimingScopeId>(
+    return ::RegisterNamedScope<TimingScopeId>(
         m_scopes,
         m_scopeMap,
         m_generation,

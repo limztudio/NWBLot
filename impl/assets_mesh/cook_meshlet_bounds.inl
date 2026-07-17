@@ -37,7 +37,7 @@ template<typename PositionAtT, typename VisitFaceNormalsT>
     SIMDVector areaWeightedNormal = VectorZero();
     u32 validFaceNormalCount = 0u;
     visitFaceNormals([&](const SIMDVector faceNormal){
-        if(!Core::Mesh::FrameValidDirection(faceNormal))
+        if(!::FrameValidDirection(faceNormal))
             return;
 
         areaWeightedNormal = VectorAdd(areaWeightedNormal, faceNormal);
@@ -45,11 +45,11 @@ template<typename PositionAtT, typename VisitFaceNormalsT>
     });
 
     result.coneAxis = NormalizeMeshletDirectionOrZero(areaWeightedNormal);
-    if(validFaceNormalCount == primitiveCount && Core::Mesh::FrameValidDirection(result.coneAxis)){
+    if(validFaceNormalCount == primitiveCount && ::FrameValidDirection(result.coneAxis)){
         result.coneCutoff = 1.0f;
         visitFaceNormals([&](const SIMDVector meshletFaceNormal){
             const SIMDVector faceNormal = NormalizeMeshletDirectionOrZero(meshletFaceNormal);
-            if(Core::Mesh::FrameValidDirection(faceNormal))
+            if(::FrameValidDirection(faceNormal))
                 result.coneCutoff = Min(result.coneCutoff, VectorGetX(Vector3Dot(result.coneAxis, faceNormal)));
         });
         if(result.coneCutoff <= 0.0f)

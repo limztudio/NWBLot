@@ -134,7 +134,7 @@ static constexpr usize s_MeshletDisconnectedCandidateParallelThreshold = 4096u;
 static constexpr usize s_MeshletDisconnectedCandidateParallelOversubscription = 4u;
 
 [[nodiscard]] static SIMDVector NormalizeMeshletDirectionOrZero(const SIMDVector value){
-    return Vector3NormalizeOr(value, VectorZero(), Core::Mesh::s_FrameDirectionEpsilon);
+    return Vector3NormalizeOr(value, VectorZero(), ::s_FrameDirectionEpsilon);
 }
 
 

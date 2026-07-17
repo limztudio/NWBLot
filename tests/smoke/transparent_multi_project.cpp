@@ -6,7 +6,7 @@
 
 #include <core/common/log.h>
 #include <core/ecs/module.h>
-#include <core/mesh/frame_math.h>
+#include <global/math/frame.h>
 #include <core/graphics/module.h>
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 #include <impl/ecs_csg/module.h>

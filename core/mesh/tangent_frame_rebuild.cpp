@@ -5,7 +5,7 @@
 #include "tangent_frame_rebuild.h"
 
 #include "arena_names.h"
-#include "frame_math.h"
+#include <global/math/frame.h>
 
 #include <core/alloc/scratch.h>
 

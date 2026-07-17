@@ -468,7 +468,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
         __hidden_loader::AddDebugCommandLineOptions(app, options);
 
         try{
-            NWB::Core::Common::ArgParseApp(app, argc, argv);
+            CommandLineParseApp(app, argc, argv);
         }
         catch(const CLI::ParseError& e){
             app.exit(e, NWB_COUT, NWB_CERR);

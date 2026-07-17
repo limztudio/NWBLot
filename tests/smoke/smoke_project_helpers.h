@@ -15,7 +15,7 @@
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/module.h>
-#include <core/mesh/frame_math.h>
+#include <global/math/frame.h>
 #include <global/simplemath.h>
 #include <impl/ecs_scene/module.h>
 

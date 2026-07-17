@@ -47,17 +47,6 @@ inline auto ArgAddOption(CLI& cli, T& arg){
     return cli.add_option(g_ArgCmd[static_cast<usize>(i)], arg, g_ArgDesc[static_cast<usize>(i)])->default_val(Get<static_cast<usize>(i)>(g_ArgDefault));
 }
 
-template<typename CharT>
-[[nodiscard]] inline bool ArgHasValidArgv(const isize argc, CharT** argv){
-    return CommandLineHasValidArgv(argc, argv);
-}
-
-template<typename CLI, typename CharT>
-inline void ArgParseApp(CLI& cli, const isize argc, CharT** argv){
-    CommandLineParseApp(cli, argc, argv);
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

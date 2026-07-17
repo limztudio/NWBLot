@@ -90,7 +90,7 @@ static void AccumulateMeshletScoreBounds(
 
 [[nodiscard]] static f32 MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVector triangleAreaNormal){
     const SIMDVector candidateNormal = NormalizeMeshletDirectionOrZero(triangleAreaNormal);
-    if(!Core::Mesh::FrameValidDirection(state.normalAxis) || !Core::Mesh::FrameValidDirection(candidateNormal))
+    if(!::FrameValidDirection(state.normalAxis) || !::FrameValidDirection(candidateNormal))
         return 0.0f;
 
     return VectorGetX(Vector3Dot(state.normalAxis, candidateNormal));
@@ -103,7 +103,7 @@ static void UpdateMeshletScoreConeCutoff(
     f32& coneCutoff
 ){
     const SIMDVector faceNormal = NormalizeMeshletDirectionOrZero(triangleAreaNormal);
-    if(!Core::Mesh::FrameValidDirection(faceNormal))
+    if(!::FrameValidDirection(faceNormal))
         return;
 
     hasNormal = true;
@@ -120,7 +120,7 @@ template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
     bool& outConeEnabled
 ){
     outConeEnabled = false;
-    if(!Core::Mesh::FrameValidDirection(axis))
+    if(!::FrameValidDirection(axis))
         return -1.0f;
 
     bool hasNormal = false;

@@ -7,7 +7,7 @@
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/module.h>
-#include <core/mesh/frame_math.h>
+#include <global/math/frame.h>
 #include <global/math/constant.h>
 #include <global/math/quaternion.h>
 #include <impl/assets_material/asset.h>

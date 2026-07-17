@@ -3,7 +3,7 @@
 
 
 #include "memory.h"
-#include "scope_registry.h"
+#include <global/named_registry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +40,7 @@ void MemoryRecorder::clear(){
 }
 
 MemoryScopeId MemoryRecorder::registerScope(const Name& scopeName){
-    return RegisterNamedScope<MemoryScopeId>(
+    return ::RegisterNamedScope<MemoryScopeId>(
         m_scopes,
         m_scopeMap,
         m_generation,

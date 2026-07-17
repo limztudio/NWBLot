@@ -7,7 +7,7 @@
 #include "skin.h"
 
 #include <core/common/log.h>
-#include <core/mesh/frame_math.h>
+#include <global/math/frame.h>
 #include <core/mesh/tangent_frame_rebuild.h>
 
 

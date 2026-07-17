@@ -7,7 +7,6 @@ target_sources(nwb_perf PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/memory.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/report.h"
-    "${CMAKE_CURRENT_LIST_DIR}/scope_registry.h"
     "${CMAKE_CURRENT_LIST_DIR}/session.h"
     "${CMAKE_CURRENT_LIST_DIR}/timing.h"
 )

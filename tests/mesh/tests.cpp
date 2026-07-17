@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/mesh/frame_math.h>
+#include <global/math/frame.h>
 #include <core/mesh/classification.h>
 #include <core/mesh/tangent_frame_rebuild.h>
 
@@ -62,17 +62,17 @@ TEST(Mesh, MeshClassMetadata){
     EXPECT_EQ(MeshClassText(999u), AStringView("unknown"));
 }
 
-TEST(Mesh, ResolvesCoreFrameMath){
+TEST(Mesh, ResolvesGlobalFrameMath){
     SIMDVector normal = VectorSet(0.0f, 0.0f, 5.0f, 0.0f);
     SIMDVector tangent = VectorSet(2.0f, 1.0f, 0.0f, -0.25f);
-    NWB::Core::Mesh::FrameOrthonormalize(
+    ::FrameOrthonormalize(
         normal,
         tangent,
         VectorSet(0.0f, 0.0f, 1.0f, 0.0f),
         VectorSet(1.0f, 0.0f, 0.0f, -1.0f)
     );
 
-    const SIMDVector bitangent = NWB::Core::Mesh::FrameResolveBitangent(
+    const SIMDVector bitangent = ::FrameResolveBitangent(
         normal,
         tangent,
         VectorSet(0.0f, 1.0f, 0.0f, 0.0f)

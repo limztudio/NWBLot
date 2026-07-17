@@ -155,7 +155,7 @@ CommandLineParseResult::Enum ParseCommandLine(
     outOptions.assetType.clear();
     outError.clear();
 
-    if(NWB::Core::Common::ArgHasValidArgv(argc, argv)){
+    if(CommandLineHasValidArgv(argc, argv)){
         for(int i = 1; i < argc; ++i){
             if(argv[i] == nullptr)
                 continue;
@@ -171,7 +171,7 @@ CommandLineParseResult::Enum ParseCommandLine(
     ConfigureCommandLineOptions(app, parsedOptions);
 
     try{
-        NWB::Core::Common::ArgParseApp(app, argc, argv);
+        CommandLineParseApp(app, argc, argv);
     }
     catch(const CLI::CallForHelp&){
         return CommandLineParseResult::Help;

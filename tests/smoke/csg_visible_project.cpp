@@ -7,7 +7,7 @@
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/module.h>
-#include <core/mesh/frame_math.h>
+#include <global/math/frame.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>

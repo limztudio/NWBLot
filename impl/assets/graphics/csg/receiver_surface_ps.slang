@@ -20,7 +20,7 @@ struct NwbCsgReceiverSurfacePixelInput{
 };
 
 struct NwbCsgReceiverSurfacePixelOutput{
-    [[vk::location(0)]] float4 color : SV_Target0;
+    [[vk::location(0)]] half4 color : SV_Target0;
 };
 
 
@@ -33,7 +33,7 @@ NwbCsgReceiverSurfacePixelOutput main(const NwbCsgReceiverSurfacePixelInput inpu
     nwbCsgMarkReceiverSurfaceEvent(input.position, input.worldPosition.xyz, receiverIndex, input.frontFace);
 
     NwbCsgReceiverSurfacePixelOutput output;
-    output.color = float4(0.0);
+    output.color = half4(0.0);
     return output;
 }
 

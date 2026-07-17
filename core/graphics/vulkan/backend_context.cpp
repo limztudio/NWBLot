@@ -1270,6 +1270,9 @@ bool BackendContext::createVulkanDevice(){
         || !requireFeature(supportedCoreFeatures.shaderStorageImageWriteWithoutFormat, "shaderStorageImageWriteWithoutFormat")
         || !requireFeature(supportedCoreFeatures.shaderStorageImageReadWithoutFormat, "shaderStorageImageReadWithoutFormat")
         || !requireFeature(supportedVulkan11Features.storageBuffer16BitAccess, "storageBuffer16BitAccess")
+        // Shader color payloads and render-target outputs use native `half`; its SPIR-V InputOutput16 capability
+        // requires this feature in addition to Vulkan 1.2's shaderFloat16 arithmetic support below.
+        || !requireFeature(supportedVulkan11Features.storageInputOutput16, "storageInputOutput16")
         || !requireFeature(supportedVulkan11Features.shaderDrawParameters, "shaderDrawParameters")
         || !requireFeature(supportedVulkan12Features.descriptorIndexing, "descriptorIndexing")
         || !requireFeature(supportedVulkan12Features.runtimeDescriptorArray, "runtimeDescriptorArray")
@@ -1386,6 +1389,7 @@ bool BackendContext::createVulkanDevice(){
 
     VkPhysicalDeviceVulkan11Features vulkan11features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan11Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
     vulkan11features.storageBuffer16BitAccess = supportedVulkan11Features.storageBuffer16BitAccess;
+    vulkan11features.storageInputOutput16 = supportedVulkan11Features.storageInputOutput16;
     vulkan11features.shaderDrawParameters = supportedVulkan11Features.shaderDrawParameters;
     vulkan11features.pNext = pNext;
 

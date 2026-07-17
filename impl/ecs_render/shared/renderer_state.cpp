@@ -159,11 +159,8 @@ void RendererAvboitState::invalidateResources(){
     m_integrateBindingLayout.reset();
     m_accumulateBindingLayout.reset();
     m_linearSampler.reset();
-    m_occupancyPixelShader.reset();
     m_depthWarpComputeShader.reset();
-    m_extinctionPixelShader.reset();
     m_integrateComputeShader.reset();
-    m_accumulatePixelShader.reset();
     m_depthWarpPipeline.reset();
     m_integratePipeline.reset();
     m_targetsNeedClear = true;

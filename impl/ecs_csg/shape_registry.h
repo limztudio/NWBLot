@@ -104,6 +104,7 @@ public:
     [[nodiscard]] bool findShapeType(const Name& name, CsgShapeTypeInfo& outShapeType)const;
     [[nodiscard]] bool findShapeType(CsgShapeTypeId typeId, CsgShapeTypeInfo& outShapeType)const;
     [[nodiscard]] usize shapeTypeCount()const;
+    [[nodiscard]] u64 revision()const;
     [[nodiscard]] bool findShaderModuleInclude(const Name& shaderModule, ACompactString& outShaderModuleInclude)const;
 
 
@@ -136,6 +137,7 @@ private:
     mutable Futex m_mutex;
     ShapeVector m_shapeTypes;
     ShapeIdMap m_shapeTypeIds;
+    u64 m_revision = 0u;
 };
 
 

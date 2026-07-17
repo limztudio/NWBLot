@@ -25,13 +25,8 @@ namespace AssetsGraphicsAvboit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_OccupancyPixelShaderName("engine/graphics/avboit/occupancy_ps");
 inline constexpr Name s_DepthWarpComputeShaderName("engine/graphics/avboit/depth_warp_cs");
-inline constexpr Name s_ExtinctionPixelShaderName("engine/graphics/avboit/extinction_ps");
 inline constexpr Name s_IntegrateComputeShaderName("engine/graphics/avboit/integrate_cs");
-// Fallback fixed accumulate PS, used by a transparent material that declares explicit `shaders` instead of a
-// `surface` (the per-material accumulate PS generation covers `surface`-authored transparent materials).
-inline constexpr Name s_AccumulatePixelShaderName("engine/graphics/avboit/accumulate_ps");
 // Cook-generated per-material AVBOIT PS names are cook-private. The renderer binds them through the resolved Name
 // stored on the cooked material, not by re-deriving from a shared prefix.
 

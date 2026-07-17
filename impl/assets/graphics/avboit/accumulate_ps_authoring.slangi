@@ -151,8 +151,8 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
 
     // Shade through the material's own BXDF, by its shading-model id. Pass the negative-pixel sentinel: a
     // transparent fragment is not in the opaque G-buffer the screen-space shadow visibility was traced from, so
-    // nwbBxdfLightTransmittance skips shadow sampling and treats every light as fully visible -- matching the
-    // pre-colored-shadow transparent behaviour the fixed accumulate_ps.slang used.
+    // nwbBxdfLightTransmittance skips shadow sampling and treats every light as fully visible for the material's
+    // project BXDF evaluation.
     const half3 shadedColor = clamp(
         nwbDeferredDispatchBxdf(bxdfSurface.shadingModel, bxdfSurface, int2(-1, -1)),
         half3(0.0),

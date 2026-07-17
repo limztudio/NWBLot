@@ -117,9 +117,9 @@ bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, co
 
     constexpr u32 s_PerRuntimeMeshTimingQueries = 128u;
     const bool timingReady =
-        m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_Skinning, &device, s_PerRuntimeMeshTimingQueries)
-        && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_MeshletBounds, &device, s_PerRuntimeMeshTimingQueries)
-        && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_RepackNormals, &device, s_PerRuntimeMeshTimingQueries)
+        m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_Skinning.identity, &device, s_PerRuntimeMeshTimingQueries)
+        && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_MeshletBounds.identity, &device, s_PerRuntimeMeshTimingQueries)
+        && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_RepackNormals.identity, &device, s_PerRuntimeMeshTimingQueries)
     ;
     if(!timingReady)
         NWB_LOGGER_WARNING(NWB_TEXT("MeshSkinningSystem: GPU timing scope preparation failed; timing samples may be skipped"));

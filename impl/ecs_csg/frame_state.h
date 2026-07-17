@@ -153,10 +153,13 @@ public:
 
 
 private:
+    [[nodiscard]] bool resolveReceiverCutterRange(Core::ECS::EntityID entity, CsgFrameCutterRange& outRange)const;
+
+
+private:
     Core::ECS::World& m_world;
     CutterRangeMap m_cutterRanges;
     CutterRefVector m_cutterRefs;
-    [[nodiscard]] bool resolveReceiverCutterRange(Core::ECS::EntityID entity, CsgFrameCutterRange& outRange)const;
 };
 
 

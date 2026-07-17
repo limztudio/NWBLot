@@ -190,11 +190,8 @@ bool RendererAvboitSystem::createAvboitResources(){
     };
 
     if(
-        !loadAvboitShader(avboitState().m_occupancyPixelShader, AssetsGraphicsAvboit::s_OccupancyPixelShaderName, Core::ShaderType::Pixel, "ECSRender_AvboitOccupancyPS")
-        || !loadAvboitShader(avboitState().m_depthWarpComputeShader, AssetsGraphicsAvboit::s_DepthWarpComputeShaderName, Core::ShaderType::Compute, "ECSRender_AvboitDepthWarpCS")
-        || !loadAvboitShader(avboitState().m_extinctionPixelShader, AssetsGraphicsAvboit::s_ExtinctionPixelShaderName, Core::ShaderType::Pixel, "ECSRender_AvboitExtinctionPS")
+        !loadAvboitShader(avboitState().m_depthWarpComputeShader, AssetsGraphicsAvboit::s_DepthWarpComputeShaderName, Core::ShaderType::Compute, "ECSRender_AvboitDepthWarpCS")
         || !loadAvboitShader(avboitState().m_integrateComputeShader, AssetsGraphicsAvboit::s_IntegrateComputeShaderName, Core::ShaderType::Compute, "ECSRender_AvboitIntegrateCS")
-        || !loadAvboitShader(avboitState().m_accumulatePixelShader, AssetsGraphicsAvboit::s_AccumulatePixelShaderName, Core::ShaderType::Pixel, "ECSRender_AvboitAccumulatePS")
     )
         return false;
 

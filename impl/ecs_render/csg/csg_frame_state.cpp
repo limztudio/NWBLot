@@ -22,9 +22,11 @@ namespace __hidden_csg_frame_state{
 
 [[nodiscard]] static bool BuildCsgFrameStateCacheSignature(
     Core::ECS::World& world,
+    const CsgShapeRegistry& shapeRegistry,
     CsgFrameStateCacheSignature& outSignature
 ){
     outSignature = CsgFrameStateCacheSignature{};
+    outSignature.shapeRegistryRevision = shapeRegistry.revision();
 
     if(world.view<SkinnedCsgMeshComponent>().candidateCount() > 0u)
         return false;
@@ -98,7 +100,7 @@ namespace __hidden_csg_frame_state{
 
 CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scratchArena){
     CsgFrameStateCacheSignature signature;
-    const bool cacheable = __hidden_csg_frame_state::BuildCsgFrameStateCacheSignature(world(), signature);
+    const bool cacheable = __hidden_csg_frame_state::BuildCsgFrameStateCacheSignature(world(), csgShapeRegistry(), signature);
     if(cacheable && csgState().m_frameStateCacheValid && csgState().m_frameStateCacheSignature == signature)
         return csgState().m_frameStateCache;
 

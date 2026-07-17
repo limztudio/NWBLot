@@ -7,6 +7,8 @@
 
 #include <impl/global.h>
 
+#include <core/graphics/gpu_timing.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,9 +25,9 @@ namespace MeshSkinningGpuTimingScope{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_Skinning("mesh_skinning.skinning");
-inline constexpr Name s_MeshletBounds("mesh_skinning.meshlet_bounds");
-inline constexpr Name s_RepackNormals("mesh_skinning.repack_normals");
+inline constexpr Core::GpuTimingScopeDefinition s_Skinning("mesh_skinning.skinning");
+inline constexpr Core::GpuTimingScopeDefinition s_MeshletBounds("mesh_skinning.meshlet_bounds");
+inline constexpr Core::GpuTimingScopeDefinition s_RepackNormals("mesh_skinning.repack_normals");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

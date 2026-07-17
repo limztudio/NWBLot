@@ -4,7 +4,6 @@ if(NWB_BUILD_RESOURCE_COOKER)
     nwb_declare_static_library(nwb_assets_csg_cook)
     target_sources(nwb_assets_csg_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.h"
     )
     target_link_libraries(nwb_assets_csg_cook PUBLIC

@@ -883,11 +883,8 @@ Graphics::CoopVectorSupport Graphics::queryCoopVecSupport()const{
     output.inferencingSupported = queryFeatureSupport(Feature::CooperativeVectorInferencing);
     output.trainingSupported = queryFeatureSupport(Feature::CooperativeVectorTraining);
 
-    auto* device = getDevice();
-    if(!device)
-        return output;
-
-    const CooperativeVectorDeviceFeatures features = device->queryCoopVecFeatures();
+    auto& device = *getDevice();
+    const CooperativeVectorDeviceFeatures features = device.queryCoopVecFeatures();
     output.fp32TrainingSupported = output.trainingSupported && features.trainingFloat32;
 
     for(const auto& combo : features.matMulFormats){
@@ -907,8 +904,8 @@ bool Graphics::queryFeatureSupport(const Feature::Enum feature, void* featureInf
         return false;
 #endif
 
-    auto* device = getDevice();
-    return device && device->queryFeatureSupport(feature, featureInfo, featureInfoSize);
+    auto& device = *getDevice();
+    return device.queryFeatureSupport(feature, featureInfo, featureInfoSize);
 }
 
 u32 Graphics::queryWaveLaneCount()const noexcept{

@@ -34,6 +34,25 @@ struct GpuTimingScope{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct GpuTimingScopeDefinition{
+    Name identity = NAME_NONE;
+    AStringView markerLabel;
+
+
+    constexpr GpuTimingScopeDefinition() = default;
+    constexpr explicit GpuTimingScopeDefinition(const char* const label)
+        : identity(label)
+        , markerLabel(label)
+    {}
+
+
+    [[nodiscard]] constexpr bool valid()const{ return identity && !markerLabel.empty(); }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class GpuTimingAccumulator final : NoCopy{
 private:
     struct QueryRecord{
@@ -142,7 +161,7 @@ public:
     // forward-declared in this header (the marker calls need the complete type, available in the .cpp).
     GpuTimingMeasure(
         GpuTimingRecorder& recorder,
-        const Name& scopeName,
+        const GpuTimingScopeDefinition& scopeDefinition,
         Device* device,
         CommandList& commandList
     );
@@ -153,6 +172,7 @@ private:
     GpuTimingRecorder& m_recorder;
     CommandList& m_commandList;
     GpuTimingScope m_scope;
+    bool m_markerOpen = false;
 };
 
 

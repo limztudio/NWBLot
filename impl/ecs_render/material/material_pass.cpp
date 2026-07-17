@@ -72,12 +72,14 @@ struct MaterialTypedByteRangeCache{
     }
 }
 
-[[nodiscard]] static const Name& MaterialPassGpuTimingScope(const MaterialPipelinePass::Enum pass){
+inline constexpr Core::GpuTimingScopeDefinition s_NoneGpuTimingScope;
+
+[[nodiscard]] static const Core::GpuTimingScopeDefinition& MaterialPassGpuTimingScope(const MaterialPipelinePass::Enum pass){
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy: return RendererGpuTimingScope::s_AvboitOccupancy;
     case MaterialPipelinePass::AvboitExtinction: return RendererGpuTimingScope::s_AvboitExtinction;
     case MaterialPipelinePass::AvboitAccumulate: return RendererGpuTimingScope::s_AvboitAccumulate;
-    default: return NAME_NONE;
+    default: return s_NoneGpuTimingScope;
     }
 }
 

@@ -513,8 +513,10 @@ TEST(Csg, CsgShapeRegistryBuiltIns){
     NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
 
     EXPECT_EQ(registry.shapeTypeCount(), 0u);
+    EXPECT_EQ(registry.revision(), 0u);
     EXPECT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
     EXPECT_EQ(registry.shapeTypeCount(), 4u);
+    EXPECT_EQ(registry.revision(), 4u);
 
     const NWB::Impl::CsgShapeTypeId boxId = registry.findShapeTypeId(Name("engine/csg/box"));
     EXPECT_NE(boxId, NWB::Impl::s_InvalidCsgShapeTypeId);
@@ -527,6 +529,7 @@ TEST(Csg, CsgShapeRegistryBuiltIns){
 
     EXPECT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
     EXPECT_EQ(registry.shapeTypeCount(), 4u);
+    EXPECT_EQ(registry.revision(), 8u);
     EXPECT_EQ(registry.findShapeTypeId(Name("engine/csg/box")), boxId);
 }
 

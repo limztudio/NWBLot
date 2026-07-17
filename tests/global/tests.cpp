@@ -485,6 +485,22 @@ TEST(Global, CaptureProcessOutputReapsTruncatedChild){
     EXPECT_EQ(waitResult, -1);
     EXPECT_EQ(waitError, ECHILD);
 }
+
+TEST(Global, CaptureProcessOutputTimesOutWithContinuousOutput){
+    const char* const argv[] = {
+        "/bin/sh",
+        "-c",
+        "while :; do printf x; done",
+        nullptr
+    };
+    AString output;
+    const u64 startMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
+    EXPECT_FALSE(CaptureProcessOutput(output, argv, 64u, 64u, 100u));
+    const u64 elapsedMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds() - startMilliseconds;
+
+    if(startMilliseconds != 0u)
+        EXPECT_LT(elapsedMilliseconds, 1000u);
+}
 #endif
 
 TEST(Global, FilesystemMovePathToDirectory){

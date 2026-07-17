@@ -44,9 +44,11 @@ class RendererRayTracingSystem;
 
 struct CsgFrameStateCacheSignature{
     u64 contentHash = 0u;
+    u64 shapeRegistryRevision = 0u;
 
     friend bool operator==(const CsgFrameStateCacheSignature& lhs, const CsgFrameStateCacheSignature& rhs){
-        return lhs.contentHash == rhs.contentHash;
+        return lhs.contentHash == rhs.contentHash
+            && lhs.shapeRegistryRevision == rhs.shapeRegistryRevision;
     }
 };
 
@@ -244,11 +246,8 @@ private:
     Core::BindingLayoutHandle m_integrateBindingLayout;
     Core::BindingLayoutHandle m_accumulateBindingLayout;
     Core::SamplerHandle m_linearSampler;
-    Core::ShaderHandle m_occupancyPixelShader;
     Core::ShaderHandle m_depthWarpComputeShader;
-    Core::ShaderHandle m_extinctionPixelShader;
     Core::ShaderHandle m_integrateComputeShader;
-    Core::ShaderHandle m_accumulatePixelShader;
     Core::ComputePipelineHandle m_depthWarpPipeline;
     Core::ComputePipelineHandle m_integratePipeline;
     bool m_targetsNeedClear = true;

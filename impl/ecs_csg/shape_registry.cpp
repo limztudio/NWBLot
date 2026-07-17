@@ -386,6 +386,7 @@ bool CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, CsgShapeT
         const CsgShapeTypeId existingId = found.value();
         CsgShapeTypeInfo& shapeType = m_shapeTypes[static_cast<usize>(existingId - 1u)];
         shapeType.desc = desc;
+        ++m_revision;
         outTypeId = existingId;
         return true;
     }
@@ -398,6 +399,7 @@ bool CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, CsgShapeT
     const CsgShapeTypeId id = static_cast<CsgShapeTypeId>(m_shapeTypes.size()) + 1u;
     m_shapeTypes.push_back(CsgShapeTypeInfo{ id, desc });
     m_shapeTypeIds.emplace(desc.name, id);
+    ++m_revision;
     outTypeId = id;
     return true;
 }
@@ -435,6 +437,11 @@ bool CsgShapeRegistry::findShapeType(const CsgShapeTypeId typeId, CsgShapeTypeIn
 usize CsgShapeRegistry::shapeTypeCount()const{
     ScopedLock lock(m_mutex);
     return m_shapeTypes.size();
+}
+
+u64 CsgShapeRegistry::revision()const{
+    ScopedLock lock(m_mutex);
+    return m_revision;
 }
 
 bool CsgShapeRegistry::findShaderModuleInclude(const Name& shaderModule, ACompactString& outShaderModuleInclude)const{

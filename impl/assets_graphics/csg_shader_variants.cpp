@@ -10,7 +10,6 @@
 
 #include "csg_shader_variants.h"
 
-#include <impl/assets/graphics/avboit/names.h>
 #include <impl/assets_shader/asset.h>
 
 #include <core/graphics/shader_stage_names.h>
@@ -82,12 +81,8 @@ void CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>
     CollectMaterialMeshShaderKeys(materialEntries, outShaderKeys);
 
     const Name& pixelStageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::PixelStage);
-    InsertShaderKey(outShaderKeys, AssetsGraphicsAvboit::s_OccupancyPixelShaderName, pixelStageName);
-    InsertShaderKey(outShaderKeys, AssetsGraphicsAvboit::s_ExtinctionPixelShaderName, pixelStageName);
-    InsertShaderKey(outShaderKeys, AssetsGraphicsAvboit::s_AccumulatePixelShaderName, pixelStageName);
-
-    // Each transparent material's cook-generated AVBOIT accumulate/occupancy/extinction PS replaces the fixed one
-    // for that material's transparent draw, so each needs the SAME AVBOIT CSG clip variants the fixed PS gets.
+    // Every transparent material owns cook-generated AVBOIT accumulate/occupancy/extinction pixel shaders, and each
+    // needs the matching CSG clip variant for its typed material binding and project surface/BXDF contract.
     for(const MaterialCookEntry& materialEntry : materialEntries){
         if(!materialEntry.avboitAccumulatePixelShaderName.empty())
             InsertShaderKey(outShaderKeys, ToName(AStringView(materialEntry.avboitAccumulatePixelShaderName)), pixelStageName);

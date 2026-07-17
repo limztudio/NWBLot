@@ -243,6 +243,11 @@ template<typename StringT>
     bool outputTruncated = false;
     bool timedOut = false;
     for(;;){
+        if(ProcessExecutionDetail::TimeoutExpired(deadlineMilliseconds)){
+            timedOut = true;
+            break;
+        }
+
         pollfd pipePoll = {};
         pipePoll.fd = pipeFds[0];
         pipePoll.events = POLLIN | POLLHUP | POLLERR;

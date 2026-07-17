@@ -47,8 +47,8 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
     const Handle backBuffer = builder.addExternal(Core::GraphicsFrameGraphNodes::s_Backbuffer, "Back Buffer");
 
     Handle lastPass = frameSetup;
-    auto appendPass = [&](const Name& name, const AStringView label) -> Handle{
-        const Handle pass = builder.addPass(name, label);
+    auto appendPass = [&](const Core::GpuTimingScopeDefinition& scope, const AStringView label) -> Handle{
+        const Handle pass = builder.addPass(scope.identity, label);
         builder.addEdge(lastPass, pass, Edge::DependsOn);
         lastPass = pass;
         return pass;

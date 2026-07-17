@@ -108,42 +108,28 @@ struct MaterialPipelineCsgBindingLayouts{
 
 struct MaterialPipelineAvboitPixelShaderSelection{
     const Core::Assets::AssetRef<Shader>* materialShader = nullptr;
-    Core::ShaderHandle fallbackShader;
-    Name fallbackShaderName = NAME_NONE;
     const char* debugName = nullptr;
 
     [[nodiscard]] bool materialDriven()const{ return materialShader != nullptr && materialShader->valid(); }
-    [[nodiscard]] Core::ShaderHandle preloadedShader()const{
-        return materialDriven() ? Core::ShaderHandle() : fallbackShader;
-    }
-    [[nodiscard]] Name shaderName()const{ return materialDriven() ? materialShader->name() : fallbackShaderName; }
+    [[nodiscard]] Name shaderName()const{ return materialDriven() ? materialShader->name() : NAME_NONE; }
 };
 
 [[nodiscard]] MaterialPipelineAvboitPixelShaderSelection SelectAvboitPixelShader(
     const MaterialPipelinePass::Enum pass,
-    const MaterialSurfaceInfo& materialInfo,
-    const Core::ShaderHandle& occupancyFallback,
-    const Core::ShaderHandle& extinctionFallback,
-    const Core::ShaderHandle& accumulateFallback
+    const MaterialSurfaceInfo& materialInfo
 ){
     MaterialPipelineAvboitPixelShaderSelection selection;
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy:
         selection.materialShader = &materialInfo.avboitOccupancyPixelShader;
-        selection.fallbackShader = occupancyFallback;
-        selection.fallbackShaderName = AssetsGraphicsAvboit::s_OccupancyPixelShaderName;
         selection.debugName = "ECSRender_AvboitOccupancyPS";
         break;
     case MaterialPipelinePass::AvboitExtinction:
         selection.materialShader = &materialInfo.avboitExtinctionPixelShader;
-        selection.fallbackShader = extinctionFallback;
-        selection.fallbackShaderName = AssetsGraphicsAvboit::s_ExtinctionPixelShaderName;
         selection.debugName = "ECSRender_AvboitExtinctionPS";
         break;
     case MaterialPipelinePass::AvboitAccumulate:
         selection.materialShader = &materialInfo.avboitAccumulatePixelShader;
-        selection.fallbackShader = accumulateFallback;
-        selection.fallbackShaderName = AssetsGraphicsAvboit::s_AccumulatePixelShaderName;
         selection.debugName = "ECSRender_AvboitAccumulatePS";
         break;
     default:
@@ -385,19 +371,13 @@ bool RendererMaterialSystem::createRendererPipeline(
             || !avboitState().m_occupancyBindingLayout
             || !avboitState().m_extinctionBindingLayout
             || !avboitState().m_accumulateBindingLayout
-            || !avboitState().m_occupancyPixelShader
-            || !avboitState().m_extinctionPixelShader
-            || !avboitState().m_accumulatePixelShader
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT resources were not validated before material pipeline creation"));
             return failMaterialPipeline();
         }
         avboitPixelShaderSelection = __hidden_material_pipeline::SelectAvboitPixelShader(
             pass,
-            materialInfo,
-            avboitState().m_occupancyPixelShader,
-            avboitState().m_extinctionPixelShader,
-            avboitState().m_accumulatePixelShader
+            materialInfo
         );
         if(materialInfo.transparent && !avboitPixelShaderSelection.materialDriven()){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: transparent material '{}' is missing its cook-generated AVBOIT pass pixel shader"), StringConvert(materialKey.c_str()));
@@ -416,7 +396,6 @@ bool RendererMaterialSystem::createRendererPipeline(
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
     case MaterialPipelinePass::AvboitAccumulate:
-        passPixelShader = avboitPixelShaderSelection.preloadedShader();
         passPixelShaderName = avboitPixelShaderSelection.shaderName();
         passPixelShaderDebugName = avboitPixelShaderSelection.debugName;
         break;
@@ -458,9 +437,8 @@ bool RendererMaterialSystem::createRendererPipeline(
                 return false;
         }
         else if(!passPixelShader){
-            // No preloaded pass pixel shader: a cook-generated per-material pass PS (an AVBOIT accumulate/occupancy/
-            // extinction PS) the material selected by name -- load it at its default variant, mirroring the opaque
-            // per-material PS load.
+            // AVBOIT pixel shaders are generated for the selected material and use its typed binding and project
+            // surface/BXDF contract, so load the resolved per-material pass shader at its default variant.
             if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Pixel, passPixelShaderDebugName))
                 return false;
         }
@@ -520,9 +498,8 @@ bool RendererMaterialSystem::createRendererPipeline(
                 return false;
         }
         else if(!passPixelShader){
-            // No preloaded pass pixel shader: a cook-generated per-material pass PS (an AVBOIT accumulate/occupancy/
-            // extinction PS) the material selected by name -- load it at its default variant, mirroring the opaque
-            // per-material PS load.
+            // AVBOIT pixel shaders are generated for the selected material and use its typed binding and project
+            // surface/BXDF contract, so load the resolved per-material pass shader at its default variant.
             if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Pixel, passPixelShaderDebugName))
                 return false;
         }

@@ -136,6 +136,9 @@
 // not over-blur. Revisit this if U6 makes the cell size depth-scaled (the ratio -- not the extent -- is what must hold).
 #define NWB_SURFEL_GATHER_CELL_EXTENT 2
 #define NWB_SURFEL_SPAWN_TILE 16u              // one spawn candidate per 16x16 screen tile
+// One-dimensional workgroup width shared by the maintenance passes. Keep the CPU dispatches and the
+// age-free/hash-build [numthreads] declarations on this symbol so a tuning change cannot under-dispatch either pass.
+#define NWB_SURFEL_LINEAR_GROUP_SIZE 64u
 #define NWB_SURFEL_RAYS_PER_SURFEL 64u         // one workgroup (64 threads) per surfel
 // A/B switch for the per-surfel SH reduction. The group == wave size on AMD BC-250/RADV (subgroup 64), so the wave
 // path replaces the 6-stride barriered groupshared tree reduce with a single WaveActiveSum (no barriers, no shared

@@ -31,7 +31,7 @@ RWStructuredBuffer<uint> g_NwbSurfelCellHead;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[numthreads(64, 1, 1)]
+[numthreads(NWB_SURFEL_LINEAR_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint surfelIndex = dispatchThreadID.x;
     const uint poolCapacity = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.y);

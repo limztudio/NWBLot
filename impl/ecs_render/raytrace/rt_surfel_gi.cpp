@@ -211,21 +211,21 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
     if(!rayTracingState().m_surfelTraceBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // SW scene BVH + instance + light list + per-mesh descriptor arrays (slots 0-11; identical to the SW
-        // shadow/caustic trace -- the trace body is gi_sw_trace.slangi, reused verbatim).
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(0, 1)); // scene shading
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1)); // light list
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1)); // scene nodes
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1)); // scene instances
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(4, 1)); // instance material
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, NWB_SW_SHADOW_MAX_MESHES)); // mesh nodes
-        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(6, NWB_SW_SHADOW_MAX_MESHES)); // mesh positions
-        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(7, NWB_SW_SHADOW_MAX_MESHES)); // mesh indices
-        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(8, NWB_SW_SHADOW_MAX_MESHES)); // mesh attributes
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(9, 1)); // material typed
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(10, 1)); // mesh instances
-        // Surfel bindings (12 = constants CB, 13 = pool UAV, 20/21 = prev-frame snapshot pool/cell-head SRVs the U4
-        // bounce gather reads). No push constants -- the trace derives the round-robin phase from frameIndex % divisor.
+        // SW scene BVH + instance + light list + per-mesh descriptor arrays. The NWB_GI_SW_BINDING_* ABI is shared
+        // verbatim with gi_sw_trace.slangi, so the CPU binding layout cannot drift from the shader declarations.
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_SW_BINDING_SCENE_SHADING, 1)); // scene shading
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_LIGHT_LIST, 1)); // light list
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_NODES, 1)); // scene nodes
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_INSTANCES, 1)); // scene instances
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_INSTANCE_MATERIAL, 1)); // instance material
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MESH_NODES, NWB_GI_SW_MAX_MESHES)); // mesh nodes
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_GI_SW_BINDING_MESH_POSITIONS, NWB_GI_SW_MAX_MESHES)); // mesh positions
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_GI_SW_BINDING_MESH_INDICES, NWB_GI_SW_MAX_MESHES)); // mesh indices
+        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_GI_SW_BINDING_MESH_ATTRIBUTES, NWB_GI_SW_MAX_MESHES)); // mesh attributes
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MATERIAL_TYPED, 1)); // material typed
+        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MESH_INSTANCES, 1)); // mesh instances
+        // The surfel-specific tail is likewise named in surfel_binding_slots.h. No push constants -- the trace derives
+        // the round-robin phase from frameIndex % divisor.
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // surfel pool
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, 1)); // U4 bounce: prev-frame pool
@@ -581,9 +581,8 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildBindingSet(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The trace binding set: the SW scene BVH (slots 0-10; the same geometry the SW shadow trace uses) + the surfel
-// constants CB + the surfel pool UAV. Rebuilt when the scene-BVH / instance buffers or the distinct-mesh count change,
-// mirroring the SW shadow set's rebuild guard.
+// The trace binding set: the SW scene-BVH ABI + the surfel constants CB + the surfel pool UAV. Rebuilt when the
+// scene-BVH / instance buffers or the distinct-mesh count change, mirroring the SW shadow set's rebuild guard.
 bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
     NWB_ASSERT(rayTracingState().m_surfelTraceBindingLayout);
     NWB_ASSERT(rayTracingState().m_surfelConstants);
@@ -614,22 +613,22 @@ bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
         return true;
 
     Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(0, deferredState().m_sceneShadingBuffer.get())); // scene shading
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, deferredState().m_lightBuffer.get())); // light list
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, sceneNodeBuffer)); // scene nodes
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, instanceBuffer)); // scene instances
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(4, rayTracingState().m_shadowInstanceMaterialBuffer.get())); // instance material
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_SW_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get())); // scene shading
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get())); // light list
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_NODES, sceneNodeBuffer)); // scene nodes
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_INSTANCES, instanceBuffer)); // scene instances
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_INSTANCE_MATERIAL, rayTracingState().m_shadowInstanceMaterialBuffer.get())); // instance material
     // Per-mesh descriptor arrays: bind every slot; pad the unused tail with the last real mesh (the trace only indexes
     // meshIndex < meshCount), mirroring the SW shadow set.
-    for(u32 slot = 0u; slot < NWB_SW_SHADOW_MAX_MESHES; ++slot){
+    for(u32 slot = 0u; slot < NWB_GI_SW_MAX_MESHES; ++slot){
         const u32 source = (slot < meshCount) ? slot : (meshCount > 0u ? (meshCount - 1u) : 0u);
-        desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(5, rayTracingState().m_swShadowMeshNodeBuffers[source]).setArrayElement(slot));
-        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(6, rayTracingState().m_swShadowMeshPositionBuffers[source]).setArrayElement(slot));
-        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(7, rayTracingState().m_swShadowMeshIndexBuffers[source]).setArrayElement(slot));
-        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(8, rayTracingState().m_swShadowMeshAttributeBuffers[source]).setArrayElement(slot));
+        desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MESH_NODES, rayTracingState().m_swShadowMeshNodeBuffers[source]).setArrayElement(slot));
+        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_GI_SW_BINDING_MESH_POSITIONS, rayTracingState().m_swShadowMeshPositionBuffers[source]).setArrayElement(slot));
+        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_GI_SW_BINDING_MESH_INDICES, rayTracingState().m_swShadowMeshIndexBuffers[source]).setArrayElement(slot));
+        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_GI_SW_BINDING_MESH_ATTRIBUTES, rayTracingState().m_swShadowMeshAttributeBuffers[source]).setArrayElement(slot));
     }
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(9, materialTypedBuffer)); // material typed
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(10, meshInstanceBuffer)); // mesh instances
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MATERIAL_TYPED, materialTypedBuffer)); // material typed
+    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MESH_INSTANCES, meshInstanceBuffer)); // mesh instances
     desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get())); // surfel constants
     desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get())); // surfel pool
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, rayTracingState().m_surfelPoolSnapshotBuffer.get())); // U4 bounce: prev-frame pool
@@ -1300,7 +1299,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     // their ids onto the free-list for the spawn to reuse. Runs FIRST -- it reads lastSeenFrame written by the PREVIOUS
     // frame's spawn keep-alive, and frees the slots BEFORE the hash-build re-links live surfels + the spawn pops. The
     // push (here) and the spawn's pop are barrier-separated (clear + hash-build between), so the free-list stack has no
-    // concurrent push/pop -> no ABA. [numthreads(64,1,1)].
+    // concurrent push/pop -> no ABA. The linear workgroup width is shared with the shader.
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelAgeFree, graphics().getDevice(), commandList);
         commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelAgeFreeBindingSet.get());
@@ -1309,7 +1308,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         state.setPipeline(rayTracingState().m_surfelAgeFreePipeline.get());
         state.addBindingSet(rayTracingState().m_surfelAgeFreeBindingSet.get());
         commandList.setComputeState(state);
-        commandList.dispatch(DivideUp(poolCapacity, 64u), 1u, 1u);
+        commandList.dispatch(DivideUp(poolCapacity, static_cast<u32>(NWB_SURFEL_LINEAR_GROUP_SIZE)), 1u, 1u);
     }
 
     // (1) Clear the cell-head to empty, then rebuild the hash from the live pool BEFORE the spawn, so the spawn sees this
@@ -1321,7 +1320,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
     }
 
-    // (2) Hash-build: one thread per pool slot; link each live surfel into its cell's list. [numthreads(64,1,1)].
+    // (2) Hash-build: one thread per pool slot; link each live surfel into its cell's list.
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelHashBuild, graphics().getDevice(), commandList);
         commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelHashBuildBindingSet.get());
@@ -1330,7 +1329,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         state.setPipeline(rayTracingState().m_surfelHashBuildPipeline.get());
         state.addBindingSet(rayTracingState().m_surfelHashBuildBindingSet.get());
         commandList.setComputeState(state);
-        commandList.dispatch(DivideUp(poolCapacity, 64u), 1u, 1u);
+        commandList.dispatch(DivideUp(poolCapacity, static_cast<u32>(NWB_SURFEL_LINEAR_GROUP_SIZE)), 1u, 1u);
     }
 
     // (3) Spawn: one thread per screen tile. Reads the freshly-built cell head; where a cell is still empty, atomically

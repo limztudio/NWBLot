@@ -372,9 +372,9 @@ private:
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Core::ECS::EntityID m_receivers[s_CsgVisibleShapeCount] = {};
     NWB::Core::ECS::EntityID m_cutters[s_CsgVisibleShapeCount] = {};
+    f32 m_animationTime = 0.0f;
     Float4 m_receiverCenters[s_CsgVisibleShapeCount] = {};
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ CsgVisibleFpsLabel() };
-    f32 m_animationTime = 0.0f;
 };
 
 

@@ -396,9 +396,9 @@ private:
     NWB::Core::ECS::EntityID m_receiver = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_receiverObject = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_cutter = NWB::Core::ECS::ENTITY_ID_INVALID;
+    f32 m_animationTime = s_InitialAnimationTime;
     Float4 m_cutterLocalCenter = Float4(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ CsgSkinnedVisibleFpsLabel() };
-    f32 m_animationTime = s_InitialAnimationTime;
 };
 
 

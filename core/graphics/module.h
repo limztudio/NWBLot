@@ -194,6 +194,8 @@ private:
     bool m_hasPresentedFrame = false;
     bool m_windowVisible = false;
     bool m_windowIsInFocus = true;
+    bool m_requestedVSync = false;
+    bool m_instanceCreated = false;
 
     List<IRenderPass*, Alloc::GlobalArena> m_renderPasses;
     Timer m_previousFrameTimestamp = {};
@@ -201,8 +203,6 @@ private:
     f32 m_dpiScaleFactorY = 1.f;
     f32 m_prevDPIScaleFactorX = 0.f;
     f32 m_prevDPIScaleFactorY = 0.f;
-    bool m_requestedVSync = false;
-    bool m_instanceCreated = false;
 
     f64 m_averageFrameTime = 0.0;
     f64 m_averageTimeUpdateInterval = s_AverageFrameTimeUpdateIntervalSeconds;

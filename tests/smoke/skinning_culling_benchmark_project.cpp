@@ -606,12 +606,12 @@ private:
     BenchmarkRuntimeMeshProvider m_runtimeMeshProvider;
     Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> m_entities;
     Vector<NWB::Impl::SkeletonJointMatrix, NWB::Core::Alloc::GlobalArena> m_bindJoints;
-    NWB::Core::ECS::EntityID m_cameraEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     f64 m_totalTimeSeconds = 0.0;
+    usize m_caseIndex = 0u;
+    NWB::Core::ECS::EntityID m_cameraEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     u32 m_caseRenderedFrames = 0u;
     u32 m_finishDrainFrames = 0u;
     u32 m_repeatIndex = 0u;
-    usize m_caseIndex = 0u;
     bool m_finished = false;
     bool m_quitRequested = false;
     bool m_staticPreview = false;

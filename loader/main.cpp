@@ -232,12 +232,22 @@ bool InstallCrashCapture(CrashArena& crashArena){
             ? NWB::Core::Crash::GpuCrashDumpKind::RadeonGpuDetective
             : NWB::Core::Crash::GpuCrashDumpKind::Aftermath
         ;
-        [[maybe_unused]] const NWB::Core::Crash::CrashDumpResult dumpResult =
+        const NWB::Core::Crash::CrashDumpResult dumpResult =
             NWB::Core::Crash::CaptureGpuCrashDump(
                 AStringView(report.details.data(), report.details.size())
                 , binaryDump
                 , dumpKind
             );
+        if(
+            dumpResult.status == NWB::Core::Crash::CrashDumpStatus::NotInstalled
+            || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::RequestFailed
+            || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::PackageWriteFailed
+        ){
+            NWB_LOGGER_WARNING(
+                NWB_TEXT("Loader: GPU crash dump capture failed (status {})")
+                , static_cast<u32>(dumpResult.status)
+            );
+        }
     }, nullptr);
     return true;
 }

@@ -10,6 +10,7 @@ import sys
 
 SOURCE_DIRECTORIES = (
     "Testbed",
+    "core",
     "global",
     "impl",
     "loader",

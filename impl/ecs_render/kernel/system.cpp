@@ -476,13 +476,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         // instance (has*CausticWork, checked inside); else the black-cleared buffer is the additive no-op. Runs
         // BEFORE renderDeferredLighting so the lighting read sees the resolve.
         if(m_preparedShadowVisibilityReady){
-            // false = no caustic work this frame (the common case: no caustic light or no refractive instance) or a
-            // pipeline-build failure already logged inside; either way the black-cleared buffer is the additive no-op.
+            // A false result with no caustic work is the common no-op. If work was present, preserve the black-cleared
+            // fallback while surfacing that the producer or resolve pass could not be recorded.
             if(hardwareShadowSupported){
-                [[maybe_unused]] const bool causticsDispatched = m_raytracingSystem.renderHwCaustics(*commandList, deferredTargets);
+                const bool causticsDispatched = m_raytracingSystem.renderHwCaustics(*commandList, deferredTargets);
+                if(!causticsDispatched && m_raytracingSystem.hasHwCausticWork())
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic render pass failed"));
             }
             else{
-                [[maybe_unused]] const bool causticsDispatched = m_raytracingSystem.renderGpuBvhCaustics(*commandList, deferredTargets);
+                const bool causticsDispatched = m_raytracingSystem.renderGpuBvhCaustics(*commandList, deferredTargets);
+                if(!causticsDispatched && m_raytracingSystem.hasCausticWork())
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic render pass failed"));
             }
         }
 

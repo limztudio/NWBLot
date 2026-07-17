@@ -135,7 +135,7 @@ private:
 
         // Force ray-tracing emulation so the SOFTWARE shadow path runs even on RT-capable hardware -- the A/B sibling of
         // the hardware path. Default OFF: the demo runs the hardware (hybrid) path.
-#if defined(NWB_STRESS_TEST_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
+#if defined(NWB_STRESS_TEST_FORCE_RT_EMULATION) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
         NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
 #endif
 

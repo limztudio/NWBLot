@@ -95,6 +95,15 @@ function(nwb_apply_codegen target)
         $<$<CONFIG:fin>:PROP_FIN>
     )
 
+    # The smoke executables and the engine libraries they link share one build graph.  Keep
+    # feature-override hooks available in a final configuration only when this is explicitly
+    # a test-enabled build; production final builds retain the normal stripped surface.
+    if(NWB_BUILD_TESTS)
+        target_compile_definitions(${target} PRIVATE
+            NWB_ENABLE_TEST_FEATURE_OVERRIDES=1
+        )
+    endif()
+
     if(WIN32)
         target_compile_definitions(${target} PRIVATE
             NOMINMAX

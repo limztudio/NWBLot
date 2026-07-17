@@ -118,7 +118,7 @@ private:
         // Force ray-tracing emulation so the SOFTWARE shadow path runs even on RT-capable hardware -- the software path is
         // the one that runs the FULL soft pipeline (half-res jittered trace -> a-trous denoise -> bilateral upsample), so
         // the _sw_smoke build is the intended way to see the denoised soft shadow. Default OFF: the HW (hybrid) path.
-#if defined(NWB_SOFT_SHADOW_TEST_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
+#if defined(NWB_SOFT_SHADOW_TEST_FORCE_RT_EMULATION) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
         NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
 #endif
 

@@ -116,7 +116,7 @@ private:
 
         // Force ray-tracing emulation so the SOFTWARE shadow + caustic path runs even on RT-capable hardware -- the
         // A/B sibling of the hardware ray-traced path. Default OFF: the demo runs the hardware path.
-#if defined(NWB_SKINNED_CAUSTIC_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
+#if defined(NWB_SKINNED_CAUSTIC_FORCE_RT_EMULATION) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
         NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
 #endif
 

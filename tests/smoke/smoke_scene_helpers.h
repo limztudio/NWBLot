@@ -75,9 +75,15 @@ namespace Smoke{
 }
 
 inline void DisableSmokeRayTracingForTesting(ProjectRuntimeContext& context){
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
     context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayTracingAccelStruct, true);
     context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayTracingPipeline, true);
     context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayQuery, true);
+#else
+    // Production final builds deliberately exclude the hook; their smoke executable keeps the
+    // platform's native feature selection.
+    static_cast<void>(context);
+#endif
 }
 
 inline Impl::RendererSystem& AddSmokeRenderSystems(

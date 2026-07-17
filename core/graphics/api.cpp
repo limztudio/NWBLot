@@ -456,8 +456,6 @@ usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
         return 1;
     case CooperativeVectorDataType::UInt8Packed:
     case CooperativeVectorDataType::SInt8Packed:
-        // Not sure if this is correct or even relevant because packed types
-        // cannot be used in matrices accessible from the host side.
         return 1;
     case CooperativeVectorDataType::UInt16:
     case CooperativeVectorDataType::SInt16:

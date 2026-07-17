@@ -12,10 +12,9 @@
 #include "binding_slots.h"
 #include "instance_material.slangi"
 
-// Point the surface hook's material-constants context (g_NwbMaterialTypedWords + g_NwbMeshInstances, declared in
-// mesh/material_typed_bindings.slangi at NWB_MESH_SET / NWB_MESH_BINDING_*) at this pass's binding set so the
-// per-hit transmittance dispatch reads them here -- mirroring the software traversal's redirect. The mesh-set
-// defaults (slots 6/12) collide with this set's other slots, so they are moved onto the shadow-RT slot map.
+// Map the shared material-constants context (g_NwbMaterialTypedWords + g_NwbMeshInstances, declared in
+// mesh/material_typed_bindings.slangi at NWB_MESH_SET / NWB_MESH_BINDING_*) into this pass's binding set. The
+// mesh-set defaults (slots 6/12) collide with this set's other slots, so they are moved onto the shadow-RT slot map.
 #define NWB_MESH_SET NWB_SHADOW_RT_SET
 #define NWB_MESH_BINDING_MATERIAL_TYPED NWB_SHADOW_RT_BINDING_MATERIAL_TYPED
 #define NWB_MESH_BINDING_INSTANCE NWB_SHADOW_RT_BINDING_MESH_INSTANCES
@@ -28,10 +27,9 @@
 #include "shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 
-// SHARED per-crossing integration + finalize (NwbShadowVisibilityAccumulator / nwbShadowIntegrateCrossing /
-// nwbShadowFinalizeVisibility), used identically by the hardware RayQuery trace (shadow_rayquery_cs) and the
-// software traversal -- pulled in after the surface helpers it depends on. Each backend keeps the accumulator as a
-// compute LOCAL (its per-occluder bin array indexes safely there), so there is no ray payload.
+// Per-crossing integration helpers (NwbShadowVisibilityAccumulator / nwbShadowIntegrateCrossing /
+// nwbShadowFinalizeVisibility). The opaque RayQuery trace does not invoke them; the software traversal includes
+// the same helpers after its surface setup.
 #include "shadow_integrate.slangi"
 
 
@@ -56,8 +54,8 @@ RWTexture2DArray<float4> g_NwbShadowVisibility;
 [[vk::binding(NWB_SHADOW_RT_BINDING_INSTANCE_MATERIAL, NWB_SHADOW_RT_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbShadowInstanceMaterial;
 
-// Parallel per-mesh arrays (slot k = mesh k = material.meshSlot): raw triangle index byte buffer (the any-hit
-// loads i0/i1/i2 by PrimitiveIndex) + the per-triangle-corner shadow-trace attribute byte buffer.
+// Parallel per-mesh arrays (slot k = mesh k = material.meshSlot): raw triangle index and per-triangle-corner
+// shadow-trace attribute byte buffers.
 [[vk::binding(NWB_SHADOW_RT_BINDING_MESH_INDICES, NWB_SHADOW_RT_SET)]]
 ByteAddressBuffer g_NwbShadowMeshIndices[NWB_SHADOW_RT_MAX_MESHES];
 
@@ -67,8 +65,7 @@ ByteAddressBuffer g_NwbShadowMeshIndices[NWB_SHADOW_RT_MAX_MESHES];
 ByteAddressBuffer g_NwbShadowMeshAttributes[NWB_SHADOW_RT_MAX_MESHES];
 
 // Per-mesh raw object-space positions (float3 at vertexIndex * 12), positionStream-indexed in lockstep with the
-// index buffer. The any-hit reads the hit triangle's three positions to derive its GEOMETRIC face normal. Same data
-// the software traversal loads, so the two backends integrate identical physics.
+// index buffer. The software traversal loads the same geometry to derive the geometric face normal.
 [[vk::binding(NWB_SHADOW_RT_BINDING_MESH_POSITIONS, NWB_SHADOW_RT_SET)]]
 ByteAddressBuffer g_NwbShadowMeshPositions[NWB_SHADOW_RT_MAX_MESHES];
 

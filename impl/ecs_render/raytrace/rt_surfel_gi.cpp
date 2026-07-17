@@ -1258,9 +1258,8 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     )
         return true;
 
-    // The age-free / hash-build passes still dispatch over the full pool (they touch every slot); the trace now dispatches
-    // per LIVE surfel via (3b)'s indirect args, and derives its round-robin phase from the CB divisor -- so the old
-    // CPU-side activeSurfelCount = ceil(poolCapacity/divisor) is gone.
+    // The age-free / hash-build passes dispatch over the full pool (they touch every slot); the trace dispatches per
+    // LIVE surfel via (3b)'s indirect args and derives its round-robin phase from the CB divisor.
     const u32 poolCapacity = rayTracingState().m_surfelPoolCapacity;
 
     // (U4 infinite bounce) Snapshot the previous frame's converged pool + cell-head into the SRV-only snapshot buffers

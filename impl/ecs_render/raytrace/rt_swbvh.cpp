@@ -138,7 +138,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     auto rendererView = world().view<RendererComponent>();
     Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena> instances{ scratchArena };
     // Per-instance occluder material, built lockstep with `instances` (one record per push, same order) so the
-    // uploaded table indexes by the hardware InstanceID() the shadow any-hit reads.
+    // uploaded table indexes by the hardware InstanceID() the trace reads.
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
     // Shadow-OWNED combined material-constants context, built lockstep with `instances`: the per-occluder
     // InstanceGpuData (g_NwbMeshInstances for the trace; index == InstanceID()) + the combined typed bytes
@@ -158,7 +158,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     shadowMutableTypedRanges.reserve(rendererView.candidateCount());
 
     // Reset the per-frame distinct-mesh table; the gather repopulates it (slot k -> mesh k's index/attribute
-    // buffers) for the per-mesh descriptor arrays the any-hit indexes by material.meshSlot.
+    // buffers) for the per-mesh descriptor arrays indexed by material.meshSlot.
     rayTracingState().m_shadowMeshCount = 0u;
     // Whether any gathered occluder is transparent. On RT hardware this gates the hybrid software-transparent-shadow
     // prepare: the HW pass casts only the opaque (binary) shadow, so the SW colored pass is needed only when a
@@ -178,9 +178,9 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             ? m_renderer.meshSystem().findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
             : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
         ;
-        // The BLAS owns the positions it traces, but the any-hit still needs the index buffer (3 vertex indices by
-        // PrimitiveIndex) + the U2 triangle-corner attribute buffer (normal/uv0 for the per-hit dispatch) + the raw
-        // position buffer (the geometric face normal for crossing pairing), so require all three.
+        // The BLAS owns the positions it traces, while the HW GI trace needs the index buffer (3 vertex indices by
+        // PrimitiveIndex), the U2 triangle-corner attribute buffer, and the raw position buffer for geometric face
+        // normals, so require all three.
         if(!meshReady || !mesh || !mesh->blas || !mesh->triangleIndexBuffer || !mesh->attributeBuffer || !mesh->positionBuffer)
             continue;
 
@@ -229,7 +229,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         }
 
         // Resolve the occluder material (transmittance-model id + transparent flag) + the per-mesh attribute slot
-        // + the material-constants context the any-hit's per-hit dispatch reads. That context is packed into the
+        // + the material-constants context the trace surface dispatch reads. That context is packed into the
         // SHADOW-OWNED combined buffers (NOT the draw pass's, which hold only one transparency class at trace
         // time): appendShadowOccluderMaterialContext appends this occluder's constant block (its real byte offset
         // -> materialConstantByteOffset) + its per-instance mutable block (offset packed into the InstanceGpuData
@@ -299,7 +299,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     );
     rayTracingState().m_tlasDeviceAddress = rayTracingState().m_tlas->getDeviceAddress();
 
-    // Upload the per-instance occluder material table (indexed by InstanceID()) for the hardware any-hit.
+    // Upload the per-instance occluder material table (indexed by InstanceID()) for the hardware trace paths.
     if(!ensureShadowInstanceMaterialBuffer(instances.size()))
         return false;
     Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
@@ -309,8 +309,8 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     commandList.setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 
-    // Upload the shadow-owned combined material-constants context the any-hit's per-hit transmittance dispatch
-    // reads. A word of padding keeps the typed buffer valid when no occluder contributed any typed bytes.
+    // Upload the shadow-owned combined material-constants context the trace surface dispatch reads. A word of
+    // padding keeps the typed buffer valid when no occluder contributed any typed bytes.
     if(shadowMaterialTypedBytes.empty())
         shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
     if(!uploadShadowMaterialContextBuffers(commandList, shadowInstanceData, shadowMaterialTypedBytes))
@@ -580,9 +580,7 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
         .setIndexCount(meshResources.meshletPrimitiveIndexCount)
     ;
 
-    // Colored shadows need the any-hit to fire on every occluder, so the shadow geometry is NON-opaque (an
-    // Opaque flag would skip the any-hit). NoDuplicateAnyHitInvocation keeps it firing exactly once per
-    // primitive so the transmittance product is not double-applied.
+    // Keep the shadow geometry non-opaque so the RayQuery path can inspect each candidate's material flags.
     Core::RayTracingGeometryDesc geometry;
     geometry
         .setTriangles(triangles)

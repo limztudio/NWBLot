@@ -243,9 +243,9 @@ struct GeneratedMaterialPixelShader{
 // `surface`, generate its AVBOIT accumulate pixel shader (engine AVBOIT-accumulate authoring + the material's
 // typed `.bind` + its resolved `surface` hook) under a `generated/` directory in the cook cache, and append a
 // (name, source) record so the caller can synthesize the shader entry. Unlike the G-buffer PS this is NOT
-// assigned as a material stage shader (the material's single pixel stage is the G-buffer PS); the renderer
-// derives this PS's identity from the material name + the shared accumulate-PS prefix to bind it for the
-// transparent draw. Opaque materials are skipped; transparent/refractive explicit-stage materials are rejected
+// assigned as a material stage shader (the material's single pixel stage is the G-buffer PS); its generated name
+// is stored on the cooked material for the transparent draw. Opaque materials are skipped; transparent/refractive
+// explicit-stage materials are rejected
 // during material metadata parsing because the current schema has no separate AVBOIT/shadow optical hook.
 // `surfaceSource` must already be resolved to an absolute path.
 [[nodiscard]] bool EmitMaterialAvboitAccumulatePixelShaders(
@@ -261,8 +261,8 @@ struct GeneratedMaterialPixelShader{
 // authored with a `surface`, generate its AVBOIT occupancy / extinction pixel shader (engine AVBOIT
 // occupancy/extinction authoring + the material's typed `.bind` + its resolved `surface` hook), so all three
 // AVBOIT passes read this material's SAME shader-decided surface.renderCoverage. Like the accumulate PS these are NOT
-// material stage shaders; the renderer derives each PS's identity from the material name + the matching prefix to
-// bind it for the transparent draw's occupancy/extinction pass. `surfaceSource` must already be resolved.
+// material stage shaders; their generated names are stored on the cooked material for the transparent draw's
+// occupancy/extinction pass. `surfaceSource` must already be resolved.
 [[nodiscard]] bool EmitMaterialAvboitOccupancyPixelShaders(
     MaterialCookArena& arena,
     const Path& cacheDirectory,

@@ -406,27 +406,27 @@ struct RtShadowState{
     // Active shadow slots this frame (= min(lightCount, NWB_SCENE_SHADOW_SLOT_COUNT)), set during the light upload and
     // read by the edge-adaptive shadow resolve so it only processes the slots that hold a light.
     u32 m_shadowSlotCount = 0u;
-    // Per-frame instance-material table (NwbRtInstanceMaterialGpu), shared by the hardware any-hit and the
-    // software traversal; built lockstep with the TLAS / scene-instance buffer so the array index matches the
+    // Per-frame instance-material table (NwbRtInstanceMaterialGpu), shared by the hardware and software trace
+    // paths; built lockstep with the TLAS / scene-instance buffer so the array index matches the
     // shadow instance id. Grows by doubling, never shrinks.
     Core::BufferHandle m_shadowInstanceMaterialBuffer;
     usize m_shadowInstanceMaterialCapacity = 0u;
-    // Shadow-OWNED combined material-constants context the per-hit transmittance dispatch reads (g_NwbMeshInstances
+    // Trace-owned combined material-constants context used by per-hit surface evaluation (g_NwbMeshInstances
     // + g_NwbMaterialTypedWords). The draw passes' equivalents hold only ONE transparency class at trace time (the
     // opaque set is resident; the transparent occluders' blocks are uploaded after the trace), so the trace builds
     // its own combined buffers over ALL gathered occluders (both transparency classes) lockstep with the shadow
     // instances. m_shadowInstanceBuffer = InstanceGpuData per occluder (mutable byte offset in translation.w);
     // m_shadowMaterialTypedBuffer = each occluder's constant + mutable typed blocks (constant offset stored in the
-    // instance-material record). Both grow by doubling, never shrink, and only the shadow trace binds them.
+    // instance-material record). Both grow by doubling, never shrink, and are shared by the shadow, GI, and caustic
+    // trace paths.
     Core::BufferHandle m_shadowInstanceBuffer;
     Core::BufferHandle m_shadowMaterialTypedBuffer;
     usize m_shadowInstanceCapacity = 0u;
     usize m_shadowMaterialTypedCapacity = 0u;
     // Per-frame distinct meshes referenced by the TLAS (filled by buildSceneTlas); the per-mesh descriptor arrays
     // bind these (parallel: slot k = mesh k's index/attribute/position buffers, indexed by material.meshSlot). The
-    // HW BLAS owns the positions it traces, but the any-hit ALSO needs the raw positions to derive the geometric
-    // face normal for the per-crossing faceSign/cosI, so the position buffer is tracked here too. Sized by the
-    // shared shader cap so the C++ arrays and the shader's `[NWB_SHADOW_RT_MAX_MESHES]` stay one definition.
+    // HW GI trace needs raw positions to derive geometric face normals, so the position buffer is tracked here too.
+    // The shared shader cap keeps the C++ arrays and the shader's `[NWB_SHADOW_RT_MAX_MESHES]` in one definition.
     Core::Buffer* m_shadowMeshIndexBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
     Core::Buffer* m_shadowMeshAttributeBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
     Core::Buffer* m_shadowMeshPositionBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};

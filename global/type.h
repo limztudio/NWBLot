@@ -49,7 +49,6 @@ using usize = std::uintptr_t;
 typedef float f32;
 typedef double f64;
 
-//typedef char char;
 typedef wchar_t wchar;
 #if defined(NWB_UNICODE)
 typedef wchar tchar;

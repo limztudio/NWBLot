@@ -30,8 +30,7 @@
 // dispatch, materialConstantByteOffset locates this material's constant block in g_NwbMaterialTypedWords. The
 // normal is in WORLD space (the surface contract -- NwbMeshSurface.normal, surface.slangi -- and the same hook slot
 // the rasterizer fills via nwbMeshTransformDirection's world-space normal). Each trace backend transforms its
-// interpolated object-space attribute to world space (inverse-transpose of object->world) before filling this; see
-// shadow_ahit.slang / nwbSwShadowTransformNormal for how that relates to the rasterizer under non-uniform scale.
+// interpolated object-space attribute to world space (inverse-transpose of object->world) before filling this.
 struct NwbShadowHit{
     uint meshInstanceIndex;
     uint shadowTransmittanceModelId;

@@ -44,7 +44,7 @@ using NWB::Tests::Smoke::AddSmokeRenderSystems;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// DEDICATED GI scene (DDGI U5): an OPEN-TOP BOX with a SATURATED-RED wall (+X) and a SATURATED-BLUE wall (-X) on
+// DEDICATED GI scene: an OPEN-TOP BOX with a SATURATED-RED wall (+X) and a SATURATED-BLUE wall (-X) on
 // opposite sides, lit by a single DIRECTIONAL light aimed so the walls are lit but the FLOOR between them is in
 // DIRECT SHADOW. The indirect bleed onto the shadowed floor -- RED near the red wall, BLUE near the blue wall, a
 // red-to-blue gradient across the middle -- is the unfakeable pass signal: the hemiAmbient replacement makes this
@@ -121,7 +121,7 @@ public:
 
 public:
     virtual bool onStartup()override{
-        // Emit per-pass GPU timings (render.surfel_*) so U6 perf work can A/B via NWB_GPU_TIMING_FILE.
+        // Emit per-pass GPU timings (render.surfel_*) for A/B capture via NWB_GPU_TIMING_FILE.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);

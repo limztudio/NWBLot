@@ -39,7 +39,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per light: cast one occlusion ray from the surface toward the light. Mirrors the hardware raygen
+// Per light: cast one occlusion ray from the surface toward the light. Mirrors the hardware RayQuery path
 // (directional aims along the toward-light axis to "infinity"; point/spot aim at the light with tMax = the
 // distance; geometric-normal bias + tMin avoids self-intersection; a light inside the bias shell is lit).
 // Returns the per-channel transmittance: float3(1) when fully lit, tinted toward zero through occluders.
@@ -60,7 +60,7 @@ half3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, c
     NwbShadowVisibilityAccumulator acc = nwbShadowVisibilityBegin();
     nwbSwShadowOccluded(origin, toLight, tMin, tEnd, acc);
     // Combine into the final per-channel visibility (Fresnel product * Beer-Lambert, with the absolute-t bias
-    // correction) -- the SAME shared finalize the HW raygen uses, so the two backends match exactly.
+    // correction).
     return nwbShadowFinalizeVisibility(acc);
 }
 

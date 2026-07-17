@@ -9,7 +9,7 @@ function(nwb_configure_name_symbols)
 endfunction()
 
 # Creates the on-demand "nwb_namesym" target for a release (non-buildmode) configuration. Building it runs the full
-# capture the user asked for in one step -- "compile NWB_BUILDMODE -> create namesym -> use it from the non-buildmode
+# capture in one step -- "compile NWB_BUILDMODE -> create namesym -> use it from the non-buildmode
 # build" -- without anyone configuring/building twice by hand:
 #
 #   cmake --build <release-build-dir> --config <cfg> --target nwb_namesym

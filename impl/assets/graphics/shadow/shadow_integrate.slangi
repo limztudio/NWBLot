@@ -9,16 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// SHARED occlusion-ray volume-path integration for BOTH shadow trace backends -- the hardware RayQuery compute trace
-// (shadow_rayquery_cs.slang, t = CandidateTriangleRayT(), geometric normal from the bound position buffer +
-// CandidateObjectRayDirection()) and the software compute traversal (shadow_sw_traversal_cs.slang, t = triangleHit.t,
-// geometric normal from the loaded triangle positions + the object-space ray dir). Both run in compute, so the
-// accumulator lives as a LOCAL variable (its per-occluder bin array indexes safely -- unlike a hardware ray payload).
-// Centralising the per-crossing physics + finalize here means the two backends integrate byte-identical results from
-// ONE definition -- no lockstep edits, no drift.
+// Occlusion-ray volume-path integration for the software traversal (sw_shadow_traverse.slangi, t = triangleHit.t,
+// geometric normal from the loaded triangle positions + the object-space ray dir). The accumulator lives as a LOCAL
+// variable, so its per-occluder bin array indexes safely.
 //
 // Must be included AFTER the surface helpers (shadow_surface.slangi -> mesh/surface.slangi), which define
-// nwbShadowFresnelTransmittedFraction / nwbShadowAbsorptionCoefficient (both backends already pull those in first).
+// nwbShadowFresnelTransmittedFraction / nwbShadowAbsorptionCoefficient.
 
 
 // Max distinct occluders one shadow ray accumulates (the per-thread transparent accumulator's bin array). A ray crosses only
@@ -36,8 +32,8 @@
 // survival^chord) leaves it casting almost no shadow no matter how dark/dense the material -- chord -> 0 pushes
 // visibility -> 1. Flooring a REAL volume chord to this thickness lets a thin glass caster still cast a shadow
 // governed by its density/tint rather than its accidental geometric thinness. Thicker casters keep their larger real
-// chord (physical thickness still darkens them), so the thick caustic-sphere shadow + the HW/SW parity are unchanged,
-// and the caustic light-transport path (a separate integrator in caustic_trace.slangi) is untouched entirely.
+// chord (physical thickness still darkens them), and the caustic light-transport path (a separate integrator in
+// caustic_trace.slangi) is untouched entirely.
 #define NWB_SHADOW_MIN_OCCLUDER_THICKNESS 0.5
 
 // Per-occluder optical-depth bin. Each occluder's crossings are accumulated INDEPENDENTLY (binned by instance id) so
@@ -97,9 +93,8 @@ float nwbShadowSmoothNormalWeight(const float3 n0, const float3 n1, const float3
 
 // Fold ONE transparent surface crossing into the running visibility. The caller supplies the crossing's occluder id
 // + the occluder's optical params (ior / transmission, from its surface hook) + the crossing geometry: geometricNormal
-// and rayDirection MUST be in the SAME space (object space in both backends -> invariant to the instance transform and
-// identical HW vs SW), shadingNormal is the interpolated triangle-corner normal in that same space, and t is the WORLD
-// ray distance to the hit.
+// and rayDirection MUST be in the SAME object space (invariant to the instance transform); shadingNormal is the
+// interpolated triangle-corner normal in that same space, and t is the WORLD ray distance to the hit.
 //
 // Transparent shadow visibility uses Beer-Lambert absorption through the paired chord plus Fresnel loss at each
 // accepted interface. Hard/faceted triangles use the geometric face normal so their shadow keeps the authored hard

@@ -177,8 +177,8 @@ bool EmitMaterialPixelShadersImpl(
 // material's typed .bind + its resolved surface hook, so all three read this material's SAME shader-decided
 // surface.renderCoverage. They differ only in the generated-directory leaf, the included authoring header, the log label,
 // the generated-name prefix, and which entry name field records the identity -- threaded through here. Unlike the
-// G-buffer PS these are NOT material stage shaders; the renderer derives each PS's identity from the material name
-// + the matching prefix to bind it for the transparent draw. Opaque materials are skipped. ParseMaterialMeta rejects
+// G-buffer PS these are NOT material stage shaders; their generated names are stored on the cooked material for the
+// transparent draw. Opaque materials are skipped. ParseMaterialMeta rejects
 // transparent/refractive explicit-stage materials because they have no project-owned AVBOIT/shadow optical hook.
 static bool EmitMaterialAvboitPassPixelShadersImpl(
     CookArena& arena,

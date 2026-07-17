@@ -237,11 +237,9 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
-    // The per-mesh index/attribute/position byte buffers the RayQuery trace reads were last touched as accel-struct
-    // build inputs (positions/indices) or are otherwise resident; move each distinct mesh's buffers to ShaderResource
-    // for the per-hit transmittance dispatch, alongside the shadow-owned material-context buffers (built + uploaded by
-    // buildSceneTlas on the shadow-prepare command list). setResourceStatesForBindingSet then derives the rest (TLAS
-    // read, G-buffer SRVs, scene/light buffers, the visibility UAV).
+    // Transition the shared geometry and material-context buffers carried by the RayQuery layout to ShaderResource;
+    // buildSceneTlas last used positions/indices as acceleration-structure inputs. The binding set then derives the
+    // remaining states (TLAS read, G-buffer SRVs, scene/light buffers, and the visibility UAV).
     for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
         commandList.setBufferState(rayTracingState().m_shadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
@@ -689,19 +687,18 @@ bool RendererRayTracingSystem::softTransparentShadowReady()const noexcept{
 
 void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const{
     // The hardware inline-RayQuery occlusion trace's bindings, in NWB_SHADOW_RT_* slot order (occlusion.slangi /
-    // shadow_rayquery.slangi declare them). Shared by the half-res trace pipeline AND the full-res resolve pipeline
-    // (which re-traces silhouette pixels), so both integrate against the identical geometry/material context.
+    // shadow_rayquery.slangi declare them). Shared by the full-resolution hard fallback and the half-resolution soft
+    // trace, so both use the identical resource slot map.
     layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, 1)); // inline RayQuery reads the TLAS from compute
     layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RT_BINDING_GBUFFER_WORLD_POSITION, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RT_BINDING_GBUFFER_NORMAL, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RT_BINDING_GBUFFER_DEPTH, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SHADOW_RT_BINDING_SCENE_SHADING, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_LIGHT_LIST, 1));
-    layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, 1)); // trace: half-res; resolve: full-res
+    layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, 1)); // soft trace: half-res; hard fallback: full-res
     layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_INSTANCE_MATERIAL, 1));
-    // Per-mesh descriptor arrays (index + attribute + position byte buffers) the RayQuery trace indexes by
-    // material.meshSlot, plus the shared material-constants context buffers the per-hit transmittance dispatch
-    // reads. The bounded SRV arrays mirror the software traversal's compute path.
+    // Per-mesh descriptor arrays (index + attribute + position byte buffers) and material-context buffers remain in
+    // the shared trace slot map. The bounded SRV arrays mirror the software traversal's compute path.
     layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INDICES, NWB_SHADOW_RT_MAX_MESHES));
     layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_ATTRIBUTES, NWB_SHADOW_RT_MAX_MESHES));
     layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, 1));
@@ -721,10 +718,9 @@ void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayou
 
 
 void RendererRayTracingSystem::appendShadowTraceBindingSet(Core::BindingSetDesc& desc, DeferredFrameTargets& targets, Core::Texture* visibilityTarget)const{
-    // The visibility UAV target differs per pass (half-res for the trace, full-res for the resolve); everything else is
-    // the identical trace context. The shadow-OWNED material-context buffers (built by buildSceneTlas over ALL gathered
-    // occluders) feed the per-hit transmittance dispatch -- NOT the draw pass's buffers (those hold only the opaque set
-    // at trace time, so the transparent occluders' tint/constants would be absent).
+    // The visibility UAV target differs per pass (half-res for the trace, full-res for the hard fallback); everything
+    // else uses the identical trace layout. Its shadow-owned material context is built by buildSceneTlas over ALL
+    // gathered occluders, unlike the draw-pass buffers, which hold only the opaque set at trace time.
     const u32 meshCount = rayTracingState().m_shadowMeshCount;
     desc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, rayTracingState().m_tlas.get()));
     desc.addItem(Core::BindingSetItem::Texture_SRV(
@@ -761,8 +757,8 @@ void RendererRayTracingSystem::appendShadowTraceBindingSet(Core::BindingSetDesc&
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, rayTracingState().m_shadowMaterialTypedBuffer.get()));
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INSTANCES, rayTracingState().m_shadowInstanceBuffer.get()));
 
-    // Per-mesh descriptor arrays: bind every slot (the trace only indexes meshSlot < meshCount). Unused tail slots
-    // are padded with the last real mesh so a non-bindless array has no unbound descriptors.
+    // The shared trace layout uses bounded per-mesh descriptor arrays, so bind every slot. Unused tail slots are
+    // padded with the last real mesh so a non-bindless array has no unbound descriptors.
     for(u32 slot = 0u; slot < NWB_SHADOW_RT_MAX_MESHES; ++slot){
         const u32 source = (slot < meshCount) ? slot : (meshCount - 1u);
         desc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INDICES, rayTracingState().m_shadowMeshIndexBuffers[source]).setArrayElement(slot));
@@ -841,10 +837,9 @@ bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targ
     NWB_ASSERT(targets.shadowVisibility);
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
     NWB_ASSERT(deferredState().m_lightBuffer);
-    // The material-constants context the per-hit transmittance dispatch reads (g_NwbMaterialTypedWords +
-    // g_NwbMeshInstances) is the SHADOW-OWNED combined pair built by buildSceneTlas over ALL gathered occluders,
-    // NOT the draw pass's buffers (those hold only the opaque set at trace time, so the transparent occluders'
-    // tint/constants would be absent). buildSceneTlas uploads both before this binding set is created.
+    // The shared trace layout carries the shadow-owned material context (g_NwbMaterialTypedWords +
+    // g_NwbMeshInstances) built by buildSceneTlas over ALL gathered occluders, rather than the draw-pass buffers,
+    // which hold only the opaque set at trace time. buildSceneTlas uploads both before this binding set is created.
     NWB_ASSERT(rayTracingState().m_shadowMaterialTypedBuffer);
     NWB_ASSERT(rayTracingState().m_shadowInstanceBuffer);
 

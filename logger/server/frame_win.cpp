@@ -72,7 +72,6 @@ inline constexpr LogRowColors s_FatalOddLogRowColors{ RGB(255, 255, 0), RGB(250,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// in windows, the frame is a singleton
 using MessageItem = Pair<LogString, Log::Type::Enum>;
 using MessageDeque = Deque<MessageItem, LogArena>;
 

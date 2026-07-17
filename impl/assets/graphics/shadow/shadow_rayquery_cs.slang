@@ -5,7 +5,7 @@
 // Hardware RayQuery (inline ray tracing) FULL-resolution OPAQUE shadow trace. One compute thread per output pixel
 // inline-traces each light's occlusion ray against the TLAS (shared nwbShadowRqLightVisible) and writes a binary
 // "any opaque hit -> shadowed" mask straight into the full-res visibility array. The colored TRANSPARENT shadow is
-// cast separately by the software traversal (shadow_sw_traversal_cs) and multiplied onto this opaque mask -- the
+// cast separately by the software traversal (sw_shadow_traverse.slangi) and multiplied onto this opaque mask -- the
 // hybrid split, because the hardware intersector and the software Moeller-Trumbore disagree by +/-1 crossing at
 // grazing silhouettes (invisible for a binary opaque test, but it corrupts the colored Beer-Lambert chord).
 
@@ -31,8 +31,8 @@ ConstantBuffer<NwbShadowRqPushConstants> g_NwbShadowRqPushConstants;
 [numthreads(NWB_SHADOW_RT_GROUP_SIZE, NWB_SHADOW_RT_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // FULL-RESOLUTION: one inline-RayQuery occlusion ray per output pixel, written straight into the full-res
-    // visibility array the deferred lighting samples -- structurally identical to the software traversal's main()
-    // (shadow_sw_traversal_cs), so the hardware and software backends produce the same per-pixel result.
+    // visibility array the deferred lighting samples. The software transparent stage folds colored transmittance
+    // onto this opaque result.
     uint width;
     uint height;
     uint slotElems;

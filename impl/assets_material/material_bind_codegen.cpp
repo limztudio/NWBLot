@@ -165,11 +165,10 @@ bool ResolveMaterialBindDependencyInterface(
 
         if(outInterfaceName != dependencyInterfaceName){
             // More than one DISTINCT interface: this is a generic consumer of a cook-generated dispatch module,
-            // not a per-material shader. The shadow-transmittance dispatch (included by shadow_ahit and the
-            // software traversal CS) #includes every surface material's `.bind` -- namespace-isolated by
-            // EmitShadowTransmittanceDispatchModule, so there is no symbol collision -- to evaluate each occluder's
-            // transmittance hook by shading-model id. Such a shader still reads the typed binding (above) but has
-            // NO single owning interface; only per-material pixel shaders (exactly one interface) carry one for
+            // not a per-material shader. The shadow-transmittance dispatch #includes every surface material's
+            // `.bind`, namespace-isolated by EmitShadowTransmittanceDispatchModule, so it can evaluate each
+            // occluder's transmittance hook by shading-model id. Such a shader still reads the typed binding above
+            // but has NO single owning interface; only per-material pixel shaders (exactly one interface) carry one for
             // material_validation to match against the material's declaration.
             outInterfacePath.clear();
             outInterfaceName = NAME_NONE;

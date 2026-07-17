@@ -13,7 +13,7 @@
 // opaque occluders: a binary "any opaque hit -> fully shadowed" test. That is order-independent and needs no chord, so
 // the hardware ray-triangle intersector does it exactly as well as software (at most a sub-pixel hard-edge difference,
 // never a colored-chord error). The TRANSPARENT occluders -- whose colored Beer-Lambert shadow DOES depend on the exact
-// per-occluder crossing set -- are traced by the software traversal (shadow_sw_traversal_cs), and that colored result is
+// per-occluder crossing set -- are traced by the software traversal (sw_shadow_traverse.slangi), and that colored result is
 // multiplied onto this opaque mask. So this trace gathers nothing and runs no integrator; it returns the first opaque
 // hit as fully-blocked. Centralising the opaque ray here keeps shadow_rayquery_cs thin.
 

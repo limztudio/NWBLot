@@ -49,12 +49,11 @@ using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// MINIMAL FLICKER-REPRO scene: ONE opaque `body` character on ONE opaque ground plane, lit by a SINGLE directional light.
-// The character spins about its vertical axis (root-transform rotation only, bind pose) so its ground shadow + self-shadow
-// sweep -- the tightest possible isolation of the hard-shadow edge crawl (no transparency, no point light, no crowd). Arrow
-// keys (Left/Right) scrub the yaw by hand; the live angle shows in the title bar so the exact orientation a flicker appears
-// at can be read off and reproduced via NWB_FLICKER_TEST_SPIN_ANGLE. Reuses the benchmark's cooked body model + ground
-// material (no new assets).
+// FLICKER-REPRO scene: opaque and glass `body` characters on an opaque ground plane, lit by directional and point lights.
+// The characters spin about their vertical axes (root-transform rotation only, bind pose) so their shadows + self-shadows
+// sweep. Arrow keys (Left/Right) scrub the yaw by hand; the live angle shows in the title bar so the exact orientation a
+// flicker appears at can be read off and reproduced via NWB_FLICKER_TEST_SPIN_ANGLE. Reuses the benchmark's cooked body
+// model + ground material (no new assets).
 static constexpr AStringView s_ModelPath = "project/characters/body/model";
 static constexpr AStringView s_OpaqueMaterialPath = "project/smoke/transparent_multi/materials/ground";  // opaque lambert
 static constexpr AStringView s_TransparentMaterialPath = "project/smoke/transparent_multi/materials/shared"; // glass

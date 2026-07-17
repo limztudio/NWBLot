@@ -51,9 +51,9 @@ using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// STRESS scene: an empty ground plane with TEN skinned `body` characters in a tight ZIGZAG -- alternating TRANSPARENT
-// (glass) and OPAQUE, staggered front/back so their shadows overlap -- lit by one directional + one point light. Each
-// character SPINS about its vertical axis
+// STRESS scene: TEN skinned `body` characters in a tight ZIGZAG inside a coloured open-front GI box -- alternating
+// TRANSPARENT (glass) and OPAQUE, staggered front/back so their shadows overlap -- lit by one directional + one point light.
+// Each character SPINS about its vertical axis
 // (no skeleton-pose animation; the bodies render in bind pose and the whole entity rotates), so its instance transform
 // changes every frame -- exercising the per-frame scene BVH/TLAS rebuild + the hybrid shadow path (opaque->HW binary,
 // transparent->SW colored) across TWO shadowed lights as the occluders sweep. Reuses the body model + transparent_multi
@@ -66,7 +66,7 @@ static constexpr AStringView s_GroundMeshPath = "project/meshes/shadow_plane";
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 static constexpr u32 s_CharactersPerClass = 5u;                       // 5 transparent + 5 opaque
-static constexpr u32 s_CharacterCount = s_CharactersPerClass * 2u;    // = 10
+static constexpr u32 s_CharacterCount = s_CharactersPerClass * 2u;
 static constexpr f32 s_CharacterSpacingX = 0.72f;                     // tight so neighbours' shadows overlap
 static constexpr f32 s_TransparentRowZ = -0.55f;                      // even index -> front of the zigzag
 static constexpr f32 s_OpaqueRowZ = 0.55f;                            // odd index  -> back of the zigzag

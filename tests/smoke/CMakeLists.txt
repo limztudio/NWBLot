@@ -219,8 +219,8 @@ if(Python3_Interpreter_FOUND)
         )
 
         # Forced-software-emulation sibling of the caustic sphere demo: identical scene, but the SOFTWARE caustic
-        # producer (P3) runs even on RT hardware, so the two can be captured + diffed to verify the HW (P4) and SW
-        # producers converge to the same caustic (the byte-parallel parity gate).
+        # producer runs even on RT hardware, so the two can be captured + diffed to verify the HW and SW producers
+        # converge to the same caustic (the byte-parallel parity gate).
         nwb_declare_executable(nwb_caustic_sphere_sw_smoke)
         target_sources(nwb_caustic_sphere_sw_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
@@ -635,10 +635,10 @@ if(Python3_Interpreter_FOUND)
             "--reject-log-message" "failed to resolve shader"
         )
 
-        # Load-time STRESS scene: TEN animated skinned `body` characters (5 transparent + 5 opaque) over a ground plane
-        # under a directional + a point light. Reuses the benchmark's cooked assets (body model + transparent_multi
-        # glass/ground materials); exercises per-frame skinning x10 + SW BVH refits + the hybrid shadow path across two
-        # shadowed lights at load.
+        # Load-time STRESS scene: TEN spinning skinned `body` characters (5 transparent + 5 opaque) inside a coloured
+        # open-front GI box, under a directional + a point light. Reuses the benchmark's cooked assets (body model +
+        # transparent_multi glass/ground materials); exercises per-frame scene updates and the hybrid shadow path across two
+        # shadowed lights.
         nwb_declare_executable(nwb_stress_test_smoke)
         target_sources(nwb_stress_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
@@ -667,9 +667,8 @@ if(Python3_Interpreter_FOUND)
         )
         add_dependencies(nwb_stress_test_sw_smoke nwb_skinning_culling_benchmark_assets)
 
-        # Minimal FLICKER-REPRO scene: ONE opaque `body` character on ONE opaque ground plane under a SINGLE directional
-        # light, arrow-key-spun. The tightest isolation of the hard-shadow edge crawl (no transparency, no point light, no
-        # crowd). Reuses the benchmark's cooked assets (body model + ground material).
+        # FLICKER-REPRO scene: opaque and glass `body` characters on an opaque ground plane under directional + point
+        # lights, arrow-key-spun. Reuses the benchmark's cooked assets (body model + ground material).
         nwb_declare_executable(nwb_flicker_test_smoke)
         target_sources(nwb_flicker_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/flicker_test_project.cpp"
@@ -698,10 +697,9 @@ if(Python3_Interpreter_FOUND)
         )
         add_dependencies(nwb_flicker_test_sw_smoke nwb_skinning_culling_benchmark_assets)
 
-        # Dedicated SOFT-SHADOW scene (Stage 1): ONE opaque `body` character on ONE opaque ground plane under a SINGLE
-        # directional light with a physical angular source size (env NWB_SOFT_SHADOW_TEST_ANGLE). Isolates the soft
-        # directional penumbra (contact hardening + distance-widening), arrow-key-spun for a crawl check. Reuses the
-        # benchmark's cooked assets (body model + ground material).
+        # Dedicated SOFT-SHADOW scene: opaque and glass `body` characters on an opaque ground plane under directional,
+        # point, and spot lights with physical source sizes. It exercises their tinted penumbras, with arrow-key yaw
+        # control for a crawl check. Reuses the benchmark's cooked assets (body model + ground material).
         nwb_declare_executable(nwb_soft_shadow_test_smoke)
         target_sources(nwb_soft_shadow_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_test_project.cpp"
@@ -731,9 +729,9 @@ if(Python3_Interpreter_FOUND)
         )
         add_dependencies(nwb_soft_shadow_test_sw_smoke nwb_skinning_culling_benchmark_assets)
 
-        # Dedicated DDGI GI scene (U5): a white open-top box + one saturated-red wall + a directional light aimed
-        # so the red wall is lit but the adjacent floor is in direct shadow. The indirect red bleed on the
-        # shadowed floor is the unfakeable DDGI pass signal. Reuses the benchmark's cooked assets (ground material).
+        # Dedicated DDGI GI scene: an open-top box with saturated-red and saturated-blue walls, plus a directional light
+        # aimed to leave the floor in direct shadow. The red-to-blue indirect bleed on that floor is the DDGI pass signal.
+        # Reuses the benchmark's cooked assets (ground material).
         nwb_declare_executable(nwb_gi_test_smoke)
         target_sources(nwb_gi_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/gi_test_project.cpp"

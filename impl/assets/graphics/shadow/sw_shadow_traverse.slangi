@@ -42,8 +42,8 @@
 #include "shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 
-// SHARED per-crossing integration + finalize (NwbShadowVisibilityAccumulator / nwbShadowIntegrateCrossing /
-// nwbShadowFinalizeVisibility), identical to the hardware any-hit -- pulled in after the surface helpers it depends on.
+// Per-crossing integration + finalize (NwbShadowVisibilityAccumulator / nwbShadowIntegrateCrossing /
+// nwbShadowFinalizeVisibility), pulled in after the surface helpers it depends on.
 // The traversal threads one accumulator by reference and the per-light entry finalizes it.
 #include "shadow_integrate.slangi"
 
@@ -62,9 +62,8 @@ uint nwbSwShadowInstanceCount(){
 
 
 // Per-instance occlusion: push the world ray into the instance's object space, then walk that mesh's
-// triangle BVH. Each triangle the ray crosses folds one surface crossing into the shared running accumulator (the
-// same nwbShadowIntegrateCrossing the hardware any-hit calls) for a transparent occluder, or zeroes the
-// transmittance and stops for an opaque occluder.
+// triangle BVH. Each transparent triangle folds one surface crossing into the shared running accumulator; an opaque
+// triangle zeroes the transmittance and stops the traversal.
 void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowVisibilityAccumulator acc){
     const NwbSwShadowInstance instance = g_NwbSwShadowInstances[instanceIndex];
     const NwbRtInstanceMaterial material = g_NwbSwShadowInstanceMaterial[instanceIndex];
@@ -172,7 +171,7 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 hit.rayDirection = worldDirection;
 
                 // Evaluate this material's surface hook for its optical params, then fold the crossing into the
-                // running accumulator via the SHARED integrator -- byte-identical to the HW any-hit. The GEOMETRIC face
+                // running accumulator via the shared integrator. The geometric face
                 // normal cross(v1-v0,v2-v0) + the object-space ray `direction` are already in hand;
                 // triangleHit.t is the world distance (the ray dir is left un-normalised so its t matches RayTCurrent()).
                 // hit.worldNormal stays the SHADING normal for any hook that reads it; the integrator uses geometry
@@ -182,7 +181,7 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 nwbShadowIntegrateCrossing(acc, instanceIndex, surface.refractionIor, surface.shadowAbsorptionTint, geometricNormal, objectNormal, smoothNormalWeight, direction, triangleHit.t);
                 // Cost safeguard for deeply-stacked transparency: stop once effectively opaque, but KEEP the
                 // accumulated (near-zero) value -- the finalize applies the same Beer-Lambert term. Hard-zeroing here
-                // was order-dependent and could snap an overlap pixel to pure black; matches the HW soft early-out.
+                // was order-dependent and could snap an overlap pixel to pure black.
                 if(max(max(acc.transmittance.x, acc.transmittance.y), acc.transmittance.z) < NWB_SW_SHADOW_TRANSMITTANCE_EPSILON)
                     return;
             }

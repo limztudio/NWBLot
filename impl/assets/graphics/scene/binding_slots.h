@@ -25,7 +25,7 @@
 
 // Colored shadows store per-light float3 transmittance in a Texture2DArray with one layer per shadow slot.
 // A bounded pool of slots is assigned per frame to the most important lights (the shadow-slot allocator);
-// lights without a slot stay fully lit. The shadow producers (raygen / software fallback) and the lighting
+// lights without a slot stay fully lit. The shadow producers (hardware RayQuery / software fallback) and the lighting
 // consumer MUST share this slot count (the array depth).
 #define NWB_SCENE_SHADOW_SLOT_COUNT 8u
 

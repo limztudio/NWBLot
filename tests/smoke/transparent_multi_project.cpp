@@ -303,7 +303,7 @@ public:
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         // Single STATIC glass sphere centered above the ground. A sphere lens CONVERGES the directional light into a
         // focused caustic on the receiver (a faceted tetrahedron only deviates light), and a static scene lets the
-        // temporal accumulator (P5b) average the jittered photon splat into a smooth crescent instead of a grid of dots.
+        // temporal accumulator average the jittered photon splat into a smooth crescent instead of a grid of dots.
         const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,

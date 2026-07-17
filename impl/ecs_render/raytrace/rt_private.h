@@ -146,7 +146,7 @@ namespace BvhNodeIndex{
 inline constexpr usize s_SceneBvhInitialInstanceCapacity = 64u;
 
 // Binned-SAH scene-BVH build tuning. BuildSceneBvhNode evaluates a fixed-grid SAH over all three centroid axes at
-// every split and takes the lowest-cost bin boundary, replacing the old largest-axis spatial-median split. Each
+// every split and takes the lowest-cost bin boundary. Each
 // instance carries a leaf cost (its primitive count in production) so a large instance biases the tree like a large
 // primitive would; when none is supplied every instance counts uniformly (the self-test path). Leaves remain
 // single-instance (the NwbBvhNode leaf ABI encodes one instance), so SAH here only chooses split axis + position;
@@ -186,7 +186,7 @@ static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCa
 // material-constants context the surface hook needs (the constant block byte offset into g_NwbMaterialTypedWords
 // and the g_NwbMeshInstances index that resolves the mutable storage offset). Built per frame into one structured
 // buffer indexed by the shadow instance id (hardware InstanceID() == software scene-BVH leaf index), so the
-// hardware any-hit and the software traversal read the same record for the same entity. The model id dispatches
+// hardware and software trace paths read the same record for the same entity. The model id dispatches
 // the per-hit transmittance hook; meshSlot indexes the per-mesh attribute buffers the shadow trace interpolates.
 struct NwbRtInstanceMaterialGpu{
     u32 shadowTransmittanceModelId = Limit<u32>::s_Max;

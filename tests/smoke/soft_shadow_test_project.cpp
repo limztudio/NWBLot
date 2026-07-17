@@ -53,7 +53,7 @@ using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 // POINT light, and a BLUE SPOT -- each with a PHYSICAL source size. That source size is what makes each shadow soft: the
 // trace jitters the ray over the light's source (the sun's angularRadius disk, or a point/spot's sourceRadius sphere
 // subtending asin(R/dist)), so every penumbra emerges + WIDENS with occluder->receiver distance and HARDENS at contact. The
-// GLASS caster casts a COLORED transparent soft shadow (Stage 5) beside the opaque grey one. Both spin (arrow keys).
+// GLASS caster casts a COLORED transparent soft shadow beside the opaque grey one. Both spin (arrow keys).
 //
 // A/B levers:
 //   - THREE differently-coloured soft-shadowed lights are lit AT ONCE (a warm-white directional sun, a RED point, a BLUE

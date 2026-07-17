@@ -87,6 +87,8 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         // the caustic binding set captures them. Opaque-only scenes skip all of this and pay no software cost.
         rayTracingState().m_hybridTransparentShadowReady = false;
         if(outBackendReady && rayTracingState().m_sceneHasTransparentOccluder){
+            if(!preparePendingMeshSwBvhResources())
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent shadow software BVH resource preparation failed"));
             if(!buildPendingMeshSwBvh(commandList))
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent shadow per-mesh software BVH build failed"));
             // Guard m_swShadowMeshCount > 0 before ensureSwShadowBindingSet (which asserts it): if no per-mesh software
@@ -175,6 +177,8 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
 
     // No hardware ray tracing: build/refit the per-mesh software BVHs from the already skinned geometry, then
     // build the per-frame software scene/instance BVH over them before the render pass consumes it.
+    if(!preparePendingMeshSwBvhResources())
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH resource preparation failed"));
     if(!buildPendingMeshSwBvh(commandList))
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH update failed"));
     if(!buildSceneSwBvh(commandList, scratchArena)){

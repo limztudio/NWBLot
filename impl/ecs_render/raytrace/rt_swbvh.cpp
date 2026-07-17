@@ -48,6 +48,7 @@ bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandL
     //  - The no-RayQuery fallback prepare (the only shadow backend) -- builds every mesh.
     //  - The hybrid prepare on RT hardware -- only when the scene has a TRANSPARENT occluder (whose colored shadow the
     //    software pass must trace); opaque-only / no-transparent scenes never call this, so they pay no software cost.
+    // Resource allocation happens first in preparePendingMeshSwBvhResources; this pass only records build/refit work.
     bool allBuildsReady = true;
     auto& meshes = meshState().m_meshes;
     for(auto it = meshes.begin(); it != meshes.end(); ++it){
@@ -77,6 +78,49 @@ bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandL
         }
     }
     return allBuildsReady;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
+    // Keep allocation out of updateMeshSwBvh: recording the per-frame build/refit command stream may only consume
+    // the resources prepared here. Runtime meshes are intentionally included every frame because a provider can
+    // replace the current cache entry between frames; static meshes stay in the set until their first build succeeds.
+    bool allResourcesReady = true;
+    auto& meshes = meshState().m_meshes;
+    for(auto it = meshes.begin(); it != meshes.end(); ++it){
+        MeshResources& meshResources = it.value();
+        if(!meshResources.runtimeMesh && !meshResources.swBvhBuildPending)
+            continue;
+
+        if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer){
+            allResourcesReady = false;
+            continue;
+        }
+        // meshletPrimitiveIndexCount is the reconstructed triangle-index count (3 per triangle).
+        if(meshResources.meshletPrimitiveIndexCount == 0u || (meshResources.meshletPrimitiveIndexCount % 3u) != 0u){
+            allResourcesReady = false;
+            continue;
+        }
+
+        const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / 3u;
+        if(!ensureMeshSwBvhResources(
+            meshResources.positionBuffer.get(),
+            meshResources.triangleIndexBuffer.get(),
+            primitiveCount,
+            meshResources.swBvhNodeBuffer,
+            meshResources.swBvhParentBuffer,
+            meshResources.swBvhBindingSet
+        )){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preparation failed for mesh '{}'")
+                , StringConvert(meshResources.meshName.c_str())
+            );
+            allResourcesReady = false;
+        }
+    }
+    return allResourcesReady;
 }
 
 
@@ -338,9 +382,10 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             ? m_renderer.meshSystem().findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
             : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
         ;
-        // Only instances whose per-mesh software BVH + geometry are built (and that have valid object-space
-        // bounds) can be traced.
-        if(!meshReady || !mesh || !mesh->swBvhNodeBuffer || !mesh->positionBuffer || !mesh->triangleIndexBuffer || !mesh->csgLocalBounds.valid())
+        // Only instances whose per-mesh software BVH topology + geometry are built (and that have valid
+        // object-space bounds) can be traced. Storage alone is insufficient because resource preparation may
+        // allocate it before the first build command has initialized the topology.
+        if(!meshReady || !mesh || !mesh->swBvhTopologyBuilt || !mesh->swBvhNodeBuffer || !mesh->positionBuffer || !mesh->triangleIndexBuffer || !mesh->csgLocalBounds.valid())
             continue;
 
         // Dedupe to a per-mesh descriptor-array slot: instances sharing a mesh share its node/position/index
@@ -1017,6 +1062,34 @@ bool RendererRayTracingSystem::ensureMeshSwBvhResources(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererRayTracingSystem::meshSwBvhResourcesReady(
+    Core::Buffer* positionBuffer,
+    Core::Buffer* triangleIndexBuffer,
+    const Core::BufferHandle& nodeBuffer,
+    const Core::BufferHandle& parentBuffer,
+    const Core::BindingSetHandle& bindingSet
+){
+    return
+        positionBuffer
+        && triangleIndexBuffer
+        && nodeBuffer
+        && parentBuffer
+        && bindingSet
+        && rayTracingState().m_bvhSortPipeline
+        && rayTracingState().m_bvhSortBindingSet
+        && rayTracingState().m_bvhSortKeysBuffer
+        && rayTracingState().m_bvhSortPayloadBuffer
+        && rayTracingState().m_bvhMortonPipeline
+        && rayTracingState().m_bvhTopologyPipeline
+        && rayTracingState().m_bvhFitPipeline
+        && rayTracingState().m_bvhVisitCounterBuffer
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::buildMeshSwBvh(
     Core::CommandList& commandList,
     Core::Buffer* positionBuffer,
@@ -1031,6 +1104,37 @@ bool RendererRayTracingSystem::buildMeshSwBvh(
     if(primitiveCount == 0u)
         return false;
     if(!ensureMeshSwBvhResources(positionBuffer, triangleIndexBuffer, primitiveCount, nodeBuffer, parentBuffer, bindingSet))
+        return false;
+
+    return buildMeshSwBvhPrepared(
+        commandList,
+        positionBuffer,
+        triangleIndexBuffer,
+        primitiveCount,
+        aabbMin,
+        aabbMax,
+        nodeBuffer,
+        parentBuffer,
+        bindingSet
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
+    Core::CommandList& commandList,
+    Core::Buffer* positionBuffer,
+    Core::Buffer* triangleIndexBuffer,
+    u32 primitiveCount,
+    const SIMDVector aabbMin,
+    const SIMDVector aabbMax,
+    Core::BufferHandle& nodeBuffer,
+    Core::BufferHandle& parentBuffer,
+    Core::BindingSetHandle& bindingSet
+){
+    if(primitiveCount == 0u || !meshSwBvhResourcesReady(positionBuffer, triangleIndexBuffer, nodeBuffer, parentBuffer, bindingSet))
         return false;
 
     u32 paddedCount = static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE);
@@ -1128,6 +1232,33 @@ bool RendererRayTracingSystem::refitMeshSwBvh(
     if(!ensureMeshSwBvhResources(positionBuffer, triangleIndexBuffer, primitiveCount, nodeBuffer, parentBuffer, bindingSet))
         return false;
 
+    return refitMeshSwBvhPrepared(
+        commandList,
+        positionBuffer,
+        triangleIndexBuffer,
+        primitiveCount,
+        nodeBuffer,
+        parentBuffer,
+        bindingSet
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
+    Core::CommandList& commandList,
+    Core::Buffer* positionBuffer,
+    Core::Buffer* triangleIndexBuffer,
+    u32 primitiveCount,
+    Core::BufferHandle& nodeBuffer,
+    Core::BufferHandle& parentBuffer,
+    Core::BindingSetHandle& bindingSet
+){
+    if(primitiveCount == 0u || !meshSwBvhResourcesReady(positionBuffer, triangleIndexBuffer, nodeBuffer, parentBuffer, bindingSet))
+        return false;
+
     Core::Buffer* meshNodeBuffer = nodeBuffer.get();
     Core::Buffer* meshParentBuffer = parentBuffer.get();
     Core::Buffer* visitCounterBuffer = rayTracingState().m_bvhVisitCounterBuffer.get();
@@ -1174,6 +1305,14 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
     if(meshResources.meshletPrimitiveIndexCount == 0u || (meshResources.meshletPrimitiveIndexCount % 3u) != 0u)
         return false;
     const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / 3u;
+    if(!meshSwBvhResourcesReady(
+        meshResources.positionBuffer.get(),
+        meshResources.triangleIndexBuffer.get(),
+        meshResources.swBvhNodeBuffer,
+        meshResources.swBvhParentBuffer,
+        meshResources.swBvhBindingSet
+    ))
+        return false;
 
     // The morton / topology / fit kernels read positions and triangle indices as raw byte buffers, so move
     // both to ShaderResource before the build/refit dispatches bind them.
@@ -1184,8 +1323,9 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
     // Skinned (runtime) meshes deform every frame: refit the build-pose topology in place from the freshly
     // skinned positions, forcing a full rebuild once the adaptive refit budget (scales ~cube-root of triangle
     // count) is exhausted to restore tree quality. Static meshes build once. A mesh's first appearance is
-    // always a full build.
-    const bool firstBuild = !meshResources.swBvhNodeBuffer;
+    // always a full build. Resource preparation can allocate node storage before recording begins, so topology
+    // initialization is tracked independently from buffer existence.
+    const bool firstBuild = !meshResources.swBvhTopologyBuilt;
     const bool performRefit =
         meshResources.runtimeMesh
         && !firstBuild
@@ -1194,7 +1334,7 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
 
     bool built = false;
     if(performRefit){
-        built = refitMeshSwBvh(
+        built = refitMeshSwBvhPrepared(
             commandList,
             meshResources.positionBuffer.get(),
             meshResources.triangleIndexBuffer.get(),
@@ -1207,7 +1347,7 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
     else{
         const SIMDVector aabbMin = LoadFloatInt(meshResources.csgLocalBounds.minBounds);
         const SIMDVector aabbMax = LoadFloatInt(meshResources.csgLocalBounds.maxBounds);
-        built = buildMeshSwBvh(
+        built = buildMeshSwBvhPrepared(
             commandList,
             meshResources.positionBuffer.get(),
             meshResources.triangleIndexBuffer.get(),
@@ -1221,6 +1361,9 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
     }
     if(!built)
         return false;
+
+    if(!performRefit)
+        meshResources.swBvhTopologyBuilt = true;
 
     if(firstBuild){
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)")

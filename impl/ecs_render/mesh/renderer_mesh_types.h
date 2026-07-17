@@ -72,6 +72,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     bool dynamicMeshletConesFresh = false;
     bool blasBuildPending = false;
     bool swBvhBuildPending = false;     // static mesh awaiting its one-time software BVH build
+    bool swBvhTopologyBuilt = false;    // a full software BVH build initialized the persistent topology
     u64 runtimeMeshVersion = 0u;
     CsgReceiverCpuBounds csgLocalBounds;
 

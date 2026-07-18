@@ -255,6 +255,19 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
                 return false;
             instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
         }
+
+        // Non-transparent occluders (including the unresolved-material fallback above, which casts a colorless
+        // opaque shadow) are marked FORCE_OPAQUE. The hardware shadow RayQuery then lets the fixed-function
+        // intersector commit the first opaque occluder and terminate (RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH)
+        // with no per-candidate shader callback and no per-instance material load on the common opaque path.
+        // Transparent occluders stay non-opaque so they still surface as candidates the hardware trace skips (the
+        // software traversal casts their colored shadow). The flag is invisible to the GI and caustic traces:
+        // both pass RAY_FLAG_FORCE_OPAQUE at the ray level and so already treat every instance as opaque
+        // regardless of it -- so this force-opaque set (= the exact set the shadow trace treated as a solid
+        // occluder before) changes only the shadow path.
+        if(!(materialInfo && materialInfo->transparent))
+            instanceDesc.setFlags(Core::RayTracingInstanceFlags::ForceOpaque);
+
         instances.push_back(instanceDesc);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);

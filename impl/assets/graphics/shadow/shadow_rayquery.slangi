@@ -21,9 +21,9 @@
 #include "binding_slots.h"
 
 // Point the surface hook's material-constants context + the scene shading / light list at the shadow-RT binding set, so
-// occlusion.slangi's includes resolve their bindings here (the opaque trace only actually reads the TLAS, the instance
-// material flags, the G-buffer, and the light list -- the surface/integrator machinery occlusion.slangi also pulls in is
-// unused on this path and compiles out).
+// occlusion.slangi's includes resolve their bindings here (the opaque trace only actually reads the TLAS, the G-buffer,
+// and the light list -- the surface/integrator machinery occlusion.slangi also pulls in is unused on this path and
+// compiles out).
 #define NWB_SCENE_SHADING_SET NWB_SHADOW_RT_SET
 #define NWB_SCENE_SHADING_BINDING NWB_SHADOW_RT_BINDING_SCENE_SHADING
 #define NWB_SCENE_LIGHT_LIST_SET NWB_SHADOW_RT_SET
@@ -61,20 +61,22 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
     ray.TMin = tMin;
     ray.TMax = tEnd;
 
-    RayQuery<RAY_FLAG_NONE> query;
-    query.TraceRayInline(g_NwbShadowTlas, RAY_FLAG_NONE, 0xFFu, ray);
+    // The opaque fast path. buildSceneTlas marks every non-transparent occluder FORCE_OPAQUE, so the fixed-function
+    // intersector commits the first opaque occluder and ACCEPT_FIRST_HIT_AND_END_SEARCH ends traversal immediately --
+    // no per-candidate shader callback and no per-instance material load on the common opaque path. Only TRANSPARENT
+    // occluders stay non-opaque; they surface here as non-opaque candidates the hardware path ignores (the software
+    // traversal casts their colored shadow). We never commit them, so traversal continues past a transparent occluder
+    // to any opaque occluder behind it. A committed triangle hit therefore means exactly "an opaque occluder blocks
+    // the light" -- the same binary result the per-candidate material-flag walk produced before, now resolved in the
+    // acceleration structure instead of the shader.
+    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+    query.TraceRayInline(g_NwbShadowTlas, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xFFu, ray);
+    // Drain the non-opaque (transparent) candidates without committing any of them; opaque occluders never reach
+    // this loop (the intersector commits them and ends the search). The body is intentionally empty.
     while(query.Proceed()){
-        if(query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE)
-            continue;
-
-        const NwbRtInstanceMaterial material = g_NwbShadowInstanceMaterial[query.CandidateInstanceID()];
-        // Opaque occluder: light is fully blocked along this ray -- any single opaque hit is enough, so stop here.
-        // Transparent occluders are ignored on the hardware path (the software traversal handles their colored shadow).
-        if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) == 0u)
-            return half3(0.0, 0.0, 0.0);
     }
 
-    return half3(1.0, 1.0, 1.0);
+    return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? half3(0.0, 0.0, 0.0) : half3(1.0, 1.0, 1.0);
 }
 
 

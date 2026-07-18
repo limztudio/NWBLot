@@ -18,6 +18,7 @@ NWB_LOG_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 inline constexpr usize s_DefaultMaxExtractedCrashPackages = 256u;
 inline constexpr usize s_DefaultMaxRawCrashArchives = 256u;
 inline constexpr usize s_DefaultMaxInvalidCrashArchives = 64u;

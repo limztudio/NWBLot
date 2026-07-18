@@ -51,8 +51,8 @@ Texture2D<float4> g_NwbShadowGBufferDepth;
 [[vk::binding(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, NWB_SHADOW_RT_SET)]]
 RWTexture2DArray<float4> g_NwbShadowVisibility;
 
-[[vk::binding(NWB_SHADOW_RT_BINDING_INSTANCE_MATERIAL, NWB_SHADOW_RT_SET)]]
-StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbShadowInstanceMaterial;
+// (binding 7, the per-instance occluder material table, is intentionally absent here: the hardware opaque fast
+// path commits the first FORCE_OPAQUE hit and loads no per-instance material -- see binding_slots.h.)
 
 // Parallel per-mesh arrays (slot k = mesh k = material.meshSlot): raw triangle index and per-triangle-corner
 // shadow-trace attribute byte buffers.

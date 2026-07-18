@@ -18,9 +18,12 @@
 #define NWB_SHADOW_RT_BINDING_SCENE_SHADING 4
 #define NWB_SHADOW_RT_BINDING_LIGHT_LIST 5
 #define NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT 6
-// Per-instance occluder material table (NwbRtInstanceMaterial), indexed by InstanceID(); built lockstep with
-// the TLAS instances so the array slot matches the hardware instance id.
-#define NWB_SHADOW_RT_BINDING_INSTANCE_MATERIAL 7
+// 7: free. Formerly the per-instance occluder material table (NwbRtInstanceMaterial). The hardware opaque fast
+// path commits the first FORCE_OPAQUE hit via ACCEPT_FIRST_HIT_AND_END_SEARCH and loads no per-instance material,
+// so this binding was removed. The slot is left as a gap (this binding layout matches by explicit slot number, not
+// position, so bindings need not be contiguous) to keep the mesh-array slots below at their existing numbers. The
+// shared material buffer (m_shadowInstanceMaterialBuffer) still exists -- the software shadow / GI / caustics paths
+// read it through their own binding sets.
 // Parallel per-mesh descriptor arrays (slot k = mesh k), indexed by material.meshSlot: the raw triangle index buffer +
 // the U2 per-triangle-corner shadow-trace attribute buffer (normal/uv0) + the raw object-space position buffer.
 #define NWB_SHADOW_RT_BINDING_MESH_INDICES 8

@@ -696,7 +696,8 @@ void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayou
     layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SHADOW_RT_BINDING_SCENE_SHADING, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_LIGHT_LIST, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, 1)); // soft trace: half-res; hard fallback: full-res
-    layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_INSTANCE_MATERIAL, 1));
+    // (slot 7, the per-instance occluder material table, is intentionally absent: the opaque fast path loads no
+    // per-instance material. The shared buffer stays for the SW/GI/caustics paths -- see binding_slots.h.)
     // Per-mesh descriptor arrays (index + attribute + position byte buffers) and material-context buffers remain in
     // the shared trace slot map. The bounded SRV arrays mirror the software traversal's compute path.
     layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INDICES, NWB_SHADOW_RT_MAX_MESHES));
@@ -753,7 +754,8 @@ void RendererRayTracingSystem::appendShadowTraceBindingSet(Core::BindingSetDesc&
         ECSRenderDetail::s_ShadowVisibilitySubresources,
         Core::TextureDimension::Texture2DArray
     ));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_INSTANCE_MATERIAL, rayTracingState().m_shadowInstanceMaterialBuffer.get()));
+    // (slot 7 removed: the opaque fast path loads no per-instance material; m_shadowInstanceMaterialBuffer stays
+    // bound by the SW shadow / GI / caustics passes through their own sets.)
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, rayTracingState().m_shadowMaterialTypedBuffer.get()));
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INSTANCES, rayTracingState().m_shadowInstanceBuffer.get()));
 

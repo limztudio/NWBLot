@@ -56,30 +56,17 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
     }
 
     auto& meshSystem = world->addSystem<NWB::Impl::MeshSystem>(*world);
-    if(!world->getSystem<NWB::Impl::MeshSystem>()){
-        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core mesh system was not created"));
-        return false;
-    }
     auto& rendererSystem = world->addSystem<NWB::Impl::RendererSystem>(
         *world,
         context.graphics,
         context.assetManager,
         context.shaderPathResolver
     );
-    if(!world->getSystem<NWB::Impl::RendererSystem>()){
-        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core renderer system was not created"));
-        return false;
-    }
-    auto& modelSystem = world->addSystem<NWB::Impl::ModelSystem>(
+    world->addSystem<NWB::Impl::ModelSystem>(
         *world,
         context.assetManager,
         NWB::Impl::CreateModelObjectRendererHooks()
     );
-    static_cast<void>(modelSystem);
-    if(!world->getSystem<NWB::Impl::ModelSystem>()){
-        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: model system was not created"));
-        return false;
-    }
     auto& meshSkinningSystem = world->addSystem<NWB::Impl::MeshSkinningSystem>(
         *world,
         context.graphics,
@@ -87,10 +74,6 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         meshSystem,
         context.shaderPathResolver
     );
-    if(!world->getSystem<NWB::Impl::MeshSkinningSystem>()){
-        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: mesh skinning system was not created"));
-        return false;
-    }
     auto& uiSystem = world->addSystem<NWB::Impl::UiSystem>(
         *world,
         context.graphics,
@@ -98,10 +81,6 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         context.assetManager,
         context.shaderPathResolver
     );
-    if(!world->getSystem<NWB::Impl::UiSystem>()){
-        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core UI system was not created"));
-        return false;
-    }
     context.graphics.addRenderPassToBack(meshSkinningSystem);
     context.graphics.addRenderPassToBack(rendererSystem);
     context.graphics.addRenderPassToBack(uiSystem);
@@ -114,40 +93,16 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
 
 
 void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world){
-    if(!world){
-        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: world is null"));
-        return;
-    }
-
-    auto* modelSystem = world->getSystem<NWB::Impl::ModelSystem>();
-    if(!modelSystem){
-        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: model system is null"));
-        return;
-    }
+    NWB_ASSERT(world);
 
     auto* meshSkinningSystem = world->getSystem<NWB::Impl::MeshSkinningSystem>();
-    if(!meshSkinningSystem){
-        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: mesh skinning system is null"));
-        return;
-    }
+    NWB_ASSERT(meshSkinningSystem);
 
     auto* rendererSystem = world->getSystem<NWB::Impl::RendererSystem>();
-    if(!rendererSystem){
-        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core renderer system is null"));
-        return;
-    }
-
-    auto* meshSystem = world->getSystem<NWB::Impl::MeshSystem>();
-    if(!meshSystem){
-        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core mesh system is null"));
-        return;
-    }
+    NWB_ASSERT(rendererSystem);
 
     auto* uiSystem = world->getSystem<NWB::Impl::UiSystem>();
-    if(!uiSystem){
-        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core UI system is null"));
-        return;
-    }
+    NWB_ASSERT(uiSystem);
 
     context.frameGraphRegistry.unregisterContributor(*rendererSystem);
     context.graphics.removeRenderPass(*meshSkinningSystem);
@@ -156,8 +111,9 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
 
     context.graphics.waitAllJobs();
 
-    if(auto* device = context.graphics.getDevice())
-        device->waitForIdle();
+    auto* device = context.graphics.getDevice();
+    NWB_ASSERT(device);
+    device->waitForIdle();
 
     world->clear();
     world.reset();

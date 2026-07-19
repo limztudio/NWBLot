@@ -481,8 +481,9 @@ void Graphics::addRenderPassToBack(IRenderPass& pass){
 
 void Graphics::removeRenderPass(IRenderPass& pass){
     waitAllJobs();
-    if(auto* device = getDevice())
-        device->waitForIdle();
+    auto* device = getDevice();
+    NWB_ASSERT(device);
+    device->waitForIdle();
 
     pass.invalidateResources();
     m_renderPasses.remove(&pass);
@@ -555,8 +556,9 @@ TextureHandle Graphics::createTexture(const TextureDesc& desc)const{
 
 void Graphics::backBufferResizing(){
     waitAllJobs();
-    if(auto* device = getDevice())
-        device->waitForIdle();
+    auto* device = getDevice();
+    NWB_ASSERT(device);
+    device->waitForIdle();
 
     invalidateRenderPassResources();
     m_swapChainFramebuffers.clear();
@@ -616,8 +618,9 @@ void Graphics::animate(f64 elapsedTime){
 
 void Graphics::render(){
     Framebuffer* framebuffer = getCurrentFramebuffer();
-    if(auto* device = getDevice())
-        m_gpuTiming.collect(*device, m_frameIndex);
+    auto* device = getDevice();
+    NWB_ASSERT(device);
+    m_gpuTiming.collect(*device, m_frameIndex);
     m_gpuTiming.beginFrame(m_frameIndex);
 
     for(auto* renderPass : m_renderPasses){
@@ -692,8 +695,9 @@ bool Graphics::animateRenderPresent(){
 
     YieldThread();
 
-    if(auto* device = getDevice())
-        device->runGarbageCollection();
+    auto* device = getDevice();
+    NWB_ASSERT(device);
+    device->runGarbageCollection();
 
     updateAverageFrameTime(elapsedTime);
     m_previousFrameTimestamp = now;

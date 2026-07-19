@@ -17,7 +17,6 @@
 class ProjectTestbed final : public NWB::IProjectEntryCallbacks, public NWB::Core::IInputEventHandler{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createInitialWorldOrDie(NWB::ProjectRuntimeContext& context);
-    static void verifyRendererSystemOrDie(NWB::Core::ECS::World& world);
 
 private:
     void drawUiControls();

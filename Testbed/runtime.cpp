@@ -263,29 +263,7 @@ NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(
         NWB_LOGGER_FATAL(NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false"));
         throw RuntimeException("ProjectTestbed initialization failed");
     }
-    if(!world){
-        NWB_LOGGER_FATAL(NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned null world"));
-        throw RuntimeException("ProjectTestbed initialization failed");
-    }
     return MakeNotNullUnique(Move(world));
-}
-
-void ProjectTestbed::verifyRendererSystemOrDie(NWB::Core::ECS::World& world){
-    auto* rendererSystem = world.getSystem<NWB::Impl::RendererSystem>();
-    NWB_FATAL_ASSERT_MSG(
-        rendererSystem,
-        NWB_TEXT("ProjectTestbed initialization failed: renderer system is missing in initial world")
-    );
-    auto* meshSkinningSystem = world.getSystem<NWB::Impl::MeshSkinningSystem>();
-    NWB_FATAL_ASSERT_MSG(
-        meshSkinningSystem,
-        NWB_TEXT("ProjectTestbed initialization failed: mesh skinning system is missing in initial world")
-    );
-    auto* modelSystem = world.getSystem<NWB::Impl::ModelSystem>();
-    NWB_FATAL_ASSERT_MSG(
-        modelSystem,
-        NWB_TEXT("ProjectTestbed initialization failed: model system is missing in initial world")
-    );
 }
 
 void ProjectTestbed::drawUiControls(){
@@ -305,9 +283,7 @@ void ProjectTestbed::drawUiControls(){
 ProjectTestbed::ProjectTestbed(NWB::ProjectRuntimeContext& context)
     : m_context(context)
     , m_world(createInitialWorldOrDie(context))
-{
-    verifyRendererSystemOrDie(*m_world);
-}
+{}
 
 ProjectTestbed::~ProjectTestbed(){
     unregisterInputHandler();

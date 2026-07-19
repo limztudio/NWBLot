@@ -41,9 +41,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // device limit, so poolCapacity MUST stay <= maxComputeWorkGroupCount[0] (Vulkan guarantees >= 65535; default pool is
     // 16384). Raising NWB_SURFEL_POOL_CAPACITY past that floor would need a clamp here.
     const uint groups = (bumpTop + divisor - 1u) / divisor;
-    g_NwbSurfelBuildArgsOutput[0] = groups;
-    g_NwbSurfelBuildArgsOutput[1] = 1u;
-    g_NwbSurfelBuildArgsOutput[2] = 1u;
+    g_NwbSurfelBuildArgsOutput[NWB_SURFEL_TRACE_INDIRECT_ARGS_GROUP_COUNT_X] = groups;
+    g_NwbSurfelBuildArgsOutput[NWB_SURFEL_TRACE_INDIRECT_ARGS_GROUP_COUNT_Y] = 1u;
+    g_NwbSurfelBuildArgsOutput[NWB_SURFEL_TRACE_INDIRECT_ARGS_GROUP_COUNT_Z] = 1u;
 }
 
 

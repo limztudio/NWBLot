@@ -75,6 +75,8 @@ private:
 private:
     static constexpr usize s_DefaultMinimumArenaSize = 65536;
     static constexpr usize s_DefaultNodeReservePerThread = 256;
+    static constexpr usize s_DefaultDependenciesPerNode = 4;
+    static constexpr usize s_DefaultArenaOverheadBytes = 4096;
 
 
 private:
@@ -86,10 +88,10 @@ private:
     static inline usize defaultArenaSize(u32 threadCount){
         const usize reserveCount = defaultNodeReserveCount(threadCount);
         const usize nodeBytes = SizeOf<sizeof(JobNode)>(reserveCount);
-        const usize dependencyCount = SizeOf<4>(reserveCount);
+        const usize dependencyCount = SizeOf<s_DefaultDependenciesPerNode>(reserveCount);
         const usize dependencyBytes = SizeOf<sizeof(JobHandle)>(dependencyCount);
         const usize freeListBytes = SizeOf<sizeof(u32)>(reserveCount);
-        const usize total = AddSize(AddSize(AddSize(nodeBytes, dependencyBytes), freeListBytes), 4096);
+        const usize total = AddSize(AddSize(AddSize(nodeBytes, dependencyBytes), freeListBytes), s_DefaultArenaOverheadBytes);
         const usize arenaSize = total > s_DefaultMinimumArenaSize ? total : s_DefaultMinimumArenaSize;
         return PersistentArena::StructureAlignedSize(arenaSize);
     }

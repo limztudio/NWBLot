@@ -14,6 +14,26 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_caustics{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr AStringView s_HwRaygenExportName = "CausticHwRayGen";
+static constexpr AStringView s_HwMissExportName = "CausticHwMiss";
+static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
     // Caustic emission-target gather (P1, CPU only): collect the world-space AABB of every refractive instance in
     // the scene -- the domain the caustic photon producer aims at. Runs once per frame regardless of the shadow
@@ -32,8 +52,8 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
     Vector<NwbCausticEmissionTargetGpu, Core::Alloc::ScratchArena> targets{ scratchArena };
     targets.reserve(candidateCount);
 
-    SIMDVector combinedMin = VectorReplicate(1e30f);
-    SIMDVector combinedMax = VectorReplicate(-1e30f);
+    SIMDVector combinedMin = VectorReplicate(s_RayTracingFiniteInfinity);
+    SIMDVector combinedMax = VectorReplicate(-s_RayTracingFiniteInfinity);
 
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
@@ -1234,15 +1254,15 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     pipelineDesc.addBindingLayout(rayTracingState().m_hwCausticBindingLayout);
 
     Core::RayTracingPipelineShaderDesc raygenDesc(arena());
-    raygenDesc.setShader(raygenShader).setExportName("CausticHwRayGen");
+    raygenDesc.setShader(raygenShader).setExportName(__hidden_caustics::s_HwRaygenExportName);
     pipelineDesc.addShader(raygenDesc);
 
     Core::RayTracingPipelineShaderDesc missDesc(arena());
-    missDesc.setShader(missShader).setExportName("CausticHwMiss");
+    missDesc.setShader(missShader).setExportName(__hidden_caustics::s_HwMissExportName);
     pipelineDesc.addShader(missDesc);
 
     Core::RayTracingPipelineHitGroupDesc hitGroupDesc(arena());
-    hitGroupDesc.setClosestHitShader(closestHitShader).setExportName("CausticHwHitGroup");
+    hitGroupDesc.setClosestHitShader(closestHitShader).setExportName(__hidden_caustics::s_HwHitGroupExportName);
     pipelineDesc.addHitGroup(hitGroupDesc);
 
     rayTracingState().m_hwCausticPipeline = device->createRayTracingPipeline(pipelineDesc);
@@ -1258,9 +1278,9 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
         rayTracingState().m_hwCausticPipelineFailed = true;
         return false;
     }
-    shaderTable->setRayGenerationShader("CausticHwRayGen");
-    shaderTable->addMissShader("CausticHwMiss");
-    shaderTable->addHitGroup("CausticHwHitGroup");
+    shaderTable->setRayGenerationShader(__hidden_caustics::s_HwRaygenExportName);
+    shaderTable->addMissShader(__hidden_caustics::s_HwMissExportName);
+    shaderTable->addHitGroup(__hidden_caustics::s_HwHitGroupExportName);
     rayTracingState().m_hwCausticShaderTable = Move(shaderTable);
 
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RT caustic pipeline + shader table"));

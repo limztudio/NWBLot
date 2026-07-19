@@ -25,6 +25,7 @@ namespace __hidden_graphics{
 
 
 using UploadBytes = Vector<u8, Alloc::GlobalArena>;
+constexpr u32 s_DefaultWaveLaneCount = 64u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -918,7 +919,7 @@ u32 Graphics::queryWaveLaneCount()const noexcept{
         return info.maxWaveLaneCount;
     // Conservative fallback for backends/paths that cannot report a wave size: 64 lanes is the safe upper
     // bound across all desktop GPUs and keeps groupshared reductions correct without wave intrinsics.
-    return 64u;
+    return __hidden_graphics::s_DefaultWaveLaneCount;
 }
 
 

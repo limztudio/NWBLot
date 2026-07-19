@@ -18,10 +18,12 @@
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/assets/graphics/caustic/names.h>
 #include <impl/assets/graphics/bvh/binding_slots.h>
+#include <impl/assets/graphics/bvh/constants.h>
 #include <impl/assets/graphics/bvh/names.h>
 #include <impl/assets/graphics/gi/names.h>
 #include <impl/assets/graphics/gi/sw_binding_slots.h>
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
+#include <impl/assets/graphics/shadow/constants.h>
 #include <global/environment.h>
 #include <global/text_utils.h>
 
@@ -33,6 +35,11 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Finite positive-infinity sentinel for CPU-side ray-tracing bounds and SAH cost initialization. Keeping it below
+// the f32 limit leaves headroom for the surface-area arithmetic that follows.
+inline constexpr f32 s_RayTracingFiniteInfinity = 1e30f;
 
 
 // Number of in-place refits performed on a skinned BLAS before forcing a full rebuild. A refit
@@ -137,8 +144,8 @@ static_assert(sizeof(BvhBuildPushConstants) == sizeof(u32) * 4u + sizeof(Float4)
 // sentinel rather than a maskable bit, grouped here as part of the one node-index encoding.)
 namespace BvhNodeIndex{
     enum Mask : u32{
-        LeafFlag = 0x80000000u,
-        Invalid = 0xFFFFFFFFu,
+        LeafFlag = NWB_BVH_LEAF_FLAG,
+        Invalid = NWB_BVH_INVALID,
     };
 }
 
@@ -205,8 +212,8 @@ static_assert(sizeof(NwbRtInstanceMaterialGpu) == 20u, "NwbRtInstanceMaterialGpu
 namespace RtInstanceMaterialFlag{
     enum Mask : u32{
         None = 0u,
-        Transparent = 1u << 0u,
-        Refractive = 1u << 1u,
+        Transparent = NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT,
+        Refractive = NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE,
     };
 }
 

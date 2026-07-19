@@ -58,6 +58,10 @@
 #define NWB_SW_SHADOW_BINDING_EDGE_COUNTER 17
 #define NWB_SW_SHADOW_BINDING_EDGE_LIST 18
 #define NWB_SW_SHADOW_BINDING_INDIRECT_ARGS 19
+#define NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_X 0u
+#define NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_Y 1u
+#define NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_Z 2u
+#define NWB_SW_SHADOW_INDIRECT_ARGS_WORD_COUNT 3u
 // Soft opaque shadow: a HALF-res RGBA16F Texture2DArray (one layer per shadow slot) the jittered opaque trace writes one
 // cone-jittered visibility sample per half-res pixel into. It is then denoised by the SEPARATE shadow_resolve pipeline --
 // geometry downsample + a-trous wavelet + bilateral upsample into the full-res visibility the lighting samples. Only the

@@ -55,6 +55,7 @@ using BasicStringDetail::s_UnicodeLowSurrogateMax;
 inline constexpr u32 s_AsciiControlMaxExclusive = 32u;
 inline constexpr u32 s_AsciiDelete = 127u;
 inline constexpr u8 s_JsonControlMaxExclusive = 0x20u;
+inline constexpr usize s_DecimalTextBufferBytes = 32u;
 };
 
 

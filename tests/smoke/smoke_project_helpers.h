@@ -28,6 +28,8 @@ namespace NWB::Tests::Smoke{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+inline constexpr f32 s_DegreesPerTurn = 360.0f;
+
 
 [[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(
     ProjectRuntimeContext& context,
@@ -121,7 +123,7 @@ struct SmokeYawDisplay{
 
     return {
         wrapped,
-        wrapped * (360.0f / twoPi),
+        wrapped * (s_DegreesPerTurn / twoPi),
     };
 }
 

@@ -25,7 +25,7 @@ function(nwb_apply_debug_symbols target)
             MSVC_DEBUG_INFORMATION_FORMAT ProgramDatabase
         )
 
-        foreach(_nwb_config dbg opt fin)
+        foreach(_nwb_config IN LISTS NWB_BUILD_CONFIGURATIONS)
             string(TOUPPER "${_nwb_config}" _nwb_config_upper)
             nwb_resolve_target_output_name(${target} "${_nwb_config}" _nwb_config_output_name)
             set_target_properties(${target} PROPERTIES
@@ -53,7 +53,7 @@ function(nwb_apply_debug_symbols target)
         OR _nwb_target_type STREQUAL "SHARED_LIBRARY"
         OR _nwb_target_type STREQUAL "MODULE_LIBRARY"
     )
-        foreach(_nwb_config dbg opt fin)
+        foreach(_nwb_config IN LISTS NWB_BUILD_CONFIGURATIONS)
             string(TOUPPER "${_nwb_config}" _nwb_config_upper)
             nwb_resolve_target_output_name(${target} "${_nwb_config}" _nwb_config_output_name)
             set_target_properties(${target} PROPERTIES

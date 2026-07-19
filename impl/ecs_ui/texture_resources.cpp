@@ -33,21 +33,22 @@ static constexpr usize s_TextureNameBufferBytes = 64u;
 static constexpr usize s_RgbaPixelBytes = 4u;
 static constexpr usize s_RgbaAlphaByteOffset = 3u;
 static constexpr u8 s_OpaqueAlpha = 255u;
+static constexpr Name s_FallbackTextureName("ecs_ui/imgui_texture");
+static constexpr AStringView s_TextureNamePrefix("ecs_ui/imgui_texture_");
 
 static Name UiTextureName(const usize uniqueId){
-    static constexpr AStringView s_Prefix("ecs_ui/imgui_texture_");
     char idBuffer[s_TextureNameIdBufferBytes] = {};
     const AStringView idText = FormatDecimal(uniqueId, idBuffer);
     if(idText.empty())
-        return Name("ecs_ui/imgui_texture");
+        return s_FallbackTextureName;
 
     char nameBuffer[s_TextureNameBufferBytes] = {};
-    const usize nameSize = s_Prefix.size() + idText.size();
+    const usize nameSize = s_TextureNamePrefix.size() + idText.size();
     if(nameSize > sizeof(nameBuffer))
-        return Name("ecs_ui/imgui_texture");
+        return s_FallbackTextureName;
 
-    NWB_MEMCPY(nameBuffer, sizeof(nameBuffer), s_Prefix.data(), s_Prefix.size());
-    NWB_MEMCPY(nameBuffer + s_Prefix.size(), sizeof(nameBuffer) - s_Prefix.size(), idText.data(), idText.size());
+    NWB_MEMCPY(nameBuffer, sizeof(nameBuffer), s_TextureNamePrefix.data(), s_TextureNamePrefix.size());
+    NWB_MEMCPY(nameBuffer + s_TextureNamePrefix.size(), sizeof(nameBuffer) - s_TextureNamePrefix.size(), idText.data(), idText.size());
     return Name(AStringView(nameBuffer, nameSize));
 }
 

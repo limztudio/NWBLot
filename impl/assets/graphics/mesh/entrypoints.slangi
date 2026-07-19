@@ -62,8 +62,8 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     ){
         const uint primitiveBase = nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex);
         const uint3 localVertexIndices = nwbMeshLoadMeshletPrimitive(primitiveBase);
-        NwbMeshGeneratedVertex generatedVertices[3];
-        for(uint corner = 0u; corner < 3u; ++corner){
+        NwbMeshGeneratedVertex generatedVertices[NWB_MESHLET_TRIANGLE_INDEX_COUNT];
+        for(uint corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner){
             generatedVertices[corner] = nwbMeshBuildMeshletVertex(
                 meshletIndex,
                 meshlet,
@@ -78,7 +78,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
             continue;
         }
 
-        for(uint corner = 0u; corner < 3u; ++corner)
+        for(uint corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner)
             g_NwbMeshGeneratedVertices[primitiveBase + corner] = generatedVertices[corner];
     }
 }

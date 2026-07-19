@@ -1112,7 +1112,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
 
         Core::BufferDesc indirectArgsDesc;
         indirectArgsDesc
-            .setByteSize(static_cast<u64>(sizeof(u32) * 3u))
+            .setByteSize(static_cast<u64>(sizeof(u32) * NWB_SW_SHADOW_INDIRECT_ARGS_WORD_COUNT))
             .setStructStride(sizeof(u32))
             .setCanHaveUAVs(true)
             .setIsDrawIndirectArgs(true)

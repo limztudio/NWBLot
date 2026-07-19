@@ -36,7 +36,7 @@ ufbx_matrix MakeInverseUniformScaleMatrix(const f64 scale){
 }
 
 bool FiniteUfbxMatrix(const ufbx_matrix& matrix){
-    for(usize i = 0u; i < 12u; ++i){
+    for(usize i = 0u; i < s_JointMatrixElementCount; ++i){
         if(!IsFinite(static_cast<f64>(matrix.v[i])))
             return false;
     }
@@ -241,7 +241,7 @@ bool BuildInfluence(
     f64 weightSum = 0.0;
     u32 writtenInfluenceCount = 0u;
     for(u32 weightOffset = 0u; weightOffset < skinVertex.num_weights; ++weightOffset){
-        if(writtenInfluenceCount == 4u)
+        if(writtenInfluenceCount == static_cast<u32>(s_MeshSkinInfluenceCount))
             break;
 
         const ufbx_skin_weight& weight = skin->weights.data[skinVertex.weight_begin + weightOffset];

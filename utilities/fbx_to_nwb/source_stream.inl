@@ -97,7 +97,7 @@ using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, Position
 struct MeshSkinInfluenceHasher{
     usize operator()(const MeshSkinInfluence& value)const{
         usize seed = Hasher<u16>{}(value.joint[0u]);
-        for(usize i = 1u; i < 4u; ++i)
+        for(usize i = 1u; i < s_MeshSkinInfluenceCount; ++i)
             HashCombine(seed, value.joint[i]);
         for(const f32 weight : value.weight.raw)
             HashCombine(seed, FloatHashBits(weight));
@@ -227,12 +227,12 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     const ufbx_mesh& mesh,
     UtilityVector<u32>& inOutTriangleIndices
 ){
-    if(mesh.max_face_triangles > Limit<usize>::s_Max / 3u){
+    if(mesh.max_face_triangles > Limit<usize>::s_Max / s_TriangleIndexCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh face triangulation scratch size overflows"));
         return false;
     }
 
-    const usize triangleIndexCapacity = static_cast<usize>(mesh.max_face_triangles) * 3u;
+    const usize triangleIndexCapacity = static_cast<usize>(mesh.max_face_triangles) * s_TriangleIndexCount;
     if(inOutTriangleIndices.size() < triangleIndexCapacity)
         inOutTriangleIndices.resize(triangleIndexCapacity);
     return true;
@@ -470,7 +470,7 @@ template<typename Value, typename Lookup>
     outTangentReport = SourceTangentReport{};
     NWB_ASSERT(!mesh.vertexRefs.empty());
     NWB_ASSERT(!mesh.indices.empty());
-    NWB_ASSERT((mesh.indices.size() % 3u) == 0u);
+    NWB_ASSERT((mesh.indices.size() % s_TriangleIndexCount) == 0u);
 
     UtilityVector<RebuildVertex> rebuildVertices;
     rebuildVertices.reserve(mesh.vertexRefs.size());
@@ -491,7 +491,7 @@ template<typename Value, typename Lookup>
 
     UtilityVector<u32> rebuildIndices;
     rebuildIndices.reserve(mesh.indices.size());
-    for(usize indexBase = 0u; indexBase < mesh.indices.size(); indexBase += 3u){
+    for(usize indexBase = 0u; indexBase < mesh.indices.size(); indexBase += s_TriangleIndexCount){
         const u32 i0 = mesh.indices[indexBase + 0u];
         const u32 i1 = mesh.indices[indexBase + 1u];
         const u32 i2 = mesh.indices[indexBase + 2u];

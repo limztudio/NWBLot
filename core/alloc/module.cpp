@@ -28,6 +28,12 @@ namespace __hidden_alloc{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_PLATFORM_WINDOWS)
+static constexpr u8 s_MaxEfficiencyClass = Limit<u8>::s_Max;
+static constexpr u32 s_AffinityMaskBitCount = sizeof(u64) * 8u;
+#endif
+
+
 struct AffinityMasks{
     u64 m_performance = 0;
     u64 m_efficiency = 0;
@@ -55,7 +61,7 @@ struct AffinityMasks{
         ))
             return;
 
-        u8 minEfficiency = 255;
+        u8 minEfficiency = s_MaxEfficiencyClass;
         u8 maxEfficiency = 0;
 
         auto* ptr = buffer.data();
@@ -83,7 +89,7 @@ struct AffinityMasks{
             auto* info = reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(ptr);
             if(info->Type == CpuSetInformation && info->CpuSet.EfficiencyClass == targetClass){
                 u32 logicalIndex = info->CpuSet.LogicalProcessorIndex;
-                if(logicalIndex < 64)
+                if(logicalIndex < s_AffinityMaskBitCount)
                     mask |= (1ULL << logicalIndex);
             }
             ptr += info->Size;

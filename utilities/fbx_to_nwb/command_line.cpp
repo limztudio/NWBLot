@@ -553,7 +553,7 @@ int Run(int argc, char** argv, Core::Alloc::ThreadPool& threadPool, bool& prompt
         << "  positions: " << mesh.positions.size() << "\n"
         << "  normals: " << mesh.normals.size() << "\n"
         << "  vertex_refs: " << mesh.vertexRefs.size() << "\n"
-        << "  triangles: " << (mesh.indices.size() / 3u) << "\n"
+        << "  triangles: " << (mesh.indices.size() / s_TriangleIndexCount) << "\n"
         << "  asset_type: " << options.assetType << "\n"
         << "  normal_mode: " << options.normalMode << "\n"
         << "  tangents: " << SourceTangentModeText(tangentReport.mode) << "\n"

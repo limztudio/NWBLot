@@ -24,6 +24,7 @@ NWB_LOG_BEGIN
 
 inline constexpr tchar SERVER_NAME[] = NWB_TEXT("Server");
 inline constexpr usize s_MaxPendingCrashUploadPathText = 1024u;
+inline constexpr f32 s_ServerUpdateIntervalSeconds = 0.1f;
 
 struct PendingCrashUpload{
     char path[s_MaxPendingCrashUploadPathText] = {};
@@ -31,12 +32,12 @@ struct PendingCrashUpload{
 
 using CrashUploadQueue = ParallelQueue<PendingCrashUpload, LogArena>;
 
-class Server final : public BaseUpdateOrdinary<Server, 0.1f, SERVER_NAME>{
+class Server final : public BaseUpdateOrdinary<Server, s_ServerUpdateIntervalSeconds, SERVER_NAME>{
     template<typename, const tchar*> friend class Base;
     template<typename, f32, const tchar*> friend class BaseUpdateOrdinary;
 
     using BaseType = Base<Server, SERVER_NAME>;
-    using UpdateBaseType = BaseUpdateOrdinary<Server, 0.1f, SERVER_NAME>;
+    using UpdateBaseType = BaseUpdateOrdinary<Server, s_ServerUpdateIntervalSeconds, SERVER_NAME>;
 
 
 private:

@@ -9,6 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "constants.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Per-instance shadow-occluder material, indexed by the shadow instance id (hardware InstanceID() == software
 // scene-BVH leaf index). shadowTransmittanceModelId dispatches the per-hit transmittance hook; flags bit0 =
 // isTransparent (1 -> evaluate the hook, multiply the running transmittance and keep tracing; 0 -> opaque, zero
@@ -26,12 +32,10 @@ struct NwbRtInstanceMaterial{
     uint meshInstanceIndex;
 };
 
-#define NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT 0x1u
 // flags bit1 = isRefractive: the material asset's `refractive` classification, plumbed to the GPU instance record
 // for the caustic producer. The shadow trace does NOT read this -- a transparent occluder's surface hook supplies the
 // optical params (ior / transmission) and the engine integrates the shadow visibility over the true volume path
 // (per-crossing Fresnel + signed Beer-Lambert). This flag is the producer's classification.
-#define NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE 0x2u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

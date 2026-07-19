@@ -425,7 +425,7 @@ void Queue::updateTextureTileMappings(Texture* textureResource, const TextureTil
     const bool useParallelPool = workerPool.isParallelEnabled();
     const usize mappingCount = static_cast<usize>(numTileMappings);
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SparseTextureBindArena, 8192);
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SparseTextureBindArena, s_SparseTextureBindScratchArenaBytes);
 
     Vector<VkSparseImageMemoryBind, Alloc::ScratchArena> sparseImageMemoryBinds{scratchArena};
     Vector<VkSparseMemoryBind, Alloc::ScratchArena> sparseMemoryBinds{scratchArena};

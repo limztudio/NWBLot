@@ -82,11 +82,11 @@ struct StreamSortEntry{
 }
 
 [[nodiscard]] bool LessValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs){
-    for(usize i = 0u; i < 4u; ++i){
+    for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
         if(lhs.joint[i] != rhs.joint[i])
             return lhs.joint[i] < rhs.joint[i];
     }
-    for(usize i = 0u; i < 4u; ++i){
+    for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
         if(!SameF32(lhs.weight.raw[i], rhs.weight.raw[i]))
             return LessF32(lhs.weight.raw[i], rhs.weight.raw[i]);
     }
@@ -512,27 +512,29 @@ template<typename ElementT, usize ComponentCount>
 
         const Core::Metascript::Value* jointsValue = Core::Metascript::FindField(influenceValue, "joints");
         const Core::Metascript::Value* weightsValue = Core::Metascript::FindField(influenceValue, "weights");
-        if(!jointsValue || !jointsValue->isList() || jointsValue->asList().size() != 4u){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}].joints' must contain four integers")
+        if(!jointsValue || !jointsValue->isList() || jointsValue->asList().size() != s_MeshSkinInfluenceCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}].joints' must contain {} integers")
                 , StringConvert(s_MeshMetaKind)
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(skinVariableName)
                 , i
+                , s_MeshSkinInfluenceCount
             );
             return false;
         }
-        if(!weightsValue || !weightsValue->isList() || weightsValue->asList().size() != 4u){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}].weights' must contain four numeric values")
+        if(!weightsValue || !weightsValue->isList() || weightsValue->asList().size() != s_MeshSkinInfluenceCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}].weights' must contain {} numeric values")
                 , StringConvert(s_MeshMetaKind)
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(skinVariableName)
                 , i
+                , s_MeshSkinInfluenceCount
             );
             return false;
         }
 
         MeshSkinInfluence influence;
-        for(usize componentIndex = 0u; componentIndex < 4u; ++componentIndex){
+        for(usize componentIndex = 0u; componentIndex < s_MeshSkinInfluenceCount; ++componentIndex){
             u32 jointIndex = 0u;
             AStringStream jointLabel;
             jointLabel << skinVariableName << ".influences[" << i << "].joints[" << componentIndex << "]";
@@ -604,7 +606,7 @@ template<typename ElementT, usize ComponentCount>
         return false;
     if(!FillIndicesRecursive(nwbFilePath, *field, "indices", outIndices))
         return false;
-    if(outIndices.empty() || (outIndices.size() % 3u) != 0u){
+    if(outIndices.empty() || (outIndices.size() % s_TriangleIndexCount) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)

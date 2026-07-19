@@ -13,7 +13,7 @@ template<typename VisitTriangle>
         return false;
     for(usize faceIndex = 0; faceIndex < mesh.num_faces; ++faceIndex){
         const ufbx_face face = mesh.faces.data[faceIndex];
-        if(face.num_indices < 3u)
+        if(face.num_indices < s_TriangleIndexCount)
             continue;
 
         const u32 triangleCount = ufbx_triangulate_face(
@@ -274,12 +274,12 @@ bool EstimateSelectedTriangleCorners(
 
         const ufbx_mesh* const mesh = instances[instanceIndex].mesh;
         NWB_ASSERT(mesh != nullptr);
-        if(mesh->num_triangles > (Limit<usize>::s_Max - outTriangleCorners) / 3u){
+        if(mesh->num_triangles > (Limit<usize>::s_Max - outTriangleCorners) / s_TriangleIndexCount){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes have too many triangle corners"));
             return false;
         }
 
-        outTriangleCorners += static_cast<usize>(mesh->num_triangles) * 3u;
+        outTriangleCorners += static_cast<usize>(mesh->num_triangles) * s_TriangleIndexCount;
     }
     return true;
 }

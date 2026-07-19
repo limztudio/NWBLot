@@ -7,6 +7,7 @@
 
 
 #include "hw_binding_slots.h"
+#include "../mesh/runtime_constants.h"
 
 // Point the scene + the surface hook's material-constants context (g_NwbSceneLights + g_NwbMaterialTypedWords +
 // g_NwbMeshInstances) at THIS pass's binding set, exactly as the SW caustic kernel + the shadow trace do, so the
@@ -68,7 +69,7 @@ struct NwbCausticHwView{
     row_major float4x4 worldToClip;
     row_major float4x4 clipToWorld;
     float4 cameraPosition;
-    float4 frustumPlanes[6];
+    float4 frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
 };
 
 // Per-dispatch constants -- byte-identical to the SW producer's push constants (CPU mirror CausticPhotonPushConstants)

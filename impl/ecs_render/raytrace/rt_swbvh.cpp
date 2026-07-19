@@ -1157,7 +1157,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     commandList.setBufferState(meshParentBuffer, Core::ResourceStates::CopyDest);
     commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
-    commandList.clearBufferUInt(keysBuffer, 0xFFFFFFFFu);
+    commandList.clearBufferUInt(keysBuffer, BvhNodeIndex::Invalid);
     commandList.clearBufferUInt(meshParentBuffer, BvhNodeIndex::Invalid);
     commandList.clearBufferUInt(visitCounterBuffer, 0u);
 

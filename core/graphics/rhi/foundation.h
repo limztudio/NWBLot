@@ -131,6 +131,7 @@ using CommandList = GraphicsBackend::CommandList;
 inline constexpr u32 s_MaxRenderTargets = 8;
 inline constexpr u32 s_MaxViewports = 16;
 inline constexpr u32 s_MaxVertexAttributes = 16;
+inline constexpr usize s_MaxProgrammableSamplePositions = 16u;
 inline constexpr u32 s_MaxBindingLayouts = 8;
 inline constexpr u32 s_MaxBindlessRegisterSpaces = 16;
 inline constexpr u32 s_MaxVolatileConstantBuffersPerLayout = 6;

@@ -94,6 +94,10 @@
 #define NWB_SURFEL_TRACE_BUILDARGS_BINDING_CONSTANTS 0   // ConstantBuffer<NwbSurfelConstants> (update divisor = .w)
 #define NWB_SURFEL_TRACE_BUILDARGS_BINDING_COUNTER 1     // RWStructuredBuffer<uint> (read BUMP_TOP)
 #define NWB_SURFEL_TRACE_BUILDARGS_BINDING_ARGS 2        // RWStructuredBuffer<uint> (DispatchIndirectArguments, 3 u32)
+#define NWB_SURFEL_TRACE_INDIRECT_ARGS_GROUP_COUNT_X 0u
+#define NWB_SURFEL_TRACE_INDIRECT_ARGS_GROUP_COUNT_Y 1u
+#define NWB_SURFEL_TRACE_INDIRECT_ARGS_GROUP_COUNT_Z 2u
+#define NWB_SURFEL_TRACE_INDIRECT_ARGS_WORD_COUNT 3u
 
 // g_SurfelCounter layout: index 0 = bump-allocation top (fresh slots ever handed out; CAS-capped at poolCapacity so
 // it is a true high-water mark, never overshoots), index 1 = free-list top (live LIFO depth of recycled ids, U1).

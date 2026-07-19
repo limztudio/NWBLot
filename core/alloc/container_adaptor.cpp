@@ -28,8 +28,10 @@ namespace __hidden_container_adaptor{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr usize s_DefaultCachelineSize = 64u;
+
 struct CacheSize{
-    usize m_size = 64;
+    usize m_size = s_DefaultCachelineSize;
 
     void initialize(){
 #if defined(NWB_PLATFORM_WINDOWS)

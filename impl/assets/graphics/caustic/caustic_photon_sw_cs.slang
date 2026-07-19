@@ -3,6 +3,7 @@
 
 
 #include "sw_binding_slots.h"
+#include "../mesh/runtime_constants.h"
 
 #define NWB_SCENE_SHADING_SET NWB_CAUSTIC_SW_SET
 #define NWB_SCENE_SHADING_BINDING NWB_CAUSTIC_SW_BINDING_SCENE_SHADING
@@ -89,7 +90,7 @@ struct NwbCausticSwView{
     row_major float4x4 worldToClip;
     row_major float4x4 clipToWorld;
     float4 cameraPosition;
-    float4 frustumPlanes[6];
+    float4 frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
 };
 
 [[vk::binding(NWB_CAUSTIC_SW_BINDING_VIEW, NWB_CAUSTIC_SW_SET)]]

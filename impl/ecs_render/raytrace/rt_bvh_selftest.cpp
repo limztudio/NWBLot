@@ -42,7 +42,7 @@ void RendererRayTracingSystem::runBvhSortSelfTest(){
     u32 inputKeys[paddedCount];
     u32 inputPayload[paddedCount];
     for(u32 i = 0u; i < paddedCount; ++i){
-        inputKeys[i] = i < elementCount ? (elementCount - 1u - i) : 0xFFFFFFFFu;
+        inputKeys[i] = i < elementCount ? (elementCount - 1u - i) : BvhNodeIndex::Invalid;
         inputPayload[i] = i;
     }
 
@@ -149,8 +149,8 @@ void RendererRayTracingSystem::runBvhBuildSelfTest(){
     for(u32 index = 0u; index < vertexCount; ++index)
         indexData[index] = index;
 
-    SIMDVector boundsMinVector = VectorReplicate(1e30f);
-    SIMDVector boundsMaxVector = VectorReplicate(-1e30f);
+    SIMDVector boundsMinVector = VectorReplicate(s_RayTracingFiniteInfinity);
+    SIMDVector boundsMaxVector = VectorReplicate(-s_RayTracingFiniteInfinity);
     for(u32 vertex = 0u; vertex < vertexCount; ++vertex){
         const SIMDVector position = VectorSet(positionData[vertex * 3u + 0u], positionData[vertex * 3u + 1u], positionData[vertex * 3u + 2u], 0.0f);
         boundsMinVector = VectorMin(boundsMinVector, position);
@@ -379,8 +379,8 @@ void RendererRayTracingSystem::runSceneBvhSelfTest(){
     instanceAabbMax.reserve(instanceCount);
     instanceCentroid.reserve(instanceCount);
 
-    SIMDVector boundsMin = VectorReplicate(1e30f);
-    SIMDVector boundsMax = VectorReplicate(-1e30f);
+    SIMDVector boundsMin = VectorReplicate(s_RayTracingFiniteInfinity);
+    SIMDVector boundsMax = VectorReplicate(-s_RayTracingFiniteInfinity);
     for(u32 i = 0u; i < instanceCount; ++i){
         const f32 base = static_cast<f32>(i) * 3.0f;
         const SIMDVector boxMin = VectorSet(base, base * 0.25f, -base * 0.5f, 0.0f);

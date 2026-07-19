@@ -58,9 +58,9 @@ public:
             NWB_TEXT("{}: fps avg={} frame_ms avg={} min={} max={} frames={} seconds={}")
             , m_label
             , averageFps
-            , averageFrameSeconds * 1000.0
-            , m_minFrameSeconds * 1000.0
-            , m_maxFrameSeconds * 1000.0
+            , averageFrameSeconds * s_MillisecondsPerSecond
+            , m_minFrameSeconds * s_MillisecondsPerSecond
+            , m_maxFrameSeconds * s_MillisecondsPerSecond
             , m_intervalFrames
             , m_intervalSeconds
         );
@@ -77,6 +77,7 @@ private:
     static constexpr f64 s_ReportIntervalSeconds = 0.5;
     static constexpr f64 s_MaxMeasuredFrameSeconds = 0.25;
     static constexpr f64 s_LargeFrameSeconds = 3600.0;
+    static constexpr f64 s_MillisecondsPerSecond = 1000.0;
 
     const tchar* m_label = NWB_TEXT("Smoke");
     f64 m_elapsedSeconds = 0.0;

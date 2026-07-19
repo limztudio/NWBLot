@@ -184,7 +184,7 @@ bool nwbMeshAllOutsideScissor(const float4 a, const float4 b, const float4 c){
     return triMax.x < scissorRect.x || triMin.x > scissorRect.z || triMax.y < scissorRect.y || triMin.y > scissorRect.w;
 }
 
-bool nwbMeshTriangleCulled(const NwbMeshGeneratedVertex vertices[3]){
+bool nwbMeshTriangleCulled(const NwbMeshGeneratedVertex vertices[NWB_MESHLET_TRIANGLE_INDEX_COUNT]){
     const float4 a = vertices[0].position;
     const float4 b = vertices[1].position;
     const float4 c = vertices[2].position;
@@ -201,7 +201,7 @@ void nwbMeshStoreCulledPrimitive(const uint primitiveBase){
         float3(0.0),
         0u
     );
-    for(uint corner = 0u; corner < 3u; ++corner)
+    for(uint corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner)
         g_NwbMeshGeneratedVertices[primitiveBase + corner] = vertex;
 }
 

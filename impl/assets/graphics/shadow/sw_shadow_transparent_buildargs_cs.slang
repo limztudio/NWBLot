@@ -21,7 +21,7 @@ struct NwbSwShadowTransparentBuildArgsPushConstants{
 [[vk::push_constant]]
 ConstantBuffer<NwbSwShadowTransparentBuildArgsPushConstants> g_NwbSwShadowPush;
 
-// The append counter (read [0], write the clamped count into [1]) + the indirect dispatch-args buffer (3 u32).
+// The append counter (read [0], write the clamped count into [1]) + the indirect dispatch-args buffer.
 [[vk::binding(NWB_SW_SHADOW_BINDING_EDGE_COUNTER, NWB_SW_SHADOW_SET)]]
 RWStructuredBuffer<uint> g_NwbSwShadowEdgeCounter;
 
@@ -40,9 +40,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     uint count = g_NwbSwShadowEdgeCounter[NWB_SW_SHADOW_EDGE_COUNTER_APPEND];
     count = min(count, g_NwbSwShadowPush.edgeCapacity);
     const uint groups = (count + groupSize - 1u) / groupSize;
-    g_NwbSwShadowIndirectArgs[0] = groups;
-    g_NwbSwShadowIndirectArgs[1] = 1u;
-    g_NwbSwShadowIndirectArgs[2] = 1u;
+    g_NwbSwShadowIndirectArgs[NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_X] = groups;
+    g_NwbSwShadowIndirectArgs[NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_Y] = 1u;
+    g_NwbSwShadowIndirectArgs[NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_Z] = 1u;
     g_NwbSwShadowEdgeCounter[NWB_SW_SHADOW_EDGE_COUNTER_TRACE] = count;
 }
 

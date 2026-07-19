@@ -43,6 +43,7 @@ using StreamOffset = std::streamoff;
 using StreamSize = std::streamsize;
 
 inline constexpr usize s_InitialPathBufferCapacity = 256u;
+inline constexpr usize s_FileSizeHighPartShiftBits = sizeof(u32) * 8u;
 
 
 [[nodiscard]] inline bool CanRepresentStreamSize(const u64 byteCount)noexcept{
@@ -743,7 +744,7 @@ template<typename ArenaT>
     }
 
     GlobalFilesystemDetail::ClearError(outError);
-    return (static_cast<u64>(data.nFileSizeHigh) << 32u) | static_cast<u64>(data.nFileSizeLow);
+    return (static_cast<u64>(data.nFileSizeHigh) << GlobalFilesystemDetail::s_FileSizeHighPartShiftBits) | static_cast<u64>(data.nFileSizeLow);
 #else
     struct stat pathStat;
     if(stat(path.c_str(), &pathStat) != 0){

@@ -7,13 +7,14 @@
 
 #include "../compact_string.h"
 #include "../hash_utils.h"
+#include "../text_utils.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] inline u64 HashVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex){
-    char segmentIndexBuffer[32] = {};
+    char segmentIndexBuffer[TextDetail::s_DecimalTextBufferBytes] = {};
     const AStringView segmentIndexText = FormatDecimal(segmentIndex, segmentIndexBuffer);
     NWB_ASSERT(!segmentIndexText.empty());
 

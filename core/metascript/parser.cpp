@@ -24,6 +24,12 @@ namespace __hidden_metascript_parser{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr usize s_ParserScratchArenaBytes = 4096u;
+constexpr usize s_InitialReferencePathSegmentCount = 4u;
+constexpr usize s_InitialStructFieldCount = 8u;
+constexpr usize s_DocumentReaderChunkBytes = 4096u;
+
+
 [[nodiscard]] bool BinaryI64Overflows(const TokenType::Enum op, const i64 lhs, const i64 rhs){
     switch(op){
     case TokenType::Plus:
@@ -65,7 +71,7 @@ public:
     )
         : m_lexer(source)
         , m_arena(arena)
-        , m_scratchArena(MetascriptArenaScope::s_ParserScratch, 4096)
+        , m_scratchArena(MetascriptArenaScope::s_ParserScratch, s_ParserScratchArenaBytes)
         , m_declaredStructs(m_scratchArena)
         , m_errors(errors)
         , m_variables(variables)
@@ -247,7 +253,7 @@ private:
         }
 
         ScratchPath path{m_scratchArena};
-        path.reserve(4);
+        path.reserve(s_InitialReferencePathSegmentCount);
         path.push_back(firstName);
 
         while(m_current.type == TokenType::Dot){
@@ -398,7 +404,7 @@ private:
         fields.makeList();
 
         ScratchNameList fieldNames{m_scratchArena};
-        fieldNames.reserve(8);
+        fieldNames.reserve(s_InitialStructFieldCount);
 
         while(m_current.type != TokenType::RightBrace){
             if(m_current.type == TokenType::EndOfFile){
@@ -592,7 +598,7 @@ private:
             advance();
 
             ScratchPath path{m_scratchArena};
-            path.reserve(4);
+            path.reserve(s_InitialReferencePathSegmentCount);
             path.push_back(name);
 
             while(m_current.type == TokenType::Dot){
@@ -1218,22 +1224,23 @@ bool Document::parse(IMetaReader& reader){
     m_declarations.clear();
 
     try{
-        constexpr usize chunkSize = 4096;
-
-        Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_DocumentReaderScratch, chunkSize);
+        Alloc::ScratchArena scratchArena(
+            MetascriptArenaScope::s_DocumentReaderScratch,
+            __hidden_metascript_parser::s_DocumentReaderChunkBytes
+        );
         BasicString<MChar, Alloc::ScratchArena> buffer{scratchArena};
-        buffer.reserve(chunkSize);
-        MChar chunk[chunkSize];
+        buffer.reserve(__hidden_metascript_parser::s_DocumentReaderChunkBytes);
+        MChar chunk[__hidden_metascript_parser::s_DocumentReaderChunkBytes];
 
         for(;;){
-            const isize bytesRead = reader.read(chunk, chunkSize);
+            const isize bytesRead = reader.read(chunk, __hidden_metascript_parser::s_DocumentReaderChunkBytes);
             if(bytesRead < 0){
                 m_errors.push_back(ParseError{0, 0, MString("read error", m_arena)});
                 return false;
             }
             if(bytesRead == 0)
                 break;
-            if(static_cast<usize>(bytesRead) > chunkSize){
+            if(static_cast<usize>(bytesRead) > __hidden_metascript_parser::s_DocumentReaderChunkBytes){
                 m_errors.push_back(ParseError{0, 0, MString("reader returned more bytes than requested", m_arena)});
                 return false;
             }

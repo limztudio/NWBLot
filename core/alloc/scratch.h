@@ -28,6 +28,7 @@ private:
 
 public:
     static constexpr usize s_MaxAlignSize = 256;
+    static constexpr usize s_DefaultInitialChunkBytes = 1024u;
 
 
 private:
@@ -138,7 +139,7 @@ public:
 
 
 public:
-    explicit ScratchArena(const Name& allocationLog, usize initSize = 1024)
+    explicit ScratchArena(const Name& allocationLog, usize initSize = s_DefaultInitialChunkBytes)
         : Base(allocationLog)
     {
         for(usize i = 0; i < LengthOf(m_bucket); ++i){

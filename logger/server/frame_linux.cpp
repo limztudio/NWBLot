@@ -32,6 +32,7 @@ namespace FrameDetail{
 
 static Futex s_PrintMutex;
 static volatile SignalAtomic s_ShouldExit = 0;
+static constexpr u32 s_ConsoleUpdateIntervalMilliseconds = 50u;
 
 static void SignalHandler(i32){
     s_ShouldExit = 1;
@@ -86,7 +87,7 @@ bool Frame::mainLoop(){
         if(!update(delta))
             return false;
 
-        SleepMS(50);
+        SleepMS(FrameDetail::s_ConsoleUpdateIntervalMilliseconds);
     }
 
     return true;

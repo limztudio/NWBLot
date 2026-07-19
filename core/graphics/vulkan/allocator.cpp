@@ -114,7 +114,7 @@ inline VmaAllocationCreateInfo BuildHostMappedBufferAllocationInfo(){
 }
 
 inline u32 BuildAllMemoryTypeBits(const VkPhysicalDeviceMemoryProperties& memoryProperties){
-    if(memoryProperties.memoryTypeCount >= 32u)
+    if(memoryProperties.memoryTypeCount >= s_VulkanMemoryTypeBitCount)
         return UINT32_MAX;
     return (1u << memoryProperties.memoryTypeCount) - 1u;
 }

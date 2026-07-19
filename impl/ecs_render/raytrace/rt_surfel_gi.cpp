@@ -342,7 +342,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
     if(!rayTracingState().m_surfelTraceIndirectArgsBuffer){
         Core::BufferDesc desc;
         desc
-            .setByteSize(static_cast<u64>(sizeof(u32)) * 3u)
+            .setByteSize(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_TRACE_INDIRECT_ARGS_WORD_COUNT)
             .setStructStride(sizeof(u32))
             .setCanHaveUAVs(true)
             .setIsDrawIndirectArgs(true)

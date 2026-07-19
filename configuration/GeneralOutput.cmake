@@ -31,7 +31,7 @@ macro(nwb_configure_general_output)
     nwb_resolve_output_domain()
 
     foreach(_type RUNTIME LIBRARY ARCHIVE)
-        foreach(_cfg dbg opt fin)
+        foreach(_cfg IN LISTS NWB_BUILD_CONFIGURATIONS)
             string(TOUPPER "${_cfg}" _cfg_upper)
             set(CMAKE_${_type}_OUTPUT_DIRECTORY_${_cfg_upper} "${NWB_OUTPUT_ROOT}/${_cfg}")
         endforeach()

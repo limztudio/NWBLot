@@ -24,6 +24,7 @@ using Vec4 = Float4U;
 static constexpr usize s_Vector4ComponentCount = 4u;
 static constexpr usize s_MeshSkinInfluenceCount = s_Vector4ComponentCount;
 static constexpr usize s_JointMatrixRowCount = 3u;
+static constexpr usize s_JointMatrixElementCount = s_JointMatrixRowCount * s_Vector4ComponentCount;
 static constexpr usize s_TriangleIndexCount = 3u;
 static constexpr usize s_AuthoredVertexRefComponentCount = 5u;
 static constexpr usize s_MaxSkeletonJointCount = static_cast<usize>(Limit<u16>::s_Max) + 1u;
@@ -49,7 +50,7 @@ struct MeshSkinInfluenceEqual{
 struct JointMatrix{
     Vec4 rows[s_JointMatrixRowCount];
 };
-static_assert(sizeof(JointMatrix) == sizeof(f32) * s_JointMatrixRowCount * s_Vector4ComponentCount);
+static_assert(sizeof(JointMatrix) == sizeof(f32) * s_JointMatrixElementCount);
 static_assert(alignof(JointMatrix) == alignof(f32));
 static_assert(IsTriviallyCopyable_V<JointMatrix>);
 

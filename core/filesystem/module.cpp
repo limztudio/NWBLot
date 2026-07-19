@@ -118,6 +118,7 @@ namespace __hidden_filesystem{
 static constexpr u64 s_VolumeDefaultMetadataBytes = 512ull * 1024ull;
 static constexpr u64 s_VolumeMinMetadataBytes = 4ull * 1024ull;
 static constexpr u64 s_VolumeMoveChunkBytes = 1024ull * 1024ull;
+static constexpr usize s_ErrnoMessageBufferBytes = 256u;
 static constexpr AStringView s_VolumePublishLogPrefix = "Filesystem volume publish";
 
 
@@ -297,13 +298,13 @@ static ACompactString LastErrnoMessage(){
     if(errorNumber == 0)
         return ACompactString("none");
 
-    char errorText[256] = {};
+    char errorText[s_ErrnoMessageBufferBytes] = {};
     if(NWB_STRERROR(errorText, sizeof(errorText), errorNumber) != 0)
         return ACompactString("unknown");
 
     ACompactString output(errorText);
     output += " (";
-    char numberText[32] = {};
+    char numberText[TextDetail::s_DecimalTextBufferBytes] = {};
     output += FormatDecimal(errorNumber, numberText);
     output += ")";
     return output;

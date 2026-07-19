@@ -162,8 +162,8 @@ struct RasterState{
     bool programmableSamplePositionsEnable = false;
     bool conservativeRasterEnable = false;
     bool quadFillEnable = false;
-    char samplePositionsX[16]{};
-    char samplePositionsY[16]{};
+    char samplePositionsX[s_MaxProgrammableSamplePositions]{};
+    char samplePositionsY[s_MaxProgrammableSamplePositions]{};
 
     constexpr RasterState& setFillMode(RasterFillMode::Enum value){ fillMode = value; return *this; }
     constexpr RasterState& setFillSolid(){ fillMode = RasterFillMode::Solid; return *this; }
@@ -201,7 +201,7 @@ struct RasterState{
     constexpr RasterState& setSamplePositions(const i8* x, const i8* y, usize count){
         if(!x || !y)
             return *this;
-        const usize samplePositionCount = count < 16 ? count : 16;
+        const usize samplePositionCount = count < s_MaxProgrammableSamplePositions ? count : s_MaxProgrammableSamplePositions;
         for(usize i = 0; i < samplePositionCount; ++i){
             samplePositionsX[i] = x[i];
             samplePositionsY[i] = y[i];

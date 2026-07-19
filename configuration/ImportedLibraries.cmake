@@ -22,7 +22,7 @@ function(nwb_set_imported_library_locations target_name)
     endif()
 
     set_target_properties(${target_name} PROPERTIES
-        IMPORTED_CONFIGURATIONS "DBG;OPT;FIN"
+        IMPORTED_CONFIGURATIONS "${NWB_IMPORTED_CONFIGURATIONS}"
         IMPORTED_LOCATION "${ARG_DEFAULT}"
         IMPORTED_LOCATION_DBG "${ARG_DBG}"
         IMPORTED_LOCATION_OPT "${ARG_OPT}"

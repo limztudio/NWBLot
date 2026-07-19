@@ -6,6 +6,7 @@
 
 
 #include "basic_string.h"
+#include "text_utils.h"
 #include "type.h"
 
 
@@ -55,7 +56,7 @@ inline void AppendFixedBuffer(char (&dst)[N], const char* src)noexcept{
 
 template<usize N>
 inline void AppendUnsignedToFixedBuffer(char (&dst)[N], u64 value)noexcept{
-    char tmp[32] = {};
+    char tmp[TextDetail::s_DecimalTextBufferBytes] = {};
     usize count = 0u;
     do{
         tmp[count++] = static_cast<char>('0' + (value % 10u));

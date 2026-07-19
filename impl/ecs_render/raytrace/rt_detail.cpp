@@ -127,8 +127,8 @@ u32 BuildSceneBvhNode(
 
     // Bounding centroid extent over the slice: the per-axis extent picks which axes are binable (a zero extent
     // axis cannot separate any instances and is skipped).
-    SIMDVector centroidMin = VectorReplicate(1e30f);
-    SIMDVector centroidMax = VectorReplicate(-1e30f);
+    SIMDVector centroidMin = VectorReplicate(s_RayTracingFiniteInfinity);
+    SIMDVector centroidMax = VectorReplicate(-s_RayTracingFiniteInfinity);
     for(u32 i = lo; i < hi; ++i){
         const SIMDVector centroid = LoadFloat(instanceCentroid[indices[i]]);
         centroidMin = VectorMin(centroidMin, centroid);
@@ -145,7 +145,7 @@ u32 BuildSceneBvhNode(
     bool anyAxisValid = false;
     u32 bestAxis = 0u;
     u32 bestBin = 0u;
-    f32 bestCost = 1e30f;
+    f32 bestCost = s_RayTracingFiniteInfinity;
 
     for(u32 axis = 0u; axis < 3u; ++axis){
         const f32 loExtent = SceneBvhAxisComponent(centroidMin, axis);
@@ -157,8 +157,8 @@ u32 BuildSceneBvhNode(
         const f32 invExtent = s_SceneBvhSahBinCount / extent;
 
         for(u32 b = 0u; b < s_SceneBvhSahBinCount; ++b){
-            binMin[b] = VectorReplicate(1e30f);
-            binMax[b] = VectorReplicate(-1e30f);
+            binMin[b] = VectorReplicate(s_RayTracingFiniteInfinity);
+            binMax[b] = VectorReplicate(-s_RayTracingFiniteInfinity);
             binCost[b] = 0.0f;
             binCount[b] = 0u;
         }
@@ -181,8 +181,8 @@ u32 BuildSceneBvhNode(
         f32 suffixCost[s_SceneBvhSahBinCount];
         u32 suffixCount[s_SceneBvhSahBinCount];
         {
-            SIMDVector accMin = VectorReplicate(1e30f);
-            SIMDVector accMax = VectorReplicate(-1e30f);
+            SIMDVector accMin = VectorReplicate(s_RayTracingFiniteInfinity);
+            SIMDVector accMax = VectorReplicate(-s_RayTracingFiniteInfinity);
             f32 accCost = 0.0f;
             u32 accCount = 0u;
             for(u32 b = s_SceneBvhSahBinCount; b >= 1u; --b){
@@ -205,8 +205,8 @@ u32 BuildSceneBvhNode(
         const SIMDVector parentMax = suffixMax[0u];
         const f32 parentArea = SceneBvhAabbSurfaceArea(parentMin, parentMax);
 
-        SIMDVector leftMin = VectorReplicate(1e30f);
-        SIMDVector leftMax = VectorReplicate(-1e30f);
+        SIMDVector leftMin = VectorReplicate(s_RayTracingFiniteInfinity);
+        SIMDVector leftMax = VectorReplicate(-s_RayTracingFiniteInfinity);
         f32 leftCost = 0.0f;
         u32 leftCount = 0u;
         for(u32 k = 1u; k < s_SceneBvhSahBinCount; ++k){

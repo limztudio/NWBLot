@@ -23,6 +23,9 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr usize s_MaxGraphicsPipelineShaderStageCount = 5u;
+
+
 constexpr VkPrimitiveTopology ConvertPrimitiveTopology(PrimitiveType::Enum primType){
     switch(primType){
     case PrimitiveType::PointList:     return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
@@ -191,8 +194,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     PipelineShaderStageVector shaderStages{ scratchArena };
     PipelineSpecializationInfoVector specInfos{ scratchArena };
     PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
-    shaderStages.reserve(5);
-    specInfos.reserve(5);
+    shaderStages.reserve(VulkanDetail::s_MaxGraphicsPipelineShaderStageCount);
+    specInfos.reserve(VulkanDetail::s_MaxGraphicsPipelineShaderStageCount);
 
     if(desc.VS)
         appendPipelineShaderStage(desc.VS.get(), VK_SHADER_STAGE_VERTEX_BIT, specInfos, shaderStages);

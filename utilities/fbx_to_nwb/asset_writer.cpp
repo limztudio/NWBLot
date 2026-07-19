@@ -30,6 +30,7 @@ using TextWrite::WriteVec4;
 using TextWrite::s_OutputFloatPrecision;
 
 static constexpr f32 s_InvertibleJointDeterminantEpsilon = 0.000000000001f;
+static constexpr usize s_PositionSkinKeySkinShiftBits = 32u;
 
 template<typename Stream>
 void WriteSkinJoints(Stream& out, const MeshSkinInfluence& skin){
@@ -113,7 +114,7 @@ bool ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView conte
         NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh tangent stream is required"), StringConvert(context));
         return false;
     }
-    if((mesh.indices.size() % 3u) != 0u){
+    if((mesh.indices.size() % s_TriangleIndexCount) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh index stream must contain whole triangles"), StringConvert(context));
         return false;
     }
@@ -377,7 +378,7 @@ bool RemapSkinInfluences(
     const UtilityVector<u16>& oldToNewJointIndices
 ){
     for(MeshSkinInfluence& influence : inOutInfluences){
-        for(u32 slot = 0u; slot < 4u; ++slot){
+        for(usize slot = 0u; slot < s_MeshSkinInfluenceCount; ++slot){
             const u16 oldJointIndex = influence.joint[slot];
             if(oldJointIndex >= oldToNewJointIndices.size()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: skin influence references out-of-range joint {}"), oldJointIndex);
@@ -390,7 +391,7 @@ bool RemapSkinInfluences(
 }
 
 u64 PositionSkinKey(const u32 position, const u32 skin){
-    return (static_cast<u64>(position) << 32u) | static_cast<u64>(skin);
+    return (static_cast<u64>(position) << s_PositionSkinKeySkinShiftBits) | static_cast<u64>(skin);
 }
 
 bool BuildPositionAlignedSkinnedMesh(
@@ -494,7 +495,7 @@ void WriteMeshAssetBody(Stream& file, const SourceMeshStreams& mesh, const AStri
     file << indent << "];\n\n";
 
     file << variableName << ".indices = [\n";
-    for(usize i = 0u; i < mesh.indices.size(); i += 3u)
+    for(usize i = 0u; i < mesh.indices.size(); i += s_TriangleIndexCount)
         file << indent << "    [" << mesh.indices[i + 0u] << ", " << mesh.indices[i + 1u] << ", " << mesh.indices[i + 2u] << "],\n";
     file << indent << "];\n";
 }

@@ -117,7 +117,7 @@ private:
         OpenTimingFile(timingFile);
         if(timingFile.is_open()){
             timingFile.setf(std::ios::fixed, std::ios::floatfield);
-            timingFile.precision(4);
+            timingFile.precision(s_TimingFilePrecision);
             timingFile << "=== interval: " << static_cast<unsigned>(m_intervalFrames) << " frames / " << m_intervalSeconds << "s ===\n";
         }
 
@@ -128,21 +128,21 @@ private:
                 continue;
 
             const Name scopeName = gpuTiming.scopeNameAt(i);
-            const f64 averageMs = (accum.sumSeconds / static_cast<f64>(accum.frames)) * 1000.0;
+            const f64 averageMs = (accum.sumSeconds / static_cast<f64>(accum.frames)) * s_MillisecondsPerSecond;
             NWB_LOGGER_ESSENTIAL_INFO(
                 NWB_TEXT("  {}: gpu_ms avg={} min={} max={} samples={}")
                 , StringConvert(scopeName.c_str())
                 , averageMs
-                , accum.minSeconds * 1000.0
-                , accum.maxSeconds * 1000.0
+                , accum.minSeconds * s_MillisecondsPerSecond
+                , accum.maxSeconds * s_MillisecondsPerSecond
                 , accum.frames
             );
             if(timingFile.is_open()){
                 timingFile
                     << "  " << scopeName.c_str()
                     << ": avg=" << averageMs
-                    << " min=" << accum.minSeconds * 1000.0
-                    << " max=" << accum.maxSeconds * 1000.0
+                    << " min=" << accum.minSeconds * s_MillisecondsPerSecond
+                    << " max=" << accum.maxSeconds * s_MillisecondsPerSecond
                     << " samples=" << static_cast<unsigned>(accum.frames)
                     << '\n'
                 ;
@@ -171,6 +171,8 @@ private:
     static constexpr f64 s_WarmupSeconds = 0.25;
     static constexpr f64 s_ReportIntervalSeconds = 0.5;
     static constexpr f64 s_MaxMeasuredFrameSeconds = 0.25;
+    static constexpr f64 s_MillisecondsPerSecond = 1000.0;
+    static constexpr int s_TimingFilePrecision = 4;
     static constexpr usize s_MaxScopes = 64u;
 
     struct ScopeAccum{

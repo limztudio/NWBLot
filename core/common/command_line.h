@@ -30,12 +30,13 @@ inline constexpr const char* g_ArgCmd[] = {
     "-a,--logaddress",
     "-p,--logport",
 };
+inline constexpr u16 s_DefaultLogServerPort = 7117u;
 inline const Tuple<
     const char*
     , u16
 > g_ArgDefault = {
     "http://localhost",
-    static_cast<u16>(7117),
+    s_DefaultLogServerPort,
 };
 inline constexpr const char* g_ArgDesc[] = {
     "Log server address",

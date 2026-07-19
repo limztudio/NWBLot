@@ -61,6 +61,7 @@ inline constexpr u64 s_BufferAlignmentBytes = 4;
 inline constexpr u64 s_BufferAlignmentMask = s_BufferAlignmentBytes - 1u;
 inline constexpr usize s_SpirvWordAlignmentBytes = sizeof(u32);
 inline constexpr usize s_SpirvWordAlignmentMask = s_SpirvWordAlignmentBytes - 1u;
+inline constexpr u32 s_VulkanMemoryTypeBitCount = sizeof(u32) * 8u;
 
 // Fixed-size, pre-reserved arena for GPU crash reports. Captured on device-lost, so it must
 // not touch the growable heap (which may be unsafe at crash time); the block is reserved up front.
@@ -120,6 +121,7 @@ inline constexpr u32 s_InstanceFieldMask24Bit = 0x00FFFFFF;
 inline constexpr usize s_GraphicsPipelineScratchArenaBytes = 2048;
 inline constexpr usize s_DescriptorBindingScratchArenaBytes = 4096;
 inline constexpr usize s_RayTracingScratchArenaBytes = 4096;
+inline constexpr usize s_SparseTextureBindScratchArenaBytes = 8192;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

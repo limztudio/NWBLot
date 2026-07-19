@@ -2,24 +2,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static SIMDVector LoadMeshPositionVector(const Float3U& position){
-    return VectorSetW(LoadFloat(position), 0.0f);
+[[nodiscard]] static SIMDVector MakeMeshPositionVector(const SIMDVector position){
+    return VectorSetW(position, 0.0f);
 }
 
-[[nodiscard]] static SIMDVector LoadMeshNormalVector(const Half4U& normal){
-    return VectorSetW(LoadFloat(LoadHalf4U(normal)), 0.0f);
+[[nodiscard]] static SIMDVector MakeMeshNormalVector(const SIMDVector normal){
+    return VectorSetW(normal, 0.0f);
 }
 
-[[nodiscard]] static SIMDVector LoadMeshTangentVector(const Half4U& tangent){
-    return LoadFloat(LoadHalf4U(tangent));
+[[nodiscard]] static SIMDVector MakeMeshTangentVector(const SIMDVector tangent){
+    return tangent;
 }
 
-[[nodiscard]] static SIMDVector LoadMeshUvVector(const Float2U& uv){
-    return VectorSetW(VectorSetZ(LoadFloat(uv), 0.0f), 0.0f);
+[[nodiscard]] static SIMDVector MakeMeshUvVector(const SIMDVector uv){
+    return VectorSetW(VectorSetZ(uv, 0.0f), 0.0f);
 }
 
-[[nodiscard]] static SIMDVector LoadMeshColorVector(const Half4U& color){
-    return LoadFloat(LoadHalf4U(color));
+[[nodiscard]] static SIMDVector MakeMeshColorVector(const SIMDVector color){
+    return color;
 }
 
 [[nodiscard]] static bool ValidDirectionVector(const SIMDVector direction){
@@ -62,7 +62,7 @@
     }
 
     for(usize i = 0u; i < positions.size(); ++i){
-        if(VectorIsFinite(LoadMeshPositionVector(positions[i]), 0x7u))
+        if(VectorIsFinite(MakeMeshPositionVector(LoadFloat(positions[i])), 0x7u))
             continue;
 
         return FailMeshPayloadIndexedValidation(
@@ -74,7 +74,7 @@
         );
     }
     for(usize i = 0u; i < normals.size(); ++i){
-        if(ValidDirectionVector(LoadMeshNormalVector(normals[i])))
+        if(ValidDirectionVector(MakeMeshNormalVector(LoadFloat(LoadHalf4U(normals[i])))))
             continue;
 
         return FailMeshPayloadIndexedValidation(
@@ -86,7 +86,7 @@
         );
     }
     for(usize i = 0u; i < tangents.size(); ++i){
-        if(ValidTangentVector(LoadMeshTangentVector(tangents[i])))
+        if(ValidTangentVector(MakeMeshTangentVector(LoadFloat(LoadHalf4U(tangents[i])))))
             continue;
 
         return FailMeshPayloadIndexedValidation(
@@ -98,7 +98,7 @@
         );
     }
     for(usize i = 0u; i < uv0.size(); ++i){
-        if(VectorIsFinite(LoadMeshUvVector(uv0[i]), 0x3u))
+        if(VectorIsFinite(MakeMeshUvVector(LoadFloat(uv0[i])), 0x3u))
             continue;
 
         return FailMeshPayloadIndexedValidation(
@@ -110,7 +110,7 @@
         );
     }
     for(usize i = 0u; i < colors.size(); ++i){
-        if(VectorIsFinite(LoadMeshColorVector(colors[i]), 0xFu))
+        if(VectorIsFinite(MakeMeshColorVector(LoadFloat(LoadHalf4U(colors[i]))), 0xFu))
             continue;
 
         return FailMeshPayloadIndexedValidation(

@@ -167,9 +167,9 @@ NWB_INLINE f32* ConvertHalfBufferToFloat(f32* outFloatBuffer, const Half* halfBu
 }
 
 [[nodiscard]] NWB_INLINE Half4U MakeHalf4U(const f32 x, const f32 y, const f32 z, const f32 w)noexcept{
-    const f32 values[] = { x, y, z, w };
+    const Float4U values(x, y, z, w);
     Half4U result;
-    ConvertFloatBufferToHalf(result.raw, values, 4u);
+    ConvertFloatBufferToHalf(result.raw, values.raw, 4u);
     return result;
 }
 
@@ -202,8 +202,8 @@ NWB_INLINE SIMDVector SIMDCALL MakeF32(f32 x, f32 y, f32 z, f32 w)noexcept{
     result.f[3] = w;
     return result;
 #elif defined(NWB_HAS_NEON)
-    alignas(16) const f32 values[4] = { x, y, z, w };
-    return vld1q_f32(values);
+    const Float4 values(x, y, z, w);
+    return vld1q_f32(values.raw);
 #elif defined(NWB_HAS_SSE4)
     return _mm_set_ps(w, z, y, x);
 #endif
@@ -218,8 +218,12 @@ NWB_INLINE SIMDVector SIMDCALL MakeU32(u32 x, u32 y, u32 z, u32 w)noexcept{
     result.u[3] = w;
     return result;
 #elif defined(NWB_HAS_NEON)
-    alignas(16) const u32 values[4] = { x, y, z, w };
-    return vreinterpretq_f32_u32(vld1q_u32(values));
+    UInt4 values{};
+    values.x = x;
+    values.y = y;
+    values.z = z;
+    values.w = w;
+    return vreinterpretq_f32_u32(vld1q_u32(values.raw));
 #elif defined(NWB_HAS_SSE4)
     return _mm_castsi128_ps(_mm_set_epi32(static_cast<i32>(w), static_cast<i32>(z), static_cast<i32>(y), static_cast<i32>(x)));
 #endif

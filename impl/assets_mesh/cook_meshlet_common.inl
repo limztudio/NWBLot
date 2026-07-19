@@ -2,33 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename CookEntryT>
-[[nodiscard]] static SIMDVector LoadMeshletPositionStreamVector(
-    const CookEntryT& entry,
-    const MeshletPositionStreamRef& ref
-){
-    return VectorSetW(LoadFloat(entry.positions[ref.position]), 0.0f);
-}
-
-template<typename CookEntryT>
-[[nodiscard]] static SIMDVector LoadMeshletLocalPositionStreamVector(
-    const CookEntryT& entry,
-    const MeshletDesc& meshlet,
-    const u32 localVertexIndex
-){
-    const MeshletLocalVertexRef& localVertexRef = entry.meshletLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex];
-    const usize positionRefIndex = meshlet.positionRefOffset + localVertexRef.localDeformedPosition;
-    const MeshletPositionStreamRef& positionRef = entry.meshletPositionStreamRefs[positionRefIndex];
-    return LoadMeshletPositionStreamVector(entry, positionRef);
-}
-
-template<typename CookEntryT>
-[[nodiscard]] static SIMDVector LoadMeshletSourceVertexPositionStreamVector(
-    const CookEntryT& entry,
-    const u32 vertexRefIndex
-){
-    const MeshVertexRef& vertexRef = entry.vertexRefs[vertexRefIndex];
-    return VectorSetW(LoadFloat(entry.positions[vertexRef.position]), 0.0f);
+[[nodiscard]] static SIMDVector MakeMeshletPositionVector(const SIMDVector position){
+    return VectorSetW(position, 0.0f);
 }
 
 struct MeshletTriangleVectors{
@@ -45,28 +20,22 @@ struct MeshletTriangleData{
     Float4 areaNormal = {};
 };
 
-[[nodiscard]] static SIMDVector LoadMeshletTriangleAreaNormal(const MeshletTriangleData& triangle){
-    return LoadFloat(triangle.areaNormal);
-}
-
-[[nodiscard]] static MeshletTriangleVectors LoadMeshletTriangleVectors(const MeshletTriangleData& triangle){
+[[nodiscard]] static MeshletTriangleVectors MakeMeshletTriangleVectors(
+    const SIMDVector position0,
+    const SIMDVector position1,
+    const SIMDVector position2,
+    const SIMDVector centroid,
+    const SIMDVector areaNormal
+){
     return MeshletTriangleVectors{
         {
-            LoadFloat(triangle.positionVectors[0u]),
-            LoadFloat(triangle.positionVectors[1u]),
-            LoadFloat(triangle.positionVectors[2u]),
+            position0,
+            position1,
+            position2,
         },
-        LoadFloat(triangle.centroid),
-        LoadMeshletTriangleAreaNormal(triangle)
+        centroid,
+        areaNormal
     };
-}
-
-static void StoreMeshletTriangleVectors(const MeshletTriangleVectors& vectors, MeshletTriangleData& outTriangle){
-    StoreFloat(vectors.positions[0u], &outTriangle.positionVectors[0u]);
-    StoreFloat(vectors.positions[1u], &outTriangle.positionVectors[1u]);
-    StoreFloat(vectors.positions[2u], &outTriangle.positionVectors[2u]);
-    StoreFloat(vectors.centroid, &outTriangle.centroid);
-    StoreFloat(vectors.areaNormal, &outTriangle.areaNormal);
 }
 
 struct MeshletTrianglePrecompute{

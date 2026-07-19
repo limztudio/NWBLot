@@ -219,9 +219,11 @@ bool BuildInfluence(
     ufbx_skin_deformer* skin,
     const UtilityVector<u16>& clusterJoints,
     const u32 logicalVertex,
-    MeshSkinInfluence& outInfluence
+    MeshSkinInfluence& outInfluence,
+    SIMDVector& outWeights
 ){
     outInfluence = MeshSkinInfluence{};
+    outWeights = VectorZero();
     if(!skin || logicalVertex >= skin->vertices.count){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer does not contain weights for every logical vertex"));
         return false;
@@ -256,7 +258,7 @@ bool BuildInfluence(
         }
 
         outInfluence.joint[writtenInfluenceCount] = clusterJoints[weight.cluster_index];
-        outInfluence.weight[writtenInfluenceCount] = static_cast<f32>(value);
+        outInfluence.weight.raw[writtenInfluenceCount] = static_cast<f32>(value);
         weightSum += value;
         ++writtenInfluenceCount;
     }
@@ -266,19 +268,16 @@ bool BuildInfluence(
         return false;
     }
 
-    const f32 inverseWeightSum = static_cast<f32>(1.0 / weightSum);
-    SIMDConvertDetail::StoreF32(
-        outInfluence.weight,
-        VectorScale(
-            VectorSet(
-                outInfluence.weight[0u],
-                outInfluence.weight[1u],
-                outInfluence.weight[2u],
-                outInfluence.weight[3u]
-            ),
-            inverseWeightSum
-        )
+    outWeights = VectorScale(
+        VectorSet(
+            outInfluence.weight.x,
+            outInfluence.weight.y,
+            outInfluence.weight.z,
+            outInfluence.weight.w
+        ),
+        static_cast<f32>(1.0 / weightSum)
     );
+    StoreFloat(outWeights, &outInfluence.weight);
 
     return true;
 }

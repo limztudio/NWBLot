@@ -20,8 +20,9 @@ NWB_IMPL_BEGIN
 
 struct SkinInfluence4{
     u16 joint[4] = {};
-    f32 weight[4] = {};
+    Float4U weight{};
 };
+static_assert(sizeof(SkinInfluence4) == sizeof(u16) * 4u + sizeof(Float4U), "SkinInfluence4 must keep its binary payload layout");
 static_assert(IsStandardLayout_V<SkinInfluence4>, "SkinInfluence4 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<SkinInfluence4>, "SkinInfluence4 must stay binary-serializable");
 

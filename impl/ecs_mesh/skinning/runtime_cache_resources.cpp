@@ -35,10 +35,6 @@ namespace __hidden_runtime_cache_resources{
 
 #include <impl/assets_mesh/meshlet_ref_range_validation.inl>
 
-[[nodiscard]] SIMDMatrix LoadRuntimeInverseBindMatrix(const SkeletonJointMatrix& matrix){
-    return LoadFloat(matrix);
-}
-
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const MeshSkinningRuntimeInstance& instance){
     TString<Core::Alloc::GlobalArena> sourceText{arena};
     if(instance.sourceName)
@@ -110,7 +106,7 @@ namespace __hidden_runtime_cache_resources{
         return false;
     }
     for(const SkeletonJointMatrix& storedInverseBind : instance.inverseBindMatrices){
-        const SIMDMatrix inverseBind = LoadRuntimeInverseBindMatrix(storedInverseBind);
+        const SIMDMatrix inverseBind = LoadFloat(storedInverseBind);
         if(SkinValidation::ValidAffineJointMatrix(inverseBind))
             continue;
 
@@ -122,12 +118,7 @@ namespace __hidden_runtime_cache_resources{
 
     for(usize skinIndex = 0u; skinIndex < instance.skin.size(); ++skinIndex){
         const SkinInfluence4& skin = instance.skin[skinIndex];
-        const SIMDVector weights = VectorSet(
-            skin.weight[0u],
-            skin.weight[1u],
-            skin.weight[2u],
-            skin.weight[3u]
-        );
+        const SIMDVector weights = LoadFloat(skin.weight);
         u32 failedJoint = 0u;
         if(
             SkinValidation::ValidSkinInfluenceWeights(weights)

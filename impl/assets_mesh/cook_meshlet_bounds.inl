@@ -63,7 +63,13 @@ template<typename CookEntryT>
 static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDesc& meshlet){
     const auto positionAt = [&](const u32 localPositionIndex){
         const MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];
-        return LoadMeshletPositionStreamVector(entry, ref);
+        return MakeMeshletPositionVector(LoadFloat(entry.positions[ref.position]));
+    };
+    const auto localPositionAt = [&](const u8 localVertexIndex){
+        const MeshletLocalVertexRef& localVertexRef = entry.meshletLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex];
+        const usize positionRefIndex = meshlet.positionRefOffset + localVertexRef.localDeformedPosition;
+        const MeshletPositionStreamRef& positionRef = entry.meshletPositionStreamRefs[positionRefIndex];
+        return MakeMeshletPositionVector(LoadFloat(entry.positions[positionRef.position]));
     };
     const auto visitFaceNormals = [&](auto&& callback){
         for(u32 primitiveIndex = 0u; primitiveIndex < MeshletPrimitiveCount(meshlet); ++primitiveIndex){
@@ -71,9 +77,9 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
             const u8 localVertex0 = entry.meshletPrimitiveIndices[primitiveOffset + 0u];
             const u8 localVertex1 = entry.meshletPrimitiveIndices[primitiveOffset + 1u];
             const u8 localVertex2 = entry.meshletPrimitiveIndices[primitiveOffset + 2u];
-            const SIMDVector p0 = LoadMeshletLocalPositionStreamVector(entry, meshlet, localVertex0);
-            const SIMDVector p1 = LoadMeshletLocalPositionStreamVector(entry, meshlet, localVertex1);
-            const SIMDVector p2 = LoadMeshletLocalPositionStreamVector(entry, meshlet, localVertex2);
+            const SIMDVector p0 = localPositionAt(localVertex0);
+            const SIMDVector p1 = localPositionAt(localVertex1);
+            const SIMDVector p2 = localPositionAt(localVertex2);
             callback(TriangleTests::AreaNormal(p0, p1, p2));
         }
     };

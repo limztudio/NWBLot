@@ -435,7 +435,7 @@ static NWB::Impl::SkeletonJointMatrix MakeNonUniformScaleJointMatrix(){
 static NWB::Impl::SkinInfluence4 MakeSingleJointSkin(const u16 joint){
     NWB::Impl::SkinInfluence4 skin{};
     skin.joint[0] = joint;
-    skin.weight[0] = 1.0f;
+    skin.weight.x = 1.0f;
     return skin;
 }
 

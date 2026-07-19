@@ -43,18 +43,6 @@ template<typename VisitTriangle>
     return true;
 }
 
-static void StoreSmoothPosition(const SIMDVector position, Vec3& outPosition){
-    StoreFloat(position, &outPosition);
-}
-
-[[nodiscard]] static SIMDVector LoadSmoothNormal(const Vec3& normal){
-    return LoadFloat(normal);
-}
-
-static void StoreSmoothNormal(const SIMDVector normal, Vec3& outNormal){
-    StoreFloat(normal, &outNormal);
-}
-
 [[nodiscard]] bool BuildSmoothPositionNormals(
     const ufbx_mesh& mesh,
     const ufbx_node& node,
@@ -69,13 +57,13 @@ static void StoreSmoothNormal(const SIMDVector normal, Vec3& outNormal){
     if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
         Vec3 positions[s_TriangleIndexCount] = {};
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex){
-            StoreSmoothPosition(BuildCornerOutputPositionVector(
+            StoreFloat(BuildCornerOutputPositionVector(
                 mesh,
                 node,
                 options,
                 wantsSkinning,
                 cornerIndices[triangleCornerIndex]
-            ), positions[triangleCornerIndex]);
+            ), &positions[triangleCornerIndex]);
         }
 
         const TriangleAreaNormal64 areaNormal64 = BuildTriangleAreaNormal64(positions[0u], positions[1u], positions[2u]);
@@ -93,9 +81,9 @@ static void StoreSmoothNormal(const SIMDVector normal, Vec3& outNormal){
             auto result = outNormals.emplace(key, areaNormal);
             if(!result.second){
                 Vec3& normal = result.first.value();
-                StoreSmoothNormal(
-                    VectorAdd(LoadSmoothNormal(normal), LoadSmoothNormal(areaNormal)),
-                    normal
+                StoreFloat(
+                    VectorAdd(LoadFloat(normal), LoadFloat(areaNormal)),
+                    &normal
                 );
             }
         }
@@ -105,11 +93,11 @@ static void StoreSmoothNormal(const SIMDVector normal, Vec3& outNormal){
 
     for(auto it = outNormals.begin(); it != outNormals.end(); ++it){
         SIMDVector normal;
-        if(!Normalize(LoadSmoothNormal(it.value()), normal)){
+        if(!Normalize(LoadFloat(it.value()), normal)){
             NWB_LOGGER_WARNING(NWB_TEXT("Mesh build: degenerate accumulated vertex normal left un-normalized"));
             continue;
         }
-        StoreSmoothNormal(normal, it.value());
+        StoreFloat(normal, &it.value());
     }
     return true;
 }
@@ -201,8 +189,8 @@ bool AppendInstanceMesh(
                 inOutSawVertexColors = true;
             }
 
+            SIMDVector tangent = VectorZero();
             if(importTangents){
-                SIMDVector tangent;
                 corner.hasTangent = BuildCornerOutputTangentVector(
                     *mesh,
                     normalToWorld,
@@ -216,12 +204,22 @@ bool AppendInstanceMesh(
                     StoreFloat(tangent, &corner.tangent);
             }
 
+            SIMDVector skinWeights = VectorZero();
             if(wantsSkinning){
-                if(!FbxSkinDetail::BuildInfluence(skin, clusterJoints, logicalVertex, corner.skin))
+                if(!FbxSkinDetail::BuildInfluence(skin, clusterJoints, logicalVertex, corner.skin, skinWeights))
                     return false;
             }
 
-            if(!IsFiniteSourceTriangleCorner(corner, wantsSkinning)){
+            if(!IsFiniteSourceTriangleCorner(
+                position,
+                normal,
+                tangent,
+                LoadFloat(corner.uv0),
+                LoadFloat(corner.color),
+                corner.hasTangent,
+                wantsSkinning,
+                skinWeights
+            )){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh contains non-finite vertex data"));
                 return false;
             }

@@ -265,14 +265,10 @@ template<usize ComponentCount>
 [[nodiscard]] bool NormalizeSkinInfluenceWeights(
     const Path& nwbFilePath,
     const usize influenceIndex,
-    SkinInfluence4& influence
+    const SIMDVector weights,
+    SIMDVector& outNormalizedWeights
 ){
-    const SIMDVector weights = VectorSet(
-        influence.weight[0u],
-        influence.weight[1u],
-        influence.weight[2u],
-        influence.weight[3u]
-    );
+    outNormalizedWeights = VectorZero();
     if(!VectorIsFinite(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero())){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must be finite and non-negative")
             , PathToString<tchar>(nwbFilePath)
@@ -290,13 +286,8 @@ template<usize ComponentCount>
         return false;
     }
 
-    const SIMDVector normalizedWeights = VectorDivide(weights, weightSum);
-    influence.weight[0u] = VectorGetX(normalizedWeights);
-    influence.weight[1u] = VectorGetY(normalizedWeights);
-    influence.weight[2u] = VectorGetZ(normalizedWeights);
-    influence.weight[3u] = VectorGetW(normalizedWeights);
-
-    return SkinValidation::ValidSkinInfluenceWeights(normalizedWeights);
+    outNormalizedWeights = VectorDivide(weights, weightSum);
+    return SkinValidation::ValidSkinInfluenceWeights(outNormalizedWeights);
 }
 
 [[nodiscard]] bool ParseSkinInfluence(
@@ -320,10 +311,19 @@ template<usize ComponentCount>
         return false;
     }
 
-    return ParseU16Tuple(nwbFilePath, *joints, s_JointsField, outInfluence.joint)
-        && ParseF32Tuple(nwbFilePath, *weights, s_WeightsField, outInfluence.weight)
-        && NormalizeSkinInfluenceWeights(nwbFilePath, influenceIndex, outInfluence)
-    ;
+    Float4U parsedWeights;
+    if(
+        !ParseU16Tuple(nwbFilePath, *joints, s_JointsField, outInfluence.joint)
+        || !ParseF32Tuple(nwbFilePath, *weights, s_WeightsField, parsedWeights.raw)
+    )
+        return false;
+
+    SIMDVector normalizedWeights;
+    if(!NormalizeSkinInfluenceWeights(nwbFilePath, influenceIndex, LoadFloat(parsedWeights), normalizedWeights))
+        return false;
+
+    StoreFloat(normalizedWeights, &outInfluence.weight);
+    return true;
 }
 
 [[nodiscard]] bool ParseSkinInfluences(
@@ -370,10 +370,6 @@ template<usize ComponentCount>
     return true;
 }
 
-[[nodiscard]] SIMDMatrix LoadInverseBindMatrix(const SkeletonJointMatrix& matrix){
-    return LoadFloat(matrix);
-}
-
 [[nodiscard]] bool ParseInverseBindMatrices(
     const Path& nwbFilePath,
     const Value& asset,
@@ -403,7 +399,7 @@ template<usize ComponentCount>
         ))
             return false;
 
-        if(!SkinValidation::ValidAffineJointMatrix(LoadInverseBindMatrix(matrix))){
+        if(!SkinValidation::ValidAffineJointMatrix(LoadFloat(matrix))){
             NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix")
                 , PathToString<tchar>(nwbFilePath)
                 , matrixIndex

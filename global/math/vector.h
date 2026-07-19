@@ -577,13 +577,13 @@ NWB_INLINE f32 SIMDCALL VectorGetByIndex(SIMDVector value, usize index)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return value.f[index];
 #else
-    alignas(16) f32 v[4]{};
+    Float4 v{};
 #if defined(NWB_HAS_NEON)
-    vst1q_f32(v, value);
+    vst1q_f32(v.raw, value);
 #else
-    _mm_store_ps(v, value);
+    _mm_store_ps(v.raw, value);
 #endif
-    return v[index];
+    return v.raw[index];
 #endif
 }
 
@@ -593,13 +593,13 @@ NWB_INLINE void SIMDCALL VectorGetByIndexPtr(f32* out, SIMDVector value, usize i
 #if defined(NWB_HAS_SCALAR)
     *out = value.f[index];
 #else
-    alignas(16) f32 v[4]{};
+    Float4 v{};
 #if defined(NWB_HAS_NEON)
-    vst1q_f32(v, value);
+    vst1q_f32(v.raw, value);
 #else
-    _mm_store_ps(v, value);
+    _mm_store_ps(v.raw, value);
 #endif
-    *out = v[index];
+    *out = v.raw[index];
 #endif
 }
 
@@ -618,13 +618,13 @@ NWB_INLINE u32 SIMDCALL VectorGetIntByIndex(SIMDVector value, usize index)noexce
 #if defined(NWB_HAS_SCALAR)
     return value.u[index];
 #else
-    alignas(16) u32 v[4]{};
+    UInt4 v{};
 #if defined(NWB_HAS_NEON)
-    vst1q_u32(v, vreinterpretq_u32_f32(value));
+    vst1q_u32(v.raw, vreinterpretq_u32_f32(value));
 #else
-    _mm_store_si128(reinterpret_cast<__m128i*>(v), _mm_castps_si128(value));
+    _mm_store_si128(reinterpret_cast<__m128i*>(v.raw), _mm_castps_si128(value));
 #endif
-    return v[index];
+    return v.raw[index];
 #endif
 }
 
@@ -634,13 +634,13 @@ NWB_INLINE void SIMDCALL VectorGetIntByIndexPtr(u32* out, SIMDVector value, usiz
 #if defined(NWB_HAS_SCALAR)
     *out = value.u[index];
 #else
-    alignas(16) u32 v[4]{};
+    UInt4 v{};
 #if defined(NWB_HAS_NEON)
-    vst1q_u32(v, vreinterpretq_u32_f32(value));
+    vst1q_u32(v.raw, vreinterpretq_u32_f32(value));
 #else
-    _mm_store_si128(reinterpret_cast<__m128i*>(v), _mm_castps_si128(value));
+    _mm_store_si128(reinterpret_cast<__m128i*>(v.raw), _mm_castps_si128(value));
 #endif
-    *out = v[index];
+    *out = v.raw[index];
 #endif
 }
 
@@ -699,15 +699,15 @@ NWB_INLINE SIMDVector SIMDCALL VectorSetByIndex(SIMDVector value, f32 component,
     value.f[index] = component;
     return value;
 #else
-    alignas(16) f32 v[4]{};
+    Float4 v{};
 #if defined(NWB_HAS_NEON)
-    vst1q_f32(v, value);
-    v[index] = component;
-    return vld1q_f32(v);
+    vst1q_f32(v.raw, value);
+    v.raw[index] = component;
+    return vld1q_f32(v.raw);
 #else
-    _mm_store_ps(v, value);
-    v[index] = component;
-    return _mm_load_ps(v);
+    _mm_store_ps(v.raw, value);
+    v.raw[index] = component;
+    return _mm_load_ps(v.raw);
 #endif
 #endif
 }
@@ -719,15 +719,15 @@ NWB_INLINE SIMDVector SIMDCALL VectorSetByIndexPtr(SIMDVector value, const f32* 
     value.f[index] = *component;
     return value;
 #else
-    alignas(16) f32 v[4]{};
+    Float4 v{};
 #if defined(NWB_HAS_NEON)
-    vst1q_f32(v, value);
-    v[index] = *component;
-    return vld1q_f32(v);
+    vst1q_f32(v.raw, value);
+    v.raw[index] = *component;
+    return vld1q_f32(v.raw);
 #else
-    _mm_store_ps(v, value);
-    v[index] = *component;
-    return _mm_load_ps(v);
+    _mm_store_ps(v.raw, value);
+    v.raw[index] = *component;
+    return _mm_load_ps(v.raw);
 #endif
 #endif
 }
@@ -2200,11 +2200,11 @@ NWB_INLINE SIMDVector SIMDCALL VectorPow(SIMDVector v0, SIMDVector v1)noexcept{
         Pow(vgetq_lane_f32(v0, 3), vgetq_lane_f32(v1, 3))
     );
 #else
-    alignas(16) f32 a[4]{};
-    alignas(16) f32 b[4]{};
-    _mm_store_ps(a, v0);
-    _mm_store_ps(b, v1);
-    return _mm_set_ps(Pow(a[3], b[3]), Pow(a[2], b[2]), Pow(a[1], b[1]), Pow(a[0], b[0]));
+    Float4 a{};
+    Float4 b{};
+    _mm_store_ps(a.raw, v0);
+    _mm_store_ps(b.raw, v1);
+    return _mm_set_ps(Pow(a.w, b.w), Pow(a.z, b.z), Pow(a.y, b.y), Pow(a.x, b.x));
 #endif
 }
 
@@ -2334,9 +2334,9 @@ NWB_INLINE SIMDVector SIMDCALL VectorTan(SIMDVector value)noexcept{
 #elif defined(NWB_HAS_NEON)
     vb = vreinterpretq_f32_u32(vcvtq_u32_f32(vb));
 #else
-    f32 vbValues[4]{};
-    SIMDConvertDetail::StoreF32(vbValues, vb);
-    vb = VectorSetInt(static_cast<u32>(vbValues[0]), static_cast<u32>(vbValues[1]), static_cast<u32>(vbValues[2]), static_cast<u32>(vbValues[3]));
+    Float4U vbValues;
+    SIMDConvertDetail::StoreF32(vbValues.raw, vb);
+    vb = VectorSetInt(static_cast<u32>(vbValues.x), static_cast<u32>(vbValues.y), static_cast<u32>(vbValues.z), static_cast<u32>(vbValues.w));
 #endif
 
     SIMDVector vc2 = VectorMultiply(vc, vc);

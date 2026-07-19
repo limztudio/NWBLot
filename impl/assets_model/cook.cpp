@@ -292,12 +292,12 @@ template<typename AssetT>
             return false;
         }
 
-        f32 rowValues[4] = {};
+        Float4 rowValues;
         for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
-            if(!ReadFloatValue(nwbFilePath, row.asList()[columnIndex], objectKind, s_TransformField, rowValues[columnIndex]))
+            if(!ReadFloatValue(nwbFilePath, row.asList()[columnIndex], objectKind, s_TransformField, rowValues.raw[columnIndex]))
                 return false;
         }
-        outTransform.rows[rowIndex] = Float4(rowValues[0], rowValues[1], rowValues[2], rowValues[3]);
+        outTransform.rows[rowIndex] = rowValues;
     }
 
     return true;

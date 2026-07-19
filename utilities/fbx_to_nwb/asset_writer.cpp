@@ -48,7 +48,7 @@ void WriteSkinWeights(Stream& out, const MeshSkinInfluence& skin){
     for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
         if(i != 0u)
             out << ", ";
-        WriteFloat(out, skin.weight[i]);
+        WriteFloat(out, skin.weight.raw[i]);
     }
     out << "]";
 }

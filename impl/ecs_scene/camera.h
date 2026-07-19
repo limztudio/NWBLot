@@ -121,14 +121,15 @@ static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectio
         VectorSet(1.0f, 1.0f, camera.farPlane(), camera.nearPlane()),
         VectorSet(1.0f, 1.0f, 1.0f, -camera.farPlane())
     );
-    StoreFloat(VectorDivide(projectionNumerators, projectionDenominators), &projectionData.projectionParams);
+    const SIMDVector projectionParams = VectorDivide(projectionNumerators, projectionDenominators);
     if(!CameraProjectionDataValid(
-        LoadFloat(projectionData.projectionParams),
+        projectionParams,
         projectionData.aspectRatio,
         projectionData.tanHalfVerticalFov
     ))
         return false;
 
+    StoreFloat(projectionParams, &projectionData.projectionParams);
     outProjectionData = projectionData;
     return true;
 }

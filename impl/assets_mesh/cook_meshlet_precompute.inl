@@ -54,19 +54,16 @@ template<typename CookEntryT>
         triangle.positions[1] = entry.vertexRefs[triangle.vertexRefs[1]].position;
         triangle.positions[2] = entry.vertexRefs[triangle.vertexRefs[2]].position;
 
-        const SIMDVector p0 = LoadMeshletSourceVertexPositionStreamVector(entry, triangle.vertexRefs[0]);
-        const SIMDVector p1 = LoadMeshletSourceVertexPositionStreamVector(entry, triangle.vertexRefs[1]);
-        const SIMDVector p2 = LoadMeshletSourceVertexPositionStreamVector(entry, triangle.vertexRefs[2]);
+        const SIMDVector p0 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[0u]]));
+        const SIMDVector p1 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[1u]]));
+        const SIMDVector p2 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[2u]]));
         const SIMDVector centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / 3.0f);
         const SIMDVector areaNormal = TriangleTests::AreaNormal(p0, p1, p2);
-        StoreMeshletTriangleVectors(
-            MeshletTriangleVectors{
-                { p0, p1, p2 },
-                VectorSetW(centroid, 0.0f),
-                VectorSetW(areaNormal, 0.0f)
-            },
-            triangle
-        );
+        StoreFloat(p0, &triangle.positionVectors[0u]);
+        StoreFloat(p1, &triangle.positionVectors[1u]);
+        StoreFloat(p2, &triangle.positionVectors[2u]);
+        StoreFloat(VectorSetW(centroid, 0.0f), &triangle.centroid);
+        StoreFloat(VectorSetW(areaNormal, 0.0f), &triangle.areaNormal);
 
         const u32 triangleIndexU32 = static_cast<u32>(triangleIndex);
         for(const u32 positionIndex : triangle.positions){

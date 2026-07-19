@@ -99,7 +99,7 @@ struct MeshSkinInfluenceHasher{
         usize seed = Hasher<u16>{}(value.joint[0u]);
         for(usize i = 1u; i < 4u; ++i)
             HashCombine(seed, value.joint[i]);
-        for(const f32 weight : value.weight)
+        for(const f32 weight : value.weight.raw)
             HashCombine(seed, FloatHashBits(weight));
         return seed;
     }
@@ -406,27 +406,33 @@ template<typename Vector3Like>
     return true;
 }
 
-[[nodiscard]] bool IsFiniteSkinInfluence(const MeshSkinInfluence& value){
-    return VectorIsFinite(
-        VectorSet(value.weight[0u], value.weight[1u], value.weight[2u], value.weight[3u]),
-        0xFu
-    );
+[[nodiscard]] bool IsFiniteSkinInfluence(const SIMDVector weights){
+    return VectorIsFinite(weights, 0xFu);
 }
 
-[[nodiscard]] bool IsFiniteSourceTriangleCorner(const SourceTriangleCorner& corner, const bool wantsSkinning){
+[[nodiscard]] bool IsFiniteSourceTriangleCorner(
+    const SIMDVector position,
+    const SIMDVector normal,
+    const SIMDVector tangent,
+    const SIMDVector uv0,
+    const SIMDVector color,
+    const bool hasTangent,
+    const bool wantsSkinning,
+    const SIMDVector skinWeights
+){
     if(
-        !VectorIsFinite(LoadFloat(corner.position), 0x7u)
-        || !VectorIsFinite(LoadFloat(corner.normal), 0x7u)
-        || !VectorIsFinite(LoadFloat(corner.uv0), 0x3u)
-        || !VectorIsFinite(LoadFloat(corner.color), 0xFu)
+        !VectorIsFinite(position, 0x7u)
+        || !VectorIsFinite(normal, 0x7u)
+        || !VectorIsFinite(uv0, 0x3u)
+        || !VectorIsFinite(color, 0xFu)
     )
         return false;
     if(
-        corner.hasTangent
-        && !VectorIsFinite(LoadFloat(corner.tangent), 0xFu)
+        hasTangent
+        && !VectorIsFinite(tangent, 0xFu)
     )
         return false;
-    return !wantsSkinning || IsFiniteSkinInfluence(corner.skin);
+    return !wantsSkinning || IsFiniteSkinInfluence(skinWeights);
 }
 
 template<typename Value, typename Lookup>

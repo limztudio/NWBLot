@@ -82,21 +82,6 @@ SIMDMatrix MakeStaticAttachmentWorldTransform(
     return MatrixMultiply(worldTransform, localTransform);
 }
 
-void StoreResolvedTransform(
-    Scene::TransformComponent& transform,
-    const SIMDMatrix& worldTransform
-){
-    SIMDVector scale;
-    SIMDVector rotation;
-    SIMDVector translation;
-    if(!ResolveObjectTransformVectors(worldTransform, scale, rotation, translation))
-        return;
-
-    StoreFloat(translation, &transform.position);
-    StoreFloat(rotation, &transform.rotation);
-    StoreFloat(scale, &transform.scale);
-}
-
 void StoreObjectWorldTransform(
     Core::ECS::World& world,
     const Core::ECS::EntityID owner,
@@ -113,13 +98,20 @@ void StoreObjectWorldTransform(
         : MatrixIdentity()
     ;
 
-    StoreResolvedTransform(
-        transform,
-        MakeWorldTransform(
-            ownerMatrix,
-            LoadFloat(localTransform)
-        )
-    );
+    SIMDVector scale;
+    SIMDVector rotation;
+    SIMDVector translation;
+    if(!ResolveObjectTransformVectors(
+        MakeWorldTransform(ownerMatrix, LoadFloat(localTransform)),
+        scale,
+        rotation,
+        translation
+    ))
+        return;
+
+    StoreFloat(translation, &transform.position);
+    StoreFloat(rotation, &transform.rotation);
+    StoreFloat(scale, &transform.scale);
 }
 
 void TagObject(
@@ -513,36 +505,41 @@ void ModelSystem::updateStaticMeshAttachments(){
             ;
             const SIMDMatrix localMatrix = LoadFloat(attachment.localTransform);
 
+            SIMDMatrix worldTransform{};
             if(!attachment.parentEntity.valid() || attachment.parentJointIndex == Limit<u32>::s_Max){
-                __hidden_model_system::StoreResolvedTransform(
-                    transform,
-                    __hidden_model_system::MakeStaticAttachmentWorldTransform(
-                        parentMatrix,
-                        nullptr,
-                        localMatrix
-                    )
+                worldTransform = __hidden_model_system::MakeStaticAttachmentWorldTransform(
+                    parentMatrix,
+                    nullptr,
+                    localMatrix
                 );
-                return;
             }
+            else{
+                const SkeletonPoseComponent* pose = m_world.tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
+                if(!pose)
+                    return;
 
-            const SkeletonPoseComponent* pose = m_world.tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
-            if(!pose)
-                return;
+                u32 skinningMode = SkeletonSkinningMode::LinearBlend;
+                if(!SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, m_scratchJoints, skinningMode))
+                    return;
 
-            u32 skinningMode = SkeletonSkinningMode::LinearBlend;
-            if(!SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, m_scratchJoints, skinningMode))
-                return;
-
-            NWB_ASSERT(attachment.parentJointIndex < m_scratchJoints.size());
-            const SIMDMatrix jointMatrix = LoadFloat(m_scratchJoints[attachment.parentJointIndex]);
-            __hidden_model_system::StoreResolvedTransform(
-                transform,
-                __hidden_model_system::MakeStaticAttachmentWorldTransform(
+                NWB_ASSERT(attachment.parentJointIndex < m_scratchJoints.size());
+                const SIMDMatrix jointMatrix = LoadFloat(m_scratchJoints[attachment.parentJointIndex]);
+                worldTransform = __hidden_model_system::MakeStaticAttachmentWorldTransform(
                     parentMatrix,
                     &jointMatrix,
                     localMatrix
-                )
-            );
+                );
+            }
+
+            SIMDVector scale;
+            SIMDVector rotation;
+            SIMDVector translation;
+            if(!__hidden_model_system::ResolveObjectTransformVectors(worldTransform, scale, rotation, translation))
+                return;
+
+            StoreFloat(translation, &transform.position);
+            StoreFloat(rotation, &transform.rotation);
+            StoreFloat(scale, &transform.scale);
         }
     );
 }

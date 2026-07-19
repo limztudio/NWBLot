@@ -30,16 +30,16 @@ static constexpr usize s_MaxSkeletonJointCount = static_cast<usize>(Limit<u16>::
 
 struct MeshSkinInfluence{
     u16 joint[s_MeshSkinInfluenceCount] = {};
-    f32 weight[s_MeshSkinInfluenceCount] = {};
+    Float4U weight{};
 };
-static_assert(sizeof(MeshSkinInfluence) == sizeof(u16) * s_MeshSkinInfluenceCount + sizeof(f32) * s_MeshSkinInfluenceCount);
+static_assert(sizeof(MeshSkinInfluence) == sizeof(u16) * s_MeshSkinInfluenceCount + sizeof(Float4U));
 static_assert(alignof(MeshSkinInfluence) == alignof(f32));
 static_assert(IsTriviallyCopyable_V<MeshSkinInfluence>);
 
 struct MeshSkinInfluenceEqual{
     bool operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const{
         for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
-            if(lhs.joint[i] != rhs.joint[i] || FloatHashBits(lhs.weight[i]) != FloatHashBits(rhs.weight[i]))
+            if(lhs.joint[i] != rhs.joint[i] || FloatHashBits(lhs.weight.raw[i]) != FloatHashBits(rhs.weight.raw[i]))
                 return false;
         }
         return true;

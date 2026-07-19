@@ -438,9 +438,9 @@ inline void FrustumCorners(
     const f32 farPlane,
     SIMDVector* outCorners
 )noexcept{
-    const f32 depths[2] = { nearPlane, farPlane };
+    const Float2U depths(nearPlane, farPlane);
     u32 corner = 0u;
-    for(const f32 depth : depths){
+    for(const f32 depth : depths.raw){
         const f32 left = leftSlope * depth;
         const f32 right = rightSlope * depth;
         const f32 bottom = bottomSlope * depth;

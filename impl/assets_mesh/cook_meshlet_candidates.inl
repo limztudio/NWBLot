@@ -36,9 +36,15 @@ static void UpdateBestMeshletCandidateIfBetter(
     if(!MeshletCanFitTriangle(meshlet, localVertexRefs, triangle, sharedVertexCount, missingVertexCount))
         return;
 
-    const MeshletTriangleVectors triangleVectors = LoadMeshletTriangleVectors(triangle);
+    const MeshletTriangleVectors triangleVectors = MakeMeshletTriangleVectors(
+        LoadFloat(triangle.positionVectors[0u]),
+        LoadFloat(triangle.positionVectors[1u]),
+        LoadFloat(triangle.positionVectors[2u]),
+        LoadFloat(triangle.centroid),
+        LoadFloat(triangle.areaNormal)
+    );
     const auto triangleAreaNormalAt = [&](const u32 otherTriangleIndex){
-        return LoadMeshletTriangleAreaNormal(trianglePrecompute.triangles[otherTriangleIndex]);
+        return LoadFloat(trianglePrecompute.triangles[otherTriangleIndex].areaNormal);
     };
     const f32 score = ScoreMeshletCandidate(
         triangleIndices,

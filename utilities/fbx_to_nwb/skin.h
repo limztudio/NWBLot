@@ -42,7 +42,8 @@ bool BuildInfluence(
     ufbx_skin_deformer* skin,
     const UtilityVector<u16>& clusterJoints,
     u32 logicalVertex,
-    MeshSkinInfluence& outInfluence
+    MeshSkinInfluence& outInfluence,
+    SIMDVector& outWeights
 );
 
 

@@ -269,9 +269,9 @@ template<typename TValue>
             return true;
         }
         if(parameter.fieldType == MaterialLayoutFieldType::Float4){
-            f32 components[4];
-            NWB_MEMCPY(components, sizeof(components), parameter.value.raw, sizeof(components));
-            outValue = Float4(components[0], components[1], components[2], components[3]);
+            Float4 components;
+            NWB_MEMCPY(&components, sizeof(components), parameter.value.raw, sizeof(components));
+            outValue = components;
             return true;
         }
         return false;

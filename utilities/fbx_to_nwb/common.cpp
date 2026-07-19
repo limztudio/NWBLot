@@ -182,18 +182,22 @@ bool ParseColorText(const AString& text, Vec4& outColor){
     Replace(normalized.begin(), normalized.end(), ',', ' ');
     AStringStream in(normalized);
 
-    Vec4 color;
-    if(!(in >> color.x >> color.y >> color.z >> color.w))
+    f32 red = 0.0f;
+    f32 green = 0.0f;
+    f32 blue = 0.0f;
+    f32 alpha = 0.0f;
+    if(!(in >> red >> green >> blue >> alpha))
         return false;
 
     AString trailing;
     if(in >> trailing)
         return false;
 
-    if(!VectorIsFinite(LoadFloat(color), 0xFu))
+    const SIMDVector color = VectorSet(red, green, blue, alpha);
+    if(!VectorIsFinite(color, 0xFu))
         return false;
 
-    outColor = color;
+    StoreFloat(color, &outColor);
     return true;
 }
 

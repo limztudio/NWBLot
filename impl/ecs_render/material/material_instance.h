@@ -262,14 +262,10 @@ template<typename TValue>
         if(parameter.parameterName != queryName)
             continue;
         if(parameter.fieldType == MaterialLayoutFieldType::Half4){
-            Half components[4];
-            NWB_MEMCPY(components, sizeof(components), parameter.value.raw, sizeof(components));
-            outValue = Float4(
-                ConvertHalfToFloat(components[0]),
-                ConvertHalfToFloat(components[1]),
-                ConvertHalfToFloat(components[2]),
-                ConvertHalfToFloat(components[3])
-            );
+            Half4U packedValue;
+            NWB_MEMCPY(&packedValue, sizeof(packedValue), parameter.value.raw, sizeof(packedValue));
+            const Float4U unpackedValue = LoadHalf4U(packedValue);
+            outValue = Float4(unpackedValue.x, unpackedValue.y, unpackedValue.z, unpackedValue.w);
             return true;
         }
         if(parameter.fieldType == MaterialLayoutFieldType::Float4){

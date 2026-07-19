@@ -94,15 +94,15 @@ struct StreamSortEntry{
 }
 
 [[nodiscard]] bool SameValue(const Vec2& lhs, const Vec2& rhs){
-    return SameF32(lhs.x, rhs.x) && SameF32(lhs.y, rhs.y);
+    return Vector2EqualInt(LoadFloat(lhs), LoadFloat(rhs));
 }
 
 [[nodiscard]] bool SameValue(const Vec3& lhs, const Vec3& rhs){
-    return SameF32(lhs.x, rhs.x) && SameF32(lhs.y, rhs.y) && SameF32(lhs.z, rhs.z);
+    return Vector3EqualInt(LoadFloat(lhs), LoadFloat(rhs));
 }
 
 [[nodiscard]] bool SameValue(const Vec4& lhs, const Vec4& rhs){
-    return SameF32(lhs.x, rhs.x) && SameF32(lhs.y, rhs.y) && SameF32(lhs.z, rhs.z) && SameF32(lhs.w, rhs.w);
+    return Vector4EqualInt(LoadFloat(lhs), LoadFloat(rhs));
 }
 
 [[nodiscard]] bool SameValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs){

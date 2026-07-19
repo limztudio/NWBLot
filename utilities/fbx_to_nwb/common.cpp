@@ -190,11 +190,8 @@ bool ParseColorText(const AString& text, Vec4& outColor){
     if(in >> trailing)
         return false;
 
-    const f32 values[] = { color.x, color.y, color.z, color.w };
-    for(const f32 value : values){
-        if(!IsFinite(value))
-            return false;
-    }
+    if(!VectorIsFinite(LoadFloat(color), 0xFu))
+        return false;
 
     outColor = color;
     return true;

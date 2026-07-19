@@ -407,37 +407,23 @@ template<typename Vector3Like>
 }
 
 [[nodiscard]] bool IsFiniteSkinInfluence(const MeshSkinInfluence& value){
-    for(const f32 weight : value.weight){
-        if(!IsFinite(weight))
-            return false;
-    }
-    return true;
+    return VectorIsFinite(
+        VectorSet(value.weight[0u], value.weight[1u], value.weight[2u], value.weight[3u]),
+        0xFu
+    );
 }
 
 [[nodiscard]] bool IsFiniteSourceTriangleCorner(const SourceTriangleCorner& corner, const bool wantsSkinning){
     if(
-        !IsFinite(corner.position.x)
-        || !IsFinite(corner.position.y)
-        || !IsFinite(corner.position.z)
-        || !IsFinite(corner.normal.x)
-        || !IsFinite(corner.normal.y)
-        || !IsFinite(corner.normal.z)
-        || !IsFinite(corner.uv0.x)
-        || !IsFinite(corner.uv0.y)
-        || !IsFinite(corner.color.x)
-        || !IsFinite(corner.color.y)
-        || !IsFinite(corner.color.z)
-        || !IsFinite(corner.color.w)
+        !VectorIsFinite(LoadFloat(corner.position), 0x7u)
+        || !VectorIsFinite(LoadFloat(corner.normal), 0x7u)
+        || !VectorIsFinite(LoadFloat(corner.uv0), 0x3u)
+        || !VectorIsFinite(LoadFloat(corner.color), 0xFu)
     )
         return false;
     if(
         corner.hasTangent
-        && (
-            !IsFinite(corner.tangent.x)
-            || !IsFinite(corner.tangent.y)
-            || !IsFinite(corner.tangent.z)
-            || !IsFinite(corner.tangent.w)
-        )
+        && !VectorIsFinite(LoadFloat(corner.tangent), 0xFu)
     )
         return false;
     return !wantsSkinning || IsFiniteSkinInfluence(corner.skin);

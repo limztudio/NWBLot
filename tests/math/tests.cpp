@@ -267,6 +267,33 @@ TEST(Math, HalfFloatBufferConversion){
     EXPECT_EQ(unpacked[5], Limit<f32>::s_Infinity);
 }
 
+TEST(Math, HalfFloat4Conversion){
+    const Half4U packed = MakeHalf4U(0.0f, -1.5f, 65504.0f, Limit<f32>::s_Infinity);
+    EXPECT_EQ(packed.raw[0], ConvertFloatToHalf(0.0f));
+    EXPECT_EQ(packed.raw[1], ConvertFloatToHalf(-1.5f));
+    EXPECT_EQ(packed.raw[2], ConvertFloatToHalf(65504.0f));
+    EXPECT_EQ(packed.raw[3], ConvertFloatToHalf(Limit<f32>::s_Infinity));
+
+    const Float4U unpacked = LoadHalf4U(packed);
+    EXPECT_TRUE(NearlyEqual(unpacked.x, 0.0f));
+    EXPECT_TRUE(NearlyEqual(unpacked.y, -1.5f));
+    EXPECT_TRUE(NearlyEqual(unpacked.z, 65504.0f));
+    EXPECT_EQ(unpacked.w, Limit<f32>::s_Infinity);
+
+    const Half4U specialPacked = MakeHalf4U(-0.0f, 5.9604644775390625e-8f, Limit<f32>::s_QuietNaN, -Limit<f32>::s_Infinity);
+    EXPECT_EQ(specialPacked.raw[0], static_cast<Half>(0x8000u));
+    EXPECT_EQ(specialPacked.raw[1], static_cast<Half>(0x0001u));
+    EXPECT_EQ((specialPacked.raw[2] & static_cast<Half>(0x7c00u)), static_cast<Half>(0x7c00u));
+    EXPECT_NE((specialPacked.raw[2] & static_cast<Half>(0x03ffu)), static_cast<Half>(0u));
+    EXPECT_EQ(specialPacked.raw[3], static_cast<Half>(0xfc00u));
+
+    const Float4U specialUnpacked = LoadHalf4U(specialPacked);
+    EXPECT_TRUE(SignBit(specialUnpacked.x));
+    EXPECT_TRUE(NearlyEqual(specialUnpacked.y, 5.9604644775390625e-8f));
+    EXPECT_TRUE(IsNaN(specialUnpacked.z));
+    EXPECT_EQ(specialUnpacked.w, -Limit<f32>::s_Infinity);
+}
+
 TEST(Math, FloatIntStorageConversion){
     const SIMDVector xyz = VectorSet(1.25f, -2.5f, 3.75f, 99.0f);
 

@@ -167,12 +167,10 @@ NWB_INLINE f32* ConvertHalfBufferToFloat(f32* outFloatBuffer, const Half* halfBu
 }
 
 [[nodiscard]] NWB_INLINE Half4U MakeHalf4U(const f32 x, const f32 y, const f32 z, const f32 w)noexcept{
-    return Half4U(
-        ConvertFloatToHalf(x),
-        ConvertFloatToHalf(y),
-        ConvertFloatToHalf(z),
-        ConvertFloatToHalf(w)
-    );
+    const f32 values[] = { x, y, z, w };
+    Half4U result;
+    ConvertFloatBufferToHalf(result.raw, values, 4u);
+    return result;
 }
 
 [[nodiscard]] NWB_INLINE Float2U LoadHalf2U(const Half2U& value)noexcept{
@@ -180,12 +178,9 @@ NWB_INLINE f32* ConvertHalfBufferToFloat(f32* outFloatBuffer, const Half* halfBu
 }
 
 [[nodiscard]] NWB_INLINE Float4U LoadHalf4U(const Half4U& value)noexcept{
-    return Float4U(
-        ConvertHalfToFloat(value.x),
-        ConvertHalfToFloat(value.y),
-        ConvertHalfToFloat(value.z),
-        ConvertHalfToFloat(value.w)
-    );
+    Float4U result{};
+    ConvertHalfBufferToFloat(result.raw, value.raw, 4u);
+    return result;
 }
 
 

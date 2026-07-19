@@ -267,8 +267,18 @@ bool BuildInfluence(
     }
 
     const f32 inverseWeightSum = static_cast<f32>(1.0 / weightSum);
-    for(f32& weight : outInfluence.weight)
-        weight *= inverseWeightSum;
+    SIMDConvertDetail::StoreF32(
+        outInfluence.weight,
+        VectorScale(
+            VectorSet(
+                outInfluence.weight[0u],
+                outInfluence.weight[1u],
+                outInfluence.weight[2u],
+                outInfluence.weight[3u]
+            ),
+            inverseWeightSum
+        )
+    );
 
     return true;
 }

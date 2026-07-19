@@ -113,12 +113,15 @@ static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectio
     CameraProjectionData projectionData;
     projectionData.aspectRatio = aspectRatio;
     projectionData.tanHalfVerticalFov = tanHalfFov;
-    projectionData.projectionParams = Float4(
-        1.0f / (tanHalfFov * aspectRatio),
-        1.0f / tanHalfFov,
-        camera.farPlane() / depthRange,
-        -(camera.nearPlane() * camera.farPlane()) / depthRange
+    const SIMDVector projectionDenominators = VectorMultiply(
+        VectorSet(tanHalfFov, tanHalfFov, depthRange, depthRange),
+        VectorSet(aspectRatio, 1.0f, 1.0f, 1.0f)
     );
+    const SIMDVector projectionNumerators = VectorMultiply(
+        VectorSet(1.0f, 1.0f, camera.farPlane(), camera.nearPlane()),
+        VectorSet(1.0f, 1.0f, 1.0f, -camera.farPlane())
+    );
+    StoreFloat(VectorDivide(projectionNumerators, projectionDenominators), &projectionData.projectionParams);
     if(!CameraProjectionDataValid(
         LoadFloat(projectionData.projectionParams),
         projectionData.aspectRatio,

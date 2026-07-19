@@ -39,6 +39,11 @@ TEST(Scene, CameraProjectionHelpers){
     EXPECT_GT(projectionParams.y, 0.0f);
     EXPECT_GT(projectionParams.z, 0.0f);
     EXPECT_LT(projectionParams.w, 0.0f);
+    const f32 depthRange = camera.farPlane() - camera.nearPlane();
+    EXPECT_FLOAT_EQ(projectionParams.x, 1.0f / (tanHalfFov * camera.aspectRatio()));
+    EXPECT_FLOAT_EQ(projectionParams.y, 1.0f / tanHalfFov);
+    EXPECT_FLOAT_EQ(projectionParams.z, camera.farPlane() / depthRange);
+    EXPECT_FLOAT_EQ(projectionParams.w, -(camera.nearPlane() * camera.farPlane()) / depthRange);
 
     NWB::Impl::Scene::CameraProjectionData projectionData;
     EXPECT_TRUE(NWB::Impl::Scene::TryBuildCameraProjectionData(camera, 1.5f, projectionData));

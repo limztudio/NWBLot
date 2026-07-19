@@ -9,9 +9,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Software-shadow ray/primitive intersection math: the slab ray/AABB overlap test, the safe reciprocal-direction, and
-// the watertight Woop ray/triangle test. PURE float math -- declares NO bindings and pulls NO other concern, so any BVH
-// traversal (scene or per-mesh) can compose it. Kept in shadow/ to keep the software-shadow decomposition self-contained.
+// Software-shadow ray/primitive intersection math: the shared slab ray/AABB helpers plus the watertight Woop ray/triangle
+// test. PURE float math -- declares NO bindings and pulls NO other concern, so any BVH traversal (scene or per-mesh) can
+// compose it.
 
 
 #define NWB_SW_SHADOW_AABB_PADDING 1e-4
@@ -21,20 +21,14 @@
 // compare with plain <= (no inf/NaN hazards).
 #define NWB_SW_SHADOW_AABB_MISS 1.0e30
 
+#include "../bvh/ray_intersect.slangi"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Slab ray/AABB overlap test over the [tMin, tMax] interval. invDir may contain +/-inf for axis-aligned
-// directions; the min/max ordering keeps that well-defined for all but the measure-zero on-slab case.
 bool nwbSwShadowRayAabb(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
-    const float3 t0 = (boxMin - NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
-    const float3 t1 = (boxMax + NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
-    const float3 tSmall = min(t0, t1);
-    const float3 tLarge = max(t0, t1);
-    const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
-    const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
-    return tNear <= tFar;
+    return nwbBvhRayAabb(origin, invDir, tMin, tMax, boxMin, boxMax, NWB_SW_SHADOW_AABB_PADDING);
 }
 
 // Entry distance of the ray into the box (the slab tNear, clamped into [tMin,tMax]); NWB_SW_SHADOW_AABB_MISS on miss.
@@ -43,26 +37,18 @@ bool nwbSwShadowRayAabb(const float3 origin, const float3 invDir, const float tM
 // (same padding, same min/max) keeps the miss set identical; this only RANKS two sibling boxes so the nearer one is
 // visited first -- it can never cull a real hit.
 float nwbSwShadowRayAabbEntryT(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
-    const float3 t0 = (boxMin - NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
-    const float3 t1 = (boxMax + NWB_SW_SHADOW_AABB_PADDING - origin) * invDir;
-    const float3 tSmall = min(t0, t1);
-    const float3 tLarge = max(t0, t1);
-    const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
-    const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
-    return (tNear <= tFar) ? tNear : NWB_SW_SHADOW_AABB_MISS;
+    float tEntry;
+    return nwbBvhRayAabbT(origin, invDir, tMin, tMax, boxMin, boxMax, NWB_SW_SHADOW_AABB_PADDING, tEntry)
+        ? tEntry
+        : NWB_SW_SHADOW_AABB_MISS
+    ;
 }
 
 // Reciprocal of the ray direction with each component nudged off exactly zero, so an axis-aligned ray gets
 // a large-but-finite slope instead of +/-inf. That keeps the slab test from forming inf*0 = NaN when the
 // ray origin lies exactly on a box face (a NaN there compares false and would silently drop the shadow).
 float3 nwbSwShadowSafeInvDir(const float3 direction){
-    const float epsilon = 1e-8;
-    const float3 safe = float3(
-        abs(direction.x) > epsilon ? direction.x : (direction.x < 0.0 ? -epsilon : epsilon),
-        abs(direction.y) > epsilon ? direction.y : (direction.y < 0.0 ? -epsilon : epsilon),
-        abs(direction.z) > epsilon ? direction.z : (direction.z < 0.0 ? -epsilon : epsilon)
-    );
-    return 1.0 / safe;
+    return nwbBvhSafeInvDir(direction);
 }
 
 // Result of a ray/triangle test: whether the ray crossed the triangle inside (tMin, tMax) + the hit's

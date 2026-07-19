@@ -31,16 +31,6 @@ inline constexpr usize s_HandlerCommandLineReserveSlack = 160u;
 inline constexpr DWORD s_HandlerExitWaitMilliseconds = 3000u;
 
 
-[[nodiscard]] static bool __hidden_ack_matches_request(
-    const Detail::CrashAck& ack,
-    const Detail::CrashRequest& request
-)noexcept{
-    return ack.magic == Detail::s_AckMagic
-        && ack.version == Detail::s_RequestVersion
-        && AStringView(ack.crashId) == AStringView(request.crashId)
-    ;
-}
-
 static void __hidden_drain_pending_acks(const HANDLE ackReadHandle)noexcept{
     if(ackReadHandle == INVALID_HANDLE_VALUE)
         return;
@@ -213,7 +203,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
                 status = CrashDumpTransportStatus::Failed;
                 break;
             }
-            if(!__hidden_crash_win32::__hidden_ack_matches_request(ack, request)){
+            if(!CrashAckMatchesRequest(ack, request)){
                 status = CrashDumpTransportStatus::Failed;
                 break;
             }

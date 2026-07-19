@@ -169,15 +169,15 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         if(!renderer.visible)
             continue;
 
-        RenderableMeshDesc resolvedMesh;
-        if(!meshSystem->resolveRenderableMesh(entity, resolvedMesh))
-            continue;
-
         MeshResources* mesh = nullptr;
-        const bool meshReady = resolvedMesh.runtime
-            ? m_renderer.meshSystem().findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
-            : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
-        ;
+        RenderableMeshDesc resolvedMesh;
+        const bool meshReady = __hidden_raytracing_system::ResolveRenderableMeshResources(
+            *meshSystem,
+            m_renderer.meshSystem(),
+            entity,
+            resolvedMesh,
+            mesh
+        );
         // The BLAS owns the positions it traces, while the HW GI trace needs the index buffer (3 vertex indices by
         // PrimitiveIndex), the U2 triangle-corner attribute buffer, and the raw position buffer for geometric face
         // normals, so require all three.
@@ -219,12 +219,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         if(transform){
             // Compose object->world (T * R(quat) * S) and store it as the instance's row-major 3x4 transform;
             // the engine's column-vector SIMDMatrix rows map directly onto AffineTransform (= Float34).
-            const SIMDMatrix instanceWorld = MatrixAffineTransformation(
-                LoadFloat(transform->scale),
-                VectorZero(),
-                LoadFloat(transform->rotation),
-                LoadFloat(transform->position)
-            );
+            const SIMDMatrix instanceWorld = __hidden_raytracing_system::BuildObjectToWorld(transform);
             StoreFloat(instanceWorld, &instanceDesc.transform);
         }
 
@@ -386,15 +381,15 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         if(!renderer.visible)
             continue;
 
-        RenderableMeshDesc resolvedMesh;
-        if(!meshSystem->resolveRenderableMesh(entity, resolvedMesh))
-            continue;
-
         MeshResources* mesh = nullptr;
-        const bool meshReady = resolvedMesh.runtime
-            ? m_renderer.meshSystem().findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
-            : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
-        ;
+        RenderableMeshDesc resolvedMesh;
+        const bool meshReady = __hidden_raytracing_system::ResolveRenderableMeshResources(
+            *meshSystem,
+            m_renderer.meshSystem(),
+            entity,
+            resolvedMesh,
+            mesh
+        );
         // Only instances whose per-mesh software BVH topology + geometry are built (and that have valid
         // object-space bounds) can be traced. Storage alone is insufficient because resource preparation may
         // allocate it before the first build command has initialized the topology.
@@ -430,17 +425,8 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             rayTracingState().m_swShadowMeshAttributeBuffers[meshSlot] = mesh->attributeBuffer.get();
         }
 
-        // object->world from the decomposed transform (identity when absent), matching buildSceneTlas.
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
-        SIMDMatrix objectToWorld = MatrixIdentity();
-        if(transform){
-            objectToWorld = MatrixAffineTransformation(
-                LoadFloat(transform->scale),
-                VectorZero(),
-                LoadFloat(transform->rotation),
-                LoadFloat(transform->position)
-            );
-        }
+        const SIMDMatrix objectToWorld = __hidden_raytracing_system::BuildObjectToWorld(transform);
         SIMDVector determinant;
         const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
 

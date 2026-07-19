@@ -417,6 +417,49 @@ bool RendererMaterialSystem::createRendererPipeline(
         avboitState().m_accumulateBindingLayout
     };
 
+    auto loadPassPixelShader = [&]() -> bool{
+        if(pass == MaterialPipelinePass::Opaque){
+            return m_renderer.shaderSystem().loadShader(
+                resources.pixelShader,
+                materialInfo.pixelShader.name(),
+                pixelShaderVariant,
+                Core::ShaderType::Pixel,
+                "ECSRender_RendererPS"
+            );
+        }
+        if(pass == MaterialPipelinePass::CsgReceiverSurface){
+            return m_renderer.shaderSystem().loadShader(
+                resources.pixelShader,
+                passPixelShaderName,
+                Core::ShaderArchive::s_DefaultVariant,
+                Core::ShaderType::Pixel,
+                passPixelShaderDebugName
+            );
+        }
+        if(avboitCsgClipPipeline){
+            return m_renderer.shaderSystem().loadShader(
+                resources.pixelShader,
+                passPixelShaderName,
+                AStringView(avboitCsgShaderVariant),
+                Core::ShaderType::Pixel,
+                passPixelShaderDebugName
+            );
+        }
+        if(!passPixelShader){
+            // AVBOIT pixel shaders are generated for the selected material and use its typed binding and project
+            // surface/BXDF contract, so load the resolved per-material pass shader at its default variant.
+            return m_renderer.shaderSystem().loadShader(
+                resources.pixelShader,
+                passPixelShaderName,
+                Core::ShaderArchive::s_DefaultVariant,
+                Core::ShaderType::Pixel,
+                passPixelShaderDebugName
+            );
+        }
+        resources.pixelShader = passPixelShader;
+        return true;
+    };
+
     auto tryBuildMeshPipeline = [&]() -> bool{
         if(!drawState().m_meshBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh shader resources were not validated before material pipeline creation"));
@@ -424,26 +467,8 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
         if(!m_renderer.shaderSystem().loadShader(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, Core::ShaderType::Mesh, "ECSRender_RendererMesh"))
             return false;
-        if(pass == MaterialPipelinePass::Opaque){
-            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
-                return false;
-        }
-        else if(pass == MaterialPipelinePass::CsgReceiverSurface){
-            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Pixel, passPixelShaderDebugName))
-                return false;
-        }
-        else if(avboitCsgClipPipeline){
-            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
-                return false;
-        }
-        else if(!passPixelShader){
-            // AVBOIT pixel shaders are generated for the selected material and use its typed binding and project
-            // surface/BXDF contract, so load the resolved per-material pass shader at its default variant.
-            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Pixel, passPixelShaderDebugName))
-                return false;
-        }
-        else
-            resources.pixelShader = passPixelShader;
+        if(!loadPassPixelShader())
+            return false;
 
         Core::MeshletPipelineDesc pipelineDesc;
         pipelineDesc.setMeshShader(resources.meshShader);
@@ -485,27 +510,8 @@ bool RendererMaterialSystem::createRendererPipeline(
             &meshComputeArchiveStageName
         ))
             return false;
-        if(pass == MaterialPipelinePass::Opaque){
-            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
-                return false;
-        }
-        else if(pass == MaterialPipelinePass::CsgReceiverSurface){
-            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Pixel, passPixelShaderDebugName))
-                return false;
-        }
-        else if(avboitCsgClipPipeline){
-            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
-                return false;
-        }
-        else if(!passPixelShader){
-            // AVBOIT pixel shaders are generated for the selected material and use its typed binding and project
-            // surface/BXDF contract, so load the resolved per-material pass shader at its default variant.
-            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Pixel, passPixelShaderDebugName))
-                return false;
-        }
-        else{
-            resources.pixelShader = passPixelShader;
-        }
+        if(!loadPassPixelShader())
+            return false;
         Core::ComputePipelineDesc computeDesc;
         computeDesc.setComputeShader(resources.computeShader);
         computeDesc.addBindingLayout(drawState().m_computeBindingLayout);

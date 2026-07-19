@@ -39,15 +39,15 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
         if(!renderer.visible)
             continue;
 
-        RenderableMeshDesc resolvedMesh;
-        if(!meshSystem->resolveRenderableMesh(entity, resolvedMesh))
-            continue;
-
         MeshResources* mesh = nullptr;
-        const bool meshReady = resolvedMesh.runtime
-            ? m_renderer.meshSystem().findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
-            : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
-        ;
+        RenderableMeshDesc resolvedMesh;
+        const bool meshReady = __hidden_raytracing_system::ResolveRenderableMeshResources(
+            *meshSystem,
+            m_renderer.meshSystem(),
+            entity,
+            resolvedMesh,
+            mesh
+        );
         // Need valid object-space bounds to build a world AABB; the per-mesh BVH / position buffers (required by
         // the SW shadow trace) are NOT required here -- the emission target is geometry-agnostic.
         if(!meshReady || !mesh || !mesh->csgLocalBounds.valid())
@@ -61,17 +61,8 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
         if(!materialInfo || !materialInfo->refractive)
             continue;
 
-        // object->world from the decomposed transform (identity when absent), matching buildSceneSwBvh.
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
-        SIMDMatrix objectToWorld = MatrixIdentity();
-        if(transform){
-            objectToWorld = MatrixAffineTransformation(
-                LoadFloat(transform->scale),
-                VectorZero(),
-                LoadFloat(transform->rotation),
-                LoadFloat(transform->position)
-            );
-        }
+        const SIMDMatrix objectToWorld = __hidden_raytracing_system::BuildObjectToWorld(transform);
 
         // Use the shared 8-corner transform so caustic targets and the scene BVH retain identical world bounds.
         SIMDVector localMin = LoadFloatInt(mesh->csgLocalBounds.minBounds);
@@ -503,6 +494,27 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTargets& targets, const f32 temporalDecay)const{
+    return
+        rayTracingState().m_causticResolvePipeline
+        && rayTracingState().m_causticResolveBindingSetOutputHalfA
+        && rayTracingState().m_causticResolveBindingSetOutputHalfB
+        && rayTracingState().m_causticResolveBindingSetUpsample
+        && rayTracingState().m_causticGeometryDownsamplePipeline
+        && rayTracingState().m_causticGeometryDownsampleBindingSet
+        && (temporalDecay <= 0.f || (rayTracingState().m_causticAccumulatorDecayPipeline && rayTracingState().m_causticAccumulatorDecayBindingSet))
+        && targets.causticAccumulator
+        && targets.causticIrradiance
+        && targets.causticHistory
+        && targets.causticResolveHalf
+        && targets.causticResolveGeometry
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets){
     // Software caustic photon producer + resolve — the no-hardware-ray-tracing fallback (P3). Dispatched in the
     // SW-fallback branch right after the SW shadow pass and BEFORE deferred lighting (which reads the resolved
@@ -512,19 +524,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
     if(!hasCausticWork())
         return false;
     const f32 temporalDecay = causticTemporalDecay();
-    if(
-        !rayTracingState().m_swCausticPipeline
-        || !rayTracingState().m_swCausticBindingSet
-        || !rayTracingState().m_causticResolvePipeline
-        || !rayTracingState().m_causticResolveBindingSetOutputHalfA
-        || !rayTracingState().m_causticResolveBindingSetOutputHalfB
-        || !rayTracingState().m_causticResolveBindingSetUpsample
-        || !rayTracingState().m_causticGeometryDownsamplePipeline
-        || !rayTracingState().m_causticGeometryDownsampleBindingSet
-        || (temporalDecay > 0.f && (!rayTracingState().m_causticAccumulatorDecayPipeline || !rayTracingState().m_causticAccumulatorDecayBindingSet))
-    )
-        return false;
-    if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory || !targets.causticResolveHalf || !targets.causticResolveGeometry)
+    if(!rayTracingState().m_swCausticPipeline || !rayTracingState().m_swCausticBindingSet || !causticResolveResourcesReady(targets, temporalDecay))
         return false;
 
     {
@@ -1453,16 +1453,8 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         !rayTracingState().m_hwCausticPipeline
         || !rayTracingState().m_hwCausticShaderTable
         || !rayTracingState().m_hwCausticBindingSet
-        || !rayTracingState().m_causticResolvePipeline
-        || !rayTracingState().m_causticResolveBindingSetOutputHalfA
-        || !rayTracingState().m_causticResolveBindingSetOutputHalfB
-        || !rayTracingState().m_causticResolveBindingSetUpsample
-        || !rayTracingState().m_causticGeometryDownsamplePipeline
-        || !rayTracingState().m_causticGeometryDownsampleBindingSet
-        || (temporalDecay > 0.f && (!rayTracingState().m_causticAccumulatorDecayPipeline || !rayTracingState().m_causticAccumulatorDecayBindingSet))
+        || !causticResolveResourcesReady(targets, temporalDecay)
     )
-        return false;
-    if(!targets.causticAccumulator || !targets.causticIrradiance || !targets.causticHistory || !targets.causticResolveHalf || !targets.causticResolveGeometry)
         return false;
 
     {

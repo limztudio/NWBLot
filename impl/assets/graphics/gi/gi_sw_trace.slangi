@@ -38,6 +38,7 @@
 #include "gi_trace_common.slangi"
 // SW-only: the CPU-built scene/instance/per-mesh BVH node type.
 #include "../bvh/bvh_common.slangi"
+#include "../bvh/ray_intersect.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,38 +102,6 @@ NwbGiSwVertexAttrib nwbGiSwLoadVertexAttrib(const uint meshIndex, const uint att
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// Ray/AABB slab overlap + entry-T (front-to-back ordered descent -- cloned from caustic, the proven pattern).
-float3 nwbGiSwSafeInvDir(const float3 direction){
-    const float epsilon = 1e-8;
-    const float3 safe = float3(
-        abs(direction.x) > epsilon ? direction.x : (direction.x < 0.0 ? -epsilon : epsilon),
-        abs(direction.y) > epsilon ? direction.y : (direction.y < 0.0 ? -epsilon : epsilon),
-        abs(direction.z) > epsilon ? direction.z : (direction.z < 0.0 ? -epsilon : epsilon)
-    );
-    return 1.0 / safe;
-}
-
-bool nwbGiSwRayAabb(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
-    const float3 t0 = (boxMin - origin) * invDir;
-    const float3 t1 = (boxMax - origin) * invDir;
-    const float3 tSmall = min(t0, t1);
-    const float3 tLarge = max(t0, t1);
-    const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
-    const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
-    return tNear <= tFar;
-}
-
-bool nwbGiSwRayAabbT(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax, out float tEntry){
-    const float3 t0 = (boxMin - origin) * invDir;
-    const float3 t1 = (boxMax - origin) * invDir;
-    const float3 tSmall = min(t0, t1);
-    const float3 tLarge = max(t0, t1);
-    const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
-    const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
-    tEntry = tNear;
-    return tNear <= tFar;
-}
 
 float3 nwbGiSwTransformPoint(const NwbGiSwInstance instance, const float3 point){
     return float3(
@@ -204,12 +173,12 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
 
     const float3 origin = nwbGiSwTransformPoint(instance, worldOrigin);
     const float3 direction = nwbGiSwTransformVector(instance, worldDirection);
-    const float3 invDir = nwbGiSwSafeInvDir(direction);
+    const float3 invDir = nwbBvhSafeInvDir(direction);
 
     uint stack[NWB_GI_SW_MESH_STACK_SIZE];
     uint stackPointer = 0u;
     NwbBvhNode node = g_NwbGiSwMeshNodes[NonUniformResourceIndex(meshIndex)][0u];
-    bool active = nwbGiSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax);
+    bool active = nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0);
 
     [loop] while(active){
         if(nwbBvhNodeIsLeaf(node)){
@@ -249,9 +218,9 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
             const NwbBvhNode leftNode = g_NwbGiSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.leftChild];
             const NwbBvhNode rightNode = g_NwbGiSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.rightChild];
             float tLeft;
-            const bool hitLeft = nwbGiSwRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, tLeft);
+            const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
             float tRight;
-            const bool hitRight = nwbGiSwRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, tRight);
+            const bool hitRight = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, 0.0, tRight);
             if(hitLeft && hitRight){
                 if(tLeft <= tRight){
                     if(stackPointer < NWB_GI_SW_MESH_STACK_SIZE) stack[stackPointer++] = node.rightChild;
@@ -270,7 +239,7 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
 
         [loop] while(stackPointer > 0u){
             node = g_NwbGiSwMeshNodes[NonUniformResourceIndex(meshIndex)][stack[--stackPointer]];
-            if(nwbGiSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax)){
+            if(nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0)){
                 active = true;
                 break;
             }
@@ -287,12 +256,12 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     closest.normal = float3(0.0, 0.0, 1.0);
     closest.albedo = half3(NWB_GI_SW_TRACE_DEFAULT_ALBEDO);
 
-    const float3 invDir = nwbGiSwSafeInvDir(direction);
+    const float3 invDir = nwbBvhSafeInvDir(direction);
 
     uint stack[NWB_GI_SW_SCENE_STACK_SIZE];
     uint stackPointer = 0u;
     NwbBvhNode node = g_NwbGiSwSceneNodes[0u];
-    bool active = nwbGiSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax);
+    bool active = nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0);
 
     [loop] while(active){
         if(nwbBvhNodeIsLeaf(node)){
@@ -303,9 +272,9 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
             const NwbBvhNode leftNode = g_NwbGiSwSceneNodes[node.leftChild];
             const NwbBvhNode rightNode = g_NwbGiSwSceneNodes[node.rightChild];
             float tLeft;
-            const bool hitLeft = nwbGiSwRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, tLeft);
+            const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
             float tRight;
-            const bool hitRight = nwbGiSwRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, tRight);
+            const bool hitRight = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, 0.0, tRight);
             if(hitLeft && hitRight){
                 if(tLeft <= tRight){
                     if(stackPointer < NWB_GI_SW_SCENE_STACK_SIZE) stack[stackPointer++] = node.rightChild;
@@ -324,7 +293,7 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 
         [loop] while(stackPointer > 0u){
             node = g_NwbGiSwSceneNodes[stack[--stackPointer]];
-            if(nwbGiSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax)){
+            if(nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0)){
                 active = true;
                 break;
             }

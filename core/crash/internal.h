@@ -170,6 +170,13 @@ struct CrashAck{
     char crashId[s_MaxShortText] = {};
 };
 
+[[nodiscard]] inline bool CrashAckMatchesRequest(const CrashAck& ack, const CrashRequest& request)noexcept{
+    return ack.magic == s_AckMagic
+        && ack.version == s_RequestVersion
+        && AStringView(ack.crashId) == AStringView(request.crashId)
+    ;
+}
+
 struct CrashDumpRequestOptions{
     u32 waitMilliseconds = 0u;
     u32 callstackFrameCount = 0u;

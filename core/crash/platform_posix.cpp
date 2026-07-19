@@ -324,16 +324,6 @@ static void __hidden_silence_child_process(int& requestReadFd, int& ackWriteFd)n
     __hidden_redirect_stdio_to_null();
 }
 
-[[nodiscard]] static bool __hidden_ack_matches_request(
-    const Detail::CrashAck& ack,
-    const Detail::CrashRequest& request
-)noexcept{
-    return ack.magic == Detail::s_AckMagic
-        && ack.version == Detail::s_RequestVersion
-        && AStringView(ack.crashId) == AStringView(request.crashId)
-    ;
-}
-
 static void __hidden_drain_pending_acks(const int ackReadFd)noexcept{
     if(ackReadFd < 0)
         return;
@@ -392,7 +382,7 @@ static void __hidden_drain_pending_acks(const int ackReadFd)noexcept{
         Detail::CrashAck ack;
         if(!ReadAllFileDescriptor(ackReadFd, &ack, sizeof(ack)))
             return Detail::CrashDumpTransportStatus::Failed;
-        if(__hidden_ack_matches_request(ack, request))
+        if(Detail::CrashAckMatchesRequest(ack, request))
             return ack.packageWritten
                 ? Detail::CrashDumpTransportStatus::PackageWritten
                 : Detail::CrashDumpTransportStatus::PackageWriteFailed

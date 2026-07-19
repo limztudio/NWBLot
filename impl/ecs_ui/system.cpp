@@ -48,6 +48,15 @@ static void DrawCallbackResetRenderState(const ImDrawList*, const ImDrawCmd*){}
     return VectorDivide(numerators, denominators);
 }
 
+static void GetFramebufferExtent(const ImDrawData& drawData, i32& outWidth, i32& outHeight){
+    const SIMDVector framebufferExtent = VectorMultiply(
+        VectorSet(drawData.DisplaySize.x, drawData.DisplaySize.y, 0.0f, 0.0f),
+        VectorSet(drawData.FramebufferScale.x, drawData.FramebufferScale.y, 0.0f, 0.0f)
+    );
+    outWidth = static_cast<i32>(VectorGetX(framebufferExtent));
+    outHeight = static_cast<i32>(VectorGetY(framebufferExtent));
+}
+
 static bool HasTextureRequests(const ImDrawData& drawData){
 #if defined(IMGUI_HAS_TEXTURES)
     if(!drawData.Textures)
@@ -259,12 +268,9 @@ bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
     if(!drawData)
         return true;
 
-    const SIMDVector framebufferExtent = VectorMultiply(
-        VectorSet(drawData->DisplaySize.x, drawData->DisplaySize.y, 0.0f, 0.0f),
-        VectorSet(drawData->FramebufferScale.x, drawData->FramebufferScale.y, 0.0f, 0.0f)
-    );
-    const i32 framebufferWidth = static_cast<i32>(VectorGetX(framebufferExtent));
-    const i32 framebufferHeight = static_cast<i32>(VectorGetY(framebufferExtent));
+    i32 framebufferWidth = 0;
+    i32 framebufferHeight = 0;
+    __hidden_ui::GetFramebufferExtent(*drawData, framebufferWidth, framebufferHeight);
     if(framebufferWidth <= 0 || framebufferHeight <= 0){
         m_frameStarted = false;
         m_frameFinished = false;
@@ -323,12 +329,9 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
     if(!drawData)
         return;
 
-    const SIMDVector framebufferExtent = VectorMultiply(
-        VectorSet(drawData->DisplaySize.x, drawData->DisplaySize.y, 0.0f, 0.0f),
-        VectorSet(drawData->FramebufferScale.x, drawData->FramebufferScale.y, 0.0f, 0.0f)
-    );
-    const i32 framebufferWidth = static_cast<i32>(VectorGetX(framebufferExtent));
-    const i32 framebufferHeight = static_cast<i32>(VectorGetY(framebufferExtent));
+    i32 framebufferWidth = 0;
+    i32 framebufferHeight = 0;
+    __hidden_ui::GetFramebufferExtent(*drawData, framebufferWidth, framebufferHeight);
     if(framebufferWidth <= 0 || framebufferHeight <= 0){
         m_frameStarted = false;
         m_frameFinished = false;
@@ -414,12 +417,9 @@ void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer*
     UiPushConstants pushConstants;
     StoreFloat(__hidden_ui::BuildUiScaleTranslate(displayMin, displaySize), &pushConstants.scaleTranslate);
 
-    const SIMDVector framebufferExtent = VectorMultiply(
-        displaySize,
-        VectorSet(drawData.FramebufferScale.x, drawData.FramebufferScale.y, 0.0f, 0.0f)
-    );
-    const i32 framebufferWidth = static_cast<i32>(VectorGetX(framebufferExtent));
-    const i32 framebufferHeight = static_cast<i32>(VectorGetY(framebufferExtent));
+    i32 framebufferWidth = 0;
+    i32 framebufferHeight = 0;
+    __hidden_ui::GetFramebufferExtent(drawData, framebufferWidth, framebufferHeight);
     const Core::Viewport viewport(0.0f, static_cast<f32>(framebufferWidth), 0.0f, static_cast<f32>(framebufferHeight), 0.0f, 1.0f);
     const ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
 

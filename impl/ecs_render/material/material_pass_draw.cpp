@@ -93,17 +93,20 @@ bool RendererMaterialSystem::materialPassDrawResourcesReady(const MeshResources&
 }
 
 bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems){
-    return meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems)
-        && computeMaterialPassDrawResourcesReady(drawItems.computeDrawItems)
-    ;
-}
-
-bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems){
     const MaterialPassCsgBindingSets csgBindingSets{
         csgState().m_clipBindingSet,
         csgState().m_receiverSurfaceBindingSet,
         csgState().m_intervalSampleBindingSet
     };
+    return meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems, csgBindingSets)
+        && computeMaterialPassDrawResourcesReady(drawItems.computeDrawItems, csgBindingSets)
+    ;
+}
+
+bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(
+    const MaterialPassDrawItemVector& drawItems,
+    const MaterialPassCsgBindingSets& csgBindingSets
+){
     for(const MaterialPassDrawItem& drawItem : drawItems){
         MeshResources* mesh = nullptr;
         MaterialPipelineResources* pipelineResources = nullptr;
@@ -126,17 +129,15 @@ bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const MaterialPa
     return true;
 }
 
-bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems){
+bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(
+    const MaterialPassDrawItemVector& drawItems,
+    const MaterialPassCsgBindingSets& csgBindingSets
+){
     if(drawItems.empty())
         return true;
     if(!drawState().m_emulationViewBindingSet)
         return false;
 
-    const MaterialPassCsgBindingSets csgBindingSets{
-        csgState().m_clipBindingSet,
-        csgState().m_receiverSurfaceBindingSet,
-        csgState().m_intervalSampleBindingSet
-    };
     for(const MaterialPassDrawItem& drawItem : drawItems){
         MeshResources* mesh = nullptr;
         MaterialPipelineResources* pipelineResources = nullptr;

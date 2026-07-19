@@ -527,6 +527,14 @@ namespace __hidden_raytracing_system{
 [[nodiscard]] f32 SceneBvhAxisComponent(const SIMDVector value, const u32 axis)noexcept;
 [[nodiscard]] f32 SceneBvhAabbSurfaceArea(const SIMDVector aabbMin, const SIMDVector aabbMax)noexcept;
 void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noexcept;
+[[nodiscard]] SIMDMatrix BuildObjectToWorld(const Scene::TransformComponent* transform)noexcept;
+[[nodiscard]] bool ResolveRenderableMeshResources(
+    MeshSystem& meshSystem,
+    RendererMeshSystem& rendererMeshSystem,
+    const Core::ECS::EntityID entity,
+    RenderableMeshDesc& outResolvedMesh,
+    MeshResources*& outMesh
+);
 u32 BuildSceneBvhNode(
     u32* indices,
     const u32 lo,

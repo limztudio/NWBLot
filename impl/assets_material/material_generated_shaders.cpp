@@ -42,6 +42,26 @@ static constexpr AStringView s_AvboitExtinctionPixelShaderGeneratedPrefix("gener
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static void AppendGeneratedMaterialShaderIncludes(
+    CookString& outSource,
+    const AStringView authoringHeaderInclude,
+    const MaterialCookEntry& entry
+){
+    outSource += "#include \"";
+    outSource += authoringHeaderInclude;
+    outSource += "\"\n";
+    outSource += "#include \"";
+    outSource += entry.materialInterface;
+    outSource += ".bind\"\n";
+    outSource += "#include \"";
+    outSource += entry.surfaceSource;
+    outSource += "\"\n";
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool EmitMaterialPixelShadersImpl(
     CookArena& arena,
     const Path& cacheDirectory,
@@ -103,13 +123,7 @@ bool EmitMaterialPixelShadersImpl(
         generatedSource += "// Generated per-material G-buffer pixel shader: engine pixel-shader authoring + this material's\n";
         generatedSource += "// typed .bind + its surface hook. The material declares only its 'surface' fragment; the cook\n";
         generatedSource += "// assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
-        generatedSource += "#include \"mesh/material_ps_authoring.slangi\"\n";
-        generatedSource += "#include \"";
-        generatedSource += entry.materialInterface;
-        generatedSource += ".bind\"\n";
-        generatedSource += "#include \"";
-        generatedSource += entry.surfaceSource;
-        generatedSource += "\"\n";
+        AppendGeneratedMaterialShaderIncludes(generatedSource, "mesh/material_ps_authoring.slangi", entry);
 
         CookString relativeFile(arena);
         relativeFile += entry.virtualPath;
@@ -227,15 +241,7 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
         generatedSource += "// Generated per-material AVBOIT pass pixel shader: engine AVBOIT pass authoring + this material's\n";
         generatedSource += "// typed .bind + its surface hook. The material declares only its 'surface' fragment; the cook\n";
         generatedSource += "// assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
-        generatedSource += "#include \"";
-        generatedSource += authoringHeaderInclude;
-        generatedSource += "\"\n";
-        generatedSource += "#include \"";
-        generatedSource += entry.materialInterface;
-        generatedSource += ".bind\"\n";
-        generatedSource += "#include \"";
-        generatedSource += entry.surfaceSource;
-        generatedSource += "\"\n";
+        AppendGeneratedMaterialShaderIncludes(generatedSource, authoringHeaderInclude, entry);
 
         CookString relativeFile(arena);
         relativeFile += entry.virtualPath;

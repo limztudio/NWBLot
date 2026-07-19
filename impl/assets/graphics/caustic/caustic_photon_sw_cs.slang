@@ -19,6 +19,7 @@
 
 #include "../scene/buffer.slangi"
 #include "../bvh/bvh_common.slangi"
+#include "../bvh/ray_intersect.slangi"
 #include "../common/math.slangi"
 #include "../shadow/instance_material.slangi"
 
@@ -120,42 +121,6 @@ ConstantBuffer<NwbCausticSwPushConstants> g_NwbCausticSwPushConstants;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Slab ray/AABB overlap over [tMin, tMax]; identical to the SW shadow trace's test (axis-aligned safe via the
-// finite invDir below).
-bool nwbCausticSwRayAabb(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
-    const float3 t0 = (boxMin - origin) * invDir;
-    const float3 t1 = (boxMax - origin) * invDir;
-    const float3 tSmall = min(t0, t1);
-    const float3 tLarge = max(t0, t1);
-    const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
-    const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
-    return tNear <= tFar;
-}
-
-// Same slab test, but also returns the ENTRY distance (clamped to tMin) for FRONT-TO-BACK ordered traversal: descending
-// the nearer-entry child first shrinks the running closest.t faster, so the farther child + its subtree are more often
-// culled (fewer triangle tests + the expensive per-hit surface dispatch). Output-neutral: closest-hit is order-independent.
-bool nwbCausticSwRayAabbT(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax, out float tEntry){
-    const float3 t0 = (boxMin - origin) * invDir;
-    const float3 t1 = (boxMax - origin) * invDir;
-    const float3 tSmall = min(t0, t1);
-    const float3 tLarge = max(t0, t1);
-    const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
-    const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
-    tEntry = tNear;
-    return tNear <= tFar;
-}
-
-float3 nwbCausticSwSafeInvDir(const float3 direction){
-    const float epsilon = 1e-8;
-    const float3 safe = float3(
-        abs(direction.x) > epsilon ? direction.x : (direction.x < 0.0 ? -epsilon : epsilon),
-        abs(direction.y) > epsilon ? direction.y : (direction.y < 0.0 ? -epsilon : epsilon),
-        abs(direction.z) > epsilon ? direction.z : (direction.z < 0.0 ? -epsilon : epsilon)
-    );
-    return 1.0 / safe;
-}
-
 float3 nwbCausticSwTransformPoint(const NwbCausticSwInstance instance, const float3 point){
     return float3(
         dot(instance.worldToObjectRow0.xyz, point) + instance.worldToObjectRow0.w,
@@ -255,7 +220,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     const uint meshIndex = instance.meshIndex;
     const float3 origin = nwbCausticSwTransformPoint(instance, worldOrigin);
     const float3 direction = nwbCausticSwTransformVector(instance, worldDirection);
-    const float3 invDir = nwbCausticSwSafeInvDir(direction);
+    const float3 invDir = nwbBvhSafeInvDir(direction);
 
     // FRONT-TO-BACK ordered descent. Keep the current node loaded; at an internal node descend the NEARER-entry child
     // and defer the farther onto the stack (re-tested when popped, against the by-then-smaller closest.t). Processing
@@ -264,7 +229,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     uint stack[NWB_CAUSTIC_SW_MESH_STACK_SIZE];
     uint stackPointer = 0u;
     NwbBvhNode node = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][0u]; // per-mesh root
-    bool active = nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax);
+    bool active = nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0);
 
     [loop] while(active){
         if(nwbBvhNodeIsLeaf(node)){
@@ -323,9 +288,9 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
             const NwbBvhNode leftNode = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.leftChild];
             const NwbBvhNode rightNode = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.rightChild];
             float tLeft;
-            const bool hitLeft = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, tLeft);
+            const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
             float tRight;
-            const bool hitRight = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, tRight);
+            const bool hitRight = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, 0.0, tRight);
             if(hitLeft && hitRight){
                 // Descend the nearer child; defer the farther. A full stack drops that farther subtree rather than
                 // corrupting traversal state.
@@ -347,7 +312,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
         // Pop the next deferred node that still survives the (now-smaller) closest.t cull; drain -> done.
         [loop] while(stackPointer > 0u){
             node = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][stack[--stackPointer]];
-            if(nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax)){
+            if(nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0)){
                 active = true;
                 break;
             }
@@ -371,7 +336,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     if(g_NwbCausticSwPushConstants.instanceCount == 0u)
         return closest;
 
-    const float3 invDir = nwbCausticSwSafeInvDir(direction);
+    const float3 invDir = nwbBvhSafeInvDir(direction);
 
     // FRONT-TO-BACK ordered descent (same scheme as the per-mesh traversal). Here a "leaf" is an INSTANCE whose whole
     // mesh traversal (+ surface dispatches) is expensive, and the demo's refractors OVERLAP, so processing the nearer
@@ -380,7 +345,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     uint stack[NWB_CAUSTIC_SW_SCENE_STACK_SIZE];
     uint stackPointer = 0u;
     NwbBvhNode node = g_NwbCausticSwSceneNodes[0u]; // root
-    bool active = nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax);
+    bool active = nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0);
 
     [loop] while(active){
         if(nwbBvhNodeIsLeaf(node)){
@@ -391,9 +356,9 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
             const NwbBvhNode leftNode = g_NwbCausticSwSceneNodes[node.leftChild];
             const NwbBvhNode rightNode = g_NwbCausticSwSceneNodes[node.rightChild];
             float tLeft;
-            const bool hitLeft = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, tLeft);
+            const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
             float tRight;
-            const bool hitRight = nwbCausticSwRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, tRight);
+            const bool hitRight = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, 0.0, tRight);
             if(hitLeft && hitRight){
                 if(tLeft <= tRight){
                     if(stackPointer < NWB_CAUSTIC_SW_SCENE_STACK_SIZE) stack[stackPointer++] = node.rightChild;
@@ -412,7 +377,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 
         [loop] while(stackPointer > 0u){
             node = g_NwbCausticSwSceneNodes[stack[--stackPointer]];
-            if(nwbCausticSwRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax)){
+            if(nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0)){
                 active = true;
                 break;
             }

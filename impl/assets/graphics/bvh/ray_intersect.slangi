@@ -1,0 +1,69 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_BVH_RAY_INTERSECT_SLANGI
+#define NWB_GRAPHICS_BVH_RAY_INTERSECT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shared ray/AABB helpers for the software BVH consumers. Keep the reciprocal direction finite for axis-aligned rays:
+// an infinite reciprocal multiplied by a zero slab offset would otherwise create a NaN and incorrectly reject a box.
+float3 nwbBvhSafeInvDir(const float3 direction){
+    const float epsilon = 1e-8;
+    const float3 safe = float3(
+        abs(direction.x) > epsilon ? direction.x : (direction.x < 0.0 ? -epsilon : epsilon),
+        abs(direction.y) > epsilon ? direction.y : (direction.y < 0.0 ? -epsilon : epsilon),
+        abs(direction.z) > epsilon ? direction.z : (direction.z < 0.0 ? -epsilon : epsilon)
+    );
+    return 1.0 / safe;
+}
+
+bool nwbBvhRayAabb(
+    const float3 origin,
+    const float3 invDir,
+    const float tMin,
+    const float tMax,
+    const float3 boxMin,
+    const float3 boxMax,
+    const float padding
+){
+    const float3 t0 = (boxMin - padding - origin) * invDir;
+    const float3 t1 = (boxMax + padding - origin) * invDir;
+    const float3 tSmall = min(t0, t1);
+    const float3 tLarge = max(t0, t1);
+    const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
+    const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
+    return tNear <= tFar;
+}
+
+bool nwbBvhRayAabbT(
+    const float3 origin,
+    const float3 invDir,
+    const float tMin,
+    const float tMax,
+    const float3 boxMin,
+    const float3 boxMax,
+    const float padding,
+    out float tEntry
+){
+    const float3 t0 = (boxMin - padding - origin) * invDir;
+    const float3 t1 = (boxMax + padding - origin) * invDir;
+    const float3 tSmall = min(t0, t1);
+    const float3 tLarge = max(t0, t1);
+    const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
+    const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
+    tEntry = tNear;
+    return tNear <= tFar;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -230,7 +230,7 @@ struct SkeletonOutputData{
     UtilityVector<u16> oldToNewJointIndices;
 };
 
-AString SkeletonSortName(const ufbx_node* node, const usize fallbackIndex){
+AString NodeName(const ufbx_node* node, const usize fallbackIndex){
     AString name;
     if(node && node->name.data && node->name.length != 0u)
         name.assign(node->name.data, node->name.length);
@@ -278,7 +278,7 @@ bool BuildSkeletonOutputData(
             return false;
         }
         sourceJointLookup.emplace(joint, jointIndex);
-        sortNames.push_back(SkeletonSortName(joint, jointIndex));
+        sortNames.push_back(NodeName(joint, jointIndex));
     }
 
     UtilityVector<u32> parentIndices;
@@ -520,18 +520,6 @@ bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
         return false;
     }
     return true;
-}
-
-AString NodeName(const ufbx_node* node, const usize fallbackIndex){
-    AString name;
-    if(node && node->name.data && node->name.length != 0u)
-        name.assign(node->name.data, node->name.length);
-    if(!name.empty())
-        return name;
-
-    AStringStream out;
-    out << "joint_" << fallbackIndex;
-    return out.str();
 }
 
 bool NameUsed(const UtilityVector<AString>& names, const AString& name){

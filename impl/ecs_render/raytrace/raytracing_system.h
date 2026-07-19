@@ -201,6 +201,8 @@ private:
     // Geometry downsample pre-pass: fills the half-res geometry cache (world + receiver validity) the resolve reads.
     [[nodiscard]] bool ensureCausticGeometryDownsamplePipeline();
     [[nodiscard]] bool ensureCausticGeometryDownsampleBindingSet(DeferredFrameTargets& targets);
+    // Resolve/temporal resources shared by the software-BVH and hardware-ray-tracing caustic producers.
+    [[nodiscard]] bool causticResolveResourcesReady(const DeferredFrameTargets& targets, f32 temporalDecay)const;
     // Accumulator decay pre-pass (splat-space temporal EMA): multiplies the resident R32_UINT accumulator by the temporal
     // decay factor before the producer splats this frame's photons (only used when temporal is enabled, decay > 0).
     [[nodiscard]] bool ensureCausticAccumulatorDecayPipeline();

@@ -55,6 +55,35 @@ void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noe
     boundsMax = VectorAdd(boundsMax, paddingVector);
 }
 
+SIMDMatrix BuildObjectToWorld(const Scene::TransformComponent* const transform)noexcept{
+    if(!transform)
+        return MatrixIdentity();
+
+    return MatrixAffineTransformation(
+        LoadFloat(transform->scale),
+        VectorZero(),
+        LoadFloat(transform->rotation),
+        LoadFloat(transform->position)
+    );
+}
+
+bool ResolveRenderableMeshResources(
+    MeshSystem& meshSystem,
+    RendererMeshSystem& rendererMeshSystem,
+    const Core::ECS::EntityID entity,
+    RenderableMeshDesc& outResolvedMesh,
+    MeshResources*& outMesh
+){
+    outMesh = nullptr;
+    if(!meshSystem.resolveRenderableMesh(entity, outResolvedMesh))
+        return false;
+
+    return outResolvedMesh.runtime
+        ? rendererMeshSystem.findRuntimeMeshResources(outResolvedMesh.runtimeMesh, outMesh)
+        : rendererMeshSystem.findMeshResources(outResolvedMesh.mesh, outMesh)
+    ;
+}
+
 // Recursively builds a binary BVH over the [lo, hi) slice of the instance-index permutation, appending nodes
 // to `nodes` (the first node appended for the whole range is the root, index 0). Each internal node splits on
 // the axis + bin boundary of lowest binned-SAH cost: it sweeps a fixed-grid binning of all three centroid axes,

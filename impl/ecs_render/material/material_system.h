@@ -25,6 +25,8 @@ namespace RendererResourceLookupMode{
     };
 };
 
+struct MaterialPassCsgBindingSets;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -119,8 +121,14 @@ public:
     void pruneMaterialInstanceMutableCache();
     [[nodiscard]] bool materialPassDrawResourcesReady(const MeshResources& mesh)const;
     [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems);
-    [[nodiscard]] bool meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
-    [[nodiscard]] bool computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
+    [[nodiscard]] bool meshMaterialPassDrawResourcesReady(
+        const MaterialPassDrawItemVector& drawItems,
+        const MaterialPassCsgBindingSets& csgBindingSets
+    );
+    [[nodiscard]] bool computeMaterialPassDrawResourcesReady(
+        const MaterialPassDrawItemVector& drawItems,
+        const MaterialPassCsgBindingSets& csgBindingSets
+    );
     [[nodiscard]] bool prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems);
     [[nodiscard]] bool prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);

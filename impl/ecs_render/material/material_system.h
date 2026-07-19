@@ -45,6 +45,7 @@ public:
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
     [[nodiscard]] bool findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
     [[nodiscard]] bool prepareVisibleMaterialSurfaceInfos();
+    void prepareVisibleMaterialInstanceMutableCache();
     [[nodiscard]] bool createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer* framebuffer, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool findRendererPipeline(const MaterialPipelineKey& pipelineKey, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool hasTransparentRenderers(RendererResourceLookupMode::Enum lookupMode);
@@ -95,12 +96,19 @@ public:
         const MaterialInstanceComponent& materialInstance,
         MaterialTypedByteDataVector& inOutMutableTypedBytes
     );
-    [[nodiscard]] bool resolveMaterialInstanceMutableTypedBytes(
+    // Creation and override application belong to preparation; render paths only use the prepared lookup below.
+    [[nodiscard]] bool prepareMaterialInstanceMutableTypedBytes(
         Core::ECS::EntityID entity,
         const MaterialSurfaceInfo& materialInfo,
         const MaterialInstanceComponent* materialInstance,
         const MaterialTypedByteVector*& outMutableTypedBytes
     );
+    [[nodiscard]] bool findPreparedMaterialInstanceMutableTypedBytes(
+        Core::ECS::EntityID entity,
+        const MaterialSurfaceInfo& materialInfo,
+        const MaterialInstanceComponent* materialInstance,
+        const MaterialTypedByteVector*& outMutableTypedBytes
+    )const;
     // Packs one shadow occluder's material-constants context into a shadow-OWNED combined typed buffer (the draw
     // passes' g_NwbMaterialTypedWords / g_NwbMeshInstances hold only one pass's transparency class at trace time,
     // so the trace cannot read them). Appends this occluder's constant block + its per-instance mutable block into

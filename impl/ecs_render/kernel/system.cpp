@@ -124,7 +124,6 @@ void RendererSystem::invalidateResources(){
 void RendererSystem::update(Core::ECS::World& world, f32 delta){
     static_cast<void>(world);
     static_cast<void>(delta);
-    m_materialSystem.pruneMaterialInstanceMutableCache();
 }
 
 bool RendererSystem::ensureFrameCommandLists(){
@@ -212,6 +211,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 
     m_meshSystem.pruneRuntimeMeshResources();
     m_preparedHasTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
+    m_materialSystem.prepareVisibleMaterialInstanceMutableCache();
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
 

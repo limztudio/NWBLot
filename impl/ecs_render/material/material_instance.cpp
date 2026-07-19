@@ -201,7 +201,7 @@ bool RendererMaterialSystem::applyMaterialInstanceOverrides(
     return true;
 }
 
-bool RendererMaterialSystem::resolveMaterialInstanceMutableTypedBytes(
+bool RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& materialInfo,
     const MaterialInstanceComponent* materialInstance,
@@ -246,6 +246,36 @@ bool RendererMaterialSystem::resolveMaterialInstanceMutableTypedBytes(
     return true;
 }
 
+bool RendererMaterialSystem::findPreparedMaterialInstanceMutableTypedBytes(
+    const Core::ECS::EntityID entity,
+    const MaterialSurfaceInfo& materialInfo,
+    const MaterialInstanceComponent* materialInstance,
+    const MaterialTypedByteVector*& outMutableTypedBytes
+)const{
+    outMutableTypedBytes = nullptr;
+    if(!materialInstance || materialInstance->overrides.empty()){
+        outMutableTypedBytes = &materialInfo.mutableDefaultTypedBytes;
+        return true;
+    }
+
+    const auto found = materialState().m_instanceMutableCache.find(entity);
+    if(found == materialState().m_instanceMutableCache.end())
+        return false;
+
+    const MaterialInstanceMutableCacheEntry& cacheEntry = found.value();
+    if(
+        cacheEntry.materialName != materialInfo.materialName
+        || cacheEntry.materialInterface != materialInfo.materialInterface
+        || materialInstance->materialInterface != materialInfo.materialInterface
+        || cacheEntry.typedLayoutHash != materialInfo.typedLayoutHash
+        || cacheEntry.revision != materialInstance->revision
+    )
+        return false;
+
+    outMutableTypedBytes = &cacheEntry.mutableTypedBytes;
+    return true;
+}
+
 bool RendererMaterialSystem::appendShadowOccluderMaterialContext(
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& materialInfo,
@@ -273,7 +303,7 @@ bool RendererMaterialSystem::appendShadowOccluderMaterialContext(
     // sharing identical mutable storage share one appended range -- mirroring the draw pass.
     const MaterialInstanceComponent* materialInstance = world().tryGetComponent<MaterialInstanceComponent>(entity);
     const MaterialTypedByteVector* mutableTypedBytes = nullptr;
-    if(!resolveMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes))
+    if(!prepareMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes))
         return false;
     if(!ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
         inOutMaterialTypedBytes,

@@ -215,6 +215,33 @@ bool RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
     return hasTransparentRenderers;
 }
 
+void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(){
+    pruneMaterialInstanceMutableCache();
+
+    auto rendererView = world().view<RendererComponent>();
+    for(auto&& [entity, renderer] : rendererView){
+        if(!renderer.visible)
+            continue;
+
+        const MaterialInstanceComponent* materialInstance = world().tryGetComponent<MaterialInstanceComponent>(entity);
+        if(!materialInstance || materialInstance->overrides.empty())
+            continue;
+
+        MaterialSurfaceInfo* materialInfo = nullptr;
+        if(!findMaterialSurfaceInfo(renderer.material, materialInfo))
+            continue;
+
+        const MaterialTypedByteVector* mutableTypedBytes = nullptr;
+        if(!prepareMaterialInstanceMutableTypedBytes(
+            entity,
+            *materialInfo,
+            materialInstance,
+            mutableTypedBytes
+        ))
+            continue;
+    }
+}
+
 bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLookupMode::Enum lookupMode){
     auto materialIsTransparent = [&](const Core::Assets::AssetRef<Material>& material) -> bool{
         MaterialSurfaceInfo* materialInfo = nullptr;

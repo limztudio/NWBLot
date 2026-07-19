@@ -369,7 +369,12 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             return appendDefaultMutableMaterialTypedBytes(materialInfo, outRange);
 
         const MaterialTypedByteVector* mutableTypedBytes = nullptr;
-        if(!resolveMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes))
+        // Prepared-only render gathers must never populate or rebuild the persistent override cache.
+        const bool mutableTypedBytesReady = lookupMode == RendererResourceLookupMode::CreateMissing
+            ? prepareMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes)
+            : findPreparedMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes)
+        ;
+        if(!mutableTypedBytesReady)
             return false;
 
         return ECSRenderDetail::FindOrAppendMaterialTypedByteRange(

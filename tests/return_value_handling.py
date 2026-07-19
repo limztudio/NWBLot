@@ -27,6 +27,7 @@ CALL_AT_START = re.compile(
     r"(?:(?:::)?([A-Za-z_]\w*)(?:(?:::[A-Za-z_]\w*)|(?:->|\.)[A-Za-z_]\w*)*)\s*\("
 )
 FUNCTION_POINTER_CALL = re.compile(r"\(\s*\*\s*(?:[A-Za-z_]\w*\s*)?\)\s*\(")
+GROUPED_CALL = re.compile(r"[)}]\s*\(")
 NON_CALL_IDENTIFIERS = frozenset(("alignof", "decltype", "noexcept", "sizeof", "typeid"))
 
 
@@ -84,28 +85,58 @@ def blank_non_code(source: str) -> str:
     return "".join(result)
 
 
-def matching_parenthesis(source: str, opening: int) -> int | None:
+def matching_delimiter(source: str, opening: int, opening_char: str, closing_char: str) -> int | None:
     depth = 1
     for position in range(opening + 1, len(source)):
-        if source[position] == "(":
+        if source[position] == opening_char:
             depth += 1
-        elif source[position] == ")":
+        elif source[position] == closing_char:
             depth -= 1
             if depth == 0:
                 return position
     return None
 
 
+def matching_parenthesis(source: str, opening: int) -> int | None:
+    return matching_delimiter(source, opening, "(", ")")
+
+
 def contains_call(expression: str) -> bool:
     if FUNCTION_POINTER_CALL.search(expression):
         return True
-    return any(match.group(1) not in NON_CALL_IDENTIFIERS for match in CALL.finditer(expression))
+    if any(match.group(1) not in NON_CALL_IDENTIFIERS for match in CALL.finditer(expression)):
+        return True
+    return GROUPED_CALL.search(expression) is not None
+
+
+def starts_with_lambda_call(expression: str, start: int) -> bool:
+    if start >= len(expression) or expression[start] != "[":
+        return False
+
+    capture_closing = matching_delimiter(expression, start, "[", "]")
+    if capture_closing is None:
+        return False
+
+    body_opening = expression.find("{", capture_closing + 1)
+    if body_opening == -1 or ";" in expression[capture_closing + 1 : body_opening]:
+        return False
+
+    body_closing = matching_delimiter(expression, body_opening, "{", "}")
+    if body_closing is None:
+        return False
+
+    after_body = body_closing + 1
+    while after_body < len(expression) and expression[after_body].isspace():
+        after_body += 1
+    return after_body < len(expression) and expression[after_body] == "("
 
 
 def starts_with_call(expression: str) -> bool:
     start = len(expression) - len(expression.lstrip())
     call = CALL_AT_START.match(expression, start)
     if (call is not None and call.group(1) not in NON_CALL_IDENTIFIERS) or FUNCTION_POINTER_CALL.match(expression, start):
+        return True
+    if starts_with_lambda_call(expression, start):
         return True
     if start >= len(expression) or expression[start] != "(":
         return False
@@ -152,7 +183,28 @@ def source_files(source_root: Path) -> list[Path]:
     )
 
 
+def run_self_test() -> int:
+    cases = (
+        ("direct call", "static_cast<void>(callback());", ((1, "static_cast<void>"),)),
+        ("parenthesized callable", "static_cast<void>((callback)());", ((1, "static_cast<void>"),)),
+        ("immediate lambda", "static_cast<void>([]{}());", ((1, "static_cast<void>"),)),
+        ("c-style parenthesized callable", "(void)(callback)();", ((1, "C-style void cast"),)),
+        ("c-style immediate lambda", "(void)([]{}());", ((1, "C-style void cast"),)),
+        ("unused parameter", "static_cast<void>(parameter);", ()),
+    )
+    failed = False
+    for name, source, expected in cases:
+        actual = tuple(find_discarded_calls(source))
+        if actual != expected:
+            print(f"{name}: expected {expected}, got {actual}", file=sys.stderr)
+            failed = True
+    return 1 if failed else 0
+
+
 def main() -> int:
+    if len(sys.argv) == 2 and sys.argv[1] == "--self-test":
+        return run_self_test()
+
     source_root = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else Path(__file__).resolve().parents[1]
     violations: list[str] = []
     for path in source_files(source_root):

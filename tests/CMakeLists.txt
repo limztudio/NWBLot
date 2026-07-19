@@ -18,6 +18,13 @@ add_test(
         "${CMAKE_CURRENT_LIST_DIR}/return_value_handling.py"
         "${CMAKE_SOURCE_DIR}"
 )
+add_test(
+    NAME nwb_return_value_handling_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/return_value_handling.py"
+        --self-test
+)
 
 add_subdirectory(global)
 if(TARGET nwb_crash)

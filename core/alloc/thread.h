@@ -149,8 +149,8 @@ public:
     {
         m_workers.reserve(threadCount);
         for(u32 i = 0; i < threadCount; ++i){
-            m_workers.emplace_back([this, affinityMask](StopToken st){
-                workerLoop(st, affinityMask);
+            m_workers.emplace_back([this, affinityMask](const StopToken& stopToken){
+                workerLoop(stopToken, affinityMask);
             });
         }
     }
@@ -321,7 +321,7 @@ private:
         }
     }
 
-    inline void workerLoop(StopToken stopToken, u64 affinityMask){
+    inline void workerLoop(const StopToken& stopToken, u64 affinityMask){
         SetCurrentThreadAffinity(affinityMask);
 
         for(;;){

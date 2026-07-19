@@ -12,6 +12,7 @@ if(NWB_BUILD_RESOURCE_COOKER)
     target_sources(nwb_assets_material_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/material_parse.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_parse_meta.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_bind_codegen.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_dispatch_codegen.cpp"

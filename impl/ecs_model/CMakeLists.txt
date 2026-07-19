@@ -7,6 +7,7 @@ target_sources(nwb_ecs_model PRIVATE
 )
 target_link_libraries(nwb_ecs_model PUBLIC
     nwb_ecs
+    nwb_assets_skeleton_types
 )
 target_link_libraries(nwb_ecs_model PRIVATE
     nwb_assets_model

@@ -20,9 +20,9 @@ target_link_libraries(nwb_ecs_mesh_skinning PUBLIC
     nwb_ecs_mesh
     nwb_ecs_skeleton
     nwb_graphics
+    nwb_assets_mesh
 )
 target_link_libraries(nwb_ecs_mesh_skinning PRIVATE
-    nwb_assets_mesh
     nwb_assets_shader_loader
 )
 

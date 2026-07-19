@@ -90,11 +90,11 @@ target_link_libraries(nwb_ecs_render PUBLIC
     nwb_ecs_mesh
     nwb_graphics
     nwb_assets_material
+    nwb_ecs_csg
+    nwb_ecs_scene
 )
 target_link_libraries(nwb_ecs_render PRIVATE
     nwb_assets_mesh
     nwb_assets_shader_loader
-    nwb_ecs_csg
-    nwb_ecs_scene
 )
 

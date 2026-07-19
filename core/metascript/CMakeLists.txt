@@ -8,4 +8,4 @@ target_sources(nwb_metascript PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/parser.h"
     "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
 )
-target_link_libraries(nwb_metascript PUBLIC nwb::tbb)
+target_link_libraries(nwb_metascript PUBLIC nwb_alloc nwb::tbb)

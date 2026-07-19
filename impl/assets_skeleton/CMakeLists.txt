@@ -2,6 +2,7 @@ nwb_declare_interface_library(nwb_assets_skeleton_types)
 target_sources(nwb_assets_skeleton_types INTERFACE
     "${CMAKE_CURRENT_LIST_DIR}/joint_types.h"
 )
+target_link_libraries(nwb_assets_skeleton_types INTERFACE nwb_alloc)
 
 nwb_declare_static_library(nwb_assets_skeleton)
 target_sources(nwb_assets_skeleton PRIVATE

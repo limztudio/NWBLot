@@ -5,6 +5,9 @@
 #if defined(NWB_COOK)
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "cook_private.h"
 
 
@@ -20,22 +23,15 @@ NWB_IMPL_BEGIN
 namespace __hidden_cook{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Cook-private NAME PREFIXES for the generated per-material AVBOIT accumulate/occupancy/extinction pixel shaders
 // (kept here, not in the graphics avboit/names.h, so the material cook does not depend on the graphics-asset header).
 // The cook builds "<prefix><material virtual path>" + stores the resolved Name on the cooked material; the renderer
 // binds via that stored Name (materialInfo.avboit{Accumulate,Occupancy,Extinction}PixelShader), never re-deriving here.
 static constexpr AStringView s_AvboitAccumulatePixelShaderGeneratedPrefix("generated/avboit_accumulate_ps/");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static constexpr AStringView s_AvboitOccupancyPixelShaderGeneratedPrefix("generated/avboit_occupancy_ps/");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static constexpr AStringView s_AvboitExtinctionPixelShaderGeneratedPrefix("generated/avboit_extinction_ps/");
 
 

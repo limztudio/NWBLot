@@ -1,3 +1,7 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Stage-2 ADAPTIVE transparent resolve (full resolution). One thread per full-res pixel: read the coarse neighbourhood;
 // where the colored transmittance AGREES (flat shadow) bilinearly interpolate it (cheap), where it DISAGREES (an edge)
 // re-trace THIS pixel at full res (sharp). Either way fold the result onto this pixel's own full-res opaque mask, so the

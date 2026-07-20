@@ -1,3 +1,7 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "caustic_hw_common.slangi"
 // The shared transport: the photon struct, the emission aim, the per-photon stratified hash jitter, the iterative bounce loop. It declares
 // the backend hook nwbCausticTraceClosest, defined below over a single TraceRay per segment. Pulled in ONLY here

@@ -1,3 +1,7 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_render/kernel/renderer_private.h>
 #include <impl/ecs_render/avboit/avboit_private.h>
 #include <impl/ecs_render/material/material_shader_variants_private.h>

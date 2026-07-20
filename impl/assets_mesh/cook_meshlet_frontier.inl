@@ -1,3 +1,7 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename FrontierVectorT>
 static void ClearMeshletFrontier(FrontierVectorT& frontier, Core::Assets::AssetVector<u8>& frontierFlags){
     for(const u32 triangleIndex : frontier)

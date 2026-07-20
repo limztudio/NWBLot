@@ -1,3 +1,7 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Surfel spawn: one thread per screen tile (spawnTile x spawnTile px). Reads the tile-centre G-buffer world position +
 // normal, hashes it to a cell, and -- if that cell's list is still EMPTY -- claims the cell and bump-allocates one
 // surfel on that surface. ONE SURFEL PER HASH BUCKET: the hash is rebuilt from the live pool BEFORE this pass, so a

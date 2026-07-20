@@ -1,3 +1,7 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Project deferred lighting BXDF: smooth diffuse + spec + rim (the engine's built-in whole-surface model,
 // offered to projects as a library). This file is pulled into the cook-generated deferred lighting dispatch
 // module, which #defines NWB_DEFERRED_BXDF_FUNCTION to this model's unique entry name before including it. The

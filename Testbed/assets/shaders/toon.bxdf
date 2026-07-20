@@ -1,3 +1,7 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Project deferred lighting BXDF: a cel / toon model -- per-light N.L quantized into hard bands, hard shadow
 // edges, flat ambient, no tonemap. Deliberately, obviously different from the lambert model so per-material
 // BXDF dispatch is visible at a glance. Pulled into the cook-generated deferred lighting dispatch module,

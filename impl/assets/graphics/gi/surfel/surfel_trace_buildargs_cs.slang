@@ -1,3 +1,7 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Build the trace's DispatchIndirectArguments (U6): 1 thread reads the allocation high-water BUMP_TOP + the update
 // divisor (both from the surfel CB) and writes {ceil(BUMP_TOP / divisor), 1, 1} -- the exact workgroup count to visit
 // every LIVE surfel over `divisor` frames via the trace's round-robin, instead of the fixed ceil(poolCapacity/divisor).

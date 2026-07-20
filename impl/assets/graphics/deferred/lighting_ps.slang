@@ -1,3 +1,7 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "lighting_framework.slangi"
 // Cook-generated dispatch module: assembled from every material's `bxdf` declaration (see the asset cooker's
 // EmitDeferredBxdfDispatchModule). It defines nwbDeferredDispatchBxdf(shadingModel, surface, pixel),

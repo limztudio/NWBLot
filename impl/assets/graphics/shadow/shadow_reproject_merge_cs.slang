@@ -1,3 +1,7 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "shadow_reproject_merge_binding_slots.h"
 #include "shadow_resolve_binding_slots.h" // NWB_SHADOW_RESOLVE_GROUP_SIZE (the merge shares the resolve's group size)
 #include "sw_binding_slots.h"             // NWB_SW_SHADOW_SOFT_FACTOR + NWB_SCENE_SHADOW_SLOT_COUNT (via scene binding_slots)

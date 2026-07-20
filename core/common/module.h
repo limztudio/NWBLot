@@ -215,7 +215,6 @@ public:
 
     inline u16& height(){ return m_data.u16[1]; }
     inline const u16& height()const{ return m_data.u16[1]; }
-
 };
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>

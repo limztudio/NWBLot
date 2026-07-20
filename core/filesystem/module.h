@@ -20,11 +20,11 @@ NWB_FILESYSTEM_BEGIN
 
 
 namespace VolumeUsage{
-enum Enum : u8{
-    RuntimeReadOnly = 0,
-    RuntimeReadWrite,
-    CookWrite
-};
+    enum Enum : u8{
+        RuntimeReadOnly = 0,
+        RuntimeReadWrite,
+        CookWrite
+    };
 };
 
 using VolumeArena = Alloc::GlobalArena;

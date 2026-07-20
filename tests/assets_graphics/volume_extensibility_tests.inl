@@ -1,7 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 TEST(AssetsGraphics, AutoRegistrationQueueDeduplicatesAndSnapshots){
     NWB::Core::Assets::AutoRegistrationQueue<u32> queue(s_AutoRegistrationQueueArena);
     const auto equal = [](const u32 lhs, const u32 rhs){ return lhs == rhs; };

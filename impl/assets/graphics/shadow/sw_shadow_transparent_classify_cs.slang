@@ -1,7 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Stage-3 CLASSIFY + FILL (compacted transparent resolve). Byte-identical edge test + interpolation to the Stage-2
 // adaptive resolve, but EDGE slots are NOT traced here: they are atomically APPENDED to the compacted edge list and the
 // edge texel is left holding the PRISTINE opaque mask, so the indirect trace pass can read that mask and fold

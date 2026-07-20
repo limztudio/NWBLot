@@ -1,7 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // HARDWARE (RayQuery) SOFT OPAQUE half-res trace. The HW analog of sw_shadow_soft_opaque_cs: one thread per HALF-res
 // pixel casts NWB_SW_SHADOW_SOFT_SPP OPAQUE inline-RayQuery occlusion rays CONE-JITTERED inside the cone the light's
 // physical source subtends (via shadow_rayquery.slangi's nwbShadowRqLightVisible, already type-aware) and writes the

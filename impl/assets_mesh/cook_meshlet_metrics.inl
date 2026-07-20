@@ -1,7 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template<typename VectorT>
 [[nodiscard]] static usize MeshletCookVectorBytes(const VectorT& values){
     return values.size() * sizeof(typename VectorT::value_type);

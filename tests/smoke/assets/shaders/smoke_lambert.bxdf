@@ -1,7 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Smoke-test deferred lighting BXDF: the engine's built-in whole-surface model, used by the smoke materials so
 // their cooks satisfy the per-material BXDF requirement. Pulled into the cook-generated deferred lighting
 // dispatch module (which #defines NWB_DEFERRED_BXDF_FUNCTION to this model's entry name). The deferred lighting

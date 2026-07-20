@@ -1,7 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Surfel resolve: one thread per HALF-res pixel (U6). Reads the G-buffer world position + normal, gathers the surfel
 // irradiance (nwbSurfelGather -- the (2*EXTENT+1)^3 hash walk, reused verbatim), and writes it to a HALF-res texture
 // that surfel_upsample_cs then reconstructs into the full-res surfelIrradiance the deferred-lighting PIXEL shader samples.

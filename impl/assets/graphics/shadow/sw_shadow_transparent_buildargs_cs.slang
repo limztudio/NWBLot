@@ -1,7 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Stage-3 BUILD INDIRECT ARGS (compacted transparent resolve). One thread: clamp the classify pass's append count to
 // the list capacity, write the DispatchIndirectArguments{groupsX,1,1} for the indirect trace (groupsX =
 // ceil(count / traceGroupSize); 0 when no edges -> a valid zero-workgroup indirect dispatch), and stash the clamped

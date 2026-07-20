@@ -1,7 +1,3 @@
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #include <impl/ecs_render/raytrace/rt_private.h>
 
 #include <impl/assets/graphics/gi/hw_binding_slots.h>   // NWB_GI_HW_* -- the U5 HW-RayQuery trace binding slots

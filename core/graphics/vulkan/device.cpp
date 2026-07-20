@@ -171,6 +171,7 @@ Device::Device(const DeviceDesc& desc)
     , m_context(desc.allocator, desc.threadPool, desc.instance, desc.physicalDevice, desc.device, desc.allocationCallbacks)
     , m_allocator(m_context)
     , m_descriptorHeapManager(m_context, m_allocator)
+    , m_gpuDescriptorHeap(*this)
     , m_pipelineCacheDirectory(m_context.objectArena, desc.pipelineCacheDirectory)
     , m_pipelineCacheVolumeName(m_context.objectArena)
     , m_uploadManager(*this, s_DefaultUploadChunkSize, 0, false)
@@ -498,6 +499,9 @@ Device::~Device(){
     m_uploadManager.clear();
     m_scratchManager.clear();
 
+    // Release the global descriptor heap's tables/layouts while the device is still valid (idempotent; the member
+    // destructor also calls this). Phase 1 leaves initialize() to the consumer, so this is a no-op unless used.
+    m_gpuDescriptorHeap.shutdown();
     m_descriptorHeapManager.shutdown();
 
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)

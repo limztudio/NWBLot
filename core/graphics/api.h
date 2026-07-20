@@ -19,6 +19,7 @@
 #include "rhi/framebuffer.h"
 #include "rhi/raytracing.h"
 #include "rhi/binding.h"
+#include "rhi/gpu_descriptor_heap.h"
 #include "rhi/pipeline.h"
 #include "rhi/command.h"
 #include "rhi/coopvec.h"

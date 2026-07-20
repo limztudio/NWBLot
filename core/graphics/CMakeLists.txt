@@ -14,6 +14,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/constants.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/device.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/extensions.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/gpu_descriptor_heap.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/graphics_pipeline.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/meshlets.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/queries.cpp"

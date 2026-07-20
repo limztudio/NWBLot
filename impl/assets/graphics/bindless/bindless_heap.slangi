@@ -1,0 +1,61 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Global descriptor heap - shader accessor surface (Phase 1, Backend A = descriptor indexing).
+//
+// One unbounded array per resource class, declared at the exact set/binding the host binds the heap's two descriptor
+// tables to (see binding_slots.h). A resource registered through GpuDescriptorHeap::write() lands at its class's
+// array, at its GpuDescriptorHandle::slot(). A shader fetches it by indexing that array with the slot; a slot that
+// varies across a wave must be wrapped in NonUniformResourceIndex() at the subscript (the round-trip test runs a
+// single invocation, so it does not need to). AccelStruct has no array here - it is unsupported on Backend A and
+// lands with the descriptor-buffer backend in a later phase.
+
+
+#ifndef NWB_GRAPHICS_BINDLESS_HEAP_SLANGI
+#define NWB_GRAPHICS_BINDLESS_HEAP_SLANGI
+
+
+#include "binding_slots.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Element type of the uniform-buffer (CBV) heap array. A CBV is at least a 16-byte float4 lane; the payload is the
+// leading uint, the rest pads the constant-buffer row.
+struct NwbBindlessHeapUint{
+    uint value;
+    uint3 _pad;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+Texture2D<float4> g_NwbHeapSampledImages[];
+
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWTexture2D<float4> g_NwbHeapStorageImages[];
+
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+Buffer<uint> g_NwbHeapSampledBuffers[];
+
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWByteAddressBuffer g_NwbHeapStorageBuffers[];
+
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbBindlessHeapUint> g_NwbHeapUniformBuffers[];
+
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLER, NWB_BINDLESS_HEAP_SAMPLER_SET)]]
+SamplerState g_NwbHeapSamplers[];
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

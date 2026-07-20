@@ -251,6 +251,7 @@ private:
     void runBvhSortSelfTest();
     void runBvhBuildSelfTest();
     void runSceneBvhSelfTest();
+    void runGpuDescriptorHeapSelfTest();
 #endif
 };
 

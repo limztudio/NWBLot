@@ -2129,6 +2129,28 @@ void CommandList::bindDescriptorHeapState(
 }
 
 
+void CommandList::bindDescriptorHeap(GpuDescriptorHeap& heap, const VkPipelineBindPoint bindPoint, const VkPipelineLayout pipelineLayout){
+    // Binds the global descriptor heap's persistent tables at their set indices against the given pipeline layout.
+    // The bound pipeline must have been built with the heap layouts at those set positions (Phase-1 dark path).
+    if(!m_currentCmdBuf || pipelineLayout == VK_NULL_HANDLE)
+        return;
+    if(!heap.isInitialized())
+        return;
+
+    const DescriptorTable* resourceTable = heap.m_resourceTable.get();
+    if(resourceTable && !resourceTable->m_descriptorSets.empty()){
+        const VkDescriptorSet set = resourceTable->m_descriptorSets[0];
+        vkCmdBindDescriptorSets(m_currentCmdBuf->m_cmdBuf, bindPoint, pipelineLayout, heap.getResourceSetIndex(), 1, &set, 0, nullptr);
+    }
+
+    const DescriptorTable* samplerTable = heap.m_samplerTable.get();
+    if(samplerTable && !samplerTable->m_descriptorSets.empty()){
+        const VkDescriptorSet set = samplerTable->m_descriptorSets[0];
+        vkCmdBindDescriptorSets(m_currentCmdBuf->m_cmdBuf, bindPoint, pipelineLayout, heap.getSamplerSetIndex(), 1, &set, 0, nullptr);
+    }
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

@@ -1475,6 +1475,122 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Global Descriptor Heap (Phase 1)
+
+
+// Device-owned unification of the dormant bindless machinery behind the single GpuDescriptorHandle contract
+// (rhi/gpu_descriptor_heap.h; docs/design/bindless-phase1-rhi-heap.md).
+//
+// Phase 1 stands up Backend A only - descriptor indexing, the guaranteed floor that runs on every device the engine
+// boots on (BC-250/RADV included). It builds two persistent bindless descriptor tables (resources + samplers) from
+// the existing createBindlessLayout/createDescriptorTable machinery and hands out global slot indices into them.
+// Backend B (VK_EXT_descriptor_heap) is a future accelerator, absent on our hardware, so it is not wired here. The
+// heap is dark: constructed at Device init, exercised only by its own round-trip test, invisible to every existing
+// pipeline.
+class GpuDescriptorHeap final : NoCopy{
+    friend class Device;
+    friend class CommandList;
+
+
+public:
+    explicit GpuDescriptorHeap(Device& device);
+    ~GpuDescriptorHeap();
+
+
+public:
+    bool initialize(const GpuDescriptorHeapDesc& desc);
+    void shutdown();
+
+    [[nodiscard]] bool isInitialized()const{ return m_initialized; }
+
+    // O(1) free-list pop from the class's index namespace. Returns GpuDescriptorHandle::invalid() (logged) when the
+    // namespace is exhausted - the heap is not auto-grown mid-frame.
+    [[nodiscard]] GpuDescriptorHandle allocate(GpuDescriptorClass::Enum descriptorClass);
+
+    // Quarantines the slot until s_MaxFramesInFlight advanceFrame() calls have passed, then returns it to the free
+    // list (deferred free, design 7). Safe to call at any time; ignores invalid handles.
+    void free(GpuDescriptorHandle handle);
+
+    // Registers a resource at the handle's slot. item is built with the usual BindingSetItem factories; its slot
+    // (register space) and arrayElement (global index) are overwritten from the handle. Update-after-bind: legal
+    // while the table is bound, provided the slot is not read by in-flight GPU work.
+    bool write(GpuDescriptorHandle handle, const BindingSetItem& item);
+
+    // Binds the resource + sampler tables at their set indices against the given pipeline layout / bind point. The
+    // explicit layout (a Phase-1 refinement of the design's bind(cmd)) sidesteps command-list pipeline tracking.
+    void bind(CommandList& commandList, VkPipelineBindPoint bindPoint, VkPipelineLayout pipelineLayout);
+
+    // Facade-friendly bind for a compute dispatch: pulls the bind point + pipeline layout from the pipeline itself,
+    // so callers above the Vulkan layer (impl/, which never names Vk types) can bind the heap without touching them.
+    // Call after setComputeState(pipeline) with no binding sets; the pipeline must have been built from
+    // getResourceLayout()/getSamplerLayout() at sets 0/1.
+    void bindCompute(CommandList& commandList, const ComputePipeline& pipeline);
+
+    // Advances the deferred-free retirement clock by one frame and recycles any slot whose quarantine has matured.
+    void advanceFrame();
+
+    [[nodiscard]] u32 getResourceCapacity()const{ return m_resourceSlots.capacity; }
+    [[nodiscard]] u32 getSamplerCapacity()const{ return m_samplerSlots.capacity; }
+    [[nodiscard]] u32 getResourceSetIndex()const{ return m_resourceSetIndex; }
+    [[nodiscard]] u32 getSamplerSetIndex()const{ return m_samplerSetIndex; }
+    // The two bindless layouts a consuming pipeline must be built from (resource -> set 0, sampler -> set 1), in that
+    // order, so the pipeline layout matches what bind()/bindCompute() bind against. Null until initialize() succeeds.
+    [[nodiscard]] const BindingLayoutHandle& getResourceLayout()const{ return m_resourceLayout; }
+    [[nodiscard]] const BindingLayoutHandle& getSamplerLayout()const{ return m_samplerLayout; }
+    // The register-space binding number a class occupies inside its table (SPIR-V binding within the heap set).
+    [[nodiscard]] static u32 getRegisterSlot(GpuDescriptorClass::Enum descriptorClass);
+
+
+private:
+    // Per-namespace index allocator: a fresh-index bump pointer plus a recycled free list.
+    struct SlotAllocator{
+        u32 capacity = 0;
+        u32 nextFresh = 0;
+        Vector<u32, Alloc::GlobalArena> freeList;
+
+        explicit SlotAllocator(Alloc::GlobalArena& arena)
+            : freeList(arena)
+        {}
+    };
+    struct RetiredSlot{
+        GpuDescriptorHandle handle;
+        u64 retireAtFrame = 0;
+    };
+
+    [[nodiscard]] SlotAllocator& allocatorForClass(GpuDescriptorClass::Enum descriptorClass);
+    [[nodiscard]] DescriptorTable* tableForClass(GpuDescriptorClass::Enum descriptorClass);
+
+
+private:
+    Device& m_device;
+    const VulkanContext& m_context;
+
+    bool m_initialized = false;
+    GpuDescriptorHeapDesc m_desc;
+
+    // Set index each table occupies in a consuming pipeline layout. Phase 1 is positional (BindlessLayoutDesc has
+    // no set-index field): the round-trip pipeline places the resource table at set 0 and the sampler table at set 1.
+    // Phase 2 moves these to reserved high sets once coexistence with classic sets (and maxBoundDescriptorSets) is
+    // validated.
+    u32 m_resourceSetIndex = 0;
+    u32 m_samplerSetIndex = 1;
+
+    BindingLayoutHandle m_resourceLayout;
+    BindingLayoutHandle m_samplerLayout;
+    DescriptorTableHandle m_resourceTable;
+    DescriptorTableHandle m_samplerTable;
+
+    SlotAllocator m_resourceSlots;
+    SlotAllocator m_samplerSlots;
+
+    Vector<RetiredSlot, Alloc::GlobalArena> m_retired;
+    u64 m_frameCounter = 0;
+
+    Futex m_mutex;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Graphics Pipeline
 
 
@@ -1992,6 +2108,9 @@ public:
     void dispatch(u32 groupsX, u32 groupsY = 1, u32 groupsZ = 1);
     void dispatchIndirect(u32 offsetBytes);
 
+    // Binds the global descriptor heap's tables for the currently bound pipeline (Phase-1 dark path).
+    void bindDescriptorHeap(GpuDescriptorHeap& heap, VkPipelineBindPoint bindPoint, VkPipelineLayout pipelineLayout);
+
     void setMeshletState(const MeshletState& state);
     void dispatchMesh(u32 groupsX, u32 groupsY = 1, u32 groupsZ = 1);
 
@@ -2153,6 +2272,7 @@ class Device final : public RefCounter<GraphicsResource>, NoCopy{
     friend class CommandList;
     friend class Texture;
     friend class UploadManager;
+    friend class GpuDescriptorHeap;
 
 
 private:
@@ -2270,6 +2390,8 @@ public:
 
 public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
+    // Phase-1 global descriptor heap (dark; see GpuDescriptorHeap). Valid only after Device init completes.
+    [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
 
 
 private:
@@ -2391,6 +2513,7 @@ private:
     VulkanContext m_context;
     VulkanAllocator m_allocator;
     DescriptorHeapManager m_descriptorHeapManager;
+    GpuDescriptorHeap m_gpuDescriptorHeap;
     Path m_pipelineCacheDirectory;
     GraphicsString m_pipelineCacheVolumeName;
     Optional<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];

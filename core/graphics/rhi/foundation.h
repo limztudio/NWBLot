@@ -54,6 +54,7 @@ namespace GraphicsBackend{
     class ShaderTable;
     class RayTracingPipeline;
     class CommandList;
+    class GpuDescriptorHeap;   // Device-owned global descriptor heap (Phase 1); not a refcounted GraphicsResource.
 
     using RayTracingOpacityMicromap = OpacityMicromap;
     using RayTracingAccelStruct = AccelStruct;
@@ -123,6 +124,7 @@ using TimerQuery = GraphicsBackend::TimerQuery;
 using RayTracingShaderTable = GraphicsBackend::RayTracingShaderTable;
 using RayTracingPipeline = GraphicsBackend::RayTracingPipeline;
 using CommandList = GraphicsBackend::CommandList;
+using GpuDescriptorHeap = GraphicsBackend::GpuDescriptorHeap;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

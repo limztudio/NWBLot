@@ -49,6 +49,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_caustics.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_surfel_gi.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_bvh_selftest.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/gpu_descriptor_heap_selftest.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shared/renderer_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit.h"

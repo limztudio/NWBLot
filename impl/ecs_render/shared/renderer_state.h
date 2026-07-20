@@ -385,6 +385,7 @@ struct RtSceneBvhState{
     bool m_bvhBuildPipelineFailed = false;
     bool m_bvhBuildSelfTestDone = false;
     bool m_sceneBvhSelfTestDone = false;
+    bool m_gpuDescriptorHeapSelfTestDone = false;
 };
 
 

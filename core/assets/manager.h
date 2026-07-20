@@ -18,12 +18,12 @@ NWB_ASSETS_BEGIN
 
 
 namespace AssetLoadState{
-enum Enum : u8{
-    Invalid = 0,
-    Pending,
-    InFlight,
-    Completed
-};
+    enum Enum : u8{
+        Invalid = 0,
+        Pending,
+        InFlight,
+        Completed
+    };
 };
 
 

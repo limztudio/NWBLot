@@ -6,7 +6,9 @@
 #include <tests/test_context.h>
 #include <gtest/gtest.h>
 
+#include <global/algorithm.h>
 #include <global/allocation_size.h>
+#include <global/arena_object.h>
 #include <global/binary.h>
 #include <global/blocking_io.h>
 #include <global/compile.h>
@@ -19,8 +21,10 @@
 #include <global/hash_utils.h>
 #include <global/inplace_function.h>
 #include <global/limit.h>
+#include <global/math/type.h>
 #include <global/process_execution.h>
 #include <global/text_utils.h>
+#include <global/type_counter.h>
 
 #include <core/alloc/persistent.h>
 #include <core/common/name_symbols.h>
@@ -38,6 +42,20 @@ using AString = NWB::Tests::TestAString;
 using NameSymbolTestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
 template<typename T>
 using Vector = NWB::Tests::TestVector<T>;
+
+struct ArenaObjectProbe{
+    bool& m_destroyed;
+
+    explicit ArenaObjectProbe(bool& destroyed)
+        : m_destroyed(destroyed)
+    {}
+    ~ArenaObjectProbe(){
+        m_destroyed = true;
+    }
+};
+
+struct TypeCounterFirstTag{};
+struct TypeCounterSecondTag{};
 
 static u32 s_DiagnosticEventCaptureCount = 0u;
 static const char* s_DiagnosticEventName = nullptr;
@@ -192,6 +210,41 @@ TEST(Global, AllocationSizeHelpers){
     EXPECT_EQ(Alignment(16u, 48u), 48u);
 }
 
+TEST(Global, GenericAllocationAndTypeHelpers){
+    NWB::Core::Alloc::GlobalArena arena(NWB::Tests::s_TestArena);
+    bool destroyed = false;
+    ArenaObjectProbe* const probe = ::NewArenaObject<ArenaObjectProbe>(arena, destroyed);
+    ASSERT_NE(probe, nullptr);
+    EXPECT_FALSE(destroyed);
+    ::DestroyArenaObject(arena, probe);
+    EXPECT_TRUE(destroyed);
+
+    const usize firstId = ::TypeCounter<TypeCounterFirstTag>::id<u32>();
+    EXPECT_EQ(firstId, ::TypeCounter<TypeCounterFirstTag>::id<u32>());
+    EXPECT_NE(firstId, ::TypeCounter<TypeCounterFirstTag>::id<u64>());
+    EXPECT_EQ(::TypeCounter<TypeCounterSecondTag>::id<u32>(), 0u);
+}
+
+TEST(Global, GrowingCapacityHelpers){
+    EXPECT_EQ(::NextGrowingCapacity(0u, 1u), 1u);
+    EXPECT_EQ(::NextGrowingCapacity(3u, 4u), 6u);
+    EXPECT_EQ(::NextGrowingCapacity(8u, 8u), 8u);
+    EXPECT_EQ(::NextGrowingCapacity(8u, 9u), 16u);
+    EXPECT_EQ(::NextGrowingCapacity(0u, 4097u, 4096u), 8192u);
+    EXPECT_EQ(::NextGrowingCapacity((Limit<usize>::s_Max / 2u) + 1u, Limit<usize>::s_Max), Limit<usize>::s_Max);
+}
+
+TEST(Global, Float34IdentityUsesAffineStorage){
+    const Float34 identity = ::Float34Identity();
+
+    EXPECT_FLOAT_EQ(identity._11, 1.0f);
+    EXPECT_FLOAT_EQ(identity._22, 1.0f);
+    EXPECT_FLOAT_EQ(identity._33, 1.0f);
+    EXPECT_FLOAT_EQ(identity._14, 0.0f);
+    EXPECT_FLOAT_EQ(identity._24, 0.0f);
+    EXPECT_FLOAT_EQ(identity._34, 0.0f);
+}
+
 TEST(Global, GlobalArenaReallocationPreservesAlignment){
     NWB::Core::Alloc::GlobalArena arena(NWB::Tests::s_TestArena);
     VerifyAlignedReallocation(arena);
@@ -252,6 +305,24 @@ TEST(Global, RuntimeNameSymbolsRecordStringViewNames){
 
     const Name literalName("Literal\\Name");
     EXPECT_FALSE(NWB::Core::Common::NameSymbols::Resolve(literalName.hash(), resolvedText, sizeof(resolvedText)));
+}
+
+TEST(Global, NameHashDebugTextHelpers){
+    const NameHash source = ComputeNameHash("global_name_hash_debug_text");
+    char hashText[NameDetail::s_DebugHashTextLength + 1u] = {};
+    NameDetail::HashToDebugString(source, hashText, sizeof(hashText));
+
+    NameHash decoded = {};
+    EXPECT_TRUE(NameDetail::DecodeDebugHashText(AStringView(hashText), decoded));
+    EXPECT_EQ(decoded, source);
+
+    char copiedHashText[NameDetail::s_DebugHashTextLength + 1u] = {};
+    EXPECT_TRUE(NameDetail::CopyDebugHashToken(AStringView(hashText), 0u, copiedHashText));
+    EXPECT_EQ(AStringView(copiedHashText), AStringView(hashText));
+
+    AString invalidHashText(hashText);
+    invalidHashText[0u] = 'g';
+    EXPECT_FALSE(NameDetail::DecodeDebugHashText(AStringView(invalidHashText.data(), invalidHashText.size()), decoded));
 }
 
 TEST(Global, NameSymbolsWriteDefaultFile){
@@ -399,6 +470,10 @@ TEST(Global, TextUtilityHelpers){
     EXPECT_TRUE(FitsU32(static_cast<usize>(Limit<u32>::s_Max)));
     EXPECT_FALSE(FitsU32(static_cast<u64>(Limit<u32>::s_Max) + 1u));
     EXPECT_FALSE(FitsU32(-1));
+    EXPECT_TRUE(CanRepresentU64<u32>(Limit<u32>::s_Max));
+    EXPECT_FALSE(CanRepresentU64<u32>(static_cast<u64>(Limit<u32>::s_Max) + 1u));
+    EXPECT_TRUE(CanRepresentU64<i64>(static_cast<u64>(Limit<i64>::s_Max)));
+    EXPECT_FALSE(CanRepresentU64<i64>(static_cast<u64>(Limit<i64>::s_Max) + 1u));
     EXPECT_TRUE(StartsWith(AStringView("alpha"), AStringView("alp")));
     EXPECT_TRUE(StartsWith(AStringView("alpha"), "al"));
     EXPECT_FALSE(StartsWith(AStringView("alpha"), AStringView("beta")));
@@ -408,6 +483,13 @@ TEST(Global, TextUtilityHelpers){
     AppendJsonQuotedText(jsonText, AStringView("a\"b\\c\n\t"));
     EXPECT_EQ(jsonText, AString("\"a\\\"b\\\\c\\n\\t\""));
     EXPECT_EQ(MakeJsonEscapedText<AString>(AStringView("a\rb")), AString("a\\rb"));
+
+    AString lineEndings("alpha\r\nbeta\rgamma\n");
+    EXPECT_TRUE(HasCrlfLineEndings(AStringView(lineEndings.data(), lineEndings.size())));
+    NormalizeLineEndingsInPlace(lineEndings, false);
+    EXPECT_EQ(lineEndings, AString("alpha\nbeta\ngamma\n"));
+    NormalizeLineEndingsInPlace(lineEndings, true);
+    EXPECT_EQ(lineEndings, AString("alpha\r\nbeta\r\ngamma\r\n"));
 
     AString csvCell;
     AppendCsvCell(csvCell, AStringView("alpha,b\"eta"));
@@ -546,6 +628,12 @@ TEST(Global, FilesystemUtilityHelpers){
 }
 
 TEST(Global, FilesystemVolumeSegmentNaming){
+    EXPECT_TRUE(ValidVolumeName("graphics"));
+    EXPECT_TRUE(ValidVolumeName("runtime_pipeline-cache"));
+    EXPECT_FALSE(ValidVolumeName(""));
+    EXPECT_FALSE(ValidVolumeName("graphics/cache"));
+    EXPECT_FALSE(ValidVolumeName("graphics cache"));
+
     const ACompactString firstSegment = MakeVolumeSegmentFileName("graphics", 0u);
     const ACompactString sameSegment = MakeVolumeSegmentFileName("graphics", 0u);
     const ACompactString nextSegment = MakeVolumeSegmentFileName("graphics", 1u);

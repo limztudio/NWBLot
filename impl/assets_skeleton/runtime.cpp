@@ -8,7 +8,6 @@
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
-#include <global/binary.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -203,14 +202,15 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
 
     usize cursor = 0u;
     SkeletonBinaryPayload::HeaderBinary header;
-    if(!ReadPOD(binary, cursor, header)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: malformed header"));
+    if(!Core::Assets::ReadMagicHeaderPayload(
+        binary,
+        cursor,
+        header,
+        SkeletonBinaryPayload::s_SkeletonMagic,
+        NWB_TEXT("Skeleton::loadBinary"),
+        NWB_TEXT("skeleton")
+    ))
         return false;
-    }
-    if(header.magic != SkeletonBinaryPayload::s_SkeletonMagic){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: invalid skeleton asset format; recook required"));
-        return false;
-    }
 
     Core::Assets::AssetVector<SkeletonBinaryPayload::JointBinary> jointBinaries(m_joints.get_allocator().arena());
     if(!Core::Assets::ReadVectorPayload(

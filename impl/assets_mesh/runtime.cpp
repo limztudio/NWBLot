@@ -80,12 +80,13 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
     const tchar* const loadFailureContext = NWB_TEXT("Mesh::loadBinary");
     usize cursor = 0;
     MeshBinaryPayload::MeshHeaderBinary header;
-    if(!MeshAssetBinaryPayload::ReadHeader(
+    if(!Core::Assets::ReadMagicHeaderPayload(
         binary,
         cursor,
         header,
         MeshBinaryPayload::s_MeshMagic,
-        loadFailureContext
+        loadFailureContext,
+        NWB_TEXT("mesh")
     ))
         return false;
 
@@ -106,7 +107,7 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     if(!readGeometryMeshletStreams(binary, cursor, header, loadFailureContext))
         return false;
-    if(!MeshAssetBinaryPayload::ReadComplete(binary, cursor, loadFailureContext))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, loadFailureContext))
         return false;
 
     return validatePayload();

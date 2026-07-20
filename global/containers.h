@@ -6,6 +6,7 @@
 
 
 #include "generic.h"
+#include "algorithm.h"
 #include "limit.h"
 #include "type.h"
 
@@ -287,15 +288,7 @@ inline void ReserveGrowingCapacity(Container& container, const usize requiredCap
         if(requiredCapacity <= container.capacity())
             return;
 
-        usize nextCapacity = container.capacity() > 1u ? static_cast<usize>(container.capacity()) : 1u;
-        while(nextCapacity < requiredCapacity){
-            if(nextCapacity > Limit<usize>::s_Max / 2u){
-                nextCapacity = requiredCapacity;
-                break;
-            }
-
-            nextCapacity *= 2u;
-        }
+        usize nextCapacity = NextGrowingCapacity(static_cast<usize>(container.capacity()), requiredCapacity);
 
         if constexpr(requires(const Container& c){ c.max_size(); }){
             if(nextCapacity > container.max_size())
@@ -306,6 +299,18 @@ inline void ReserveGrowingCapacity(Container& container, const usize requiredCap
     }
     else
         container.reserve(requiredCapacity);
+}
+
+template<typename Container>
+inline void ReserveAdditionalCapacity(Container& container, const usize additionalCount){
+    if(additionalCount <= 1u)
+        return;
+
+    const usize currentSize = container.size();
+    if(additionalCount > Limit<usize>::s_Max - currentSize)
+        return;
+
+    ReserveGrowingCapacity(container, currentSize + additionalCount);
 }
 
 

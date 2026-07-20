@@ -12,6 +12,8 @@
 #include <impl/assets_shader/loader.h>
 #include <core/common/log.h>
 
+#include <global/algorithm.h>
+
 #include <cstddef>
 
 
@@ -34,16 +36,6 @@ static constexpr usize s_DefaultVertexCapacity = 4096u;
 static constexpr usize s_DefaultIndexCapacity = 8192u;
 static constexpr Name s_UiVertexBufferName("ecs_ui/imgui_vertices");
 static constexpr Name s_UiIndexBufferName("ecs_ui/imgui_indices");
-
-static usize NextCapacity(const usize currentCapacity, const usize requiredCapacity, const usize defaultCapacity){
-    usize capacity = Max(currentCapacity, defaultCapacity);
-    while(capacity < requiredCapacity){
-        if(capacity > Limit<usize>::s_Max / 2u)
-            return requiredCapacity;
-        capacity *= 2u;
-    }
-    return capacity;
-}
 
 static Core::RenderState BuildUiRenderState(){
     Core::RenderState renderState;
@@ -236,7 +228,7 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
 
     auto* device = m_graphics.getDevice();
     if(!m_vertexBuffer || m_vertexBufferCapacity < vertexCount){
-        const usize capacity = __hidden_ui::NextCapacity(
+        const usize capacity = ::NextGrowingCapacity(
             m_vertexBufferCapacity,
             vertexCount,
             __hidden_ui::s_DefaultVertexCapacity
@@ -259,7 +251,7 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
     }
 
     if(!m_indexBuffer || m_indexBufferCapacity < indexCount){
-        const usize capacity = __hidden_ui::NextCapacity(
+        const usize capacity = ::NextGrowingCapacity(
             m_indexBufferCapacity,
             indexCount,
             __hidden_ui::s_DefaultIndexCapacity

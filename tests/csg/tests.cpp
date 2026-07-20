@@ -538,7 +538,7 @@ TEST(Csg, CsgShapeRegistryBounds){
     NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
     EXPECT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
 
-    Float34 shapeToWorld = NWB::Impl::CsgIdentityTransform();
+    Float34 shapeToWorld = ::Float34Identity();
     shapeToWorld._14 = 10.0f;
     shapeToWorld._24 = -5.0f;
     shapeToWorld._34 = 1.0f;
@@ -634,7 +634,7 @@ TEST(Csg, CsgShapeRegistryProjectShape){
     SIMDVector minBounds;
     SIMDVector maxBounds;
     bool finiteBounds = false;
-    const SIMDMatrix shapeToWorldMatrix = LoadFloat(NWB::Impl::CsgIdentityTransform());
+    const SIMDMatrix shapeToWorldMatrix = LoadFloat(::Float34Identity());
     EXPECT_TRUE(registry.buildShapeBounds(
         desc.name,
         shapeToWorldMatrix,

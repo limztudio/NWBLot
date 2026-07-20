@@ -7,7 +7,6 @@
 
 #include <core/assets/binary_payload_io.h>
 #include <global/binary.h>
-#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,48 +23,6 @@ namespace MeshAssetBinaryPayload{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename ValueContainer>
-[[nodiscard]] bool ReadVector(
-    const Core::Assets::AssetBytes& binary,
-    usize& inOutCursor,
-    const u64 count,
-    ValueContainer& outValues,
-    const tchar* failureContext,
-    const tchar* label
-){
-    return Core::Assets::ReadVectorPayload(binary, inOutCursor, count, outValues, failureContext, label);
-}
-
-
-template<typename Header>
-[[nodiscard]] bool ReadHeader(
-    const Core::Assets::AssetBytes& binary,
-    usize& inOutCursor,
-    Header& outHeader,
-    const u32 expectedMagic,
-    const tchar* failureContext
-){
-    if(!ReadPOD(binary, inOutCursor, outHeader)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed header"), failureContext);
-        return false;
-    }
-
-    if(outHeader.magic != expectedMagic){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid mesh asset format; recook required"), failureContext);
-        return false;
-    }
-
-    return true;
-}
-
-[[nodiscard]] inline bool ReadComplete(
-    const Core::Assets::AssetBytes& binary,
-    const usize cursor,
-    const tchar* failureContext
-){
-    return Core::Assets::ReadCompletePayload(binary, cursor, failureContext);
-}
 
 template<typename HeaderT>
 [[nodiscard]] bool MeshBaseHeaderComplete(const HeaderT& header){
@@ -103,11 +60,11 @@ template<
     ColorContainer& outColors,
     const tchar* failureContext
 ){
-    return ReadVector(binary, inOutCursor, header.positionCount, outPositions, failureContext, NWB_TEXT("positions"))
-        && ReadVector(binary, inOutCursor, header.normalCount, outNormals, failureContext, NWB_TEXT("normals"))
-        && ReadVector(binary, inOutCursor, header.tangentCount, outTangents, failureContext, NWB_TEXT("tangents"))
-        && ReadVector(binary, inOutCursor, header.uv0Count, outUv0, failureContext, NWB_TEXT("uv0"))
-        && ReadVector(binary, inOutCursor, header.colorCount, outColors, failureContext, NWB_TEXT("colors"))
+    return Core::Assets::ReadVectorPayload(binary, inOutCursor, header.positionCount, outPositions, failureContext, NWB_TEXT("positions"))
+        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.normalCount, outNormals, failureContext, NWB_TEXT("normals"))
+        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.tangentCount, outTangents, failureContext, NWB_TEXT("tangents"))
+        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.uv0Count, outUv0, failureContext, NWB_TEXT("uv0"))
+        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.colorCount, outColors, failureContext, NWB_TEXT("colors"))
     ;
 }
 
@@ -132,9 +89,9 @@ template<
     MeshletPrimitiveIndexContainer& outMeshletPrimitiveIndices,
     const tchar* failureContext
 ){
-    if(!ReadVector(binary, inOutCursor, header.meshletCount, outMeshlets, failureContext, NWB_TEXT("meshlets")))
+    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletCount, outMeshlets, failureContext, NWB_TEXT("meshlets")))
         return false;
-    if(!ReadVector(
+    if(!Core::Assets::ReadVectorPayload(
         binary,
         inOutCursor,
         header.meshletBoundCount,
@@ -143,7 +100,7 @@ template<
         NWB_TEXT("meshlet bounds")
     ))
         return false;
-    if(!ReadVector(
+    if(!Core::Assets::ReadVectorPayload(
         binary,
         inOutCursor,
         header.meshletPositionRefDeltaByteCount,
@@ -152,7 +109,7 @@ template<
         NWB_TEXT("meshlet position ref deltas")
     ))
         return false;
-    if(!ReadVector(
+    if(!Core::Assets::ReadVectorPayload(
         binary,
         inOutCursor,
         header.meshletAttributeRefDeltaByteCount,
@@ -161,7 +118,7 @@ template<
         NWB_TEXT("meshlet attribute ref deltas")
     ))
         return false;
-    if(!ReadVector(
+    if(!Core::Assets::ReadVectorPayload(
         binary,
         inOutCursor,
         header.meshletLocalVertexRefCount,
@@ -170,7 +127,7 @@ template<
         NWB_TEXT("meshlet local vertex refs")
     ))
         return false;
-    return ReadVector(
+    return Core::Assets::ReadVectorPayload(
         binary,
         inOutCursor,
         header.meshletPrimitiveIndexCount,
@@ -189,16 +146,6 @@ template<
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename ValueContainer>
-[[nodiscard]] bool AppendVector(
-    Core::Assets::AssetBytes& outBinary,
-    const ValueContainer& values,
-    const tchar* failureContext,
-    const tchar* label
-){
-    return Core::Assets::AppendVectorPayload(outBinary, values, failureContext, label);
-}
 
 template<typename MeshT>
 [[nodiscard]] bool AddMeshBaseReserveBytes(usize& reserveBytes, const MeshT& mesh){
@@ -238,11 +185,11 @@ template<typename MeshT>
     const MeshT& mesh,
     const tchar* failureContext
 ){
-    return AppendVector(outBinary, mesh.positionStream(), failureContext, NWB_TEXT("positions"))
-        && AppendVector(outBinary, mesh.normalStream(), failureContext, NWB_TEXT("normals"))
-        && AppendVector(outBinary, mesh.tangentStream(), failureContext, NWB_TEXT("tangents"))
-        && AppendVector(outBinary, mesh.uv0Stream(), failureContext, NWB_TEXT("uv0"))
-        && AppendVector(outBinary, mesh.colorStream(), failureContext, NWB_TEXT("colors"))
+    return Core::Assets::AppendVectorPayload(outBinary, mesh.positionStream(), failureContext, NWB_TEXT("positions"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.normalStream(), failureContext, NWB_TEXT("normals"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.tangentStream(), failureContext, NWB_TEXT("tangents"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.uv0Stream(), failureContext, NWB_TEXT("uv0"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.colorStream(), failureContext, NWB_TEXT("colors"))
     ;
 }
 
@@ -252,12 +199,12 @@ template<typename MeshT>
     const MeshT& mesh,
     const tchar* failureContext
 ){
-    return AppendVector(outBinary, mesh.meshlets(), failureContext, NWB_TEXT("meshlets"))
-        && AppendVector(outBinary, mesh.meshletBounds(), failureContext, NWB_TEXT("meshlet bounds"))
-        && AppendVector(outBinary, mesh.meshletPositionRefDeltas(), failureContext, NWB_TEXT("meshlet position ref deltas"))
-        && AppendVector(outBinary, mesh.meshletAttributeRefDeltas(), failureContext, NWB_TEXT("meshlet attribute ref deltas"))
-        && AppendVector(outBinary, mesh.meshletLocalVertexRefs(), failureContext, NWB_TEXT("meshlet local vertex refs"))
-        && AppendVector(outBinary, mesh.meshletPrimitiveIndices(), failureContext, NWB_TEXT("meshlet primitive indices"))
+    return Core::Assets::AppendVectorPayload(outBinary, mesh.meshlets(), failureContext, NWB_TEXT("meshlets"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletBounds(), failureContext, NWB_TEXT("meshlet bounds"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPositionRefDeltas(), failureContext, NWB_TEXT("meshlet position ref deltas"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletAttributeRefDeltas(), failureContext, NWB_TEXT("meshlet attribute ref deltas"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletLocalVertexRefs(), failureContext, NWB_TEXT("meshlet local vertex refs"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPrimitiveIndices(), failureContext, NWB_TEXT("meshlet primitive indices"))
     ;
 }
 

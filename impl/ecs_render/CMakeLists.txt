@@ -57,7 +57,6 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_shader_variants_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/mesh_view_private.h"
-    "${CMAKE_CURRENT_LIST_DIR}/kernel/renderer_capacity_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/renderer_csg_types.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/csg_interval_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/renderer_constants_private.h"

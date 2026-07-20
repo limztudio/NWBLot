@@ -47,7 +47,7 @@ inline constexpr usize s_FileSizeHighPartShiftBits = sizeof(u32) * 8u;
 
 
 [[nodiscard]] inline bool CanRepresentStreamSize(const u64 byteCount)noexcept{
-    return byteCount <= static_cast<u64>(Limit<StreamSize>::s_Max);
+    return ::CanRepresentU64<StreamSize>(byteCount);
 }
 
 inline void ClearError(ErrorCode& outError)noexcept{

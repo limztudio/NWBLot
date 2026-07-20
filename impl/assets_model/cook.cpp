@@ -256,7 +256,7 @@ template<typename AssetT>
     const AStringView objectKind,
     SkeletonJointMatrix& outTransform
 ){
-    outTransform = MakeIdentityModelMatrix();
+    outTransform = ::Float34Identity();
 
     const Value* fieldValue = object.findField(s_TransformField);
     if(!fieldValue)

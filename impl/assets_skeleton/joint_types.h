@@ -25,18 +25,6 @@ static_assert(IsTriviallyCopyable_V<SkeletonJointMatrix>, "SkeletonJointMatrix m
 static_assert(sizeof(SkeletonJointMatrix) == sizeof(f32) * s_SkeletonJointMatrixFloatCount, "SkeletonJointMatrix GPU layout drifted");
 static_assert(alignof(SkeletonJointMatrix) >= alignof(Float4), "SkeletonJointMatrix must stay SIMD-aligned");
 
-[[nodiscard]] inline SkeletonJointMatrix MakeIdentitySkeletonJointMatrix(){
-    SkeletonJointMatrix matrix{};
-    matrix.rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    matrix.rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    matrix.rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    return matrix;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 

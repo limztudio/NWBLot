@@ -41,6 +41,7 @@ inline constexpr usize s_DebugNameCapacity = 256u;
 inline constexpr usize s_NameHashBytes = sizeof(u64) * s_HashLaneCount;
 inline constexpr usize s_HexDigitsPerHashLane = sizeof(u64) * 2u;
 inline constexpr usize s_EncodedNameHashLength = s_HexDigitsPerHashLane * s_HashLaneCount;
+inline constexpr usize s_DebugHashTextLength = s_EncodedNameHashLength + (s_HashLaneCount - 1u);
 
 static_assert(sizeof(NameHash) == s_NameHashBytes, "NameHash size must stay stable");
 
@@ -80,6 +81,59 @@ template<typename CharT>
     }
 
     return true;
+}
+
+template<typename CharT>
+[[nodiscard]] inline bool IsNameHashTokenChar(const CharT ch){
+    return (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9'))
+        || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('f'))
+        || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('F'))
+        || ch == static_cast<CharT>('_')
+    ;
+}
+
+template<typename CharT>
+[[nodiscard]] inline bool CopyDebugHashToken(const BasicStringView<CharT> text, const usize offset, char (&outHashText)[s_DebugHashTextLength + 1u]){
+    if(offset + s_DebugHashTextLength > text.size())
+        return false;
+    if(offset > 0u && IsNameHashTokenChar(text[offset - 1u]))
+        return false;
+    if(offset + s_DebugHashTextLength < text.size() && IsNameHashTokenChar(text[offset + s_DebugHashTextLength]))
+        return false;
+
+    for(usize i = 0u; i < s_DebugHashTextLength; ++i){
+        const CharT ch = text[offset + i];
+        if(((i + 1u) % (s_HexDigitsPerHashLane + 1u)) == 0u){
+            if(ch != static_cast<CharT>('_'))
+                return false;
+        }
+        else if(!IsNameHashTokenChar(ch) || ch == static_cast<CharT>('_')){
+            return false;
+        }
+
+        outHashText[i] = static_cast<char>(ch);
+    }
+    outHashText[s_DebugHashTextLength] = 0;
+    return true;
+}
+
+[[nodiscard]] inline bool DecodeDebugHashText(const AStringView text, NameHash& outHash){
+    if(text.size() != s_DebugHashTextLength)
+        return false;
+
+    NameHash hash = {};
+    usize cursor = 0u;
+    for(u32 lane = 0u; lane < s_HashLaneCount; ++lane){
+        if((lane > 0u && text[cursor++] != '_') || cursor + s_HexDigitsPerHashLane > text.size())
+            return false;
+
+        if(!ParseHexU64<char>(AStringView(text.data() + cursor, s_HexDigitsPerHashLane), hash.qwords[lane]))
+            return false;
+        cursor += s_HexDigitsPerHashLane;
+    }
+
+    outHash = hash;
+    return cursor == text.size();
 }
 
 
@@ -312,8 +366,7 @@ inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstS
 
     static constexpr char s_Hex[] = "0123456789abcdef";
 
-    const usize requiredLength = s_EncodedNameHashLength + (s_HashLaneCount - 1u);
-    if(dstSize <= requiredLength){
+    if(dstSize <= s_DebugHashTextLength){
         dst[0] = CharT{};
         return;
     }

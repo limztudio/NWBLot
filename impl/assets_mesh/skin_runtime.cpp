@@ -8,7 +8,6 @@
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
-#include <global/binary.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,14 +66,15 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
 
     usize cursor = 0u;
     SkinBinaryPayload::HeaderBinary header;
-    if(!ReadPOD(binary, cursor, header)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin::loadBinary failed: malformed header"));
+    if(!Core::Assets::ReadMagicHeaderPayload(
+        binary,
+        cursor,
+        header,
+        SkinBinaryPayload::s_SkinMagic,
+        NWB_TEXT("Skin::loadBinary"),
+        NWB_TEXT("skin")
+    ))
         return false;
-    }
-    if(header.magic != SkinBinaryPayload::s_SkinMagic){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin::loadBinary failed: invalid skin asset format; recook required"));
-        return false;
-    }
 
     m_mesh.virtualPath = Name(header.meshNameHash);
     m_skeleton.virtualPath = Name(header.skeletonNameHash);

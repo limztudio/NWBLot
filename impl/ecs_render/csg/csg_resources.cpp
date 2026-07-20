@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/kernel/renderer_private.h>
 
-#include <impl/ecs_render/kernel/renderer_capacity_private.h>
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -232,7 +232,7 @@ static void BuildResolvedClipCutterGpuData(
     if(elementByteSize == 0u || requiredCount > Limit<usize>::s_Max / elementByteSize)
         return false;
 
-    const usize capacity = ECSRenderDetail::NextGrowingCapacity(inOutCapacity, requiredCount);
+    const usize capacity = ::NextGrowingCapacity(inOutCapacity, requiredCount);
     if(capacity > Limit<usize>::s_Max / elementByteSize)
         return false;
 

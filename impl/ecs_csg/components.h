@@ -45,14 +45,6 @@ static_assert(IsTriviallyCopyable_V<SkinnedCsgMeshComponent>, "SkinnedCsgMeshCom
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Float34 CsgIdentityTransform(){
-    Float34 transform = {};
-    transform._11 = 1.0f;
-    transform._22 = 1.0f;
-    transform._33 = 1.0f;
-    return transform;
-}
-
 struct CsgCutterComponent{
     using ParameterByteVector = Vector<u8, Core::Alloc::GlobalArena>;
 
@@ -68,8 +60,8 @@ struct CsgCutterComponent{
     bool active = true;
 
     explicit CsgCutterComponent(Core::Alloc::GlobalArena& arena)
-        : worldToShape(CsgIdentityTransform())
-        , shapeToWorld(CsgIdentityTransform())
+        : worldToShape(::Float34Identity())
+        , shapeToWorld(::Float34Identity())
         , parameterBytes(arena)
     {}
 };

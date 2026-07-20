@@ -43,6 +43,28 @@ template<typename ValueContainer>
     return false;
 }
 
+template<typename HeaderT>
+[[nodiscard]] bool ReadMagicHeaderPayload(
+    const AssetBytes& binary,
+    usize& inOutCursor,
+    HeaderT& outHeader,
+    const u32 expectedMagic,
+    const tchar* failureContext,
+    const tchar* assetType
+){
+    if(!ReadPOD(binary, inOutCursor, outHeader)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed header"), failureContext);
+        return false;
+    }
+
+    if(outHeader.magic != expectedMagic){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid {} asset format; recook required"), failureContext, assetType);
+        return false;
+    }
+
+    return true;
+}
+
 [[nodiscard]] inline bool ReadCompletePayload(
     const AssetBytes& binary,
     const usize cursor,

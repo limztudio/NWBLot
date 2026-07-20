@@ -33,54 +33,15 @@ inline constexpr usize s_MaxResolvedTextLength = 1024u;
 inline constexpr char s_FileName[] = "namesym";
 inline constexpr char s_FileExtension[] = ".namesym";
 inline constexpr char s_FileHeader[] = "nwb_namesym_v1";
-inline constexpr usize s_DebugHashTextLength = (16u * NameDetail::s_HashLaneCount) + (NameDetail::s_HashLaneCount - 1u);
+inline constexpr usize s_DebugHashTextLength = NameDetail::s_DebugHashTextLength;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool IsNameHashTokenChar(const char ch){
-    return (ch >= '0' && ch <= '9')
-        || (ch >= 'a' && ch <= 'f')
-        || (ch >= 'A' && ch <= 'F')
-        || ch == '_'
-    ;
-}
-template<typename CharT>
-[[nodiscard]] inline bool IsNameHashTokenChar(const CharT ch){
-    return (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9'))
-        || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('f'))
-        || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('F'))
-        || ch == static_cast<CharT>('_')
-    ;
-}
-
-[[nodiscard]] bool DecodeDebugHashText(AStringView text, NameHash& outHash);
-
-template<typename CharT>
-[[nodiscard]] inline bool CopyDebugHashToken(const BasicStringView<CharT> text, const usize offset, char (&outHashText)[s_DebugHashTextLength + 1u]){
-    if(offset + s_DebugHashTextLength > text.size())
-        return false;
-    if(offset > 0u && IsNameHashTokenChar(text[offset - 1u]))
-        return false;
-    if(offset + s_DebugHashTextLength < text.size() && IsNameHashTokenChar(text[offset + s_DebugHashTextLength]))
-        return false;
-
-    for(usize i = 0u; i < s_DebugHashTextLength; ++i){
-        const CharT ch = text[offset + i];
-        if(((i + 1u) % 17u) == 0u){
-            if(ch != static_cast<CharT>('_'))
-                return false;
-        }
-        else if(!IsNameHashTokenChar(ch) || ch == static_cast<CharT>('_')){
-            return false;
-        }
-
-        outHashText[i] = static_cast<char>(ch);
-    }
-    outHashText[s_DebugHashTextLength] = 0;
-    return true;
-}
+using NameDetail::CopyDebugHashToken;
+using NameDetail::DecodeDebugHashText;
+using NameDetail::IsNameHashTokenChar;
 
 [[nodiscard]] bool Resolve(const NameHash& hash, char* outText, usize outTextSize);
 

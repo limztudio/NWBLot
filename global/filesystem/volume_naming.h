@@ -13,6 +13,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline bool ValidVolumeName(const AStringView volumeName){
+    if(volumeName.empty())
+        return false;
+
+    for(const char ch : volumeName){
+        if(IsAsciiAlphaNumeric(ch) || ch == '_' || ch == '-')
+            continue;
+        return false;
+    }
+    return true;
+}
+
 [[nodiscard]] inline u64 HashVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex){
     char segmentIndexBuffer[TextDetail::s_DecimalTextBufferBytes] = {};
     const AStringView segmentIndexText = FormatDecimal(segmentIndex, segmentIndexBuffer);

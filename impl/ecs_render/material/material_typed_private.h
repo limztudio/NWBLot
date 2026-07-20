@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_capacity_private.h>
 #include <impl/ecs_render/kernel/renderer_types.h>
 
 #include <core/common/log.h>
@@ -153,7 +152,7 @@ template<typename DestinationByteVector, typename SourceByteVector>
 
     const usize requiredTypedByteCapacity = appendRange.alignedByteEnd;
     if(requiredTypedByteCapacity > materialTypedBytes.capacity())
-        materialTypedBytes.reserve(NextGrowingCapacity(
+        materialTypedBytes.reserve(::NextGrowingCapacity(
             materialTypedBytes.capacity(),
             requiredTypedByteCapacity
         ));

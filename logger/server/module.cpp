@@ -12,6 +12,8 @@
 #include <core/alloc/standalone_runtime.h>
 #include <core/common/name_symbols.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,7 +31,6 @@ namespace __hidden_logger_server{
 
 
 inline constexpr usize s_ConnectionInitialBufferCapacity = 256u;
-inline constexpr usize s_ConnectionBufferGrowthFactor = 2u;
 inline constexpr usize s_BytesPerMebibyte = 1024u * 1024u;
 inline constexpr usize s_MaxLogMessageUploadMebibytes = 1u;
 inline constexpr usize s_MaxCrashPackageUploadMebibytes = 128u;
@@ -105,14 +106,7 @@ struct ConnectionInfo{
         if(requiredSize <= capacity)
             return true;
 
-        usize newCapacity = capacity > 0u ? capacity : s_ConnectionInitialBufferCapacity;
-        while(newCapacity < requiredSize){
-            if(newCapacity > Limit<usize>::s_Max / s_ConnectionBufferGrowthFactor){
-                newCapacity = requiredSize;
-                break;
-            }
-            newCapacity *= s_ConnectionBufferGrowthFactor;
-        }
+        const usize newCapacity = ::NextGrowingCapacity(capacity, requiredSize, s_ConnectionInitialBufferCapacity);
 
         auto* newBuffer = reinterpret_cast<u8*>(Core::Alloc::CoreRealloc(
             buffer,

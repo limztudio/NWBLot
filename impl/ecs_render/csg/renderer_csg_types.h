@@ -39,14 +39,6 @@ struct CsgBoundsGpuData{
 
 using CsgReceiverCpuBounds = CsgBoundsGpuData;
 
-[[nodiscard]] NWB_INLINE Float34 MakeIdentityCsgMatrix(){
-    Float34 matrix{};
-    matrix.rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-    matrix.rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    matrix.rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    return matrix;
-}
-
 struct CsgReceiverRangeGpuData{
     // The CSG shaders pack these four scalars as a single uint4 (rangeInfo):
     //   x = firstCutter, y = cutterCount, z = flags, w = shadingModelId.
@@ -54,7 +46,7 @@ struct CsgReceiverRangeGpuData{
     u32 cutterCount = 0u;
     u32 flags = 0u;
     u32 shadingModelId = 0u;
-    Float34 worldToReceiver = MakeIdentityCsgMatrix();
+    Float34 worldToReceiver = ::Float34Identity();
     CsgBoundsGpuData localBounds;
     // The cap-fill material context packs as a uint4 after localBounds:
     //   x = cook-generated surface-dispatch id, y = constant material byte offset, z = mesh instance index.
@@ -69,7 +61,7 @@ struct CsgCutterGpuData{
     f32 worldToShapeScaleBound = 1.f;
     u32 padding0 = 0u;
     u32 padding1 = 0u;
-    Float34 worldToShape = MakeIdentityCsgMatrix();
+    Float34 worldToShape = ::Float34Identity();
     Float4 parameter0 = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 parameter1 = Float4(0.f, 0.f, 0.f, 0.f);
 };

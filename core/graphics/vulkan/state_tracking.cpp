@@ -5,6 +5,7 @@
 #include "backend.h"
 
 #include <core/common/log.h>
+#include <global/containers.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,38 +88,6 @@ void AppendTextureStateBarriersBefore(
             AppendTextureStateBarrier(barriers, image, aspectMask, arraySlice, mipLevel, oldState, stateBits, rayTracingStageAvailable);
     }
 }
-
-template<typename ContainerT>
-void ReserveAdditionalCapacity(ContainerT& container, usize additionalCount){
-    if(additionalCount <= 1u)
-        return;
-
-    const usize currentSize = container.size();
-    if(additionalCount > Limit<usize>::s_Max - currentSize)
-        return;
-
-    const usize requiredCapacity = currentSize + additionalCount;
-    if constexpr(requires{ container.capacity(); }){
-        if(requiredCapacity <= container.capacity())
-            return;
-
-        usize nextCapacity = Max<usize>(container.capacity(), 1u);
-        while(nextCapacity < requiredCapacity){
-            if(nextCapacity > Limit<usize>::s_Max / 2u){
-                nextCapacity = requiredCapacity;
-                break;
-            }
-            nextCapacity *= 2u;
-        }
-        container.reserve(nextCapacity);
-    }
-    else
-        container.reserve(requiredCapacity);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 };
 
@@ -274,7 +243,7 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
             else if(subresourceOldState != oldState && !usePerSubresourceBarriers){
                 usePerSubresourceBarriers = true;
                 firstBarrierIndex = m_pendingImageBarriers.size();
-                __hidden_vulkan_state_tracking::ReserveAdditionalCapacity(m_pendingImageBarriers, subresourceCount);
+                ::ContainerDetail::ReserveAdditionalCapacity(m_pendingImageBarriers, subresourceCount);
                 if(__hidden_vulkan_state_tracking::NeedsTextureStateBarrier(oldState, stateBits, uavBarrierEnabled)){
                     __hidden_vulkan_state_tracking::AppendTextureStateBarriersBefore(
                         m_pendingImageBarriers,
@@ -626,7 +595,7 @@ void StateTracker::beginTrackingResolvedTransientTexture(Texture& texture, const
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
     const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
 
-    __hidden_vulkan_state_tracking::ReserveAdditionalCapacity(m_textureStates, subresourceCount);
+    ::ContainerDetail::ReserveAdditionalCapacity(m_textureStates, subresourceCount);
 
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){

@@ -73,6 +73,29 @@ template<typename T>
         return static_cast<u64>(value) <= static_cast<u64>(Limit<u32>::s_Max);
 }
 
+template<typename T>
+[[nodiscard]] inline constexpr bool CanRepresentU64(const u64 value){
+    static_assert(IsArithmetic_V<T>, "CanRepresentU64 requires arithmetic target type");
+
+    constexpr bool signedType = static_cast<T>(-1) < static_cast<T>(0);
+    if constexpr(signedType){
+        constexpr usize bitCount = sizeof(T) * 8u;
+        constexpr u64 maxValue = bitCount >= 64u
+            ? (Limit<u64>::s_Max >> 1u)
+            : ((u64(1) << (bitCount - 1u)) - 1u)
+        ;
+        return value <= maxValue;
+    }
+    else{
+        constexpr usize bitCount = sizeof(T) * 8u;
+        constexpr u64 maxValue = bitCount >= 64u
+            ? Limit<u64>::s_Max
+            : ((u64(1) << bitCount) - 1u)
+        ;
+        return value <= maxValue;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

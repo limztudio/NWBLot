@@ -1022,39 +1022,6 @@ template<typename Value, typename WriteValue>
     return true;
 }
 
-[[nodiscard]] bool PrefersCrlf(const AString& source){
-    return source.find("\r\n") != AString::npos;
-}
-
-void NormalizeLineEndings(AString& inOutSource, const bool useCrlf){
-    static constexpr usize s_CrlfReserveGrowthDivisor = 16u;
-    AString normalized;
-    normalized.reserve(useCrlf ? inOutSource.size() + inOutSource.size() / s_CrlfReserveGrowthDivisor : inOutSource.size());
-
-    for(usize i = 0u; i < inOutSource.size(); ++i){
-        const char c = inOutSource[i];
-        if(c == '\r'){
-            if(i + 1u < inOutSource.size() && inOutSource[i + 1u] == '\n')
-                ++i;
-            if(useCrlf)
-                normalized.append("\r\n", 2u);
-            else
-                normalized.push_back('\n');
-            continue;
-        }
-        if(c == '\n'){
-            if(useCrlf)
-                normalized.append("\r\n", 2u);
-            else
-                normalized.push_back('\n');
-            continue;
-        }
-        normalized.push_back(c);
-    }
-
-    inOutSource = Move(normalized);
-}
-
 [[nodiscard]] bool IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName){
     if(value.isReference()){
         const Core::Metascript::MStringView reference = value.asReference();
@@ -1190,7 +1157,7 @@ bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Al
     AString source;
     if(!__hidden_mesh_refresh::ReadMetascriptSource(inputPath, source))
         return false;
-    const bool useCrlf = __hidden_mesh_refresh::PrefersCrlf(source);
+    const bool useCrlf = HasCrlfLineEndings(AStringView(source.data(), source.size()));
 
     Core::Metascript::MetaArena metaArena(UtilityDetail::s_UtilityArena);
     Core::Metascript::Document doc(metaArena);
@@ -1261,7 +1228,7 @@ bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Al
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to apply text replacements for '{}'"), PathToString<tchar>(inputPath));
         return false;
     }
-    __hidden_mesh_refresh::NormalizeLineEndings(source, useCrlf);
+    NormalizeLineEndingsInPlace(source, useCrlf);
 
     return WriteTextFile(outputPath, AStringView(source.data(), source.size()));
 }

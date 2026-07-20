@@ -14,27 +14,6 @@ NWB_METASCRIPT_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_value{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename Container>
-inline void ReserveGrowingCapacity(Container& container, const usize requiredCapacity){
-    ::ContainerDetail::ReserveGrowingCapacity(container, requiredCapacity);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Value::Value(MetaArena& arena)
     : m_arena(arena)
 {}
@@ -229,7 +208,7 @@ Value& Value::operator+=(const Value& rhs){
             return *this;
         }
         const usize requiredStringCapacity = m_data.m_string->size() + rhs.m_data.m_string->size();
-        __hidden_value::ReserveGrowingCapacity(*m_data.m_string, requiredStringCapacity);
+        ::ContainerDetail::ReserveGrowingCapacity(*m_data.m_string, requiredStringCapacity);
         m_data.m_string->append(rhs.m_data.m_string->data(), rhs.m_data.m_string->size());
         return *this;
     }
@@ -242,7 +221,7 @@ Value& Value::operator+=(const Value& rhs){
             }
             const usize appendCount = rhs.m_data.m_list->size();
             const usize requiredListCapacity = m_data.m_list->size() + appendCount;
-            __hidden_value::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);
+            ::ContainerDetail::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);
             appendListCopies(*rhs.m_data.m_list, appendCount);
         }
         else{
@@ -254,7 +233,7 @@ Value& Value::operator+=(const Value& rhs){
             const usize rhsIndex = valueIndexInList(rhs);
             const bool rhsInList = rhsIndex != listSize;
             const usize requiredListCapacity = listSize + 1u;
-            __hidden_value::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);
+            ::ContainerDetail::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);
             appendListCopy(rhsInList ? (*m_data.m_list)[rhsIndex] : rhs);
         }
         return *this;
@@ -485,7 +464,7 @@ void Value::append(Value&& val){
     const bool valInList = valIndex != listSize;
     if(valInList){
         const usize requiredListCapacity = listSize + 1u;
-        __hidden_value::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);
+        ::ContainerDetail::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);
         appendListCopy((*m_data.m_list)[valIndex]);
         (*m_data.m_list)[valIndex].destroy();
         return;

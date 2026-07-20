@@ -5,9 +5,9 @@
 #include <impl/ecs_render/kernel/renderer_private.h>
 #include <impl/ecs_render/material/material_pass_csg_private.h>
 
-#include <impl/ecs_render/kernel/renderer_capacity_private.h>
-
 #include <impl/assets/graphics/mesh/names.h>
+
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -242,7 +242,7 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
     if(drawState().m_instanceBuffer && drawState().m_instanceBufferCapacity >= instanceCount)
         return true;
 
-    const usize capacity = ECSRenderDetail::NextGrowingCapacity(drawState().m_instanceBufferCapacity, instanceCount);
+    const usize capacity = ::NextGrowingCapacity(drawState().m_instanceBufferCapacity, instanceCount);
 #if defined(NWB_DEBUG)
     if(capacity > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance buffer capacity overflows addressable memory"));
@@ -287,7 +287,7 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
     if(drawState().m_materialTypedBuffer && drawState().m_materialTypedBufferCapacity >= requiredByteCount)
         return true;
 
-    const usize capacity = ECSRenderDetail::NextGrowingCapacity(drawState().m_materialTypedBufferCapacity, requiredByteCount);
+    const usize capacity = ::NextGrowingCapacity(drawState().m_materialTypedBufferCapacity, requiredByteCount);
     Core::BufferDesc materialTypedBufferDesc;
     materialTypedBufferDesc
         .setByteSize(static_cast<u64>(capacity))

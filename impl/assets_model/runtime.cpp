@@ -8,7 +8,6 @@
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
-#include <global/binary.h>
 #include <global/algorithm.h>
 
 
@@ -170,14 +169,15 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
 
     usize cursor = 0u;
     ModelBinaryPayload::ModelHeaderBinary header;
-    if(!ReadPOD(binary, cursor, header)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Model::loadBinary failed: malformed header"));
+    if(!Core::Assets::ReadMagicHeaderPayload(
+        binary,
+        cursor,
+        header,
+        ModelBinaryPayload::s_ModelMagic,
+        NWB_TEXT("Model::loadBinary"),
+        NWB_TEXT("model")
+    ))
         return false;
-    }
-    if(header.magic != ModelBinaryPayload::s_ModelMagic){
-        NWB_LOGGER_ERROR(NWB_TEXT("Model::loadBinary failed: invalid model asset format; recook required"));
-        return false;
-    }
 
     Core::Assets::AssetVector<ModelBinaryPayload::ModelSkeletonObjectBinary> skeletonObjectBinaries(m_skeletonObjects.get_allocator().arena());
     Core::Assets::AssetVector<ModelBinaryPayload::ModelStaticMeshObjectBinary> staticMeshObjectBinaries(m_staticMeshObjects.get_allocator().arena());

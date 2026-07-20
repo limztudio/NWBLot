@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -275,9 +277,11 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     }
 
     if(!rayTracingState().m_tlas || rayTracingState().m_tlasMaxInstances < instances.size()){
-        usize capacity = rayTracingState().m_tlasMaxInstances > 0u ? rayTracingState().m_tlasMaxInstances : s_TlasInitialInstanceCapacity;
-        while(capacity < instances.size())
-            capacity *= 2u;
+        const usize capacity = ::NextGrowingCapacity(
+            rayTracingState().m_tlasMaxInstances,
+            instances.size(),
+            s_TlasInitialInstanceCapacity
+        );
 
         Core::RayTracingAccelStructDesc accelStructDesc(arena());
         accelStructDesc.setTopLevelMaxInstances(capacity);
@@ -700,9 +704,11 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
     auto* device = graphics().getDevice();
 
     if(!rayTracingState().m_bvhSortKeysBuffer || rayTracingState().m_bvhSortCapacity < paddedCount){
-        usize capacity = rayTracingState().m_bvhSortCapacity > 0u ? rayTracingState().m_bvhSortCapacity : s_BvhSortInitialCapacity;
-        while(capacity < paddedCount)
-            capacity *= 2u;
+        const usize capacity = ::NextGrowingCapacity(
+            rayTracingState().m_bvhSortCapacity,
+            paddedCount,
+            s_BvhSortInitialCapacity
+        );
 
         Core::BufferDesc keysBufferDesc;
         keysBufferDesc
@@ -911,9 +917,11 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
     if(rayTracingState().m_bvhVisitCounterBuffer && rayTracingState().m_bvhBuildCapacity >= primitiveCount)
         return true;
 
-    usize capacity = rayTracingState().m_bvhBuildCapacity > 0u ? rayTracingState().m_bvhBuildCapacity : s_BvhBuildInitialCapacity;
-    while(capacity < primitiveCount)
-        capacity *= 2u;
+    const usize capacity = ::NextGrowingCapacity(
+        rayTracingState().m_bvhBuildCapacity,
+        primitiveCount,
+        s_BvhBuildInitialCapacity
+    );
 
     // The fit's bottom-up rendezvous counter is SHARED scratch (one u32 per internal node, < N). Meshes are
     // built sequentially within a frame and serialized by barriers, so a single shared counter suffices.
@@ -1383,12 +1391,11 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
     // traversal pass, so they are structured SRVs (no UAV) that grow by doubling like the hardware TLAS.
     const usize requiredNodes = static_cast<usize>(instanceCount) * 2u - 1u;
     if(!rayTracingState().m_sceneBvhNodeBuffer || rayTracingState().m_sceneBvhNodeCapacity < requiredNodes){
-        usize capacity = rayTracingState().m_sceneBvhNodeCapacity > 0u
-            ? rayTracingState().m_sceneBvhNodeCapacity
-            : (s_SceneBvhInitialInstanceCapacity * 2u - 1u)
-        ;
-        while(capacity < requiredNodes)
-            capacity *= 2u;
+        const usize capacity = ::NextGrowingCapacity(
+            rayTracingState().m_sceneBvhNodeCapacity,
+            requiredNodes,
+            s_SceneBvhInitialInstanceCapacity * 2u - 1u
+        );
 
         Core::BufferDesc nodeBufferDesc;
         nodeBufferDesc
@@ -1406,12 +1413,11 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
     }
 
     if(!rayTracingState().m_sceneInstanceBuffer || rayTracingState().m_sceneInstanceCapacity < instanceCount){
-        usize capacity = rayTracingState().m_sceneInstanceCapacity > 0u
-            ? rayTracingState().m_sceneInstanceCapacity
-            : s_SceneBvhInitialInstanceCapacity
-        ;
-        while(capacity < instanceCount)
-            capacity *= 2u;
+        const usize capacity = ::NextGrowingCapacity(
+            rayTracingState().m_sceneInstanceCapacity,
+            instanceCount,
+            s_SceneBvhInitialInstanceCapacity
+        );
 
         Core::BufferDesc instanceBufferDesc;
         instanceBufferDesc

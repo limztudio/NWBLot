@@ -60,6 +60,23 @@ constexpr ForwardIt LowerBound(ForwardIt first, ForwardIt last, const T& value, 
     return std::lower_bound(first, last, value, Forward<Compare>(compare));
 }
 
+[[nodiscard]] constexpr usize NextGrowingCapacity(
+    const usize currentCapacity,
+    const usize requiredCapacity,
+    const usize initialCapacity = 1u
+){
+    usize capacity = currentCapacity > initialCapacity ? currentCapacity : initialCapacity;
+    if(capacity == 0u)
+        capacity = 1u;
+
+    while(capacity < requiredCapacity){
+        if(capacity > Limit<usize>::s_Max / 2u)
+            return requiredCapacity;
+        capacity *= 2u;
+    }
+    return capacity;
+}
+
 template<typename T>
 constexpr T AlignUp(const T value, const T alignment){
     if(alignment == 0)

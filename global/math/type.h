@@ -170,6 +170,14 @@ struct alignas(16) Float34{
     };
 };
 
+[[nodiscard]] constexpr Float34 Float34Identity()noexcept{
+    Float34 matrix = {};
+    matrix.rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    matrix.rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    matrix.rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    return matrix;
+}
+
 struct alignas(16) Float44{
     union{
         struct{

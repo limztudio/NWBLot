@@ -6,6 +6,7 @@
 
 
 #include "basic_string.h"
+#include "limit.h"
 
 #include <cctype>
 #include <charconv>
@@ -155,6 +156,88 @@ template<typename CharT, typename ArenaT>
 inline void TrimTrailingCarriageReturn(BasicString<CharT, ArenaT>& inOutLine){
     if(!inOutLine.empty() && inOutLine.back() == CharT('\r'))
         inOutLine.pop_back();
+}
+
+template<typename CharT>
+[[nodiscard]] inline bool HasCrlfLineEndings(const BasicStringView<CharT> text){
+    for(usize i = 1u; i < text.size(); ++i){
+        if(text[i - 1u] == CharT('\r') && text[i] == CharT('\n'))
+            return true;
+    }
+    return false;
+}
+
+template<typename StringT>
+    requires requires(StringT& text, const usize size){
+        typename StringT::value_type;
+        text.size();
+        text.resize(size);
+        text[0u];
+    }
+inline void NormalizeLineEndingsInPlace(StringT& inOutText, const bool useCrlf){
+    using CharT = typename StringT::value_type;
+    const usize sourceSize = inOutText.size();
+
+    if(!useCrlf){
+        bool hasCarriageReturn = false;
+        for(usize i = 0u; i < sourceSize; ++i){
+            if(inOutText[i] == CharT('\r')){
+                hasCarriageReturn = true;
+                break;
+            }
+        }
+        if(!hasCarriageReturn)
+            return;
+
+        usize write = 0u;
+        for(usize read = 0u; read < sourceSize; ++read){
+            const CharT ch = inOutText[read];
+            if(ch == CharT('\r')){
+                if(read + 1u < sourceSize && inOutText[read + 1u] == CharT('\n'))
+                    ++read;
+                inOutText[write++] = CharT('\n');
+            }
+            else
+                inOutText[write++] = ch;
+        }
+        inOutText.resize(write);
+        return;
+    }
+
+    usize growthCount = 0u;
+    for(usize i = 0u; i < sourceSize; ++i){
+        const CharT ch = inOutText[i];
+        if(ch == CharT('\r')){
+            if(i + 1u < sourceSize && inOutText[i + 1u] == CharT('\n'))
+                ++i;
+            else
+                ++growthCount;
+        }
+        else if(ch == CharT('\n'))
+            ++growthCount;
+    }
+    if(growthCount == 0u || growthCount > Limit<usize>::s_Max - sourceSize)
+        return;
+
+    inOutText.resize(sourceSize + growthCount);
+    usize read = sourceSize;
+    usize write = inOutText.size();
+    while(read > 0u){
+        --read;
+        const CharT ch = inOutText[read];
+        if(ch == CharT('\n')){
+            if(read > 0u && inOutText[read - 1u] == CharT('\r'))
+                --read;
+            inOutText[--write] = CharT('\n');
+            inOutText[--write] = CharT('\r');
+        }
+        else if(ch == CharT('\r')){
+            inOutText[--write] = CharT('\n');
+            inOutText[--write] = CharT('\r');
+        }
+        else
+            inOutText[--write] = ch;
+    }
 }
 
 

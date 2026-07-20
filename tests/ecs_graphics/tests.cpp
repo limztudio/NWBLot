@@ -391,7 +391,7 @@ TEST(EcsGraphics, CsgReceiverRangeCarriesMaterialSurfaceContext){
 }
 
 static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
-    NWB::Impl::SkeletonJointMatrix joint = NWB::Impl::MakeIdentitySkeletonJointMatrix();
+    NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
     joint.rows[0].w = x;
     joint.rows[1].w = y;
     joint.rows[2].w = z;
@@ -399,35 +399,35 @@ static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, co
 }
 
 static NWB::Impl::SkeletonJointMatrix MakeZHalfTurnJointMatrix(){
-    NWB::Impl::SkeletonJointMatrix joint = NWB::Impl::MakeIdentitySkeletonJointMatrix();
+    NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
     joint.rows[0] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
     joint.rows[1] = Float4(0.0f, -1.0f, 0.0f, 0.0f);
     return joint;
 }
 
 static NWB::Impl::SkeletonJointMatrix MakeXHalfTurnJointMatrix(){
-    NWB::Impl::SkeletonJointMatrix joint = NWB::Impl::MakeIdentitySkeletonJointMatrix();
+    NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
     joint.rows[1] = Float4(0.0f, -1.0f, 0.0f, 0.0f);
     joint.rows[2] = Float4(0.0f, 0.0f, -1.0f, 0.0f);
     return joint;
 }
 
 static NWB::Impl::SkeletonJointMatrix MakeYHalfTurnJointMatrix(){
-    NWB::Impl::SkeletonJointMatrix joint = NWB::Impl::MakeIdentitySkeletonJointMatrix();
+    NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
     joint.rows[0] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
     joint.rows[2] = Float4(0.0f, 0.0f, -1.0f, 0.0f);
     return joint;
 }
 
 static NWB::Impl::SkeletonJointMatrix MakeZQuarterTurnJointMatrix(){
-    NWB::Impl::SkeletonJointMatrix joint = NWB::Impl::MakeIdentitySkeletonJointMatrix();
+    NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
     joint.rows[0] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
     joint.rows[1] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
     return joint;
 }
 
 static NWB::Impl::SkeletonJointMatrix MakeNonUniformScaleJointMatrix(){
-    NWB::Impl::SkeletonJointMatrix joint = NWB::Impl::MakeIdentitySkeletonJointMatrix();
+    NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
     joint.rows[0] = Float4(2.0f, 0.0f, 0.0f, 0.0f);
     return joint;
 }
@@ -626,7 +626,7 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     outsidePalette.skin[0u] = MakeSingleJointSkin(1u);
     outsidePalette.skeletonJointCount = 2u;
     outsidePalette.inverseBindMatrices.clear();
-    joints.joints.resize(1u, NWB::Impl::MakeIdentitySkeletonJointMatrix());
+    joints.joints.resize(1u, ::Float34Identity());
     EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinPayload(outsidePalette, &joints, skinInfluences, jointMatrices));
 
     NWB::Impl::MeshSkinningRuntimeInstance nonAffineJoint = instance;

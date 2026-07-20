@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1558,12 +1560,11 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
     if(rayTracingState().m_causticEmissionTargetBuffer && rayTracingState().m_causticEmissionTargetCapacity >= targetCount)
         return true;
 
-    usize capacity = rayTracingState().m_causticEmissionTargetCapacity > 0u
-        ? rayTracingState().m_causticEmissionTargetCapacity
-        : s_CausticEmissionTargetInitialCapacity
-    ;
-    while(capacity < targetCount)
-        capacity *= 2u;
+    const usize capacity = ::NextGrowingCapacity(
+        rayTracingState().m_causticEmissionTargetCapacity,
+        targetCount,
+        s_CausticEmissionTargetInitialCapacity
+    );
 
     Core::BufferDesc targetBufferDesc;
     targetBufferDesc

@@ -11,6 +11,8 @@
 #include <core/alloc/scratch.h>
 #include <global/binary.h>
 #include <global/filesystem/volume_naming.h>
+#include <global/limit.h>
+#include <global/simplemath.h>
 
 #include <cerrno>
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -121,6 +123,10 @@ static constexpr u64 s_VolumeMoveChunkBytes = 1024ull * 1024ull;
 static constexpr usize s_ErrnoMessageBufferBytes = 256u;
 static constexpr AStringView s_VolumePublishLogPrefix = "Filesystem volume publish";
 
+using ::AddNoOverflow;
+using ::CanRepresentU64;
+using ::ValidVolumeName;
+
 
 static constexpr char s_VolumeMagic[8] = { 'N', 'W', 'B', 'V', 'O', 'L', '1', '\0' };
 
@@ -155,50 +161,6 @@ static ACompactString FilesystemMutationFailureDetail(const ErrorCode& errorCode
     return detail;
 }
 
-
-template<typename T>
-static bool CanRepresentU64(const u64 value){
-    static_assert(IsArithmetic_V<T>, "CanRepresentU64 requires arithmetic target type");
-
-    constexpr bool signedType = static_cast<T>(-1) < static_cast<T>(0);
-    if constexpr(signedType){
-        constexpr usize bitCount = sizeof(T) * 8;
-        constexpr u64 maxValue = bitCount >= 64
-            ? (Limit<u64>::s_Max >> 1)
-            : ((u64(1) << (bitCount - 1)) - 1)
-        ;
-        return value <= maxValue;
-    }
-    else{
-        constexpr usize bitCount = sizeof(T) * 8;
-        constexpr u64 maxValue = bitCount >= 64
-            ? Limit<u64>::s_Max
-            : ((u64(1) << bitCount) - 1)
-        ;
-        return value <= maxValue;
-    }
-}
-
-static bool ValidVolumeName(AStringView name){
-    if(name.empty())
-        return false;
-
-    for(const char ch : name){
-        const bool alphaNum = IsAsciiAlphaNumeric(ch);
-        if(alphaNum || ch == '_' || ch == '-')
-            continue;
-        return false;
-    }
-
-    return true;
-}
-
-static bool AddNoOverflow(const u64 lhs, const u64 rhs, u64& out){
-    if(lhs > Limit<u64>::s_Max - rhs)
-        return false;
-    out = lhs + rhs;
-    return true;
-}
 
 static bool ComputeVolumeIndexBytes(const u64 fileCount, u64& outIndexBytes){
     outIndexBytes = 0;
@@ -287,10 +249,6 @@ static bool ResizeFile(const Path& path, const u64 byteCount, ErrorCode& outErro
     GlobalFilesystemDetail::SetLastSystemError(outError);
     return false;
 #endif
-}
-
-static bool LessName(const Name& lhs, const Name& rhs){
-    return ::LessNameHash(lhs.hash(), rhs.hash());
 }
 
 static ACompactString LastErrnoMessage(){
@@ -1442,7 +1400,7 @@ Vector<Name, VolumeArena> VolumeFileSystem::listFiles()const{
     for(const auto& [path, _] : m_files)
         output.push_back(path);
 
-    Sort(output.begin(), output.end(), __hidden_filesystem::LessName);
+    Sort(output.begin(), output.end());
     return output;
 }
 
@@ -1853,7 +1811,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         sortedRecords.begin(),
         sortedRecords.end(),
         [](const MetadataIndexRecord& lhs, const MetadataIndexRecord& rhs){
-            return __hidden_filesystem::LessName(lhs.path, rhs.path);
+            return ::LessNameHash(lhs.path.hash(), rhs.path.hash());
         }
     );
 

@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1348,12 +1350,11 @@ bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instance
     if(rayTracingState().m_shadowInstanceMaterialBuffer && rayTracingState().m_shadowInstanceMaterialCapacity >= instanceCount)
         return true;
 
-    usize capacity = rayTracingState().m_shadowInstanceMaterialCapacity > 0u
-        ? rayTracingState().m_shadowInstanceMaterialCapacity
-        : s_ShadowInstanceMaterialInitialCapacity
-    ;
-    while(capacity < instanceCount)
-        capacity *= 2u;
+    const usize capacity = ::NextGrowingCapacity(
+        rayTracingState().m_shadowInstanceMaterialCapacity,
+        instanceCount,
+        s_ShadowInstanceMaterialInitialCapacity
+    );
 
     Core::BufferDesc materialBufferDesc;
     materialBufferDesc
@@ -1384,7 +1385,7 @@ bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceC
     if(rayTracingState().m_shadowInstanceBuffer && rayTracingState().m_shadowInstanceCapacity >= instanceCount)
         return true;
 
-    const usize capacity = ECSRenderDetail::NextGrowingCapacity(rayTracingState().m_shadowInstanceCapacity, instanceCount);
+    const usize capacity = ::NextGrowingCapacity(rayTracingState().m_shadowInstanceCapacity, instanceCount);
     Core::BufferDesc instanceBufferDesc;
     instanceBufferDesc
         .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
@@ -1414,7 +1415,7 @@ bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
     if(rayTracingState().m_shadowMaterialTypedBuffer && rayTracingState().m_shadowMaterialTypedCapacity >= requiredByteCount)
         return true;
 
-    const usize capacity = ECSRenderDetail::NextGrowingCapacity(rayTracingState().m_shadowMaterialTypedCapacity, requiredByteCount);
+    const usize capacity = ::NextGrowingCapacity(rayTracingState().m_shadowMaterialTypedCapacity, requiredByteCount);
     Core::BufferDesc materialTypedBufferDesc;
     materialTypedBufferDesc
         .setByteSize(static_cast<u64>(capacity))

@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <global/type_counter.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,20 +29,7 @@ struct ComponentTypeTag{};
 struct SystemTypeTag{};
 struct MessageTypeTag{};
 
-
-template<typename Tag>
-class TypeCounter{
-public:
-    template<typename T>
-    static usize id(){
-        static const usize value = s_NextId.fetch_add(1, MemoryOrder::relaxed);
-        return value;
-    }
-
-
-private:
-    inline static Atomic<usize> s_NextId{ 0 };
-};
+using ::TypeCounter;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,6 +1,6 @@
 nwb_declare_static_library(nwb_alloc)
 target_sources(nwb_alloc PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/container_adaptor.cpp"
+    "${PROJECT_SOURCE_DIR}/global/container/adaptor.cpp"
     "${PROJECT_SOURCE_DIR}/global/allocation_size.h"
     "${PROJECT_SOURCE_DIR}/global/container/adaptor.h"
     "${PROJECT_SOURCE_DIR}/global/inplace_function.h"

@@ -29,7 +29,7 @@ inline constexpr u32 s_SkeletonInvalidJointIndex = Limit<u32>::s_Max;
 
 struct SkeletonJoint{
     u32 parentIndex = s_SkeletonInvalidJointIndex;
-    SkeletonJointMatrix localBindPose = MakeIdentitySkeletonJointMatrix();
+    SkeletonJointMatrix localBindPose = ::Float34Identity();
 };
 
 

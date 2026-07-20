@@ -300,25 +300,6 @@ namespace NameSymbols{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool DecodeDebugHashText(const AStringView text, NameHash& outHash){
-    if(text.size() != s_DebugHashTextLength)
-        return false;
-
-    NameHash hash = {};
-    usize cursor = 0u;
-    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
-        if((lane > 0u && text[cursor++] != '_') || cursor + 16u > text.size())
-            return false;
-
-        if(!ParseHexU64<char>(AStringView(text.data() + cursor, 16u), hash.qwords[lane]))
-            return false;
-        cursor += 16u;
-    }
-
-    outHash = hash;
-    return cursor == text.size();
-}
-
 bool Resolve(const NameHash& hash, char* const outText, const usize outTextSize){
     return __hidden_common_name_symbols::Registry().resolve(hash, outText, outTextSize);
 }

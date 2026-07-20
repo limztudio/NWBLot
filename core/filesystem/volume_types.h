@@ -1,0 +1,67 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "global.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FILESYSTEM_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace VolumeUsage{
+    enum Enum : u8{
+        RuntimeReadOnly = 0,
+        RuntimeReadWrite,
+        CookWrite
+    };
+};
+
+using VolumeArena = Alloc::GlobalArena;
+using VolumeString = AString<VolumeArena>;
+using VolumeBytes = Vector<u8, VolumeArena>;
+
+struct VolumeMountDesc{
+    ACompactString volumeName;
+    Path mountDirectory;
+
+    u64 segmentSize = 0;
+    u64 metadataSize = 0;
+    usize maxSegments = 0;
+
+    bool createIfMissing = false;
+    VolumeUsage::Enum usage = VolumeUsage::RuntimeReadOnly;
+
+    explicit VolumeMountDesc(VolumeArena& arena)
+        : mountDirectory(arena)
+    {}
+};
+
+
+struct VolumeBuildConfig{
+    ACompactString volumeName;
+    u64 segmentSize = 0;
+    u64 metadataSize = 0;
+};
+
+struct VolumeBuildInfo{
+    u64 fileCount = 0;
+    u64 segmentCount = 0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FILESYSTEM_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

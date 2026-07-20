@@ -13,7 +13,6 @@
 #include "arena_names.h"
 
 #include <core/assets/module.h>
-#include <core/filesystem/module.h>
 
 #include <core/common/log.h>
 

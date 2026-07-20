@@ -22,7 +22,7 @@
 #include <core/assets/manager.h>
 #include <core/assets/auto_registration.h>
 #include <core/graphics/shader_archive.h>
-#include <core/filesystem/module.h>
+#include <core/filesystem/volume_session.h>
 #include <global/filesystem/volume_naming.h>
 
 #include "project_entry.h"

@@ -14,7 +14,6 @@
 #include "module.h"
 
 #include <core/alloc/scratch.h>
-#include <core/filesystem/module.h>
 
 #include <core/common/log.h>
 #include <core/metascript/parser.h>

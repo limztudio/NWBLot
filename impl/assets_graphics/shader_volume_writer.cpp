@@ -15,7 +15,6 @@
 #include <impl/assets_shader/binary_payload.h>
 
 #include <core/graphics/shader_archive.h>
-#include <core/filesystem/module.h>
 
 #include <core/common/log.h>
 

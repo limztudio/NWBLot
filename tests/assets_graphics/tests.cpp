@@ -27,7 +27,7 @@
 #include <core/alloc/thread.h>
 #include <core/common/module.h>
 #include <core/mesh/classification.h>
-#include <core/filesystem/module.h>
+#include <core/filesystem/volume_session.h>
 #include <core/graphics/api.h>
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/spirv_entry_point.h>

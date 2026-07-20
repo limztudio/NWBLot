@@ -51,6 +51,9 @@ static_assert(IsStandardLayout_V<MeshHeaderBinary>, "MeshHeaderBinary must stay 
 static_assert(IsTriviallyCopyable_V<MeshHeaderBinary>, "MeshHeaderBinary must stay binary-serializable");
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

@@ -84,6 +84,8 @@ struct WaylandContext{
     bool visible = false;
     bool shouldClose = false;
     bool initialSizeConstrained = false;
+    bool repeatPending = false;
+    bool scrollPending = false;
 
     i32 bufferScale = 1;
     u32 seatVersion = 0;
@@ -93,14 +95,12 @@ struct WaylandContext{
     u32 repeatKeycode = 0;
     i32 repeatKey = Key::Unknown;
     i32 repeatScancode = 0;
-    bool repeatPending = false;
     Timer nextRepeatTime = {};
 
     f64 scrollX = 0.0;
     f64 scrollY = 0.0;
     i32 scrollDiscreteX = 0;
     i32 scrollDiscreteY = 0;
-    bool scrollPending = false;
 };
 
 

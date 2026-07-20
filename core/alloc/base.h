@@ -151,11 +151,12 @@ protected:
     [[nodiscard]] inline const char* log()const{ return m_name.logText(); }
 
 
-protected:
-    ArenaMemoryTracker m_memoryStats;
-
 private:
     Name m_name;
+
+
+protected:
+    ArenaMemoryTracker m_memoryStats;
 };
 
 

@@ -366,9 +366,9 @@ private:
 
 
 private:
+    Atomic<ParallelForDesc*> m_pfWork{ nullptr };
     PersistentArena m_arena;
     TaskQueue m_tasks;
-    Atomic<ParallelForDesc*> m_pfWork{ nullptr };
     Futex m_taskMutex;
     Futex m_pfMutex;
     ConditionVariableAny m_taskAvailable;

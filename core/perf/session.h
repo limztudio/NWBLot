@@ -71,10 +71,10 @@ private:
 
 
 private:
+    u64 m_frameIndex = 0u;
     TimingRecorder m_cpuTiming;
     TimingRecorder m_gpuTiming;
     MemoryRecorder m_memory;
-    u64 m_frameIndex = 0u;
     bool m_enabled = false;
     bool m_cpuTimingEnabled = true;
     bool m_gpuTimingEnabled = true;

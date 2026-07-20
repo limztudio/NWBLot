@@ -56,8 +56,8 @@ public:
     }
 
 private:
-    AssetArena m_arena;
     Futex m_mutex;
+    AssetArena m_arena;
     AssetVector<ValueT> m_values;
 };
 

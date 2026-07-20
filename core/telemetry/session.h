@@ -72,9 +72,9 @@ private:
     [[nodiscard]] TextLogCaptureLogger& textLogCaptureLogger(){ return m_textLogCapture; }
 
 private:
+    u64 m_frameIndex = 0u;
     Recorder m_recorder;
     TextLogCaptureLogger m_textLogCapture;
-    u64 m_frameIndex = 0u;
     u32 m_streamId = 0u;
 };
 

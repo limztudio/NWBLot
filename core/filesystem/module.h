@@ -188,14 +188,13 @@ private:
 
 
 private:
-    mutable Futex m_mutex;
+    Path m_mountDirectory;
+    ACompactString m_volumeName;
 
+    mutable Futex m_mutex;
     VolumeUsage::Enum m_usage = VolumeUsage::RuntimeReadOnly;
     bool m_mounted = false;
     bool m_writable = false;
-
-    ACompactString m_volumeName;
-    Path m_mountDirectory;
 
     u64 m_segmentSize = 0;
     u64 m_metadataBytes = 0;

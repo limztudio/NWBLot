@@ -17,7 +17,6 @@
 
 #include <core/alloc/scratch.h>
 #include <core/assets/paths.h>
-#include <core/filesystem/module.h>
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/shader_stage_names.h>
 #include <core/metascript/parser.h>

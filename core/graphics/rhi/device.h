@@ -81,6 +81,7 @@ struct CommandListParameters{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Command List
 
+
 // Represents a sequence of GPU operations submitted through a backend queue.
 typedef GraphicsBackend::Handle<CommandList> CommandListHandle;
 

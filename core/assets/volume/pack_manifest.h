@@ -30,10 +30,10 @@ namespace AssetsVolumeCookDetail{
 
 
 namespace AssetVolumePackEntrySource{
-enum Enum : u8{
-    PayloadBytes,
-    ObjectFilePayload
-};
+    enum Enum : u8{
+        PayloadBytes,
+        ObjectFilePayload
+    };
 };
 
 struct AssetVolumePayloadIdentity{

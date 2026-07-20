@@ -266,21 +266,21 @@ NWB_COMMON_END
 
 #define NWB_LOGGER_IGNORE_MESSAGE(...)                                                                                         \
     do{                                                                                                                        \
-        [[maybe_unused]] constexpr auto nwbIgnoredLoggerMessageSize =                                                           \
+        [[maybe_unused]] constexpr auto nwbIgnoredLoggerMessageSize =                                                          \
             sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0));                                        \
     }while(false)
 #define NWB_DIAGNOSTIC_LOGGER_CATEGORY(Type) ::NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategory ## Type
 
 #define NWB_LOGGER_ENQUEUE_MESSAGE(Type, ...)                                                                                  \
     do{                                                                                                                        \
-        NWB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_logger != nullptr);                                               \
+        NWB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_logger != nullptr);                                              \
         auto& logger = *::NWB::Core::Common::LoggerDetail::g_logger;                                                           \
         ::NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, ::NWB::Core::Common::LogType::Type, __VA_ARGS__);            \
     }while(false)
 
 #define NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Type, BreakMacro, ...)                                                            \
     do{                                                                                                                        \
-        NWB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_logger != nullptr);                                               \
+        NWB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_logger != nullptr);                                              \
         auto& logger = *::NWB::Core::Common::LoggerDetail::g_logger;                                                           \
         ::NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(                                                           \
             logger,                                                                                                            \

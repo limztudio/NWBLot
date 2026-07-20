@@ -13,7 +13,9 @@
 #include "cooked_object_cache.h"
 #include "cook_paths.h"
 
-#include <core/filesystem/module.h>
+#include <core/filesystem/volume_build.h>
+#include <core/filesystem/volume_session.h>
+#include <core/filesystem/volume_staging.h>
 
 #include <core/common/log.h>
 

@@ -699,6 +699,11 @@ bool Graphics::animateRenderPresent(){
     auto* device = getDevice();
     NWB_ASSERT(device);
     device->runGarbageCollection();
+    // Advance the global bindless heap's deferred-free clock once per frame, next to the device GC - both retire GPU
+    // resources that in-flight frames may still reference. Harmless while the heap is empty (early Phase 2); required
+    // once mesh registration (Phase 2 M1) starts recycling heap slots on scene mutation, so freed slots return to the
+    // free list after s_MaxFramesInFlight frames instead of leaking.
+    device->getDescriptorHeap().advanceFrame();
 
     updateAverageFrameTime(elapsedTime);
     m_previousFrameTimestamp = now;

@@ -30,8 +30,6 @@ namespace{
     inline constexpr u32 s_HeapSelfTestTypedValue   = 0x00000033u;   // SampledBuffer  (typed R32_UINT)
     inline constexpr u32 s_HeapSelfTestExpectedSum  = s_HeapSelfTestStorageValue + s_HeapSelfTestUniformValue + s_HeapSelfTestTypedValue;
 
-    inline constexpr u32 s_HeapSelfTestResourceCapacity = 256u;
-    inline constexpr u32 s_HeapSelfTestSamplerCapacity  = 16u;
     inline constexpr u32 s_HeapSelfTestConstantBufferBytes = 256u;   // pad the CBV to the constant-buffer size alignment
 };
 
@@ -43,8 +41,9 @@ namespace{
 // debug only, on the live device (Backend A / descriptor indexing, the guaranteed floor). Registers real resources
 // through GpuDescriptorHandles, dispatches a kernel that reads each one back ONLY through its handle slot, and asserts
 // the readback. Then frees half the handles, recycles the deferred-free quarantine, reallocates, and re-runs - proving
-// a recycled slot never aliases a live resource. The heap is initialized and torn down entirely within this test, so
-// Phase 1 stays dark to every other pass.
+// a recycled slot never aliases a live resource. Phase 2: the heap is now brought live by the device for every run,
+// so this test no longer owns its lifetime - it runs against the production heap and frees every handle it mints,
+// proving the test coexists with (does not disturb) the live heap.
 void RendererRayTracingSystem::runGpuDescriptorHeapSelfTest(){
     if(rayTracingState().m_gpuDescriptorHeapSelfTestDone)
         return;
@@ -53,14 +52,19 @@ void RendererRayTracingSystem::runGpuDescriptorHeapSelfTest(){
     auto* device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
 
-    Core::GpuDescriptorHeapDesc heapDesc;
-    heapDesc.setResourceCapacity(s_HeapSelfTestResourceCapacity).setSamplerCapacity(s_HeapSelfTestSamplerCapacity);
-    if(!heap.initialize(heapDesc)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: GpuDescriptorHeap self-test could not initialize the heap"));
+    // Phase 2: the device brings the heap live at creation, so this test verifies it exists rather than initializing
+    // it. No other consumer allocates from the heap at capability-probe time yet, so it is still fresh here and the
+    // first StorageBuffer allocation lands at the bootstrap slot the round-trip kernel hardcodes
+    // (NWB_BINDLESS_TEST_PARAMS_SLOT == 0). Once a real consumer (Phase 2 M1 mesh registration) begins allocating
+    // before this runs, this test must point the kernel at the params handle's actual slot instead of asserting 0.
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: GpuDescriptorHeap self-test skipped: device did not bring the heap live"));
         return;
     }
 
-    // The body is a lambda so every early-out still tears the heap back down below.
+    // The heap-touching body runs as a lambda; on the success path it frees every handle it minted (see the end),
+    // leaving the production heap exactly as found. A failure path returns early without freeing - acceptable because
+    // an [ERROR] in this debug build already triggers a crash diagnostic, so the process does not carry leaked slots.
     const auto runBody = [this, device, &heap]() -> bool{
         // ---- create backing resources, one per class the kernel reads ----
         const auto createStorageBuffer = [this](const u64 byteSize, const tchar* name) -> Core::BufferHandle{
@@ -270,12 +274,22 @@ void RendererRayTracingSystem::runGpuDescriptorHeapSelfTest(){
             return false;
         }
 
+        // Coexistence: return the production heap to its pre-test state. storageHandle/typedHandle were already freed
+        // and recycled in pass 2; free the rest here. The per-frame advanceFrame() pump matures the deferred-free
+        // quarantine and returns these slots to the free list within s_MaxFramesInFlight frames.
+        heap.free(paramsHandle);
+        heap.free(outputHandle);
+        heap.free(uniformHandle);
+        heap.free(sampledImageHandle);
+        heap.free(storageImageHandle);
+        heap.free(samplerHandle);
+        heap.free(storageHandle2);
+        heap.free(typedHandle2);
+
         return true;
     };
 
     const bool passed = runBody();
-
-    heap.shutdown();
 
     if(passed)
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: GpuDescriptorHeap round-trip self-test PASSED (Backend A, expected sum {})"), s_HeapSelfTestExpectedSum);

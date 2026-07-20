@@ -450,6 +450,19 @@ Device::Device(const DeviceDesc& desc)
         }
     }
 
+    // Bring the global bindless descriptor heap (Backend A - descriptor indexing) live for every run. Unlike the
+    // optional EXT_descriptor_heap accelerator above, descriptor indexing is the guaranteed portability floor (present
+    // on the BC-250/RADV target), so the heap is initialized unconditionally rather than behind an extension gate.
+    // Phase 1 left initialize() to the debug self-test alone; Phase 2 makes the heap a production consumer, so it must
+    // exist independent of NWB_DEBUG. Capacity 0 selects the ample Phase-1 default, clamped to the device
+    // update-after-bind limits and logged inside initialize(). Failure is non-fatal here (no consumer yet in early
+    // Phase 2) but logged loudly because later phases require the heap.
+    {
+        GpuDescriptorHeapDesc heapDesc;
+        if(!m_gpuDescriptorHeap.initialize(heapDesc))
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Global GpuDescriptorHeap failed to initialize; bindless heap consumers will be unavailable."));
+    }
+
     GraphicsBytes pipelineCacheInitialData{m_context.objectArena};
     // loadPipelineCacheData logs the genuine failures (corrupt / incompatible data, mount/read errors) itself
     // and returns false with empty data for the expected "no cache yet" case -- the first run, or any prior run

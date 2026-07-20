@@ -64,66 +64,66 @@ namespace ColorMask{
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
-    struct BlendState{
-        struct RenderTarget{
-            BlendFactor::Enum srcBlend = BlendFactor::One;
-            BlendFactor::Enum destBlend = BlendFactor::Zero;
-            BlendOp::Enum blendOp = BlendOp::Add;
-            BlendFactor::Enum srcBlendAlpha = BlendFactor::One;
-            BlendFactor::Enum destBlendAlpha = BlendFactor::Zero;
-            BlendOp::Enum blendOpAlpha = BlendOp::Add;
-            ColorMask::Mask colorWriteMask = ColorMask::All;
-            bool blendEnable = false;
+struct BlendState{
+    struct RenderTarget{
+        BlendFactor::Enum srcBlend = BlendFactor::One;
+        BlendFactor::Enum destBlend = BlendFactor::Zero;
+        BlendOp::Enum blendOp = BlendOp::Add;
+        BlendFactor::Enum srcBlendAlpha = BlendFactor::One;
+        BlendFactor::Enum destBlendAlpha = BlendFactor::Zero;
+        BlendOp::Enum blendOpAlpha = BlendOp::Add;
+        ColorMask::Mask colorWriteMask = ColorMask::All;
+        bool blendEnable = false;
 
-            constexpr RenderTarget& setBlendEnable(bool enable){ blendEnable = enable; return *this; }
-            constexpr RenderTarget& enableBlend(){ blendEnable = true; return *this; }
-            constexpr RenderTarget& disableBlend(){ blendEnable = false; return *this; }
-            constexpr RenderTarget& setSrcBlend(BlendFactor::Enum value){ srcBlend = value; return *this; }
-            constexpr RenderTarget& setDestBlend(BlendFactor::Enum value){ destBlend = value; return *this; }
-            constexpr RenderTarget& setBlendOp(BlendOp::Enum value){ blendOp = value; return *this; }
-            constexpr RenderTarget& setSrcBlendAlpha(BlendFactor::Enum value){ srcBlendAlpha = value; return *this; }
-            constexpr RenderTarget& setDestBlendAlpha(BlendFactor::Enum value){ destBlendAlpha = value; return *this; }
-            constexpr RenderTarget& setBlendOpAlpha(BlendOp::Enum value){ blendOpAlpha = value; return *this; }
-            constexpr RenderTarget& setColorWriteMask(ColorMask::Mask value){ colorWriteMask = value; return *this; }
+        constexpr RenderTarget& setBlendEnable(bool enable){ blendEnable = enable; return *this; }
+        constexpr RenderTarget& enableBlend(){ blendEnable = true; return *this; }
+        constexpr RenderTarget& disableBlend(){ blendEnable = false; return *this; }
+        constexpr RenderTarget& setSrcBlend(BlendFactor::Enum value){ srcBlend = value; return *this; }
+        constexpr RenderTarget& setDestBlend(BlendFactor::Enum value){ destBlend = value; return *this; }
+        constexpr RenderTarget& setBlendOp(BlendOp::Enum value){ blendOp = value; return *this; }
+        constexpr RenderTarget& setSrcBlendAlpha(BlendFactor::Enum value){ srcBlendAlpha = value; return *this; }
+        constexpr RenderTarget& setDestBlendAlpha(BlendFactor::Enum value){ destBlendAlpha = value; return *this; }
+        constexpr RenderTarget& setBlendOpAlpha(BlendOp::Enum value){ blendOpAlpha = value; return *this; }
+        constexpr RenderTarget& setColorWriteMask(ColorMask::Mask value){ colorWriteMask = value; return *this; }
 
-            [[nodiscard]] bool usesConstantColor()const;
-        };
-
-        RenderTarget targets[s_MaxRenderTargets];
-        bool alphaToCoverageEnable = false;
-
-        constexpr BlendState& setRenderTarget(u32 index, const RenderTarget& target){ targets[index] = target; return *this; }
-        constexpr BlendState& setAlphaToCoverageEnable(bool enable){ alphaToCoverageEnable = enable; return *this; }
-        constexpr BlendState& enableAlphaToCoverage(){ alphaToCoverageEnable = true; return *this; }
-        constexpr BlendState& disableAlphaToCoverage(){ alphaToCoverageEnable = false; return *this; }
-
-        [[nodiscard]] bool usesConstantColor(u32 numTargets)const;
+        [[nodiscard]] bool usesConstantColor()const;
     };
-    constexpr bool operator==(const BlendState::RenderTarget& lhs, const BlendState::RenderTarget& rhs)noexcept{
-        return
-            lhs.blendEnable == rhs.blendEnable
-            && lhs.srcBlend == rhs.srcBlend
-            && lhs.destBlend == rhs.destBlend
-            && lhs.blendOp == rhs.blendOp
-            && lhs.srcBlendAlpha == rhs.srcBlendAlpha
-            && lhs.destBlendAlpha == rhs.destBlendAlpha
-            && lhs.blendOpAlpha == rhs.blendOpAlpha
-            && lhs.colorWriteMask == rhs.colorWriteMask
-        ;
-    }
-    constexpr bool operator!=(const BlendState::RenderTarget& lhs, const BlendState::RenderTarget& rhs)noexcept{ return !(lhs == rhs); }
-    constexpr bool operator==(const BlendState& lhs, const BlendState& rhs)noexcept{
-        if(lhs.alphaToCoverageEnable != rhs.alphaToCoverageEnable)
+
+    RenderTarget targets[s_MaxRenderTargets];
+    bool alphaToCoverageEnable = false;
+
+    constexpr BlendState& setRenderTarget(u32 index, const RenderTarget& target){ targets[index] = target; return *this; }
+    constexpr BlendState& setAlphaToCoverageEnable(bool enable){ alphaToCoverageEnable = enable; return *this; }
+    constexpr BlendState& enableAlphaToCoverage(){ alphaToCoverageEnable = true; return *this; }
+    constexpr BlendState& disableAlphaToCoverage(){ alphaToCoverageEnable = false; return *this; }
+
+    [[nodiscard]] bool usesConstantColor(u32 numTargets)const;
+};
+constexpr bool operator==(const BlendState::RenderTarget& lhs, const BlendState::RenderTarget& rhs)noexcept{
+    return
+        lhs.blendEnable == rhs.blendEnable
+        && lhs.srcBlend == rhs.srcBlend
+        && lhs.destBlend == rhs.destBlend
+        && lhs.blendOp == rhs.blendOp
+        && lhs.srcBlendAlpha == rhs.srcBlendAlpha
+        && lhs.destBlendAlpha == rhs.destBlendAlpha
+        && lhs.blendOpAlpha == rhs.blendOpAlpha
+        && lhs.colorWriteMask == rhs.colorWriteMask
+    ;
+}
+constexpr bool operator!=(const BlendState::RenderTarget& lhs, const BlendState::RenderTarget& rhs)noexcept{ return !(lhs == rhs); }
+constexpr bool operator==(const BlendState& lhs, const BlendState& rhs)noexcept{
+    if(lhs.alphaToCoverageEnable != rhs.alphaToCoverageEnable)
+        return false;
+
+    for(u32 i = 0; i < s_MaxRenderTargets; ++i){
+        if(lhs.targets[i] != rhs.targets[i])
             return false;
-
-        for(u32 i = 0; i < s_MaxRenderTargets; ++i){
-            if(lhs.targets[i] != rhs.targets[i])
-                return false;
-        }
-
-        return true;
     }
-    constexpr bool operator!=(const BlendState& lhs, const BlendState& rhs)noexcept{ return !(lhs == rhs); }
+
+    return true;
+}
+constexpr bool operator!=(const BlendState& lhs, const BlendState& rhs)noexcept{ return !(lhs == rhs); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

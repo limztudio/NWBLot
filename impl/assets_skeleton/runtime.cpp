@@ -28,6 +28,9 @@ namespace __hidden_skeleton_runtime{
 Core::Assets::AssetCodecAutoRegistrar s_SkeletonAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<SkeletonAssetCodec>);
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

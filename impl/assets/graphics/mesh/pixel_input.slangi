@@ -75,16 +75,17 @@ void nwbLoadMeshSurfaceInputs(NwbMeshSurfaceInputs inputs){
 
 void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
     NwbMeshSurfaceInputs inputs;
-    inputs.color = half4(input.color);
-    inputs.normal = input.normal;
-    inputs.tangent = input.tangent;
+    inputs.color = input.color;
+    // Normals/tangents cross the rasterizer as half varyings; restore float before any material or geometry math.
+    inputs.normal = float3(input.normal);
+    inputs.tangent = float4(input.tangent);
     inputs.uv0 = input.uv0;
     inputs.worldPosition = input.worldPosition.xyz;
     // No view buffer is bound in the G-buffer pass, so the true view direction (normalize(worldPosition -
     // cameraPosition)) is unavailable here. Use the documented dummy -normal: the G-buffer discards transmittance
     // (the only value any refractive hook computes from this), so the dummy is harmless in the rasterizer; the
     // shadow trace supplies the real ray direction for the value that actually matters.
-    inputs.incidentDirection = -input.normal;
+    inputs.incidentDirection = -float3(input.normal);
     nwbLoadMeshSurfaceInputs(inputs);
     inPixelDepth = input.position.z;
 #if NWB_CSG_ENABLED

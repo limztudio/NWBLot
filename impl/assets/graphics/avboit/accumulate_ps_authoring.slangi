@@ -109,9 +109,10 @@ struct NwbAvboitAccumulatePixelOutput{
 // engine builds a NwbBxdfSurface from it and shades it through the material's BXDF, then runs the AVBOIT math.
 NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     NwbMeshSurfaceInputs surfaceInputs;
-    surfaceInputs.color = half4(input.color);
-    surfaceInputs.normal = input.normal;
-    surfaceInputs.tangent = input.tangent;
+    surfaceInputs.color = input.color;
+    // Keep the half raster payload through interpolation, then promote directional data at the shading boundary.
+    surfaceInputs.normal = float3(input.normal);
+    surfaceInputs.tangent = float4(input.tangent);
     surfaceInputs.uv0 = input.uv0;
     surfaceInputs.worldPosition = input.worldPosition.xyz;
     // The view direction (surface toward camera, reversed): the AVBOIT pass binds the scene shading buffer, so a

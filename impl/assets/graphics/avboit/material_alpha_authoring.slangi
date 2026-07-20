@@ -15,20 +15,21 @@
 
 bool nwbAvboitLoadAcceptedMaterialAlpha(
     const float4 position,
-    const float4 color,
-    const float3 normal,
-    const float4 tangent,
+    const half4 color,
+    const half3 normal,
+    const half4 tangent,
     const float2 uv0,
     const float4 worldPosition,
     out half outAlpha
 ){
     NwbMeshSurfaceInputs surfaceInputs;
-    surfaceInputs.color = half4(color);
-    surfaceInputs.normal = normal;
-    surfaceInputs.tangent = tangent;
+    surfaceInputs.color = color;
+    // Match the G-buffer/accumulate boundary: expand half directions before the material hook evaluates them.
+    surfaceInputs.normal = float3(normal);
+    surfaceInputs.tangent = float4(tangent);
     surfaceInputs.uv0 = uv0;
     surfaceInputs.worldPosition = worldPosition.xyz;
-    surfaceInputs.incidentDirection = -normal;
+    surfaceInputs.incidentDirection = -float3(normal);
     nwbLoadMeshSurfaceInputs(surfaceInputs);
 
 #if NWB_CSG_ENABLED

@@ -5,6 +5,9 @@
 #if defined(NWB_COOK)
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "cook_private.h"
 
 
@@ -20,21 +23,12 @@ NWB_IMPL_BEGIN
 namespace __hidden_cook{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // deferred lighting BXDF dispatch (per-material shading model id + generated dispatch module)
-
-
 static constexpr AStringView s_DeferredBxdfFunctionMacro = "NWB_DEFERRED_BXDF_FUNCTION";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static constexpr AStringView s_DeferredBxdfModelPrefix = "nwbDeferredBxdfModel";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static constexpr AStringView s_DeferredBxdfModuleSubPath = "deferred/generated/bxdf_dispatch.slangi";
 
 
@@ -291,34 +285,14 @@ bool EmitDeferredBxdfDispatchModuleImpl(
 
 
 // shadow transmittance dispatch (per-material surface id + generated dispatch module)
-
-
 static constexpr AStringView s_ShadowTransmittanceSurfaceMacro = "nwbMaterialSurface";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static constexpr AStringView s_ShadowTransmittanceModelPrefix = "nwbShadowSurfaceModel";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static constexpr AStringView s_ShadowTransmittanceWrapperPrefix = "nwbShadowTransmittanceModel";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // Per-id Slang namespace that isolates each material's `.bind` file-scope symbols in the dispatch module (the one
 // TU that concatenates multiple `.bind` files) so distinct interfaces' fixed-named layout constants/structs/
 // accessors do not collide; a `using namespace` then exposes them to the global-scope surface hook.
 static constexpr AStringView s_ShadowTransmittanceBindNamespacePrefix = "nwbShadowBindModel";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 static constexpr AStringView s_ShadowTransmittanceModuleSubPath = "shadow/generated/transmittance_dispatch.slangi";
 

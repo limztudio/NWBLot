@@ -1056,6 +1056,7 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
@@ -1070,11 +1071,6 @@ ShaderCook::ShaderCook(CookArena& memoryArena, ShaderCompilerFactory compilerFac
     const ShaderCompilerFactory createCompiler = compilerFactory ? compilerFactory : &__hidden_cook::CreateDefaultShaderCompiler;
     m_compiler = createCompiler(m_memoryArena);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 
 
 bool ShaderCook::parseDocument(const Path& nwbFilePath, Metascript::Document& outDoc){

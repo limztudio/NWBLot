@@ -1,0 +1,943 @@
+nwb_logserver is running in console mode. Press Ctrl+C to exit.
+00:00:00.002 [ESSENTIAL INFO]:
+Log server: listening on port 50741
+00:00:00.159 [ESSENTIAL INFO]:
+Loader: connected to log server 'http://localhost:50741'
+00:00:00.160 [ESSENTIAL INFO]:
+Frame: Using Linux X11 backend.
+00:00:00.174 [INFO]:
+Vulkan: Enabled instance extensions:
+    VK_KHR_surface
+    VK_KHR_xlib_surface
+    VK_KHR_get_physical_device_properties2
+00:00:00.175 [INFO]:
+Vulkan: Enabled layers:
+00:00:00.181 [INFO]:
+Vulkan: Enabled device extensions:
+    VK_KHR_swapchain_mutable_format
+    VK_KHR_ray_tracing_pipeline
+    VK_EXT_sampler_filter_minmax
+    VK_KHR_acceleration_structure
+    VK_EXT_mutable_descriptor_type
+    VK_KHR_deferred_host_operations
+    VK_KHR_synchronization2
+    VK_KHR_pipeline_library
+    VK_KHR_buffer_device_address
+    VK_KHR_dynamic_rendering
+    VK_EXT_device_fault
+    VK_KHR_ray_query
+    VK_KHR_maintenance1
+    VK_EXT_descriptor_indexing
+    VK_KHR_maintenance4
+    VK_AMD_buffer_marker
+    VK_KHR_swapchain
+00:00:00.182 [ESSENTIAL INFO]:
+Vulkan: created device 'AMD BC-250 (RADV GFX1013)'
+00:00:00.186 [INFO]:
+Vulkan: No usable pipeline cache found; starting with an empty cache.
+00:00:00.190 [INFO]:
+Graphics: Back buffer resized to 1280x900
+00:00:00.190 [ESSENTIAL INFO]:
+Graphics: window device and swap chain created (1280x900)
+00:00:00.190 [ESSENTIAL INFO]:
+Loader: frame initialized (1280x900)
+00:00:00.190 [ESSENTIAL INFO]:
+Loader: mounted graphics volume from '/home/limstudio/WorkStation/NWBLot/__cmake/build/linux-clang-x64/Testing/skinning_culling_benchmark_runtime/opt/res'
+00:00:00.190 [INFO]:
+RendererSystem: ray tracing capability - accel struct true, pipeline true, ray query true
+00:00:00.362 [ESSENTIAL INFO]:
+RendererSystem: deferred rendering targets ready (1280x900, albedo RGBA16_FLOAT, normal RGBA16_FLOAT, world position RGBA16_FLOAT, opaque color RGBA16_FLOAT, depth D32, shadow visibility RGBA16_FLOAT, CSG peel 4 layers: cap back normal RGBA16_FLOAT, interval depth RGBA32_FLOAT, interval id R32_UINT, receiver events 32 layers: event data RGBA32_UINT, event count R32_UINT, receiver spans 16 layers: span data RGBA32_UINT, span count RG32_UINT, removed intervals 16 layers: interval depth RGBA32_FLOAT, cap normal RGBA16_FLOAT, interval data RGBA32_UINT, interval count RG32_UINT, AVBOIT color RGBA16_FLOAT, extinction R16_FLOAT, transmittance R16_FLOAT)
+00:00:00.363 [ESSENTIAL INFO]:
+StressTestSmokeProject: spawned 10 spinning characters (5 transparent + 5 opaque) over ground, directional + point light
+00:00:00.363 [ESSENTIAL INFO]:
+Loader: project startup complete
+00:00:00.491 [INFO]:
+RendererSystem: mesh 'project/meshes/shadow_plane' shadow trace index buffer ready (6 indices, expected 6)
+00:00:00.492 [ESSENTIAL INFO]:
+RendererSystem: material 'project/smoke/transparent_multi/materials/ground' selected CS + PS by compiling its mesh shader for compute emulation because this device does not support mesh shaders
+00:00:00.492 [ESSENTIAL INFO]:
+RendererSystem: material 'project/smoke/transparent_multi/materials/shared' selected CS + PS by compiling its mesh shader for compute emulation because this device does not support mesh shaders
+00:00:00.514 [INFO]:
+RendererSystem: created caustic emission-target buffer (capacity 32 targets)
+00:00:00.515 [INFO]:
+RendererSystem: built BLAS for mesh '24a9e9c3a1a63893_e8daca9fc893ddeb_f440287b395d0e9e_23bb9b534210c2c4_707859684f21dc57_f0a8229128f6fc0e_c5a26fac30021fad_68917937cca811f4' (runtime true, 36943 vertices, 154956 indices)
+00:00:00.515 [INFO]:
+RendererSystem: built BLAS for mesh '6238e234700eaf8b_f68d0e085c9ccff3_0a14d82e116467c4_fb95c47f6ff68aa6_380e6a5f1ae00d77_fee0616dcc7c22b4_e2b942b6cd0a3191_d748d5b4f28a9456' (runtime true, 36943 vertices, 154956 indices)
+00:00:00.515 [INFO]:
+RendererSystem: built BLAS for mesh 'b318925e883b7dd2_37bdb70a8c07574a_003538c3fc5a7ab7_217c99b9f2787b11_07a3b3066a1b093e_7efe9388f8b81be7_a94f1b5e5e593a78_76b8eb20b9a8d801' (runtime true, 36943 vertices, 154956 indices)
+00:00:00.515 [INFO]:
+RendererSystem: built BLAS for mesh 'e5f2980849d73abd_448c54efc589df95_daf555b40b90b2c4_3d066e1a6fdd1e9e_4eba2b4b7348bfb1_e0496d8fc4be6bf4_211feec57f82c5c3_78f02e3930e0a20e' (runtime true, 36943 vertices, 154956 indices)
+00:00:00.515 [INFO]:
+RendererSystem: built BLAS for mesh '805671cda5ed997e_2414e3d128937e96_344374f6cd0b5ab3_c123926f313bf95d_df266e3e7942be92_6709cc3c7c577b63_eee4b4916510d7d4_e634874c22cfa8cd' (runtime true, 36943 vertices, 154956 indices)
+00:00:00.515 [INFO]:
+RendererSystem: built BLAS for mesh '591a820cd6d7c988_f26fdf574fd91b80_d8b6541abbf86b11_48fb7e6332da8ab7_0440a10a0f8d5564_ee70df78b1bf3201_0d0cf10ac3f814c2_07469f3100a1c1e7' (runtime true, 36943 vertices, 154956 indices)
+00:00:00.516 [INFO]:
+RendererSystem: built BLAS for mesh 'project/meshes/shadow_plane' (runtime false, 4 vertices, 6 indices)
+00:00:00.516 [INFO]:
+RendererSystem: built BLAS for mesh 'c8ec0e2339892197_3c8ae27fe6dd06af_3ac2a233fa6fcc72_e24d5ed3caa816a8_f86de8325de9d053_9ff14e9d4ad77ce2_e97493f46951ef61_9c19b33d158b0698' (runtime true, 36943 vertices, 154956 indices)
+00:00:00.516 [INFO]:
+RendererSystem: built BLAS for mesh '214bfe1453216f0c_e901762d1302ef14_8cb84c68407dd285_37dbfee246f5425b_c5c2e2247160c390_bd0691cde642d9f5_0490b3933fbcf456_281e69ecaf0e5acb' (runtime true, 36943 vertices, 154956 indices)
+00:00:00.516 [INFO]:
+RendererSystem: built BLAS for mesh '50615429f2e48ff1_eb90ae0ed0e88fe9_99871934942806a8_8388e7d330efdc72_9182ef6e6fbb697d_13d1a7950da16098_d1e20296e6dd6b47_28395a4552c122e2' (runtime true, 36943 vertices, 154956 indices)
+00:00:00.516 [INFO]:
+RendererSystem: built BLAS for mesh '70515dc93b2888bb_0f0c7acd09138803_f912c9ac0a6c6786_464df17374869fac_780ecbbd9c1055ff_c68c5f92efed5af6_a65e5f82f11c1355_8488ed72eb72a11c' (runtime true, 36943 vertices, 154956 indices)
+00:00:00.516 [INFO]:
+RendererSystem: created scene TLAS (capacity 128 instances)
+00:00:00.516 [INFO]:
+RendererSystem: created RayQuery shadow compute pipeline
+00:00:00.517 [INFO]:
+RendererSystem: built software BVH for mesh '24a9e9c3a1a63893_e8daca9fc893ddeb_f440287b395d0e9e_23bb9b534210c2c4_707859684f21dc57_f0a8229128f6fc0e_c5a26fac30021fad_68917937cca811f4' (runtime true, 51652 triangles)
+00:00:00.517 [INFO]:
+RendererSystem: built software BVH for mesh '6238e234700eaf8b_f68d0e085c9ccff3_0a14d82e116467c4_fb95c47f6ff68aa6_380e6a5f1ae00d77_fee0616dcc7c22b4_e2b942b6cd0a3191_d748d5b4f28a9456' (runtime true, 51652 triangles)
+00:00:00.517 [INFO]:
+RendererSystem: built software BVH for mesh 'b318925e883b7dd2_37bdb70a8c07574a_003538c3fc5a7ab7_217c99b9f2787b11_07a3b3066a1b093e_7efe9388f8b81be7_a94f1b5e5e593a78_76b8eb20b9a8d801' (runtime true, 51652 triangles)
+00:00:00.517 [INFO]:
+RendererSystem: built software BVH for mesh 'e5f2980849d73abd_448c54efc589df95_daf555b40b90b2c4_3d066e1a6fdd1e9e_4eba2b4b7348bfb1_e0496d8fc4be6bf4_211feec57f82c5c3_78f02e3930e0a20e' (runtime true, 51652 triangles)
+00:00:00.517 [INFO]:
+RendererSystem: built software BVH for mesh '805671cda5ed997e_2414e3d128937e96_344374f6cd0b5ab3_c123926f313bf95d_df266e3e7942be92_6709cc3c7c577b63_eee4b4916510d7d4_e634874c22cfa8cd' (runtime true, 51652 triangles)
+00:00:00.517 [INFO]:
+RendererSystem: built software BVH for mesh '591a820cd6d7c988_f26fdf574fd91b80_d8b6541abbf86b11_48fb7e6332da8ab7_0440a10a0f8d5564_ee70df78b1bf3201_0d0cf10ac3f814c2_07469f3100a1c1e7' (runtime true, 51652 triangles)
+00:00:00.518 [INFO]:
+RendererSystem: built software BVH for mesh 'project/meshes/shadow_plane' (runtime false, 2 triangles)
+00:00:00.518 [INFO]:
+RendererSystem: built software BVH for mesh 'c8ec0e2339892197_3c8ae27fe6dd06af_3ac2a233fa6fcc72_e24d5ed3caa816a8_f86de8325de9d053_9ff14e9d4ad77ce2_e97493f46951ef61_9c19b33d158b0698' (runtime true, 51652 triangles)
+00:00:00.518 [INFO]:
+RendererSystem: built software BVH for mesh '214bfe1453216f0c_e901762d1302ef14_8cb84c68407dd285_37dbfee246f5425b_c5c2e2247160c390_bd0691cde642d9f5_0490b3933fbcf456_281e69ecaf0e5acb' (runtime true, 51652 triangles)
+00:00:00.518 [INFO]:
+RendererSystem: built software BVH for mesh '50615429f2e48ff1_eb90ae0ed0e88fe9_99871934942806a8_8388e7d330efdc72_9182ef6e6fbb697d_13d1a7950da16098_d1e20296e6dd6b47_28395a4552c122e2' (runtime true, 51652 triangles)
+00:00:00.518 [INFO]:
+RendererSystem: built software BVH for mesh '70515dc93b2888bb_0f0c7acd09138803_f912c9ac0a6c6786_464df17374869fac_780ecbbd9c1055ff_c68c5f92efed5af6_a65e5f82f11c1355_8488ed72eb72a11c' (runtime true, 51652 triangles)
+00:00:00.518 [INFO]:
+RendererSystem: created software scene BVH buffers (capacity 64 instances)
+00:00:00.520 [INFO]:
+RendererSystem: created RayQuery soft shadow compute pipeline
+00:00:00.522 [INFO]:
+RendererSystem: created RT caustic pipeline + shader table
+00:00:00.522 [INFO]:
+RendererSystem: created surfel HW trace compute pipeline
+00:00:00.522 [INFO]:
+RendererSystem: created surfel spawn compute pipeline
+00:00:00.522 [INFO]:
+RendererSystem: created surfel age-free compute pipeline
+00:00:00.522 [INFO]:
+RendererSystem: created surfel hash-build compute pipeline
+00:00:00.523 [INFO]:
+RendererSystem: created surfel resolve compute pipeline
+00:00:00.523 [INFO]:
+RendererSystem: created surfel upsample compute pipeline
+00:00:00.523 [INFO]:
+RendererSystem: created surfel trace build-args compute pipeline
+00:00:00.523 [ESSENTIAL INFO]:
+RendererSystem: caustic P1 -- 1 caustic light(s); 5 refractive emission target(s), combined extent min (-4.0257206, -0.22112656, -1.3453032) max (2.9174225, 2.0239875, 0.25000724)
+00:00:00.523 [ESSENTIAL INFO]:
+RendererSystem: caustic P1 -- caustic slot 0 -> light index 0 (directional)
+00:00:00.525 [INFO]:
+RendererSystem: dispatched hardware caustic producer (131072 photons/frame temporal-reuse over 262144 full-grid budget, 1 caustic lights, 5 refractive instances)
+00:00:00.577 [INFO]:
+RendererSystem: surfel live count = 379 (bump 379 - free 0) of 16384 pool capacity
+00:00:01.110 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=78.24310148411753 frame_ms avg=12.780679459683597 min=11.386754922568798 max=21.40391245484352 frames=40 seconds=0.5112271783873439
+00:00:01.110 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 40 frames / 0.5112271783873439s
+00:00:01.110 [ESSENTIAL INFO]:
+  mesh_skinning.skinning: gpu_ms avg=0.03577299903554376 min=0 max=0.19003999477718025 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  mesh_skinning.meshlet_bounds: gpu_ms avg=0.012001999630228966 min=0 max=0.17059999299817719 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  mesh_skinning.repack_normals: gpu_ms avg=0.021215999299784016 min=0 max=0.09099999533646042 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=9.996587759815156 min=9.137519635260105 max=16.577638685703278 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0.044652998531091725 min=0.04231999992043711 max=0.055479998991359025 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.016054999480275 min=0.015039999425425776 max=0.026759999400383094 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.opaque_regular: gpu_ms avg=0.8662849722895771 min=0.7929199491627514 max=1.31332001183182 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=1.8525409514040803 min=1.7027599574248597 max=3.3004399283527164 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=4.682184848934412 min=4.106519743800163 max=8.239399641752243 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0.2770669940218795 min=0.24579997989349067 max=0.4370399983599782 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=1.048837968846783 min=0.9836399694904685 max=1.683759968727827 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0.005893999866657396 min=0.0052400000640773214 max=0.007199999799922807 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0.007321999794385192 min=0.0066799998421629425 max=0.009280000085709617 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0.009634999651098042 min=0.007999999979801942 max=0.02747999860730488 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0.14048399607418105 min=0.12139999307692051 max=0.24707999546080828 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0.2680409910681192 min=0.2498399990145117 max=0.47575999633409083 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0.07733899728918914 min=0.07324000034714118 max=0.1197199962916784 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0.13713399566768203 min=0.1276399998459965 max=0.22271998750511557 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0.10911999743257184 min=0.10291999933542684 max=0.12879999121651053 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0.6738349780789576 min=0.6286400021053851 max=1.0730399517342448 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0.05848399823662476 min=0.05332000000635162 max=0.10999999358318746 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0.6701889797113836 min=0.6309199961833656 max=1.0564399417489767 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0.09839199719863245 min=0.08995999814942479 max=0.18307998834643513 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0.6927809838089161 min=0.6519199814647436 max=1.1007200228050351 samples=40
+00:00:01.110 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0.02799099920594017 min=0.026480000087758526 max=0.03647999983513728 samples=40
+00:00:01.613 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=83.43453419435777 frame_ms avg=11.985444752055974 min=10.940233245491982 max=16.042642295360565 frames=42 seconds=0.5033886795863509
+00:00:01.613 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 42 frames / 0.5033886795863509s
+00:00:01.613 [ESSENTIAL INFO]:
+  mesh_skinning.skinning: gpu_ms avg=0.07455237872428759 min=0 max=0.18907999401562847 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  mesh_skinning.meshlet_bounds: gpu_ms avg=0.021201904019108042 min=0 max=0.16835999304021243 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  mesh_skinning.repack_normals: gpu_ms avg=0.04453237965035008 min=0.009159999535768293 max=0.09019999833981274 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=9.17364446268905 min=8.967719972133636 max=9.480119682848454 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0.04293333213787437 min=0.041960000089602545 max=0.04468000042834319 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.01514285666070507 min=0.014999999621068127 max=0.01535999967927637 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.opaque_regular: gpu_ms avg=0.8143809335749774 min=0.793639977928251 max=0.825919967610389 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=1.7365494752864055 min=1.718999942568189 max=1.7561199533702165 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=4.118715135735416 min=3.935679793357849 max=4.423880018293858 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0.2584790407646714 min=0.24411999038420618 max=0.2801999798975885 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0.9900142544037884 min=0.9844399755820632 max=0.9953599656000733 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0.005796190331845234 min=0.0052400000640773214 max=0.006320000011328375 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0.007175237907999656 min=0.006639999810431618 max=0.007720000212430023 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0.010689523519214986 min=0.00808000004326459 max=0.019600000086938962 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0.1341799964263503 min=0.12055999832227826 max=0.1558799995109439 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0.2531942799188463 min=0.2507600001990795 max=0.25548000121489167 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0.07400952173546622 min=0.07316000119317323 max=0.0753599961171858 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0.1300266625808685 min=0.1276399998459965 max=0.1367599907098338 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0.10928475915404436 min=0.1034399974741973 max=0.11495999933686107 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0.6517228404326099 min=0.6334399804472923 max=0.6615599850192666 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0.05431333166987835 min=0.05332000000635162 max=0.055319997045444325 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0.6422123627825862 min=0.6341999978758395 max=0.6528800004161894 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0.09206666419188314 min=0.09095999848796055 max=0.09316000068793073 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0.6575295064110487 min=0.6483199540525675 max=0.6749999593012035 samples=42
+00:00:01.613 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0.027145713483194066 min=0.026119998437934555 max=0.028839998776675202 samples=42
+00:00:02.057 [INFO]:
+RendererSystem: surfel live count = 391 (bump 391 - free 0) of 16384 pool capacity
+00:00:02.122 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=82.5581251851359 frame_ms avg=12.112678161689214 min=10.47056820243597 max=13.019363395869732 frames=42 seconds=0.508732482790947
+00:00:02.122 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 42 frames / 0.508732482790947s
+00:00:02.122 [ESSENTIAL INFO]:
+  mesh_skinning.skinning: gpu_ms avg=0.10592094930048224 min=0.05839999721501954 max=0.1888799943117192 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  mesh_skinning.meshlet_bounds: gpu_ms avg=0.044919998539886104 min=0 max=0.16983999375952408 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  mesh_skinning.repack_normals: gpu_ms avg=0.06125142709563425 min=0.035799999750452116 max=0.08999999772640876 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=9.343457851736318 min=9.085999801754951 max=9.689239785075188 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0.04306476070528983 min=0.04211999839753844 max=0.04540000009001233 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.015110475688050514 min=0.014959999589336803 max=0.01531999942017137 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.opaque_regular: gpu_ms avg=0.8163161664491607 min=0.7952399901114404 max=0.8280399488285184 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=1.738895189343263 min=1.724159935292846 max=1.7508399660073337 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=4.283786529586429 min=4.055999685078859 max=4.6297600492835045 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0.24829047054351705 min=0.23659999715164304 max=0.26699999580159783 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0.9907761705107987 min=0.9850399801507592 max=0.9956000139936805 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0.005766666477246049 min=0.005279999641061295 max=0.006599999778700294 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0.007131428360264094 min=0.006599999778700294 max=0.007599999662488699 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0.009858094905385292 min=0.007919999916339293 max=0.01931999941007234 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0.13303142432483755 min=0.12047999916831031 max=0.1482799998484552 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0.2548933248146481 min=0.25228000595234334 max=0.25752000510692596 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0.07403618794688512 min=0.07343999459408224 max=0.07491999713238329 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0.12976761527603403 min=0.12831999629270285 max=0.13283999578561634 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0.10859904432436451 min=0.10635999933583662 max=0.11291999544482678 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0.6533228345991423 min=0.6447199848480523 max=0.6665999535471201 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0.05448190313472878 min=0.05355999746825546 max=0.05543999941437505 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0.6488495051772112 min=0.6381199928000569 max=0.6571199628524482 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0.09191142557288653 min=0.09123999916482717 max=0.09311999747296795 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0.6615056994459814 min=0.6500000017695129 max=0.6797999958507717 samples=42
+00:00:02.122 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0.027217141992185223 min=0.025999999706982635 max=0.028919999749632552 samples=42
+00:00:02.633 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=82.08087154457921 frame_ms avg=12.183106504380703 min=10.999593883752823 max=15.85649885237217 frames=42 seconds=0.5116904731839895
+00:00:02.633 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 42 frames / 0.5116904731839895s
+00:00:02.633 [ESSENTIAL INFO]:
+  mesh_skinning.skinning: gpu_ms avg=0.15977332930647425 min=0.11199999607924838 max=0.1950799942278536 samples=42
+00:00:02.633 [ESSENTIAL INFO]:
+  mesh_skinning.meshlet_bounds: gpu_ms avg=0.10485237743566922 min=0.03339999966556206 max=0.17379999371769372 samples=42
+00:00:02.633 [ESSENTIAL INFO]:
+  mesh_skinning.repack_normals: gpu_ms avg=0.08394761683424197 min=0.06227999801922124 max=0.10051999834104208 samples=42
+00:00:02.633 [ESSENTIAL INFO]:
+  0bff10145658ef8d_d6e616b093f0292a_ded831c58725ea1d_62574e7c94af5e45_372bf3e9137ef6bd_c4e6e45ff77abd47_1dcb97ab743737f8_40b3025e31b50272: gpu_ms avg=0 min=0 max=0 samples=1
+00:00:02.633 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=9.317986378889708 min=9.182319976389408 max=9.486159309744835 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0.04289999881058022 min=0.04187999729765579 max=0.044439999328460544 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.015100951849316993 min=0.014999999621068127 max=0.015279999388440046 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.opaque_regular: gpu_ms avg=0.8128171210132894 min=0.7929999846965075 max=0.829879951197654 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=1.7174418576901407 min=1.6824799404275836 max=1.7347999505545886 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=4.258912256253617 min=4.1299196891486645 max=4.410760011523962 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0.2510409450180651 min=0.23471999156754464 max=0.275679980404675 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0.9931742513020123 min=0.9838399710133672 max=1.0057599283754826 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0.005605714098540678 min=0.005200000032345997 max=0.006239999947865726 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0.007014285529294284 min=0.006599999778700294 max=0.007720000212430023 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0.008942856917807754 min=0.00808000004326459 max=0.020319999748608097 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0.136164757783436 min=0.12535999121610075 max=0.1566400023875758 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0.25525427814240437 min=0.2530000056140125 max=0.25687998277135193 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0.07389618916758559 min=0.0730399988242425 max=0.07488000119337812 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0.12996761541303603 min=0.12799999967683107 max=0.13256000238470733 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0.10938380659180916 min=0.10307999764336273 max=0.11747999815270305 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0.6473523625616162 min=0.6316399667412043 max=0.6563999922946095 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0.05437809366932405 min=0.05327999679138884 max=0.05527999746846035 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0.6438037948793776 min=0.6352399941533804 max=0.6533199921250343 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0.09200475965155333 min=0.0908799993339926 max=0.093039998319 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0.6663647377752655 min=0.6506399950012565 max=0.67787995794788 samples=42
+00:00:02.634 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0.027271427652089016 min=0.02631999996083323 max=0.02907999987655785 samples=42
+00:00:03.135 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=79.80535609726695 frame_ms avg=12.53048728685826 min=11.707296594977379 max=14.613470062613487 frames=40 seconds=0.5012194914743304
+00:00:03.135 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 40 frames / 0.5012194914743304s
+00:00:03.135 [ESSENTIAL INFO]:
+  mesh_skinning.skinning: gpu_ms avg=0.17983635861486563 min=0.115999995614402 max=0.19731999418581836 samples=33
+00:00:03.135 [ESSENTIAL INFO]:
+  mesh_skinning.meshlet_bounds: gpu_ms avg=0.13786302615974846 min=0.050079997890861705 max=0.17371999456372578 samples=33
+00:00:03.135 [ESSENTIAL INFO]:
+  mesh_skinning.repack_normals: gpu_ms avg=0.0879987855472736 min=0.0226399997700355 max=0.0979999977062107 samples=33
+00:00:03.135 [ESSENTIAL INFO]:
+  0bff10145658ef8d_d6e616b093f0292a_ded831c58725ea1d_62574e7c94af5e45_372bf3e9137ef6bd_c4e6e45ff77abd47_1dcb97ab743737f8_40b3025e31b50272: gpu_ms avg=0 min=0 max=0 samples=1
+00:00:03.135 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=8.759464970544764 min=0 max=9.35903936624527 samples=38
+00:00:03.135 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0.04226888803613191 min=0 max=0.04907999755232595 samples=36
+00:00:03.135 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.013152999554222333 min=0.0038399998629756738 max=0.015519999806201668 samples=40
+00:00:03.135 [ESSENTIAL INFO]:
+  render.opaque_regular: gpu_ms avg=0.8094011890617283 min=0.793639977928251 max=0.8288399549201131 samples=33
+00:00:03.135 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=1.5564159552809542 min=0.5239599931883276 max=1.7265999513256247 samples=40
+00:00:03.135 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=3.875497237754029 min=0 max=4.356159828603268 samples=37
+00:00:03.135 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0.25235399225493893 min=0.2346399996895343 max=0.277919985819608 samples=40
+00:00:03.135 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0.9884569677524268 min=0.9797199163585901 max=1.0051599238067865 samples=40
+00:00:03.135 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0.0052699998731340104 min=0 max=0.006439999651774997 samples=36
+00:00:03.135 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0.00652972951413815 min=0 max=0.00751999959902605 samples=37
+00:00:03.135 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0.009438947113506546 min=0.00808000004326459 max=0.018999999156221747 samples=38
+00:00:03.135 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0.12317080698857034 min=0 max=0.15007999900262803 samples=37
+00:00:03.135 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0.2536305186559299 min=0.2521999995224178 max=0.2563599846325815 samples=38
+00:00:03.135 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0.06764222113512612 min=0 max=0.07488000119337812 samples=36
+00:00:03.135 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0.11804588019217858 min=0 max=0.13223999121692032 samples=34
+00:00:03.135 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0.09838333021939939 min=0 max=0.11567999899853021 samples=36
+00:00:03.135 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0.6445168217300976 min=0.6252799648791552 max=0.6530399550683796 samples=38
+00:00:03.135 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0.04958352805902798 min=0 max=0.055479998991359025 samples=34
+00:00:03.135 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0.5873426845347559 min=0 max=0.6480399752035737 samples=37
+00:00:03.135 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0.09210210249109782 min=0.09119999594986439 max=0.0931999966269359 samples=38
+00:00:03.135 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0.6079059282972201 min=0 max=0.6701999809592962 samples=37
+00:00:03.135 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0.02518222128047556 min=0 max=0.029519998861360364 samples=36
+00:00:03.642 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=57.11818573823667 frame_ms avg=17.507558881208812 min=14.70562256872654 max=21.221494302153587 frames=29 seconds=0.5077192075550556
+00:00:03.642 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 29 frames / 0.5077192075550556s
+00:00:03.642 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=3.1350265567501387 min=0 max=9.532039985060692 samples=15
+00:00:03.642 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0.02124307642449052 min=0 max=0.047319997975137085 samples=13
+00:00:03.642 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.0038593102231218304 min=0.0037999998312443495 max=0.004040000021632295 samples=29
+00:00:03.642 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=0.31049516270160954 min=0 max=0.7970799701979558 samples=29
+00:00:03.642 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=0.5954971337424857 min=0 max=4.172679968178272 samples=14
+00:00:03.642 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0.19425262948253044 min=0 max=0.25536000612191856 samples=19
+00:00:03.642 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0.19601599778980017 min=0 max=0.9810399496927857 samples=15
+00:00:03.642 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0 min=0 max=0 samples=15
+00:00:03.642 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0.00484749986640054 min=0 max=0.007439999990310753 samples=16
+00:00:03.642 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0.006277646849305122 min=0 max=0.01883999902929645 samples=17
+00:00:03.642 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0.10462399804964662 min=0 max=0.17123999714385718 samples=20
+00:00:03.642 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0.10521646575344835 min=0 max=0.2568399941083044 samples=17
+00:00:03.642 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0 min=0 max=0 samples=15
+00:00:03.642 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0 min=0 max=0 samples=15
+00:00:03.642 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0 min=0 max=0 samples=15
+00:00:03.642 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0.04358666483312845 min=0 max=0.6537999724969268 samples=15
+00:00:03.642 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0 min=0 max=0 samples=15
+00:00:03.642 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0 min=0 max=0 samples=14
+00:00:03.642 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0.07737759762676433 min=0 max=0.09307999425800517 samples=25
+00:00:03.642 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0.4175894642493835 min=0 max=0.6683599785901606 samples=19
+00:00:03.642 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0 min=0 max=0 samples=15
+00:00:03.719 [INFO]:
+RendererSystem: surfel live count = 385 (bump 391 - free 6) of 16384 pool capacity
+00:00:04.165 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=42.0623963814422 frame_ms avg=23.774204183031213 min=21.533755585551262 max=27.07163244485855 frames=22 seconds=0.5230324920266867
+00:00:04.165 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 22 frames / 0.5230324920266867s
+00:00:04.165 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0.010986666590421615 min=0 max=0.04611999975168146 samples=12
+00:00:04.165 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.003856363512320306 min=0.0037999998312443495 max=0.003919999926438322 samples=22
+00:00:04.165 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=0.0015199999655702745 min=0 max=0.03343999924254604 samples=22
+00:00:04.165 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.165 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:04.690 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=34.32452805354783 frame_ms avg=29.13368534710672 min=26.625284925103188 max=31.832989305257797 frames=18 seconds=0.524406336247921
+00:00:04.690 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 18 frames / 0.524406336247921s
+00:00:04.690 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0.0048933333245157785 min=0 max=0.044039999920642 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.003851110982901042 min=0.0038399998629756738 max=0.003919999926438322 samples=18
+00:00:04.690 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=0 min=0 max=0 samples=18
+00:00:04.690 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:04.690 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:05.202 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=29.30713736805733 frame_ms avg=34.12138099471728 min=31.754348427057266 max=36.28046438097954 frames=15 seconds=0.5118207149207592
+00:00:05.202 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 15 frames / 0.5118207149207592s
+00:00:05.202 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.202 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0 min=0 max=0 samples=8
+00:00:05.202 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.004199999693810241 min=0.004159999662078917 max=0.004239999725541566 samples=15
+00:00:05.202 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=0 min=0 max=0 samples=15
+00:00:05.202 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=0 min=0 max=0 samples=8
+00:00:05.202 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.202 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.202 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.202 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.202 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.202 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0 min=0 max=0 samples=8
+00:00:05.202 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.202 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.202 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.202 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.202 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.202 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.202 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0 min=0 max=0 samples=8
+00:00:05.202 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.202 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0 min=0 max=0 samples=8
+00:00:05.202 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=26.202084691206903 frame_ms avg=38.16490221236433 min=36.155831068754196 max=39.9019680917263 frames=14 seconds=0.5343086309731007
+00:00:05.736 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 14 frames / 0.5343086309731007s
+00:00:05.736 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.00426285685404894 min=0.004199999693810241 max=0.00475999968330143 samples=14
+00:00:05.736 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=0 min=0 max=0 samples=14
+00:00:05.736 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:05.736 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0 min=0 max=0 samples=7
+00:00:06.241 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=23.751098711888385 frame_ms avg=42.10331539312998 min=40.159668773412704 max=43.428685516119 frames=12 seconds=0.5052397847175598
+00:00:06.241 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 12 frames / 0.5052397847175598s
+00:00:06.241 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.004306666672467448 min=0 max=0.004839999746764079 samples=12
+00:00:06.241 [ESSENTIAL INFO]:
+  render.opaque_regular: gpu_ms avg=0 min=0 max=0 samples=2
+00:00:06.241 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=0 min=0 max=0 samples=12
+00:00:06.241 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.241 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=21.913656088510034 frame_ms avg=45.633644881573595 min=44.236473739147186 max=47.07083851099014 frames=11 seconds=0.5019700936973095
+00:00:06.743 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 11 frames / 0.5019700936973095s
+00:00:06.743 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:06.743 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.004250909114489332 min=0 max=0.004839999746764079 samples=11
+00:00:06.743 [ESSENTIAL INFO]:
+  render.opaque_regular: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:06.743 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:06.743 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:06.743 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:06.743 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:06.743 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:06.743 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:06.743 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:07.285 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=20.30302097225685 frame_ms avg=49.25375397909771 min=47.86998778581619 max=50.71812868118286 frames=11 seconds=0.5417912937700748
+00:00:07.285 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 11 frames / 0.5417912937700748s
+00:00:07.285 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:07.285 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.0004763636421888474 min=0 max=0.0052400000640773214 samples=11
+00:00:07.285 [ESSENTIAL INFO]:
+  render.opaque_regular: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=0 min=0 max=0 samples=11
+00:00:07.285 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:07.285 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:07.285 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:07.285 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.285 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0 min=0 max=0 samples=6
+00:00:07.285 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=18.935778935330294 frame_ms avg=52.81007997691631 min=51.55017226934433 max=54.648421704769135 frames=10 seconds=0.5281007997691631
+00:00:07.813 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 10 frames / 0.5281007997691631s
+00:00:07.813 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0 min=0 max=0 samples=10
+00:00:07.813 [ESSENTIAL INFO]:
+  render.opaque_regular: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=0 min=0 max=0 samples=10
+00:00:07.813 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:07.813 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=17.872715138027846 frame_ms avg=55.951207876205444 min=54.65153604745865 max=57.435858994722366 frames=9 seconds=0.503560870885849
+00:00:08.317 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 9 frames / 0.503560870885849s
+00:00:08.317 [ESSENTIAL INFO]:
+  mesh_skinning.skinning: gpu_ms avg=0.06324999822027166 min=0.031439998565474525 max=0.08359999810636509 samples=4
+00:00:08.317 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.317 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:08.317 [ESSENTIAL INFO]:
+  render.opaque_regular: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.317 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:08.317 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.317 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.317 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.317 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.317 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.317 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.402 [INFO]:
+RendererSystem: surfel live count = 398 (bump 399 - free 1) of 16384 pool capacity
+00:00:08.844 [ESSENTIAL INFO]:
+StressTestSmokeProject: fps avg=17.05146874454993 frame_ms avg=58.64597443077299 min=57.4830137193203 max=59.66947227716446 frames=9 seconds=0.5278137698769569
+00:00:08.844 [ESSENTIAL INFO]:
+StressTestSmokeProject: gpu per-pass timing over 9 frames / 0.5278137698769569s
+00:00:08.844 [ESSENTIAL INFO]:
+  mesh_skinning.skinning: gpu_ms avg=0.10632499697749154 min=0.028679998649749905 max=0.3031599935638951 samples=8
+00:00:08.844 [ESSENTIAL INFO]:
+  mesh_skinning.meshlet_bounds: gpu_ms avg=0.09187999785353895 min=0.09111999679589644 max=0.09263999891118146 samples=2
+00:00:08.844 [ESSENTIAL INFO]:
+  mesh_skinning.repack_normals: gpu_ms avg=0.13187999684305396 min=0.13143999603926204 max=0.13231999764684588 samples=2
+00:00:08.844 [ESSENTIAL INFO]:
+  render.frame: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.844 [ESSENTIAL INFO]:
+  render.deferred_clear: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.844 [ESSENTIAL INFO]:
+  render.material_upload: gpu_ms avg=0.0013955555510215668 min=0 max=0.006279999979597051 samples=9
+00:00:08.844 [ESSENTIAL INFO]:
+  render.opaque_regular: gpu_ms avg=0.42564666364341974 min=0 max=1.2974799610674381 samples=6
+00:00:08.844 [ESSENTIAL INFO]:
+  render.mesh_dispatch: gpu_ms avg=0 min=0 max=0 samples=9
+00:00:08.844 [ESSENTIAL INFO]:
+  render.shadow_visibility: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.845 [ESSENTIAL INFO]:
+  render.caustic_photons: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.845 [ESSENTIAL INFO]:
+  render.caustic_resolve: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.845 [ESSENTIAL INFO]:
+  render.surfel_age_free: gpu_ms avg=0.001311999949393794 min=0 max=0.00655999974696897 samples=5
+00:00:08.845 [ESSENTIAL INFO]:
+  render.surfel_hash_build: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.845 [ESSENTIAL INFO]:
+  render.surfel_spawn: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.845 [ESSENTIAL INFO]:
+  render.surfel_trace: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.845 [ESSENTIAL INFO]:
+  render.surfel_resolve: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.845 [ESSENTIAL INFO]:
+  render.surfel_upsample: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.845 [ESSENTIAL INFO]:
+  render.deferred_lighting: gpu_ms avg=0.05565999890677631 min=0 max=0.22263999562710524 samples=4
+00:00:08.845 [ESSENTIAL INFO]:
+  render.avboit_clear: gpu_ms avg=0.02440799871692434 min=0 max=0.1220399935846217 samples=5
+00:00:08.845 [ESSENTIAL INFO]:
+  render.avboit_occupancy: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.845 [ESSENTIAL INFO]:
+  render.avboit_depth_warp: gpu_ms avg=0.02685999970708508 min=0 max=0.10743999882834032 samples=4
+00:00:08.845 [ESSENTIAL INFO]:
+  render.avboit_extinction: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.845 [ESSENTIAL INFO]:
+  render.avboit_integration: gpu_ms avg=0 min=0 max=0 samples=4
+00:00:08.845 [ESSENTIAL INFO]:
+  render.avboit_accumulate: gpu_ms avg=0 min=0 max=0 samples=5
+00:00:08.845 [ESSENTIAL INFO]:
+  render.deferred_composite: gpu_ms avg=0 min=0 max=0 samples=4

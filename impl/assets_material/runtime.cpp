@@ -27,6 +27,9 @@ namespace __hidden_runtime{
 Core::Assets::AssetCodecAutoRegistrar s_MaterialAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<MaterialAssetCodec>);
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static bool ValidateMaterialTypedLayout(
     const u64 layoutHash,
     const Material::TypedLayoutBlockVector& blocks,

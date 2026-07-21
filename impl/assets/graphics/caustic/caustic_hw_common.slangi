@@ -25,6 +25,14 @@
 #include "../common/math.slangi"
 #include "../shadow/instance_material.slangi"
 
+// Global descriptor heap accessor (Phase 2 step 4b): the per-corner attribute buffer the closest-hit interpolates the
+// shading normal from now lives in the bindless heap, reached by the attributeSlot the instance material record carries
+// (NwbRtInstanceMaterial, populated lockstep with the mesh by the HW shadow builder in rt_swbvh.cpp). Only the raw byte
+// view (NwbHeapRawBuffer) is needed -- the hardware caustic bends on interpolated corner normals, so it reads NO BVH
+// nodes / positions / indices (the fixed-function intersector supplies the hit triangle + barycentrics). Heap set 8,
+// pinned on this pass's RT pipeline in step 4a.
+#include "../bindless/bindless_heap.slangi"
+
 // The shadow trace's material-constants context (NwbShadowHit + the surface contract + the engine shadow physics
 // helpers) + the cook-generated per-hit surface dispatch (nwbShadowDispatchSurface), routed by
 // shadowTransmittanceModelId -- the SAME dispatch the SW caustic kernel + the shadow trace evaluate, so a glass's
@@ -94,11 +102,14 @@ RaytracingAccelerationStructure g_NwbCausticHwTlas;
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL, NWB_CAUSTIC_RT_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticHwInstanceMaterial;
 
-// Per-mesh descriptor arrays (slot k = mesh k = material.meshSlot): the raw triangle index byte buffer + the
-// per-triangle-corner attribute byte buffer (Half4U normal @ +0 / Float2U uv0 @ +8), interpolated into the SHADING
-// normal the refraction bends on + the per-hit surface dispatch. (No position array: bending on the interpolated
-// shading normal needs only the corner normals, not the positions -- the world hit point comes from
-// WorldRayOrigin()+RayTCurrent()*WorldRayDirection().)
+// DEAD as of step 4b: these parallel per-mesh arrays (slot k = mesh k -- the raw triangle index byte buffer + the
+// per-triangle-corner attribute byte buffer, Half4U normal @ +0 / Float2U uv0 @ +8) are no longer read by any accessor.
+// The index array was already unread (the hardware fixed-function intersector supplies the hit triangle + barycentrics,
+// so the HW caustic never fetches indices); the attribute closest-hit now fetches the same bytes from the bindless heap
+// by material.attributeSlot. Retained declared + host-bound (bindings 11-12) so the classic caustic RT set layout is
+// unchanged until the 4c bounded-path removal drops these declarations together with the C++ layout items + the
+// per-frame binding-set fills. (Still no position array: bending on the interpolated shading normal needs only the
+// corner normals -- the world hit point comes from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().)
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_MESH_INDICES, NWB_CAUSTIC_RT_SET)]]
 ByteAddressBuffer g_NwbCausticHwMeshIndices[NWB_CAUSTIC_RT_MAX_MESHES];
 
@@ -135,13 +146,17 @@ struct NwbCausticHwVertexAttrib{
     float2 uv0;
 };
 
-NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
-    // meshIndex is non-uniform across the ray wave (each hit is on a different instance/mesh), so the per-mesh
-    // descriptor-array access MUST be tagged NonUniformResourceIndex; without it the index is UB and a wave whose
-    // hits straddle a mesh boundary reads another mesh's attribute descriptor for some lanes.
+NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
+    // attributeSlot is this mesh's per-corner attribute buffer's GLOBAL HEAP slot (carried on the instance material
+    // record, populated lockstep with the mesh by the HW shadow builder in rt_swbvh.cpp -- the same mesh->attributeBuffer
+    // the bounded g_NwbCausticHwMeshAttributes[meshSlot] pointed at, so the fetched bytes are identical). It is
+    // non-uniform across the ray wave -- each hit is on a different instance/mesh -- so the heap subscript MUST be
+    // NonUniformResourceIndex-tagged; NwbHeapRawBuffer() applies that internally and is re-invoked at each Load (mirroring
+    // the bounded g_NwbCausticHwMeshAttributes[NonUniformResourceIndex(meshIndex)] it replaces) so the decoration is
+    // applied fresh at every descriptor access.
     // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- one request instead of two
     // dependent Load2s (bit-identical; mirrors the SW producer).
-    const uint4 packed = g_NwbCausticHwMeshAttributes[NonUniformResourceIndex(meshIndex)].Load4(attributeIndex * 16u);
+    const uint4 packed = NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u);
     NwbCausticHwVertexAttrib attrib;
     attrib.normal = float3(
         nwbUnpackHalf2x16(packed.x),

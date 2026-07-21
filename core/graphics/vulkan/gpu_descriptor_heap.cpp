@@ -356,6 +356,13 @@ void GpuDescriptorHeap::bindCompute(CommandList& commandList, const ComputePipel
     commandList.bindDescriptorHeap(*this, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_pipelineLayout);
 }
 
+void GpuDescriptorHeap::bindRayTracing(CommandList& commandList, const RayTracingPipeline& pipeline){
+    // Same PipelineBindingState::m_pipelineLayout the RT dispatch binds its set-0 material table against (the mixed
+    // classic+heap layout createPipelineLayoutForBindingLayouts builds when the descriptor-heap accelerator is off);
+    // bind the heap tables at sets 8/9 against it at the ray-tracing bind point.
+    commandList.bindDescriptorHeap(*this, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline.m_pipelineLayout);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

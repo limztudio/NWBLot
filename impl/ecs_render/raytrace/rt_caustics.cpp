@@ -1551,6 +1551,14 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         rayTracingPassState.setShaderTable(rayTracingState().m_hwCausticShaderTable.get());
         rayTracingPassState.addBindingSet(rayTracingState().m_hwCausticBindingSet.get());
         commandList.setRayTracingState(rayTracingPassState);
+        // Phase 2 step 4b: the closest-hit now fetches each mesh's per-corner attribute buffer from the global descriptor
+        // heap (set 8) by the material record's attributeSlot, so the heap's descriptor tables -- pinned on this
+        // pipeline's layout in step 4a -- must be BOUND before dispatchRays, not merely present in the layout.
+        // bindRayTracing binds only sets 8/9 at the ray-tracing bind point (it never disturbs the classic set 0 the
+        // RayTracingState bound above); gated on a live heap so non-bindless builds are untouched.
+        Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+        if(heap.isInitialized())
+            heap.bindRayTracing(commandList, *rayTracingState().m_hwCausticPipeline.get());
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
         // Dispatch one ray per photon over a gridSide x (gridSide/2) grid == the SW half-budget photon grid, so the

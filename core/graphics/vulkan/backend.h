@@ -1526,6 +1526,12 @@ public:
     // getResourceLayout()/getSamplerLayout() at sets 0/1.
     void bindCompute(CommandList& commandList, const ComputePipeline& pipeline);
 
+    // Ray-tracing sibling of bindCompute: binds the heap's resource + sampler tables against the ray-tracing pipeline's
+    // layout at VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR. Call after setRayTracingState(pipeline) and before dispatchRays;
+    // the pipeline must carry the heap layouts at its heap sets (ensureCausticRtPipeline pins them at sets 8/9). Lets a
+    // hardware ray-tracing pass fetch heap-registered geometry without the impl/ caller naming any Vk type.
+    void bindRayTracing(CommandList& commandList, const RayTracingPipeline& pipeline);
+
     // Advances the deferred-free retirement clock by one frame and recycles any slot whose quarantine has matured.
     void advanceFrame();
 

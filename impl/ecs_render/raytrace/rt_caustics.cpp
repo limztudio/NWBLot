@@ -1270,6 +1270,19 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     pipelineDesc.setMaxPayloadSize(static_cast<u32>(sizeof(f32) * 16u));
     pipelineDesc.setMaxRecursionDepth(1u);
     pipelineDesc.addBindingLayout(rayTracingState().m_hwCausticBindingLayout);
+    // Phase 2 (HW caustic migration, step 4a): pin the global descriptor heap's resource (set 8) + sampler (set 9)
+    // bindless layouts onto the hardware caustic ray-tracing pipeline so the closest-hit can later fetch each mesh's
+    // per-corner attribute buffer from the heap. The classic caustic RT layout is added first, so it keeps positional
+    // set 0; the two heap layouts carry explicit sets 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7
+    // with the empty set layout. Guarded on a live heap so non-bindless builds keep the pure set-0 layout. Added BEFORE
+    // the shader consumes the heap so the mixed classic+bindless pipeline layout is validated in isolation (zero
+    // rendering change) ahead of the accessor rewrite that reads through it. Mirrors the SW caustic step 4a scaffold
+    // (ensureSwCausticPipeline) -- the first HW ray-tracing pipeline to carry the heap layouts.
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(heap.isInitialized()){
+        pipelineDesc.addBindingLayout(heap.getResourceLayout());
+        pipelineDesc.addBindingLayout(heap.getSamplerLayout());
+    }
 
     Core::RayTracingPipelineShaderDesc raygenDesc(arena());
     raygenDesc.setShader(raygenShader).setExportName(__hidden_caustics::s_HwRaygenExportName);

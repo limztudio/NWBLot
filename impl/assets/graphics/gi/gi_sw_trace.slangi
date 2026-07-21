@@ -71,22 +71,12 @@ StructuredBuffer<NwbGiSwInstance, Std430DataLayout> g_NwbGiSwInstances;
 [[vk::binding(NWB_GI_SW_BINDING_INSTANCE_MATERIAL, NWB_GI_SW_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbGiSwInstanceMaterial;
 
-// DEAD as of step 4b: these parallel per-mesh arrays (slot k = mesh k -- triangle BVH nodes + raw position / index /
-// attribute byte buffers) are no longer read by any accessor -- the surfel traversal fetches the same geometry from the
-// bindless heap by the material record's slots. Retained declared + host-bound (bindings 5-8) so the classic SW-GI set
-// layout is unchanged until the 4c bounded-path removal drops these declarations together with the C++ layout items +
-// per-frame fill loops.
-[[vk::binding(NWB_GI_SW_BINDING_MESH_NODES, NWB_GI_SW_SET)]]
-StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbGiSwMeshNodes[NWB_GI_SW_MAX_MESHES];
-
-[[vk::binding(NWB_GI_SW_BINDING_MESH_POSITIONS, NWB_GI_SW_SET)]]
-ByteAddressBuffer g_NwbGiSwMeshPositions[NWB_GI_SW_MAX_MESHES];
-
-[[vk::binding(NWB_GI_SW_BINDING_MESH_INDICES, NWB_GI_SW_SET)]]
-ByteAddressBuffer g_NwbGiSwMeshIndices[NWB_GI_SW_MAX_MESHES];
-
-[[vk::binding(NWB_GI_SW_BINDING_MESH_ATTRIBUTES, NWB_GI_SW_SET)]]
-ByteAddressBuffer g_NwbGiSwMeshAttributes[NWB_GI_SW_MAX_MESHES];
+// Per-mesh geometry (BVH nodes / raw positions / raw indices / per-corner attributes) is fetched from the bindless
+// heap (step 4b) by the material record's per-buffer slots; the parallel per-mesh descriptor arrays that preceded it
+// (bindings 5-8) were dropped in the step 4c bounded-path removal. The shared C++ backing buffers stay -- the heap
+// descriptors (shadow / caustic / GI alike) point at them and the per-dispatch buffer-state barriers still transition
+// them for the heap reads. GI is the last SW consumer to bind them as bounded arrays, so the final M4 cleanup drops
+// the shared arrays outright once this migration lands.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

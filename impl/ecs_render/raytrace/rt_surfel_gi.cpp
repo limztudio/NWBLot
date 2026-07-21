@@ -218,10 +218,9 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_NODES, 1)); // scene nodes
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_INSTANCES, 1)); // scene instances
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_INSTANCE_MATERIAL, 1)); // instance material
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MESH_NODES, NWB_GI_SW_MAX_MESHES)); // mesh nodes
-        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_GI_SW_BINDING_MESH_POSITIONS, NWB_GI_SW_MAX_MESHES)); // mesh positions
-        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_GI_SW_BINDING_MESH_INDICES, NWB_GI_SW_MAX_MESHES)); // mesh indices
-        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_GI_SW_BINDING_MESH_ATTRIBUTES, NWB_GI_SW_MAX_MESHES)); // mesh attributes
+        // Per-mesh geometry (BVH nodes / positions / indices / attributes) is fetched from the global descriptor heap
+        // (sets 8/9, pinned on this pipeline in step 4a) by the material record's per-buffer slots; the former bounded
+        // per-mesh descriptor arrays at slots 5-8 were removed in step 4c.
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MATERIAL_TYPED, 1)); // material typed
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MESH_INSTANCES, 1)); // mesh instances
         // The surfel-specific tail is likewise named in surfel_binding_slots.h. No push constants -- the trace derives
@@ -632,15 +631,11 @@ bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_NODES, sceneNodeBuffer)); // scene nodes
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_INSTANCES, instanceBuffer)); // scene instances
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_INSTANCE_MATERIAL, rayTracingState().m_shadowInstanceMaterialBuffer.get())); // instance material
-    // Per-mesh descriptor arrays: bind every slot; pad the unused tail with the last real mesh (the trace only indexes
-    // meshIndex < meshCount), mirroring the SW shadow set.
-    for(u32 slot = 0u; slot < NWB_GI_SW_MAX_MESHES; ++slot){
-        const u32 source = (slot < meshCount) ? slot : (meshCount > 0u ? (meshCount - 1u) : 0u);
-        desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MESH_NODES, rayTracingState().m_swShadowMeshNodeBuffers[source]).setArrayElement(slot));
-        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_GI_SW_BINDING_MESH_POSITIONS, rayTracingState().m_swShadowMeshPositionBuffers[source]).setArrayElement(slot));
-        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_GI_SW_BINDING_MESH_INDICES, rayTracingState().m_swShadowMeshIndexBuffers[source]).setArrayElement(slot));
-        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_GI_SW_BINDING_MESH_ATTRIBUTES, rayTracingState().m_swShadowMeshAttributeBuffers[source]).setArrayElement(slot));
-    }
+    // Per-mesh geometry is not bound here: the SW GI surfel traversal fetches BVH nodes / positions / indices /
+    // attributes from the global descriptor heap (bound as sets 8/9 per dispatch) by the material record's per-buffer
+    // slots. The former bounded per-mesh descriptor arrays (slots 5-8) were removed in step 4c; the backing buffers
+    // (m_swShadowMesh*Buffers) stay -- they are what the heap descriptors point at, and the per-dispatch buffer-state
+    // barriers still transition them for the heap reads.
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MATERIAL_TYPED, materialTypedBuffer)); // material typed
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MESH_INSTANCES, meshInstanceBuffer)); // mesh instances
     desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get())); // surfel constants

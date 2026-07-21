@@ -147,6 +147,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .setLayoutType(BindlessLayoutType::MutableSrvUavCbv)
         .setMaxCapacity(resourceCapacity)
         .setVisibility(ShaderType::All)
+        .setDescriptorSetIndex(m_resourceSetIndex)   // reserved set 8 - createPipelineLayoutForBindingLayouts gap-fills 0..7
         .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::Texture_UAV(getRegisterSlot(GpuDescriptorClass::StorageImage), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::TypedBuffer_SRV(getRegisterSlot(GpuDescriptorClass::SampledBuffer), resourceCapacity))
@@ -172,6 +173,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .setLayoutType(BindlessLayoutType::MutableSampler)
         .setMaxCapacity(samplerCapacity)
         .setVisibility(ShaderType::All)
+        .setDescriptorSetIndex(m_samplerSetIndex)   // reserved set 9
         .addRegisterSpace(BindingLayoutItem::Sampler(getRegisterSlot(GpuDescriptorClass::Sampler), samplerCapacity))
     ;
 

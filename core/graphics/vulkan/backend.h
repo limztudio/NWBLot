@@ -1568,12 +1568,13 @@ private:
     bool m_initialized = false;
     GpuDescriptorHeapDesc m_desc;
 
-    // Set index each table occupies in a consuming pipeline layout. Phase 1 is positional (BindlessLayoutDesc has
-    // no set-index field): the round-trip pipeline places the resource table at set 0 and the sampler table at set 1.
-    // Phase 2 moves these to reserved high sets once coexistence with classic sets (and maxBoundDescriptorSets) is
-    // validated.
-    u32 m_resourceSetIndex = 0;
-    u32 m_samplerSetIndex = 1;
+    // Set index each table occupies in a consuming pipeline layout. Phase 2 pins them to reserved high sets (8/9) via
+    // BindlessLayoutDesc::setDescriptorSetIndex in initialize(), clearing the 8 classic sets (s_MaxBindingLayouts) with
+    // room to spare under maxBoundDescriptorSets so the heap never collides with a migrated pipeline's own low sets.
+    // These MUST stay in lockstep with the shader contract in impl/assets/graphics/bindless/binding_slots.h
+    // (NWB_BINDLESS_HEAP_RESOURCE_SET / NWB_BINDLESS_HEAP_SAMPLER_SET).
+    u32 m_resourceSetIndex = 8;
+    u32 m_samplerSetIndex = 9;
 
     BindingLayoutHandle m_resourceLayout;
     BindingLayoutHandle m_samplerLayout;

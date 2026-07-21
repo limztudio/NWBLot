@@ -517,14 +517,82 @@ bool Device::createPipelineLayoutForBindingLayouts(
         descriptorSetLayoutCount += layout->m_descriptorSetLayouts.size();
     }
 
-    descriptorSetLayouts.reserve(descriptorSetLayoutCount);
-    for(const auto& bindingLayout : bindingLayouts){
-        auto* layout = bindingLayout.get();
-        NWB_ASSERT(layout != nullptr);
-        for(const auto& descriptorSetLayout : layout->m_descriptorSetLayouts)
-            descriptorSetLayouts.push_back(descriptorSetLayout);
+    // Determine each layout's descriptor-set placement. A layout may pin itself to an explicit set index - bindless via
+    // BindlessLayoutDesc::descriptorSetIndexIsExplicit, classic via BindingLayoutDesc::registerSpaceIsDescriptorSet -
+    // otherwise it keeps the legacy positional assignment (concatenation order). The global bindless heap uses this to
+    // sit at reserved high sets (8/9) above a migrated pipeline's own low sets (Phase 2).
+    const auto layoutSetIndex = [](const BindingLayout& layout, const u32 positional, bool& outExplicit) -> u32{
+        if(const BindlessLayoutDesc* bindlessDesc = layout.getBindlessDesc()){
+            outExplicit = bindlessDesc->descriptorSetIndexIsExplicit;
+            return outExplicit ? bindlessDesc->descriptorSetIndex : positional;
+        }
+        const BindingLayoutDesc& classicDesc = layout.getBindingLayoutDesc();
+        outExplicit = classicDesc.registerSpaceIsDescriptorSet;
+        return outExplicit ? classicDesc.registerSpace : positional;
+    };
+
+    bool anyExplicitSet = false;
+    for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()) && !anyExplicitSet; ++i){
+        bool isExplicit = false;
+        (void)layoutSetIndex(*bindingLayouts[i].get(), i, isExplicit);
+        anyExplicitSet = isExplicit;
     }
-    NWB_ASSERT(descriptorSetLayouts.size() == descriptorSetLayoutCount);
+
+    if(!anyExplicitSet){
+        // Legacy path: concatenate every layout's sets in list order. Byte-identical to the pre-Phase-2 behavior, so no
+        // pipeline that leaves its layouts on positional assignment changes at all.
+        descriptorSetLayouts.reserve(descriptorSetLayoutCount);
+        for(const auto& bindingLayout : bindingLayouts){
+            auto* layout = bindingLayout.get();
+            NWB_ASSERT(layout != nullptr);
+            for(const auto& descriptorSetLayout : layout->m_descriptorSetLayouts)
+                descriptorSetLayouts.push_back(descriptorSetLayout);
+        }
+        NWB_ASSERT(descriptorSetLayouts.size() == descriptorSetLayoutCount);
+    }
+    else{
+        // Explicit-index path: place each layout's set(s) at its target index and fill every unused set in between with
+        // the cached empty (zero-binding) set layout so the pipeline layout is dense from set 0 (Vulkan requires no
+        // holes). The empty gap-set layout is mandatory here.
+        if(m_context.emptyDescriptorSetLayout == VK_NULL_HANDLE){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: explicit descriptor-set placement needs the empty gap-set layout, which is unavailable"), operationName);
+            return false;
+        }
+
+        u32 maxSetIndex = 0;
+        for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){
+            const BindingLayout& layout = *bindingLayouts[i].get();
+            const usize setCount = layout.m_descriptorSetLayouts.size();
+            if(setCount == 0)
+                continue;
+            bool isExplicit = false;
+            const u32 base = layoutSetIndex(layout, i, isExplicit);
+            if(base > Limit<u32>::s_Max - static_cast<u32>(setCount - 1)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor set index overflow"), operationName);
+                return false;
+            }
+            maxSetIndex = Max<u32>(maxSetIndex, base + static_cast<u32>(setCount) - 1u);
+        }
+
+        const u32 totalSets = maxSetIndex + 1u;
+        descriptorSetLayouts.reserve(totalSets);
+        for(u32 s = 0; s < totalSets; ++s)
+            descriptorSetLayouts.push_back(m_context.emptyDescriptorSetLayout);
+
+        for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){
+            const BindingLayout& layout = *bindingLayouts[i].get();
+            bool isExplicit = false;
+            const u32 base = layoutSetIndex(layout, i, isExplicit);
+            for(usize s = 0; s < layout.m_descriptorSetLayouts.size(); ++s){
+                const u32 slot = base + static_cast<u32>(s);
+                if(descriptorSetLayouts[slot] != m_context.emptyDescriptorSetLayout){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: two binding layouts map to descriptor set {}"), operationName, slot);
+                    return false;
+                }
+                descriptorSetLayouts[slot] = layout.m_descriptorSetLayouts[s];
+            }
+        }
+    }
 
     if(!VulkanDetail::CreatePipelineLayout(
         m_context,

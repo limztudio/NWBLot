@@ -163,11 +163,19 @@ struct BindlessLayoutDesc{
     ShaderType::Mask visibility = ShaderType::None;
     BindlessLayoutType::Enum layoutType = BindlessLayoutType::Immutable;
 
+    // When descriptorSetIndexIsExplicit is set, this layout occupies SPIR-V descriptor set `descriptorSetIndex` in a
+    // multi-layout pipeline layout, mirroring BindingLayoutDesc::registerSpaceIsDescriptorSet. Layouts that leave it
+    // unset keep the legacy positional assignment (concatenation order). Used to pin the global bindless heap tables
+    // to reserved high sets so they never collide with a migrated pipeline's own low sets (Phase 2).
+    u32 descriptorSetIndex = 0;
+    bool descriptorSetIndexIsExplicit = false;
+
     constexpr BindlessLayoutDesc& setVisibility(ShaderType::Mask value){ visibility = value; return *this; }
     constexpr BindlessLayoutDesc& setFirstSlot(u32 value){ firstSlot = value; return *this; }
     constexpr BindlessLayoutDesc& setMaxCapacity(u32 value){ maxCapacity = value; return *this; }
     constexpr BindlessLayoutDesc& addRegisterSpace(const BindingLayoutItem& value){ registerSpaces.push_back(value); return *this; }
     constexpr BindlessLayoutDesc& setLayoutType(BindlessLayoutType::Enum value){ layoutType = value; return *this; }
+    constexpr BindlessLayoutDesc& setDescriptorSetIndex(u32 value){ descriptorSetIndex = value; descriptorSetIndexIsExplicit = true; return *this; }
 };
 
 typedef GraphicsBackend::Handle<BindingLayout> BindingLayoutHandle;

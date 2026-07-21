@@ -155,7 +155,7 @@ void RendererRayTracingSystem::runGpuDescriptorHeapSelfTest(){
         heap.write(uniformHandle, Core::BindingSetItem::ConstantBuffer(0u, uniformBuffer.get()));
         heap.write(typedHandle,   Core::BindingSetItem::TypedBuffer_SRV(0u, typedBuffer.get(), Core::Format::R32_UINT));
 
-        // ---- load the cooked kernel and build a pipeline from the heap's two bindless layouts (sets 0 and 1) ----
+        // ---- load the cooked kernel and build a pipeline from the heap's two bindless layouts (sets 8 and 9) ----
         Core::ShaderHandle shader;
         if(!m_renderer.shaderSystem().loadShader(
             shader,

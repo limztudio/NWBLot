@@ -640,10 +640,9 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_NODES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_INSTANCES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_NODES, NWB_CAUSTIC_SW_MAX_MESHES));
-        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_POSITIONS, NWB_CAUSTIC_SW_MAX_MESHES));
-        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_INDICES, NWB_CAUSTIC_SW_MAX_MESHES));
-        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_ATTRIBUTES, NWB_CAUSTIC_SW_MAX_MESHES));
+        // Per-mesh geometry (BVH nodes / positions / indices / attributes) is fetched from the global descriptor heap
+        // (sets 8/9, pinned on this pipeline in step 4a) by the material record's per-buffer slots; the former bounded
+        // per-mesh descriptor arrays at slots 5-8 were removed in step 4c.
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MATERIAL_TYPED, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_INSTANCES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS, 1));
@@ -779,16 +778,11 @@ bool RendererRayTracingSystem::ensureSwCausticBindingSet(DeferredFrameTargets& t
         Core::TextureDimension::Texture2DArray
     ));
 
-    // Per-mesh descriptor arrays: bind every slot (the shader only indexes meshIndex < meshCount). Unused tail
-    // slots are padded with the last real mesh, exactly as the SW shadow set does. The caustic producer reuses the
-    // SAME per-mesh buffers the SW shadow scene BVH populated (meshSlot indices match), so no separate gather.
-    for(u32 slot = 0u; slot < NWB_CAUSTIC_SW_MAX_MESHES; ++slot){
-        const u32 source = (slot < meshCount) ? slot : (meshCount - 1u);
-        bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_NODES, rayTracingState().m_swShadowMeshNodeBuffers[source]).setArrayElement(slot));
-        bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_POSITIONS, rayTracingState().m_swShadowMeshPositionBuffers[source]).setArrayElement(slot));
-        bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_INDICES, rayTracingState().m_swShadowMeshIndexBuffers[source]).setArrayElement(slot));
-        bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_ATTRIBUTES, rayTracingState().m_swShadowMeshAttributeBuffers[source]).setArrayElement(slot));
-    }
+    // Per-mesh geometry is not bound here: the SW caustic traversal fetches BVH nodes / positions / indices /
+    // attributes from the global descriptor heap (bound as sets 8/9 per dispatch) by the material record's per-buffer
+    // slots. The former bounded per-mesh descriptor arrays (slots 5-8) were removed in step 4c; the backing buffers
+    // (m_swShadowMesh*Buffers) stay -- they are what the heap descriptors point at, and the SW GI pass still binds them
+    // as bounded arrays until its own bindless migration.
 
     auto* device = graphics().getDevice();
     rayTracingState().m_swCausticBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_swCausticBindingLayout);

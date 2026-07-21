@@ -68,22 +68,10 @@ StructuredBuffer<NwbCausticSwInstance, Std430DataLayout> g_NwbCausticSwInstances
 [[vk::binding(NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL, NWB_CAUSTIC_SW_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticSwInstanceMaterial;
 
-// DEAD as of step 4b: these parallel per-mesh arrays (slot k = mesh k -- triangle BVH nodes + raw position / index /
-// attribute byte buffers) are no longer read by any accessor -- the photon traversal fetches the same geometry from the
-// bindless heap by the material record's slots. Retained declared + host-bound (bindings 5-8) so the classic SW-caustic
-// set layout is unchanged until the 4c bounded-path removal drops these declarations together with the C++ layout items
-// + per-frame fill loops.
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_MESH_NODES, NWB_CAUSTIC_SW_SET)]]
-StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbCausticSwMeshNodes[NWB_CAUSTIC_SW_MAX_MESHES];
-
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_MESH_POSITIONS, NWB_CAUSTIC_SW_SET)]]
-ByteAddressBuffer g_NwbCausticSwMeshPositions[NWB_CAUSTIC_SW_MAX_MESHES];
-
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_MESH_INDICES, NWB_CAUSTIC_SW_SET)]]
-ByteAddressBuffer g_NwbCausticSwMeshIndices[NWB_CAUSTIC_SW_MAX_MESHES];
-
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_MESH_ATTRIBUTES, NWB_CAUSTIC_SW_SET)]]
-ByteAddressBuffer g_NwbCausticSwMeshAttributes[NWB_CAUSTIC_SW_MAX_MESHES];
+// Per-mesh geometry (BVH nodes / raw positions / raw indices / per-corner attributes) is fetched from the bindless
+// heap (step 4b) by the material record's per-buffer slots; the parallel per-mesh descriptor arrays that preceded it
+// (bindings 5-8) were dropped in the step 4c bounded-path removal. The shared C++ backing buffers stay -- the heap
+// descriptors point at them, and the SW GI pass still binds them as bounded arrays until its own migration.
 
 // One caustic emission target (P1): the world-space AABB of a refractive instance. Mirrors the C++
 // NwbCausticEmissionTargetGpu (32 bytes; the w lanes are unused padding).

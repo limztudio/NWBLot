@@ -669,6 +669,20 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         .setComputeShader(rayTracingState().m_swCausticShader)
         .addBindingLayout(rayTracingState().m_swCausticBindingLayout)
     ;
+    // Phase 2 (SW caustic migration, step 4a): pin the global descriptor heap's resource (set 8) + sampler (set 9)
+    // bindless layouts onto the SW caustic photon-trace pipeline so the traversal can later fetch per-mesh geometry from
+    // the heap. The classic SW caustic layout is added first, so it keeps positional set 0; the two heap layouts carry
+    // explicit sets 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7 with the empty set layout. Guarded
+    // on a live heap so non-bindless builds keep the pure set-0 layout. Added BEFORE the shader consumes the heap so the
+    // mixed classic+bindless pipeline layout is validated in isolation (zero rendering change) ahead of the accessor
+    // rewrite that reads through it. Mirrors the SW-shadow step 4a scaffold (rt_shadow.cpp ensureSwShadowPassPipeline).
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(heap.isInitialized()){
+        pipelineDesc
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
+    }
     rayTracingState().m_swCausticPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_swCausticPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software caustic compute pipeline"));

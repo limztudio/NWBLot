@@ -8,6 +8,7 @@
 #include <impl/ecs_render/kernel/renderer_types.h>
 
 #include <core/ecs/entity_id.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>   // Phase 2 M1: GpuDescriptorHandle stored per-mesh next to the backing buffer arrays
 
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
@@ -431,8 +432,15 @@ struct RtShadowState{
     Core::Buffer* m_shadowMeshIndexBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
     Core::Buffer* m_shadowMeshAttributeBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
     Core::Buffer* m_shadowMeshPositionBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
+    // Phase 2 M1: parallel global-heap handles for the three backing buffers above, minted in lockstep at
+    // buildSceneTlas registration and freed at the per-frame rebuild. Additive - no shader reads them yet, so this
+    // cannot change the rendered result (the M1 parity gate); M3 will route occlusion.slangi through these slots.
+    Core::GpuDescriptorHandle m_shadowMeshIndexHandles[NWB_SHADOW_RT_MAX_MESHES] = {};
+    Core::GpuDescriptorHandle m_shadowMeshAttributeHandles[NWB_SHADOW_RT_MAX_MESHES] = {};
+    Core::GpuDescriptorHandle m_shadowMeshPositionHandles[NWB_SHADOW_RT_MAX_MESHES] = {};
     u32 m_shadowMeshCount = 0u;
     bool m_shadowMeshCapReported = false;
+    u32 m_shadowMeshHeapHighWater = 0u; // Phase 2 M1: peak distinct-mesh registration count; logged only on a new high
     // Adaptive transparent shadow (coarse-trace + edge-refine) config, fixed at shipping defaults (adaptive ON,
     // edge threshold 0.1, stats OFF). These flags drive the transparent economizer path used by the HW-hybrid backend
     // (renderGpuBvhShadowVisibility multiplyOntoOpaque=true). The full-res opaque prepass remains the SW-path
@@ -485,6 +493,14 @@ struct RtShadowState{
     Core::Buffer* m_swShadowMeshPositionBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
     Core::Buffer* m_swShadowMeshIndexBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
     Core::Buffer* m_swShadowMeshAttributeBuffers[NWB_SW_SHADOW_MAX_MESHES] = {}; // U2 per-vertex normal/uv0 for the per-hit transmittance dispatch
+    // Phase 2 M1: parallel global-heap handles for the four backing buffers above (node = StructuredBuffer<NwbBvhNode>
+    // view, the rest raw), minted in lockstep at buildSceneSwBvh registration and freed at the per-frame rebuild.
+    // Additive until the SW passes migrate in M3, so nothing consumes them and the rendered result is unchanged.
+    Core::GpuDescriptorHandle m_swShadowMeshNodeHandles[NWB_SW_SHADOW_MAX_MESHES] = {};
+    Core::GpuDescriptorHandle m_swShadowMeshPositionHandles[NWB_SW_SHADOW_MAX_MESHES] = {};
+    Core::GpuDescriptorHandle m_swShadowMeshIndexHandles[NWB_SW_SHADOW_MAX_MESHES] = {};
+    Core::GpuDescriptorHandle m_swShadowMeshAttributeHandles[NWB_SW_SHADOW_MAX_MESHES] = {};
+    u32 m_swShadowMeshHeapHighWater = 0u; // Phase 2 M1: peak SW distinct-mesh registration count; logged only on a new high
     f32 m_swShadowEdgeThreshold = 0.1f;
     bool m_swShadowEdgeStatsPending = false;
     bool m_shadowResolvePipelineFailed = false;

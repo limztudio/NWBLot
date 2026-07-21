@@ -16,6 +16,29 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace{
+    // Phase 2 M1: register one per-mesh backing buffer in the global descriptor heap, returning its handle. Every
+    // backing buffer registers as a single STORAGE_BUFFER; the raw-vs-structured split is only a shader-side view
+    // (P3 aliases) and write() forces the canonical STORAGE_BUFFER type, so the SRV factory choice is documentation.
+    // Returns an invalid handle if the resource namespace is exhausted (allocate() logs it); free() then ignores it.
+    [[nodiscard]] Core::GpuDescriptorHandle RegisterMeshHeapBuffer(Core::GpuDescriptorHeap& heap, const Core::BindingSetItem& view){
+        const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(handle.valid())
+            heap.write(handle, view);
+        return handle;
+    }
+    // Return a per-mesh heap handle to the deferred-free quarantine and invalidate the stored slot. Safe on an
+    // already-invalid handle (heap.free ignores it), so a partially-filled prior frame retires cleanly.
+    void ReleaseMeshHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle){
+        heap.free(handle);
+        handle = Core::GpuDescriptorHandle::invalid();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandList){
     if(!graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
@@ -161,6 +184,21 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
 
     // Reset the per-frame distinct-mesh table; the gather repopulates it (slot k -> mesh k's index/attribute
     // buffers) for the per-mesh descriptor arrays indexed by material.meshSlot.
+    // Phase 2 M1: the same distinct-mesh set is additively mirrored into the global descriptor heap (in lockstep
+    // with the bounded arrays below - no shader consumes the handles yet, so the rendered result is unchanged). The
+    // table is rebuilt every frame (the unconditional reset just below), so retire last frame's handles here before
+    // it is repopulated; the deferred-free quarantine (module.cpp pumps advanceFrame() per frame) keeps slots that
+    // in-flight frames still reference valid. Guarded on a live heap so non-bindless builds are unaffected.
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    const bool heapLive = heap.isInitialized();
+    if(heapLive){
+        auto& rt = rayTracingState();
+        for(u32 slot = 0u; slot < rt.m_shadowMeshCount; ++slot){
+            ReleaseMeshHeapHandle(heap, rt.m_shadowMeshIndexHandles[slot]);
+            ReleaseMeshHeapHandle(heap, rt.m_shadowMeshAttributeHandles[slot]);
+            ReleaseMeshHeapHandle(heap, rt.m_shadowMeshPositionHandles[slot]);
+        }
+    }
     rayTracingState().m_shadowMeshCount = 0u;
     // Whether any gathered occluder is transparent. On RT hardware this gates the hybrid software-transparent-shadow
     // prepare: the HW pass casts only the opaque (binary) shadow, so the SW colored pass is needed only when a
@@ -210,6 +248,14 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             rayTracingState().m_shadowMeshIndexBuffers[meshSlot] = meshIndexBuffer;
             rayTracingState().m_shadowMeshAttributeBuffers[meshSlot] = mesh->attributeBuffer.get();
             rayTracingState().m_shadowMeshPositionBuffers[meshSlot] = mesh->positionBuffer.get();
+            // Phase 2 M1: mirror the same three buffers into the global heap (raw SRV view; M3's occlusion.slangi
+            // will read them via NwbHeapRawBuffer(record.<x>Slot)). Registered only for a newly-minted distinct
+            // mesh, exactly like the bounded-array fill above.
+            if(heapLive){
+                rayTracingState().m_shadowMeshIndexHandles[meshSlot]     = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, meshIndexBuffer));
+                rayTracingState().m_shadowMeshAttributeHandles[meshSlot] = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->attributeBuffer.get()));
+                rayTracingState().m_shadowMeshPositionHandles[meshSlot]  = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->positionBuffer.get()));
+            }
         }
 
         Core::RayTracingInstanceDesc instanceDesc;
@@ -268,6 +314,16 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         instances.push_back(instanceDesc);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
+    }
+
+    // Phase 2 M1: evidence for the registration gate - confirm handles were minted and track the peak, logging only
+    // on a new high so a steady scene stays quiet. 3 handles per HW-shadow distinct mesh (index/attribute/position).
+    if(heapLive && rayTracingState().m_shadowMeshCount > rayTracingState().m_shadowMeshHeapHighWater){
+        rayTracingState().m_shadowMeshHeapHighWater = rayTracingState().m_shadowMeshCount;
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: Phase 2 M1 HW-shadow heap registration high-water: {} distinct meshes -> {} handles")
+            , static_cast<u64>(rayTracingState().m_shadowMeshCount)
+            , static_cast<u64>(rayTracingState().m_shadowMeshCount) * 3u
+        );
     }
 
     rayTracingState().m_tlasInstanceCount = static_cast<u32>(instances.size());
@@ -379,6 +435,20 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
 
     // Reset the per-frame distinct-mesh table; the gather repopulates it (slot k -> mesh k's buffers) for the
     // per-mesh descriptor arrays the traversal binds.
+    // Phase 2 M1: additively mirror the same distinct meshes into the global descriptor heap; retire last frame's
+    // handles before the per-frame rebuild (the deferred-free quarantine keeps in-flight frames valid). Nothing
+    // consumes the handles yet, so this cannot change the render. See buildSceneTlas for the full rationale.
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    const bool heapLive = heap.isInitialized();
+    if(heapLive){
+        auto& rt = rayTracingState();
+        for(u32 slot = 0u; slot < rt.m_swShadowMeshCount; ++slot){
+            ReleaseMeshHeapHandle(heap, rt.m_swShadowMeshNodeHandles[slot]);
+            ReleaseMeshHeapHandle(heap, rt.m_swShadowMeshPositionHandles[slot]);
+            ReleaseMeshHeapHandle(heap, rt.m_swShadowMeshIndexHandles[slot]);
+            ReleaseMeshHeapHandle(heap, rt.m_swShadowMeshAttributeHandles[slot]);
+        }
+    }
     rayTracingState().m_swShadowMeshCount = 0u;
 
     for(auto&& [entity, renderer] : rendererView){
@@ -427,6 +497,15 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             // The U2 per-triangle-corner shadow-trace attribute buffer (normal/uv0), parallel to the triangle index
             // buffer so the trace interpolates the exact raster corner attributes.
             rayTracingState().m_swShadowMeshAttributeBuffers[meshSlot] = mesh->attributeBuffer.get();
+            // Phase 2 M1: mirror the four buffers into the global heap. The node buffer takes the
+            // StructuredBuffer<NwbBvhNode> view (M3 reads it via NwbHeapBvhNodes(record.nodeSlot)); position/index/
+            // attribute take the raw view. All land as STORAGE_BUFFER regardless (write() forces the type).
+            if(heapLive){
+                rayTracingState().m_swShadowMeshNodeHandles[meshSlot]      = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::StructuredBuffer_SRV(0u, meshNodeBuffer));
+                rayTracingState().m_swShadowMeshPositionHandles[meshSlot]  = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->positionBuffer.get()));
+                rayTracingState().m_swShadowMeshIndexHandles[meshSlot]     = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->triangleIndexBuffer.get()));
+                rayTracingState().m_swShadowMeshAttributeHandles[meshSlot] = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->attributeBuffer.get()));
+            }
         }
 
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
@@ -487,6 +566,16 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         instanceCentroid.push_back(storedCentroid);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
+    }
+
+    // Phase 2 M1: registration-gate evidence for the SW distinct-mesh set (see buildSceneTlas), logged only on a new
+    // high. 4 handles per SW distinct mesh (node/position/index/attribute).
+    if(heapLive && rayTracingState().m_swShadowMeshCount > rayTracingState().m_swShadowMeshHeapHighWater){
+        rayTracingState().m_swShadowMeshHeapHighWater = rayTracingState().m_swShadowMeshCount;
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: Phase 2 M1 SW-shadow heap registration high-water: {} distinct meshes -> {} handles")
+            , static_cast<u64>(rayTracingState().m_swShadowMeshCount)
+            , static_cast<u64>(rayTracingState().m_swShadowMeshCount) * 4u
+        );
     }
 
     const u32 instanceCount = static_cast<u32>(instances.size());

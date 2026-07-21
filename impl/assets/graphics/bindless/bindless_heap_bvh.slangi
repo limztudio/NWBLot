@@ -1,0 +1,50 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Global descriptor heap - structured BVH-node view over the StorageBuffer class (Phase 2 P3).
+//
+// The three SW per-mesh node arrays are read as StructuredBuffer<NwbBvhNode>; the other 17 migrated arrays are raw
+// ByteAddressBuffer (bindless_heap.slangi). This structured alias is split out here, rather than added to the generic
+// heap surface, so only the SW passes that actually traverse nodes pull in NwbBvhNode / bvh_common - the HW shadow,
+// HW caustic and HW GI passes keep a BVH-free include graph.
+//
+// It aliases the EXACT same set/binding as the raw StorageBuffer arrays (NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER on
+// NWB_BINDLESS_HEAP_RESOURCE_SET): all three views resolve to one Vulkan STORAGE_BUFFER descriptor, and the 32-byte
+// NwbBvhNode stride is a per-view SPIR-V decoration, not a distinct descriptor. A single heap slot minted for a node
+// buffer is therefore legible through this view without a second registration.
+
+
+#ifndef NWB_GRAPHICS_BINDLESS_HEAP_BVH_SLANGI
+#define NWB_GRAPHICS_BINDLESS_HEAP_BVH_SLANGI
+
+
+#include "bindless_heap.slangi"
+#include "../bvh/bvh_common.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbBvhNode> g_NwbHeapBvhNodeBuffers[];
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Slot accessor for the structured node view. Like NwbHeapRawBuffer(), the varying per-mesh slot is wrapped in
+// NonUniformResourceIndex() here so every SW node fetch decorates identically. Returns the buffer by value (an opaque
+// handle) so the caller subscripts by node index, mirroring the bounded StructuredBuffer<NwbBvhNode> arrays it replaces.
+StructuredBuffer<NwbBvhNode> NwbHeapBvhNodes(const uint slot){
+    return g_NwbHeapBvhNodeBuffers[NonUniformResourceIndex(slot)];
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

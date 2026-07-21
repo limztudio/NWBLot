@@ -31,6 +31,14 @@ namespace{
     inline constexpr u32 s_HeapSelfTestExpectedSum  = s_HeapSelfTestStorageValue + s_HeapSelfTestUniformValue + s_HeapSelfTestTypedValue;
 
     inline constexpr u32 s_HeapSelfTestConstantBufferBytes = 256u;   // pad the CBV to the constant-buffer size alignment
+
+    // Phase 2 P3: the one known NwbBvhNode the kernel reads back through the StructuredBuffer<NwbBvhNode> alias over the
+    // StorageBuffer class. Only the two integer child fields are asserted (the shader ignores the AABB floats), so the
+    // AABB carries arbitrary recognizable values; the child fields carry the shared sentinels from binding_slots.h.
+    inline constexpr NwbBvhNodeGpu s_HeapSelfTestNode = {
+        Float3UInt(-1.0f, -2.0f, -3.0f, NWB_BINDLESS_TEST_NODE_LEFTCHILD),
+        Float3UInt( 1.0f,  2.0f,  3.0f, NWB_BINDLESS_TEST_NODE_RIGHTCHILD),
+    };
 };
 
 
@@ -82,6 +90,7 @@ void RendererRayTracingSystem::runGpuDescriptorHeapSelfTest(){
         Core::BufferHandle paramsBuffer  = createStorageBuffer(NWB_BINDLESS_TEST_PARAMS_BYTES, NWB_TEXT("bindless_selftest_params"));
         Core::BufferHandle storageBuffer = createStorageBuffer(sizeof(u32), NWB_TEXT("bindless_selftest_storage"));
         Core::BufferHandle outputBuffer  = createStorageBuffer(sizeof(u32), NWB_TEXT("bindless_selftest_output"));
+        Core::BufferHandle nodeBuffer    = createStorageBuffer(sizeof(NwbBvhNodeGpu), NWB_TEXT("bindless_selftest_node"));   // P3 structured-alias check
 
         Core::BufferDesc uniformDesc;
         uniformDesc
@@ -111,7 +120,7 @@ void RendererRayTracingSystem::runGpuDescriptorHeapSelfTest(){
         ;
         Core::BufferHandle readbackBuffer = graphics().createBuffer(readbackDesc);
 
-        if(!paramsBuffer || !storageBuffer || !outputBuffer || !uniformBuffer || !typedBuffer || !readbackBuffer){
+        if(!paramsBuffer || !storageBuffer || !outputBuffer || !nodeBuffer || !uniformBuffer || !typedBuffer || !readbackBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: GpuDescriptorHeap self-test failed to create backing buffers"));
             return false;
         }
@@ -127,6 +136,7 @@ void RendererRayTracingSystem::runGpuDescriptorHeapSelfTest(){
         }
         const Core::GpuDescriptorHandle storageHandle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
         const Core::GpuDescriptorHandle outputHandle  = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        const Core::GpuDescriptorHandle nodeHandle    = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);   // P3 structured-alias check
         const Core::GpuDescriptorHandle uniformHandle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
         const Core::GpuDescriptorHandle typedHandle   = heap.allocate(Core::GpuDescriptorClass::SampledBuffer);
 
@@ -138,7 +148,7 @@ void RendererRayTracingSystem::runGpuDescriptorHeapSelfTest(){
         const Core::GpuDescriptorHandle storageImageHandle = heap.allocate(Core::GpuDescriptorClass::StorageImage);
         const Core::GpuDescriptorHandle samplerHandle      = heap.allocate(Core::GpuDescriptorClass::Sampler);
 
-        if(!paramsHandle.valid() || !storageHandle.valid() || !outputHandle.valid() || !uniformHandle.valid()
+        if(!paramsHandle.valid() || !storageHandle.valid() || !outputHandle.valid() || !nodeHandle.valid() || !uniformHandle.valid()
             || !typedHandle.valid() || !sampledImageHandle.valid() || !storageImageHandle.valid() || !samplerHandle.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: GpuDescriptorHeap self-test: a class failed to allocate a handle"));
             return false;
@@ -152,6 +162,7 @@ void RendererRayTracingSystem::runGpuDescriptorHeapSelfTest(){
         heap.write(paramsHandle,  Core::BindingSetItem::StructuredBuffer_UAV(0u, paramsBuffer.get()));
         heap.write(storageHandle, Core::BindingSetItem::StructuredBuffer_UAV(0u, storageBuffer.get()));
         heap.write(outputHandle,  Core::BindingSetItem::StructuredBuffer_UAV(0u, outputBuffer.get()));
+        heap.write(nodeHandle,    Core::BindingSetItem::StructuredBuffer_UAV(0u, nodeBuffer.get()));
         heap.write(uniformHandle, Core::BindingSetItem::ConstantBuffer(0u, uniformBuffer.get()));
         heap.write(typedHandle,   Core::BindingSetItem::TypedBuffer_SRV(0u, typedBuffer.get(), Core::Format::R32_UINT));
 
@@ -188,11 +199,14 @@ void RendererRayTracingSystem::runGpuDescriptorHeapSelfTest(){
             const Core::GpuDescriptorHandle outputSlotHandle,
             u32& outValue
         ) -> bool{
+            // nodeHandle is a fixed test resource (never freed/realloc'd across the two passes), so its slot is captured
+            // directly rather than threaded through the per-pass signature like the storage/typed slots that recycle.
             const u32 paramWords[] = {
                 storageSlotHandle.slot(),
                 uniformSlotHandle.slot(),
                 typedSlotHandle.slot(),
                 outputSlotHandle.slot(),
+                nodeHandle.slot(),
             };
 
             Core::CommandListHandle commandList = device->createCommandList();
@@ -212,6 +226,7 @@ void RendererRayTracingSystem::runGpuDescriptorHeapSelfTest(){
             uploadBuffer(storageBuffer.get(), &s_HeapSelfTestStorageValue, sizeof(u32), Core::ResourceStates::UnorderedAccess);
             uploadBuffer(uniformBuffer.get(), &s_HeapSelfTestUniformValue, sizeof(u32), Core::ResourceStates::ConstantBuffer);
             uploadBuffer(typedBuffer.get(),   &s_HeapSelfTestTypedValue,   sizeof(u32), Core::ResourceStates::ShaderResource);
+            uploadBuffer(nodeBuffer.get(),    &s_HeapSelfTestNode,         sizeof(s_HeapSelfTestNode), Core::ResourceStates::UnorderedAccess);
             uploadBuffer(paramsBuffer.get(),  paramWords,                  sizeof(paramWords), Core::ResourceStates::UnorderedAccess);
 
             commandList->setBufferState(outputBuffer.get(), Core::ResourceStates::UnorderedAccess);
@@ -279,6 +294,7 @@ void RendererRayTracingSystem::runGpuDescriptorHeapSelfTest(){
         // quarantine and returns these slots to the free list within s_MaxFramesInFlight frames.
         heap.free(paramsHandle);
         heap.free(outputHandle);
+        heap.free(nodeHandle);
         heap.free(uniformHandle);
         heap.free(sampledImageHandle);
         heap.free(storageImageHandle);

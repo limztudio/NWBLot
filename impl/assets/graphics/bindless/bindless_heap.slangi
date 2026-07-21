@@ -4,8 +4,11 @@
 
 // Global descriptor heap - shader accessor surface (Phase 1, Backend A = descriptor indexing).
 //
-// One unbounded array per resource class, declared at the exact set/binding the host binds the heap's two descriptor
-// tables to (see binding_slots.h). A resource registered through GpuDescriptorHeap::write() lands at its class's
+// At least one unbounded array per resource class, declared at the exact set/binding the host binds the heap's two
+// descriptor tables to (see binding_slots.h). A class may expose several aliased views over its single descriptor:
+// the StorageBuffer class carries the RW raw array plus a read-only raw alias here, and a read-only structured node
+// alias in bindless_heap_bvh.slangi - all three at the same binding, differing only by SPIR-V access/stride decoration.
+// A resource registered through GpuDescriptorHeap::write() lands at its class's
 // array, at its GpuDescriptorHandle::slot(). A shader fetches it by indexing that array with the slot; a slot that
 // varies across a wave must be wrapped in NonUniformResourceIndex() at the subscript (the round-trip test runs a
 // single invocation, so it does not need to). AccelStruct has no array here - it is unsupported on Backend A and
@@ -45,11 +48,32 @@ Buffer<uint> g_NwbHeapSampledBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 RWByteAddressBuffer g_NwbHeapStorageBuffers[];
 
+// Read-only raw alias of the StorageBuffer class (Phase 2 P3). Declared at the SAME set/binding as the RW array
+// above: ByteAddressBuffer and RWByteAddressBuffer both resolve to a Vulkan STORAGE_BUFFER descriptor, so the two
+// arrays alias one descriptor table - the SRV/UAV distinction is a per-view SPIR-V access decoration, not a separate
+// descriptor. Consumers that only read a registered raw buffer (17 of the 20 migrated per-mesh arrays) take this view
+// so no write capability leaks into a read-only geometry fetch. Bindless_heap_bvh.slangi adds the structured node view
+// over this same binding for the 3 SW node arrays.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ByteAddressBuffer g_NwbHeapRawBuffers[];
+
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 ConstantBuffer<NwbBindlessHeapUint> g_NwbHeapUniformBuffers[];
 
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLER, NWB_BINDLESS_HEAP_SAMPLER_SET)]]
 SamplerState g_NwbHeapSamplers[];
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Slot accessor for the read-only raw view. A per-mesh geometry slot varies across a wave (neighbouring invocations
+// touch different meshes), so the descriptor-array subscript must be wrapped in NonUniformResourceIndex(); centralizing
+// that here means every migrated pass fetches identically and no call site can forget the decoration. Returns the
+// buffer by value (an opaque handle) so the caller Loads at its own offset, mirroring the bounded arrays it replaces.
+ByteAddressBuffer NwbHeapRawBuffer(const uint slot){
+    return g_NwbHeapRawBuffers[NonUniformResourceIndex(slot)];
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

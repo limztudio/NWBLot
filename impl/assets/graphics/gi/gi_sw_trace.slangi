@@ -40,6 +40,12 @@
 #include "../bvh/bvh_common.slangi"
 #include "../bvh/ray_intersect.slangi"
 
+// Global descriptor heap accessors (Phase 2 step 4b): the per-mesh geometry the surfel traversal fetches now lives in
+// the bindless heap, reached by the per-buffer slots the instance material record (NwbRtInstanceMaterial) carries.
+// bindless_heap_bvh.slangi pulls the structured NwbBvhNode node view (NwbHeapBvhNodes) + the raw byte view
+// (NwbHeapRawBuffer) for positions / indices / attributes, both at heap set 8 (pinned on the SW GI pipeline in 4a).
+#include "../bindless/bindless_heap_bvh.slangi"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,6 +71,11 @@ StructuredBuffer<NwbGiSwInstance, Std430DataLayout> g_NwbGiSwInstances;
 [[vk::binding(NWB_GI_SW_BINDING_INSTANCE_MATERIAL, NWB_GI_SW_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbGiSwInstanceMaterial;
 
+// DEAD as of step 4b: these parallel per-mesh arrays (slot k = mesh k -- triangle BVH nodes + raw position / index /
+// attribute byte buffers) are no longer read by any accessor -- the surfel traversal fetches the same geometry from the
+// bindless heap by the material record's slots. Retained declared + host-bound (bindings 5-8) so the classic SW-GI set
+// layout is unchanged until the 4c bounded-path removal drops these declarations together with the C++ layout items +
+// per-frame fill loops.
 [[vk::binding(NWB_GI_SW_BINDING_MESH_NODES, NWB_GI_SW_SET)]]
 StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbGiSwMeshNodes[NWB_GI_SW_MAX_MESHES];
 
@@ -88,8 +99,8 @@ struct NwbGiSwVertexAttrib{
     float2 uv0;
 };
 
-NwbGiSwVertexAttrib nwbGiSwLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
-    const uint4 packed = g_NwbGiSwMeshAttributes[NonUniformResourceIndex(meshIndex)].Load4(attributeIndex * 16u);
+NwbGiSwVertexAttrib nwbGiSwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
+    const uint4 packed = NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u);
     NwbGiSwVertexAttrib attrib;
     attrib.normal = float3(
         nwbUnpackHalf2x16(packed.x),
@@ -169,7 +180,6 @@ NwbGiSwTriangleHit nwbGiSwRayTriangle(const float3 origin, const float3 directio
 void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbGiProbeHit closest){
     const NwbGiSwInstance instance = g_NwbGiSwInstances[instanceIndex];
     const NwbRtInstanceMaterial material = g_NwbGiSwInstanceMaterial[instanceIndex];
-    const uint meshIndex = instance.meshIndex;
 
     const float3 origin = nwbGiSwTransformPoint(instance, worldOrigin);
     const float3 direction = nwbGiSwTransformVector(instance, worldDirection);
@@ -177,23 +187,23 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
 
     uint stack[NWB_GI_SW_MESH_STACK_SIZE];
     uint stackPointer = 0u;
-    NwbBvhNode node = g_NwbGiSwMeshNodes[NonUniformResourceIndex(meshIndex)][0u];
+    NwbBvhNode node = NwbHeapBvhNodes(material.nodeSlot)[0u];
     bool active = nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0);
 
     [loop] while(active){
         if(nwbBvhNodeIsLeaf(node)){
             const uint triangle = nwbBvhLeafPrimitive(node);
             const uint indexBase = triangle * 3u;
-            const uint3 triIndices = g_NwbGiSwMeshIndices[NonUniformResourceIndex(meshIndex)].Load3(indexBase * 4u);
-            const float3 v0 = asfloat(g_NwbGiSwMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(triIndices.x * 12u));
-            const float3 v1 = asfloat(g_NwbGiSwMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(triIndices.y * 12u));
-            const float3 v2 = asfloat(g_NwbGiSwMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(triIndices.z * 12u));
+            const uint3 triIndices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * 4u);
+            const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.x * 12u));
+            const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.y * 12u));
+            const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.z * 12u));
             const NwbGiSwTriangleHit triHit = nwbGiSwRayTriangle(origin, direction, tMin, closest.t, v0, v1, v2);
             if(triHit.hit){
                 const uint attributeBase = triangle * 3u;
-                const NwbGiSwVertexAttrib a0 = nwbGiSwLoadVertexAttrib(meshIndex, attributeBase);
-                const NwbGiSwVertexAttrib a1 = nwbGiSwLoadVertexAttrib(meshIndex, attributeBase + 1u);
-                const NwbGiSwVertexAttrib a2 = nwbGiSwLoadVertexAttrib(meshIndex, attributeBase + 2u);
+                const NwbGiSwVertexAttrib a0 = nwbGiSwLoadVertexAttrib(material.attributeSlot, attributeBase);
+                const NwbGiSwVertexAttrib a1 = nwbGiSwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
+                const NwbGiSwVertexAttrib a2 = nwbGiSwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
                 const float3 objectShadingNormal = a0.normal * triHit.w + a1.normal * triHit.u + a2.normal * triHit.v;
 
                 NwbShadowHit surfaceHit;
@@ -215,8 +225,8 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
             active = false;
         }
         else{
-            const NwbBvhNode leftNode = g_NwbGiSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.leftChild];
-            const NwbBvhNode rightNode = g_NwbGiSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.rightChild];
+            const NwbBvhNode leftNode = NwbHeapBvhNodes(material.nodeSlot)[node.leftChild];
+            const NwbBvhNode rightNode = NwbHeapBvhNodes(material.nodeSlot)[node.rightChild];
             float tLeft;
             const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
             float tRight;
@@ -238,7 +248,7 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
         }
 
         [loop] while(stackPointer > 0u){
-            node = g_NwbGiSwMeshNodes[NonUniformResourceIndex(meshIndex)][stack[--stackPointer]];
+            node = NwbHeapBvhNodes(material.nodeSlot)[stack[--stackPointer]];
             if(nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0)){
                 active = true;
                 break;

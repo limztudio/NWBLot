@@ -79,13 +79,15 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     if(!transparent)
         return;
 #endif
-    // meshIndex selects this instance's slot in the per-mesh descriptor ARRAYS (nodes/indices/positions/attributes).
-    // It is NON-UNIFORM across the wave -- different invocations' rays hit different meshes -- so every indexed access
-    // must be wrapped in NonUniformResourceIndex() AT THE SUBSCRIPT (the decoration does not reliably survive a copy
-    // into a plain uint). Omitting it is undefined behaviour: on a wave that straddles a mesh-shadow boundary the
-    // hardware can read a DIFFERENT mesh's BVH/geometry for some lanes, which culls real occluder hits there and
-    // leaves an under-occluded (bright) wave-tile-aligned band along the boundary.
-    const uint meshIndex = instance.meshIndex;
+    // This instance's per-mesh geometry (BVH nodes / indices / positions / attributes) is fetched from the global
+    // descriptor heap by the four per-buffer slots the material record carries (populated lockstep with the mesh -- and
+    // with instance.meshIndex -- in rt_swbvh.cpp). Each slot is NON-UNIFORM across the wave -- different invocations'
+    // rays hit different meshes -- so its heap subscript must be NonUniformResourceIndex-tagged; NwbHeapBvhNodes() /
+    // NwbHeapRawBuffer() apply that internally and are re-invoked at EACH access below (never hoisted into a resource
+    // local) so the decoration is applied fresh at every subscript, exactly as the bounded
+    // g_NwbSwShadowMesh*[NonUniformResourceIndex(meshIndex)] arrays they replace did. Omitting it is undefined
+    // behaviour: on a wave that straddles a mesh-shadow boundary the hardware can read a DIFFERENT mesh's BVH/geometry
+    // for some lanes, which culls real occluder hits there and leaves an under-occluded (bright) wave-tile-aligned band.
     const float3 origin = nwbSwShadowTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwShadowTransformVector(instance, worldDirection);
     const float3 invDir = nwbSwShadowSafeInvDir(direction);
@@ -119,13 +121,13 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     // test on every visited node. The internal-node branch still tests BOTH children (their tight boxes can both miss a
     // padded parent), so the accept/reject set is unchanged; only the per-node redundant re-test is removed.
     {
-        const NwbBvhNode root = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][nodeIndex];
+        const NwbBvhNode root = NwbHeapBvhNodes(material.nodeSlot)[nodeIndex];
         if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, root.aabbMin, root.aabbMax))
             return; // whole mesh missed: no occluder
     }
 
     while(true){
-        const NwbBvhNode node = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][nodeIndex];
+        const NwbBvhNode node = NwbHeapBvhNodes(material.nodeSlot)[nodeIndex];
         // No loop-top box test: this node is the pre-proven root or a parent-ranked child (see above).
 
         if(nwbBvhNodeIsLeaf(node)){
@@ -135,10 +137,10 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
             // separate Load() calls (three transactions over the same 12 contiguous bytes). Same bytes, 1/3 the
             // fetch traffic -- the index buffer is laid out as back-to-back u32 triples so the three values are
             // exactly the words a ByteAddressBuffer.Load3 reads.
-            const uint3 indices = g_NwbSwShadowMeshIndices[NonUniformResourceIndex(meshIndex)].Load3(indexBase * 4u);
-            const float3 v0 = asfloat(g_NwbSwShadowMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(indices.x * 12u));
-            const float3 v1 = asfloat(g_NwbSwShadowMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(indices.y * 12u));
-            const float3 v2 = asfloat(g_NwbSwShadowMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(indices.z * 12u));
+            const uint3 indices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * 4u);
+            const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.x * 12u));
+            const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.y * 12u));
+            const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.z * 12u));
             const NwbSwShadowTriangleHit triangleHit = nwbSwShadowRayTriangle(origin, direction, tMin, tMax, v0, v1, v2);
             if(triangleHit.hit){
                 if(!transparent){
@@ -151,9 +153,9 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 // hook reads the interpolated normal/uv0 + the material-constants context carried by the instance
                 // record; dispatched by shadowTransmittanceModelId.
                 const uint attributeBase = triangle * 3u;
-                const NwbSwShadowVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(meshIndex, attributeBase);
-                const NwbSwShadowVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(meshIndex, attributeBase + 1u);
-                const NwbSwShadowVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(meshIndex, attributeBase + 2u);
+                const NwbSwShadowVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase);
+                const NwbSwShadowVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
+                const NwbSwShadowVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
                 const float smoothNormalWeight = nwbShadowSmoothNormalWeight(a0.normal, a1.normal, a2.normal);
 
                 // Interpolate the object-space normal, then transform it to world space (the surface contract) with
@@ -195,8 +197,8 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
         else{
             const uint left = node.leftChild;
             const uint right = node.rightChild;
-            const NwbBvhNode leftNode = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][left];
-            const NwbBvhNode rightNode = g_NwbSwShadowMeshNodes[NonUniformResourceIndex(meshIndex)][right];
+            const NwbBvhNode leftNode = NwbHeapBvhNodes(material.nodeSlot)[left];
+            const NwbBvhNode rightNode = NwbHeapBvhNodes(material.nodeSlot)[right];
             const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax);
             const float tRight = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax);
             const bool leftMiss = (tLeft >= NWB_SW_SHADOW_AABB_MISS);

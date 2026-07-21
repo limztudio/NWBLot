@@ -15,15 +15,22 @@
 #include "../common/math.slangi"
 #include "instance_material.slangi"
 
+// Global descriptor heap accessors (Phase 2 step 4b): the per-mesh geometry the traversal fetches now lives in the
+// bindless heap, reached by the per-buffer slots the instance material record carries. bindless_heap_bvh.slangi pulls
+// the structured NwbBvhNode node view (NwbHeapBvhNodes) + the raw byte view (NwbHeapRawBuffer) for positions / indices
+// / attributes, both at heap set 8 (pinned on the SW shadow pipeline in step 4a).
+#include "../bindless/bindless_heap_bvh.slangi"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // The software-shadow scene geometry: the scene/instance BVH node buffer, the per-instance record (affine
-// world->object transform + per-mesh descriptor slot) + its world->object transform helpers, the parallel per-mesh
-// descriptor ARRAYS (BVH nodes / raw positions / raw indices / per-corner attributes), and the vertex-attribute
-// unpack. Declares the scene-node / instance / instance-material / per-mesh bindings; any pass that walks the BVH
-// pulls this concern.
+// world->object transform + per-mesh descriptor slot) + its world->object transform helpers, and the vertex-attribute
+// unpack. Per-mesh geometry (BVH nodes / raw positions / raw indices / per-corner attributes) is fetched from the
+// bindless heap (step 4b) by the material record's per-buffer slots; the parallel per-mesh descriptor ARRAYS below are
+// now DEAD (declared + host-bound only, pending the 4c bounded-path removal). Declares the scene-node / instance /
+// instance-material bindings; any pass that walks the BVH pulls this concern.
 
 
 [[vk::binding(NWB_SW_SHADOW_BINDING_SCENE_NODES, NWB_SW_SHADOW_SET)]]
@@ -47,7 +54,11 @@ StructuredBuffer<NwbSwShadowInstance, Std430DataLayout> g_NwbSwShadowInstances;
 [[vk::binding(NWB_SW_SHADOW_BINDING_INSTANCE_MATERIAL, NWB_SW_SHADOW_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbSwShadowInstanceMaterial;
 
-// Parallel per-mesh arrays (slot k = mesh k): triangle BVH nodes + raw position / index byte buffers.
+// DEAD as of step 4b: these parallel per-mesh arrays (slot k = mesh k -- triangle BVH nodes + raw position / index
+// byte buffers, plus the attribute buffer below) are no longer read by any accessor -- the traversal fetches the same
+// geometry from the bindless heap by the material record's slots. Retained declared + host-bound (bindings 8-11) so the
+// classic SW-shadow set layout is unchanged until the 4c bounded-path removal drops these declarations together with
+// the C++ layout items + per-frame fill loops.
 [[vk::binding(NWB_SW_SHADOW_BINDING_MESH_NODES, NWB_SW_SHADOW_SET)]]
 StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbSwShadowMeshNodes[NWB_SW_SHADOW_MAX_MESHES];
 
@@ -109,19 +120,21 @@ struct NwbSwShadowVertexAttrib{
     float2 uv0;
 };
 
-NwbSwShadowVertexAttrib nwbSwShadowLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
-    // meshIndex is non-uniform across the wave (each invocation's ray hits whatever instance/mesh occludes it), so
-    // every per-mesh descriptor-array access MUST be tagged NonUniformResourceIndex; without it the index is UB and
-    // a wave that straddles a mesh-shadow boundary reads another mesh's descriptor for some lanes.
-    const uint nuMesh = NonUniformResourceIndex(meshIndex);
+NwbSwShadowVertexAttrib nwbSwShadowLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
+    // attributeSlot is this mesh's per-corner attribute buffer's GLOBAL HEAP slot (carried on the instance material
+    // record, populated lockstep with the mesh in rt_swbvh.cpp). It is non-uniform across the wave -- each invocation's
+    // ray hits whatever instance/mesh occludes it -- so the heap subscript MUST be NonUniformResourceIndex-tagged;
+    // NwbHeapRawBuffer() applies that internally, and is re-invoked at each Load (mirroring the bounded
+    // g_NwbSwShadowMeshAttributes[NonUniformResourceIndex(meshIndex)] it replaces) so the decoration is applied fresh at
+    // every descriptor access rather than propagated through a copied resource handle.
     const uint base = attributeIndex * 16u;
-    const uint2 packedNormal = g_NwbSwShadowMeshAttributes[nuMesh].Load2(base);
+    const uint2 packedNormal = NwbHeapRawBuffer(attributeSlot).Load2(base);
     NwbSwShadowVertexAttrib attrib;
     attrib.normal = float3(
         nwbUnpackHalf2x16(packedNormal.x),
         nwbUnpackHalf2x16(packedNormal.y).x
     );
-    attrib.uv0 = asfloat(g_NwbSwShadowMeshAttributes[nuMesh].Load2(base + 8u));
+    attrib.uv0 = asfloat(NwbHeapRawBuffer(attributeSlot).Load2(base + 8u));
     return attrib;
 }
 

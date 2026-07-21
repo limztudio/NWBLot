@@ -1281,6 +1281,20 @@ bool BackendContext::createVulkanDevice(){
         || !requireFeature(supportedVulkan12Features.timelineSemaphore, "timelineSemaphore")
         || !requireFeature(supportedVulkan12Features.shaderFloat16, "shaderFloat16")
         || !requireFeature(supportedVulkan12Features.shaderSampledImageArrayNonUniformIndexing, "shaderSampledImageArrayNonUniformIndexing")
+        // Phase 2's bindless GpuDescriptorHeap fetches per-mesh geometry from a STORAGE_BUFFER descriptor array
+        // indexed by NonUniformResourceIndex; require non-uniform storage-buffer indexing so a target lacking it
+        // fails device creation with a clear capability log instead of silently miscompiling the heap fetch path.
+        || !requireFeature(supportedVulkan12Features.shaderStorageBufferArrayNonUniformIndexing, "shaderStorageBufferArrayNonUniformIndexing")
+        // The heap's resource layout (createBindlessLayout) marks all five of its non-sampler descriptor classes
+        // UPDATE_AFTER_BIND, and the sampler table too. Creating that layout is a VUID violation unless the matching
+        // sibling UAB feature is enabled for each descriptor type, so require all five here - the sampler table's UAB
+        // is covered by the sampled-image feature per the Vulkan spec. These worked de-facto on RADV but were never
+        // formally required.
+        || !requireFeature(supportedVulkan12Features.descriptorBindingSampledImageUpdateAfterBind, "descriptorBindingSampledImageUpdateAfterBind")
+        || !requireFeature(supportedVulkan12Features.descriptorBindingStorageImageUpdateAfterBind, "descriptorBindingStorageImageUpdateAfterBind")
+        || !requireFeature(supportedVulkan12Features.descriptorBindingUniformTexelBufferUpdateAfterBind, "descriptorBindingUniformTexelBufferUpdateAfterBind")
+        || !requireFeature(supportedVulkan12Features.descriptorBindingStorageBufferUpdateAfterBind, "descriptorBindingStorageBufferUpdateAfterBind")
+        || !requireFeature(supportedVulkan12Features.descriptorBindingUniformBufferUpdateAfterBind, "descriptorBindingUniformBufferUpdateAfterBind")
         || !requireFeature(supportedVulkan12Features.shaderSubgroupExtendedTypes, "shaderSubgroupExtendedTypes")
         || !requireFeature(supportedVulkan12Features.scalarBlockLayout, "scalarBlockLayout")
         || !requireFeature(dynamicRenderingEnabled ? dynamicRenderingFeatures.dynamicRendering : VK_FALSE, "dynamicRendering")
@@ -1401,6 +1415,13 @@ bool BackendContext::createVulkanDevice(){
     vulkan12features.timelineSemaphore = supportedVulkan12Features.timelineSemaphore;
     vulkan12features.shaderFloat16 = supportedVulkan12Features.shaderFloat16;
     vulkan12features.shaderSampledImageArrayNonUniformIndexing = supportedVulkan12Features.shaderSampledImageArrayNonUniformIndexing;
+    vulkan12features.shaderStorageBufferArrayNonUniformIndexing = supportedVulkan12Features.shaderStorageBufferArrayNonUniformIndexing;
+    // All five non-sampler heap descriptor classes are UPDATE_AFTER_BIND (see the requireFeature block above).
+    vulkan12features.descriptorBindingSampledImageUpdateAfterBind = supportedVulkan12Features.descriptorBindingSampledImageUpdateAfterBind;
+    vulkan12features.descriptorBindingStorageImageUpdateAfterBind = supportedVulkan12Features.descriptorBindingStorageImageUpdateAfterBind;
+    vulkan12features.descriptorBindingUniformTexelBufferUpdateAfterBind = supportedVulkan12Features.descriptorBindingUniformTexelBufferUpdateAfterBind;
+    vulkan12features.descriptorBindingStorageBufferUpdateAfterBind = supportedVulkan12Features.descriptorBindingStorageBufferUpdateAfterBind;
+    vulkan12features.descriptorBindingUniformBufferUpdateAfterBind = supportedVulkan12Features.descriptorBindingUniformBufferUpdateAfterBind;
     vulkan12features.bufferDeviceAddress = bufferDeviceAddressFeatures.bufferDeviceAddress;
     vulkan12features.shaderSubgroupExtendedTypes = supportedVulkan12Features.shaderSubgroupExtendedTypes;
     vulkan12features.scalarBlockLayout = supportedVulkan12Features.scalarBlockLayout;

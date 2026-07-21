@@ -592,6 +592,14 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         computeState.setPipeline(rayTracingState().m_swCausticPipeline.get());
         computeState.addBindingSet(rayTracingState().m_swCausticBindingSet.get());
         commandList.setComputeState(computeState);
+        // Phase 2 step 4b: the SW caustic photon traversal now fetches per-mesh geometry (BVH nodes / positions /
+        // indices / attributes) from the global descriptor heap (set 8), so the heap's descriptor tables -- pinned on
+        // this pipeline's layout in step 4a -- must be BOUND before the dispatch, not merely present in the layout.
+        // bindCompute binds only sets 8/9 (it never disturbs the classic set 0), so bind right after the ComputeState
+        // and before the dispatch; gated on a live heap so non-bindless builds are untouched.
+        Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+        if(heap.isInitialized())
+            heap.bindCompute(commandList, *rayTracingState().m_swCausticPipeline.get());
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         commandList.dispatch(DivideUp(s_CausticSwPhotonCount / 2u, static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
         // Advance the checkerboard phase for next frame.

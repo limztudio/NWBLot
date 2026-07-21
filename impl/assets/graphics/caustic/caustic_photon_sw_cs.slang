@@ -24,6 +24,12 @@
 #include "../common/math.slangi"
 #include "../shadow/instance_material.slangi"
 
+// Global descriptor heap accessors (Phase 2 step 4b): the per-mesh geometry the photon traversal fetches now lives in
+// the bindless heap, reached by the per-buffer slots the instance material record (NwbRtInstanceMaterial) carries.
+// bindless_heap_bvh.slangi pulls the structured NwbBvhNode node view (NwbHeapBvhNodes) + the raw byte view
+// (NwbHeapRawBuffer) for positions / indices / attributes, both at heap set 8 (pinned on the SW caustic pipeline in 4a).
+#include "../bindless/bindless_heap_bvh.slangi"
+
 // The shadow trace's material-constants context (NwbShadowHit + the per-invocation accessors + the surface contract)
 // + the cook-generated per-hit surface dispatch (nwbShadowDispatchSurface), which #includes each transparent
 // material's .bind + .surface and routes by shadowTransmittanceModelId to return that occluder's optical params
@@ -62,6 +68,11 @@ StructuredBuffer<NwbCausticSwInstance, Std430DataLayout> g_NwbCausticSwInstances
 [[vk::binding(NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL, NWB_CAUSTIC_SW_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticSwInstanceMaterial;
 
+// DEAD as of step 4b: these parallel per-mesh arrays (slot k = mesh k -- triangle BVH nodes + raw position / index /
+// attribute byte buffers) are no longer read by any accessor -- the photon traversal fetches the same geometry from the
+// bindless heap by the material record's slots. Retained declared + host-bound (bindings 5-8) so the classic SW-caustic
+// set layout is unchanged until the 4c bounded-path removal drops these declarations together with the C++ layout items
+// + per-frame fill loops.
 [[vk::binding(NWB_CAUSTIC_SW_BINDING_MESH_NODES, NWB_CAUSTIC_SW_SET)]]
 StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbCausticSwMeshNodes[NWB_CAUSTIC_SW_MAX_MESHES];
 
@@ -183,13 +194,15 @@ struct NwbCausticSwVertexAttrib{
     float2 uv0;
 };
 
-NwbCausticSwVertexAttrib nwbCausticSwLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
-    // meshIndex is non-uniform across the wave (each photon/pixel's ray hits a different mesh), so the per-mesh
-    // descriptor-array access MUST be tagged NonUniformResourceIndex; without it the index is UB and a wave that
-    // straddles a mesh boundary reads another mesh's descriptor for some lanes.
+NwbCausticSwVertexAttrib nwbCausticSwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
+    // attributeSlot is this mesh's per-corner attribute buffer's GLOBAL HEAP slot (carried on the instance material
+    // record, populated lockstep with the mesh in rt_swbvh.cpp). It is non-uniform across the wave -- each photon's ray
+    // hits a different mesh -- so the heap subscript MUST be NonUniformResourceIndex-tagged; NwbHeapRawBuffer() applies
+    // that internally and is re-invoked at each Load (mirroring the bounded g_NwbCausticSwMeshAttributes[
+    // NonUniformResourceIndex(meshIndex)] it replaces) so the decoration is applied fresh at every descriptor access.
     // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- a single memory request
     // instead of two dependent Load2s (bit-identical result, lower latency in the refractive-hit path).
-    const uint4 packed = g_NwbCausticSwMeshAttributes[NonUniformResourceIndex(meshIndex)].Load4(attributeIndex * 16u);
+    const uint4 packed = NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u);
     NwbCausticSwVertexAttrib attrib;
     attrib.normal = float3(
         nwbUnpackHalf2x16(packed.x),
@@ -214,11 +227,14 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     const NwbCausticSwInstance instance = g_NwbCausticSwInstances[instanceIndex];
     const NwbRtInstanceMaterial material = g_NwbCausticSwInstanceMaterial[instanceIndex];
     const bool refractive = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
-    // meshIndex selects this instance's slot in the per-mesh descriptor ARRAYS (nodes/indices/positions/attributes).
-    // It is NON-UNIFORM across the wave, so every indexed access must be wrapped in NonUniformResourceIndex() AT THE
-    // SUBSCRIPT (the decoration does not reliably survive a copy into a plain uint). Omitting it is undefined
+    // This instance's per-mesh geometry (BVH nodes / indices / positions / attributes) is fetched from the global
+    // descriptor heap by the four per-buffer slots the material record carries (populated lockstep with the mesh -- and
+    // with instance.meshIndex -- in rt_swbvh.cpp). Each slot is NON-UNIFORM across the wave -- different photons' rays
+    // hit different meshes -- so its heap subscript must be NonUniformResourceIndex-tagged; NwbHeapBvhNodes() /
+    // NwbHeapRawBuffer() apply that internally and are re-invoked at EACH access below (never hoisted into a resource
+    // local) so the decoration is applied fresh at every subscript, exactly as the bounded
+    // g_NwbCausticSwMesh*[NonUniformResourceIndex(meshIndex)] arrays they replace did. Omitting it is undefined
     // behaviour: a wave straddling a mesh boundary reads a DIFFERENT mesh's BVH/geometry for some lanes.
-    const uint meshIndex = instance.meshIndex;
     const float3 origin = nwbCausticSwTransformPoint(instance, worldOrigin);
     const float3 direction = nwbCausticSwTransformVector(instance, worldDirection);
     const float3 invDir = nwbBvhSafeInvDir(direction);
@@ -229,7 +245,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     // The stack holds only deferred FAR children (<= tree depth).
     uint stack[NWB_CAUSTIC_SW_MESH_STACK_SIZE];
     uint stackPointer = 0u;
-    NwbBvhNode node = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][0u]; // per-mesh root
+    NwbBvhNode node = NwbHeapBvhNodes(material.nodeSlot)[0u]; // per-mesh root
     bool active = nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0);
 
     [loop] while(active){
@@ -237,13 +253,13 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
             const uint triangle = nwbBvhLeafPrimitive(node);
             const uint indexBase = triangle * 3u;
             // The 3 triangle indices are contiguous -> one Load3 instead of three Loads (bit-identical, one request).
-            const uint3 triIndices = g_NwbCausticSwMeshIndices[NonUniformResourceIndex(meshIndex)].Load3(indexBase * 4u);
+            const uint3 triIndices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * 4u);
             const uint i0 = triIndices.x;
             const uint i1 = triIndices.y;
             const uint i2 = triIndices.z;
-            const float3 v0 = asfloat(g_NwbCausticSwMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(i0 * 12u));
-            const float3 v1 = asfloat(g_NwbCausticSwMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(i1 * 12u));
-            const float3 v2 = asfloat(g_NwbCausticSwMeshPositions[NonUniformResourceIndex(meshIndex)].Load3(i2 * 12u));
+            const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i0 * 12u));
+            const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i1 * 12u));
+            const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i2 * 12u));
             const NwbCausticSwTriangleHit triangleHit = nwbCausticSwRayTriangle(origin, direction, tMin, closest.t, v0, v1, v2);
             if(triangleHit.hit){
                 // Closer than the running min -> adopt it.
@@ -259,9 +275,9 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                     // Evaluate this material's surface hook for its optical params, the SAME way the shadow trace
                     // does (interpolated normal/uv0 + the material-constants context the instance record carries).
                     const uint attributeBase = triangle * 3u;
-                    const NwbCausticSwVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(meshIndex, attributeBase);
-                    const NwbCausticSwVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(meshIndex, attributeBase + 1u);
-                    const NwbCausticSwVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(meshIndex, attributeBase + 2u);
+                    const NwbCausticSwVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase);
+                    const NwbCausticSwVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
+                    const NwbCausticSwVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
                     const float3 objectShadingNormal = a0.normal * triangleHit.w + a1.normal * triangleHit.u + a2.normal * triangleHit.v;
 
                     // The interpolated SHADING normal in world space (inverse-transpose of object->world). This is the
@@ -286,8 +302,8 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
             active = false; // leaf done -> pop the next deferred node below
         }
         else{
-            const NwbBvhNode leftNode = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.leftChild];
-            const NwbBvhNode rightNode = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][node.rightChild];
+            const NwbBvhNode leftNode = NwbHeapBvhNodes(material.nodeSlot)[node.leftChild];
+            const NwbBvhNode rightNode = NwbHeapBvhNodes(material.nodeSlot)[node.rightChild];
             float tLeft;
             const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
             float tRight;
@@ -312,7 +328,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
 
         // Pop the next deferred node that still survives the (now-smaller) closest.t cull; drain -> done.
         [loop] while(stackPointer > 0u){
-            node = g_NwbCausticSwMeshNodes[NonUniformResourceIndex(meshIndex)][stack[--stackPointer]];
+            node = NwbHeapBvhNodes(material.nodeSlot)[stack[--stackPointer]];
             if(nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0)){
                 active = true;
                 break;

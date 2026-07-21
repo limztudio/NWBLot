@@ -298,6 +298,15 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
                 return false;
             instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
         }
+        // Phase 2 M2: carry this mesh's heap slots on the shared record, from the M1 handles minted above. Applies
+        // to both the resolved and the fallback-opaque record (meshSlot is a valid registered slot on both paths).
+        // Write-only this step -- the HW opaque trace reads no geometry; the HW caustic/GI traces (which read this
+        // buffer by InstanceID) consume the slots when they are swept. nodeSlot stays s_Max: no SW node buffer here.
+        if(heapLive){
+            instanceMaterial.indexSlot = rayTracingState().m_shadowMeshIndexHandles[meshSlot].slot();
+            instanceMaterial.attributeSlot = rayTracingState().m_shadowMeshAttributeHandles[meshSlot].slot();
+            instanceMaterial.positionSlot = rayTracingState().m_shadowMeshPositionHandles[meshSlot].slot();
+        }
 
         // Non-transparent occluders (including the unresolved-material fallback above, which casts a colorless
         // opaque shadow) are marked FORCE_OPAQUE. The hardware shadow RayQuery then lets the fixed-function
@@ -552,6 +561,15 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             ))
                 return false;
             instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
+        }
+        // Phase 2 M2: carry this mesh's four heap slots on the shared record, from the SW M1 handles minted above.
+        // Applies to both the resolved and the fallback record (meshSlot is a valid registered SW slot on both).
+        // Write-only this step; the software shadow traversal -- the first swept consumer -- reads them next.
+        if(heapLive){
+            instanceMaterial.indexSlot = rayTracingState().m_swShadowMeshIndexHandles[meshSlot].slot();
+            instanceMaterial.attributeSlot = rayTracingState().m_swShadowMeshAttributeHandles[meshSlot].slot();
+            instanceMaterial.positionSlot = rayTracingState().m_swShadowMeshPositionHandles[meshSlot].slot();
+            instanceMaterial.nodeSlot = rayTracingState().m_swShadowMeshNodeHandles[meshSlot].slot();
         }
         Float4 storedWorldMin;
         Float4 storedWorldMax;

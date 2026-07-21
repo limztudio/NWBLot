@@ -22,7 +22,7 @@
 // materialConstantByteOffset locates the occluder's constant block in g_NwbMaterialTypedWords and
 // meshInstanceIndex indexes g_NwbMeshInstances (the mutable storage offset) -- together they reconstruct the
 // material-constants context the surface hook reads. GI evaluates the same hook for baseColor at the traced hit,
-// rather than carrying a guessed interface field in this record. The five uints mirror the C++
+// rather than carrying a guessed interface field in this record. The nine uints mirror the C++
 // NwbRtInstanceMaterialGpu.
 struct NwbRtInstanceMaterial{
     uint shadowTransmittanceModelId;
@@ -30,6 +30,15 @@ struct NwbRtInstanceMaterial{
     uint meshSlot;
     uint materialConstantByteOffset;
     uint meshInstanceIndex;
+    // Phase 2 M2: per-buffer global heap slots for the same geometry the bounded per-mesh arrays hold, populated
+    // from the M1 handles (rt_swbvh.cpp) alongside meshSlot. Additive -- a pass still on the bounded path ignores
+    // them; a migrated accessor fetches NwbHeapRawBuffer(<x>Slot) instead of g_Nwb<Pass>Mesh<X>[meshSlot].
+    // indexSlot/attributeSlot/positionSlot are set by both shadow builders; nodeSlot is the per-mesh SW BVH node
+    // buffer (SW-only, stays invalid on hardware-built records).
+    uint indexSlot;
+    uint attributeSlot;
+    uint positionSlot;
+    uint nodeSlot;
 };
 
 // flags bit1 = isRefractive: the material asset's `refractive` classification, plumbed to the GPU instance record

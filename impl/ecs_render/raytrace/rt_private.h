@@ -201,8 +201,16 @@ struct NwbRtInstanceMaterialGpu{
     u32 meshSlot = 0u;
     u32 materialConstantByteOffset = 0u;
     u32 meshInstanceIndex = 0u;
+    // Phase 2 M2: per-buffer global heap slots (GpuDescriptorHandle::slot()) for this occluder's mesh geometry,
+    // populated from the M1 handles at BVH-build time. Additive alongside meshSlot -- the bounded per-mesh arrays
+    // still drive every live consumer until each pass is swept onto NwbHeapRawBuffer(<x>Slot). Default s_Max marks
+    // "unregistered"; nodeSlot is the SW BVH node buffer (SW-only, stays s_Max on hardware-built records).
+    u32 indexSlot = Limit<u32>::s_Max;
+    u32 attributeSlot = Limit<u32>::s_Max;
+    u32 positionSlot = Limit<u32>::s_Max;
+    u32 nodeSlot = Limit<u32>::s_Max;
 };
-static_assert(sizeof(NwbRtInstanceMaterialGpu) == 20u, "NwbRtInstanceMaterialGpu must match the shader NwbRtInstanceMaterial std430 layout (5 x uint)");
+static_assert(sizeof(NwbRtInstanceMaterialGpu) == 36u, "NwbRtInstanceMaterialGpu must match the shader NwbRtInstanceMaterial std430 layout (9 x uint)");
 
 // Per-instance shadow-occluder flags (NwbRtInstanceMaterialGpu.flags), mirroring the shader-side
 // NWB_RT_INSTANCE_MATERIAL_FLAG_* defines: `Transparent` = evaluate the per-hit transmittance hook; `Refractive` =

@@ -28,8 +28,9 @@
 // The software-shadow scene geometry: the scene/instance BVH node buffer, the per-instance record (affine
 // world->object transform + per-mesh descriptor slot) + its world->object transform helpers, and the vertex-attribute
 // unpack. Per-mesh geometry (BVH nodes / raw positions / raw indices / per-corner attributes) is fetched from the
-// bindless heap (step 4b) by the material record's per-buffer slots; the parallel per-mesh descriptor ARRAYS below are
-// now DEAD (declared + host-bound only, pending the 4c bounded-path removal). Declares the scene-node / instance /
+// bindless heap (step 4b) by the material record's per-buffer slots; the parallel per-mesh descriptor arrays that
+// preceded it were dropped in the step 4c bounded-path removal (the shared C++ backing buffers stay -- the heap
+// descriptors point at them, and the SW caustic / GI passes still bind them). Declares the scene-node / instance /
 // instance-material bindings; any pass that walks the BVH pulls this concern.
 
 
@@ -53,25 +54,6 @@ StructuredBuffer<NwbSwShadowInstance, Std430DataLayout> g_NwbSwShadowInstances;
 
 [[vk::binding(NWB_SW_SHADOW_BINDING_INSTANCE_MATERIAL, NWB_SW_SHADOW_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbSwShadowInstanceMaterial;
-
-// DEAD as of step 4b: these parallel per-mesh arrays (slot k = mesh k -- triangle BVH nodes + raw position / index
-// byte buffers, plus the attribute buffer below) are no longer read by any accessor -- the traversal fetches the same
-// geometry from the bindless heap by the material record's slots. Retained declared + host-bound (bindings 8-11) so the
-// classic SW-shadow set layout is unchanged until the 4c bounded-path removal drops these declarations together with
-// the C++ layout items + per-frame fill loops.
-[[vk::binding(NWB_SW_SHADOW_BINDING_MESH_NODES, NWB_SW_SHADOW_SET)]]
-StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbSwShadowMeshNodes[NWB_SW_SHADOW_MAX_MESHES];
-
-[[vk::binding(NWB_SW_SHADOW_BINDING_MESH_POSITIONS, NWB_SW_SHADOW_SET)]]
-ByteAddressBuffer g_NwbSwShadowMeshPositions[NWB_SW_SHADOW_MAX_MESHES];
-
-[[vk::binding(NWB_SW_SHADOW_BINDING_MESH_INDICES, NWB_SW_SHADOW_SET)]]
-ByteAddressBuffer g_NwbSwShadowMeshIndices[NWB_SW_SHADOW_MAX_MESHES];
-
-// Per-triangle-corner shadow-trace attributes (AttribGpu = Half4U normal @ +0 (8B) + Float2U uv0 @ +8 (8B), 16B
-// stride), indexed as triangle*3+corner in lockstep with the triangle index buffer.
-[[vk::binding(NWB_SW_SHADOW_BINDING_MESH_ATTRIBUTES, NWB_SW_SHADOW_SET)]]
-ByteAddressBuffer g_NwbSwShadowMeshAttributes[NWB_SW_SHADOW_MAX_MESHES];
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

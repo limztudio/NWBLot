@@ -13,9 +13,9 @@
 // reads the G-buffer, casts one occlusion ray per light through the software scene/instance BVH (and, in
 // the per-mesh stage, each instance's triangle BVH), and writes per-light colored transmittance into the
 // shadow-visibility Texture2DArray the deferred lighting pass samples. Slots 0-6 are the scene-level pass;
-// slots 8-11 add the per-mesh triangle traversal (parallel per-mesh node/position/index/attribute arrays);
-// slots 13-14 bring in the material-constants context (typed words + mesh instances) the per-hit
-// transmittance dispatch reads.
+// the per-mesh triangle traversal fetches its geometry from the global descriptor heap by the material record's
+// per-buffer slots (the former bounded arrays at slots 8-11 were removed in step 4c); slots 13-14 bring in the
+// material-constants context (typed words + mesh instances) the per-hit transmittance dispatch reads.
 #define NWB_SW_SHADOW_SET 0
 
 #define NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION 0
@@ -26,12 +26,10 @@
 #define NWB_SW_SHADOW_BINDING_SCENE_NODES 5
 #define NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT 6
 #define NWB_SW_SHADOW_BINDING_SCENE_INSTANCES 7
-// Parallel per-mesh descriptor arrays (slot k = mesh k), kept contiguous: triangle BVH nodes + raw position /
-// index byte buffers + the per-triangle-corner shadow-trace attribute buffer (normal/uv0 the dispatch interpolates).
-#define NWB_SW_SHADOW_BINDING_MESH_NODES 8
-#define NWB_SW_SHADOW_BINDING_MESH_POSITIONS 9
-#define NWB_SW_SHADOW_BINDING_MESH_INDICES 10
-#define NWB_SW_SHADOW_BINDING_MESH_ATTRIBUTES 11
+// Slots 8-11 (the former parallel per-mesh descriptor arrays -- triangle BVH nodes + raw position / index byte
+// buffers + the per-triangle-corner attribute buffer) were removed in the step 4c bounded-path teardown: the SW
+// shadow traversal now fetches that per-mesh geometry from the global descriptor heap by the material record's
+// per-buffer slots. The numbers are left as a gap (not renumbered) so the surrounding bindings keep their values.
 // Per-instance occluder material table (NwbRtInstanceMaterial), indexed by the scene-BVH leaf instance index;
 // built lockstep with the scene-instance buffer so the array slot matches the traversal's instanceIndex.
 #define NWB_SW_SHADOW_BINDING_INSTANCE_MATERIAL 12
@@ -112,7 +110,10 @@
 // light-LOOP index (0..NWB_SCENE_MAX_LIGHTS-1) so the trace pass does one g_NwbSceneLights load + recovers slot=params.z.
 #define NWB_SW_SHADOW_EDGE_RECORD_WORDS 2
 
-// Maximum distinct meshes the per-mesh descriptor arrays can address in one frame.
+// Maximum distinct meshes the shared software per-mesh buffer set addresses in one frame. Sizes the C++
+// m_swShadowMesh* backing-buffer + global-heap-handle arrays (renderer_state.h); the SW caustic / GI bounded
+// descriptor arrays derive their caps from it (NWB_CAUSTIC_SW_MAX_MESHES / NWB_GI_SW_MAX_MESHES). The SW shadow
+// traversal no longer uses a bounded array (step 4c) -- it reads this geometry from the descriptor heap.
 #define NWB_SW_SHADOW_MAX_MESHES 64
 
 // Occluder class the per-mesh traversal filters to. Each pass kernel that traces #defines NWB_SW_SHADOW_OCCLUDER to

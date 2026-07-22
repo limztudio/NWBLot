@@ -53,19 +53,10 @@ RaytracingAccelerationStructure g_NwbGiHwTlas;
 [[vk::binding(NWB_GI_HW_BINDING_INSTANCE_MATERIAL, NWB_GI_HW_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbGiHwInstanceMaterial;
 
-// DEAD as of step 4b: these parallel per-mesh arrays (slot k = mesh k -- raw position / index / per-corner attribute
-// byte buffers) are no longer read by any accessor -- the closest-hit fetches the same geometry from the bindless heap
-// by the material record's slots. Retained declared + host-bound (bindings 4-6) so the classic HW GI set layout is
-// unchanged until the 4c bounded-path removal drops these declarations together with the C++ layout items + the
-// per-frame binding-set fills.
-[[vk::binding(NWB_GI_HW_BINDING_MESH_POSITIONS, NWB_GI_HW_SET)]]
-ByteAddressBuffer g_NwbGiHwMeshPositions[NWB_GI_HW_MAX_MESHES];
-
-[[vk::binding(NWB_GI_HW_BINDING_MESH_INDICES, NWB_GI_HW_SET)]]
-ByteAddressBuffer g_NwbGiHwMeshIndices[NWB_GI_HW_MAX_MESHES];
-
-[[vk::binding(NWB_GI_HW_BINDING_MESH_ATTRIBUTES, NWB_GI_HW_SET)]]
-ByteAddressBuffer g_NwbGiHwMeshAttributes[NWB_GI_HW_MAX_MESHES];
+// Per-mesh geometry (raw positions / indices / per-corner attributes) is fetched from the bindless heap (step 4b) by
+// the material record's per-buffer slots; the parallel per-mesh descriptor arrays that preceded it (bindings 4-6) were
+// dropped in the step 4c bounded-path removal. The shared C++ backing buffers stay -- the heap descriptors point at them
+// (m_shadowMesh*Buffers) and the per-dispatch buffer-state barriers still transition them for the heap reads.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

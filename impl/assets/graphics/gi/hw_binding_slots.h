@@ -23,9 +23,10 @@
 #define NWB_GI_HW_BINDING_LIGHT_LIST 1         // StructuredBuffer<NwbSceneLight> (SRV)
 #define NWB_GI_HW_BINDING_TLAS 2               // RaytracingAccelerationStructure (the scene TLAS)
 #define NWB_GI_HW_BINDING_INSTANCE_MATERIAL 3  // StructuredBuffer<NwbRtInstanceMaterial> (SRV) -- InstanceID-indexed
-#define NWB_GI_HW_BINDING_MESH_POSITIONS 4     // ByteAddressBuffer[NWB_GI_HW_MAX_MESHES] -- geometric face normal
-#define NWB_GI_HW_BINDING_MESH_INDICES 5       // ByteAddressBuffer[NWB_GI_HW_MAX_MESHES]
-#define NWB_GI_HW_BINDING_MESH_ATTRIBUTES 6    // ByteAddressBuffer[NWB_GI_HW_MAX_MESHES] -- shading normal + uv0
+// Slots 4-6 (the former per-mesh position / index / attribute descriptor arrays) were removed in the step 4c
+// bounded-path teardown: the HW GI closest-hit now fetches that geometry from the global descriptor heap by the material
+// record's {position,index,attribute}Slot. The numbers are left as a gap (not renumbered) so the surrounding bindings
+// keep their values.
 #define NWB_GI_HW_BINDING_MATERIAL_TYPED 7     // StructuredBuffer<uint> -- authored typed material constants
 #define NWB_GI_HW_BINDING_MESH_INSTANCES 8     // StructuredBuffer<NwbMeshInstanceData> -- mutable material offsets
 

@@ -48,12 +48,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reuse the shadow per-mesh cap so the C++ slot arrays + the shader's [N] descriptor arrays stay one definition. The
-// HW raygen reads the photon grid side from the same push-constant layout as the SW producer.
-#include "../shadow/binding_slots.h"
+// The HW raygen reads the photon grid side from the same push-constant layout as the SW producer.
 #include "sw_binding_slots.h"
 
-#define NWB_CAUSTIC_RT_MAX_MESHES NWB_SHADOW_RT_MAX_MESHES
+// (Phase 2 M4 retired NWB_CAUSTIC_RT_MAX_MESHES: the HW caustic closest-hit fetches its per-mesh attributes from the
+// global descriptor heap (step 4b), so there is no fixed distinct-mesh cap to alias from the shadow trace.)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

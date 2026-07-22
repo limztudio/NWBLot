@@ -30,10 +30,8 @@
 #define NWB_GI_HW_BINDING_MATERIAL_TYPED 7     // StructuredBuffer<uint> -- authored typed material constants
 #define NWB_GI_HW_BINDING_MESH_INSTANCES 8     // StructuredBuffer<NwbMeshInstanceData> -- mutable material offsets
 
-#include "../shadow/binding_slots.h"           // NWB_SHADOW_RT_MAX_MESHES (the HW-resident per-mesh array size)
-#ifndef NWB_GI_HW_MAX_MESHES
-#define NWB_GI_HW_MAX_MESHES NWB_SHADOW_RT_MAX_MESHES
-#endif
+// (Phase 2 M4 retired NWB_GI_HW_MAX_MESHES: the HW GI surfel trace fetches per-mesh position/index/attribute geometry
+// from the global descriptor heap (step 4b), so there is no fixed distinct-mesh cap to alias from the shadow trace.)
 
 // The shared shade (gi_trace_common.slangi) casts a dominant-light occlusion ray; keep it on the HW path too so the HW
 // and SW shades are identical (the occlusion ray re-enters the HW RayQuery via the seam).

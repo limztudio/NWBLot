@@ -199,6 +199,15 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             ReleaseMeshHeapHandle(heap, rt.m_shadowMeshPositionHandles[slot]);
         }
     }
+    // Phase 2 M4: clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once
+    // to the scene's steady-state distinct-mesh count, then reuse that storage) and m_shadowMeshCount mirrors their
+    // length -- the gather below repopulates both by push_back.
+    rayTracingState().m_shadowMeshIndexBuffers.clear();
+    rayTracingState().m_shadowMeshAttributeBuffers.clear();
+    rayTracingState().m_shadowMeshPositionBuffers.clear();
+    rayTracingState().m_shadowMeshIndexHandles.clear();
+    rayTracingState().m_shadowMeshAttributeHandles.clear();
+    rayTracingState().m_shadowMeshPositionHandles.clear();
     rayTracingState().m_shadowMeshCount = 0u;
     // Whether any gathered occluder is transparent. On RT hardware this gates the hybrid software-transparent-shadow
     // prepare: the HW pass casts only the opaque (binary) shadow, so the SW colored pass is needed only when a
@@ -224,37 +233,36 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         if(!meshReady || !mesh || !mesh->blas || !mesh->triangleIndexBuffer || !mesh->attributeBuffer || !mesh->positionBuffer)
             continue;
 
-        // Dedupe to a per-mesh descriptor-array slot: instances sharing a mesh share its index/attribute
-        // buffers. Once the per-frame mesh cap is reached, the instance casts a colorless (opaque) shadow.
+        // Dedupe to a per-mesh table slot: instances sharing a mesh share its index/attribute/position buffers. The
+        // table grows on demand (Phase 2 M4 retired the per-frame mesh cap), so every distinct mesh is registered.
         Core::Buffer* meshIndexBuffer = mesh->triangleIndexBuffer.get();
-        u32 meshSlot = NWB_SHADOW_RT_MAX_MESHES;
+        u32 meshSlot = ~0u; // sentinel: mesh not yet in this frame's distinct-mesh table
         for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
             if(rayTracingState().m_shadowMeshIndexBuffers[slot] == meshIndexBuffer){
                 meshSlot = slot;
                 break;
             }
         }
-        if(meshSlot == NWB_SHADOW_RT_MAX_MESHES){
-            if(rayTracingState().m_shadowMeshCount >= NWB_SHADOW_RT_MAX_MESHES){
-                if(!rayTracingState().m_shadowMeshCapReported){
-                    rayTracingState().m_shadowMeshCapReported = true;
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware shadow distinct-mesh cap ({}) reached; further meshes cast colorless shadows this scene")
-                        , static_cast<u64>(NWB_SHADOW_RT_MAX_MESHES)
-                    );
-                }
-                continue;
-            }
+        if(meshSlot == ~0u){
+            // New distinct mesh: append its three backing buffers to the per-frame table and mint the parallel
+            // global-heap handles the HW caustic/GI traces read this geometry through. Phase 2 M4 retired the fixed
+            // distinct-mesh cap, so every distinct mesh is always registered (the table grows on demand).
             meshSlot = rayTracingState().m_shadowMeshCount++;
-            rayTracingState().m_shadowMeshIndexBuffers[meshSlot] = meshIndexBuffer;
-            rayTracingState().m_shadowMeshAttributeBuffers[meshSlot] = mesh->attributeBuffer.get();
-            rayTracingState().m_shadowMeshPositionBuffers[meshSlot] = mesh->positionBuffer.get();
-            // Phase 2 M1: mirror the same three buffers into the global heap (raw SRV view; M3's occlusion.slangi
-            // will read them via NwbHeapRawBuffer(record.<x>Slot)). Registered only for a newly-minted distinct
-            // mesh, exactly like the bounded-array fill above.
+            rayTracingState().m_shadowMeshIndexBuffers.push_back(meshIndexBuffer);
+            rayTracingState().m_shadowMeshAttributeBuffers.push_back(mesh->attributeBuffer.get());
+            rayTracingState().m_shadowMeshPositionBuffers.push_back(mesh->positionBuffer.get());
+            // Phase 2 M1: mirror the same three buffers into the global heap (raw SRV view; the HW caustic/GI traces
+            // read them via NwbHeapRawBuffer(record.<x>Slot)). When the heap is unavailable the handles push default
+            // (never read) so all six Vectors stay lockstep by slot.
             if(heapLive){
-                rayTracingState().m_shadowMeshIndexHandles[meshSlot]     = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, meshIndexBuffer));
-                rayTracingState().m_shadowMeshAttributeHandles[meshSlot] = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->attributeBuffer.get()));
-                rayTracingState().m_shadowMeshPositionHandles[meshSlot]  = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->positionBuffer.get()));
+                rayTracingState().m_shadowMeshIndexHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, meshIndexBuffer)));
+                rayTracingState().m_shadowMeshAttributeHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->attributeBuffer.get())));
+                rayTracingState().m_shadowMeshPositionHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->positionBuffer.get())));
+            }
+            else{
+                rayTracingState().m_shadowMeshIndexHandles.emplace_back();
+                rayTracingState().m_shadowMeshAttributeHandles.emplace_back();
+                rayTracingState().m_shadowMeshPositionHandles.emplace_back();
             }
         }
 

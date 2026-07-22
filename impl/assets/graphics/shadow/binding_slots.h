@@ -39,11 +39,9 @@
 // was removed in the same step 4c teardown for the same reason -- the opaque trace reads no geometry. Left as a gap,
 // not renumbered.
 
-// Maximum distinct meshes the per-mesh descriptor arrays (index + attribute + position) can address in one frame;
-// meshes beyond it cast a colorless (opaque) shadow that frame (logged once). The hardware shadow trace is an
-// inline-RayQuery COMPUTE pass, whose single-stage descriptor budget limits these arrays to 32 (3*32=96) descriptors.
-// Kept at 32 for headroom; raising it needs the compute descriptor-set budget widened (a backend change).
-#define NWB_SHADOW_RT_MAX_MESHES 32
+// (Phase 2 M4 retired NWB_SHADOW_RT_MAX_MESHES: the HW distinct-mesh table is now a dynamic Vector in
+// renderer_state.h -- the HW caustic/GI traces read the per-mesh geometry from the global descriptor heap, so there
+// is no fixed per-frame mesh cap. The three former per-mesh descriptor-array slots 8/9/12 were dropped in step 4c.)
 
 // Workgroup size of the hardware RayQuery opaque shadow trace (shadow_rayquery_cs): one thread per FULL-res pixel.
 #define NWB_SHADOW_RT_GROUP_SIZE 8

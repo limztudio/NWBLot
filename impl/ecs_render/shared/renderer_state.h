@@ -395,12 +395,19 @@ struct RtSceneBvhState{
 
 
 struct RtShadowState{
-    // Phase 2 M4: the per-frame SW distinct-mesh table Vectors (m_swShadowMesh*, below) allocate from the renderer's
-    // global arena, bound once here at construction. The arena allocator cannot be rebound afterward (its copy-assign
-    // is a deliberate no-op), so RendererRayTracingState threads the arena in. Every other member keeps its default
-    // initializer -- listing only the eight Vectors, in declaration order.
+    // Phase 2 M4: the per-frame distinct-mesh table Vectors (the HW m_shadowMesh* table and the SW m_swShadowMesh*
+    // table, both below) allocate from the renderer's global arena, bound once here at construction. The arena
+    // allocator cannot be rebound afterward (its copy-assign is a deliberate no-op), so RendererRayTracingState
+    // threads the arena in. Every other member keeps its default initializer -- listing only the fourteen Vectors,
+    // in declaration order (the HW table first, then the SW table).
     explicit RtShadowState(Core::Alloc::GlobalArena& arena)
-        : m_swShadowMeshNodeBuffers(arena)
+        : m_shadowMeshIndexBuffers(arena)
+        , m_shadowMeshAttributeBuffers(arena)
+        , m_shadowMeshPositionBuffers(arena)
+        , m_shadowMeshIndexHandles(arena)
+        , m_shadowMeshAttributeHandles(arena)
+        , m_shadowMeshPositionHandles(arena)
+        , m_swShadowMeshNodeBuffers(arena)
         , m_swShadowMeshPositionBuffers(arena)
         , m_swShadowMeshIndexBuffers(arena)
         , m_swShadowMeshAttributeBuffers(arena)
@@ -441,21 +448,21 @@ struct RtShadowState{
     Core::BufferHandle m_shadowMaterialTypedBuffer;
     usize m_shadowInstanceCapacity = 0u;
     usize m_shadowMaterialTypedCapacity = 0u;
-    // Per-frame distinct meshes referenced by the TLAS (filled by buildSceneTlas); the per-mesh descriptor arrays
-    // bind these (parallel: slot k = mesh k's index/attribute/position buffers, indexed by material.meshSlot). The
-    // HW GI trace needs raw positions to derive geometric face normals, so the position buffer is tracked here too.
-    // The shared shader cap keeps the C++ arrays and the shader's `[NWB_SHADOW_RT_MAX_MESHES]` in one definition.
-    Core::Buffer* m_shadowMeshIndexBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
-    Core::Buffer* m_shadowMeshAttributeBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
-    Core::Buffer* m_shadowMeshPositionBuffers[NWB_SHADOW_RT_MAX_MESHES] = {};
+    // Per-frame distinct meshes referenced by the TLAS (filled by buildSceneTlas). The three backing buffers feed the
+    // global-heap descriptors the HW caustic/GI passes read (keyed by material.meshSlot); the HW GI trace also needs
+    // raw positions to derive geometric face normals, so the position buffer is tracked here too. Phase 2 M4: dynamic
+    // GlobalArena Vectors (bound in the RtShadowState ctor above) -- the fixed NWB_SHADOW_RT_MAX_MESHES cap is retired,
+    // so no distinct mesh is ever dropped.
+    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshIndexBuffers;
+    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshAttributeBuffers;
+    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshPositionBuffers;
     // Phase 2 M1: parallel global-heap handles for the three backing buffers above, minted in lockstep at
-    // buildSceneTlas registration and freed at the per-frame rebuild. Additive - no shader reads them yet, so this
-    // cannot change the rendered result (the M1 parity gate); M3 will route occlusion.slangi through these slots.
-    Core::GpuDescriptorHandle m_shadowMeshIndexHandles[NWB_SHADOW_RT_MAX_MESHES] = {};
-    Core::GpuDescriptorHandle m_shadowMeshAttributeHandles[NWB_SHADOW_RT_MAX_MESHES] = {};
-    Core::GpuDescriptorHandle m_shadowMeshPositionHandles[NWB_SHADOW_RT_MAX_MESHES] = {};
+    // buildSceneTlas registration and freed at the per-frame rebuild. Read by the HW caustic (attribute) and GI
+    // (position/index/attribute) traces via NwbHeapRawBuffer(record.<x>Slot).
+    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshIndexHandles;
+    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshAttributeHandles;
+    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshPositionHandles;
     u32 m_shadowMeshCount = 0u;
-    bool m_shadowMeshCapReported = false;
     u32 m_shadowMeshHeapHighWater = 0u; // Phase 2 M1: peak distinct-mesh registration count; logged only on a new high
     // Adaptive transparent shadow (coarse-trace + edge-refine) config, fixed at shipping defaults (adaptive ON,
     // edge threshold 0.1, stats OFF). These flags drive the transparent economizer path used by the HW-hybrid backend

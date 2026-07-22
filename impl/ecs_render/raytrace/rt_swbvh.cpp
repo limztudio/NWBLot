@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace{
+namespace __hidden_rt_swbvh{
     // Phase 2 M1: register one per-mesh backing buffer in the global descriptor heap, returning its handle. Every
     // backing buffer registers as a single STORAGE_BUFFER; the raw-vs-structured split is only a shader-side view
     // (P3 aliases) and write() forces the canonical STORAGE_BUFFER type, so the SRV factory choice is documentation.
@@ -33,7 +33,7 @@ namespace{
         heap.free(handle);
         handle = Core::GpuDescriptorHandle::invalid();
     }
-}
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -153,6 +153,8 @@ bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
 
 
 bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
+    using namespace __hidden_rt_swbvh;
+
     if(!graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
 
@@ -410,6 +412,8 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
 
 
 bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
+    using namespace __hidden_rt_swbvh;
+
     // Software scene/instance BVH (TLAS-analog) over ALL gathered occluders, plus the shadow-owned material context.
     // Built by the no-RayQuery fallback prepare (the only shadow backend) AND, on RT hardware, by the hybrid prepare
     // when the scene has a transparent occluder. The gather order matches buildSceneTlas's (same RendererComponent

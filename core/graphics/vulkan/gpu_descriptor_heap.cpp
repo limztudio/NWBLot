@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace{
+namespace __hidden_vulkan_descriptor_heap{
     // Phase-1 defaults when GpuDescriptorHeapDesc leaves a capacity at 0. Clamped to device update-after-bind limits
     // in initialize(); real sizing is a Phase-2 concern.
     inline constexpr u32 s_DefaultResourceCapacity = 16384u;
@@ -93,6 +93,8 @@ DescriptorTable* GpuDescriptorHeap::tableForClass(const GpuDescriptorClass::Enum
 
 
 bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
+    using namespace __hidden_vulkan_descriptor_heap;
+
     if(m_initialized)
         return true;
 
@@ -307,6 +309,8 @@ void GpuDescriptorHeap::advanceFrame(){
 
 
 bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const BindingSetItem& item){
+    using namespace __hidden_vulkan_descriptor_heap;
+
     if(!m_initialized){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write called before initialize."));
         return false;
@@ -371,3 +375,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

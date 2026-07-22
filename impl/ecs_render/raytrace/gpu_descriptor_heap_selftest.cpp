@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace{
+namespace __hidden_descriptor_heap_selftest{
     // One known value per resource class the kernel reads; their sum is what the round-trip must reproduce.
     inline constexpr u32 s_HeapSelfTestStorageValue = 0x11110000u;   // StorageBuffer  (RWByteAddressBuffer)
     inline constexpr u32 s_HeapSelfTestUniformValue = 0x00002200u;   // UniformBuffer  (ConstantBuffer)
@@ -53,6 +53,8 @@ namespace{
 // so this test no longer owns its lifetime - it runs against the production heap and frees every handle it mints,
 // proving the test coexists with (does not disturb) the live heap.
 void RendererRayTracingSystem::runGpuDescriptorHeapSelfTest(){
+    using namespace __hidden_descriptor_heap_selftest;
+
     if(rayTracingState().m_gpuDescriptorHeapSelfTestDone)
         return;
     rayTracingState().m_gpuDescriptorHeapSelfTestDone = true;
@@ -327,3 +329,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

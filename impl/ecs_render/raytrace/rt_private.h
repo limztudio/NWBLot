@@ -147,7 +147,7 @@ namespace BvhNodeIndex{
         LeafFlag = NWB_BVH_LEAF_FLAG,
         Invalid = NWB_BVH_INVALID,
     };
-}
+};
 
 // Initial scene/instance BVH instance capacity; grows by doubling like the hardware TLAS.
 inline constexpr usize s_SceneBvhInitialInstanceCapacity = 64u;
@@ -227,7 +227,7 @@ namespace RtInstanceMaterialFlag{
         Transparent = NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT,
         Refractive = NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE,
     };
-}
+};
 
 // Initial element capacity of the per-frame instance-material table; grows by doubling like the TLAS/scene BVH.
 inline constexpr usize s_ShadowInstanceMaterialInitialCapacity = 128u;

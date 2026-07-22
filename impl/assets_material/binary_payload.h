@@ -40,7 +40,7 @@ namespace MaterialFlag{
         Refractive = 1u << 2u,
         All = Transparent | TwoSided | Refractive,
     };
-}
+};
 
 static_assert(sizeof(Core::ShaderType::Enum) == sizeof(u8), "Material shader stage indices must stay byte-sized");
 

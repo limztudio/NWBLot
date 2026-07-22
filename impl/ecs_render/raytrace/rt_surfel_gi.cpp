@@ -725,6 +725,20 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         .setComputeShader(rayTracingState().m_surfelTraceHwShader)
         .addBindingLayout(rayTracingState().m_surfelTraceHwBindingLayout)
     ;
+    // Phase 2 (HW GI migration, step 4a): pin the global descriptor heap's resource (set 8) + sampler (set 9) bindless
+    // layouts onto the hardware surfel-trace pipeline so the inline-RayQuery closest-hit can later fetch each mesh's
+    // position / index / attribute buffers from the heap. The classic HW GI layout is added first (positional set 0);
+    // the two heap layouts carry explicit sets 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7. Guarded
+    // on a live heap so non-bindless builds keep the pure set-0 layout; INERT until the 4b accessor rewrite reads through
+    // it. Mirrors the SW GI step 4a scaffold (ce336658) -- this is a COMPUTE pipeline (inline RayQuery), so the heap binds
+    // via bindCompute like the SW paths, not the HW-caustic bindRayTracing.
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(heap.isInitialized()){
+        pipelineDesc
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
+    }
     rayTracingState().m_surfelTraceHwPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelTraceHwPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel HW trace compute pipeline"));

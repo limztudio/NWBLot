@@ -30,11 +30,13 @@ struct NwbRtInstanceMaterial{
     uint meshSlot;
     uint materialConstantByteOffset;
     uint meshInstanceIndex;
-    // Per-buffer global heap slots for this occluder's mesh geometry, populated from the distinct-mesh table's
-    // heap handles (rt_swbvh.cpp) alongside meshSlot. Every pass's accessor fetches NwbHeapRawBuffer(<x>Slot);
-    // the former bounded g_Nwb<Pass>Mesh<X>[meshSlot] arrays were removed once each pass migrated.
-    // indexSlot/attributeSlot/positionSlot are set by both shadow builders; nodeSlot is the per-mesh SW BVH node
-    // buffer (SW-only, stays invalid on hardware-built records).
+    // Per-buffer descriptor-heap slots for this occluder's mesh geometry. These slots are the pivot of the
+    // geometry-access split the other RT comments name by side. Host-index side: the host registers each backing
+    // buffer in the global descriptor-index heap and stores the returned slot here (rt_swbvh.cpp, alongside
+    // meshSlot). Shader-layout-only side: every pass reads that geometry through the pinned heap via
+    // NwbHeapRawBuffer(<x>Slot), never a bound per-mesh array (the former g_Nwb<Pass>Mesh<X>[meshSlot] arrays were
+    // removed once each pass migrated). indexSlot/attributeSlot/positionSlot are set by both shadow builders;
+    // nodeSlot is the per-mesh SW BVH node buffer (SW-only, stays invalid on hardware-built records).
     uint indexSlot;
     uint attributeSlot;
     uint positionSlot;

@@ -201,11 +201,13 @@ struct NwbRtInstanceMaterialGpu{
     u32 meshSlot = 0u;
     u32 materialConstantByteOffset = 0u;
     u32 meshInstanceIndex = 0u;
-    // Per-buffer global heap slots (GpuDescriptorHandle::slot()) for this occluder's mesh geometry, populated
-    // from the distinct-mesh table's heap handles at BVH-build time (indexed by meshSlot). Every RT pass reads
-    // its geometry through these slots via NwbHeapRawBuffer(<x>Slot); the per-mesh buffer Vectors survive only
-    // for host-side barriers. Default s_Max marks "unregistered"; nodeSlot is the SW BVH node buffer (SW-only,
-    // stays s_Max on hardware-built records).
+    // Per-buffer descriptor-heap slots (GpuDescriptorHandle::slot()) for this occluder's mesh geometry. These
+    // slots are the pivot of the geometry-access split the other RT comments name by side. Host-index side: the
+    // host registers each backing buffer in the global descriptor-index heap at BVH-build time and stores the
+    // returned slot here (indexed by meshSlot), and the per-mesh buffer Vectors survive only for host-side
+    // barriers. Shader-layout-only side: every RT pass reads that geometry through the pinned heap via
+    // NwbHeapRawBuffer(<x>Slot), never through a bound per-mesh array. Default s_Max marks "unregistered";
+    // nodeSlot is the SW BVH node buffer (SW-only, stays s_Max on hardware-built records).
     u32 indexSlot = Limit<u32>::s_Max;
     u32 attributeSlot = Limit<u32>::s_Max;
     u32 positionSlot = Limit<u32>::s_Max;

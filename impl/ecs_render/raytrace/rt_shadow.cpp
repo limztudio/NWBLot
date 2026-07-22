@@ -1187,11 +1187,11 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
         .setComputeShader(shader)
         .addBindingLayout(rayTracingState().m_swShadowBindingLayout)
     ;
-    // Pin the global descriptor heap's resource (set 8) + sampler (set 9) bindless layouts onto every SW shadow pass
-    // pipeline so the traversal fetches per-mesh geometry from the heap. The classic SW shadow layout is added first,
-    // so it keeps positional set 0; the two heap layouts carry explicit sets 8/9 and
-    // createPipelineLayoutForBindingLayouts gap-fills sets 1-7 with the empty set layout. Guarded on a live heap so
-    // non-bindless builds keep the pure set-0 layout.
+    // Pin the global descriptor-index heap's resource (set 8) + sampler (set 9) layouts onto every SW shadow pass
+    // pipeline -- the shader-layout-only side of the split: the traversal reads per-mesh geometry through these sets by
+    // the host-provided slot index. The classic SW shadow layout is added first, so it keeps positional set 0; the two
+    // heap layouts carry explicit sets 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7 with the empty
+    // set layout. Guarded on a live heap so builds without one keep the pure set-0 layout.
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     if(heap.isInitialized()){
         pipelineDesc
@@ -1330,11 +1330,11 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
         Core::TextureDimension::Texture2DArray
     ));
 
-    // Per-mesh geometry is not bound here: the SW shadow traversal fetches BVH nodes / positions / indices / attributes
-    // from the global descriptor heap (bound as sets 8/9 per dispatch) by the material record's per-buffer slots. The
-    // former bounded per-mesh descriptor arrays (slots 8-11) were removed in step 4c; the backing buffers
-    // (m_swShadowMesh*Buffers) stay -- they are what the heap descriptors point at, and the SW caustic / GI passes still
-    // bind them as bounded arrays until their own bindless migration.
+    // Per-mesh geometry is not bound here: the SW shadow traversal reads BVH nodes / positions / indices / attributes
+    // through the global descriptor-index heap (bound as sets 8/9 per dispatch) by the material record's host-provided
+    // slot indices. The former bounded per-mesh descriptor arrays (slots 8-11) were removed in step 4c; the backing
+    // buffers (m_swShadowMesh*Buffers) stay -- they are what the heap descriptors point at, and the per-dispatch
+    // barriers still transition them for the heap reads.
 
     auto* device = graphics().getDevice();
     rayTracingState().m_swShadowBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_swShadowBindingLayout);

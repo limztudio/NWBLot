@@ -183,12 +183,14 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     shadowMutableTypedRanges.reserve(rendererView.candidateCount());
 
     // Reset the per-frame distinct-mesh table; the gather repopulates it (slot k -> mesh k's index/attribute/
-    // position buffers) indexed by material.meshSlot. Each RT pass fetches that geometry from the global
-    // descriptor heap via the per-record slots meshSlot fills below (NwbHeapRawBuffer(<x>Slot)); the table now
-    // drives only host-side work -- barriering the backing buffers to ShaderResource and populating those slots.
-    // The table is rebuilt every frame (the unconditional reset just below), so retire last frame's handles here
-    // before it is repopulated; the deferred-free quarantine (module.cpp pumps advanceFrame() per frame) keeps
-    // slots that in-flight frames still reference valid. Guarded on a live heap so non-bindless builds are unaffected.
+    // position buffers) indexed by material.meshSlot. This is the host-index side of the geometry split: the host
+    // registers each backing buffer in the global descriptor-index heap and writes the returned slot into the
+    // per-record fields meshSlot fills below; the shader then reads that geometry layout-only through the pinned
+    // heap set (NwbHeapRawBuffer(<x>Slot)). The table now drives only host-side work -- barriering the backing
+    // buffers to ShaderResource and populating those slots. The table is rebuilt every frame (the unconditional
+    // reset just below), so retire last frame's handles here before it is repopulated; the deferred-free quarantine
+    // (module.cpp pumps advanceFrame() per frame) keeps slots that in-flight frames still reference valid. Guarded
+    // on a live heap so builds without one are unaffected.
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     const bool heapLive = heap.isInitialized();
     if(heapLive){

@@ -253,11 +253,12 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         .setComputeShader(rayTracingState().m_surfelTraceShader)
         .addBindingLayout(rayTracingState().m_surfelTraceBindingLayout)
     ;
-    // Pin the global descriptor heap's resource (set 8) + sampler (set 9) bindless layouts onto the SW surfel-trace
-    // pipeline so the traversal fetches per-mesh geometry from the heap. The classic SW GI layout is added first, so
-    // it keeps positional set 0; the two heap layouts carry explicit sets 8/9 and createPipelineLayoutForBindingLayouts
-    // gap-fills sets 1-7 with the empty set layout. Guarded on a live heap so non-bindless builds keep the pure set-0
-    // layout. Mirrors the SW-caustic scaffold (rt_caustics.cpp ensureSwCausticPipeline).
+    // Pin the global descriptor-index heap's resource (set 8) + sampler (set 9) layouts onto the SW surfel-trace
+    // pipeline -- the shader-layout-only side of the split: the traversal reads per-mesh geometry through these sets by
+    // the host-provided slot index. The classic SW GI layout is added first, so it keeps positional set 0; the two heap
+    // layouts carry explicit sets 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7 with the empty set
+    // layout. Guarded on a live heap so builds without one keep the pure set-0 layout. Mirrors the SW-caustic scaffold
+    // (rt_caustics.cpp ensureSwCausticPipeline).
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(heap.isInitialized()){
         pipelineDesc
@@ -629,11 +630,11 @@ bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_NODES, sceneNodeBuffer)); // scene nodes
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_INSTANCES, instanceBuffer)); // scene instances
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_INSTANCE_MATERIAL, rayTracingState().m_shadowInstanceMaterialBuffer.get())); // instance material
-    // Per-mesh geometry is not bound here: the SW GI surfel traversal fetches BVH nodes / positions / indices /
-    // attributes from the global descriptor heap (bound as sets 8/9 per dispatch) by the material record's per-buffer
-    // slots. The former bounded per-mesh descriptor arrays (slots 5-8) were removed in step 4c; the backing buffers
-    // (m_swShadowMesh*Buffers) stay -- they are what the heap descriptors point at, and the per-dispatch buffer-state
-    // barriers still transition them for the heap reads.
+    // Per-mesh geometry is not bound here: the SW GI surfel traversal reads BVH nodes / positions / indices /
+    // attributes through the global descriptor-index heap (bound as sets 8/9 per dispatch) by the material record's
+    // host-provided slot indices. The former bounded per-mesh descriptor arrays (slots 5-8) were removed in step 4c;
+    // the backing buffers (m_swShadowMesh*Buffers) stay -- they are what the heap descriptors point at, and the
+    // per-dispatch buffer-state barriers still transition them for the heap reads.
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MATERIAL_TYPED, materialTypedBuffer)); // material typed
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MESH_INSTANCES, meshInstanceBuffer)); // mesh instances
     desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get())); // surfel constants
@@ -722,12 +723,13 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         .setComputeShader(rayTracingState().m_surfelTraceHwShader)
         .addBindingLayout(rayTracingState().m_surfelTraceHwBindingLayout)
     ;
-    // Pin the global descriptor heap's resource (set 8) + sampler (set 9) bindless layouts onto the hardware
-    // surfel-trace pipeline so the inline-RayQuery closest-hit fetches each mesh's position / index / attribute buffers
-    // from the heap. The classic HW GI layout is added first (positional set 0); the two heap layouts carry explicit
-    // sets 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7. Guarded on a live heap so non-bindless
-    // builds keep the pure set-0 layout. Mirrors the SW GI scaffold -- this is a COMPUTE pipeline (inline RayQuery), so
-    // the heap binds via bindCompute like the SW paths, not the HW-caustic bindRayTracing.
+    // Pin the global descriptor-index heap's resource (set 8) + sampler (set 9) layouts onto the hardware
+    // surfel-trace pipeline -- the shader-layout-only side of the split: the inline-RayQuery closest-hit reads each
+    // mesh's position / index / attribute buffers through these sets by the host-provided slot index. The classic HW GI
+    // layout is added first (positional set 0); the two heap layouts carry explicit sets 8/9 and
+    // createPipelineLayoutForBindingLayouts gap-fills sets 1-7. Guarded on a live heap so builds without one keep the
+    // pure set-0 layout. Mirrors the SW GI scaffold -- this is a COMPUTE pipeline (inline RayQuery), so the heap binds
+    // via bindCompute like the SW paths, not the HW-caustic bindRayTracing.
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(heap.isInitialized()){
         pipelineDesc
@@ -787,10 +789,11 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwBindingSet(){
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_INSTANCE_MATERIAL, instanceMaterial)); // instance material
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_MATERIAL_TYPED, materialTyped)); // material typed
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_MESH_INSTANCES, meshInstances)); // mesh instances
-    // Per-mesh geometry is not bound here: the HW GI closest-hit fetches positions / indices / attributes from the
-    // global descriptor heap (bound as sets 8/9 per dispatch) by the material record's per-buffer slots. The former
-    // bounded per-mesh descriptor arrays (slots 4-6) were removed in step 4c; the backing buffers (m_shadowMesh*Buffers)
-    // stay -- they are what the heap descriptors point at, and the per-dispatch barriers still transition them.
+    // Per-mesh geometry is not bound here: the HW GI closest-hit reads positions / indices / attributes through the
+    // global descriptor-index heap (bound as sets 8/9 per dispatch) by the material record's host-provided slot
+    // indices. The former bounded per-mesh descriptor arrays (slots 4-6) were removed in step 4c; the backing buffers
+    // (m_shadowMesh*Buffers) stay -- they are what the heap descriptors point at, and the per-dispatch barriers still
+    // transition them.
     desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get())); // surfel constants
     desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get())); // surfel pool
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, rayTracingState().m_surfelPoolSnapshotBuffer.get())); // U4 bounce: prev-frame pool

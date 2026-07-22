@@ -30,8 +30,7 @@
 #define NWB_GI_SW_BINDING_MESH_INSTANCES 10
 
 // The GI surfel trace reuses the SAME software per-mesh buffers the SW shadow/caustic build (buildSceneSwBvh fills the
-// shared dynamic distinct-mesh table in renderer_state.h). Phase 2 M4 retired the fixed NWB_GI_SW_MAX_MESHES cap; the
-// per-mesh geometry is fetched from the descriptor heap.
+// shared dynamic distinct-mesh table in renderer_state.h). The per-mesh geometry is fetched from the descriptor heap.
 #include "../shadow/sw_binding_slots.h"
 
 // Hit shadow rays toward the dominant light per bounce hit (1 = on). gi_sw_trace.slangi's shade reads this.

@@ -19,7 +19,7 @@
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 
 #include <global/generic.h>
-#include <global/containers.h>   // Phase 2 M4: dynamic Vector storage for the per-frame SW distinct-mesh table
+#include <global/containers.h>   // dynamic Vector storage for the per-frame SW distinct-mesh table
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -395,7 +395,7 @@ struct RtSceneBvhState{
 
 
 struct RtShadowState{
-    // Phase 2 M4: the per-frame distinct-mesh table Vectors (the HW m_shadowMesh* table and the SW m_swShadowMesh*
+    // The per-frame distinct-mesh table Vectors (the HW m_shadowMesh* table and the SW m_swShadowMesh*
     // table, both below) allocate from the renderer's global arena, bound once here at construction. The arena
     // allocator cannot be rebound afterward (its copy-assign is a deliberate no-op), so RendererRayTracingState
     // threads the arena in. Every other member keeps its default initializer -- listing only the fourteen Vectors,
@@ -450,9 +450,8 @@ struct RtShadowState{
     usize m_shadowMaterialTypedCapacity = 0u;
     // Per-frame distinct meshes referenced by the TLAS (filled by buildSceneTlas). The three backing buffers feed the
     // global-heap descriptors the HW caustic/GI passes read (keyed by material.meshSlot); the HW GI trace also needs
-    // raw positions to derive geometric face normals, so the position buffer is tracked here too. Phase 2 M4: dynamic
-    // GlobalArena Vectors (bound in the RtShadowState ctor above) -- the fixed NWB_SHADOW_RT_MAX_MESHES cap is retired,
-    // so no distinct mesh is ever dropped.
+    // raw positions to derive geometric face normals, so the position buffer is tracked here too. Dynamic GlobalArena
+    // Vectors (bound in the RtShadowState ctor above) grown on demand, so no distinct mesh is ever dropped.
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshIndexBuffers;
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshAttributeBuffers;
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshPositionBuffers;
@@ -511,9 +510,9 @@ struct RtShadowState{
     u32 m_swShadowMeshCount = 0u;
     // Per-frame distinct meshes referenced by the software scene BVH (filled by buildSceneSwBvh). The SW shadow /
     // caustic / GI traces fetch this geometry from the global descriptor heap by the per-buffer slots carried on the
-    // instance-material record (the bounded per-mesh descriptor arrays were retired in step 4c). Phase 2 M4: grown on
-    // demand -- no fixed per-frame mesh cap -- and cleared (capacity retained) each rebuild; m_swShadowMeshCount
-    // mirrors their length. All eight grow in lockstep (one push per distinct mesh), so slot k indexes them all.
+    // instance-material record. The Vectors grow on demand -- no fixed per-frame mesh cap -- and are cleared (capacity
+    // retained) each rebuild; m_swShadowMeshCount mirrors their length. All eight grow in lockstep (one push per
+    // distinct mesh), so slot k indexes them all.
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshNodeBuffers;
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshPositionBuffers;
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshIndexBuffers;
@@ -901,7 +900,7 @@ class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtS
     friend class RendererRayTracingSystem;
 
 public:
-    // Phase 2 M4: forward the renderer's global arena to RtShadowState so its per-frame SW distinct-mesh table Vectors
+    // Forward the renderer's global arena to RtShadowState so its per-frame SW distinct-mesh table Vectors
     // bind their allocator at construction (the other state bases default-construct).
     explicit RendererRayTracingState(Core::Alloc::GlobalArena& arena)
         : RtShadowState(arena)

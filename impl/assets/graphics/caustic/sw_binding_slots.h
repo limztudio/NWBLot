@@ -50,8 +50,8 @@
 #define NWB_CAUSTIC_SW_GROUP_SIZE 64
 
 // The caustic kernel reuses the SAME software per-mesh buffers + the SAME meshSlot indices the SW shadow scene BVH
-// produced (buildSceneSwBvh fills the shared dynamic distinct-mesh table in renderer_state.h). Phase 2 M4 retired the
-// fixed NWB_CAUSTIC_SW_MAX_MESHES cap alongside the shadow cap; the per-mesh geometry comes from the descriptor heap.
+// produced (buildSceneSwBvh fills the shared dynamic distinct-mesh table in renderer_state.h). The per-mesh geometry
+// comes from the descriptor heap.
 #include "../shadow/sw_binding_slots.h"
 
 // Per-thread traversal stack depths. With the FRONT-TO-BACK ordered descent (caustic_photon_sw_cs.slang) only the

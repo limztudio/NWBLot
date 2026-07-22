@@ -110,10 +110,6 @@
 // light-LOOP index (0..NWB_SCENE_MAX_LIGHTS-1) so the trace pass does one g_NwbSceneLights load + recovers slot=params.z.
 #define NWB_SW_SHADOW_EDGE_RECORD_WORDS 2
 
-// (Phase 2 M4 retired NWB_SW_SHADOW_MAX_MESHES: the shared software distinct-mesh table is a dynamic Vector in
-// renderer_state.h -- the SW shadow / caustic / GI traces read the per-mesh geometry from the descriptor heap, so
-// there is no fixed per-frame mesh cap.)
-
 // Occluder class the per-mesh traversal filters to. Each pass kernel that traces #defines NWB_SW_SHADOW_OCCLUDER to
 // one of these BEFORE including sw_shadow_traverse.slangi; the filter in nwbSwShadowInstanceOccluded then skips the
 // other class. The class is a compile-time identity baked into each pass, not a runtime push value:

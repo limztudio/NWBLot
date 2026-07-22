@@ -199,9 +199,9 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             ReleaseMeshHeapHandle(heap, rt.m_shadowMeshPositionHandles[slot]);
         }
     }
-    // Phase 2 M4: clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once
-    // to the scene's steady-state distinct-mesh count, then reuse that storage) and m_shadowMeshCount mirrors their
-    // length -- the gather below repopulates both by push_back.
+    // Clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once to the
+    // scene's steady-state distinct-mesh count, then reuse that storage) and m_shadowMeshCount mirrors their length --
+    // the gather below repopulates both by push_back.
     rayTracingState().m_shadowMeshIndexBuffers.clear();
     rayTracingState().m_shadowMeshAttributeBuffers.clear();
     rayTracingState().m_shadowMeshPositionBuffers.clear();
@@ -234,7 +234,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             continue;
 
         // Dedupe to a per-mesh table slot: instances sharing a mesh share its index/attribute/position buffers. The
-        // table grows on demand (Phase 2 M4 retired the per-frame mesh cap), so every distinct mesh is registered.
+        // table grows on demand, so every distinct mesh is registered.
         Core::Buffer* meshIndexBuffer = mesh->triangleIndexBuffer.get();
         u32 meshSlot = ~0u; // sentinel: mesh not yet in this frame's distinct-mesh table
         for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
@@ -245,8 +245,8 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         }
         if(meshSlot == ~0u){
             // New distinct mesh: append its three backing buffers to the per-frame table and mint the parallel
-            // global-heap handles the HW caustic/GI traces read this geometry through. Phase 2 M4 retired the fixed
-            // distinct-mesh cap, so every distinct mesh is always registered (the table grows on demand).
+            // global-heap handles the HW caustic/GI traces read this geometry through. Every distinct mesh is always
+            // registered (the table grows on demand).
             meshSlot = rayTracingState().m_shadowMeshCount++;
             rayTracingState().m_shadowMeshIndexBuffers.push_back(meshIndexBuffer);
             rayTracingState().m_shadowMeshAttributeBuffers.push_back(mesh->attributeBuffer.get());
@@ -466,9 +466,9 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             ReleaseMeshHeapHandle(heap, rt.m_swShadowMeshAttributeHandles[slot]);
         }
     }
-    // Phase 2 M4: clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once
-    // to the scene's steady-state distinct-mesh count, then reuse that storage) and m_swShadowMeshCount mirrors their
-    // length -- the gather below repopulates both by push_back.
+    // Clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once to the
+    // scene's steady-state distinct-mesh count, then reuse that storage) and m_swShadowMeshCount mirrors their length
+    // -- the gather below repopulates both by push_back.
     rayTracingState().m_swShadowMeshNodeBuffers.clear();
     rayTracingState().m_swShadowMeshPositionBuffers.clear();
     rayTracingState().m_swShadowMeshIndexBuffers.clear();
@@ -499,7 +499,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             continue;
 
         // Dedupe to a per-mesh table slot: instances sharing a mesh share its node/position/index buffers. The table
-        // grows on demand (Phase 2 M4 retired the per-frame mesh cap), so every distinct mesh is always traced.
+        // grows on demand, so every distinct mesh is always traced.
         Core::Buffer* meshNodeBuffer = mesh->swBvhNodeBuffer.get();
         u32 meshSlot = ~0u; // sentinel: mesh not yet in this frame's distinct-mesh table
         for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){

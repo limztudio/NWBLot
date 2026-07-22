@@ -51,9 +51,6 @@
 // The HW raygen reads the photon grid side from the same push-constant layout as the SW producer.
 #include "sw_binding_slots.h"
 
-// (Phase 2 M4 retired NWB_CAUSTIC_RT_MAX_MESHES: the HW caustic closest-hit fetches its per-mesh attributes from the
-// global descriptor heap (step 4b), so there is no fixed distinct-mesh cap to alias from the shadow trace.)
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

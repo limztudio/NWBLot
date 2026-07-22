@@ -39,10 +39,6 @@
 // was removed in the same step 4c teardown for the same reason -- the opaque trace reads no geometry. Left as a gap,
 // not renumbered.
 
-// (Phase 2 M4 retired NWB_SHADOW_RT_MAX_MESHES: the HW distinct-mesh table is now a dynamic Vector in
-// renderer_state.h -- the HW caustic/GI traces read the per-mesh geometry from the global descriptor heap, so there
-// is no fixed per-frame mesh cap. The three former per-mesh descriptor-array slots 8/9/12 were dropped in step 4c.)
-
 // Workgroup size of the hardware RayQuery opaque shadow trace (shadow_rayquery_cs): one thread per FULL-res pixel.
 #define NWB_SHADOW_RT_GROUP_SIZE 8
 

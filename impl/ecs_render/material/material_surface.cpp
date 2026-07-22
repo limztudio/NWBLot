@@ -207,7 +207,6 @@ bool RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(!createMaterialSurfaceInfo(renderer.material, materialInfo))
             continue;
-        NWB_ASSERT(materialInfo);
         if(materialInfo->transparent)
             hasTransparentRenderers = true;
     }
@@ -251,7 +250,6 @@ bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLooku
         ;
         if(!materialInfoReady)
             return false;
-        NWB_ASSERT(materialInfo);
         return materialInfo->transparent;
     };
 

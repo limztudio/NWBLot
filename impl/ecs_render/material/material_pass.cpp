@@ -402,7 +402,6 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         ;
         if(!materialInfoReady)
             return false;
-        NWB_ASSERT(materialInfo);
         if(materialInfo->transparent != transparent)
             return false;
 
@@ -476,7 +475,6 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         ;
         if(!pipelineReady)
             return false;
-        NWB_ASSERT(pipelineResources);
         const RenderPath::Enum renderPath = pipelineResources->renderPath;
 
         const bool passDrawItemActive = pass != MaterialPipelinePass::CsgReceiverSurface;
@@ -500,7 +498,6 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 if(!csgReceiverSurfacePipelineReady)
                     return false;
             }
-            NWB_ASSERT(csgReceiverSurfacePipelineResources);
             csgReceiverSurfaceRenderPath = csgReceiverSurfacePipelineResources->renderPath;
         }
 
@@ -612,7 +609,6 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 continue;
         }
 
-        NWB_ASSERT(mesh);
         CsgReceiverDrawState csgReceiverState;
         if(csgReceiverLookupPtr && !csgReceiverLookupPtr->resolveReceiverDrawState(entity, csgReceiverPass, csgReceiverState))
             csgReceiverState = CsgReceiverDrawState{};

@@ -112,8 +112,6 @@ bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(
         MaterialPipelineResources* pipelineResources = nullptr;
         if(!findMaterialPassDrawItemResources(drawItem, mesh, pipelineResources))
             return false;
-        NWB_ASSERT(mesh);
-        NWB_ASSERT(pipelineResources);
         if(!materialPassDrawResourcesReady(*mesh) || !pipelineResources->meshletPipeline || !mesh->meshBindingSet){
             return false;
         }
@@ -143,8 +141,6 @@ bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(
         MaterialPipelineResources* pipelineResources = nullptr;
         if(!findMaterialPassDrawItemResources(drawItem, mesh, pipelineResources))
             return false;
-        NWB_ASSERT(mesh);
-        NWB_ASSERT(pipelineResources);
         if(
             !materialPassDrawResourcesReady(*mesh)
             || !pipelineResources->computePipeline

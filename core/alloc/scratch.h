@@ -82,7 +82,6 @@ private:
 
             const usize bufferBegin = reinterpret_cast<usize>(m_buffer);
             const bool isValidRequest = allocationBegin >= bufferBegin && allocationEnd <= available && size <= (m_size - m_remaining);
-            NWB_ASSERT(isValidRequest);
             if(!isValidRequest)
                 return false;
 

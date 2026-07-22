@@ -154,14 +154,12 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
             frameStateCacheable = false;
             continue;
         }
-        NWB_ASSERT(mesh);
 
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(!m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo)){
             frameStateCacheable = false;
             continue;
         }
-        NWB_ASSERT(materialInfo);
 
         const Scene::TransformComponent* transform = world().tryGetComponent<Scene::TransformComponent>(entity);
 

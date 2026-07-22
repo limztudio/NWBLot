@@ -177,7 +177,6 @@ bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Mater
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         if(!ready)
             return;
-        NWB_ASSERT(pipelineResources.meshletPipeline);
         if(!pipelineResources.meshletPipeline){
             ready = false;
             return;
@@ -213,8 +212,6 @@ bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Ma
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         if(!ready)
             return;
-        NWB_ASSERT(pipelineResources.computePipeline);
-        NWB_ASSERT(pipelineResources.emulationPipeline);
         if(!pipelineResources.computePipeline || !pipelineResources.emulationPipeline){
             ready = false;
             return;

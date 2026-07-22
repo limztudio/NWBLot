@@ -279,7 +279,11 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         if(transform){
             // Compose object->world (T * R(quat) * S) and store it as the instance's row-major 3x4 transform;
             // the engine's column-vector SIMDMatrix rows map directly onto AffineTransform (= Float34).
-            const SIMDMatrix instanceWorld = __hidden_raytracing_system::BuildObjectToWorld(transform);
+            const SIMDMatrix instanceWorld = __hidden_raytracing_system::BuildObjectToWorld(
+                LoadFloat(transform->scale),
+                LoadFloat(transform->rotation),
+                LoadFloat(transform->position)
+            );
             StoreFloat(instanceWorld, &instanceDesc.transform);
         }
 
@@ -543,7 +547,14 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         }
 
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
-        const SIMDMatrix objectToWorld = __hidden_raytracing_system::BuildObjectToWorld(transform);
+        const SIMDMatrix objectToWorld = transform
+            ? __hidden_raytracing_system::BuildObjectToWorld(
+                LoadFloat(transform->scale),
+                LoadFloat(transform->rotation),
+                LoadFloat(transform->position)
+            )
+            : MatrixIdentity()
+        ;
         SIMDVector determinant;
         const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
 

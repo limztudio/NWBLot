@@ -84,7 +84,14 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
             continue;
 
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
-        const SIMDMatrix objectToWorld = __hidden_raytracing_system::BuildObjectToWorld(transform);
+        const SIMDMatrix objectToWorld = transform
+            ? __hidden_raytracing_system::BuildObjectToWorld(
+                LoadFloat(transform->scale),
+                LoadFloat(transform->rotation),
+                LoadFloat(transform->position)
+            )
+            : MatrixIdentity()
+        ;
 
         // Use the shared 8-corner transform so caustic targets and the scene BVH retain identical world bounds.
         SIMDVector localMin = LoadFloatInt(mesh->csgLocalBounds.minBounds);

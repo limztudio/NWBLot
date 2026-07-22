@@ -55,15 +55,14 @@ void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noe
     boundsMax = VectorAdd(boundsMax, paddingVector);
 }
 
-SIMDMatrix BuildObjectToWorld(const Scene::TransformComponent* const transform)noexcept{
-    if(!transform)
-        return MatrixIdentity();
-
+// Composes the affine object->world matrix from already-loaded scale/rotation/translation SIMD vectors.
+// The SIMD<->storage boundary stays in the caller: this helper only does SIMD math.
+SIMDMatrix BuildObjectToWorld(const SIMDVector scale, const SIMDVector rotation, const SIMDVector translation)noexcept{
     return MatrixAffineTransformation(
-        LoadFloat(transform->scale),
+        scale,
         VectorZero(),
-        LoadFloat(transform->rotation),
-        LoadFloat(transform->position)
+        rotation,
+        translation
     );
 }
 

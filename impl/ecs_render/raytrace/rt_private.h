@@ -546,7 +546,10 @@ namespace __hidden_raytracing_system{
 [[nodiscard]] f32 SceneBvhAxisComponent(const SIMDVector value, const u32 axis)noexcept;
 [[nodiscard]] f32 SceneBvhAabbSurfaceArea(const SIMDVector aabbMin, const SIMDVector aabbMax)noexcept;
 void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noexcept;
-[[nodiscard]] SIMDMatrix BuildObjectToWorld(const Scene::TransformComponent* transform)noexcept;
+// Composes the affine object->world matrix from already-loaded scale/rotation/translation SIMD vectors.
+// Callers own the SIMD<->storage boundary: load the Float4 component fields at the entry point and pass the
+// resulting SIMDVector values in; do not pass the component pointer here.
+[[nodiscard]] SIMDMatrix BuildObjectToWorld(const SIMDVector scale, const SIMDVector rotation, const SIMDVector translation)noexcept;
 [[nodiscard]] bool ResolveRenderableMeshResources(
     MeshSystem& meshSystem,
     RendererMeshSystem& rendererMeshSystem,

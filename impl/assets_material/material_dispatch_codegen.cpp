@@ -221,7 +221,7 @@ bool EmitDeferredBxdfDispatchModuleImpl(
         if(sourceById[id].empty())
             continue;
 
-        char idText[32] = {};
+        char idText[TextDetail::s_DecimalTextBufferBytes] = {};
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         source += "#define ";
         source += s_DeferredBxdfFunctionMacro;
@@ -241,7 +241,7 @@ bool EmitDeferredBxdfDispatchModuleImpl(
         if(sourceById[id].empty())
             continue;
 
-        char idText[32] = {};
+        char idText[TextDetail::s_DecimalTextBufferBytes] = {};
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         source += "    case ";
         source += idView;
@@ -421,7 +421,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
         if(surfaceById[id].empty())
             continue;
 
-        char idText[32] = {};
+        char idText[TextDetail::s_DecimalTextBufferBytes] = {};
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         source += "namespace ";
         source += s_ShadowTransmittanceBindNamespacePrefix;
@@ -463,7 +463,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
         if(surfaceById[id].empty())
             continue;
 
-        char idText[32] = {};
+        char idText[TextDetail::s_DecimalTextBufferBytes] = {};
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         source += "    case ";
         source += idView;

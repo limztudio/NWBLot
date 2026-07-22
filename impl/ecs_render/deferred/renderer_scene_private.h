@@ -29,6 +29,12 @@ namespace ECSRenderDetail{
 inline constexpr f32 s_CausticSlotUnassigned = -1.f;
 inline constexpr f32 s_CausticSlotDisabled = -2.f;
 
+// SceneLightGpuData::params.y carries static_cast<f32>(LightType::Enum) (Directional=0, Point=1, Spot=2). These
+// thresholds decode the integer-typed light type back from its float packing: a half-way bound between adjacent
+// integer values absorbs any quantization noise from the float round-trip.
+inline constexpr f32 s_LightTypeDirectionalMax = 0.5f;
+inline constexpr f32 s_LightTypePointMax = 1.5f;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,7 +64,7 @@ inline f32 ShadowSlotImportance(
     const SIMDVector intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
     const SIMDVector radiantImportance = VectorMultiply(luminance, intensity);
 
-    if(VectorGetY(params) < 0.5f)
+    if(VectorGetY(params) < s_LightTypeDirectionalMax)
         return VectorGetX(VectorMultiplyAdd(radiantImportance, VectorReplicate(4.0f), s_SIMDOne));
 
     const SIMDVector delta = VectorSubtract(lightPosition, cameraPosition);
@@ -142,7 +148,7 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, SceneLightGpuData* outLig
 // lights (params.y ~ 1) are excluded because omnidirectional emission would spread the photon budget too thin.
 // params.y carries static_cast<f32>(LightType::Enum) (Directional=0, Point=1, Spot=2; see ResolveSceneLights).
 inline bool CausticLightEligible(const SceneLightGpuData& light){
-    return light.params.y < 0.5f || light.params.y > 1.5f;
+    return light.params.y < s_LightTypeDirectionalMax || light.params.y > s_LightTypePointMax;
 }
 
 inline bool CausticLightEnabled(const SceneLightGpuData& light){

@@ -61,7 +61,7 @@ static bool CountFlattenedValueLeaves(const Core::Metascript::Value& value, usiz
 }
 
 static ScratchString MakeIndexedLabel(Core::Alloc::ScratchArena& arena, const AStringView baseLabel, const usize index){
-    char indexBuffer[32] = {};
+    char indexBuffer[TextDetail::s_DecimalTextBufferBytes] = {};
     const AStringView indexText = FormatDecimal(index, indexBuffer);
     NWB_ASSERT(!indexText.empty());
 

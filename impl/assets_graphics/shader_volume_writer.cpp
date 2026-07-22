@@ -58,6 +58,12 @@ enum Enum : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Bytecode cache file-name layout: <shader>__<stage>__<fnv64-hex>.spv
+inline constexpr AStringView s_BytecodeNameSeparator = "__";
+inline constexpr AStringView s_BytecodeExtension = ".spv";
+inline constexpr AStringView s_SourceChecksumExtension = ".source";
+
+
 static VariantCachePaths BuildVariantCachePaths(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
@@ -67,18 +73,25 @@ static VariantCachePaths BuildVariantCachePaths(
     ScratchArena& scratchArena
 ){
     ScratchString bytecodeFileName{scratchArena};
-    bytecodeFileName.reserve(shaderSafeName.size() + 2u + stageSafeName.size() + 2u + 16u + 4u);
+    bytecodeFileName.reserve(
+        shaderSafeName.size()
+        + s_BytecodeNameSeparator.size()
+        + stageSafeName.size()
+        + s_BytecodeNameSeparator.size()
+        + s_HexU64DigitCount
+        + s_BytecodeExtension.size()
+    );
     bytecodeFileName += shaderSafeName;
-    bytecodeFileName += "__";
+    bytecodeFileName += s_BytecodeNameSeparator;
     bytecodeFileName += stageSafeName;
-    bytecodeFileName += "__";
+    bytecodeFileName += s_BytecodeNameSeparator;
     AppendHexU64(ComputeFnv64Text(variantName), bytecodeFileName);
-    bytecodeFileName += ".spv";
+    bytecodeFileName += s_BytecodeExtension;
 
     VariantCachePaths cachePaths(cacheDirectory.arena());
     cachePaths.bytecodePath = cacheDirectory / configurationSafeName / bytecodeFileName;
     cachePaths.sourceChecksumPath = cachePaths.bytecodePath;
-    cachePaths.sourceChecksumPath += ".source";
+    cachePaths.sourceChecksumPath += s_SourceChecksumExtension;
     return cachePaths;
 }
 

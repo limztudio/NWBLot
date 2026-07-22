@@ -258,7 +258,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     commandList.setGraphicsState(graphicsState);
 
     Core::DrawArguments drawArgs;
-    drawArgs.setVertexCount(3);
+    drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);
     commandList.draw(drawArgs);
 }
 

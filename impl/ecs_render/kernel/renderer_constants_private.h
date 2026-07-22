@@ -29,6 +29,9 @@ namespace ECSRenderDetail{
 
 
 inline constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
+// Vertex count of the full-screen triangle used for screen-space passes (no vertex/index buffer; the VS
+// reconstructs position from SV_VertexID). One triangle covers the whole viewport with a single primitive.
+inline constexpr u32 s_FullscreenTriangleVertexCount = 3u;
 inline constexpr u32 s_EmulatedVertexStride = sizeof(f32) * NWB_MESH_EMULATION_VERTEX_FLOAT_COUNT;
 inline constexpr u32 s_CsgPeelLayerCount = NWB_CSG_PEEL_LAYER_COUNT;
 inline constexpr u32 s_CsgReceiverEventLayerCount = NWB_CSG_RECEIVER_EVENT_LAYER_COUNT;

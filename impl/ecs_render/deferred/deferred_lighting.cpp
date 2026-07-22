@@ -212,7 +212,7 @@ bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandLi
     commandList.setGraphicsState(graphicsState);
 
     Core::DrawArguments drawArgs;
-    drawArgs.setVertexCount(3);
+    drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);
     commandList.draw(drawArgs);
     commandList.endRenderPass();
     return true;
@@ -250,7 +250,7 @@ void RendererDeferredSystem::logCausticClassificationOnce(
             continue;
         // params.y carries the light type (Directional=0, Point=1, Spot=2); point lights are excluded so only
         // directional/spot reach here.
-        const bool directional = lights[i].params.y < 0.5f;
+        const bool directional = lights[i].params.y < ECSRenderDetail::s_LightTypeDirectionalMax;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- caustic slot {} -> light index {} ({})")
             , static_cast<u32>(lights[i].params.w)
             , i

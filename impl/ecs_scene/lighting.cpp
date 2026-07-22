@@ -22,11 +22,21 @@ namespace __hidden_lighting{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Length-squared epsilon used to decide whether a quaternion/normalization input is degenerate (near-zero).
+inline constexpr f32 s_NormalizeLengthSquaredEpsilon = 0.0001f;
+// Cosine clamping bounds for valid light cone angles.
+inline constexpr f32 s_ConeCosineMin = -1.0f;
+inline constexpr f32 s_ConeCosineMax = 1.0f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static SIMDVector BuildDirectionalLightDirectionVector(const SIMDVector forward){
     return Vector3NormalizeOr(
         VectorNegate(forward),
         VectorSet(0.0f, 0.0f, -1.0f, 0.0f),
-        0.0001f
+        s_NormalizeLengthSquaredEpsilon
     );
 }
 
@@ -34,7 +44,7 @@ static SIMDVector BuildLightEmissionVector(const SIMDVector forward){
     return Vector3NormalizeOr(
         forward,
         VectorSet(0.0f, 0.0f, 1.0f, 0.0f),
-        0.0001f
+        s_NormalizeLengthSquaredEpsilon
     );
 }
 
@@ -44,7 +54,7 @@ static bool IsValidLightRotation(const SIMDVector rotation){
         !QuaternionIsNaN(rotation)
         && !QuaternionIsInfinite(rotation)
         && IsFinite(rotationLengthSquared)
-        && rotationLengthSquared > 0.0001f
+        && rotationLengthSquared > s_NormalizeLengthSquaredEpsilon
     ;
 }
 
@@ -62,9 +72,9 @@ static bool IsValidLightCone(const f32 innerConeCos, const f32 outerConeCos){
     return
         IsFinite(innerConeCos)
         && IsFinite(outerConeCos)
-        && outerConeCos >= -1.0f
+        && outerConeCos >= s_ConeCosineMin
         && outerConeCos <= innerConeCos
-        && innerConeCos <= 1.0f
+        && innerConeCos <= s_ConeCosineMax
     ;
 }
 

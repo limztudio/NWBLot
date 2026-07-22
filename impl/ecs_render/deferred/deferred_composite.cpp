@@ -107,7 +107,7 @@ bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandL
     commandList.setGraphicsState(graphicsState);
 
     Core::DrawArguments drawArgs;
-    drawArgs.setVertexCount(3);
+    drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);
     commandList.draw(drawArgs);
     return true;
 }

@@ -255,7 +255,7 @@ static constexpr AStringView s_EvalShapeIdDefineName = "NWB_CSG_EVAL_SHAPE_ID";
     const u32 shapeTypeId,
     ScratchString& outValue
 ){
-    char shapeTypeIdText[32] = {};
+    char shapeTypeIdText[TextDetail::s_DecimalTextBufferBytes] = {};
     const AStringView shapeTypeIdView = FormatDecimal(shapeTypeId, shapeTypeIdText);
     if(shapeTypeIdView.empty())
         return false;

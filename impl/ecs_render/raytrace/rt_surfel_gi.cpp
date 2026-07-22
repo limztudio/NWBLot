@@ -1420,12 +1420,12 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         // The args buffer carries the workgroup count; setComputeState auto-transitions it UnorderedAccess->IndirectArgument.
         state.setIndirectParams(rayTracingState().m_surfelTraceIndirectArgsBuffer.get());
         commandList.setComputeState(state);
-        // Phase 2 step 4b (SW GI): the SW surfel-trace shader now fetches per-mesh geometry (BVH nodes / positions /
-        // indices / attributes) from the global descriptor heap (sets 8/9, pinned on the SW pipeline in 4a), so bind the
-        // heap's descriptor tables before the dispatch. SW path only -- the HW surfel pipeline does not carry the heap
-        // layout yet (its migration is separate) and still reads the bounded per-mesh arrays. bindCompute touches only
-        // sets 8/9, never the classic set 0.
-        if(!useHwTrace){
+        // Phase 2 step 4b: BOTH surfel-trace shaders now fetch per-mesh geometry from the global descriptor heap (sets
+        // 8/9, pinned on each pipeline in 4a) -- the SW trace reads BVH nodes / positions / indices / attributes, the HW
+        // trace reads positions / indices / attributes (it walks the TLAS via inline RayQuery, so no nodes) -- so bind
+        // the heap's descriptor tables against the SELECTED trace pipeline before the dispatch. bindCompute touches only
+        // sets 8/9, never the classic set 0; gated on a live heap so non-bindless builds are untouched.
+        {
             Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
             if(heap.isInitialized())
                 heap.bindCompute(commandList, *tracePipeline);

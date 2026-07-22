@@ -35,6 +35,14 @@
 
 #include "gi_trace_common.slangi"
 
+// Global descriptor heap accessor (Phase 2 step 4b): the per-mesh position / index / attribute buffers the closest-hit
+// reconstructs the hit from now live in the bindless heap, reached by the position/index/attributeSlot the instance
+// material record carries (NwbRtInstanceMaterial, populated lockstep with the mesh by the HW shadow builder in
+// rt_swbvh.cpp). Only the raw byte view (NwbHeapRawBuffer) is needed -- the HW GI walks the TLAS via inline RayQuery, so
+// it reads NO BVH nodes (nodeSlot stays unused on the HW path). Heap set 8, pinned on this pass's compute pipeline in
+// step 4a.
+#include "../bindless/bindless_heap.slangi"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -45,6 +53,11 @@ RaytracingAccelerationStructure g_NwbGiHwTlas;
 [[vk::binding(NWB_GI_HW_BINDING_INSTANCE_MATERIAL, NWB_GI_HW_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbGiHwInstanceMaterial;
 
+// DEAD as of step 4b: these parallel per-mesh arrays (slot k = mesh k -- raw position / index / per-corner attribute
+// byte buffers) are no longer read by any accessor -- the closest-hit fetches the same geometry from the bindless heap
+// by the material record's slots. Retained declared + host-bound (bindings 4-6) so the classic HW GI set layout is
+// unchanged until the 4c bounded-path removal drops these declarations together with the C++ layout items + the
+// per-frame binding-set fills.
 [[vk::binding(NWB_GI_HW_BINDING_MESH_POSITIONS, NWB_GI_HW_SET)]]
 ByteAddressBuffer g_NwbGiHwMeshPositions[NWB_GI_HW_MAX_MESHES];
 
@@ -65,8 +78,12 @@ struct NwbGiHwVertexAttrib{
     float2 uv0;
 };
 
-NwbGiHwVertexAttrib nwbGiHwLoadVertexAttrib(const uint meshIndex, const uint attributeIndex){
-    const uint4 packed = g_NwbGiHwMeshAttributes[NonUniformResourceIndex(meshIndex)].Load4(attributeIndex * 16u);
+NwbGiHwVertexAttrib nwbGiHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
+    // attributeSlot is this mesh's per-corner attribute buffer's GLOBAL HEAP slot (carried on the instance material
+    // record, the same mesh->attributeBuffer the bounded g_NwbGiHwMeshAttributes[meshSlot] pointed at). Non-uniform
+    // across the wave (each ray hits a different mesh), so the subscript must be NonUniformResourceIndex-tagged;
+    // NwbHeapRawBuffer() applies that internally and is re-invoked at each Load.
+    const uint4 packed = NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u);
     NwbGiHwVertexAttrib attrib;
     attrib.normal = float3(
         nwbUnpackHalf2x16(packed.x),
@@ -119,21 +136,25 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 
     const uint instanceIndex = query.CommittedInstanceID();
     const NwbRtInstanceMaterial material = g_NwbGiHwInstanceMaterial[instanceIndex];
-    const uint meshSlot = material.meshSlot;
     const uint triangle = query.CommittedPrimitiveIndex();
 
+    // This mesh's index / position / attribute geometry is fetched from the global descriptor heap by the per-buffer
+    // slots the material record carries (populated lockstep with the mesh in rt_swbvh.cpp). Each slot is NON-UNIFORM
+    // across the wave -- different rays hit different meshes -- so its heap subscript must be NonUniformResourceIndex-
+    // tagged; NwbHeapRawBuffer() applies that internally and is re-invoked at EACH access below (never hoisted into a
+    // resource local), exactly as the bounded g_NwbGiHwMesh*[NonUniformResourceIndex(meshSlot)] arrays it replaces did.
     const uint indexBase = triangle * 3u;
-    const uint3 tri = g_NwbGiHwMeshIndices[NonUniformResourceIndex(meshSlot)].Load3(indexBase * 4u);
-    const float3 v0 = asfloat(g_NwbGiHwMeshPositions[NonUniformResourceIndex(meshSlot)].Load3(tri.x * 12u));
-    const float3 v1 = asfloat(g_NwbGiHwMeshPositions[NonUniformResourceIndex(meshSlot)].Load3(tri.y * 12u));
-    const float3 v2 = asfloat(g_NwbGiHwMeshPositions[NonUniformResourceIndex(meshSlot)].Load3(tri.z * 12u));
+    const uint3 tri = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * 4u);
+    const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(tri.x * 12u));
+    const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(tri.y * 12u));
+    const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(tri.z * 12u));
     const float3 objNormal = normalize(cross(v1 - v0, v2 - v0));   // same edges/order/sign as nwbGiSwRayTriangle
     const float2 bary = query.CommittedTriangleBarycentrics();
     const float3 weights = float3(1.0 - bary.x - bary.y, bary.x, bary.y);
     const uint attributeBase = triangle * 3u;
-    const NwbGiHwVertexAttrib a0 = nwbGiHwLoadVertexAttrib(meshSlot, attributeBase);
-    const NwbGiHwVertexAttrib a1 = nwbGiHwLoadVertexAttrib(meshSlot, attributeBase + 1u);
-    const NwbGiHwVertexAttrib a2 = nwbGiHwLoadVertexAttrib(meshSlot, attributeBase + 2u);
+    const NwbGiHwVertexAttrib a0 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase);
+    const NwbGiHwVertexAttrib a1 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
+    const NwbGiHwVertexAttrib a2 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
     const float3 objectShadingNormal = a0.normal * weights.x + a1.normal * weights.y + a2.normal * weights.z;
 
     NwbShadowHit surfaceHit;

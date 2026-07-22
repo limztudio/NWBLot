@@ -409,3 +409,9 @@ FodyWeavers.xsd
 
 # Claude Code local session data (memory, transcripts, settings) — local tooling, not part of the project.
 .claude/
+
+# A/B validation capture artifacts: generated screenshots and diff images from the tests/ab/
+# harness. The Python/shell harness scripts and expected-value .txt files there stay tracked;
+# only the generated image outputs are ignored.
+tests/ab/**/*.bmp
+tests/ab/**/*.png

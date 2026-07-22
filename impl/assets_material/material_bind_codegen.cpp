@@ -1066,6 +1066,20 @@ bool BuildMaterialBindIncludeSourceImpl(
     outSource += "\n";
     AppendMaterialBindGeneratedSeparator(outSource, 3u);
 
+    // The struct + instance emission below appends many small fragments in a tight loop; reserve once from the
+    // authored names so the repeated += appends grow in place instead of reallocating on nearly every append.
+    {
+        usize estimatedStructBytes = 0u;
+        for(const MaterialBindStruct& bindStruct : entry.structs){
+            estimatedStructBytes += bindStruct.name.size() + 32u;
+            for(const MaterialBindField& bindField : bindStruct.fields)
+                estimatedStructBytes += bindField.type.size() + bindField.name.size() + 8u;
+        }
+        for(const MaterialBindInstance& bindInstance : entry.instances)
+            estimatedStructBytes += bindInstance.type.size() + bindInstance.name.size() + 64u;
+        outSource.reserve(outSource.size() + estimatedStructBytes);
+    }
+
     for(const MaterialBindStruct& bindStruct : entry.structs){
         if(!RegisterGeneratedMaterialBindSymbol(
             AStringView(includePath),

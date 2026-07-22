@@ -76,18 +76,14 @@ bool AssignMaterialShadingModelIdsImpl(
 
     for(MaterialCookEntry& entry : materialEntries){
         const AStringView source(entry.bxdfSource);
-        bool assigned = false;
-        for(usize id = 0u; id < uniqueSources.size(); ++id){
-            if(uniqueSources[id] == source){
-                entry.shadingModelId = static_cast<u32>(id);
-                assigned = true;
-                break;
-            }
-        }
-        if(!assigned){
+        // uniqueSources is sorted + deduped, so a binary search locates the id in O(log N) instead of the
+        // earlier O(N) linear scan per material.
+        const auto sourceIt = LowerBound(uniqueSources.begin(), uniqueSources.end(), source);
+        if(sourceIt == uniqueSources.end() || *sourceIt != source){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign shading model id for '{}'"), StringConvert(entry.virtualPath.c_str()));
             return false;
         }
+        entry.shadingModelId = static_cast<u32>(static_cast<usize>(sourceIt - uniqueSources.begin()));
     }
 
     // Assign each material a separate shadow-transmittance id deduped over the unique `.surface` sources (the
@@ -120,18 +116,14 @@ bool AssignMaterialShadingModelIdsImpl(
         }
 
         const AStringView surface(entry.surfaceSource);
-        bool assigned = false;
-        for(usize id = 0u; id < uniqueSurfaces.size(); ++id){
-            if(uniqueSurfaces[id] == surface){
-                entry.shadowTransmittanceModelId = static_cast<u32>(id);
-                assigned = true;
-                break;
-            }
-        }
-        if(!assigned){
+        // uniqueSurfaces is sorted + deduped, so a binary search locates the id in O(log N) instead of the
+        // earlier O(N) linear scan per material.
+        const auto surfaceIt = LowerBound(uniqueSurfaces.begin(), uniqueSurfaces.end(), surface);
+        if(surfaceIt == uniqueSurfaces.end() || *surfaceIt != surface){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign shadow transmittance id for '{}'"), StringConvert(entry.virtualPath.c_str()));
             return false;
         }
+        entry.shadowTransmittanceModelId = static_cast<u32>(static_cast<usize>(surfaceIt - uniqueSurfaces.begin()));
     }
     return true;
 }

@@ -65,6 +65,27 @@ namespace __hidden_material_instance{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Single source of truth for the cache-validity check shared by the prepare and the find paths.
+// Both must compare the same set of identity/revision fields, otherwise the find-only path can disagree with
+// the prepare path about whether a cached entry is still live. Centralizing the comparison keeps the two in
+// lockstep and removes the inverted-logic duplication between the two call sites.
+[[nodiscard]] static bool materialInstanceMutableCacheEntryMatches(
+    const MaterialInstanceMutableCacheEntry& cacheEntry,
+    const MaterialSurfaceInfo& materialInfo,
+    const MaterialInstanceComponent& materialInstance
+)noexcept{
+    return cacheEntry.materialName == materialInfo.materialName
+        && cacheEntry.materialInterface == materialInfo.materialInterface
+        && materialInstance.materialInterface == materialInfo.materialInterface
+        && cacheEntry.typedLayoutHash == materialInfo.typedLayoutHash
+        && cacheEntry.revision == materialInstance.revision
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererMaterialSystem::findMaterialInstanceOverrideField(
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& materialInfo,
@@ -217,13 +238,7 @@ bool RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
 
     auto it = materialState().m_instanceMutableCache.try_emplace(entity, arena()).first;
     MaterialInstanceMutableCacheEntry& cacheEntry = it.value();
-    if(
-        cacheEntry.materialName == materialInfo.materialName
-        && cacheEntry.materialInterface == materialInfo.materialInterface
-        && materialInstance->materialInterface == materialInfo.materialInterface
-        && cacheEntry.typedLayoutHash == materialInfo.typedLayoutHash
-        && cacheEntry.revision == materialInstance->revision
-    ){
+    if(materialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance)){
         outMutableTypedBytes = &cacheEntry.mutableTypedBytes;
         return true;
     }
@@ -263,13 +278,7 @@ bool RendererMaterialSystem::findPreparedMaterialInstanceMutableTypedBytes(
         return false;
 
     const MaterialInstanceMutableCacheEntry& cacheEntry = found.value();
-    if(
-        cacheEntry.materialName != materialInfo.materialName
-        || cacheEntry.materialInterface != materialInfo.materialInterface
-        || materialInstance->materialInterface != materialInfo.materialInterface
-        || cacheEntry.typedLayoutHash != materialInfo.typedLayoutHash
-        || cacheEntry.revision != materialInstance->revision
-    )
+    if(!materialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance))
         return false;
 
     outMutableTypedBytes = &cacheEntry.mutableTypedBytes;

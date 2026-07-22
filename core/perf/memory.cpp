@@ -112,24 +112,11 @@ const MemoryDelta& MemoryRecorder::delta(const MemoryScopeId scope)const{
 }
 
 MemoryScopeId MemoryRecorder::scopeAt(const usize index)const{
-    if(index >= m_scopes.size())
-        return {};
-
-    const ScopeRecord* record = m_scopes[index].get();
-    if(!record)
-        return {};
-
-    MemoryScopeId scope;
-    scope.index = static_cast<u32>(index);
-    scope.generation = record->generation;
-    return scope;
+    return ::ScopeAt<MemoryScopeId>(m_scopes, index);
 }
 
 Name MemoryRecorder::scopeNameAt(const usize index)const{
-    if(index >= m_scopes.size() || !m_scopes[index])
-        return NAME_NONE;
-
-    return m_scopes[index]->name;
+    return ::ScopeNameAt(m_scopes, index);
 }
 
 const MemorySnapshot& MemoryRecorder::snapshotAt(const usize index)const{
@@ -147,14 +134,7 @@ const MemoryDelta& MemoryRecorder::deltaAt(const usize index)const{
 }
 
 MemoryRecorder::ScopeRecord* MemoryRecorder::findScope(const MemoryScopeId scope)const{
-    if(!scope.valid() || scope.index >= m_scopes.size())
-        return nullptr;
-
-    ScopeRecord* record = m_scopes[scope.index].get();
-    if(!record || record->generation != scope.generation)
-        return nullptr;
-
-    return record;
+    return ::FindNamedScope<MemoryScopeId>(m_scopes, scope);
 }
 
 

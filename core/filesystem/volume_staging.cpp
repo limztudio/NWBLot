@@ -4,6 +4,7 @@
 
 #include "volume_staging.h"
 #include "volume_staging_detail.h"
+#include "volume_storage_detail.h"
 #include "arena_names.h"
 
 #include <core/alloc/scratch.h>
@@ -112,13 +113,6 @@ static ACompactString FilesystemMutationFailureDetail(const ErrorCode& errorCode
     return detail;
 }
 
-static void LogFailure(const AStringView volumeName, const AStringView operation, const AStringView detail){
-    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed: {}")
-        , StringConvert(volumeName)
-        , StringConvert(operation)
-        , StringConvert(detail)
-    );
-}
 
 
 using StagedVolumePaths = StagedDirectoryPaths;
@@ -430,7 +424,7 @@ bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& ou
 
 bool RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeName){
     if(!::ValidVolumeName(volumeName)){
-        __hidden_filesystem_staging::LogFailure(volumeName, "remove", "invalid volume name");
+        __hidden_filesystem::LogFailure(volumeName, "remove", "invalid volume name");
         return false;
     }
 

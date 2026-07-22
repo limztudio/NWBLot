@@ -54,3 +54,49 @@ template<
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+// Shared scope-resolution helpers: the Memory/Timing recorders (and any future named-scope recorder that
+// stores a vector of generation-stamped records) resolve a ScopeId the same way and project the same
+// index/name accessors. Centralizing them here keeps the lookup contract single-sourced.
+
+template<
+    typename ScopeId,
+    typename ScopeVector
+>
+[[nodiscard]] auto FindNamedScope(const ScopeVector& scopes, const ScopeId scope) -> decltype(scopes[scope.index].get()){
+    if(!scope.valid() || scope.index >= scopes.size())
+        return nullptr;
+
+    auto record = scopes[scope.index].get();
+    if(!record || record->generation != scope.generation)
+        return nullptr;
+
+    return record;
+}
+
+template<typename ScopeId, typename ScopeVector>
+[[nodiscard]] ScopeId ScopeAt(const ScopeVector& scopes, const usize index){
+    if(index >= scopes.size())
+        return {};
+
+    auto record = scopes[index].get();
+    if(!record)
+        return {};
+
+    ScopeId scope;
+    scope.index = static_cast<u32>(index);
+    scope.generation = record->generation;
+    return scope;
+}
+
+template<typename ScopeVector>
+[[nodiscard]] Name ScopeNameAt(const ScopeVector& scopes, const usize index){
+    if(index >= scopes.size() || !scopes[index])
+        return NAME_NONE;
+
+    return scopes[index]->name;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

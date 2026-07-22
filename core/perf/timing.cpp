@@ -127,24 +127,11 @@ const TimingStats& TimingRecorder::stats(const TimingScopeId scope)const{
 }
 
 TimingScopeId TimingRecorder::scopeAt(const usize index)const{
-    if(index >= m_scopes.size())
-        return {};
-
-    const ScopeRecord* record = m_scopes[index].get();
-    if(!record)
-        return {};
-
-    TimingScopeId scope;
-    scope.index = static_cast<u32>(index);
-    scope.generation = record->generation;
-    return scope;
+    return ::ScopeAt<TimingScopeId>(m_scopes, index);
 }
 
 Name TimingRecorder::scopeNameAt(const usize index)const{
-    if(index >= m_scopes.size() || !m_scopes[index])
-        return NAME_NONE;
-
-    return m_scopes[index]->name;
+    return ::ScopeNameAt(m_scopes, index);
 }
 
 const TimingStats& TimingRecorder::statsAt(const usize index)const{
@@ -166,14 +153,7 @@ void TimingRecorder::recordSample(const Name& scopeName, const f64 seconds, cons
 }
 
 TimingRecorder::ScopeRecord* TimingRecorder::findScope(const TimingScopeId scope)const{
-    if(!scope.valid() || scope.index >= m_scopes.size())
-        return nullptr;
-
-    ScopeRecord* record = m_scopes[scope.index].get();
-    if(!record || record->generation != scope.generation)
-        return nullptr;
-
-    return record;
+    return ::FindNamedScope<TimingScopeId>(m_scopes, scope);
 }
 
 

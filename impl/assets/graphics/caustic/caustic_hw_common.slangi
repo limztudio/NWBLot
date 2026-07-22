@@ -102,19 +102,14 @@ RaytracingAccelerationStructure g_NwbCausticHwTlas;
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL, NWB_CAUSTIC_RT_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticHwInstanceMaterial;
 
-// DEAD as of step 4b: these parallel per-mesh arrays (slot k = mesh k -- the raw triangle index byte buffer + the
-// per-triangle-corner attribute byte buffer, Half4U normal @ +0 / Float2U uv0 @ +8) are no longer read by any accessor.
-// The index array was already unread (the hardware fixed-function intersector supplies the hit triangle + barycentrics,
-// so the HW caustic never fetches indices); the attribute closest-hit now fetches the same bytes from the bindless heap
-// by material.attributeSlot. Retained declared + host-bound (bindings 11-12) so the classic caustic RT set layout is
-// unchanged until the 4c bounded-path removal drops these declarations together with the C++ layout items + the
-// per-frame binding-set fills. (Still no position array: bending on the interpolated shading normal needs only the
-// corner normals -- the world hit point comes from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().)
-[[vk::binding(NWB_CAUSTIC_RT_BINDING_MESH_INDICES, NWB_CAUSTIC_RT_SET)]]
-ByteAddressBuffer g_NwbCausticHwMeshIndices[NWB_CAUSTIC_RT_MAX_MESHES];
-
-[[vk::binding(NWB_CAUSTIC_RT_BINDING_MESH_ATTRIBUTES, NWB_CAUSTIC_RT_SET)]]
-ByteAddressBuffer g_NwbCausticHwMeshAttributes[NWB_CAUSTIC_RT_MAX_MESHES];
+// The per-corner attribute geometry the closest-hit interpolates is fetched from the bindless heap (step 4b) by the
+// material record's attributeSlot; the parallel per-mesh descriptor arrays that preceded it (bindings 11-12 -- the raw
+// triangle index byte buffer, already unread on the HW path since the fixed-function intersector supplies the hit
+// triangle + barycentrics, plus the per-triangle-corner attribute byte buffer) were dropped in the step 4c bounded-path
+// removal. The shared C++ backing buffers stay -- the attribute heap descriptor points at m_shadowMeshAttributeBuffers,
+// and the HW GI pass still binds the shadow per-mesh buffers as bounded arrays until its own migration. (Still no
+// position array: bending on the interpolated shading normal needs only the corner normals -- the world hit point comes
+// from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().)
 
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS, NWB_CAUSTIC_RT_SET)]]
 StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbCausticHwEmissionTargets;

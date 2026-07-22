@@ -1223,10 +1223,11 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     auto* device = graphics().getDevice();
 
     if(!rayTracingState().m_hwCausticBindingLayout){
-        // Mirrors the shadow RT layout (TLAS + scene/light + instance-material + material-context + per-mesh
-        // index/attribute arrays) and adds the caustic I/O (emission targets, view, G-buffer depth + world position
-        // for the splat, the R32_UINT accumulator UAV) + the push constants (byte-identical to the SW producer's).
-        // No per-mesh position array: the refraction bends on the interpolated shading normal (from the attributes).
+        // Mirrors the shadow RT layout (TLAS + scene/light + instance-material + material-context) and adds the caustic
+        // I/O (emission targets, view, G-buffer depth + world position for the splat, the R32_UINT accumulator UAV) +
+        // the push constants (byte-identical to the SW producer's). No per-mesh geometry arrays: the closest-hit fetches
+        // its per-corner attributes from the global descriptor heap (sets 8/9, pinned below) by the material record's
+        // attributeSlot, and the refraction bends on that interpolated shading normal (so it needs no positions/indices).
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::AllRayTracing);
         layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_CAUSTIC_RT_BINDING_TLAS, 1));
@@ -1240,8 +1241,6 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RT_BINDING_GBUFFER_DEPTH, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RT_BINDING_GBUFFER_WORLD_POSITION, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RT_BINDING_ACCUMULATOR, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_INDICES, NWB_CAUSTIC_RT_MAX_MESHES));
-        layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_ATTRIBUTES, NWB_CAUSTIC_RT_MAX_MESHES));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticPhotonPushConstants)));
 
         rayTracingState().m_hwCausticBindingLayout = device->createBindingLayout(layoutDesc);
@@ -1396,14 +1395,11 @@ bool RendererRayTracingSystem::ensureCausticRtBindingSet(DeferredFrameTargets& t
         Core::TextureDimension::Texture2DArray
     ));
 
-    // Per-mesh descriptor arrays: bind every slot (the closest-hit only indexes meshSlot < meshCount). Unused tail
-    // slots are padded with the last real mesh so the non-bindless arrays have no unbound descriptors. The caustic
-    // reuses the shadow per-mesh index + attribute buffers verbatim (the shading-normal bend needs no positions).
-    for(u32 slot = 0u; slot < NWB_CAUSTIC_RT_MAX_MESHES; ++slot){
-        const u32 source = (slot < meshCount) ? slot : (meshCount - 1u);
-        bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_INDICES, rayTracingState().m_shadowMeshIndexBuffers[source]).setArrayElement(slot));
-        bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_ATTRIBUTES, rayTracingState().m_shadowMeshAttributeBuffers[source]).setArrayElement(slot));
-    }
+    // Per-mesh geometry is not bound here: the HW caustic closest-hit fetches its per-corner attributes from the global
+    // descriptor heap (bound as sets 8/9 per dispatch) by the material record's attributeSlot. The former bounded
+    // per-mesh descriptor arrays (slots 11-12) were removed in step 4c; the backing buffers (m_shadowMeshAttributeBuffers)
+    // stay -- they are what the attribute heap descriptor points at, and the HW GI pass still binds the shadow per-mesh
+    // buffers as bounded arrays until its own bindless migration.
 
     auto* device = graphics().getDevice();
     rayTracingState().m_hwCausticBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_hwCausticBindingLayout);
@@ -1516,13 +1512,13 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         if(temporalDecay > 0.f)
             prepareCausticAccumulatorForSplat(commandList, targets, temporalDecay);
 
-        // Move the per-mesh index/attribute/position byte buffers + the shadow-owned material context + the emission
-        // targets to ShaderResource; setResourceStatesForBindingSet derives the TLAS, G-buffer SRVs, view CB, and the
-        // accumulator UAV.
-        for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
-            commandList.setBufferState(rayTracingState().m_shadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
+        // Move the per-mesh attribute byte buffers to ShaderResource (the heap descriptors the closest-hit reads by
+        // attributeSlot point at them, so they still need the transition) + the shadow-owned material context + the
+        // emission targets; setResourceStatesForBindingSet derives the TLAS, G-buffer SRVs, view CB, and the accumulator
+        // UAV. The per-mesh INDEX buffers are no longer transitioned here -- the HW caustic reads no indices (the
+        // fixed-function intersector supplies the hit triangle), so the step 4c teardown dropped that dead binding.
+        for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot)
             commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
-        }
         commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);

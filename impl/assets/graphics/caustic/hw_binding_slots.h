@@ -38,12 +38,11 @@
 #define NWB_CAUSTIC_RT_BINDING_GBUFFER_WORLD_POSITION 9
 #define NWB_CAUSTIC_RT_BINDING_ACCUMULATOR 10
 
-// Parallel per-mesh descriptor arrays (slot k of the array = mesh k = material.meshSlot): the raw triangle index
-// byte buffer + the per-triangle-corner attribute byte buffer (normal/uv0 the closest-hit interpolates into the
-// SHADING normal the refraction bends on + the per-hit surface dispatch). Each is ONE binding holding
-// NWB_CAUSTIC_RT_MAX_MESHES array elements (NOT consecutive slots).
-#define NWB_CAUSTIC_RT_BINDING_MESH_INDICES 11
-#define NWB_CAUSTIC_RT_BINDING_MESH_ATTRIBUTES 12
+// Slots 11-12 (the former parallel per-mesh descriptor arrays -- the raw triangle index byte buffer + the
+// per-triangle-corner attribute byte buffer) were removed in the step 4c bounded-path teardown: the HW caustic
+// closest-hit now fetches its per-corner attributes from the global descriptor heap by the material record's
+// attributeSlot (and never read indices -- the fixed-function intersector supplies the hit triangle). The numbers are
+// left as a gap (not renumbered) so the surrounding bindings keep their values.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

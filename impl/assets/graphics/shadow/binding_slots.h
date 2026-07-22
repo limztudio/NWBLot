@@ -24,18 +24,20 @@
 // position, so bindings need not be contiguous) to keep the mesh-array slots below at their existing numbers. The
 // shared material buffer (m_shadowInstanceMaterialBuffer) still exists -- the software shadow / GI / caustics paths
 // read it through their own binding sets.
-// Parallel per-mesh descriptor arrays (slot k = mesh k), indexed by material.meshSlot: the raw triangle index buffer +
-// the U2 per-triangle-corner shadow-trace attribute buffer (normal/uv0) + the raw object-space position buffer.
-#define NWB_SHADOW_RT_BINDING_MESH_INDICES 8
-#define NWB_SHADOW_RT_BINDING_MESH_ATTRIBUTES 9
+// Slots 8-9 (the former parallel per-mesh index + per-triangle-corner attribute descriptor arrays) were removed in
+// the step 4c bounded-path teardown: the hardware opaque shadow trace commits the first FORCE_OPAQUE hit and reads
+// no geometry, so they were declared-but-never-fetched dead bindings (M3 already dropped them from occlusion.slangi /
+// shadow_rayquery.slangi). The numbers are left as a gap (not renumbered) so the surrounding bindings keep their
+// values. The transparent-occluder geometry the colored software shadow needs is fetched from the global descriptor
+// heap by the SW path, not from this trace's slot map.
 // The shared material-constants context the per-hit transmittance dispatch reads (same buffers the rasterizer
 // binds at NWB_MESH_BINDING_MATERIAL_TYPED / NWB_MESH_BINDING_INSTANCE, pointed here for this pass): the typed
 // material-constant words + the per-instance mutable-storage records.
 #define NWB_SHADOW_RT_BINDING_MATERIAL_TYPED 10
 #define NWB_SHADOW_RT_BINDING_MESH_INSTANCES 11
-// Per-mesh raw object-space position byte buffer (slot k = mesh k, float3 at vertexIndex * 12), for deriving the
-// geometric face normal; indexed by the same i0/i1/i2 the index buffer yields.
-#define NWB_SHADOW_RT_BINDING_MESH_POSITIONS 12
+// Slot 12 (the former per-mesh raw object-space position descriptor array, used to derive the geometric face normal)
+// was removed in the same step 4c teardown for the same reason -- the opaque trace reads no geometry. Left as a gap,
+// not renumbered.
 
 // Maximum distinct meshes the per-mesh descriptor arrays (index + attribute + position) can address in one frame;
 // meshes beyond it cast a colorless (opaque) shadow that frame (logged once). The hardware shadow trace is an

@@ -239,9 +239,11 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
-    // Transition the shared geometry and material-context buffers carried by the RayQuery layout to ShaderResource;
-    // buildSceneTlas last used positions/indices as acceleration-structure inputs. The binding set then derives the
-    // remaining states (TLAS read, G-buffer SRVs, scene/light buffers, and the visibility UAV).
+    // Transition the shared per-mesh geometry + material-context buffers to ShaderResource; buildSceneTlas last used
+    // positions/indices as acceleration-structure inputs. The opaque trace itself reads no geometry (its per-mesh
+    // descriptor arrays were dropped in step 4c), but these buffers back the global-heap descriptors the caustic/GI
+    // passes read, so they are staged to ShaderResource here right after the shared TLAS build. The binding set then
+    // derives the remaining states (TLAS read, G-buffer SRVs, scene/light buffers, and the visibility UAV).
     for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
         commandList.setBufferState(rayTracingState().m_shadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
@@ -721,13 +723,11 @@ void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayou
     layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, 1)); // soft trace: half-res; hard fallback: full-res
     // (slot 7, the per-instance occluder material table, is intentionally absent: the opaque fast path loads no
     // per-instance material. The shared buffer stays for the SW/GI/caustics paths -- see binding_slots.h.)
-    // Per-mesh descriptor arrays (index + attribute + position byte buffers) and material-context buffers remain in
-    // the shared trace slot map. The bounded SRV arrays mirror the software traversal's compute path.
-    layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INDICES, NWB_SHADOW_RT_MAX_MESHES));
-    layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_ATTRIBUTES, NWB_SHADOW_RT_MAX_MESHES));
+    // Only the shared material-context buffers remain in this trace's slot map. The per-mesh index/attribute/position
+    // descriptor arrays (slots 8/9/12) were dropped in the step 4c bounded-path teardown: the opaque fast path reads
+    // no geometry, so they were dead host bindings the occlusion/rayquery shaders never declared -- see binding_slots.h.
     layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INSTANCES, 1));
-    layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_POSITIONS, NWB_SHADOW_RT_MAX_MESHES));
     // Soft shadow cone-jitter: the frame counter (NwbShadowRqPushConstants) seeds the per-pixel low-discrepancy jitter
     // sample for soft-light opaque traces. Sized to the LARGER of the two pipelines that share this layout -- the full-res
     // hard trace sets only ShadowRqPushConstants (frameIndex), while the half-res SOFT trace (shadow_rayquery_soft_cs) sets
@@ -745,7 +745,6 @@ void RendererRayTracingSystem::appendShadowTraceBindingSet(Core::BindingSetDesc&
     // The visibility UAV target differs per pass (half-res for the trace, full-res for the hard fallback); everything
     // else uses the identical trace layout. Its shadow-owned material context is built by buildSceneTlas over ALL
     // gathered occluders, unlike the draw-pass buffers, which hold only the opaque set at trace time.
-    const u32 meshCount = rayTracingState().m_shadowMeshCount;
     desc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, rayTracingState().m_tlas.get()));
     desc.addItem(Core::BindingSetItem::Texture_SRV(
         NWB_SHADOW_RT_BINDING_GBUFFER_WORLD_POSITION,
@@ -781,15 +780,8 @@ void RendererRayTracingSystem::appendShadowTraceBindingSet(Core::BindingSetDesc&
     // bound by the SW shadow / GI / caustics passes through their own sets.)
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, rayTracingState().m_shadowMaterialTypedBuffer.get()));
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INSTANCES, rayTracingState().m_shadowInstanceBuffer.get()));
-
-    // The shared trace layout uses bounded per-mesh descriptor arrays, so bind every slot. Unused tail slots are
-    // padded with the last real mesh so a non-bindless array has no unbound descriptors.
-    for(u32 slot = 0u; slot < NWB_SHADOW_RT_MAX_MESHES; ++slot){
-        const u32 source = (slot < meshCount) ? slot : (meshCount - 1u);
-        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INDICES, rayTracingState().m_shadowMeshIndexBuffers[source]).setArrayElement(slot));
-        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_ATTRIBUTES, rayTracingState().m_shadowMeshAttributeBuffers[source]).setArrayElement(slot));
-        desc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_POSITIONS, rayTracingState().m_shadowMeshPositionBuffers[source]).setArrayElement(slot));
-    }
+    // The per-mesh index/attribute/position descriptor arrays (slots 8/9/12) and their fill loop were removed in the
+    // step 4c bounded-path teardown -- the opaque trace reads no geometry, so nothing bound here was ever fetched.
 }
 
 

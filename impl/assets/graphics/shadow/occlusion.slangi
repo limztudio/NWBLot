@@ -58,8 +58,8 @@ RWTexture2DArray<float4> g_NwbShadowVisibility;
 // formerly at NWB_SHADOW_RT_BINDING_MESH_INDICES/ATTRIBUTES/POSITIONS) are removed from this trace. The hardware
 // opaque path reads no geometry -- shadow_rayquery.slangi commits the first FORCE_OPAQUE hit for a binary
 // blocked/lit result -- so they were declared-but-never-fetched dead bindings. The transparent-occluder geometry
-// the colored software shadow needs is fetched by sw_shadow_traverse.slangi from its own per-mesh arrays (soon the
-// heap). The host still binds these three descriptors until M4 drops the C++ layout items + fill loops.
+// the colored software shadow needs is fetched by sw_shadow_traverse.slangi from the global descriptor heap. The
+// step 4c teardown dropped the host-side C++ layout items + fill loop for these three slots (they are now gaps).
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

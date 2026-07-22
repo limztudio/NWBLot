@@ -44,11 +44,13 @@ struct DeviceDesc{
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
 
+    // Queue handles grouped together, then their integer indices packed back-to-back, to avoid the
+    // 4-byte padding that an interleaved handle/index layout would otherwise introduce between each pair.
     VkQueue graphicsQueue = VK_NULL_HANDLE;
-    i32 graphicsQueueIndex = -1;
     VkQueue transferQueue = VK_NULL_HANDLE;
-    i32 transferQueueIndex = -1;
     VkQueue computeQueue = VK_NULL_HANDLE;
+    i32 graphicsQueueIndex = -1;
+    i32 transferQueueIndex = -1;
     i32 computeQueueIndex = -1;
 
     GraphicsAllocator& allocator;

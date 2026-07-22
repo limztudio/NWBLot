@@ -193,8 +193,9 @@ static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCa
 // material-constants context the surface hook needs (the constant block byte offset into g_NwbMaterialTypedWords
 // and the g_NwbMeshInstances index that resolves the mutable storage offset). Built per frame into one structured
 // buffer indexed by the shadow instance id (hardware InstanceID() == software scene-BVH leaf index), so the
-// hardware and software trace paths read the same record for the same entity. The model id dispatches
-// the per-hit transmittance hook; meshSlot indexes the per-mesh attribute buffers the shadow trace interpolates.
+// hardware and software trace paths read the same record for the same entity. The model id dispatches the
+// per-hit transmittance hook; meshSlot is the host-side index into the per-mesh buffer Vectors (it fills the
+// heap slots below and drives host barriers), while the trace reaches geometry through those heap slots.
 struct NwbRtInstanceMaterialGpu{
     u32 shadowTransmittanceModelId = Limit<u32>::s_Max;
     u32 flags = 0u;

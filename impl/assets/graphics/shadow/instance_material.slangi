@@ -18,7 +18,8 @@
 // Per-instance shadow-occluder material, indexed by the shadow instance id (hardware InstanceID() == software
 // scene-BVH leaf index). shadowTransmittanceModelId dispatches the per-hit transmittance hook; flags bit0 =
 // isTransparent (1 -> evaluate the hook, multiply the running transmittance and keep tracing; 0 -> opaque, zero
-// the transmittance and stop); meshSlot indexes the per-mesh attribute buffers the trace interpolates;
+// the transmittance and stop); meshSlot is host-side/layout-only here -- the host indexes its per-mesh buffer
+// tables by it, while the trace reaches geometry through the heap slots below, not meshSlot;
 // materialConstantByteOffset locates the occluder's constant block in g_NwbMaterialTypedWords and
 // meshInstanceIndex indexes g_NwbMeshInstances (the mutable storage offset) -- together they reconstruct the
 // material-constants context the surface hook reads. GI evaluates the same hook for baseColor at the traced hit,

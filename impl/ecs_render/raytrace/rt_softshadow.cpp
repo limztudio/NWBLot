@@ -336,6 +336,19 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         return state;
     };
 
+    // Phase 2 step 4b: the soft transparent trace reuses an SW-shadow pass pipeline (built with the heap layout in
+    // step 4a by ensureSwShadowPassPipeline), so the heap's descriptor tables (sets 8/9) must be BOUND before it
+    // dispatches, not merely present in its layout. bindDescriptorHeap binds only sets 8/9 (it never disturbs the
+    // classic set 0), so bind right after the ComputeState and before the dispatch, mirroring renderGpuBvhShadowVisibility.
+    // Bound per pass so set 8 is freshly bound immediately ahead of the dispatch, immune to a set-0 rebind disturbing it;
+    // gated on a live heap so non-bindless builds skip it.
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    const bool heapLive = heap.isInitialized();
+    const auto bindPassHeap = [&](const Core::ComputePipelineHandle& pipeline){
+        if(heapLive)
+            heap.bindCompute(commandList, *pipeline.get());
+    };
+
     // Geometry downsample: fill the half-res packed geometry cache ONCE (slot-independent) before the per-slot
     // resolve loop taps it. Writes the cache UAV; each slot's resolve then reads it as an SRV (the cache is not
     // rewritten, so the UAV->SRV transition happens once and every directional slot shares it).
@@ -492,6 +505,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         transparentTracePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
         transparentTracePush.frameIndex = frameIndex;
         commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentSoftPipeline));
+        bindPassHeap(rayTracingState().m_swShadowTransparentSoftPipeline);
         commandList.setPushConstants(&transparentTracePush, sizeof(transparentTracePush));
         commandList.dispatch(softGroupsX, softGroupsY, 1u);
 

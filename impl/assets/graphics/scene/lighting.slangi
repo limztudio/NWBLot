@@ -124,17 +124,19 @@ void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 
     lightVector = nwbSafeNormalize(toLight, float3(0.0, 0.0, -1.0));
 
     const float range = max(light.params.x, 0.0001);
-    float attenuation = saturate(1.0 - length(toLight) / range);
+    // attenuation + cone smoothstep are bounded [0,1] falloff weights that only ever scale the already-half radiance,
+    // so they are kept half (mobile register pressure / bandwidth) while the underlying direction math stays float.
+    half attenuation = half(saturate(1.0 - length(toLight) / range));
     attenuation *= attenuation;
 
     if(lightType > 1.5){
         const float innerConeCos = light.position.w;
         const float outerConeCos = light.direction.w;
         const float3 emission = nwbSafeNormalize(light.direction.xyz, float3(0.0, 0.0, -1.0));
-        attenuation *= smoothstep(outerConeCos, innerConeCos, dot(-lightVector, emission));
+        attenuation *= half(smoothstep(outerConeCos, innerConeCos, dot(-lightVector, emission)));
     }
 
-    radiance = baseRadiance * half(attenuation);
+    radiance = baseRadiance * attenuation;
 }
 
 half3 nwbSceneShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVector, float3 tangentVector, float3 bitangentVector, float3 viewVector, half ndotv, float3 worldPosition){

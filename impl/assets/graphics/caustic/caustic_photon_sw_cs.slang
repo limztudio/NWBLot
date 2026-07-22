@@ -71,7 +71,7 @@ StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticSwInstance
 // Per-mesh geometry (BVH nodes / raw positions / raw indices / per-corner attributes) is fetched from the bindless
 // heap (step 4b) by the material record's per-buffer slots; the parallel per-mesh descriptor arrays that preceded it
 // (bindings 5-8) were dropped in the step 4c bounded-path removal. The shared C++ backing buffers stay -- the heap
-// descriptors point at them, and the SW GI pass still binds them as bounded arrays until its own migration.
+// descriptors point at them, and the per-dispatch buffer-state barriers still transition them for the heap reads.
 
 // One caustic emission target (P1): the world-space AABB of a refractive instance. Mirrors the C++
 // NwbCausticEmissionTargetGpu (32 bytes; the w lanes are unused padding).

@@ -253,13 +253,11 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         .setComputeShader(rayTracingState().m_surfelTraceShader)
         .addBindingLayout(rayTracingState().m_surfelTraceBindingLayout)
     ;
-    // Phase 2 (SW GI migration, step 4a): pin the global descriptor heap's resource (set 8) + sampler (set 9) bindless
-    // layouts onto the SW surfel-trace pipeline so the traversal can later fetch per-mesh geometry from the heap. The
-    // classic SW GI layout is added first, so it keeps positional set 0; the two heap layouts carry explicit sets 8/9 and
-    // createPipelineLayoutForBindingLayouts gap-fills sets 1-7 with the empty set layout. Guarded on a live heap so
-    // non-bindless builds keep the pure set-0 layout. Added BEFORE the shader consumes the heap so the mixed
-    // classic+bindless pipeline layout is validated in isolation (zero rendering change) ahead of the 4b accessor rewrite
-    // that reads through it. Mirrors the SW-caustic step 4a scaffold (rt_caustics.cpp ensureSwCausticPipeline).
+    // Pin the global descriptor heap's resource (set 8) + sampler (set 9) bindless layouts onto the SW surfel-trace
+    // pipeline so the traversal fetches per-mesh geometry from the heap. The classic SW GI layout is added first, so
+    // it keeps positional set 0; the two heap layouts carry explicit sets 8/9 and createPipelineLayoutForBindingLayouts
+    // gap-fills sets 1-7 with the empty set layout. Guarded on a live heap so non-bindless builds keep the pure set-0
+    // layout. Mirrors the SW-caustic scaffold (rt_caustics.cpp ensureSwCausticPipeline).
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(heap.isInitialized()){
         pipelineDesc
@@ -724,13 +722,12 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         .setComputeShader(rayTracingState().m_surfelTraceHwShader)
         .addBindingLayout(rayTracingState().m_surfelTraceHwBindingLayout)
     ;
-    // Phase 2 (HW GI migration, step 4a): pin the global descriptor heap's resource (set 8) + sampler (set 9) bindless
-    // layouts onto the hardware surfel-trace pipeline so the inline-RayQuery closest-hit can later fetch each mesh's
-    // position / index / attribute buffers from the heap. The classic HW GI layout is added first (positional set 0);
-    // the two heap layouts carry explicit sets 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7. Guarded
-    // on a live heap so non-bindless builds keep the pure set-0 layout; INERT until the 4b accessor rewrite reads through
-    // it. Mirrors the SW GI step 4a scaffold (ce336658) -- this is a COMPUTE pipeline (inline RayQuery), so the heap binds
-    // via bindCompute like the SW paths, not the HW-caustic bindRayTracing.
+    // Pin the global descriptor heap's resource (set 8) + sampler (set 9) bindless layouts onto the hardware
+    // surfel-trace pipeline so the inline-RayQuery closest-hit fetches each mesh's position / index / attribute buffers
+    // from the heap. The classic HW GI layout is added first (positional set 0); the two heap layouts carry explicit
+    // sets 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7. Guarded on a live heap so non-bindless
+    // builds keep the pure set-0 layout. Mirrors the SW GI scaffold -- this is a COMPUTE pipeline (inline RayQuery), so
+    // the heap binds via bindCompute like the SW paths, not the HW-caustic bindRayTracing.
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(heap.isInitialized()){
         pipelineDesc

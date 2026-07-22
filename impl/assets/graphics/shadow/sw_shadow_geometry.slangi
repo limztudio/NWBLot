@@ -29,9 +29,9 @@
 // world->object transform + per-mesh descriptor slot) + its world->object transform helpers, and the vertex-attribute
 // unpack. Per-mesh geometry (BVH nodes / raw positions / raw indices / per-corner attributes) is fetched from the
 // bindless heap (step 4b) by the material record's per-buffer slots; the parallel per-mesh descriptor arrays that
-// preceded it were dropped in the step 4c bounded-path removal (the shared C++ backing buffers stay -- the heap
-// descriptors point at them, and the SW caustic / GI passes still bind them). Declares the scene-node / instance /
-// instance-material bindings; any pass that walks the BVH pulls this concern.
+// preceded it were dropped in the step 4c bounded-path removal (the shared C++ backing buffers stay -- the shadow /
+// caustic / GI heap descriptors point at them, and the per-dispatch barriers transition them for the heap reads).
+// Declares the scene-node / instance / instance-material bindings; any pass that walks the BVH pulls this concern.
 
 
 [[vk::binding(NWB_SW_SHADOW_BINDING_SCENE_NODES, NWB_SW_SHADOW_SET)]]

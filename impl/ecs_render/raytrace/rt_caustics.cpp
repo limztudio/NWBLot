@@ -676,13 +676,12 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         .setComputeShader(rayTracingState().m_swCausticShader)
         .addBindingLayout(rayTracingState().m_swCausticBindingLayout)
     ;
-    // Phase 2 (SW caustic migration, step 4a): pin the global descriptor heap's resource (set 8) + sampler (set 9)
-    // bindless layouts onto the SW caustic photon-trace pipeline so the traversal can later fetch per-mesh geometry from
-    // the heap. The classic SW caustic layout is added first, so it keeps positional set 0; the two heap layouts carry
-    // explicit sets 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7 with the empty set layout. Guarded
-    // on a live heap so non-bindless builds keep the pure set-0 layout. Added BEFORE the shader consumes the heap so the
-    // mixed classic+bindless pipeline layout is validated in isolation (zero rendering change) ahead of the accessor
-    // rewrite that reads through it. Mirrors the SW-shadow step 4a scaffold (rt_shadow.cpp ensureSwShadowPassPipeline).
+    // Pin the global descriptor heap's resource (set 8) + sampler (set 9) bindless layouts onto the SW caustic
+    // photon-trace pipeline so the traversal fetches per-mesh geometry from the heap. The classic SW caustic layout is
+    // added first, so it keeps positional set 0; the two heap layouts carry explicit sets 8/9 and
+    // createPipelineLayoutForBindingLayouts gap-fills sets 1-7 with the empty set layout. Guarded on a live heap so
+    // non-bindless builds keep the pure set-0 layout. Mirrors the SW-shadow scaffold (rt_shadow.cpp
+    // ensureSwShadowPassPipeline).
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(heap.isInitialized()){
         pipelineDesc
@@ -781,8 +780,8 @@ bool RendererRayTracingSystem::ensureSwCausticBindingSet(DeferredFrameTargets& t
     // Per-mesh geometry is not bound here: the SW caustic traversal fetches BVH nodes / positions / indices /
     // attributes from the global descriptor heap (bound as sets 8/9 per dispatch) by the material record's per-buffer
     // slots. The former bounded per-mesh descriptor arrays (slots 5-8) were removed in step 4c; the backing buffers
-    // (m_swShadowMesh*Buffers) stay -- they are what the heap descriptors point at, and the SW GI pass still binds them
-    // as bounded arrays until its own bindless migration.
+    // (m_swShadowMesh*Buffers) stay -- they are what the heap descriptors point at, and the per-dispatch buffer-state
+    // barriers still transition them for the heap reads.
 
     auto* device = graphics().getDevice();
     rayTracingState().m_swCausticBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_swCausticBindingLayout);
@@ -1269,14 +1268,12 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     pipelineDesc.setMaxPayloadSize(static_cast<u32>(sizeof(f32) * 16u));
     pipelineDesc.setMaxRecursionDepth(1u);
     pipelineDesc.addBindingLayout(rayTracingState().m_hwCausticBindingLayout);
-    // Phase 2 (HW caustic migration, step 4a): pin the global descriptor heap's resource (set 8) + sampler (set 9)
-    // bindless layouts onto the hardware caustic ray-tracing pipeline so the closest-hit can later fetch each mesh's
-    // per-corner attribute buffer from the heap. The classic caustic RT layout is added first, so it keeps positional
-    // set 0; the two heap layouts carry explicit sets 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7
-    // with the empty set layout. Guarded on a live heap so non-bindless builds keep the pure set-0 layout. Added BEFORE
-    // the shader consumes the heap so the mixed classic+bindless pipeline layout is validated in isolation (zero
-    // rendering change) ahead of the accessor rewrite that reads through it. Mirrors the SW caustic step 4a scaffold
-    // (ensureSwCausticPipeline) -- the first HW ray-tracing pipeline to carry the heap layouts.
+    // Pin the global descriptor heap's resource (set 8) + sampler (set 9) bindless layouts onto the hardware caustic
+    // ray-tracing pipeline so the closest-hit fetches each mesh's per-corner attribute buffer from the heap. The
+    // classic caustic RT layout is added first, so it keeps positional set 0; the two heap layouts carry explicit sets
+    // 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7 with the empty set layout. Guarded on a live heap
+    // so non-bindless builds keep the pure set-0 layout. Mirrors the SW caustic scaffold (ensureSwCausticPipeline) --
+    // the first HW ray-tracing pipeline to carry the heap layouts.
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(heap.isInitialized()){
         pipelineDesc.addBindingLayout(heap.getResourceLayout());
@@ -1398,8 +1395,7 @@ bool RendererRayTracingSystem::ensureCausticRtBindingSet(DeferredFrameTargets& t
     // Per-mesh geometry is not bound here: the HW caustic closest-hit fetches its per-corner attributes from the global
     // descriptor heap (bound as sets 8/9 per dispatch) by the material record's attributeSlot. The former bounded
     // per-mesh descriptor arrays (slots 11-12) were removed in step 4c; the backing buffers (m_shadowMeshAttributeBuffers)
-    // stay -- they are what the attribute heap descriptor points at, and the HW GI pass still binds the shadow per-mesh
-    // buffers as bounded arrays until its own bindless migration.
+    // stay -- they are what the attribute heap descriptor points at, and the per-dispatch barriers still transition them.
 
     auto* device = graphics().getDevice();
     rayTracingState().m_hwCausticBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_hwCausticBindingLayout);

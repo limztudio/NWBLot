@@ -107,9 +107,9 @@ StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticHwInstance
 // triangle index byte buffer, already unread on the HW path since the fixed-function intersector supplies the hit
 // triangle + barycentrics, plus the per-triangle-corner attribute byte buffer) were dropped in the step 4c bounded-path
 // removal. The shared C++ backing buffers stay -- the attribute heap descriptor points at m_shadowMeshAttributeBuffers,
-// and the HW GI pass still binds the shadow per-mesh buffers as bounded arrays until its own migration. (Still no
-// position array: bending on the interpolated shading normal needs only the corner normals -- the world hit point comes
-// from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().)
+// and the per-dispatch barriers still transition them for the heap reads. (Still no position array: bending on the
+// interpolated shading normal needs only the corner normals -- the world hit point comes from
+// WorldRayOrigin()+RayTCurrent()*WorldRayDirection().)
 
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS, NWB_CAUSTIC_RT_SET)]]
 StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbCausticHwEmissionTargets;

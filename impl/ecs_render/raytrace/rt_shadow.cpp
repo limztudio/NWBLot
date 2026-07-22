@@ -1187,13 +1187,11 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
         .setComputeShader(shader)
         .addBindingLayout(rayTracingState().m_swShadowBindingLayout)
     ;
-    // Phase 2 (SW shadow migration, step 4a): pin the global descriptor heap's resource (set 8) + sampler (set 9)
-    // bindless layouts onto every SW shadow pass pipeline so the traversal can later fetch per-mesh geometry from the
-    // heap. The classic SW shadow layout is added first, so it keeps positional set 0; the two heap layouts carry
-    // explicit sets 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7 with the empty set layout.
-    // Guarded on a live heap so non-bindless builds keep the pure set-0 layout. Added here BEFORE the shader consumes
-    // the heap so the mixed classic+bindless pipeline layout is validated in isolation (zero rendering change) ahead
-    // of the accessor rewrite that reads through it.
+    // Pin the global descriptor heap's resource (set 8) + sampler (set 9) bindless layouts onto every SW shadow pass
+    // pipeline so the traversal fetches per-mesh geometry from the heap. The classic SW shadow layout is added first,
+    // so it keeps positional set 0; the two heap layouts carry explicit sets 8/9 and
+    // createPipelineLayoutForBindingLayouts gap-fills sets 1-7 with the empty set layout. Guarded on a live heap so
+    // non-bindless builds keep the pure set-0 layout.
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     if(heap.isInitialized()){
         pipelineDesc

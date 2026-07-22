@@ -75,8 +75,7 @@ StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbGiSwInstanceMater
 // heap (step 4b) by the material record's per-buffer slots; the parallel per-mesh descriptor arrays that preceded it
 // (bindings 5-8) were dropped in the step 4c bounded-path removal. The shared C++ backing buffers stay -- the heap
 // descriptors (shadow / caustic / GI alike) point at them and the per-dispatch buffer-state barriers still transition
-// them for the heap reads. GI is the last SW consumer to bind them as bounded arrays, so the final M4 cleanup drops
-// the shared arrays outright once this migration lands.
+// them for the heap reads.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

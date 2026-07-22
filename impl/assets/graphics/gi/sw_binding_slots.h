@@ -10,8 +10,8 @@
 
 
 // Shared SOFTWARE (SW BVH) trace bindings -- slots 0-10 (5-8 now a gap) the GI trace body (gi_sw_trace.slangi) declares. It reuses the
-// SAME software scene/instance + per-mesh BVH buffers the SW shadow/caustic trace builds (NWB_GI_SW_MAX_MESHES ==
-// NWB_SW_SHADOW_MAX_MESHES), so prepareShadowVisibilityResources -> buildSceneSwBvh already populates them. Producers
+// SAME software scene/instance + per-mesh BVH buffers the SW shadow/caustic trace builds (the shared dynamic
+// distinct-mesh table), so prepareShadowVisibilityResources -> buildSceneSwBvh already populates them. Producers
 // (the surfel trace) add their OWN output bindings at the tail (>= 11); nothing GI-grid-specific lives here anymore.
 
 #define NWB_GI_SW_SET 0
@@ -29,12 +29,10 @@
 #define NWB_GI_SW_BINDING_MATERIAL_TYPED 9
 #define NWB_GI_SW_BINDING_MESH_INSTANCES 10
 
-// Reuse the SAME per-mesh cap as the SW shadow/caustic (they share the buildSceneSwBvh output). The shadow SW
-// binding slots header defines NWB_SW_SHADOW_MAX_MESHES.
+// The GI surfel trace reuses the SAME software per-mesh buffers the SW shadow/caustic build (buildSceneSwBvh fills the
+// shared dynamic distinct-mesh table in renderer_state.h). Phase 2 M4 retired the fixed NWB_GI_SW_MAX_MESHES cap; the
+// per-mesh geometry is fetched from the descriptor heap.
 #include "../shadow/sw_binding_slots.h"
-#ifndef NWB_GI_SW_MAX_MESHES
-#define NWB_GI_SW_MAX_MESHES NWB_SW_SHADOW_MAX_MESHES
-#endif
 
 // Hit shadow rays toward the dominant light per bounce hit (1 = on). gi_sw_trace.slangi's shade reads this.
 #ifndef NWB_GI_HIT_SHADOW_RAYS

@@ -259,7 +259,14 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowBindingSetVisibility = nullptr;
     m_swShadowBindingSetMeshCount = 0u;
     m_swShadowMeshCount = 0u;
-    m_swShadowMeshCapReported = false;
+    m_swShadowMeshNodeBuffers.clear();
+    m_swShadowMeshPositionBuffers.clear();
+    m_swShadowMeshIndexBuffers.clear();
+    m_swShadowMeshAttributeBuffers.clear();
+    m_swShadowMeshNodeHandles.clear();
+    m_swShadowMeshPositionHandles.clear();
+    m_swShadowMeshIndexHandles.clear();
+    m_swShadowMeshAttributeHandles.clear();
     m_swShadowTransparentSoftShader.reset();
     m_swShadowTransparentSoftPipeline.reset();
     m_swShadowEdgeStatsBuffer.reset();

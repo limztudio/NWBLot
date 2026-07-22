@@ -19,6 +19,7 @@
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 
 #include <global/generic.h>
+#include <global/containers.h>   // Phase 2 M4: dynamic Vector storage for the per-frame SW distinct-mesh table
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -340,8 +341,8 @@ struct RtSceneBvhState{
     const Core::Texture* m_transparentReprojectMergeGeometryPrev = nullptr;
     const Core::Texture* m_transparentReprojectMergeWorldPosition = nullptr;
     // Software caustic photon producer (P3) — the no-hardware-ray-tracing fallback. It reuses the same software
-    // scene/instance + per-mesh BVH buffers the SW shadow trace builds (NWB_CAUSTIC_SW_MAX_MESHES ==
-    // NWB_SW_SHADOW_MAX_MESHES, so the m_swShadowMesh* arrays serve both), and adds the caustic-specific inputs
+    // scene/instance + per-mesh BVH buffers the SW shadow trace builds (the shared m_swShadowMesh* table serves
+    // shadow, caustic, and GI alike), and adds the caustic-specific inputs
     // (the P1 emission-target buffer, the camera view buffer, the G-buffer depth) + output (the R32_UINT
     // accumulators). The binding set is rebuilt when any cached input changes, mirroring the SW shadow set.
     Core::BindingLayoutHandle m_swCausticBindingLayout;
@@ -394,6 +395,21 @@ struct RtSceneBvhState{
 
 
 struct RtShadowState{
+    // Phase 2 M4: the per-frame SW distinct-mesh table Vectors (m_swShadowMesh*, below) allocate from the renderer's
+    // global arena, bound once here at construction. The arena allocator cannot be rebound afterward (its copy-assign
+    // is a deliberate no-op), so RendererRayTracingState threads the arena in. Every other member keeps its default
+    // initializer -- listing only the eight Vectors, in declaration order.
+    explicit RtShadowState(Core::Alloc::GlobalArena& arena)
+        : m_swShadowMeshNodeBuffers(arena)
+        , m_swShadowMeshPositionBuffers(arena)
+        , m_swShadowMeshIndexBuffers(arena)
+        , m_swShadowMeshAttributeBuffers(arena)
+        , m_swShadowMeshNodeHandles(arena)
+        , m_swShadowMeshPositionHandles(arena)
+        , m_swShadowMeshIndexHandles(arena)
+        , m_swShadowMeshAttributeHandles(arena)
+    {}
+
     Core::BindingLayoutHandle m_shadowBindingLayout;
     // Hardware shadow trace is an inline-RayQuery COMPUTE pass (shadow_rayquery_cs); the per-occluder optical-depth
     // accumulator lives in a compute local, which a hardware ray payload could not index safely.
@@ -486,26 +502,27 @@ struct RtShadowState{
     const Core::Texture* m_swShadowBindingSetVisibility = nullptr;
     u32 m_swShadowBindingSetMeshCount = 0u;
     u32 m_swShadowMeshCount = 0u;
-    // Per-frame distinct meshes referenced by the software scene BVH (filled by buildSceneSwBvh); the per-mesh
-    // descriptor arrays bind these (parallel: slot k = mesh k's node/position/index buffers). Sized by the
-    // shared shader cap so the C++ arrays and the shader's `[NWB_SW_SHADOW_MAX_MESHES]` stay one definition.
-    Core::Buffer* m_swShadowMeshNodeBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
-    Core::Buffer* m_swShadowMeshPositionBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
-    Core::Buffer* m_swShadowMeshIndexBuffers[NWB_SW_SHADOW_MAX_MESHES] = {};
-    Core::Buffer* m_swShadowMeshAttributeBuffers[NWB_SW_SHADOW_MAX_MESHES] = {}; // U2 per-vertex normal/uv0 for the per-hit transmittance dispatch
+    // Per-frame distinct meshes referenced by the software scene BVH (filled by buildSceneSwBvh). The SW shadow /
+    // caustic / GI traces fetch this geometry from the global descriptor heap by the per-buffer slots carried on the
+    // instance-material record (the bounded per-mesh descriptor arrays were retired in step 4c). Phase 2 M4: grown on
+    // demand -- no fixed per-frame mesh cap -- and cleared (capacity retained) each rebuild; m_swShadowMeshCount
+    // mirrors their length. All eight grow in lockstep (one push per distinct mesh), so slot k indexes them all.
+    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshNodeBuffers;
+    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshPositionBuffers;
+    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshIndexBuffers;
+    Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshAttributeBuffers; // U2 per-vertex normal/uv0 for the per-hit transmittance dispatch
     // Phase 2 M1: parallel global-heap handles for the four backing buffers above (node = StructuredBuffer<NwbBvhNode>
-    // view, the rest raw), minted in lockstep at buildSceneSwBvh registration and freed at the per-frame rebuild.
-    // Additive until the SW passes migrate in M3, so nothing consumes them and the rendered result is unchanged.
-    Core::GpuDescriptorHandle m_swShadowMeshNodeHandles[NWB_SW_SHADOW_MAX_MESHES] = {};
-    Core::GpuDescriptorHandle m_swShadowMeshPositionHandles[NWB_SW_SHADOW_MAX_MESHES] = {};
-    Core::GpuDescriptorHandle m_swShadowMeshIndexHandles[NWB_SW_SHADOW_MAX_MESHES] = {};
-    Core::GpuDescriptorHandle m_swShadowMeshAttributeHandles[NWB_SW_SHADOW_MAX_MESHES] = {};
+    // view, the rest raw), minted in lockstep at buildSceneSwBvh registration and freed at the per-frame rebuild. The
+    // SW shadow / caustic / GI traces read the referenced geometry through these heap slots.
+    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshNodeHandles;
+    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshPositionHandles;
+    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshIndexHandles;
+    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshAttributeHandles;
     u32 m_swShadowMeshHeapHighWater = 0u; // Phase 2 M1: peak SW distinct-mesh registration count; logged only on a new high
     f32 m_swShadowEdgeThreshold = 0.1f;
     bool m_swShadowEdgeStatsPending = false;
     bool m_shadowResolvePipelineFailed = false;
     bool m_shadowResolveRgbPipelineFailed = false;
-    bool m_swShadowMeshCapReported = false;
     // Edge-fraction instrumentation: a 2-uint UAV counter the resolve tallies into ([0] traced rays, [1] total rays),
     // snapshotted into a CPU-readable buffer on a slow cadence and logged a safe number of frames later (so the copy is
     // GPU-complete without a stall). The tick counts transparent-shadow dispatches; pending guards the in-flight copy.
@@ -877,7 +894,11 @@ class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtS
     friend class RendererRayTracingSystem;
 
 public:
-    RendererRayTracingState() = default;
+    // Phase 2 M4: forward the renderer's global arena to RtShadowState so its per-frame SW distinct-mesh table Vectors
+    // bind their allocator at construction (the other state bases default-construct).
+    explicit RendererRayTracingState(Core::Alloc::GlobalArena& arena)
+        : RtShadowState(arena)
+    {}
 
 
 public:

@@ -110,11 +110,9 @@
 // light-LOOP index (0..NWB_SCENE_MAX_LIGHTS-1) so the trace pass does one g_NwbSceneLights load + recovers slot=params.z.
 #define NWB_SW_SHADOW_EDGE_RECORD_WORDS 2
 
-// Maximum distinct meshes the shared software per-mesh buffer set addresses in one frame. Sizes the C++
-// m_swShadowMesh* backing-buffer + global-heap-handle arrays (renderer_state.h); the SW caustic / GI bounded
-// descriptor arrays derive their caps from it (NWB_CAUSTIC_SW_MAX_MESHES / NWB_GI_SW_MAX_MESHES). The SW shadow
-// traversal no longer uses a bounded array (step 4c) -- it reads this geometry from the descriptor heap.
-#define NWB_SW_SHADOW_MAX_MESHES 64
+// (Phase 2 M4 retired NWB_SW_SHADOW_MAX_MESHES: the shared software distinct-mesh table is a dynamic Vector in
+// renderer_state.h -- the SW shadow / caustic / GI traces read the per-mesh geometry from the descriptor heap, so
+// there is no fixed per-frame mesh cap.)
 
 // Occluder class the per-mesh traversal filters to. Each pass kernel that traces #defines NWB_SW_SHADOW_OCCLUDER to
 // one of these BEFORE including sw_shadow_traverse.slangi; the filter in nwbSwShadowInstanceOccluded then skips the

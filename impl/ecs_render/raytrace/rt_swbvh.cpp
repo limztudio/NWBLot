@@ -458,6 +458,17 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             ReleaseMeshHeapHandle(heap, rt.m_swShadowMeshAttributeHandles[slot]);
         }
     }
+    // Phase 2 M4: clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once
+    // to the scene's steady-state distinct-mesh count, then reuse that storage) and m_swShadowMeshCount mirrors their
+    // length -- the gather below repopulates both by push_back.
+    rayTracingState().m_swShadowMeshNodeBuffers.clear();
+    rayTracingState().m_swShadowMeshPositionBuffers.clear();
+    rayTracingState().m_swShadowMeshIndexBuffers.clear();
+    rayTracingState().m_swShadowMeshAttributeBuffers.clear();
+    rayTracingState().m_swShadowMeshNodeHandles.clear();
+    rayTracingState().m_swShadowMeshPositionHandles.clear();
+    rayTracingState().m_swShadowMeshIndexHandles.clear();
+    rayTracingState().m_swShadowMeshAttributeHandles.clear();
     rayTracingState().m_swShadowMeshCount = 0u;
 
     for(auto&& [entity, renderer] : rendererView){
@@ -479,41 +490,41 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         if(!meshReady || !mesh || !mesh->swBvhTopologyBuilt || !mesh->swBvhNodeBuffer || !mesh->positionBuffer || !mesh->triangleIndexBuffer || !mesh->csgLocalBounds.valid())
             continue;
 
-        // Dedupe to a per-mesh descriptor-array slot: instances sharing a mesh share its node/position/index
-        // buffers. Once the per-frame mesh cap is reached, the instance casts no software shadow this frame.
+        // Dedupe to a per-mesh table slot: instances sharing a mesh share its node/position/index buffers. The table
+        // grows on demand (Phase 2 M4 retired the per-frame mesh cap), so every distinct mesh is always traced.
         Core::Buffer* meshNodeBuffer = mesh->swBvhNodeBuffer.get();
-        u32 meshSlot = NWB_SW_SHADOW_MAX_MESHES;
+        u32 meshSlot = ~0u; // sentinel: mesh not yet in this frame's distinct-mesh table
         for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
             if(rayTracingState().m_swShadowMeshNodeBuffers[slot] == meshNodeBuffer){
                 meshSlot = slot;
                 break;
             }
         }
-        if(meshSlot == NWB_SW_SHADOW_MAX_MESHES){
-            if(rayTracingState().m_swShadowMeshCount >= NWB_SW_SHADOW_MAX_MESHES){
-                if(!rayTracingState().m_swShadowMeshCapReported){
-                    rayTracingState().m_swShadowMeshCapReported = true;
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow distinct-mesh cap ({}) reached; further meshes cast no software shadow this scene")
-                        , static_cast<u64>(NWB_SW_SHADOW_MAX_MESHES)
-                    );
-                }
-                continue;
-            }
+        if(meshSlot == ~0u){
+            // New distinct mesh: append its four backing buffers to the per-frame table and mint the parallel
+            // global-heap handles the SW shadow / caustic / GI traces read this geometry through.
             meshSlot = rayTracingState().m_swShadowMeshCount++;
-            rayTracingState().m_swShadowMeshNodeBuffers[meshSlot] = meshNodeBuffer;
-            rayTracingState().m_swShadowMeshPositionBuffers[meshSlot] = mesh->positionBuffer.get();
-            rayTracingState().m_swShadowMeshIndexBuffers[meshSlot] = mesh->triangleIndexBuffer.get();
+            rayTracingState().m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);
+            rayTracingState().m_swShadowMeshPositionBuffers.push_back(mesh->positionBuffer.get());
+            rayTracingState().m_swShadowMeshIndexBuffers.push_back(mesh->triangleIndexBuffer.get());
             // The U2 per-triangle-corner shadow-trace attribute buffer (normal/uv0), parallel to the triangle index
             // buffer so the trace interpolates the exact raster corner attributes.
-            rayTracingState().m_swShadowMeshAttributeBuffers[meshSlot] = mesh->attributeBuffer.get();
+            rayTracingState().m_swShadowMeshAttributeBuffers.push_back(mesh->attributeBuffer.get());
             // Phase 2 M1: mirror the four buffers into the global heap. The node buffer takes the
             // StructuredBuffer<NwbBvhNode> view (M3 reads it via NwbHeapBvhNodes(record.nodeSlot)); position/index/
-            // attribute take the raw view. All land as STORAGE_BUFFER regardless (write() forces the type).
+            // attribute take the raw view. All land as STORAGE_BUFFER regardless (write() forces the type). When the
+            // heap is unavailable the handles push default (never read) so all eight Vectors stay lockstep by slot.
             if(heapLive){
-                rayTracingState().m_swShadowMeshNodeHandles[meshSlot]      = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::StructuredBuffer_SRV(0u, meshNodeBuffer));
-                rayTracingState().m_swShadowMeshPositionHandles[meshSlot]  = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->positionBuffer.get()));
-                rayTracingState().m_swShadowMeshIndexHandles[meshSlot]     = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->triangleIndexBuffer.get()));
-                rayTracingState().m_swShadowMeshAttributeHandles[meshSlot] = RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->attributeBuffer.get()));
+                rayTracingState().m_swShadowMeshNodeHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::StructuredBuffer_SRV(0u, meshNodeBuffer)));
+                rayTracingState().m_swShadowMeshPositionHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->positionBuffer.get())));
+                rayTracingState().m_swShadowMeshIndexHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->triangleIndexBuffer.get())));
+                rayTracingState().m_swShadowMeshAttributeHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->attributeBuffer.get())));
+            }
+            else{
+                rayTracingState().m_swShadowMeshNodeHandles.emplace_back();
+                rayTracingState().m_swShadowMeshPositionHandles.emplace_back();
+                rayTracingState().m_swShadowMeshIndexHandles.emplace_back();
+                rayTracingState().m_swShadowMeshAttributeHandles.emplace_back();
             }
         }
 

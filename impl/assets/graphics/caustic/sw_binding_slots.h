@@ -49,11 +49,10 @@
 // One thread per photon in a 1D dispatch; 64 photons per group.
 #define NWB_CAUSTIC_SW_GROUP_SIZE 64
 
-// Must equal the shadow SW cap (the caustic kernel reuses the SAME per-mesh buffers + the SAME meshSlot indices the
-// SW shadow scene BVH produced) so the descriptor-array sizes and the C++ buffer arrays stay one definition. Alias it
-// directly to the shadow cap so the equality is enforced by the compiler, not just a comment.
+// The caustic kernel reuses the SAME software per-mesh buffers + the SAME meshSlot indices the SW shadow scene BVH
+// produced (buildSceneSwBvh fills the shared dynamic distinct-mesh table in renderer_state.h). Phase 2 M4 retired the
+// fixed NWB_CAUSTIC_SW_MAX_MESHES cap alongside the shadow cap; the per-mesh geometry comes from the descriptor heap.
 #include "../shadow/sw_binding_slots.h"
-#define NWB_CAUSTIC_SW_MAX_MESHES NWB_SW_SHADOW_MAX_MESHES
 
 // Per-thread traversal stack depths. With the FRONT-TO-BACK ordered descent (caustic_photon_sw_cs.slang) only the
 // deferred FAR child is pushed per internal node, so the live stack depth is <= the BVH tree depth. The scene/instance

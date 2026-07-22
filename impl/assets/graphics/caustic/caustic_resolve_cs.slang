@@ -227,7 +227,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
         for(uint i = threadIndex; i < tileTexels; i += threadCount){
             const int2 t = tileOrigin + int2((int)(i % (uint)tileW), (int)(i / (uint)tileW));
-            half3 tapColor = half3(0.0, 0.0, 0.0);
+            half3 tapColor = half3(0.0h, 0.0h, 0.0h);
             float3 tapWorld = float3(0.0, 0.0, 0.0);
             uint tapValid = 0u;
             // Only receiver texels inside the half-res image contribute (matches the texture path's OOB + background skips).
@@ -236,7 +236,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     tapColor = half3(g_NwbCausticResolveInputColor.Load(int3(t, 0)).rgb);
                     tapWorld = nwbCausticResolveWorldAtHalf(t);
                     tapValid = 1u;
-                    if(any(tapColor > half3(0.0, 0.0, 0.0)))
+                    if(any(tapColor > half3(0.0h, 0.0h, 0.0h)))
                         InterlockedOr(s_NwbCausticResolveTileActive, 1u);
                 }
             }

@@ -472,7 +472,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             for(uint i = threadIndex; i < tileTexels; i += threadCount){
                 const int2 t = tileOrigin + int2((int)(i % (uint)tileW), (int)(i / (uint)tileW));
                 NwbShadowResolveVisVec tapVis = NwbShadowResolveVisVec(1.0); // LIT / UNTINTED identity for OOB/background taps
-                half2 tapNormal = half2(0.0, 0.0);
+                half2 tapNormal = half2(0.0h, 0.0h);
                 float tapDist = 0.0;
                 uint tapValid = 0u;
                 if(t.x >= 0 && t.y >= 0 && t.x < hw && t.y < hh){

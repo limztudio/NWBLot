@@ -1176,6 +1176,429 @@ void DescriptorHeapManager::shutdownHeap(HeapStorage& heap){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Backend C - VK_EXT_descriptor_buffer manager (Phase 3 step 1b)
+//
+// Mirrors DescriptorHeapManager (Backend B) in shape: two HOST-mapped VkBuffers sub-allocated by byte offset through
+// a shared free-range list + bump pointer. The differences are entirely in the Vulkan calls - descriptor buffers use
+// their own usage bits, their own offset alignment (descriptorBufferOffsetAlignment), and write descriptors through
+// vkGetDescriptorEXT (VkDescriptorGetInfoEXT + VkDescriptorDataEXT) rather than the EXT_descriptor_heap write calls.
+// vkGetDescriptorEXT is also the only path that encodes an acceleration-structure handle, which is why the TLAS
+// migration routes through this manager. No consumer is wired here; the manager is dark until Phase 3 steps 2-4.
+
+
+DescriptorBufferManager::DescriptorBufferManager(const VulkanContext& context, VulkanAllocator& allocator)
+    : m_context(context)
+    , m_allocator(allocator)
+    , m_resourceSegment(context.objectArena)
+    , m_samplerSegment(context.objectArena)
+{}
+DescriptorBufferManager::~DescriptorBufferManager(){
+    shutdown();
+}
+
+bool DescriptorBufferManager::initialize(){
+    shutdown();
+
+    if(!m_context.extensions.EXT_descriptor_buffer)
+        return false;
+
+    const auto& props = m_context.descriptorBufferProperties;
+
+    // One global segment per type. RADV advertises multi-GB address spaces for both; we cap at modest working sizes
+    // (mirroring Backend B's targets) since the segments are HOST-mapped and persist for device life. The suballocator
+    // only ever hands out what gets written, so the reservation is virtual from a memory-pressure standpoint only.
+    constexpr u32 s_TargetResourceSegmentBytes = 32u * 1024u * 1024u;
+    constexpr u32 s_TargetSamplerSegmentBytes = 2u * 1024u * 1024u;
+
+    if(
+        props.resourceDescriptorBufferAddressSpaceSize > UINT32_MAX
+        || props.samplerDescriptorBufferAddressSpaceSize > UINT32_MAX
+        || props.descriptorBufferOffsetAlignment > UINT32_MAX
+        || props.maxResourceDescriptorBufferRange > UINT32_MAX
+        || props.maxSamplerDescriptorBufferRange > UINT32_MAX
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer properties exceed supported 32-bit segment offsets."));
+        return false;
+    }
+
+    const u32 offsetAlignment = static_cast<u32>(props.descriptorBufferOffsetAlignment);
+    if(offsetAlignment == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer offset alignment is zero; cannot sub-allocate."));
+        return false;
+    }
+
+    const u32 resourceMaxBytes = static_cast<u32>(Min<VkDeviceSize>(props.resourceDescriptorBufferAddressSpaceSize, props.maxResourceDescriptorBufferRange));
+    const u32 samplerMaxBytes = static_cast<u32>(Min<VkDeviceSize>(props.samplerDescriptorBufferAddressSpaceSize, props.maxSamplerDescriptorBufferRange));
+
+    u32 resourceCapacityBytes = 0;
+    u32 samplerCapacityBytes = 0;
+    if(
+        !AlignUpU32Checked(Min(resourceMaxBytes, s_TargetResourceSegmentBytes), offsetAlignment, resourceCapacityBytes)
+        || !AlignUpU32Checked(Min(samplerMaxBytes, s_TargetSamplerSegmentBytes), offsetAlignment, samplerCapacityBytes)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer requested capacity overflows 32-bit segment offsets."));
+        return false;
+    }
+
+    if(resourceCapacityBytes == 0u || samplerCapacityBytes == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer properties do not allow creating usable global segments."));
+        return false;
+    }
+
+    if(!initializeSegment(m_resourceSegment, "vk_resource_descriptor_buffer", resourceCapacityBytes)){
+        shutdown();
+        return false;
+    }
+
+    if(!initializeSegment(m_samplerSegment, "vk_sampler_descriptor_buffer", samplerCapacityBytes)){
+        shutdown();
+        return false;
+    }
+
+    m_enabled = true;
+    return true;
+}
+
+void DescriptorBufferManager::shutdown(){
+    shutdownSegment(m_resourceSegment);
+    shutdownSegment(m_samplerSegment);
+    m_enabled = false;
+}
+
+u32 DescriptorBufferManager::getDescriptorSize(const VkDescriptorType descriptorType)const{
+    if(!m_enabled)
+        return 0;
+
+    const auto& props = m_context.descriptorBufferProperties;
+    VkDeviceSize size = 0;
+    switch(descriptorType){
+    case VK_DESCRIPTOR_TYPE_SAMPLER:                               size = props.samplerDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:                size = props.combinedImageSamplerDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:                         size = props.sampledImageDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:                         size = props.storageImageDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:                  size = props.uniformTexelBufferDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:                  size = props.storageTexelBufferDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:                        size = props.uniformBufferDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:                        size = props.storageBufferDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:                      size = props.inputAttachmentDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:            size = props.accelerationStructureDescriptorSize; break;
+    default:                                                       return 0;
+    }
+
+    return size > UINT32_MAX ? 0u : static_cast<u32>(size);
+}
+
+u32 DescriptorBufferManager::getDescriptorStride(const VkDescriptorType descriptorType)const{
+    const u32 descriptorSize = getDescriptorSize(descriptorType);
+    if(descriptorSize == 0)
+        return 0;
+
+    // Descriptors are tightly packed at descriptorBufferOffsetAlignment; the stride is the size rounded up to that
+    // alignment (matching how vkCmdSetDescriptorBufferOffsetsEXT addresses each descriptor array element).
+    const VkDeviceSize alignment = m_context.descriptorBufferProperties.descriptorBufferOffsetAlignment;
+    const VkDeviceSize stride = (descriptorSize + alignment - 1u) & ~(alignment - 1u);
+    return stride > UINT32_MAX ? 0u : static_cast<u32>(stride);
+}
+
+DescriptorBufferSegment DescriptorBufferManager::allocate(const DescriptorBufferSegmentKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes){
+    DescriptorBufferSegment result{};
+    if(!m_enabled || kind == DescriptorBufferSegmentKind::None || sizeBytes == 0)
+        return result;
+
+    SegmentStorage& segment = kind == DescriptorBufferSegmentKind::Sampler ? m_samplerSegment : m_resourceSegment;
+    auto clearAllocation = [&](const DescriptorBufferSegment& allocation){
+        if(allocation.valid() && segment.mappedMemory)
+            NWB_MEMSET(static_cast<u8*>(segment.mappedMemory) + allocation.offsetBytes, 0, allocation.sizeBytes);
+    };
+
+    ScopedLock lock(segment.mutex);
+
+    for(usize i = 0; i < segment.freeRanges.size(); ++i){
+        FreeRange range = segment.freeRanges[i];
+        if(range.sizeBytes > UINT32_MAX - range.offsetBytes)
+            continue;
+
+        u32 alignedOffset = 0;
+        if(!AlignUpU32Checked(range.offsetBytes, alignmentBytes, alignedOffset))
+            continue;
+
+        const u32 rangeEnd = range.offsetBytes + range.sizeBytes;
+        if(alignedOffset >= rangeEnd)
+            continue;
+
+        const u32 consumedPrefix = alignedOffset - range.offsetBytes;
+        const u32 remainingBytes = range.sizeBytes - consumedPrefix;
+        if(remainingBytes < sizeBytes)
+            continue;
+        if(sizeBytes > UINT32_MAX - alignedOffset)
+            continue;
+
+        const u32 allocEnd = alignedOffset + sizeBytes;
+        if(consumedPrefix > 0){
+            segment.freeRanges[i] = { range.offsetBytes, consumedPrefix };
+            if(allocEnd < rangeEnd)
+                segment.freeRanges.insert(segment.freeRanges.begin() + i + 1u, { allocEnd, rangeEnd - allocEnd });
+        }
+        else if(allocEnd < rangeEnd){
+            segment.freeRanges[i] = { allocEnd, rangeEnd - allocEnd };
+        }
+        else{
+            segment.freeRanges.erase(segment.freeRanges.begin() + i);
+        }
+
+        result.kind = kind;
+        result.offsetBytes = alignedOffset;
+        result.sizeBytes = sizeBytes;
+        clearAllocation(result);
+        return result;
+    }
+
+    u32 alignedOffset = 0;
+    if(!AlignUpU32Checked(segment.writableOffsetBytes, alignmentBytes, alignedOffset)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer alignment overflows 32-bit offsets."));
+        return result;
+    }
+    if(alignedOffset > segment.capacityBytes || sizeBytes > segment.capacityBytes - alignedOffset){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer is out of space (kind={}, requested={} bytes).")
+            , kind == DescriptorBufferSegmentKind::Sampler ? NWB_TEXT("sampler") : NWB_TEXT("resource")
+            , sizeBytes
+        );
+        return result;
+    }
+
+    segment.writableOffsetBytes = alignedOffset + sizeBytes;
+    result.kind = kind;
+    result.offsetBytes = alignedOffset;
+    result.sizeBytes = sizeBytes;
+    clearAllocation(result);
+    return result;
+}
+
+void DescriptorBufferManager::free(const DescriptorBufferSegment& segment){
+    if(!segment.valid())
+        return;
+
+    SegmentStorage& storage = segment.kind == DescriptorBufferSegmentKind::Sampler ? m_samplerSegment : m_resourceSegment;
+
+    ScopedLock lock(storage.mutex);
+
+    const auto rangeEnd = [](const FreeRange& range, u32& outEnd) -> bool{
+        if(range.sizeBytes > UINT32_MAX - range.offsetBytes)
+            return false;
+        outEnd = range.offsetBytes + range.sizeBytes;
+        return true;
+    };
+
+    FreeRange freedRange{ segment.offsetBytes, segment.sizeBytes };
+    usize insertIndex = 0u;
+    while(insertIndex < storage.freeRanges.size() && storage.freeRanges[insertIndex].offsetBytes < freedRange.offsetBytes)
+        ++insertIndex;
+
+    storage.freeRanges.insert(storage.freeRanges.begin() + insertIndex, freedRange);
+
+    const auto mergeAdjacentAt = [&](const usize leftIndex) -> bool{
+        if(leftIndex + 1u >= storage.freeRanges.size())
+            return false;
+
+        FreeRange& left = storage.freeRanges[leftIndex];
+        const FreeRange right = storage.freeRanges[leftIndex + 1u];
+
+        u32 leftEnd = 0;
+        if(!rangeEnd(left, leftEnd) || leftEnd != right.offsetBytes || right.sizeBytes > UINT32_MAX - left.sizeBytes)
+            return false;
+
+        left.sizeBytes += right.sizeBytes;
+        storage.freeRanges.erase(storage.freeRanges.begin() + leftIndex + 1u);
+        return true;
+    };
+
+    // Merge newly inserted range with its right neighbor, then re-merge leftward to coalesce a fully surrounded hole.
+    if(mergeAdjacentAt(insertIndex))
+        mergeAdjacentAt(insertIndex);
+    if(insertIndex > 0)
+        mergeAdjacentAt(insertIndex - 1u);
+}
+
+bool DescriptorBufferManager::writeDescriptor(const BindingSetItem& item, const u32 dstOffsetBytes, const VkDescriptorType descriptorType){
+    if(!m_enabled)
+        return false;
+
+    // Sampler is the one type that lives in the separate sampler segment (RADV requires samplers in their own
+    // descriptor buffer binding); every other type writes into the resource segment.
+    const bool isSampler = (descriptorType == VK_DESCRIPTOR_TYPE_SAMPLER);
+    SegmentStorage& segment = isSampler ? m_samplerSegment : m_resourceSegment;
+    auto* dstBytes = static_cast<u8*>(segment.mappedMemory);
+    if(!dstBytes)
+        return false;
+
+    const u32 descriptorSize = getDescriptorSize(descriptorType);
+    if(descriptorSize == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: unknown size for descriptor type {}."), static_cast<u32>(descriptorType));
+        return false;
+    }
+    if(!item.resourceHandle){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: resource handle is null."));
+        return false;
+    }
+    if(dstOffsetBytes > segment.capacityBytes || descriptorSize > segment.capacityBytes - dstOffsetBytes){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: offset {} + size {} exceeds segment capacity {}.")
+            , dstOffsetBytes, descriptorSize, segment.capacityBytes
+        );
+        return false;
+    }
+
+    auto getInfo = VulkanDetail::MakeVkStruct<VkDescriptorGetInfoEXT>(VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT);
+    getInfo.type = descriptorType;
+
+    // vkGetDescriptorEXT writes through these stack locals; their lifetimes must cover the call.
+    VkDescriptorAddressInfoEXT addressInfo{};
+    VkDescriptorImageInfo imageInfo{};
+    VkSampler samplerHandle = VK_NULL_HANDLE;
+    VkDeviceAddress accelStructAddress = 0;
+
+    if(VulkanDetail::UsesDescriptorBufferInfo(item.type)){
+        // Uniform/storage buffer (non-texel): device-address range.
+        auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
+        if(!buffer)
+            return false;
+        BufferRange range;
+        if(!VulkanDetail::ResolveDescriptorBufferRange(item, *buffer, range))
+            return false;
+        addressInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT;
+        addressInfo.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + range.byteOffset;
+        addressInfo.range = range.byteSize;
+        getInfo.data.pStorageBuffer = &addressInfo;
+        getInfo.data.pUniformBuffer = &addressInfo;
+    }
+    else{
+        switch(item.type){
+        case ResourceType::TypedBuffer_SRV:
+        case ResourceType::TypedBuffer_UAV:{
+            auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
+            if(!buffer)
+                return false;
+            const BufferDesc& bufferDesc = buffer->getDescription();
+            BufferRange range;
+            if(!VulkanDetail::ResolveDescriptorBufferRange(item, *buffer, range))
+                return false;
+            const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : bufferDesc.format;
+            const VkFormat vkFormat = ConvertFormat(viewFormat);
+            if(vkFormat == VK_FORMAT_UNDEFINED)
+                return false;
+            addressInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT;
+            addressInfo.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + range.byteOffset;
+            addressInfo.range = range.byteSize;
+            addressInfo.format = vkFormat;
+            getInfo.data.pUniformTexelBuffer = &addressInfo;
+            getInfo.data.pStorageTexelBuffer = &addressInfo;
+            break;
+        }
+        case ResourceType::Texture_SRV:
+        case ResourceType::Texture_UAV:{
+            auto* texture = checked_cast<Texture*>(item.resourceHandle);
+            if(!texture)
+                return false;
+            imageInfo.imageView = texture->getView(item.subresources, item.dimension, item.format);
+            if(imageInfo.imageView == VK_NULL_HANDLE)
+                return false;
+            imageInfo.imageLayout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            getInfo.data.pSampledImage = &imageInfo;
+            getInfo.data.pStorageImage = &imageInfo;
+            break;
+        }
+        case ResourceType::Sampler:{
+            auto* sampler = checked_cast<Sampler*>(item.resourceHandle);
+            if(!sampler)
+                return false;
+            samplerHandle = sampler->m_sampler;
+            getInfo.data.pSampler = &samplerHandle;
+            break;
+        }
+        case ResourceType::RayTracingAccelStruct:{
+            // The TLAS path. vkGetDescriptorEXT is the only Vulkan write that accepts a bare AS device address; this
+            // is why the TLAS migration is gated on Backend C (no classic-descriptor-set or Backend-B equivalent).
+            auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
+            if(!as)
+                return false;
+            accelStructAddress = static_cast<VkDeviceAddress>(as->getDeviceAddress());
+            getInfo.data.accelerationStructure = accelStructAddress;
+            break;
+        }
+        default:
+            return false;
+        }
+    }
+
+    vkGetDescriptorEXT(m_context.device, &getInfo, descriptorSize, dstBytes + dstOffsetBytes);
+    return true;
+}
+
+bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const ACompactString& debugName, const u32 capacityBytes){
+    VkResult res = VK_SUCCESS;
+
+    shutdownSegment(segment);
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = capacityBytes;
+    bufferInfo.usage =
+        (&segment == &m_resourceSegment ? VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT : VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT)
+        | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    res = m_allocator.createHostMappedBuffer(
+        segment.buffer,
+        segment.allocation,
+        segment.mappedMemory,
+        bufferInfo
+    );
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor buffer '{}': {}")
+            , StringConvert(debugName.view())
+            , ResultToString(res)
+        );
+        return false;
+    }
+    if(!segment.mappedMemory){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map descriptor buffer memory '{}'"), StringConvert(debugName.view()));
+        shutdownSegment(segment);
+        return false;
+    }
+
+    VkBufferDeviceAddressInfo addressInfo{};
+    addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    addressInfo.buffer = segment.buffer;
+    segment.deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
+    if(segment.deviceAddress == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query descriptor buffer device address '{}'.")
+            , StringConvert(debugName.view())
+        );
+        shutdownSegment(segment);
+        return false;
+    }
+
+    segment.capacityBytes = capacityBytes;
+    segment.bindingInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+    segment.bindingInfo.address = segment.deviceAddress;
+    segment.bindingInfo.usage =
+        (&segment == &m_resourceSegment ? VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT : VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT);
+    segment.writableOffsetBytes = 0u;
+
+    NWB_MEMSET(segment.mappedMemory, 0, capacityBytes);
+    return true;
+}
+
+void DescriptorBufferManager::shutdownSegment(SegmentStorage& segment){
+    m_allocator.destroyHostMappedBuffer(segment.buffer, segment.allocation, segment.mappedMemory);
+    segment.deviceAddress = 0;
+    segment.capacityBytes = 0;
+    segment.writableOffsetBytes = 0;
+    segment.bindingInfo = {};
+    segment.freeRanges.clear();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 BindingLayout::BindingLayout(const VulkanContext& context)

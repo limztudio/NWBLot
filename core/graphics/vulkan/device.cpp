@@ -175,6 +175,7 @@ Device::Device(const DeviceDesc& desc)
     , m_context(desc.allocator, desc.threadPool, desc.instance, desc.physicalDevice, desc.device, desc.allocationCallbacks)
     , m_allocator(m_context)
     , m_descriptorHeapManager(m_context, m_allocator)
+    , m_descriptorBufferManager(m_context, m_allocator)
     , m_gpuDescriptorHeap(*this)
     , m_pipelineCacheDirectory(m_context.objectArena, desc.pipelineCacheDirectory)
     , m_pipelineCacheVolumeName(m_context.objectArena)
@@ -184,6 +185,7 @@ Device::Device(const DeviceDesc& desc)
     VkResult res = VK_SUCCESS;
 
     m_context.descriptorHeapManager = &m_descriptorHeapManager;
+    m_context.descriptorBufferManager = &m_descriptorBufferManager;
 
     vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
     vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
@@ -473,6 +475,17 @@ Device::Device(const DeviceDesc& desc)
         }
     }
 
+    // Stand up the Backend C descriptor-buffer manager (VK_EXT_descriptor_buffer). The extension and its properties
+    // are already detected/enabled/queried above; this carves the two global segments (resource + sampler) and leaves
+    // them dark - no pipeline consumer is wired until the binding-layer conversion (Phase 3 steps 2-4). Failure is
+    // non-fatal (Backend A remains the floor) but logged loudly.
+    if(m_context.extensions.EXT_descriptor_buffer){
+        if(!m_descriptorBufferManager.initialize()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor buffer manager initialization failed; Backend C is disabled."));
+            m_context.extensions.EXT_descriptor_buffer = false;
+        }
+    }
+
     // Bring the global bindless descriptor heap (Backend A - descriptor indexing) live for every run. Unlike the
     // optional EXT_descriptor_heap accelerator above, descriptor indexing is the guaranteed portability floor (present
     // on the BC-250/RADV target), so the heap is initialized unconditionally rather than behind an extension gate.
@@ -542,6 +555,7 @@ Device::~Device(){
     // Release the global descriptor heap's tables/layouts while the device is still valid (idempotent; the member
     // destructor also calls this). Phase 1 leaves initialize() to the consumer, so this is a no-op unless used.
     m_gpuDescriptorHeap.shutdown();
+    m_descriptorBufferManager.shutdown();
     m_descriptorHeapManager.shutdown();
 
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)

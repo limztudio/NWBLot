@@ -545,6 +545,7 @@ class Device;
 class Queue;
 class TrackedCommandBuffer;
 class DescriptorHeapManager;
+class DescriptorBufferManager;
 
 class Buffer;
 class Texture;
@@ -609,6 +610,7 @@ struct VulkanContext{
     // Core Vulkan 1.1 (engine floor is 1.3), so always populated. Holds the device wave/subgroup size.
     VkPhysicalDeviceSubgroupProperties subgroupProperties{};
     DescriptorHeapManager* descriptorHeapManager = nullptr;
+    DescriptorBufferManager* descriptorBufferManager = nullptr;
 
 
     explicit VulkanContext(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef)
@@ -1100,6 +1102,7 @@ private:
 
 class Sampler final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
+    friend class DescriptorBufferManager;
 
 
 public:
@@ -1475,6 +1478,121 @@ private:
     bool m_enabled = false;
     HeapStorage m_resourceHeap;
     HeapStorage m_samplerHeap;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Backend C - VK_EXT_descriptor_buffer descriptor-buffer manager (Phase 3)
+//
+// Descriptor-as-memory: unlike Backend A (descriptor indexing) or Backend B (the absent-on-RADV EXT_descriptor_heap
+// model), Backend C stores descriptors as ordinary bytes in one HOST-mappable buffer per type and binds them with
+// vkCmdBindDescriptorBuffersEXT + vkCmdSetDescriptorBufferOffsetsEXT. Individual descriptors are written into the
+// mapped memory with vkGetDescriptorEXT via VkDescriptorGetInfoEXT, which is also the only Vulkan write path that
+// natively encodes an acceleration-structure handle (VkDescriptorDataEXT::accelerationStructure) - the reason the
+// TLAS migration is bound to this backend (docs/design/bindless-phase1-rhi-heap.md 12.1).
+//
+// Layout choice: one large descriptor buffer per type (a "global segment"), sub-allocated by byte offset through the
+// same free-range suballocator Backend B proved (FreeRange vector + bump pointer). Resource descriptors live in the
+// resource segment (images, texel buffers, storage/uniform buffers, AS); sampler descriptors in the sampler segment.
+// All descriptors are aligned to descriptorBufferOffsetAlignment. No pipeline consumer is wired in this step; the
+// manager is dark - constructed at Device init, enabled only where the extension is present, exercised solely by its
+// own round-trip test until the binding-layer conversion (Phase 3 steps 2-4) lights it up.
+
+namespace DescriptorBufferSegmentKind{
+    enum Enum : u8{
+        None = 0,
+        Resource,    // non-sampler descriptors (sampled/storage image, texel/storage/uniform buffer, AS)
+        Sampler,     // VK_DESCRIPTOR_TYPE_SAMPLER only - RADV keeps samplers in a separate buffer binding
+    };
+};
+
+struct DescriptorBufferSegment{
+    DescriptorBufferSegmentKind::Enum kind = DescriptorBufferSegmentKind::None;
+    u32 offsetBytes = 0;
+    u32 sizeBytes = 0;
+
+    [[nodiscard]] bool valid()const{ return kind != DescriptorBufferSegmentKind::None && sizeBytes > 0; }
+};
+
+class DescriptorBufferManager final : NoCopy{
+private:
+    // Byte range returned to the segment's free pool by free(); merged with neighbors to keep the list compact.
+    // Identical shape to Backend B's DescriptorHeapManager::FreeRange (kept local because that one is private).
+    struct FreeRange{
+        u32 offsetBytes = 0;
+        u32 sizeBytes = 0;
+    };
+
+    // One sub-allocated descriptor buffer. Mirrors Backend B's HeapStorage: a HOST-mapped VkBuffer + its device
+    // address + a free-range list and a bump pointer sharing one mutex. The mapped pointer is the write target for
+    // vkGetDescriptorEXT; the device address is what vkCmdBindDescriptorBuffersEXT binds.
+    struct SegmentStorage{
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VulkanAllocationHandle allocation = nullptr;
+        void* mappedMemory = nullptr;
+        VkDeviceAddress deviceAddress = 0;
+        u32 capacityBytes = 0;
+        u32 writableOffsetBytes = 0;
+        VkDescriptorBufferBindingInfoEXT bindingInfo{};
+        Futex mutex;
+        Vector<FreeRange, Alloc::GlobalArena> freeRanges;
+
+
+        explicit SegmentStorage(Alloc::GlobalArena& arena)
+            : freeRanges(arena)
+        {}
+    };
+
+
+public:
+    DescriptorBufferManager(const VulkanContext& context, VulkanAllocator& allocator);
+    ~DescriptorBufferManager();
+
+
+public:
+    bool initialize();
+    void shutdown();
+
+    [[nodiscard]] bool isEnabled()const{ return m_enabled; }
+
+    // Per-type descriptor footprint from descriptorBufferProperties, strided up to descriptorBufferOffsetAlignment.
+    // Returns 0 when the backend is disabled (caller must not write).
+    [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const;
+    [[nodiscard]] u32 getDescriptorStride(VkDescriptorType descriptorType)const;
+
+    // The buffer-binding records a consuming command buffer hands to vkCmdBindDescriptorBuffersEXT. Stable for the
+    // lifetime of the manager after initialize(); null until then.
+    [[nodiscard]] const VkDescriptorBufferBindingInfoEXT& getResourceBindingInfo()const{ return m_resourceSegment.bindingInfo; }
+    [[nodiscard]] const VkDescriptorBufferBindingInfoEXT& getSamplerBindingInfo()const{ return m_samplerSegment.bindingInfo; }
+    // Segment-to-buffer-index lookup for vkCmdSetDescriptorBufferOffsetsEXT's pBufferIndices (resource first, then
+    // sampler, matching the order bindDescriptorBuffers() binds them in).
+    [[nodiscard]] u32 getResourceBufferIndex()const{ return 0; }
+    [[nodiscard]] u32 getSamplerBufferIndex()const{ return 1; }
+
+    // Carve `sizeBytes` (already stride-aligned) out of the segment; returned offset is aligned to
+    // descriptorBufferOffsetAlignment. Free-list first, bump-pointer fallback - identical policy to Backend B. The
+    // carved bytes are zeroed so a stale read before the first write cannot leak a neighboring descriptor.
+    [[nodiscard]] DescriptorBufferSegment allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes);
+    void free(const DescriptorBufferSegment& segment);
+
+    // Write one descriptor into the segment at `dstOffsetBytes` (a byte offset into the segment's mapped buffer).
+    // Routes the BindingSetItem to vkGetDescriptorEXT through VkDescriptorGetInfoEXT + VkDescriptorDataEXT; the only
+    // Vulkan write path that encodes an acceleration-structure handle, which is why the TLAS migration routes here.
+    // `descriptorType` selects the VkDescriptorDataEXT union arm and the per-type size.
+    bool writeDescriptor(const BindingSetItem& item, u32 dstOffsetBytes, VkDescriptorType descriptorType);
+
+
+private:
+    bool initializeSegment(SegmentStorage& segment, const ACompactString& debugName, u32 capacityBytes);
+    void shutdownSegment(SegmentStorage& segment);
+
+
+private:
+    const VulkanContext& m_context;
+    VulkanAllocator& m_allocator;
+    bool m_enabled = false;
+    SegmentStorage m_resourceSegment;
+    SegmentStorage m_samplerSegment;
 };
 
 
@@ -2524,6 +2642,7 @@ private:
     VulkanContext m_context;
     VulkanAllocator m_allocator;
     DescriptorHeapManager m_descriptorHeapManager;
+    DescriptorBufferManager m_descriptorBufferManager;
     GpuDescriptorHeap m_gpuDescriptorHeap;
     Path m_pipelineCacheDirectory;
     GraphicsString m_pipelineCacheVolumeName;

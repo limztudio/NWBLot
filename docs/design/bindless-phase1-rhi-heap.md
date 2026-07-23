@@ -370,15 +370,17 @@ the logger-server name-symbol resolver for readable scopes):
 - ⏸ Test passes on Backend B on any host that advertises `VK_EXT_descriptor_heap`, with
   **byte-identical** readback to Backend A. **Deferred** — no such host available (BC-250 lacks
   the extension). Backend B is not wired; the handle contract is designed to satisfy it unchanged.
-- ✅ Zero change in any existing smoke/stress capture (heap is dark to them). **Verified** — the
-  `gi_test_smoke` run's window still captures and the BVH self-tests still pass, log fully clean.
+- ✅ Zero change in any existing smoke/stress capture (heap is dark to them). **Verified at the
+  time of the phase rollout** — the `gi_test_smoke` run's window captured and the then-existing
+  BVH self-tests passed with a clean log.
 - ✅ No new runtime env-var reads outside tests (house rule). **Held.**
 
-**Implementation notes (as built):**
-- Host = the `impl/` debug renderer self-test infra (`gpu_descriptor_heap_selftest.cpp`, wired into
-  `RendererRayTracingSystem::logCapabilityOnce` next to the BVH self-tests, `#if NWB_DEBUG`), *not*
-  a headless gtest — the design's intended path and the one with a proven template. It initializes
-  the heap, runs the round-trip, and tears it down, so the heap stays dark.
+**Implementation notes (historical):**
+- The initial host was the `impl/` debug renderer self-test infra
+  (`gpu_descriptor_heap_selftest.cpp`, wired into `RendererRayTracingSystem::logCapabilityOnce`
+  next to the BVH self-tests, `#if NWB_DEBUG`), *not* a headless gtest. That implementation was
+  later retired when renderer-internal test code was removed; this section records how the Phase 1
+  contract was originally validated.
 - The kernel dispatches **one invocation** (group size 1) so every descriptor-array index is
   dynamically uniform — no `NonUniformResourceIndex` and no per-type non-uniform-indexing feature is
   required. Divergent-index coverage is a later-phase concern.
@@ -386,7 +388,7 @@ the logger-server name-symbol resolver for readable scopes):
   end-to-end; SampledImage / StorageImage / Sampler are exercised at the **allocator** level (they
   allocate distinct valid handles). Texture/sampler *shader reads* were left for a follow-up — same
   `writeDescriptorTable` path, more resource-setup surface.
-- **Gotcha for future self-tests on this dbg host:** any `[ERROR]`-level log triggers a crash
+- **Historical self-test gotcha on this dbg host:** any `[ERROR]`-level log triggers a crash
   diagnostic capture, and the diagnostic renderer cannot create its headless Vulkan instance here —
   so an intentional error in a *passing* path SIGTRAPs the run. The test therefore must not probe the
   AccelStruct rejection (whose `allocate()` logs an `[ERROR]`); that invariant is covered by
@@ -406,8 +408,8 @@ the logger-server name-symbol resolver for readable scopes):
   header and its shared C++/shader binding-slot constants. (Shaders live under
   `impl/assets/graphics/`, following the existing `#include "binding_slots.h"` convention —
   *not* `core/graphics/shaders/`, which does not exist.)
-- The §10 round-trip compute shader + headless harness, wired as a self-test entry point
-  (exact host TBD against the existing self-test infra).
+- Historical: the §10 round-trip compute shader + renderer self-test harness. Both were retired
+  with the renderer-internal self-test infrastructure.
 
 **Touched (all done, compile clean):**
 - `core/graphics/vulkan/backend.h` — full `GpuDescriptorHeap` class decl; `CommandList::

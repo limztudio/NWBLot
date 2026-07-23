@@ -1,8 +1,8 @@
-Targeted CPU micro-benchmark for the Buffer*-keyed descriptor-handle cache (commit a409d9ab).
-Run: dbg, soft_shadow_test_sw_smoke, NWB_HEAP_HANDLE_BENCH=1, AMD BC-250/RADV, DISPLAY=:0 (Xwayland).
-Bench defined in rt_swbvh.cpp::runHeapHandleCacheBench (whole function DEBUG-gated; opt/fin builds omit it entirely).
-NOTE: this bench has since been retired from the renderer (test logic purged from the engine); the data below is the
-recorded result that justified the cache (a409d9ab), retained for reference.
+Historical CPU micro-benchmark for the Buffer*-keyed descriptor-handle cache (commit a409d9ab).
+It formerly ran as `rt_swbvh.cpp::runHeapHandleCacheBench` from the debug
+`soft_shadow_test_sw_smoke` harness. The benchmark and its `NWB_HEAP_HANDLE_BENCH`
+opt-in were retired with the renderer self-tests, so the data below is retained only
+as the recorded result that justified the cache.
 
 Tuned scene shape + frame counts (this revision):
   - Mesh-count sweep {16, 64, 256} x 4 views/mesh (index + attribute + position + node) -- mirrors the SW gather

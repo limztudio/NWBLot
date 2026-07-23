@@ -78,11 +78,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(nwbSwShadowIsBackground(texel))
         return;
 
-    const float2 coarseCoord = float2(pixel) * (1.0 / float(NWB_SW_SHADOW_COARSE_FACTOR));
-    const uint2 c0 = uint2(floor(coarseCoord));
-    const uint2 c1 = min(c0 + uint2(1u, 1u), uint2(g_NwbSwShadowPush.coarseWidth - 1u, g_NwbSwShadowPush.coarseHeight - 1u));
-    const float2 w = coarseCoord - float2(c0);
-
+    const NwbSwShadowCoarseLocation coarseLocation = nwbSwShadowLocateCoarseSample(
+        pixel,
+        uint2(g_NwbSwShadowPush.coarseWidth, g_NwbSwShadowPush.coarseHeight)
+    );
     const float edgeThreshold = g_NwbSwShadowPush.edgeThreshold;
     const uint edgeCapacity = g_NwbSwShadowPush.edgeCapacity;
 
@@ -91,16 +90,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint i = 0u; i < lightCount; ++i){
-        const float slotF = g_NwbSceneLights[i].params.z;
-        if(slotF < 0.0)
+        NwbSwShadowCoarseLight coarseLight;
+        if(!nwbSwShadowLoadCoarseLight(coarseLocation, i, edgeThreshold, coarseLight))
             continue;
-        const uint slot = uint(slotF);
+        const uint slot = coarseLight.slot;
         ++totalRays;
 
-        const NwbSwShadowCoarseSamples samples = nwbSwShadowLoadCoarseSamples(c0, c1, slot);
-        const half range = nwbSwShadowCoarseRange(samples);
-
-        if(float(range) > edgeThreshold){
+        if(coarseLight.isEdge){
             // EDGE: append (pixel, lightIndex) to the compacted list; DO NOT trace and DO NOT write the texel -- leave
             // the pristine opaque mask for the indirect trace's single overwrite. Always increment the counter (so the
             // true edge total is measured) but guard the indexed write to the allocated capacity.
@@ -115,14 +111,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             else{
                 // OVERFLOW: this edge will not be traced, so degrade it to the interpolated fallback rather than leaving
                 // the un-tinted opaque mask. Near-impossible at the allocated capacity.
-                const half3 interp = nwbSwShadowInterpolateCoarse(samples, w);
+                const half3 interp = nwbSwShadowInterpolateCoarse(coarseLight.samples, coarseLocation.weights);
                 const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
                 g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * interp, 1.0);
             }
         }
         else{
             // FLAT interior: interpolate the coarse transmittance and fold onto the pristine opaque mask in place.
-            const half3 interp = nwbSwShadowInterpolateCoarse(samples, w);
+            const half3 interp = nwbSwShadowInterpolateCoarse(coarseLight.samples, coarseLocation.weights);
             const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
             g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * interp, 1.0);
         }

@@ -63,13 +63,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 worldPosition = nwbSwShadowLoadWorldPosition(texel);
     const float3 normal = nwbSwShadowLoadNormal(texel);
 
-    // Continuous coarse coordinate: coarse sample k sits at full-res k*FACTOR, so a full-res pixel maps to k =
-    // pixel/FACTOR. floor + frac give the bracketing coarse texels and the bilinear weights; clamp the upper texel.
-    const float2 coarseCoord = float2(pixel) * (1.0 / float(NWB_SW_SHADOW_COARSE_FACTOR));
-    const uint2 c0 = uint2(floor(coarseCoord));
-    const uint2 c1 = min(c0 + uint2(1u, 1u), uint2(g_NwbSwShadowPush.coarseWidth - 1u, g_NwbSwShadowPush.coarseHeight - 1u));
-    const float2 w = coarseCoord - float2(c0);
-
+    const NwbSwShadowCoarseLocation coarseLocation = nwbSwShadowLocateCoarseSample(
+        pixel,
+        uint2(g_NwbSwShadowPush.coarseWidth, g_NwbSwShadowPush.coarseHeight)
+    );
     const float edgeThreshold = g_NwbSwShadowPush.edgeThreshold;
 
     uint tracedRays = 0u;
@@ -77,24 +74,21 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint i = 0u; i < lightCount; ++i){
-        const float slotF = g_NwbSceneLights[i].params.z;
-        if(slotF < 0.0)
+        NwbSwShadowCoarseLight coarseLight;
+        if(!nwbSwShadowLoadCoarseLight(coarseLocation, i, edgeThreshold, coarseLight))
             continue;
-        const uint slot = uint(slotF);
+        const uint slot = coarseLight.slot;
         ++totalRays;
 
-        const NwbSwShadowCoarseSamples samples = nwbSwShadowLoadCoarseSamples(c0, c1, slot);
-        const half range = nwbSwShadowCoarseRange(samples);
-
         half3 transmittance;
-        if(float(range) > edgeThreshold){
+        if(coarseLight.isEdge){
             // Edge block: re-trace this exact full-res pixel.
             transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i], float2(0.0, 0.0));
             ++tracedRays;
         }
         else{
             // Flat interior: bilinearly interpolate the coarse transmittance.
-            transmittance = nwbSwShadowInterpolateCoarse(samples, w);
+            transmittance = nwbSwShadowInterpolateCoarse(coarseLight.samples, coarseLocation.weights);
         }
 
         const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);

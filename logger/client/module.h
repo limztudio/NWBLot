@@ -26,6 +26,29 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename T, const tchar* NAME>
+class ClientBase : public IClient, public BaseUpdateIfQueued<T, NAME>{
+protected:
+    using BaseType = Base<T, NAME>;
+    using UpdateBaseType = BaseUpdateIfQueued<T, NAME>;
+
+
+    explicit ClientBase(const char* allocationLog)
+        : UpdateBaseType(allocationLog)
+    {}
+
+
+public:
+    using BaseType::enqueue;
+    virtual LogArena& arena()override{ return BaseType::arena(); }
+    virtual void enqueue(LogString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
+    virtual void enqueue(const LogString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace ClientPayloadKind{
     enum Enum : u8{
         Message,
@@ -34,12 +57,13 @@ namespace ClientPayloadKind{
 };
 
 inline constexpr tchar CLIENT_NAME[] = NWB_TEXT("Client");
-class Client final : public IClient, public BaseUpdateIfQueued<Client, CLIENT_NAME>{
+class Client final : public ClientBase<Client, CLIENT_NAME>{
     template<typename, const tchar*> friend class Base;
     template<typename, const tchar*> friend class BaseUpdateIfQueued;
 
-    using BaseType = Base<Client, CLIENT_NAME>;
-    using UpdateBaseType = BaseUpdateIfQueued<Client, CLIENT_NAME>;
+    using ClientBaseType = ClientBase<Client, CLIENT_NAME>;
+    using BaseType = ClientBaseType::BaseType;
+    using UpdateBaseType = ClientBaseType::UpdateBaseType;
 
 
 private:
@@ -52,10 +76,7 @@ public:
 
 
 public:
-    using BaseType::enqueue;
-    virtual LogArena& arena()override{ return BaseType::arena(); }
-    virtual void enqueue(LogString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
-    virtual void enqueue(const LogString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
+    using ClientBaseType::enqueue;
     [[nodiscard]] bool enqueueTelemetry(const void* bytes, usize byteCount);
 
 
@@ -63,7 +84,6 @@ protected:
     bool internalInit(NotNull<const char*> url);
     bool internalUpdate();
 
-private:
 protected:
     inline void enqueue(MessageType&& data){
         this->m_msgQueue.emplace(Move(data));
@@ -103,12 +123,13 @@ private:
 
 
 inline constexpr tchar CLIENT_STANDALONE_NAME[] = NWB_TEXT("ClientStandalone");
-class ClientStandalone final : public IClient, public BaseUpdateIfQueued<ClientStandalone, CLIENT_STANDALONE_NAME>{
+class ClientStandalone final : public ClientBase<ClientStandalone, CLIENT_STANDALONE_NAME>{
     template<typename, const tchar*> friend class Base;
     template<typename, const tchar*> friend class BaseUpdateIfQueued;
 
-    using BaseType = Base<ClientStandalone, CLIENT_STANDALONE_NAME>;
-    using UpdateBaseType = BaseUpdateIfQueued<ClientStandalone, CLIENT_STANDALONE_NAME>;
+    using ClientBaseType = ClientBase<ClientStandalone, CLIENT_STANDALONE_NAME>;
+    using BaseType = ClientBaseType::BaseType;
+    using UpdateBaseType = ClientBaseType::UpdateBaseType;
 
 
 private:
@@ -121,10 +142,7 @@ public:
 
 
 public:
-    using BaseType::enqueue;
-    virtual LogArena& arena()override{ return BaseType::arena(); }
-    virtual void enqueue(LogString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
-    virtual void enqueue(const LogString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
+    using ClientBaseType::enqueue;
 
 
 protected:

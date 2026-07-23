@@ -72,6 +72,21 @@ bool nwbBvhSortPairLess(const uint keyA, const uint payloadA, const uint keyB, c
 groupshared uint s_tileKeys[NWB_BVH_SORT_GROUP_SIZE];
 groupshared uint s_tilePayload[NWB_BVH_SORT_GROUP_SIZE];
 
+// Keep the groupshared networks in main (a function callee triggers a bundled slangc SPIR-V backend crash), while
+// sharing their byte-identical compare/swap body through preprocessing so LOCAL_TILE and GLOBAL_TAIL cannot diverge.
+#define NWB_BVH_SORT_TILE_COMPARE_SWAP(ASCENDING, PARTNER) \
+    const uint keyA = s_tileKeys[local]; \
+    const uint payloadA = s_tilePayload[local]; \
+    const uint keyB = s_tileKeys[PARTNER]; \
+    const uint payloadB = s_tilePayload[PARTNER]; \
+    const bool aLessB = nwbBvhSortPairLess(keyA, payloadA, keyB, payloadB); \
+    if((ASCENDING) != aLessB){ \
+        s_tileKeys[local] = keyB; \
+        s_tilePayload[local] = payloadB; \
+        s_tileKeys[PARTNER] = keyA; \
+        s_tilePayload[PARTNER] = payloadA; \
+    }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -131,17 +146,7 @@ void main(
                     // are constant within a tile, so tiles must alternate ascending/descending — `(local & seq)`
                     // would be uniformly 0 and corrupt multi-tile sorts. (For seq < GROUP_SIZE the two agree.)
                     const bool ascending = (global & sequenceSize) == 0u;
-                    const uint keyA = s_tileKeys[local];
-                    const uint payloadA = s_tilePayload[local];
-                    const uint keyB = s_tileKeys[partner];
-                    const uint payloadB = s_tilePayload[partner];
-                    const bool aLessB = nwbBvhSortPairLess(keyA, payloadA, keyB, payloadB);
-                    if(ascending != aLessB){
-                        s_tileKeys[local] = keyB;
-                        s_tilePayload[local] = payloadB;
-                        s_tileKeys[partner] = keyA;
-                        s_tilePayload[partner] = payloadA;
-                    }
+                    NWB_BVH_SORT_TILE_COMPARE_SWAP(ascending, partner)
                 }
                 GroupMemoryBarrierWithGroupSync();
             }
@@ -159,17 +164,7 @@ void main(
         for(uint compareDistance = NWB_BVH_SORT_GROUP_SIZE >> 1u; compareDistance > 0u; compareDistance >>= 1u){
             const uint partner = local ^ compareDistance;
             if(partner > local){
-                const uint keyA = s_tileKeys[local];
-                const uint payloadA = s_tilePayload[local];
-                const uint keyB = s_tileKeys[partner];
-                const uint payloadB = s_tilePayload[partner];
-                const bool aLessB = nwbBvhSortPairLess(keyA, payloadA, keyB, payloadB);
-                if(ascending != aLessB){
-                    s_tileKeys[local] = keyB;
-                    s_tilePayload[local] = payloadB;
-                    s_tileKeys[partner] = keyA;
-                    s_tilePayload[partner] = payloadA;
-                }
+                NWB_BVH_SORT_TILE_COMPARE_SWAP(ascending, partner)
             }
             GroupMemoryBarrierWithGroupSync();
         }
@@ -178,6 +173,8 @@ void main(
     g_NwbBvhSortKeys[global] = s_tileKeys[local];
     g_NwbBvhSortPayload[global] = s_tilePayload[local];
 }
+
+#undef NWB_BVH_SORT_TILE_COMPARE_SWAP
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -18,6 +18,29 @@ struct NwbSwShadowCoarseSamples{
     half3 t11;
 };
 
+struct NwbSwShadowCoarseLocation{
+    uint2 c0;
+    uint2 c1;
+    float2 weights;
+};
+
+struct NwbSwShadowCoarseLight{
+    uint slot;
+    NwbSwShadowCoarseSamples samples;
+    bool isEdge;
+};
+
+// Coarse sample k maps to full-resolution k*FACTOR. floor + frac select its 2x2 reconstruction neighbourhood;
+// clamping c1 handles the final partial block at the right or bottom edge.
+NwbSwShadowCoarseLocation nwbSwShadowLocateCoarseSample(const uint2 pixel, const uint2 coarseSize){
+    const float2 coarseCoord = float2(pixel) * (1.0 / float(NWB_SW_SHADOW_COARSE_FACTOR));
+    NwbSwShadowCoarseLocation location;
+    location.c0 = uint2(floor(coarseCoord));
+    location.c1 = min(location.c0 + uint2(1u, 1u), coarseSize - uint2(1u, 1u));
+    location.weights = coarseCoord - float2(location.c0);
+    return location;
+}
+
 NwbSwShadowCoarseSamples nwbSwShadowLoadCoarseSamples(const uint2 c0, const uint2 c1, const uint slot){
     NwbSwShadowCoarseSamples samples;
     samples.t00 = half3(g_NwbSwShadowCoarse[uint3(c0.x, c0.y, slot)].rgb);
@@ -37,6 +60,24 @@ half3 nwbSwShadowInterpolateCoarse(const NwbSwShadowCoarseSamples samples, const
     const half3 tx0 = lerp(samples.t00, samples.t10, half(weights.x));
     const half3 tx1 = lerp(samples.t01, samples.t11, half(weights.x));
     return lerp(tx0, tx1, half(weights.y));
+}
+
+// Both adaptive paths classify the same coarse data for one scene-light entry. The caller owns the different edge
+// action (full-resolution trace versus compact-list append), while this helper owns slot filtering and threshold math.
+bool nwbSwShadowLoadCoarseLight(
+    const NwbSwShadowCoarseLocation location,
+    const uint lightIndex,
+    const float edgeThreshold,
+    out NwbSwShadowCoarseLight outLight
+){
+    const float slotF = g_NwbSceneLights[lightIndex].params.z;
+    if(slotF < 0.0)
+        return false;
+
+    outLight.slot = uint(slotF);
+    outLight.samples = nwbSwShadowLoadCoarseSamples(location.c0, location.c1, outLight.slot);
+    outLight.isEdge = float(nwbSwShadowCoarseRange(outLight.samples)) > edgeThreshold;
+    return true;
 }
 
 

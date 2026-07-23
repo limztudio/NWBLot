@@ -33,8 +33,7 @@ namespace CommandLineParseResult{
 CommandLineParseResult::Enum ParseCommandLine(
     int argc,
     char** argv,
-    CookOptions& outOptions,
-    NWB::Core::Assets::AssetString& outError
+    CookOptions& outOptions
 );
 void PrintUsage();
 

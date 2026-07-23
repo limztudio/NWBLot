@@ -52,11 +52,8 @@ int ResourceCookerMain(int argc, char** argv){
         NWB::Core::Assets::RegisterAutoCollectedAssetCookers(assetCookerRegistry, cookArena);
 
         CookOptions options(cookArena, cookThreadPool);
-        NWB::Core::Assets::AssetString errorMessage{cookArena};
-        const CommandLineParseResult::Enum parseResult = ParseCommandLine(argc, argv, options, errorMessage);
+        const CommandLineParseResult::Enum parseResult = ParseCommandLine(argc, argv, options);
         if(parseResult != CommandLineParseResult::Success){
-            if(!errorMessage.empty())
-                NWB_LOGGER_WARNING(NWB_TEXT("Failed to parse command line: {}"), StringConvert(errorMessage));
             PrintUsage();
             return parseResult == CommandLineParseResult::Help ? 0 : -1;
         }

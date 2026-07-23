@@ -52,13 +52,22 @@ class RendererRayTracingSystem;
 // at end of gather.
 //
 // Correctness: a raw Buffer* can be recycled after its mesh is destroyed, so each entry pins its Buffer with a
-// refcounted BufferHandle -- the key identity stays alive exactly as long as the entry. seenThisFrame drives the
+// refcounted BufferHandle -- the key identity stays alive exactly as long as the entry. Entries are inserted only
+// after both allocation and descriptor write succeed, so every cached handle is valid. seenThisFrame drives the
 // end-of-gather sweep (cleared at gather begin, set on first touch, freed+erased if still clear at sweep time).
 struct RtMeshHeapHandleCacheEntry{
     Core::BufferHandle keepAlive;                       // refcount pin so the Buffer* key cannot be recycled under us
     Core::GpuDescriptorHandle handle = Core::GpuDescriptorHandle::invalid();
     bool seenThisFrame = false;
 };
+
+using RtMeshHeapHandleCache = HashMap<
+    const Core::Buffer*,
+    RtMeshHeapHandleCacheEntry,
+    Hasher<const Core::Buffer*>,
+    EqualTo<const Core::Buffer*>,
+    Core::Alloc::GlobalArena
+>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -550,8 +559,8 @@ struct RtShadowState{
     // (on the hybrid backend the SW gather runs after the HW one and reuses position/index/attribute buffers). Every
     // backing buffer lands in its gather's cache once and is reused across frames; a buffer unseen this frame is freed
     // + evicted at end of gather. Arena-bound at construction (see RtShadowState ctor).
-    HashMap<const Core::Buffer*, RtMeshHeapHandleCacheEntry, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>, Core::Alloc::GlobalArena> m_hwMeshHeapHandleCache;
-    HashMap<const Core::Buffer*, RtMeshHeapHandleCacheEntry, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>, Core::Alloc::GlobalArena> m_swMeshHeapHandleCache;
+    RtMeshHeapHandleCache m_hwMeshHeapHandleCache;
+    RtMeshHeapHandleCache m_swMeshHeapHandleCache;
     f32 m_swShadowEdgeThreshold = 0.1f;
     bool m_swShadowEdgeStatsPending = false;
     bool m_shadowResolvePipelineFailed = false;

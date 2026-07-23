@@ -21,30 +21,42 @@ namespace __hidden_rt_swbvh{
     // handle cache; on a hit the existing valid handle is reused unchanged (no allocate/write/free -- the dominant
     // avoidable cost was minting a fresh handle every frame for the same buffer). On a miss the buffer is registered
     // once (allocate + write) and pinned in the cache by a refcounted BufferHandle so the key cannot be recycled
-    // under us. seenThisFrame is set so the end-of-gather sweep keeps it. Every backing buffer registers as a single
-    // STORAGE_BUFFER; the raw-vs-structured split is only a shader-side view (P3 aliases) and write() forces the
-    // canonical STORAGE_BUFFER type, so the SRV factory choice is documentation. Returns invalid if the resource
-    // namespace is exhausted (allocate() logs it).
-    [[nodiscard]] Core::GpuDescriptorHandle AcquireMeshHeapHandle(
+    // under us. seenThisFrame is set so the end-of-gather sweep keeps it. Every backing buffer registers as one
+    // full-range STORAGE_BUFFER; raw-vs-structured access is only a shader-side view (P3 aliases), so the cache key
+    // is exactly the backing Buffer*. Failed allocation or descriptor writes are never cached: a later gather can
+    // retry once capacity or the resource state recovers.
+    [[nodiscard]] bool AcquireMeshHeapHandle(
         Core::GpuDescriptorHeap& heap,
-        HashMap<const Core::Buffer*, RtMeshHeapHandleCacheEntry, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>, Core::Alloc::GlobalArena>& cache,
-        const Core::Buffer* buffer,
-        const Core::BindingSetItem& view
+        RtMeshHeapHandleCache& cache,
+        Core::Buffer& buffer,
+        Core::GpuDescriptorHandle& outHandle
     ){
-        auto found = cache.find(buffer);
+        outHandle = Core::GpuDescriptorHandle::invalid();
+
+        const Core::Buffer* const bufferKey = &buffer;
+        auto found = cache.find(bufferKey);
         if(found != cache.end()){
+            NWB_ASSERT(found.value().handle.valid());
             found.value().seenThisFrame = true;
-            return found.value().handle;
+            outHandle = found.value().handle;
+            return true;
+        }
+
+        const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(!handle.valid())
+            return false;
+        if(!heap.write(handle, Core::BindingSetItem::StructuredBuffer_SRV(0u, &buffer))){
+            heap.free(handle);
+            return false;
         }
 
         RtMeshHeapHandleCacheEntry entry;
-        entry.keepAlive = Core::BufferHandle(const_cast<Core::Buffer*>(buffer));   // refcount-pin the key
-        entry.handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(entry.handle.valid())
-            heap.write(entry.handle, view);
+        entry.keepAlive = Core::BufferHandle(&buffer);   // refcount-pin the key
+        entry.handle = handle;
         entry.seenThisFrame = true;
-        cache.insert({buffer, Move(entry)});
-        return entry.handle;
+        cache.insert({bufferKey, Move(entry)});
+        outHandle = handle;
+        return true;
     }
 
     // End-of-gather sweep: free + evict every cached buffer that did not reappear this frame (a mesh was unloaded or
@@ -52,7 +64,7 @@ namespace __hidden_rt_swbvh{
     // heap.free quarantine keeps in-flight frames referencing a freed slot valid until they retire.
     void SweepUnseenMeshHeapHandles(
         Core::GpuDescriptorHeap& heap,
-        HashMap<const Core::Buffer*, RtMeshHeapHandleCacheEntry, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>, Core::Alloc::GlobalArena>& cache
+        RtMeshHeapHandleCache& cache
     ){
         for(auto it = cache.begin(); it != cache.end(); ){
             if(it.value().seenThisFrame){
@@ -68,7 +80,7 @@ namespace __hidden_rt_swbvh{
 
     // Begin a gather: mark nothing seen yet so the sweep can tell reappearances from dropouts.
     void BeginMeshHeapHandleGather(
-        HashMap<const Core::Buffer*, RtMeshHeapHandleCacheEntry, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>, Core::Alloc::GlobalArena>& cache
+        RtMeshHeapHandleCache& cache
     ){
         for(auto it = cache.begin(); it != cache.end(); ++it)
             it.value().seenThisFrame = false;
@@ -289,7 +301,38 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             // New distinct mesh: append its three backing buffers to the per-frame table and mint the parallel
             // global-heap handles the HW caustic/GI traces read this geometry through. Every distinct mesh is always
             // registered (the table grows on demand).
-            meshSlot = rayTracingState().m_shadowMeshCount++;
+            Core::GpuDescriptorHandle indexHandle;
+            Core::GpuDescriptorHandle attributeHandle;
+            Core::GpuDescriptorHandle positionHandle;
+            if(
+                heapLive
+                && (
+                    !AcquireMeshHeapHandle(
+                        heap,
+                        rayTracingState().m_hwMeshHeapHandleCache,
+                        *meshIndexBuffer,
+                        indexHandle
+                    )
+                    || !AcquireMeshHeapHandle(
+                        heap,
+                        rayTracingState().m_hwMeshHeapHandleCache,
+                        *mesh->attributeBuffer,
+                        attributeHandle
+                    )
+                    || !AcquireMeshHeapHandle(
+                        heap,
+                        rayTracingState().m_hwMeshHeapHandleCache,
+                        *mesh->positionBuffer,
+                        positionHandle
+                    )
+                )
+            ){
+                SweepUnseenMeshHeapHandles(heap, rayTracingState().m_hwMeshHeapHandleCache);
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
+                return false;
+            }
+
+            meshSlot = rayTracingState().m_shadowMeshCount;
             rayTracingState().m_shadowMeshIndexBuffers.push_back(meshIndexBuffer);
             rayTracingState().m_shadowMeshAttributeBuffers.push_back(mesh->attributeBuffer.get());
             rayTracingState().m_shadowMeshPositionBuffers.push_back(mesh->positionBuffer.get());
@@ -297,15 +340,16 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             // read them via NwbHeapRawBuffer(record.<x>Slot)). When the heap is unavailable the handles push default
             // (never read) so all six Vectors stay lockstep by slot.
             if(heapLive){
-                rayTracingState().m_shadowMeshIndexHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_hwMeshHeapHandleCache, meshIndexBuffer, Core::BindingSetItem::RawBuffer_SRV(0u, meshIndexBuffer)));
-                rayTracingState().m_shadowMeshAttributeHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_hwMeshHeapHandleCache, mesh->attributeBuffer.get(), Core::BindingSetItem::RawBuffer_SRV(0u, mesh->attributeBuffer.get())));
-                rayTracingState().m_shadowMeshPositionHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_hwMeshHeapHandleCache, mesh->positionBuffer.get(), Core::BindingSetItem::RawBuffer_SRV(0u, mesh->positionBuffer.get())));
+                rayTracingState().m_shadowMeshIndexHandles.push_back(indexHandle);
+                rayTracingState().m_shadowMeshAttributeHandles.push_back(attributeHandle);
+                rayTracingState().m_shadowMeshPositionHandles.push_back(positionHandle);
             }
             else{
                 rayTracingState().m_shadowMeshIndexHandles.emplace_back();
                 rayTracingState().m_shadowMeshAttributeHandles.emplace_back();
                 rayTracingState().m_shadowMeshPositionHandles.emplace_back();
             }
+            ++rayTracingState().m_shadowMeshCount;
         }
 
         Core::RayTracingInstanceDesc instanceDesc;
@@ -543,7 +587,16 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         // Only instances whose per-mesh software BVH topology + geometry are built (and that have valid
         // object-space bounds) can be traced. Storage alone is insufficient because resource preparation may
         // allocate it before the first build command has initialized the topology.
-        if(!meshReady || !mesh || !mesh->swBvhTopologyBuilt || !mesh->swBvhNodeBuffer || !mesh->positionBuffer || !mesh->triangleIndexBuffer || !mesh->csgLocalBounds.valid())
+        if(
+            !meshReady
+            || !mesh
+            || !mesh->swBvhTopologyBuilt
+            || !mesh->swBvhNodeBuffer
+            || !mesh->positionBuffer
+            || !mesh->triangleIndexBuffer
+            || !mesh->attributeBuffer
+            || !mesh->csgLocalBounds.valid()
+        )
             continue;
 
         // Dedupe to a per-mesh table slot: instances sharing a mesh share its node/position/index buffers. The table
@@ -559,7 +612,45 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         if(meshSlot == ~0u){
             // New distinct mesh: append its four backing buffers to the per-frame table and mint the parallel
             // global-heap handles the SW shadow / caustic / GI traces read this geometry through.
-            meshSlot = rayTracingState().m_swShadowMeshCount++;
+            Core::GpuDescriptorHandle nodeHandle;
+            Core::GpuDescriptorHandle positionHandle;
+            Core::GpuDescriptorHandle indexHandle;
+            Core::GpuDescriptorHandle attributeHandle;
+            if(
+                heapLive
+                && (
+                    !AcquireMeshHeapHandle(
+                        heap,
+                        rayTracingState().m_swMeshHeapHandleCache,
+                        *meshNodeBuffer,
+                        nodeHandle
+                    )
+                    || !AcquireMeshHeapHandle(
+                        heap,
+                        rayTracingState().m_swMeshHeapHandleCache,
+                        *mesh->positionBuffer,
+                        positionHandle
+                    )
+                    || !AcquireMeshHeapHandle(
+                        heap,
+                        rayTracingState().m_swMeshHeapHandleCache,
+                        *mesh->triangleIndexBuffer,
+                        indexHandle
+                    )
+                    || !AcquireMeshHeapHandle(
+                        heap,
+                        rayTracingState().m_swMeshHeapHandleCache,
+                        *mesh->attributeBuffer,
+                        attributeHandle
+                    )
+                )
+            ){
+                SweepUnseenMeshHeapHandles(heap, rayTracingState().m_swMeshHeapHandleCache);
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
+                return false;
+            }
+
+            meshSlot = rayTracingState().m_swShadowMeshCount;
             rayTracingState().m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);
             rayTracingState().m_swShadowMeshPositionBuffers.push_back(mesh->positionBuffer.get());
             rayTracingState().m_swShadowMeshIndexBuffers.push_back(mesh->triangleIndexBuffer.get());
@@ -571,10 +662,10 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             // attribute take the raw view. All land as STORAGE_BUFFER regardless (write() forces the type). When the
             // heap is unavailable the handles push default (never read) so all eight Vectors stay lockstep by slot.
             if(heapLive){
-                rayTracingState().m_swShadowMeshNodeHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_swMeshHeapHandleCache, meshNodeBuffer, Core::BindingSetItem::StructuredBuffer_SRV(0u, meshNodeBuffer)));
-                rayTracingState().m_swShadowMeshPositionHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_swMeshHeapHandleCache, mesh->positionBuffer.get(), Core::BindingSetItem::RawBuffer_SRV(0u, mesh->positionBuffer.get())));
-                rayTracingState().m_swShadowMeshIndexHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_swMeshHeapHandleCache, mesh->triangleIndexBuffer.get(), Core::BindingSetItem::RawBuffer_SRV(0u, mesh->triangleIndexBuffer.get())));
-                rayTracingState().m_swShadowMeshAttributeHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_swMeshHeapHandleCache, mesh->attributeBuffer.get(), Core::BindingSetItem::RawBuffer_SRV(0u, mesh->attributeBuffer.get())));
+                rayTracingState().m_swShadowMeshNodeHandles.push_back(nodeHandle);
+                rayTracingState().m_swShadowMeshPositionHandles.push_back(positionHandle);
+                rayTracingState().m_swShadowMeshIndexHandles.push_back(indexHandle);
+                rayTracingState().m_swShadowMeshAttributeHandles.push_back(attributeHandle);
             }
             else{
                 rayTracingState().m_swShadowMeshNodeHandles.emplace_back();
@@ -582,6 +673,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
                 rayTracingState().m_swShadowMeshIndexHandles.emplace_back();
                 rayTracingState().m_swShadowMeshAttributeHandles.emplace_back();
             }
+            ++rayTracingState().m_swShadowMeshCount;
         }
 
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);

@@ -38,6 +38,7 @@ void RendererRayTracingSystem::logCapabilityOnce(){
     runBvhBuildSelfTest();
     runSceneBvhSelfTest();
     runGpuDescriptorHeapSelfTest();
+    runHeapHandleCacheBench();
 #endif
 }
 

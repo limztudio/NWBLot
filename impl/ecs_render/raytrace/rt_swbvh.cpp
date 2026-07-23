@@ -79,6 +79,242 @@ namespace __hidden_rt_swbvh{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Targeted CPU micro-benchmark for the Buffer*-keyed descriptor-handle cache (commit a409d9ab). Opt-in via the
+// NWB_HEAP_HANDLE_BENCH env var; runs once at capability-probe time against the live heap (DEBUG only). Isolates the
+// gather-path cost the cache changed, in one binary, so the gain is measurable without two separate app builds.
+//
+// It sweeps a set of mesh counts, creating representative backing buffers per shape, then times three regimes of the
+// same logical gather operation (AcquireMeshHeapHandle per distinct mesh view) against the live descriptor heap:
+//   coldUncached       -- pre-cache per-frame churn: allocate()+write() every view every frame, free() every handle at
+//                         end of frame (what buildSceneTlas/buildSceneSwBvh did before the cache). Dominant cost is the
+//                         write() -> vkUpdateDescriptorSets host descriptor update.
+//   warmCached         -- post-cache steady state: AcquireMeshHeapHandle on a populated cache (cache hit -> one HashMap
+//                         find, zero alloc/write/free) plus SweepUnseenMeshHeapHandles (all seen -> no eviction).
+//   cachedFirstFrame   -- one-time populate-from-empty (reference; not recurring).
+//
+// The cold regime quarantines totalViews fresh slots/frame with no mid-loop recycling, so framesUncached is sized
+// against the LIVE device-clamped resource capacity (NOT the s_DefaultResourceCapacity request) -- if the device clamps
+// the cap lower than requested, an over-large cold loop would silently exhaust the namespace (allocate() returns
+// invalid, write() is skipped) and under-measure the cold cost. The quarantine is matured by advanceFrame() x
+// s_MaxFramesInFlight between shapes (the self-test's pattern). Results are reported as us/frame AND us/handle (the
+// shape-portable quantity). Defined here (not a separate TU) so it can use the __hidden_rt_swbvh gather helpers unchanged.
+#if defined(NWB_DEBUG)
+void RendererRayTracingSystem::runHeapHandleCacheBench(){
+    using namespace __hidden_rt_swbvh;
+
+    // Gate: never run unless explicitly requested, so a normal debug session is unaffected.
+    AString<Core::Alloc::GlobalArena> benchFlag;
+    if(!ReadEnvironmentVariable("NWB_HEAP_HANDLE_BENCH", benchFlag) || benchFlag.empty())
+        return;
+    if(rayTracingState().m_heapHandleBenchDone)
+        return;
+    rayTracingState().m_heapHandleBenchDone = true;
+
+    auto* device = graphics().getDevice();
+    if(!device)
+        return;
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: heap-handle cache bench skipped: device did not bring the heap live"));
+        return;
+    }
+
+    // ---- live capacity (the production heap is device-clamped, not the s_DefaultResourceCapacity request) ----
+    // The cold regime quarantines totalViews fresh slots/frame with no mid-loop recycling (advanceFrame() is never
+    // called inside the timed section, so the production frame counter is untouched), so framesUncached MUST be sized
+    // against the LIVE capacity or allocate() silently returns invalid -> write() is skipped -> the cold cost is
+    // under-measured (the exact number this bench exists to trust). The quarantine is matured by advanceFrame() x
+    // s_MaxFramesInFlight between regimes (the self-test's pattern), so each regime starts from a clean namespace.
+    const u32 resourceCapacity = heap.getResourceCapacity();
+    constexpr u32 viewsPerMesh = 4u;        // index + attribute + position + node (mirrors the SW gather exactly)
+    constexpr u32 warmupIterations = 3u;    // prime caches / CPU branch predictors before timing
+    constexpr u32 framesCached = 300u;      // steady state: cache hits are cheap, so more frames dampen timer noise
+    constexpr u32 targetColdHandles = 8192u;// aggregate fresh-handle target for stable cold timing across shapes
+
+    // Backing-buffer factories (raw + structured, mirroring the real gather's view mix). Reused across the sweep.
+    const auto createRawBuffer = [this](const u64 byteSize, const tchar* name) -> Core::BufferHandle{
+        Core::BufferDesc desc;
+        desc
+            .setByteSize(byteSize)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setDebugName(Name(name))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        return graphics().createBuffer(desc);
+    };
+    const auto createStructuredBuffer = [this](const u64 byteSize, const tchar* name) -> Core::BufferHandle{
+        Core::BufferDesc desc;
+        desc
+            .setByteSize(byteSize)
+            .setCanHaveUAVs(true)
+            .setStructStride(16u)   // NwbBvhNode-sized (Float3UInt = 16B); write() forces STORAGE_BUFFER either way
+            .setDebugName(Name(name))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        return graphics().createBuffer(desc);
+    };
+
+    // A bench-local cache using the exact production type, so the hot path measured is byte-identical to the gather's.
+    using CacheT = HashMap<const Core::Buffer*, RtMeshHeapHandleCacheEntry, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>, Core::Alloc::GlobalArena>;
+
+    NWB_LOGGER_INFO(NWB_TEXT("========================================================"));
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: heap-handle cache bench (Buffer*-keyed, commit a409d9ab)"));
+    NWB_LOGGER_INFO(NWB_TEXT("  live resource capacity: {} slots"), static_cast<u64>(resourceCapacity));
+
+    // Mesh-count sweep: the per-frame cost scales with meshCount, so a single point is shape-dependent. Reporting
+    // us/frame AND us/handle (the shape-portable quantity) makes the gain robust to scene size.
+    constexpr u32 meshCounts[] = { 16u, 64u, 256u };
+    volatile u32 sink = 0u;   // accumulates across all shapes so no gather loop is optimized away
+
+    // Sum a slot field pulled out of every minted handle so the optimizer cannot delete the gather loop as dead code.
+    const auto consumeHandles = [](const Core::GpuDescriptorHandle* handles, const u32 count) noexcept -> u32{
+        u32 acc = 0u;
+        for(u32 i = 0u; i < count; ++i)
+            acc += handles[i].slot();
+        return acc;
+    };
+
+    for(const u32 meshCount : meshCounts){
+        const u32 totalViews = meshCount * viewsPerMesh;
+
+        // Capacity-safe cold frame count: totalViews fresh quarantined slots/frame, matured only AFTER the loop.
+        const u32 capacityFrames = (resourceCapacity > totalViews) ? ((resourceCapacity - totalViews) / totalViews) : 0u;
+        u32 framesUncached = targetColdHandles / Max(totalViews, 1u);
+        framesUncached = Max(framesUncached, 8u);
+        framesUncached = Min(framesUncached, capacityFrames);
+        if(framesUncached == 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: heap-handle cache bench: meshCount {} needs {} slots/frame but capacity is {}")
+                , static_cast<u64>(meshCount), static_cast<u64>(totalViews), static_cast<u64>(resourceCapacity));
+            continue;
+        }
+
+        // ---- create the representative backing buffers for this shape (raw + structured, mirroring the gather) ----
+        Vector<Core::BufferHandle, Core::Alloc::GlobalArena> buffers{arena()};
+        Vector<Core::BindingSetItem, Core::Alloc::GlobalArena> views{arena()};
+        buffers.reserve(totalViews);
+        views.reserve(totalViews);
+        for(u32 i = 0u; i < totalViews; ++i){
+            Core::BufferHandle buf;
+            Core::BindingSetItem view;
+            const bool structured = ((i % viewsPerMesh) == 0u);   // one structured (node) view per mesh, rest raw
+            if(structured){
+                buf = createStructuredBuffer(4096u, NWB_TEXT("heap_bench_structured"));
+                view = Core::BindingSetItem::StructuredBuffer_SRV(0u, buf.get());
+            }
+            else{
+                buf = createRawBuffer(4096u, NWB_TEXT("heap_bench_raw"));
+                view = Core::BindingSetItem::RawBuffer_SRV(0u, buf.get());
+            }
+            if(!buf){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: heap-handle cache bench failed to create backing buffer {} (meshCount {})"), static_cast<u64>(i), static_cast<u64>(meshCount));
+                return;
+            }
+            buffers.push_back(Move(buf));
+            views.push_back(view);
+        }
+
+        // Scratch handle vector the gather fills, paralleling m_shadowMesh*Handles in the real gather.
+        Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> gatheredHandles{arena()};
+        gatheredHandles.resize(totalViews);
+        CacheT cache(0, Hasher<const Core::Buffer*>(), EqualTo<const Core::Buffer*>(), arena());
+
+        // ---- Regime 1: coldUncached -- the pre-cache per-frame churn (allocate + write + end-of-frame free) ----
+        for(u32 w = 0u; w < warmupIterations; ++w){
+            for(u32 i = 0u; i < totalViews; ++i){
+                Core::GpuDescriptorHandle h = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+                if(h.valid())
+                    heap.write(h, views[i]);
+                gatheredHandles[i] = h;
+            }
+            sink ^= consumeHandles(gatheredHandles.data(), totalViews);
+            for(u32 i = 0u; i < totalViews; ++i)
+                heap.free(gatheredHandles[i]);
+        }
+
+        const Timer tColdBegin = TimerNow();
+        for(u32 f = 0u; f < framesUncached; ++f){
+            for(u32 i = 0u; i < totalViews; ++i){
+                Core::GpuDescriptorHandle h = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+                if(h.valid())
+                    heap.write(h, views[i]);
+                gatheredHandles[i] = h;
+            }
+            sink ^= consumeHandles(gatheredHandles.data(), totalViews);
+            for(u32 i = 0u; i < totalViews; ++i)
+                heap.free(gatheredHandles[i]);
+        }
+        const f64 coldUncachedSeconds = DurationInSeconds<f64>(TimerNow(), tColdBegin);
+        // Mature the cold quarantine so the cached regimes below start from a clean namespace (self-test pattern).
+        for(u32 fr = 0u; fr < Core::s_MaxFramesInFlight; ++fr)
+            heap.advanceFrame();
+
+        // ---- Regime 2: cachedFirstFrame -- one-time populate-from-empty (reference; not recurring) ----
+        cache.clear();
+        const Timer tFirstBegin = TimerNow();
+        {
+            for(u32 i = 0u; i < totalViews; ++i)
+                gatheredHandles[i] = AcquireMeshHeapHandle(heap, cache, buffers[i].get(), views[i]);
+            sink ^= consumeHandles(gatheredHandles.data(), totalViews);
+            // Leave the cache in steady-state shape: all entries seen (so the sweep below retains everything).
+            for(auto it = cache.begin(); it != cache.end(); ++it)
+                it.value().seenThisFrame = true;
+        }
+        const f64 cachedFirstFrameSeconds = DurationInSeconds<f64>(TimerNow(), tFirstBegin);
+
+        // ---- Regime 3: warmCached -- the post-cache steady state (Acquire hit + sweep, no eviction) ----
+        for(u32 w = 0u; w < warmupIterations; ++w){
+            BeginMeshHeapHandleGather(cache);
+            for(u32 i = 0u; i < totalViews; ++i)
+                gatheredHandles[i] = AcquireMeshHeapHandle(heap, cache, buffers[i].get(), views[i]);
+            sink ^= consumeHandles(gatheredHandles.data(), totalViews);
+            SweepUnseenMeshHeapHandles(heap, cache);
+        }
+
+        const Timer tWarmBegin = TimerNow();
+        for(u32 f = 0u; f < framesCached; ++f){
+            BeginMeshHeapHandleGather(cache);
+            for(u32 i = 0u; i < totalViews; ++i)
+                gatheredHandles[i] = AcquireMeshHeapHandle(heap, cache, buffers[i].get(), views[i]);
+            sink ^= consumeHandles(gatheredHandles.data(), totalViews);
+            SweepUnseenMeshHeapHandles(heap, cache);
+        }
+        const f64 warmCachedSeconds = DurationInSeconds<f64>(TimerNow(), tWarmBegin);
+
+        // ---- teardown: free every cached handle, then mature the quarantine so the next shape starts clean ----
+        for(auto it = cache.begin(); it != cache.end(); ++it)
+            heap.free(it.value().handle);
+        cache.clear();
+        for(u32 fr = 0u; fr < Core::s_MaxFramesInFlight; ++fr)
+            heap.advanceFrame();
+
+        // ---- report (per-frame us AND us/handle, the shape-portable quantity) ----
+        const f64 coldPerFrameUs = (coldUncachedSeconds / static_cast<f64>(framesUncached)) * 1e6;
+        const f64 warmPerFrameUs = (warmCachedSeconds / static_cast<f64>(framesCached)) * 1e6;
+        const f64 firstFrameUs = cachedFirstFrameSeconds * 1e6;
+        const f64 coldPerHandleUs = coldPerFrameUs / static_cast<f64>(totalViews);
+        const f64 warmPerHandleUs = warmPerFrameUs / static_cast<f64>(totalViews);
+        const f64 speedup = (warmPerFrameUs > 0.0) ? (coldPerFrameUs / warmPerFrameUs) : 0.0;
+        const f64 savedPerFrameUs = coldPerFrameUs - warmPerFrameUs;
+
+        NWB_LOGGER_INFO(NWB_TEXT("  ---- meshCount {}: {} meshes x {} views = {} handles/frame [cold {} frames, warm {} frames]")
+            , static_cast<u64>(meshCount), static_cast<u64>(meshCount), static_cast<u64>(viewsPerMesh), static_cast<u64>(totalViews), static_cast<u64>(framesUncached), static_cast<u64>(framesCached));
+        NWB_LOGGER_INFO(NWB_TEXT("    coldUncached  (alloc+write+free/frame): {:>10.2f} us/frame  ({:>6.3f} us/handle)")
+            , coldPerFrameUs, coldPerHandleUs);
+        NWB_LOGGER_INFO(NWB_TEXT("    warmCached    (hash-find + sweep):     {:>10.2f} us/frame  ({:>6.3f} us/handle)")
+            , warmPerFrameUs, warmPerHandleUs);
+        NWB_LOGGER_INFO(NWB_TEXT("    cachedFirstFrame (one-time populate):   {:>10.2f} us  (not recurring)"), firstFrameUs);
+        NWB_LOGGER_INFO(NWB_TEXT("    delta: {:>10.2f} us/frame saved   speedup: {:>6.2f}x"), savedPerFrameUs, speedup);
+    }
+    NWB_LOGGER_INFO(NWB_TEXT("  (sink={:#x}; wall-clock steady_timer totals over the frame counts shown)"), static_cast<u32>(sink));
+    NWB_LOGGER_INFO(NWB_TEXT("========================================================"));
+}
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandList){
     if(!graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;

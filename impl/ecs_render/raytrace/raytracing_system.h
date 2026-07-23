@@ -252,6 +252,7 @@ private:
     void runBvhBuildSelfTest();
     void runSceneBvhSelfTest();
     void runGpuDescriptorHeapSelfTest();
+    void runHeapHandleCacheBench();   // opt-in (NWB_HEAP_HANDLE_BENCH) CPU micro-benchmark for the descriptor-handle cache
 #endif
 };
 

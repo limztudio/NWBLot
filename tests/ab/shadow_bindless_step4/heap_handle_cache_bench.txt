@@ -1,0 +1,74 @@
+Targeted CPU micro-benchmark for the Buffer*-keyed descriptor-handle cache (commit a409d9ab).
+Run: dbg, soft_shadow_test_sw_smoke, NWB_HEAP_HANDLE_BENCH=1, AMD BC-250/RADV, DISPLAY=:0 (Xwayland).
+Bench defined in rt_swbvh.cpp::runHeapHandleCacheBench (whole function DEBUG-gated; opt/fin builds omit it entirely).
+
+Tuned scene shape + frame counts (this revision):
+  - Mesh-count sweep {16, 64, 256} x 4 views/mesh (index + attribute + position + node) -- mirrors the SW gather
+    exactly. The per-frame cost scales with meshCount, so a single point is shape-dependent; the sweep makes the
+    gain robust to scene size.
+  - framesUncached is sized against the LIVE device-clamped resource capacity (getResourceCapacity()), NOT the
+    hardcoded s_DefaultResourceCapacity request. The cold regime quarantines totalViews fresh slots/frame with no
+    mid-loop recycling (advanceFrame() is never called inside the timed section), so an over-large cold loop would
+    silently exhaust the namespace -> allocate() returns invalid -> write() skipped -> cold cost under-measured.
+    The quarantine is matured by advanceFrame() x s_MaxFramesInFlight between shapes (self-test pattern).
+  - framesCached = 300 (cache hits are cheap; more frames dampen timer noise).
+  - targetColdHandles = 8192 (aggregate fresh-handle target -> framesUncached = 8192/totalViews, clamped to the
+    capacity-safe ceiling and a floor of 8).
+
+Live capacity (verified at runtime, not assumed): 16384 resource slots (device did NOT clamp below the request).
+
+Regimes (all against the live production descriptor heap, real vkUpdateDescriptorSets writes):
+  coldUncached       pre-cache per-frame churn: allocate()+write() every view/frame, free() every handle at end of frame.
+  warmCached         post-cache steady state:   AcquireMeshHeapHandle cache hit (1 HashMap find) + SweepUnseenMeshHeapHandles (no eviction).
+  cachedFirstFrame   one-time populate-from-empty (cache miss -> allocate+write+insert); reference, NOT recurring.
+
+Results (wall-clock steady_timer totals over the frame counts shown; two consecutive runs):
+
+  ---- meshCount 16: 16 meshes x 4 views = 64 handles/frame [cold 128 frames, warm 300 frames]
+    coldUncached  (alloc+write+free/frame):    2361.71 us/frame  (36.902 us/handle)   [run 1]
+    coldUncached  (alloc+write+free/frame):    1139.75 us/frame  (17.809 us/handle)   [run 2]
+    warmCached    (hash-find + sweep):          43.57 us/frame  ( 0.681 us/handle)   [run 1]
+    warmCached    (hash-find + sweep):          30.26 us/frame  ( 0.473 us/handle)   [run 2]
+    cachedFirstFrame (one-time populate):      3306.79 us  [run 1] /  2300.49 us  [run 2]  (not recurring)
+    delta:    2318.15 us/frame saved   speedup:  54.21x   [run 1]
+    delta:    1109.49 us/frame saved   speedup:  37.67x   [run 2]
+
+  ---- meshCount 64: 64 meshes x 4 views = 256 handles/frame [cold 32 frames, warm 300 frames]
+    coldUncached  (alloc+write+free/frame):    6657.90 us/frame  (26.007 us/handle)   [run 1]
+    coldUncached  (alloc+write+free/frame):    4399.51 us/frame  (17.186 us/handle)   [run 2]
+    warmCached    (hash-find + sweep):         182.03 us/frame  ( 0.711 us/handle)   [run 1]
+    warmCached    (hash-find + sweep):         122.20 us/frame  ( 0.477 us/handle)   [run 2]
+    cachedFirstFrame (one-time populate):     14719.37 us  [run 1] /  9809.76 us  [run 2]  (not recurring)
+    delta:    6475.87 us/frame saved   speedup:  36.58x   [run 1]
+    delta:    4277.31 us/frame saved   speedup:  36.00x   [run 2]
+
+  ---- meshCount 256: 256 meshes x 4 views = 1024 handles/frame [cold 8 frames, warm 300 frames]
+    coldUncached  (alloc+write+free/frame):   42496.31 us/frame  (41.500 us/handle)   [run 1]
+    coldUncached  (alloc+write+free/frame):   28487.94 us/frame  (27.820 us/handle)   [run 2]
+    warmCached    (hash-find + sweep):         771.57 us/frame  ( 0.753 us/handle)   [run 1]
+    warmCached    (hash-find + sweep):         520.37 us/frame  ( 0.508 us/handle)   [run 2]
+    cachedFirstFrame (one-time populate):     70631.02 us  [run 1] / 47216.32 us  [run 2]  (not recurring)
+    delta:   41724.74 us/frame saved   speedup:  55.08x   [run 1]
+    delta:   27967.57 us/frame saved   speedup:  54.75x   [run 2]
+
+  sink=0xaec860
+
+Interpretation:
+  The dominant avoidable cost was heap.write() -> vkUpdateDescriptorSets (a host descriptor update) minted per
+  visible mesh per frame. With the cache, a reappearing Buffer* reuses its valid handle (one HashMap find), so the
+  steady-state gather drops the host descriptor churn.
+
+  The warm (cached) cost is a clean per-handle constant: ~0.47-0.75 us/handle, essentially independent of mesh
+  count -- it is one HashMap find + the sweep's seen-bit walk. The cold (uncached) us/handle is noisier across runs
+  (17-42 us/handle) because vkUpdateDescriptorSets host-update latency varies with driver/scheduler state and is
+  amortized differently as totalViews grows.
+
+  At the representative soft-shadow scene shape (meshCount 64, matching the smoke's distinct-mesh count), the cache
+  saves ~4.3-6.5 ms/frame of gather-path CPU time (the original single-point headline of ~6.1 ms/frame is within
+  this range). The one-time populate (cachedFirstFrame) is ~10-15 ms at that shape but is paid once on the first
+  appearance of each buffer and never again while the buffer stays resident.
+
+Build status:
+  - dbg (NWB_DEBUG): compiles clean; bench runs and reports all three shapes.
+  - opt (NDEBUG): compiles clean; the whole function is #if defined(NWB_DEBUG)-gated out, so the opt binary carries
+    zero bench code (the function is DEBUG-only and its single call site in raytracing_system.cpp is also DEBUG-gated).

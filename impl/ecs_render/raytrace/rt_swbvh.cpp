@@ -17,6 +17,15 @@ NWB_IMPL_BEGIN
 
 
 namespace __hidden_rt_swbvh{
+    using MeshBufferSlotLookup = HashMap<
+        const Core::Buffer*,
+        u32,
+        Hasher<const Core::Buffer*>,
+        EqualTo<const Core::Buffer*>,
+        Core::Alloc::ScratchArena
+    >;
+
+
     // Stable Buffer*-keyed handle acquisition (Phase 2 perf opt). Looks up the backing buffer in the cross-frame
     // handle cache; on a hit the existing valid handle is reused unchanged (no allocate/write/free -- the dominant
     // avoidable cost was minting a fresh handle every frame for the same buffer). On a miss the buffer is registered
@@ -215,6 +224,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         return false;
 
     auto rendererView = world().view<RendererComponent>();
+    const usize candidateCount = rendererView.candidateCount();
     Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena> instances{ scratchArena };
     // Per-instance occluder material, built lockstep with `instances` (one record per push, same order) so the
     // uploaded table indexes by the hardware InstanceID() the trace reads.
@@ -231,10 +241,17 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         EqualTo<ECSRenderDetail::MaterialTypedByteContentKey>(),
         scratchArena
     );
-    instances.reserve(rendererView.candidateCount());
-    instanceMaterials.reserve(rendererView.candidateCount());
-    shadowInstanceData.reserve(rendererView.candidateCount());
-    shadowMutableTypedRanges.reserve(rendererView.candidateCount());
+    instances.reserve(candidateCount);
+    instanceMaterials.reserve(candidateCount);
+    shadowInstanceData.reserve(candidateCount);
+    shadowMutableTypedRanges.reserve(candidateCount);
+    MeshBufferSlotLookup meshSlotLookup(
+        0,
+        Hasher<const Core::Buffer*>(),
+        EqualTo<const Core::Buffer*>(),
+        scratchArena
+    );
+    meshSlotLookup.reserve(candidateCount);
 
     // Reset the per-frame distinct-mesh table; the gather repopulates it (slot k -> mesh k's index/attribute/
     // position buffers) indexed by material.meshSlot. This is the host-index side of the geometry split: the host
@@ -288,16 +305,14 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             continue;
 
         // Dedupe to a per-mesh table slot: instances sharing a mesh share its index/attribute/position buffers. The
-        // table grows on demand, so every distinct mesh is registered.
+        // scratch lookup avoids rescanning the growing dense table for every instance while preserving its first-seen
+        // order, which the parallel buffer/descriptor tables consume.
         Core::Buffer* meshIndexBuffer = mesh->triangleIndexBuffer.get();
-        u32 meshSlot = ~0u; // sentinel: mesh not yet in this frame's distinct-mesh table
-        for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
-            if(rayTracingState().m_shadowMeshIndexBuffers[slot] == meshIndexBuffer){
-                meshSlot = slot;
-                break;
-            }
-        }
-        if(meshSlot == ~0u){
+        u32 meshSlot = 0u;
+        const auto foundMeshSlot = meshSlotLookup.find(meshIndexBuffer);
+        if(foundMeshSlot != meshSlotLookup.end())
+            meshSlot = foundMeshSlot.value();
+        else{
             // New distinct mesh: append its three backing buffers to the per-frame table and mint the parallel
             // global-heap handles the HW caustic/GI traces read this geometry through. Every distinct mesh is always
             // registered (the table grows on demand).
@@ -349,6 +364,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
                 rayTracingState().m_shadowMeshAttributeHandles.emplace_back();
                 rayTracingState().m_shadowMeshPositionHandles.emplace_back();
             }
+            meshSlotLookup.emplace(meshIndexBuffer, meshSlot);
             ++rayTracingState().m_shadowMeshCount;
         }
 
@@ -545,6 +561,13 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     instanceMaterials.reserve(candidateCount);
     shadowInstanceData.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
+    MeshBufferSlotLookup meshSlotLookup(
+        0,
+        Hasher<const Core::Buffer*>(),
+        EqualTo<const Core::Buffer*>(),
+        scratchArena
+    );
+    meshSlotLookup.reserve(candidateCount);
 
     // Reset the per-frame distinct-mesh table; the gather repopulates it (slot k -> mesh k's buffers) for the
     // per-mesh descriptor arrays the traversal binds.
@@ -599,17 +622,15 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         )
             continue;
 
-        // Dedupe to a per-mesh table slot: instances sharing a mesh share its node/position/index buffers. The table
-        // grows on demand, so every distinct mesh is always traced.
+        // Dedupe to a per-mesh table slot: instances sharing a mesh share its node/position/index buffers. The
+        // scratch lookup avoids rescanning the growing dense table for every instance while preserving its first-seen
+        // order, which the parallel buffer/descriptor tables consume.
         Core::Buffer* meshNodeBuffer = mesh->swBvhNodeBuffer.get();
-        u32 meshSlot = ~0u; // sentinel: mesh not yet in this frame's distinct-mesh table
-        for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
-            if(rayTracingState().m_swShadowMeshNodeBuffers[slot] == meshNodeBuffer){
-                meshSlot = slot;
-                break;
-            }
-        }
-        if(meshSlot == ~0u){
+        u32 meshSlot = 0u;
+        const auto foundMeshSlot = meshSlotLookup.find(meshNodeBuffer);
+        if(foundMeshSlot != meshSlotLookup.end())
+            meshSlot = foundMeshSlot.value();
+        else{
             // New distinct mesh: append its four backing buffers to the per-frame table and mint the parallel
             // global-heap handles the SW shadow / caustic / GI traces read this geometry through.
             Core::GpuDescriptorHandle nodeHandle;
@@ -673,6 +694,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
                 rayTracingState().m_swShadowMeshIndexHandles.emplace_back();
                 rayTracingState().m_swShadowMeshAttributeHandles.emplace_back();
             }
+            meshSlotLookup.emplace(meshNodeBuffer, meshSlot);
             ++rayTracingState().m_swShadowMeshCount;
         }
 

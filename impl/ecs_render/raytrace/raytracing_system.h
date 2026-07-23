@@ -41,13 +41,6 @@ public:
 public:
     void logCapabilityOnce();
 
-#if defined(NWB_DEBUG)
-    // Test-side opt-in for the heap-handle cache micro-benchmark. The renderer NEVER reads the NWB_HEAP_HANDLE_BENCH
-    // env var directly (env-var reads belong to the test layer, like DisableSmokeRayTracingForTesting); the smoke
-    // harness reads it and calls this setter before validateResources()/logCapabilityOnce() runs the bench.
-    void requestHeapHandleCacheBench();
-#endif
-
     [[nodiscard]] bool buildPendingMeshBlas(Core::CommandList& commandList);
     [[nodiscard]] bool buildPendingMeshSwBvh(Core::CommandList& commandList);
     [[nodiscard]] bool buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
@@ -253,15 +246,6 @@ private:
     );
     [[nodiscard]] bool ensureShadowInstanceContextBuffer(usize instanceCount);
     [[nodiscard]] bool ensureShadowMaterialTypedBuffer(usize byteCount);
-
-#if defined(NWB_DEBUG)
-private:
-    void runBvhSortSelfTest();
-    void runBvhBuildSelfTest();
-    void runSceneBvhSelfTest();
-    void runGpuDescriptorHeapSelfTest();
-    void runHeapHandleCacheBench();   // gated on requestHeapHandleCacheBench() (called by the smoke harness)
-#endif
 };
 
 

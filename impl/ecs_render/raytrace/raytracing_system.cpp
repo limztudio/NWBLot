@@ -32,14 +32,6 @@ void RendererRayTracingSystem::logCapabilityOnce(){
         , graphics().queryFeatureSupport(Core::Feature::RayTracingPipeline)
         , graphics().queryFeatureSupport(Core::Feature::RayQuery)
     );
-
-#if defined(NWB_DEBUG)
-    runBvhSortSelfTest();
-    runBvhBuildSelfTest();
-    runSceneBvhSelfTest();
-    runGpuDescriptorHeapSelfTest();
-    runHeapHandleCacheBench();   // one-shot; no-op unless the smoke harness called requestHeapHandleCacheBench()
-#endif
 }
 
 

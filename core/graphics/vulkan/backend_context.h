@@ -32,6 +32,7 @@ namespace DeviceExtensionFeature{
         FragmentShadingRate,
         MutableDescriptorType,
         DescriptorHeap,
+        DescriptorBuffer,
         DeviceFault,
         Count,
     };
@@ -85,6 +86,7 @@ private:
     static constexpr ExtEntry s_OptionalDeviceExts[] = {
         { VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME, DeviceExtensionFeature::DescriptorHeap },
+        { VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME, DeviceExtensionFeature::DescriptorBuffer },
         { VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, DeviceExtensionFeature::FragmentShadingRate },
         { VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, DeviceExtensionFeature::None },

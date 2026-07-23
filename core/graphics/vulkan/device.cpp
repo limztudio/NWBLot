@@ -217,6 +217,8 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.KHR_dynamic_rendering = true;
         else if(NWB_STRCMP(ext, VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_descriptor_heap = true;
+        else if(NWB_STRCMP(ext, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME) == 0)
+            m_context.extensions.EXT_descriptor_buffer = true;
         else if(NWB_STRCMP(ext, VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_opacity_micromap = true;
         else if(NWB_STRCMP(ext, VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME) == 0)
@@ -379,6 +381,12 @@ Device::Device(const DeviceDesc& desc)
             pNext = &m_context.accelStructProperties;
         }
 
+        if(m_context.extensions.EXT_descriptor_buffer){
+            m_context.descriptorBufferProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT;
+            m_context.descriptorBufferProperties.pNext = pNext;
+            pNext = &m_context.descriptorBufferProperties;
+        }
+
         if(m_context.extensions.NV_cluster_acceleration_structure){
             m_context.nvClusterAccelerationStructureProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CLUSTER_ACCELERATION_STRUCTURE_PROPERTIES_NV;
             m_context.nvClusterAccelerationStructureProperties.pNext = pNext;
@@ -415,6 +423,21 @@ Device::Device(const DeviceDesc& desc)
         ){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor heap entry points are unavailable, falling back to descriptor sets."));
             m_context.extensions.EXT_descriptor_heap = false;
+        }
+    }
+
+    // Backend C entry-point verification. VK_EXT_descriptor_buffer is optional and gracefully disabled here if the
+    // driver advertised the extension but failed to expose any required device-level command, leaving Backend A
+    // (descriptor indexing) as the live floor. No consumer is wired in this step.
+    if(m_context.extensions.EXT_descriptor_buffer){
+        if(
+            !vkGetDescriptorEXT
+            || !vkGetDescriptorSetLayoutBindingOffsetEXT
+            || !vkCmdBindDescriptorBuffersEXT
+            || !vkCmdSetDescriptorBufferOffsetsEXT
+        ){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor buffer entry points are unavailable; Backend C is disabled."));
+            m_context.extensions.EXT_descriptor_buffer = false;
         }
     }
 

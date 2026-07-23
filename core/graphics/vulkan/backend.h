@@ -578,6 +578,7 @@ struct VulkanContext{
         bool KHR_acceleration_structure = false;
         bool buffer_device_address = false;
         bool EXT_descriptor_heap = false;
+        bool EXT_descriptor_buffer = false;
         bool EXT_debug_utils = false;
         bool EXT_debug_marker = false;
         bool KHR_swapchain = false;
@@ -597,6 +598,9 @@ struct VulkanContext{
 
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
     VkPhysicalDeviceDescriptorHeapPropertiesEXT descriptorHeapProperties{};
+    // Backend C properties: per-type descriptor sizes, offset alignment, and binding/range caps needed to lay out
+    // descriptor buffers and compute binding offsets for vkCmdSetDescriptorBufferOffsetsEXT.
+    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties{};
     VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
     VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures{};
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};

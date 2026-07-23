@@ -8,6 +8,7 @@
 #include "module.h"
 
 #include <core/common/log.h>
+#include <impl/assets/graphics/bindless/binding_slots.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1579,8 +1580,8 @@ private:
     // room to spare under maxBoundDescriptorSets so the heap never collides with a migrated pipeline's own low sets.
     // These MUST stay in lockstep with the shader contract in impl/assets/graphics/bindless/binding_slots.h
     // (NWB_BINDLESS_HEAP_RESOURCE_SET / NWB_BINDLESS_HEAP_SAMPLER_SET).
-    u32 m_resourceSetIndex = 8;
-    u32 m_samplerSetIndex = 9;
+    u32 m_resourceSetIndex = NWB_BINDLESS_HEAP_RESOURCE_SET;
+    u32 m_samplerSetIndex = NWB_BINDLESS_HEAP_SAMPLER_SET;
 
     BindingLayoutHandle m_resourceLayout;
     BindingLayoutHandle m_samplerLayout;

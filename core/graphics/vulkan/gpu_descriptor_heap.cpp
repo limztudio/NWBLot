@@ -68,12 +68,12 @@ u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptor
     // Register-space binding numbers inside each table (must be added in ascending order in initialize() so the
     // highest-numbered binding is the VARIABLE_DESCRIPTOR_COUNT one). Sampler counts from 0 in its own table.
     switch(descriptorClass){
-    case GpuDescriptorClass::SampledImage:  return 0u;
-    case GpuDescriptorClass::StorageImage:  return 1u;
-    case GpuDescriptorClass::SampledBuffer: return 2u;
-    case GpuDescriptorClass::StorageBuffer: return 3u;
-    case GpuDescriptorClass::UniformBuffer: return 4u;
-    case GpuDescriptorClass::Sampler:       return 0u;
+    case GpuDescriptorClass::SampledImage:  return NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE;
+    case GpuDescriptorClass::StorageImage:  return NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE;
+    case GpuDescriptorClass::SampledBuffer: return NWB_BINDLESS_HEAP_BINDING_SAMPLED_BUFFER;
+    case GpuDescriptorClass::StorageBuffer: return NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER;
+    case GpuDescriptorClass::UniformBuffer: return NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER;
+    case GpuDescriptorClass::Sampler:       return NWB_BINDLESS_HEAP_BINDING_SAMPLER;
     default:                                return 0u;
     }
 }

@@ -44,6 +44,26 @@ class RendererRayTracingSystem;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Stable Buffer*-keyed descriptor-heap handle cache (Phase 2 perf opt). Every frame buildSceneTlas / buildSceneSwBvh
+// formerly released and recreated ~3 (HW) / ~4 (SW) heap handles per distinct mesh -- a free() + quarantine, then a
+// fresh allocate() + write() (a vkUpdateDescriptorSets) -- even though the underlying Buffer* is identical frame to
+// frame for static meshes. The cache keys on the backing Buffer*: a reappearing buffer reuses its valid handle (zero
+// alloc/write/free), only a genuinely-new buffer allocates+writes, and a buffer absent this frame is freed + evicted
+// at end of gather.
+//
+// Correctness: a raw Buffer* can be recycled after its mesh is destroyed, so each entry pins its Buffer with a
+// refcounted BufferHandle -- the key identity stays alive exactly as long as the entry. seenThisFrame drives the
+// end-of-gather sweep (cleared at gather begin, set on first touch, freed+erased if still clear at sweep time).
+struct RtMeshHeapHandleCacheEntry{
+    Core::BufferHandle keepAlive;                       // refcount pin so the Buffer* key cannot be recycled under us
+    Core::GpuDescriptorHandle handle = Core::GpuDescriptorHandle::invalid();
+    bool seenThisFrame = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct CsgFrameStateCacheSignature{
     u64 contentHash = 0u;
     u64 shapeRegistryRevision = 0u;
@@ -396,10 +416,11 @@ struct RtSceneBvhState{
 
 struct RtShadowState{
     // The per-frame distinct-mesh table Vectors (the HW m_shadowMesh* table and the SW m_swShadowMesh*
-    // table, both below) allocate from the renderer's global arena, bound once here at construction. The arena
-    // allocator cannot be rebound afterward (its copy-assign is a deliberate no-op), so RendererRayTracingState
-    // threads the arena in. Every other member keeps its default initializer -- listing only the fourteen Vectors,
-    // in declaration order (the HW table first, then the SW table).
+    // table, both below) plus the stable Buffer*-keyed handle cache allocate from the renderer's global arena,
+    // bound once here at construction. The arena allocator cannot be rebound afterward (its copy-assign is a
+    // deliberate no-op), so RendererRayTracingState threads the arena in. Every other member keeps its default
+    // initializer -- listing only the arena-bound containers, in declaration order (the HW table first, then the SW
+    // table, then the handle cache).
     explicit RtShadowState(Core::Alloc::GlobalArena& arena)
         : m_shadowMeshIndexBuffers(arena)
         , m_shadowMeshAttributeBuffers(arena)
@@ -415,6 +436,8 @@ struct RtShadowState{
         , m_swShadowMeshPositionHandles(arena)
         , m_swShadowMeshIndexHandles(arena)
         , m_swShadowMeshAttributeHandles(arena)
+        , m_hwMeshHeapHandleCache(arena)
+        , m_swMeshHeapHandleCache(arena)
     {}
 
     Core::BindingLayoutHandle m_shadowBindingLayout;
@@ -455,8 +478,9 @@ struct RtShadowState{
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshIndexBuffers;
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshAttributeBuffers;
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshPositionBuffers;
-    // Phase 2 M1: parallel global-heap handles for the three backing buffers above, minted in lockstep at
-    // buildSceneTlas registration and freed at the per-frame rebuild. Read by the HW caustic (attribute) and GI
+    // Phase 2 M1: parallel global-heap handles for the three backing buffers above. Now stable across frames (the
+    // Buffer*-keyed handle cache below reuses a valid handle instead of free/allocate/write every frame), so they are
+    // repopulated by a cache lookup, not freshly minted. Read by the HW caustic (attribute) and GI
     // (position/index/attribute) traces via NwbHeapRawBuffer(record.<x>Slot).
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshIndexHandles;
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshAttributeHandles;
@@ -525,6 +549,13 @@ struct RtShadowState{
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshIndexHandles;
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshAttributeHandles;
     u32 m_swShadowMeshHeapHighWater = 0u; // Phase 2 M1: peak SW distinct-mesh registration count; logged only on a new high
+    // Stable Buffer*-keyed descriptor-heap handle caches: buildSceneTlas (HW) and buildSceneSwBvh (SW) each keep
+    // their own cross-frame cache so a per-gather sweep frees only that gather's dropouts without touching the other
+    // (on the hybrid backend the SW gather runs after the HW one and reuses position/index/attribute buffers). Every
+    // backing buffer lands in its gather's cache once and is reused across frames; a buffer unseen this frame is freed
+    // + evicted at end of gather. Arena-bound at construction (see RtShadowState ctor).
+    HashMap<const Core::Buffer*, RtMeshHeapHandleCacheEntry, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>, Core::Alloc::GlobalArena> m_hwMeshHeapHandleCache;
+    HashMap<const Core::Buffer*, RtMeshHeapHandleCacheEntry, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>, Core::Alloc::GlobalArena> m_swMeshHeapHandleCache;
     f32 m_swShadowEdgeThreshold = 0.1f;
     bool m_swShadowEdgeStatsPending = false;
     bool m_shadowResolvePipelineFailed = false;

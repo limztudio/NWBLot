@@ -17,21 +17,61 @@ NWB_IMPL_BEGIN
 
 
 namespace __hidden_rt_swbvh{
-    // Phase 2 M1: register one per-mesh backing buffer in the global descriptor heap, returning its handle. Every
-    // backing buffer registers as a single STORAGE_BUFFER; the raw-vs-structured split is only a shader-side view
-    // (P3 aliases) and write() forces the canonical STORAGE_BUFFER type, so the SRV factory choice is documentation.
-    // Returns an invalid handle if the resource namespace is exhausted (allocate() logs it); free() then ignores it.
-    [[nodiscard]] Core::GpuDescriptorHandle RegisterMeshHeapBuffer(Core::GpuDescriptorHeap& heap, const Core::BindingSetItem& view){
-        const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(handle.valid())
-            heap.write(handle, view);
-        return handle;
+    // Stable Buffer*-keyed handle acquisition (Phase 2 perf opt). Looks up the backing buffer in the cross-frame
+    // handle cache; on a hit the existing valid handle is reused unchanged (no allocate/write/free -- the dominant
+    // avoidable cost was minting a fresh handle every frame for the same buffer). On a miss the buffer is registered
+    // once (allocate + write) and pinned in the cache by a refcounted BufferHandle so the key cannot be recycled
+    // under us. seenThisFrame is set so the end-of-gather sweep keeps it. Every backing buffer registers as a single
+    // STORAGE_BUFFER; the raw-vs-structured split is only a shader-side view (P3 aliases) and write() forces the
+    // canonical STORAGE_BUFFER type, so the SRV factory choice is documentation. Returns invalid if the resource
+    // namespace is exhausted (allocate() logs it).
+    [[nodiscard]] Core::GpuDescriptorHandle AcquireMeshHeapHandle(
+        Core::GpuDescriptorHeap& heap,
+        HashMap<const Core::Buffer*, RtMeshHeapHandleCacheEntry, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>, Core::Alloc::GlobalArena>& cache,
+        const Core::Buffer* buffer,
+        const Core::BindingSetItem& view
+    ){
+        auto found = cache.find(buffer);
+        if(found != cache.end()){
+            found.value().seenThisFrame = true;
+            return found.value().handle;
+        }
+
+        RtMeshHeapHandleCacheEntry entry;
+        entry.keepAlive = Core::BufferHandle(const_cast<Core::Buffer*>(buffer));   // refcount-pin the key
+        entry.handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(entry.handle.valid())
+            heap.write(entry.handle, view);
+        entry.seenThisFrame = true;
+        cache.insert({buffer, Move(entry)});
+        return entry.handle;
     }
-    // Return a per-mesh heap handle to the deferred-free quarantine and invalidate the stored slot. Safe on an
-    // already-invalid handle (heap.free ignores it), so a partially-filled prior frame retires cleanly.
-    void ReleaseMeshHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle){
-        heap.free(handle);
-        handle = Core::GpuDescriptorHandle::invalid();
+
+    // End-of-gather sweep: free + evict every cached buffer that did not reappear this frame (a mesh was unloaded or
+    // fell out of the visible occluder set). Seen-this-frame entries are reset to unseen for the next gather. The
+    // heap.free quarantine keeps in-flight frames referencing a freed slot valid until they retire.
+    void SweepUnseenMeshHeapHandles(
+        Core::GpuDescriptorHeap& heap,
+        HashMap<const Core::Buffer*, RtMeshHeapHandleCacheEntry, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>, Core::Alloc::GlobalArena>& cache
+    ){
+        for(auto it = cache.begin(); it != cache.end(); ){
+            if(it.value().seenThisFrame){
+                it.value().seenThisFrame = false;
+                ++it;
+            }
+            else{
+                heap.free(it.value().handle);
+                it = cache.erase(it);
+            }
+        }
+    }
+
+    // Begin a gather: mark nothing seen yet so the sweep can tell reappearances from dropouts.
+    void BeginMeshHeapHandleGather(
+        HashMap<const Core::Buffer*, RtMeshHeapHandleCacheEntry, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>, Core::Alloc::GlobalArena>& cache
+    ){
+        for(auto it = cache.begin(); it != cache.end(); ++it)
+            it.value().seenThisFrame = false;
     }
 };
 
@@ -195,17 +235,15 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     // on a live heap so builds without one are unaffected.
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     const bool heapLive = heap.isInitialized();
-    if(heapLive){
-        auto& rt = rayTracingState();
-        for(u32 slot = 0u; slot < rt.m_shadowMeshCount; ++slot){
-            ReleaseMeshHeapHandle(heap, rt.m_shadowMeshIndexHandles[slot]);
-            ReleaseMeshHeapHandle(heap, rt.m_shadowMeshAttributeHandles[slot]);
-            ReleaseMeshHeapHandle(heap, rt.m_shadowMeshPositionHandles[slot]);
-        }
-    }
+    // Begin the stable-handle-cache gather: mark every cached buffer unseen so the gather (AcquireMeshHeapHandle
+    // sets seenThisFrame on touch) and the end-of-gather sweep can tell reappearances from dropouts. Handles are no
+    // longer freed here -- a reappearing buffer reuses its cached handle (zero alloc/write/free); only buffers absent
+    // this frame are freed + evicted by the sweep below. Guarded on a live heap so builds without one are unaffected.
+    if(heapLive)
+        BeginMeshHeapHandleGather(rayTracingState().m_hwMeshHeapHandleCache);
     // Clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once to the
     // scene's steady-state distinct-mesh count, then reuse that storage) and m_shadowMeshCount mirrors their length --
-    // the gather below repopulates both by push_back.
+    // the gather below repopulates both by push_back, now with stable (cached) handles.
     rayTracingState().m_shadowMeshIndexBuffers.clear();
     rayTracingState().m_shadowMeshAttributeBuffers.clear();
     rayTracingState().m_shadowMeshPositionBuffers.clear();
@@ -259,9 +297,9 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             // read them via NwbHeapRawBuffer(record.<x>Slot)). When the heap is unavailable the handles push default
             // (never read) so all six Vectors stay lockstep by slot.
             if(heapLive){
-                rayTracingState().m_shadowMeshIndexHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, meshIndexBuffer)));
-                rayTracingState().m_shadowMeshAttributeHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->attributeBuffer.get())));
-                rayTracingState().m_shadowMeshPositionHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->positionBuffer.get())));
+                rayTracingState().m_shadowMeshIndexHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_hwMeshHeapHandleCache, meshIndexBuffer, Core::BindingSetItem::RawBuffer_SRV(0u, meshIndexBuffer)));
+                rayTracingState().m_shadowMeshAttributeHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_hwMeshHeapHandleCache, mesh->attributeBuffer.get(), Core::BindingSetItem::RawBuffer_SRV(0u, mesh->attributeBuffer.get())));
+                rayTracingState().m_shadowMeshPositionHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_hwMeshHeapHandleCache, mesh->positionBuffer.get(), Core::BindingSetItem::RawBuffer_SRV(0u, mesh->positionBuffer.get())));
             }
             else{
                 rayTracingState().m_shadowMeshIndexHandles.emplace_back();
@@ -350,6 +388,10 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             , static_cast<u64>(rayTracingState().m_shadowMeshCount) * 3u
         );
     }
+    // End-of-gather sweep: free + evict every cached HW buffer that did not reappear this frame (a mesh was unloaded
+    // or fell out of the visible occluder set). Reappearing buffers keep their cached handle for next frame.
+    if(heapLive)
+        SweepUnseenMeshHeapHandles(heap, rayTracingState().m_hwMeshHeapHandleCache);
 
     rayTracingState().m_tlasInstanceCount = static_cast<u32>(instances.size());
     if(instances.empty()){
@@ -462,23 +504,19 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
 
     // Reset the per-frame distinct-mesh table; the gather repopulates it (slot k -> mesh k's buffers) for the
     // per-mesh descriptor arrays the traversal binds.
-    // Phase 2 M1: additively mirror the same distinct meshes into the global descriptor heap; retire last frame's
-    // handles before the per-frame rebuild (the deferred-free quarantine keeps in-flight frames valid). Nothing
-    // consumes the handles yet, so this cannot change the render. See buildSceneTlas for the full rationale.
+    // Phase 2 M1: additively mirror the same distinct meshes into the global descriptor heap. Handles are now stable
+    // across frames (the SW Buffer*-keyed handle cache reuses a valid handle instead of free/allocate/write every
+    // frame), so the per-frame rebuild repopulates with cached handles. Nothing consumes the handles yet, so this
+    // cannot change the render. See buildSceneTlas for the full rationale.
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     const bool heapLive = heap.isInitialized();
-    if(heapLive){
-        auto& rt = rayTracingState();
-        for(u32 slot = 0u; slot < rt.m_swShadowMeshCount; ++slot){
-            ReleaseMeshHeapHandle(heap, rt.m_swShadowMeshNodeHandles[slot]);
-            ReleaseMeshHeapHandle(heap, rt.m_swShadowMeshPositionHandles[slot]);
-            ReleaseMeshHeapHandle(heap, rt.m_swShadowMeshIndexHandles[slot]);
-            ReleaseMeshHeapHandle(heap, rt.m_swShadowMeshAttributeHandles[slot]);
-        }
-    }
+    // Begin the SW stable-handle-cache gather: mark every cached SW buffer unseen so the gather (AcquireMeshHeapHandle
+    // sets seenThisFrame on touch) and the end-of-gather sweep can tell reappearances from dropouts.
+    if(heapLive)
+        BeginMeshHeapHandleGather(rayTracingState().m_swMeshHeapHandleCache);
     // Clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once to the
     // scene's steady-state distinct-mesh count, then reuse that storage) and m_swShadowMeshCount mirrors their length
-    // -- the gather below repopulates both by push_back.
+    // -- the gather below repopulates both by push_back, now with stable (cached) handles.
     rayTracingState().m_swShadowMeshNodeBuffers.clear();
     rayTracingState().m_swShadowMeshPositionBuffers.clear();
     rayTracingState().m_swShadowMeshIndexBuffers.clear();
@@ -533,10 +571,10 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             // attribute take the raw view. All land as STORAGE_BUFFER regardless (write() forces the type). When the
             // heap is unavailable the handles push default (never read) so all eight Vectors stay lockstep by slot.
             if(heapLive){
-                rayTracingState().m_swShadowMeshNodeHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::StructuredBuffer_SRV(0u, meshNodeBuffer)));
-                rayTracingState().m_swShadowMeshPositionHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->positionBuffer.get())));
-                rayTracingState().m_swShadowMeshIndexHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->triangleIndexBuffer.get())));
-                rayTracingState().m_swShadowMeshAttributeHandles.push_back(RegisterMeshHeapBuffer(heap, Core::BindingSetItem::RawBuffer_SRV(0u, mesh->attributeBuffer.get())));
+                rayTracingState().m_swShadowMeshNodeHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_swMeshHeapHandleCache, meshNodeBuffer, Core::BindingSetItem::StructuredBuffer_SRV(0u, meshNodeBuffer)));
+                rayTracingState().m_swShadowMeshPositionHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_swMeshHeapHandleCache, mesh->positionBuffer.get(), Core::BindingSetItem::RawBuffer_SRV(0u, mesh->positionBuffer.get())));
+                rayTracingState().m_swShadowMeshIndexHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_swMeshHeapHandleCache, mesh->triangleIndexBuffer.get(), Core::BindingSetItem::RawBuffer_SRV(0u, mesh->triangleIndexBuffer.get())));
+                rayTracingState().m_swShadowMeshAttributeHandles.push_back(AcquireMeshHeapHandle(heap, rayTracingState().m_swMeshHeapHandleCache, mesh->attributeBuffer.get(), Core::BindingSetItem::RawBuffer_SRV(0u, mesh->attributeBuffer.get())));
             }
             else{
                 rayTracingState().m_swShadowMeshNodeHandles.emplace_back();
@@ -631,6 +669,10 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             , static_cast<u64>(rayTracingState().m_swShadowMeshCount) * 4u
         );
     }
+    // End-of-gather sweep: free + evict every cached SW buffer that did not reappear this frame (a mesh was unloaded
+    // or fell out of the visible occluder set). Reappearing buffers keep their cached handle for next frame.
+    if(heapLive)
+        SweepUnseenMeshHeapHandles(heap, rayTracingState().m_swMeshHeapHandleCache);
 
     const u32 instanceCount = static_cast<u32>(instances.size());
     if(instanceCount == 0u){

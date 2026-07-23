@@ -272,6 +272,11 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowMeshPositionHandles.clear();
     m_swShadowMeshIndexHandles.clear();
     m_swShadowMeshAttributeHandles.clear();
+    // The stable handle caches pin their buffers (BufferHandle refs) and own heap slots; drop both so a device-loss
+    // / resource-invalidation teardown cannot leave dangling handles or hold buffers past teardown. The heap itself
+    // is torn down by the device, so only the refs (not heap.free) need clearing here.
+    m_hwMeshHeapHandleCache.clear();
+    m_swMeshHeapHandleCache.clear();
     m_swShadowTransparentSoftShader.reset();
     m_swShadowTransparentSoftPipeline.reset();
     m_swShadowEdgeStatsBuffer.reset();

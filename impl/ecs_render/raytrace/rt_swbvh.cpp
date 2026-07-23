@@ -79,8 +79,9 @@ namespace __hidden_rt_swbvh{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Targeted CPU micro-benchmark for the Buffer*-keyed descriptor-handle cache (commit a409d9ab). Opt-in via the
-// NWB_HEAP_HANDLE_BENCH env var; runs once at capability-probe time against the live heap (DEBUG only). Isolates the
+// Targeted CPU micro-benchmark for the Buffer*-keyed descriptor-handle cache (commit a409d9ab). Opt-in via
+// requestHeapHandleCacheBench() (the smoke harness reads NWB_HEAP_HANDLE_BENCH and calls it -- the renderer never reads
+// the env var itself); runs once at capability-probe time against the live heap (DEBUG only). Isolates the
 // gather-path cost the cache changed, in one binary, so the gain is measurable without two separate app builds.
 //
 // It sweeps a set of mesh counts, creating representative backing buffers per shape, then times three regimes of the
@@ -99,14 +100,16 @@ namespace __hidden_rt_swbvh{
 // s_MaxFramesInFlight between shapes (the self-test's pattern). Results are reported as us/frame AND us/handle (the
 // shape-portable quantity). Defined here (not a separate TU) so it can use the __hidden_rt_swbvh gather helpers unchanged.
 #if defined(NWB_DEBUG)
+void RendererRayTracingSystem::requestHeapHandleCacheBench(){
+    rayTracingState().m_heapHandleBenchRequested = true;
+}
+
 void RendererRayTracingSystem::runHeapHandleCacheBench(){
     using namespace __hidden_rt_swbvh;
 
-    // Gate: never run unless explicitly requested, so a normal debug session is unaffected.
-    AString<Core::Alloc::GlobalArena> benchFlag;
-    if(!ReadEnvironmentVariable("NWB_HEAP_HANDLE_BENCH", benchFlag) || benchFlag.empty())
-        return;
-    if(rayTracingState().m_heapHandleBenchDone)
+    // Gate: run only once and only when the test layer opted in via requestHeapHandleCacheBench(). The renderer never
+    // reads the env var itself, so a normal debug session is unaffected.
+    if(!rayTracingState().m_heapHandleBenchRequested || rayTracingState().m_heapHandleBenchDone)
         return;
     rayTracingState().m_heapHandleBenchDone = true;
 

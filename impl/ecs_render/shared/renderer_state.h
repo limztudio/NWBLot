@@ -408,7 +408,8 @@ struct RtSceneBvhState{
     bool m_bvhBuildSelfTestDone = false;
     bool m_sceneBvhSelfTestDone = false;
     bool m_gpuDescriptorHeapSelfTestDone = false;
-    bool m_heapHandleBenchDone = false;   // opt-in (NWB_HEAP_HANDLE_BENCH) one-shot gate for runHeapHandleCacheBench
+    bool m_heapHandleBenchRequested = false;   // set by requestHeapHandleCacheBench() (test layer); gates the one-shot bench
+    bool m_heapHandleBenchDone = false;       // one-shot guard so logCapabilityOnce() re-entry never re-runs the bench
 };
 
 

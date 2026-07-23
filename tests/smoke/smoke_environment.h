@@ -37,6 +37,15 @@ using SmokeEnvironmentString = AString<Core::Alloc::GlobalArena>;
     return ReadSmokeEnvironmentText(variableName, value) && ParseF32FromChars(value.data(), value.data() + value.size(), outValue);
 }
 
+// Truthy env reader for on/off flags: absent/empty/"0" -> false, anything else -> true.
+[[nodiscard]] inline bool ReadSmokeEnvironmentFlag(const char* const variableName){
+    Core::Alloc::GlobalArena arena(s_SmokeEnvironmentArena);
+    SmokeEnvironmentString value(arena);
+    if(!ReadSmokeEnvironmentText(variableName, value))
+        return false;
+    return value[0] != '\0' && value[0] != '0';
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

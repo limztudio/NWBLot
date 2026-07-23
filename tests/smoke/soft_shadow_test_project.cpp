@@ -123,6 +123,13 @@ private:
 #endif
 
         AddSmokeSkinnedRenderSystems(*world, context);
+
+        // Opt-in the descriptor-handle cache micro-benchmark from the TEST side (the renderer never reads env vars):
+        // the smoke harness reads NWB_HEAP_HANDLE_BENCH and, when set, requests the bench here, before the first frame
+        // so it runs from the capability-probe pass. DEBUG-only; a no-op in opt/final builds.
+        if(auto* rendererSystem = world->getSystem<NWB::Impl::RendererSystem>())
+            NWB::Tests::Smoke::RequestSmokeHeapHandleCacheBench(*rendererSystem);
+
         return world;
     }
 

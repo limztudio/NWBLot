@@ -101,6 +101,13 @@ public:
     [[nodiscard]] CsgShapeRegistry& csgShapeRegistry(){ return m_csgShapeRegistry; }
     [[nodiscard]] const CsgShapeRegistry& csgShapeRegistry()const{ return m_csgShapeRegistry; }
 
+#if defined(NWB_DEBUG)
+    // Test-side opt-in for the descriptor-handle cache micro-benchmark. The renderer never reads the NWB_HEAP_HANDLE_BENCH
+    // env var itself (env-var reads belong to the test layer); the smoke harness reads it and calls this before the first
+    // frame so the bench runs from the capability-probe pass. Forwards to the ray-tracing subsystem.
+    void requestHeapHandleCacheBench(){ m_raytracingSystem.requestHeapHandleCacheBench(); }
+#endif
+
 private:
     [[nodiscard]] bool ensureFrameCommandLists();
     [[nodiscard]] bool prepareGpuTimingScopes();

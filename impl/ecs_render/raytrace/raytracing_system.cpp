@@ -38,7 +38,7 @@ void RendererRayTracingSystem::logCapabilityOnce(){
     runBvhBuildSelfTest();
     runSceneBvhSelfTest();
     runGpuDescriptorHeapSelfTest();
-    runHeapHandleCacheBench();
+    runHeapHandleCacheBench();   // one-shot; no-op unless the smoke harness called requestHeapHandleCacheBench()
 #endif
 }
 

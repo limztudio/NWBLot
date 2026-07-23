@@ -10,6 +10,8 @@
 
 #include <loader/project_entry.h>
 
+#include "smoke_environment.h"
+
 #include <core/assets/ref.h>
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
@@ -83,6 +85,19 @@ inline void DisableSmokeRayTracingForTesting(ProjectRuntimeContext& context){
     // Production final builds deliberately exclude the hook; their smoke executable keeps the
     // platform's native feature selection.
     static_cast<void>(context);
+#endif
+}
+
+// Test-side opt-in for the descriptor-handle cache micro-benchmark. Reads NWB_HEAP_HANDLE_BENCH here (not in the
+// renderer, which never reads env vars) and calls the DEBUG-only request hook on the renderer system. Call this right
+// after AddSmokeRenderSystems()/AddSmokeSkinnedRenderSystems() and BEFORE the first frame so the bench runs from the
+// capability-probe pass (logCapabilityOnce). In opt/final builds the hook is absent, so the body compiles to nothing.
+inline void RequestSmokeHeapHandleCacheBench(Impl::RendererSystem& rendererSystem){
+    static_cast<void>(rendererSystem);
+    if(!ReadSmokeEnvironmentFlag("NWB_HEAP_HANDLE_BENCH"))
+        return;
+#if defined(NWB_DEBUG)
+    rendererSystem.requestHeapHandleCacheBench();
 #endif
 }
 

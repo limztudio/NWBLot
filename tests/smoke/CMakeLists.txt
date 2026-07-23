@@ -52,6 +52,7 @@ if(Python3_Interpreter_FOUND)
             nwb_ecs_scene
             nwb_ecs_mesh
             nwb_ecs_render
+            nwb_ecs_model_renderer
             ${ARGN}
             "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_mesh>"
             "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_skeleton>"

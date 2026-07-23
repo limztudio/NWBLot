@@ -51,7 +51,6 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shared/renderer_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit.h"
-    "${CMAKE_CURRENT_LIST_DIR}/mesh/model_renderer.h"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/system.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_shader_variants_private.h"

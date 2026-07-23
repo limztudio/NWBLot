@@ -11,5 +11,6 @@ add_subdirectory(ecs_skeleton)
 add_subdirectory(ecs_mesh)
 add_subdirectory(ecs_model)
 add_subdirectory(ecs_render)
+add_subdirectory(ecs_model_renderer)
 add_subdirectory(ecs_ui)
 

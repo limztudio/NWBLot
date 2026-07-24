@@ -1011,6 +1011,13 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
     if(!rayTracingState().m_causticGeometryDownsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): caustic geometry downsample is the second pass migrated to VK_EXT_descriptor_buffer,
+        // after caustic resolve. Its shape is segment-coherent pure-resource (2 texture SRVs + 1 texture UAV, no
+        // samplers) with push constants, which the descriptor-buffer path serves wholesale. The opt-in declares intent
+        // only; where the extension is absent the backend downgrades this layout to non-descriptor-buffer-compatible
+        // and the classic descriptor-set path (Backend A) serves the pass unchanged, so no device capability gate is
+        // needed here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, 1));

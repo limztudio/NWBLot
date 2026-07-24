@@ -453,6 +453,69 @@ TEST_F(DescriptorBufferRoundTripTest, CausticResolveShapeBuildsAsDescriptorBuffe
 }
 
 
+// Caustic geometry downsample is the second pass flipped onto Backend C. Its shape (2 texture SRVs + 1 texture UAV +
+// push constants, no samplers) is a distinct resource-only segment -- two SRVs into one view is a worthwhile addition
+// to the resolve case, which interleaves the single UAV mid-set. Mirrors the resolve parity proof.
+TEST_F(DescriptorBufferRoundTripTest, CausticGeometryDownsampleShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_geom_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeTexture = [&](const u32 w, const u32 h) {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(w).setHeight(h)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeUavTexture = [&](const u32 w, const u32 h) {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(w).setHeight(h)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto worldPosition = makeTexture(32u, 32u);
+    auto depth = makeTexture(32u, 32u);
+    auto geometryOutput = makeUavTexture(32u, 32u);
+    ASSERT_TRUE(worldPosition && depth && geometryOutput);
+
+    // Slots mirror resolve_binding_slots.h geometry-downsample block (0..2); push constants ride the pipeline layout.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.setUseDescriptorBuffer(true);
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(0u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(2u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 32u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "caustic geometry downsample shape did not route to the descriptor-buffer path";
+    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
+    EXPECT_EQ(offsets.size(), 3u);
+
+    BindingSetDesc setDesc(descArena);
+    setDesc.addItem(BindingSetItem::Texture_SRV(0u, worldPosition.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(1u, depth.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_UAV(2u, geometryOutput.get(), Format::RGBA16_FLOAT));
+
+    auto bindingSet = device.createBindingSet(setDesc, layout);
+    ASSERT_NE(bindingSet.get(), nullptr);
+    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

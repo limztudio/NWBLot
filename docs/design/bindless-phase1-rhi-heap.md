@@ -1,10 +1,17 @@
 # Phase 1 — RHI Global Descriptor Heap
 
+> **Update (Phase 3):** Backend B (`VK_EXT_descriptor_heap` / `DescriptorHeapManager`) has been
+> **retired**. It was never exercised on the BC-250/RADV target (which does not advertise the
+> extension), and Phase 3's Backend C (`VK_EXT_descriptor_buffer`) superseded it as the on-device
+> descriptor-as-memory accelerator (natively encoding TLAS handles, which the heap path could not).
+> The dual-backend framing below is retained as the historical design record; the surviving
+> implementation is Backend A (descriptor indexing, the portable floor) + Backend C (descriptor
+> buffer).
+
 **Status:** ✅ **COMPLETE on Backend A** — implemented, compiling clean, and the §10 round-trip
 test **PASSES on real hardware (AMD BC-250 / RADV GFX1013)**. The `gi_test_smoke` (dbg) run logs
 `GpuDescriptorHeap round-trip self-test PASSED (Backend A, expected sum 286335539)` with a fully
-clean log (no errors, existing BVH self-tests still pass, window still captures). Backend B remains
-deferred (host lacks `VK_EXT_descriptor_heap`; §1). Not yet committed.
+clean log (no errors, existing BVH self-tests still pass, window still captures).
 **Scope:** the RHI primitive only. No shader migration, no renderer call-site rewrites.
 **Target hardware floor:** anything the engine already boots on (AMD BC-250 / RADV included).
 

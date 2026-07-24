@@ -308,7 +308,7 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
         return GpuDescriptorHandle::invalid();
     }
     if(descriptorClass == GpuDescriptorClass::AccelStruct){
-        // IsDescriptorHeapCompatibleType() rejects RayTracingAccelStruct on the descriptor-indexing backend.
+        // The descriptor-indexing bindless table cannot serve acceleration structures.
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate: AccelStruct class is unsupported on the descriptor-indexing backend (Backend A)."));
         return GpuDescriptorHandle::invalid();
     }

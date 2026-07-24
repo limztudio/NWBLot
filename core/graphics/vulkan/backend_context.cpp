@@ -112,10 +112,9 @@ struct OptionalDeviceFeatureSet{
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShader = MakeVkFeatureStruct<VkPhysicalDeviceMeshShaderFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT);
     VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragmentShadingRate = MakeVkFeatureStruct<VkPhysicalDeviceFragmentShadingRateFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR);
     VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableDescriptorType = MakeVkFeatureStruct<VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT);
-    VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptorHeap = MakeVkFeatureStruct<VkPhysicalDeviceDescriptorHeapFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT);
-    // Backend C: VK_EXT_descriptor_buffer (descriptor-as-memory). Unlike Backend B's heap extension, this one is
-    // advertised by the BC-250/RADV target and natively encodes acceleration structures via VkDescriptorGetInfoEXT,
-    // which is why the TLAS migration is bound to it. Phase 3 enables it here; consumer wiring follows in later steps.
+    // Backend C: VK_EXT_descriptor_buffer (descriptor-as-memory). It is advertised by the BC-250/RADV target and
+    // natively encodes acceleration structures via VkDescriptorGetInfoEXT, which is why the TLAS migration is bound
+    // to it. Phase 3 enables it here; consumer wiring follows in later steps.
     VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBuffer = MakeVkFeatureStruct<VkPhysicalDeviceDescriptorBufferFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT);
     VkPhysicalDeviceFaultFeaturesEXT deviceFault = MakeVkFeatureStruct<VkPhysicalDeviceFaultFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT);
 };
@@ -148,8 +147,6 @@ static OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures(){
 
     features.mutableDescriptorType.mutableDescriptorType = VK_TRUE;
 
-    features.descriptorHeap.descriptorHeap = VK_TRUE;
-
     // Backend C is requested but optional: the support clamp below disables it on a target lacking the extension or
     // its core descriptorBuffer capability, exactly like every other optional accelerator.
     features.descriptorBuffer.descriptorBuffer = VK_TRUE;
@@ -173,7 +170,6 @@ static void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, 
     case DeviceExtensionFeature::MeshShader: return &features.meshShader;
     case DeviceExtensionFeature::FragmentShadingRate: return &features.fragmentShadingRate;
     case DeviceExtensionFeature::MutableDescriptorType: return &features.mutableDescriptorType;
-    case DeviceExtensionFeature::DescriptorHeap: return &features.descriptorHeap;
     case DeviceExtensionFeature::DescriptorBuffer: return &features.descriptorBuffer;
     case DeviceExtensionFeature::DeviceFault: return &features.deviceFault;
     case DeviceExtensionFeature::None:
@@ -308,8 +304,6 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
         ;
     case DeviceExtensionFeature::MutableDescriptorType:
         return SupportsRequestedValue(requested.mutableDescriptorType.mutableDescriptorType, supported.mutableDescriptorType.mutableDescriptorType);
-    case DeviceExtensionFeature::DescriptorHeap:
-        return SupportsRequestedValue(requested.descriptorHeap.descriptorHeap, supported.descriptorHeap.descriptorHeap);
     case DeviceExtensionFeature::DescriptorBuffer:
         return SupportsRequestedValue(requested.descriptorBuffer.descriptorBuffer, supported.descriptorBuffer.descriptorBuffer);
     case DeviceExtensionFeature::DeviceFault:
@@ -325,7 +319,6 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
 }
 
 static void FinalizeOptionalDeviceFeatureEnablement(OptionalDeviceFeatureSet& enabled, const OptionalDeviceFeatureSet& supported){
-    enabled.descriptorHeap.descriptorHeapCaptureReplay = supported.descriptorHeap.descriptorHeapCaptureReplay;
     enabled.meshShader.taskShader = supported.meshShader.taskShader;
     enabled.rayTracingLinearSweptSpheres.spheres = supported.rayTracingLinearSweptSpheres.spheres;
     enabled.rayTracingLinearSweptSpheres.linearSweptSpheres = supported.rayTracingLinearSweptSpheres.linearSweptSpheres;
@@ -1509,7 +1502,6 @@ bool BackendContext::createVulkanDevice(){
            << " meshTaskShader=" << VulkanDetail::BoolToString(m_meshTaskShaderSupported)
            << " maintenance4=" << VulkanDetail::BoolToString(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
            << "\n    optional paths: debugMarker=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DEBUG_MARKER_EXTENSION_NAME))
-           << " descriptorHeap=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME))
            << " descriptorBuffer=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
            << " meshShader=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME))
            << " rayTracingPipeline=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME))

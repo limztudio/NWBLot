@@ -211,13 +211,9 @@ void DestroyPipelineAndOwnedLayout(
     }
 }
 
-constexpr DescriptorHeapKind::Enum GetDescriptorHeapKind(ResourceType::Enum type){
-    return type == ResourceType::Sampler ? DescriptorHeapKind::Sampler : DescriptorHeapKind::Resource;
-}
-
-// Backend C: the descriptor-buffer segment a binding's descriptors live in. Samplers go in the dedicated sampler
+// The descriptor-buffer segment a binding's descriptors live in. Samplers go in the dedicated sampler
 // segment (RADV requires a separate buffer binding for sampler descriptors); every other descriptor-buffer type
-// lives in the resource segment. Mirrors GetDescriptorHeapKind's taxonomy.
+// lives in the resource segment.
 constexpr DescriptorBufferSegmentKind::Enum GetDescriptorBufferSegmentKind(ResourceType::Enum type){
     return type == ResourceType::Sampler ? DescriptorBufferSegmentKind::Sampler : DescriptorBufferSegmentKind::Resource;
 }
@@ -305,7 +301,9 @@ constexpr bool UsesDescriptorBufferInfo(ResourceType::Enum type){
     }
 }
 
-constexpr bool IsDescriptorHeapCompatibleType(ResourceType::Enum type){
+// Supported register-space resource type for a bindless (descriptor-indexing) table. Acceleration structures
+// are excluded: the descriptor-indexing bindless heap cannot serve them, so a bindless layout must not declare one.
+constexpr bool IsBindlessRegisterSpaceType(ResourceType::Enum type){
     return type != ResourceType::RayTracingAccelStruct && IsSupportedDescriptorBindingType(type);
 }
 
@@ -694,25 +692,12 @@ bool Device::createPipelineLayoutForBindingLayouts(
 bool Device::configurePipelineBindings(
     const BindingLayoutVector& bindingLayouts,
     const tchar* operationName,
-    PipelineShaderStageVector& shaderStages,
-    PipelineDescriptorHeapScratch& descriptorHeapScratch,
     PipelineBindingState& outBindings,
     Alloc::ScratchArena& scratchArena
 )const{
     outBindings.m_pipelineLayout = VK_NULL_HANDLE;
     outBindings.m_ownsPipelineLayout = false;
     outBindings.m_pushConstantByteSize = 0;
-
-    outBindings.m_usesDescriptorHeap = DescriptorHeapManager::tryEnablePipeline(
-        m_context,
-        bindingLayouts,
-        shaderStages,
-        outBindings.m_descriptorHeapPushRanges,
-        outBindings.m_descriptorHeapPushDataSize,
-        descriptorHeapScratch
-    );
-    if(outBindings.m_usesDescriptorHeap)
-        return true;
 
     // Backend C: a pipeline uses the descriptor-buffer path only when EVERY layout opts in and is buffer-compatible
     // -- descriptor-buffer set layouts cannot be mixed with classic descriptor sets in one pipeline layout (the
@@ -764,525 +749,13 @@ void Device::appendPipelineShaderStage(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool DescriptorHeapManager::tryEnablePipeline(
-    const VulkanContext& context,
-    const BindingLayoutVector& bindingLayouts,
-    PipelineShaderStageVector& shaderStages,
-    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
-    u32& outPushDataSize,
-    VkPipelineCreateFlags2CreateInfo& outFlags2,
-    Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchArena>& outMappings,
-    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchArena>& outStageMappings
-){
-    outPushRanges.clear();
-    outPushDataSize = 0;
-    outMappings.clear();
-    outStageMappings.clear();
-
-    if(!context.extensions.EXT_descriptor_heap || shaderStages.empty())
-        return false;
-
-    auto getDescriptorSetIndex = [](const BindingLayout& layout, const u32 pipelineBindingIndex) -> u32{
-        const BindingLayoutDesc& layoutDesc = layout.getBindingLayoutDesc();
-        return layoutDesc.registerSpaceIsDescriptorSet ? layoutDesc.registerSpace : pipelineBindingIndex;
-    };
-
-    bool hasAnyDescriptors = false;
-    for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){
-        auto* layout = bindingLayouts[i].get();
-        if(!layout)
-            continue;
-        if(layout->isBindlessLayout() || !layout->isDescriptorHeapCompatible())
-            return false;
-
-        const u32 descriptorSetIndex = getDescriptorSetIndex(*layout, i);
-        for(u32 j = 0; j < i; ++j){
-            auto* prevLayout = bindingLayouts[j].get();
-            if(!prevLayout)
-                continue;
-            if(getDescriptorSetIndex(*prevLayout, j) == descriptorSetIndex)
-                return false;
-        }
-
-        const auto& heapBindings = layout->getDescriptorHeapBindings();
-        if(heapBindings.empty())
-            continue;
-        if(heapBindings.size() > UINT32_MAX / sizeof(u32))
-            return false;
-        if(heapBindings.size() > Limit<usize>::s_Max - outMappings.size())
-            return false;
-
-        const u32 pushDataBytes = static_cast<u32>(heapBindings.size() * sizeof(u32));
-        if(outPushDataSize > UINT32_MAX - pushDataBytes)
-            return false;
-        if(outPushDataSize + pushDataBytes > context.descriptorHeapProperties.maxPushDataSize)
-            return false;
-        outMappings.reserve(outMappings.size() + heapBindings.size());
-
-        DescriptorHeapPushRange pushRange{};
-        pushRange.bindingSetIndex = i;
-        pushRange.pushOffsetBytes = outPushDataSize;
-        pushRange.pushWordCount = static_cast<u32>(heapBindings.size());
-        outPushRanges.push_back(pushRange);
-
-        for(usize bindingIndex = 0; bindingIndex < heapBindings.size(); ++bindingIndex){
-            const DescriptorHeapBindingMeta& meta = heapBindings[bindingIndex];
-
-            VkDescriptorSetAndBindingMappingEXT mapping{};
-            mapping.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_AND_BINDING_MAPPING_EXT;
-            mapping.descriptorSet = descriptorSetIndex;
-            mapping.firstBinding = meta.slot;
-            mapping.bindingCount = 1;
-            mapping.resourceMask = VK_SPIRV_RESOURCE_TYPE_ALL_EXT;
-            mapping.source = VK_DESCRIPTOR_MAPPING_SOURCE_HEAP_WITH_PUSH_INDEX_EXT;
-            mapping.sourceData.pushIndex.heapOffset = 0;
-            mapping.sourceData.pushIndex.pushOffset = pushRange.pushOffsetBytes + static_cast<u32>(bindingIndex * sizeof(u32));
-            mapping.sourceData.pushIndex.heapIndexStride = meta.descriptorStride;
-            mapping.sourceData.pushIndex.heapArrayStride = meta.descriptorStride;
-            outMappings.push_back(mapping);
-            hasAnyDescriptors = true;
-        }
-
-        outPushDataSize += pushDataBytes;
-    }
-
-    if(!hasAnyDescriptors)
-        return false;
-
-    outFlags2 = {};
-    outFlags2.sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO;
-    outFlags2.flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT;
-
-    outStageMappings.reserve(shaderStages.size());
-    for(usize i = 0; i < shaderStages.size(); ++i){
-        VkShaderDescriptorSetAndBindingMappingInfoEXT mappingInfo = {};
-        mappingInfo.sType = VK_STRUCTURE_TYPE_SHADER_DESCRIPTOR_SET_AND_BINDING_MAPPING_INFO_EXT;
-        mappingInfo.mappingCount = static_cast<u32>(outMappings.size());
-        mappingInfo.pMappings = outMappings.data();
-        mappingInfo.pNext = shaderStages[i].pNext;
-        outStageMappings.push_back(mappingInfo);
-        shaderStages[i].pNext = &outStageMappings.back();
-    }
-
-    return true;
-}
-
-bool DescriptorHeapManager::tryEnablePipeline(
-    const VulkanContext& context,
-    const BindingLayoutVector& bindingLayouts,
-    PipelineShaderStageVector& shaderStages,
-    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
-    u32& outPushDataSize,
-    PipelineDescriptorHeapScratch& scratch
-){
-    return tryEnablePipeline(
-        context,
-        bindingLayouts,
-        shaderStages,
-        outPushRanges,
-        outPushDataSize,
-        scratch.flags2,
-        scratch.mappings,
-        scratch.stageMappings
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-DescriptorHeapManager::DescriptorHeapManager(const VulkanContext& context, VulkanAllocator& allocator)
-    : m_context(context)
-    , m_allocator(allocator)
-    , m_resourceHeap(context.objectArena)
-    , m_samplerHeap(context.objectArena)
-{}
-DescriptorHeapManager::~DescriptorHeapManager(){
-    shutdown();
-}
-
-bool DescriptorHeapManager::initialize(){
-    shutdown();
-
-    if(!m_context.extensions.EXT_descriptor_heap)
-        return false;
-
-    const auto& props = m_context.descriptorHeapProperties;
-
-    constexpr u32 s_TargetResourceHeapBytes = 32u * 1024u * 1024u;
-    constexpr u32 s_TargetSamplerHeapBytes = 2u * 1024u * 1024u;
-
-    if(
-        props.minResourceHeapReservedRange > UINT32_MAX || props.minSamplerHeapReservedRange > UINT32_MAX
-        || props.resourceHeapAlignment > UINT32_MAX || props.samplerHeapAlignment > UINT32_MAX
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap properties exceed supported 32-bit heap offsets."));
-        return false;
-    }
-
-    const u32 resourceReservedBytes = static_cast<u32>(props.minResourceHeapReservedRange);
-    const u32 samplerReservedBytes = static_cast<u32>(props.minSamplerHeapReservedRange);
-    const u32 resourceMaxBytes = props.maxResourceHeapSize > UINT32_MAX ? UINT32_MAX : static_cast<u32>(props.maxResourceHeapSize);
-    const u32 samplerMaxBytes = props.maxSamplerHeapSize > UINT32_MAX ? UINT32_MAX : static_cast<u32>(props.maxSamplerHeapSize);
-    const u32 resourceAlignment = static_cast<u32>(props.resourceHeapAlignment);
-    const u32 samplerAlignment = static_cast<u32>(props.samplerHeapAlignment);
-
-    u32 resourceRequestedBytes = 0;
-    u32 samplerRequestedBytes = 0;
-    if(
-        resourceReservedBytes > UINT32_MAX - s_TargetResourceHeapBytes
-        || samplerReservedBytes > UINT32_MAX - s_TargetSamplerHeapBytes
-        || !AlignUpU32Checked(resourceReservedBytes + s_TargetResourceHeapBytes, resourceAlignment, resourceRequestedBytes)
-        || !AlignUpU32Checked(samplerReservedBytes + s_TargetSamplerHeapBytes, samplerAlignment, samplerRequestedBytes)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap requested capacity overflows 32-bit heap offsets."));
-        return false;
-    }
-
-    const u32 resourceCapacityBytes = Min(resourceMaxBytes, resourceRequestedBytes);
-    const u32 samplerCapacityBytes = Min(samplerMaxBytes, samplerRequestedBytes);
-
-    if(resourceCapacityBytes <= resourceReservedBytes || samplerCapacityBytes <= samplerReservedBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap properties do not allow creating usable global heaps."));
-        return false;
-    }
-
-    if(!initializeHeap(m_resourceHeap, "vk_resource_heap", resourceCapacityBytes, resourceReservedBytes)){
-        shutdown();
-        return false;
-    }
-
-    if(!initializeHeap(m_samplerHeap, "vk_sampler_heap", samplerCapacityBytes, samplerReservedBytes)){
-        shutdown();
-        return false;
-    }
-
-    m_enabled = true;
-    return true;
-}
-
-void DescriptorHeapManager::shutdown(){
-    shutdownHeap(m_resourceHeap);
-    shutdownHeap(m_samplerHeap);
-    m_enabled = false;
-}
-
-u32 DescriptorHeapManager::getDescriptorSize(const VkDescriptorType descriptorType)const{
-    if(!m_enabled)
-        return 0;
-
-    const VkDeviceSize size = vkGetPhysicalDeviceDescriptorSizeEXT(m_context.physicalDevice, descriptorType);
-    if(size > UINT32_MAX)
-        return 0;
-
-    return static_cast<u32>(size);
-}
-
-u32 DescriptorHeapManager::getDescriptorStride(const VkDescriptorType descriptorType)const{
-    const u32 descriptorSize = getDescriptorSize(descriptorType);
-    if(descriptorSize == 0)
-        return 0;
-
-    VkDeviceSize alignmentValue = descriptorSize;
-    switch(descriptorType){
-    case VK_DESCRIPTOR_TYPE_SAMPLER:
-        alignmentValue = Max<VkDeviceSize>(alignmentValue, m_context.descriptorHeapProperties.samplerDescriptorAlignment);
-        break;
-    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
-    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-    case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
-    case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
-        alignmentValue = Max<VkDeviceSize>(alignmentValue, m_context.descriptorHeapProperties.imageDescriptorAlignment);
-        break;
-    default:
-        alignmentValue = Max<VkDeviceSize>(alignmentValue, m_context.descriptorHeapProperties.bufferDescriptorAlignment);
-        break;
-    }
-    if(alignmentValue > UINT32_MAX)
-        return 0;
-
-    u32 stride = 0;
-    if(!AlignUpU32Checked(descriptorSize, static_cast<u32>(alignmentValue), stride))
-        return 0;
-
-    return stride;
-}
-
-DescriptorHeapAllocation DescriptorHeapManager::allocate(const DescriptorHeapKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes){
-    DescriptorHeapAllocation result{};
-    if(!m_enabled || kind == DescriptorHeapKind::None || sizeBytes == 0)
-        return result;
-
-    HeapStorage& heap = kind == DescriptorHeapKind::Sampler ? m_samplerHeap : m_resourceHeap;
-    auto clearAllocation = [&](const DescriptorHeapAllocation& allocation){
-        if(allocation.valid() && heap.mappedMemory)
-            NWB_MEMSET(static_cast<u8*>(heap.mappedMemory) + allocation.offsetBytes, 0, allocation.sizeBytes);
-    };
-
-    ScopedLock lock(heap.mutex);
-
-    for(usize i = 0; i < heap.freeRanges.size(); ++i){
-        FreeRange range = heap.freeRanges[i];
-        if(range.sizeBytes > UINT32_MAX - range.offsetBytes)
-            continue;
-
-        u32 alignedOffset = 0;
-        if(!AlignUpU32Checked(range.offsetBytes, alignmentBytes, alignedOffset))
-            continue;
-
-        const u32 rangeEnd = range.offsetBytes + range.sizeBytes;
-        if(alignedOffset >= rangeEnd)
-            continue;
-
-        const u32 consumedPrefix = alignedOffset - range.offsetBytes;
-        const u32 remainingBytes = range.sizeBytes - consumedPrefix;
-        if(remainingBytes < sizeBytes)
-            continue;
-        if(sizeBytes > UINT32_MAX - alignedOffset)
-            continue;
-
-        const u32 allocEnd = alignedOffset + sizeBytes;
-        if(consumedPrefix > 0){
-            heap.freeRanges[i] = { range.offsetBytes, consumedPrefix };
-            if(allocEnd < rangeEnd)
-                heap.freeRanges.insert(heap.freeRanges.begin() + i + 1u, { allocEnd, rangeEnd - allocEnd });
-        }
-        else if(allocEnd < rangeEnd){
-            heap.freeRanges[i] = { allocEnd, rangeEnd - allocEnd };
-        }
-        else{
-            heap.freeRanges.erase(heap.freeRanges.begin() + i);
-        }
-
-        result.kind = kind;
-        result.offsetBytes = alignedOffset;
-        result.sizeBytes = sizeBytes;
-        clearAllocation(result);
-        return result;
-    }
-
-    u32 alignedOffset = 0;
-    if(!AlignUpU32Checked(heap.writableOffsetBytes, alignmentBytes, alignedOffset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap alignment overflows 32-bit offsets."));
-        return result;
-    }
-    if(alignedOffset > heap.capacityBytes || sizeBytes > heap.capacityBytes - alignedOffset){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap is out of space (kind={}, requested={} bytes).")
-            , kind == DescriptorHeapKind::Sampler ? NWB_TEXT("sampler") : NWB_TEXT("resource")
-            , sizeBytes
-        );
-        return result;
-    }
-
-    heap.writableOffsetBytes = alignedOffset + sizeBytes;
-    result.kind = kind;
-    result.offsetBytes = alignedOffset;
-    result.sizeBytes = sizeBytes;
-    clearAllocation(result);
-    return result;
-}
-
-void DescriptorHeapManager::free(const DescriptorHeapAllocation& allocation){
-    if(!allocation.valid())
-        return;
-
-    HeapStorage& heap = allocation.kind == DescriptorHeapKind::Sampler ? m_samplerHeap : m_resourceHeap;
-
-    ScopedLock lock(heap.mutex);
-
-    const auto rangeEnd = [](const FreeRange& range, u32& outEnd) -> bool{
-        if(range.sizeBytes > UINT32_MAX - range.offsetBytes)
-            return false;
-        outEnd = range.offsetBytes + range.sizeBytes;
-        return true;
-    };
-
-    FreeRange freedRange{ allocation.offsetBytes, allocation.sizeBytes };
-    usize insertIndex = 0u;
-    while(insertIndex < heap.freeRanges.size() && heap.freeRanges[insertIndex].offsetBytes < freedRange.offsetBytes)
-        ++insertIndex;
-
-    heap.freeRanges.insert(heap.freeRanges.begin() + insertIndex, freedRange);
-
-    const auto mergeAdjacentAt = [&](const usize leftIndex) -> bool{
-        if(leftIndex + 1u >= heap.freeRanges.size())
-            return false;
-
-        FreeRange& left = heap.freeRanges[leftIndex];
-        const FreeRange right = heap.freeRanges[leftIndex + 1u];
-
-        u32 leftEnd = 0;
-        if(!rangeEnd(left, leftEnd) || leftEnd != right.offsetBytes || right.sizeBytes > UINT32_MAX - left.sizeBytes)
-            return false;
-
-        left.sizeBytes += right.sizeBytes;
-        heap.freeRanges.erase(heap.freeRanges.begin() + leftIndex + 1u);
-        return true;
-    };
-
-    if(insertIndex > 0u && mergeAdjacentAt(insertIndex - 1u))
-        --insertIndex;
-
-    mergeAdjacentAt(insertIndex);
-}
-
-bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const DescriptorHeapBindingMeta& meta, const u32 dstOffsetBytes){
-    if(!m_enabled)
-        return false;
-
-    HeapStorage& heap = meta.heapKind == DescriptorHeapKind::Sampler ? m_samplerHeap : m_resourceHeap;
-    auto* dstBytes = static_cast<u8*>(heap.mappedMemory);
-    if(!dstBytes)
-        return false;
-
-    VkHostAddressRangeEXT dstRange{};
-    dstRange.address = dstBytes + dstOffsetBytes;
-    dstRange.size = meta.descriptorSize;
-
-    if(meta.heapKind == DescriptorHeapKind::Sampler){
-        auto* sampler = checked_cast<Sampler*>(item.resourceHandle);
-        if(!sampler)
-            return false;
-
-        const VkSamplerCreateInfo samplerInfo = VulkanDetail::BuildSamplerCreateInfo(sampler->getDescription());
-        return vkWriteSamplerDescriptorsEXT(m_context.device, 1, &samplerInfo, &dstRange) == VK_SUCCESS;
-    }
-
-    auto resourceInfo = VulkanDetail::MakeVkStruct<VkResourceDescriptorInfoEXT>(VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT);
-    auto imageInfo = VulkanDetail::MakeVkStruct<VkImageDescriptorInfoEXT>(VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT);
-    VkImageViewCreateInfo imageViewInfo{};
-    auto texelInfo = VulkanDetail::MakeVkStruct<VkTexelBufferDescriptorInfoEXT>(VK_STRUCTURE_TYPE_TEXEL_BUFFER_DESCRIPTOR_INFO_EXT);
-    VkDeviceAddressRangeEXT addressRange{};
-
-    resourceInfo.type = meta.descriptorType;
-
-    if(VulkanDetail::UsesDescriptorBufferInfo(item.type)){
-        auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
-        if(!buffer)
-            return false;
-        BufferRange range;
-        if(!VulkanDetail::ResolveDescriptorBufferRange(item, *buffer, range))
-            return false;
-        addressRange.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + range.byteOffset;
-        addressRange.size = range.byteSize;
-        resourceInfo.data.pAddressRange = &addressRange;
-    }
-    else{
-        switch(item.type){
-        case ResourceType::TypedBuffer_SRV:
-        case ResourceType::TypedBuffer_UAV:{
-            auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
-            if(!buffer)
-                return false;
-            const BufferDesc& bufferDesc = buffer->getDescription();
-            BufferRange range;
-            if(!VulkanDetail::ResolveDescriptorBufferRange(item, *buffer, range))
-                return false;
-            const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : bufferDesc.format;
-            const VkFormat vkFormat = ConvertFormat(viewFormat);
-            if(vkFormat == VK_FORMAT_UNDEFINED)
-                return false;
-            texelInfo.format = vkFormat;
-            texelInfo.addressRange.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + range.byteOffset;
-            texelInfo.addressRange.size = range.byteSize;
-            resourceInfo.data.pTexelBuffer = &texelInfo;
-            break;
-        }
-        case ResourceType::Texture_SRV:
-        case ResourceType::Texture_UAV:{
-            auto* texture = checked_cast<Texture*>(item.resourceHandle);
-            if(!texture)
-                return false;
-            if(!VulkanDetail::BuildImageViewCreateInfo(*texture, item, imageViewInfo))
-                return false;
-            imageInfo.pView = &imageViewInfo;
-            imageInfo.layout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            resourceInfo.data.pImage = &imageInfo;
-            break;
-        }
-        default:
-            return false;
-        }
-    }
-
-    return vkWriteResourceDescriptorsEXT(m_context.device, 1, &resourceInfo, &dstRange) == VK_SUCCESS;
-}
-
-bool DescriptorHeapManager::initializeHeap(HeapStorage& heap, const ACompactString& debugName, const u32 capacityBytes, const u32 reservedRangeBytes){
-    VkResult res = VK_SUCCESS;
-
-    shutdownHeap(heap);
-
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = capacityBytes;
-    bufferInfo.usage = VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    res = m_allocator.createHostMappedBuffer(
-        heap.buffer,
-        heap.allocation,
-        heap.mappedMemory,
-        bufferInfo
-    );
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor heap buffer '{}': {}")
-            , StringConvert(debugName.view())
-            , ResultToString(res)
-        );
-        return false;
-    }
-    if(!heap.mappedMemory){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map descriptor heap memory '{}'"), StringConvert(debugName.view()));
-        shutdownHeap(heap);
-        return false;
-    }
-
-    VkBufferDeviceAddressInfo addressInfo{};
-    addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    addressInfo.buffer = heap.buffer;
-    heap.deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
-    if(heap.deviceAddress == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query descriptor heap device address '{}'.")
-            , StringConvert(debugName.view())
-        );
-        shutdownHeap(heap);
-        return false;
-    }
-
-    heap.capacityBytes = capacityBytes;
-    heap.bindInfo.sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT;
-    heap.bindInfo.heapRange.address = heap.deviceAddress;
-    heap.bindInfo.heapRange.size = capacityBytes;
-    heap.bindInfo.reservedRangeOffset = 0;
-    heap.bindInfo.reservedRangeSize = reservedRangeBytes;
-    heap.writableOffsetBytes = reservedRangeBytes;
-
-    NWB_MEMSET(heap.mappedMemory, 0, capacityBytes);
-    return true;
-}
-
-void DescriptorHeapManager::shutdownHeap(HeapStorage& heap){
-    m_allocator.destroyHostMappedBuffer(heap.buffer, heap.allocation, heap.mappedMemory);
-    heap.deviceAddress = 0;
-    heap.capacityBytes = 0;
-    heap.writableOffsetBytes = 0;
-    heap.bindInfo = {};
-    heap.freeRanges.clear();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Backend C - VK_EXT_descriptor_buffer manager (Phase 3 step 1b)
 //
-// Mirrors DescriptorHeapManager (Backend B) in shape: two HOST-mapped VkBuffers sub-allocated by byte offset through
-// a shared free-range list + bump pointer. The differences are entirely in the Vulkan calls - descriptor buffers use
-// their own usage bits, their own offset alignment (descriptorBufferOffsetAlignment), and write descriptors through
-// vkGetDescriptorEXT (VkDescriptorGetInfoEXT + VkDescriptorDataEXT) rather than the EXT_descriptor_heap write calls.
-// vkGetDescriptorEXT is also the only path that encodes an acceleration-structure handle, which is why the TLAS
-// migration routes through this manager. No consumer is wired here; the manager is dark until Phase 3 steps 2-4.
+// Two HOST-mapped VkBuffers sub-allocated by byte offset through a shared free-range list + bump pointer. Descriptor
+// buffers use their own usage bits, their own offset alignment (descriptorBufferOffsetAlignment), and write
+// descriptors through vkGetDescriptorEXT (VkDescriptorGetInfoEXT + VkDescriptorDataEXT). vkGetDescriptorEXT is also
+// the only path that encodes an acceleration-structure handle, which is why the TLAS migration routes through this
+// manager. No consumer is wired here; the manager is dark until Phase 3 steps 2-4.
 
 
 DescriptorBufferManager::DescriptorBufferManager(const VulkanContext& context, VulkanAllocator& allocator)
@@ -1304,8 +777,8 @@ bool DescriptorBufferManager::initialize(){
     const auto& props = m_context.descriptorBufferProperties;
 
     // One global segment per type. RADV advertises multi-GB address spaces for both; we cap at modest working sizes
-    // (mirroring Backend B's targets) since the segments are HOST-mapped and persist for device life. The suballocator
-    // only ever hands out what gets written, so the reservation is virtual from a memory-pressure standpoint only.
+    // since the segments are HOST-mapped and persist for device life. The suballocator only ever hands out what gets
+    // written, so the reservation is virtual from a memory-pressure standpoint only.
     constexpr u32 s_TargetResourceSegmentBytes = 32u * 1024u * 1024u;
     constexpr u32 s_TargetSamplerSegmentBytes = 2u * 1024u * 1024u;
 
@@ -1615,7 +1088,7 @@ bool DescriptorBufferManager::writeDescriptor(const BindingSetItem& item, const 
         }
         case ResourceType::RayTracingAccelStruct:{
             // The TLAS path. vkGetDescriptorEXT is the only Vulkan write that accepts a bare AS device address; this
-            // is why the TLAS migration is gated on Backend C (no classic-descriptor-set or Backend-B equivalent).
+            // is why the TLAS migration is gated on Backend C (no classic-descriptor-set equivalent).
             auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
             if(!as)
                 return false;
@@ -1704,13 +1177,6 @@ BindingLayout::BindingLayout(const VulkanContext& context)
     : RefCounter<GraphicsResource>(context.threadPool)
     , m_desc(context.objectArena)
     , m_descriptorSetLayouts(context.objectArena)
-    , m_descriptorHeapBindings(context.objectArena)
-    , m_descriptorHeapBindingLookup(
-        0,
-        Hasher<u32>(),
-        EqualTo<u32>(),
-        context.objectArena
-    )
     , m_descriptorBufferBindingOffsets(
         0,
         Hasher<u32>(),
@@ -1757,16 +1223,10 @@ BindingSet::BindingSet(const VulkanContext& context)
     : RefCounter<GraphicsResource>(context.threadPool)
     , m_desc(context.objectArena)
     , m_descriptorSets(context.objectArena)
-    , m_descriptorHeapPushIndices(context.objectArena)
-    , m_descriptorHeapAllocations(context.objectArena)
     , m_descriptorBufferAllocations(context.objectArena)
     , m_context(context)
 {}
 BindingSet::~BindingSet(){
-    if(m_context.descriptorHeapManager){
-        for(const DescriptorHeapAllocation& allocation : m_descriptorHeapAllocations)
-            m_context.descriptorHeapManager->free(allocation);
-    }
     if(m_context.descriptorBufferManager){
         for(const DescriptorBufferSegment& segment : m_descriptorBufferAllocations)
             m_context.descriptorBufferManager->free(segment);
@@ -1847,9 +1307,9 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     layoutInfo.bindingCount = static_cast<u32>(bindings.size());
     layoutInfo.pBindings = bindings.data();
 
-    // Backend C: descriptor-buffer layouts must set this create flag. Classic (Backend A) and descriptor-heap
-    // (Backend B) layouts leave it clear; the three are mutually exclusive on the descriptor-set-layout object, so
-    // a descriptor-buffer layout can only ever be consumed through the descriptor-buffer command bind path.
+    // Backend C: descriptor-buffer layouts must set this create flag. Classic (Backend A) layouts leave it clear; the
+    // two are mutually exclusive on the descriptor-set-layout object, so a descriptor-buffer layout can only ever be
+    // consumed through the descriptor-buffer command bind path.
     if(desc.useDescriptorBuffer && m_context.extensions.EXT_descriptor_buffer){
         layoutInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     }
@@ -1863,7 +1323,6 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     }
     layout->m_descriptorSetLayouts.push_back(setLayout);
 
-    const bool hasPushConstants = pushConstantByteSize > 0;
     if(
         !VulkanDetail::CreatePipelineLayout(
             m_context,
@@ -1876,50 +1335,6 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     ){
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
-    }
-
-    if(m_context.extensions.EXT_descriptor_heap){
-        bool compatible = !hasPushConstants;
-
-        if(compatible){
-            layout->m_descriptorHeapBindings.reserve(desc.bindings.size());
-            layout->m_descriptorHeapBindingLookup.reserve(desc.bindings.size());
-            for(const auto& item : desc.bindings){
-                if(item.type == ResourceType::PushConstants || item.type == ResourceType::None)
-                    continue;
-
-                if(!VulkanDetail::IsDescriptorHeapCompatibleType(item.type)){
-                    compatible = false;
-                    break;
-                }
-
-                const VkDescriptorType descriptorType = VulkanDetail::ConvertDescriptorType(item.type);
-                const u32 descriptorSize = m_descriptorHeapManager.getDescriptorSize(descriptorType);
-                const u32 descriptorStride = m_descriptorHeapManager.getDescriptorStride(descriptorType);
-                if(descriptorSize == 0 || descriptorStride == 0){
-                    compatible = false;
-                    break;
-                }
-
-                DescriptorHeapBindingMeta meta{};
-                meta.resourceType = item.type;
-                meta.descriptorType = descriptorType;
-                meta.heapKind = VulkanDetail::GetDescriptorHeapKind(item.type);
-                meta.slot = item.slot;
-                meta.arraySize = item.getArraySize();
-                meta.descriptorSize = descriptorSize;
-                meta.descriptorStride = descriptorStride;
-                const usize metaIndex = layout->m_descriptorHeapBindings.size();
-                layout->m_descriptorHeapBindings.push_back(meta);
-                layout->m_descriptorHeapBindingLookup.insert_or_assign(meta.slot, metaIndex);
-            }
-        }
-
-        layout->m_descriptorHeapCompatible = compatible && !layout->m_descriptorHeapBindings.empty();
-        if(!layout->m_descriptorHeapCompatible){
-            layout->m_descriptorHeapBindings.clear();
-            layout->m_descriptorHeapBindingLookup.clear();
-        }
     }
 
     // Backend C (VK_EXT_descriptor_buffer): when the layout opts in, query the driver for the set block's total size
@@ -2001,7 +1416,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     const u32 maxCapacity = VulkanDetail::NormalizeDescriptorTableCapacity(desc.maxCapacity);
     for(usize i = 0; i < desc.registerSpaces.size(); ++i){
         const auto& item = desc.registerSpaces[i];
-        if(!VulkanDetail::IsDescriptorHeapCompatibleType(item.type)){
+        if(!VulkanDetail::IsBindlessRegisterSpaceType(item.type)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: register space slot {} has unsupported resource type {}")
                 , item.slot
                 , static_cast<u32>(item.type)
@@ -2584,31 +1999,6 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
         Handle<BindingLayout>::deleter_type(&m_context.objectArena)
     );
 
-    if(layout->m_descriptorHeapCompatible && m_context.descriptorHeapManager){
-        const usize descriptorHeapBindingCount = layout->m_descriptorHeapBindings.size();
-        bindingSet->m_descriptorHeapPushIndices.reserve(descriptorHeapBindingCount);
-        bindingSet->m_descriptorHeapAllocations.reserve(descriptorHeapBindingCount);
-
-        for(usize i = 0; i < descriptorHeapBindingCount; ++i){
-            const DescriptorHeapBindingMeta& meta = layout->m_descriptorHeapBindings[i];
-            if(meta.arraySize > UINT32_MAX / meta.descriptorStride){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate descriptor heap storage for binding slot {}: descriptor array size overflows"), meta.slot);
-                DestroyArenaObject(m_context.objectArena, bindingSet);
-                return nullptr;
-            }
-            const u32 allocationSizeBytes = meta.arraySize * meta.descriptorStride;
-            const DescriptorHeapAllocation allocation = m_context.descriptorHeapManager->allocate(meta.heapKind, allocationSizeBytes, meta.descriptorStride);
-            if(!allocation.valid()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate descriptor heap storage for binding slot {}"), meta.slot);
-                DestroyArenaObject(m_context.objectArena, bindingSet);
-                return nullptr;
-            }
-
-            bindingSet->m_descriptorHeapAllocations.push_back(allocation);
-            bindingSet->m_descriptorHeapPushIndices.push_back(allocation.offsetBytes / meta.descriptorStride);
-        }
-    }
-
     // Backend C: carve ONE contiguous block for this set's descriptor buffer (sized by the layout's driver-queried
     // set size), then write each non-push-constant binding's descriptor(s) at blockOffset + bindingOffset +
     // arrayElement*stride. A single binding set's block always lives in one segment (resource OR sampler); the layout
@@ -2654,7 +2044,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
         }
     }
 
-    // The classic descriptor-pool write path is only for sets backed by descriptor sets (Backend A / Backend B);
+    // The classic descriptor-pool write path is only for sets backed by descriptor sets (Backend A);
     // descriptor-buffer sets (Backend C) have no descriptor-set objects to write into, so their writes were already
     // performed above into the carved buffer block. Guard the whole vkUpdateDescriptorSets loop on compatibility so
     // the (empty) m_descriptorSets[0] dereference is never reached for a descriptor-buffer set.
@@ -2790,18 +2180,6 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
                 break;
             }
         }
-
-        if(layout->m_descriptorHeapCompatible && m_context.descriptorHeapManager){
-            const auto metaIt = layout->m_descriptorHeapBindingLookup.find(item.slot);
-            if(metaIt != layout->m_descriptorHeapBindingLookup.end()){
-                const usize metaIndex = metaIt->second;
-                const DescriptorHeapBindingMeta& meta = layout->m_descriptorHeapBindings[metaIndex];
-                const DescriptorHeapAllocation& allocation = bindingSet->m_descriptorHeapAllocations[metaIndex];
-                const u32 descriptorOffset = allocation.offsetBytes + item.arrayElement * meta.descriptorStride;
-                if(!m_context.descriptorHeapManager->writeDescriptor(item, meta, descriptorOffset))
-                    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to write descriptor heap entry for slot {}"), item.slot);
-            }
-        }
     }
 
     if(!writes.empty())
@@ -2822,17 +2200,9 @@ void CommandList::retainBindingSets(const BindingSetVector& bindings){
 void CommandList::bindPipelineBindingSets(
     const VkPipelineBindPoint bindPoint,
     const VkPipelineLayout pipelineLayout,
-    const bool usesDescriptorHeap,
     const bool usesDescriptorBuffer,
-    const FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& pushRanges,
-    const u32 pushDataSize,
     const BindingSetVector& bindings){
     retainBindingSets(bindings);
-
-    if(usesDescriptorHeap){
-        bindDescriptorHeapState(true, pushRanges, pushDataSize, bindings);
-        return;
-    }
 
     if(usesDescriptorBuffer){
         bindDescriptorBufferState(bindPoint, pipelineLayout, bindings);
@@ -2861,48 +2231,6 @@ void CommandList::bindPipelineBindingSets(
             nullptr
         );
     }
-}
-
-void CommandList::bindDescriptorHeapState(
-    const bool usesDescriptorHeap,
-    const FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& pushRanges,
-    const u32 pushDataSize,
-    const BindingSetVector& bindings){
-    if(!usesDescriptorHeap || !m_context.descriptorHeapManager)
-        return;
-
-    vkCmdBindResourceHeapEXT(m_currentCmdBuf->m_cmdBuf, &m_context.descriptorHeapManager->getResourceBindInfo());
-    vkCmdBindSamplerHeapEXT(m_currentCmdBuf->m_cmdBuf, &m_context.descriptorHeapManager->getSamplerBindInfo());
-
-    if(pushDataSize == 0)
-        return;
-
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DescriptorBindingArena, s_DescriptorBindingScratchArenaBytes);
-    Vector<u32, Alloc::ScratchArena> pushWords(pushDataSize / sizeof(u32), 0u, scratchArena);
-
-    for(const DescriptorHeapPushRange& range : pushRanges){
-        if(range.pushWordCount == 0)
-            continue;
-        if(range.bindingSetIndex >= bindings.size())
-            continue;
-
-        auto* bindingSet = bindings[range.bindingSetIndex];
-        if(!bindingSet)
-            continue;
-        if(bindingSet->m_descriptorHeapPushIndices.size() < range.pushWordCount)
-            continue;
-
-        const u32 dstWordOffset = range.pushOffsetBytes / sizeof(u32);
-        for(u32 i = 0; i < range.pushWordCount; ++i)
-            pushWords[dstWordOffset + i] = bindingSet->m_descriptorHeapPushIndices[i];
-    }
-
-    VkPushDataInfoEXT pushDataInfo{};
-    pushDataInfo.sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT;
-    pushDataInfo.offset = 0;
-    pushDataInfo.data.address = pushWords.data();
-    pushDataInfo.data.size = pushDataSize;
-    vkCmdPushDataEXT(m_currentCmdBuf->m_cmdBuf, &pushDataInfo);
 }
 
 

@@ -3,7 +3,7 @@
 // This is the dark-manager hardware proof the GpuDescriptorHeap (Backend A) self-test was for Phase 1: stand up a
 // real headless GPU device and exercise DescriptorBufferManager::allocate / writeDescriptor / free across every
 // descriptor class, asserting the vkGetDescriptorEXT path actually produces descriptor bytes into the HOST-mapped
-// segments and that the free-range sub-allocator (mirrored from Backend B) is sound.
+// segments and that the free-range sub-allocator is sound.
 //
 // No pipeline consumes the manager yet; this test is its sole consumer until the Phase-3 binding-layer conversion
 // (steps 2-4) lights it up. The GPU bind step (vkCmdBindDescriptorBuffersEXT / vkCmdSetDescriptorBufferOffsetsEXT)
@@ -292,7 +292,7 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsSamplerDescriptor){
 
 
 // Free-list reuse: allocate a range, free it, allocate the same size again — the second carve must be satisfied from
-// the free list (mirroring Backend B's policy) and succeed. This is the sub-allocator correctness check the dark
+// the free list and succeed. This is the sub-allocator correctness check the dark
 // manager needs before live wiring can trust allocate/free churn across frames.
 TEST_F(DescriptorBufferRoundTripTest, FreeListReusesFreedRange){
     auto& mgr = manager();

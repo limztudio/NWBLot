@@ -60,13 +60,10 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
     PipelineShaderStageVector shaderStages{ scratchArena };
     shaderStages.push_back(shaderStage);
-    PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
 
     if(!configurePipelineBindingsOrDestroy(
         desc.bindingLayouts,
         NWB_TEXT("compute pipeline"),
-        shaderStages,
-        descriptorHeapScratch,
         pso,
         scratchArena
     ))
@@ -74,7 +71,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
     pipelineInfo.stage = shaderStages[0];
-    VulkanDetail::AttachPipelineBindingState(pipelineInfo, descriptorHeapScratch, *pso);
+    VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso);
 
     if(!createPipelineOrDestroy(NWB_TEXT("compute pipeline"), pso, pipelineInfo))
         return nullptr;
@@ -102,7 +99,7 @@ void CommandList::setComputeState(const ComputeState& state){
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipeline);
 
     if(pipeline)
-        bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorHeap, pipeline->m_usesDescriptorBuffer, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
+        bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorBuffer, state.bindings);
 }
 
 void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){

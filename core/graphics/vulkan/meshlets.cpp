@@ -50,7 +50,6 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
     PipelineShaderStageVector shaderStages{ scratchArena };
     PipelineSpecializationInfoVector specInfos{ scratchArena };
-    PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
     shaderStages.reserve(s_MeshletPipelineStageReserveCount); // Task (optional), Mesh, Fragment
     specInfos.reserve(s_MeshletPipelineStageReserveCount);
 
@@ -77,8 +76,6 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     if(!configurePipelineBindingsOrDestroy(
         desc.bindingLayouts,
         NWB_TEXT("meshlet pipeline"),
-        shaderStages,
-        descriptorHeapScratch,
         pso,
         scratchArena
     ))
@@ -108,7 +105,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         return nullptr;
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
-    VulkanDetail::AttachPipelineBindingState(pipelineInfo, descriptorHeapScratch, *pso, &fixedState.renderingInfo);
+    VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso, &fixedState.renderingInfo);
     pipelineInfo.stageCount = static_cast<u32>(shaderStages.size());
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = nullptr; // Mesh shaders don't use vertex input
@@ -145,7 +142,7 @@ void CommandList::setMeshletState(const MeshletState& state){
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
 
     if(pipeline)
-        bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorHeap, pipeline->m_usesDescriptorBuffer, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
+        bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorBuffer, state.bindings);
 
     setViewportState(state.viewport);
 }

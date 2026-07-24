@@ -1145,7 +1145,6 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     PipelineShaderStageVector stages{ scratchArena };
     Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchArena> groups{ scratchArena };
     PipelineSpecializationInfoVector specInfos{ scratchArena };
-    PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
 
     stages.reserve(maxShaderStages);
     groups.reserve(desc.shaders.size() + desc.hitGroups.size());
@@ -1245,8 +1244,6 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     if(!configurePipelineBindingsOrDestroy(
         desc.globalBindingLayouts,
         NWB_TEXT("ray tracing pipeline"),
-        stages,
-        descriptorHeapScratch,
         pso,
         scratchArena
     ))
@@ -1258,18 +1255,18 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         pipelineFlags2.flags |= VK_PIPELINE_CREATE_2_RAY_TRACING_ALLOW_SPHERES_AND_LINEAR_SWEPT_SPHERES_BIT_NV;
 
     auto createInfo = VulkanDetail::MakeVkStruct<VkRayTracingPipelineCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR);
-    if(pso->m_usesDescriptorHeap){
-        descriptorHeapScratch.flags2.flags |= pipelineFlags2.flags;
-        createInfo.pNext = descriptorHeapScratch.pNext();
-    }
-    else if(pipelineFlags2.flags != 0)
+    if(pipelineFlags2.flags != 0)
         createInfo.pNext = &pipelineFlags2;
+    // Backend C: descriptor-buffer pipelines must opt in with VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT so the
+    // driver expects descriptor-buffer binds rather than classic descriptor sets.
+    if(pso->m_usesDescriptorBuffer)
+        createInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     createInfo.stageCount = static_cast<u32>(stages.size());
     createInfo.pStages = stages.data();
     createInfo.groupCount = static_cast<u32>(groups.size());
     createInfo.pGroups = groups.data();
     createInfo.maxPipelineRayRecursionDepth = desc.maxRecursionDepth;
-    createInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pso->m_pipelineLayout;
+    createInfo.layout = pso->m_pipelineLayout;
 
     res = vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
@@ -1552,7 +1549,7 @@ void CommandList::setRayTracingState(const RayTracingState& state){
 
     vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipeline);
 
-    bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorHeap, pipeline->m_usesDescriptorBuffer, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
+    bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorBuffer, state.bindings);
 }
 
 

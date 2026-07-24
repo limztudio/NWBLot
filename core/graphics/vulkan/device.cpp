@@ -174,7 +174,6 @@ Device::Device(const DeviceDesc& desc)
     , m_gpuCrashVendorBinaryArena(VulkanArenaScope::s_GpuCrashVendorBinaryArena, Alloc::PersistentArena::StructureAlignedSize(s_MaxDeviceFaultVendorBinaryBytes))
     , m_context(desc.allocator, desc.threadPool, desc.instance, desc.physicalDevice, desc.device, desc.allocationCallbacks)
     , m_allocator(m_context)
-    , m_descriptorHeapManager(m_context, m_allocator)
     , m_descriptorBufferManager(m_context, m_allocator)
     , m_gpuDescriptorHeap(*this)
     , m_pipelineCacheDirectory(m_context.objectArena, desc.pipelineCacheDirectory)
@@ -184,7 +183,6 @@ Device::Device(const DeviceDesc& desc)
 {
     VkResult res = VK_SUCCESS;
 
-    m_context.descriptorHeapManager = &m_descriptorHeapManager;
     m_context.descriptorBufferManager = &m_descriptorBufferManager;
 
     vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
@@ -217,8 +215,6 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.KHR_swapchain = true;
         else if(NWB_STRCMP(ext, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_dynamic_rendering = true;
-        else if(NWB_STRCMP(ext, VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME) == 0)
-            m_context.extensions.EXT_descriptor_heap = true;
         else if(NWB_STRCMP(ext, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_descriptor_buffer = true;
         else if(NWB_STRCMP(ext, VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME) == 0)
@@ -414,20 +410,6 @@ Device::Device(const DeviceDesc& desc)
         vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
     }
 
-    if(m_context.extensions.EXT_descriptor_heap){
-        if(
-            !vkGetPhysicalDeviceDescriptorSizeEXT
-            || !vkWriteResourceDescriptorsEXT
-            || !vkWriteSamplerDescriptorsEXT
-            || !vkCmdBindResourceHeapEXT
-            || !vkCmdBindSamplerHeapEXT
-            || !vkCmdPushDataEXT
-        ){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor heap entry points are unavailable, falling back to descriptor sets."));
-            m_context.extensions.EXT_descriptor_heap = false;
-        }
-    }
-
     // Backend C entry-point verification. VK_EXT_descriptor_buffer is optional and gracefully disabled here if the
     // driver advertised the extension but failed to expose any required device-level command, leaving Backend A
     // (descriptor indexing) as the live floor. No consumer is wired in this step.
@@ -460,18 +442,6 @@ Device::Device(const DeviceDesc& desc)
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to allocate AMD breadcrumb buffer ({}); AMD GPU breadcrumbs disabled."), ResultToString(breadcrumbRes));
             m_context.extensions.AMD_buffer_marker = false;
             m_amdBreadcrumb.buffer = VK_NULL_HANDLE;
-        }
-    }
-
-    if(m_context.extensions.EXT_descriptor_heap){
-        auto props2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
-        m_context.descriptorHeapProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
-        props2.pNext = &m_context.descriptorHeapProperties;
-        vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
-
-        if(!m_descriptorHeapManager.initialize()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor heap initialization failed, falling back to descriptor sets."));
-            m_context.extensions.EXT_descriptor_heap = false;
         }
     }
 
@@ -553,7 +523,6 @@ Device::~Device(){
     // destructor also calls this).
     m_gpuDescriptorHeap.shutdown();
     m_descriptorBufferManager.shutdown();
-    m_descriptorHeapManager.shutdown();
 
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
         m_queues[i].reset();

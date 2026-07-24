@@ -193,7 +193,6 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     // Step 1: Collect shader stages
     PipelineShaderStageVector shaderStages{ scratchArena };
     PipelineSpecializationInfoVector specInfos{ scratchArena };
-    PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
     shaderStages.reserve(VulkanDetail::s_MaxGraphicsPipelineShaderStageCount);
     specInfos.reserve(VulkanDetail::s_MaxGraphicsPipelineShaderStageCount);
 
@@ -217,8 +216,6 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     if(!configurePipelineBindingsOrDestroy(
         desc.bindingLayouts,
         NWB_TEXT("graphics pipeline"),
-        shaderStages,
-        descriptorHeapScratch,
         pso,
         scratchArena
     ))
@@ -277,7 +274,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         return nullptr;
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
-    VulkanDetail::AttachPipelineBindingState(pipelineInfo, descriptorHeapScratch, *pso, &fixedState.renderingInfo);
+    VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso, &fixedState.renderingInfo);
     pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = &vertexInputInfo;
@@ -469,7 +466,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     }
 
     if(pipeline)
-        bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorHeap, pipeline->m_usesDescriptorBuffer, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
+        bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorBuffer, state.bindings);
 
     setViewportState(state.viewport);
 

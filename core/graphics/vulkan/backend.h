@@ -547,7 +547,6 @@ inline void CopyHostMemory(
 class Device;
 class Queue;
 class TrackedCommandBuffer;
-class DescriptorHeapManager;
 class DescriptorBufferManager;
 
 class Buffer;
@@ -587,7 +586,6 @@ struct VulkanContext{
         bool KHR_ray_query = false;
         bool KHR_acceleration_structure = false;
         bool buffer_device_address = false;
-        bool EXT_descriptor_heap = false;
         bool EXT_descriptor_buffer = false;
         bool EXT_debug_utils = false;
         bool EXT_debug_marker = false;
@@ -607,7 +605,6 @@ struct VulkanContext{
     } extensions;
 
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
-    VkPhysicalDeviceDescriptorHeapPropertiesEXT descriptorHeapProperties{};
     // Backend C properties: per-type descriptor sizes, offset alignment, and binding/range caps needed to lay out
     // descriptor buffers and compute binding offsets for vkCmdSetDescriptorBufferOffsetsEXT.
     VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties{};
@@ -618,7 +615,6 @@ struct VulkanContext{
     VkPhysicalDeviceClusterAccelerationStructurePropertiesNV nvClusterAccelerationStructureProperties{};
     // Core Vulkan 1.1 (engine floor is 1.3), so always populated. Holds the device wave/subgroup size.
     VkPhysicalDeviceSubgroupProperties subgroupProperties{};
-    DescriptorHeapManager* descriptorHeapManager = nullptr;
     DescriptorBufferManager* descriptorBufferManager = nullptr;
 
 
@@ -1290,70 +1286,18 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Descriptor Heap
+// Pipeline binding
 
-
-namespace DescriptorHeapKind{
-    enum Enum : u8{
-        None = 0,
-        Resource,
-        Sampler,
-    };
-};
-
-struct DescriptorHeapAllocation{
-    DescriptorHeapKind::Enum kind = DescriptorHeapKind::None;
-    u32 offsetBytes = 0;
-    u32 sizeBytes = 0;
-
-    [[nodiscard]] bool valid()const{ return kind != DescriptorHeapKind::None && sizeBytes > 0; }
-};
-
-struct DescriptorHeapBindingMeta{
-    VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
-    u32 slot = 0;
-    u32 arraySize = 0;
-    u32 descriptorSize = 0;
-    u32 descriptorStride = 0;
-    ResourceType::Enum resourceType = ResourceType::None;
-    DescriptorHeapKind::Enum heapKind = DescriptorHeapKind::None;
-};
-
-struct DescriptorHeapPushRange{
-    u32 bindingSetIndex = 0;
-    u32 pushOffsetBytes = 0;
-    u32 pushWordCount = 0;
-};
 
 using PipelineShaderStageVector = Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchArena>;
 using PipelineSpecializationInfoVector = Vector<VkSpecializationInfo, Alloc::ScratchArena>;
 
-struct PipelineDescriptorHeapScratch{
-    Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchArena> mappings;
-    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchArena> stageMappings;
-    VkPipelineCreateFlags2CreateInfo flags2{};
-
-
-    explicit PipelineDescriptorHeapScratch(Alloc::ScratchArena& scratchArena)
-        : mappings(scratchArena)
-        , stageMappings(scratchArena)
-    {}
-
-    const void* pNext(const void* next = nullptr){
-        flags2.pNext = next;
-        return &flags2;
-    }
-};
-
 struct PipelineBindingState{
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     bool m_ownsPipelineLayout = false;
-    bool m_usesDescriptorHeap = false;
     // Backend C: the pipeline's layouts are descriptor-buffer layouts and its binding sets bind via
     // vkCmdBindDescriptorBuffersEXT + vkCmdSetDescriptorBufferOffsetsEXT instead of classic descriptor sets.
     bool m_usesDescriptorBuffer = false;
-    FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
-    u32 m_descriptorHeapPushDataSize = 0;
     u32 m_pushConstantByteSize = 0;
 };
 
@@ -1385,27 +1329,24 @@ inline Object GetPipelineNativeHandle(const VkPipeline pipeline, const ObjectTyp
 
 inline void AttachPipelineBindingState(
     VkComputePipelineCreateInfo& pipelineInfo,
-    PipelineDescriptorHeapScratch& descriptorHeapScratch,
     const PipelineBindingState& bindingState,
     const void* next = nullptr
 ){
-    pipelineInfo.pNext = bindingState.m_usesDescriptorHeap ? descriptorHeapScratch.pNext(next) : next;
-    pipelineInfo.layout = bindingState.m_usesDescriptorHeap ? VK_NULL_HANDLE : bindingState.m_pipelineLayout;
+    pipelineInfo.pNext = next;
+    pipelineInfo.layout = bindingState.m_pipelineLayout;
     // Backend C: descriptor-buffer pipelines must opt in with VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT so the
-    // driver expects descriptor-buffer binds rather than classic descriptor sets. The pipeline layout is still a real
-    // VkPipelineLayout (built from the flagged set layouts), unlike the heap path's VK_NULL_HANDLE.
+    // driver expects descriptor-buffer binds rather than classic descriptor sets.
     if(bindingState.m_usesDescriptorBuffer)
         pipelineInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 }
 
 inline void AttachPipelineBindingState(
     VkGraphicsPipelineCreateInfo& pipelineInfo,
-    PipelineDescriptorHeapScratch& descriptorHeapScratch,
     const PipelineBindingState& bindingState,
     const void* next = nullptr
 ){
-    pipelineInfo.pNext = bindingState.m_usesDescriptorHeap ? descriptorHeapScratch.pNext(next) : next;
-    pipelineInfo.layout = bindingState.m_usesDescriptorHeap ? VK_NULL_HANDLE : bindingState.m_pipelineLayout;
+    pipelineInfo.pNext = next;
+    pipelineInfo.layout = bindingState.m_pipelineLayout;
     if(bindingState.m_usesDescriptorBuffer)
         pipelineInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 }
@@ -1414,90 +1355,6 @@ inline void AttachPipelineBindingState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class DescriptorHeapManager final : NoCopy{
-private:
-    struct FreeRange{
-        u32 offsetBytes = 0;
-        u32 sizeBytes = 0;
-    };
-
-    struct HeapStorage{
-        VkBuffer buffer = VK_NULL_HANDLE;
-        VulkanAllocationHandle allocation = nullptr;
-        void* mappedMemory = nullptr;
-        VkDeviceAddress deviceAddress = 0;
-        u32 capacityBytes = 0;
-        u32 writableOffsetBytes = 0;
-        VkBindHeapInfoEXT bindInfo{};
-        Futex mutex;
-        Vector<FreeRange, Alloc::GlobalArena> freeRanges;
-
-
-        explicit HeapStorage(Alloc::GlobalArena& arena)
-            : freeRanges(arena)
-        {}
-    };
-
-
-public:
-    static bool tryEnablePipeline(
-        const VulkanContext& context,
-        const BindingLayoutVector& bindingLayouts,
-        PipelineShaderStageVector& shaderStages,
-        FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
-        u32& outPushDataSize,
-        VkPipelineCreateFlags2CreateInfo& outFlags2,
-        Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchArena>& outMappings,
-        Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchArena>& outStageMappings
-    );
-    static bool tryEnablePipeline(
-        const VulkanContext& context,
-        const BindingLayoutVector& bindingLayouts,
-        PipelineShaderStageVector& shaderStages,
-        FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
-        u32& outPushDataSize,
-        PipelineDescriptorHeapScratch& scratch
-    );
-
-
-public:
-    DescriptorHeapManager(const VulkanContext& context, VulkanAllocator& allocator);
-    ~DescriptorHeapManager();
-
-
-public:
-    bool initialize();
-    void shutdown();
-
-    [[nodiscard]] bool isEnabled()const{ return m_enabled; }
-    [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const;
-    [[nodiscard]] u32 getDescriptorStride(VkDescriptorType descriptorType)const;
-    [[nodiscard]] const VkBindHeapInfoEXT& getResourceBindInfo()const{ return m_resourceHeap.bindInfo; }
-    [[nodiscard]] const VkBindHeapInfoEXT& getSamplerBindInfo()const{ return m_samplerHeap.bindInfo; }
-
-    [[nodiscard]] DescriptorHeapAllocation allocate(DescriptorHeapKind::Enum kind, u32 sizeBytes, u32 alignmentBytes);
-    void free(const DescriptorHeapAllocation& allocation);
-
-    bool writeDescriptor(const BindingSetItem& item, const DescriptorHeapBindingMeta& meta, u32 dstOffsetBytes);
-
-
-private:
-    bool initializeHeap(HeapStorage& heap, const ACompactString& debugName, u32 capacityBytes, u32 reservedRangeBytes);
-    void shutdownHeap(HeapStorage& heap);
-
-
-private:
-    const VulkanContext& m_context;
-    VulkanAllocator& m_allocator;
-    bool m_enabled = false;
-    HeapStorage m_resourceHeap;
-    HeapStorage m_samplerHeap;
 };
 
 
@@ -1505,15 +1362,15 @@ private:
 
 // Backend C - VK_EXT_descriptor_buffer descriptor-buffer manager (Phase 3)
 //
-// Descriptor-as-memory: unlike Backend A (descriptor indexing) or Backend B (the absent-on-RADV EXT_descriptor_heap
-// model), Backend C stores descriptors as ordinary bytes in one HOST-mappable buffer per type and binds them with
-// vkCmdBindDescriptorBuffersEXT + vkCmdSetDescriptorBufferOffsetsEXT. Individual descriptors are written into the
-// mapped memory with vkGetDescriptorEXT via VkDescriptorGetInfoEXT, which is also the only Vulkan write path that
-// natively encodes an acceleration-structure handle (VkDescriptorDataEXT::accelerationStructure) - the reason the
-// TLAS migration is bound to this backend (docs/design/bindless-phase1-rhi-heap.md 12.1).
+// Descriptor-as-memory: unlike Backend A (descriptor indexing), Backend C stores descriptors as ordinary bytes in one
+// HOST-mappable buffer per type and binds them with vkCmdBindDescriptorBuffersEXT + vkCmdSetDescriptorBufferOffsetsEXT.
+// Individual descriptors are written into the mapped memory with vkGetDescriptorEXT via VkDescriptorGetInfoEXT, which
+// is also the only Vulkan write path that natively encodes an acceleration-structure handle
+// (VkDescriptorDataEXT::accelerationStructure) - the reason the TLAS migration is bound to this backend
+// (docs/design/bindless-phase1-rhi-heap.md 12.1).
 //
-// Layout choice: one large descriptor buffer per type (a "global segment"), sub-allocated by byte offset through the
-// same free-range suballocator Backend B proved (FreeRange vector + bump pointer). Resource descriptors live in the
+// Layout choice: one large descriptor buffer per type (a "global segment"), sub-allocated by byte offset through a
+// free-range suballocator (FreeRange vector + bump pointer). Resource descriptors live in the
 // resource segment (images, texel buffers, storage/uniform buffers, AS); sampler descriptors in the sampler segment.
 // All descriptors are aligned to descriptorBufferOffsetAlignment. No pipeline consumer is wired in this step; the
 // manager is dark - constructed at Device init, enabled only where the extension is present, exercised solely by its
@@ -1538,15 +1395,14 @@ struct DescriptorBufferSegment{
 class DescriptorBufferManager final : NoCopy{
 private:
     // Byte range returned to the segment's free pool by free(); merged with neighbors to keep the list compact.
-    // Identical shape to Backend B's DescriptorHeapManager::FreeRange (kept local because that one is private).
     struct FreeRange{
         u32 offsetBytes = 0;
         u32 sizeBytes = 0;
     };
 
-    // One sub-allocated descriptor buffer. Mirrors Backend B's HeapStorage: a HOST-mapped VkBuffer + its device
-    // address + a free-range list and a bump pointer sharing one mutex. The mapped pointer is the write target for
-    // vkGetDescriptorEXT; the device address is what vkCmdBindDescriptorBuffersEXT binds.
+    // One sub-allocated descriptor buffer: a HOST-mapped VkBuffer + its device address + a free-range list and a bump
+    // pointer sharing one mutex. The mapped pointer is the write target for vkGetDescriptorEXT; the device address is
+    // what vkCmdBindDescriptorBuffersEXT binds.
     struct SegmentStorage{
         VkBuffer buffer = VK_NULL_HANDLE;
         VulkanAllocationHandle allocation = nullptr;
@@ -1591,8 +1447,8 @@ public:
     [[nodiscard]] u32 getSamplerBufferIndex()const{ return 1; }
 
     // Carve `sizeBytes` (already stride-aligned) out of the segment; returned offset is aligned to
-    // descriptorBufferOffsetAlignment. Free-list first, bump-pointer fallback - identical policy to Backend B. The
-    // carved bytes are zeroed so a stale read before the first write cannot leak a neighboring descriptor.
+    // descriptorBufferOffsetAlignment. Free-list first, bump-pointer fallback. The carved bytes are zeroed so a stale
+    // read before the first write cannot leak a neighboring descriptor.
     [[nodiscard]] DescriptorBufferSegment allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes);
     void free(const DescriptorBufferSegment& segment);
 
@@ -1625,8 +1481,7 @@ private:
 // (rhi/gpu_descriptor_heap.h; docs/design/bindless-phase1-rhi-heap.md).
 //
 // Descriptor indexing is the portable implementation. It builds persistent resource and sampler tables from the
-// existing createBindlessLayout/createDescriptorTable machinery and hands out global slot indices. The optional
-// VK_EXT_descriptor_heap accelerator is not wired here.
+// existing createBindlessLayout/createDescriptorTable machinery and hands out global slot indices.
 class GpuDescriptorHeap final : NoCopy{
     friend class Device;
     friend class CommandList;
@@ -1968,8 +1823,6 @@ public:
 public:
     [[nodiscard]] const BindingLayoutDesc& getBindingLayoutDesc()const{ return m_desc; }
     [[nodiscard]] bool isBindlessLayout()const{ return m_isBindless; }
-    [[nodiscard]] bool isDescriptorHeapCompatible()const{ return m_descriptorHeapCompatible; }
-    [[nodiscard]] const Vector<DescriptorHeapBindingMeta, Alloc::GlobalArena>& getDescriptorHeapBindings()const{ return m_descriptorHeapBindings; }
     // Backend C (VK_EXT_descriptor_buffer) accessors. A descriptor-buffer layout serves a single set block of
     // m_descriptorBufferSetSizeBytes in segment m_descriptorBufferSegmentKind; per-binding byte offsets within that
     // block are in m_descriptorBufferBindingOffsets (slot -> bytes). The layout is compatible only when the whole
@@ -1985,8 +1838,6 @@ private:
     BindlessLayoutDesc m_bindlessDesc;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout, Alloc::GlobalArena> m_descriptorSetLayouts;
-    Vector<DescriptorHeapBindingMeta, Alloc::GlobalArena> m_descriptorHeapBindings;
-    HashMap<u32, usize, Hasher<u32>, EqualTo<u32>, Alloc::GlobalArena> m_descriptorHeapBindingLookup;
     // Backend C: the driver-computed footprint of this layout's single set block in the descriptor buffer
     // (vkGetDescriptorSetLayoutSizeEXT), the segment that holds it (Resource for non-sampler sets / Sampler for
     // sampler-only sets; mixed sets downgrade to non-compatible), and each non-push-constant binding's byte offset
@@ -1999,7 +1850,6 @@ private:
     const VulkanContext& m_context;
     u32 m_pushConstantByteSize = 0;
     bool m_isBindless = false;
-    bool m_descriptorHeapCompatible = false;
     bool m_descriptorBufferCompatible = false;
 };
 
@@ -2061,10 +1911,8 @@ private:
     Handle<BindingLayout> m_layout;
     Handle<DescriptorTable> m_descriptorTable;
     Vector<VkDescriptorSet, Alloc::GlobalArena> m_descriptorSets;
-    Vector<u32, Alloc::GlobalArena> m_descriptorHeapPushIndices;
-    Vector<DescriptorHeapAllocation, Alloc::GlobalArena> m_descriptorHeapAllocations;
     // Backend C: one carved segment per binding (resource or sampler), ordered to match the layout's metas. Freed in
-    // the destructor through the DescriptorBufferManager, mirroring the heap allocations above.
+    // the destructor through the DescriptorBufferManager.
     Vector<DescriptorBufferSegment, Alloc::GlobalArena> m_descriptorBufferAllocations;
 
     const VulkanContext& m_context;
@@ -2353,17 +2201,7 @@ private:
     void bindPipelineBindingSets(
         VkPipelineBindPoint bindPoint,
         VkPipelineLayout pipelineLayout,
-        bool usesDescriptorHeap,
         bool usesDescriptorBuffer,
-        const FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& pushRanges,
-        u32 pushDataSize,
-        const BindingSetVector& bindings
-    );
-
-    void bindDescriptorHeapState(
-        bool usesDescriptorHeap,
-        const FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& pushRanges,
-        u32 pushDataSize,
         const BindingSetVector& bindings
     );
     // Backend C: binds the global resource + sampler descriptor-buffer segments once via
@@ -2638,8 +2476,6 @@ private:
     [[nodiscard]] bool configurePipelineBindings(
         const BindingLayoutVector& bindingLayouts,
         const tchar* operationName,
-        PipelineShaderStageVector& shaderStages,
-        PipelineDescriptorHeapScratch& descriptorHeapScratch,
         PipelineBindingState& outBindings,
         Alloc::ScratchArena& scratchArena
     )const;
@@ -2647,12 +2483,10 @@ private:
     [[nodiscard]] bool configurePipelineBindingsOrDestroy(
         const BindingLayoutVector& bindingLayouts,
         const tchar* operationName,
-        PipelineShaderStageVector& shaderStages,
-        PipelineDescriptorHeapScratch& descriptorHeapScratch,
         PipelineT* pipeline,
         Alloc::ScratchArena& scratchArena
     )const{
-        if(configurePipelineBindings(bindingLayouts, operationName, shaderStages, descriptorHeapScratch, *pipeline, scratchArena))
+        if(configurePipelineBindings(bindingLayouts, operationName, *pipeline, scratchArena))
             return true;
 
         DestroyArenaObject(m_context.objectArena, pipeline);
@@ -2733,7 +2567,6 @@ private:
 
     VulkanContext m_context;
     VulkanAllocator m_allocator;
-    DescriptorHeapManager m_descriptorHeapManager;
     DescriptorBufferManager m_descriptorBufferManager;
     GpuDescriptorHeap m_gpuDescriptorHeap;
     Path m_pipelineCacheDirectory;

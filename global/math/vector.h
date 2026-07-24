@@ -866,14 +866,17 @@ NWB_INLINE SIMDVector SIMDCALL VectorSwizzle(SIMDVector value, u32 e0, u32 e1, u
     const uint8x8_t hi = vtbl2_u8(table, vreinterpret_u8_u32(idx));
     return vcombine_f32(vreinterpret_f32_u8(lo), vreinterpret_f32_u8(hi));
 #elif defined(NWB_HAS_AVX2)
-    alignas(16) const i32 control[4] = { static_cast<i32>(e0), static_cast<i32>(e1), static_cast<i32>(e2), static_cast<i32>(e3) };
-    return _mm_permutevar_ps(value, _mm_load_si128(reinterpret_cast<const __m128i*>(control)));
+    const __m128i control = _mm_set_epi32(static_cast<i32>(e3), static_cast<i32>(e2), static_cast<i32>(e1), static_cast<i32>(e0));
+    return _mm_permutevar_ps(value, control);
 #elif defined(NWB_HAS_SSE4)
-    alignas(16) u32 stored[4]{};
-    _mm_store_si128(reinterpret_cast<__m128i*>(stored), _mm_castps_si128(value));
-    return _mm_castsi128_ps(_mm_set_epi32(static_cast<i32>(stored[e3]), static_cast<i32>(stored[e2]), static_cast<i32>(stored[e1]), static_cast<i32>(stored[e0])));
+    return VectorSetInt(
+        VectorGetIntByIndex(value, e0),
+        VectorGetIntByIndex(value, e1),
+        VectorGetIntByIndex(value, e2),
+        VectorGetIntByIndex(value, e3)
+    );
 #else
-    return SIMDConvertDetail::MakeU32(value.u[e0], value.u[e1], value.u[e2], value.u[e3]);
+    return VectorSetInt(value.u[e0], value.u[e1], value.u[e2], value.u[e3]);
 #endif
 }
 
@@ -1000,28 +1003,26 @@ NWB_INLINE SIMDVector SIMDCALL VectorPermute(SIMDVector v0, SIMDVector v1, u32 x
     const uint8x8_t hi = vtbl4_u8(table, vreinterpret_u8_u32(idx));
     return vcombine_f32(vreinterpret_f32_u8(lo), vreinterpret_f32_u8(hi));
 #elif defined(NWB_HAS_AVX2)
-    alignas(16) const i32 control[4] = { static_cast<i32>(x), static_cast<i32>(y), static_cast<i32>(z), static_cast<i32>(w) };
-    const __m128i controlVector = _mm_load_si128(reinterpret_cast<const __m128i*>(control));
+    const __m128i controlVector = _mm_set_epi32(static_cast<i32>(w), static_cast<i32>(z), static_cast<i32>(y), static_cast<i32>(x));
     const __m128i select = _mm_cmpgt_epi32(controlVector, _mm_set1_epi32(3));
     const __m128i swizzle = _mm_and_si128(controlVector, _mm_set1_epi32(3));
     const SIMDVector a = _mm_permutevar_ps(v0, swizzle);
     const SIMDVector b = _mm_permutevar_ps(v1, swizzle);
     return _mm_or_ps(_mm_andnot_ps(_mm_castsi128_ps(select), a), _mm_and_ps(_mm_castsi128_ps(select), b));
 #elif defined(NWB_HAS_SSE4)
-    alignas(16) u32 a[4]{};
-    alignas(16) u32 b[4]{};
-    _mm_store_si128(reinterpret_cast<__m128i*>(a), _mm_castps_si128(v0));
-    _mm_store_si128(reinterpret_cast<__m128i*>(b), _mm_castps_si128(v1));
-    const u32* source[2] = { a, b };
-    return _mm_castsi128_ps(_mm_set_epi32(
-        static_cast<i32>(source[w >> 2][w & 3]),
-        static_cast<i32>(source[z >> 2][z & 3]),
-        static_cast<i32>(source[y >> 2][y & 3]),
-        static_cast<i32>(source[x >> 2][x & 3])
-    ));
+    return VectorSetInt(
+        x < 4u ? VectorGetIntByIndex(v0, x) : VectorGetIntByIndex(v1, x - 4u),
+        y < 4u ? VectorGetIntByIndex(v0, y) : VectorGetIntByIndex(v1, y - 4u),
+        z < 4u ? VectorGetIntByIndex(v0, z) : VectorGetIntByIndex(v1, z - 4u),
+        w < 4u ? VectorGetIntByIndex(v0, w) : VectorGetIntByIndex(v1, w - 4u)
+    );
 #else
-    const u32* source[2] = { v0.u, v1.u };
-    return SIMDConvertDetail::MakeU32(source[x >> 2][x & 3], source[y >> 2][y & 3], source[z >> 2][z & 3], source[w >> 2][w & 3]);
+    return VectorSetInt(
+        x < 4u ? v0.u[x] : v1.u[x - 4u],
+        y < 4u ? v0.u[y] : v1.u[y - 4u],
+        z < 4u ? v0.u[z] : v1.u[z - 4u],
+        w < 4u ? v0.u[w] : v1.u[w - 4u]
+    );
 #endif
 }
 
@@ -2259,9 +2260,12 @@ NWB_INLINE SIMDVector SIMDCALL VectorTan(SIMDVector value)noexcept{
 #elif defined(NWB_HAS_NEON)
     vb = vreinterpretq_f32_u32(vcvtq_u32_f32(vb));
 #else
-    Float4U vbValues;
-    SIMDConvertDetail::StoreF32(vbValues.raw, vb);
-    vb = VectorSetInt(static_cast<u32>(vbValues.x), static_cast<u32>(vbValues.y), static_cast<u32>(vbValues.z), static_cast<u32>(vbValues.w));
+    vb = VectorSetInt(
+        static_cast<u32>(VectorGetX(vb)),
+        static_cast<u32>(VectorGetY(vb)),
+        static_cast<u32>(VectorGetZ(vb)),
+        static_cast<u32>(VectorGetW(vb))
+    );
 #endif
 
     SIMDVector vc2 = VectorMultiply(vc, vc);

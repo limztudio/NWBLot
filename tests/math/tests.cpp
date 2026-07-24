@@ -193,6 +193,23 @@ TEST(Math, DynamicVectorLanes){
     EXPECT_EQ(VectorGetIntW(updatedInteger), 13u);
 }
 
+TEST(Math, DynamicVectorSwizzleAndPermute){
+    const SIMDVector first = VectorSetInt(11u, 22u, 33u, 44u);
+    const SIMDVector second = VectorSetInt(55u, 66u, 77u, 88u);
+
+    const SIMDVector swizzled = VectorSwizzle(first, 3u, 1u, 0u, 2u);
+    EXPECT_EQ(VectorGetIntX(swizzled), 44u);
+    EXPECT_EQ(VectorGetIntY(swizzled), 22u);
+    EXPECT_EQ(VectorGetIntZ(swizzled), 11u);
+    EXPECT_EQ(VectorGetIntW(swizzled), 33u);
+
+    const SIMDVector permuted = VectorPermute(first, second, 5u, 2u, 7u, 0u);
+    EXPECT_EQ(VectorGetIntX(permuted), 66u);
+    EXPECT_EQ(VectorGetIntY(permuted), 33u);
+    EXPECT_EQ(VectorGetIntZ(permuted), 88u);
+    EXPECT_EQ(VectorGetIntW(permuted), 11u);
+}
+
 TEST(Math, RefractCriticalAngle){
     const SIMDVector normal = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     const SIMDVector criticalIncident = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);

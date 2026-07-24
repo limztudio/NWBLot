@@ -1090,6 +1090,13 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
     if(!rayTracingState().m_surfelTraceBuildArgsBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): surfel trace build-args is the fourth surfel-GI pass migrated to VK_EXT_descriptor_buffer,
+        // after surfel upsample, hash-build, and age-free. Its shape is segment-coherent pure-resource (1 ConstantBuffer +
+        // 2 StructuredBuffer_UAV, no samplers), the minimal CB + UAV subset of the age-free shape (its two storage buffers
+        // are the counter read and the indirect-args write). The opt-in declares intent only; where the extension is absent
+        // the backend downgrades this layout to non-descriptor-buffer-compatible and the classic descriptor-set path
+        // (Backend A) serves the pass unchanged, so no device capability gate is needed here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_TRACE_BUILDARGS_BINDING_CONSTANTS, 1)); // surfel constants (divisor .w)
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_TRACE_BUILDARGS_BINDING_COUNTER, 1)); // counter (read BUMP_TOP)
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_TRACE_BUILDARGS_BINDING_ARGS, 1)); // indirect args (write)

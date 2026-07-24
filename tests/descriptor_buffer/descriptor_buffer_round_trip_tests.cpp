@@ -781,6 +781,71 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelAgeFreeShapeBuildsAsDescriptorBuffer
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST_F(DescriptorBufferRoundTripTest, SurfelTraceBuildArgsShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/surfel_trace_buildargs_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto constants = makeConstantBuffer();
+    auto counter = makeStructuredUav(4u);
+    auto args = makeStructuredUav(4u);
+    ASSERT_TRUE(constants && counter && args);
+
+    // Slots mirror surfel_binding_slots.h trace-build-args block (0, 1, 2); the segment-coherent pure-resource layout
+    // (a uniform buffer plus two storage buffers, no samplers) is the minimal CB + UAV subset of the age-free shape --
+    // its two storage buffers are the BUMP_TOP counter read and the DispatchIndirectArguments write.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.setUseDescriptorBuffer(true);
+    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(0u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(1u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(2u, 1u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "surfel trace build-args shape did not route to the descriptor-buffer path";
+    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
+    EXPECT_EQ(offsets.size(), 3u);
+
+    BindingSetDesc setDesc(descArena);
+    setDesc.addItem(BindingSetItem::ConstantBuffer(0u, constants.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(1u, counter.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(2u, args.get()));
+
+    auto bindingSet = device.createBindingSet(setDesc, layout);
+    ASSERT_NE(bindingSet.get(), nullptr);
+    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }; // namespace Tests
 
 

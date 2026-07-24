@@ -637,8 +637,12 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
     auto* device = graphics().getDevice();
 
     if(!rayTracingState().m_swCausticBindingLayout){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Backend C: pure-resource (CB + StructuredBuffer + Texture_SRV/UAV, no samplers) embedding the heap layouts at
+        // 8/9; push constants ride the pipeline layout. Opt in iff the heap is on Backend C.
+        layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_SCENE_SHADING, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_LIGHT_LIST, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_NODES, 1));
@@ -1248,6 +1252,10 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
         // attributeSlot, and the refraction bends on that interpolated shading normal (so it needs no positions/indices).
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::AllRayTracing);
+        // Backend C: pure-resource (TLAS + CB + StructuredBuffer + Texture_SRV/UAV, no samplers) embedding the heap
+        // layouts at 8/9; the TLAS is descriptor-buffer-compatible via vkGetDescriptorEXT and push constants ride the
+        // pipeline layout. Opt in iff the heap is on Backend C.
+        layoutDesc.setUseDescriptorBuffer(device->getDescriptorHeap().usesDescriptorBuffer());
         layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_CAUSTIC_RT_BINDING_TLAS, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_SCENE_SHADING, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_LIGHT_LIST, 1));

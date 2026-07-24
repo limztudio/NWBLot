@@ -180,12 +180,24 @@ struct BindlessLayoutDesc{
 
     bool descriptorSetIndexIsExplicit = false;
 
+    // Backend C (VK_EXT_descriptor_buffer) opt-in, mirroring BindingLayoutDesc::useDescriptorBuffer. When set on an
+    // extension-capable device, the backend flags the descriptor-set layout with
+    // VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT, queries the driver for the set block size and each
+    // register-space's byte offset, and marks the layout descriptor-buffer-compatible. The global descriptor heap
+    // (MutableSrvUavCbv resource + MutableSampler) sets this so the heap-coupled tail pipelines can embed
+    // descriptor-buffer layouts at sets 8/9 instead of classic bindless sets. The opt-in declares intent only; where
+    // the extension is absent the backend leaves the classic (Backend A) path unchanged. Same segment-coherence rule
+    // as classic layouts applies (a mixed resource+sampler bindless set is not segment-coherent and downgrades), but
+    // the heap's two bindless layouts are each pure-class by construction.
+    bool useDescriptorBuffer = false;
+
     constexpr BindlessLayoutDesc& setVisibility(ShaderType::Mask value){ visibility = value; return *this; }
     constexpr BindlessLayoutDesc& setFirstSlot(u32 value){ firstSlot = value; return *this; }
     constexpr BindlessLayoutDesc& setMaxCapacity(u32 value){ maxCapacity = value; return *this; }
     constexpr BindlessLayoutDesc& addRegisterSpace(const BindingLayoutItem& value){ registerSpaces.push_back(value); return *this; }
     constexpr BindlessLayoutDesc& setLayoutType(BindlessLayoutType::Enum value){ layoutType = value; return *this; }
     constexpr BindlessLayoutDesc& setDescriptorSetIndex(u32 value){ descriptorSetIndex = value; descriptorSetIndexIsExplicit = true; return *this; }
+    constexpr BindlessLayoutDesc& setUseDescriptorBuffer(bool value){ useDescriptorBuffer = value; return *this; }
 };
 
 typedef GraphicsBackend::Handle<BindingLayout> BindingLayoutHandle;

@@ -1023,8 +1023,12 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     auto* device = graphics().getDevice();
 
     if(!rayTracingState().m_swShadowBindingLayout){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Backend C: pure-resource (Texture_SRV/UAV + CB + StructuredBuffer, no samplers) embedding the heap layouts at
+        // 8/9; the push-constant range rides the pipeline layout alongside it. Opt in iff the heap is on Backend C.
+        layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SW_SHADOW_BINDING_GBUFFER_NORMAL, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SW_SHADOW_BINDING_GBUFFER_DEPTH, 1));

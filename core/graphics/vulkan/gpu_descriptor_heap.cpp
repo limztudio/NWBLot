@@ -142,8 +142,20 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         return false;
     }
 
-    // Backend A - descriptor indexing. Resource table: one mutable-SRV/UAV/CBV bindless layout with one register
-    // space per non-sampler class, added in ascending slot order (see getRegisterSlot).
+    // Backend selection: prefer Backend C (VK_EXT_descriptor_buffer) where the device advertises the extension and
+    // the DescriptorBufferManager initialized its mapped segments; fall back to Backend A (descriptor indexing)
+    // otherwise. The heap's two bindless layouts are each pure-class by construction (resource set / sampler set), so
+    // they are always segment-coherent and the descriptor-buffer path serves them wholesale. When Backend C is
+    // selected the layouts carry VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT, which makes them
+    // descriptor-buffer-compatible so a heap-coupled pipeline that embeds them can opt into Backend C too.
+    m_usesDescriptorBuffer =
+        m_context.extensions.EXT_descriptor_buffer
+        && m_context.descriptorBufferManager
+        && m_context.descriptorBufferManager->isEnabled()
+    ;
+
+    // Resource table: one mutable-SRV/UAV/CBV bindless layout with one register space per non-sampler class, added
+    // in ascending slot order (see getRegisterSlot).
     BindlessLayoutDesc resourceLayoutDesc;
     resourceLayoutDesc
         .setLayoutType(BindlessLayoutType::MutableSrvUavCbv)
@@ -155,6 +167,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .addRegisterSpace(BindingLayoutItem::TypedBuffer_SRV(getRegisterSlot(GpuDescriptorClass::SampledBuffer), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::StructuredBuffer_UAV(getRegisterSlot(GpuDescriptorClass::StorageBuffer), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::ConstantBuffer(getRegisterSlot(GpuDescriptorClass::UniformBuffer), resourceCapacity))
+        .setUseDescriptorBuffer(m_usesDescriptorBuffer)
     ;
 
     m_resourceLayout = m_device.createBindlessLayout(resourceLayoutDesc);
@@ -162,11 +175,24 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create resource bindless layout."));
         return false;
     }
-    m_resourceTable = m_device.createDescriptorTable(m_resourceLayout);
-    if(!m_resourceTable){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create resource descriptor table."));
+    // On Backend C the layout should be descriptor-buffer-compatible (the resource set is pure-class); if the driver
+    // downgraded it, abandon Backend C for the heap so the classic table path serves it instead of mixing.
+    if(m_usesDescriptorBuffer && !m_resourceLayout->isDescriptorBufferCompatible()){
+        // A pure MutableSrvUavCbv bindless set is always segment-coherent; a downgrade here is a driver/extension
+        // problem, not a recoverable shape mismatch, so treat it as a hard init failure rather than silently mixing.
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap resource layout is not descriptor-buffer-compatible despite Backend C selection."));
         m_resourceLayout = nullptr;
         return false;
+    }
+    // Backend C stores descriptors as bytes in carved buffer blocks, so it needs no classic descriptor table; in fact a
+    // DESCRIPTOR_BUFFER_BIT_EXT layout cannot back a classic descriptor set. Only Backend A allocates the tables here.
+    if(!m_usesDescriptorBuffer){
+        m_resourceTable = m_device.createDescriptorTable(m_resourceLayout);
+        if(!m_resourceTable){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create resource descriptor table."));
+            m_resourceLayout = nullptr;
+            return false;
+        }
     }
 
     // Sampler table: separate namespace, separate layout (samplers cannot share an array with sampled images).
@@ -177,6 +203,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .setVisibility(ShaderType::All)
         .setDescriptorSetIndex(m_samplerSetIndex)   // reserved set 9
         .addRegisterSpace(BindingLayoutItem::Sampler(getRegisterSlot(GpuDescriptorClass::Sampler), samplerCapacity))
+        .setUseDescriptorBuffer(m_usesDescriptorBuffer)
     ;
 
     m_samplerLayout = m_device.createBindlessLayout(samplerLayoutDesc);
@@ -186,13 +213,33 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         m_resourceLayout = nullptr;
         return false;
     }
-    m_samplerTable = m_device.createDescriptorTable(m_samplerLayout);
-    if(!m_samplerTable){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create sampler descriptor table."));
+    if(m_usesDescriptorBuffer && !m_samplerLayout->isDescriptorBufferCompatible()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap sampler layout is not descriptor-buffer-compatible despite Backend C selection."));
         m_samplerLayout = nullptr;
         m_resourceTable = nullptr;
         m_resourceLayout = nullptr;
         return false;
+    }
+    if(!m_usesDescriptorBuffer){
+        m_samplerTable = m_device.createDescriptorTable(m_samplerLayout);
+        if(!m_samplerTable){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create sampler descriptor table."));
+            m_samplerLayout = nullptr;
+            m_resourceTable = nullptr;
+            m_resourceLayout = nullptr;
+            return false;
+        }
+    }
+
+    // Backend C: carve one persistent block per segment sized to the driver-queried set block for each layout, and
+    // cache each class's binding offset within it. The heap's descriptors are written into these blocks' mapped
+    // memory via write() and never re-carved (the heap outlives any single frame). The blocks are freed in
+    // shutdown(). Backend A instead persists its descriptors in the classic tables created above and binds via
+    // vkCmdBindDescriptorSets, so no carve happens here on that path.
+    if(m_usesDescriptorBuffer){
+        const u32 offsetAlignmentBytes = VulkanDetail::GetDescriptorBufferOffsetAlignmentBytes(m_context);
+        if(!initializeDescriptorBufferBlocks(offsetAlignmentBytes))
+            return false;
     }
 
     m_resourceSlots.capacity = resourceCapacity;
@@ -202,7 +249,8 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     m_frameCounter = 0u;
     m_initialized = true;
 
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: GpuDescriptorHeap initialized (Backend A - descriptor indexing): resource capacity {}, sampler capacity {} (sets {}/{}).")
+    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: GpuDescriptorHeap initialized ({}): resource capacity {}, sampler capacity {} (sets {}/{}).")
+        , m_usesDescriptorBuffer ? NWB_TEXT("Backend C - descriptor buffer") : NWB_TEXT("Backend A - descriptor indexing")
         , resourceCapacity
         , samplerCapacity
         , m_resourceSetIndex
@@ -214,6 +262,20 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
 void GpuDescriptorHeap::shutdown(){
     if(!m_initialized)
         return;
+
+    // Backend C: return the two persistent heap blocks to the descriptor-buffer manager before dropping the layouts.
+    // The manager outlives the heap (it is device-owned), so freeing here is safe and ordering-independent.
+    if(m_usesDescriptorBuffer && m_context.descriptorBufferManager){
+        if(m_resourceBufferBlock.valid())
+            m_context.descriptorBufferManager->free(m_resourceBufferBlock);
+        if(m_samplerBufferBlock.valid())
+            m_context.descriptorBufferManager->free(m_samplerBufferBlock);
+    }
+    m_resourceBufferBlock = {};
+    m_samplerBufferBlock = {};
+    m_usesDescriptorBuffer = false;
+    for(u32 i = 0; i < GpuDescriptorClass::kCount; ++i)
+        m_classBufferOffset[i] = 0u;
 
     m_resourceTable = nullptr;
     m_samplerTable = nullptr;
@@ -329,18 +391,26 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const BindingSet
         return false;
     }
 
-    DescriptorTable* table = tableForClass(descriptorClass);
-    if(!table){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: no descriptor table for class {}."), static_cast<u32>(descriptorClass));
-        return false;
-    }
-
     // The handle's class is authoritative: force the register space (slot), the global index (arrayElement), and the
     // canonical descriptor type. The caller supplies only the resource and its view params (range/subresources).
     BindingSetItem writeItem = item;
     writeItem.slot = getRegisterSlot(descriptorClass);
     writeItem.arrayElement = handle.slot();
     writeItem.type = ClassToResourceType(descriptorClass);
+
+    // Backend C: write the descriptor as bytes into the heap's persistent carved block at
+    // block.offsetBytes + classBindingOffset + slotIndex*stride, exactly mirroring how createBindingSet lays out a
+    // frozen set (blockOffset + bindingOffset + arrayElement*stride). The block was carved once in initialize() and is
+    // never re-carved -- the heap is persistent, so every write() rewrites in place. Backend A keeps the classic table.
+    if(m_usesDescriptorBuffer){
+        return writeDescriptorBuffer(writeItem, descriptorClass);
+    }
+
+    DescriptorTable* table = tableForClass(descriptorClass);
+    if(!table){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: no descriptor table for class {}."), static_cast<u32>(descriptorClass));
+        return false;
+    }
 
     return m_device.writeDescriptorTable(table, writeItem);
 }
@@ -354,16 +424,103 @@ void GpuDescriptorHeap::bind(CommandList& commandList, const VkPipelineBindPoint
 }
 
 void GpuDescriptorHeap::bindCompute(CommandList& commandList, const ComputePipeline& pipeline){
-    // m_pipelineLayout is a public member of the PipelineBindingState base; reading it here keeps every Vk type out of
-    // the caller's translation unit.
+    // Backend C: bind the two persistent heap blocks at sets 8/9 via vkCmdSetDescriptorBufferOffsetsEXT against the
+    // pipeline's descriptor-buffer layout (the segments are already bound by bindDescriptorBufferState once per
+    // command buffer, but the heap binds its OWN offsets here, after setComputeState). Backend A binds the classic
+    // descriptor tables at sets 8/9 via vkCmdBindDescriptorSets. m_pipelineLayout is a public member of the
+    // PipelineBindingState base; reading it here keeps every Vk type out of the caller's translation unit.
+    if(m_usesDescriptorBuffer){
+        commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_pipelineLayout);
+        return;
+    }
     commandList.bindDescriptorHeap(*this, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_pipelineLayout);
 }
 
 void GpuDescriptorHeap::bindRayTracing(CommandList& commandList, const RayTracingPipeline& pipeline){
     // Same PipelineBindingState::m_pipelineLayout the RT dispatch binds its set-0 material table against (the mixed
     // classic+heap layout createPipelineLayoutForBindingLayouts builds when the descriptor-heap accelerator is off);
-    // bind the heap tables at sets 8/9 against it at the ray-tracing bind point.
+    // bind the heap tables at sets 8/9 against it at the ray-tracing bind point. Backend C routes through the
+    // descriptor-buffer offset path, Backend A through classic descriptor sets.
+    if(m_usesDescriptorBuffer){
+        commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline.m_pipelineLayout);
+        return;
+    }
     commandList.bindDescriptorHeap(*this, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline.m_pipelineLayout);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignmentBytes){
+    if(!m_context.descriptorBufferManager)
+        return false;
+
+    auto carve = [&](const BindingLayoutHandle& layout, DescriptorBufferSegment& outBlock, GpuDescriptorClass::Enum firstClass, u32 classCount) -> bool{
+        const auto* bindingLayout = layout.get();
+        if(!bindingLayout || !bindingLayout->isDescriptorBufferCompatible()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: bindless layout is not descriptor-buffer-compatible; cannot carve heap block."));
+            return false;
+        }
+        const u32 setSizeBytes = bindingLayout->getDescriptorBufferSetSizeBytes();
+        if(setSizeBytes == 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer layout reports a zero set size."));
+            return false;
+        }
+        const DescriptorBufferSegment block = m_context.descriptorBufferManager->allocate(
+            bindingLayout->getDescriptorBufferSegmentKind(),
+            setSizeBytes,
+            offsetAlignmentBytes
+        );
+        if(!block.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: failed to carve {}-byte descriptor-buffer heap block."), setSizeBytes);
+            return false;
+        }
+        outBlock = block;
+        // Cache each class's driver-queried binding offset within the set block; write() addresses a descriptor as
+        // block.offsetBytes + m_classBufferOffset[class] + slot*stride.
+        const auto& bindingOffsets = bindingLayout->getDescriptorBufferBindingOffsets();
+        for(u32 c = 0; c < classCount; ++c){
+            const GpuDescriptorClass::Enum cls = static_cast<GpuDescriptorClass::Enum>(static_cast<u32>(firstClass) + c);
+            const auto it = bindingOffsets.find(getRegisterSlot(cls));
+            if(it == bindingOffsets.end()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer layout has no offset for class {}."), static_cast<u32>(cls));
+                return false;
+            }
+            m_classBufferOffset[static_cast<u32>(cls)] = it->second;
+        }
+        return true;
+    };
+
+    // Resource set holds the five non-sampler classes in ascending register-slot order; the sampler set holds Sampler.
+    if(!carve(m_resourceLayout, m_resourceBufferBlock, GpuDescriptorClass::SampledImage, 5u))
+        return false;
+    if(!carve(m_samplerLayout, m_samplerBufferBlock, GpuDescriptorClass::Sampler, 1u))
+        return false;
+
+    return true;
+}
+
+bool GpuDescriptorHeap::writeDescriptorBuffer(const BindingSetItem& writeItem, const GpuDescriptorClass::Enum descriptorClass){
+    if(!m_context.descriptorBufferManager)
+        return false;
+
+    const bool isSampler = (descriptorClass == GpuDescriptorClass::Sampler);
+    const DescriptorBufferSegment& block = isSampler ? m_samplerBufferBlock : m_resourceBufferBlock;
+    if(!block.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: heap block not carved for class {}."), static_cast<u32>(descriptorClass));
+        return false;
+    }
+
+    const VkDescriptorType descriptorType = VulkanDetail::ConvertDescriptorType(writeItem.type);
+    const u32 stride = m_context.descriptorBufferManager->getDescriptorStride(descriptorType);
+    if(stride == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: zero stride for class {}."), static_cast<u32>(descriptorClass));
+        return false;
+    }
+
+    const u32 baseOffset = block.offsetBytes + m_classBufferOffset[static_cast<u32>(descriptorClass)] + writeItem.arrayElement * stride;
+    return m_context.descriptorBufferManager->writeDescriptor(writeItem, baseOffset, descriptorType);
 }
 
 

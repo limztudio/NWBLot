@@ -231,8 +231,14 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
     auto* device = graphics().getDevice();
 
     if(!rayTracingState().m_surfelTraceBindingLayout){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Backend C: this layout is segment-coherent pure-resource (CB + StructuredBuffer SRV/UAV, no samplers) and the
+        // pipeline embeds the global descriptor heap's two layouts at sets 8/9. The heap is on Backend C iff the device
+        // advertises VK_EXT_descriptor_buffer, and only then are the embedded heap layouts descriptor-buffer-compatible
+        // -- so opt in exactly when the heap is, otherwise the classic heap layouts would downgrade this pipeline to A.
+        layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
         // SW scene BVH, instances, light list, and material context. The NWB_GI_SW_BINDING_* ABI is shared with
         // gi_sw_trace.slangi, so the CPU binding layout cannot drift from shader declarations.
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_SW_BINDING_SCENE_SHADING, 1)); // scene shading
@@ -698,8 +704,12 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     auto* device = graphics().getDevice();
 
     if(!rayTracingState().m_surfelTraceHwBindingLayout){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Backend C: pure-resource (CB + StructuredBuffer + TLAS, no samplers) embedding the heap layouts at 8/9; the
+        // TLAS is descriptor-buffer-compatible via vkGetDescriptorEXT. Opt in iff the heap is on Backend C.
+        layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
         // 0/1 scene shading + light list (shared with the SW trace); 2 = scene TLAS; 3 = InstanceID-indexed material
         // record; 7/8 = the typed material + mutable-instance context the generated material-surface evaluator reads.
         // Closest-hit reads positions, indices, and attributes through descriptor-heap slots; the driver walks the TLAS.

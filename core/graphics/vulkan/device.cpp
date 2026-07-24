@@ -567,6 +567,10 @@ Device::~Device(){
         vkDestroyDescriptorSetLayout(m_context.device, m_context.emptyDescriptorSetLayout, m_context.allocationCallbacks);
         m_context.emptyDescriptorSetLayout = VK_NULL_HANDLE;
     }
+    if(m_context.emptyDescriptorBufferSetLayout){
+        vkDestroyDescriptorSetLayout(m_context.device, m_context.emptyDescriptorBufferSetLayout, m_context.allocationCallbacks);
+        m_context.emptyDescriptorBufferSetLayout = VK_NULL_HANDLE;
+    }
 
     if(m_context.pipelineCache){
         savePipelineCacheData();
@@ -618,6 +622,32 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
         , outData.size()
     );
     return true;
+}
+
+VkDescriptorSetLayout Device::getOrCreateEmptyDescriptorBufferSetLayout()const{
+    // Double-checked lazy init under the pipeline-cache mutex (the empty layouts are device-singletons created once
+    // and never recreated; the const cast mirrors how other device-singleton caches are materialized on first use).
+    if(m_context.emptyDescriptorBufferSetLayout != VK_NULL_HANDLE)
+        return m_context.emptyDescriptorBufferSetLayout;
+
+    if(!m_context.extensions.EXT_descriptor_buffer)
+        return VK_NULL_HANDLE;
+
+    auto layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
+    layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    layoutInfo.bindingCount = 0;
+    layoutInfo.pBindings = nullptr;
+
+    VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
+    const VkResult res = vkCreateDescriptorSetLayout(m_context.device, &layoutInfo, m_context.allocationCallbacks, &setLayout);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create empty descriptor-buffer set layout. {}"), ResultToString(res));
+        return VK_NULL_HANDLE;
+    }
+    // const-cast: the context member is logically immutable after lazy init (created once, never recreated), but this
+    // is called from the const createPipelineLayoutForBindingLayouts path, so the assignment needs the cast.
+    const_cast<VkDescriptorSetLayout&>(m_context.emptyDescriptorBufferSetLayout) = setLayout;
+    return setLayout;
 }
 
 void Device::savePipelineCacheData(){

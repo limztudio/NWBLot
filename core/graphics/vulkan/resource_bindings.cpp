@@ -80,6 +80,12 @@ VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages){
     return flags;
 }
 
+// Backend C: descriptorBufferOffsetAlignment clamped to a 32-bit value (1 when zero/oversized) for byte-offset math.
+u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context){
+    const VkDeviceSize alignment = context.descriptorBufferProperties.descriptorBufferOffsetAlignment;
+    return (alignment == 0 || alignment > UINT32_MAX) ? 1u : static_cast<u32>(alignment);
+}
+
 bool ConfigurePipelineMultisampleState(
     const u32 sampleCount,
     const bool alphaToCoverageEnable,
@@ -214,6 +220,26 @@ constexpr DescriptorHeapKind::Enum GetDescriptorHeapKind(ResourceType::Enum type
 // lives in the resource segment. Mirrors GetDescriptorHeapKind's taxonomy.
 constexpr DescriptorBufferSegmentKind::Enum GetDescriptorBufferSegmentKind(ResourceType::Enum type){
     return type == ResourceType::Sampler ? DescriptorBufferSegmentKind::Sampler : DescriptorBufferSegmentKind::Resource;
+}
+
+// Bindless sibling of ResolveDescriptorBufferSegmentKind: a bindless layout's register spaces are all one class by
+// construction (the global heap uses a pure MutableSrvUavCbv resource set and a pure MutableSampler sampler set), so a
+// coherent bindless set resolves to exactly one segment. A register-space mix (e.g. a Sampler alongside image/buffer
+// types in one set) is not segment-coherent and downgrades to the classic path, identical to the classic-layout rule.
+constexpr DescriptorBufferSegmentKind::Enum ResolveBindlessDescriptorBufferSegmentKind(const BindlessLayoutDesc& desc){
+    DescriptorBufferSegmentKind::Enum resolved = DescriptorBufferSegmentKind::None;
+    bool seen = false;
+    for(const auto& item : desc.registerSpaces){
+        const DescriptorBufferSegmentKind::Enum kind = GetDescriptorBufferSegmentKind(item.type);
+        if(!seen){
+            resolved = kind;
+            seen = true;
+        }
+        else if(resolved != kind){
+            return DescriptorBufferSegmentKind::None;
+        }
+    }
+    return seen ? resolved : DescriptorBufferSegmentKind::None;
 }
 
 constexpr bool IsSupportedDescriptorBindingType(ResourceType::Enum type){
@@ -593,6 +619,28 @@ bool Device::createPipelineLayoutForBindingLayouts(
             return false;
         }
 
+        // Backend C: when every embedded layout is descriptor-buffer-compatible (the wholesale-conversion gate that
+        // configurePipelineBindings sets m_usesDescriptorBuffer on), the pipeline layout must not mix descriptor-buffer
+        // set layouts with classic ones -- so gap-fill with the descriptor-buffer-flagged empty layout instead of the
+        // classic one. This is the path the heap-coupled tail pipelines hit: their leaf set (0) + heap sets (8/9) are
+        // all descriptor-buffer-compatible, and sets 1-7 must be the descriptor-buffer empty sibling.
+        bool anyDescriptorBufferCompatible = false;
+        for(const auto& bindingLayout : bindingLayouts){
+            const auto* layout = bindingLayout.get();
+            if(layout && layout->isDescriptorBufferCompatible()){
+                anyDescriptorBufferCompatible = true;
+                break;
+            }
+        }
+        const VkDescriptorSetLayout gapSetLayout = (anyDescriptorBufferCompatible && m_context.extensions.EXT_descriptor_buffer)
+            ? getOrCreateEmptyDescriptorBufferSetLayout()
+            : VK_NULL_HANDLE;
+        if(anyDescriptorBufferCompatible && gapSetLayout == VK_NULL_HANDLE){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor-buffer explicit-set placement needs the empty descriptor-buffer gap-set layout, which is unavailable"), operationName);
+            return false;
+        }
+        const VkDescriptorSetLayout fillSetLayout = (gapSetLayout != VK_NULL_HANDLE) ? gapSetLayout : m_context.emptyDescriptorSetLayout;
+
         u32 maxSetIndex = 0;
         for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){
             const BindingLayout& layout = *bindingLayouts[i].get();
@@ -611,7 +659,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
         const u32 totalSets = maxSetIndex + 1u;
         descriptorSetLayouts.reserve(totalSets);
         for(u32 s = 0; s < totalSets; ++s)
-            descriptorSetLayouts.push_back(m_context.emptyDescriptorSetLayout);
+            descriptorSetLayouts.push_back(fillSetLayout);
 
         for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){
             const BindingLayout& layout = *bindingLayouts[i].get();
@@ -619,7 +667,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
             const u32 base = layoutSetIndex(layout, i, isExplicit);
             for(usize s = 0; s < layout.m_descriptorSetLayouts.size(); ++s){
                 const u32 slot = base + static_cast<u32>(s);
-                if(descriptorSetLayouts[slot] != m_context.emptyDescriptorSetLayout){
+                if(descriptorSetLayouts[slot] != fillSetLayout){
                     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: two binding layouts map to descriptor set {}"), operationName, slot);
                     return false;
                 }
@@ -1990,6 +2038,13 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     auto layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
     layoutInfo.pNext = &bindingFlagsInfo;
     layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    // Backend C: a bindless layout that opts in sets the descriptor-buffer create flag (same flag the classic path
+    // sets). The descriptor-buffer spec permits UPDATE_AFTER_BIND_POOL + PARTIALLY_BOUND + VARIABLE_DESCRIPTOR_COUNT
+    // alongside DESCRIPTOR_BUFFER_BIT_EXT, so the heap's persistent bindless binding flags are preserved and the
+    // driver-queried set size already includes the full VARIABLE_DESCRIPTOR_COUNT capacity.
+    if(desc.useDescriptorBuffer && m_context.extensions.EXT_descriptor_buffer){
+        layoutInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    }
     layoutInfo.bindingCount = static_cast<u32>(bindings.size());
     layoutInfo.pBindings = bindings.data();
 
@@ -2001,6 +2056,52 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
         return nullptr;
     }
     layout->m_descriptorSetLayouts.push_back(setLayout);
+
+    // Backend C: when a bindless layout opts in on an extension-capable device, query the driver for the set block's
+    // total size and each register-space's byte offset within it, and record the single segment the block lives in.
+    // This is the bindless mirror of the classic createBindingLayout path -- the global descriptor heap sets this on
+    // its resource/sampler layouts so the heap-coupled tail pipelines can embed descriptor-buffer layouts at sets 8/9.
+    // A non-segment-coherent bindless set (a register-space mix) downgrades to the classic path; the opt-in is then a
+    // silent no-op and the classic descriptor-table path serves the heap unchanged.
+    if(desc.useDescriptorBuffer && m_context.extensions.EXT_descriptor_buffer && m_context.descriptorBufferManager && m_context.descriptorBufferManager->isEnabled()){
+        const VkDescriptorSetLayout setLayoutForQuery = layout->m_descriptorSetLayouts[0];
+        const DescriptorBufferSegmentKind::Enum segmentKind = VulkanDetail::ResolveBindlessDescriptorBufferSegmentKind(desc);
+        bool compatible = (segmentKind != DescriptorBufferSegmentKind::None);
+
+        if(compatible){
+            for(const auto& item : desc.registerSpaces){
+                if(!VulkanDetail::IsDescriptorBufferCompatibleType(item.type)){
+                    compatible = false;
+                    break;
+                }
+            }
+        }
+
+        if(compatible){
+            VkDeviceSize setSizeBytes = 0;
+            vkGetDescriptorSetLayoutSizeEXT(m_context.device, setLayoutForQuery, &setSizeBytes);
+            if(setSizeBytes == 0 || setSizeBytes > UINT32_MAX)
+                compatible = false;
+
+            if(compatible){
+                layout->m_descriptorBufferBindingOffsets.reserve(desc.registerSpaces.size());
+                for(const auto& item : desc.registerSpaces){
+                    VkDeviceSize bindingOffsetBytes = 0;
+                    vkGetDescriptorSetLayoutBindingOffsetEXT(m_context.device, setLayoutForQuery, item.slot, &bindingOffsetBytes);
+                    layout->m_descriptorBufferBindingOffsets.insert_or_assign(item.slot, static_cast<u32>(bindingOffsetBytes));
+                }
+                layout->m_descriptorBufferSetSizeBytes = static_cast<u32>(setSizeBytes);
+                layout->m_descriptorBufferSegmentKind = segmentKind;
+            }
+        }
+
+        layout->m_descriptorBufferCompatible = compatible;
+        if(!layout->m_descriptorBufferCompatible){
+            layout->m_descriptorBufferSetSizeBytes = 0;
+            layout->m_descriptorBufferSegmentKind = DescriptorBufferSegmentKind::None;
+            layout->m_descriptorBufferBindingOffsets.clear();
+        }
+    }
 
     if(
         !VulkanDetail::CreatePipelineLayout(
@@ -2824,6 +2925,51 @@ void CommandList::bindDescriptorHeap(GpuDescriptorHeap& heap, const VkPipelineBi
         const VkDescriptorSet set = samplerTable->m_descriptorSets[0];
         vkCmdBindDescriptorSets(m_currentCmdBuf->m_cmdBuf, bindPoint, pipelineLayout, heap.getSamplerSetIndex(), 1, &set, 0, nullptr);
     }
+}
+
+void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const VkPipelineBindPoint bindPoint, const VkPipelineLayout pipelineLayout){
+    // Backend C heap bind. The pipeline embeds the heap's two descriptor-buffer layouts at reserved sets 8/9; the
+    // heap's descriptors live in its two persistent carved blocks (one per segment). The segments are bound once per
+    // command buffer by bindDescriptorBufferState, but the heap binds its OWN offsets here (after setComputeState /
+    // setRayTracingState), so record one vkCmdSetDescriptorBufferOffsetsEXT spanning both heap sets: resource at set
+    // 8 (resource-segment buffer index) and sampler at set 9 (sampler-segment buffer index). The descriptor data was
+    // written into the blocks at heap write() time, so no writes happen here. Guarded like the classic path.
+    if(!m_currentCmdBuf || pipelineLayout == VK_NULL_HANDLE)
+        return;
+    if(!heap.isInitialized() || !heap.usesDescriptorBuffer())
+        return;
+    if(!m_context.descriptorBufferManager || !m_context.descriptorBufferManager->isEnabled())
+        return;
+
+    // Bind both segments once for this command buffer (idempotent with bindDescriptorBufferState's bind; the driver
+    // accepts a re-bind at the same addresses). The order (resource=0, sampler=1) matches the manager's indices.
+    VkDescriptorBufferBindingInfoEXT bindingInfos[2] = {
+        m_context.descriptorBufferManager->getResourceBindingInfo(),
+        m_context.descriptorBufferManager->getSamplerBindingInfo()
+    };
+    vkCmdBindDescriptorBuffersEXT(m_currentCmdBuf->m_cmdBuf, 2u, bindingInfos);
+
+    const DescriptorBufferSegment& resourceBlock = heap.getResourceBufferBlock();
+    const DescriptorBufferSegment& samplerBlock = heap.getSamplerBufferBlock();
+
+    // The two heap sets occupy the manager's two segments (resource set -> resource segment, sampler set -> sampler
+    // segment); record their offsets against the just-bound buffers, indexed from the heap's lower set number so the
+    // API spans [resourceSet .. samplerSet]. Heap sets are always 8 and 9 (ascending, contiguous), so firstSet is the
+    // resource set and setCount is 2.
+    const u32 resourceIndex = m_context.descriptorBufferManager->getResourceBufferIndex();
+    const u32 samplerIndex = m_context.descriptorBufferManager->getSamplerBufferIndex();
+    const u32 bufferIndices[2] = { resourceIndex, samplerIndex };
+    const VkDeviceSize offsets[2] = { resourceBlock.offsetBytes, samplerBlock.offsetBytes };
+
+    vkCmdSetDescriptorBufferOffsetsEXT(
+        m_currentCmdBuf->m_cmdBuf,
+        bindPoint,
+        pipelineLayout,
+        heap.getResourceSetIndex(),
+        2u,
+        bufferIndices,
+        offsets
+    );
 }
 
 void CommandList::bindDescriptorBufferState(const VkPipelineBindPoint bindPoint, const VkPipelineLayout pipelineLayout, const BindingSetVector& bindings){

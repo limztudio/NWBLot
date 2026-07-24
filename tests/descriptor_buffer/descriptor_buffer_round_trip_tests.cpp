@@ -1518,6 +1518,110 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowRtTraceShapeBuildsAsDescriptorBuffer
 }
 
 
+// Phase 3 heap-migration proof: the global GpuDescriptorHeap must run on Backend C where the device advertises
+// VK_EXT_descriptor_buffer. Unlike the per-pass shape tests above (which exercise a frozen binding set), this proves
+// the heap itself -- a persistent, per-slot-writable structure -- (1) selected Backend C, (2) built descriptor-buffer-
+// compatible bindless layouts at sets 8/9, (3) carved two persistent blocks from the manager's segments, and (4)
+// routes write() through the descriptor-buffer path. This is the prerequisite the five heap-coupled tail pipelines
+// (surfel SW/HW trace, caustic SW/HW, SW shadow) embed, so their opt-in is only valid when these hold.
+TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized()) << "device-owned GpuDescriptorHeap was not initialized";
+
+    // Backend selection: the heap must be on Backend C here (the suite is already skipped where the extension is
+    // absent). A false result would mean the heap silently stayed on Backend A and the tail pipelines' opt-in would
+    // downgrade the whole pipeline to classic -- the exact regression this migration removes.
+    ASSERT_TRUE(heap.usesDescriptorBuffer())
+        << "global descriptor heap did not select Backend C despite the extension being present";
+
+    // The heap's two bindless layouts must be descriptor-buffer-compatible so a pipeline that embeds them at sets 8/9
+    // passes the all-compatible wholesale-conversion gate. Each is pure-class by construction (resource / sampler).
+    const auto* resourceLayout = heap.getResourceLayout().get();
+    const auto* samplerLayout = heap.getSamplerLayout().get();
+    ASSERT_NE(resourceLayout, nullptr);
+    ASSERT_NE(samplerLayout, nullptr);
+    EXPECT_TRUE(resourceLayout->isDescriptorBufferCompatible())
+        << "heap resource bindless layout is not descriptor-buffer-compatible";
+    EXPECT_TRUE(samplerLayout->isDescriptorBufferCompatible())
+        << "heap sampler bindless layout is not descriptor-buffer-compatible";
+
+    // Each layout reports a non-zero driver-queried set size and resolves to its expected segment (resource set ->
+    // Resource segment, sampler set -> Sampler segment), the carve input for the persistent heap blocks.
+    EXPECT_GT(resourceLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(resourceLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    EXPECT_GT(samplerLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(samplerLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Sampler);
+
+    // The two persistent heap blocks were carved once at init and live for the heap's lifetime; their offsets are what
+    // vkCmdSetDescriptorBufferOffsetsEXT binds at sets 8/9. A zero/invalid block would mean no carve happened.
+    const auto& resourceBlock = heap.getResourceBufferBlock();
+    const auto& samplerBlock = heap.getSamplerBufferBlock();
+    EXPECT_TRUE(resourceBlock.valid())
+        << "heap resource descriptor-buffer block was not carved";
+    EXPECT_TRUE(samplerBlock.valid())
+        << "heap sampler descriptor-buffer block was not carved";
+
+    // write() must route through the descriptor-buffer path on Backend C: allocate a slot in the StorageBuffer class
+    // and write a structured buffer into it. The write is a host memcpy into the resource block at
+    // block.offsetBytes + classBindingOffset + slot*stride; success proves the carve + class-offset cache + write path.
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/heap_write_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto structuredBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(16u * 4096u)
+            .setStructStride(16u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(structuredBuffer);
+
+    const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(handle.valid());
+    EXPECT_TRUE(heap.write(handle, BindingSetItem::StructuredBuffer_SRV(0u, structuredBuffer.get())))
+        << "heap write() did not route through the descriptor-buffer path";
+
+    heap.free(handle);
+}
+
+
+// Heap-coupled layout compatibility proof: confirm the heap's two descriptor-buffer layouts (sets 8/9) and a
+// Backend-C leaf layout are ALL descriptor-buffer-compatible simultaneously -- the wholesale-conversion gate the five
+// tail pipelines must pass to opt in. A single non-compatible layout would downgrade the whole pipeline to classic,
+// so this simultaneous check is the precondition the tail opt-ins rely on. (The gap-set materialization and full
+// pipeline create are exercised by the soft-shadow smoke test, which carries a cooked shader; the binding-layer suite
+// has no shader loader, so it stops at the layout level like every other case here.)
+TEST_F(DescriptorBufferRoundTripTest, HeapCoupledLayoutsAreAllDescriptorBufferCompatible){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized() && heap.usesDescriptorBuffer());
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/heap_coupled_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    // Leaf set 0: a segment-coherent pure-resource shape (CB + 2 StructuredBuffer SRV, no samplers), opting into
+    // Backend C iff the heap is -- mirroring how the tail pipelines gate their opt-in on the heap's backend.
+    BindingLayoutDesc leafDesc(descArena);
+    leafDesc.setVisibility(ShaderType::Compute);
+    leafDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
+    leafDesc.addItem(BindingLayoutItem::ConstantBuffer(0u, 1u));
+    leafDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(1u, 1u));
+    leafDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(2u, 1u));
+    auto leafLayout = device.createBindingLayout(leafDesc);
+    ASSERT_NE(leafLayout.get(), nullptr);
+    ASSERT_TRUE(leafLayout->isDescriptorBufferCompatible())
+        << "leaf layout did not route to the descriptor-buffer path";
+
+    // All three embedded layouts must be descriptor-buffer-compatible for the wholesale-conversion gate -- the heap's
+    // two at sets 8/9 and the leaf at set 0. This is the precondition the tail pipelines' opt-in depends on.
+    EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
+    EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
+    EXPECT_TRUE(leafLayout->isDescriptorBufferCompatible());
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

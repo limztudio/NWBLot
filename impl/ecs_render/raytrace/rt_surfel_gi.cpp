@@ -50,6 +50,14 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
     if(!rayTracingState().m_surfelSpawnBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): surfel spawn is the fifth surfel-GI pass migrated to VK_EXT_descriptor_buffer, after
+        // surfel upsample, hash-build, age-free, and trace build-args. Its shape is segment-coherent pure-resource (1
+        // ConstantBuffer + 4 StructuredBuffer_UAV + 2 Texture_SRV, no samplers), the age-free CB + UAV mix extended
+        // with the two G-buffer SRVs (world position + normal) the pass samples. The opt-in declares intent only;
+        // where the extension is absent the backend downgrades this layout to non-descriptor-buffer-compatible and
+        // the classic descriptor-set path (Backend A) serves the pass unchanged, so no device capability gate is
+        // needed here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // pool
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_CELL_HEAD, 1)); // cell head (this frame; claim links)
@@ -836,6 +844,14 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
     if(!rayTracingState().m_surfelResolveBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): surfel resolve is the sixth surfel-GI pass migrated to VK_EXT_descriptor_buffer, after
+        // spawn, upsample, hash-build, age-free, and trace build-args. Its shape is segment-coherent pure-resource (1
+        // ConstantBuffer + 2 StructuredBuffer_SRV + 2 Texture_SRV + 1 Texture_UAV, no samplers): it reads the pool and
+        // cell-head built by the surfel passes, the G-buffer world position + normal, and writes the half-res
+        // irradiance. The opt-in declares intent only; where the extension is absent the backend downgrades this
+        // layout to non-descriptor-buffer-compatible and the classic descriptor-set path (Backend A) serves the pass
+        // unchanged, so no device capability gate is needed here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_RESOLVE_BINDING_CONSTANTS, 1)); // surfel constants
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_RESOLVE_BINDING_POOL, 1)); // pool (SRV)
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_RESOLVE_BINDING_CELL_HEAD, 1)); // cell head (SRV)

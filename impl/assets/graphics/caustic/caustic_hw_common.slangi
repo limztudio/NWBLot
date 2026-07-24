@@ -25,12 +25,8 @@
 #include "../common/math.slangi"
 #include "../shadow/instance_material.slangi"
 
-// Global descriptor heap accessor (Phase 2 step 4b): the per-corner attribute buffer the closest-hit interpolates the
-// shading normal from now lives in the bindless heap, reached by the attributeSlot the instance material record carries
-// (NwbRtInstanceMaterial, populated lockstep with the mesh by the HW shadow builder in rt_swbvh.cpp). Only the raw byte
-// view (NwbHeapRawBuffer) is needed -- the hardware caustic bends on interpolated corner normals, so it reads NO BVH
-// nodes / positions / indices (the fixed-function intersector supplies the hit triangle + barycentrics). Heap set 8,
-// pinned on this pass's RT pipeline in step 4a.
+// Global descriptor-heap access to the corner attributes carried by the instance material record. The fixed-function
+// intersector supplies the triangle and barycentrics, so hardware caustics needs no BVH nodes, positions, or indices.
 #include "../bindless/bindless_heap.slangi"
 
 // The shadow trace's material-constants context (NwbShadowHit + the surface contract + the engine shadow physics
@@ -102,14 +98,9 @@ RaytracingAccelerationStructure g_NwbCausticHwTlas;
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL, NWB_CAUSTIC_RT_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticHwInstanceMaterial;
 
-// The per-corner attribute geometry the closest-hit interpolates is read layout-only through the global
-// descriptor-index heap (step 4b) by the material record's host-provided attributeSlot; the parallel per-mesh
-// descriptor arrays that preceded it (bindings 11-12 -- the raw triangle index byte buffer, already unread on the HW
-// path since the fixed-function intersector supplies the hit triangle + barycentrics, plus the per-triangle-corner
-// attribute byte buffer) were dropped in the step 4c bounded-path removal. The shared C++ backing buffers stay -- the
-// attribute heap descriptor points at m_shadowMeshAttributeBuffers, and the per-dispatch barriers still transition them
-// for the heap reads. (Still no position array: bending on the interpolated shading normal needs only the corner
-// normals -- the world hit point comes from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().)
+// The closest-hit reads corner attributes through the material record's global heap slot. The shared backing buffer
+// remains transitioned for the heap read. The fixed-function intersector supplies the triangle and barycentrics; the
+// world hit point comes from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().
 
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS, NWB_CAUSTIC_RT_SET)]]
 StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbCausticHwEmissionTargets;

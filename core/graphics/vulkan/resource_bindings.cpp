@@ -519,8 +519,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
 
     // Determine each layout's descriptor-set placement. A layout may pin itself to an explicit set index - bindless via
     // BindlessLayoutDesc::descriptorSetIndexIsExplicit, classic via BindingLayoutDesc::registerSpaceIsDescriptorSet -
-    // otherwise it keeps the legacy positional assignment (concatenation order). The global bindless heap uses this to
-    // sit at reserved high sets (8/9) above a migrated pipeline's own low sets (Phase 2).
+    // otherwise it uses positional assignment. The global bindless heap occupies reserved high sets (8/9).
     const auto layoutSetIndex = [](const BindingLayout& layout, const u32 positional, bool& outExplicit) -> u32{
         if(const BindlessLayoutDesc* bindlessDesc = layout.getBindlessDesc()){
             outExplicit = bindlessDesc->descriptorSetIndexIsExplicit;
@@ -539,8 +538,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
     }
 
     if(!anyExplicitSet){
-        // Legacy path: concatenate every layout's sets in list order. Byte-identical to the pre-Phase-2 behavior, so no
-        // pipeline that leaves its layouts on positional assignment changes at all.
+        // Positional path: concatenate every layout's sets in list order.
         descriptorSetLayouts.reserve(descriptorSetLayoutCount);
         for(const auto& bindingLayout : bindingLayouts){
             auto* layout = bindingLayout.get();
@@ -2199,7 +2197,7 @@ void CommandList::bindDescriptorHeapState(
 
 void CommandList::bindDescriptorHeap(GpuDescriptorHeap& heap, const VkPipelineBindPoint bindPoint, const VkPipelineLayout pipelineLayout){
     // Binds the global descriptor heap's persistent tables at their set indices against the given pipeline layout.
-    // The bound pipeline must have been built with the heap layouts at those set positions (Phase-1 dark path).
+    // The pipeline must have been built with the heap layouts at those positions.
     if(!m_currentCmdBuf || pipelineLayout == VK_NULL_HANDLE)
         return;
     if(!heap.isInitialized())

@@ -336,12 +336,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         return state;
     };
 
-    // Phase 2 step 4b: the soft transparent trace reuses an SW-shadow pass pipeline (built with the heap layout in
-    // step 4a by ensureSwShadowPassPipeline), so the heap's descriptor tables (sets 8/9) must be BOUND before it
-    // dispatches, not merely present in its layout. bindDescriptorHeap binds only sets 8/9 (it never disturbs the
-    // classic set 0), so bind right after the ComputeState and before the dispatch, mirroring renderGpuBvhShadowVisibility.
-    // Bound per pass so set 8 is freshly bound immediately ahead of the dispatch, immune to a set-0 rebind disturbing it;
-    // gated on a live heap so non-bindless builds skip it.
+    // The soft transparent trace accesses per-mesh geometry through the descriptor heap, so bind its tables after the
+    // ComputeState and before each dispatch. bindCompute touches only sets 8/9; non-bindless builds skip it.
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     const bool heapLive = heap.isInitialized();
     const auto bindPassHeap = [&](const Core::ComputePipelineHandle& pipeline){

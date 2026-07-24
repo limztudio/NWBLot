@@ -43,10 +43,8 @@
 #include "../bvh/bvh_common.slangi"
 #include "../bvh/ray_intersect.slangi"
 
-// Global descriptor heap accessors (Phase 2 step 4b): the per-mesh geometry the surfel traversal fetches now lives in
-// the bindless heap, reached by the per-buffer slots the instance material record (NwbRtInstanceMaterial) carries.
-// bindless_heap_bvh.slangi pulls the structured NwbBvhNode node view (NwbHeapBvhNodes) + the raw byte view
-// (NwbHeapRawBuffer) for positions / indices / attributes, both at heap set 8 (pinned on the SW GI pipeline in 4a).
+// Global descriptor-heap accessors for per-mesh geometry. The material record carries the slots; this include provides
+// NwbHeapBvhNodes() for nodes and NwbHeapRawBuffer() for positions, indices, and attributes.
 #include "../bindless/bindless_heap_bvh.slangi"
 
 
@@ -74,11 +72,8 @@ StructuredBuffer<NwbGiSwInstance, Std430DataLayout> g_NwbGiSwInstances;
 [[vk::binding(NWB_GI_SW_BINDING_INSTANCE_MATERIAL, NWB_GI_SW_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbGiSwInstanceMaterial;
 
-// Per-mesh geometry (BVH nodes / raw positions / raw indices / per-corner attributes) is read layout-only through the
-// global descriptor-index heap (step 4b) by the material record's host-provided slot indices; the parallel per-mesh
-// descriptor arrays that preceded it (bindings 5-8) were dropped in the step 4c bounded-path removal. The shared C++
-// backing buffers stay -- the heap descriptors (shadow / caustic / GI alike) point at them and the per-dispatch
-// buffer-state barriers still transition them for the heap reads.
+// Per-mesh nodes, positions, indices, and attributes are read through descriptor-heap slots carried by the material
+// record. The shared C++ backing buffers remain transitioned for those heap reads.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -8,7 +8,7 @@
 #include <impl/ecs_render/kernel/renderer_types.h>
 
 #include <core/ecs/entity_id.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>   // Phase 2 M1: GpuDescriptorHandle stored per-mesh next to the backing buffer arrays
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
 
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
@@ -44,17 +44,11 @@ class RendererRayTracingSystem;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stable Buffer*-keyed descriptor-heap handle cache (Phase 2 perf opt). Every frame buildSceneTlas / buildSceneSwBvh
-// formerly released and recreated ~3 (HW) / ~4 (SW) heap handles per distinct mesh -- a free() + quarantine, then a
-// fresh allocate() + write() (a vkUpdateDescriptorSets) -- even though the underlying Buffer* is identical frame to
-// frame for static meshes. The cache keys on the backing Buffer*: a reappearing buffer reuses its valid handle (zero
-// alloc/write/free), only a genuinely-new buffer allocates+writes, and a buffer absent this frame is freed + evicted
-// at end of gather.
+// Cross-frame Buffer*-keyed descriptor-heap handle cache. Reappearing buffers reuse their handles; unseen buffers are
+// freed and evicted at the end of the gather.
 //
-// Correctness: a raw Buffer* can be recycled after its mesh is destroyed, so each entry pins its Buffer with a
-// refcounted BufferHandle -- the key identity stays alive exactly as long as the entry. Entries are inserted only
-// after both allocation and descriptor write succeed, so every cached handle is valid. seenThisFrame drives the
-// end-of-gather sweep (cleared at gather begin, set on first touch, freed+erased if still clear at sweep time).
+// A refcounted BufferHandle prevents the raw pointer key from being recycled. Entries are added only after allocation
+// and descriptor writes succeed; seenThisFrame drives the end-of-gather sweep.
 struct RtMeshHeapHandleCacheEntry{
     Core::BufferHandle keepAlive;                       // refcount pin so the Buffer* key cannot be recycled under us
     Core::GpuDescriptorHandle handle = Core::GpuDescriptorHandle::invalid();
@@ -483,15 +477,13 @@ struct RtShadowState{
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshIndexBuffers;
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshAttributeBuffers;
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshPositionBuffers;
-    // Phase 2 M1: parallel global-heap handles for the three backing buffers above. Now stable across frames (the
-    // Buffer*-keyed handle cache below reuses a valid handle instead of free/allocate/write every frame), so they are
-    // repopulated by a cache lookup, not freshly minted. Read by the HW caustic (attribute) and GI
-    // (position/index/attribute) traces via NwbHeapRawBuffer(record.<x>Slot).
+    // Parallel global-heap handles for the three backing buffers above. The cache reuses them across frames; HW
+    // caustic reads attributes and HW GI reads positions, indices, and attributes through NwbHeapRawBuffer().
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshIndexHandles;
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshAttributeHandles;
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshPositionHandles;
     u32 m_shadowMeshCount = 0u;
-    u32 m_shadowMeshHeapHighWater = 0u; // Phase 2 M1: peak distinct-mesh registration count; logged only on a new high
+    u32 m_shadowMeshHeapHighWater = 0u;
     // Adaptive transparent shadow (coarse-trace + edge-refine) config, fixed at shipping defaults (adaptive ON,
     // edge threshold 0.1, stats OFF). These flags drive the transparent economizer path used by the HW-hybrid backend
     // (renderGpuBvhShadowVisibility multiplyOntoOpaque=true). The full-res opaque prepass remains the SW-path
@@ -546,14 +538,13 @@ struct RtShadowState{
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshPositionBuffers;
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshIndexBuffers;
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_swShadowMeshAttributeBuffers; // U2 per-vertex normal/uv0 for the per-hit transmittance dispatch
-    // Phase 2 M1: parallel global-heap handles for the four backing buffers above (node = StructuredBuffer<NwbBvhNode>
-    // view, the rest raw), minted in lockstep at buildSceneSwBvh registration and freed at the per-frame rebuild. The
-    // SW shadow / caustic / GI traces read the referenced geometry through these heap slots.
+    // Parallel global-heap handles for the four backing buffers above. Nodes use StructuredBuffer<NwbBvhNode>; the
+    // other buffers use raw views. The cache reuses handles across frames, and SW shadow, caustic, and GI read them.
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshNodeHandles;
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshPositionHandles;
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshIndexHandles;
     Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshAttributeHandles;
-    u32 m_swShadowMeshHeapHighWater = 0u; // Phase 2 M1: peak SW distinct-mesh registration count; logged only on a new high
+    u32 m_swShadowMeshHeapHighWater = 0u;
     // Stable Buffer*-keyed descriptor-heap handle caches: buildSceneTlas (HW) and buildSceneSwBvh (SW) each keep
     // their own cross-frame cache so a per-gather sweep frees only that gather's dropouts without touching the other
     // (on the hybrid backend the SW gather runs after the HW one and reuses position/index/attribute buffers). Every

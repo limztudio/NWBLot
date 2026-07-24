@@ -15,31 +15,25 @@
 #include "../common/math.slangi"
 #include "instance_material.slangi"
 
-// Global descriptor heap accessors (Phase 2 step 4b): the per-mesh geometry the traversal fetches now lives in the
-// bindless heap, reached by the per-buffer slots the instance material record carries. bindless_heap_bvh.slangi pulls
-// the structured NwbBvhNode node view (NwbHeapBvhNodes) + the raw byte view (NwbHeapRawBuffer) for positions / indices
-// / attributes, both at heap set 8 (pinned on the SW shadow pipeline in step 4a).
+// Global descriptor-heap accessors for per-mesh geometry. The material record carries the slots; this include provides
+// NwbHeapBvhNodes() for nodes and NwbHeapRawBuffer() for positions, indices, and attributes.
 #include "../bindless/bindless_heap_bvh.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The software-shadow scene geometry: the scene/instance BVH node buffer, the per-instance record (affine
-// world->object transform + per-mesh descriptor slot) + its world->object transform helpers, and the vertex-attribute
-// unpack. Per-mesh geometry (BVH nodes / raw positions / raw indices / per-corner attributes) is read layout-only
-// through the global descriptor-index heap (step 4b) by the material record's host-provided slot indices; the parallel
-// per-mesh descriptor arrays that preceded it were dropped in the step 4c bounded-path removal (the shared C++ backing
-// buffers stay -- the shadow / caustic / GI heap descriptors point at them, and the per-dispatch barriers transition
-// them for the heap reads). Declares the scene-node / instance / instance-material bindings; any pass that walks the
-// BVH pulls this concern.
+// The software-shadow scene geometry: the scene/instance BVH node buffer, the per-instance record, world->object
+// helpers, and vertex-attribute unpack. Per-mesh nodes, positions, indices, and attributes are read through descriptor
+// heap slots carried by the material record; shared backing buffers remain transitioned for those reads. This concern
+// declares the scene-node, instance, and instance-material bindings used by every BVH-walking pass.
 
 
 [[vk::binding(NWB_SW_SHADOW_BINDING_SCENE_NODES, NWB_SW_SHADOW_SET)]]
 StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbSwShadowSceneNodes;
 
-// Per-instance record: the affine world->object transform (3 rows) + the slot into the parallel per-mesh
-// descriptor arrays. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes).
+// Per-instance record: the affine world->object transform (3 rows) and mesh-table slot. Mirrors the C++
+// SceneSwBvhInstanceGpu (64 bytes).
 struct NwbSwShadowInstance{
     float4 worldToObjectRow0;
     float4 worldToObjectRow1;
@@ -104,12 +98,7 @@ struct NwbSwShadowVertexAttrib{
 };
 
 NwbSwShadowVertexAttrib nwbSwShadowLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
-    // attributeSlot is this mesh's per-corner attribute buffer's GLOBAL HEAP slot (carried on the instance material
-    // record, populated lockstep with the mesh in rt_swbvh.cpp). It is non-uniform across the wave -- each invocation's
-    // ray hits whatever instance/mesh occludes it -- so the heap subscript MUST be NonUniformResourceIndex-tagged;
-    // NwbHeapRawBuffer() applies that internally, and is re-invoked at each Load (mirroring the bounded
-    // g_NwbSwShadowMeshAttributes[NonUniformResourceIndex(meshIndex)] it replaces) so the decoration is applied fresh at
-    // every descriptor access rather than propagated through a copied resource handle.
+    // attributeSlot is a non-uniform global heap slot; NwbHeapRawBuffer() applies the required decoration per load.
     const uint base = attributeIndex * 16u;
     const uint2 packedNormal = NwbHeapRawBuffer(attributeSlot).Load2(base);
     NwbSwShadowVertexAttrib attrib;

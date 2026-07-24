@@ -24,10 +24,8 @@
 #include "../common/math.slangi"
 #include "../shadow/instance_material.slangi"
 
-// Global descriptor heap accessors (Phase 2 step 4b): the per-mesh geometry the photon traversal fetches now lives in
-// the bindless heap, reached by the per-buffer slots the instance material record (NwbRtInstanceMaterial) carries.
-// bindless_heap_bvh.slangi pulls the structured NwbBvhNode node view (NwbHeapBvhNodes) + the raw byte view
-// (NwbHeapRawBuffer) for positions / indices / attributes, both at heap set 8 (pinned on the SW caustic pipeline in 4a).
+// Global descriptor-heap accessors for per-mesh geometry. The material record carries the slots; this include provides
+// NwbHeapBvhNodes() for nodes and NwbHeapRawBuffer() for positions, indices, and attributes.
 #include "../bindless/bindless_heap_bvh.slangi"
 
 // The shadow trace's material-constants context (NwbShadowHit + the per-invocation accessors + the surface contract)
@@ -50,8 +48,8 @@
 [[vk::binding(NWB_CAUSTIC_SW_BINDING_SCENE_NODES, NWB_CAUSTIC_SW_SET)]]
 StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbCausticSwSceneNodes;
 
-// Per-instance record: the affine world->object transform (3 rows) + the slot into the parallel per-mesh
-// descriptor arrays. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes) / the SW shadow NwbSwShadowInstance.
+// Per-instance record: the affine world->object transform (3 rows) and mesh-table slot. Mirrors the C++
+// SceneSwBvhInstanceGpu (64 bytes) / the SW shadow NwbSwShadowInstance.
 struct NwbCausticSwInstance{
     float4 worldToObjectRow0;
     float4 worldToObjectRow1;
@@ -68,11 +66,8 @@ StructuredBuffer<NwbCausticSwInstance, Std430DataLayout> g_NwbCausticSwInstances
 [[vk::binding(NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL, NWB_CAUSTIC_SW_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticSwInstanceMaterial;
 
-// Per-mesh geometry (BVH nodes / raw positions / raw indices / per-corner attributes) is read layout-only through the
-// global descriptor-index heap (step 4b) by the material record's host-provided slot indices; the parallel per-mesh
-// descriptor arrays that preceded it (bindings 5-8) were dropped in the step 4c bounded-path removal. The shared C++
-// backing buffers stay -- the heap descriptors point at them, and the per-dispatch buffer-state barriers still
-// transition them for the heap reads.
+// Per-mesh nodes, positions, indices, and attributes are read through descriptor-heap slots carried by the material
+// record. The shared backing buffers remain transitioned for those heap reads.
 
 // One caustic emission target (P1): the world-space AABB of a refractive instance. Mirrors the C++
 // NwbCausticEmissionTargetGpu (32 bytes; the w lanes are unused padding).

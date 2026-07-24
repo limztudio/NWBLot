@@ -36,8 +36,7 @@ void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttri
 
         const uint prim = PrimitiveIndex();
         const uint attributeBase = prim * 3u;
-        // material.attributeSlot is this mesh's per-corner attribute buffer's global heap slot (populated lockstep with
-        // the mesh by the HW shadow builder); nwbCausticHwLoadVertexAttrib fetches through the bindless heap (step 4b).
+        // material.attributeSlot is this mesh's per-corner attribute buffer's global heap slot.
         const NwbCausticHwVertexAttrib a0 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase);
         const NwbCausticHwVertexAttrib a1 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
         const NwbCausticHwVertexAttrib a2 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);

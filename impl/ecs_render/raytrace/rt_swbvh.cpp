@@ -26,14 +26,10 @@ namespace __hidden_rt_swbvh{
     >;
 
 
-    // Stable Buffer*-keyed handle acquisition (Phase 2 perf opt). Looks up the backing buffer in the cross-frame
-    // handle cache; on a hit the existing valid handle is reused unchanged (no allocate/write/free -- the dominant
-    // avoidable cost was minting a fresh handle every frame for the same buffer). On a miss the buffer is registered
-    // once (allocate + write) and pinned in the cache by a refcounted BufferHandle so the key cannot be recycled
-    // under us. seenThisFrame is set so the end-of-gather sweep keeps it. Every backing buffer registers as one
-    // full-range STORAGE_BUFFER; raw-vs-structured access is only a shader-side view (P3 aliases), so the cache key
-    // is exactly the backing Buffer*. Failed allocation or descriptor writes are never cached: a later gather can
-    // retry once capacity or the resource state recovers.
+    // Look up the backing buffer in the cross-frame cache. A hit reuses its valid handle; a miss registers the buffer
+    // and pins it with a refcounted BufferHandle so the raw pointer key cannot be recycled. Every backing buffer uses
+    // one full-range STORAGE_BUFFER descriptor; raw and structured access are shader-side views. Failed registrations
+    // are not cached so a later gather can retry.
     [[nodiscard]] bool AcquireMeshHeapHandle(
         Core::GpuDescriptorHeap& heap,
         RtMeshHeapHandleCache& cache,
@@ -253,26 +249,18 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     );
     meshSlotLookup.reserve(candidateCount);
 
-    // Reset the per-frame distinct-mesh table; the gather repopulates it (slot k -> mesh k's index/attribute/
-    // position buffers) indexed by material.meshSlot. This is the host-index side of the geometry split: the host
-    // registers each backing buffer in the global descriptor-index heap and writes the returned slot into the
-    // per-record fields meshSlot fills below; the shader then reads that geometry layout-only through the pinned
-    // heap set (NwbHeapRawBuffer(<x>Slot)). The table now drives only host-side work -- barriering the backing
-    // buffers to ShaderResource and populating those slots. The table is rebuilt every frame (the unconditional
-    // reset just below), so retire last frame's handles here before it is repopulated; the deferred-free quarantine
-    // (module.cpp pumps advanceFrame() per frame) keeps slots that in-flight frames still reference valid. Guarded
-    // on a live heap so builds without one are unaffected.
+    // Reset the per-frame distinct-mesh table; the gather repopulates its index, attribute, and position buffers.
+    // Each backing buffer is registered in the global descriptor-index heap, and its slot is stored in the material
+    // record for shader-side NwbHeapRawBuffer() access. The table drives host-side barriers and record population.
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     const bool heapLive = heap.isInitialized();
-    // Begin the stable-handle-cache gather: mark every cached buffer unseen so the gather (AcquireMeshHeapHandle
-    // sets seenThisFrame on touch) and the end-of-gather sweep can tell reappearances from dropouts. Handles are no
-    // longer freed here -- a reappearing buffer reuses its cached handle (zero alloc/write/free); only buffers absent
-    // this frame are freed + evicted by the sweep below. Guarded on a live heap so builds without one are unaffected.
+    // Begin the stable-handle-cache gather: mark every cached buffer unseen so the end-of-gather sweep can distinguish
+    // reappearances from dropouts. Reappearing buffers reuse their handles; absent buffers are freed and evicted below.
     if(heapLive)
         BeginMeshHeapHandleGather(rayTracingState().m_hwMeshHeapHandleCache);
     // Clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once to the
     // scene's steady-state distinct-mesh count, then reuse that storage) and m_shadowMeshCount mirrors their length --
-    // the gather below repopulates both by push_back, now with stable (cached) handles.
+    // the gather below repopulates both by push_back with cached handles.
     rayTracingState().m_shadowMeshIndexBuffers.clear();
     rayTracingState().m_shadowMeshAttributeBuffers.clear();
     rayTracingState().m_shadowMeshPositionBuffers.clear();
@@ -351,9 +339,8 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             rayTracingState().m_shadowMeshIndexBuffers.push_back(meshIndexBuffer);
             rayTracingState().m_shadowMeshAttributeBuffers.push_back(mesh->attributeBuffer.get());
             rayTracingState().m_shadowMeshPositionBuffers.push_back(mesh->positionBuffer.get());
-            // Phase 2 M1: mirror the same three buffers into the global heap (raw SRV view; the HW caustic/GI traces
-            // read them via NwbHeapRawBuffer(record.<x>Slot)). When the heap is unavailable the handles push default
-            // (never read) so all six Vectors stay lockstep by slot.
+            // Mirror the same three buffers into the global heap for HW caustic and GI. When unavailable, append
+            // default handles so all vectors remain slot-aligned.
             if(heapLive){
                 rayTracingState().m_shadowMeshIndexHandles.push_back(indexHandle);
                 rayTracingState().m_shadowMeshAttributeHandles.push_back(attributeHandle);
@@ -412,10 +399,8 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
                 return false;
             instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
         }
-        // Phase 2 M2: carry this mesh's heap slots on the shared record, from the M1 handles minted above. Applies
-        // to both the resolved and the fallback-opaque record (meshSlot is a valid registered slot on both paths).
-        // Write-only this step -- the HW opaque trace reads no geometry; the HW caustic/GI traces (which read this
-        // buffer by InstanceID) consume the slots when they are swept. nodeSlot stays s_Max: no SW node buffer here.
+        // Carry this mesh's heap slots on both resolved and fallback records. The HW opaque trace does not read
+        // geometry; caustic and GI consume the slots by InstanceID. nodeSlot stays s_Max because this is the HW path.
         if(heapLive){
             instanceMaterial.indexSlot = rayTracingState().m_shadowMeshIndexHandles[meshSlot].slot();
             instanceMaterial.attributeSlot = rayTracingState().m_shadowMeshAttributeHandles[meshSlot].slot();
@@ -439,11 +424,11 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         shadowInstanceData.push_back(shadowInstance);
     }
 
-    // Phase 2 M1: evidence for the registration gate - confirm handles were minted and track the peak, logging only
-    // on a new high so a steady scene stays quiet. 3 handles per HW-shadow distinct mesh (index/attribute/position).
+    // Log a new peak only, keeping steady scenes quiet. Each HW distinct mesh contributes index, attribute, and
+    // position handles.
     if(heapLive && rayTracingState().m_shadowMeshCount > rayTracingState().m_shadowMeshHeapHighWater){
         rayTracingState().m_shadowMeshHeapHighWater = rayTracingState().m_shadowMeshCount;
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: Phase 2 M1 HW-shadow heap registration high-water: {} distinct meshes -> {} handles")
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: HW-shadow heap registration high-water: {} distinct meshes -> {} handles")
             , static_cast<u64>(rayTracingState().m_shadowMeshCount)
             , static_cast<u64>(rayTracingState().m_shadowMeshCount) * s_HardwareRayTracingMeshBufferCount
         );
@@ -569,12 +554,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     );
     meshSlotLookup.reserve(candidateCount);
 
-    // Reset the per-frame distinct-mesh table; the gather repopulates it (slot k -> mesh k's buffers) for the
-    // per-mesh descriptor arrays the traversal binds.
-    // Phase 2 M1: additively mirror the same distinct meshes into the global descriptor heap. Handles are now stable
-    // across frames (the SW Buffer*-keyed handle cache reuses a valid handle instead of free/allocate/write every
-    // frame), so the per-frame rebuild repopulates with cached handles. Nothing consumes the handles yet, so this
-    // cannot change the render. See buildSceneTlas for the full rationale.
+    // Reset the per-frame distinct-mesh table; the gather repopulates its buffers and descriptor-heap handles.
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     const bool heapLive = heap.isInitialized();
     // Begin the SW stable-handle-cache gather: mark every cached SW buffer unseen so the gather (AcquireMeshHeapHandle
@@ -583,7 +563,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         BeginMeshHeapHandleGather(rayTracingState().m_swMeshHeapHandleCache);
     // Clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once to the
     // scene's steady-state distinct-mesh count, then reuse that storage) and m_swShadowMeshCount mirrors their length
-    // -- the gather below repopulates both by push_back, now with stable (cached) handles.
+    // -- the gather below repopulates both by push_back with cached handles.
     rayTracingState().m_swShadowMeshNodeBuffers.clear();
     rayTracingState().m_swShadowMeshPositionBuffers.clear();
     rayTracingState().m_swShadowMeshIndexBuffers.clear();
@@ -678,10 +658,8 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             // The U2 per-triangle-corner shadow-trace attribute buffer (normal/uv0), parallel to the triangle index
             // buffer so the trace interpolates the exact raster corner attributes.
             rayTracingState().m_swShadowMeshAttributeBuffers.push_back(mesh->attributeBuffer.get());
-            // Phase 2 M1: mirror the four buffers into the global heap. The node buffer takes the
-            // StructuredBuffer<NwbBvhNode> view (M3 reads it via NwbHeapBvhNodes(record.nodeSlot)); position/index/
-            // attribute take the raw view. All land as STORAGE_BUFFER regardless (write() forces the type). When the
-            // heap is unavailable the handles push default (never read) so all eight Vectors stay lockstep by slot.
+            // Mirror the four buffers into the global heap. Nodes use NwbHeapBvhNodes(); position, index, and
+            // attributes use raw views. When the heap is unavailable, append default handles to preserve alignment.
             if(heapLive){
                 rayTracingState().m_swShadowMeshNodeHandles.push_back(nodeHandle);
                 rayTracingState().m_swShadowMeshPositionHandles.push_back(positionHandle);
@@ -750,9 +728,8 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
                 return false;
             instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
         }
-        // Phase 2 M2: carry this mesh's four heap slots on the shared record, from the SW M1 handles minted above.
-        // Applies to both the resolved and the fallback record (meshSlot is a valid registered SW slot on both).
-        // Write-only this step; the software shadow traversal -- the first swept consumer -- reads them next.
+        // Carry this mesh's four heap slots on both resolved and fallback records; software shadow traversal consumes
+        // them next.
         if(heapLive){
             instanceMaterial.indexSlot = rayTracingState().m_swShadowMeshIndexHandles[meshSlot].slot();
             instanceMaterial.attributeSlot = rayTracingState().m_swShadowMeshAttributeHandles[meshSlot].slot();
@@ -774,11 +751,10 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         shadowInstanceData.push_back(shadowInstance);
     }
 
-    // Phase 2 M1: registration-gate evidence for the SW distinct-mesh set (see buildSceneTlas), logged only on a new
-    // high. 4 handles per SW distinct mesh (node/position/index/attribute).
+    // Log a new peak only. Each SW distinct mesh contributes node, position, index, and attribute handles.
     if(heapLive && rayTracingState().m_swShadowMeshCount > rayTracingState().m_swShadowMeshHeapHighWater){
         rayTracingState().m_swShadowMeshHeapHighWater = rayTracingState().m_swShadowMeshCount;
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: Phase 2 M1 SW-shadow heap registration high-water: {} distinct meshes -> {} handles")
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW-shadow heap registration high-water: {} distinct meshes -> {} handles")
             , static_cast<u64>(rayTracingState().m_swShadowMeshCount)
             , static_cast<u64>(rayTracingState().m_swShadowMeshCount) * s_SoftwareRayTracingMeshBufferCount
         );

@@ -66,9 +66,7 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
     // no per-candidate shader callback and no per-instance material load on the common opaque path. Only TRANSPARENT
     // occluders stay non-opaque; they surface here as non-opaque candidates the hardware path ignores (the software
     // traversal casts their colored shadow). We never commit them, so traversal continues past a transparent occluder
-    // to any opaque occluder behind it. A committed triangle hit therefore means exactly "an opaque occluder blocks
-    // the light" -- the same binary result the per-candidate material-flag walk produced before, now resolved in the
-    // acceleration structure instead of the shader.
+    // to any opaque occluder behind it. A committed triangle hit therefore means an opaque occluder blocks the light.
     RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
     query.TraceRayInline(g_NwbShadowTlas, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xFFu, ray);
     // Drain the non-opaque (transparent) candidates without committing any of them; opaque occluders never reach

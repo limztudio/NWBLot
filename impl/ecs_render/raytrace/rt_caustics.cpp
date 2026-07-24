@@ -1143,6 +1143,13 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
     if(!rayTracingState().m_causticAccumulatorDecayBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): caustic accumulator decay is the third pass migrated to VK_EXT_descriptor_buffer, after
+        // caustic resolve and geometry downsample. Its shape is segment-coherent pure-resource (a lone texture UAV, no
+        // samplers) with push constants, which the descriptor-buffer path serves wholesale -- the minimal single-UAV
+        // case. The opt-in declares intent only; where the extension is absent the backend downgrades this layout to
+        // non-descriptor-buffer-compatible and the classic descriptor-set path (Backend A) serves the pass unchanged,
+        // so no device capability gate is needed here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_ACCUMULATOR_DECAY_BINDING_ACCUMULATOR, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticAccumulatorDecayPushConstants)));
 

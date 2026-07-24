@@ -519,6 +519,61 @@ TEST_F(DescriptorBufferRoundTripTest, CausticGeometryDownsampleShapeBuildsAsDesc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Caustic accumulator decay is the third pass flipped onto Backend C. Its shape (1 texture UAV + push constants, no
+// samplers) is the minimal single-UAV case -- distinct from resolve (UAV interleaved mid-set) and geometry downsample
+// (2 SRVs + 1 UAV). The UAV is an R32_UINT Texture2DArray (3 flux-channel slices), exercised faithfully here.
+// Mirrors the resolve/geometry-downsample parity proofs.
+TEST_F(DescriptorBufferRoundTripTest, CausticAccumulatorDecayShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_decay_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeUavTextureArray = [&](const u32 w, const u32 h) {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(w).setHeight(h)
+                .setArraySize(3u)
+                .setDimension(TextureDimension::Texture2DArray)
+                .setFormat(Format::R32_UINT)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto accumulator = makeUavTextureArray(32u, 32u);
+    ASSERT_TRUE(accumulator);
+
+    // Slots mirror resolve_binding_slots.h accumulator-decay block (0); push constants ride the pipeline layout.
+    // sizeof(CausticAccumulatorDecayPushConstants) == 4 * u32 == 16 (matches the shader push-constant layout).
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.setUseDescriptorBuffer(true);
+    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(0u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 16u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "caustic accumulator decay shape did not route to the descriptor-buffer path";
+    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
+    EXPECT_EQ(offsets.size(), 1u);
+
+    BindingSetDesc setDesc(descArena);
+    setDesc.addItem(BindingSetItem::Texture_UAV(0u, accumulator.get(), Format::R32_UINT));
+
+    auto bindingSet = device.createBindingSet(setDesc, layout);
+    ASSERT_NE(bindingSet.get(), nullptr);
+    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }; // namespace Tests
 
 

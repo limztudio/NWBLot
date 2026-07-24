@@ -2521,6 +2521,12 @@ public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
     // Phase-1 global descriptor heap (dark; see GpuDescriptorHeap). Valid only after Device init completes.
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
+    // Phase-3 Backend-C descriptor-buffer manager (VK_EXT_descriptor_buffer). Disabled (returns isEnabled()==false)
+    // when the extension is absent or its segments failed to initialize; the classic descriptor-set path (Backend A)
+    // remains the portability floor in that case. Valid only after Device init completes. Exposed because the
+    // binding-layer conversion needs a stable manager handle and the descriptor-buffer bind path is the only Vulkan
+    // write that encodes an acceleration-structure handle (TLAS migration).
+    [[nodiscard]] DescriptorBufferManager& getDescriptorBufferManager(){ return m_descriptorBufferManager; }
 
 
 private:

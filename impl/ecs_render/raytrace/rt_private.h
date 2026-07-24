@@ -40,6 +40,13 @@ NWB_IMPL_BEGIN
 // Finite positive-infinity sentinel for CPU-side ray-tracing bounds and SAH cost initialization. Keeping it below
 // the f32 limit leaves headroom for the surface-area arithmetic that follows.
 inline constexpr f32 s_RayTracingFiniteInfinity = 1e30f;
+// The reconstructed mesh index buffer stores one u32 index for each corner of every traced triangle.
+inline constexpr u32 s_RayTracingTriangleIndexCount = 3u;
+// Each hardware instance mask is an eight-bit field; this selects every instance for traces that do not filter.
+inline constexpr u32 s_RayTracingAllInstanceMask = static_cast<u32>(Limit<u8>::s_Max);
+// Distinct geometry buffers registered in the descriptor heap for each mesh on the two trace backends.
+inline constexpr u32 s_HardwareRayTracingMeshBufferCount = 3u;
+inline constexpr u32 s_SoftwareRayTracingMeshBufferCount = 4u;
 
 
 // Number of in-place refits performed on a skinned BLAS before forcing a full rebuild. A refit
@@ -60,6 +67,7 @@ inline constexpr u32 s_BlasMaxRefitsBeforeRebuild = 8u;
 // very large meshes. Used by both the HW BLAS and the SW BVH update paths so the two move together.
 inline constexpr u32 s_BlasMinRefitsBeforeRebuild = 4u;
 inline constexpr u32 s_BlasMaxRefitsBeforeRebuildCap = 64u;
+inline constexpr u32 s_BlasRefitBudgetLog2ExponentStep = 3u;
 
 // Adaptive refit budget for a mesh of `primitiveCount` triangles: the cube-root-scaled value above, clamped to
 // [s_BlasMinRefitsBeforeRebuild, s_BlasMaxRefitsBeforeRebuildCap]. Pure-integer (power-of-two cube root via
@@ -69,7 +77,7 @@ inline constexpr u32 s_BlasMaxRefitsBeforeRebuildCap = 64u;
     u32 n = primitiveCount;
     while(n > 1u){ n >>= 1u; ++log2; }
     // Cube root in power-of-two steps: every tripling of the exponent adds one budget doubling.
-    u32 budget = s_BlasMaxRefitsBeforeRebuild << (log2 / 3u);
+    u32 budget = s_BlasMaxRefitsBeforeRebuild << (log2 / s_BlasRefitBudgetLog2ExponentStep);
     if(budget < s_BlasMinRefitsBeforeRebuild)
         budget = s_BlasMinRefitsBeforeRebuild;
     if(budget > s_BlasMaxRefitsBeforeRebuildCap)
@@ -157,9 +165,11 @@ inline constexpr usize s_SceneBvhInitialInstanceCapacity = 64u;
 // instance carries a leaf cost (its primitive count in production) so a large instance biases the tree like a large
 // primitive would; when none is supplied every instance counts uniformly (the self-test path). Leaves remain
 // single-instance (the NwbBvhNode leaf ABI encodes one instance), so SAH here only chooses split axis + position;
-// s_SceneBvhSahBinCount is the per-axis bin grid size, s_SceneBvhSahTraversalCost the classic ct of the
+// s_SceneBvhAxisCount is the number of spatial axes evaluated, s_SceneBvhSahBinCount is the per-axis bin grid size,
+// and s_SceneBvhSahTraversalCost is the classic ct of the
 // cost = ct + (SA_L*cost_L + SA_R*cost_R)/SA_parent model (the per-instance intersection cost ci is folded into the
 // leaf-cost weight itself, so a uniform-weight build is implicitly ci = 1).
+inline constexpr u32 s_SceneBvhAxisCount = 3u;
 inline constexpr u32 s_SceneBvhSahBinCount = 12u;
 inline constexpr f32 s_SceneBvhSahTraversalCost = 1.0f;
 

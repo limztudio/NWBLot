@@ -205,10 +205,12 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using FrameParam = FrameParamStorage<4>;
-class FrameData : public BasicFrameData<4>{
+inline constexpr usize s_FrameParamPointerSlotCount = 4u;
+
+using FrameParam = FrameParamStorage<s_FrameParamPointerSlotCount>;
+class FrameData : public BasicFrameData<s_FrameParamPointerSlotCount>{
 public:
-    using BasicFrameData<4>::BasicFrameData;
+    using BasicFrameData<s_FrameParamPointerSlotCount>::BasicFrameData;
 
     inline u16& width(){ return m_data.u16[0]; }
     inline const u16& width()const{ return m_data.u16[0]; }
@@ -244,24 +246,33 @@ namespace LinuxFrameBackend{
     };
 };
 class LinuxFrame : public FrameData{
+private:
+    static constexpr usize s_ActiveFlagByteIndex = sizeof(u16) * 2u;
+    static constexpr usize s_BackendByteIndex = s_ActiveFlagByteIndex + 1u;
+    static constexpr usize s_NativeDisplayPointerSlot = 1u;
+    static constexpr usize s_NativeWindowHandleSlot = 2u;
+    static constexpr usize s_NativeStatePointerSlot = 3u;
+    static constexpr usize s_NativeAuxValueSlot = 3u;
+
+
 public:
-    inline bool isActive()const{ return m_data.u8[4] != 0; }
-    inline void setActive(bool value){ m_data.u8[4] = value ? 1u : 0u; }
+    inline bool isActive()const{ return m_data.u8[s_ActiveFlagByteIndex] != 0; }
+    inline void setActive(bool value){ m_data.u8[s_ActiveFlagByteIndex] = value ? 1u : 0u; }
 
-    inline LinuxFrameBackend::Enum backend()const{ return static_cast<LinuxFrameBackend::Enum>(m_data.u8[5]); }
-    inline void setBackend(LinuxFrameBackend::Enum value){ m_data.u8[5] = static_cast<u8>(value); }
+    inline LinuxFrameBackend::Enum backend()const{ return static_cast<LinuxFrameBackend::Enum>(m_data.u8[s_BackendByteIndex]); }
+    inline void setBackend(LinuxFrameBackend::Enum value){ m_data.u8[s_BackendByteIndex] = static_cast<u8>(value); }
 
-    inline void*& nativeDisplay(){ return m_data.ptr[1]; }
-    inline void* const& nativeDisplay()const{ return m_data.ptr[1]; }
+    inline void*& nativeDisplay(){ return m_data.ptr[s_NativeDisplayPointerSlot]; }
+    inline void* const& nativeDisplay()const{ return m_data.ptr[s_NativeDisplayPointerSlot]; }
 
-    inline u64& nativeWindowHandle(){ return m_data.u64[2]; }
-    inline const u64& nativeWindowHandle()const{ return m_data.u64[2]; }
+    inline u64& nativeWindowHandle(){ return m_data.u64[s_NativeWindowHandleSlot]; }
+    inline const u64& nativeWindowHandle()const{ return m_data.u64[s_NativeWindowHandleSlot]; }
 
-    inline void*& nativeState(){ return m_data.ptr[3]; }
-    inline void* const& nativeState()const{ return m_data.ptr[3]; }
+    inline void*& nativeState(){ return m_data.ptr[s_NativeStatePointerSlot]; }
+    inline void* const& nativeState()const{ return m_data.ptr[s_NativeStatePointerSlot]; }
 
-    inline u64& nativeAuxValue(){ return m_data.u64[3]; }
-    inline const u64& nativeAuxValue()const{ return m_data.u64[3]; }
+    inline u64& nativeAuxValue(){ return m_data.u64[s_NativeAuxValueSlot]; }
+    inline const u64& nativeAuxValue()const{ return m_data.u64[s_NativeAuxValueSlot]; }
 };
 #endif
 

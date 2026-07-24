@@ -28,7 +28,7 @@ template<typename VertexRefVectorT>
 ){
     u32 missingVertexCount = 0u;
     outSharedVertexCount = 0u;
-    for(usize cornerIndex = 0u; cornerIndex < 3u; ++cornerIndex){
+    for(usize cornerIndex = 0u; cornerIndex < s_MeshletTriangleIndexCount; ++cornerIndex){
         const u32 vertexRefIndex = triangle.vertexRefs[cornerIndex];
         bool repeatedInTriangle = false;
         for(usize previousCornerIndex = 0u; previousCornerIndex < cornerIndex; ++previousCornerIndex){
@@ -62,7 +62,7 @@ static void ResetMeshletScoreState(MeshletScoreState& state){
 }
 
 static void AccumulateMeshletScoreBounds(
-    const SIMDVector (&trianglePositions)[3],
+    const SIMDVector (&trianglePositions)[s_MeshletTriangleIndexCount],
     SIMDVector& minBounds,
     SIMDVector& maxBounds
 ){
@@ -71,7 +71,7 @@ static void AccumulateMeshletScoreBounds(
 
 [[nodiscard]] static f32 PredictMeshletScoreRadius(
     const MeshletScoreState& state,
-    const SIMDVector (&trianglePositions)[3]
+    const SIMDVector (&trianglePositions)[s_MeshletTriangleIndexCount]
 ){
     SIMDVector minBounds = state.minBounds;
     SIMDVector maxBounds = state.maxBounds;

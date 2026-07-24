@@ -57,6 +57,7 @@ inline constexpr u32 s_AsciiControlMaxExclusive = 32u;
 inline constexpr u32 s_AsciiDelete = 127u;
 inline constexpr u8 s_JsonControlMaxExclusive = 0x20u;
 inline constexpr usize s_DecimalTextBufferBytes = 32u;
+inline constexpr i32 s_DefaultNumericTextBase = 10;
 };
 
 
@@ -561,11 +562,11 @@ template<typename ArenaT>
 
 
 template<typename ArenaT>
-[[nodiscard]] inline i32 Stoi(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = 10){ return std::stoi(str, pos, base); }
+[[nodiscard]] inline i32 Stoi(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = TextDetail::s_DefaultNumericTextBase){ return std::stoi(str, pos, base); }
 template<typename ArenaT>
-[[nodiscard]] inline i64 Stoll(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = 10){ return std::stoll(str, pos, base); }
+[[nodiscard]] inline i64 Stoll(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = TextDetail::s_DefaultNumericTextBase){ return std::stoll(str, pos, base); }
 template<typename ArenaT>
-[[nodiscard]] inline u64 Stoull(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = 10){ return std::stoull(str, pos, base); }
+[[nodiscard]] inline u64 Stoull(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = TextDetail::s_DefaultNumericTextBase){ return std::stoull(str, pos, base); }
 template<typename ArenaT>
 [[nodiscard]] inline f32 Stof(const AString<ArenaT>& str, usize* pos = nullptr){ return std::stof(str, pos); }
 template<typename ArenaT>

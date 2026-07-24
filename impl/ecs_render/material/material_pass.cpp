@@ -26,7 +26,7 @@ namespace __hidden_material_pass{
 inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
 
 [[nodiscard]] static bool MeshletConeCullScaleSafe(const SIMDVector scale){
-    if(!VectorIsFinite(scale, 0x7u) || !Vector3Greater(scale, VectorZero()))
+    if(!VectorIsFinite(scale, VectorComponentMask::s_XYZ) || !Vector3Greater(scale, VectorZero()))
         return false;
 
     const SIMDVector minScale = Vector3MinComponent(scale);

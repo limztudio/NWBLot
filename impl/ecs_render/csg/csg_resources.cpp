@@ -104,7 +104,7 @@ static void CopyCsgCutterInlineParameters(
 
     SIMDVector determinant;
     outWorldToLocal = MatrixInverse(&determinant, *localToWorld);
-    return VectorIsFinite(determinant, 0xFu) && Vector4Greater(VectorAbs(determinant), VectorZero());
+    return VectorIsFinite(determinant, VectorComponentMask::s_XYZW) && Vector4Greater(VectorAbs(determinant), VectorZero());
 }
 
 [[nodiscard]] static bool BuildCsgReceiverWorldBounds(
@@ -153,7 +153,7 @@ static void ExpandCsgFrameWorkRegionForWorldBounds(
         const SIMDVector clipPosition = Vector4Transform(worldPosition, worldToClip);
         const SIMDVector clipW = VectorSplatW(clipPosition);
         if(
-            !VectorIsFinite(clipW, 0xFu)
+            !VectorIsFinite(clipW, VectorComponentMask::s_XYZW)
             || !Vector4Greater(clipW, VectorReplicate(s_MinClipWForWorkRegion))
         ){
             csgFrameData.workRegion.expandFull();
@@ -161,7 +161,7 @@ static void ExpandCsgFrameWorkRegionForWorldBounds(
         }
 
         const SIMDVector ndcPosition = VectorDivide(clipPosition, clipW);
-        if(!VectorIsFinite(ndcPosition, 0x3u)){
+        if(!VectorIsFinite(ndcPosition, VectorComponentMask::s_XY)){
             csgFrameData.workRegion.expandFull();
             return;
         }

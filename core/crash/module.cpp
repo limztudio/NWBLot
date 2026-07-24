@@ -22,6 +22,9 @@ namespace __hidden_crash_module{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u32 s_DiagnosticCaptureCallstackFramesToSkip = 5u;
+
+
 template<typename ArenaT>
 [[nodiscard]] static ::Path<ArenaT> __hidden_default_crash_root_directory(ArenaT& arena){
     ::Path<ArenaT> executableDirectory(arena);
@@ -161,7 +164,7 @@ NWB_NOINLINE static void __hidden_capture_diagnostic_crash(const DiagnosticEvent
         options.triggerFile = record.file ? AStringView(record.file) : AStringView();
         options.triggerInstructionPointer = record.instructionPointer;
         options.triggerLine = record.line;
-        options.callstackFramesToSkip = 5u;
+        options.callstackFramesToSkip = s_DiagnosticCaptureCallstackFramesToSkip;
         if(!__hidden_reserve_diagnostic_capture(record, options.event, options.triggerCategory))
             return;
         const CrashDumpResult result = __hidden_capture_crash_dump(Detail::CrashReasonKind::ManualDump, options.triggerCategory, options.triggerMessage, options);

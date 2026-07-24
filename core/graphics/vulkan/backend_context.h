@@ -192,10 +192,10 @@ private:
     VkDebugReportCallbackEXT m_debugReportCallback = VK_NULL_HANDLE;
 
     VkPhysicalDevice m_vulkanPhysicalDevice = VK_NULL_HANDLE;
-    i32 m_graphicsQueueFamily = -1;
-    i32 m_computeQueueFamily = -1;
-    i32 m_transferQueueFamily = -1;
-    i32 m_presentQueueFamily = -1;
+    i32 m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;
+    i32 m_computeQueueFamily = s_InvalidQueueFamilyIndex;
+    i32 m_transferQueueFamily = s_InvalidQueueFamilyIndex;
+    i32 m_presentQueueFamily = s_InvalidQueueFamilyIndex;
 
     VkDevice m_vulkanDevice = VK_NULL_HANDLE;
     VkQueue m_graphicsQueue = VK_NULL_HANDLE;

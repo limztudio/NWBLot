@@ -28,6 +28,8 @@ constexpr usize s_ParserScratchArenaBytes = 4096u;
 constexpr usize s_InitialReferencePathSegmentCount = 4u;
 constexpr usize s_InitialStructFieldCount = 8u;
 constexpr usize s_DocumentReaderChunkBytes = 4096u;
+constexpr char s_ExpectedTokenFoundSeparator[] = ", found ";
+constexpr usize s_ExpectedTokenFoundSeparatorLength = sizeof(s_ExpectedTokenFoundSeparator) - 1u;
 
 
 [[nodiscard]] bool BinaryI64Overflows(const TokenType::Enum op, const i64 lhs, const i64 rhs){
@@ -1108,12 +1110,12 @@ private:
         const auto desc = tokenDescription();
         ScratchString msg{m_scratchArena};
         if(
-            expected.size() <= Limit<usize>::s_Max - 8u
-            && desc.size() <= Limit<usize>::s_Max - expected.size() - 8u
+            expected.size() <= Limit<usize>::s_Max - s_ExpectedTokenFoundSeparatorLength
+            && desc.size() <= Limit<usize>::s_Max - expected.size() - s_ExpectedTokenFoundSeparatorLength
         )
-            msg.reserve(expected.size() + 8u + desc.size());
+            msg.reserve(expected.size() + s_ExpectedTokenFoundSeparatorLength + desc.size());
         msg.append(expected.data(), expected.size());
-        msg.append(", found ", 8);
+        msg.append(s_ExpectedTokenFoundSeparator, s_ExpectedTokenFoundSeparatorLength);
         msg.append(desc.data(), desc.size());
         error(m_current.line, m_current.column, MStringView(msg.data(), msg.size()));
     }

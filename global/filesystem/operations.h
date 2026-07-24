@@ -44,6 +44,14 @@ using StreamSize = std::streamsize;
 
 inline constexpr usize s_InitialPathBufferCapacity = 256u;
 inline constexpr usize s_FileSizeHighPartShiftBits = sizeof(u32) * 8u;
+inline constexpr u32 s_CreateDirectoryPermissionMask = 0777u;
+inline constexpr char s_StagedDirectoryPrefix = '.';
+inline constexpr char s_StageDirectorySuffix[] = "_stage";
+inline constexpr char s_BackupDirectorySuffix[] = "_backup";
+inline constexpr usize s_StageDirectorySuffixLength = sizeof(s_StageDirectorySuffix) - 1u;
+inline constexpr usize s_BackupDirectorySuffixLength = sizeof(s_BackupDirectorySuffix) - 1u;
+inline constexpr usize s_StageDirectoryNameExtraCharacters = 1u + s_StageDirectorySuffixLength;
+inline constexpr usize s_BackupDirectoryNameExtraCharacters = 1u + s_BackupDirectorySuffixLength;
 
 
 [[nodiscard]] inline bool CanRepresentStreamSize(const u64 byteCount)noexcept{
@@ -423,7 +431,7 @@ template<typename ArenaT>
         return false;
     }
 #else
-    if(mkdir(path.c_str(), 0777) == 0){
+    if(mkdir(path.c_str(), static_cast<mode_t>(GlobalFilesystemDetail::s_CreateDirectoryPermissionMask)) == 0){
         ClearError(outError);
         return true;
     }
@@ -715,17 +723,17 @@ template<typename TempArenaT, typename PathArenaT>
     StagedDirectoryPaths<PathArenaT> output(pathArena);
 
     AString<TempArenaT> stageDirectoryName{tempArena};
-    stageDirectoryName.reserve(stageToken.size() + 7u);
-    stageDirectoryName += '.';
+    stageDirectoryName.reserve(stageToken.size() + GlobalFilesystemDetail::s_StageDirectoryNameExtraCharacters);
+    stageDirectoryName += GlobalFilesystemDetail::s_StagedDirectoryPrefix;
     stageDirectoryName += stageToken;
-    stageDirectoryName += "_stage";
+    stageDirectoryName += GlobalFilesystemDetail::s_StageDirectorySuffix;
     output.stageDirectory = stageBaseDirectory / stageDirectoryName;
 
     AString<TempArenaT> backupDirectoryName{tempArena};
-    backupDirectoryName.reserve(stageToken.size() + 8u);
-    backupDirectoryName += '.';
+    backupDirectoryName.reserve(stageToken.size() + GlobalFilesystemDetail::s_BackupDirectoryNameExtraCharacters);
+    backupDirectoryName += GlobalFilesystemDetail::s_StagedDirectoryPrefix;
     backupDirectoryName += stageToken;
-    backupDirectoryName += "_backup";
+    backupDirectoryName += GlobalFilesystemDetail::s_BackupDirectorySuffix;
     output.backupDirectory = stageBaseDirectory / backupDirectoryName;
     return output;
 }

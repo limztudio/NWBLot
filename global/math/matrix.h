@@ -20,6 +20,7 @@ namespace SIMDMatrixDetail{
 static const SIMDVectorConstF s_SIMDMatrixSign = { { { 1.0f, -1.0f, 1.0f, -1.0f } } };
 static const SIMDVectorConstF s_SIMDMatrixNegativeTwo = { { { -2.0f, -2.0f, -2.0f, 0.0f } } };
 static const SIMDVectorConstU s_SIMDMatrixSelect0001 = { { { s_SELECT_0, s_SELECT_0, s_SELECT_0, s_SELECT_1 } } };
+inline constexpr f32 s_MatrixDecomposeEpsilon = 0.0001f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -396,8 +397,6 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     NWB_ASSERT(outRotQuat != nullptr);
     NWB_ASSERT(outTrans != nullptr);
 
-    static constexpr f32 epsilon = 0.0001f;
-
     const SIMDVector canonicalBasis[3] = {
         s_SIMDIdentityR0,
         s_SIMDIdentityR1,
@@ -425,11 +424,11 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     usize c{};
     SIMDMatrixDetail::RankDecompose(a, b, c, VectorGetX(scale), VectorGetY(scale), VectorGetZ(scale));
 
-    if(VectorGetByIndex(scale, a) < epsilon)
+    if(VectorGetByIndex(scale, a) < SIMDMatrixDetail::s_MatrixDecomposeEpsilon)
         basis[a] = canonicalBasis[a];
     basis[a] = Vector3Normalize(basis[a]);
 
-    if(VectorGetByIndex(scale, b) < epsilon){
+    if(VectorGetByIndex(scale, b) < SIMDMatrixDetail::s_MatrixDecomposeEpsilon){
         usize aa{};
         usize bb{};
         usize cc{};
@@ -445,7 +444,7 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     }
     basis[b] = Vector3Normalize(basis[b]);
 
-    if(VectorGetByIndex(scale, c) < epsilon)
+    if(VectorGetByIndex(scale, c) < SIMDMatrixDetail::s_MatrixDecomposeEpsilon)
         basis[c] = Vector3Cross(basis[a], basis[b]);
     basis[c] = Vector3Normalize(basis[c]);
 
@@ -470,7 +469,7 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
 
     determinant -= 1.0f;
     determinant *= determinant;
-    if(epsilon < determinant)
+    if(SIMDMatrixDetail::s_MatrixDecomposeEpsilon < determinant)
         return false;
 
     *outScale = scale;

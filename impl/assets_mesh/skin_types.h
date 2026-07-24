@@ -18,11 +18,15 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// Number of joint/weight pairs carried by one skin influence record. This keeps the serialized CPU and GPU
+// representations in lockstep without scattering the fixed influence count.
+inline constexpr u32 s_SkinInfluenceJointCount = 4u;
+
 struct SkinInfluence4{
-    u16 joint[4] = {};
+    u16 joint[s_SkinInfluenceJointCount] = {};
     Float4U weight{};
 };
-static_assert(sizeof(SkinInfluence4) == sizeof(u16) * 4u + sizeof(Float4U), "SkinInfluence4 must keep its binary payload layout");
+static_assert(sizeof(SkinInfluence4) == sizeof(u16) * s_SkinInfluenceJointCount + sizeof(Float4U), "SkinInfluence4 must keep its binary payload layout");
 static_assert(IsStandardLayout_V<SkinInfluence4>, "SkinInfluence4 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<SkinInfluence4>, "SkinInfluence4 must stay binary-serializable");
 

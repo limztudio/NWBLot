@@ -24,6 +24,8 @@ namespace __hidden_metascript_lexer{
 [[nodiscard]] inline bool isAlpha(MChar c){ return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
 [[nodiscard]] inline bool isAlphaNumeric(MChar c){ return isAlpha(c) || isDigit(c); }
 
+constexpr usize s_CompoundAssignmentTokenLength = 2u;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -72,19 +74,19 @@ Token Lexer::next(){
     switch(c){
     case '+':
         if(peekNext() == '=')
-            return makeToken(TokenType::PlusEqual, 2);
+            return makeToken(TokenType::PlusEqual, s_CompoundAssignmentTokenLength);
         return makeToken(TokenType::Plus, 1);
     case '-':
         if(peekNext() == '=')
-            return makeToken(TokenType::MinusEqual, 2);
+            return makeToken(TokenType::MinusEqual, s_CompoundAssignmentTokenLength);
         return makeToken(TokenType::Minus, 1);
     case '*':
         if(peekNext() == '=')
-            return makeToken(TokenType::StarEqual, 2);
+            return makeToken(TokenType::StarEqual, s_CompoundAssignmentTokenLength);
         return makeToken(TokenType::Star, 1);
     case '/':
         if(peekNext() == '=')
-            return makeToken(TokenType::SlashEqual, 2);
+            return makeToken(TokenType::SlashEqual, s_CompoundAssignmentTokenLength);
         return makeToken(TokenType::Slash, 1);
     case '=':
         return makeToken(TokenType::Equal, 1);

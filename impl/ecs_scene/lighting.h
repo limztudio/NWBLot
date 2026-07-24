@@ -57,14 +57,19 @@ struct alignas(Float4) SceneLight{
     // Directional: normalized direction toward the light. Spot: normalized emission axis. w = spot outer cone cosine.
     Float4 direction = Float4(0.0f, 0.0f, -1.0f, 1.0f);
     // xyz = color, w = intensity.
-    Float4 colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
+    Float4 colorIntensity = Float4(
+        LightDefaults::s_WhiteColorComponent,
+        LightDefaults::s_WhiteColorComponent,
+        LightDefaults::s_WhiteColorComponent,
+        LightDefaults::s_Intensity
+    );
     f32 range = 0.0f;
     // Soft-shadow source size (see LightComponent): directional angular radius (radians) / punctual source radius (world units).
-    f32 angularRadius = 0.00465f;
-    f32 sourceRadius = 0.1f;
+    f32 angularRadius = LightDefaults::s_DirectionalAngularRadius;
+    f32 sourceRadius = LightDefaults::s_PunctualSourceRadius;
     // Byte-sized members kept last so the f32 fields pack contiguously with no internal padding.
     LightType::Enum type = LightType::Directional;
-    bool enableCaustics = true;
+    bool enableCaustics = LightDefaults::s_EnableCaustics;
 };
 
 static_assert(IsStandardLayout_V<SceneLight>, "SceneLight must stay layout-stable");

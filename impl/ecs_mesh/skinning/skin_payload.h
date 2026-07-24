@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 
 
 struct alignas(Float4) MeshSkinningInfluenceGpu{
-    u32 joint[4] = {};
+    u32 joint[s_SkinInfluenceJointCount] = {};
     Float4 weight = Float4(0.0f, 0.0f, 0.0f, 0.0f);
 };
 static_assert(
@@ -145,7 +145,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         static_cast<void>(failedSkeletonJoint);
 
         MeshSkinningInfluenceGpu gpuSkin;
-        for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
+        for(u32 influenceIndex = 0; influenceIndex < s_SkinInfluenceJointCount; ++influenceIndex){
             const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
             gpuSkin.joint[influenceIndex] = joint;
         }

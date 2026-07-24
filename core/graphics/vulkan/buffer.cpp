@@ -214,7 +214,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
             DestroyArenaObject(m_context.objectArena, buffer);
             return nullptr;
         }
-        if(alignedSize > static_cast<u64>(-1) / d.maxVersions){
+        if(alignedSize > Limit<u64>::s_Max / d.maxVersions){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: versioned size overflows"));
             DestroyArenaObject(m_context.objectArena, buffer);
             return nullptr;
@@ -344,7 +344,7 @@ bool Device::validateHeapMemoryBinding(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: heap is invalid"), operationName);
         return false;
     }
-    if(heap.m_memoryTypeIndex >= 32u || (memoryRequirements.memoryTypeBits & (1u << heap.m_memoryTypeIndex)) == 0){
+    if(heap.m_memoryTypeIndex >= s_VulkanMemoryTypeBitCount || (memoryRequirements.memoryTypeBits & (1u << heap.m_memoryTypeIndex)) == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: heap memory type is incompatible with the {}"), operationName, resourceName);
         return false;
     }

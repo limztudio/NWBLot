@@ -16,7 +16,7 @@ static bool BuildMeshlets(
     entry.meshletAttributeStreamRefs.clear();
     entry.meshletLocalVertexRefs.clear();
     entry.meshletPrimitiveIndices.clear();
-    entry.meshlets.reserve((indices.size() / 3u + s_MeshMaxMeshletTriangles - 1u) / s_MeshMaxMeshletTriangles);
+    entry.meshlets.reserve((indices.size() / s_MeshletTriangleIndexCount + s_MeshMaxMeshletTriangles - 1u) / s_MeshMaxMeshletTriangles);
     entry.meshletBounds.reserve(entry.meshlets.capacity());
     entry.meshletPositionStreamRefs.reserve(indices.size());
     entry.meshletAttributeStreamRefs.reserve(indices.size());
@@ -43,7 +43,7 @@ static bool BuildMeshlets(
     localAttributeSkins.reserve(s_MeshMaxMeshletVertices);
     localVertexRefs.reserve(s_MeshMaxMeshletVertices);
     localTriangleIndices.reserve(s_MeshMaxMeshletTriangles);
-    frontier.reserve(s_MeshMaxMeshletTriangles * 3u);
+    frontier.reserve(s_MeshMaxMeshletTriangles * s_MeshletTriangleIndexCount);
     frontierFlags.resize(trianglePrecompute.triangles.size(), 0u);
 
     MeshletScoreState scoreState;

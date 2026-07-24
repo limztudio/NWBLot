@@ -184,7 +184,7 @@
         expectedLocalVertexRefCount += vertexCount;
         expectedPositionRefByteCount += encodedPositionBytes;
         expectedAttributeRefByteCount += encodedAttributeBytes;
-        expectedPrimitiveIndexCount += static_cast<usize>(primitiveCount) * 3u;
+        expectedPrimitiveIndexCount += static_cast<usize>(primitiveCount) * s_MeshletTriangleIndexCount;
         if(
             expectedLocalVertexRefCount > localVertexRefs.size()
             || expectedPositionRefByteCount > positionRefDeltas.size()
@@ -201,7 +201,7 @@
 
         const MeshletBounds& bounds = meshletBounds[meshletIndex];
         const SIMDVector sphere = LoadFloat(bounds.sphere);
-        if(!VectorIsFinite(sphere, 0xFu) || VectorGetW(sphere) < 0.0f){
+        if(!VectorIsFinite(sphere, VectorComponentMask::s_XYZW) || VectorGetW(sphere) < 0.0f){
             return FailMeshletPayloadValidation(
                 contextText,
                 meshPathText,
@@ -283,8 +283,8 @@
             );
         }
         for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
-            const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * 3u;
-            for(usize corner = 0u; corner < 3u; ++corner){
+            const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * s_MeshletTriangleIndexCount;
+            for(usize corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
                 if(meshletPrimitiveIndices[primitiveOffset + corner] < vertexCount)
                     continue;
 

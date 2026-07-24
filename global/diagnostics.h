@@ -86,6 +86,7 @@ inline Atomic<DiagnosticEventCallback> g_EventCallback{ nullptr };
 inline AtomicFlag g_EventActive;
 inline constexpr usize s_MaxEventTextBytes = 2048u;
 inline constexpr usize s_NumberTextBufferBytes = 128u;
+inline constexpr wchar_t s_AsciiCharacterMax = 0x7F;
 inline constexpr const char* s_NullText = "(null)";
 inline constexpr const char* s_PointerHexPrefix = "0x";
 inline constexpr const char* s_UnprintableText = "<unprintable>";
@@ -110,7 +111,7 @@ inline void CopyEventText(char (&outText)[s_MaxEventTextBytes], const std::wstri
     for(const wchar_t ch : text){
         if(writeCursor + 1u >= s_MaxEventTextBytes)
             break;
-        outText[writeCursor++] = ch >= 0 && ch <= 0x7F
+        outText[writeCursor++] = ch >= 0 && ch <= s_AsciiCharacterMax
             ? static_cast<char>(ch)
             : '?'
         ;
@@ -136,7 +137,7 @@ inline void AppendEventText(char (&outText)[s_MaxEventTextBytes], usize& outCurs
         AppendEventChar(
             outText,
             outCursor,
-            ch >= 0 && ch <= 0x7F
+            ch >= 0 && ch <= s_AsciiCharacterMax
                 ? static_cast<char>(ch)
                 : '?'
         );
@@ -161,7 +162,7 @@ inline void AppendFormatLiteral(char (&outText)[s_MaxEventTextBytes], usize& out
         AppendEventChar(
             outText,
             outCursor,
-            ch >= 0 && ch <= 0x7F
+            ch >= 0 && ch <= s_AsciiCharacterMax
                 ? static_cast<char>(ch)
                 : '?'
         );
@@ -209,7 +210,7 @@ inline void AppendEventArgument(char (&outText)[s_MaxEventTextBytes], usize& out
         AppendEventChar(outText, outCursor, value);
     }
     else if constexpr(std::is_same_v<RawT, wchar_t>){
-        AppendEventChar(outText, outCursor, value >= 0 && value <= 0x7F ? static_cast<char>(value) : '?');
+        AppendEventChar(outText, outCursor, value >= 0 && value <= s_AsciiCharacterMax ? static_cast<char>(value) : '?');
     }
     else if constexpr(std::is_same_v<RawT, std::nullptr_t>){
         AppendEventText(outText, outCursor, std::string_view(s_NullText));
@@ -294,7 +295,7 @@ inline void FormatEventTextArgs(
         AppendEventChar(
             outText,
             outCursor,
-            ch >= 0 && ch <= 0x7F
+            ch >= 0 && ch <= s_AsciiCharacterMax
                 ? static_cast<char>(ch)
                 : '?'
         );

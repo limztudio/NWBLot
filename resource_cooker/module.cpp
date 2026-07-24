@@ -20,6 +20,7 @@ namespace __hidden_resource_cooker{
 
 
 inline constexpr Name s_CookArena("resource_cooker/cook");
+inline constexpr u32 s_CookMainThreadReservedCoreCount = 1u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +28,7 @@ inline constexpr Name s_CookArena("resource_cooker/cook");
 
 u32 QueryCookWorkerThreadCount(){
     const u32 coreCount = NWB::Core::Alloc::QueryCoreCount(NWB::Core::Alloc::CoreAffinity::Any);
-    return coreCount > 1u ? coreCount - 1u : 0u;
+    return coreCount > s_CookMainThreadReservedCoreCount ? coreCount - s_CookMainThreadReservedCoreCount : 0u;
 }
 
 

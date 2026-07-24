@@ -37,9 +37,9 @@ template<
         const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
 
         for(u32 primitive = 0u; primitive < primitiveCount; ++primitive){
-            const usize primitiveBase = static_cast<usize>(meshlet.primitiveOffset) + static_cast<usize>(primitive) * NWB_MESHLET_TRIANGLE_INDEX_COUNT;
+            const usize primitiveBase = static_cast<usize>(meshlet.primitiveOffset) + static_cast<usize>(primitive) * s_MeshletTriangleIndexCount;
 
-            for(u32 corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner){
+            for(u32 corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
                 const usize primitiveByte = primitiveBase + corner;
                 if(primitiveByte >= primitiveIndexCount)
                     return false;

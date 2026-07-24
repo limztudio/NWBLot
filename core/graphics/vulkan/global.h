@@ -75,6 +75,8 @@ inline constexpr u32 s_AmdVendorId = 0x1002; // PCI vendor ID for AMD; gates Rad
 inline constexpr u32 s_NvidiaVendorId = 0x10DE; // PCI vendor ID for NVIDIA; gates NVIDIA-only Aftermath GPU crash dump setup
 
 // Queue and swap chain defaults.
+// Local sentinel used until a compatible queue family is selected.
+inline constexpr i32 s_InvalidQueueFamilyIndex = -1;
 inline constexpr u32 s_GraphicsQueueIndex = 0;
 inline constexpr u32 s_ComputeQueueIndex = 0;
 inline constexpr u32 s_TransferQueueIndex = 0;

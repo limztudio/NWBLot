@@ -49,6 +49,8 @@ using CrashArena = NWB::Core::Alloc::PersistentArena;
 inline constexpr usize s_CrashArenaPayloadSize = 256u * 1024u;
 inline constexpr Name s_CommandLineArena("loader/command_line");
 inline constexpr Name s_CrashReportingArena("loader/crash_reporting");
+inline constexpr AStringView s_ResourceDirectoryName = "res";
+inline constexpr AStringView s_GraphicsVolumeName = "graphics";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -108,7 +110,7 @@ bool HasGraphicsVolumeSegment(const Path& mountDirectory){
     if(!IsDirectory(mountDirectory, errorCode) || errorCode)
         return false;
 
-    const Path segmentPath = mountDirectory / ::MakeVolumeSegmentFileName("graphics", 0).c_str();
+    const Path segmentPath = mountDirectory / ::MakeVolumeSegmentFileName(s_GraphicsVolumeName, 0).c_str();
     errorCode.clear();
     return FileExists(segmentPath, errorCode) && !errorCode;
 }
@@ -117,28 +119,28 @@ Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena){
     ErrorCode errorCode;
     Path currentDirectory(arena);
     if(GetCurrentPath(currentDirectory, errorCode)){
-        const Path currentResDirectory = currentDirectory / "res";
+        const Path currentResDirectory = currentDirectory / s_ResourceDirectoryName;
         if(HasGraphicsVolumeSegment(currentResDirectory))
             return currentResDirectory;
     }
 
     Path executableDirectory(arena);
     if(!GetExecutableDirectory(executableDirectory))
-        return Path(arena, "res");
+        return Path(arena, s_ResourceDirectoryName);
 
-    const Path executableResDirectory = executableDirectory / "res";
+    const Path executableResDirectory = executableDirectory / s_ResourceDirectoryName;
     if(HasGraphicsVolumeSegment(executableResDirectory))
         return executableResDirectory;
 
     const Path parentDirectory = executableDirectory.parent_path();
     if(parentDirectory.empty())
-        return Path(arena, "res");
+        return Path(arena, s_ResourceDirectoryName);
 
-    const Path parentResDirectory = parentDirectory / "res";
+    const Path parentResDirectory = parentDirectory / s_ResourceDirectoryName;
     if(HasGraphicsVolumeSegment(parentResDirectory))
         return parentResDirectory;
 
-    return Path(arena, "res");
+    return Path(arena, s_ResourceDirectoryName);
 }
 
 
@@ -323,7 +325,7 @@ static int RunProjectRuntime(
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: frame initialized ({}x{})"), initializedFrameWidth, initializedFrameHeight);
 
         NWB::Core::Filesystem::VolumeSession graphicsVolume(frame.projectObjectArena());
-        if(!graphicsVolume.load("graphics", resourceMountDirectory))
+        if(!graphicsVolume.load(__hidden_loader::s_GraphicsVolumeName, resourceMountDirectory))
             return -1;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: mounted graphics volume from '{}'"), PathToString<tchar>(resourceMountDirectory));
 

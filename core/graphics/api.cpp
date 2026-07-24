@@ -265,12 +265,12 @@ TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
 TextureSlice TextureSlice::resolve(const u32 mipWidth, const u32 mipHeight, const u32 mipDepth)const{
     TextureSlice ret(*this);
 
-    if(width == static_cast<u32>(-1))
+    if(width == TextureSlice::AllDimensions)
         ret.width = x < mipWidth ? mipWidth - x : 0;
-    if(height == static_cast<u32>(-1))
+    if(height == TextureSlice::AllDimensions)
         ret.height = y < mipHeight ? mipHeight - y : 0;
 
-    if(depth == static_cast<u32>(-1))
+    if(depth == TextureSlice::AllDimensions)
         ret.depth = z < mipDepth ? mipDepth - z : 0;
 
     return ret;

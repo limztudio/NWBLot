@@ -153,15 +153,17 @@ struct TextureDesc{
 };
 
 struct TextureSlice{
+    static constexpr u32 AllDimensions = Limit<u32>::s_Max;
+
     u32 x = 0;
     u32 y = 0;
     u32 z = 0;
 
-    // -1 means the entire dimension is part of the region
+    // AllDimensions means the entire dimension is part of the region.
     // resolve() will translate these values into actual dimensions
-    u32 width = static_cast<u32>(-1);
-    u32 height = static_cast<u32>(-1);
-    u32 depth = static_cast<u32>(-1);
+    u32 width = AllDimensions;
+    u32 height = AllDimensions;
+    u32 depth = AllDimensions;
 
     MipLevel mipLevel = 0;
     ArraySlice arraySlice = 0;
@@ -173,7 +175,7 @@ struct TextureSlice{
     constexpr TextureSlice& setWidth(u32 value){ width = value; return *this; }
     constexpr TextureSlice& setHeight(u32 value){ height = value; return *this; }
     constexpr TextureSlice& setDepth(u32 value){ depth = value; return *this; }
-    constexpr TextureSlice& setSize(u32 vx = static_cast<u32>(-1), u32 vy = static_cast<u32>(-1), u32 vz = static_cast<u32>(-1)){ width = vx; height = vy; depth = vz; return *this; }
+    constexpr TextureSlice& setSize(u32 vx = AllDimensions, u32 vy = AllDimensions, u32 vz = AllDimensions){ width = vx; height = vy; depth = vz; return *this; }
     constexpr TextureSlice& setMipLevel(MipLevel level){ mipLevel = level; return *this; }
     constexpr TextureSlice& setArraySlice(ArraySlice slice){ arraySlice = slice; return *this; }
 };
@@ -383,6 +385,9 @@ struct BufferDesc{
 };
 
 struct BufferRange{
+    // AllBytes marks an unbounded range; resolve() clamps it to the buffer's byte size.
+    static constexpr u64 AllBytes = Limit<u64>::s_Max;
+
     u64 byteOffset = 0;
     u64 byteSize = 0;
 
@@ -393,14 +398,14 @@ struct BufferRange{
     {}
 
     [[nodiscard]] BufferRange resolve(const BufferDesc& desc)const;
-    [[nodiscard]] constexpr bool isEntireBuffer(const BufferDesc& desc)const{ return (!byteOffset) && (byteSize == static_cast<u64>(-1) || byteSize == desc.byteSize); }
+    [[nodiscard]] constexpr bool isEntireBuffer(const BufferDesc& desc)const{ return (!byteOffset) && (byteSize == AllBytes || byteSize == desc.byteSize); }
     constexpr bool operator==(const BufferRange& other)const{ return byteOffset == other.byteOffset && byteSize == other.byteSize; }
 
     constexpr BufferRange& setByteOffset(u64 value){ byteOffset = value; return *this; }
     constexpr BufferRange& setByteSize(u64 value){ byteSize = value; return *this; }
 };
 
-inline constexpr BufferRange s_EntireBuffer = BufferRange(0, static_cast<u64>(-1));
+inline constexpr BufferRange s_EntireBuffer = BufferRange(0, BufferRange::AllBytes);
 
 typedef GraphicsBackend::Handle<Buffer> BufferHandle;
 

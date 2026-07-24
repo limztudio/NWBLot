@@ -22,6 +22,7 @@ NWB_IMPL_BEGIN
 inline constexpr u32 s_MeshMissingStreamIndex = NWB_MESH_MISSING_STREAM_INDEX;
 inline constexpr u32 s_MeshMaxMeshletVertices = NWB_MESH_SHADER_MAX_VERTICES;
 inline constexpr u32 s_MeshMaxMeshletTriangles = NWB_MESH_SHADER_MAX_TRIANGLES;
+inline constexpr u32 s_MeshletTriangleIndexCount = NWB_MESHLET_TRIANGLE_INDEX_COUNT;
 inline constexpr u32 s_MeshletConeFlagEnabled = NWB_MESHLET_CONE_FLAG_ENABLED;
 
 struct MeshletDesc{

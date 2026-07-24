@@ -186,12 +186,12 @@ bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
             continue;
         }
         // meshletPrimitiveIndexCount is the reconstructed triangle-index count (3 per triangle).
-        if(meshResources.meshletPrimitiveIndexCount == 0u || (meshResources.meshletPrimitiveIndexCount % 3u) != 0u){
+        if(meshResources.meshletPrimitiveIndexCount == 0u || (meshResources.meshletPrimitiveIndexCount % s_RayTracingTriangleIndexCount) != 0u){
             allResourcesReady = false;
             continue;
         }
 
-        const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / 3u;
+        const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
         if(!ensureMeshSwBvhResources(
             meshResources.positionBuffer.get(),
             meshResources.triangleIndexBuffer.get(),
@@ -371,7 +371,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         Core::RayTracingInstanceDesc instanceDesc;
         instanceDesc.setBLAS(mesh->blas.get());
         instanceDesc.setInstanceID(static_cast<u32>(instances.size()));
-        instanceDesc.setInstanceMask(0xFFu);
+        instanceDesc.setInstanceMask(s_RayTracingAllInstanceMask);
 
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         if(transform){
@@ -445,7 +445,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         rayTracingState().m_shadowMeshHeapHighWater = rayTracingState().m_shadowMeshCount;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: Phase 2 M1 HW-shadow heap registration high-water: {} distinct meshes -> {} handles")
             , static_cast<u64>(rayTracingState().m_shadowMeshCount)
-            , static_cast<u64>(rayTracingState().m_shadowMeshCount) * 3u
+            , static_cast<u64>(rayTracingState().m_shadowMeshCount) * s_HardwareRayTracingMeshBufferCount
         );
     }
     // End-of-gather sweep: free + evict every cached HW buffer that did not reappear this frame (a mesh was unloaded
@@ -722,7 +722,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         SceneSwBvhInstanceGpu instance;
         StoreFloat(worldToObject, &instance.worldToObject);
         instance.meshIndex = meshSlot;
-        instance.primitiveCount = mesh->meshletPrimitiveIndexCount / 3u;
+        instance.primitiveCount = mesh->meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
 
         // Resolve the occluder material (transmittance-model id + transparent flag) + the material-constants
         // context the surface hook reads in the trace. That context is packed into the SHADOW-OWNED combined
@@ -780,7 +780,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         rayTracingState().m_swShadowMeshHeapHighWater = rayTracingState().m_swShadowMeshCount;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: Phase 2 M1 SW-shadow heap registration high-water: {} distinct meshes -> {} handles")
             , static_cast<u64>(rayTracingState().m_swShadowMeshCount)
-            , static_cast<u64>(rayTracingState().m_swShadowMeshCount) * 4u
+            , static_cast<u64>(rayTracingState().m_swShadowMeshCount) * s_SoftwareRayTracingMeshBufferCount
         );
     }
     // End-of-gather sweep: free + evict every cached SW buffer that did not reappear this frame (a mesh was unloaded
@@ -919,7 +919,7 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
     const bool performRefit =
         meshResources.runtimeMesh
         && !firstBuild
-        && meshResources.blasRefitsSinceRebuild < adaptiveRefitsBeforeRebuild(meshResources.meshletPrimitiveIndexCount / 3u)
+        && meshResources.blasRefitsSinceRebuild < adaptiveRefitsBeforeRebuild(meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount)
     ;
     if(performRefit)
         buildFlags |= Core::RayTracingAccelStructBuildFlags::PerformUpdate;
@@ -1606,9 +1606,9 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
     if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
         return false;
     // meshletPrimitiveIndexCount is the reconstructed triangle-index count (3 per triangle).
-    if(meshResources.meshletPrimitiveIndexCount == 0u || (meshResources.meshletPrimitiveIndexCount % 3u) != 0u)
+    if(meshResources.meshletPrimitiveIndexCount == 0u || (meshResources.meshletPrimitiveIndexCount % s_RayTracingTriangleIndexCount) != 0u)
         return false;
-    const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / 3u;
+    const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
     if(!meshSwBvhResourcesReady(
         meshResources.positionBuffer.get(),
         meshResources.triangleIndexBuffer.get(),

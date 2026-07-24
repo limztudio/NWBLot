@@ -29,6 +29,14 @@ static constexpr usize s_TriangleIndexCount = 3u;
 static constexpr usize s_AuthoredVertexRefComponentCount = 5u;
 static constexpr usize s_MaxSkeletonJointCount = static_cast<usize>(Limit<u16>::s_Max) + 1u;
 
+// Active component masks for VectorIsFinite. The importer stores positions/normals as XYZ, UVs as XY, and colors
+// and skin weights as full XYZW vectors.
+namespace VectorComponentMask{
+inline constexpr u32 s_XY = 0x3u;
+inline constexpr u32 s_XYZ = 0x7u;
+inline constexpr u32 s_XYZW = 0xFu;
+};
+
 struct MeshSkinInfluence{
     u16 joint[s_MeshSkinInfluenceCount] = {};
     Float4U weight{};

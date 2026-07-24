@@ -41,10 +41,10 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 
 [[nodiscard]] NWB_INLINE bool IsAffineJointMatrix(const SIMDMatrix& matrix){
     return
-        VectorIsFinite(matrix.v[0], 0xFu)
-        && VectorIsFinite(matrix.v[1], 0xFu)
-        && VectorIsFinite(matrix.v[2], 0xFu)
-        && VectorIsFinite(matrix.v[3], 0xFu)
+        VectorIsFinite(matrix.v[0], VectorComponentMask::s_XYZW)
+        && VectorIsFinite(matrix.v[1], VectorComponentMask::s_XYZW)
+        && VectorIsFinite(matrix.v[2], VectorComponentMask::s_XYZW)
+        && VectorIsFinite(matrix.v[3], VectorComponentMask::s_XYZW)
         && Vector4NearEqual(matrix.v[3], s_SIMDIdentityR3, VectorReplicate(s_Epsilon))
     ;
 }
@@ -170,8 +170,8 @@ template<typename JointMatrixVector>
     );
     const SIMDVector epsilon = VectorReplicate(s_RigidJointEpsilon);
     return
-        VectorIsFinite(lengthSq, 0x7u)
-        && VectorIsFinite(dotAndDeterminant, 0xFu)
+        VectorIsFinite(lengthSq, VectorComponentMask::s_XYZ)
+        && VectorIsFinite(dotAndDeterminant, VectorComponentMask::s_XYZW)
         && Vector4LessOrEqual(VectorAbs(VectorSubtract(lengthSq, s_SIMDOne)), epsilon)
         && Vector4LessOrEqual(VectorAbs(VectorSubtract(dotAndDeterminant, s_SIMDIdentityR3)), epsilon)
     ;
@@ -199,7 +199,7 @@ template<typename JointMatrixVector>
         0.0f
     );
     outDual = VectorScale(QuaternionMultiply(translation, outReal), 0.5f);
-    return VectorIsFinite(outDual, 0xFu);
+    return VectorIsFinite(outDual, VectorComponentMask::s_XYZW);
 }
 
 

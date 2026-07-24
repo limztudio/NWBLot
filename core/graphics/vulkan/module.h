@@ -49,9 +49,9 @@ struct DeviceDesc{
     VkQueue graphicsQueue = VK_NULL_HANDLE;
     VkQueue transferQueue = VK_NULL_HANDLE;
     VkQueue computeQueue = VK_NULL_HANDLE;
-    i32 graphicsQueueIndex = -1;
-    i32 transferQueueIndex = -1;
-    i32 computeQueueIndex = -1;
+    i32 graphicsQueueIndex = s_InvalidQueueFamilyIndex;
+    i32 transferQueueIndex = s_InvalidQueueFamilyIndex;
+    i32 computeQueueIndex = s_InvalidQueueFamilyIndex;
 
     GraphicsAllocator& allocator;
     Alloc::ThreadPool& threadPool;

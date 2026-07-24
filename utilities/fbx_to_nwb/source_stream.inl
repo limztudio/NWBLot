@@ -407,7 +407,7 @@ template<typename Vector3Like>
 }
 
 [[nodiscard]] bool IsFiniteSkinInfluence(const SIMDVector weights){
-    return VectorIsFinite(weights, 0xFu);
+    return VectorIsFinite(weights, VectorComponentMask::s_XYZW);
 }
 
 [[nodiscard]] bool IsFiniteSourceTriangleCorner(
@@ -421,15 +421,15 @@ template<typename Vector3Like>
     const SIMDVector skinWeights
 ){
     if(
-        !VectorIsFinite(position, 0x7u)
-        || !VectorIsFinite(normal, 0x7u)
-        || !VectorIsFinite(uv0, 0x3u)
-        || !VectorIsFinite(color, 0xFu)
+        !VectorIsFinite(position, VectorComponentMask::s_XYZ)
+        || !VectorIsFinite(normal, VectorComponentMask::s_XYZ)
+        || !VectorIsFinite(uv0, VectorComponentMask::s_XY)
+        || !VectorIsFinite(color, VectorComponentMask::s_XYZW)
     )
         return false;
     if(
         hasTangent
-        && !VectorIsFinite(tangent, 0xFu)
+        && !VectorIsFinite(tangent, VectorComponentMask::s_XYZW)
     )
         return false;
     return !wantsSkinning || IsFiniteSkinInfluence(skinWeights);

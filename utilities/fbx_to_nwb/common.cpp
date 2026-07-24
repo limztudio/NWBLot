@@ -194,7 +194,7 @@ bool ParseColorText(const AString& text, Vec4& outColor){
         return false;
 
     const SIMDVector color = VectorSet(red, green, blue, alpha);
-    if(!VectorIsFinite(color, 0xFu))
+    if(!VectorIsFinite(color, VectorComponentMask::s_XYZW))
         return false;
 
     StoreFloat(color, &outColor);
@@ -203,7 +203,7 @@ bool ParseColorText(const AString& text, Vec4& outColor){
 
 bool Normalize(const SIMDVector value, SIMDVector& outValue){
     const SIMDVector lengthSquaredVector = Vector3LengthSq(value);
-    if(!VectorIsFinite(lengthSquaredVector, 0xFu) || !Vector3Greater(lengthSquaredVector, VectorZero()))
+    if(!VectorIsFinite(lengthSquaredVector, VectorComponentMask::s_XYZW) || !Vector3Greater(lengthSquaredVector, VectorZero()))
         return false;
 
     const SIMDVector normalized = Vector3Normalize(value);

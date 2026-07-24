@@ -73,7 +73,7 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
     };
     const auto visitFaceNormals = [&](auto&& callback){
         for(u32 primitiveIndex = 0u; primitiveIndex < MeshletPrimitiveCount(meshlet); ++primitiveIndex){
-            const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * 3u;
+            const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * s_MeshletTriangleIndexCount;
             const u8 localVertex0 = entry.meshletPrimitiveIndices[primitiveOffset + 0u];
             const u8 localVertex1 = entry.meshletPrimitiveIndices[primitiveOffset + 1u];
             const u8 localVertex2 = entry.meshletPrimitiveIndices[primitiveOffset + 2u];

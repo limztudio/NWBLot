@@ -21,6 +21,20 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Default camera projection policy. The zero aspect-ratio sentinel deliberately asks the renderer to derive the
+// aspect from its active framebuffer; callers that cannot do that use s_FallbackAspectRatio instead.
+namespace CameraDefaults{
+inline constexpr f32 s_VerticalFovRadians = 60.0f * (s_PI / 180.0f);
+inline constexpr f32 s_NearPlane = 0.001f;
+inline constexpr f32 s_FarPlane = 10000.0f;
+inline constexpr f32 s_AutoAspectRatio = 0.0f;
+inline constexpr f32 s_FallbackAspectRatio = 1.0f;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct alignas(Float4) TransformComponent{
     Float4 position = Float4(0.f, 0.f, 0.f);
     // Unit quaternion in x/y/z/w order.
@@ -56,7 +70,12 @@ static_assert(sizeof(ActiveCameraComponent) == sizeof(Core::ECS::EntityID), "Act
 struct alignas(Float4) CameraComponent{
     // x = vertical FOV, y = near plane, z = far plane, w = aspect ratio.
     // An aspect ratio of 0 lets renderers derive aspect from the active framebuffer.
-    Float4 projection = Float4(60.0f * (s_PI / 180.0f), 0.001f, 10000.0f, 0.0f);
+    Float4 projection = Float4(
+        CameraDefaults::s_VerticalFovRadians,
+        CameraDefaults::s_NearPlane,
+        CameraDefaults::s_FarPlane,
+        CameraDefaults::s_AutoAspectRatio
+    );
 
     [[nodiscard]] f32 verticalFovRadians()const{ return projection.x; }
     [[nodiscard]] f32 nearPlane()const{ return projection.y; }
@@ -94,22 +113,43 @@ namespace LightType{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Default physical-light policy shared by authoring components and the renderer's resolved light representation.
+namespace LightDefaults{
+inline constexpr f32 s_WhiteColorComponent = 1.0f;
+inline constexpr f32 s_Intensity = 1.0f;
+inline constexpr f32 s_Range = 10.0f;
+inline constexpr f32 s_InnerConeCos = 0.95f;
+inline constexpr f32 s_OuterConeCos = 0.90f;
+inline constexpr f32 s_DirectionalAngularRadius = 0.00465f;
+inline constexpr f32 s_PunctualSourceRadius = 0.1f;
+inline constexpr bool s_EnableCaustics = true;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct alignas(Float4) LightComponent{
     // x/y/z = color, w = intensity.
-    Float4 colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
-    f32 range = 10.0f;
+    Float4 colorIntensity = Float4(
+        LightDefaults::s_WhiteColorComponent,
+        LightDefaults::s_WhiteColorComponent,
+        LightDefaults::s_WhiteColorComponent,
+        LightDefaults::s_Intensity
+    );
+    f32 range = LightDefaults::s_Range;
     // Spot cone cosines; outer (wider) must stay <= inner (narrower).
-    f32 innerConeCos = 0.95f;
-    f32 outerConeCos = 0.90f;
+    f32 innerConeCos = LightDefaults::s_InnerConeCos;
+    f32 outerConeCos = LightDefaults::s_OuterConeCos;
     // Soft-shadow source size (physical, Unreal-style). Directional: angular radius of the light disk in
     // radians (the sun half-angle; default ~0.27deg). Point/Spot: emissive sphere radius in world units.
     // Larger = softer penumbra. The RT sampler jitters the shadow ray over this source, so contact hardening
     // and distance-based softening emerge for free (no separate penumbra parameter).
-    f32 angularRadius = 0.00465f;
-    f32 sourceRadius = 0.1f;
+    f32 angularRadius = LightDefaults::s_DirectionalAngularRadius;
+    f32 sourceRadius = LightDefaults::s_PunctualSourceRadius;
     // Byte-sized members kept last so the five f32 above pack contiguously with no internal padding.
     LightType::Enum type = LightType::Directional;
-    bool enableCaustics = true;
+    bool enableCaustics = LightDefaults::s_EnableCaustics;
 
     [[nodiscard]] Float4 color()const{
         return Float4(colorIntensity.x, colorIntensity.y, colorIntensity.z, 0.0f);

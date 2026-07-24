@@ -69,7 +69,7 @@ bool InvertJointMatrix(const SIMDMatrix& matrix, SIMDMatrix& outInverse){
     SIMDVector determinant;
     outInverse = MatrixInverse(&determinant, matrix);
 
-    return VectorIsFinite(determinant, 0xFu)
+    return VectorIsFinite(determinant, VectorComponentMask::s_XYZW)
         && Vector4Greater(VectorAbs(determinant), VectorReplicate(s_InvertibleJointDeterminantEpsilon))
         && !MatrixIsNaN(outInverse)
         && !MatrixIsInfinite(outInverse)

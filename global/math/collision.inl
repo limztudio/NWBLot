@@ -18,6 +18,8 @@ namespace CollisionDetail{
 
 inline constexpr f32 s_RayEpsilon = 1.0e-20f;
 inline constexpr f32 s_PlaneEpsilon = 1.192092896e-7f;
+inline constexpr usize s_TriangleVertexCount = 3u;
+inline constexpr u32 s_FrustumPlaneCount = 6u;
 
 [[nodiscard]] NWB_INLINE bool Vector3AnyTrue(const SIMDVector value)noexcept{
     return (VectorMoveMask(value) & 0x7u) != 0u;
@@ -487,7 +489,7 @@ inline void FrustumPlanes(
     const f32 farPlane,
     SIMDVector* outPlanes
 )noexcept{
-    const SIMDVector localPlanes[6] = {
+    const SIMDVector localPlanes[s_FrustumPlaneCount] = {
         VectorSet(0.0f, 0.0f, 1.0f, -nearPlane),
         VectorSet(0.0f, 0.0f, -1.0f, farPlane),
         VectorSet(-1.0f, 0.0f, rightSlope, 0.0f),
@@ -495,7 +497,7 @@ inline void FrustumPlanes(
         VectorSet(0.0f, -1.0f, topSlope, 0.0f),
         VectorSet(0.0f, 1.0f, -bottomSlope, 0.0f),
     };
-    for(u32 i = 0u; i < 6u; ++i)
+    for(u32 i = 0u; i < s_FrustumPlaneCount; ++i)
         outPlanes[i] = PlaneNormalizeSafe(TransformPlane(localPlanes[i], orientation, origin));
 }
 
@@ -504,7 +506,7 @@ inline void FrustumPlanes(
     const SIMDVector center,
     const SIMDVector extents
 )noexcept{
-    for(u32 planeIndex = 0u; planeIndex < 6u; ++planeIndex){
+    for(u32 planeIndex = 0u; planeIndex < s_FrustumPlaneCount; ++planeIndex){
         SIMDVector outside{};
         SIMDVector inside{};
         FastIntersectAxisAlignedBoxPlane(center, extents, planes[planeIndex], outside, inside);
@@ -517,7 +519,7 @@ inline void FrustumPlanes(
 [[nodiscard]] inline bool FrustumPlanesIntersectSphere(const SIMDVector* planes, const SIMDVector centerRadius)noexcept{
     const SIMDVector center = SphereCenter(centerRadius);
     const SIMDVector radius = VectorReplicate(SphereRadius(centerRadius));
-    for(u32 planeIndex = 0u; planeIndex < 6u; ++planeIndex){
+    for(u32 planeIndex = 0u; planeIndex < s_FrustumPlaneCount; ++planeIndex){
         SIMDVector outside{};
         SIMDVector inside{};
         FastIntersectSpherePlane(center, radius, planes[planeIndex], outside, inside);
@@ -537,7 +539,7 @@ inline void FrustumPlanes(
     SIMDVector axis1{};
     SIMDVector axis2{};
     ObbAxes(orientation, axis0, axis1, axis2);
-    for(u32 planeIndex = 0u; planeIndex < 6u; ++planeIndex){
+    for(u32 planeIndex = 0u; planeIndex < s_FrustumPlaneCount; ++planeIndex){
         SIMDVector outside{};
         SIMDVector inside{};
         FastIntersectOrientedBoxPlane(center, extents, axis0, axis1, axis2, planes[planeIndex], outside, inside);
@@ -552,7 +554,7 @@ inline void FrustumPlanes(
     const SIMDVector* points,
     const usize pointCount
 )noexcept{
-    for(u32 planeIndex = 0u; planeIndex < 6u; ++planeIndex){
+    for(u32 planeIndex = 0u; planeIndex < s_FrustumPlaneCount; ++planeIndex){
         SIMDVector outside{};
         SIMDVector inside{};
         FastIntersectPointsPlane(points, pointCount, planes[planeIndex], outside, inside);
@@ -976,9 +978,9 @@ inline void SIMDCALL BoundingSphere::transform(
     const SIMDVector v1,
     const SIMDVector v2
 )const noexcept{
-    const SIMDVector points[3] = { v0, v1, v2 };
+    const SIMDVector points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
     const SIMDVector sphereValue = LoadFloat(centerRadius);
-    if(CollisionDetail::PointsInsideSphere(points, 3u, CollisionDetail::SphereCenter(sphereValue), VectorReplicate(CollisionDetail::SphereRadius(sphereValue))))
+    if(CollisionDetail::PointsInsideSphere(points, CollisionDetail::s_TriangleVertexCount, CollisionDetail::SphereCenter(sphereValue), VectorReplicate(CollisionDetail::SphereRadius(sphereValue))))
         return ContainmentType::Contains;
     return intersects(v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
@@ -1137,7 +1139,7 @@ inline void SIMDCALL BoundingSphere::transform(
     const SIMDVector plane4,
     const SIMDVector plane5
 )const noexcept{
-    const SIMDVector planes[6] = { plane0, plane1, plane2, plane3, plane4, plane5 };
+    const SIMDVector planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
     const SIMDVector sphereValue = LoadFloat(centerRadius);
     const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
     const SIMDVector sphereRadius = VectorReplicate(CollisionDetail::SphereRadius(sphereValue));
@@ -1296,9 +1298,9 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{
 )const noexcept{
     SIMDVector minBounds{};
     SIMDVector maxBounds{};
-    const SIMDVector points[3] = { v0, v1, v2 };
+    const SIMDVector points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
     CollisionDetail::MinMaxFromCenterExtents(LoadFloat(center), LoadFloat(extents), minBounds, maxBounds);
-    if(CollisionDetail::PointsInsideMinMax(points, 3u, minBounds, maxBounds))
+    if(CollisionDetail::PointsInsideMinMax(points, CollisionDetail::s_TriangleVertexCount, minBounds, maxBounds))
         return ContainmentType::Contains;
     return intersects(v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
@@ -1438,8 +1440,8 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{
 )const noexcept{
     SIMDVector points[s_CornerCount];
     CollisionDetail::AabbCorners(LoadFloat(center), LoadFloat(extents), points);
-    const SIMDVector planes[6] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDetail::ContainmentFromPlaneTests(points, s_CornerCount, planes, 6u);
+    const SIMDVector planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
+    return CollisionDetail::ContainmentFromPlaneTests(points, s_CornerCount, planes, CollisionDetail::s_FrustumPlaneCount);
 }
 
 inline void BoundingBox::createMerged(BoundingBox& outBox, const BoundingBox& box0, const BoundingBox& box1)noexcept{
@@ -1555,8 +1557,8 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
     const SIMDVector v1,
     const SIMDVector v2
 )const noexcept{
-    const SIMDVector points[3] = { v0, v1, v2 };
-    if(CollisionDetail::PointsInsideObb(points, 3u, LoadFloat(center), LoadFloat(extents), LoadFloat(orientation)))
+    const SIMDVector points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
+    if(CollisionDetail::PointsInsideObb(points, CollisionDetail::s_TriangleVertexCount, LoadFloat(center), LoadFloat(extents), LoadFloat(orientation)))
         return ContainmentType::Contains;
     return intersects(v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
@@ -1700,8 +1702,8 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
 )const noexcept{
     SIMDVector corners[s_CornerCount];
     CollisionDetail::ObbCorners(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), corners);
-    const SIMDVector planes[6] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDetail::ContainmentFromPlaneTests(corners, s_CornerCount, planes, 6u);
+    const SIMDVector planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
+    return CollisionDetail::ContainmentFromPlaneTests(corners, s_CornerCount, planes, CollisionDetail::s_FrustumPlaneCount);
 }
 
 inline void BoundingOrientedBox::createFromBoundingBox(BoundingOrientedBox& outBox, const BoundingBox& box)noexcept{
@@ -1790,7 +1792,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
 }
 
 [[nodiscard]] inline ContainmentType::Enum SIMDCALL BoundingFrustum::contains(const SIMDVector point)const noexcept{
-    SIMDVector planes[6];
+    SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
     for(const SIMDVector plane : planes){
         if(CollisionDetail::Vector4AllTrue(VectorLess(CollisionDetail::PlaneDistance(plane, point), VectorZero())))
@@ -1804,14 +1806,14 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
     const SIMDVector v1,
     const SIMDVector v2
 )const noexcept{
-    SIMDVector planes[6];
-    const SIMDVector points[3] = { v0, v1, v2 };
+    SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
+    const SIMDVector points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
-    return CollisionDetail::ContainmentFromPlaneTests(points, 3u, planes, 6u);
+    return CollisionDetail::ContainmentFromPlaneTests(points, CollisionDetail::s_TriangleVertexCount, planes, CollisionDetail::s_FrustumPlaneCount);
 }
 
 [[nodiscard]] inline ContainmentType::Enum BoundingFrustum::contains(const BoundingSphere& sphere)const noexcept{
-    SIMDVector planes[6];
+    SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
     const SIMDVector sphereValue = LoadFloat(sphere.centerRadius);
     const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
@@ -1829,23 +1831,23 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
 }
 
 [[nodiscard]] inline ContainmentType::Enum BoundingFrustum::contains(const BoundingBox& box)const noexcept{
-    SIMDVector planes[6];
+    SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
     SIMDVector corners[BoundingBox::s_CornerCount];
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
     CollisionDetail::AabbCorners(LoadFloat(box.center), LoadFloat(box.extents), corners);
-    return CollisionDetail::ContainmentFromPlaneTests(corners, BoundingBox::s_CornerCount, planes, 6u);
+    return CollisionDetail::ContainmentFromPlaneTests(corners, BoundingBox::s_CornerCount, planes, CollisionDetail::s_FrustumPlaneCount);
 }
 
 [[nodiscard]] inline ContainmentType::Enum BoundingFrustum::contains(const BoundingOrientedBox& box)const noexcept{
-    SIMDVector planes[6];
+    SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
     SIMDVector corners[BoundingOrientedBox::s_CornerCount];
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
     CollisionDetail::ObbCorners(LoadFloat(box.center), LoadFloat(box.extents), LoadFloat(box.orientation), corners);
-    return CollisionDetail::ContainmentFromPlaneTests(corners, BoundingOrientedBox::s_CornerCount, planes, 6u);
+    return CollisionDetail::ContainmentFromPlaneTests(corners, BoundingOrientedBox::s_CornerCount, planes, CollisionDetail::s_FrustumPlaneCount);
 }
 
 [[nodiscard]] inline ContainmentType::Enum BoundingFrustum::contains(const BoundingFrustum& frustum)const noexcept{
-    SIMDVector planes[6];
+    SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
     SIMDVector corners[BoundingFrustum::s_CornerCount];
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
     CollisionDetail::FrustumCorners(
@@ -1859,11 +1861,11 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
         frustum.farPlane,
         corners
     );
-    const ContainmentType::Enum containment = CollisionDetail::ContainmentFromPlaneTests(corners, BoundingFrustum::s_CornerCount, planes, 6u);
+    const ContainmentType::Enum containment = CollisionDetail::ContainmentFromPlaneTests(corners, BoundingFrustum::s_CornerCount, planes, CollisionDetail::s_FrustumPlaneCount);
     if(containment != ContainmentType::Intersects)
         return containment;
 
-    SIMDVector otherPlanes[6];
+    SIMDVector otherPlanes[CollisionDetail::s_FrustumPlaneCount];
     SIMDVector thisCorners[BoundingFrustum::s_CornerCount];
     CollisionDetail::FrustumPlanes(
         LoadFloat(frustum.origin),
@@ -1881,26 +1883,26 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
 }
 
 [[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingSphere& sphere)const noexcept{
-    SIMDVector planes[6];
+    SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
     return CollisionDetail::FrustumPlanesIntersectSphere(planes, LoadFloat(sphere.centerRadius));
 }
 
 [[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingBox& box)const noexcept{
-    SIMDVector planes[6];
+    SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
     return CollisionDetail::FrustumPlanesIntersectAxisAlignedBox(planes, LoadFloat(box.center), LoadFloat(box.extents));
 }
 
 [[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingOrientedBox& box)const noexcept{
-    SIMDVector planes[6];
+    SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
     return CollisionDetail::FrustumPlanesIntersectOrientedBox(planes, LoadFloat(box.center), LoadFloat(box.extents), LoadFloat(box.orientation));
 }
 
 [[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingFrustum& frustum)const noexcept{
-    SIMDVector planes[6];
-    SIMDVector otherPlanes[6];
+    SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
+    SIMDVector otherPlanes[CollisionDetail::s_FrustumPlaneCount];
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
     CollisionDetail::FrustumPlanes(
         LoadFloat(frustum.origin),
@@ -1959,7 +1961,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
     const SIMDVector direction,
     f32& outDistance
 )const noexcept{
-    SIMDVector planes[6];
+    SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
     f32 tMin = 0.0f;
     f32 tMax = s_MaxF32;
@@ -1995,8 +1997,8 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
 )const noexcept{
     SIMDVector corners[s_CornerCount];
     CollisionDetail::FrustumCorners(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, corners);
-    const SIMDVector planes[6] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDetail::ContainmentFromPlaneTests(corners, s_CornerCount, planes, 6u);
+    const SIMDVector planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
+    return CollisionDetail::ContainmentFromPlaneTests(corners, s_CornerCount, planes, CollisionDetail::s_FrustumPlaneCount);
 }
 
 inline void BoundingFrustum::getPlanes(
@@ -2007,7 +2009,7 @@ inline void BoundingFrustum::getPlanes(
     SIMDVector* topPlaneOut,
     SIMDVector* bottomPlaneOut
 )const noexcept{
-    SIMDVector planes[6];
+    SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
     if(nearPlaneOut)
         *nearPlaneOut = planes[0];
@@ -2122,9 +2124,9 @@ inline void SIMDCALL BoundingFrustum::createFromMatrix(
     const SIMDVector plane4,
     const SIMDVector plane5
 )noexcept{
-    const SIMDVector points[3] = { v0, v1, v2 };
-    const SIMDVector planes[6] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    return CollisionDetail::ContainmentFromPlaneTests(points, 3u, planes, 6u);
+    const SIMDVector points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
+    const SIMDVector planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
+    return CollisionDetail::ContainmentFromPlaneTests(points, CollisionDetail::s_TriangleVertexCount, planes, CollisionDetail::s_FrustumPlaneCount);
 }
 
 

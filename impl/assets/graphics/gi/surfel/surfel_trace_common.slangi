@@ -14,21 +14,13 @@
 
 
 #include "../sampling.slangi"        // nwbGiFibonacciDirection + nwbGiFrameRotation
-#include "surfel_record.slangi"
-#include "surfel_constants.slangi"
-#include "surfel_binding_slots.h"
+#include "surfel_runtime.slangi"
 #include "surfel_sh.slangi"          // nwbSurfelShBasis / nwbSurfelShProjectionScale
 #include "surfel_hash.slangi"        // nwbSurfelCellCoord / nwbSurfelHashCell
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[vk::binding(NWB_SURFEL_BINDING_CONSTANTS, NWB_SURFEL_SET)]]
-ConstantBuffer<NwbSurfelConstants> g_NwbSurfelConstants;
-
-[[vk::binding(NWB_SURFEL_BINDING_POOL, NWB_SURFEL_SET)]]
-RWStructuredBuffer<NwbSurfel> g_NwbSurfelPool;
 
 // Snapshot of the previous frame's converged field. The bounce gather reads these SRVs instead of the live pool this
 // trace writes, so surfel feedback sees a stable frame-start field.

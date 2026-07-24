@@ -22,6 +22,8 @@ namespace __hidden_vulkan_queries{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr f32 s_TimestampNanosecondsToSeconds = 1e-9f;
+
 inline VkResult GetTimerQueryResults(const VulkanContext& context, const VkQueryPool queryPool, u64 (&timestamps)[s_TimerQueryTimestampCount]){
     return vkGetQueryPoolResults(
         context.device,
@@ -190,7 +192,7 @@ f32 Device::getTimerQueryTime(TimerQuery* queryResource){
     if(res == VK_SUCCESS){
         u64 diff = timestamps[s_TimerQueryEndIndex] - timestamps[s_TimerQueryBeginIndex];
         f32 timestampPeriod = m_context.physicalDeviceProperties.limits.timestampPeriod;
-        return static_cast<f32>(diff) * timestampPeriod * 1e-9f; // Convert to seconds
+        return static_cast<f32>(diff) * timestampPeriod * __hidden_vulkan_queries::s_TimestampNanosecondsToSeconds;
     }
 
     if(res != VK_NOT_READY)

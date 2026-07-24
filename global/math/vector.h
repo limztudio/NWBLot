@@ -15,6 +15,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Active component masks for vector helpers that consume only a subset of SIMD lanes.
+namespace VectorComponentMask{
+inline constexpr u32 s_XY = 0x3u;
+inline constexpr u32 s_XYZ = 0x7u;
+inline constexpr u32 s_XYZW = 0xFu;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace SIMDVectorDetail{
 
 
@@ -574,33 +585,18 @@ NWB_INLINE f32 SIMDCALL VectorGetW(SIMDVector value)noexcept{ return SIMDVectorD
 
 NWB_INLINE f32 SIMDCALL VectorGetByIndex(SIMDVector value, usize index)noexcept{
     NWB_ASSERT(index < 4);
-#if defined(NWB_HAS_SCALAR)
-    return value.f[index];
-#else
-    Float4 v{};
-#if defined(NWB_HAS_NEON)
-    vst1q_f32(v.raw, value);
-#else
-    _mm_store_ps(v.raw, value);
-#endif
-    return v.raw[index];
-#endif
+    switch(index){
+    case 0u: return VectorGetX(value);
+    case 1u: return VectorGetY(value);
+    case 2u: return VectorGetZ(value);
+    default: return VectorGetW(value);
+    }
 }
 
 NWB_INLINE void SIMDCALL VectorGetByIndexPtr(f32* out, SIMDVector value, usize index)noexcept{
     NWB_ASSERT(out != nullptr);
     NWB_ASSERT(index < 4);
-#if defined(NWB_HAS_SCALAR)
-    *out = value.f[index];
-#else
-    Float4 v{};
-#if defined(NWB_HAS_NEON)
-    vst1q_f32(v.raw, value);
-#else
-    _mm_store_ps(v.raw, value);
-#endif
-    *out = v.raw[index];
-#endif
+    *out = VectorGetByIndex(value, index);
 }
 
 NWB_INLINE void SIMDCALL VectorGetXPtr(f32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<0u>(out, value); }
@@ -615,33 +611,18 @@ NWB_INLINE u32 SIMDCALL VectorGetIntW(SIMDVector value)noexcept{ return SIMDVect
 
 NWB_INLINE u32 SIMDCALL VectorGetIntByIndex(SIMDVector value, usize index)noexcept{
     NWB_ASSERT(index < 4);
-#if defined(NWB_HAS_SCALAR)
-    return value.u[index];
-#else
-    UInt4 v{};
-#if defined(NWB_HAS_NEON)
-    vst1q_u32(v.raw, vreinterpretq_u32_f32(value));
-#else
-    _mm_store_si128(reinterpret_cast<__m128i*>(v.raw), _mm_castps_si128(value));
-#endif
-    return v.raw[index];
-#endif
+    switch(index){
+    case 0u: return VectorGetIntX(value);
+    case 1u: return VectorGetIntY(value);
+    case 2u: return VectorGetIntZ(value);
+    default: return VectorGetIntW(value);
+    }
 }
 
 NWB_INLINE void SIMDCALL VectorGetIntByIndexPtr(u32* out, SIMDVector value, usize index)noexcept{
     NWB_ASSERT(out != nullptr);
     NWB_ASSERT(index < 4);
-#if defined(NWB_HAS_SCALAR)
-    *out = value.u[index];
-#else
-    UInt4 v{};
-#if defined(NWB_HAS_NEON)
-    vst1q_u32(v.raw, vreinterpretq_u32_f32(value));
-#else
-    _mm_store_si128(reinterpret_cast<__m128i*>(v.raw), _mm_castps_si128(value));
-#endif
-    *out = v.raw[index];
-#endif
+    *out = VectorGetIntByIndex(value, index);
 }
 
 NWB_INLINE void SIMDCALL VectorGetIntXPtr(u32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<0u>(out, value); }
@@ -695,41 +676,18 @@ NWB_INLINE SIMDVector SIMDCALL VectorSetW(SIMDVector value, f32 w)noexcept{
 
 NWB_INLINE SIMDVector SIMDCALL VectorSetByIndex(SIMDVector value, f32 component, usize index)noexcept{
     NWB_ASSERT(index < 4);
-#if defined(NWB_HAS_SCALAR)
-    value.f[index] = component;
-    return value;
-#else
-    Float4 v{};
-#if defined(NWB_HAS_NEON)
-    vst1q_f32(v.raw, value);
-    v.raw[index] = component;
-    return vld1q_f32(v.raw);
-#else
-    _mm_store_ps(v.raw, value);
-    v.raw[index] = component;
-    return _mm_load_ps(v.raw);
-#endif
-#endif
+    switch(index){
+    case 0u: return VectorSetX(value, component);
+    case 1u: return VectorSetY(value, component);
+    case 2u: return VectorSetZ(value, component);
+    default: return VectorSetW(value, component);
+    }
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorSetByIndexPtr(SIMDVector value, const f32* component, usize index)noexcept{
     NWB_ASSERT(component != nullptr);
     NWB_ASSERT(index < 4);
-#if defined(NWB_HAS_SCALAR)
-    value.f[index] = *component;
-    return value;
-#else
-    Float4 v{};
-#if defined(NWB_HAS_NEON)
-    vst1q_f32(v.raw, value);
-    v.raw[index] = *component;
-    return vld1q_f32(v.raw);
-#else
-    _mm_store_ps(v.raw, value);
-    v.raw[index] = *component;
-    return _mm_load_ps(v.raw);
-#endif
-#endif
+    return VectorSetByIndex(value, *component, index);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorSetXPtr(SIMDVector value, const f32* x)noexcept{
@@ -826,41 +784,18 @@ NWB_INLINE SIMDVector SIMDCALL VectorSetIntW(SIMDVector value, u32 w)noexcept{
 
 NWB_INLINE SIMDVector SIMDCALL VectorSetIntByIndex(SIMDVector value, u32 component, usize index)noexcept{
     NWB_ASSERT(index < 4);
-#if defined(NWB_HAS_SCALAR)
-    value.u[index] = component;
-    return value;
-#else
-    alignas(16) u32 v[4]{};
-#if defined(NWB_HAS_NEON)
-    vst1q_u32(v, vreinterpretq_u32_f32(value));
-    v[index] = component;
-    return vreinterpretq_f32_u32(vld1q_u32(v));
-#else
-    _mm_store_si128(reinterpret_cast<__m128i*>(v), _mm_castps_si128(value));
-    v[index] = component;
-    return _mm_castsi128_ps(_mm_load_si128(reinterpret_cast<const __m128i*>(v)));
-#endif
-#endif
+    switch(index){
+    case 0u: return VectorSetIntX(value, component);
+    case 1u: return VectorSetIntY(value, component);
+    case 2u: return VectorSetIntZ(value, component);
+    default: return VectorSetIntW(value, component);
+    }
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorSetIntByIndexPtr(SIMDVector value, const u32* component, usize index)noexcept{
     NWB_ASSERT(component != nullptr);
     NWB_ASSERT(index < 4);
-#if defined(NWB_HAS_SCALAR)
-    value.u[index] = *component;
-    return value;
-#else
-    alignas(16) u32 v[4]{};
-#if defined(NWB_HAS_NEON)
-    vst1q_u32(v, vreinterpretq_u32_f32(value));
-    v[index] = *component;
-    return vreinterpretq_f32_u32(vld1q_u32(v));
-#else
-    _mm_store_si128(reinterpret_cast<__m128i*>(v), _mm_castps_si128(value));
-    v[index] = *component;
-    return _mm_castsi128_ps(_mm_load_si128(reinterpret_cast<const __m128i*>(v)));
-#endif
-#endif
+    return VectorSetIntByIndex(value, *component, index);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorSetIntXPtr(SIMDVector value, const u32* x)noexcept{
@@ -942,14 +877,17 @@ NWB_INLINE SIMDVector SIMDCALL VectorSwizzle(SIMDVector value, u32 e0, u32 e1, u
     const uint8x8_t hi = vtbl2_u8(table, vreinterpret_u8_u32(idx));
     return vcombine_f32(vreinterpret_f32_u8(lo), vreinterpret_f32_u8(hi));
 #elif defined(NWB_HAS_AVX2)
-    alignas(16) const i32 control[4] = { static_cast<i32>(e0), static_cast<i32>(e1), static_cast<i32>(e2), static_cast<i32>(e3) };
-    return _mm_permutevar_ps(value, _mm_load_si128(reinterpret_cast<const __m128i*>(control)));
+    const __m128i control = _mm_set_epi32(static_cast<i32>(e3), static_cast<i32>(e2), static_cast<i32>(e1), static_cast<i32>(e0));
+    return _mm_permutevar_ps(value, control);
 #elif defined(NWB_HAS_SSE4)
-    alignas(16) u32 stored[4]{};
-    _mm_store_si128(reinterpret_cast<__m128i*>(stored), _mm_castps_si128(value));
-    return _mm_castsi128_ps(_mm_set_epi32(static_cast<i32>(stored[e3]), static_cast<i32>(stored[e2]), static_cast<i32>(stored[e1]), static_cast<i32>(stored[e0])));
+    return VectorSetInt(
+        VectorGetIntByIndex(value, e0),
+        VectorGetIntByIndex(value, e1),
+        VectorGetIntByIndex(value, e2),
+        VectorGetIntByIndex(value, e3)
+    );
 #else
-    return SIMDConvertDetail::MakeU32(value.u[e0], value.u[e1], value.u[e2], value.u[e3]);
+    return VectorSetInt(value.u[e0], value.u[e1], value.u[e2], value.u[e3]);
 #endif
 }
 
@@ -1076,28 +1014,26 @@ NWB_INLINE SIMDVector SIMDCALL VectorPermute(SIMDVector v0, SIMDVector v1, u32 x
     const uint8x8_t hi = vtbl4_u8(table, vreinterpret_u8_u32(idx));
     return vcombine_f32(vreinterpret_f32_u8(lo), vreinterpret_f32_u8(hi));
 #elif defined(NWB_HAS_AVX2)
-    alignas(16) const i32 control[4] = { static_cast<i32>(x), static_cast<i32>(y), static_cast<i32>(z), static_cast<i32>(w) };
-    const __m128i controlVector = _mm_load_si128(reinterpret_cast<const __m128i*>(control));
+    const __m128i controlVector = _mm_set_epi32(static_cast<i32>(w), static_cast<i32>(z), static_cast<i32>(y), static_cast<i32>(x));
     const __m128i select = _mm_cmpgt_epi32(controlVector, _mm_set1_epi32(3));
     const __m128i swizzle = _mm_and_si128(controlVector, _mm_set1_epi32(3));
     const SIMDVector a = _mm_permutevar_ps(v0, swizzle);
     const SIMDVector b = _mm_permutevar_ps(v1, swizzle);
     return _mm_or_ps(_mm_andnot_ps(_mm_castsi128_ps(select), a), _mm_and_ps(_mm_castsi128_ps(select), b));
 #elif defined(NWB_HAS_SSE4)
-    alignas(16) u32 a[4]{};
-    alignas(16) u32 b[4]{};
-    _mm_store_si128(reinterpret_cast<__m128i*>(a), _mm_castps_si128(v0));
-    _mm_store_si128(reinterpret_cast<__m128i*>(b), _mm_castps_si128(v1));
-    const u32* source[2] = { a, b };
-    return _mm_castsi128_ps(_mm_set_epi32(
-        static_cast<i32>(source[w >> 2][w & 3]),
-        static_cast<i32>(source[z >> 2][z & 3]),
-        static_cast<i32>(source[y >> 2][y & 3]),
-        static_cast<i32>(source[x >> 2][x & 3])
-    ));
+    return VectorSetInt(
+        x < 4u ? VectorGetIntByIndex(v0, x) : VectorGetIntByIndex(v1, x - 4u),
+        y < 4u ? VectorGetIntByIndex(v0, y) : VectorGetIntByIndex(v1, y - 4u),
+        z < 4u ? VectorGetIntByIndex(v0, z) : VectorGetIntByIndex(v1, z - 4u),
+        w < 4u ? VectorGetIntByIndex(v0, w) : VectorGetIntByIndex(v1, w - 4u)
+    );
 #else
-    const u32* source[2] = { v0.u, v1.u };
-    return SIMDConvertDetail::MakeU32(source[x >> 2][x & 3], source[y >> 2][y & 3], source[z >> 2][z & 3], source[w >> 2][w & 3]);
+    return VectorSetInt(
+        x < 4u ? v0.u[x] : v1.u[x - 4u],
+        y < 4u ? v0.u[y] : v1.u[y - 4u],
+        z < 4u ? v0.u[z] : v1.u[z - 4u],
+        w < 4u ? v0.u[w] : v1.u[w - 4u]
+    );
 #endif
 }
 
@@ -2200,11 +2136,12 @@ NWB_INLINE SIMDVector SIMDCALL VectorPow(SIMDVector v0, SIMDVector v1)noexcept{
         Pow(vgetq_lane_f32(v0, 3), vgetq_lane_f32(v1, 3))
     );
 #else
-    Float4 a{};
-    Float4 b{};
-    _mm_store_ps(a.raw, v0);
-    _mm_store_ps(b.raw, v1);
-    return _mm_set_ps(Pow(a.w, b.w), Pow(a.z, b.z), Pow(a.y, b.y), Pow(a.x, b.x));
+    return VectorSet(
+        Pow(VectorGetX(v0), VectorGetX(v1)),
+        Pow(VectorGetY(v0), VectorGetY(v1)),
+        Pow(VectorGetZ(v0), VectorGetZ(v1)),
+        Pow(VectorGetW(v0), VectorGetW(v1))
+    );
 #endif
 }
 
@@ -2334,9 +2271,12 @@ NWB_INLINE SIMDVector SIMDCALL VectorTan(SIMDVector value)noexcept{
 #elif defined(NWB_HAS_NEON)
     vb = vreinterpretq_f32_u32(vcvtq_u32_f32(vb));
 #else
-    Float4U vbValues;
-    SIMDConvertDetail::StoreF32(vbValues.raw, vb);
-    vb = VectorSetInt(static_cast<u32>(vbValues.x), static_cast<u32>(vbValues.y), static_cast<u32>(vbValues.z), static_cast<u32>(vbValues.w));
+    vb = VectorSetInt(
+        static_cast<u32>(VectorGetX(vb)),
+        static_cast<u32>(VectorGetY(vb)),
+        static_cast<u32>(VectorGetZ(vb)),
+        static_cast<u32>(VectorGetW(vb))
+    );
 #endif
 
     SIMDVector vc2 = VectorMultiply(vc, vc);

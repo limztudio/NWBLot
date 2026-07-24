@@ -94,6 +94,14 @@
 #define NWB_SURFEL_TRACE_BUILDARGS_BINDING_CONSTANTS 0   // ConstantBuffer<NwbSurfelConstants> (update divisor = .w)
 #define NWB_SURFEL_TRACE_BUILDARGS_BINDING_COUNTER 1     // RWStructuredBuffer<uint> (read BUMP_TOP)
 #define NWB_SURFEL_TRACE_BUILDARGS_BINDING_ARGS 2        // RWStructuredBuffer<uint> (DispatchIndirectArguments, 3 u32)
+// This housekeeping pass has exactly one invocation. Keep its Slang workgroup shape and its CPU dispatch dimensions
+// explicit and shared so neither side accidentally starts launching more than one writer of the indirect arguments.
+#define NWB_SURFEL_TRACE_BUILDARGS_GROUP_SIZE_X 1u
+#define NWB_SURFEL_TRACE_BUILDARGS_GROUP_SIZE_Y 1u
+#define NWB_SURFEL_TRACE_BUILDARGS_GROUP_SIZE_Z 1u
+#define NWB_SURFEL_TRACE_BUILDARGS_DISPATCH_GROUP_COUNT_X 1u
+#define NWB_SURFEL_TRACE_BUILDARGS_DISPATCH_GROUP_COUNT_Y 1u
+#define NWB_SURFEL_TRACE_BUILDARGS_DISPATCH_GROUP_COUNT_Z 1u
 #define NWB_SURFEL_TRACE_INDIRECT_ARGS_GROUP_COUNT_X 0u
 #define NWB_SURFEL_TRACE_INDIRECT_ARGS_GROUP_COUNT_Y 1u
 #define NWB_SURFEL_TRACE_INDIRECT_ARGS_GROUP_COUNT_Z 2u

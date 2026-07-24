@@ -32,7 +32,7 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
 
 
 [[nodiscard]] inline bool ValidSkinInfluenceWeights(const SIMDVector weights){
-    if(!VectorIsFinite(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero()))
+    if(!VectorIsFinite(weights, VectorComponentMask::s_XYZW) || !Vector4GreaterOrEqual(weights, VectorZero()))
         return false;
 
     return Vector4NearEqual(Vector4Dot(weights, s_SIMDOne), s_SIMDOne, VectorReplicate(s_SkinWeightSumEpsilon));
@@ -43,7 +43,7 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
     if(skeletonJointCount == 0u)
         return true;
 
-    for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
+    for(u32 influenceIndex = 0; influenceIndex < s_SkinInfluenceJointCount; ++influenceIndex){
         const u32 joint = static_cast<u32>(skin.joint[influenceIndex]);
         if(joint < skeletonJointCount)
             continue;
@@ -60,10 +60,10 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
     const SIMDVector row2 = matrix.v[2];
     const SIMDVector row3 = matrix.v[3];
     if(
-        !VectorIsFinite(row0, 0xFu)
-        || !VectorIsFinite(row1, 0xFu)
-        || !VectorIsFinite(row2, 0xFu)
-        || !VectorIsFinite(row3, 0xFu)
+        !VectorIsFinite(row0, VectorComponentMask::s_XYZW)
+        || !VectorIsFinite(row1, VectorComponentMask::s_XYZW)
+        || !VectorIsFinite(row2, VectorComponentMask::s_XYZW)
+        || !VectorIsFinite(row3, VectorComponentMask::s_XYZW)
         || !Vector4NearEqual(row3, s_SIMDIdentityR3, VectorReplicate(s_Epsilon))
     )
         return false;
@@ -72,7 +72,7 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
         VectorSetW(row0, 0.0f),
         Vector3Cross(VectorSetW(row1, 0.0f), VectorSetW(row2, 0.0f))
     );
-    return VectorIsFinite(determinant, 0xFu) && Vector4Greater(VectorAbs(determinant), VectorReplicate(s_Epsilon));
+    return VectorIsFinite(determinant, VectorComponentMask::s_XYZW) && Vector4Greater(VectorAbs(determinant), VectorReplicate(s_Epsilon));
 }
 
 [[nodiscard]] inline bool ValidInverseBindMatrixCount(

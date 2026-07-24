@@ -158,6 +158,58 @@ TEST(Math, VectorMergeAndComponentReductions){
     EXPECT_TRUE(NearlyEqual4(Vector3MaxComponent(value), 11.0f, 11.0f, 11.0f, 11.0f));
 }
 
+TEST(Math, DynamicVectorLanes){
+    const SIMDVector value = VectorSet(3.0f, -7.0f, 11.0f, -19.0f);
+    EXPECT_TRUE(NearlyEqual(VectorGetByIndex(value, 0u), 3.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetByIndex(value, 1u), -7.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetByIndex(value, 2u), 11.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetByIndex(value, 3u), -19.0f));
+
+    f32 component = 0.0f;
+    VectorGetByIndexPtr(&component, value, 2u);
+    EXPECT_TRUE(NearlyEqual(component, 11.0f));
+
+    SIMDVector updated = VectorSetByIndex(value, 5.0f, 1u);
+    const f32 replacement = 13.0f;
+    updated = VectorSetByIndexPtr(updated, &replacement, 3u);
+    EXPECT_TRUE(NearlyEqual4(updated, 3.0f, 5.0f, 11.0f, 13.0f));
+
+    const SIMDVector integerValue = VectorSetInt(3u, 7u, 11u, 19u);
+    EXPECT_EQ(VectorGetIntByIndex(integerValue, 0u), 3u);
+    EXPECT_EQ(VectorGetIntByIndex(integerValue, 1u), 7u);
+    EXPECT_EQ(VectorGetIntByIndex(integerValue, 2u), 11u);
+    EXPECT_EQ(VectorGetIntByIndex(integerValue, 3u), 19u);
+
+    u32 integerComponent = 0u;
+    VectorGetIntByIndexPtr(&integerComponent, integerValue, 1u);
+    EXPECT_EQ(integerComponent, 7u);
+
+    SIMDVector updatedInteger = VectorSetIntByIndex(integerValue, 5u, 1u);
+    const u32 integerReplacement = 13u;
+    updatedInteger = VectorSetIntByIndexPtr(updatedInteger, &integerReplacement, 3u);
+    EXPECT_EQ(VectorGetIntX(updatedInteger), 3u);
+    EXPECT_EQ(VectorGetIntY(updatedInteger), 5u);
+    EXPECT_EQ(VectorGetIntZ(updatedInteger), 11u);
+    EXPECT_EQ(VectorGetIntW(updatedInteger), 13u);
+}
+
+TEST(Math, DynamicVectorSwizzleAndPermute){
+    const SIMDVector first = VectorSetInt(11u, 22u, 33u, 44u);
+    const SIMDVector second = VectorSetInt(55u, 66u, 77u, 88u);
+
+    const SIMDVector swizzled = VectorSwizzle(first, 3u, 1u, 0u, 2u);
+    EXPECT_EQ(VectorGetIntX(swizzled), 44u);
+    EXPECT_EQ(VectorGetIntY(swizzled), 22u);
+    EXPECT_EQ(VectorGetIntZ(swizzled), 11u);
+    EXPECT_EQ(VectorGetIntW(swizzled), 33u);
+
+    const SIMDVector permuted = VectorPermute(first, second, 5u, 2u, 7u, 0u);
+    EXPECT_EQ(VectorGetIntX(permuted), 66u);
+    EXPECT_EQ(VectorGetIntY(permuted), 33u);
+    EXPECT_EQ(VectorGetIntZ(permuted), 88u);
+    EXPECT_EQ(VectorGetIntW(permuted), 11u);
+}
+
 TEST(Math, RefractCriticalAngle){
     const SIMDVector normal = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     const SIMDVector criticalIncident = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);

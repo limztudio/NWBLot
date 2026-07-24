@@ -31,7 +31,11 @@ RWStructuredBuffer<uint> g_NwbSurfelBuildArgsOutput;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[numthreads(1, 1, 1)]
+[numthreads(
+    NWB_SURFEL_TRACE_BUILDARGS_GROUP_SIZE_X,
+    NWB_SURFEL_TRACE_BUILDARGS_GROUP_SIZE_Y,
+    NWB_SURFEL_TRACE_BUILDARGS_GROUP_SIZE_Z
+)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(dispatchThreadID.x != 0u)
         return;

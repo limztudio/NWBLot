@@ -41,6 +41,7 @@ nwb_configure_external_dependencies()
 nwb_configure_internal_headers()
 nwb_configure_name_symbols()
 
+add_subdirectory(global)
 add_subdirectory(core)
 add_subdirectory(logger/telemetry)
 add_subdirectory(logger/client)

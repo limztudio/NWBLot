@@ -63,8 +63,10 @@ struct TimerDeltaParts{
     i64 milliseconds = 0;
 };
 
+using MillisecondDuration = std::chrono::duration<i64, std::milli>;
+
 [[nodiscard]] inline TimerDeltaParts SplitTimerDelta(const TimerDelta& val){
-    auto duration = std::chrono::duration<i64, std::ratio<1, 1000>>(static_cast<i64>(val));
+    auto duration = MillisecondDuration(static_cast<i64>(val));
     auto h = std::chrono::duration_cast<std::chrono::hours>(duration);
     auto m = std::chrono::duration_cast<std::chrono::minutes>(duration % std::chrono::hours(1));
     auto s = std::chrono::duration_cast<std::chrono::seconds>(duration % std::chrono::minutes(1));
@@ -180,11 +182,11 @@ inline T ConsumeTimerDeltaSeconds(Timer& previous)noexcept{
 }
 template<typename T>
 inline T DurationInMS(const Timer& current, const Timer& late = TimerDetail::s_VeryBegining)noexcept{
-    return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1000>>>(current - late).count();
+    return std::chrono::duration_cast<std::chrono::duration<T, std::milli>>(current - late).count();
 }
 template<typename T>
 inline T DurationInNS(const Timer& current, const Timer& late = TimerDetail::s_VeryBegining)noexcept{
-    return std::chrono::duration_cast<std::chrono::duration<T, std::ratio<1, 1000000000>>>(current - late).count();
+    return std::chrono::duration_cast<std::chrono::duration<T, std::nano>>(current - late).count();
 }
 inline TimerDelta DurationInTimeDelta(const Timer& current, const Timer& late = TimerDetail::s_VeryBegining)noexcept{
     if(current < late)

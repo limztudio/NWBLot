@@ -154,7 +154,7 @@ namespace MeshletRefDeltaWidth{
 [[nodiscard]] NWB_INLINE u32 PackMeshletConeOct16(const SIMDVector axis){
     SIMDVector octAxis = VectorSetW(axis, 0.0f);
     const SIMDVector lengthVector = VectorSum(VectorAbs(octAxis));
-    if(!VectorIsFinite(lengthVector, 0xFu) || !Vector4Greater(lengthVector, VectorReplicate(s_MeshletConeAxisLengthEpsilon)))
+    if(!VectorIsFinite(lengthVector, VectorComponentMask::s_XYZW) || !Vector4Greater(lengthVector, VectorReplicate(s_MeshletConeAxisLengthEpsilon)))
         return s_MeshletConeAxisFallback;
 
     octAxis = FoldMeshletConeOctAxis(VectorMultiply(octAxis, VectorReciprocal(lengthVector)));

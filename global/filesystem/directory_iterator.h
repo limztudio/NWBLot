@@ -32,24 +32,46 @@ private:
 };
 
 template<typename ArenaT>
-class DirectoryIterator{
+class DirectoryIteratorBase{
 public:
     using Entry = DirectoryEntry<ArenaT>;
     using EntryVector = std::vector<Entry, ContainerDetail::ArenaAllocatorFor_T<Entry, ArenaT>>;
     using iterator = typename EntryVector::const_iterator;
 
 
-public:
-    DirectoryIterator(const Path<ArenaT>& path, ErrorCode& outError)
+protected:
+    explicit DirectoryIteratorBase(const Path<ArenaT>& path)
         : m_entries(path.arena())
-    {
-        collect(path, outError);
-    }
+    {}
 
 
 public:
     [[nodiscard]] iterator begin()const noexcept{ return m_entries.begin(); }
     [[nodiscard]] iterator end()const noexcept{ return m_entries.end(); }
+
+
+protected:
+    EntryVector m_entries;
+};
+
+template<typename ArenaT>
+class DirectoryIterator : public DirectoryIteratorBase<ArenaT>{
+    using BaseType = DirectoryIteratorBase<ArenaT>;
+
+
+public:
+    using Entry = typename BaseType::Entry;
+    using iterator = typename BaseType::iterator;
+    using BaseType::begin;
+    using BaseType::end;
+
+
+public:
+    DirectoryIterator(const Path<ArenaT>& path, ErrorCode& outError)
+        : BaseType(path)
+    {
+        collect(path, outError);
+    }
 
 
 private:
@@ -67,7 +89,7 @@ private:
             const TStringView fileName(data.cFileName);
             if(fileName == NWB_TEXT(".") || fileName == NWB_TEXT(".."))
                 continue;
-            m_entries.emplace_back(path / fileName);
+            this->m_entries.emplace_back(path / fileName);
         }while(FindNextFile(findHandle, &data));
 
         FindClose(findHandle);
@@ -83,38 +105,33 @@ private:
             const AStringView fileName(entry->d_name);
             if(fileName == "." || fileName == "..")
                 continue;
-            m_entries.emplace_back(path / fileName);
+            this->m_entries.emplace_back(path / fileName);
         }
 
         closedir(directory);
         GlobalFilesystemDetail::ClearError(outError);
 #endif
     }
-
-
-private:
-    EntryVector m_entries;
 };
 
 template<typename ArenaT>
-class RecursiveDirectoryIterator{
+class RecursiveDirectoryIterator : public DirectoryIteratorBase<ArenaT>{
+    using BaseType = DirectoryIteratorBase<ArenaT>;
+
+
 public:
-    using Entry = DirectoryEntry<ArenaT>;
-    using EntryVector = std::vector<Entry, ContainerDetail::ArenaAllocatorFor_T<Entry, ArenaT>>;
-    using iterator = typename EntryVector::const_iterator;
+    using Entry = typename BaseType::Entry;
+    using iterator = typename BaseType::iterator;
+    using BaseType::begin;
+    using BaseType::end;
 
 
 public:
     RecursiveDirectoryIterator(const Path<ArenaT>& path, ErrorCode& outError)
-        : m_entries(path.arena())
+        : BaseType(path)
     {
         collect(path, outError);
     }
-
-
-public:
-    [[nodiscard]] iterator begin()const noexcept{ return m_entries.begin(); }
-    [[nodiscard]] iterator end()const noexcept{ return m_entries.end(); }
 
 
 private:
@@ -124,7 +141,7 @@ private:
             return;
 
         for(const Entry& entry : directory){
-            m_entries.push_back(entry);
+            this->m_entries.push_back(entry);
             ErrorCode directoryError;
             if(IsDirectory(entry.path(), directoryError)){
                 collect(entry.path(), outError);
@@ -134,10 +151,6 @@ private:
         }
         GlobalFilesystemDetail::ClearError(outError);
     }
-
-
-private:
-    EntryVector m_entries;
 };
 
 

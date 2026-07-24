@@ -269,7 +269,7 @@ template<usize ComponentCount>
     SIMDVector& outNormalizedWeights
 ){
     outNormalizedWeights = VectorZero();
-    if(!VectorIsFinite(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero())){
+    if(!VectorIsFinite(weights, VectorComponentMask::s_XYZW) || !Vector4GreaterOrEqual(weights, VectorZero())){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must be finite and non-negative")
             , PathToString<tchar>(nwbFilePath)
             , influenceIndex
@@ -278,7 +278,7 @@ template<usize ComponentCount>
     }
 
     const SIMDVector weightSum = Vector4Dot(weights, s_SIMDOne);
-    if(!VectorIsFinite(weightSum, 0xFu) || !Vector4Greater(weightSum, VectorReplicate(SkinValidation::s_Epsilon))){
+    if(!VectorIsFinite(weightSum, VectorComponentMask::s_XYZW) || !Vector4Greater(weightSum, VectorReplicate(SkinValidation::s_Epsilon))){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must contain a positive total")
             , PathToString<tchar>(nwbFilePath)
             , influenceIndex
@@ -430,7 +430,7 @@ template<usize ComponentCount>
     const u32 jointCount = static_cast<u32>(entry.inverseBindMatrices.size());
     for(usize influenceIndex = 0u; influenceIndex < entry.influences.size(); ++influenceIndex){
         const SkinInfluence4& influence = entry.influences[influenceIndex];
-        for(usize componentIndex = 0u; componentIndex < 4u; ++componentIndex){
+        for(usize componentIndex = 0u; componentIndex < s_SkinInfluenceJointCount; ++componentIndex){
             if(static_cast<u32>(influence.joint[componentIndex]) < jointCount)
                 continue;
 

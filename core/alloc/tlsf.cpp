@@ -22,8 +22,13 @@
 #define tlsf_decl static
 #endif
 
+static constexpr size_t s_TlsfReportBufferBytes = 512u;
+static constexpr int s_TlsfNativeWordBitCount = static_cast<int>(sizeof(unsigned int) * CHAR_BIT);
+static constexpr size_t s_TlsfNativeWordMask = static_cast<size_t>(UINT_MAX);
+static constexpr size_t s_TlsfReportedPoolHighByteScale = 256u;
+
 static int tlsf_report(const char* format, ...){
-    char buffer[512];
+    char buffer[s_TlsfReportBufferBytes];
 
     va_list args;
     va_start(args, format);
@@ -201,13 +206,13 @@ tlsf_decl int tlsf_fls(unsigned int word){
 /* Possibly 64-bit version of tlsf_fls. */
 #if defined (TLSF_64BIT)
 tlsf_decl int tlsf_fls_sizet(size_t size){
-    int high = static_cast<int>(size >> 32);
+    int high = static_cast<int>(size >> s_TlsfNativeWordBitCount);
     int bits = 0;
     if(high){
-        bits = 32 + tlsf_fls(high);
+        bits = s_TlsfNativeWordBitCount + tlsf_fls(high);
     }
     else{
-        bits = tlsf_fls(static_cast<unsigned int>(size & 0xffffffffu));
+        bits = tlsf_fls(static_cast<unsigned int>(size & s_TlsfNativeWordMask));
 
     }
     return bits;
@@ -949,7 +954,7 @@ pool_t tlsf_add_pool(tlsf_t tlsf, void* mem, size_t bytes){
         tlsf_report(
             "tlsf_add_pool: Memory size must be between 0x%x and 0x%x00 bytes.\n",
             static_cast<unsigned int>(pool_overhead + block_size_min),
-            static_cast<unsigned int>((pool_overhead + block_size_max) / 256)
+            static_cast<unsigned int>((pool_overhead + block_size_max) / s_TlsfReportedPoolHighByteScale)
         );
 #else
         tlsf_report(
@@ -1000,22 +1005,50 @@ void tlsf_remove_pool(tlsf_t tlsf, pool_t pool){
 */
 
 #if _DEBUG
+static constexpr unsigned int s_TlsfHighestU32Bit = 0x80000000u;
+static constexpr unsigned int s_TlsfHighAndMiddleU32Bits = 0x80008000u;
+static constexpr unsigned int s_TlsfHighAndLowU32Bits = 0x80000008u;
+static constexpr unsigned int s_TlsfAllButHighestU32Bits = 0x7FFFFFFFu;
+static constexpr int s_TlsfHighestU32BitIndex = s_TlsfNativeWordBitCount - 1;
+static constexpr int s_TlsfMiddleU32BitIndex = (s_TlsfNativeWordBitCount / 2) - 1;
+static constexpr int s_TlsfSecondHighestU32BitIndex = s_TlsfHighestU32BitIndex - 1;
+static constexpr int s_TlsfFfsZeroFailureMask = 0x1;
+static constexpr int s_TlsfFlsZeroFailureMask = 0x2;
+static constexpr int s_TlsfFfsOneFailureMask = 0x4;
+static constexpr int s_TlsfFlsOneFailureMask = 0x8;
+static constexpr int s_TlsfFfsHighestFailureMask = 0x10;
+static constexpr int s_TlsfFfsMiddleFailureMask = 0x20;
+static constexpr int s_TlsfFlsHighestFailureMask = 0x40;
+static constexpr int s_TlsfFlsSecondHighestFailureMask = 0x80;
+
+#if defined(TLSF_64BIT)
+static constexpr size_t s_TlsfHighestLowerWordSizeBit = static_cast<size_t>(s_TlsfHighestU32Bit);
+static constexpr size_t s_TlsfLowestUpperWordSizeBit = static_cast<size_t>(1u) << s_TlsfNativeWordBitCount;
+static constexpr size_t s_TlsfMaximumSizeBitPattern = static_cast<size_t>(-1);
+static constexpr int s_TlsfHighestSizeBitIndex = static_cast<int>(sizeof(size_t) * CHAR_BIT) - 1;
+static constexpr int s_TlsfLowerWordHighestSizeBitIndex = s_TlsfHighestU32BitIndex;
+static constexpr int s_TlsfUpperWordLowestSizeBitIndex = s_TlsfNativeWordBitCount;
+static constexpr int s_TlsfFlsLowerWordFailureMask = 0x100;
+static constexpr int s_TlsfFlsUpperWordFailureMask = 0x200;
+static constexpr int s_TlsfFlsMaximumSizeFailureMask = 0x400;
+#endif
+
 int test_ffs_fls(){
     /* Verify ffs/fls work properly. */
     int rv = 0;
-    rv += (tlsf_ffs(0) == -1) ? 0 : 0x1;
-    rv += (tlsf_fls(0) == -1) ? 0 : 0x2;
-    rv += (tlsf_ffs(1) == 0) ? 0 : 0x4;
-    rv += (tlsf_fls(1) == 0) ? 0 : 0x8;
-    rv += (tlsf_ffs(0x80000000) == 31) ? 0 : 0x10;
-    rv += (tlsf_ffs(0x80008000) == 15) ? 0 : 0x20;
-    rv += (tlsf_fls(0x80000008) == 31) ? 0 : 0x40;
-    rv += (tlsf_fls(0x7FFFFFFF) == 30) ? 0 : 0x80;
+    rv += (tlsf_ffs(0) == -1) ? 0 : s_TlsfFfsZeroFailureMask;
+    rv += (tlsf_fls(0) == -1) ? 0 : s_TlsfFlsZeroFailureMask;
+    rv += (tlsf_ffs(1) == 0) ? 0 : s_TlsfFfsOneFailureMask;
+    rv += (tlsf_fls(1) == 0) ? 0 : s_TlsfFlsOneFailureMask;
+    rv += (tlsf_ffs(s_TlsfHighestU32Bit) == s_TlsfHighestU32BitIndex) ? 0 : s_TlsfFfsHighestFailureMask;
+    rv += (tlsf_ffs(s_TlsfHighAndMiddleU32Bits) == s_TlsfMiddleU32BitIndex) ? 0 : s_TlsfFfsMiddleFailureMask;
+    rv += (tlsf_fls(s_TlsfHighAndLowU32Bits) == s_TlsfHighestU32BitIndex) ? 0 : s_TlsfFlsHighestFailureMask;
+    rv += (tlsf_fls(s_TlsfAllButHighestU32Bits) == s_TlsfSecondHighestU32BitIndex) ? 0 : s_TlsfFlsSecondHighestFailureMask;
 
 #if defined (TLSF_64BIT)
-    rv += (tlsf_fls_sizet(0x80000000) == 31) ? 0 : 0x100;
-    rv += (tlsf_fls_sizet(0x100000000) == 32) ? 0 : 0x200;
-    rv += (tlsf_fls_sizet(0xffffffffffffffff) == 63) ? 0 : 0x400;
+    rv += (tlsf_fls_sizet(s_TlsfHighestLowerWordSizeBit) == s_TlsfLowerWordHighestSizeBitIndex) ? 0 : s_TlsfFlsLowerWordFailureMask;
+    rv += (tlsf_fls_sizet(s_TlsfLowestUpperWordSizeBit) == s_TlsfUpperWordLowestSizeBitIndex) ? 0 : s_TlsfFlsUpperWordFailureMask;
+    rv += (tlsf_fls_sizet(s_TlsfMaximumSizeBitPattern) == s_TlsfHighestSizeBitIndex) ? 0 : s_TlsfFlsMaximumSizeFailureMask;
 #endif
 
     if(rv)

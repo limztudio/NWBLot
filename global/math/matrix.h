@@ -20,6 +20,7 @@ namespace SIMDMatrixDetail{
 static const SIMDVectorConstF s_SIMDMatrixSign = { { { 1.0f, -1.0f, 1.0f, -1.0f } } };
 static const SIMDVectorConstF s_SIMDMatrixNegativeTwo = { { { -2.0f, -2.0f, -2.0f, 0.0f } } };
 static const SIMDVectorConstU s_SIMDMatrixSelect0001 = { { { s_SELECT_0, s_SELECT_0, s_SELECT_0, s_SELECT_1 } } };
+inline constexpr f32 s_MatrixDecomposeEpsilon = 0.0001f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -396,8 +397,6 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     NWB_ASSERT(outRotQuat != nullptr);
     NWB_ASSERT(outTrans != nullptr);
 
-    static constexpr f32 epsilon = 0.0001f;
-
     const SIMDVector canonicalBasis[3] = {
         s_SIMDIdentityR0,
         s_SIMDIdentityR1,
@@ -413,22 +412,23 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
         VectorAndInt(transposed.v[2], s_SIMDMask3)
     };
 
-    Float3U scale(
-        VectorGetX(Vector3Length(basis[0])),
-        VectorGetX(Vector3Length(basis[1])),
-        VectorGetX(Vector3Length(basis[2]))
+    SIMDVector scale = VectorMergeX(
+        Vector3Length(basis[0]),
+        Vector3Length(basis[1]),
+        Vector3Length(basis[2]),
+        VectorZero()
     );
 
     usize a{};
     usize b{};
     usize c{};
-    SIMDMatrixDetail::RankDecompose(a, b, c, scale.x, scale.y, scale.z);
+    SIMDMatrixDetail::RankDecompose(a, b, c, VectorGetX(scale), VectorGetY(scale), VectorGetZ(scale));
 
-    if(scale.raw[a] < epsilon)
+    if(VectorGetByIndex(scale, a) < SIMDMatrixDetail::s_MatrixDecomposeEpsilon)
         basis[a] = canonicalBasis[a];
     basis[a] = Vector3Normalize(basis[a]);
 
-    if(scale.raw[b] < epsilon){
+    if(VectorGetByIndex(scale, b) < SIMDMatrixDetail::s_MatrixDecomposeEpsilon){
         usize aa{};
         usize bb{};
         usize cc{};
@@ -444,7 +444,7 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     }
     basis[b] = Vector3Normalize(basis[b]);
 
-    if(scale.raw[c] < epsilon)
+    if(VectorGetByIndex(scale, c) < SIMDMatrixDetail::s_MatrixDecomposeEpsilon)
         basis[c] = Vector3Cross(basis[a], basis[b]);
     basis[c] = Vector3Normalize(basis[c]);
 
@@ -457,7 +457,7 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     SIMDMatrix rotationMatrix = MatrixTranspose(basisAsRows);
     f32 determinant = VectorGetX(MatrixDeterminant(rotationMatrix));
     if(determinant < 0.0f){
-        scale.raw[a] = -scale.raw[a];
+        scale = VectorSetByIndex(scale, -VectorGetByIndex(scale, a), a);
         basis[a] = VectorNegate(basis[a]);
 
         basisAsRows.v[0] = basis[0];
@@ -469,10 +469,10 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
 
     determinant -= 1.0f;
     determinant *= determinant;
-    if(epsilon < determinant)
+    if(SIMDMatrixDetail::s_MatrixDecomposeEpsilon < determinant)
         return false;
 
-    *outScale = VectorSet(scale.x, scale.y, scale.z, 0.0f);
+    *outScale = scale;
     *outRotQuat = QuaternionRotationMatrix(rotationMatrix);
     return true;
 }

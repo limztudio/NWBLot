@@ -14,7 +14,7 @@
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>
-#include <impl/ecs_render/mesh/model_renderer.h>
+#include <impl/ecs_model_renderer/model_renderer.h>
 #include <impl/ecs_render/kernel/module.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 #include <impl/ecs_mesh/skinning/module.h>

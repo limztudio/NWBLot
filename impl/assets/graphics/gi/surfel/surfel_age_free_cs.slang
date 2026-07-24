@@ -10,19 +10,11 @@
 // frame's spawn keep-alive.
 
 
-#include "surfel_record.slangi"
-#include "surfel_constants.slangi"
-#include "surfel_binding_slots.h"
+#include "surfel_runtime.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[vk::binding(NWB_SURFEL_BINDING_CONSTANTS, NWB_SURFEL_SET)]]
-ConstantBuffer<NwbSurfelConstants> g_NwbSurfelConstants;
-
-[[vk::binding(NWB_SURFEL_BINDING_POOL, NWB_SURFEL_SET)]]
-RWStructuredBuffer<NwbSurfel> g_NwbSurfelPool;
 
 [[vk::binding(NWB_SURFEL_BINDING_COUNTER, NWB_SURFEL_SET)]]
 RWStructuredBuffer<uint> g_NwbSurfelCounter;

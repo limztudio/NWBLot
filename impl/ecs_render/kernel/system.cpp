@@ -245,6 +245,21 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     )
         return false;
 
+    // Transparent preparation can grow shared instance and material buffers, which invalidates all mesh
+    // binding sets. Refresh opaque bindings after the final possible grow so render only consumes prepared
+    // resources.
+    if(
+        m_preparedHasTransparentRenderers
+        && !m_materialSystem.prepareMaterialPassResources(
+            deferredTargets.framebuffer.get(),
+            MaterialPipelinePass::Opaque,
+            false,
+            m_preparedCsgFrameState,
+            nullptr
+        )
+    )
+        return false;
+
     if(!m_renderCommandList){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: render command list was not validated"));
         return false;

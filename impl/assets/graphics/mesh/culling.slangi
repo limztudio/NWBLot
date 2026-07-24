@@ -197,7 +197,7 @@ void nwbMeshStoreCulledPrimitive(const uint primitiveBase){
         float3(0.0, 0.0, 1.0),
         float4(1.0, 0.0, 0.0, 1.0),
         float2(0.0),
-        float4(0.0),
+        half4(0.0h, 0.0h, 0.0h, 0.0h),
         float3(0.0),
         0u
     );

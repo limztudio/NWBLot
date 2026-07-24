@@ -26,6 +26,9 @@ namespace __hidden_mesh_tangent_frame_rebuild{
 
 
 static constexpr f32 s_Epsilon = 0.000001f;
+static constexpr f32 s_TangentOrthogonalityTolerance = 0.001f;
+static constexpr usize s_IndicesPerTriangle = 3u;
+static constexpr u32 s_UvComponentMask = 0x3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,7 +59,7 @@ static_assert(
 }
 
 [[nodiscard]] bool ValidInputVertex(const SIMDVector position, const SIMDVector uv0){
-    return VectorIsFinite(position, 0x7u) && VectorIsFinite(uv0, 0x3u);
+    return Vector3IsFinite(position) && VectorIsFinite(uv0, s_UvComponentMask);
 }
 
 [[nodiscard]] bool AccumulateTriangleTangentFrame(
@@ -117,7 +120,7 @@ bool RebuildTangentFrames(
         || !indices
         || vertexCount == 0u
         || indexCount == 0u
-        || (indexCount % 3u) != 0u
+        || (indexCount % s_IndicesPerTriangle) != 0u
         || vertexCount > static_cast<usize>(Limit<u32>::s_Max)
     )
         return false;
@@ -135,9 +138,9 @@ bool RebuildTangentFrames(
     );
 
     TangentFrameRebuildResult result;
-    const usize triangleCount = indexCount / 3u;
+    const usize triangleCount = indexCount / s_IndicesPerTriangle;
     for(usize triangle = 0u; triangle < triangleCount; ++triangle){
-        const usize indexBase = triangle * 3u;
+        const usize indexBase = triangle * s_IndicesPerTriangle;
         const u32 i0 = indices[indexBase + 0u];
         const u32 i1 = indices[indexBase + 1u];
         const u32 i2 = indices[indexBase + 2u];
@@ -199,7 +202,7 @@ bool RebuildTangentFrames(
         }
 
         const SIMDVector tangent = FrameResolveTangent(normal, tangentSource, previousTangent);
-        if(!FrameValidDirection(tangent) || Abs(VectorGetX(Vector3Dot(normal, tangent))) > 0.001f)
+        if(!FrameValidDirection(tangent) || Abs(VectorGetX(Vector3Dot(normal, tangent))) > s_TangentOrthogonalityTolerance)
             return false;
 
         f32 handedness = ResolveTangentHandedness(vertex.tangent.w);

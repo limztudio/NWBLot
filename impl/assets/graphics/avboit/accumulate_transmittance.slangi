@@ -28,7 +28,7 @@ float nwbAvboitPhysicalSliceFromVirtualSampleSlice(float sampleSlice){
     return lerp(physicalSlice0, physicalSlice1, sampleSlice - sliceBase);
 }
 
-float nwbAvboitLinearBiasedTransmittance(float2 fragCoord, float depth){
+half nwbAvboitLinearBiasedTransmittance(float2 fragCoord, float depth){
     const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
     const float virtualSliceMax = max(float(virtualSliceCount) - 1.0, 0.0);
     const float sampleSlice = clamp(
@@ -38,10 +38,10 @@ float nwbAvboitLinearBiasedTransmittance(float2 fragCoord, float depth){
     );
     const float physicalSlice = nwbAvboitPhysicalSliceFromVirtualSampleSlice(sampleSlice);
     const float physicalSliceUv = (physicalSlice + 0.5) / max(float(nwbAvboitPhysicalSliceCount()), 1.0);
-    return g_Transmittance.Sample(
+    return half(g_Transmittance.Sample(
         g_LinearSampler,
         float3(nwbAvboitFullUvFromFragCoord(fragCoord), clamp(physicalSliceUv, 0.0, 1.0))
-    ).r;
+    ).r);
 }
 
 

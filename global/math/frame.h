@@ -13,9 +13,10 @@
 
 static constexpr f32 s_FrameDirectionEpsilon = 0.00000001f;
 static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
+static constexpr f32 s_FrameFallbackTangentZAxisAlignmentThreshold = 0.999f;
 
 [[nodiscard]] NWB_INLINE bool FrameValidDirection(const SIMDVector value){
-    return VectorIsFinite(value, 0x7u) && Vector3Greater(Vector3LengthSq(value), VectorReplicate(s_FrameDirectionEpsilon));
+    return Vector3IsFinite(value) && Vector3Greater(Vector3LengthSq(value), VectorReplicate(s_FrameDirectionEpsilon));
 }
 
 [[nodiscard]] NWB_INLINE SIMDVector FrameNormalizeDirection(const SIMDVector value, const SIMDVector fallback){
@@ -36,7 +37,7 @@ static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
     const SIMDVector axis = VectorSelect(
         yAxis,
         zAxis,
-        VectorLess(VectorAbs(VectorSplatZ(normal)), VectorReplicate(0.999f))
+        VectorLess(VectorAbs(VectorSplatZ(normal)), VectorReplicate(s_FrameFallbackTangentZAxisAlignmentThreshold))
     );
     return FrameNormalizeDirection(Vector3Cross(axis, normal), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
 }
@@ -50,12 +51,12 @@ static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
 [[nodiscard]] NWB_INLINE SIMDVector FrameResolveTangent(const SIMDVector normal, const SIMDVector tangent, const SIMDVector fallbackTangent){
     const SIMDVector safeFallbackTangent = FrameFallbackTangent(normal);
 
-    SIMDVector projectedTangent = VectorIsFinite(tangent, 0x7u)
+    SIMDVector projectedTangent = Vector3IsFinite(tangent)
         ? FrameProjectOntoPlane(tangent, normal)
         : safeFallbackTangent
     ;
     if(!FrameValidDirection(projectedTangent)){
-        projectedTangent = VectorIsFinite(fallbackTangent, 0x7u)
+        projectedTangent = Vector3IsFinite(fallbackTangent)
             ? FrameProjectOntoPlane(fallbackTangent, normal)
             : safeFallbackTangent
         ;
@@ -68,7 +69,7 @@ static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
 
 [[nodiscard]] NWB_INLINE SIMDVector FrameResolveBitangent(const SIMDVector normal, const SIMDVector tangent, const SIMDVector fallbackBitangent){
     const SIMDVector safeFallbackBitangent = FrameNormalizeDirection(
-        VectorIsFinite(fallbackBitangent, 0x7u)
+        Vector3IsFinite(fallbackBitangent)
             ? FrameProjectOntoPlane(fallbackBitangent, normal)
             : Vector3Cross(normal, FrameFallbackTangent(normal)),
         VectorSet(0.0f, 1.0f, 0.0f, 0.0f)

@@ -72,37 +72,37 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
         ECSRenderDetail::SetEmulatedVertexAttribute(
             attributes[NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION],
             Core::Format::RGBA32_FLOAT,
-            NWB_MESH_EMULATION_VERTEX_POSITION_FLOAT_OFFSET,
+            NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET,
             "POSITION"
         );
         ECSRenderDetail::SetEmulatedVertexAttribute(
             attributes[NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION],
-            Core::Format::RGB32_FLOAT,
-            NWB_MESH_EMULATION_VERTEX_NORMAL_FLOAT_OFFSET,
+            Core::Format::RGBA16_FLOAT,
+            NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET,
             "NORMAL"
         );
         ECSRenderDetail::SetEmulatedVertexAttribute(
             attributes[NWB_MESH_EMULATION_VERTEX_TANGENT_LOCATION],
-            Core::Format::RGBA32_FLOAT,
-            NWB_MESH_EMULATION_VERTEX_TANGENT_FLOAT_OFFSET,
+            Core::Format::RGBA16_FLOAT,
+            NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET,
             "TANGENT"
         );
         ECSRenderDetail::SetEmulatedVertexAttribute(
             attributes[NWB_MESH_EMULATION_VERTEX_UV0_LOCATION],
             Core::Format::RG32_FLOAT,
-            NWB_MESH_EMULATION_VERTEX_UV0_FLOAT_OFFSET,
+            NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET,
             "TEXCOORD"
         );
         ECSRenderDetail::SetEmulatedVertexAttribute(
             attributes[NWB_MESH_EMULATION_VERTEX_COLOR_LOCATION],
-            Core::Format::RGBA32_FLOAT,
-            NWB_MESH_EMULATION_VERTEX_COLOR_FLOAT_OFFSET,
+            Core::Format::RGBA16_FLOAT,
+            NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET,
             "COLOR"
         );
         ECSRenderDetail::SetEmulatedVertexAttribute(
             attributes[NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_LOCATION],
             Core::Format::RGBA32_FLOAT,
-            NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_FLOAT_OFFSET,
+            NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET,
             "POSITION1"
         );
 

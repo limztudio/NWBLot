@@ -36,6 +36,49 @@ namespace Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct SmokeTintedEntitySetup{
+    Core::ECS::EntityID entity;
+    Name materialInterface;
+};
+
+[[nodiscard]] inline SmokeTintedEntitySetup CreateSmokeTintedEntity(
+    Core::ECS::World& world,
+    Core::Alloc::GlobalArena& arena,
+    const AStringView materialPath,
+    const AStringView materialInterfacePath,
+    const Float4& position,
+    const Float4& scale
+){
+    Core::Assets::AssetRef<Impl::Material> material;
+    material.virtualPath = Name(materialPath);
+
+    auto entity = world.createEntity();
+    auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
+    transform.position = position;
+    transform.scale = scale;
+
+    auto& renderer = entity.addComponent<Impl::RendererComponent>();
+    renderer.material = material;
+
+    const Name materialInterface(materialInterfacePath);
+    entity.addComponent<Impl::MaterialInstanceComponent>(arena, materialInterface);
+    return { entity.id(), materialInterface };
+}
+
+[[nodiscard]] inline bool ApplySmokeMaterialTint(
+    Core::ECS::World& world,
+    const SmokeTintedEntitySetup& setup,
+    const Float4& colorTint
+){
+    return Impl::SetMaterialMutableHalf4(
+        world,
+        setup.entity,
+        setup.materialInterface,
+        "runtime.color_tint",
+        colorTint
+    );
+}
+
 [[nodiscard]] inline Core::ECS::EntityID CreateTintedStaticMeshEntity(
     Core::ECS::World& world,
     Core::Alloc::GlobalArena& arena,
@@ -48,32 +91,41 @@ namespace Smoke{
 ){
     Core::Assets::AssetRef<Impl::Mesh> mesh;
     mesh.virtualPath = Name(meshPath);
-    Core::Assets::AssetRef<Impl::Material> material;
-    material.virtualPath = Name(materialPath);
+    const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(
+        world,
+        arena,
+        materialPath,
+        materialInterfacePath,
+        position,
+        scale
+    );
 
-    auto entity = world.createEntity();
-    auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
-    transform.position = position;
-    transform.scale = scale;
-
-    auto& meshComponent = entity.addComponent<Impl::MeshComponent>();
+    auto& meshComponent = world.addComponent<Impl::MeshComponent>(setup.entity);
     meshComponent.mesh = mesh;
 
-    auto& renderer = entity.addComponent<Impl::RendererComponent>();
-    renderer.material = material;
-
-    const Name materialInterface(materialInterfacePath);
-    entity.addComponent<Impl::MaterialInstanceComponent>(arena, materialInterface);
-    if(!Impl::SetMaterialMutableHalf4(
-        world,
-        entity.id(),
-        materialInterface,
-        "runtime.color_tint",
-        colorTint
-    ))
+    if(!ApplySmokeMaterialTint(world, setup, colorTint))
         return Core::ECS::ENTITY_ID_INVALID;
 
-    return entity.id();
+    return setup.entity;
+}
+
+struct SmokeRenderSystems{
+    Impl::MeshSystem& mesh;
+    Impl::RendererSystem& renderer;
+};
+
+[[nodiscard]] inline SmokeRenderSystems CreateSmokeRenderSystems(
+    Core::ECS::World& world,
+    ProjectRuntimeContext& context
+){
+    auto& meshSystem = world.addSystem<Impl::MeshSystem>(world);
+    auto& rendererSystem = world.addSystem<Impl::RendererSystem>(
+        world,
+        context.graphics,
+        context.assetManager,
+        context.shaderPathResolver
+    );
+    return { meshSystem, rendererSystem };
 }
 
 inline void DisableSmokeRayTracingForTesting(ProjectRuntimeContext& context){
@@ -92,17 +144,11 @@ inline Impl::RendererSystem& AddSmokeRenderSystems(
     Core::ECS::World& world,
     ProjectRuntimeContext& context
 ){
-    world.addSystem<Impl::MeshSystem>(world);
-    auto& rendererSystem = world.addSystem<Impl::RendererSystem>(
-        world,
-        context.graphics,
-        context.assetManager,
-        context.shaderPathResolver
-    );
+    const SmokeRenderSystems systems = CreateSmokeRenderSystems(world, context);
 
-    context.graphics.addRenderPassToBack(rendererSystem);
-    context.frameGraphRegistry.registerContributor(rendererSystem);
-    return rendererSystem;
+    context.graphics.addRenderPassToBack(systems.renderer);
+    context.frameGraphRegistry.registerContributor(systems.renderer);
+    return systems.renderer;
 }
 
 inline void FinishDestroyingSmokeWorld(
@@ -118,6 +164,17 @@ inline void FinishDestroyingSmokeWorld(
     world.owner().reset();
 }
 
+inline void RemoveSmokeRendererSystem(
+    ProjectRuntimeContext& context,
+    Core::ECS::World& world
+){
+    auto* rendererSystem = world.getSystem<Impl::RendererSystem>();
+    if(rendererSystem){
+        context.frameGraphRegistry.unregisterContributor(*rendererSystem);
+        context.graphics.removeRenderPass(*rendererSystem);
+    }
+}
+
 inline void DestroySmokeRenderWorld(
     ProjectRuntimeContext& context,
     NotNullUniquePtr<Core::ECS::World>& world
@@ -125,12 +182,7 @@ inline void DestroySmokeRenderWorld(
     if(!world.owner())
         return;
 
-    auto* rendererSystem = world->getSystem<Impl::RendererSystem>();
-    if(rendererSystem){
-        context.frameGraphRegistry.unregisterContributor(*rendererSystem);
-        context.graphics.removeRenderPass(*rendererSystem);
-    }
-
+    RemoveSmokeRendererSystem(context, *world);
     FinishDestroyingSmokeWorld(context, world);
 }
 

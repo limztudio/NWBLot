@@ -332,12 +332,10 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
     NwbMeshGeneratedVertex generatedVertex;
     const float3 worldPosition = nwbMeshTransformPosition(source.position, instance);
     generatedVertex.position = nwbMeshTransformWorldToClip(worldPosition);
-    generatedVertex.normal = nwbMeshTransformDirection(source.normal, instance);
-    generatedVertex.padding0 = 0.0;
-    generatedVertex.tangent = float4(nwbMeshTransformDirection(source.tangent.xyz, instance), source.tangent.w);
+    nwbMeshSetGeneratedVertexNormal(generatedVertex, half4(half3(nwbMeshTransformDirection(source.normal, instance)), half(0.0)));
+    nwbMeshSetGeneratedVertexTangent(generatedVertex, half4(float4(nwbMeshTransformDirection(source.tangent.xyz, instance), source.tangent.w)));
     generatedVertex.uv0 = source.uv0;
-    generatedVertex.padding1 = float2(0.0);
-    generatedVertex.color = source.color;
+    nwbMeshSetGeneratedVertexColor(generatedVertex, source.color);
     generatedVertex.worldPosition = float4(worldPosition, 1.0);
     return generatedVertex;
 }

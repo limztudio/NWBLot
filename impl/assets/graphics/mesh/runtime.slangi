@@ -30,14 +30,90 @@ struct NwbMeshSourceVertex{
 
 struct NwbMeshGeneratedVertex{
     float4 position;
-    float3 normal;
-    float padding0;
-    float4 tangent;
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+    // The compute path writes this type into a structured buffer. Keep native-half values packed in uint words:
+    // the current SPIR-V lowering declares these buffers in Uniform storage and would otherwise require the
+    // broader UniformAndStorageBuffer16BitAccess feature. The vertex fetch still interprets these exact words
+    // as RGBA16_FLOAT, so the buffer remains a 64-byte FP16 transport without narrowing device support.
+    uint2 normal;
+    uint2 tangent;
+#else
+    // The mesh path keeps the same payload native-half in registers before emitting its half raster varyings.
+    half4 normal;
+    half4 tangent;
+#endif
     float2 uv0;
-    float2 padding1;
-    float4 color;
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+    uint2 color;
+#else
+    half4 color;
+#endif
     float4 worldPosition;
 };
+
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+uint2 nwbMeshPackGeneratedHalf4(const half4 value){
+    return uint2(
+        nwbPackHalf2x16(float2(value.xy)),
+        nwbPackHalf2x16(float2(value.zw))
+    );
+}
+
+half4 nwbMeshUnpackGeneratedHalf4(const uint2 value){
+    return half4(float4(
+        nwbUnpackHalf2x16(value.x),
+        nwbUnpackHalf2x16(value.y)
+    ));
+}
+#endif
+
+void nwbMeshSetGeneratedVertexNormal(inout NwbMeshGeneratedVertex generatedVertex, const half4 normal){
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+    generatedVertex.normal = nwbMeshPackGeneratedHalf4(normal);
+#else
+    generatedVertex.normal = normal;
+#endif
+}
+
+void nwbMeshSetGeneratedVertexTangent(inout NwbMeshGeneratedVertex generatedVertex, const half4 tangent){
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+    generatedVertex.tangent = nwbMeshPackGeneratedHalf4(tangent);
+#else
+    generatedVertex.tangent = tangent;
+#endif
+}
+
+void nwbMeshSetGeneratedVertexColor(inout NwbMeshGeneratedVertex generatedVertex, const half4 color){
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+    generatedVertex.color = nwbMeshPackGeneratedHalf4(color);
+#else
+    generatedVertex.color = color;
+#endif
+}
+
+half4 nwbMeshGeneratedVertexNormal(const NwbMeshGeneratedVertex generatedVertex){
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+    return nwbMeshUnpackGeneratedHalf4(generatedVertex.normal);
+#else
+    return generatedVertex.normal;
+#endif
+}
+
+half4 nwbMeshGeneratedVertexTangent(const NwbMeshGeneratedVertex generatedVertex){
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+    return nwbMeshUnpackGeneratedHalf4(generatedVertex.tangent);
+#else
+    return generatedVertex.tangent;
+#endif
+}
+
+half4 nwbMeshGeneratedVertexColor(const NwbMeshGeneratedVertex generatedVertex){
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+    return nwbMeshUnpackGeneratedHalf4(generatedVertex.color);
+#else
+    return generatedVertex.color;
+#endif
+}
 
 groupshared uint g_NwbMeshletRasterFlags;
 
@@ -59,12 +135,10 @@ NwbMeshGeneratedVertex nwbMeshBuildGeneratedVertexWithRasterFlags(
 ){
     NwbMeshGeneratedVertex generatedVertex;
     generatedVertex.position = position;
-    generatedVertex.normal = normal;
-    generatedVertex.padding0 = 0.0;
-    generatedVertex.tangent = tangent;
+    nwbMeshSetGeneratedVertexNormal(generatedVertex, half4(half3(normal), half(0.0)));
+    nwbMeshSetGeneratedVertexTangent(generatedVertex, half4(tangent));
     generatedVertex.uv0 = uv0;
-    generatedVertex.padding1 = float2(0.0);
-    generatedVertex.color = color;
+    nwbMeshSetGeneratedVertexColor(generatedVertex, color);
     generatedVertex.worldPosition = float4(worldPosition, float(rasterFlags));
     return generatedVertex;
 }

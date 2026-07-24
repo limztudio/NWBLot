@@ -19,6 +19,7 @@ target_link_libraries(testbed PRIVATE
     nwb_ecs_model
     nwb_ecs_mesh_skinning
     nwb_ecs_render
+    nwb_ecs_model_renderer
     nwb_ecs_ui
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_mesh>"
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_skeleton>"

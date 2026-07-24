@@ -782,10 +782,10 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
     Vector<VkQueueFamilyProperties, Alloc::ScratchArena> props(queueFamilyCount, scratchArena);
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, props.data());
 
-    m_graphicsQueueFamily = -1;
-    m_computeQueueFamily = -1;
-    m_transferQueueFamily = -1;
-    m_presentQueueFamily = -1;
+    m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;
+    m_computeQueueFamily = s_InvalidQueueFamilyIndex;
+    m_transferQueueFamily = s_InvalidQueueFamilyIndex;
+    m_presentQueueFamily = s_InvalidQueueFamilyIndex;
 
     const bool requirePresentQueue = !m_deviceParams.headlessDevice;
     const bool requireComputeQueue = m_deviceParams.enableComputeQueue;
@@ -794,7 +794,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
     for(i32 i = 0; i < static_cast<i32>(props.size()); ++i){
         const auto& queueFamily = props[i];
 
-        if(m_graphicsQueueFamily == -1){
+        if(m_graphicsQueueFamily == s_InvalidQueueFamilyIndex){
             if(
                 queueFamily.queueCount > 0
                 && (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
@@ -802,7 +802,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
                 m_graphicsQueueFamily = i;
         }
 
-        if(m_computeQueueFamily == -1){
+        if(m_computeQueueFamily == s_InvalidQueueFamilyIndex){
             if(
                 queueFamily.queueCount > 0
                 && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
@@ -811,7 +811,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
                 m_computeQueueFamily = i;
         }
 
-        if(m_transferQueueFamily == -1){
+        if(m_transferQueueFamily == s_InvalidQueueFamilyIndex){
             if(
                 queueFamily.queueCount > 0
                 && (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT)
@@ -822,7 +822,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
         }
 
 #ifdef NWB_PLATFORM_WINDOWS
-        if(requirePresentQueue && m_presentQueueFamily == -1){
+        if(requirePresentQueue && m_presentQueueFamily == s_InvalidQueueFamilyIndex){
             if(queueFamily.queueCount > 0){
                 VkBool32 supported = vkGetPhysicalDeviceWin32PresentationSupportKHR(physicalDevice, i);
                 if(supported)
@@ -831,7 +831,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
         }
 #elif defined(NWB_PLATFORM_LINUX)
         VkResult res = VK_SUCCESS;
-        if(requirePresentQueue && m_presentQueueFamily == -1 && m_windowSurface){
+        if(requirePresentQueue && m_presentQueueFamily == s_InvalidQueueFamilyIndex && m_windowSurface){
             if(queueFamily.queueCount > 0){
                 VkBool32 supported = VK_FALSE;
                 res = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, m_windowSurface, &supported);
@@ -842,19 +842,19 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
 #endif
 
         if(
-            m_graphicsQueueFamily != -1
-            && (!requirePresentQueue || m_presentQueueFamily != -1)
-            && (!requireComputeQueue || m_computeQueueFamily != -1)
-            && (!requireTransferQueue || m_transferQueueFamily != -1)
+            m_graphicsQueueFamily != s_InvalidQueueFamilyIndex
+            && (!requirePresentQueue || m_presentQueueFamily != s_InvalidQueueFamilyIndex)
+            && (!requireComputeQueue || m_computeQueueFamily != s_InvalidQueueFamilyIndex)
+            && (!requireTransferQueue || m_transferQueueFamily != s_InvalidQueueFamilyIndex)
         )
             break;
     }
 
     if(
-        m_graphicsQueueFamily == -1
-        || (m_presentQueueFamily == -1 && requirePresentQueue)
-        || (m_computeQueueFamily == -1 && requireComputeQueue)
-        || (m_transferQueueFamily == -1 && requireTransferQueue)
+        m_graphicsQueueFamily == s_InvalidQueueFamilyIndex
+        || (m_presentQueueFamily == s_InvalidQueueFamilyIndex && requirePresentQueue)
+        || (m_computeQueueFamily == s_InvalidQueueFamilyIndex && requireComputeQueue)
+        || (m_transferQueueFamily == s_InvalidQueueFamilyIndex && requireTransferQueue)
     )
         return false;
 
@@ -904,10 +904,10 @@ bool BackendContext::pickPhysicalDevice(){
 
     struct DeviceSelection{
         VkPhysicalDevice device = VK_NULL_HANDLE;
-        i32 graphicsQueueFamily = -1;
-        i32 computeQueueFamily = -1;
-        i32 transferQueueFamily = -1;
-        i32 presentQueueFamily = -1;
+        i32 graphicsQueueFamily = s_InvalidQueueFamilyIndex;
+        i32 computeQueueFamily = s_InvalidQueueFamilyIndex;
+        i32 transferQueueFamily = s_InvalidQueueFamilyIndex;
+        i32 presentQueueFamily = s_InvalidQueueFamilyIndex;
     };
     auto captureCurrentSelection = [this](VkPhysicalDevice device){
         DeviceSelection selection;

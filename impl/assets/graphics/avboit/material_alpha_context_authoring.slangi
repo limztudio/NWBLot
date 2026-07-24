@@ -1,0 +1,49 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef NWB_GRAPHICS_AVBOIT_MATERIAL_ALPHA_CONTEXT_AUTHORING_SLANGI
+#define NWB_GRAPHICS_AVBOIT_MATERIAL_ALPHA_CONTEXT_AUTHORING_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shared minimum context for the AVBOIT occupancy and extinction material passes. Both evaluate the same authored
+// surface hook solely to obtain renderCoverage, so their mesh/material binding contract must stay identical.
+
+
+#include "binding_slots.h"
+#include "../mesh/runtime_constants.h"
+
+#define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
+
+#include "common.slangi"
+#include "../mesh/gbuffer_io.slangi"
+#include "material_context_authoring.slangi"
+#include "../mesh/material_typed_accessors.slangi"
+#include "../mesh/surface.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The shared alpha gate reads the opaque-depth texture with this point sampler in both material passes.
+[[vk::binding(NWB_AVBOIT_BINDING_OPAQUE_DEPTH, NWB_AVBOIT_TRANSPARENT_SET)]] Texture2D<float4> g_OpaqueDepth;
+[[vk::binding(NWB_AVBOIT_BINDING_POINT_SAMPLER, NWB_AVBOIT_TRANSPARENT_SET)]] SamplerState g_PointSampler;
+
+struct NwbAvboitMaterialAlphaPixelInput{
+    float4 position : SV_Position;
+    bool frontFace : SV_IsFrontFace;
+    NWB_MESH_RASTER_PAYLOAD_FIELDS
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

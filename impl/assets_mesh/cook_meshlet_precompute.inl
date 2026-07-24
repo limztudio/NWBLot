@@ -15,7 +15,7 @@ template<typename CookEntryT>
     outData.positionTriangleIndices.clear();
     outData.visitedTriangles.clear();
 
-    const usize triangleCount = indices.size() / 3u;
+    const usize triangleCount = indices.size() / s_MeshletTriangleIndexCount;
     if(triangleCount > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet triangle count exceeds u32 limits")
             , metaKind
@@ -46,7 +46,7 @@ template<typename CookEntryT>
 
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
         MeshletTriangleData& triangle = outData.triangles[triangleIndex];
-        const usize indexOffset = triangleIndex * 3u;
+        const usize indexOffset = triangleIndex * s_MeshletTriangleIndexCount;
         triangle.vertexRefs[0] = indices[indexOffset + 0u];
         triangle.vertexRefs[1] = indices[indexOffset + 1u];
         triangle.vertexRefs[2] = indices[indexOffset + 2u];

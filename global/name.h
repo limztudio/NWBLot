@@ -42,6 +42,13 @@ inline constexpr usize s_NameHashBytes = sizeof(u64) * s_HashLaneCount;
 inline constexpr usize s_HexDigitsPerHashLane = sizeof(u64) * 2u;
 inline constexpr usize s_EncodedNameHashLength = s_HexDigitsPerHashLane * s_HashLaneCount;
 inline constexpr usize s_DebugHashTextLength = s_EncodedNameHashLength + (s_HashLaneCount - 1u);
+inline constexpr usize s_NameHashCombineGoldenRatio = static_cast<usize>(0x9e3779b97f4a7c15ull);
+inline constexpr usize s_NameHashCombineLeftShiftBits = 6u;
+inline constexpr usize s_NameHashCombineRightShiftBits = 2u;
+inline constexpr i32 s_HashHexInitialBitShift = static_cast<i32>((s_HexU64DigitCount - 1u) * s_HexNibbleBits);
+inline constexpr i32 s_HashHexBitShiftStep = static_cast<i32>(s_HexNibbleBits);
+inline constexpr u32 s_NameHashByteBitCount = 8u;
+inline constexpr u64 s_NameHashByteMask = 0xFFu;
 
 static_assert(sizeof(NameHash) == s_NameHashBytes, "NameHash size must stay stable");
 
@@ -352,9 +359,9 @@ inline constexpr usize HashValue(const NameHash& hash){
     usize seed = static_cast<usize>(hash.qwords[0]);
     for(u32 i = 1; i < s_HashLaneCount; ++i){
         seed ^= static_cast<usize>(hash.qwords[i])
-            + static_cast<usize>(0x9e3779b97f4a7c15ull)
-            + (seed << 6)
-            + (seed >> 2);
+            + s_NameHashCombineGoldenRatio
+            + (seed << s_NameHashCombineLeftShiftBits)
+            + (seed >> s_NameHashCombineRightShiftBits);
     }
     return seed;
 }
@@ -378,8 +385,8 @@ inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstS
             ++writeCursor;
         }
         const u64 value = hash.qwords[i];
-        for(i32 bitShift = 60; bitShift >= 0; bitShift -= 4){
-            *writeCursor = static_cast<CharT>(s_Hex[(value >> bitShift) & 0xF]);
+        for(i32 bitShift = s_HashHexInitialBitShift; bitShift >= 0; bitShift -= s_HashHexBitShiftStep){
+            *writeCursor = static_cast<CharT>(s_Hex[(value >> bitShift) & s_HexNibbleMask]);
             ++writeCursor;
         }
     }
@@ -668,7 +675,7 @@ namespace NameDetail{
 
 inline u64 UpdateFnv64U64(u64 hash, const u64 value){
     for(u32 byteIndex = 0; byteIndex < sizeof(value); ++byteIndex){
-        hash ^= static_cast<u8>((value >> (byteIndex * 8u)) & 0xFFu);
+        hash ^= static_cast<u8>((value >> (byteIndex * s_NameHashByteBitCount)) & s_NameHashByteMask);
         hash *= FNV64_PRIME;
     }
     return hash;

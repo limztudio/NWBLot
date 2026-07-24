@@ -24,7 +24,7 @@
 
 [[nodiscard]] static bool ValidDirectionVector(const SIMDVector direction){
     return
-        VectorIsFinite(direction, 0x7u)
+        VectorIsFinite(direction, VectorComponentMask::s_XYZ)
         && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(0.01f))
     ;
 }
@@ -32,7 +32,7 @@
 [[nodiscard]] static bool ValidTangentVector(const SIMDVector tangent){
     const SIMDVector direction = VectorSetW(tangent, 0.0f);
     return
-        VectorIsFinite(tangent, 0xFu)
+        VectorIsFinite(tangent, VectorComponentMask::s_XYZW)
         && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(0.01f))
         && Vector4NearEqual(VectorAbs(VectorSplatW(tangent)), s_SIMDOne, VectorReplicate(0.001f))
     ;
@@ -62,7 +62,7 @@
     }
 
     for(usize i = 0u; i < positions.size(); ++i){
-        if(VectorIsFinite(MakeMeshPositionVector(LoadFloat(positions[i])), 0x7u))
+        if(VectorIsFinite(MakeMeshPositionVector(LoadFloat(positions[i])), VectorComponentMask::s_XYZ))
             continue;
 
         return FailMeshPayloadIndexedValidation(
@@ -98,7 +98,7 @@
         );
     }
     for(usize i = 0u; i < uv0.size(); ++i){
-        if(VectorIsFinite(MakeMeshUvVector(LoadFloat(uv0[i])), 0x3u))
+        if(VectorIsFinite(MakeMeshUvVector(LoadFloat(uv0[i])), VectorComponentMask::s_XY))
             continue;
 
         return FailMeshPayloadIndexedValidation(
@@ -110,7 +110,7 @@
         );
     }
     for(usize i = 0u; i < colors.size(); ++i){
-        if(VectorIsFinite(MakeMeshColorVector(LoadFloat(LoadHalf4U(colors[i]))), 0xFu))
+        if(VectorIsFinite(MakeMeshColorVector(LoadFloat(LoadHalf4U(colors[i]))), VectorComponentMask::s_XYZW))
             continue;
 
         return FailMeshPayloadIndexedValidation(

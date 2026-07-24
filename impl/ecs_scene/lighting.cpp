@@ -165,7 +165,12 @@ SceneLight BuildDefaultSceneLight(const SceneViewBasis& basis){
         __hidden_lighting::BuildDirectionalLightDirectionVector(LoadFloat(basis.forward)),
         &light.direction
     );
-    light.colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
+    light.colorIntensity = Float4(
+        LightDefaults::s_WhiteColorComponent,
+        LightDefaults::s_WhiteColorComponent,
+        LightDefaults::s_WhiteColorComponent,
+        LightDefaults::s_Intensity
+    );
     light.type = LightType::Directional;
     return light;
 }

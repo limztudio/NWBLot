@@ -7,15 +7,15 @@
 }
 
 struct MeshletTriangleVectors{
-    SIMDVector positions[3] = {};
+    SIMDVector positions[s_MeshletTriangleIndexCount] = {};
     SIMDVector centroid = {};
     SIMDVector areaNormal = {};
 };
 
 struct MeshletTriangleData{
-    u32 vertexRefs[3] = {};
-    u32 positions[3] = {};
-    Float4 positionVectors[3] = {};
+    u32 vertexRefs[s_MeshletTriangleIndexCount] = {};
+    u32 positions[s_MeshletTriangleIndexCount] = {};
+    Float4 positionVectors[s_MeshletTriangleIndexCount] = {};
     Float4 centroid = {};
     Float4 areaNormal = {};
 };

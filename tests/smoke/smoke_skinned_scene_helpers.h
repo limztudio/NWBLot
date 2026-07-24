@@ -14,7 +14,7 @@
 #include <impl/assets_model/asset.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_model/module.h>
-#include <impl/ecs_render/mesh/model_renderer.h>
+#include <impl/ecs_model_renderer/model_renderer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,13 +32,7 @@ inline void AddSmokeSkinnedRenderSystems(
     Core::ECS::World& world,
     ProjectRuntimeContext& context
 ){
-    auto& meshSystem = world.addSystem<Impl::MeshSystem>(world);
-    auto& rendererSystem = world.addSystem<Impl::RendererSystem>(
-        world,
-        context.graphics,
-        context.assetManager,
-        context.shaderPathResolver
-    );
+    const SmokeRenderSystems systems = CreateSmokeRenderSystems(world, context);
     auto& modelSystem = world.addSystem<Impl::ModelSystem>(
         world,
         context.assetManager,
@@ -49,13 +43,13 @@ inline void AddSmokeSkinnedRenderSystems(
         world,
         context.graphics,
         context.assetManager,
-        meshSystem,
+        systems.mesh,
         context.shaderPathResolver
     );
 
     context.graphics.addRenderPassToBack(meshSkinningSystem);
-    context.graphics.addRenderPassToBack(rendererSystem);
-    context.frameGraphRegistry.registerContributor(rendererSystem);
+    context.graphics.addRenderPassToBack(systems.renderer);
+    context.frameGraphRegistry.registerContributor(systems.renderer);
 }
 
 inline void DestroySmokeSkinnedRenderWorld(
@@ -69,12 +63,7 @@ inline void DestroySmokeSkinnedRenderWorld(
     if(meshSkinningSystem)
         context.graphics.removeRenderPass(*meshSkinningSystem);
 
-    auto* rendererSystem = world->getSystem<Impl::RendererSystem>();
-    if(rendererSystem){
-        context.frameGraphRegistry.unregisterContributor(*rendererSystem);
-        context.graphics.removeRenderPass(*rendererSystem);
-    }
-
+    RemoveSmokeRendererSystem(context, *world);
     FinishDestroyingSmokeWorld(context, world);
 }
 
@@ -104,33 +93,23 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
 
     Core::Assets::AssetRef<Impl::Model> model;
     model.virtualPath = Name(modelPath);
-    Core::Assets::AssetRef<Impl::Material> material;
-    material.virtualPath = Name(materialPath);
+    const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(
+        world,
+        arena,
+        materialPath,
+        materialInterfacePath,
+        position,
+        scale
+    );
 
-    auto entity = world.createEntity();
-    auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
-    transform.position = position;
-    transform.scale = scale;
-
-    auto& modelComponent = entity.addComponent<Impl::ModelComponent>();
+    auto& modelComponent = world.addComponent<Impl::ModelComponent>(setup.entity);
     modelComponent.model = model;
 
-    auto& renderer = entity.addComponent<Impl::RendererComponent>();
-    renderer.material = material;
-
-    const Name materialInterface(materialInterfacePath);
-    entity.addComponent<Impl::MaterialInstanceComponent>(arena, materialInterface);
-    const bool tintApplied = Impl::SetMaterialMutableHalf4(
-        world,
-        entity.id(),
-        materialInterface,
-        "runtime.color_tint",
-        colorTint
-    );
+    const bool tintApplied = ApplySmokeMaterialTint(world, setup, colorTint);
     if(outTintApplied)
         *outTintApplied = tintApplied;
 
-    return entity.id();
+    return setup.entity;
 }
 
 [[nodiscard]] inline Core::ECS::EntityID FindSpawnedModelObject(

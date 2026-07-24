@@ -9,20 +9,12 @@
 // from empty lists.
 
 
-#include "surfel_record.slangi"
-#include "surfel_constants.slangi"
+#include "surfel_runtime.slangi"
 #include "surfel_hash.slangi"
-#include "surfel_binding_slots.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[vk::binding(NWB_SURFEL_BINDING_CONSTANTS, NWB_SURFEL_SET)]]
-ConstantBuffer<NwbSurfelConstants> g_NwbSurfelConstants;
-
-[[vk::binding(NWB_SURFEL_BINDING_POOL, NWB_SURFEL_SET)]]
-RWStructuredBuffer<NwbSurfel> g_NwbSurfelPool;
 
 [[vk::binding(NWB_SURFEL_BINDING_CELL_HEAD, NWB_SURFEL_SET)]]
 RWStructuredBuffer<uint> g_NwbSurfelCellHead;

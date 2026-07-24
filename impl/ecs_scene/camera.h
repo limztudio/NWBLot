@@ -21,7 +21,7 @@ NWB_IMPL_SCENE_BEGIN
 
 struct alignas(Float4) CameraProjectionData{
     Float4 projectionParams = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    f32 aspectRatio = 1.0f;
+    f32 aspectRatio = CameraDefaults::s_FallbackAspectRatio;
     f32 tanHalfVerticalFov = 0.0f;
 };
 
@@ -48,8 +48,8 @@ static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectio
     SIMDVector cosHalfFovVector;
     VectorSinCos(&sinHalfFovVector, &cosHalfFovVector, VectorReplicate(verticalFovRadians * 0.5f));
     if(
-        !VectorIsFinite(sinHalfFovVector, 0xFu)
-        || !VectorIsFinite(cosHalfFovVector, 0xFu)
+        !VectorIsFinite(sinHalfFovVector, VectorComponentMask::s_XYZW)
+        || !VectorIsFinite(cosHalfFovVector, VectorComponentMask::s_XYZW)
         || !Vector4GreaterOrEqual(
             VectorAbs(cosHalfFovVector),
             VectorReplicate(s_CameraFovCosEpsilon)
@@ -58,7 +58,7 @@ static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectio
         return false;
 
     const SIMDVector tanHalfFovVector = VectorDivide(sinHalfFovVector, cosHalfFovVector);
-    if(!VectorIsFinite(tanHalfFovVector, 0xFu) || !Vector4Greater(tanHalfFovVector, VectorZero()))
+    if(!VectorIsFinite(tanHalfFovVector, VectorComponentMask::s_XYZW) || !Vector4Greater(tanHalfFovVector, VectorZero()))
         return false;
 
     outTanHalfFov = VectorGetX(tanHalfFovVector);
@@ -74,7 +74,7 @@ static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectio
         return camera.aspectRatio();
     if(IsFinite(fallbackAspectRatio) && fallbackAspectRatio > 0.0f)
         return fallbackAspectRatio;
-    return 1.0f;
+    return CameraDefaults::s_FallbackAspectRatio;
 }
 
 [[nodiscard]] inline bool CameraProjectionDataValid(
@@ -149,7 +149,7 @@ static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectio
     return true;
 }
 
-[[nodiscard]] inline Float4 BuildDefaultCameraProjectionParams(const f32 fallbackAspectRatio = 1.0f){
+[[nodiscard]] inline Float4 BuildDefaultCameraProjectionParams(const f32 fallbackAspectRatio = CameraDefaults::s_FallbackAspectRatio){
     Float4 projectionParams;
     if(TryBuildCameraProjectionParams(CameraComponent{}, fallbackAspectRatio, projectionParams))
         return projectionParams;
@@ -182,7 +182,7 @@ struct SceneCameraView{
 };
 
 
-[[nodiscard]] SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, f32 fallbackAspectRatio = 1.0f);
+[[nodiscard]] SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, f32 fallbackAspectRatio = CameraDefaults::s_FallbackAspectRatio);
 [[nodiscard]] Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position);
 
 

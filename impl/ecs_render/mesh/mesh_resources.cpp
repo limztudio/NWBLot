@@ -196,8 +196,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     }
 
     const Mesh& mesh = static_cast<const Mesh&>(*loadedAsset);
-    if(!mesh.validatePayload())
-        return false;
+    NWB_ASSERT(mesh.validatePayload());
 
     if(
         mesh.meshlets().size() > static_cast<usize>(Limit<u32>::s_Max)

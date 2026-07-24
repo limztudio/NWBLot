@@ -117,7 +117,7 @@ static bool ValidateSourceIndexStream(
     const Core::Assets::AssetVector<u32>& indices,
     const usize vertexRefCount
 ){
-    if(indices.empty() || (indices.size() % 3u) != 0u){
+    if(indices.empty() || (indices.size() % s_MeshletTriangleIndexCount) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles")
             , metaKind
             , PathToString<tchar>(nwbFilePath)

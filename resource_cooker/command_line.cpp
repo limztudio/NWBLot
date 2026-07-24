@@ -11,6 +11,7 @@
 
 #include <core/assets/paths.h>
 #include <core/common/command_line.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,24 +37,23 @@ inline constexpr AStringView s_ImplDirectoryName = "impl";
 static bool AssignCompactString(
     const AStringView source,
     const char* label,
-    ACompactString& outValue,
-    NWB::Core::Assets::AssetString& outError
+    ACompactString& outValue
 ){
     if(outValue.assign(source))
         return true;
 
-    outError = StringFormat(outError.get_allocator().arena(), "{} exceeds ACompactString capacity ({})", label, ACompactString::s_MaxLength);
+    NWB_LOGGER_WARNING(NWB_TEXT("Resource cooker: {} exceeds ACompactString capacity ({})"), label, ACompactString::s_MaxLength);
     return false;
 }
 
 static bool AssignString(
     const std::string& source,
-    NWB::Core::Assets::AssetString& outValue,
-    NWB::Core::Assets::AssetString& outError
+    const char* label,
+    NWB::Core::Assets::AssetString& outValue
 ){
     if(HasEmbeddedNull(AStringView(source.data(), source.size()))){
-        outError = "path-like command line values must not contain embedded nulls";
         outValue.clear();
+        NWB_LOGGER_WARNING(NWB_TEXT("Resource cooker: {} must not contain embedded nulls"), label);
         return false;
     }
 
@@ -64,11 +64,10 @@ static bool AssignString(
 static bool AssignAssetRootVirtualRoot(
     const std::string& source,
     ACompactString& outVirtualRoot,
-    NWB::Core::Assets::AssetString& outError
+    NWB::Core::Assets::AssetArena& arena
 ){
     outVirtualRoot.clear();
 
-    NWB::Core::Assets::AssetArena& arena = outError.get_allocator().arena();
     const Path assetRootPath(arena, source.c_str());
     const Path normalizedAssetRootPath = assetRootPath.lexically_normal();
 
@@ -82,27 +81,29 @@ static bool AssignAssetRootVirtualRoot(
     if(outVirtualRoot.assign(virtualRoot))
         return true;
 
-    outError = StringFormat(outError.get_allocator().arena(), "asset root virtual root '{}' exceeds ACompactString capacity ({})", virtualRoot, ACompactString::s_MaxLength);
+    NWB_LOGGER_WARNING(NWB_TEXT("Resource cooker: asset root virtual root '{}' exceeds ACompactString capacity ({})")
+        , virtualRoot
+        , ACompactString::s_MaxLength
+    );
     return false;
 }
 
 static bool AssignAssetRoots(
     const std::vector<std::string>& source,
-    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetCookRoot>& outValues,
-    NWB::Core::Assets::AssetString& outError
+    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetCookRoot>& outValues
 ){
     outValues.clear();
     outValues.reserve(source.size());
     NWB::Core::Assets::AssetArena& arena = outValues.get_allocator().arena();
     for(const std::string& value : source){
         if(HasEmbeddedNull(AStringView(value.data(), value.size()))){
-            outError = "path-like command line values must not contain embedded nulls";
             outValues.clear();
+            NWB_LOGGER_WARNING(NWB_TEXT("Resource cooker: --asset-root must not contain embedded nulls"));
             return false;
         }
 
         ACompactString virtualRoot;
-        if(!AssignAssetRootVirtualRoot(value, virtualRoot, outError)){
+        if(!AssignAssetRootVirtualRoot(value, virtualRoot, arena)){
             outValues.clear();
             return false;
         }
@@ -144,8 +145,7 @@ static void ConfigureCommandLineOptions(CLI::App& outApp, __hidden_command_line:
 CommandLineParseResult::Enum ParseCommandLine(
     const int argc,
     char** argv,
-    CookOptions& outOptions,
-    NWB::Core::Assets::AssetString& outError
+    CookOptions& outOptions
 ){
     outOptions.repoRoot.clear();
     outOptions.assetRoots.clear();
@@ -153,7 +153,6 @@ CommandLineParseResult::Enum ParseCommandLine(
     outOptions.cacheDirectory.clear();
     outOptions.configuration.clear();
     outOptions.assetType.clear();
-    outError.clear();
 
     if(CommandLineHasValidArgv(argc, argv)){
         for(int i = 1; i < argc; ++i){
@@ -177,30 +176,28 @@ CommandLineParseResult::Enum ParseCommandLine(
         return CommandLineParseResult::Help;
     }
     catch(const CLI::ParseError& e){
-        outError = e.what();
+        NWB_LOGGER_WARNING(NWB_TEXT("Resource cooker: failed to parse command line: {}"), StringConvert(e.what()));
         return CommandLineParseResult::Error;
     }
 
-    if(!__hidden_command_line::AssignString(parsedOptions.repoRoot, outOptions.repoRoot, outError))
+    if(!__hidden_command_line::AssignString(parsedOptions.repoRoot, "--repo-root", outOptions.repoRoot))
         return CommandLineParseResult::Error;
-    if(!__hidden_command_line::AssignAssetRoots(parsedOptions.assetRoots, outOptions.assetRoots, outError))
+    if(!__hidden_command_line::AssignAssetRoots(parsedOptions.assetRoots, outOptions.assetRoots))
         return CommandLineParseResult::Error;
-    if(!__hidden_command_line::AssignString(parsedOptions.outputDirectory, outOptions.outputDirectory, outError))
+    if(!__hidden_command_line::AssignString(parsedOptions.outputDirectory, "--output-directory", outOptions.outputDirectory))
         return CommandLineParseResult::Error;
-    if(!__hidden_command_line::AssignString(parsedOptions.cacheDirectory, outOptions.cacheDirectory, outError))
+    if(!__hidden_command_line::AssignString(parsedOptions.cacheDirectory, "--cache-directory", outOptions.cacheDirectory))
         return CommandLineParseResult::Error;
     if(!__hidden_command_line::AssignCompactString(
         AStringView(parsedOptions.configuration.data(), parsedOptions.configuration.size()),
         "--configuration",
-        outOptions.configuration,
-        outError
+        outOptions.configuration
     ))
         return CommandLineParseResult::Error;
     if(!__hidden_command_line::AssignCompactString(
         AStringView(parsedOptions.assetType.data(), parsedOptions.assetType.size()),
         "--asset-type",
-        outOptions.assetType,
-        outError
+        outOptions.assetType
     ))
         return CommandLineParseResult::Error;
 

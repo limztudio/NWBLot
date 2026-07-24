@@ -21,6 +21,26 @@ float3 nwbBvhSafeInvDir(const float3 direction){
     return 1.0 / safe;
 }
 
+bool nwbBvhRayAabbInterval(
+    const float3 origin,
+    const float3 invDir,
+    const float tMin,
+    const float tMax,
+    const float3 boxMin,
+    const float3 boxMax,
+    const float padding,
+    out float outTEntry
+){
+    const float3 t0 = (boxMin - padding - origin) * invDir;
+    const float3 t1 = (boxMax + padding - origin) * invDir;
+    const float3 tSmall = min(t0, t1);
+    const float3 tLarge = max(t0, t1);
+    const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
+    const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
+    outTEntry = tNear;
+    return tNear <= tFar;
+}
+
 bool nwbBvhRayAabb(
     const float3 origin,
     const float3 invDir,
@@ -30,13 +50,8 @@ bool nwbBvhRayAabb(
     const float3 boxMax,
     const float padding
 ){
-    const float3 t0 = (boxMin - padding - origin) * invDir;
-    const float3 t1 = (boxMax + padding - origin) * invDir;
-    const float3 tSmall = min(t0, t1);
-    const float3 tLarge = max(t0, t1);
-    const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
-    const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
-    return tNear <= tFar;
+    float unusedTEntry;
+    return nwbBvhRayAabbInterval(origin, invDir, tMin, tMax, boxMin, boxMax, padding, unusedTEntry);
 }
 
 bool nwbBvhRayAabbT(
@@ -49,14 +64,7 @@ bool nwbBvhRayAabbT(
     const float padding,
     out float tEntry
 ){
-    const float3 t0 = (boxMin - padding - origin) * invDir;
-    const float3 t1 = (boxMax + padding - origin) * invDir;
-    const float3 tSmall = min(t0, t1);
-    const float3 tLarge = max(t0, t1);
-    const float tNear = max(max(tSmall.x, tSmall.y), max(tSmall.z, tMin));
-    const float tFar = min(min(tLarge.x, tLarge.y), min(tLarge.z, tMax));
-    tEntry = tNear;
-    return tNear <= tFar;
+    return nwbBvhRayAabbInterval(origin, invDir, tMin, tMax, boxMin, boxMax, padding, tEntry);
 }
 
 

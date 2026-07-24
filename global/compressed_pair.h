@@ -25,6 +25,21 @@ namespace CompressedPairDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ImplementationKind{
+    enum Enum : int{
+        TwoValues = 0,
+        FirstEmpty,
+        SecondEmpty,
+        DistinctEmptyValues,
+        SameEmptyValue,
+        SameValue,
+    };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T>
 inline void internalSwap(T& t1, T& t2)noexcept(noexcept(Swap(t1, t2))){
     Swap(t1, t2);
@@ -34,17 +49,17 @@ template<typename T1, typename T2, bool isSame, bool firstEmpty, bool secondEmpt
 struct Switch;
 
 template<typename T1, typename T2>
-struct Switch<T1, T2, false, false, false>{ static const int value = 0; };
+struct Switch<T1, T2, false, false, false>{ static const int value = ImplementationKind::TwoValues; };
 template<typename T1, typename T2>
-struct Switch<T1, T2, false, true, false>{ static const int value = 1; };
+struct Switch<T1, T2, false, true, false>{ static const int value = ImplementationKind::FirstEmpty; };
 template<typename T1, typename T2>
-struct Switch<T1, T2, false, false, true>{ static const int value = 2; };
+struct Switch<T1, T2, false, false, true>{ static const int value = ImplementationKind::SecondEmpty; };
 template<typename T1, typename T2>
-struct Switch<T1, T2, false, true, true>{ static const int value = 3; };
+struct Switch<T1, T2, false, true, true>{ static const int value = ImplementationKind::DistinctEmptyValues; };
 template<typename T1, typename T2>
-struct Switch<T1, T2, true, true, true>{ static const int value = 4; };
+struct Switch<T1, T2, true, true, true>{ static const int value = ImplementationKind::SameEmptyValue; };
 template<typename T1, typename T2>
-struct Switch<T1, T2, true, false, false>{ static const int value = 5; };
+struct Switch<T1, T2, true, false, false>{ static const int value = ImplementationKind::SameValue; };
 
 template<typename T1, typename T2>
 struct ImplementationTypes{
@@ -132,7 +147,7 @@ using SelectedImplementation = Implementation<T1, T2,
     IsEmpty<T2>::value>::value>;
 
 template<typename T1, typename T2>
-class Implementation<T1, T2, 0> : public ValueStorage<T1, T2>{
+class Implementation<T1, T2, ImplementationKind::TwoValues> : public ValueStorage<T1, T2>{
 private:
     typedef ValueStorage<T1, T2> Base;
 
@@ -150,7 +165,7 @@ public:
     {}
 };
 template<typename T1, typename T2>
-class Implementation<T1, T2, 1> : public ImplementationTypes<T1, T2>, private T1{
+class Implementation<T1, T2, ImplementationKind::FirstEmpty> : public ImplementationTypes<T1, T2>, private T1{
 private:
     typedef ImplementationTypes<T1, T2> Types;
 
@@ -185,7 +200,7 @@ private:
     typename Types::second_type m_second;
 };
 template<typename T1, typename T2>
-class Implementation<T1, T2, 2> : public ImplementationTypes<T1, T2>, private T2{
+class Implementation<T1, T2, ImplementationKind::SecondEmpty> : public ImplementationTypes<T1, T2>, private T2{
 private:
     typedef ImplementationTypes<T1, T2> Types;
 
@@ -220,12 +235,12 @@ private:
     typename Types::first_type m_first;
 };
 template<typename T1, typename T2>
-class Implementation<T1, T2, 3>
-    : public EmptyPairAccessors<T1, T2, Implementation<T1, T2, 3>>
+class Implementation<T1, T2, ImplementationKind::DistinctEmptyValues>
+    : public EmptyPairAccessors<T1, T2, Implementation<T1, T2, ImplementationKind::DistinctEmptyValues>>
     , private T1
     , private T2{
 private:
-    friend class EmptyPairAccessors<T1, T2, Implementation<T1, T2, 3>>;
+    friend class EmptyPairAccessors<T1, T2, Implementation<T1, T2, ImplementationKind::DistinctEmptyValues>>;
     typedef ImplementationTypes<T1, T2> Types;
 
 
@@ -243,11 +258,11 @@ public:
     {}
 };
 template<typename T1, typename T2>
-class Implementation<T1, T2, 4>
-    : public EmptyPairAccessors<T1, T2, Implementation<T1, T2, 4>>
+class Implementation<T1, T2, ImplementationKind::SameEmptyValue>
+    : public EmptyPairAccessors<T1, T2, Implementation<T1, T2, ImplementationKind::SameEmptyValue>>
     , private T1{
 private:
-    friend class EmptyPairAccessors<T1, T2, Implementation<T1, T2, 4>>;
+    friend class EmptyPairAccessors<T1, T2, Implementation<T1, T2, ImplementationKind::SameEmptyValue>>;
     typedef ImplementationTypes<T1, T2> Types;
 
 
@@ -261,7 +276,7 @@ public:
     {}
 };
 template<typename T1, typename T2>
-class Implementation<T1, T2, 5> : public ValueStorage<T1, T2>{
+class Implementation<T1, T2, ImplementationKind::SameValue> : public ValueStorage<T1, T2>{
 private:
     typedef ValueStorage<T1, T2> Base;
 

@@ -22,6 +22,7 @@
 #include <global/inplace_function.h>
 #include <global/limit.h>
 #include <global/math/type.h>
+#include <global/math/vector.h>
 #include <global/process_execution.h>
 #include <global/text_utils.h>
 #include <global/type_counter.h>
@@ -243,6 +244,12 @@ TEST(Global, Float34IdentityUsesAffineStorage){
     EXPECT_FLOAT_EQ(identity._14, 0.0f);
     EXPECT_FLOAT_EQ(identity._24, 0.0f);
     EXPECT_FLOAT_EQ(identity._34, 0.0f);
+}
+
+TEST(Global, VectorComponentMasksDescribeActiveLanes){
+    EXPECT_EQ(VectorComponentMask::s_XY, 0x3u);
+    EXPECT_EQ(VectorComponentMask::s_XYZ, 0x7u);
+    EXPECT_EQ(VectorComponentMask::s_XYZW, 0xFu);
 }
 
 TEST(Global, GlobalArenaReallocationPreservesAlignment){

@@ -1376,7 +1376,11 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         state.setPipeline(rayTracingState().m_surfelTraceBuildArgsPipeline.get());
         state.addBindingSet(rayTracingState().m_surfelTraceBuildArgsBindingSet.get());
         commandList.setComputeState(state);
-        commandList.dispatch(1u, 1u, 1u);
+        commandList.dispatch(
+            NWB_SURFEL_TRACE_BUILDARGS_DISPATCH_GROUP_COUNT_X,
+            NWB_SURFEL_TRACE_BUILDARGS_DISPATCH_GROUP_COUNT_Y,
+            NWB_SURFEL_TRACE_BUILDARGS_DISPATCH_GROUP_COUNT_Z
+        );
     }
 
     // (4) Trace: one workgroup per LIVE surfel (64 threads = 64 hemisphere rays), via dispatchIndirect off (3b)'s args.

@@ -146,7 +146,7 @@ u32 BuildSceneBvhNode(
     u32 bestBin = 0u;
     f32 bestCost = s_RayTracingFiniteInfinity;
 
-    for(u32 axis = 0u; axis < 3u; ++axis){
+    for(u32 axis = 0u; axis < s_SceneBvhAxisCount; ++axis){
         const f32 loExtent = SceneBvhAxisComponent(centroidMin, axis);
         const f32 hiExtent = SceneBvhAxisComponent(centroidMax, axis);
         const f32 extent = hiExtent - loExtent;

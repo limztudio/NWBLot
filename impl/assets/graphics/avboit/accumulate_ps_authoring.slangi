@@ -136,7 +136,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
 
     // volumeTransmittance is the AVBOIT self-occlusion volume sample (NOT the material's transmittance): it is the
     // accumulated front-to-back transmittance up to this fragment, used to weight its color contribution.
-    const half volumeTransmittance = half(nwbAvboitLinearBiasedTransmittance(input.position.xy, input.position.z));
+    const half volumeTransmittance = nwbAvboitLinearBiasedTransmittance(input.position.xy, input.position.z);
     const half weightedAlpha = alpha * volumeTransmittance;
 
     NwbBxdfSurface bxdfSurface;

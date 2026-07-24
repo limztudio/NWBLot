@@ -59,8 +59,8 @@ inline void AppendUnsignedToFixedBuffer(char (&dst)[N], u64 value)noexcept{
     char tmp[TextDetail::s_DecimalTextBufferBytes] = {};
     usize count = 0u;
     do{
-        tmp[count++] = static_cast<char>('0' + (value % 10u));
-        value /= 10u;
+        tmp[count++] = static_cast<char>('0' + (value % TextDetail::s_DefaultNumericTextBase));
+        value /= TextDetail::s_DefaultNumericTextBase;
     }while(value && count < sizeof(tmp));
 
     for(usize i = 0u; i < count; ++i){

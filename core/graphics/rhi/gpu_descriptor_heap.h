@@ -15,13 +15,12 @@ NWB_CORE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Global descriptor heap - backend-agnostic contract (Phase 1)
+// Global descriptor heap - backend-agnostic contract.
 //
 // A resource registered in the heap is addressed everywhere - C++ and shader - by a single opaque 32-bit
 // GpuDescriptorHandle. The handle bit-layout and class taxonomy are identical on every backend, so a handle
-// minted on the descriptor-indexing floor (the guaranteed local path) is byte-for-byte valid on the optional
-// descriptor-heap accelerator. That portability is the entire deliverable of Phase 1; see
-// docs/design/bindless-phase1-rhi-heap.md.
+// minted on the descriptor-indexing path is byte-for-byte valid on an optional descriptor-heap accelerator. See
+// docs/design/bindless-phase1-rhi-heap.md for the original design.
 
 
 // The resource classes a shader must select between. Each class maps to exactly one register space / descriptor
@@ -39,11 +38,8 @@ namespace GpuDescriptorClass{
         kCount
     };
 
-    // AccelStruct is part of the stable handle ABI, but the descriptor-indexing backend (Backend A) cannot host it:
-    // IsDescriptorHeapCompatibleType() rejects RayTracingAccelStruct, and the descriptor-heap writeDescriptor() has
-    // no acceleration-structure case either. TLAS registration therefore lands with the descriptor-buffer backend
-    // (Backend C, VkDescriptorGetInfoEXT natively encodes AS), which is out of Phase-1 scope. write() reports
-    // AccelStruct as unsupported on Backend A rather than faking it.
+    // AccelStruct is part of the stable handle ABI but is unsupported by the descriptor-indexing backend.
+    // write() reports it as unsupported rather than faking a handle.
 };
 
 
@@ -51,7 +47,7 @@ namespace GpuDescriptorClass{
 //   bits 31..28 (4)  : class tag  - GpuDescriptorClass::Enum (<= kCount classes, fits with headroom)
 //   bits 27..0 (28)  : slot index - global within its namespace (resource heap or sampler heap), max 2^28
 //
-// Generation/versioning is intentionally NOT packed here in Phase 1 (index bits are more valuable); a debug-only
+// Generation/versioning is intentionally not packed here (index bits are more valuable); a debug-only
 // side table validates handles instead. Decoding stays confined to descriptorClass()/slot() so a future widen to
 // a 64-bit handle is a localized change.
 struct GpuDescriptorHandle{
@@ -78,7 +74,7 @@ inline constexpr bool operator!=(const GpuDescriptorHandle lhs, const GpuDescrip
 static_assert(sizeof(GpuDescriptorHandle) == 4, "GpuDescriptorHandle is supposed to be a single 32-bit word");
 
 
-// Capacities are hard ceilings for Phase 1: the heap is not auto-grown mid-frame. Effective caps are clamped to
+// Capacities are hard ceilings: the heap is not auto-grown mid-frame. Effective caps are clamped to
 // the device's update-after-bind limits at initialize() time and logged (no silent truncation). Zero means "use
 // the backend default".
 struct GpuDescriptorHeapDesc{

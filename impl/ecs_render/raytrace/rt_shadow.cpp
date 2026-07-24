@@ -239,11 +239,9 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
-    // Transition the shared per-mesh geometry + material-context buffers to ShaderResource; buildSceneTlas last used
-    // positions/indices as acceleration-structure inputs. The opaque trace itself reads no geometry (its per-mesh
-    // descriptor arrays were dropped in step 4c), but these buffers back the global-heap descriptors the caustic/GI
-    // passes read, so they are staged to ShaderResource here right after the shared TLAS build. The binding set then
-    // derives the remaining states (TLAS read, G-buffer SRVs, scene/light buffers, and the visibility UAV).
+    // Transition shared per-mesh geometry and material context to ShaderResource after buildSceneTlas used positions
+    // and indices for acceleration-structure input. Caustic and GI read these buffers through descriptor-heap slots;
+    // the binding set derives the remaining states.
     for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
         commandList.setBufferState(rayTracingState().m_shadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
@@ -406,12 +404,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         return state;
     };
 
-    // Phase 2 step 4b: the SW-shadow traversal now fetches per-mesh geometry (BVH nodes / positions / indices /
-    // attributes) from the global descriptor heap (set 8), so every pass pipeline -- built with the heap layout in
-    // step 4a -- must have the heap's descriptor tables BOUND before it dispatches, not merely present in its layout.
-    // bindDescriptorHeap binds only sets 8/9 (it never disturbs the classic set 0), so bind right after each pass's
-    // ComputeState and before its dispatch. Bound per pass (not once) so set 8 is freshly bound immediately ahead of
-    // every dispatch, immune to a set-0 rebind disturbing it; gated on a live heap so non-bindless builds skip it.
+    // SW traversal accesses per-mesh geometry through the descriptor heap, so bind its tables after each ComputeState
+    // and before dispatch. bindCompute touches only sets 8/9; non-bindless builds skip it.
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     const bool heapLive = heap.isInitialized();
     const auto bindPassHeap = [&](const Core::ComputePipelineHandle& pipeline){
@@ -723,9 +717,7 @@ void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayou
     layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, 1)); // soft trace: half-res; hard fallback: full-res
     // (slot 7, the per-instance occluder material table, is intentionally absent: the opaque fast path loads no
     // per-instance material. The shared buffer stays for the SW/GI/caustics paths -- see binding_slots.h.)
-    // Only the shared material-context buffers remain in this trace's slot map. The per-mesh index/attribute/position
-    // descriptor arrays (slots 8/9/12) were dropped in the step 4c bounded-path teardown: the opaque fast path reads
-    // no geometry, so they were dead host bindings the occlusion/rayquery shaders never declared -- see binding_slots.h.
+    // Only shared material-context buffers remain in this slot map; the opaque trace reads no per-mesh geometry.
     layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INSTANCES, 1));
     // Soft shadow cone-jitter: the frame counter (NwbShadowRqPushConstants) seeds the per-pixel low-discrepancy jitter
@@ -776,12 +768,9 @@ void RendererRayTracingSystem::appendShadowTraceBindingSet(Core::BindingSetDesc&
         ECSRenderDetail::s_ShadowVisibilitySubresources,
         Core::TextureDimension::Texture2DArray
     ));
-    // (slot 7 removed: the opaque fast path loads no per-instance material; m_shadowInstanceMaterialBuffer stays
-    // bound by the SW shadow / GI / caustics passes through their own sets.)
+    // Slot 7 is unused because the opaque fast path loads no per-instance material.
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, rayTracingState().m_shadowMaterialTypedBuffer.get()));
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INSTANCES, rayTracingState().m_shadowInstanceBuffer.get()));
-    // The per-mesh index/attribute/position descriptor arrays (slots 8/9/12) and their fill loop were removed in the
-    // step 4c bounded-path teardown -- the opaque trace reads no geometry, so nothing bound here was ever fetched.
 }
 
 
@@ -1038,9 +1027,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_NODES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_INSTANCES, 1));
-        // Per-mesh geometry (BVH nodes / positions / indices / attributes) is fetched from the global descriptor heap
-        // (sets 8/9, pinned on this pipeline in step 4a) by the material record's per-buffer slots; the former bounded
-        // per-mesh descriptor arrays at slots 8-11 were removed in step 4c.
+        // Per-mesh geometry is fetched from the global descriptor heap through slots carried by the material record.
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_INSTANCE_MATERIAL, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MATERIAL_TYPED, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MESH_INSTANCES, 1));
@@ -1330,11 +1317,8 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
         Core::TextureDimension::Texture2DArray
     ));
 
-    // Per-mesh geometry is not bound here: the SW shadow traversal reads BVH nodes / positions / indices / attributes
-    // through the global descriptor-index heap (bound as sets 8/9 per dispatch) by the material record's host-provided
-    // slot indices. The former bounded per-mesh descriptor arrays (slots 8-11) were removed in step 4c; the backing
-    // buffers (m_swShadowMesh*Buffers) stay -- they are what the heap descriptors point at, and the per-dispatch
-    // barriers still transition them for the heap reads.
+    // SW shadow reads per-mesh geometry through material-record descriptor-heap slots; backing buffers remain
+    // transitioned for those reads.
 
     auto* device = graphics().getDevice();
     rayTracingState().m_swShadowBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_swShadowBindingLayout);

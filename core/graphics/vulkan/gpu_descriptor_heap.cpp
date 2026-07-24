@@ -18,8 +18,8 @@ NWB_VULKAN_BEGIN
 
 
 namespace __hidden_vulkan_descriptor_heap{
-    // Phase-1 defaults when GpuDescriptorHeapDesc leaves a capacity at 0. Clamped to device update-after-bind limits
-    // in initialize(); real sizing is a Phase-2 concern.
+    // Defaults when GpuDescriptorHeapDesc leaves a capacity at 0. Clamped to device update-after-bind limits in
+    // initialize().
     inline constexpr u32 s_DefaultResourceCapacity = 16384u;
     inline constexpr u32 s_DefaultSamplerCapacity = 2048u;
 
@@ -246,8 +246,7 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
         return GpuDescriptorHandle::invalid();
     }
     if(descriptorClass == GpuDescriptorClass::AccelStruct){
-        // IsDescriptorHeapCompatibleType() rejects RayTracingAccelStruct; AS lands with the descriptor-buffer
-        // backend in a later phase (see rhi/gpu_descriptor_heap.h).
+        // IsDescriptorHeapCompatibleType() rejects RayTracingAccelStruct on the descriptor-indexing backend.
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate: AccelStruct class is unsupported on the descriptor-indexing backend (Backend A)."));
         return GpuDescriptorHandle::invalid();
     }

@@ -1609,18 +1609,15 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Global Descriptor Heap (Phase 1)
+// Global Descriptor Heap
 
 
-// Device-owned unification of the dormant bindless machinery behind the single GpuDescriptorHandle contract
+// Device-owned bindless descriptor tables behind the single GpuDescriptorHandle contract
 // (rhi/gpu_descriptor_heap.h; docs/design/bindless-phase1-rhi-heap.md).
 //
-// Phase 1 stands up Backend A only - descriptor indexing, the guaranteed floor that runs on every device the engine
-// boots on (BC-250/RADV included). It builds two persistent bindless descriptor tables (resources + samplers) from
-// the existing createBindlessLayout/createDescriptorTable machinery and hands out global slot indices into them.
-// Backend B (VK_EXT_descriptor_heap) is a future accelerator, absent on our hardware, so it is not wired here. The
-// heap is dark: constructed at Device init, exercised only by its own round-trip test, invisible to every existing
-// pipeline.
+// Descriptor indexing is the portable implementation. It builds persistent resource and sampler tables from the
+// existing createBindlessLayout/createDescriptorTable machinery and hands out global slot indices. The optional
+// VK_EXT_descriptor_heap accelerator is not wired here.
 class GpuDescriptorHeap final : NoCopy{
     friend class Device;
     friend class CommandList;
@@ -1650,8 +1647,7 @@ public:
     // while the table is bound, provided the slot is not read by in-flight GPU work.
     bool write(GpuDescriptorHandle handle, const BindingSetItem& item);
 
-    // Binds the resource + sampler tables at their set indices against the given pipeline layout / bind point. The
-    // explicit layout (a Phase-1 refinement of the design's bind(cmd)) sidesteps command-list pipeline tracking.
+    // Binds the resource + sampler tables at their set indices against the given pipeline layout / bind point.
     void bind(CommandList& commandList, VkPipelineBindPoint bindPoint, VkPipelineLayout pipelineLayout);
 
     // Facade-friendly bind for a compute dispatch: pulls the bind point + pipeline layout from the pipeline itself,
@@ -1705,12 +1701,10 @@ private:
     Device& m_device;
     const VulkanContext& m_context;
 
-    bool m_initialized = false;
     GpuDescriptorHeapDesc m_desc;
 
-    // Set index each table occupies in a consuming pipeline layout. Phase 2 pins them to reserved high sets (8/9) via
-    // BindlessLayoutDesc::setDescriptorSetIndex in initialize(), clearing the 8 classic sets (s_MaxBindingLayouts) with
-    // room to spare under maxBoundDescriptorSets so the heap never collides with a migrated pipeline's own low sets.
+    // Set index each table occupies in a consuming pipeline layout. They are pinned to reserved high sets (8/9) via
+    // BindlessLayoutDesc::setDescriptorSetIndex in initialize(), leaving pipeline-local low sets collision-free.
     // These MUST stay in lockstep with the shader contract in impl/assets/graphics/bindless/binding_slots.h
     // (NWB_BINDLESS_HEAP_RESOURCE_SET / NWB_BINDLESS_HEAP_SAMPLER_SET).
     u32 m_resourceSetIndex = NWB_BINDLESS_HEAP_RESOURCE_SET;
@@ -1728,6 +1722,7 @@ private:
     u64 m_frameCounter = 0;
 
     Futex m_mutex;
+    bool m_initialized = false;
 };
 
 
@@ -2269,7 +2264,7 @@ public:
     void dispatch(u32 groupsX, u32 groupsY = 1, u32 groupsZ = 1);
     void dispatchIndirect(u32 offsetBytes);
 
-    // Binds the global descriptor heap's tables for the currently bound pipeline (Phase-1 dark path).
+    // Binds the global descriptor heap's tables for the currently bound pipeline.
     void bindDescriptorHeap(GpuDescriptorHeap& heap, VkPipelineBindPoint bindPoint, VkPipelineLayout pipelineLayout);
 
     void setMeshletState(const MeshletState& state);
@@ -2557,7 +2552,7 @@ public:
 
 public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
-    // Phase-1 global descriptor heap (dark; see GpuDescriptorHeap). Valid only after Device init completes.
+    // Global descriptor heap. Valid only after Device initialization completes.
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
     // Phase-3 Backend-C descriptor-buffer manager (VK_EXT_descriptor_buffer). Disabled (returns isEnabled()==false)
     // when the extension is absent or its segments failed to initialize; the classic descriptor-set path (Backend A)

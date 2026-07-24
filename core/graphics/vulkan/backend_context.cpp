@@ -1292,8 +1292,8 @@ bool BackendContext::createVulkanDevice(){
         || !requireFeature(supportedVulkan12Features.timelineSemaphore, "timelineSemaphore")
         || !requireFeature(supportedVulkan12Features.shaderFloat16, "shaderFloat16")
         || !requireFeature(supportedVulkan12Features.shaderSampledImageArrayNonUniformIndexing, "shaderSampledImageArrayNonUniformIndexing")
-        // Phase 2's bindless GpuDescriptorHeap fetches per-mesh geometry from a STORAGE_BUFFER descriptor array
-        // indexed by NonUniformResourceIndex; require non-uniform storage-buffer indexing so a target lacking it
+        // The bindless GpuDescriptorHeap fetches per-mesh geometry from a STORAGE_BUFFER descriptor array indexed by
+        // NonUniformResourceIndex; require non-uniform storage-buffer indexing so a target lacking it
         // fails device creation with a clear capability log instead of silently miscompiling the heap fetch path.
         || !requireFeature(supportedVulkan12Features.shaderStorageBufferArrayNonUniformIndexing, "shaderStorageBufferArrayNonUniformIndexing")
         // The heap's resource layout (createBindlessLayout) marks all five of its non-sampler descriptor classes

@@ -486,13 +486,9 @@ Device::Device(const DeviceDesc& desc)
         }
     }
 
-    // Bring the global bindless descriptor heap (Backend A - descriptor indexing) live for every run. Unlike the
-    // optional EXT_descriptor_heap accelerator above, descriptor indexing is the guaranteed portability floor (present
-    // on the BC-250/RADV target), so the heap is initialized unconditionally rather than behind an extension gate.
-    // Phase 1 left initialize() to the debug self-test alone; Phase 2 makes the heap a production consumer, so it must
-    // exist independent of NWB_DEBUG. Capacity 0 selects the ample Phase-1 default, clamped to the device
-    // update-after-bind limits and logged inside initialize(). Failure is non-fatal here (no consumer yet in early
-    // Phase 2) but logged loudly because later phases require the heap.
+    // Bring the global descriptor heap live for every run. Descriptor indexing is the portable path, so initialize it
+    // independently of optional descriptor-heap acceleration and NWB_DEBUG. Capacity 0 selects a default clamped to
+    // the device's update-after-bind limits; initialization failures are logged for bindless consumers.
     {
         GpuDescriptorHeapDesc heapDesc;
         if(!m_gpuDescriptorHeap.initialize(heapDesc))
@@ -553,7 +549,7 @@ Device::~Device(){
     m_scratchManager.clear();
 
     // Release the global descriptor heap's tables/layouts while the device is still valid (idempotent; the member
-    // destructor also calls this). Phase 1 leaves initialize() to the consumer, so this is a no-op unless used.
+    // destructor also calls this).
     m_gpuDescriptorHeap.shutdown();
     m_descriptorBufferManager.shutdown();
     m_descriptorHeapManager.shutdown();

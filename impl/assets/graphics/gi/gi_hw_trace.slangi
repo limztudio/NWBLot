@@ -27,6 +27,9 @@
 #define NWB_MESH_SET NWB_GI_HW_SET
 #define NWB_MESH_BINDING_MATERIAL_TYPED NWB_GI_HW_BINDING_MATERIAL_TYPED
 #define NWB_MESH_BINDING_INSTANCE NWB_GI_HW_BINDING_MESH_INSTANCES
+// GI shades direct scene lights with an occlusion ray; it never samples the screen-space shadow/caustic textures.
+// Omitting those declarations prevents their default set-0 bindings from aliasing GI's typed material buffers.
+#define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED 1
 
 // Reuse the cook-generated material-surface dispatch for GI albedo. The binding redirects above give the evaluator the
 // same typed constants and mutable instance storage its raster/shadow invocation reads.
@@ -35,12 +38,8 @@
 
 #include "gi_trace_common.slangi"
 
-// Global descriptor heap accessor (Phase 2 step 4b): the per-mesh position / index / attribute buffers the closest-hit
-// reconstructs the hit from now live in the bindless heap, reached by the position/index/attributeSlot the instance
-// material record carries (NwbRtInstanceMaterial, populated lockstep with the mesh by the HW shadow builder in
-// rt_swbvh.cpp). Only the raw byte view (NwbHeapRawBuffer) is needed -- the HW GI walks the TLAS via inline RayQuery, so
-// it reads NO BVH nodes (nodeSlot stays unused on the HW path). Heap set 8, pinned on this pass's compute pipeline in
-// step 4a.
+// Global descriptor-heap accessors for the position, index, and attribute buffers carried by the instance-material
+// record. HW GI uses only raw buffers because inline RayQuery walks the TLAS without BVH-node access.
 #include "../bindless/bindless_heap.slangi"
 
 
@@ -53,10 +52,8 @@ RaytracingAccelerationStructure g_NwbGiHwTlas;
 [[vk::binding(NWB_GI_HW_BINDING_INSTANCE_MATERIAL, NWB_GI_HW_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbGiHwInstanceMaterial;
 
-// Per-mesh geometry (raw positions / indices / per-corner attributes) is fetched from the bindless heap (step 4b) by
-// the material record's per-buffer slots; the parallel per-mesh descriptor arrays that preceded it (bindings 4-6) were
-// dropped in the step 4c bounded-path removal. The shared C++ backing buffers stay -- the heap descriptors point at them
-// (m_shadowMesh*Buffers) and the per-dispatch buffer-state barriers still transition them for the heap reads.
+// Per-mesh positions, indices, and attributes are read through descriptor-heap slots carried by the material record.
+// The shared backing buffers remain transitioned for those heap reads.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -70,10 +67,7 @@ struct NwbGiHwVertexAttrib{
 };
 
 NwbGiHwVertexAttrib nwbGiHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
-    // attributeSlot is this mesh's per-corner attribute buffer's GLOBAL HEAP slot (carried on the instance material
-    // record, the same mesh->attributeBuffer the bounded g_NwbGiHwMeshAttributes[meshSlot] pointed at). Non-uniform
-    // across the wave (each ray hits a different mesh), so the subscript must be NonUniformResourceIndex-tagged;
-    // NwbHeapRawBuffer() applies that internally and is re-invoked at each Load.
+    // attributeSlot is a non-uniform global heap slot; NwbHeapRawBuffer() applies the required decoration per load.
     const uint4 packed = NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u);
     NwbGiHwVertexAttrib attrib;
     attrib.normal = float3(

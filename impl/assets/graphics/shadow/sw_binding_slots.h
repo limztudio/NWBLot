@@ -12,10 +12,8 @@
 // Software (compute) shadow traversal pass — the no-hardware-ray-tracing fallback. One thread per pixel
 // reads the G-buffer, casts one occlusion ray per light through the software scene/instance BVH (and, in
 // the per-mesh stage, each instance's triangle BVH), and writes per-light colored transmittance into the
-// shadow-visibility Texture2DArray the deferred lighting pass samples. Slots 0-6 are the scene-level pass;
-// the per-mesh triangle traversal fetches its geometry from the global descriptor heap by the material record's
-// per-buffer slots (the former bounded arrays at slots 8-11 were removed in step 4c); slots 13-14 bring in the
-// material-constants context (typed words + mesh instances) the per-hit transmittance dispatch reads.
+// shadow-visibility Texture2DArray the deferred lighting pass samples. Slots 0-6 are the scene-level pass; per-mesh
+// triangle traversal uses descriptor-heap slots from the material record, and slots 13-14 provide its typed context.
 #define NWB_SW_SHADOW_SET 0
 
 #define NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION 0
@@ -26,10 +24,8 @@
 #define NWB_SW_SHADOW_BINDING_SCENE_NODES 5
 #define NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT 6
 #define NWB_SW_SHADOW_BINDING_SCENE_INSTANCES 7
-// Slots 8-11 (the former parallel per-mesh descriptor arrays -- triangle BVH nodes + raw position / index byte
-// buffers + the per-triangle-corner attribute buffer) were removed in the step 4c bounded-path teardown: the SW
-// shadow traversal now fetches that per-mesh geometry from the global descriptor heap by the material record's
-// per-buffer slots. The numbers are left as a gap (not renumbered) so the surrounding bindings keep their values.
+// Slots 8-11 are intentionally unused. SW shadow reads per-mesh nodes, positions, indices, and attributes from the
+// global descriptor heap through slots carried by the material record.
 // Per-instance occluder material table (NwbRtInstanceMaterial), indexed by the scene-BVH leaf instance index;
 // built lockstep with the scene-instance buffer so the array slot matches the traversal's instanceIndex.
 #define NWB_SW_SHADOW_BINDING_INSTANCE_MATERIAL 12

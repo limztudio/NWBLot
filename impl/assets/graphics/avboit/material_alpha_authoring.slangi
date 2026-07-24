@@ -22,6 +22,10 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(
     const float4 worldPosition,
     out half outAlpha
 ){
+    // The caller ignores alpha on a rejected fragment. Initialize it anyway so the CSG early return satisfies the
+    // out-parameter contract and cannot leak an indeterminate value through a future call-site change.
+    outAlpha = half(0.0);
+
     NwbMeshSurfaceInputs surfaceInputs;
     surfaceInputs.color = color;
     // Match the G-buffer/accumulate boundary: expand half directions before the material hook evaluates them.

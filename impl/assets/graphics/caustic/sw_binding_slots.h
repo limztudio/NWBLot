@@ -24,10 +24,8 @@
 #define NWB_CAUSTIC_SW_BINDING_SCENE_NODES 2
 #define NWB_CAUSTIC_SW_BINDING_SCENE_INSTANCES 3
 #define NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL 4
-// Slots 5-8 (the former parallel per-mesh descriptor arrays -- triangle BVH nodes + raw position / index byte
-// buffers + the per-triangle-corner attribute buffer) were removed in the step 4c bounded-path teardown: the SW
-// caustic traversal now fetches that per-mesh geometry from the global descriptor heap by the material record's
-// per-buffer slots. The numbers are left as a gap (not renumbered) so the surrounding bindings keep their values.
+// Slots 5-8 are intentionally unused. SW caustics reads per-mesh nodes, positions, indices, and attributes from the
+// global descriptor heap through slots carried by the material record.
 // The shared material-constants context the per-hit surface dispatch reads (same buffers the SW shadow trace
 // binds at NWB_MESH_BINDING_MATERIAL_TYPED / NWB_MESH_BINDING_INSTANCE, pointed here for this pass).
 #define NWB_CAUSTIC_SW_BINDING_MATERIAL_TYPED 9

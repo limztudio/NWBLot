@@ -54,12 +54,8 @@ RWTexture2DArray<float4> g_NwbShadowVisibility;
 // (binding 7, the per-instance occluder material table, is intentionally absent here: the hardware opaque fast
 // path commits the first FORCE_OPAQUE hit and loads no per-instance material -- see binding_slots.h.)
 
-// Phase 2 M3: the per-mesh geometry arrays (raw triangle index / per-corner attribute / object-space position,
-// formerly at NWB_SHADOW_RT_BINDING_MESH_INDICES/ATTRIBUTES/POSITIONS) are removed from this trace. The hardware
-// opaque path reads no geometry -- shadow_rayquery.slangi commits the first FORCE_OPAQUE hit for a binary
-// blocked/lit result -- so they were declared-but-never-fetched dead bindings. The transparent-occluder geometry
-// the colored software shadow needs is fetched by sw_shadow_traverse.slangi from the global descriptor heap. The
-// step 4c teardown dropped the host-side C++ layout items + fill loop for these three slots (they are now gaps).
+// The hardware opaque path commits its first FORCE_OPAQUE hit for a binary blocked/lit result and reads no geometry.
+// Colored software shadows fetch transparent-occluder geometry through the global descriptor heap.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

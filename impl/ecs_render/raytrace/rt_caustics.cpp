@@ -599,11 +599,8 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         computeState.setPipeline(rayTracingState().m_swCausticPipeline.get());
         computeState.addBindingSet(rayTracingState().m_swCausticBindingSet.get());
         commandList.setComputeState(computeState);
-        // Phase 2 step 4b: the SW caustic photon traversal now fetches per-mesh geometry (BVH nodes / positions /
-        // indices / attributes) from the global descriptor heap (set 8), so the heap's descriptor tables -- pinned on
-        // this pipeline's layout in step 4a -- must be BOUND before the dispatch, not merely present in the layout.
-        // bindCompute binds only sets 8/9 (it never disturbs the classic set 0), so bind right after the ComputeState
-        // and before the dispatch; gated on a live heap so non-bindless builds are untouched.
+        // SW caustic traversal accesses per-mesh geometry through the descriptor heap, so bind its tables after the
+        // ComputeState and before dispatch. bindCompute touches only sets 8/9; non-bindless builds skip it.
         Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
         if(heap.isInitialized())
             heap.bindCompute(commandList, *rayTracingState().m_swCausticPipeline.get());
@@ -647,9 +644,7 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_NODES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_INSTANCES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL, 1));
-        // Per-mesh geometry (BVH nodes / positions / indices / attributes) is fetched from the global descriptor heap
-        // (sets 8/9, pinned on this pipeline in step 4a) by the material record's per-buffer slots; the former bounded
-        // per-mesh descriptor arrays at slots 5-8 were removed in step 4c.
+        // Per-mesh geometry is fetched from the global descriptor heap through slots carried by the material record.
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MATERIAL_TYPED, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_INSTANCES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS, 1));
@@ -784,11 +779,8 @@ bool RendererRayTracingSystem::ensureSwCausticBindingSet(DeferredFrameTargets& t
         Core::TextureDimension::Texture2DArray
     ));
 
-    // Per-mesh geometry is not bound here: the SW caustic traversal reads BVH nodes / positions / indices /
-    // attributes through the global descriptor-index heap (bound as sets 8/9 per dispatch) by the material record's
-    // host-provided slot indices. The former bounded per-mesh descriptor arrays (slots 5-8) were removed in step 4c;
-    // the backing buffers (m_swShadowMesh*Buffers) stay -- they are what the heap descriptors point at, and the
-    // per-dispatch buffer-state barriers still transition them for the heap reads.
+    // SW caustic traversal reads per-mesh geometry through material-record descriptor-heap slots; backing buffers
+    // remain transitioned for those reads.
 
     auto* device = graphics().getDevice();
     rayTracingState().m_swCausticBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_swCausticBindingLayout);
@@ -1406,11 +1398,8 @@ bool RendererRayTracingSystem::ensureCausticRtBindingSet(DeferredFrameTargets& t
         Core::TextureDimension::Texture2DArray
     ));
 
-    // Per-mesh geometry is not bound here: the HW caustic closest-hit reads its per-corner attributes through the
-    // global descriptor-index heap (bound as sets 8/9 per dispatch) by the material record's host-provided attributeSlot.
-    // The former bounded per-mesh descriptor arrays (slots 11-12) were removed in step 4c; the backing buffers
-    // (m_shadowMeshAttributeBuffers) stay -- they are what the attribute heap descriptor points at, and the per-dispatch
-    // barriers still transition them.
+    // HW caustic closest-hit reads corner attributes through material-record descriptor-heap slots; backing buffers
+    // remain transitioned for those reads.
 
     auto* device = graphics().getDevice();
     rayTracingState().m_hwCausticBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_hwCausticBindingLayout);
@@ -1526,8 +1515,7 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         // Move the per-mesh attribute byte buffers to ShaderResource (the heap descriptors the closest-hit reads by
         // attributeSlot point at them, so they still need the transition) + the shadow-owned material context + the
         // emission targets; setResourceStatesForBindingSet derives the TLAS, G-buffer SRVs, view CB, and the accumulator
-        // UAV. The per-mesh INDEX buffers are no longer transitioned here -- the HW caustic reads no indices (the
-        // fixed-function intersector supplies the hit triangle), so the step 4c teardown dropped that dead binding.
+        // UAV. HW caustics needs no index buffer because the fixed-function intersector supplies the hit triangle.
         for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot)
             commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -1558,11 +1546,8 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         rayTracingPassState.setShaderTable(rayTracingState().m_hwCausticShaderTable.get());
         rayTracingPassState.addBindingSet(rayTracingState().m_hwCausticBindingSet.get());
         commandList.setRayTracingState(rayTracingPassState);
-        // Phase 2 step 4b: the closest-hit now fetches each mesh's per-corner attribute buffer from the global descriptor
-        // heap (set 8) by the material record's attributeSlot, so the heap's descriptor tables -- pinned on this
-        // pipeline's layout in step 4a -- must be BOUND before dispatchRays, not merely present in the layout.
-        // bindRayTracing binds only sets 8/9 at the ray-tracing bind point (it never disturbs the classic set 0 the
-        // RayTracingState bound above); gated on a live heap so non-bindless builds are untouched.
+        // Closest-hit accesses corner attributes through the descriptor heap, so bind its tables after the
+        // RayTracingState and before dispatchRays. bindRayTracing touches only sets 8/9; non-bindless builds skip it.
         Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
         if(heap.isInitialized())
             heap.bindRayTracing(commandList, *rayTracingState().m_hwCausticPipeline.get());

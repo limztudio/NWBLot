@@ -313,9 +313,6 @@ if(Python3_Interpreter_FOUND)
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
-        set_tests_properties(nwb_csg_visible_compute_emulation_capture_smoke PROPERTIES
-            CONFIGURATIONS "dbg;opt"
-        )
 
         unset(_nwb_csg_visible_asset_stamp)
         unset(_nwb_csg_visible_runtime_root)

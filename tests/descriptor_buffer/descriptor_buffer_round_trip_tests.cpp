@@ -1407,9 +1407,9 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowReprojectMergeShapeBuildsAsDescripto
 // HW shadow trace parity: the shared inline-RayQuery occlusion layout used by BOTH the full-resolution hard fallback
 // (shadow_rayquery_cs) and the half-resolution soft opaque trace (shadow_rayquery_soft_cs). Its shape is
 // segment-coherent pure-resource (TLAS + 3 Texture_SRV + 1 Texture_UAV + 1 ConstantBuffer + 3 StructuredBuffer_SRV)
-// with no samplers, and -- critically -- its pipeline carries NO heap layout (the HW RayQuery dispatches never call
-// heap.bindCompute; only the no-RayQuery SW path does). RayTracingAccelStruct is the one resource type the descriptor
-// heap path excludes but vkGetDescriptorEXT serves, so this is the first TLAS-carrying layout to route to Backend C.
+// with no samplers. This standalone local-TLAS shape remains a direct proof that vkGetDescriptorEXT can encode an AS;
+// production Backend C now obtains its TLAS from the fixed descriptor-heap set 10, while Backend A retains this local
+// descriptor form.
 // Slots mirror shadow/binding_slots.h RT block (0 TLAS, 1..3 G-buffer, 4 scene CB, 5 light, 6 visibility UAV,
 // 10/11 shared material-context SRVs); the push-constant range rides the pipeline layout alongside the set.
 TEST_F(DescriptorBufferRoundTripTest, ShadowRtTraceShapeBuildsAsDescriptorBuffer){
@@ -1587,6 +1587,43 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
 }
 
 
+// Backend C's TLAS surface is deliberately a fixed one-descriptor set rather than an update-after-bind array: an
+// AccelStruct handle selects its own carved block, letting a replacement TLAS coexist with the block referenced by an
+// in-flight frame. Exercise the actual heap write path (not just a standalone BindingSet) on RT-capable devices.
+TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapWritesImmutableTlasBlock){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized() && heap.usesDescriptorBuffer());
+    if(!heap.hasAccelStructLayout())
+        GTEST_SKIP() << "Backend C TLAS heap layout is unavailable because ray tracing is not enabled on this device.";
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/heap_tlas_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    RayTracingAccelStructDesc tlasDesc(descArena);
+    tlasDesc.setTopLevelMaxInstances(8u);
+    tlasDesc.setDebugName(Name{"tests/descriptor_buffer/heap_tlas"});
+    auto tlas = device.createAccelStruct(tlasDesc);
+    ASSERT_NE(tlas.get(), nullptr);
+
+    const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::AccelStruct);
+    ASSERT_TRUE(handle.valid());
+    ASSERT_TRUE(heap.write(handle, BindingSetItem::RayTracingAccelStruct(0u, tlas.get())));
+
+    const auto block = heap.getAccelStructBufferBlock(handle);
+    EXPECT_TRUE(block.valid());
+    EXPECT_EQ(block.kind, GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    EXPECT_GT(block.sizeBytes, 0u);
+
+    heap.free(handle);
+    // The production heap intentionally quarantines handles for the in-flight-frame window. This headless test has
+    // no submitted work, so advance the synthetic frame counter to retire the block and its retained TLAS before the
+    // device fixture tears down.
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+}
+
+
 // Heap-coupled layout compatibility proof: confirm the heap's two descriptor-buffer layouts (sets 8/9) and a
 // Backend-C leaf layout are ALL descriptor-buffer-compatible simultaneously -- the wholesale-conversion gate the five
 // tail pipelines must pass to opt in. A single non-compatible layout would downgrade the whole pipeline to classic,
@@ -1597,6 +1634,8 @@ TEST_F(DescriptorBufferRoundTripTest, HeapCoupledLayoutsAreAllDescriptorBufferCo
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& heap = device.getDescriptorHeap();
     ASSERT_TRUE(heap.isInitialized() && heap.usesDescriptorBuffer());
+    if(!heap.hasAccelStructLayout())
+        GTEST_SKIP() << "Backend C TLAS heap layout is unavailable because ray tracing is not enabled on this device.";
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/heap_coupled_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
@@ -1614,10 +1653,12 @@ TEST_F(DescriptorBufferRoundTripTest, HeapCoupledLayoutsAreAllDescriptorBufferCo
     ASSERT_TRUE(leafLayout->isDescriptorBufferCompatible())
         << "leaf layout did not route to the descriptor-buffer path";
 
-    // All three embedded layouts must be descriptor-buffer-compatible for the wholesale-conversion gate -- the heap's
-    // two at sets 8/9 and the leaf at set 0. This is the precondition the tail pipelines' opt-in depends on.
+    // All four embedded layouts must be descriptor-buffer-compatible for the wholesale-conversion gate -- the heap's
+    // two tables at sets 8/9, the fixed TLAS set at 10, and the leaf at set 0. This is the precondition the HW
+    // shadow/GI/caustic pipelines' opt-in depends on.
     EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
     EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
+    EXPECT_TRUE(heap.getAccelStructLayout()->isDescriptorBufferCompatible());
     EXPECT_TRUE(leafLayout->isDescriptorBufferCompatible());
 }
 

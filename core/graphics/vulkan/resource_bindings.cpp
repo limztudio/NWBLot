@@ -2255,13 +2255,15 @@ void CommandList::bindDescriptorHeap(GpuDescriptorHeap& heap, const VkPipelineBi
     }
 }
 
-void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const VkPipelineBindPoint bindPoint, const VkPipelineLayout pipelineLayout){
-    // Backend C heap bind. The pipeline embeds the heap's two descriptor-buffer layouts at reserved sets 8/9; the
-    // heap's descriptors live in its two persistent carved blocks (one per segment). The segments are bound once per
-    // command buffer by bindDescriptorBufferState, but the heap binds its OWN offsets here (after setComputeState /
-    // setRayTracingState), so record one vkCmdSetDescriptorBufferOffsetsEXT spanning both heap sets: resource at set
-    // 8 (resource-segment buffer index) and sampler at set 9 (sampler-segment buffer index). The descriptor data was
-    // written into the blocks at heap write() time, so no writes happen here. Guarded like the classic path.
+void CommandList::bindDescriptorBufferHeap(
+    GpuDescriptorHeap& heap,
+    const VkPipelineBindPoint bindPoint,
+    const VkPipelineLayout pipelineLayout,
+    const GpuDescriptorHandle accelStructHandle
+){
+    // Backend C heap bind. Pipelines always embed resource/sampler at reserved sets 8/9. Hardware TLAS consumers
+    // additionally embed the fixed AS layout at set 10 and pass a handle whose descriptor-buffer block is immutable
+    // for that TLAS generation. The descriptor data was written at heap write() time; this only selects offsets.
     if(!m_currentCmdBuf || pipelineLayout == VK_NULL_HANDLE)
         return;
     if(!heap.isInitialized() || !heap.usesDescriptorBuffer())
@@ -2279,22 +2281,30 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const VkPipe
 
     const DescriptorBufferSegment& resourceBlock = heap.getResourceBufferBlock();
     const DescriptorBufferSegment& samplerBlock = heap.getSamplerBufferBlock();
+    const DescriptorBufferSegment accelStructBlock = heap.getAccelStructBufferBlock(accelStructHandle);
+    const bool bindAccelStruct = accelStructHandle.valid();
+    if(bindAccelStruct && !accelStructBlock.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot bind descriptor-buffer TLAS heap handle {}: descriptor block is invalid."), accelStructHandle.value);
+        return;
+    }
 
-    // The two heap sets occupy the manager's two segments (resource set -> resource segment, sampler set -> sampler
-    // segment); record their offsets against the just-bound buffers, indexed from the heap's lower set number so the
-    // API spans [resourceSet .. samplerSet]. Heap sets are always 8 and 9 (ascending, contiguous), so firstSet is the
-    // resource set and setCount is 2.
+    // The heap sets occupy the manager's two segments: resource -> resource segment, sampler -> sampler segment,
+    // optional TLAS -> resource segment. They are contiguous at 8/9/10, so one API call selects all required blocks.
     const u32 resourceIndex = m_context.descriptorBufferManager->getResourceBufferIndex();
     const u32 samplerIndex = m_context.descriptorBufferManager->getSamplerBufferIndex();
-    const u32 bufferIndices[2] = { resourceIndex, samplerIndex };
-    const VkDeviceSize offsets[2] = { resourceBlock.offsetBytes, samplerBlock.offsetBytes };
+    const u32 bufferIndices[3] = { resourceIndex, samplerIndex, resourceIndex };
+    const VkDeviceSize offsets[3] = {
+        resourceBlock.offsetBytes,
+        samplerBlock.offsetBytes,
+        accelStructBlock.offsetBytes
+    };
 
     vkCmdSetDescriptorBufferOffsetsEXT(
         m_currentCmdBuf->m_cmdBuf,
         bindPoint,
         pipelineLayout,
         heap.getResourceSetIndex(),
-        2u,
+        bindAccelStruct ? 3u : 2u,
         bufferIndices,
         offsets
     );

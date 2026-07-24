@@ -175,6 +175,7 @@ void RendererRayTracingState::invalidateResources(){
     // handles live on MeshResources and are released with the mesh cache. Ray tracing capability
     // persists across resource invalidation.
     m_tlas.reset();
+    m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_tlasMaxInstances = 0u;
     m_tlasDeviceAddress = 0u;
     m_tlasInstanceCount = 0u;

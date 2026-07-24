@@ -285,6 +285,9 @@ private:
 
 struct RtSceneBvhState{
     Core::RayTracingAccelStructHandle m_tlas;
+    // Backend C only: immutable descriptor-buffer generation for m_tlas. A replacement TLAS receives a fresh heap
+    // handle/block so recorded command buffers continue to see the old AS until deferred free retires it.
+    Core::GpuDescriptorHandle m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
     usize m_tlasMaxInstances = 0u;
     u64 m_tlasDeviceAddress = 0u;
     u32 m_tlasInstanceCount = 0u; // live TLAS instance count (set by buildSceneTlas); the HW caustic raygen's non-zero guard

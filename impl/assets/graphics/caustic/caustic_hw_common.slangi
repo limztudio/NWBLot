@@ -92,8 +92,10 @@ struct NwbCausticHwPushConstants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if !(defined(NWB_BINDLESS_TLAS) && NWB_BINDLESS_TLAS)
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_TLAS, NWB_CAUSTIC_RT_SET)]]
 RaytracingAccelerationStructure g_NwbCausticHwTlas;
+#endif
 
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL, NWB_CAUSTIC_RT_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticHwInstanceMaterial;

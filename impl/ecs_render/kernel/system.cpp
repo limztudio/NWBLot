@@ -113,6 +113,13 @@ void RendererSystem::invalidateResources(){
     m_preparedShadowVisibilityReady = false;
     m_renderCommandList.reset();
     m_shadowPrepareCommandList.reset();
+    // The Backend-C TLAS descriptor owns a retained acceleration-structure handle until its in-flight-frame
+    // quarantine matures. Retire it before RendererRayTracingState releases the current TLAS so resource invalidation
+    // cannot strand a descriptor-buffer block (or its retained AS) until device shutdown.
+    if(m_rayTracingState.m_tlasHeapHandle.valid()){
+        if(auto* device = m_graphics.getDevice())
+            device->getDescriptorHeap().free(m_rayTracingState.m_tlasHeapHandle);
+    }
     m_meshState.invalidateResources();
     m_materialState.invalidateResources();
     m_drawState.invalidateResources();

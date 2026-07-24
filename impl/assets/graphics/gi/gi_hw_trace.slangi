@@ -46,8 +46,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if !(defined(NWB_BINDLESS_TLAS) && NWB_BINDLESS_TLAS)
 [[vk::binding(NWB_GI_HW_BINDING_TLAS, NWB_GI_HW_SET)]]
 RaytracingAccelerationStructure g_NwbGiHwTlas;
+#endif
 
 [[vk::binding(NWB_GI_HW_BINDING_INSTANCE_MATERIAL, NWB_GI_HW_SET)]]
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbGiHwInstanceMaterial;
@@ -114,7 +116,11 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     ray.TMax = tMax;
 
     RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+#if defined(NWB_BINDLESS_TLAS) && NWB_BINDLESS_TLAS
+    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, 0xFFu, ray);
+#else
     query.TraceRayInline(g_NwbGiHwTlas, RAY_FLAG_FORCE_OPAQUE, 0xFFu, ray);
+#endif
     query.Proceed();   // FORCE_OPAQUE + triangle-only -> commits the nearest at once, returns false
     if(query.CommittedStatus() != COMMITTED_TRIANGLE_HIT)
         return closest;

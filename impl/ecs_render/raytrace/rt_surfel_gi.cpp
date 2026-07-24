@@ -702,20 +702,21 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     }
 
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
 
     if(!rayTracingState().m_surfelTraceHwBindingLayout){
-        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Backend C: pure-resource (CB + StructuredBuffer + TLAS, no samplers) embedding the heap layouts at 8/9; the
-        // TLAS is descriptor-buffer-compatible via vkGetDescriptorEXT. Opt in iff the heap is on Backend C.
+        // Backend C reads the shared TLAS from the fixed set-10 heap block, leaving this local set with only the
+        // surfel/GI resources. Backend A keeps its classic local TLAS descriptor.
         layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
-        // 0/1 scene shading + light list (shared with the SW trace); 2 = scene TLAS; 3 = InstanceID-indexed material
+        // 0/1 scene shading + light list (shared with the SW trace); 2 = scene TLAS on Backend A; 3 = InstanceID-indexed material
         // record; 7/8 = the typed material + mutable-instance context the generated material-surface evaluator reads.
         // Closest-hit reads positions, indices, and attributes through descriptor-heap slots; the driver walks the TLAS.
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_HW_BINDING_SCENE_SHADING, 1)); // scene shading
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_LIGHT_LIST, 1)); // light list
-        layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_GI_HW_BINDING_TLAS, 1)); // scene TLAS
+        if(!heap.usesDescriptorBuffer())
+            layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_GI_HW_BINDING_TLAS, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_INSTANCE_MATERIAL, 1)); // instance material
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_MATERIAL_TYPED, 1)); // material typed
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_MESH_INSTANCES, 1)); // mesh instances
@@ -735,7 +736,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     if(!m_renderer.shaderSystem().loadShader(
         rayTracingState().m_surfelTraceHwShader,
         AssetsGraphicsGi::s_SurfelTraceHwShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
+        heap.usesDescriptorBuffer() ? AStringView("NWB_BINDLESS_TLAS=1") : AStringView("NWB_BINDLESS_TLAS=0"),
         Core::ShaderType::Compute,
         "ECSRender_SurfelTraceHw"
     )){
@@ -755,12 +756,19 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     // createPipelineLayoutForBindingLayouts gap-fills sets 1-7. Guarded on a live heap so builds without one keep the
     // pure set-0 layout. Mirrors the SW GI scaffold -- this is a COMPUTE pipeline (inline RayQuery), so the heap binds
     // via bindCompute like the SW paths, not the HW-caustic bindRayTracing.
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(heap.isInitialized()){
         pipelineDesc
             .addBindingLayout(heap.getResourceLayout())
             .addBindingLayout(heap.getSamplerLayout())
         ;
+        if(heap.usesDescriptorBuffer()){
+            if(!heap.hasAccelStructLayout()){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Backend-C descriptor heap has no TLAS layout for surfel GI"));
+                rayTracingState().m_surfelTraceHwPipelineFailed = true;
+                return false;
+            }
+            pipelineDesc.addBindingLayout(heap.getAccelStructLayout());
+        }
     }
     rayTracingState().m_surfelTraceHwPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelTraceHwPipeline){
@@ -810,7 +818,9 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwBindingSet(){
     Core::BindingSetDesc desc(arena());
     desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_HW_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get())); // scene shading
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get())); // light list
-    desc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_GI_HW_BINDING_TLAS, tlas)); // scene TLAS
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    if(!heap.usesDescriptorBuffer())
+        desc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_GI_HW_BINDING_TLAS, tlas));
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_INSTANCE_MATERIAL, instanceMaterial)); // instance material
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_MATERIAL_TYPED, materialTyped)); // material typed
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_MESH_INSTANCES, meshInstances)); // mesh instances
@@ -1465,11 +1475,19 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         state.setIndirectParams(rayTracingState().m_surfelTraceIndirectArgsBuffer.get());
         commandList.setComputeState(state);
         // Both surfel shaders access per-mesh geometry through the descriptor heap, so bind its tables against the
-        // selected pipeline before dispatch. bindCompute touches only sets 8/9; non-bindless builds skip it.
+        // selected pipeline before dispatch. The HW Backend-C variant also selects its TLAS generation at set 10.
         {
             Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
-            if(heap.isInitialized())
-                heap.bindCompute(commandList, *tracePipeline);
+            if(rayTracingState().m_surfelUseHwTrace && heap.usesDescriptorBuffer() && !rayTracingState().m_tlasHeapHandle.valid()){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch Backend-C surfel GI without a TLAS heap handle"));
+                return false;
+            }
+            if(heap.isInitialized()){
+                const Core::GpuDescriptorHandle tlasHeapHandle = rayTracingState().m_surfelUseHwTrace && heap.usesDescriptorBuffer()
+                    ? rayTracingState().m_tlasHeapHandle
+                    : Core::GpuDescriptorHandle::invalid();
+                heap.bindCompute(commandList, *tracePipeline, tlasHeapHandle);
+            }
         }
         commandList.dispatchIndirect(0u);
     }

@@ -237,6 +237,12 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     if(!rayTracingState().m_tlas || !rayTracingState().m_shadowPipeline || !rayTracingState().m_shadowBindingSet)
         return false;
 
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    if(heap.usesDescriptorBuffer() && !rayTracingState().m_tlasHeapHandle.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch Backend-C shadow trace without a TLAS heap handle"));
+        return false;
+    }
+
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
     // Transition shared per-mesh geometry and material context to ShaderResource after buildSceneTlas used positions
@@ -288,6 +294,8 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         softState.setPipeline(rayTracingState().m_shadowSoftPipeline.get());
         softState.addBindingSet(rayTracingState().m_shadowSoftBindingSet.get());
         commandList.setComputeState(softState);
+        if(heap.usesDescriptorBuffer())
+            heap.bindCompute(commandList, *rayTracingState().m_shadowSoftPipeline.get(), rayTracingState().m_tlasHeapHandle);
 
         ShadowRqSoftPushConstants softPush;
         softPush.width = targets.width;
@@ -319,6 +327,8 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     shadowState.setPipeline(rayTracingState().m_shadowPipeline.get());
     shadowState.addBindingSet(rayTracingState().m_shadowBindingSet.get());
     commandList.setComputeState(shadowState);
+    if(heap.usesDescriptorBuffer())
+        heap.bindCompute(commandList, *rayTracingState().m_shadowPipeline.get(), rayTracingState().m_tlasHeapHandle);
     // Soft shadow cone-jitter: advance the per-frame seed once here. A soft light samples inside its source cone; a
     // zero-radius light jitters to the axis exactly and keeps the hard-shadow result.
     ShadowRqPushConstants shadowPush;
@@ -708,7 +718,10 @@ void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayou
     // The hardware inline-RayQuery occlusion trace's bindings, in NWB_SHADOW_RT_* slot order (occlusion.slangi /
     // shadow_rayquery.slangi declare them). Shared by the full-resolution hard fallback and the half-resolution soft
     // trace, so both use the identical resource slot map.
-    layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, 1)); // inline RayQuery reads the TLAS from compute
+    // Backend C reads the shared TLAS through set 10 of the global descriptor heap; Backend A retains its local
+    // set-0 TLAS binding and the matching shader variant.
+    if(!graphics().getDevice()->getDescriptorHeap().usesDescriptorBuffer())
+        layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RT_BINDING_GBUFFER_WORLD_POSITION, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RT_BINDING_GBUFFER_NORMAL, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RT_BINDING_GBUFFER_DEPTH, 1));
@@ -737,7 +750,8 @@ void RendererRayTracingSystem::appendShadowTraceBindingSet(Core::BindingSetDesc&
     // The visibility UAV target differs per pass (half-res for the trace, full-res for the hard fallback); everything
     // else uses the identical trace layout. Its shadow-owned material context is built by buildSceneTlas over ALL
     // gathered occluders, unlike the draw-pass buffers, which hold only the opaque set at trace time.
-    desc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, rayTracingState().m_tlas.get()));
+    if(!graphics().getDevice()->getDescriptorHeap().usesDescriptorBuffer())
+        desc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, rayTracingState().m_tlas.get()));
     desc.addItem(Core::BindingSetItem::Texture_SRV(
         NWB_SHADOW_RT_BINDING_GBUFFER_WORLD_POSITION,
         targets.worldPosition.get(),
@@ -790,16 +804,14 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
     }
 
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
 
     if(!rayTracingState().m_shadowBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Backend C: the inline-RayQuery trace layout is segment-coherent pure-resource (TLAS + G-buffer SRVs + scene
-        // CB + light SRV + visibility UAV + shared material-context SRVs) with no samplers, and its pipeline carries
-        // no heap layout (the HW RayQuery dispatches never call heap.bindCompute -- only the no-RayQuery SW path does).
-        // RayTracingAccelStruct is descriptor-buffer-compatible via vkGetDescriptorEXT, so this is the first TLAS
-        // layout to route to the descriptor-buffer path; push constants still ride the pipeline layout alongside it.
-        layoutDesc.setUseDescriptorBuffer(true);
+        // Backend C leaves the TLAS out of this local set and reads it from the immutable set-10 heap block. This
+        // keeps the whole pipeline descriptor-buffer coherent; Backend A keeps the classic local AS descriptor.
+        layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
         appendShadowTraceBindingLayout(layoutDesc);
 
         rayTracingState().m_shadowBindingLayout = device->createBindingLayout(layoutDesc);
@@ -813,7 +825,7 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
     if(!m_renderer.shaderSystem().loadShader(
         rayTracingState().m_shadowShader,
         AssetsGraphicsShadow::s_RayQueryShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
+        heap.usesDescriptorBuffer() ? AStringView("NWB_BINDLESS_TLAS=1") : AStringView("NWB_BINDLESS_TLAS=0"),
         Core::ShaderType::Compute,
         "ECSRender_ShadowRayQuery"
     )){
@@ -826,6 +838,18 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
         .setComputeShader(rayTracingState().m_shadowShader)
         .addBindingLayout(rayTracingState().m_shadowBindingLayout)
     ;
+    if(heap.usesDescriptorBuffer()){
+        if(!heap.hasAccelStructLayout()){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Backend-C descriptor heap has no TLAS layout for shadows"));
+            rayTracingState().m_shadowPipelineFailed = true;
+            return false;
+        }
+        pipelineDesc
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+            .addBindingLayout(heap.getAccelStructLayout())
+        ;
+    }
     rayTracingState().m_shadowPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery shadow compute pipeline"));
@@ -915,6 +939,7 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
     }
 
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
 
     // The soft trace REUSES the shared shadow binding layout (identical trace context; only the bound visibility-output
     // texture differs). ensureShadowPipeline creates it; the HW prepare branch runs that before this, so it is resident.
@@ -927,7 +952,7 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
     if(!m_renderer.shaderSystem().loadShader(
         rayTracingState().m_shadowSoftShader,
         AssetsGraphicsShadow::s_RayQuerySoftShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
+        heap.usesDescriptorBuffer() ? AStringView("NWB_BINDLESS_TLAS=1") : AStringView("NWB_BINDLESS_TLAS=0"),
         Core::ShaderType::Compute,
         "ECSRender_ShadowRayQuerySoft"
     )){
@@ -940,6 +965,18 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
         .setComputeShader(rayTracingState().m_shadowSoftShader)
         .addBindingLayout(rayTracingState().m_shadowBindingLayout)
     ;
+    if(heap.usesDescriptorBuffer()){
+        if(!heap.hasAccelStructLayout()){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Backend-C descriptor heap has no TLAS layout for soft shadows"));
+            rayTracingState().m_shadowSoftPipelineFailed = true;
+            return false;
+        }
+        pipelineDesc
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+            .addBindingLayout(heap.getAccelStructLayout())
+        ;
+    }
     rayTracingState().m_shadowSoftPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowSoftPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery soft shadow compute pipeline"));

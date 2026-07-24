@@ -1516,15 +1516,24 @@ public:
 
     // Facade-friendly bind for a compute dispatch: pulls the bind point + pipeline layout from the pipeline itself,
     // so callers above the Vulkan layer (impl/, which never names Vk types) can bind the heap without touching them.
-    // Call after setComputeState(pipeline) with no binding sets; the pipeline must have been built from
-    // getResourceLayout()/getSamplerLayout() at sets 0/1.
-    void bindCompute(CommandList& commandList, const ComputePipeline& pipeline);
+    // Call after setComputeState(pipeline). On Backend C, a valid accelStructHandle also binds that TLAS generation's
+    // immutable descriptor-buffer block at set 10; callers with no TLAS keep the default invalid handle.
+    void bindCompute(
+        CommandList& commandList,
+        const ComputePipeline& pipeline,
+        GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::invalid()
+    );
 
     // Ray-tracing sibling of bindCompute: binds the heap's resource + sampler tables against the ray-tracing pipeline's
     // layout at VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR. Call after setRayTracingState(pipeline) and before dispatchRays;
     // the pipeline must carry the heap layouts at its heap sets (ensureCausticRtPipeline pins them at sets 8/9). Lets a
-    // hardware ray-tracing pass fetch heap-registered geometry without the impl/ caller naming any Vk type.
-    void bindRayTracing(CommandList& commandList, const RayTracingPipeline& pipeline);
+    // hardware ray-tracing pass fetch heap-registered geometry without the impl/ caller naming any Vk type. A valid
+    // Backend-C accelStructHandle binds its per-generation descriptor-buffer block at set 10.
+    void bindRayTracing(
+        CommandList& commandList,
+        const RayTracingPipeline& pipeline,
+        GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::invalid()
+    );
 
     // Advances the deferred-free retirement clock by one frame and recycles any slot whose quarantine has matured.
     void advanceFrame();
@@ -1533,10 +1542,15 @@ public:
     [[nodiscard]] u32 getSamplerCapacity()const{ return m_samplerSlots.capacity; }
     [[nodiscard]] u32 getResourceSetIndex()const{ return m_resourceSetIndex; }
     [[nodiscard]] u32 getSamplerSetIndex()const{ return m_samplerSetIndex; }
+    [[nodiscard]] u32 getAccelStructSetIndex()const{ return m_accelStructSetIndex; }
     // The two bindless layouts a consuming pipeline must be built from (resource -> set 0, sampler -> set 1), in that
     // order, so the pipeline layout matches what bind()/bindCompute() bind against. Null until initialize() succeeds.
     [[nodiscard]] const BindingLayoutHandle& getResourceLayout()const{ return m_resourceLayout; }
     [[nodiscard]] const BindingLayoutHandle& getSamplerLayout()const{ return m_samplerLayout; }
+    // Backend C only: fixed one-descriptor TLAS layout at set 10. Every AccelStruct handle owns a separate carved
+    // block of this shape, so a new TLAS generation never overwrites descriptors still referenced by in-flight work.
+    [[nodiscard]] const BindingLayoutHandle& getAccelStructLayout()const{ return m_accelStructLayout; }
+    [[nodiscard]] bool hasAccelStructLayout()const{ return m_accelStructLayout != nullptr; }
     // The register-space binding number a class occupies inside its table (SPIR-V binding within the heap set).
     [[nodiscard]] static u32 getRegisterSlot(GpuDescriptorClass::Enum descriptorClass);
     // Backend C: whether the heap is storing its descriptors in the descriptor-buffer manager's mapped segments
@@ -1547,6 +1561,7 @@ public:
     // vkCmdSetDescriptorBufferOffsetsEXT binds at the heap's set index. Only valid when usesDescriptorBuffer().
     [[nodiscard]] const DescriptorBufferSegment& getResourceBufferBlock()const{ return m_resourceBufferBlock; }
     [[nodiscard]] const DescriptorBufferSegment& getSamplerBufferBlock()const{ return m_samplerBufferBlock; }
+    [[nodiscard]] DescriptorBufferSegment getAccelStructBufferBlock(GpuDescriptorHandle handle)const;
 
 
 private:
@@ -1567,10 +1582,13 @@ private:
 
     [[nodiscard]] SlotAllocator& allocatorForClass(GpuDescriptorClass::Enum descriptorClass);
     [[nodiscard]] DescriptorTable* tableForClass(GpuDescriptorClass::Enum descriptorClass);
+    void releaseAccelStructDescriptorBlock(u32 slot);
 
     // Backend C (VK_EXT_descriptor_buffer). Carve one persistent block per segment (resource/sampler) sized to the
     // driver-queried set block of the heap's bindless layout, and cache each class's binding offset within its block.
-    // Returns false (logged) if either carve fails -- initialize() then leaves the heap uninitialized.
+    // The TLAS layout is intentionally per-handle rather than persistent: its block is carved at first write and
+    // released only after the descriptor handle's deferred-free quarantine matures.
+    // Returns false (logged) if either persistent carve fails -- initialize() then leaves the heap uninitialized.
     bool initializeDescriptorBufferBlocks(u32 offsetAlignmentBytes);
     // Backend C write: place one descriptor in the heap's carved block at blockOffset + classOffset + slot*stride.
     // writeItem already carries the authoritative class slot/arrayElement/type; descriptorClass selects the block.
@@ -1583,15 +1601,18 @@ private:
 
     GpuDescriptorHeapDesc m_desc;
 
-    // Set index each table occupies in a consuming pipeline layout. They are pinned to reserved high sets (8/9) via
-    // BindlessLayoutDesc::setDescriptorSetIndex in initialize(), leaving pipeline-local low sets collision-free.
+    // Set index each table occupies in a consuming pipeline layout. Resource/sampler are pinned through explicit
+    // BindlessLayoutDesc set indices; Backend C's optional TLAS layout uses the next high set via
+    // BindingLayoutDesc::setRegisterSpaceAndDescriptorSet, leaving pipeline-local low sets collision-free.
     // These MUST stay in lockstep with the shader contract in impl/assets/graphics/bindless/binding_slots.h
-    // (NWB_BINDLESS_HEAP_RESOURCE_SET / NWB_BINDLESS_HEAP_SAMPLER_SET).
+    // (NWB_BINDLESS_HEAP_RESOURCE_SET / _SAMPLER_SET / _ACCEL_STRUCT_SET).
     u32 m_resourceSetIndex = NWB_BINDLESS_HEAP_RESOURCE_SET;
     u32 m_samplerSetIndex = NWB_BINDLESS_HEAP_SAMPLER_SET;
+    u32 m_accelStructSetIndex = NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET;
 
     BindingLayoutHandle m_resourceLayout;
     BindingLayoutHandle m_samplerLayout;
+    BindingLayoutHandle m_accelStructLayout;
     DescriptorTableHandle m_resourceTable;
     DescriptorTableHandle m_samplerTable;
 
@@ -1607,12 +1628,18 @@ private:
     bool m_usesDescriptorBuffer = false;
     DescriptorBufferSegment m_resourceBufferBlock{};
     DescriptorBufferSegment m_samplerBufferBlock{};
+    // TLAS descriptor blocks are one per AccelStruct handle slot. Their descriptor contents never change ownership:
+    // a new TLAS receives a fresh slot/block, while the old block and a retaining handle live through deferred free.
+    Vector<DescriptorBufferSegment, Alloc::GlobalArena> m_accelStructBufferBlocks;
+    Vector<RayTracingAccelStructHandle, Alloc::GlobalArena> m_accelStructResources;
+    u32 m_accelStructBufferBindingOffset = 0u;
     // The driver-queried byte offset of each class's register space within its set block (slot -> bytes); write()
     // addresses a descriptor as block.offsetBytes + classOffset[handle.slot] + handle.slotIndex()*stride.
     u32 m_classBufferOffset[GpuDescriptorClass::kCount] = {};
 
     SlotAllocator m_resourceSlots;
     SlotAllocator m_samplerSlots;
+    SlotAllocator m_accelStructSlots;
 
     Vector<RetiredSlot, Alloc::GlobalArena> m_retired;
     u64 m_frameCounter = 0;
@@ -2156,11 +2183,16 @@ public:
     // Binds the global descriptor heap's tables for the currently bound pipeline (Backend A - classic descriptor sets).
     void bindDescriptorHeap(GpuDescriptorHeap& heap, VkPipelineBindPoint bindPoint, VkPipelineLayout pipelineLayout);
 
-    // Backend C: binds the global descriptor heap's persistent descriptor-buffer blocks at sets 8/9 against the given
-    // pipeline layout via vkCmdSetDescriptorBufferOffsetsEXT. The segments themselves are bound once per command
-    // buffer; this records the heap's two block offsets. The pipeline must be descriptor-buffer-compatible (every
-    // embedded layout is descriptor-buffer-compatible, including the heap's two layouts).
-    void bindDescriptorBufferHeap(GpuDescriptorHeap& heap, VkPipelineBindPoint bindPoint, VkPipelineLayout pipelineLayout);
+    // Backend C: binds the global descriptor heap's persistent descriptor-buffer blocks at sets 8/9 (and optionally
+    // the selected per-generation TLAS block at set 10) against the given pipeline layout via
+    // vkCmdSetDescriptorBufferOffsetsEXT. The segments themselves are bound once per command buffer. The pipeline
+    // must be descriptor-buffer-compatible, including every embedded heap layout.
+    void bindDescriptorBufferHeap(
+        GpuDescriptorHeap& heap,
+        VkPipelineBindPoint bindPoint,
+        VkPipelineLayout pipelineLayout,
+        GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::invalid()
+    );
 
     void setMeshletState(const MeshletState& state);
     void dispatchMesh(u32 groupsX, u32 groupsY = 1, u32 groupsZ = 1);

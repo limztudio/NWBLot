@@ -11,8 +11,9 @@
 // A resource registered through GpuDescriptorHeap::write() lands at its class's
 // array, at its GpuDescriptorHandle::slot(). A shader fetches it by indexing that array with the slot; a slot that
 // varies across a wave must be wrapped in NonUniformResourceIndex() at the subscript (the round-trip test runs a
-// single invocation, so it does not need to). AccelStruct has no array here because it is unsupported by the
-// descriptor-indexing backend.
+// single invocation, so it does not need to). Backend C's optional TLAS surface is intentionally a dedicated fixed
+// descriptor set: each command records the current handle's descriptor-buffer block offset, keeping retired TLAS
+// descriptors immutable until in-flight work has drained. Backend A compiles this declaration out.
 
 
 #ifndef NWB_GRAPHICS_BINDLESS_HEAP_SLANGI
@@ -20,6 +21,13 @@
 
 
 #include "binding_slots.h"
+
+// Most shaders include the heap for buffer/sampler access but do not participate in the optional TLAS migration.
+// Give those variants an explicit disabled value: Slang evaluates the right side of `defined(...) && ...` and emits
+// a warning for an undefined identifier, even though the expression ultimately evaluates to false.
+#ifndef NWB_BINDLESS_TLAS
+#define NWB_BINDLESS_TLAS 0
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,6 +73,11 @@ ConstantBuffer<NwbBindlessHeapUint> g_NwbHeapUniformBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLER, NWB_BINDLESS_HEAP_SAMPLER_SET)]]
 SamplerState g_NwbHeapSamplers[];
 
+#if NWB_BINDLESS_TLAS
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT, NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET)]]
+RaytracingAccelerationStructure g_NwbHeapAccelStruct;
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,6 +89,16 @@ SamplerState g_NwbHeapSamplers[];
 ByteAddressBuffer NwbHeapRawBuffer(const uint slot){
     return g_NwbHeapRawBuffers[NonUniformResourceIndex(slot)];
 }
+
+
+#if NWB_BINDLESS_TLAS
+// The active TLAS descriptor is selected by the host when it binds the heap's set-10 descriptor-buffer block. It is
+// not an array subscript in shader code: a freshly allocated block per TLAS generation keeps older command buffers
+// pointing at their original AS descriptor until the heap's deferred-free quarantine retires it.
+RaytracingAccelerationStructure NwbHeapAccelStruct(){
+    return g_NwbHeapAccelStruct;
+}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

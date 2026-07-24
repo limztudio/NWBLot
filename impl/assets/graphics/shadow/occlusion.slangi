@@ -12,6 +12,12 @@
 #include "binding_slots.h"
 #include "instance_material.slangi"
 
+// Backend C fetches the shared TLAS through the fixed descriptor-buffer heap set. Backend A keeps the local
+// set-0 descriptor below, so ordinary descriptor-indexing devices retain the exact existing shader shape.
+#if defined(NWB_BINDLESS_TLAS) && NWB_BINDLESS_TLAS
+#include "../bindless/bindless_heap.slangi"
+#endif
+
 // Map the shared material-constants context (g_NwbMaterialTypedWords + g_NwbMeshInstances, declared in
 // mesh/material_typed_bindings.slangi at NWB_MESH_SET / NWB_MESH_BINDING_*) into this pass's binding set. The
 // mesh-set defaults (slots 6/12) collide with this set's other slots, so they are moved onto the shadow-RT slot map.
@@ -36,8 +42,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if !(defined(NWB_BINDLESS_TLAS) && NWB_BINDLESS_TLAS)
 [[vk::binding(NWB_SHADOW_RT_BINDING_TLAS, NWB_SHADOW_RT_SET)]]
 RaytracingAccelerationStructure g_NwbShadowTlas;
+#endif
 
 [[vk::binding(NWB_SHADOW_RT_BINDING_GBUFFER_WORLD_POSITION, NWB_SHADOW_RT_SET)]]
 Texture2D<float4> g_NwbShadowGBufferWorldPosition;

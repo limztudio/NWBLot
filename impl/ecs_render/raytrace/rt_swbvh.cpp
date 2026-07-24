@@ -464,6 +464,13 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             );
             return false;
         }
+        // Backend C gives each TLAS generation an immutable descriptor-buffer block. Retire the old handle before
+        // replacing its resource so the heap retains the old acceleration structure until all in-flight command
+        // buffers that selected its block have drained.
+        if(rayTracingState().m_tlasHeapHandle.valid()){
+            heap.free(rayTracingState().m_tlasHeapHandle);
+            rayTracingState().m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+        }
         rayTracingState().m_tlas = Move(tlas);
         rayTracingState().m_tlasMaxInstances = capacity;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created scene TLAS (capacity {} instances)")
@@ -478,6 +485,34 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         Core::RayTracingAccelStructBuildFlags::PreferFastTrace
     );
     rayTracingState().m_tlasDeviceAddress = rayTracingState().m_tlas->getDeviceAddress();
+
+    // Backend C selects the shared scene TLAS from a dedicated fixed heap set (rather than a mutable descriptor
+    // table). A fresh handle/block is allocated only when the TLAS object changes; it remains immutable thereafter.
+    if(heap.usesDescriptorBuffer()){
+        if(!heap.hasAccelStructLayout()){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Backend-C descriptor heap has no TLAS layout"));
+            return false;
+        }
+        if(!rayTracingState().m_tlasHeapHandle.valid()){
+            const Core::GpuDescriptorHandle tlasHeapHandle = heap.allocate(Core::GpuDescriptorClass::AccelStruct);
+            if(
+                !tlasHeapHandle.valid()
+                || !heap.write(tlasHeapHandle, Core::BindingSetItem::RayTracingAccelStruct(0u, rayTracingState().m_tlas.get()))
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register scene TLAS in Backend-C descriptor heap"));
+                if(tlasHeapHandle.valid())
+                    heap.free(tlasHeapHandle);
+                return false;
+            }
+            rayTracingState().m_tlasHeapHandle = tlasHeapHandle;
+        }
+    }
+    else if(rayTracingState().m_tlasHeapHandle.valid()){
+        // This only occurs after a renderer/device mode change; the classic Backend-A path retains its local TLAS
+        // descriptors and must not leave a Backend-C generation handle live.
+        heap.free(rayTracingState().m_tlasHeapHandle);
+        rayTracingState().m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+    }
 
     // Upload the per-instance occluder material table (indexed by InstanceID()) for the hardware trace paths.
     if(!ensureShadowInstanceMaterialBuffer(instances.size()))

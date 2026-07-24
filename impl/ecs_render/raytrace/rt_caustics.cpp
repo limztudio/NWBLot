@@ -1243,6 +1243,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     }
 
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
 
     if(!rayTracingState().m_hwCausticBindingLayout){
         // Mirrors the shadow RT layout (TLAS + scene/light + instance-material + material-context) and adds the caustic
@@ -1252,11 +1253,11 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
         // attributeSlot, and the refraction bends on that interpolated shading normal (so it needs no positions/indices).
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::AllRayTracing);
-        // Backend C: pure-resource (TLAS + CB + StructuredBuffer + Texture_SRV/UAV, no samplers) embedding the heap
-        // layouts at 8/9; the TLAS is descriptor-buffer-compatible via vkGetDescriptorEXT and push constants ride the
-        // pipeline layout. Opt in iff the heap is on Backend C.
-        layoutDesc.setUseDescriptorBuffer(device->getDescriptorHeap().usesDescriptorBuffer());
-        layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_CAUSTIC_RT_BINDING_TLAS, 1));
+        // Backend C fetches the shared TLAS from the fixed set-10 descriptor-buffer block; Backend A retains the
+        // local set-0 AS binding. The rest remains one pure-resource local segment.
+        layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
+        if(!heap.usesDescriptorBuffer())
+            layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_CAUSTIC_RT_BINDING_TLAS, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_SCENE_SHADING, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_LIGHT_LIST, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL, 1));
@@ -1281,9 +1282,9 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     Core::ShaderHandle missShader;
     Core::ShaderHandle closestHitShader;
     if(
-        !m_renderer.shaderSystem().loadShader(raygenShader, AssetsGraphicsCaustic::s_HwRaygenShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::RayGeneration, "ECSRender_CausticHwRaygen")
-        || !m_renderer.shaderSystem().loadShader(missShader, AssetsGraphicsCaustic::s_HwMissShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Miss, "ECSRender_CausticHwMiss")
-        || !m_renderer.shaderSystem().loadShader(closestHitShader, AssetsGraphicsCaustic::s_HwClosestHitShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::ClosestHit, "ECSRender_CausticHwClosestHit")
+        !m_renderer.shaderSystem().loadShader(raygenShader, AssetsGraphicsCaustic::s_HwRaygenShaderName, heap.usesDescriptorBuffer() ? AStringView("NWB_BINDLESS_TLAS=1") : AStringView("NWB_BINDLESS_TLAS=0"), Core::ShaderType::RayGeneration, "ECSRender_CausticHwRaygen")
+        || !m_renderer.shaderSystem().loadShader(missShader, AssetsGraphicsCaustic::s_HwMissShaderName, heap.usesDescriptorBuffer() ? AStringView("NWB_BINDLESS_TLAS=1") : AStringView("NWB_BINDLESS_TLAS=0"), Core::ShaderType::Miss, "ECSRender_CausticHwMiss")
+        || !m_renderer.shaderSystem().loadShader(closestHitShader, AssetsGraphicsCaustic::s_HwClosestHitShaderName, heap.usesDescriptorBuffer() ? AStringView("NWB_BINDLESS_TLAS=1") : AStringView("NWB_BINDLESS_TLAS=0"), Core::ShaderType::ClosestHit, "ECSRender_CausticHwClosestHit")
     ){
         rayTracingState().m_hwCausticPipelineFailed = true;
         return false;
@@ -1302,10 +1303,17 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     // createPipelineLayoutForBindingLayouts gap-fills sets 1-7 with the empty set layout. Guarded on a live heap so
     // builds without one keep the pure set-0 layout. Mirrors the SW caustic scaffold (ensureSwCausticPipeline) -- the
     // first HW ray-tracing pipeline to carry the heap layouts.
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(heap.isInitialized()){
         pipelineDesc.addBindingLayout(heap.getResourceLayout());
         pipelineDesc.addBindingLayout(heap.getSamplerLayout());
+        if(heap.usesDescriptorBuffer()){
+            if(!heap.hasAccelStructLayout()){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Backend-C descriptor heap has no TLAS layout for caustics"));
+                rayTracingState().m_hwCausticPipelineFailed = true;
+                return false;
+            }
+            pipelineDesc.addBindingLayout(heap.getAccelStructLayout());
+        }
     }
 
     Core::RayTracingPipelineShaderDesc raygenDesc(arena());
@@ -1390,7 +1398,9 @@ bool RendererRayTracingSystem::ensureCausticRtBindingSet(DeferredFrameTargets& t
         return true;
 
     Core::BindingSetDesc bindingSetDesc(arena());
-    bindingSetDesc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_CAUSTIC_RT_BINDING_TLAS, rayTracingState().m_tlas.get()));
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    if(!heap.usesDescriptorBuffer())
+        bindingSetDesc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_CAUSTIC_RT_BINDING_TLAS, rayTracingState().m_tlas.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL, rayTracingState().m_shadowInstanceMaterialBuffer.get()));
@@ -1517,6 +1527,13 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
     // accumulator the SAME resolve consumes, so the HW + SW paths converge to the same caustic (Monte-Carlo A/B).
     if(!hasHwCausticWork())
         return false;
+    {
+        Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+        if(heap.usesDescriptorBuffer() && !rayTracingState().m_tlasHeapHandle.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch Backend-C caustics without a TLAS heap handle"));
+            return false;
+        }
+    }
     const f32 temporalDecay = causticTemporalDecay();
     if(
         !rayTracingState().m_hwCausticPipeline
@@ -1569,10 +1586,14 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         rayTracingPassState.addBindingSet(rayTracingState().m_hwCausticBindingSet.get());
         commandList.setRayTracingState(rayTracingPassState);
         // Closest-hit accesses corner attributes through the descriptor heap, so bind its tables after the
-        // RayTracingState and before dispatchRays. bindRayTracing touches only sets 8/9; non-bindless builds skip it.
+        // RayTracingState and before dispatchRays. Backend C also selects the TLAS generation at set 10.
         Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
-        if(heap.isInitialized())
-            heap.bindRayTracing(commandList, *rayTracingState().m_hwCausticPipeline.get());
+        if(heap.isInitialized()){
+            const Core::GpuDescriptorHandle tlasHeapHandle = heap.usesDescriptorBuffer()
+                ? rayTracingState().m_tlasHeapHandle
+                : Core::GpuDescriptorHandle::invalid();
+            heap.bindRayTracing(commandList, *rayTracingState().m_hwCausticPipeline.get(), tlasHeapHandle);
+        }
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
         // Dispatch one ray per photon over a gridSide x (gridSide/2) grid == the SW half-budget photon grid, so the

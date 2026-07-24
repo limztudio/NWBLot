@@ -68,7 +68,11 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
     // traversal casts their colored shadow). We never commit them, so traversal continues past a transparent occluder
     // to any opaque occluder behind it. A committed triangle hit therefore means an opaque occluder blocks the light.
     RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+#if defined(NWB_BINDLESS_TLAS) && NWB_BINDLESS_TLAS
+    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xFFu, ray);
+#else
     query.TraceRayInline(g_NwbShadowTlas, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xFFu, ray);
+#endif
     // Drain the non-opaque (transparent) candidates without committing any of them; opaque occluders never reach
     // this loop (the intersector commits them and ends the search). The body is intentionally empty.
     while(query.Proceed()){

@@ -943,6 +943,14 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
     if(!rayTracingState().m_surfelUpsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): surfel upsample is the first surfel-GI pass migrated to VK_EXT_descriptor_buffer, after
+        // the caustic resolve / geometry downsample / accumulator decay passes. Its shape is segment-coherent pure-
+        // resource (3 texture SRVs + 1 texture UAV, no samplers) -- and uniquely carries NO push constants (the joint-
+        // bilinear filter is driven by the G-buffer alone), the minimal no-push case. The opt-in declares intent only;
+        // where the extension is absent the backend downgrades this layout to non-descriptor-buffer-compatible and the
+        // classic descriptor-set path (Backend A) serves the pass unchanged, so no device capability gate is needed
+        // here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SURFEL_UPSAMPLE_BINDING_HALF_IRRADIANCE, 1)); // half-res irradiance
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SURFEL_UPSAMPLE_BINDING_GBUFFER_NORMAL, 1)); // full-res G-buffer normal
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SURFEL_UPSAMPLE_BINDING_GBUFFER_WORLD_POSITION, 1)); // full-res G-buffer world position

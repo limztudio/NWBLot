@@ -574,6 +574,77 @@ TEST_F(DescriptorBufferRoundTripTest, CausticAccumulatorDecayShapeBuildsAsDescri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Surfel upsample is the fourth pass flipped onto Backend C and the first surfel-GI pass migrated. Its shape (3 texture
+// SRVs + 1 texture UAV, no samplers) is the no-push-constant case -- distinct from the caustic passes, which all carry
+// push constants. The half/full-res irradiance and G-buffer SRVs are RGBA16_FLOAT (HDR surfel irradiance + view-space
+// attributes); the full-res surfelIrradiance UAV is RGBA16_FLOAT too. Mirrors the resolve/geometry-downsample/accumulator
+// parity proofs.
+TEST_F(DescriptorBufferRoundTripTest, SurfelUpsampleShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/surfel_upsample_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeTexture = [&](const u32 w, const u32 h) {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(w).setHeight(h)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeUavTexture = [&](const u32 w, const u32 h) {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(w).setHeight(h)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto halfIrradiance = makeTexture(32u, 32u);
+    auto normal = makeTexture(32u, 32u);
+    auto worldPosition = makeTexture(32u, 32u);
+    auto output = makeUavTexture(32u, 32u);
+    ASSERT_TRUE(halfIrradiance && normal && worldPosition && output);
+
+    // Slots mirror surfel_binding_slots.h upsample block (0..3); NO push constants ride the pipeline layout (the
+    // joint-bilinear filter is driven by the G-buffer alone), so the set is the pure 4-resource case.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.setUseDescriptorBuffer(true);
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(0u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(2u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(3u, 1u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "surfel upsample shape did not route to the descriptor-buffer path";
+    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
+    EXPECT_EQ(offsets.size(), 4u);
+
+    BindingSetDesc setDesc(descArena);
+    setDesc.addItem(BindingSetItem::Texture_SRV(0u, halfIrradiance.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(1u, normal.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(2u, worldPosition.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_UAV(3u, output.get(), Format::RGBA16_FLOAT));
+
+    auto bindingSet = device.createBindingSet(setDesc, layout);
+    ASSERT_NE(bindingSet.get(), nullptr);
+    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }; // namespace Tests
 
 

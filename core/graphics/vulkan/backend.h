@@ -1494,6 +1494,7 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 // Backend C - VK_EXT_descriptor_buffer descriptor-buffer manager (Phase 3)
 //
 // Descriptor-as-memory: unlike Backend A (descriptor indexing) or Backend B (the absent-on-RADV EXT_descriptor_heap

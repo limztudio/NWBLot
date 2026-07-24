@@ -1316,6 +1316,7 @@ struct DescriptorHeapPushRange{
     u32 pushOffsetBytes = 0;
     u32 pushWordCount = 0;
 };
+
 using PipelineShaderStageVector = Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchArena>;
 using PipelineSpecializationInfoVector = Vector<VkSpecializationInfo, Alloc::ScratchArena>;
 
@@ -1340,6 +1341,9 @@ struct PipelineBindingState{
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     bool m_ownsPipelineLayout = false;
     bool m_usesDescriptorHeap = false;
+    // Backend C: the pipeline's layouts are descriptor-buffer layouts and its binding sets bind via
+    // vkCmdBindDescriptorBuffersEXT + vkCmdSetDescriptorBufferOffsetsEXT instead of classic descriptor sets.
+    bool m_usesDescriptorBuffer = false;
     FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts> m_descriptorHeapPushRanges;
     u32 m_descriptorHeapPushDataSize = 0;
     u32 m_pushConstantByteSize = 0;
@@ -1379,6 +1383,11 @@ inline void AttachPipelineBindingState(
 ){
     pipelineInfo.pNext = bindingState.m_usesDescriptorHeap ? descriptorHeapScratch.pNext(next) : next;
     pipelineInfo.layout = bindingState.m_usesDescriptorHeap ? VK_NULL_HANDLE : bindingState.m_pipelineLayout;
+    // Backend C: descriptor-buffer pipelines must opt in with VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT so the
+    // driver expects descriptor-buffer binds rather than classic descriptor sets. The pipeline layout is still a real
+    // VkPipelineLayout (built from the flagged set layouts), unlike the heap path's VK_NULL_HANDLE.
+    if(bindingState.m_usesDescriptorBuffer)
+        pipelineInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 }
 
 inline void AttachPipelineBindingState(
@@ -1389,6 +1398,8 @@ inline void AttachPipelineBindingState(
 ){
     pipelineInfo.pNext = bindingState.m_usesDescriptorHeap ? descriptorHeapScratch.pNext(next) : next;
     pipelineInfo.layout = bindingState.m_usesDescriptorHeap ? VK_NULL_HANDLE : bindingState.m_pipelineLayout;
+    if(bindingState.m_usesDescriptorBuffer)
+        pipelineInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 }
 
 
@@ -1923,6 +1934,14 @@ public:
     [[nodiscard]] bool isBindlessLayout()const{ return m_isBindless; }
     [[nodiscard]] bool isDescriptorHeapCompatible()const{ return m_descriptorHeapCompatible; }
     [[nodiscard]] const Vector<DescriptorHeapBindingMeta, Alloc::GlobalArena>& getDescriptorHeapBindings()const{ return m_descriptorHeapBindings; }
+    // Backend C (VK_EXT_descriptor_buffer) accessors. A descriptor-buffer layout serves a single set block of
+    // m_descriptorBufferSetSizeBytes in segment m_descriptorBufferSegmentKind; per-binding byte offsets within that
+    // block are in m_descriptorBufferBindingOffsets (slot -> bytes). The layout is compatible only when the whole
+    // set lives in one segment (pure-resource or pure-sampler); mixed sets downgrade to the classic fallback.
+    [[nodiscard]] bool isDescriptorBufferCompatible()const{ return m_descriptorBufferCompatible; }
+    [[nodiscard]] u32 getDescriptorBufferSetSizeBytes()const{ return m_descriptorBufferSetSizeBytes; }
+    [[nodiscard]] DescriptorBufferSegmentKind::Enum getDescriptorBufferSegmentKind()const{ return m_descriptorBufferSegmentKind; }
+    [[nodiscard]] const HashMap<u32, u32, Hasher<u32>, EqualTo<u32>, Alloc::GlobalArena>& getDescriptorBufferBindingOffsets()const{ return m_descriptorBufferBindingOffsets; }
 
 
 private:
@@ -1932,11 +1951,20 @@ private:
     Vector<VkDescriptorSetLayout, Alloc::GlobalArena> m_descriptorSetLayouts;
     Vector<DescriptorHeapBindingMeta, Alloc::GlobalArena> m_descriptorHeapBindings;
     HashMap<u32, usize, Hasher<u32>, EqualTo<u32>, Alloc::GlobalArena> m_descriptorHeapBindingLookup;
+    // Backend C: the driver-computed footprint of this layout's single set block in the descriptor buffer
+    // (vkGetDescriptorSetLayoutSizeEXT), the segment that holds it (Resource for non-sampler sets / Sampler for
+    // sampler-only sets; mixed sets downgrade to non-compatible), and each non-push-constant binding's byte offset
+    // within that block (vkGetDescriptorSetLayoutBindingOffsetEXT). createBindingSet carves one block per set and
+    // writes each binding's descriptors at blockOffset + bindingOffset + arrayElement*stride.
+    u32 m_descriptorBufferSetSizeBytes = 0;
+    DescriptorBufferSegmentKind::Enum m_descriptorBufferSegmentKind = DescriptorBufferSegmentKind::None;
+    HashMap<u32, u32, Hasher<u32>, EqualTo<u32>, Alloc::GlobalArena> m_descriptorBufferBindingOffsets;
 
     const VulkanContext& m_context;
     u32 m_pushConstantByteSize = 0;
     bool m_isBindless = false;
     bool m_descriptorHeapCompatible = false;
+    bool m_descriptorBufferCompatible = false;
 };
 
 
@@ -1999,6 +2027,9 @@ private:
     Vector<VkDescriptorSet, Alloc::GlobalArena> m_descriptorSets;
     Vector<u32, Alloc::GlobalArena> m_descriptorHeapPushIndices;
     Vector<DescriptorHeapAllocation, Alloc::GlobalArena> m_descriptorHeapAllocations;
+    // Backend C: one carved segment per binding (resource or sampler), ordered to match the layout's metas. Freed in
+    // the destructor through the DescriptorBufferManager, mirroring the heap allocations above.
+    Vector<DescriptorBufferSegment, Alloc::GlobalArena> m_descriptorBufferAllocations;
 
     const VulkanContext& m_context;
 };
@@ -2281,6 +2312,7 @@ private:
         VkPipelineBindPoint bindPoint,
         VkPipelineLayout pipelineLayout,
         bool usesDescriptorHeap,
+        bool usesDescriptorBuffer,
         const FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& pushRanges,
         u32 pushDataSize,
         const BindingSetVector& bindings
@@ -2292,6 +2324,11 @@ private:
         u32 pushDataSize,
         const BindingSetVector& bindings
     );
+    // Backend C: binds the global resource + sampler descriptor-buffer segments once via
+    // vkCmdBindDescriptorBuffersEXT, then sets each binding set's per-binding offsets via
+    // vkCmdSetDescriptorBufferOffsetsEXT. The descriptor-buffer segment per binding is already written at
+    // createBindingSet time through DescriptorBufferManager::writeDescriptor, so this records only the bind.
+    void bindDescriptorBufferState(VkPipelineBindPoint bindPoint, VkPipelineLayout pipelineLayout, const BindingSetVector& bindings);
     void setViewportState(const ViewportState& viewport);
 
     bool beginDynamicRendering(Framebuffer* framebuffer, const RenderPassParameters& params);

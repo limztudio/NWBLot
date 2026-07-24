@@ -102,7 +102,7 @@ void CommandList::setComputeState(const ComputeState& state){
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipeline);
 
     if(pipeline)
-        bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorHeap, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
+        bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorHeap, pipeline->m_usesDescriptorBuffer, pipeline->m_descriptorHeapPushRanges, pipeline->m_descriptorHeapPushDataSize, state.bindings);
 }
 
 void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){

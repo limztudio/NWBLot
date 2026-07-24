@@ -106,6 +106,13 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
     if(!rayTracingState().m_surfelAgeFreeBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): surfel age-free is the third surfel-GI pass migrated to VK_EXT_descriptor_buffer, after
+        // surfel upsample and hash-build. Its shape is segment-coherent pure-resource (1 ConstantBuffer + 3
+        // StructuredBuffer_UAV, no samplers), the same CB + UAV mix as hash-build with one additional storage buffer
+        // (the free-list). The opt-in declares intent only; where the extension is absent the backend downgrades this
+        // layout to non-descriptor-buffer-compatible and the classic descriptor-set path (Backend A) serves the pass
+        // unchanged, so no device capability gate is needed here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // pool (write alive = 0)
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_COUNTER, 1)); // counter (FREE_TOP push)

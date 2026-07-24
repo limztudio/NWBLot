@@ -713,6 +713,74 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelHashBuildShapeBuildsAsDescriptorBuff
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST_F(DescriptorBufferRoundTripTest, SurfelAgeFreeShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/surfel_age_free_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto constants = makeConstantBuffer();
+    auto pool = makeStructuredUav(16u);
+    auto counter = makeStructuredUav(4u);
+    auto freeList = makeStructuredUav(4u);
+    ASSERT_TRUE(constants && pool && counter && freeList);
+
+    // Slots mirror surfel_binding_slots.h age-free block (12, 13, 15, 19); the segment-coherent pure-resource layout
+    // (a uniform buffer plus three storage buffers, no samplers) is the CB + UAV shape of hash-build with one
+    // additional storage buffer (the free-list).
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.setUseDescriptorBuffer(true);
+    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(12u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(13u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(15u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(19u, 1u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "surfel age-free shape did not route to the descriptor-buffer path";
+    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
+    EXPECT_EQ(offsets.size(), 4u);
+
+    BindingSetDesc setDesc(descArena);
+    setDesc.addItem(BindingSetItem::ConstantBuffer(12u, constants.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(13u, pool.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(15u, counter.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(19u, freeList.get()));
+
+    auto bindingSet = device.createBindingSet(setDesc, layout);
+    ASSERT_NE(bindingSet.get(), nullptr);
+    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }; // namespace Tests
 
 

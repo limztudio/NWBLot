@@ -1455,8 +1455,8 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     BvhBuildPushConstants pushConstants;
     pushConstants.primitiveCount = primitiveCount;
     pushConstants.internalCount = primitiveCount - 1u;
-    pushConstants.aabbMin = Float4(VectorGetX(aabbMin), VectorGetY(aabbMin), VectorGetZ(aabbMin), 0.0f);
-    pushConstants.aabbMax = Float4(VectorGetX(aabbMax), VectorGetY(aabbMax), VectorGetZ(aabbMax), 0.0f);
+    StoreFloat(VectorSetW(aabbMin, 0.0f), &pushConstants.aabbMin);
+    StoreFloat(VectorSetW(aabbMax, 0.0f), &pushConstants.aabbMax);
 
     // Initialize: sort-key padding to a sentinel that sorts last, parent links to "no parent", and the
     // per-internal-node visit counters to zero (the fit's second-arrival rendezvous).

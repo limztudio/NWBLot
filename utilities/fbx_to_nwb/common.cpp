@@ -206,7 +206,7 @@ bool Normalize(const SIMDVector value, SIMDVector& outValue){
     if(!VectorIsFinite(lengthSquaredVector, 0xFu) || !Vector3Greater(lengthSquaredVector, VectorZero()))
         return false;
 
-    const SIMDVector normalized = VectorDivide(value, VectorSqrt(lengthSquaredVector));
+    const SIMDVector normalized = Vector3Normalize(value);
     NWB_ASSERT(Vector3IsFinite(normalized));
     outValue = normalized;
     return true;

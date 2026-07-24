@@ -413,22 +413,23 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
         VectorAndInt(transposed.v[2], s_SIMDMask3)
     };
 
-    Float3U scale(
-        VectorGetX(Vector3Length(basis[0])),
-        VectorGetX(Vector3Length(basis[1])),
-        VectorGetX(Vector3Length(basis[2]))
+    SIMDVector scale = VectorMergeX(
+        Vector3Length(basis[0]),
+        Vector3Length(basis[1]),
+        Vector3Length(basis[2]),
+        VectorZero()
     );
 
     usize a{};
     usize b{};
     usize c{};
-    SIMDMatrixDetail::RankDecompose(a, b, c, scale.x, scale.y, scale.z);
+    SIMDMatrixDetail::RankDecompose(a, b, c, VectorGetX(scale), VectorGetY(scale), VectorGetZ(scale));
 
-    if(scale.raw[a] < epsilon)
+    if(VectorGetByIndex(scale, a) < epsilon)
         basis[a] = canonicalBasis[a];
     basis[a] = Vector3Normalize(basis[a]);
 
-    if(scale.raw[b] < epsilon){
+    if(VectorGetByIndex(scale, b) < epsilon){
         usize aa{};
         usize bb{};
         usize cc{};
@@ -444,7 +445,7 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     }
     basis[b] = Vector3Normalize(basis[b]);
 
-    if(scale.raw[c] < epsilon)
+    if(VectorGetByIndex(scale, c) < epsilon)
         basis[c] = Vector3Cross(basis[a], basis[b]);
     basis[c] = Vector3Normalize(basis[c]);
 
@@ -457,7 +458,7 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     SIMDMatrix rotationMatrix = MatrixTranspose(basisAsRows);
     f32 determinant = VectorGetX(MatrixDeterminant(rotationMatrix));
     if(determinant < 0.0f){
-        scale.raw[a] = -scale.raw[a];
+        scale = VectorSetByIndex(scale, -VectorGetByIndex(scale, a), a);
         basis[a] = VectorNegate(basis[a]);
 
         basisAsRows.v[0] = basis[0];
@@ -472,7 +473,7 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     if(epsilon < determinant)
         return false;
 
-    *outScale = VectorSet(scale.x, scale.y, scale.z, 0.0f);
+    *outScale = scale;
     *outRotQuat = QuaternionRotationMatrix(rotationMatrix);
     return true;
 }

@@ -934,6 +934,14 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
     if(!rayTracingState().m_bvhSortBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): the bitonic sort is the first BVH-family pass migrated to VK_EXT_descriptor_buffer,
+        // after the caustic and surfel-GI passes. Its shape is segment-coherent pure-resource (2 StructuredBuffer_UAV,
+        // no samplers) with push constants, which the descriptor-buffer path serves wholesale -- push constants stay in
+        // the pipeline layout, not the descriptor buffer, so they coexist with the opt-in. The opt-in declares intent
+        // only; where the extension is absent the backend downgrades this layout to non-descriptor-buffer-compatible and
+        // the classic descriptor-set path (Backend A) serves the pass unchanged, so no device capability gate is needed
+        // here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_SORT_BINDING_KEYS, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_SORT_BINDING_PAYLOAD, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhSortPushConstants)));
@@ -1135,6 +1143,14 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
     if(!rayTracingState().m_bvhBuildBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): the shared LBVH build layout is the second BVH-family pass migrated to
+        // VK_EXT_descriptor_buffer. Its shape is segment-coherent pure-resource (2 RawBuffer_SRV + 5 StructuredBuffer_UAV,
+        // no samplers) with push constants, which the descriptor-buffer path serves wholesale -- push constants stay in
+        // the pipeline layout, not the descriptor buffer, so they coexist with the opt-in. The raw SRV and structured UAV
+        // bindings all resolve to the resource segment. The opt-in declares intent only; where the extension is absent
+        // the backend downgrades this layout to non-descriptor-buffer-compatible and the classic descriptor-set path
+        // (Backend A) serves the pass unchanged, so no device capability gate is needed here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_BVH_BUILD_BINDING_POSITIONS, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_BVH_BUILD_BINDING_TRIANGLE_INDICES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_KEYS, 1));

@@ -591,6 +591,14 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     if(!rayTracingState().m_shadowGeometryDownsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): the half-res geometry downsample is the first shadow-family pass migrated to
+        // VK_EXT_descriptor_buffer, after the caustic, surfel-GI, and BVH passes. Its shape is segment-coherent
+        // pure-resource (3 Texture_SRV + 1 ConstantBuffer + 1 Texture_UAV, no samplers) with push constants, which the
+        // descriptor-buffer path serves wholesale -- push constants stay in the pipeline layout, not the descriptor
+        // buffer, so they coexist with the opt-in. The opt-in declares intent only; where the extension is absent the
+        // backend downgrades this layout to non-descriptor-buffer-compatible and the classic descriptor-set path
+        // (Backend A) serves the pass unchanged, so no device capability gate is needed here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_NORMAL, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH, 1));
@@ -722,6 +730,13 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
     if(!rayTracingState().m_shadowResolveBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): the SVGF a-trous resolve is the second shadow-family pass migrated to VK_EXT_descriptor_buffer.
+        // Its shape is segment-coherent pure-resource (8 Texture_SRV + 1 ConstantBuffer + 2 Texture_UAV, no samplers) with
+        // push constants, which the descriptor-buffer path serves wholesale -- push constants stay in the pipeline layout,
+        // not the descriptor buffer, so they coexist with the opt-in. The RGB variant shares this layout. The opt-in declares
+        // intent only; where the extension is absent the backend downgrades this layout to non-descriptor-buffer-compatible
+        // and the classic descriptor-set path (Backend A) serves the pass unchanged, so no device capability gate is needed here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_GEOMETRY, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_GBUFFER_DEPTH, 1));
@@ -1192,6 +1207,13 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
     if(!rayTracingState().m_shadowReprojectMergeBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): the temporal reproject-merge is the third shadow-family pass migrated to VK_EXT_descriptor_buffer.
+        // Its shape is segment-coherent pure-resource (6 Texture_SRV + 2 Texture_UAV, no samplers) with push constants, which
+        // the descriptor-buffer path serves wholesale -- push constants stay in the pipeline layout, not the descriptor
+        // buffer, so they coexist with the opt-in. The opt-in declares intent only; where the extension is absent the backend
+        // downgrades this layout to non-descriptor-buffer-compatible and the classic descriptor-set path (Backend A) serves
+        // the pass unchanged, so no device capability gate is needed here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_REPROJECT_MERGE_BINDING_SOFT_TRACE, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_IN, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_IN, 1));

@@ -1031,6 +1031,379 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelResolveShapeBuildsAsDescriptorBuffer
 }
 
 
+// BVH bitonic-sort parity: the LBVH pre-sort over (Morton key, primitive-index payload) pairs. Its shape is
+// segment-coherent pure-resource (2 StructuredBuffer_UAV, no samplers) with push constants -- the first migrated
+// shape to carry ZERO read-only descriptors (a UAV-only resource segment). Push constants stay in the pipeline
+// layout, so they coexist with the opt-in.
+TEST_F(DescriptorBufferRoundTripTest, BvhSortShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/bvh_sort_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto keys = makeStructuredUav(4u);
+    auto payload = makeStructuredUav(4u);
+    ASSERT_TRUE(keys && payload);
+
+    // Slots mirror bvh/binding_slots.h sort block (0 keys, 1 payload).
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.setUseDescriptorBuffer(true);
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(0u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(1u, 1u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "bvh sort shape did not route to the descriptor-buffer path";
+    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
+    EXPECT_EQ(offsets.size(), 2u);
+
+    BindingSetDesc setDesc(descArena);
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(0u, keys.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(1u, payload.get()));
+
+    auto bindingSet = device.createBindingSet(setDesc, layout);
+    ASSERT_NE(bindingSet.get(), nullptr);
+    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
+// BVH LBVH-build parity: the shared Morton/sort/Karras-topology/bottom-up-fit layout. Its shape is segment-coherent
+// pure-resource (2 RawBuffer_SRV + 5 StructuredBuffer_UAV, no samplers) with push constants -- the first migrated
+// shape to carry RawBuffer_SRV (ByteAddressBuffer) descriptors, which the descriptor-buffer path serves as raw
+// bytes in the resource segment.
+TEST_F(DescriptorBufferRoundTripTest, BvhBuildShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/bvh_build_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeRawSrv = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(64u * 1024u)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto positions = makeRawSrv();
+    auto triangleIndices = makeRawSrv();
+    auto buildKeys = makeStructuredUav(4u);
+    auto buildPayload = makeStructuredUav(4u);
+    auto nodes = makeStructuredUav(64u);
+    auto parent = makeStructuredUav(4u);
+    auto visitCounter = makeStructuredUav(4u);
+    ASSERT_TRUE(positions && triangleIndices && buildKeys && buildPayload && nodes && parent && visitCounter);
+
+    // Slots mirror bvh/binding_slots.h build block (0..6).
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.setUseDescriptorBuffer(true);
+    layoutDesc.addItem(BindingLayoutItem::RawBuffer_SRV(0u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::RawBuffer_SRV(1u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(2u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(3u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(4u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(5u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(6u, 1u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "bvh build shape did not route to the descriptor-buffer path";
+    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
+    EXPECT_EQ(offsets.size(), 7u);
+
+    BindingSetDesc setDesc(descArena);
+    setDesc.addItem(BindingSetItem::RawBuffer_SRV(0u, positions.get()));
+    setDesc.addItem(BindingSetItem::RawBuffer_SRV(1u, triangleIndices.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(2u, buildKeys.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(3u, buildPayload.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(4u, nodes.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(5u, parent.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(6u, visitCounter.get()));
+
+    auto bindingSet = device.createBindingSet(setDesc, layout);
+    ASSERT_NE(bindingSet.get(), nullptr);
+    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
+// Shadow geometry-downsample parity: the half-res G-buffer downsample feeding the soft-shadow a-trous resolve. Its
+// shape is segment-coherent pure-resource (3 Texture_SRV + 1 ConstantBuffer + 1 Texture_UAV, no samplers) with push
+// constants.
+TEST_F(DescriptorBufferRoundTripTest, ShadowGeometryDownsampleShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/shadow_geom_downsample_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeTexture = [&](const u32 w, const u32 h) {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(w).setHeight(h)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeUavTexture = [&](const u32 w, const u32 h) {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(w).setHeight(h)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto sceneShading = makeConstantBuffer();
+    auto worldPosition = makeTexture(32u, 32u);
+    auto normal = makeTexture(32u, 32u);
+    auto depth = makeTexture(32u, 32u);
+    auto geometryOutput = makeUavTexture(16u, 16u);
+    ASSERT_TRUE(sceneShading && worldPosition && normal && depth && geometryOutput);
+
+    // Slots mirror shadow_resolve_binding_slots.h downsample block (0..4).
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.setUseDescriptorBuffer(true);
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(0u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(2u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(3u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(4u, 1u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "shadow geometry downsample shape did not route to the descriptor-buffer path";
+    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
+    EXPECT_EQ(offsets.size(), 5u);
+
+    BindingSetDesc setDesc(descArena);
+    setDesc.addItem(BindingSetItem::Texture_SRV(0u, worldPosition.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(1u, normal.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(2u, depth.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::ConstantBuffer(3u, sceneShading.get()));
+    setDesc.addItem(BindingSetItem::Texture_UAV(4u, geometryOutput.get(), Format::RGBA16_FLOAT));
+
+    auto bindingSet = device.createBindingSet(setDesc, layout);
+    ASSERT_NE(bindingSet.get(), nullptr);
+    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
+// Shadow resolve parity: the SVGF a-trous resolve (and its RGB variant). Its shape is segment-coherent pure-resource
+// (8 Texture_SRV + 1 ConstantBuffer + 2 Texture_UAV, no samplers) with push constants.
+TEST_F(DescriptorBufferRoundTripTest, ShadowResolveShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/shadow_resolve_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeTexture = [&]() {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(32u).setHeight(32u)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeUavTexture = [&]() {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(32u).setHeight(32u)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto sceneShading = makeConstantBuffer();
+    auto softHalf = makeTexture();
+    auto geometry = makeTexture();
+    auto gbufferDepth = makeTexture();
+    auto inputColor = makeTexture();
+    auto moments = makeTexture();
+    auto gbufferWorldPos = makeTexture();
+    auto gbufferNormal = makeTexture();
+    auto output = makeUavTexture();
+    auto visibility = makeUavTexture();
+    ASSERT_TRUE(sceneShading && softHalf && geometry && gbufferDepth && inputColor && moments && gbufferWorldPos && gbufferNormal && output && visibility);
+
+    // Slots mirror shadow_resolve_binding_slots.h resolve block (0 soft-half .. 9 scene-shading).
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.setUseDescriptorBuffer(true);
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(0u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(2u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(3u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(4u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(5u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(6u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(7u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(8u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(9u, 1u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "shadow resolve shape did not route to the descriptor-buffer path";
+    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
+    EXPECT_EQ(offsets.size(), 10u);
+
+    BindingSetDesc setDesc(descArena);
+    setDesc.addItem(BindingSetItem::Texture_SRV(0u, softHalf.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(1u, geometry.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(2u, gbufferDepth.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_UAV(3u, output.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(4u, inputColor.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_UAV(5u, visibility.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(6u, moments.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(7u, gbufferWorldPos.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(8u, gbufferNormal.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::ConstantBuffer(9u, sceneShading.get()));
+
+    auto bindingSet = device.createBindingSet(setDesc, layout);
+    ASSERT_NE(bindingSet.get(), nullptr);
+    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
+// Shadow reproject-merge parity: the temporal accumulation pass. Its shape is segment-coherent pure-resource
+// (6 Texture_SRV + 2 Texture_UAV, no samplers) with push constants -- the first migrated shadow shape with NO
+// constant buffer (the dispatch parameters are push-constants only).
+TEST_F(DescriptorBufferRoundTripTest, ShadowReprojectMergeShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/shadow_reproject_merge_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeTexture = [&]() {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(32u).setHeight(32u)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeUavTexture = [&]() {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(32u).setHeight(32u)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto softTrace = makeTexture();
+    auto historyIn = makeTexture();
+    auto momentsIn = makeTexture();
+    auto geometryCurr = makeTexture();
+    auto geometryPrev = makeTexture();
+    auto gbufferWorldPos = makeTexture();
+    auto historyOut = makeUavTexture();
+    auto momentsOut = makeUavTexture();
+    ASSERT_TRUE(softTrace && historyIn && momentsIn && geometryCurr && geometryPrev && gbufferWorldPos && historyOut && momentsOut);
+
+    // Slots mirror shadow_reproject_merge_binding_slots.h reproject-merge block (0..7).
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.setUseDescriptorBuffer(true);
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(0u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(2u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(3u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(4u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(5u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(6u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(7u, 1u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "shadow reproject-merge shape did not route to the descriptor-buffer path";
+    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
+    EXPECT_EQ(offsets.size(), 8u);
+
+    BindingSetDesc setDesc(descArena);
+    setDesc.addItem(BindingSetItem::Texture_SRV(0u, softTrace.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(1u, historyIn.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(2u, momentsIn.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(3u, geometryCurr.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(4u, geometryPrev.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(5u, gbufferWorldPos.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_UAV(6u, historyOut.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_UAV(7u, momentsOut.get(), Format::RGBA16_FLOAT));
+
+    auto bindingSet = device.createBindingSet(setDesc, layout);
+    ASSERT_NE(bindingSet.get(), nullptr);
+    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

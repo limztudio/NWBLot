@@ -642,6 +642,74 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelUpsampleShapeBuildsAsDescriptorBuffe
 }
 
 
+// Surfel hash-build parity: the first surfel-GI pass migrated that carries a uniform buffer alongside storage buffers
+// (1 ConstantBuffer + 2 StructuredBuffer_UAV), extending the texture-only shapes of the prior five migrations. Slots
+// mirror surfel_binding_slots.h hash-build block (12..14). The layout is segment-coherent pure-resource with no
+// samplers, so it routes to Backend C intact; the set is built once on persistent buffers in production. This proof
+// exercises the live device API with hash-build's exact binding shape, asserting the layout routes to Backend C,
+// reports a non-zero driver-queried set size, gives the binding 3 layout offsets, and createBindingSet carves the
+// block and writes the uniform/storage descriptors through the production writeDescriptor path.
+TEST_F(DescriptorBufferRoundTripTest, SurfelHashBuildShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/surfel_hash_build_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto constants = makeConstantBuffer();
+    auto pool = makeStructuredUav(16u);
+    auto cellHead = makeStructuredUav(4u);
+    ASSERT_TRUE(constants && pool && cellHead);
+
+    // Slots mirror surfel_binding_slots.h hash-build block (12..14); the segment-coherent pure-resource layout (a
+    // uniform buffer plus two storage buffers, no samplers) is the first Backend-C migration to mix CB + UAV.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.setUseDescriptorBuffer(true);
+    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(12u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(13u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(14u, 1u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "surfel hash-build shape did not route to the descriptor-buffer path";
+    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
+    EXPECT_EQ(offsets.size(), 3u);
+
+    BindingSetDesc setDesc(descArena);
+    setDesc.addItem(BindingSetItem::ConstantBuffer(12u, constants.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(13u, pool.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(14u, cellHead.get()));
+
+    auto bindingSet = device.createBindingSet(setDesc, layout);
+    ASSERT_NE(bindingSet.get(), nullptr);
+    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

@@ -159,6 +159,13 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
     if(!rayTracingState().m_surfelHashBuildBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): surfel hash-build is the second surfel-GI pass migrated to VK_EXT_descriptor_buffer, after
+        // surfel upsample. Its shape is segment-coherent pure-resource (1 ConstantBuffer + 2 StructuredBuffer_UAV, no
+        // samplers) -- the first Backend-C layout to carry a uniform buffer alongside storage buffers, extending the
+        // texture-only shapes of the prior five migrations. The opt-in declares intent only; where the extension is
+        // absent the backend downgrades this layout to non-descriptor-buffer-compatible and the classic descriptor-set
+        // path (Backend A) serves the pass unchanged, so no device capability gate is needed here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // pool
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_CELL_HEAD, 1)); // cell head (write links)

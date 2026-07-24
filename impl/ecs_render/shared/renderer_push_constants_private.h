@@ -45,10 +45,10 @@ struct TransparentDrawPushConstants{
 
 struct EmulatedVertex{
     Float4 position;
-    Float4 normal;
-    Float4 tangent;
-    Float4 uv0;
-    Float4 color;
+    Half4U normal;
+    Half4U tangent;
+    Float2U uv0;
+    Half4U color;
     Float4 worldPosition;
 };
 
@@ -79,27 +79,27 @@ static_assert(sizeof(TransparentDrawPushConstants) == s_RendererAvboitTransparen
 static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
 static_assert(
-    offsetof(EmulatedVertex, position) == sizeof(f32) * NWB_MESH_EMULATION_VERTEX_POSITION_FLOAT_OFFSET,
+    offsetof(EmulatedVertex, position) == NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET,
     "EmulatedVertex position offset must match the mesh emulation shader"
 );
 static_assert(
-    offsetof(EmulatedVertex, normal) == sizeof(f32) * NWB_MESH_EMULATION_VERTEX_NORMAL_FLOAT_OFFSET,
+    offsetof(EmulatedVertex, normal) == NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET,
     "EmulatedVertex normal offset must match the mesh emulation shader"
 );
 static_assert(
-    offsetof(EmulatedVertex, tangent) == sizeof(f32) * NWB_MESH_EMULATION_VERTEX_TANGENT_FLOAT_OFFSET,
+    offsetof(EmulatedVertex, tangent) == NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET,
     "EmulatedVertex tangent offset must match the mesh emulation shader"
 );
 static_assert(
-    offsetof(EmulatedVertex, uv0) == sizeof(f32) * NWB_MESH_EMULATION_VERTEX_UV0_FLOAT_OFFSET,
+    offsetof(EmulatedVertex, uv0) == NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET,
     "EmulatedVertex uv0 offset must match the mesh emulation shader"
 );
 static_assert(
-    offsetof(EmulatedVertex, color) == sizeof(f32) * NWB_MESH_EMULATION_VERTEX_COLOR_FLOAT_OFFSET,
+    offsetof(EmulatedVertex, color) == NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET,
     "EmulatedVertex color offset must match the mesh emulation shader"
 );
 static_assert(
-    offsetof(EmulatedVertex, worldPosition) == sizeof(f32) * NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_FLOAT_OFFSET,
+    offsetof(EmulatedVertex, worldPosition) == NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET,
     "EmulatedVertex world-position offset must match the mesh emulation shader"
 );
 static_assert(alignof(EmulatedVertex) >= alignof(Float4), "EmulatedVertex must stay SIMD-aligned");
@@ -187,13 +187,13 @@ NWB_INLINE void SetTransparentDrawPushConstants(
 NWB_INLINE void SetEmulatedVertexAttribute(
     Core::VertexAttributeDesc& attribute,
     const Core::Format::Enum format,
-    const u32 offsetFloatCount,
+    const u32 offsetByteCount,
     const char* name
 ){
     attribute
         .setFormat(format)
         .setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX)
-        .setOffset(sizeof(f32) * offsetFloatCount)
+        .setOffset(offsetByteCount)
         .setElementStride(s_EmulatedVertexStride)
         .setName(name)
     ;

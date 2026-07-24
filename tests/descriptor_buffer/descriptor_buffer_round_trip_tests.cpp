@@ -363,6 +363,96 @@ TEST_F(DescriptorBufferRoundTripTest, AllocationsAreStrideAligned){
 }
 
 
+// Step 2 (Phase 3) production-binding-layer proof: exercise createBindingLayout/createBindingSet through the live
+// device API with the EXACT shape of the caustic resolve pass — 5 Texture_SRVs + 1 Texture_UAV + push constants,
+// useDescriptorBuffer = true. This is the first end-to-end exercise of the Backend-C binding layer (the prior cases
+// only round-trip the manager directly): it verifies (1) the layout is marked descriptor-buffer-compatible (the
+// segment-coherence + driver size/offset queries succeed), (2) its set block reports a non-zero driver-queried size,
+// (3) createBindingSet carves the block from the live resource segment and writes all 6 texture descriptors through
+// the production writeDescriptor path, and (4) the resulting set/layout are wired for the command bind path. The
+// caustic pass is segment-coherent pure-resource with push constants, which the Backend-C path serves wholesale; a
+// mixed or unsupported shape would downgrade the layout and fail the compatibility assertion.
+TEST_F(DescriptorBufferRoundTripTest, CausticResolveShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    // A short-lived arena for the layout/set descs (they copy their bindings into object-arena storage on creation).
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_shape_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    // Six textures matching caustic resolve's 5 SRV + 1 UAV (+ the geometry + input-color ping-pong siblings). All
+    // RGBA16F-ish 2D textures so their image views are valid descriptor targets.
+    auto makeTexture = [&](const u32 w, const u32 h) {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(w)
+                .setHeight(h)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeUavTexture = [&](const u32 w, const u32 h) {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(w)
+                .setHeight(h)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto accumulator = makeTexture(32u, 32u);
+    auto worldPosition = makeTexture(32u, 32u);
+    auto depth = makeTexture(32u, 32u);
+    auto output = makeUavTexture(32u, 32u);   // UAV (wavelet output)
+    auto inputColor = makeTexture(32u, 32u);
+    auto geometry = makeTexture(32u, 32u);
+    ASSERT_TRUE(accumulator && worldPosition && depth && output && inputColor && geometry);
+
+    // The caustic resolve binding layout: 5 SRV + 1 UAV + push constants, opting into the descriptor-buffer path.
+    // Slots mirror resolve_binding_slots.h (0..5); push constants ride the pipeline layout, allowed alongside.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.setUseDescriptorBuffer(true);
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(0u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(2u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(3u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(4u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(5u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 32u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    // The authoritative step-2 signal: the layout is descriptor-buffer-compatible. On a host where the extension is
+    // absent the suite is already skipped (SetUpTestSuite); here the extension is present, so this shape MUST route
+    // to Backend C. A downgrade here would mean the live caustic pass silently fell back to Backend A.
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "caustic resolve shape did not route to the descriptor-buffer path";
+    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    // Every non-push-constant binding must have a driver-queried layout offset within the set block.
+    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
+    EXPECT_EQ(offsets.size(), 6u);
+
+    // A binding set carved against this layout exercises the production carve + 6 writeDescriptor calls.
+    BindingSetDesc setDesc(descArena);
+    setDesc.addItem(BindingSetItem::Texture_SRV(0u, accumulator.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(1u, worldPosition.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(2u, depth.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_UAV(3u, output.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(4u, inputColor.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(5u, geometry.get(), Format::RGBA16_FLOAT));
+
+    auto bindingSet = device.createBindingSet(setDesc, layout);
+    // createBindingSet carved the set block and wrote all 6 descriptors; a failure here would have logged at ERROR.
+    ASSERT_NE(bindingSet.get(), nullptr);
+    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

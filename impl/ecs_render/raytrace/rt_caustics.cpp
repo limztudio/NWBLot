@@ -836,6 +836,12 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
     if(!rayTracingState().m_causticResolveBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Phase 3 (Backend C): the caustic resolve set is the first pass migrated to VK_EXT_descriptor_buffer. Its
+        // shape is segment-coherent pure-resource (5 texture SRVs + 1 texture UAV, no samplers) with push constants,
+        // which the descriptor-buffer path serves wholesale. The opt-in declares intent only; where the extension is
+        // absent the backend downgrades this layout to non-descriptor-buffer-compatible and the classic descriptor-set
+        // path (Backend A) serves the pass unchanged, so no device capability gate is needed here.
+        layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_WORLD_POSITION, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH, 1));

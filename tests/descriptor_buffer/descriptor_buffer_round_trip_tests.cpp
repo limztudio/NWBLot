@@ -1404,6 +1404,120 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowReprojectMergeShapeBuildsAsDescripto
 }
 
 
+// HW shadow trace parity: the shared inline-RayQuery occlusion layout used by BOTH the full-resolution hard fallback
+// (shadow_rayquery_cs) and the half-resolution soft opaque trace (shadow_rayquery_soft_cs). Its shape is
+// segment-coherent pure-resource (TLAS + 3 Texture_SRV + 1 Texture_UAV + 1 ConstantBuffer + 3 StructuredBuffer_SRV)
+// with no samplers, and -- critically -- its pipeline carries NO heap layout (the HW RayQuery dispatches never call
+// heap.bindCompute; only the no-RayQuery SW path does). RayTracingAccelStruct is the one resource type the descriptor
+// heap path excludes but vkGetDescriptorEXT serves, so this is the first TLAS-carrying layout to route to Backend C.
+// Slots mirror shadow/binding_slots.h RT block (0 TLAS, 1..3 G-buffer, 4 scene CB, 5 light, 6 visibility UAV,
+// 10/11 shared material-context SRVs); the push-constant range rides the pipeline layout alongside the set.
+TEST_F(DescriptorBufferRoundTripTest, ShadowRtTraceShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/shadow_rt_trace_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeTexture = [&]() {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(32u).setHeight(32u)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeUavTexture = [&]() {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(32u).setHeight(32u)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredSrv = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto gbufferWorldPos = makeTexture();
+    auto gbufferNormal = makeTexture();
+    auto gbufferDepth = makeTexture();
+    auto visibilityOutput = makeUavTexture();
+    auto sceneShading = makeConstantBuffer();
+    auto lightList = makeStructuredSrv(16u);
+    auto materialTyped = makeStructuredSrv(16u);
+    auto meshInstances = makeStructuredSrv(16u);
+    ASSERT_TRUE(gbufferWorldPos && gbufferNormal && gbufferDepth && visibilityOutput && sceneShading
+        && lightList && materialTyped && meshInstances);
+
+    // A non-virtual TLAS yields a valid device address at createAccelStruct time (vkGetAccelerationStructureDeviceAddressKHR
+    // -- no build command needed), which is exactly what the AS descriptor-buffer write (vkGetDescriptorEXT) requires.
+    RayTracingAccelStructDesc tlasDesc(descArena);
+    tlasDesc.setTopLevelMaxInstances(8u);
+    tlasDesc.setDebugName(Name{"tests/shadow_rt_trace/dummy_tlas"});
+    auto tlas = device.createAccelStruct(tlasDesc);
+    ASSERT_NE(tlas.get(), nullptr);
+
+    // Slots mirror shadow/binding_slots.h RT block (0 TLAS, 1..3 G-buffer SRVs, 4 scene CB, 5 light SRV, 6 visibility
+    // UAV, 10/11 shared material-context SRVs). The layout omits slot 7 (per-instance occluder material) intentionally,
+    // matching appendShadowTraceBindingLayout.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.setUseDescriptorBuffer(true);
+    layoutDesc.addItem(BindingLayoutItem::RayTracingAccelStruct(0u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(2u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(3u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(4u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(5u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(6u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(10u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(11u, 1u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "shadow RT trace shape did not route to the descriptor-buffer path (first TLAS shape)";
+    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
+    EXPECT_EQ(offsets.size(), 9u);
+
+    BindingSetDesc setDesc(descArena);
+    setDesc.addItem(BindingSetItem::RayTracingAccelStruct(0u, tlas.get()));
+    setDesc.addItem(BindingSetItem::Texture_SRV(1u, gbufferWorldPos.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(2u, gbufferNormal.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::Texture_SRV(3u, gbufferDepth.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::ConstantBuffer(4u, sceneShading.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_SRV(5u, lightList.get()));
+    setDesc.addItem(BindingSetItem::Texture_UAV(6u, visibilityOutput.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_SRV(10u, materialTyped.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_SRV(11u, meshInstances.get()));
+
+    auto bindingSet = device.createBindingSet(setDesc, layout);
+    ASSERT_NE(bindingSet.get(), nullptr);
+    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

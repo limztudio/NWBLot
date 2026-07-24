@@ -794,6 +794,12 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
     if(!rayTracingState().m_shadowBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // Backend C: the inline-RayQuery trace layout is segment-coherent pure-resource (TLAS + G-buffer SRVs + scene
+        // CB + light SRV + visibility UAV + shared material-context SRVs) with no samplers, and its pipeline carries
+        // no heap layout (the HW RayQuery dispatches never call heap.bindCompute -- only the no-RayQuery SW path does).
+        // RayTracingAccelStruct is descriptor-buffer-compatible via vkGetDescriptorEXT, so this is the first TLAS
+        // layout to route to the descriptor-buffer path; push constants still ride the pipeline layout alongside it.
+        layoutDesc.setUseDescriptorBuffer(true);
         appendShadowTraceBindingLayout(layoutDesc);
 
         rayTracingState().m_shadowBindingLayout = device->createBindingLayout(layoutDesc);

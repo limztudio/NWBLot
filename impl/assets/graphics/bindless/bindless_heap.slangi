@@ -54,8 +54,11 @@ RWByteAddressBuffer g_NwbHeapStorageBuffers[];
 // descriptor. Consumers that only read a registered raw buffer (17 of the 20 migrated per-mesh arrays) take this view
 // so no write capability leaks into a read-only geometry fetch. Bindless_heap_bvh.slangi adds the structured node view
 // over this same binding for the 3 SW node arrays.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate read-only view of the storage-buffer descriptor table above.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 ByteAddressBuffer g_NwbHeapRawBuffers[];
+#pragma warning(pop)
 
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 ConstantBuffer<NwbBindlessHeapUint> g_NwbHeapUniformBuffers[];

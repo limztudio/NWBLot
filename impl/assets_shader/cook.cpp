@@ -78,7 +78,11 @@ static constexpr AStringView s_AssetTypeShader = "shader";
 static constexpr AStringView s_AssetTypeInclude = "include";
 static constexpr AStringView s_SlangSourceExtension = ".slang";
 static constexpr AStringView s_SlangIncludeExtension = ".slangi";
-static constexpr usize s_BaseCompilerArgumentCount = 15u;
+// Material defaults deliberately use decimal literals inside half constructors. Slang also reports profile upgrades
+// for capabilities it adds to valid emitted SPIR-V; asset metadata normalizes profile text and cannot preserve Slang's
+// case-sensitive capability names. Binding aliases are handled at their declarations so new ABI issues remain visible.
+static constexpr AStringView s_SuppressedCompilerWarnings = "30081,41012";
+static constexpr usize s_BaseCompilerArgumentCount = 17u;
 
 struct NormalizedDependencyRootAlias{
     Path root;
@@ -444,6 +448,8 @@ public:
         PushCompilerArgument(argumentArena, arguments, request.entryPoint);
         PushCompilerArgument(argumentArena, arguments, "-stage");
         PushCompilerArgument(argumentArena, arguments, slangStage);
+        PushCompilerArgument(argumentArena, arguments, "-warnings-disable");
+        PushCompilerArgument(argumentArena, arguments, s_SuppressedCompilerWarnings);
 
         for(const Path& includeDirectory : request.includeDirectories){
             PushCompilerArgument(argumentArena, arguments, "-I");
@@ -484,6 +490,15 @@ public:
                 );
             }
             return false;
+        }
+
+        ScratchString diagnostics{argumentArena};
+        if(ReadDiagnostics(diagnosticsPath, diagnostics) && !diagnostics.empty()){
+            NWB_LOGGER_WARNING(NWB_TEXT("Shader compiler emitted diagnostics for '{}' (variant '{}') :\n{}")
+                , StringConvert(request.shaderName)
+                , StringConvert(request.variantName)
+                , StringConvert(diagnostics)
+            );
         }
 
         ErrorCode errorCode;

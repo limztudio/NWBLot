@@ -27,6 +27,9 @@
 #define NWB_MESH_SET NWB_GI_HW_SET
 #define NWB_MESH_BINDING_MATERIAL_TYPED NWB_GI_HW_BINDING_MATERIAL_TYPED
 #define NWB_MESH_BINDING_INSTANCE NWB_GI_HW_BINDING_MESH_INSTANCES
+// GI shades direct scene lights with an occlusion ray; it never samples the screen-space shadow/caustic textures.
+// Omitting those declarations prevents their default set-0 bindings from aliasing GI's typed material buffers.
+#define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED 1
 
 // Reuse the cook-generated material-surface dispatch for GI albedo. The binding redirects above give the evaluator the
 // same typed constants and mutable instance storage its raster/shadow invocation reads.

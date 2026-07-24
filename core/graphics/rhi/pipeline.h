@@ -156,7 +156,8 @@ struct ComputePipelineDesc{
 typedef GraphicsBackend::Handle<ComputePipeline> ComputePipelineHandle;
 
 struct MeshletPipelineDesc{
-    PrimitiveType::Enum primType = PrimitiveType::TriangleList;
+    // The fixed vector is first so the remaining byte-sized primitive type does not force padding before it.
+    BindingLayoutVector bindingLayouts;
 
     ShaderHandle AS;
     ShaderHandle MS;
@@ -164,7 +165,7 @@ struct MeshletPipelineDesc{
 
     RenderState renderState;
 
-    BindingLayoutVector bindingLayouts;
+    PrimitiveType::Enum primType = PrimitiveType::TriangleList;
 
     ~MeshletPipelineDesc();
 

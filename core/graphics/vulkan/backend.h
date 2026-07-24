@@ -1572,7 +1572,6 @@ private:
     Device& m_device;
     const VulkanContext& m_context;
 
-    bool m_initialized = false;
     GpuDescriptorHeapDesc m_desc;
 
     // Set index each table occupies in a consuming pipeline layout. Phase 2 pins them to reserved high sets (8/9) via
@@ -1595,6 +1594,7 @@ private:
     u64 m_frameCounter = 0;
 
     Futex m_mutex;
+    bool m_initialized = false;
 };
 
 

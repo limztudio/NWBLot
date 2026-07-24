@@ -154,8 +154,8 @@ namespace FormatKind{
 };
 
 struct FormatInfo{
-    Format::Enum format;
     const char* name;
+    Format::Enum format;
     u8 bytesPerBlock;
     u8 blockSize;
     FormatKind::Enum kind;
@@ -167,7 +167,38 @@ struct FormatInfo{
     bool hasStencil : 1;
     bool isSigned : 1;
     bool isSRGB : 1;
+
+    constexpr FormatInfo(
+        const Format::Enum formatValue,
+        const char* const nameValue,
+        const u8 bytesPerBlockValue,
+        const u8 blockSizeValue,
+        const FormatKind::Enum kindValue,
+        const bool hasRedValue,
+        const bool hasGreenValue,
+        const bool hasBlueValue,
+        const bool hasAlphaValue,
+        const bool hasDepthValue,
+        const bool hasStencilValue,
+        const bool isSignedValue,
+        const bool isSrgbValue
+    )
+        : name(nameValue)
+        , format(formatValue)
+        , bytesPerBlock(bytesPerBlockValue)
+        , blockSize(blockSizeValue)
+        , kind(kindValue)
+        , hasRed(hasRedValue)
+        , hasGreen(hasGreenValue)
+        , hasBlue(hasBlueValue)
+        , hasAlpha(hasAlphaValue)
+        , hasDepth(hasDepthValue)
+        , hasStencil(hasStencilValue)
+        , isSigned(isSignedValue)
+        , isSRGB(isSrgbValue)
+    {}
 };
+static_assert(sizeof(FormatInfo) == 16u, "FormatInfo should remain tightly packed");
 
 const FormatInfo& GetFormatInfo(Format::Enum format)noexcept;
 [[nodiscard]] u32 GetFormatBlockWidth(const FormatInfo& formatInfo)noexcept;

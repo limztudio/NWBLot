@@ -160,14 +160,16 @@ struct BindlessLayoutDesc{
     FixedVector<BindingLayoutItem, s_MaxBindlessRegisterSpaces> registerSpaces;
     u32 firstSlot = 0;
     u32 maxCapacity = 0;
-    ShaderType::Mask visibility = ShaderType::None;
-    BindlessLayoutType::Enum layoutType = BindlessLayoutType::Immutable;
 
     // When descriptorSetIndexIsExplicit is set, this layout occupies SPIR-V descriptor set `descriptorSetIndex` in a
     // multi-layout pipeline layout, mirroring BindingLayoutDesc::registerSpaceIsDescriptorSet. Layouts that leave it
     // unset keep the legacy positional assignment (concatenation order). Used to pin the global bindless heap tables
     // to reserved high sets so they never collide with a migrated pipeline's own low sets (Phase 2).
     u32 descriptorSetIndex = 0;
+
+    ShaderType::Mask visibility = ShaderType::None;
+    BindlessLayoutType::Enum layoutType = BindlessLayoutType::Immutable;
+
     bool descriptorSetIndexIsExplicit = false;
 
     constexpr BindlessLayoutDesc& setVisibility(ShaderType::Mask value){ visibility = value; return *this; }

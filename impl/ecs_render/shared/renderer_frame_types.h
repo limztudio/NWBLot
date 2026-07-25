@@ -42,9 +42,13 @@ struct AvboitFrameTargets{
     Core::BufferHandle controlBuffer;
     Core::BufferHandle extinctionBuffer;
     Core::BufferHandle extinctionOverflowBuffer;
+    // Regular occupancy/extinction use the deferred bindless depth/sampler slots. CSG retains these companion local
+    // sets until its graphics pipeline layouts receive their own descriptor-buffer conversion.
     Core::BindingSetHandle occupancyBindingSet;
+    Core::BindingSetHandle csgOccupancyBindingSet;
     Core::BindingSetHandle depthWarpBindingSet;
     Core::BindingSetHandle extinctionBindingSet;
+    Core::BindingSetHandle csgExtinctionBindingSet;
     Core::BindingSetHandle integrateBindingSet;
     Core::BindingSetHandle accumulateBindingSet;
 
@@ -73,8 +77,10 @@ struct AvboitFrameTargets{
             && extinctionBuffer != nullptr
             && extinctionOverflowBuffer != nullptr
             && occupancyBindingSet != nullptr
+            && csgOccupancyBindingSet != nullptr
             && depthWarpBindingSet != nullptr
             && extinctionBindingSet != nullptr
+            && csgExtinctionBindingSet != nullptr
             && integrateBindingSet != nullptr
             && accumulateBindingSet != nullptr
         ;

@@ -26,6 +26,8 @@
 #include <core/graphics/api.h>
 #include <core/graphics/backend_selection.h>
 #include <core/perf/timing.h>
+#include <impl/assets/graphics/avboit/binding_slots.h>
+#include <impl/assets/graphics/avboit/constants.h>
 #include <tests/capturing_logger.h>
 
 // The manager lives in the Vulkan backend (Core::GraphicsBackend namespace). The test is inherently Vulkan-aware
@@ -360,6 +362,101 @@ TEST_F(DescriptorBufferRoundTripTest, AllocationsAreStrideAligned){
 
     mgr.free(a);
     mgr.free(b);
+}
+
+
+// Regular AVBOIT occupancy/extinction now keep opaque depth and its point sampler in the global heap. Their local
+// sets therefore become pure-resource shapes: the shared deferred-slot CB plus coverage/depth-warp/extinction
+// buffers. Exercise both exact shapes through the live descriptor-buffer API so a future local sampler or image
+// regression cannot silently downgrade the non-CSG transparent path on Backend C.
+TEST_F(DescriptorBufferRoundTripTest, AvboitDepthGateShapesBuildAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/avboit_depth_gate_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(48u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredSrv = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto slots = makeConstantBuffer();
+    auto coverage = makeStructuredUav(4u);
+    auto depthWarp = makeStructuredSrv(4u);
+    auto control = makeStructuredSrv(4u);
+    auto extinction = makeStructuredUav(4u);
+    auto overflowDepth = makeStructuredUav(4u);
+    ASSERT_TRUE(slots && coverage && depthWarp && control && extinction && overflowDepth);
+
+    BindingLayoutDesc occupancyLayoutDesc(descArena);
+    occupancyLayoutDesc.setVisibility(ShaderType::Pixel);
+    occupancyLayoutDesc.setUseDescriptorBuffer(true);
+    occupancyLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, 1u));
+    occupancyLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, 1u));
+    occupancyLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE));
+    auto occupancyLayout = device.createBindingLayout(occupancyLayoutDesc);
+    ASSERT_NE(occupancyLayout.get(), nullptr);
+    ASSERT_TRUE(occupancyLayout->isDescriptorBufferCompatible());
+    EXPECT_EQ(occupancyLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+
+    BindingSetDesc occupancySetDesc(descArena);
+    occupancySetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, slots.get()));
+    occupancySetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, coverage.get()));
+    auto occupancySet = device.createBindingSet(occupancySetDesc, occupancyLayout);
+    ASSERT_NE(occupancySet.get(), nullptr);
+
+    BindingLayoutDesc extinctionLayoutDesc(descArena);
+    extinctionLayoutDesc.setVisibility(ShaderType::Pixel);
+    extinctionLayoutDesc.setUseDescriptorBuffer(true);
+    extinctionLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, 1u));
+    extinctionLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_DEPTH_WARP, 1u));
+    extinctionLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_CONTROL, 1u));
+    extinctionLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_EXTINCTION, 1u));
+    extinctionLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH, 1u));
+    extinctionLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE));
+    auto extinctionLayout = device.createBindingLayout(extinctionLayoutDesc);
+    ASSERT_NE(extinctionLayout.get(), nullptr);
+    ASSERT_TRUE(extinctionLayout->isDescriptorBufferCompatible());
+    EXPECT_EQ(extinctionLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+
+    BindingSetDesc extinctionSetDesc(descArena);
+    extinctionSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, slots.get()));
+    extinctionSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_DEPTH_WARP, depthWarp.get()));
+    extinctionSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_CONTROL, control.get()));
+    extinctionSetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_EXTINCTION, extinction.get()));
+    extinctionSetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH, overflowDepth.get()));
+    auto extinctionSet = device.createBindingSet(extinctionSetDesc, extinctionLayout);
+    ASSERT_NE(extinctionSet.get(), nullptr);
+
+    auto& heap = device.getDescriptorHeap();
+    EXPECT_TRUE(heap.isInitialized() && heap.usesDescriptorBuffer());
+    EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
+    EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
 }
 
 

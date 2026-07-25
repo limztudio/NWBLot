@@ -29,6 +29,7 @@ struct VulkanContext;
 class Buffer;
 class CommandList;
 class Heap;
+class MeshletPipeline;
 class Texture;
 class StagingTexture;
 using PipelineRenderingFormatVector = Vector<VkFormat, Alloc::ScratchArena>;
@@ -1524,10 +1525,11 @@ public:
         GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::invalid()
     );
 
-    // Graphics sibling of bindCompute. Deferred/compositor fullscreen passes use this after setGraphicsState() so
-    // their per-pass texture/sampler slots can resolve through the persistent heap on both descriptor-indexing and
+    // Graphics siblings of bindCompute. Fullscreen and meshlet graphics passes use these after their state setter so
+    // per-pass texture/sampler slots can resolve through the persistent heap on both descriptor-indexing and
     // descriptor-buffer backends.
     void bindGraphics(CommandList& commandList, const GraphicsPipeline& pipeline);
+    void bindGraphics(CommandList& commandList, const MeshletPipeline& pipeline);
 
     // Ray-tracing sibling of bindCompute: binds the heap's resource + sampler tables against the ray-tracing pipeline's
     // layout at VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR. Call after setRayTracingState(pipeline) and before dispatchRays;

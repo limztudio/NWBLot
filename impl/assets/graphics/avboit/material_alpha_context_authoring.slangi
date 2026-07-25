@@ -29,9 +29,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The shared alpha gate reads the opaque-depth texture with this point sampler in both material passes.
+// The regular occupancy/extinction variants read opaque depth through the persistent descriptor heap. CSG variants
+// deliberately retain their local descriptors: their classic clip/interval layouts cannot share a Backend-C
+// descriptor-buffer pipeline with the heap yet.
+#if NWB_CSG_ENABLED
 [[vk::binding(NWB_AVBOIT_BINDING_OPAQUE_DEPTH, NWB_AVBOIT_TRANSPARENT_SET)]] Texture2D<float4> g_OpaqueDepth;
 [[vk::binding(NWB_AVBOIT_BINDING_POINT_SAMPLER, NWB_AVBOIT_TRANSPARENT_SET)]] SamplerState g_PointSampler;
+#else
+#include "../deferred/bindless_resources.slangi"
+[[vk::binding(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, NWB_AVBOIT_TRANSPARENT_SET)]]
+ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbDeferredBindlessResources;
+#endif
 
 struct NwbAvboitMaterialAlphaPixelInput{
     float4 position : SV_Position;

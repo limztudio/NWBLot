@@ -115,12 +115,15 @@ void RendererCsgState::invalidateResources(){
 
 void RendererDrawState::invalidateResources(){
     m_meshBindingLayout.reset();
+    m_bindlessMeshBindingLayout.reset();
     m_computeBindingLayout.reset();
     m_emulationViewBindingLayout.reset();
+    m_bindlessEmulationViewBindingLayout.reset();
     m_instanceBuffer.reset();
     m_materialTypedBuffer.reset();
     m_meshViewBuffer.reset();
     m_emulationViewBindingSet.reset();
+    m_bindlessEmulationViewBindingSet.reset();
     m_emulationVertexShader.reset();
     m_emulationInputLayout.reset();
     m_meshViewGpuDataValid = false;
@@ -154,8 +157,10 @@ void RendererDeferredState::invalidateResources(){
 void RendererAvboitState::invalidateResources(){
     m_emptyBindingLayout.reset();
     m_occupancyBindingLayout.reset();
+    m_csgOccupancyBindingLayout.reset();
     m_depthWarpBindingLayout.reset();
     m_extinctionBindingLayout.reset();
+    m_csgExtinctionBindingLayout.reset();
     m_integrateBindingLayout.reset();
     m_accumulateBindingLayout.reset();
     m_linearSampler.reset();

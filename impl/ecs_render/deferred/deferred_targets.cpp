@@ -109,8 +109,10 @@ static void ClearCsgIntervalTargets(
 
 void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
     targets.occupancyBindingSet.reset();
+    targets.csgOccupancyBindingSet.reset();
     targets.depthWarpBindingSet.reset();
     targets.extinctionBindingSet.reset();
+    targets.csgExtinctionBindingSet.reset();
     targets.integrateBindingSet.reset();
     targets.accumulateBindingSet.reset();
 
@@ -553,6 +555,19 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
 
     deferredState().m_targets = Move(createdTargets);
     if(!createDeferredLightingPipeline(deferredState().m_targets)){
+        resetDeferredFrameTargets();
+        return false;
+    }
+
+    // AVBOIT's regular occupancy/extinction sets use the shared target-generation heap-slot cbuffer. Allocate those
+    // descriptor-buffer sets after deferred lighting's heap-coupled pipeline, while their layouts remain available
+    // for the normal target setup. This preserves the established SW pipeline-creation sequence before AVBOIT draw
+    // work begins. Transparent CSG receives the parallel classic fallback here as well.
+    if(!m_renderer.avboitSystem().createAvboitFrameTargetBindingSets(
+            deferredState().m_targets,
+            deferredState().m_targets.avboit
+        )
+    ){
         resetDeferredFrameTargets();
         return false;
     }

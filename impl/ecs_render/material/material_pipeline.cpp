@@ -140,23 +140,35 @@ struct MaterialPipelineAvboitPixelShaderSelection{
 
 struct MaterialPipelineAvboitBindingLayouts{
     const Core::BindingLayoutHandle& occupancy;
+    const Core::BindingLayoutHandle& csgOccupancy;
     const Core::BindingLayoutHandle& extinction;
+    const Core::BindingLayoutHandle& csgExtinction;
     const Core::BindingLayoutHandle& accumulate;
 };
+
+[[nodiscard]] constexpr bool UsesBindlessAvboitDepth(
+    const MaterialPipelinePass::Enum pass,
+    const bool csgClipPipeline
+){
+    return !csgClipPipeline
+        && (pass == MaterialPipelinePass::AvboitOccupancy || pass == MaterialPipelinePass::AvboitExtinction)
+    ;
+}
 
 template<typename PipelineDesc>
 [[nodiscard]] bool AddAvboitBindingLayout(
     PipelineDesc& pipelineDesc,
     const MaterialPipelinePass::Enum pass,
+    const bool csgClipPipeline,
     const MaterialPipelineAvboitBindingLayouts& bindingLayouts
 ){
     const Core::BindingLayoutHandle* bindingLayout = nullptr;
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy:
-        bindingLayout = &bindingLayouts.occupancy;
+        bindingLayout = csgClipPipeline ? &bindingLayouts.csgOccupancy : &bindingLayouts.occupancy;
         break;
     case MaterialPipelinePass::AvboitExtinction:
-        bindingLayout = &bindingLayouts.extinction;
+        bindingLayout = csgClipPipeline ? &bindingLayouts.csgExtinction : &bindingLayouts.extinction;
         break;
     case MaterialPipelinePass::AvboitAccumulate:
         bindingLayout = &bindingLayouts.accumulate;
@@ -278,6 +290,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
     const bool csgClipPipeline = csgBindingUse.clip;
     const bool avboitCsgClipPipeline = csgBindingUse.avboitClip;
+    const bool usesBindlessAvboitDepth = __hidden_material_pipeline::UsesBindlessAvboitDepth(pass, csgClipPipeline);
     ACompactString csgProjectEvaluatorModuleInclude;
     Core::GraphicsString csgProjectEvaluatorModuleAssignment(arena());
     AStringView materialProjectEvaluatorModuleAssignmentToAdd;
@@ -369,7 +382,9 @@ bool RendererMaterialSystem::createRendererPipeline(
         if(
             !avboitState().m_emptyBindingLayout
             || !avboitState().m_occupancyBindingLayout
+            || !avboitState().m_csgOccupancyBindingLayout
             || !avboitState().m_extinctionBindingLayout
+            || !avboitState().m_csgExtinctionBindingLayout
             || !avboitState().m_accumulateBindingLayout
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT resources were not validated before material pipeline creation"));
@@ -413,9 +428,16 @@ bool RendererMaterialSystem::createRendererPipeline(
     };
     const __hidden_material_pipeline::MaterialPipelineAvboitBindingLayouts avboitBindingLayouts{
         avboitState().m_occupancyBindingLayout,
+        avboitState().m_csgOccupancyBindingLayout,
         avboitState().m_extinctionBindingLayout,
+        avboitState().m_csgExtinctionBindingLayout,
         avboitState().m_accumulateBindingLayout
     };
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(usesBindlessAvboitDepth && !heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: regular AVBOIT depth-gate pipeline requires the global descriptor heap"));
+        return failMaterialPipeline();
+    }
 
     auto loadPassPixelShader = [&]() -> bool{
         if(pass == MaterialPipelinePass::Opaque){
@@ -461,7 +483,11 @@ bool RendererMaterialSystem::createRendererPipeline(
     };
 
     auto tryBuildMeshPipeline = [&]() -> bool{
-        if(!drawState().m_meshBindingLayout){
+        const Core::BindingLayoutHandle& meshBindingLayout = usesBindlessAvboitDepth
+            ? drawState().m_bindlessMeshBindingLayout
+            : drawState().m_meshBindingLayout
+        ;
+        if(!meshBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh shader resources were not validated before material pipeline creation"));
             return false;
         }
@@ -474,11 +500,17 @@ bool RendererMaterialSystem::createRendererPipeline(
         pipelineDesc.setMeshShader(resources.meshShader);
         pipelineDesc.setPixelShader(resources.pixelShader);
         pipelineDesc.setRenderState(renderState);
-        pipelineDesc.addBindingLayout(drawState().m_meshBindingLayout);
-        if(!__hidden_material_pipeline::AddAvboitBindingLayout(pipelineDesc, pass, avboitBindingLayouts))
+        pipelineDesc.addBindingLayout(meshBindingLayout);
+        if(!__hidden_material_pipeline::AddAvboitBindingLayout(pipelineDesc, pass, csgClipPipeline, avboitBindingLayouts))
             return false;
         if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(pipelineDesc, csgBindingUse, csgBindingLayouts))
             return false;
+        if(usesBindlessAvboitDepth){
+            pipelineDesc
+                .addBindingLayout(heap.getResourceLayout())
+                .addBindingLayout(heap.getSamplerLayout())
+            ;
+        }
 
         resources.meshletPipeline = device->createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
         if(!resources.meshletPipeline){
@@ -494,6 +526,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         if(
             !drawState().m_computeBindingLayout
             || !drawState().m_emulationViewBindingLayout
+            || !drawState().m_bindlessEmulationViewBindingLayout
             || !drawState().m_emulationVertexShader
             || !drawState().m_emulationInputLayout
         ){
@@ -534,12 +567,12 @@ bool RendererMaterialSystem::createRendererPipeline(
             || materialDrivenAvboitPass
         ;
         const Core::BindingLayoutHandle& avboitViewBindingLayout = emulationGraphicsUsesMeshFrameSet
-            ? drawState().m_emulationViewBindingLayout
+            ? (usesBindlessAvboitDepth ? drawState().m_bindlessEmulationViewBindingLayout : drawState().m_emulationViewBindingLayout)
             : avboitState().m_emptyBindingLayout
         ;
         if(MaterialPipelinePassUsesRendererAvboit(pass)){
             emulationDesc.addBindingLayout(avboitViewBindingLayout);
-            if(!__hidden_material_pipeline::AddAvboitBindingLayout(emulationDesc, pass, avboitBindingLayouts))
+            if(!__hidden_material_pipeline::AddAvboitBindingLayout(emulationDesc, pass, csgClipPipeline, avboitBindingLayouts))
                 return false;
         }
         else{
@@ -547,6 +580,12 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
         if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(emulationDesc, csgBindingUse, csgBindingLayouts))
             return false;
+        if(usesBindlessAvboitDepth){
+            emulationDesc
+                .addBindingLayout(heap.getResourceLayout())
+                .addBindingLayout(heap.getSamplerLayout())
+            ;
+        }
         resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
         if(!resources.emulationPipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"), StringConvert(materialKey.c_str()));

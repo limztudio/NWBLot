@@ -16,9 +16,11 @@ NWB_IMPL_BEGIN
 
 void RendererMeshSystem::destroyMeshBindingSets(){
     drawState().m_emulationViewBindingSet = nullptr;
+    drawState().m_bindlessEmulationViewBindingSet = nullptr;
     for(auto it = meshState().m_meshes.begin(); it != meshState().m_meshes.end(); ++it){
         MeshResources& mesh = it.value();
         mesh.meshBindingSet = nullptr;
+        mesh.bindlessMeshBindingSet = nullptr;
         mesh.computeBindingSet = nullptr;
     }
 }
@@ -40,6 +42,29 @@ bool RendererMeshSystem::createMeshBindingSet(MeshResources& mesh){
     mesh.meshBindingSet = device->createBindingSet(bindingSetDesc, drawState().m_meshBindingLayout);
     if(!mesh.meshBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh shader binding set for mesh '{}'"), StringConvert(mesh.meshName.c_str()));
+        return false;
+    }
+
+    return true;
+}
+
+bool RendererMeshSystem::createBindlessMeshBindingSet(MeshResources& mesh){
+    if(mesh.bindlessMeshBindingSet)
+        return true;
+    if(!drawState().m_bindlessMeshBindingLayout){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: bindless mesh shader binding layout was not validated before mesh binding-set creation"));
+        return false;
+    }
+    if(!meshFrameBindingResourcesReady(NWB_TEXT("bindless mesh binding set")))
+        return false;
+
+    Core::BindingSetDesc bindingSetDesc(arena());
+    addMeshDrawBindingItems(bindingSetDesc, mesh);
+
+    auto* device = graphics().getDevice();
+    mesh.bindlessMeshBindingSet = device->createBindingSet(bindingSetDesc, drawState().m_bindlessMeshBindingLayout);
+    if(!mesh.bindlessMeshBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create bindless mesh shader binding set for mesh '{}'"), StringConvert(mesh.meshName.c_str()));
         return false;
     }
 

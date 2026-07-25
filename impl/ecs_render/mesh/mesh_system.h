@@ -31,6 +31,7 @@ public:
     [[nodiscard]] bool updateMeshViewBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
     void destroyMeshBindingSets();
     [[nodiscard]] bool createMeshBindingSet(MeshResources& mesh);
+    [[nodiscard]] bool createBindlessMeshBindingSet(MeshResources& mesh);
     [[nodiscard]] bool createComputeBindingSet(MeshResources& mesh);
     [[nodiscard]] bool meshFrameBindingResourcesReady(const tchar* context)const;
     void addMeshSourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const;

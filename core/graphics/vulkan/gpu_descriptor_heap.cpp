@@ -643,6 +643,16 @@ void GpuDescriptorHeap::bindGraphics(CommandList& commandList, const GraphicsPip
     commandList.bindDescriptorHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
 }
 
+void GpuDescriptorHeap::bindGraphics(CommandList& commandList, const MeshletPipeline& pipeline){
+    // Mesh shader pipelines share the graphics bind point but carry their own PipelineBindingState type. Keep the
+    // overload here rather than exposing VkPipelineLayout above the Vulkan RHI boundary.
+    if(m_usesDescriptorBuffer){
+        commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
+        return;
+    }
+    commandList.bindDescriptorHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
+}
+
 void GpuDescriptorHeap::bindRayTracing(
     CommandList& commandList,
     const RayTracingPipeline& pipeline,

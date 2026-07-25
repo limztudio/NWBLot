@@ -25,6 +25,9 @@
 #define NWB_AVBOIT_EXTINCTION_BINDING_CONTROL 3
 #define NWB_AVBOIT_EXTINCTION_BINDING_EXTINCTION 4
 #define NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH 5
+// Occupancy/extinction fetch the shared opaque-depth image and point sampler through the deferred target-generation
+// slot cbuffer on their regular (non-CSG) graphics variants. Slots 0..5 remain reserved for the legacy CSG fallback.
+#define NWB_AVBOIT_BINDING_BINDLESS_RESOURCES 6
 
 #define NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION 0
 #define NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE 1

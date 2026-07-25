@@ -20,20 +20,37 @@ NWB_IMPL_BEGIN
 
 
 bool RendererMaterialSystem::createMeshShaderResources(){
-    if(drawState().m_meshBindingLayout)
-        return true;
-
-    Core::BindingLayoutDesc bindingLayoutDesc(arena());
-    bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
-    RendererMeshSystem::addMeshSourceBindingLayoutItems(bindingLayoutDesc);
-    RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
-
     auto* device = graphics().getDevice();
-    drawState().m_meshBindingLayout = device->createBindingLayout(bindingLayoutDesc);
     if(!drawState().m_meshBindingLayout){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh shader binding layout"));
-        return false;
+        Core::BindingLayoutDesc bindingLayoutDesc(arena());
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
+        RendererMeshSystem::addMeshSourceBindingLayoutItems(bindingLayoutDesc);
+        RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
+
+        drawState().m_meshBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!drawState().m_meshBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh shader binding layout"));
+            return false;
+        }
+    }
+
+    if(!drawState().m_bindlessMeshBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc(arena());
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
+        // This pure-resource twin is consumed only by regular AVBOIT occupancy/extinction pipelines, together with
+        // the global resource/sampler heap. CSG keeps the classic layout above because its graphics tail is not yet
+        // wholesale descriptor-buffer compatible.
+        bindingLayoutDesc.setUseDescriptorBuffer(true);
+        RendererMeshSystem::addMeshSourceBindingLayoutItems(bindingLayoutDesc);
+        RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
+
+        drawState().m_bindlessMeshBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!drawState().m_bindlessMeshBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create bindless mesh shader binding layout"));
+            return false;
+        }
     }
 
     return true;
@@ -136,6 +153,20 @@ bool RendererMaterialSystem::createEmulationViewBindingLayout(){
         }
     }
 
+    if(!drawState().m_bindlessEmulationViewBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc(arena());
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Vertex | Core::ShaderType::Pixel);
+        bindingLayoutDesc.setUseDescriptorBuffer(true);
+        RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
+
+        drawState().m_bindlessEmulationViewBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!drawState().m_bindlessEmulationViewBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create bindless emulation view binding layout"));
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -144,18 +175,34 @@ bool RendererMaterialSystem::createEmulationViewResources(){
     if(!createEmulationViewBindingLayout())
         return false;
 
-    if(drawState().m_emulationViewBindingSet)
+    if(drawState().m_emulationViewBindingSet && drawState().m_bindlessEmulationViewBindingSet)
         return true;
     if(!drawState().m_instanceBuffer || !drawState().m_meshViewBuffer || !drawState().m_materialTypedBuffer)
         return true;
 
-    Core::BindingSetDesc bindingSetDesc(arena());
-    m_renderer.meshSystem().addMeshFrameBindingItems(bindingSetDesc);
-
-    drawState().m_emulationViewBindingSet = device->createBindingSet(bindingSetDesc, drawState().m_emulationViewBindingLayout);
     if(!drawState().m_emulationViewBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation view binding set"));
-        return false;
+        Core::BindingSetDesc bindingSetDesc(arena());
+        m_renderer.meshSystem().addMeshFrameBindingItems(bindingSetDesc);
+
+        drawState().m_emulationViewBindingSet = device->createBindingSet(bindingSetDesc, drawState().m_emulationViewBindingLayout);
+        if(!drawState().m_emulationViewBindingSet){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation view binding set"));
+            return false;
+        }
+    }
+
+    if(!drawState().m_bindlessEmulationViewBindingSet){
+        Core::BindingSetDesc bindingSetDesc(arena());
+        m_renderer.meshSystem().addMeshFrameBindingItems(bindingSetDesc);
+
+        drawState().m_bindlessEmulationViewBindingSet = device->createBindingSet(
+            bindingSetDesc,
+            drawState().m_bindlessEmulationViewBindingLayout
+        );
+        if(!drawState().m_bindlessEmulationViewBindingSet){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create bindless emulation view binding set"));
+            return false;
+        }
     }
 
     return true;
@@ -181,7 +228,17 @@ bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Mater
             ready = false;
             return;
         }
-        if(!mesh.meshBindingSet && !m_renderer.meshSystem().createMeshBindingSet(mesh)){
+        const bool usesBindlessAvboitDepth =
+            (drawItem.pipelineKey.pass == MaterialPipelinePass::AvboitOccupancy || drawItem.pipelineKey.pass == MaterialPipelinePass::AvboitExtinction)
+            && drawItem.pipelineKey.csgMode == MaterialPipelineCsgMode::None
+        ;
+        if(usesBindlessAvboitDepth){
+            if(!mesh.bindlessMeshBindingSet && !m_renderer.meshSystem().createBindlessMeshBindingSet(mesh)){
+                ready = false;
+                return;
+            }
+        }
+        else if(!mesh.meshBindingSet && !m_renderer.meshSystem().createMeshBindingSet(mesh)){
             ready = false;
             return;
         }
@@ -200,7 +257,11 @@ bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Mater
 bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems){
     if(drawItems.empty())
         return true;
-    if(!createEmulationViewResources() || !drawState().m_emulationViewBindingSet)
+    if(
+        !createEmulationViewResources()
+        || !drawState().m_emulationViewBindingSet
+        || !drawState().m_bindlessEmulationViewBindingSet
+    )
         return false;
 
     bool ready = true;

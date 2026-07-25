@@ -339,6 +339,12 @@ void RendererAvboitSystem::renderAvboitPasses(
 
     buildTransparentCsgIntervals(commandList, targets, csgFrameState);
 
+    // Regular occupancy/extinction discover opaque depth only through the global descriptor heap, which normal
+    // BindingSet state tracking cannot see. Keep the explicit transition before either material pass; the CSG-local
+    // fallback may request the same state again, which is harmless.
+    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.commitBarriers();
+
     m_renderer.materialSystem().renderMaterialPass(
         commandList,
         avboitTargets.lowFramebuffer.get(),

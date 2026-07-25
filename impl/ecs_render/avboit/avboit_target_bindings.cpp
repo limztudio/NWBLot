@@ -36,6 +36,13 @@ static void AddDepthSamplerBindings(
     bindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_AVBOIT_BINDING_POINT_SAMPLER, sampler));
 }
 
+static void AddBindlessResourcesBinding(Core::BindingSetDesc& bindingSetDesc, const DeferredFrameTargets& createdTargets){
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
+        NWB_AVBOIT_BINDING_BINDLESS_RESOURCES,
+        createdTargets.bindless.slotsBuffer.get()
+    ));
+}
+
 static bool CreateBindingSet(
     Core::Device& device,
     Core::BindingSetHandle& outBindingSet,
@@ -66,12 +73,7 @@ bool RendererAvboitSystem::createAvboitFrameTargetBindingSets(
     auto* device = graphics().getDevice();
 
     Core::BindingSetDesc occupancyBindingSetDesc(arena());
-    __hidden_avboit_target_bindings::AddDepthSamplerBindings(
-        occupancyBindingSetDesc,
-        createdTargets.depth.get(),
-        createdTargets.depthFormat,
-        deferredState().m_sampler.get()
-    );
+    __hidden_avboit_target_bindings::AddBindlessResourcesBinding(occupancyBindingSetDesc, createdTargets);
     occupancyBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, avboitTargets.coverageBuffer.get()));
     if(!__hidden_avboit_target_bindings::CreateBindingSet(
         *device,
@@ -80,6 +82,24 @@ bool RendererAvboitSystem::createAvboitFrameTargetBindingSets(
         avboitState().m_occupancyBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT occupancy binding set"));
+        return false;
+    }
+
+    Core::BindingSetDesc csgOccupancyBindingSetDesc(arena());
+    __hidden_avboit_target_bindings::AddDepthSamplerBindings(
+        csgOccupancyBindingSetDesc,
+        createdTargets.depth.get(),
+        createdTargets.depthFormat,
+        deferredState().m_sampler.get()
+    );
+    csgOccupancyBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, avboitTargets.coverageBuffer.get()));
+    if(!__hidden_avboit_target_bindings::CreateBindingSet(
+        *device,
+        avboitTargets.csgOccupancyBindingSet,
+        csgOccupancyBindingSetDesc,
+        avboitState().m_csgOccupancyBindingLayout
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT CSG occupancy binding set"));
         return false;
     }
 
@@ -98,12 +118,7 @@ bool RendererAvboitSystem::createAvboitFrameTargetBindingSets(
     }
 
     Core::BindingSetDesc extinctionBindingSetDesc(arena());
-    __hidden_avboit_target_bindings::AddDepthSamplerBindings(
-        extinctionBindingSetDesc,
-        createdTargets.depth.get(),
-        createdTargets.depthFormat,
-        deferredState().m_sampler.get()
-    );
+    __hidden_avboit_target_bindings::AddBindlessResourcesBinding(extinctionBindingSetDesc, createdTargets);
     extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_DEPTH_WARP, avboitTargets.depthWarpBuffer.get()));
     extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_CONTROL, avboitTargets.controlBuffer.get()));
     extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_EXTINCTION, avboitTargets.extinctionBuffer.get()));
@@ -115,6 +130,27 @@ bool RendererAvboitSystem::createAvboitFrameTargetBindingSets(
         avboitState().m_extinctionBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction binding set"));
+        return false;
+    }
+
+    Core::BindingSetDesc csgExtinctionBindingSetDesc(arena());
+    __hidden_avboit_target_bindings::AddDepthSamplerBindings(
+        csgExtinctionBindingSetDesc,
+        createdTargets.depth.get(),
+        createdTargets.depthFormat,
+        deferredState().m_sampler.get()
+    );
+    csgExtinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_DEPTH_WARP, avboitTargets.depthWarpBuffer.get()));
+    csgExtinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_CONTROL, avboitTargets.controlBuffer.get()));
+    csgExtinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_EXTINCTION, avboitTargets.extinctionBuffer.get()));
+    csgExtinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH, avboitTargets.extinctionOverflowBuffer.get()));
+    if(!__hidden_avboit_target_bindings::CreateBindingSet(
+        *device,
+        avboitTargets.csgExtinctionBindingSet,
+        csgExtinctionBindingSetDesc,
+        avboitState().m_csgExtinctionBindingLayout
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT CSG extinction binding set"));
         return false;
     }
 

@@ -10,7 +10,7 @@
 
 
 // Shared alpha path for AVBOIT material occupancy/extinction authoring. Include after the material surface hook is in
-// scope and after the pass declares g_OpaqueDepth / g_PointSampler.
+// scope and after the pass declares its regular bindless or CSG-local opaque-depth contract.
 
 
 bool nwbAvboitLoadAcceptedMaterialAlpha(
@@ -48,7 +48,17 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(
 
     outAlpha = half(clamp(surface.renderCoverage, 0.0, 1.0));
     uint virtualSlice;
+#if NWB_CSG_ENABLED
     return nwbAvboitAcceptLowDepthFragment(g_OpaqueDepth, g_PointSampler, position, outAlpha, virtualSlice);
+#else
+    return nwbAvboitAcceptLowDepthFragment(
+        NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w),
+        NwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w),
+        position,
+        outAlpha,
+        virtualSlice
+    );
+#endif
 }
 
 

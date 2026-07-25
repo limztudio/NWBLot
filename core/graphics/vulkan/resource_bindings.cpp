@@ -2334,8 +2334,12 @@ void CommandList::bindDescriptorBufferState(const VkPipelineBindPoint bindPoint,
     // layout of a compute/graphics pipeline's binding-set vector. Each set's block lives in one segment, so its
     // buffer index is the segment's index and its offset is the carved block's offset.
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DescriptorBindingArena, s_DescriptorBindingScratchArenaBytes);
-    Vector<u32, Alloc::ScratchArena> bufferIndices{bindings.size(), 0u, scratchArena};
-    Vector<VkDeviceSize, Alloc::ScratchArena> offsets{bindings.size(), 0, scratchArena};
+    // These vectors describe exactly the supplied binding-set sequence. Constructing them with bindings.size() here
+    // would populate leading zero offsets, shifting every real descriptor block to later set numbers.
+    Vector<u32, Alloc::ScratchArena> bufferIndices{scratchArena};
+    Vector<VkDeviceSize, Alloc::ScratchArena> offsets{scratchArena};
+    bufferIndices.reserve(bindings.size());
+    offsets.reserve(bindings.size());
 
     for(usize i = 0; i < bindings.size(); ++i){
         auto* bindingSet = bindings[i];

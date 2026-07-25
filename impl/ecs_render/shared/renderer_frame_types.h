@@ -121,8 +121,8 @@ struct DeferredBindlessResourceSlots{
 static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 16u, "Deferred bindless slots must match four std140 uint4 lanes");
 
 // Heap registrations are owned by the deferred-target generation. Resize/recreate frees each handle through the
-// heap's deferred retirement path before releasing the texture it points at; the slot buffer is shared by lighting
-// and compositing because both fullscreen passes consume the same frame generation.
+// heap's deferred retirement path before releasing the texture it points at; the slot buffer is shared by shadows,
+// lighting, and compositing because all consume the same frame generation.
 struct DeferredBindlessFrameResources{
     Core::BufferHandle slotsBuffer;
     DeferredBindlessResourceSlots slots;

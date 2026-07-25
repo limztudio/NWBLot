@@ -42,12 +42,14 @@ public:
     void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, bool clearCsgTargets, const Core::Rect& csgClearRect);
     void clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect);
     [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer);
+    // One-time target-generation upload shared by every consumer of DeferredBindlessResourceSlots. Shadow tracing runs
+    // before deferred lighting, so it must be able to make the slot cbuffer resident during shadow preparation.
+    [[nodiscard]] bool uploadDeferredBindlessFrameResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
 
 
 private:
     [[nodiscard]] bool createDeferredBindlessFrameResources(DeferredFrameTargets& targets);
     void resetDeferredBindlessFrameResources(DeferredFrameTargets& targets);
-    [[nodiscard]] bool uploadDeferredBindlessFrameResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void logCausticClassificationOnce(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount, u32 causticLightCount, u32 refractiveInstanceCount);
 };
 

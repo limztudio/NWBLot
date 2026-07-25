@@ -10,42 +10,37 @@
 
 
 #include "sw_binding_slots.h"
+#include "../deferred/bindless_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The software-shadow G-buffer inputs: the world-position / packed-normal / depth SRVs the trace reads at each output
-// texel, plus the shared accessors (world position, unpacked world normal, background/validity test). Declares ONLY
-// these three bindings; any pass that reads the G-buffer pulls this concern.
+// The software-shadow G-buffer inputs: the world-position / packed-normal / depth target-generation heap entries the
+// trace reads at each output texel, plus the shared accessors (world position, unpacked world normal,
+// background/validity test). One local cbuffer selects all three global descriptors, so every pass shares the same
+// compact local shape instead of carrying three Texture_SRV descriptors.
 
-
-[[vk::binding(NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION, NWB_SW_SHADOW_SET)]]
-Texture2D<float4> g_NwbSwShadowGBufferWorldPosition;
-
-[[vk::binding(NWB_SW_SHADOW_BINDING_GBUFFER_NORMAL, NWB_SW_SHADOW_SET)]]
-Texture2D<float4> g_NwbSwShadowGBufferNormal;
-
-[[vk::binding(NWB_SW_SHADOW_BINDING_GBUFFER_DEPTH, NWB_SW_SHADOW_SET)]]
-Texture2D<float4> g_NwbSwShadowGBufferDepth;
+[[vk::binding(NWB_SW_SHADOW_BINDING_BINDLESS_RESOURCES, NWB_SW_SHADOW_SET)]]
+ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbSwShadowBindlessResources;
 
 
 // True where this texel is the cleared background (no geometry): fully lit, casts no candidate ray. The passes treat a
 // background texel specially (store white / leave the pristine mask), so this test is centralised here rather than the
 // bare depth literal repeated at every trace/resolve site.
 bool nwbSwShadowIsBackground(const int3 texel){
-    return g_NwbSwShadowGBufferDepth.Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH;
+    return NwbHeapSampledImage2D(g_NwbSwShadowBindlessResources.gbufferSlots.w).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH;
 }
 
 // The world-space surface position at this texel (the shade point the occlusion ray leaves from).
 float3 nwbSwShadowLoadWorldPosition(const int3 texel){
-    return g_NwbSwShadowGBufferWorldPosition.Load(texel).xyz;
+    return NwbHeapSampledImage2D(g_NwbSwShadowBindlessResources.gbufferSlots.z).Load(texel).xyz;
 }
 
 // The world-space surface normal at this texel, unpacked from the [0,1] G-buffer encoding back to [-1,1] and
 // renormalised (the ray origin is biased along it to avoid self-intersection).
 float3 nwbSwShadowLoadNormal(const int3 texel){
-    return normalize(g_NwbSwShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
+    return normalize(NwbHeapSampledImage2D(g_NwbSwShadowBindlessResources.gbufferSlots.y).Load(texel).xyz * 2.0 - 1.0);
 }
 
 

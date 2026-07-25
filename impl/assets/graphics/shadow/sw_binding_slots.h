@@ -16,6 +16,8 @@
 // triangle traversal uses descriptor-heap slots from the material record, and slots 13-14 provide its typed context.
 #define NWB_SW_SHADOW_SET 0
 
+// Legacy local G-buffer binding numbers retained as intentional gaps. Every SW trace pass now selects the
+// target-generation images through the deferred bindless-slot cbuffer at binding 22.
 #define NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION 0
 #define NWB_SW_SHADOW_BINDING_GBUFFER_NORMAL 1
 #define NWB_SW_SHADOW_BINDING_GBUFFER_DEPTH 2
@@ -69,6 +71,9 @@
 // the resolve). Only the SW traversal declares/writes it; the resolve binds its own copy. Kept a PARALLEL signal to the
 // opaque SOFT_HALF (independent noise stats, separately denoised) and folded only at the final full-res upsample.
 #define NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF 21
+// The target-generation DeferredBindlessResourceSlots cbuffer. Its gbufferSlots.z/y/w select world position, normal,
+// and depth from the global sampled-image heap for every software-shadow pass.
+#define NWB_SW_SHADOW_BINDING_BINDLESS_RESOURCES 22
 
 // 8x8 = 64 threads per group (one thread per pixel).
 #define NWB_SW_SHADOW_GROUP_SIZE 8

@@ -527,6 +527,7 @@ struct RtShadowState{
     const Core::Buffer* m_swShadowBindingSetInstanceMaterial = nullptr;
     const Core::Buffer* m_swShadowBindingSetMaterialTyped = nullptr;
     const Core::Buffer* m_swShadowBindingSetMeshInstances = nullptr;
+    const Core::Buffer* m_swShadowBindingSetBindlessResources = nullptr;
     const Core::Texture* m_swShadowBindingSetVisibility = nullptr;
     u32 m_swShadowBindingSetMeshCount = 0u;
     u32 m_swShadowMeshCount = 0u;

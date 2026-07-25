@@ -402,11 +402,12 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
 
         // (a2) Stage the SW shadow binding set's resources before the transparent trace uses that set. This is the
         // critical HW-path barrier: the HW opaque-soft trace above ran through m_shadowSoftBindingSet, so the SW set's
-        // BVH / per-mesh geometry / G-buffer SRVs / transparentSoftHalf UAV were NEVER transitioned for this trace --
+        // BVH / per-mesh geometry / target-generation slot cbuffer / transparentSoftHalf UAV were NEVER transitioned
+        // for this trace -- the heap-selected G-buffer images were staged before the geometry-downsample pass --
         // they are still in whatever state their last writer left (per-mesh node/geometry buffers from the SW BVH build
         // pass, the material context from buildSceneSwBvh, etc.). Move each mesh's node/position/index/attribute buffer
         // to ShaderResource, then the two shadow-owned material-context buffers, then derive the rest (scene BVH read,
-        // G-buffer SRVs, transparentSoftHalf UAV) from the SW set. This mirrors the staging at the top of
+        // target-generation slot cbuffer, transparentSoftHalf UAV) from the SW set. This mirrors the staging at the top of
         // renderGpuBvhShadowVisibility EXACTLY. On the SW path it is a harmless idempotent no-op: those resources were
         // already staged at the top of the SW render, so setResourceStatesForBindingSet finds them already in their
         // target states and emits no barriers.

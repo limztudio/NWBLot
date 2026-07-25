@@ -262,6 +262,7 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowBindingSetInstanceMaterial = nullptr;
     m_swShadowBindingSetMaterialTyped = nullptr;
     m_swShadowBindingSetMeshInstances = nullptr;
+    m_swShadowBindingSetBindlessResources = nullptr;
     m_swShadowBindingSetVisibility = nullptr;
     m_swShadowBindingSetMeshCount = 0u;
     m_swShadowMeshCount = 0u;

@@ -281,14 +281,23 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     auto& device = *m_graphics.getDevice();
 
     m_shadowPrepareCommandList->open();
+    // The software-shadow trace selects its G-buffer heap descriptors through the target-generation slot cbuffer. It
+    // runs before deferred lighting, which historically performed this one-time upload, so make the cbuffer resident on
+    // the ordered shadow-preparation command list first.
+    const bool deferredBindlessResourcesUploaded = m_deferredSystem.uploadDeferredBindlessFrameResources(
+        *m_shadowPrepareCommandList,
+        deferredTargets
+    );
     // Surfel GI resources are prepared inside prepareShadowVisibilityResources, after the ray-tracing scene
     // structures are resident, so the producer can run on the same frame without startup latency.
-    const bool shadowResourcesPrepared = m_raytracingSystem.prepareShadowVisibilityResources(
-        *m_shadowPrepareCommandList,
-        deferredTargets,
-        scratchArena,
-        m_preparedShadowVisibilityReady
-    );
+    const bool shadowResourcesPrepared = deferredBindlessResourcesUploaded
+        && m_raytracingSystem.prepareShadowVisibilityResources(
+            *m_shadowPrepareCommandList,
+            deferredTargets,
+            scratchArena,
+            m_preparedShadowVisibilityReady
+        )
+    ;
     m_shadowPrepareCommandList->close();
     if(!shadowResourcesPrepared)
         return false;

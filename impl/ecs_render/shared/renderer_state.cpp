@@ -451,8 +451,6 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelTraceBuildArgsShader.reset();
     m_surfelTraceBuildArgsPipeline.reset();
     m_surfelTraceBuildArgsBindingSet.reset();
-    m_surfelSpawnBindingSetWorldPosition = nullptr;
-    m_surfelSpawnBindingSetNormal = nullptr;
     m_surfelTraceBindingSetSceneNodes = nullptr;
     m_surfelTraceBindingSetInstances = nullptr;
     m_surfelTraceBindingSetMaterialTyped = nullptr;

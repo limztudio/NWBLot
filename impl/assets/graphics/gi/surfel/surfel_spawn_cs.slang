@@ -14,6 +14,7 @@
 
 #include "surfel_runtime.slangi"
 #include "surfel_hash.slangi"
+#include "../../bindless/bindless_heap_sampled_image_2d.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,11 +29,13 @@ RWStructuredBuffer<uint> g_NwbSurfelCounter;
 [[vk::binding(NWB_SURFEL_BINDING_FREE_LIST, NWB_SURFEL_SET)]]
 RWStructuredBuffer<uint> g_NwbSurfelFreeList;   // recycled ids (U1); popped before bump-allocating
 
-[[vk::binding(NWB_SURFEL_BINDING_GBUFFER_WORLD_POSITION, NWB_SURFEL_SET)]]
-Texture2D<float4> g_NwbSurfelGbufferWorldPosition;
+struct NwbSurfelSpawnPushConstants{
+    uint worldPositionSlot;
+    uint normalSlot;
+};
 
-[[vk::binding(NWB_SURFEL_BINDING_GBUFFER_NORMAL, NWB_SURFEL_SET)]]
-Texture2D<float4> g_NwbSurfelGbufferNormal;
+[[vk::push_constant]]
+NwbSurfelSpawnPushConstants g_NwbSurfelSpawnPushConstants;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,11 +53,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     const int3 loadCoord = int3(int2(pixel), 0);
-    const float3 rawNormal = g_NwbSurfelGbufferNormal.Load(loadCoord).xyz;
+    const float3 rawNormal = NwbHeapSampledImage2DOnly(g_NwbSurfelSpawnPushConstants.normalSlot).Load(loadCoord).xyz;
     if(dot(rawNormal, rawNormal) < 0.01)
         return;   // no geometry at this tile (background)
 
-    const float3 worldPosition = g_NwbSurfelGbufferWorldPosition.Load(loadCoord).xyz;
+    const float3 worldPosition = NwbHeapSampledImage2DOnly(g_NwbSurfelSpawnPushConstants.worldPositionSlot).Load(loadCoord).xyz;
     const float3 worldNormal = normalize(rawNormal);
 
     const float cellSize = g_NwbSurfelConstants.cameraPositionCellSize.w;

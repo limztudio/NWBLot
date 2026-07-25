@@ -36,8 +36,10 @@
 #define NWB_SURFEL_BINDING_COUNTER 15     // RWStructuredBuffer<uint> (bump top + free top)
 
 // Spawn-only G-buffer inputs (the same deferred targets the lighting pass reads: world position + normal + depth).
-#define NWB_SURFEL_BINDING_GBUFFER_WORLD_POSITION 16
-#define NWB_SURFEL_BINDING_GBUFFER_NORMAL 17
+// Keep these historical local-layout positions intact: world position and normal are now logical heap-SRV selections
+// supplied through the spawn push constants, so they no longer occupy entries in the local spawn binding set.
+#define NWB_SURFEL_BINDING_GBUFFER_WORLD_POSITION 16 // logical heap-SRV position; selected through push constants
+#define NWB_SURFEL_BINDING_GBUFFER_NORMAL 17         // logical heap-SRV position; selected through push constants
 #define NWB_SURFEL_BINDING_GBUFFER_DEPTH 18
 
 // Free-list (U1 recycling): a persistent LIFO stack of recycled surfel ids. The age-free pass PUSHES an id (dead surfel)

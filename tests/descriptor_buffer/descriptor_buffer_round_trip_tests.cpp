@@ -1171,14 +1171,9 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelTraceBuildArgsShapeBuildsAsDescripto
 }
 
 
-// Surfel spawn parity: the surfel-GI pass that allocates new surfels into the pool. Its shape is segment-coherent
-// pure-resource (1 ConstantBuffer + 4 StructuredBuffer_UAV + 2 Texture_SRV, no samplers) -- the age-free CB + UAV mix
-// extended with the two G-buffer SRVs (world position + normal) the pass samples. Slots mirror surfel_binding_slots.h
-// spawn block (12, 13, 14, 15, 19, 16, 17). The layout routes to Backend C intact; in production the set is rebuilt on
-// G-buffer (resize) change against persistent surfel buffers. This proof exercises the live device API with spawn's
-// exact binding shape, asserting the layout routes to Backend C, reports a non-zero driver-queried set size, gives the
-// binding 7 layout offsets, and createBindingSet carves the block and writes the uniform/storage/texture descriptors
-// through the production writeDescriptor path.
+// Surfel spawn allocates new surfels into the pool. Its two G-buffer inputs are descriptor-heap reads selected by an
+// eight-byte push block, so the local Backend-C shape is the persistent constant buffer plus four UAV buffers. Slots
+// mirror surfel_binding_slots.h's spawn block (12, 13, 14, 15, 19). This proof exercises that live production shape.
 TEST_F(DescriptorBufferRoundTripTest, SurfelSpawnShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
@@ -1204,28 +1199,15 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelSpawnShapeBuildsAsDescriptorBuffer){
                 .setKeepInitialState(true)
         );
     };
-    auto makeTexture = [&](const u32 w, const u32 h) {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(w).setHeight(h)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::ShaderResource)
-                .setKeepInitialState(true)
-        );
-    };
-
     auto constants = makeConstantBuffer();
     auto pool = makeStructuredUav(16u);
     auto cellHead = makeStructuredUav(4u);
     auto counter = makeStructuredUav(4u);
     auto freeList = makeStructuredUav(4u);
-    auto worldPosition = makeTexture(32u, 32u);
-    auto normal = makeTexture(32u, 32u);
-    ASSERT_TRUE(constants && pool && cellHead && counter && freeList && worldPosition && normal);
+    ASSERT_TRUE(constants && pool && cellHead && counter && freeList);
 
-    // Slots mirror surfel_binding_slots.h spawn block (12, 13, 14, 15, 19, 16, 17); the segment-coherent pure-resource
-    // layout (a uniform buffer, four storage buffers, and two textures, no samplers) is the age-free CB + UAV mix
-    // extended with the two G-buffer SRVs the pass samples.
+    // The local bindings retain only the persistent surfel resources; heap-selected G-buffer inputs ride an 8-byte
+    // push range.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
     layoutDesc.setUseDescriptorBuffer(true);
@@ -1234,8 +1216,7 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelSpawnShapeBuildsAsDescriptorBuffer){
     layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(14u, 1u));
     layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(15u, 1u));
     layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(19u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(16u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(17u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 8u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
@@ -1245,7 +1226,7 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelSpawnShapeBuildsAsDescriptorBuffer){
     EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
     const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 7u);
+    EXPECT_EQ(offsets.size(), 5u);
 
     BindingSetDesc setDesc(descArena);
     setDesc.addItem(BindingSetItem::ConstantBuffer(12u, constants.get()));
@@ -1253,8 +1234,6 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelSpawnShapeBuildsAsDescriptorBuffer){
     setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(14u, cellHead.get()));
     setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(15u, counter.get()));
     setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(19u, freeList.get()));
-    setDesc.addItem(BindingSetItem::Texture_SRV(16u, worldPosition.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(17u, normal.get(), Format::RGBA16_FLOAT));
 
     auto bindingSet = device.createBindingSet(setDesc, layout);
     ASSERT_NE(bindingSet.get(), nullptr);

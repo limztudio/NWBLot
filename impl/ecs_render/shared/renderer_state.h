@@ -780,7 +780,8 @@ struct RtSurfelGiState{
     // (link live surfels into the spatial-hash cell lists) -> trace (one workgroup per surfel, 64 SW rays -> EMA
     // irradiance), then resolve to the screen-space texture the deferred lighting pass samples.
     // The three passes have DISTINCT binding layouts: the cell-head is an SRV at spawn (reads the previous frame) but a
-    // UAV at hash-build (writes the links), so they cannot share one layout the way the SW-shadow passes do.
+    // UAV at hash-build (writes the links), so they cannot share one layout the way the SW-shadow passes do. Spawn
+    // selects its G-buffer reads from the frame descriptor heap; its local set contains persistent surfel buffers only.
     Core::BindingLayoutHandle m_surfelSpawnBindingLayout;
     Core::BindingLayoutHandle m_surfelAgeFreeBindingLayout;
     Core::BindingLayoutHandle m_surfelHashBuildBindingLayout;
@@ -826,9 +827,6 @@ struct RtSurfelGiState{
     Core::ShaderHandle m_surfelTraceBuildArgsShader;
     Core::ComputePipelineHandle m_surfelTraceBuildArgsPipeline;
     Core::BindingSetHandle m_surfelTraceBuildArgsBindingSet;
-    // Tracked pointers for the spawn set rebuild (the G-buffer world-position + normal are recreated on resize).
-    const Core::Texture* m_surfelSpawnBindingSetWorldPosition = nullptr;
-    const Core::Texture* m_surfelSpawnBindingSetNormal = nullptr;
     // Tracked pointers for the trace set rebuild (the SW scene BVH + per-mesh arrays; mirrors the SW shadow set guard).
     const Core::Buffer* m_surfelTraceBindingSetSceneNodes = nullptr;
     const Core::Buffer* m_surfelTraceBindingSetInstances = nullptr;

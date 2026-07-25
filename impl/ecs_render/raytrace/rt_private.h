@@ -491,8 +491,14 @@ struct CausticResolvePushConstants{
 };
 static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 12u + sizeof(f32), "CausticResolvePushConstants must match the shader push-constant layout");
 
-// Surfel GI resolve/upsample source their frame textures from the descriptor heap. Their persistent surfel buffers and
-// output UAV remain local; these mirrors select the heap-side image slots for the compute dispatches.
+// Surfel GI spawn/resolve/upsample source their frame textures from the descriptor heap. Their persistent surfel
+// buffers and output UAVs remain local; these mirrors select the heap-side image slots for the compute dispatches.
+struct SurfelSpawnPushConstants{
+    u32 worldPositionSlot = 0u; // SampledImage: full-resolution world-position G-buffer
+    u32 normalSlot = 0u;        // SampledImage: full-resolution normal G-buffer
+};
+static_assert(sizeof(SurfelSpawnPushConstants) == sizeof(u32) * 2u, "SurfelSpawnPushConstants must match the shader push-constant layout");
+
 struct SurfelResolvePushConstants{
     u32 worldPositionSlot = 0u; // SampledImage: full-resolution world-position G-buffer
     u32 normalSlot = 0u;        // SampledImage: full-resolution normal G-buffer

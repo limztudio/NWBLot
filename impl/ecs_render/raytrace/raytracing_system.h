@@ -75,9 +75,9 @@ public:
     // Lazily create the persistent surfel buffers (pool / cell-head / counter / params CB) + the three pass
     // pipelines. The buffers live on RendererRayTracingState so a window resize does not reset convergence.
     [[nodiscard]] bool ensureSurfelResources();
-    // The three pass pipelines. The spawn + hash-build read only the surfel buffers + G-buffer; the trace reuses the
-    // SW scene BVH (slots 0-10) exactly like the SW shadow/caustic trace. Distinct layouts (the cell-head is an SRV at
-    // spawn, a UAV at hash-build).
+    // The three pass pipelines. Spawn and hash-build read the surfel buffers; spawn selects its G-buffer inputs from
+    // the descriptor heap. The trace reuses the SW scene BVH (slots 0-10) exactly like the SW shadow/caustic trace.
+    // Their layouts remain distinct because the cell-head is an SRV at spawn and a UAV at hash-build.
     [[nodiscard]] bool ensureSurfelSpawnPipeline();
     // Age-free (U1 recycling): one thread per pool slot; frees surfels unseen for maxAge frames + pushes their ids onto
     // the free-list. Reads only the persistent buffers, so pipeline + set are built once (like hash-build).
@@ -87,10 +87,10 @@ public:
     // U5 HW-RayQuery trace twin: the same surfel trace over the TLAS (inline RayQuery) instead of the SW BVH. Selected
     // by m_surfelUseHwTrace on the HW-shadow branch; gated on RayQuery + accel-struct support (like ensureShadowPipeline).
     [[nodiscard]] bool ensureSurfelTraceHwPipeline();
-    // The spawn set (surfel buffers + G-buffer world-position/normal; rebuilt on G-buffer change) + the hash-build set
-    // (surfel buffers only; built once) + the trace set (SW scene BVH + per-mesh arrays + surfel constants/pool;
-    // rebuilt during prepare when the scene BVH / distinct-mesh count changes, mirroring the SW shadow set).
-    [[nodiscard]] bool ensureSurfelSpawnBindingSet(DeferredFrameTargets& targets);
+    // The spawn + hash-build sets bind persistent surfel buffers only and are built once. The trace set carries the SW
+    // scene BVH + per-mesh arrays + surfel constants/pool; rebuild it during prepare when the scene BVH or distinct-
+    // mesh count changes, mirroring the SW shadow set.
+    [[nodiscard]] bool ensureSurfelSpawnBindingSet();
     [[nodiscard]] bool ensureSurfelAgeFreeBindingSet();
     [[nodiscard]] bool ensureSurfelHashBuildBindingSet();
     [[nodiscard]] bool ensureSurfelTraceBindingSet();

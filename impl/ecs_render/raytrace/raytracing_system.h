@@ -158,6 +158,17 @@ private:
     [[nodiscard]] bool ensureSoftTransparentResolvePipeline();
     [[nodiscard]] bool ensureSoftTransparentResolveBindingSet(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureShadowTransparentReprojectMergeBindingSet(DeferredFrameTargets& targets);
+    // The three sampled Texture2DArray inputs a particular resolve binding-set role needs. OUTPUT / VISIBILITY / scene
+    // shading stay local; these source reads are fetched through the target-generation descriptor heap. Keep both the
+    // resource pointer (for state transitions) and slot (for shader indirection) together so their roles cannot drift.
+    struct SoftShadowResolvePassResources{
+        Core::Texture* softHalfTexture = nullptr;
+        Core::Texture* inputColorTexture = nullptr;
+        Core::Texture* momentsTexture = nullptr;
+        u32 softHalf = 0u;
+        u32 inputColor = 0u;
+        u32 moments = 0u;
+    };
     // The set of binding sets + pipeline + fold mode a dispatchSoftShadowResolve call runs against, so ONE dispatch routine
     // serves BOTH the opaque (scalar pipeline, its own base sets, Overwrite fold) and the transparent (RGB pipeline, its own
     // base sets, Multiply fold) resolve. The prepareOverride (temporal) still swaps the PREPARE input to the accumulated
@@ -168,6 +179,10 @@ private:
         Core::BindingSet* outputHalfB = nullptr; // PREPARE + even wavelet passes: reads scratch-A, writes scratch-B
         Core::BindingSet* upsample = nullptr;    // final: reads scratch-A, writes/folds the full-res visibility
         Core::BindingSet* prepareOverride = nullptr; // temporal: PREPARE reads the accumulated history instead of the raw trace
+        SoftShadowResolvePassResources outputHalfAResources;
+        SoftShadowResolvePassResources outputHalfBResources;
+        SoftShadowResolvePassResources upsampleResources;
+        SoftShadowResolvePassResources prepareOverrideResources;
         SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
         // A-trous wavelet pass count for this signal: opaque = NWB_SHADOW_RESOLVE_PASS_COUNT (1), the cheaper smooth transparent
         // tint = NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT (1). MUST be ODD -- the ping-pong leaves the final result in soft-A

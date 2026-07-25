@@ -370,8 +370,8 @@ struct ShadowRqSoftPushConstants{
 static_assert(sizeof(ShadowRqSoftPushConstants) == sizeof(u32) * 3u, "ShadowRqSoftPushConstants must match the shader push-constant layout");
 
 // CPU mirror of shadow_resolve_cs.slang's NwbShadowResolvePushConstants: the full/half dims, the a-trous dilation +
-// stage selector, the active shadow-slot range the resolve loops, the temporal-moments-valid flag, and the upsample
-// fold mode. 10 x 4 = 40 bytes.
+// stage selector, the active shadow-slot range the resolve loops, the temporal-moments-valid flag, the upsample fold,
+// and seven target-generation descriptor-heap slots (four 2D + three 2D-array reads). 18 x 4 = 72 bytes.
 struct ShadowResolvePushConstants{
     u32 width = 0u;          // FULL-res width (UPSAMPLE dispatch/output dim)
     u32 height = 0u;         // FULL-res height
@@ -387,8 +387,16 @@ struct ShadowResolvePushConstants{
     u32 upsampleFold = 0u;   // UPSAMPLE fold mode: 0 = OVERWRITE the full-res visibility (soft OPAQUE);
                              // 1 = MULTIPLY the denoised colored transmittance onto it (soft TRANSPARENT fold, RMW). Ignored
                              // by PREPARE/WAVELET; see SoftShadowUpsampleFold::Enum + the UPSAMPLE stage in shadow_resolve_cs.
+    u32 geometrySlot = 0u;      // SampledImage: half-res packed geometry cache
+    u32 depthSlot = 0u;         // SampledImage: full-res G-buffer depth
+    u32 worldPositionSlot = 0u; // SampledImage: full-res G-buffer world position
+    u32 normalSlot = 0u;        // SampledImage: full-res G-buffer normal
+    u32 softHalfSlot = 0u;      // SampledImage2DArray: PREPARE source
+    u32 inputColorSlot = 0u;    // SampledImage2DArray: WAVELET / UPSAMPLE source
+    u32 momentsSlot = 0u;       // SampledImage2DArray: temporal moments (or non-temporal dummy)
+    u32 pad0 = 0u;
 };
-static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 10u, "ShadowResolvePushConstants must match the shader push-constant layout");
+static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 18u, "ShadowResolvePushConstants must match the shader push-constant layout");
 
 // Shadow resolve stages, kept in lockstep with shadow_resolve_cs.slang's pushConstants.stage switch.
 namespace ShadowResolveStage{
@@ -405,15 +413,19 @@ namespace ShadowResolveStage{
 //  - Multiply:  the soft COLORED TRANSPARENT resolve read-modify-write MULTIPLIES its denoised colored transmittance onto
 //    the visibility (which already holds the opaque result), so visibility = opaqueSoftUpsampled * transparentSoftUpsampled.
 
-// Mirror of shadow_geometry_downsample_cs.slang's NwbShadowGeometryDownsamplePushConstants: full-res G-buffer dims +
-// the half-res output dims.
+// Mirror of shadow_geometry_downsample_cs.slang's NwbShadowGeometryDownsamplePushConstants: full-res G-buffer dims,
+// the half-res output dims, and three SampledImage heap slots for the G-buffer inputs.
 struct ShadowGeometryDownsamplePushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 halfWidth = 0u;
     u32 halfHeight = 0u;
+    u32 worldPositionSlot = 0u;
+    u32 normalSlot = 0u;
+    u32 depthSlot = 0u;
+    u32 pad0 = 0u;
 };
-static_assert(sizeof(ShadowGeometryDownsamplePushConstants) == sizeof(u32) * 4u, "ShadowGeometryDownsamplePushConstants must match the shader push-constant layout");
+static_assert(sizeof(ShadowGeometryDownsamplePushConstants) == sizeof(u32) * 8u, "ShadowGeometryDownsamplePushConstants must match the shader push-constant layout");
 
 // CPU mirror of shadow_reproject_merge_cs.slang's NwbShadowReprojectMergePushConstants (temporal accumulation):
 // the STASHED previous-frame worldToClip (64-byte row-major matrix -- Float44U's raw[16] is the row-major dump of the

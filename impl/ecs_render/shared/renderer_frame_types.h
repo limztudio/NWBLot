@@ -139,6 +139,21 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle avboitAccumExtinction = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitTransmittance = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitLinearSampler = Core::GpuDescriptorHandle::invalid();
+    // Soft-shadow denoise intermediates are target-generation resources too. The resolve passes carry these slots in
+    // their push constants, rather than keeping seven sampled images in each local descriptor-buffer set.
+    Core::GpuDescriptorHandle shadowSoftGeometry = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowSoftGeometryPrev = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowSoftHalfA = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowSoftHalfB = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowHistA = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowHistB = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowMomentsA = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowMomentsB = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle transparentSoftHalf = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle transparentHistA = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle transparentHistB = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle transparentMomentsA = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle transparentMomentsB = Core::GpuDescriptorHandle::invalid();
     bool slotsUploaded = false;
 
     [[nodiscard]] bool valid()const noexcept{
@@ -157,6 +172,19 @@ struct DeferredBindlessFrameResources{
             && avboitAccumExtinction.valid()
             && avboitTransmittance.valid()
             && avboitLinearSampler.valid()
+            && shadowSoftGeometry.valid()
+            && shadowSoftGeometryPrev.valid()
+            && shadowSoftHalfA.valid()
+            && shadowSoftHalfB.valid()
+            && shadowHistA.valid()
+            && shadowHistB.valid()
+            && shadowMomentsA.valid()
+            && shadowMomentsB.valid()
+            && transparentSoftHalf.valid()
+            && transparentHistA.valid()
+            && transparentHistB.valid()
+            && transparentMomentsA.valid()
+            && transparentMomentsB.valid()
         ;
     }
 };

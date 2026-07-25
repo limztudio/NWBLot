@@ -4,6 +4,7 @@
 
 #include "shadow_resolve_binding_slots.h"
 #include "sw_binding_slots.h" // NWB_SW_SHADOW_SOFT_FACTOR -- the half-res downscale, shared with the trace + resolve.
+#include "../bindless/bindless_heap.slangi"
 #include "../common/math.slangi"
 
 // This pass needs ONLY the camera world position (for the linear camera-distance edge-stop metric), so it declares
@@ -32,15 +33,6 @@ ConstantBuffer<NwbShadowGeometrySceneShading, Std140DataLayout> g_NwbShadowGeome
 // metric, not an area Jacobian). Same 2x point sample the resolve's half->full map would use, so no quality change vs
 // per-tap full-res reads; it only removes redundant full-res bandwidth.
 
-[[vk::binding(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION, NWB_SHADOW_GEOMETRY_DOWNSAMPLE_SET)]]
-Texture2D<float4> g_NwbShadowGeometryWorldPosition;
-
-[[vk::binding(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_NORMAL, NWB_SHADOW_GEOMETRY_DOWNSAMPLE_SET)]]
-Texture2D<float4> g_NwbShadowGeometryNormal;
-
-[[vk::binding(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH, NWB_SHADOW_GEOMETRY_DOWNSAMPLE_SET)]]
-Texture2D<float4> g_NwbShadowGeometryDepth;
-
 [[vk::binding(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, NWB_SHADOW_GEOMETRY_DOWNSAMPLE_SET)]]
 RWTexture2D<float4> g_NwbShadowGeometryOutput;
 
@@ -49,6 +41,11 @@ struct NwbShadowGeometryDownsamplePushConstants{
     uint height;      // full-res G-buffer height
     uint halfWidth;   // half-res output width
     uint halfHeight;  // half-res output height
+    // Global heap SampledImage slots: the full-res G-buffer inputs no longer consume local set-0 descriptors.
+    uint worldPositionSlot;
+    uint normalSlot;
+    uint depthSlot;
+    uint _pad0;
 };
 
 [[vk::push_constant]]
@@ -70,17 +67,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         min((int)halfTexel.y * NWB_SW_SHADOW_SOFT_FACTOR, (int)g_NwbShadowGeometryDownsamplePushConstants.height - 1)
     );
 
-    const float depth = g_NwbShadowGeometryDepth.Load(int3(full, 0)).r;
+    const float depth = NwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.depthSlot).Load(int3(full, 0)).r;
     if(depth >= 0.999999){
         // Background (no receiver): validity 0. Normal/distance are irrelevant (the resolve skips invalid taps).
         g_NwbShadowGeometryOutput[halfTexel] = float4(0.0, 0.0, 0.0, 0.0);
         return;
     }
 
-    const float3 world = g_NwbShadowGeometryWorldPosition.Load(int3(full, 0)).xyz;
+    const float3 world = NwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.worldPositionSlot).Load(int3(full, 0)).xyz;
     // The G-buffer normal is stored [0,1]-encoded (matching the SW/HW traces' `n*2-1` decode); normalize the decode so
     // the octahedral pack sees a unit vector.
-    const float3 normal = normalize(g_NwbShadowGeometryNormal.Load(int3(full, 0)).xyz * 2.0 - 1.0);
+    const float3 normal = normalize(NwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.normalSlot).Load(int3(full, 0)).xyz * 2.0 - 1.0);
     const float2 octNormal = nwbOctEncodeNormal(normal);
     const float cameraDistance = length(world - g_NwbShadowGeometrySceneShading.cameraPosition.xyz);
 

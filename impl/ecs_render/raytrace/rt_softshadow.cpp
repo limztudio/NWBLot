@@ -21,10 +21,7 @@ namespace __hidden_rt_softshadow{
 
 
 struct SoftShadowResolveBindingSetInputs{
-    Core::Texture* softHalf = nullptr;
     Core::Texture* output = nullptr;
-    Core::Texture* inputColor = nullptr;
-    Core::Texture* moments = nullptr;
     Core::Format::Enum outputFormat = Core::Format::UNKNOWN;
     Core::TextureDimension::Enum outputDimension = Core::TextureDimension::Unknown;
 };
@@ -34,36 +31,11 @@ struct SoftShadowResolveBindingSetInputs{
     Core::Device& device,
     Core::BindingLayoutHandle& layout,
     DeferredFrameTargets& targets,
-    Core::Texture* const geometry,
-    Core::Texture* const depth,
     Core::Texture* const visibility,
-    Core::Texture* const worldPosition,
-    Core::Texture* const normal,
     Core::Buffer* const sceneShading,
     const SoftShadowResolveBindingSetInputs& inputs
 ){
     Core::BindingSetDesc desc(arena);
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF,
-        inputs.softHalf,
-        targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_RESOLVE_BINDING_GEOMETRY,
-        geometry,
-        targets.shadowSoftGeometryFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_RESOLVE_BINDING_GBUFFER_DEPTH,
-        depth,
-        targets.depthFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
     desc.addItem(Core::BindingSetItem::Texture_UAV(
         NWB_SHADOW_RESOLVE_BINDING_OUTPUT,
         inputs.output,
@@ -71,40 +43,12 @@ struct SoftShadowResolveBindingSetInputs{
         ECSRenderDetail::s_ShadowVisibilitySubresources,
         inputs.outputDimension
     ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_RESOLVE_BINDING_INPUT_COLOR,
-        inputs.inputColor,
-        targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
     desc.addItem(Core::BindingSetItem::Texture_UAV(
         NWB_SHADOW_RESOLVE_BINDING_VISIBILITY,
         visibility,
         targets.shadowVisibilityFormat,
         ECSRenderDetail::s_ShadowVisibilitySubresources,
         Core::TextureDimension::Texture2DArray
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_RESOLVE_BINDING_MOMENTS,
-        inputs.moments,
-        targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_RESOLVE_BINDING_GBUFFER_WORLDPOS,
-        worldPosition,
-        targets.worldPositionFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_RESOLVE_BINDING_GBUFFER_NORMAL,
-        normal,
-        targets.normalFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
     ));
     desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SHADOW_RESOLVE_BINDING_SCENE_SHADING, sceneShading));
     return device.createBindingSet(desc, layout);
@@ -323,6 +267,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
     // swap. It reads only the shared soft/temporal DeferredFrameTargets buffers + the G-buffer, so the same chain denoises
     // HW RayQuery and SW BVH opaque-soft traces. The transparent trace+fold always traces against the SW transparent-only
     // scene BVH via m_swShadowBindingSet; on the HW path this block stages those resources before the transparent trace.
+    NWB_ASSERT(targets.bindless.valid());
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
     const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
 
@@ -349,6 +294,10 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
     // resolve loop taps it. Writes the cache UAV; each slot's resolve then reads it as an SRV (the cache is not
     // rewritten, so the UAV->SRV transition happens once and every directional slot shares it).
     {
+        // These three reads moved out of the local set, so stage them explicitly before the local CB/UAV set is applied.
+        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setResourceStatesForBindingSet(rayTracingState().m_shadowGeometryDownsampleBindingSet.get());
         commandList.commitBarriers();
 
@@ -357,11 +306,15 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         geometryPush.height = targets.height;
         geometryPush.halfWidth = softHalfWidth;
         geometryPush.halfHeight = softHalfHeight;
+        geometryPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+        geometryPush.normalSlot = targets.bindless.gbufferNormal.slot();
+        geometryPush.depthSlot = targets.bindless.gbufferDepth.slot();
 
         Core::ComputeState geometryState;
         geometryState.setPipeline(rayTracingState().m_shadowGeometryDownsamplePipeline.get());
         geometryState.addBindingSet(rayTracingState().m_shadowGeometryDownsampleBindingSet.get());
         commandList.setComputeState(geometryState);
+        bindPassHeap(rayTracingState().m_shadowGeometryDownsamplePipeline);
         commandList.setPushConstants(&geometryPush, sizeof(geometryPush));
         commandList.dispatch(softGroupsX, softGroupsY, 1u);
     }
@@ -441,6 +394,28 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         opaqueDispatch.outputHalfB = rayTracingState().m_shadowResolveBindingSetOutputHalfB.get();
         opaqueDispatch.upsample = rayTracingState().m_shadowResolveBindingSetUpsample.get();
         opaqueDispatch.prepareOverride = temporalPrepareSet;
+        opaqueDispatch.outputHalfAResources = {
+            targets.shadowSoftHalfB.get(), targets.shadowSoftHalfB.get(), targets.shadowMomentsA.get(),
+            targets.bindless.shadowSoftHalfB.slot(), targets.bindless.shadowSoftHalfB.slot(), targets.bindless.shadowMomentsA.slot()
+        };
+        opaqueDispatch.outputHalfBResources = {
+            targets.shadowSoftHalfA.get(), targets.shadowSoftHalfA.get(), targets.shadowMomentsA.get(),
+            targets.bindless.shadowSoftHalfA.slot(), targets.bindless.shadowSoftHalfA.slot(), targets.bindless.shadowMomentsA.slot()
+        };
+        opaqueDispatch.upsampleResources = {
+            targets.shadowSoftHalfA.get(), targets.shadowSoftHalfA.get(), targets.shadowMomentsA.get(),
+            targets.bindless.shadowSoftHalfA.slot(), targets.bindless.shadowSoftHalfA.slot(), targets.bindless.shadowMomentsA.slot()
+        };
+        opaqueDispatch.prepareOverrideResources = frontIsA
+            ? SoftShadowResolvePassResources{
+                targets.shadowHistB.get(), targets.shadowHistB.get(), targets.shadowMomentsB.get(),
+                targets.bindless.shadowHistB.slot(), targets.bindless.shadowHistB.slot(), targets.bindless.shadowMomentsB.slot()
+            }
+            : SoftShadowResolvePassResources{
+                targets.shadowHistA.get(), targets.shadowHistA.get(), targets.shadowMomentsA.get(),
+                targets.bindless.shadowHistA.slot(), targets.bindless.shadowHistA.slot(), targets.bindless.shadowMomentsA.slot()
+            }
+        ;
         opaqueDispatch.fold = SoftShadowUpsampleFold::Overwrite;
         // Opaque path stays FULL quality: the 5-pass (dilation 1,2,4,8,16) a-trous the sharp binary blocker edge needs.
         opaqueDispatch.waveletPassCount = static_cast<u32>(NWB_SHADOW_RESOLVE_PASS_COUNT);
@@ -562,6 +537,28 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
             transparentDispatch.outputHalfB = rayTracingState().m_transparentResolveBindingSetOutputHalfB.get();
             transparentDispatch.upsample = rayTracingState().m_transparentResolveBindingSetUpsample.get();
             transparentDispatch.prepareOverride = transparentPrepareSet;
+            transparentDispatch.outputHalfAResources = {
+                targets.transparentSoftHalf.get(), targets.shadowSoftHalfB.get(), targets.transparentMomentsA.get(),
+                targets.bindless.transparentSoftHalf.slot(), targets.bindless.shadowSoftHalfB.slot(), targets.bindless.transparentMomentsA.slot()
+            };
+            transparentDispatch.outputHalfBResources = {
+                targets.transparentSoftHalf.get(), targets.shadowSoftHalfA.get(), targets.transparentMomentsA.get(),
+                targets.bindless.transparentSoftHalf.slot(), targets.bindless.shadowSoftHalfA.slot(), targets.bindless.transparentMomentsA.slot()
+            };
+            transparentDispatch.upsampleResources = {
+                targets.transparentSoftHalf.get(), targets.shadowSoftHalfA.get(), targets.transparentMomentsA.get(),
+                targets.bindless.transparentSoftHalf.slot(), targets.bindless.shadowSoftHalfA.slot(), targets.bindless.transparentMomentsA.slot()
+            };
+            transparentDispatch.prepareOverrideResources = frontIsA
+                ? SoftShadowResolvePassResources{
+                    targets.transparentHistB.get(), targets.transparentHistB.get(), targets.transparentMomentsB.get(),
+                    targets.bindless.transparentHistB.slot(), targets.bindless.transparentHistB.slot(), targets.bindless.transparentMomentsB.slot()
+                }
+                : SoftShadowResolvePassResources{
+                    targets.transparentHistA.get(), targets.transparentHistA.get(), targets.transparentMomentsA.get(),
+                    targets.bindless.transparentHistA.slot(), targets.bindless.transparentHistA.slot(), targets.bindless.transparentMomentsA.slot()
+                }
+            ;
             transparentDispatch.fold = SoftShadowUpsampleFold::Multiply;
             // Cheaper than opaque: the smooth colored tint reconstructs from a 3-pass (dilation 1,2,4) a-trous. Both odd.
             transparentDispatch.waveletPassCount = static_cast<u32>(NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT);
@@ -591,17 +588,10 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     if(!rayTracingState().m_shadowGeometryDownsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Phase 3 (Backend C): the half-res geometry downsample is the first shadow-family pass migrated to
-        // VK_EXT_descriptor_buffer, after the caustic, surfel-GI, and BVH passes. Its shape is segment-coherent
-        // pure-resource (3 Texture_SRV + 1 ConstantBuffer + 1 Texture_UAV, no samplers) with push constants, which the
-        // descriptor-buffer path serves wholesale -- push constants stay in the pipeline layout, not the descriptor
-        // buffer, so they coexist with the opt-in. The opt-in declares intent only; where the extension is absent the
-        // backend downgrades this layout to non-descriptor-buffer-compatible and the classic descriptor-set path
-        // (Backend A) serves the pass unchanged, so no device capability gate is needed here.
+        // Phase 3 (Backend C): the G-buffer inputs now arrive through the global heap, leaving this local
+        // descriptor-buffer segment with only the scene CB + geometry-cache UAV. Push constants carry the three
+        // SampledImage slots, while the fixed high heap sets preserve Backend-A descriptor-indexing fallback.
         layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_NORMAL, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_SCENE_SHADING, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowGeometryDownsamplePushConstants)));
@@ -630,6 +620,13 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
         .setComputeShader(rayTracingState().m_shadowGeometryDownsampleShader)
         .addBindingLayout(rayTracingState().m_shadowGeometryDownsampleBindingLayout)
     ;
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(heap.isInitialized()){
+        pipelineDesc
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
+    }
     rayTracingState().m_shadowGeometryDownsamplePipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowGeometryDownsamplePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow geometry downsample compute pipeline"));
@@ -667,27 +664,6 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsampleBindingSet(Deferred
     auto* device = graphics().getDevice();
 
     Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION,
-        worldPositionTarget,
-        targets.worldPositionFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_NORMAL,
-        normalTarget,
-        targets.normalFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH,
-        depthTarget,
-        targets.depthFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
     desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
     desc.addItem(Core::BindingSetItem::Texture_UAV(
         NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT,
@@ -730,24 +706,12 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
     if(!rayTracingState().m_shadowResolveBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Phase 3 (Backend C): the SVGF a-trous resolve is the second shadow-family pass migrated to VK_EXT_descriptor_buffer.
-        // Its shape is segment-coherent pure-resource (8 Texture_SRV + 1 ConstantBuffer + 2 Texture_UAV, no samplers) with
-        // push constants, which the descriptor-buffer path serves wholesale -- push constants stay in the pipeline layout,
-        // not the descriptor buffer, so they coexist with the opt-in. The RGB variant shares this layout. The opt-in declares
-        // intent only; where the extension is absent the backend downgrades this layout to non-descriptor-buffer-compatible
-        // and the classic descriptor-set path (Backend A) serves the pass unchanged, so no device capability gate is needed here.
+        // Phase 3 (Backend C): all seven sampled frame images now use target-generation heap slots. The residual local
+        // descriptor-buffer segment is the two UAVs + scene CB; the RGB variant shares it unchanged. The local binding
+        // numbers intentionally remain sparse so the established ABI gaps are not renumbered.
         layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_GEOMETRY, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_GBUFFER_DEPTH, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RESOLVE_BINDING_OUTPUT, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_INPUT_COLOR, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RESOLVE_BINDING_VISIBILITY, 1));
-        // The SVGF temporal moments SRV (variance-coupled a-trous) + the full-res world-pos/normal SRVs and the
-        // scene-shading CB (full-res-guided upsample). The moments SRV is a dummy on the non-temporal path (see dispatch).
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_MOMENTS, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_GBUFFER_WORLDPOS, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_RESOLVE_BINDING_GBUFFER_NORMAL, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SHADOW_RESOLVE_BINDING_SCENE_SHADING, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowResolvePushConstants)));
 
@@ -775,6 +739,13 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
         .setComputeShader(rayTracingState().m_shadowResolveShader)
         .addBindingLayout(rayTracingState().m_shadowResolveBindingLayout)
     ;
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(heap.isInitialized()){
+        pipelineDesc
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
+    }
     rayTracingState().m_shadowResolvePipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowResolvePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow resolve compute pipeline"));
@@ -819,6 +790,13 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
         .setComputeShader(rayTracingState().m_shadowResolveRgbShader)
         .addBindingLayout(rayTracingState().m_shadowResolveBindingLayout)
     ;
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(heap.isInitialized()){
+        pipelineDesc
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
+    }
     rayTracingState().m_shadowResolveRgbPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowResolveRgbPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft transparent shadow RGB resolve compute pipeline"));
@@ -885,23 +863,12 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
 
     auto* device = graphics().getDevice();
 
-    // SOFT_HALF is the soft trace target (soft-A), read only by the PREPARE stage (which runs on the OutputHalfB
-    // set). The three sets differ in the (SOFT_HALF, OUTPUT, INPUT_COLOR) triple, chosen so NO set ever binds the same
-    // texture as both an SRV and a UAV (which the resource-state framework cannot resolve to one state):
-    //  - OutputHalfB: softHalf=soft-A, out=soft-B, in=soft-A -- PREPARE (copies soft-A -> soft-B) + the even wavelets.
-    //  - OutputHalfA: softHalf=soft-B, out=soft-A, in=soft-B -- the odd wavelets. SOFT_HALF is bound-but-unused here, so
-    //                 pointing it at soft-B (not soft-A == OUTPUT) avoids an SRV+UAV alias of soft-A in this set.
-    //  - Upsample:    softHalf=soft-A, out=full-res visibility, in=soft-A (the final wavelet lands in soft-A, odd count).
-    // The half + full targets are dimensionless in the set (the bound texture carries the extent), so one layout serves.
-    // momentsTex: the MOMENTS SRV source for this set. For the two temporal variants it is the merge's history-OUT moments
-    // buffer (the accumulated moments this frame's a-trous should read); for the non-temporal sets it is a valid-but-unused
-    // dummy (any half-res array) -- the shader guards the read behind push.momentsValid == 0, so the dummy is never sampled.
-    const auto buildSet = [&](Core::Texture* softHalfTex, Core::Texture* outputTex, Core::Format::Enum outputFormat, Core::TextureDimension::Enum outputDim, Core::Texture* inputTex, Core::Texture* momentsTex) -> Core::BindingSetHandle {
+    // The sampled source role now travels in resolve push constants, so these local sets contain only the changing OUTPUT
+    // UAV plus the shared VISIBILITY UAV and scene CB. The source slot mapping remains explicit at dispatch time, preserving
+    // the no-SRV/UAV-alias arrangement the former local sets used.
+    const auto buildSet = [&](Core::Texture* outputTex, Core::Format::Enum outputFormat, Core::TextureDimension::Enum outputDim) -> Core::BindingSetHandle {
         __hidden_rt_softshadow::SoftShadowResolveBindingSetInputs inputs;
-        inputs.softHalf = softHalfTex;
         inputs.output = outputTex;
-        inputs.inputColor = inputTex;
-        inputs.moments = momentsTex;
         inputs.outputFormat = outputFormat;
         inputs.outputDimension = outputDim;
         return __hidden_rt_softshadow::CreateSoftShadowResolveBindingSet(
@@ -909,11 +876,7 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
             *device,
             rayTracingState().m_shadowResolveBindingLayout,
             targets,
-            geometryTarget,
-            depthTarget,
             visibilityTarget,
-            worldPositionTarget,
-            normalTarget,
             deferredState().m_sceneShadingBuffer.get(),
             inputs
         );
@@ -924,15 +887,15 @@ bool RendererRayTracingSystem::ensureSoftShadowResolveBindingSet(DeferredFrameTa
     // The non-temporal sets never sample the MOMENTS SRV (push.momentsValid == 0 on those dispatches), so bind moments-A as
     // an inert dummy. The two temporal variants bind the moments buffer PAIRED with the hist buffer they read as SOFT_HALF
     // (hist-A <-> moments-A, hist-B <-> moments-B), i.e. the merge's accumulated moments for this frame's a-trous.
-    Core::BindingSetHandle outputHalfA = buildSet(softBTarget, softATarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, softBTarget, momentsATarget);
-    Core::BindingSetHandle outputHalfB = buildSet(softATarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, softATarget, momentsATarget);
-    Core::BindingSetHandle upsample    = buildSet(softATarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, softATarget, momentsATarget);
+    Core::BindingSetHandle outputHalfA = buildSet(softATarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray);
+    Core::BindingSetHandle outputHalfB = buildSet(softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray);
+    Core::BindingSetHandle upsample    = buildSet(softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray);
     // Two TEMPORAL variants: PREPARE reads the accumulated history (hist-A / hist-B) as SOFT_HALF (+ INPUT_COLOR, unused by
     // PREPARE), writes soft-B (out). SOFT_HALF == hist buffer is DISTINCT from the ping-pong output soft-A/soft-B, so no
     // SRV+UAV alias. The dispatch picks the variant matching the merge's history-out buffer (B when frontIsA, else A). Each
     // binds its paired moments buffer as the MOMENTS SRV so the variance-coupled a-trous reads the accumulated moments.
-    Core::BindingSetHandle temporalHistA = buildSet(histATarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, histATarget, momentsATarget);
-    Core::BindingSetHandle temporalHistB = buildSet(histBTarget, softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray, histBTarget, momentsBTarget);
+    Core::BindingSetHandle temporalHistA = buildSet(softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray);
+    Core::BindingSetHandle temporalHistB = buildSet(softBTarget, targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray);
     if(!outputHalfA || !outputHalfB || !upsample || !temporalHistA || !temporalHistB){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow resolve binding sets"));
         rayTracingState().m_shadowResolveBindingSetOutputHalfA = nullptr;
@@ -1034,16 +997,11 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolveBindingSet(DeferredFr
 
     auto* device = graphics().getDevice();
 
-    // buildSet: (SOFT_HALF SRV, OUTPUT UAV, INPUT_COLOR SRV, MOMENTS SRV). GEOMETRY/DEPTH/VISIBILITY/WORLDPOS/NORMAL/CB are
-    // fixed. No set binds the same texture as both SRV and UAV: the raw colored trace + the two hist buffers are only ever
-    // SRVs here; the OUTPUT UAV is always the ping-pong scratch (soft-A/soft-B), distinct from all of them; the VISIBILITY
-    // UAV (the fold target) is a separate resource. (The upsample's OUTPUT is bound-but-unused -> soft-B, still no alias.)
-    const auto buildSet = [&](Core::Texture* softHalfTex, Core::Texture* outputTex, Core::Texture* inputTex, Core::Texture* momentsTex) -> Core::BindingSetHandle {
+    // Only the changing scratch OUTPUT remains local. The raw/history/moments source images use the same explicit
+    // heap-slot mapping as the opaque resolve and are staged at dispatch time.
+    const auto buildSet = [&](Core::Texture* outputTex) -> Core::BindingSetHandle {
         __hidden_rt_softshadow::SoftShadowResolveBindingSetInputs inputs;
-        inputs.softHalf = softHalfTex;
         inputs.output = outputTex;
-        inputs.inputColor = inputTex;
-        inputs.moments = momentsTex;
         inputs.outputFormat = targets.shadowSoftFormat;
         inputs.outputDimension = Core::TextureDimension::Texture2DArray;
         return __hidden_rt_softshadow::CreateSoftShadowResolveBindingSet(
@@ -1051,11 +1009,7 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolveBindingSet(DeferredFr
             *device,
             rayTracingState().m_shadowResolveBindingLayout,
             targets,
-            geometryTarget,
-            depthTarget,
             visibilityTarget,
-            worldPositionTarget,
-            normalTarget,
             deferredState().m_sceneShadingBuffer.get(),
             inputs
         );
@@ -1065,13 +1019,13 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolveBindingSet(DeferredFr
     // outputHalfA: odd wavelets (SOFT_HALF bound-unused; INPUT_COLOR = soft-B -> soft-A). SOFT_HALF -> the raw trace here
     //              (an SRV distinct from the soft-A OUTPUT), NOT soft-A, so no SRV+UAV alias of the scratch.
     // upsample: reads INPUT_COLOR = soft-A (the final odd-count result), folds the VISIBILITY (OUTPUT = soft-B, unused).
-    Core::BindingSetHandle outputHalfA = buildSet(rawTraceTarget, scratchATarget, scratchBTarget, momentsATarget);
-    Core::BindingSetHandle outputHalfB = buildSet(rawTraceTarget, scratchBTarget, scratchATarget, momentsATarget);
-    Core::BindingSetHandle upsample    = buildSet(rawTraceTarget, scratchBTarget, scratchATarget, momentsATarget);
+    Core::BindingSetHandle outputHalfA = buildSet(scratchATarget);
+    Core::BindingSetHandle outputHalfB = buildSet(scratchBTarget);
+    Core::BindingSetHandle upsample    = buildSet(scratchBTarget);
     // Temporal variants: PREPARE reads the accumulated transparent history (hist-A / hist-B) as SOFT_HALF -> soft-B; the
     // wavelet ping-pong + INPUT_COLOR are still soft-A/soft-B. Each binds its paired transparent moments as the MOMENTS SRV.
-    Core::BindingSetHandle temporalHistA = buildSet(histATarget, scratchBTarget, scratchATarget, momentsATarget);
-    Core::BindingSetHandle temporalHistB = buildSet(histBTarget, scratchBTarget, scratchATarget, momentsBTarget);
+    Core::BindingSetHandle temporalHistA = buildSet(scratchBTarget);
+    Core::BindingSetHandle temporalHistB = buildSet(scratchBTarget);
     if(!outputHalfA || !outputHalfB || !upsample || !temporalHistA || !temporalHistB){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft transparent shadow resolve binding sets"));
         rayTracingState().m_transparentResolveBindingSetOutputHalfA = nullptr;
@@ -1136,8 +1090,23 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     const u32 fullGroupsX = DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
     const u32 fullGroupsY = DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
 
+    NWB_ASSERT(targets.bindless.valid());
+    const DeferredBindlessFrameResources& bindless = targets.bindless;
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     const u32 foldValue = static_cast<u32>(dispatch.fold);
-    const auto runPass = [&](Core::BindingSet* const bindingSet, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY){
+    const auto runPass = [&](Core::BindingSet* const bindingSet, const SoftShadowResolvePassResources& resources, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY){
+        NWB_ASSERT(resources.softHalfTexture);
+        NWB_ASSERT(resources.inputColorTexture);
+        NWB_ASSERT(resources.momentsTexture);
+        // The seven reads now arrive through the heap rather than bindingSet, so retain the old automatic-state behavior
+        // explicitly. The selected role never aliases its local OUTPUT UAV (the same invariant the former sets encoded).
+        commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(resources.softHalfTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(resources.momentsTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         commandList.setResourceStatesForBindingSet(bindingSet);
         commandList.commitBarriers();
 
@@ -1156,11 +1125,20 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
         resolvePush.momentsValid = (dispatch.prepareOverride != nullptr) ? 1u : 0u;
         // OVERWRITE (opaque) vs MULTIPLY-onto-visibility (transparent fold). Ignored by PREPARE/WAVELET (only UPSAMPLE reads it).
         resolvePush.upsampleFold = foldValue;
+        resolvePush.geometrySlot = bindless.shadowSoftGeometry.slot();
+        resolvePush.depthSlot = bindless.gbufferDepth.slot();
+        resolvePush.worldPositionSlot = bindless.gbufferWorldPosition.slot();
+        resolvePush.normalSlot = bindless.gbufferNormal.slot();
+        resolvePush.softHalfSlot = resources.softHalf;
+        resolvePush.inputColorSlot = resources.inputColor;
+        resolvePush.momentsSlot = resources.moments;
 
         Core::ComputeState computeState;
         computeState.setPipeline(dispatch.pipeline);
         computeState.addBindingSet(bindingSet);
         commandList.setComputeState(computeState);
+        if(heap.isInitialized())
+            heap.bindCompute(commandList, *dispatch.pipeline);
         commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
         commandList.dispatch(groupsX, groupsY, 1u);
     };
@@ -1169,7 +1147,8 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     // in=raw) never read-write aliases the scratch; the temporal override (SOFT_HALF == the merge's accumulated history buffer,
     // still out=soft-B) reads the accumulated visibility instead. Either way the result lives in soft-B for the wavelets.
     Core::BindingSet* const prepareSet = dispatch.prepareOverride ? dispatch.prepareOverride : dispatch.outputHalfB;
-    runPass(prepareSet, 1u, ShadowResolveStage::Prepare, halfGroupsX, halfGroupsY);
+    const SoftShadowResolvePassResources& prepareResources = dispatch.prepareOverride ? dispatch.prepareOverrideResources : dispatch.outputHalfBResources;
+    runPass(prepareSet, prepareResources, 1u, ShadowResolveStage::Prepare, halfGroupsX, halfGroupsY);
 
     // Half-res a-trous wavelet passes at a doubling dilation, starting from soft-B. Each pass writes the buffer NOT
     // holding its input (outputHalfA reads soft-B writes soft-A; outputHalfB reads soft-A writes soft-B). srcIsHalfB
@@ -1181,7 +1160,8 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     bool srcIsHalfB = true;
     for(u32 pass = 0u; pass < dispatch.waveletPassCount; ++pass){
         Core::BindingSet* const bindingSet = srcIsHalfB ? dispatch.outputHalfA : dispatch.outputHalfB;
-        runPass(bindingSet, 1u << pass, ShadowResolveStage::Wavelet, halfGroupsX, halfGroupsY);
+        const SoftShadowResolvePassResources& resources = srcIsHalfB ? dispatch.outputHalfAResources : dispatch.outputHalfBResources;
+        runPass(bindingSet, resources, 1u << pass, ShadowResolveStage::Wavelet, halfGroupsX, halfGroupsY);
         srcIsHalfB = !srcIsHalfB;
     }
 
@@ -1189,7 +1169,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     // slot. The final wavelet result lives in soft-A when waveletPassCount is ODD (1 opaque / 1 transparent) -- srcIsHalfB is
     // now false. Both upsample sets read soft-A (INPUT_COLOR) by construction; assert the parity so a pass-count change is caught.
     NWB_ASSERT(!srcIsHalfB); // waveletPassCount must be odd for the final result to land in soft-A (the upsample's input)
-    runPass(dispatch.upsample, 1u, ShadowResolveStage::Upsample, fullGroupsX, fullGroupsY);
+    runPass(dispatch.upsample, dispatch.upsampleResources, 1u, ShadowResolveStage::Upsample, fullGroupsX, fullGroupsY);
 }
 
 
@@ -1399,6 +1379,9 @@ void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTarget
     rayTracingState().m_softShadowTemporalSeeded = true;
 
     Swap(targets.shadowSoftGeometry, targets.shadowSoftGeometryPrev);
+    // The descriptors are immutable per physical target generation. Swap their handles with the two role handles rather
+    // than rewriting a live heap slot, so next frame's "current" geometry role still names the texture just selected above.
+    Swap(targets.bindless.shadowSoftGeometry, targets.bindless.shadowSoftGeometryPrev);
     rayTracingState().m_softShadowHistoryFrontIsA ^= 1u;
 }
 

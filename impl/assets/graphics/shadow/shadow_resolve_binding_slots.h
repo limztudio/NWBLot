@@ -22,6 +22,10 @@
 // active shadow slots [lightSlotStart, lightSlotStart+lightSlotCount) carried in the push constants.
 #define NWB_SHADOW_RESOLVE_SET 0
 
+// The sampled-image slot numbers below are retained as the sparse local-layout ABI map; do not renumber the gaps.
+// Geometry downsample and soft resolve now fetch those logical reads from the global heap through push-constant slots,
+// so only the OUTPUT/VISIBILITY UAVs and scene CB are physically present in their set-0 layouts.
+
 // The half-res soft visibility Texture2DArray (one layer per shadow slot). SRV role: read by PREPARE
 // (copy) + WAVELET (the previous pass's color, via the ping-pong -- see below). The FINAL upsample reads it too.
 #define NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF 0
@@ -70,6 +74,7 @@
 // + normal + depth + the scene-shading CB (for the camera position), writes the packed half-res geometry cache above
 // (octahedral normal + camera distance + validity).
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_SET 0
+// These three logical G-buffer slots likewise remain reserved while the downsample reads the target-generation heap.
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION 0
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_NORMAL 1
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH 2

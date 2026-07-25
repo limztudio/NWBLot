@@ -196,6 +196,21 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         && registerTexture(bindless.avboitAccumExtinction, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumExtinction.get(), targets.avboit.accumExtinctionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitTransmittance, Core::GpuDescriptorClass::SampledImage3D, targets.avboit.transmittanceTexture.get(), targets.avboit.transmittanceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D)
         && registerSampler(bindless.avboitLinearSampler, avboitState().m_linearSampler.get())
+        // The soft-shadow geometry downsample + resolve use these target-generation slots directly in push constants.
+        // Keep the physical images retained through the heap's deferred-free window when a resize replaces them.
+        && registerTexture(bindless.shadowSoftGeometry, Core::GpuDescriptorClass::SampledImage, targets.shadowSoftGeometry.get(), targets.shadowSoftGeometryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.shadowSoftGeometryPrev, Core::GpuDescriptorClass::SampledImage, targets.shadowSoftGeometryPrev.get(), targets.shadowSoftGeometryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.shadowSoftHalfA, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowSoftHalfA.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerTexture(bindless.shadowSoftHalfB, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowSoftHalfB.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerTexture(bindless.shadowHistA, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowHistA.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerTexture(bindless.shadowHistB, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowHistB.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerTexture(bindless.shadowMomentsA, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowMomentsA.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerTexture(bindless.shadowMomentsB, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowMomentsB.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerTexture(bindless.transparentSoftHalf, Core::GpuDescriptorClass::SampledImage2DArray, targets.transparentSoftHalf.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerTexture(bindless.transparentHistA, Core::GpuDescriptorClass::SampledImage2DArray, targets.transparentHistA.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerTexture(bindless.transparentHistB, Core::GpuDescriptorClass::SampledImage2DArray, targets.transparentHistB.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerTexture(bindless.transparentMomentsA, Core::GpuDescriptorClass::SampledImage2DArray, targets.transparentMomentsA.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerTexture(bindless.transparentMomentsB, Core::GpuDescriptorClass::SampledImage2DArray, targets.transparentMomentsB.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
     ;
     if(!registered){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register deferred frame resources in the descriptor heap"));
@@ -251,6 +266,19 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
             heap.free(targets.bindless.avboitAccumExtinction);
             heap.free(targets.bindless.avboitTransmittance);
             heap.free(targets.bindless.avboitLinearSampler);
+            heap.free(targets.bindless.shadowSoftGeometry);
+            heap.free(targets.bindless.shadowSoftGeometryPrev);
+            heap.free(targets.bindless.shadowSoftHalfA);
+            heap.free(targets.bindless.shadowSoftHalfB);
+            heap.free(targets.bindless.shadowHistA);
+            heap.free(targets.bindless.shadowHistB);
+            heap.free(targets.bindless.shadowMomentsA);
+            heap.free(targets.bindless.shadowMomentsB);
+            heap.free(targets.bindless.transparentSoftHalf);
+            heap.free(targets.bindless.transparentHistA);
+            heap.free(targets.bindless.transparentHistB);
+            heap.free(targets.bindless.transparentMomentsA);
+            heap.free(targets.bindless.transparentMomentsB);
         }
     }
     targets.bindless = DeferredBindlessFrameResources{};

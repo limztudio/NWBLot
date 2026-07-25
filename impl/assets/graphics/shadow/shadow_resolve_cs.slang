@@ -4,6 +4,7 @@
 
 #include "shadow_resolve_binding_slots.h"
 #include "sw_binding_slots.h" // NWB_SW_SHADOW_SOFT_FACTOR + NWB_SCENE_SHADOW_SLOT_COUNT reach (via scene binding_slots)
+#include "../bindless/bindless_heap.slangi"
 #include "../scene/binding_slots.h"
 #include "../common/math.slangi"
 
@@ -54,40 +55,14 @@
 //   stage 2 UPSAMPLE (full-res dispatch): per slot, edge-aware (joint-bilateral) resample of the final half-res
 //     visibility into the FULL-res visibility buffer the deferred lighting samples. Background pixels write 1.0.
 
-[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF, NWB_SHADOW_RESOLVE_SET)]]
-Texture2DArray<float4> g_NwbShadowResolveSoftHalf;
-
-[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_GEOMETRY, NWB_SHADOW_RESOLVE_SET)]]
-Texture2D<float4> g_NwbShadowResolveGeometry;
-
-[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_GBUFFER_DEPTH, NWB_SHADOW_RESOLVE_SET)]]
-Texture2D<float4> g_NwbShadowResolveGBufferDepth;
-
 // The pass output (UAV). For PREPARE + WAVELET this is a HALF-res ping-pong layer (soft-A / soft-B); the C++ swaps the
 // bound texture per pass. (Only the UPSAMPLE writes the full-res visibility below, so this stays half-res here.)
 [[vk::binding(NWB_SHADOW_RESOLVE_BINDING_OUTPUT, NWB_SHADOW_RESOLVE_SET)]]
 RWTexture2DArray<float4> g_NwbShadowResolveOutput;
 
-// The input color (SRV): for WAVELET this is the previous pass's HALF-res layer (the OTHER ping-pong buffer); for
-// UPSAMPLE it is the final half-res visibility. PREPARE reads SOFT_HALF instead but this is always bound.
-[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_INPUT_COLOR, NWB_SHADOW_RESOLVE_SET)]]
-Texture2DArray<float4> g_NwbShadowResolveInputColor;
-
 // The FULL-res visibility Texture2DArray the deferred lighting samples -- the UPSAMPLE stage's output.
 [[vk::binding(NWB_SHADOW_RESOLVE_BINDING_VISIBILITY, NWB_SHADOW_RESOLVE_SET)]]
 RWTexture2DArray<float4> g_NwbShadowResolveVisibility;
-
-// TEMPORAL moments SRV (.x = m1, .y = m2, .z = history length n) from the reproject-merge. Read by the WAVELET stage's
-// variance-coupled luminance edge-stop, but ONLY when g_NwbShadowResolvePushConstants.momentsValid == 1; otherwise this
-// is a valid-but-unused dummy (never sampled -- the shader takes the spatial-variance fallback). See binding-slot doc.
-[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_MOMENTS, NWB_SHADOW_RESOLVE_SET)]]
-Texture2DArray<float4> g_NwbShadowResolveMoments;
-
-// FULL-res G-buffer world position + normal SRVs -- the UPSAMPLE stage's joint-bilateral CENTRE (see binding-slot doc).
-[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_GBUFFER_WORLDPOS, NWB_SHADOW_RESOLVE_SET)]]
-Texture2D<float4> g_NwbShadowResolveGBufferWorldPos;
-[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_GBUFFER_NORMAL, NWB_SHADOW_RESOLVE_SET)]]
-Texture2D<float4> g_NwbShadowResolveGBufferNormal;
 
 // Scene-shading CB: only the camera world position is needed (the full-res upsample centre's camera distance). Declared
 // directly (not via scene/buffer.slangi) for the same reason the geometry downsample does -- to layout-match the C++
@@ -114,6 +89,16 @@ struct NwbShadowResolvePushConstants{
                          // 1 = MULTIPLY the denoised result onto the visibility (soft COLORED TRANSPARENT fold-multiply,
                          // read-modify-write). Background pixels skip the write entirely when fold==1 (leaving the opaque
                          // result untouched -- white would clobber it). Ignored by PREPARE/WAVELET. See the UPSAMPLE stage.
+    // Global heap SampledImage slots. These retain the logical local-binding order while keeping the local set to its
+    // two UAVs + scene CB: geometry/depth/world-position/normal are Texture2D, soft-half/input-color/moments are arrays.
+    uint geometrySlot;
+    uint depthSlot;
+    uint worldPositionSlot;
+    uint normalSlot;
+    uint softHalfSlot;
+    uint inputColorSlot;
+    uint momentsSlot;
+    uint _pad0;
 };
 
 [[vk::push_constant]]
@@ -134,10 +119,10 @@ groupshared uint   s_NwbShadowResolveTileValid[NWB_SHADOW_RESOLVE_TILE_TEXELS]; 
 // Half-res geometry cache accessors (see shadow_geometry_downsample_cs): .xy = octahedral normal, .z = camera
 // distance, .w = validity.
 float4 nwbShadowResolveGeomAtHalf(const int2 halfTexel){
-    return g_NwbShadowResolveGeometry.Load(int3(halfTexel, 0));
+    return NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0));
 }
 bool nwbShadowResolveValidAtHalf(const int2 halfTexel){
-    return g_NwbShadowResolveGeometry.Load(int3(halfTexel, 0)).w > 0.5;
+    return NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)).w > 0.5;
 }
 
 
@@ -249,7 +234,7 @@ float nwbShadowResolveValueWeightVec(const NwbShadowResolveVisFVec centerVis, co
 // PREPARE/WAVELET tap read of the current INPUT_COLOR (or SOFT_HALF) at a half-res texel + slot, as the wavelet vector
 // type: .r broadcast for SCALAR (CH1), .rgb for RGB (CH3). Centralised so the LDS-load + large-step paths read identically.
 NwbShadowResolveVisVec nwbShadowResolveLoadInput(const int2 tap, const uint slot){
-    const float4 s = g_NwbShadowResolveInputColor.Load(int4(tap, (int)slot, 0));
+    const float4 s = NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.inputColorSlot).Load(int4(tap, (int)slot, 0));
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
     return NwbShadowResolveVisVec(s.rgb);
 #else
@@ -272,7 +257,7 @@ float4 nwbShadowResolveStore(const NwbShadowResolveVisFVec v){
 // branch is guarded by it), so a dummy-bound moments texture on the non-temporal path is safe.
 float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const int hw, const int hh, const uint momentsValid){
     if(momentsValid != 0u){
-        const float3 mom = g_NwbShadowResolveMoments.Load(int4(texel, (int)slot, 0)).xyz;
+        const float3 mom = NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.momentsSlot).Load(int4(texel, (int)slot, 0)).xyz;
         const float n = mom.z;
         if(n >= NWB_SHADOW_RESOLVE_VARIANCE_MIN_HISTORY){
             const float varTemporal = max(mom.y - mom.x * mom.x, 0.0);
@@ -288,11 +273,11 @@ float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const in
     [unroll] for(int dy = -1; dy <= 1; ++dy){
         [unroll] for(int dx = -1; dx <= 1; ++dx){
             const int2 t = int2(clamp(texel.x + dx, 0, hw - 1), clamp(texel.y + dy, 0, hh - 1));
-            if(g_NwbShadowResolveGeometry.Load(int3(t, 0)).w <= 0.5)
+            if(NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.geometrySlot).Load(int3(t, 0)).w <= 0.5)
                 continue; // background tap -> no receiver, skip
             // SCALAR: .r visibility; RGB: the LUMA of the colored transmittance, so the spatial variance tracks the same
             // perceptual signal the temporal moments (also luma) do -- keeping the sigma metric consistent for both variants.
-            const float4 sColor = g_NwbShadowResolveInputColor.Load(int4(t, (int)slot, 0));
+            const float4 sColor = NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.inputColorSlot).Load(int4(t, (int)slot, 0));
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
             const float v = nwbShadowResolveLuma(sColor.rgb);
 #else
@@ -329,7 +314,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             return;
 
         const int2 fullTexel = int2(pixel);
-        const bool background = g_NwbShadowResolveGBufferDepth.Load(int3(fullTexel, 0)).r >= 0.999999;
+        const bool background = NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.depthSlot).Load(int3(fullTexel, 0)).r >= 0.999999;
 
         const int hw = (int)g_NwbShadowResolvePushConstants.halfWidth;
         const int hh = (int)g_NwbShadowResolvePushConstants.halfHeight;
@@ -341,8 +326,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         // linear model is evaluated at, so the reconstruction snaps to the full-res silhouette rather than the half-res grid;
         // the centre normal drives the wide same-surface gate. The guide is referenced to the centre INSIDE the loop for
         // fp32 stability (relative distances are ~cm, absolute ~m -> squaring the absolute would lose the variance).
-        const float3 centerWorld = g_NwbShadowResolveGBufferWorldPos.Load(int3(fullTexel, 0)).xyz;
-        const float3 centerNormal = normalize(g_NwbShadowResolveGBufferNormal.Load(int3(fullTexel, 0)).xyz * 2.0 - 1.0);
+        const float3 centerWorld = NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.worldPositionSlot).Load(int3(fullTexel, 0)).xyz;
+        const float3 centerNormal = normalize(NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.normalSlot).Load(int3(fullTexel, 0)).xyz * 2.0 - 1.0);
         const float centerDist = length(centerWorld - g_NwbShadowResolveSceneShading.cameraPosition.xyz);
         const float guidedEps = NWB_SHADOW_RESOLVE_GUIDED_EPS_FRAC * centerDist;
         const float guidedEpsSq = guidedEps * guidedEps;
@@ -376,7 +361,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     const float4 tapGeom = nwbShadowResolveGeomAtHalf(tap);
                     if(tapGeom.w <= 0.5)
                         continue; // background tap -> no receiver
-                    const float3 tapVis = g_NwbShadowResolveInputColor.Load(int4(tap, slot, 0)).rgb;
+                    const float3 tapVis = NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.inputColorSlot).Load(int4(tap, slot, 0)).rgb;
                     anySum += tapVis;
                     anyCount += 1.0;
                     if(dot(centerNormal, nwbOctDecodeNormal(tapGeom.xy)) < NWB_SHADOW_RESOLVE_GUIDED_NORMAL_GATE)
@@ -433,7 +418,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         if(inBounds){
             const bool valid = nwbShadowResolveValidAtHalf(texel);
             for(uint slot = slotStart; slot < slotEnd; ++slot){
-                const float3 vis = valid ? g_NwbShadowResolveSoftHalf.Load(int4(texel, slot, 0)).rgb : float3(1.0, 1.0, 1.0);
+                const float3 vis = valid ? NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.softHalfSlot).Load(int4(texel, slot, 0)).rgb : float3(1.0, 1.0, 1.0);
                 g_NwbShadowResolveOutput[uint3(pixel, slot)] = float4(vis, 1.0);
             }
         }

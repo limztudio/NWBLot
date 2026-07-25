@@ -148,7 +148,7 @@ public:
 
 private:
     Core::BindingLayoutHandle m_meshBindingLayout;
-    // Regular AVBOIT depth-gate graphics path needs a descriptor-buffer-compatible mesh set so it can coexist with
+    // Regular AVBOIT material graphics paths need a descriptor-buffer-compatible mesh set so they can coexist with
     // the global heap on Backend C. CSG continues to use m_meshBindingLayout and its classic companion layouts.
     Core::BindingLayoutHandle m_bindlessMeshBindingLayout;
     Core::BindingLayoutHandle m_computeBindingLayout;
@@ -270,7 +270,7 @@ public:
 
 private:
     Core::BindingLayoutHandle m_emptyBindingLayout;
-    // Regular non-CSG occupancy/extinction layouts are pure-resource descriptor-buffer shapes. Their CSG twins
+    // Regular non-CSG AVBOIT material layouts are pure-resource descriptor-buffer shapes. Their CSG twins
     // retain the old texture+sampler local contract until CSG graphics has a full Backend-C conversion.
     Core::BindingLayoutHandle m_occupancyBindingLayout;
     Core::BindingLayoutHandle m_csgOccupancyBindingLayout;
@@ -279,6 +279,7 @@ private:
     Core::BindingLayoutHandle m_csgExtinctionBindingLayout;
     Core::BindingLayoutHandle m_integrateBindingLayout;
     Core::BindingLayoutHandle m_accumulateBindingLayout;
+    Core::BindingLayoutHandle m_csgAccumulateBindingLayout;
     Core::SamplerHandle m_linearSampler;
     Core::ShaderHandle m_depthWarpComputeShader;
     Core::ShaderHandle m_integrateComputeShader;

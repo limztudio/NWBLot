@@ -38,7 +38,7 @@ bool RendererMaterialSystem::createMeshShaderResources(){
     if(!drawState().m_bindlessMeshBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
-        // This pure-resource twin is consumed only by regular AVBOIT occupancy/extinction pipelines, together with
+        // This pure-resource twin is consumed only by regular AVBOIT material pipelines, together with
         // the global resource/sampler heap. CSG keeps the classic layout above because its graphics tail is not yet
         // wholesale descriptor-buffer compatible.
         bindingLayoutDesc.setUseDescriptorBuffer(true);
@@ -228,11 +228,11 @@ bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Mater
             ready = false;
             return;
         }
-        const bool usesBindlessAvboitDepth =
-            (drawItem.pipelineKey.pass == MaterialPipelinePass::AvboitOccupancy || drawItem.pipelineKey.pass == MaterialPipelinePass::AvboitExtinction)
+        const bool usesBindlessAvboitResources =
+            MaterialPipelinePassUsesRendererAvboit(drawItem.pipelineKey.pass)
             && drawItem.pipelineKey.csgMode == MaterialPipelineCsgMode::None
         ;
-        if(usesBindlessAvboitDepth){
+        if(usesBindlessAvboitResources){
             if(!mesh.bindlessMeshBindingSet && !m_renderer.meshSystem().createBindlessMeshBindingSet(mesh)){
                 ready = false;
                 return;

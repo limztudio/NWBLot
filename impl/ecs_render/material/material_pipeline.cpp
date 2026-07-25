@@ -144,14 +144,15 @@ struct MaterialPipelineAvboitBindingLayouts{
     const Core::BindingLayoutHandle& extinction;
     const Core::BindingLayoutHandle& csgExtinction;
     const Core::BindingLayoutHandle& accumulate;
+    const Core::BindingLayoutHandle& csgAccumulate;
 };
 
-[[nodiscard]] constexpr bool UsesBindlessAvboitDepth(
+[[nodiscard]] constexpr bool UsesBindlessAvboitResources(
     const MaterialPipelinePass::Enum pass,
     const bool csgClipPipeline
 ){
     return !csgClipPipeline
-        && (pass == MaterialPipelinePass::AvboitOccupancy || pass == MaterialPipelinePass::AvboitExtinction)
+        && MaterialPipelinePassUsesRendererAvboit(pass)
     ;
 }
 
@@ -171,7 +172,7 @@ template<typename PipelineDesc>
         bindingLayout = csgClipPipeline ? &bindingLayouts.csgExtinction : &bindingLayouts.extinction;
         break;
     case MaterialPipelinePass::AvboitAccumulate:
-        bindingLayout = &bindingLayouts.accumulate;
+        bindingLayout = csgClipPipeline ? &bindingLayouts.csgAccumulate : &bindingLayouts.accumulate;
         break;
     default:
         return true;
@@ -290,7 +291,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
     const bool csgClipPipeline = csgBindingUse.clip;
     const bool avboitCsgClipPipeline = csgBindingUse.avboitClip;
-    const bool usesBindlessAvboitDepth = __hidden_material_pipeline::UsesBindlessAvboitDepth(pass, csgClipPipeline);
+    const bool usesBindlessAvboitResources = __hidden_material_pipeline::UsesBindlessAvboitResources(pass, csgClipPipeline);
     ACompactString csgProjectEvaluatorModuleInclude;
     Core::GraphicsString csgProjectEvaluatorModuleAssignment(arena());
     AStringView materialProjectEvaluatorModuleAssignmentToAdd;
@@ -386,6 +387,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             || !avboitState().m_extinctionBindingLayout
             || !avboitState().m_csgExtinctionBindingLayout
             || !avboitState().m_accumulateBindingLayout
+            || !avboitState().m_csgAccumulateBindingLayout
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT resources were not validated before material pipeline creation"));
             return failMaterialPipeline();
@@ -431,11 +433,12 @@ bool RendererMaterialSystem::createRendererPipeline(
         avboitState().m_csgOccupancyBindingLayout,
         avboitState().m_extinctionBindingLayout,
         avboitState().m_csgExtinctionBindingLayout,
-        avboitState().m_accumulateBindingLayout
+        avboitState().m_accumulateBindingLayout,
+        avboitState().m_csgAccumulateBindingLayout
     };
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-    if(usesBindlessAvboitDepth && !heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: regular AVBOIT depth-gate pipeline requires the global descriptor heap"));
+    if(usesBindlessAvboitResources && !heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: regular AVBOIT material pipeline requires the global descriptor heap"));
         return failMaterialPipeline();
     }
 
@@ -483,7 +486,7 @@ bool RendererMaterialSystem::createRendererPipeline(
     };
 
     auto tryBuildMeshPipeline = [&]() -> bool{
-        const Core::BindingLayoutHandle& meshBindingLayout = usesBindlessAvboitDepth
+        const Core::BindingLayoutHandle& meshBindingLayout = usesBindlessAvboitResources
             ? drawState().m_bindlessMeshBindingLayout
             : drawState().m_meshBindingLayout
         ;
@@ -505,7 +508,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             return false;
         if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(pipelineDesc, csgBindingUse, csgBindingLayouts))
             return false;
-        if(usesBindlessAvboitDepth){
+        if(usesBindlessAvboitResources){
             pipelineDesc
                 .addBindingLayout(heap.getResourceLayout())
                 .addBindingLayout(heap.getSamplerLayout())
@@ -567,7 +570,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             || materialDrivenAvboitPass
         ;
         const Core::BindingLayoutHandle& avboitViewBindingLayout = emulationGraphicsUsesMeshFrameSet
-            ? (usesBindlessAvboitDepth ? drawState().m_bindlessEmulationViewBindingLayout : drawState().m_emulationViewBindingLayout)
+            ? (usesBindlessAvboitResources ? drawState().m_bindlessEmulationViewBindingLayout : drawState().m_emulationViewBindingLayout)
             : avboitState().m_emptyBindingLayout
         ;
         if(MaterialPipelinePassUsesRendererAvboit(pass)){
@@ -580,7 +583,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
         if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(emulationDesc, csgBindingUse, csgBindingLayouts))
             return false;
-        if(usesBindlessAvboitDepth){
+        if(usesBindlessAvboitResources){
             emulationDesc
                 .addBindingLayout(heap.getResourceLayout())
                 .addBindingLayout(heap.getSamplerLayout())

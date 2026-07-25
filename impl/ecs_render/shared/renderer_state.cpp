@@ -163,6 +163,7 @@ void RendererAvboitState::invalidateResources(){
     m_csgExtinctionBindingLayout.reset();
     m_integrateBindingLayout.reset();
     m_accumulateBindingLayout.reset();
+    m_csgAccumulateBindingLayout.reset();
     m_linearSampler.reset();
     m_depthWarpComputeShader.reset();
     m_integrateComputeShader.reset();

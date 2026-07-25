@@ -52,6 +52,11 @@ Texture2D<float4> g_NwbHeapSampledImages[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 Texture2DArray<float4> g_NwbHeapSampledImage2DArrays[];
 
+// Texture3D needs another sampled-image binding because Slang's resource type determines the SPIR-V image view
+// dimension. It shares the global resource-slot namespace with the other non-sampler classes.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+Texture3D<float4> g_NwbHeapSampledImage3Ds[];
+
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 RWTexture2D<float4> g_NwbHeapStorageImages[];
 
@@ -103,6 +108,10 @@ Texture2D<float4> NwbHeapSampledImage2D(const uint slot){
 
 Texture2DArray<float4> NwbHeapSampledImage2DArray(const uint slot){
     return g_NwbHeapSampledImage2DArrays[slot];
+}
+
+Texture3D<float4> NwbHeapSampledImage3D(const uint slot){
+    return g_NwbHeapSampledImage3Ds[slot];
 }
 
 SamplerState NwbHeapSampler(const uint slot){

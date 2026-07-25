@@ -38,6 +38,9 @@ namespace GpuDescriptorClass{
         // distinct descriptor array because Texture2D and Texture2DArray have different shader types even though
         // both write VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE descriptors.
         SampledImage2DArray,// Texture2DArray_SRV     -> SAMPLED_IMAGE
+        // Keep appended for the same stable handle ABI reason. Texture3D requires its own shader-side array even
+        // though Vulkan encodes it with the same sampled-image descriptor type.
+        SampledImage3D,     // Texture3D_SRV          -> SAMPLED_IMAGE
 
         kCount
     };

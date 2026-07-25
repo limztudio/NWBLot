@@ -371,6 +371,15 @@ void RendererAvboitSystem::renderAvboitPasses(
 
     dispatchAvboitIntegration(commandList, avboitTargets);
 
+    // Regular accumulation samples the integrated Texture3D through the heap, so transition it explicitly instead
+    // of relying on local BindingSet state tracking. CSG's companion set requests this state too.
+    commandList.setTextureState(
+        avboitTargets.transmittanceTexture.get(),
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    );
+    commandList.commitBarriers();
+
     m_renderer.materialSystem().renderMaterialPass(
         commandList,
         avboitTargets.accumulationFramebuffer.get(),

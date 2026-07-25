@@ -47,12 +47,12 @@ static void SetCsgBindingSetResourceStates(
         commandList.setResourceStatesForBindingSet(bindingSets.intervalSample.get());
 }
 
-[[nodiscard]] constexpr bool UsesBindlessAvboitDepth(
+[[nodiscard]] constexpr bool UsesBindlessAvboitResources(
     const MaterialPipelinePass::Enum pass,
     const MaterialPipelineCsgBindingUse& csgBindingUse
 ){
     return !csgBindingUse.clip
-        && (pass == MaterialPipelinePass::AvboitOccupancy || pass == MaterialPipelinePass::AvboitExtinction)
+        && MaterialPipelinePassUsesRendererAvboit(pass)
     ;
 }
 
@@ -68,6 +68,8 @@ static void SetCsgBindingSetResourceStates(
         return context.avboitTargets->csgOccupancyBindingSet.get();
     case MaterialPipelinePass::AvboitExtinction:
         return context.avboitTargets->csgExtinctionBindingSet.get();
+    case MaterialPipelinePass::AvboitAccumulate:
+        return context.avboitTargets->csgAccumulateBindingSet.get();
     default:
         return context.passBindingSet;
     }
@@ -141,11 +143,11 @@ bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(
         const MaterialPipelineCsgBindingUse csgBindingUse =
             MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, drawItem.pipelineKey.pass)
         ;
-        const bool usesBindlessAvboitDepth = __hidden_material_pass_draw::UsesBindlessAvboitDepth(
+        const bool usesBindlessAvboitResources = __hidden_material_pass_draw::UsesBindlessAvboitResources(
             drawItem.pipelineKey.pass,
             csgBindingUse
         );
-        const Core::BindingSetHandle& meshBindingSet = usesBindlessAvboitDepth
+        const Core::BindingSetHandle& meshBindingSet = usesBindlessAvboitResources
             ? mesh->bindlessMeshBindingSet
             : mesh->meshBindingSet
         ;
@@ -290,9 +292,9 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         const MaterialPipelineCsgBindingUse csgBindingUse =
             MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
         const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
-        const bool usesBindlessAvboitDepth = __hidden_material_pass_draw::UsesBindlessAvboitDepth(context.pass, csgBindingUse);
+        const bool usesBindlessAvboitResources = __hidden_material_pass_draw::UsesBindlessAvboitResources(context.pass, csgBindingUse);
         Core::BindingSet* const passBindingSet = __hidden_material_pass_draw::ResolvePassBindingSet(context, csgBindingUse);
-        Core::BindingSet* const meshBindingSet = usesBindlessAvboitDepth
+        Core::BindingSet* const meshBindingSet = usesBindlessAvboitResources
             ? mesh.bindlessMeshBindingSet.get()
             : mesh.meshBindingSet.get()
         ;
@@ -319,7 +321,7 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         __hidden_material_pass_draw::AddCsgGraphicsBindingSets(meshletState, csgBindingUse, csgBindingSets);
 
         context.commandList.setMeshletState(meshletState);
-        if(usesBindlessAvboitDepth)
+        if(usesBindlessAvboitResources)
             graphics().getDevice()->getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.meshletPipeline.get());
 
         setMaterialPassDrawPushConstants(context, drawItem, mesh);
@@ -352,7 +354,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources.emulationPipeline);
         const MaterialPipelineCsgBindingUse csgBindingUse =
             MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
-        const bool usesBindlessAvboitDepth = __hidden_material_pass_draw::UsesBindlessAvboitDepth(context.pass, csgBindingUse);
+        const bool usesBindlessAvboitResources = __hidden_material_pass_draw::UsesBindlessAvboitResources(context.pass, csgBindingUse);
         Core::BindingSet* const passBindingSet = __hidden_material_pass_draw::ResolvePassBindingSet(context, csgBindingUse);
         NWB_ASSERT(mesh.computeBindingSet);
         NWB_ASSERT(mesh.emulationVertexBuffer);
@@ -405,7 +407,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         );
         if(usesAvboit){
             Core::BindingSet* const emulationViewBindingSet = pipelineResources.emulationGraphicsUsesMeshFrameSet
-                ? (usesBindlessAvboitDepth ? drawState().m_bindlessEmulationViewBindingSet.get() : drawState().m_emulationViewBindingSet.get())
+                ? (usesBindlessAvboitResources ? drawState().m_bindlessEmulationViewBindingSet.get() : drawState().m_emulationViewBindingSet.get())
                 : nullptr
             ;
             graphicsState.addBindingSet(emulationViewBindingSet);
@@ -421,7 +423,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         }
 
         context.commandList.setGraphicsState(graphicsState);
-        if(usesBindlessAvboitDepth)
+        if(usesBindlessAvboitResources)
             graphics().getDevice()->getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.emulationPipeline.get());
 
         setMaterialPassDrawPushConstants(context, drawItem, mesh);

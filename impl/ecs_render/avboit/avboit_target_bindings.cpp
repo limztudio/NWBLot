@@ -177,17 +177,10 @@ bool RendererAvboitSystem::createAvboitFrameTargetBindingSets(
 
     Core::BindingSetDesc accumulateBindingSetDesc(arena());
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, avboitTargets.depthWarpBuffer.get()));
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_AVBOIT_ACCUMULATE_BINDING_TRANSMITTANCE,
-        avboitTargets.transmittanceTexture.get(),
-        avboitTargets.transmittanceFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture3D
-    ));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, avboitTargets.controlBuffer.get()));
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER, avboitState().m_linearSampler.get()));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get()));
+    __hidden_avboit_target_bindings::AddBindlessResourcesBinding(accumulateBindingSetDesc, createdTargets);
     if(!__hidden_avboit_target_bindings::CreateBindingSet(
         *device,
         avboitTargets.accumulateBindingSet,
@@ -195,6 +188,29 @@ bool RendererAvboitSystem::createAvboitFrameTargetBindingSets(
         avboitState().m_accumulateBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding set"));
+        return false;
+    }
+
+    Core::BindingSetDesc csgAccumulateBindingSetDesc(arena());
+    csgAccumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, avboitTargets.depthWarpBuffer.get()));
+    csgAccumulateBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_AVBOIT_ACCUMULATE_BINDING_TRANSMITTANCE,
+        avboitTargets.transmittanceTexture.get(),
+        avboitTargets.transmittanceFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture3D
+    ));
+    csgAccumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, avboitTargets.controlBuffer.get()));
+    csgAccumulateBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER, avboitState().m_linearSampler.get()));
+    csgAccumulateBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
+    csgAccumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get()));
+    if(!__hidden_avboit_target_bindings::CreateBindingSet(
+        *device,
+        avboitTargets.csgAccumulateBindingSet,
+        csgAccumulateBindingSetDesc,
+        avboitState().m_csgAccumulateBindingLayout
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT CSG accumulation binding set"));
         return false;
     }
 

@@ -115,6 +115,7 @@ void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets
     targets.csgExtinctionBindingSet.reset();
     targets.integrateBindingSet.reset();
     targets.accumulateBindingSet.reset();
+    targets.csgAccumulateBindingSet.reset();
 
     targets.lowFramebuffer.reset();
     targets.accumulationFramebuffer.reset();
@@ -147,6 +148,10 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
     }
     if(!deferredState().m_sampler){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred bindless resources require the deferred sampler"));
+        return false;
+    }
+    if(!avboitState().m_linearSampler){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred bindless resources require the AVBOIT linear sampler"));
         return false;
     }
 
@@ -192,6 +197,8 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         && registerTexture(bindless.opaqueColor, Core::GpuDescriptorClass::SampledImage, targets.opaqueColor.get(), targets.opaqueColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitAccumColor, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumColor.get(), targets.avboit.accumColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitAccumExtinction, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumExtinction.get(), targets.avboit.accumExtinctionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.avboitTransmittance, Core::GpuDescriptorClass::SampledImage3D, targets.avboit.transmittanceTexture.get(), targets.avboit.transmittanceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D)
+        && registerSampler(bindless.avboitLinearSampler, avboitState().m_linearSampler.get())
     ;
     if(!registered){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register deferred frame resources in the descriptor heap"));
@@ -210,6 +217,8 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
     bindless.slots.opaqueColor = bindless.opaqueColor.slot();
     bindless.slots.avboitAccumColor = bindless.avboitAccumColor.slot();
     bindless.slots.avboitAccumExtinction = bindless.avboitAccumExtinction.slot();
+    bindless.slots.avboitTransmittance = bindless.avboitTransmittance.slot();
+    bindless.slots.avboitLinearSampler = bindless.avboitLinearSampler.slot();
 
     Core::BufferDesc slotsBufferDesc;
     slotsBufferDesc
@@ -243,6 +252,8 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
             heap.free(targets.bindless.opaqueColor);
             heap.free(targets.bindless.avboitAccumColor);
             heap.free(targets.bindless.avboitAccumExtinction);
+            heap.free(targets.bindless.avboitTransmittance);
+            heap.free(targets.bindless.avboitLinearSampler);
         }
     }
     targets.bindless = DeferredBindlessFrameResources{};
@@ -559,7 +570,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    // AVBOIT's regular occupancy/extinction sets use the shared target-generation heap-slot cbuffer. Allocate those
+    // AVBOIT's regular material sets use the shared target-generation heap-slot cbuffer. Allocate those
     // descriptor-buffer sets after deferred lighting's heap-coupled pipeline, while their layouts remain available
     // for the normal target setup. This preserves the established SW pipeline-creation sequence before AVBOIT draw
     // work begins. Transparent CSG receives the parallel classic fallback here as well.

@@ -42,8 +42,8 @@ struct AvboitFrameTargets{
     Core::BufferHandle controlBuffer;
     Core::BufferHandle extinctionBuffer;
     Core::BufferHandle extinctionOverflowBuffer;
-    // Regular occupancy/extinction use the deferred bindless depth/sampler slots. CSG retains these companion local
-    // sets until its graphics pipeline layouts receive their own descriptor-buffer conversion.
+    // Regular material-driven AVBOIT passes use the target-generation bindless resource slots. CSG retains companion
+    // local sets until its graphics pipeline layouts receive their own descriptor-buffer conversion.
     Core::BindingSetHandle occupancyBindingSet;
     Core::BindingSetHandle csgOccupancyBindingSet;
     Core::BindingSetHandle depthWarpBindingSet;
@@ -51,6 +51,7 @@ struct AvboitFrameTargets{
     Core::BindingSetHandle csgExtinctionBindingSet;
     Core::BindingSetHandle integrateBindingSet;
     Core::BindingSetHandle accumulateBindingSet;
+    Core::BindingSetHandle csgAccumulateBindingSet;
 
     [[nodiscard]] bool valid()const noexcept{
 #if defined(NWB_DEBUG)
@@ -83,6 +84,7 @@ struct AvboitFrameTargets{
             && csgExtinctionBindingSet != nullptr
             && integrateBindingSet != nullptr
             && accumulateBindingSet != nullptr
+            && csgAccumulateBindingSet != nullptr
         ;
 #else
         return accumulationFramebuffer != nullptr;
@@ -99,8 +101,8 @@ struct MaterialPassDrawContext{
     const Core::ViewportState& viewportState;
 };
 
-// Per-frame slot indirection for the first ordinary-pass bindless migration. The data is a std140-compatible
-// sequence of three uint4 lanes in deferred/bindless_resources.slangi. Descriptor handles retain their class tag on
+// Per-frame slot indirection for ordinary-pass bindless consumers. The data is a std140-compatible sequence of four
+// uint4 lanes in deferred/bindless_resources.slangi. Descriptor handles retain their class tag on
 // the CPU; shaders need only the global slot because each field names the descriptor array it indexes.
 struct DeferredBindlessResourceSlots{
     u32 gbufferBaseColor = 0u;
@@ -117,8 +119,13 @@ struct DeferredBindlessResourceSlots{
     u32 avboitAccumColor = 0u;
     u32 avboitAccumExtinction = 0u;
     u32 _pad = 0u;
+
+    u32 avboitTransmittance = 0u;
+    u32 avboitLinearSampler = 0u;
+    u32 _avboitPad0 = 0u;
+    u32 _avboitPad1 = 0u;
 };
-static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 12u, "Deferred bindless slots must match three std140 uint4 lanes");
+static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 16u, "Deferred bindless slots must match four std140 uint4 lanes");
 
 // Heap registrations are owned by the deferred-target generation. Resize/recreate frees each handle through the
 // heap's deferred retirement path before releasing the texture it points at; the slot buffer is shared by lighting
@@ -137,6 +144,8 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle opaqueColor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitAccumColor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitAccumExtinction = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle avboitTransmittance = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle avboitLinearSampler = Core::GpuDescriptorHandle::invalid();
     bool slotsUploaded = false;
 
     [[nodiscard]] bool valid()const noexcept{
@@ -153,6 +162,8 @@ struct DeferredBindlessFrameResources{
             && opaqueColor.valid()
             && avboitAccumColor.valid()
             && avboitAccumExtinction.valid()
+            && avboitTransmittance.valid()
+            && avboitLinearSampler.valid()
         ;
     }
 };

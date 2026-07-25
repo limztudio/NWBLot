@@ -59,7 +59,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     Core::BufferHandle attributeBuffer;     // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
     Core::RayTracingAccelStructHandle blas;
     Core::BindingSetHandle meshBindingSet;
-    // Descriptor-buffer-compatible twin used only by non-CSG AVBOIT occupancy/extinction graphics pipelines.
+    // Descriptor-buffer-compatible twin used only by non-CSG AVBOIT material graphics pipelines.
     Core::BindingSetHandle bindlessMeshBindingSet;
     Core::BindingSetHandle computeBindingSet;
     Core::BufferHandle swBvhNodeBuffer;     // per-mesh software LBVH nodes (no-hardware-RT shadow fallback)

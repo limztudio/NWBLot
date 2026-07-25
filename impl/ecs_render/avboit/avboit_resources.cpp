@@ -190,6 +190,27 @@ bool RendererAvboitSystem::createAvboitResources(){
         avboitState().m_accumulateBindingLayout,
         Core::ShaderType::Pixel,
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
+            // The regular accumulate shader fetches its Texture3D transmittance volume and linear sampler from the
+            // heap, leaving a pure-resource local set that Backend C can bind with the heap at sets 8/9.
+            bindingLayoutDesc.setUseDescriptorBuffer(true);
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
+        }
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding layout"));
+        return false;
+    }
+
+    if(!__hidden_avboit_resources::CreateBindingLayout(
+        arena(),
+        *device,
+        avboitState().m_csgAccumulateBindingLayout,
+        Core::ShaderType::Pixel,
+        [](Core::BindingLayoutDesc& bindingLayoutDesc){
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_TRANSMITTANCE, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, 1));
@@ -199,7 +220,7 @@ bool RendererAvboitSystem::createAvboitResources(){
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
         }
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding layout"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT CSG accumulation binding layout"));
         return false;
     }
 

@@ -285,8 +285,8 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
         return false;
     }
 
-    // The regular occupancy/extinction binding sets share DeferredBindlessFrameResources::slotsBuffer. That buffer
-    // is created after all frame targets are registered in the global heap, so defer binding-set creation until the
+    // The regular AVBOIT material binding sets share DeferredBindlessFrameResources::slotsBuffer. That buffer is
+    // created after all frame targets are registered in the global heap, so defer binding-set creation until the
     // deferred target builder reaches that point.
     createdTargets.avboit = Move(avboitTargets);
     avboitState().m_targetsNeedClear = true;

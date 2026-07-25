@@ -365,11 +365,11 @@ TEST_F(DescriptorBufferRoundTripTest, AllocationsAreStrideAligned){
 }
 
 
-// Regular AVBOIT occupancy/extinction now keep opaque depth and its point sampler in the global heap. Their local
-// sets therefore become pure-resource shapes: the shared deferred-slot CB plus coverage/depth-warp/extinction
-// buffers. Exercise both exact shapes through the live descriptor-buffer API so a future local sampler or image
-// regression cannot silently downgrade the non-CSG transparent path on Backend C.
-TEST_F(DescriptorBufferRoundTripTest, AvboitDepthGateShapesBuildAsDescriptorBuffer){
+// Regular AVBOIT material passes keep sampled images and samplers in the global heap. Their local sets therefore
+// become pure-resource shapes: the shared deferred-slot CB plus coverage/depth-warp/extinction/scene buffers.
+// Exercise every exact non-CSG shape through the live descriptor-buffer API so a future local sampler or image
+// regression cannot silently downgrade the transparent path on Backend C.
+TEST_F(DescriptorBufferRoundTripTest, AvboitMaterialShapesBuildAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/avboit_depth_gate_desc_arena"};
@@ -378,7 +378,7 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitDepthGateShapesBuildAsDescriptorBuff
     auto makeConstantBuffer = [&]() {
         return device.createBuffer(
             BufferDesc()
-                .setByteSize(48u)
+                .setByteSize(64u)
                 .setIsConstantBuffer(true)
                 .setInitialState(ResourceStates::ConstantBuffer)
                 .setKeepInitialState(true)
@@ -411,7 +411,9 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitDepthGateShapesBuildAsDescriptorBuff
     auto control = makeStructuredSrv(4u);
     auto extinction = makeStructuredUav(4u);
     auto overflowDepth = makeStructuredUav(4u);
-    ASSERT_TRUE(slots && coverage && depthWarp && control && extinction && overflowDepth);
+    auto sceneShading = makeConstantBuffer();
+    auto lightList = makeStructuredSrv(16u);
+    ASSERT_TRUE(slots && coverage && depthWarp && control && extinction && overflowDepth && sceneShading && lightList);
 
     BindingLayoutDesc occupancyLayoutDesc(descArena);
     occupancyLayoutDesc.setVisibility(ShaderType::Pixel);
@@ -452,6 +454,29 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitDepthGateShapesBuildAsDescriptorBuff
     extinctionSetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH, overflowDepth.get()));
     auto extinctionSet = device.createBindingSet(extinctionSetDesc, extinctionLayout);
     ASSERT_NE(extinctionSet.get(), nullptr);
+
+    BindingLayoutDesc accumulateLayoutDesc(descArena);
+    accumulateLayoutDesc.setVisibility(ShaderType::Pixel);
+    accumulateLayoutDesc.setUseDescriptorBuffer(true);
+    accumulateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, 1u));
+    accumulateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, 1u));
+    accumulateLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING, 1u));
+    accumulateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST, 1u));
+    accumulateLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, 1u));
+    accumulateLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE));
+    auto accumulateLayout = device.createBindingLayout(accumulateLayoutDesc);
+    ASSERT_NE(accumulateLayout.get(), nullptr);
+    ASSERT_TRUE(accumulateLayout->isDescriptorBufferCompatible());
+    EXPECT_EQ(accumulateLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+
+    BindingSetDesc accumulateSetDesc(descArena);
+    accumulateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, depthWarp.get()));
+    accumulateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, control.get()));
+    accumulateSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING, sceneShading.get()));
+    accumulateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST, lightList.get()));
+    accumulateSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, slots.get()));
+    auto accumulateSet = device.createBindingSet(accumulateSetDesc, accumulateLayout);
+    ASSERT_NE(accumulateSet.get(), nullptr);
 
     auto& heap = device.getDescriptorHeap();
     EXPECT_TRUE(heap.isInitialized() && heap.usesDescriptorBuffer());
@@ -1724,6 +1749,49 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
         heap.advanceFrame();
     EXPECT_EQ(sampledImageArray->getReferenceCount(), 1u)
         << "heap did not release the descriptor resource after its in-flight quarantine matured";
+
+    // AVBOIT accumulation consumes its integrated transmittance as Texture3D. This needs a separate shader-side
+    // descriptor array from Texture2D/Texture2DArray even though all three encode VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE.
+    // Verify the new class routes through Backend C and retains the volume through the same in-flight quarantine.
+    auto sampledImage3D = device.createTexture(
+        TextureDesc()
+            .setWidth(32u)
+            .setHeight(32u)
+            .setDepth(8u)
+            .setDimension(TextureDimension::Texture3D)
+            .setFormat(Format::RGBA16_FLOAT)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(sampledImage3D);
+    EXPECT_EQ(sampledImage3D->getReferenceCount(), 1u);
+
+    EXPECT_EQ(
+        heap.getRegisterSlot(GpuDescriptorClass::SampledImage3D),
+        NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D
+    );
+    const GpuDescriptorHandle sampledImage3DHandle = heap.allocate(GpuDescriptorClass::SampledImage3D);
+    ASSERT_TRUE(sampledImage3DHandle.valid());
+    EXPECT_TRUE(heap.write(
+        sampledImage3DHandle,
+        BindingSetItem::Texture_SRV(
+            0u,
+            sampledImage3D.get(),
+            Format::RGBA16_FLOAT,
+            TextureSubresourceSet(0u, 1u, 0u, 1u),
+            TextureDimension::Texture3D
+        )
+    )) << "heap Texture3D write() did not route through the descriptor-buffer path";
+    EXPECT_EQ(sampledImage3D->getReferenceCount(), 2u)
+        << "heap write() did not retain the persistent Texture3D resource";
+
+    heap.free(sampledImage3DHandle);
+    EXPECT_EQ(sampledImage3D->getReferenceCount(), 2u)
+        << "heap free() released the Texture3D resource before its in-flight quarantine matured";
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+    EXPECT_EQ(sampledImage3D->getReferenceCount(), 1u)
+        << "heap did not release the Texture3D resource after its in-flight quarantine matured";
 }
 
 

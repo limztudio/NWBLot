@@ -27,10 +27,10 @@ namespace __hidden_vulkan_descriptor_heap{
     // each occupy the full resourceCapacity, so the total live in one set is this many times the capacity - used to
     // respect the aggregate maxPerStageUpdateAfterBindResources limit.
     //
-    // SampledImage2DArray is deliberately appended after Sampler in the public enum to preserve existing handle
-    // tags, so do not rely on enum contiguity when iterating the resource classes below.
-    inline constexpr u32 s_ResourceClassCount = 6u;
-    inline constexpr u32 s_SampledImageClassCount = 2u;
+    // Sampled-image dimensions are deliberately appended after Sampler in the public enum to preserve existing
+    // handle tags, so do not rely on enum contiguity when iterating the resource classes below.
+    inline constexpr u32 s_ResourceClassCount = 7u;
+    inline constexpr u32 s_SampledImageClassCount = 3u;
 
     // Backend C owns a distinct descriptor-buffer block per live TLAS generation. Two in-flight frames plus the
     // current replacement need at most three slots; keep one spare so a burst of capacity growth still preserves
@@ -50,6 +50,7 @@ namespace __hidden_vulkan_descriptor_heap{
         case GpuDescriptorClass::AccelStruct:   return ResourceType::RayTracingAccelStruct;
         case GpuDescriptorClass::Sampler:       return ResourceType::Sampler;
         case GpuDescriptorClass::SampledImage2DArray: return ResourceType::Texture_SRV;
+        case GpuDescriptorClass::SampledImage3D: return ResourceType::Texture_SRV;
         default:                                return ResourceType::None;
         }
     }
@@ -91,6 +92,7 @@ u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptor
     case GpuDescriptorClass::AccelStruct:   return NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT;
     case GpuDescriptorClass::Sampler:       return NWB_BINDLESS_HEAP_BINDING_SAMPLER;
     case GpuDescriptorClass::SampledImage2DArray: return NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY;
+    case GpuDescriptorClass::SampledImage3D: return NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D;
     default:                                return 0u;
     }
 }
@@ -170,7 +172,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
 
     // The heap is visible to every shader stage, so clamp both descriptor-set and per-stage update-after-bind limits.
-    // The two sampled-image arrays share their sampled-image caps; Vulkan exposes no separate texel-buffer cap, so
+    // The three sampled-image arrays share their sampled-image caps; Vulkan exposes no separate texel-buffer cap, so
     // SampledBuffer remains covered by the aggregate resource cap below.
     u32 resourceLimit = indexingProps.maxDescriptorSetUpdateAfterBindSampledImages;
     resourceLimit = Min(resourceLimit, indexingProps.maxDescriptorSetUpdateAfterBindSampledImages / s_SampledImageClassCount);
@@ -238,6 +240,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .addRegisterSpace(BindingLayoutItem::StructuredBuffer_UAV(getRegisterSlot(GpuDescriptorClass::StorageBuffer), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::ConstantBuffer(getRegisterSlot(GpuDescriptorClass::UniformBuffer), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage2DArray), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage3D), resourceCapacity))
         .setUseDescriptorBuffer(m_usesDescriptorBuffer)
     ;
 
@@ -719,7 +722,8 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
         GpuDescriptorClass::SampledBuffer,
         GpuDescriptorClass::StorageBuffer,
         GpuDescriptorClass::UniformBuffer,
-        GpuDescriptorClass::SampledImage2DArray
+        GpuDescriptorClass::SampledImage2DArray,
+        GpuDescriptorClass::SampledImage3D
     };
     static constexpr GpuDescriptorClass::Enum s_SamplerClasses[] = {
         GpuDescriptorClass::Sampler

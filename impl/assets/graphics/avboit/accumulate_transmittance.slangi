@@ -38,8 +38,8 @@ half nwbAvboitLinearBiasedTransmittance(float2 fragCoord, float depth){
     );
     const float physicalSlice = nwbAvboitPhysicalSliceFromVirtualSampleSlice(sampleSlice);
     const float physicalSliceUv = (physicalSlice + 0.5) / max(float(nwbAvboitPhysicalSliceCount()), 1.0);
-    return half(g_Transmittance.Sample(
-        g_LinearSampler,
+    return half(nwbAvboitTransmittanceTexture().Sample(
+        nwbAvboitAccumulationSampler(),
         float3(nwbAvboitFullUvFromFragCoord(fragCoord), clamp(physicalSliceUv, 0.0, 1.0))
     ).r);
 }

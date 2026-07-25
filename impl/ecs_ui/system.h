@@ -81,7 +81,10 @@ public:
 private:
     struct UiTextureResource{
         Core::TextureHandle texture;
-        Core::BindingSetHandle bindingSet;
+        // Every dynamically-created ImGui texture (including the font atlas) has one persistent sampled-image
+        // heap entry. The heap retains the texture through its deferred-free quarantine, so this handle must be
+        // retired before the owning resource leaves m_textures.
+        Core::GpuDescriptorHandle sampledImageHeapHandle = Core::GpuDescriptorHandle::invalid();
         u32 width = 0;
         u32 height = 0;
     };
@@ -91,7 +94,12 @@ private:
 
     struct UiPushConstants{
         Float4 scaleTranslate = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+        u32 textureSlot = 0u;
+        u32 samplerSlot = 0u;
+        u32 padding0 = 0u;
+        u32 padding1 = 0u;
     };
+    static_assert(sizeof(UiPushConstants) == sizeof(f32) * 4u + sizeof(u32) * 4u, "Ui push constants must match the ImGui shader block");
 
 private:
     void setCurrentContext()const;
@@ -110,7 +118,11 @@ private:
     [[nodiscard]] UiTextureResource* fallbackTextureResource()const{
         return m_textures.empty() ? nullptr : m_textures.front().get();
     }
-    [[nodiscard]] Core::BindingSet* bindingSetForTexture(ImTextureID textureId)const;
+    [[nodiscard]] UiTextureResource* textureResourceForDraw(ImTextureID textureId)const;
+    [[nodiscard]] bool ensureSamplerHeapHandle();
+    [[nodiscard]] bool registerTextureHeapHandle(UiTextureResource& resource);
+    void releaseTextureHeapHandle(UiTextureResource& resource);
+    void releaseDescriptorHeapResources();
     [[nodiscard]] bool uploadDrawBuffers(Core::CommandList& commandList, ImDrawData& drawData);
     void renderDrawData(Core::CommandList& commandList, Core::Framebuffer* framebuffer, ImDrawData& drawData);
 
@@ -125,6 +137,7 @@ private:
     ImGuiContext* m_imguiContext = nullptr;
     Core::BindingLayoutHandle m_bindingLayout;
     Core::SamplerHandle m_sampler;
+    Core::GpuDescriptorHandle m_samplerHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::ShaderHandle m_vertexShader;
     Core::ShaderHandle m_pixelShader;
     Core::InputLayoutHandle m_inputLayout;

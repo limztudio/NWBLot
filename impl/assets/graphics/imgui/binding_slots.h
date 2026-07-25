@@ -9,11 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_IMGUI_SET 0
-
-#define NWB_IMGUI_BINDING_TEXTURE 0
-#define NWB_IMGUI_BINDING_SAMPLER 1
-
 #define NWB_IMGUI_VERTEX_ATTRIBUTE_COUNT 3
 #define NWB_IMGUI_VERTEX_BUFFER_INDEX 0
 #define NWB_IMGUI_VERTEX_POSITION_LOCATION 0

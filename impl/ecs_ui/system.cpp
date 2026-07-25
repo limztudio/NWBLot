@@ -150,6 +150,10 @@ UiSystem::~UiSystem(){
         ImGuiIO& io = ImGui::GetIO();
         if(io.BackendRendererUserData == this)
             io.BackendRendererUserData = nullptr;
+        // The heap retains each dynamic ImGui texture/sampler through its in-flight quarantine. Retire all handles
+        // before clearing the owning handles so the font atlas and arbitrary ImTextureData entries remain valid for
+        // already-recorded draws.
+        releaseDescriptorHeapResources();
         m_textures.clear();
         ImGui::DestroyContext(m_imguiContext);
         m_imguiContext = nullptr;
@@ -410,6 +414,12 @@ bool UiSystem::uploadDrawBuffers(Core::CommandList& commandList, ImDrawData& dra
 void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer* framebuffer, ImDrawData& drawData){
     if(drawData.TotalVtxCount <= 0 || drawData.TotalIdxCount <= 0)
         return;
+    auto* device = m_graphics.getDevice();
+    if(!device || !m_samplerHeapHandle.valid())
+        return;
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized())
+        return;
 
     const SIMDVector displayMin = VectorSet(drawData.DisplayPos.x, drawData.DisplayPos.y, 0.0f, 0.0f);
     const SIMDVector displaySize = VectorSet(drawData.DisplaySize.x, drawData.DisplaySize.y, 0.0f, 0.0f);
@@ -470,9 +480,12 @@ void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer*
             if(scissorMaxX <= scissorMinX || scissorMaxY <= scissorMinY)
                 continue;
 
-            Core::BindingSet* bindingSet = bindingSetForTexture(drawCommand.GetTexID());
-            if(!bindingSet)
+            UiTextureResource* textureResource = textureResourceForDraw(drawCommand.GetTexID());
+            if(!textureResource || !textureResource->sampledImageHeapHandle.valid())
                 continue;
+
+            pushConstants.textureSlot = textureResource->sampledImageHeapHandle.slot();
+            pushConstants.samplerSlot = m_samplerHeapHandle.slot();
 
             Core::ViewportState viewportState;
             viewportState.addViewport(viewport);
@@ -483,12 +496,17 @@ void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer*
                 .setPipeline(m_pipeline.get())
                 .setFramebuffer(framebuffer)
                 .setViewport(viewportState)
-                .addBindingSet(bindingSet)
+                // Preserve set 0's positional gap on Backend C: the push-only layout has no descriptor block, so
+                // the command binder records its required harmless zero offset before heap.bindGraphics selects 8/9.
+                .addBindingSet(nullptr)
                 .addVertexBuffer(Core::VertexBufferBinding().setBuffer(m_vertexBuffer.get()).setSlot(NWB_IMGUI_VERTEX_BUFFER_INDEX).setOffset(0u))
                 .setIndexBuffer(Core::IndexBufferBinding().setBuffer(m_indexBuffer.get()).setFormat(indexFormat).setOffset(0u))
             ;
 
             commandList.setGraphicsState(graphicsState);
+            // The heap bind must follow setGraphicsState(), which installs the UI pipeline layout. Backend A binds
+            // its persistent descriptor tables; Backend C selects the resource/sampler descriptor-buffer blocks.
+            heap.bindGraphics(commandList, *m_pipeline);
             commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
             Core::DrawArguments drawArguments;

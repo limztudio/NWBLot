@@ -3,13 +3,21 @@
 
 
 #include "binding_slots.h"
+#include "../bindless/bindless_heap.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_IMGUI_BINDING_TEXTURE, NWB_IMGUI_SET)]] Texture2D<float4> g_UiTexture;
-[[vk::binding(NWB_IMGUI_BINDING_SAMPLER, NWB_IMGUI_SET)]] SamplerState g_UiSampler;
+struct NwbImguiPushConstants{
+    float4 scaleTranslate;
+    uint textureSlot;
+    uint samplerSlot;
+    uint2 _padding;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<NwbImguiPushConstants> g_NwbImguiPushConstants;
 
 struct NwbImguiPixelInput{
     [[vk::location(NWB_IMGUI_RASTER_UV_LOCATION)]] float2 uv : TEXCOORD0;
@@ -26,7 +34,9 @@ struct NwbImguiPixelOutput{
 
 NwbImguiPixelOutput main(NwbImguiPixelInput input){
     const half4 color = input.color;
-    const half4 texel = half4(g_UiTexture.Sample(g_UiSampler, input.uv));
+    const Texture2D<float4> texture = NwbHeapSampledImage2D(g_NwbImguiPushConstants.textureSlot);
+    const SamplerState sampler = NwbHeapSampler(g_NwbImguiPushConstants.samplerSlot);
+    const half4 texel = half4(texture.Sample(sampler, input.uv));
 
     NwbImguiPixelOutput output;
     output.color = color * texel;

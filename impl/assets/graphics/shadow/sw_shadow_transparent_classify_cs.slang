@@ -13,11 +13,11 @@
 
 #include "sw_binding_slots.h"
 
-// The scene light list this classify loop iterates. Redirect its bindings onto this pass's set before scene/buffer.slangi.
-#define NWB_SCENE_SHADING_SET NWB_SW_SHADOW_SET
-#define NWB_SCENE_SHADING_BINDING NWB_SW_SHADOW_BINDING_SCENE_SHADING
-#define NWB_SCENE_LIGHT_LIST_SET NWB_SW_SHADOW_SET
-#define NWB_SCENE_LIGHT_LIST_BINDING NWB_SW_SHADOW_BINDING_LIGHT_LIST
+// The scene light list this classify loop iterates is a target-generation heap entry. sw_shadow_gbuffer.slangi declares
+// the local slot cbuffer before scene/buffer.slangi is pulled, so redirect both shared scene buffers through it.
+#define NWB_SCENE_BUFFERS_FROM_HEAP 1
+#define NWB_SCENE_SHADING_HEAP_SLOT g_NwbSwShadowBindlessResources.avboitSlots.z
+#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbSwShadowBindlessResources.avboitSlots.w
 
 #include "sw_shadow_gbuffer.slangi"
 #include "sw_shadow_edge_record.slangi"

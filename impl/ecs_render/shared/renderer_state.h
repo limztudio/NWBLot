@@ -370,8 +370,9 @@ struct RtSceneBvhState{
     // scene/instance + per-mesh BVH buffers the SW shadow trace builds (the shared m_swShadowMesh* table serves
     // shadow, caustic, and GI alike), and adds the caustic-specific local inputs/output
     // (the P1 emission-target buffer, the camera view buffer, and the R32_UINT accumulators). G-buffer depth/world
-    // position are frame-heap reads selected through the shared photon push constants. The binding set is rebuilt when
-    // any cached local input changes, mirroring the SW shadow set.
+    // position are frame-heap reads selected through the shared photon push constants. The target-generation slot
+    // cbuffer selects shared scene/light heap entries. The binding set is rebuilt when any cached local input changes,
+    // mirroring the SW shadow set.
     Core::BindingLayoutHandle m_swCausticBindingLayout;
     Core::ShaderHandle m_swCausticShader;
     Core::ComputePipelineHandle m_swCausticPipeline;
@@ -384,6 +385,7 @@ struct RtSceneBvhState{
     const Core::Buffer* m_swCausticBindingSetEmissionTargets = nullptr;
     const Core::Buffer* m_swCausticBindingSetView = nullptr;
     const Core::Texture* m_swCausticBindingSetAccumulator = nullptr;
+    const Core::Buffer* m_swCausticBindingSetBindlessResources = nullptr;
     u32 m_swCausticBindingSetMeshCount = 0u;
     bool m_swCausticPipelineFailed = false;
     bool m_hwCausticPipelineFailed = false;
@@ -393,8 +395,9 @@ struct RtSceneBvhState{
     // shadow RT pipeline and REUSES m_tlas + the shadow instance-material / material-context / per-mesh
     // index+attribute buffers verbatim (the refraction bends on the interpolated SHADING normal from the attribute
     // buffer, so no per-mesh position array is needed). Feeds the SAME R32_UINT accumulator + the SAME resolve the SW
-    // path uses. Its G-buffer depth/world-position reads use the frame heap; the binding set is rebuilt when any
-    // cached local input changes, mirroring the shadow set.
+    // path uses. Its G-buffer depth/world-position reads use the frame heap and its target-generation slot cbuffer
+    // selects shared scene/light heap entries; the binding set is rebuilt when any cached local input changes,
+    // mirroring the shadow set.
     Core::BindingLayoutHandle m_hwCausticBindingLayout;
     Core::RayTracingPipelineHandle m_hwCausticPipeline;
     Core::RayTracingShaderTableHandle m_hwCausticShaderTable;
@@ -406,6 +409,7 @@ struct RtSceneBvhState{
     const Core::Buffer* m_hwCausticBindingSetEmissionTargets = nullptr;
     const Core::Buffer* m_hwCausticBindingSetView = nullptr;
     const Core::Texture* m_hwCausticBindingSetAccumulator = nullptr;
+    const Core::Buffer* m_hwCausticBindingSetBindlessResources = nullptr;
     bool m_bvhSortPipelineFailed = false;
     bool m_bvhBuildPipelineFailed = false;
 };
@@ -450,6 +454,8 @@ struct RtShadowState{
     const Core::Buffer* m_shadowBindingSetInstanceMaterial = nullptr;
     const Core::Buffer* m_shadowBindingSetMaterialTyped = nullptr;
     const Core::Buffer* m_shadowBindingSetMeshInstances = nullptr;
+    // The target-generation resource-slot cbuffer selects the heap-backed scene shading + light list.
+    const Core::Buffer* m_shadowBindingSetBindlessResources = nullptr;
     u32 m_shadowBindingSetMeshCount = 0u;
     // Active shadow slots this frame (= min(lightCount, NWB_SCENE_SHADOW_SLOT_COUNT)), set during the light upload and
     // read by the edge-adaptive shadow resolve so it only processes the slots that hold a light.
@@ -624,7 +630,7 @@ struct RtSoftShadowState{
     // set binds shadowSoftHalfA as the UAV output instead of the full-res shadowVisibility), so the HW opaque shadow can
     // run the SAME half-res -> temporal -> a-trous -> upsample soft-shadow denoise chain as the SW path. The binding set
     // rebuilds on the SAME tracked-pointer keys as m_shadowBindingSet (TLAS / instance-material / material-context /
-    // mesh-count), so a TLAS/G-buffer/target change rebuilds it.
+    // target-generation resource-slot cbuffer / mesh-count), so a TLAS/G-buffer/target change rebuilds it.
     Core::ShaderHandle m_shadowSoftShader;
     Core::ComputePipelineHandle m_shadowSoftPipeline;
     bool m_shadowSoftPipelineFailed = false;
@@ -650,6 +656,7 @@ struct RtSoftShadowState{
     const Core::Buffer* m_shadowSoftBindingSetInstanceMaterial = nullptr;
     const Core::Buffer* m_shadowSoftBindingSetMaterialTyped = nullptr;
     const Core::Buffer* m_shadowSoftBindingSetMeshInstances = nullptr;
+    const Core::Buffer* m_shadowSoftBindingSetBindlessResources = nullptr;
     u32 m_shadowSoftBindingSetMeshCount = 0u;
     // Soft opaque shadow (soft-ray-traced-shadow feature): a per-frame counter seeding the per-pixel low-discrepancy
     // cone-jitter sample. Incremented once per frame by whichever primary shadow producer runs (the HW RayQuery opaque

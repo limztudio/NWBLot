@@ -4,11 +4,16 @@
 
 #include "sw_binding_slots.h"
 #include "../mesh/runtime_constants.h"
+#include "../deferred/bindless_resources.slangi"
 
-#define NWB_SCENE_SHADING_SET NWB_CAUSTIC_SW_SET
-#define NWB_SCENE_SHADING_BINDING NWB_CAUSTIC_SW_BINDING_SCENE_SHADING
-#define NWB_SCENE_LIGHT_LIST_SET NWB_CAUSTIC_SW_SET
-#define NWB_SCENE_LIGHT_LIST_BINDING NWB_CAUSTIC_SW_BINDING_LIGHT_LIST
+// The shared scene-shading CB + light list are target-generation heap entries. This local slot cbuffer carries their
+// uniform heap indices in avboitSlots.z/.w, so scene/buffer.slangi emits typed heap aliases instead of the historical
+// local bindings 0/1.
+[[vk::binding(NWB_CAUSTIC_SW_BINDING_BINDLESS_RESOURCES, NWB_CAUSTIC_SW_SET)]]
+ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbCausticSwBindlessResources;
+#define NWB_SCENE_BUFFERS_FROM_HEAP 1
+#define NWB_SCENE_SHADING_HEAP_SLOT g_NwbCausticSwBindlessResources.avboitSlots.z
+#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbCausticSwBindlessResources.avboitSlots.w
 
 // Point the surface hook's material-constants context (g_NwbMaterialTypedWords + g_NwbMeshInstances, declared in
 // mesh/material_typed_bindings.slangi at NWB_MESH_SET / NWB_MESH_BINDING_*) at this pass's binding set so the

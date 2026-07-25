@@ -90,13 +90,25 @@ bool UiSystem::ensureRenderResources(Core::Framebuffer* framebuffer){
         return false;
 
     auto* device = m_graphics.getDevice();
+    if(!device){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: cannot create render resources without a graphics device"));
+        return false;
+    }
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: ImGui rendering requires the initialized global descriptor heap"));
+        return false;
+    }
+
     if(!m_bindingLayout){
         static_assert(sizeof(UiPushConstants) <= Core::s_MaxPushConstantSize, "Ui push constants must fit the portable push constant budget");
 
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
+        // ImGui's former set 0 mixed a sampled image with a sampler, which cannot live in one descriptor-buffer
+        // segment. Texture/sampler descriptors now reside in the global heap's pure resource/sampler sets; this
+        // leaf only carries per-draw slots in push constants and can therefore join Backend C when the heap does.
         bindingLayoutDesc.setVisibility(Core::ShaderType::AllGraphics);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_IMGUI_BINDING_TEXTURE, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_IMGUI_BINDING_SAMPLER, 1));
+        bindingLayoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(UiPushConstants)));
 
         m_bindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -119,6 +131,9 @@ bool UiSystem::ensureRenderResources(Core::Framebuffer* framebuffer){
         }
     }
 
+    if(!ensureSamplerHeapHandle())
+        return false;
+
     if(!ensureShadersLoaded() || !ensureInputLayout())
         return false;
 
@@ -133,6 +148,8 @@ bool UiSystem::ensureRenderResources(Core::Framebuffer* framebuffer){
         .setPixelShader(m_pixelShader)
         .setRenderState(__hidden_ui::BuildUiRenderState())
         .addBindingLayout(m_bindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
 
     m_pipeline = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);

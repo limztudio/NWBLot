@@ -187,6 +187,7 @@ void RendererRayTracingState::invalidateResources(){
     m_shadowBindingSetInstanceMaterial = nullptr;
     m_shadowBindingSetMaterialTyped = nullptr;
     m_shadowBindingSetMeshInstances = nullptr;
+    m_shadowBindingSetBindlessResources = nullptr;
     m_shadowBindingSetMeshCount = 0u;
     m_shadowSoftShader.reset();
     m_shadowSoftPipeline.reset();
@@ -195,6 +196,7 @@ void RendererRayTracingState::invalidateResources(){
     m_shadowSoftBindingSetInstanceMaterial = nullptr;
     m_shadowSoftBindingSetMaterialTyped = nullptr;
     m_shadowSoftBindingSetMeshInstances = nullptr;
+    m_shadowSoftBindingSetBindlessResources = nullptr;
     m_shadowSoftBindingSetMeshCount = 0u;
     m_shadowSlotCount = 0u;
     m_shadowMeshCount = 0u;
@@ -377,6 +379,7 @@ void RendererRayTracingState::invalidateResources(){
     m_swCausticBindingSetEmissionTargets = nullptr;
     m_swCausticBindingSetView = nullptr;
     m_swCausticBindingSetAccumulator = nullptr;
+    m_swCausticBindingSetBindlessResources = nullptr;
     m_swCausticBindingSetMeshCount = 0u;
     m_hwCausticBindingLayout.reset();
     m_hwCausticPipeline.reset();
@@ -389,6 +392,7 @@ void RendererRayTracingState::invalidateResources(){
     m_hwCausticBindingSetEmissionTargets = nullptr;
     m_hwCausticBindingSetView = nullptr;
     m_hwCausticBindingSetAccumulator = nullptr;
+    m_hwCausticBindingSetBindlessResources = nullptr;
     m_hwCausticBindingSetMeshCount = 0u;
     m_causticResolveBindingLayout.reset();
     m_causticResolveShader.reset();

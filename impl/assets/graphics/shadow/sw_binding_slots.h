@@ -12,12 +12,14 @@
 // Software (compute) shadow traversal pass — the no-hardware-ray-tracing fallback. One thread per pixel
 // reads the G-buffer, casts one occlusion ray per light through the software scene/instance BVH (and, in
 // the per-mesh stage, each instance's triangle BVH), and writes per-light colored transmittance into the
-// shadow-visibility Texture2DArray the deferred lighting pass samples. Slots 0-6 are the scene-level pass; per-mesh
-// triangle traversal uses descriptor-heap slots from the material record, and slots 13-14 provide its typed context.
+// shadow-visibility Texture2DArray the deferred lighting pass samples. The local scene/light positions remain as ABI
+// gaps; the target-generation slot cbuffer at binding 22 selects those shared buffers through the descriptor heap.
+// Per-mesh triangle traversal uses descriptor-heap slots from the material record, and slots 13-14 provide its typed
+// context.
 #define NWB_SW_SHADOW_SET 0
 
-// Legacy local G-buffer binding numbers retained as intentional gaps. Every SW trace pass now selects the
-// target-generation images through the deferred bindless-slot cbuffer at binding 22.
+// Legacy local G-buffer and scene/light binding numbers retained as intentional gaps. Every SW trace pass selects the
+// target-generation images and shared scene buffers through the deferred bindless-slot cbuffer at binding 22.
 #define NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION 0
 #define NWB_SW_SHADOW_BINDING_GBUFFER_NORMAL 1
 #define NWB_SW_SHADOW_BINDING_GBUFFER_DEPTH 2
@@ -72,7 +74,8 @@
 // opaque SOFT_HALF (independent noise stats, separately denoised) and folded only at the final full-res upsample.
 #define NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF 21
 // The target-generation DeferredBindlessResourceSlots cbuffer. Its gbufferSlots.z/y/w select world position, normal,
-// and depth from the global sampled-image heap for every software-shadow pass.
+// and depth from the global sampled-image heap, while avboitSlots.z/.w select scene shading and the light list for
+// every software-shadow pass.
 #define NWB_SW_SHADOW_BINDING_BINDLESS_RESOURCES 22
 
 // 8x8 = 64 threads per group (one thread per pixel).

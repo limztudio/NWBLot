@@ -20,10 +20,13 @@
 // needs NO object-space position array; the world hit point comes from WorldRayOrigin()+RayTCurrent()*direction.
 #define NWB_CAUSTIC_RT_SET 0
 
-// Singletons.
+// Historical local scene/light positions: binding 1 now carries the target-generation resource-slot cbuffer, while
+// binding 2 remains intentionally unbound because the light list is fetched from the global descriptor heap. Do not
+// renumber the subsequent ABI slots.
 #define NWB_CAUSTIC_RT_BINDING_TLAS 0
 #define NWB_CAUSTIC_RT_BINDING_SCENE_SHADING 1
 #define NWB_CAUSTIC_RT_BINDING_LIGHT_LIST 2
+#define NWB_CAUSTIC_RT_BINDING_BINDLESS_RESOURCES NWB_CAUSTIC_RT_BINDING_SCENE_SHADING
 // Per-instance occluder material table (NwbRtInstanceMaterial, indexed by InstanceID(); built lockstep with the
 // TLAS instances by buildSceneTlas) -- the REFRACTIVE flag gates the physics, the rest feeds the surface dispatch.
 #define NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL 3

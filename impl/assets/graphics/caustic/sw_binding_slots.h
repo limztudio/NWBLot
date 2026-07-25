@@ -19,8 +19,12 @@
 // heap-selected G-buffer depth/world-position inputs (the receiver identity reject), and the accumulator UAV.
 #define NWB_CAUSTIC_SW_SET 0
 
+// Keep the historical scene/light binding numbers stable as logical ABI positions. Binding 0 now carries the
+// target-generation resource-slot cbuffer instead of the scene-shading CB; binding 1 remains an intentional gap
+// because the light list is fetched from the global descriptor heap too.
 #define NWB_CAUSTIC_SW_BINDING_SCENE_SHADING 0
 #define NWB_CAUSTIC_SW_BINDING_LIGHT_LIST 1
+#define NWB_CAUSTIC_SW_BINDING_BINDLESS_RESOURCES NWB_CAUSTIC_SW_BINDING_SCENE_SHADING
 #define NWB_CAUSTIC_SW_BINDING_SCENE_NODES 2
 #define NWB_CAUSTIC_SW_BINDING_SCENE_INSTANCES 3
 #define NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL 4

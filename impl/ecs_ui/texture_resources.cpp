@@ -107,6 +107,106 @@ static bool BuildUploadPixels(ImTextureData& textureData, ByteVector& scratch, c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool UiSystem::ensureSamplerHeapHandle(){
+    if(m_samplerHeapHandle.valid())
+        return true;
+    if(!m_sampler){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: cannot register a missing ImGui sampler in the descriptor heap"));
+        return false;
+    }
+
+    auto* device = m_graphics.getDevice();
+    if(!device){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: cannot register the ImGui sampler without a graphics device"));
+        return false;
+    }
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: cannot register the ImGui sampler without an initialized descriptor heap"));
+        return false;
+    }
+
+    const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::Sampler);
+    if(!handle.valid())
+        return false;
+    if(!heap.write(handle, Core::BindingSetItem::Sampler(0u, m_sampler.get()))){
+        heap.free(handle);
+        return false;
+    }
+
+    m_samplerHeapHandle = handle;
+    return true;
+}
+
+bool UiSystem::registerTextureHeapHandle(UiTextureResource& resource){
+    if(resource.sampledImageHeapHandle.valid())
+        return true;
+    if(!resource.texture){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: cannot register a missing ImGui texture in the descriptor heap"));
+        return false;
+    }
+
+    auto* device = m_graphics.getDevice();
+    if(!device){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: cannot register an ImGui texture without a graphics device"));
+        return false;
+    }
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: cannot register an ImGui texture without an initialized descriptor heap"));
+        return false;
+    }
+
+    const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::SampledImage);
+    if(!handle.valid())
+        return false;
+    if(!heap.write(handle, Core::BindingSetItem::Texture_SRV(
+        0u,
+        resource.texture.get(),
+        Core::Format::RGBA8_UNORM,
+        Core::s_AllSubresources,
+        Core::TextureDimension::Texture2D
+    ))){
+        heap.free(handle);
+        return false;
+    }
+
+    resource.sampledImageHeapHandle = handle;
+    return true;
+}
+
+void UiSystem::releaseTextureHeapHandle(UiTextureResource& resource){
+    if(!resource.sampledImageHeapHandle.valid())
+        return;
+
+    if(auto* device = m_graphics.getDevice()){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+        if(heap.isInitialized())
+            heap.free(resource.sampledImageHeapHandle);
+    }
+    resource.sampledImageHeapHandle = Core::GpuDescriptorHandle::invalid();
+}
+
+void UiSystem::releaseDescriptorHeapResources(){
+    for(const UiTextureResourcePtr& resource : m_textures){
+        if(resource)
+            releaseTextureHeapHandle(*resource);
+    }
+
+    if(m_samplerHeapHandle.valid()){
+        if(auto* device = m_graphics.getDevice()){
+            Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+            if(heap.isInitialized())
+                heap.free(m_samplerHeapHandle);
+        }
+        m_samplerHeapHandle = Core::GpuDescriptorHandle::invalid();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool UiSystem::processTextureRequests(Core::CommandList& commandList, ImDrawData& drawData){
 #if defined(IMGUI_HAS_TEXTURES)
     if(!drawData.Textures)
@@ -175,19 +275,8 @@ bool UiSystem::createOrRefreshTexture(Core::CommandList& commandList, ImTextureD
             return false;
         }
 
-        Core::BindingSetDesc bindingSetDesc(m_arena);
-        bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_IMGUI_BINDING_TEXTURE,
-            createdResource->texture.get(),
-            Core::Format::RGBA8_UNORM,
-            Core::s_AllSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        bindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_IMGUI_BINDING_SAMPLER, m_sampler.get()));
-
-        createdResource->bindingSet = m_graphics.getDevice()->createBindingSet(bindingSetDesc, m_bindingLayout);
-        if(!createdResource->bindingSet){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create ImGui texture binding set"));
+        if(!registerTextureHeapHandle(*createdResource)){
+            NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to register ImGui texture in the descriptor heap"));
             return false;
         }
 
@@ -215,8 +304,10 @@ void UiSystem::destroyTexture(ImTextureData& textureData){
             m_textures.end(),
             [resource](const UiTextureResourcePtr& item){ return item.get() == resource; }
         );
-        if(it != m_textures.end())
+        if(it != m_textures.end()){
+            releaseTextureHeapHandle(**it);
             m_textures.erase(it);
+        }
     }
 
     textureData.BackendUserData = nullptr;
@@ -236,11 +327,11 @@ UiSystem::UiTextureResource* UiSystem::textureResourceFromId(const ImTextureID t
     return nullptr;
 }
 
-Core::BindingSet* UiSystem::bindingSetForTexture(const ImTextureID textureId)const{
+UiSystem::UiTextureResource* UiSystem::textureResourceForDraw(const ImTextureID textureId)const{
     UiTextureResource* resource = textureResourceFromId(textureId);
     if(!resource)
         resource = fallbackTextureResource();
-    return resource ? resource->bindingSet.get() : nullptr;
+    return resource;
 }
 
 

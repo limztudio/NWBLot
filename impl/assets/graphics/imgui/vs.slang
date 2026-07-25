@@ -10,6 +10,9 @@
 
 struct NwbImguiPushConstants{
     float4 scaleTranslate;
+    uint textureSlot;
+    uint samplerSlot;
+    uint2 _padding;
 };
 
 [[vk::push_constant]]

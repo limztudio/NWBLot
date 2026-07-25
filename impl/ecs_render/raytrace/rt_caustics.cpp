@@ -26,8 +26,8 @@ static constexpr AStringView s_HwRaygenExportName = "CausticHwRayGen";
 static constexpr AStringView s_HwMissExportName = "CausticHwMiss";
 static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
 
-// The caustic resolve's dynamic float input role. The R32_UINT accumulator remains a local typed SRV, while the
-// selected wavelet input, G-buffer, and geometry cache are target-generation heap reads.
+// The caustic resolve's dynamic float input role. The selected wavelet input, G-buffer, geometry cache, and typed
+// R32_UINT accumulator are all target-generation heap reads.
 struct CausticResolvePassResources{
     Core::Texture* inputColor = nullptr;
     u32 inputColorSlot = 0u;
@@ -333,8 +333,8 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
 
     // The producer wrote the accumulator as a UAV; move it to ShaderResource for the PREPARE pass to read (un-scale +
-    // area-normalize). The local set handles that typed SRV + output UAV; heap-backed float reads are staged explicitly
-    // below as the G-buffer and ping-pong roles change.
+    // area-normalize). Every resolve read now comes through the global heap, while the local set retains only the
+    // selected output UAV; heap-backed input roles are staged explicitly below as they change.
     commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource);
 
     // The resolve runs at HALF resolution (1/4 the pixels); only the final UPSAMPLE dispatches at full res.
@@ -402,6 +402,7 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
         resolvePush.depthSlot = targets.bindless.gbufferDepth.slot();
         resolvePush.inputColorSlot = resources.inputColorSlot;
         resolvePush.geometrySlot = targets.bindless.causticResolveGeometry.slot();
+        resolvePush.accumulatorSlot = targets.bindless.causticAccumulator.slot();
 
         Core::ComputeState computeState;
         computeState.setPipeline(rayTracingState().m_causticResolvePipeline.get());
@@ -869,10 +870,8 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
     if(!rayTracingState().m_causticResolveBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // The float sampled inputs now use global target-generation heap slots. Keep the typed R32_UINT accumulator
-        // local until the heap grows a uint Texture2DArray accessor, and retain sparse output binding 3 as the ABI.
+        // Every sampled input now uses target-generation heap slots. Retain sparse output binding 3 as the local ABI.
         layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticResolvePushConstants)));
 
@@ -931,7 +930,6 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
     NWB_ASSERT(targets.causticResolveGeometry);
 
     // Non-const (BindingSetItem needs a mutable Texture*); the const cache fields still compare/assign fine.
-    Core::Texture* accumulatorTarget = targets.causticAccumulator.get();
     Core::Texture* irradianceTarget = targets.causticIrradiance.get();
     Core::Texture* halfATarget = targets.causticHistory.get();
     Core::Texture* halfBTarget = targets.causticResolveHalf.get();
@@ -939,7 +937,6 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
         rayTracingState().m_causticResolveBindingSetOutputHalfA
         && rayTracingState().m_causticResolveBindingSetOutputHalfB
         && rayTracingState().m_causticResolveBindingSetUpsample
-        && rayTracingState().m_causticResolveBindingSetAccumulator == accumulatorTarget
         && rayTracingState().m_causticResolveBindingSetIrradiance == irradianceTarget
         && rayTracingState().m_causticResolveBindingSetHalfA == halfATarget
         && rayTracingState().m_causticResolveBindingSetHalfB == halfBTarget
@@ -948,17 +945,10 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
 
     auto* device = graphics().getDevice();
 
-    // Three local binding sets now share only the typed accumulator SRV and swap their output UAV. The float G-buffer,
-    // geometry, and ping-pong input roles are selected by global-heap slots at dispatch time.
+    // Three local binding sets now contain only their output UAV. The typed accumulator, float G-buffer, geometry, and
+    // ping-pong input roles are selected by global-heap slots at dispatch time.
     const auto buildSet = [&](Core::Texture* outputTex, Core::Format::Enum outputFormat) -> Core::BindingSetHandle {
         Core::BindingSetDesc desc(arena());
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR,
-            accumulatorTarget,
-            targets.causticAccumulatorFormat,
-            ECSRenderDetail::s_CausticAccumulatorSubresources,
-            Core::TextureDimension::Texture2DArray
-        ));
         desc.addItem(Core::BindingSetItem::Texture_UAV(
             NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT,
             outputTex,
@@ -977,7 +967,6 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
         rayTracingState().m_causticResolveBindingSetOutputHalfA = nullptr;
         rayTracingState().m_causticResolveBindingSetOutputHalfB = nullptr;
         rayTracingState().m_causticResolveBindingSetUpsample = nullptr;
-        rayTracingState().m_causticResolveBindingSetAccumulator = nullptr;
         rayTracingState().m_causticResolveBindingSetIrradiance = nullptr;
         rayTracingState().m_causticResolveBindingSetHalfA = nullptr;
         rayTracingState().m_causticResolveBindingSetHalfB = nullptr;
@@ -986,7 +975,6 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
     rayTracingState().m_causticResolveBindingSetOutputHalfA = Move(outputHalfA);
     rayTracingState().m_causticResolveBindingSetOutputHalfB = Move(outputHalfB);
     rayTracingState().m_causticResolveBindingSetUpsample = Move(upsample);
-    rayTracingState().m_causticResolveBindingSetAccumulator = accumulatorTarget;
     rayTracingState().m_causticResolveBindingSetIrradiance = irradianceTarget;
     rayTracingState().m_causticResolveBindingSetHalfA = halfATarget;
     rayTracingState().m_causticResolveBindingSetHalfB = halfBTarget;

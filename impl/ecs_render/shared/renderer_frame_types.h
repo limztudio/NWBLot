@@ -139,8 +139,10 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle avboitAccumExtinction = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitTransmittance = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitLinearSampler = Core::GpuDescriptorHandle::invalid();
-    // Caustic resolve float inputs use target-generation slots directly in push constants. The R32_UINT accumulator
-    // deliberately remains a local typed SRV until its own typed-array heap surface is introduced.
+    // Caustic resolve inputs use target-generation slots directly in push constants. causticAccumulator is sampled
+    // through the heap's dedicated typed uint Texture2DArray table; the remaining three are floating-point Texture2D
+    // resources.
+    Core::GpuDescriptorHandle causticAccumulator = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle causticHistory = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle causticResolveHalf = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle causticResolveGeometry = Core::GpuDescriptorHandle::invalid();
@@ -177,6 +179,7 @@ struct DeferredBindlessFrameResources{
             && avboitAccumExtinction.valid()
             && avboitTransmittance.valid()
             && avboitLinearSampler.valid()
+            && causticAccumulator.valid()
             && causticHistory.valid()
             && causticResolveHalf.valid()
             && causticResolveGeometry.valid()

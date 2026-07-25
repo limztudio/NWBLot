@@ -401,7 +401,6 @@ void RendererRayTracingState::invalidateResources(){
     m_causticResolveBindingSetOutputHalfA.reset();
     m_causticResolveBindingSetOutputHalfB.reset();
     m_causticResolveBindingSetUpsample.reset();
-    m_causticResolveBindingSetAccumulator = nullptr;
     m_causticResolveBindingSetIrradiance = nullptr;
     m_causticResolveBindingSetHalfA = nullptr;
     m_causticResolveBindingSetHalfB = nullptr;

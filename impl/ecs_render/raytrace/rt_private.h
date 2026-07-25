@@ -471,8 +471,9 @@ static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 7u, "CausticPh
 
 // CPU mirror of the caustic resolve push constants (caustic/caustic_resolve_cs.slang). The resolve is an N-pass
 // edge-avoiding a-trous wavelet denoise: per pass it carries the wavelet dilation (stepWidth) and whether this is the
-// first pass (read+normalize the accumulator vs read the previous pass's color). The four float-image heap slots bring
-// the scalar block to 48 bytes; the trailing pad preserves the original 32-byte prefix alignment.
+// first pass (read+normalize the accumulator vs read the previous pass's color). The five heap slots (including the
+// typed R32_UINT accumulator) bring the scalar block to 52 bytes; the trailing pad preserves the original 32-byte
+// prefix alignment.
 struct CausticResolvePushConstants{
     u32 width = 0u;             // FULL-res width (G-buffer dim; UPSAMPLE dispatch/output dim)
     u32 height = 0u;            // FULL-res height
@@ -486,8 +487,9 @@ struct CausticResolvePushConstants{
     u32 depthSlot = 0u;         // SampledImage: full-res depth G-buffer
     u32 inputColorSlot = 0u;    // SampledImage: selected half-res wavelet input
     u32 geometrySlot = 0u;      // SampledImage: half-res caustic geometry cache
+    u32 accumulatorSlot = 0u;   // SampledImage2DArrayUint: typed R32_UINT fixed-point splat accumulator
 };
-static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 11u + sizeof(f32), "CausticResolvePushConstants must match the shader push-constant layout");
+static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 12u + sizeof(f32), "CausticResolvePushConstants must match the shader push-constant layout");
 
 // Caustic resolve stages, kept in lockstep with caustic_resolve_cs.slang's pushConstants.stage switch.
 namespace CausticResolveStage{

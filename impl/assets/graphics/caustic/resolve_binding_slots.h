@@ -17,7 +17,8 @@
 // irradiance buffer the lighting adds.
 #define NWB_CAUSTIC_RESOLVE_SET 0
 
-// The R32_UINT accumulators (Texture2DArray, one layer per RGB channel) remain a local typed SRV (first pass only).
+// Logical heap-SRV position: the R32_UINT accumulator is selected through the uint Texture2DArray heap accessor and
+// a per-dispatch push-constant slot, so it no longer occupies the local descriptor-buffer layout.
 #define NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR 0
 // Logical heap-SRV positions retained for the pass ABI documentation. The world/depth/input/geometry slots now arrive
 // through per-dispatch push constants and no longer occupy entries in the local descriptor-buffer layout.

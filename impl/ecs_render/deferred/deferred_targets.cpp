@@ -196,8 +196,9 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         && registerTexture(bindless.avboitAccumExtinction, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumExtinction.get(), targets.avboit.accumExtinctionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitTransmittance, Core::GpuDescriptorClass::SampledImage3D, targets.avboit.transmittanceTexture.get(), targets.avboit.transmittanceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D)
         && registerSampler(bindless.avboitLinearSampler, avboitState().m_linearSampler.get())
-        // The caustic resolve carries its float sampled inputs through target-generation slots. The R32_UINT accumulator
-        // stays in the sparse local set until a typed uint-array heap accessor is added in a later slice.
+        // The caustic resolve carries all sampled inputs through target-generation slots. The R32_UINT accumulator uses
+        // the heap's dedicated typed uint Texture2DArray table; the remaining resources are floating-point Texture2Ds.
+        && registerTexture(bindless.causticAccumulator, Core::GpuDescriptorClass::SampledImage2DArrayUint, targets.causticAccumulator.get(), targets.causticAccumulatorFormat, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.causticHistory, Core::GpuDescriptorClass::SampledImage, targets.causticHistory.get(), targets.causticHistoryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.causticResolveHalf, Core::GpuDescriptorClass::SampledImage, targets.causticResolveHalf.get(), targets.causticHistoryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.causticResolveGeometry, Core::GpuDescriptorClass::SampledImage, targets.causticResolveGeometry.get(), targets.causticHistoryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
@@ -271,6 +272,7 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
             heap.free(targets.bindless.avboitAccumExtinction);
             heap.free(targets.bindless.avboitTransmittance);
             heap.free(targets.bindless.avboitLinearSampler);
+            heap.free(targets.bindless.causticAccumulator);
             heap.free(targets.bindless.causticHistory);
             heap.free(targets.bindless.causticResolveHalf);
             heap.free(targets.bindless.causticResolveGeometry);

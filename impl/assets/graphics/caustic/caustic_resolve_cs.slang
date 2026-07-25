@@ -4,7 +4,7 @@
 
 #include "resolve_binding_slots.h"
 #include "splat_constants.slangi"
-#include "../bindless/bindless_heap.slangi"
+#include "../bindless/bindless_heap_uint_array.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,16 +28,13 @@
 //   stage 2 UPSAMPLE (full-res dispatch): bilinearly samples the final half-res caustic into the full-res irradiance
 //     buffer the deferred lighting adds; background pixels (no receiver) write zero (the additive no-op).
 
-[[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR, NWB_CAUSTIC_RESOLVE_SET)]]
-Texture2DArray<uint> g_NwbCausticResolveAccumulator;
-
 // The pass output (UAV). For PREPARE + WAVELET this is a HALF-res ping-pong buffer (half-A / half-B); for UPSAMPLE this
 // is the FULL-res caustic irradiance buffer the deferred lighting adds. The C++ swaps the bound textures per pass.
 [[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT, NWB_CAUSTIC_RESOLVE_SET)]]
 RWTexture2D<float4> g_NwbCausticResolveOutput;
 
 struct NwbCausticResolvePushConstants{
-    // All-scalar -> 12 x 4 = 48 bytes; matches the C++ mirror CausticResolvePushConstants.
+    // All-scalar -> 13 x 4 = 52 bytes; matches the C++ mirror CausticResolvePushConstants.
     uint width;             // FULL-res width (G-buffer dim; UPSAMPLE dispatch/output dim)
     uint height;            // FULL-res height
     uint halfWidth;         // HALF-res width (the resolve buffers; PREPARE/WAVELET dispatch dim)
@@ -46,11 +43,13 @@ struct NwbCausticResolvePushConstants{
     uint stepWidth;         // a-trous dilation for this wavelet pass (1,2,4), in HALF-res texels
     uint stage;             // 0 = PREPARE+DOWNSAMPLE, 1 = WAVELET (half-res), 2 = UPSAMPLE (-> full-res irradiance)
     uint pad;               // preserves the original first 32-byte scalar block
-    // Global heap SampledImage slots. The R32_UINT accumulator remains the local typed SRV for this slice.
+    // Global heap SampledImage slots. accumulatorSlot selects the dedicated typed uint Texture2DArray table; the other four
+    // select ordinary floating-point Texture2D resources.
     uint worldPositionSlot;
     uint depthSlot;
     uint inputColorSlot;
     uint geometrySlot;
+    uint accumulatorSlot;
 };
 
 [[vk::push_constant]]
@@ -184,9 +183,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     [unroll] for(int ox = 0; ox < 2; ++ox){
                         const int2 fpx = int2(min(base.x + ox, fw - 1), min(base.y + oy, fh - 1));
                         flux += float3(
-                            (float)g_NwbCausticResolveAccumulator.Load(int4(fpx, 0, 0)).r,
-                            (float)g_NwbCausticResolveAccumulator.Load(int4(fpx, 1, 0)).r,
-                            (float)g_NwbCausticResolveAccumulator.Load(int4(fpx, 2, 0)).r
+                            (float)NwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, 0, 0)).r,
+                            (float)NwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, 1, 0)).r,
+                            (float)NwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, 2, 0)).r
                         );
                     }
                 }

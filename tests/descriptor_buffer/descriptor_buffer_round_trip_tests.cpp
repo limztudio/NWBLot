@@ -744,15 +744,10 @@ TEST_F(DescriptorBufferRoundTripTest, CsgMaterialTailShapesBuildAsDescriptorBuff
 }
 
 
-// Step 2 (Phase 3) production-binding-layer proof: exercise createBindingLayout/createBindingSet through the live
-// device API with the EXACT shape of the caustic resolve pass — 5 Texture_SRVs + 1 Texture_UAV + push constants,
-// useDescriptorBuffer = true. This is the first end-to-end exercise of the Backend-C binding layer (the prior cases
-// only round-trip the manager directly): it verifies (1) the layout is marked descriptor-buffer-compatible (the
-// segment-coherence + driver size/offset queries succeed), (2) its set block reports a non-zero driver-queried size,
-// (3) createBindingSet carves the block from the live resource segment and writes all 6 texture descriptors through
-// the production writeDescriptor path, and (4) the resulting set/layout are wired for the command bind path. The
-// caustic pass is segment-coherent pure-resource with push constants, which the Backend-C path serves wholesale; a
-// mixed or unsupported shape would downgrade the layout and fail the compatibility assertion.
+// Step 2 (Phase 3) production-binding-layer proof: the caustic resolve now carries every sampled input through the
+// global heap, leaving a sparse local descriptor-buffer set containing only the output UAV at binding 3 plus its
+// 52-byte push constants. This verifies the live resource-only shape remains descriptor-buffer compatible and that
+// the driver reports the sparse binding offset correctly.
 TEST_F(DescriptorBufferRoundTripTest, CausticResolveShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
@@ -760,18 +755,6 @@ TEST_F(DescriptorBufferRoundTripTest, CausticResolveShapeBuildsAsDescriptorBuffe
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_shape_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    // Six textures matching caustic resolve's 5 SRV + 1 UAV (+ the geometry + input-color ping-pong siblings). All
-    // RGBA16F-ish 2D textures so their image views are valid descriptor targets.
-    auto makeTexture = [&](const u32 w, const u32 h) {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(w)
-                .setHeight(h)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::ShaderResource)
-                .setKeepInitialState(true)
-        );
-    };
     auto makeUavTexture = [&](const u32 w, const u32 h) {
         return device.createTexture(
             TextureDesc()
@@ -783,26 +766,15 @@ TEST_F(DescriptorBufferRoundTripTest, CausticResolveShapeBuildsAsDescriptorBuffe
         );
     };
 
-    auto accumulator = makeTexture(32u, 32u);
-    auto worldPosition = makeTexture(32u, 32u);
-    auto depth = makeTexture(32u, 32u);
     auto output = makeUavTexture(32u, 32u);   // UAV (wavelet output)
-    auto inputColor = makeTexture(32u, 32u);
-    auto geometry = makeTexture(32u, 32u);
-    ASSERT_TRUE(accumulator && worldPosition && depth && output && inputColor && geometry);
+    ASSERT_TRUE(output);
 
-    // The caustic resolve binding layout: 5 SRV + 1 UAV + push constants, opting into the descriptor-buffer path.
-    // Slots mirror resolve_binding_slots.h (0..5); push constants ride the pipeline layout, allowed alongside.
+    // The caustic resolve local binding layout: sparse output UAV at binding 3 + push constants, opting into Backend C.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
     layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(0u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(2u, 1u));
     layoutDesc.addItem(BindingLayoutItem::Texture_UAV(3u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(4u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(5u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 32u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 52u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
@@ -814,21 +786,16 @@ TEST_F(DescriptorBufferRoundTripTest, CausticResolveShapeBuildsAsDescriptorBuffe
         << "caustic resolve shape did not route to the descriptor-buffer path";
     EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    // Every non-push-constant binding must have a driver-queried layout offset within the set block.
+    // The sparse output binding still needs one driver-queried layout offset within the set block.
     const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 6u);
+    EXPECT_EQ(offsets.size(), 1u);
 
-    // A binding set carved against this layout exercises the production carve + 6 writeDescriptor calls.
+    // A binding set carved against this layout exercises the production carve + sparse-UAV writeDescriptor path.
     BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::Texture_SRV(0u, accumulator.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(1u, worldPosition.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(2u, depth.get(), Format::RGBA16_FLOAT));
     setDesc.addItem(BindingSetItem::Texture_UAV(3u, output.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(4u, inputColor.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(5u, geometry.get(), Format::RGBA16_FLOAT));
 
     auto bindingSet = device.createBindingSet(setDesc, layout);
-    // createBindingSet carved the set block and wrote all 6 descriptors; a failure here would have logged at ERROR.
+    // createBindingSet carved the set block and wrote the single sparse UAV descriptor.
     ASSERT_NE(bindingSet.get(), nullptr);
     EXPECT_EQ(bindingSet->getLayout(), layout.get());
 }
@@ -2008,6 +1975,49 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
         heap.advanceFrame();
     EXPECT_EQ(sampledImageArray->getReferenceCount(), 1u)
         << "heap did not release the descriptor resource after its in-flight quarantine matured";
+
+    // The caustic resolve reads its R32_UINT fixed-point accumulator through a dedicated typed uint Texture2DArray
+    // descriptor table. Its image-view format differs from the floating-point array above, so verify the distinct
+    // Backend-C class/binding's write and resource-retention path too.
+    auto sampledImageArrayUint = device.createTexture(
+        TextureDesc()
+            .setWidth(32u)
+            .setHeight(32u)
+            .setArraySize(3u)
+            .setDimension(TextureDimension::Texture2DArray)
+            .setFormat(Format::R32_UINT)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(sampledImageArrayUint);
+    EXPECT_EQ(sampledImageArrayUint->getReferenceCount(), 1u);
+
+    EXPECT_EQ(
+        heap.getRegisterSlot(GpuDescriptorClass::SampledImage2DArrayUint),
+        NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY_UINT
+    );
+    const GpuDescriptorHandle sampledImageArrayUintHandle = heap.allocate(GpuDescriptorClass::SampledImage2DArrayUint);
+    ASSERT_TRUE(sampledImageArrayUintHandle.valid());
+    EXPECT_TRUE(heap.write(
+        sampledImageArrayUintHandle,
+        BindingSetItem::Texture_SRV(
+            0u,
+            sampledImageArrayUint.get(),
+            Format::R32_UINT,
+            TextureSubresourceSet(0u, 1u, 0u, 3u),
+            TextureDimension::Texture2DArray
+        )
+    )) << "heap R32_UINT Texture2DArray write() did not route through the descriptor-buffer path";
+    EXPECT_EQ(sampledImageArrayUint->getReferenceCount(), 2u)
+        << "heap write() did not retain the typed Texture2DArray resource";
+
+    heap.free(sampledImageArrayUintHandle);
+    EXPECT_EQ(sampledImageArrayUint->getReferenceCount(), 2u)
+        << "heap free() released the typed descriptor resource before its in-flight quarantine matured";
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+    EXPECT_EQ(sampledImageArrayUint->getReferenceCount(), 1u)
+        << "heap did not release the typed Texture2DArray resource after its in-flight quarantine matured";
 
     // AVBOIT accumulation consumes its integrated transmittance as Texture3D. This needs a separate shader-side
     // descriptor array from Texture2D/Texture2DArray even though all three encode VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE.

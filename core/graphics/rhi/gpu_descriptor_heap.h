@@ -41,6 +41,9 @@ namespace GpuDescriptorClass{
         // Keep appended for the same stable handle ABI reason. Texture3D requires its own shader-side array even
         // though Vulkan encodes it with the same sampled-image descriptor type.
         SampledImage3D,     // Texture3D_SRV          -> SAMPLED_IMAGE
+        // Keep appended to preserve the stable tags above. A uint Texture2DArray has a distinct shader image type
+        // from the floating-point Texture2DArray table, so it must occupy its own descriptor-array binding.
+        SampledImage2DArrayUint, // Texture2DArray<uint>_SRV -> SAMPLED_IMAGE
 
         kCount
     };

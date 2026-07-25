@@ -736,15 +736,14 @@ struct RtCausticState{
     bool m_causticResolvePipelineFailed = false;
     bool m_causticAccumulatorInitialized = false;
     // Caustic resolve pass (P3): an N-pass edge-avoiding a-trous wavelet denoise. The single compute pipeline is
-    // dispatched per pass with three output-UAV local sets. The R32_UINT accumulator stays local; G-buffer, geometry,
-    // and ping-pong float reads use target-generation heap slots selected in the dispatch push constants.
+    // dispatched per pass with three output-UAV local sets. The R32_UINT accumulator, G-buffer, geometry, and ping-pong
+    // reads use target-generation heap slots selected in the dispatch push constants.
     Core::BindingLayoutHandle m_causticResolveBindingLayout;
     Core::ShaderHandle m_causticResolveShader;
     Core::ComputePipelineHandle m_causticResolvePipeline;
     Core::BindingSetHandle m_causticResolveBindingSetOutputHalfA; // output=half-A, input=half-B (prepare + odd wavelet passes)
     Core::BindingSetHandle m_causticResolveBindingSetOutputHalfB; // output=half-B, input=half-A (even wavelet passes)
     Core::BindingSetHandle m_causticResolveBindingSetUpsample;    // output=full-res irradiance, input=half-B (final upsample)
-    const Core::Texture* m_causticResolveBindingSetAccumulator = nullptr;
     const Core::Texture* m_causticResolveBindingSetIrradiance = nullptr;
     const Core::Texture* m_causticResolveBindingSetHalfA = nullptr;
     const Core::Texture* m_causticResolveBindingSetHalfB = nullptr;

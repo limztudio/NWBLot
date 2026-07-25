@@ -491,6 +491,21 @@ struct CausticResolvePushConstants{
 };
 static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 12u + sizeof(f32), "CausticResolvePushConstants must match the shader push-constant layout");
 
+// Surfel GI resolve/upsample source their frame textures from the descriptor heap. Their persistent surfel buffers and
+// output UAV remain local; these mirrors select the heap-side image slots for the compute dispatches.
+struct SurfelResolvePushConstants{
+    u32 worldPositionSlot = 0u; // SampledImage: full-resolution world-position G-buffer
+    u32 normalSlot = 0u;        // SampledImage: full-resolution normal G-buffer
+};
+static_assert(sizeof(SurfelResolvePushConstants) == sizeof(u32) * 2u, "SurfelResolvePushConstants must match the shader push-constant layout");
+
+struct SurfelUpsamplePushConstants{
+    u32 halfIrradianceSlot = 0u; // SampledImage: half-resolution surfel resolve output
+    u32 normalSlot = 0u;         // SampledImage: full-resolution normal G-buffer
+    u32 worldPositionSlot = 0u;  // SampledImage: full-resolution world-position G-buffer
+};
+static_assert(sizeof(SurfelUpsamplePushConstants) == sizeof(u32) * 3u, "SurfelUpsamplePushConstants must match the shader push-constant layout");
+
 // Caustic resolve stages, kept in lockstep with caustic_resolve_cs.slang's pushConstants.stage switch.
 namespace CausticResolveStage{
     enum Enum : u32{

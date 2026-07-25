@@ -17,22 +17,39 @@
 
 
 #include "surfel_binding_slots.h"
+#include "../../bindless/bindless_heap_sampled_image_2d.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_SURFEL_UPSAMPLE_BINDING_HALF_IRRADIANCE, NWB_SURFEL_UPSAMPLE_SET)]]
-Texture2D<float4> g_NwbSurfelUpsampleHalfIrradiance;
-
-[[vk::binding(NWB_SURFEL_UPSAMPLE_BINDING_GBUFFER_NORMAL, NWB_SURFEL_UPSAMPLE_SET)]]
-Texture2D<float4> g_NwbSurfelUpsampleGbufferNormal;
-
-[[vk::binding(NWB_SURFEL_UPSAMPLE_BINDING_GBUFFER_WORLD_POSITION, NWB_SURFEL_UPSAMPLE_SET)]]
-Texture2D<float4> g_NwbSurfelUpsampleGbufferWorldPosition;
-
 [[vk::binding(NWB_SURFEL_UPSAMPLE_BINDING_OUTPUT, NWB_SURFEL_UPSAMPLE_SET)]]
 RWTexture2D<float4> g_NwbSurfelUpsampleOutput;
+
+struct NwbSurfelUpsamplePushConstants{
+    uint halfIrradianceSlot;
+    uint normalSlot;
+    uint worldPositionSlot;
+};
+
+[[vk::push_constant]]
+NwbSurfelUpsamplePushConstants g_NwbSurfelUpsamplePushConstants;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Texture2D<float4> nwbSurfelUpsampleHalfIrradiance(){
+    return NwbHeapSampledImage2DOnly(g_NwbSurfelUpsamplePushConstants.halfIrradianceSlot);
+}
+
+Texture2D<float4> nwbSurfelUpsampleGbufferNormal(){
+    return NwbHeapSampledImage2DOnly(g_NwbSurfelUpsamplePushConstants.normalSlot);
+}
+
+Texture2D<float4> nwbSurfelUpsampleGbufferWorldPosition(){
+    return NwbHeapSampledImage2DOnly(g_NwbSurfelUpsamplePushConstants.worldPositionSlot);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,32 +58,32 @@ RWTexture2D<float4> g_NwbSurfelUpsampleOutput;
 [numthreads(NWB_SURFEL_UPSAMPLE_GROUP_SIZE, NWB_SURFEL_UPSAMPLE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     uint fullWidth, fullHeight;
-    g_NwbSurfelUpsampleGbufferNormal.GetDimensions(fullWidth, fullHeight);
+    nwbSurfelUpsampleGbufferNormal().GetDimensions(fullWidth, fullHeight);
     const uint2 pixel = dispatchThreadID.xy;
     if(pixel.x >= fullWidth || pixel.y >= fullHeight)
         return;
 
     const int3 fullCoord = int3(int2(pixel), 0);
-    const float3 rawNormal = g_NwbSurfelUpsampleGbufferNormal.Load(fullCoord).xyz;
+    const float3 rawNormal = nwbSurfelUpsampleGbufferNormal().Load(fullCoord).xyz;
     if(dot(rawNormal, rawNormal) < 0.01){
         g_NwbSurfelUpsampleOutput[pixel] = float4(0.0, 0.0, 0.0, 0.0);   // background -> hemiAmbient in lighting
         return;
     }
     const float3 centerNormal = normalize(rawNormal * 2.0 - 1.0);
-    const float3 centerWorld = g_NwbSurfelUpsampleGbufferWorldPosition.Load(fullCoord).xyz;
+    const float3 centerWorld = nwbSurfelUpsampleGbufferWorldPosition().Load(fullCoord).xyz;
 
     // World-distance edge-stop sigma from this pixel's own world spacing (max of +x/+y to survive a grazing/foreshortened
     // surface). A few pixels of tolerance keeps same-surface taps but rejects a silhouette jump to a far surface.
     const int2 rightFull = int2(min(int(pixel.x) + 1, int(fullWidth) - 1), int(pixel.y));
     const int2 downFull = int2(int(pixel.x), min(int(pixel.y) + 1, int(fullHeight) - 1));
-    const float3 dxWorld = g_NwbSurfelUpsampleGbufferWorldPosition.Load(int3(rightFull, 0)).xyz - centerWorld;
-    const float3 dyWorld = g_NwbSurfelUpsampleGbufferWorldPosition.Load(int3(downFull, 0)).xyz - centerWorld;
+    const float3 dxWorld = nwbSurfelUpsampleGbufferWorldPosition().Load(int3(rightFull, 0)).xyz - centerWorld;
+    const float3 dyWorld = nwbSurfelUpsampleGbufferWorldPosition().Load(int3(downFull, 0)).xyz - centerWorld;
     const float spacing = max(max(length(dxWorld), length(dyWorld)), 1e-4);
     const float sigmaWorld = spacing * 3.0;
     const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
 
     uint halfWidth, halfHeight;
-    g_NwbSurfelUpsampleHalfIrradiance.GetDimensions(halfWidth, halfHeight);
+    nwbSurfelUpsampleHalfIrradiance().GetDimensions(halfWidth, halfHeight);
     const uint factor = uint(NWB_SURFEL_RESOLVE_HALF_FACTOR);
 
     // Map the full pixel to half-index space so that a block-aligned pixel lands EXACTLY on the half texel the resolve
@@ -82,18 +99,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     [unroll] for(int j = 0; j < 2; ++j){
         [unroll] for(int i = 0; i < 2; ++i){
             const int2 tap = int2(clamp(baseTexel.x + i, 0, int(halfWidth) - 1), clamp(baseTexel.y + j, 0, int(halfHeight) - 1));
-            const float4 tapValue = g_NwbSurfelUpsampleHalfIrradiance.Load(int3(tap, 0));
+            const float4 tapValue = nwbSurfelUpsampleHalfIrradiance().Load(int3(tap, 0));
             if(tapValue.a < 0.5)
                 continue;   // this half texel had no surfel coverage -> nothing to upsample from
             // Recover the tap's geometry from the SAME full texel the resolve gathered at (tap * factor, top-left).
             const int2 tapFull = int2(min(uint(tap.x) * factor, fullWidth - 1u), min(uint(tap.y) * factor, fullHeight - 1u));
-            const float3 tapRawNormal = g_NwbSurfelUpsampleGbufferNormal.Load(int3(tapFull, 0)).xyz;
+            const float3 tapRawNormal = nwbSurfelUpsampleGbufferNormal().Load(int3(tapFull, 0)).xyz;
             if(dot(tapRawNormal, tapRawNormal) < 0.01)
                 continue;   // tap's geometry is background
             const float3 tapNormal = normalize(tapRawNormal * 2.0 - 1.0);
             if(dot(tapNormal, centerNormal) < NWB_SURFEL_UPSAMPLE_NORMAL_GATE)
                 continue;   // different surface (crease) -> would leak GI across the edge
-            const float3 tapWorld = g_NwbSurfelUpsampleGbufferWorldPosition.Load(int3(tapFull, 0)).xyz;
+            const float3 tapWorld = nwbSurfelUpsampleGbufferWorldPosition().Load(int3(tapFull, 0)).xyz;
             const float3 d = tapWorld - centerWorld;
             const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
             const float weight = bilinearWeight * exp(-dot(d, d) * invTwoSigmaWorldSq);

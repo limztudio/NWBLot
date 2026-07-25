@@ -96,13 +96,12 @@ public:
     [[nodiscard]] bool ensureSurfelTraceBindingSet();
     [[nodiscard]] bool ensureSurfelTraceHwBindingSet();   // U5 HW twin: TLAS + HW-resident per-mesh buffers
     // The resolve pass: a COMPUTE gather-once-per-pixel into the screen-space surfelIrradiance texture the deferred
-    // lighting samples (keeps the RW pool off the pixel shader -> no frames-in-flight pool race). Pipeline + its set
-    // (surfel constants/pool SRV/cell-head SRV + G-buffer world-position/normal + surfelIrradiance UAV; rebuilt on a
-    // target change).
+    // lighting samples (keeps the RW pool off the pixel shader -> no frames-in-flight pool race). Its persistent
+    // buffers/output stay local; G-buffer world-position/normal are frame-heap reads selected by push constants.
     [[nodiscard]] bool ensureSurfelResolvePipeline();
     [[nodiscard]] bool ensureSurfelResolveBindingSet(DeferredFrameTargets& targets);
-    // U6 half-res upsample: reconstructs the full-res surfelIrradiance from the half-res resolve output with a surface-
-    // gated joint-bilinear filter (half-res irradiance + full-res G-buffer normal/world-position SRVs -> full-res UAV).
+    // U6 half-res upsample: reconstructs the full-res surfelIrradiance from heap-selected half irradiance plus G-buffer
+    // normal/world-position, keeping only its full-res output UAV local.
     [[nodiscard]] bool ensureSurfelUpsamplePipeline();
     [[nodiscard]] bool ensureSurfelUpsampleBindingSet(DeferredFrameTargets& targets);
     // U6 trace dispatchIndirect: a 1-thread build-args pass writes ceil(BUMP_TOP/divisor) into the trace's indirect-args

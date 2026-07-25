@@ -922,26 +922,15 @@ TEST_F(DescriptorBufferRoundTripTest, CausticAccumulatorDecayShapeBuildsAsDescri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surfel upsample is the fourth pass flipped onto Backend C and the first surfel-GI pass migrated. Its shape (3 texture
-// SRVs + 1 texture UAV, no samplers) is the no-push-constant case -- distinct from the caustic passes, which all carry
-// push constants. The half/full-res irradiance and G-buffer SRVs are RGBA16_FLOAT (HDR surfel irradiance + view-space
-// attributes); the full-res surfelIrradiance UAV is RGBA16_FLOAT too. Mirrors the resolve/geometry-downsample/accumulator
-// parity proofs.
+// Surfel upsample keeps its sparse local output UAV while selecting half irradiance plus G-buffer inputs from the frame
+// descriptor heap through a three-u32 push block. This proof covers the resulting single-UAV descriptor-buffer shape
+// and its 12-byte push-constant range.
 TEST_F(DescriptorBufferRoundTripTest, SurfelUpsampleShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/surfel_upsample_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto makeTexture = [&](const u32 w, const u32 h) {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(w).setHeight(h)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::ShaderResource)
-                .setKeepInitialState(true)
-        );
-    };
     auto makeUavTexture = [&](const u32 w, const u32 h) {
         return device.createTexture(
             TextureDesc()
@@ -952,21 +941,15 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelUpsampleShapeBuildsAsDescriptorBuffe
         );
     };
 
-    auto halfIrradiance = makeTexture(32u, 32u);
-    auto normal = makeTexture(32u, 32u);
-    auto worldPosition = makeTexture(32u, 32u);
     auto output = makeUavTexture(32u, 32u);
-    ASSERT_TRUE(halfIrradiance && normal && worldPosition && output);
+    ASSERT_TRUE(output);
 
-    // Slots mirror surfel_binding_slots.h upsample block (0..3); NO push constants ride the pipeline layout (the
-    // joint-bilinear filter is driven by the G-buffer alone), so the set is the pure 4-resource case.
+    // The local output preserves its original sparse binding 3; the former 0..2 texture SRVs are heap-selected.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
     layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(0u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(2u, 1u));
     layoutDesc.addItem(BindingLayoutItem::Texture_UAV(3u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 12u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
@@ -976,12 +959,9 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelUpsampleShapeBuildsAsDescriptorBuffe
     EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
     const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 4u);
+    EXPECT_EQ(offsets.size(), 1u);
 
     BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::Texture_SRV(0u, halfIrradiance.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(1u, normal.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(2u, worldPosition.get(), Format::RGBA16_FLOAT));
     setDesc.addItem(BindingSetItem::Texture_UAV(3u, output.get(), Format::RGBA16_FLOAT));
 
     auto bindingSet = device.createBindingSet(setDesc, layout);
@@ -1282,14 +1262,10 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelSpawnShapeBuildsAsDescriptorBuffer){
 }
 
 
-// Surfel resolve parity: the pass that gathers irradiance from the surfel pool into the half-res irradiance target.
-// Its shape is segment-coherent pure-resource (1 ConstantBuffer + 2 StructuredBuffer_SRV + 2 Texture_SRV + 1
-// Texture_UAV, no samplers): it reads the pool and cell-head built by the surfel passes, the G-buffer world position +
-// normal, and writes the half-res irradiance. Slots mirror surfel_binding_slots.h resolve block (0..5). The layout
-// routes to Backend C intact; in production the set is rebuilt on G-buffer / output (resize) change. This proof
-// exercises the live device API with resolve's exact binding shape, asserting the layout routes to Backend C, reports
-// a non-zero driver-queried set size, gives the binding 6 layout offsets, and createBindingSet carves the block and
-// writes the uniform/storage/texture descriptors through the production writeDescriptor path.
+// Surfel resolve gathers irradiance from its persistent pool/cell-head into the half-res target. G-buffer world position
+// and normal are frame-heap reads selected by an eight-byte push block; the local shape therefore keeps the constant
+// buffer, two structured SRVs, and sparse output UAV (binding 5). This proof exercises that exact descriptor-buffer
+// block and push-constant range.
 TEST_F(DescriptorBufferRoundTripTest, SurfelResolveShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
@@ -1315,15 +1291,6 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelResolveShapeBuildsAsDescriptorBuffer
                 .setKeepInitialState(true)
         );
     };
-    auto makeTexture = [&](const u32 w, const u32 h) {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(w).setHeight(h)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::ShaderResource)
-                .setKeepInitialState(true)
-        );
-    };
     auto makeUavTexture = [&](const u32 w, const u32 h) {
         return device.createTexture(
             TextureDesc()
@@ -1337,23 +1304,18 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelResolveShapeBuildsAsDescriptorBuffer
     auto constants = makeConstantBuffer();
     auto pool = makeStructuredSrv(16u);
     auto cellHead = makeStructuredSrv(4u);
-    auto worldPosition = makeTexture(32u, 32u);
-    auto normal = makeTexture(32u, 32u);
     auto output = makeUavTexture(32u, 32u);
-    ASSERT_TRUE(constants && pool && cellHead && worldPosition && normal && output);
+    ASSERT_TRUE(constants && pool && cellHead && output);
 
-    // Slots mirror surfel_binding_slots.h resolve block (0..5); the segment-coherent pure-resource layout (a uniform
-    // buffer, two read-only storage buffers, two textures, and one storage texture, no samplers) is the first
-    // migrated shape to mix StructuredBuffer_SRV with Texture_UAV in one segment.
+    // Retain the output's sparse binding 5; former G-buffer slots 3 and 4 are selected from the global heap.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
     layoutDesc.setUseDescriptorBuffer(true);
     layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(0u, 1u));
     layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(1u, 1u));
     layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(2u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(3u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(4u, 1u));
     layoutDesc.addItem(BindingLayoutItem::Texture_UAV(5u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 8u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
@@ -1363,14 +1325,12 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelResolveShapeBuildsAsDescriptorBuffer
     EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
     const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 6u);
+    EXPECT_EQ(offsets.size(), 4u);
 
     BindingSetDesc setDesc(descArena);
     setDesc.addItem(BindingSetItem::ConstantBuffer(0u, constants.get()));
     setDesc.addItem(BindingSetItem::StructuredBuffer_SRV(1u, pool.get()));
     setDesc.addItem(BindingSetItem::StructuredBuffer_SRV(2u, cellHead.get()));
-    setDesc.addItem(BindingSetItem::Texture_SRV(3u, worldPosition.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(4u, normal.get(), Format::RGBA16_FLOAT));
     setDesc.addItem(BindingSetItem::Texture_UAV(5u, output.get(), Format::RGBA16_FLOAT));
 
     auto bindingSet = device.createBindingSet(setDesc, layout);

@@ -190,6 +190,9 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         && registerTexture(bindless.shadowVisibility, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowVisibility.get(), targets.shadowVisibilityFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.causticIrradiance, Core::GpuDescriptorClass::SampledImage, targets.causticIrradiance.get(), targets.causticIrradianceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.surfelIrradiance, Core::GpuDescriptorClass::SampledImage, targets.surfelIrradiance.get(), targets.surfelIrradianceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        // The surfel GI resolve/upsample pair carries its G-buffer + half-resolution image reads through direct heap
+        // slots in push constants, retaining only output UAVs and persistent surfel buffers in local binding sets.
+        && registerTexture(bindless.surfelIrradianceHalf, Core::GpuDescriptorClass::SampledImage, targets.surfelIrradianceHalf.get(), targets.surfelIrradianceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerSampler(bindless.sampler, deferredState().m_sampler.get())
         && registerTexture(bindless.opaqueColor, Core::GpuDescriptorClass::SampledImage, targets.opaqueColor.get(), targets.opaqueColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitAccumColor, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumColor.get(), targets.avboit.accumColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
@@ -266,6 +269,7 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
             heap.free(targets.bindless.shadowVisibility);
             heap.free(targets.bindless.causticIrradiance);
             heap.free(targets.bindless.surfelIrradiance);
+            heap.free(targets.bindless.surfelIrradianceHalf);
             heap.free(targets.bindless.sampler);
             heap.free(targets.bindless.opaqueColor);
             heap.free(targets.bindless.avboitAccumColor);

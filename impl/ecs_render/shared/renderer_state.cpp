@@ -441,16 +441,11 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelResolveShader.reset();
     m_surfelResolvePipeline.reset();
     m_surfelResolveBindingSet.reset();
-    m_surfelResolveBindingSetWorldPosition = nullptr;
-    m_surfelResolveBindingSetNormal = nullptr;
     m_surfelResolveBindingSetOutput = nullptr;
     m_surfelUpsampleBindingLayout.reset();
     m_surfelUpsampleShader.reset();
     m_surfelUpsamplePipeline.reset();
     m_surfelUpsampleBindingSet.reset();
-    m_surfelUpsampleBindingSetHalfIrradiance = nullptr;
-    m_surfelUpsampleBindingSetNormal = nullptr;
-    m_surfelUpsampleBindingSetWorldPosition = nullptr;
     m_surfelUpsampleBindingSetOutput = nullptr;
     m_surfelTraceBuildArgsBindingLayout.reset();
     m_surfelTraceBuildArgsShader.reset();

@@ -801,27 +801,21 @@ struct RtSurfelGiState{
     Core::BindingSetHandle m_surfelTraceBindingSet;
     // Resolve pass: a COMPUTE pass that gathers the surfel field once per pixel into the screen-space surfelIrradiance
     // texture the deferred lighting samples. Keeping the gather in compute (not the pixel shader) keeps the RW pool off
-    // the pixel stage, eliminating the frames-in-flight pool race. Binds surfel constants/pool(SRV)/cell-head(SRV) + the
-    // G-buffer world-position/normal + the surfelIrradiance UAV.
+    // the pixel stage, eliminating the frames-in-flight pool race. Local bindings carry surfel constants/pool(SRV)/
+    // cell-head(SRV) + the surfelIrradiance UAV; G-buffer reads arrive through descriptor-heap slots.
     Core::BindingLayoutHandle m_surfelResolveBindingLayout;
     Core::ShaderHandle m_surfelResolveShader;
     Core::ComputePipelineHandle m_surfelResolvePipeline;
     Core::BindingSetHandle m_surfelResolveBindingSet;
-    // Tracked pointers for the resolve set rebuild (G-buffer world-position/normal + the surfelIrradiance output, all
-    // recreated on resize).
-    const Core::Texture* m_surfelResolveBindingSetWorldPosition = nullptr;
-    const Core::Texture* m_surfelResolveBindingSetNormal = nullptr;
+    // The only resize-sensitive local resolve binding is its half-resolution output UAV.
     const Core::Texture* m_surfelResolveBindingSetOutput = nullptr;
     // U6 half-res producer: the resolve writes surfelIrradianceHalf; this upsample pass reconstructs the full-res
-    // surfelIrradiance with a surface-gated joint-bilinear filter (surfel_upsample_cs). Binds the half-res irradiance +
-    // full-res G-buffer normal/world-position (SRVs) + the full-res surfelIrradiance (UAV). Rebuilt on resize.
+    // surfelIrradiance with a surface-gated joint-bilinear filter (surfel_upsample_cs). Its heap slots select the
+    // half-res irradiance + full-res G-buffer normal/world-position; only the full-res output remains local.
     Core::BindingLayoutHandle m_surfelUpsampleBindingLayout;
     Core::ShaderHandle m_surfelUpsampleShader;
     Core::ComputePipelineHandle m_surfelUpsamplePipeline;
     Core::BindingSetHandle m_surfelUpsampleBindingSet;
-    const Core::Texture* m_surfelUpsampleBindingSetHalfIrradiance = nullptr;
-    const Core::Texture* m_surfelUpsampleBindingSetNormal = nullptr;
-    const Core::Texture* m_surfelUpsampleBindingSetWorldPosition = nullptr;
     const Core::Texture* m_surfelUpsampleBindingSetOutput = nullptr;
     // U6 trace dispatchIndirect: a 1-thread build-args pass (surfel_trace_buildargs_cs) reads the live high-water
     // BUMP_TOP + the update divisor (surfel CB) and writes the trace's DispatchIndirectArguments into

@@ -60,8 +60,8 @@
 #define NWB_SURFEL_RESOLVE_BINDING_CONSTANTS 0              // ConstantBuffer<NwbSurfelConstants>
 #define NWB_SURFEL_RESOLVE_BINDING_POOL 1                  // StructuredBuffer<NwbSurfel> (SRV)
 #define NWB_SURFEL_RESOLVE_BINDING_CELL_HEAD 2             // StructuredBuffer<uint> (SRV)
-#define NWB_SURFEL_RESOLVE_BINDING_GBUFFER_WORLD_POSITION 3
-#define NWB_SURFEL_RESOLVE_BINDING_GBUFFER_NORMAL 4
+#define NWB_SURFEL_RESOLVE_BINDING_GBUFFER_WORLD_POSITION 3 // logical heap-SRV position; selected through push constants
+#define NWB_SURFEL_RESOLVE_BINDING_GBUFFER_NORMAL 4         // logical heap-SRV position; selected through push constants
 #define NWB_SURFEL_RESOLVE_BINDING_OUTPUT 5                // RWTexture2D<float4> (HALF-res irradiance; upsampled to full)
 #define NWB_SURFEL_RESOLVE_GROUP_SIZE 8
 // Half-res resolve factor (U6): the resolve gather -- the (2*EXTENT+1)^3 = 5x5x5 = 125-cell hotspot -- runs at 1/FACTOR^2
@@ -75,9 +75,9 @@
 // coverage (so deferred lighting's point-Load + a>0.5 ? gi : hemiAmbient is unchanged). A covered tap must also be
 // same-surface to contribute; a fully-uncovered/rejected window writes a=0 -> hemiAmbient.
 #define NWB_SURFEL_UPSAMPLE_SET 0
-#define NWB_SURFEL_UPSAMPLE_BINDING_HALF_IRRADIANCE 0        // Texture2D<float4> SRV (half-res resolve output)
-#define NWB_SURFEL_UPSAMPLE_BINDING_GBUFFER_NORMAL 1         // Texture2D<float4> SRV (full-res)
-#define NWB_SURFEL_UPSAMPLE_BINDING_GBUFFER_WORLD_POSITION 2 // Texture2D<float4> SRV (full-res)
+#define NWB_SURFEL_UPSAMPLE_BINDING_HALF_IRRADIANCE 0        // logical heap-SRV position; selected through push constants
+#define NWB_SURFEL_UPSAMPLE_BINDING_GBUFFER_NORMAL 1         // logical heap-SRV position; selected through push constants
+#define NWB_SURFEL_UPSAMPLE_BINDING_GBUFFER_WORLD_POSITION 2 // logical heap-SRV position; selected through push constants
 #define NWB_SURFEL_UPSAMPLE_BINDING_OUTPUT 3                 // RWTexture2D<float4> (full-res surfelIrradiance)
 #define NWB_SURFEL_UPSAMPLE_GROUP_SIZE 8
 // Reject a half-res tap whose surface normal is >60deg from the full-res pixel's (cos < gate): stops GI leaking across a

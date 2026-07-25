@@ -133,6 +133,9 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle shadowVisibility = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle causticIrradiance = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle surfelIrradiance = Core::GpuDescriptorHandle::invalid();
+    // The surfel resolve/upsample compute pair selects this half-resolution input together with the existing G-buffer
+    // slots through push constants. The full-resolution irradiance above remains the deferred-lighting heap input.
+    Core::GpuDescriptorHandle surfelIrradianceHalf = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle sampler = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle opaqueColor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitAccumColor = Core::GpuDescriptorHandle::invalid();
@@ -173,6 +176,7 @@ struct DeferredBindlessFrameResources{
             && shadowVisibility.valid()
             && causticIrradiance.valid()
             && surfelIrradiance.valid()
+            && surfelIrradianceHalf.valid()
             && sampler.valid()
             && opaqueColor.valid()
             && avboitAccumColor.valid()

@@ -4,6 +4,7 @@
 
 #include "binding_slots.h"
 #include "constants.h"
+#include "bindless_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,20 +24,12 @@ struct NwbCsgIntervalDispatchPushConstants{
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
 
-// Event data layout: .x = receiverIndex, .y = faceSign, .z = asuint(linear depth), .w = unused.
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DATA, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<uint4> g_NwbCsgReceiverEventData;
-
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_COUNT, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<uint> g_NwbCsgReceiverEventCount;
-
-// Span data layout: .x = receiverIndex, .y = asuint(enter depth), .z = asuint(exit depth), .w = unused.
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_DATA, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_RECEIVER_SPAN_DATA_IMAGE_FORMAT)]]
-RWTexture2DArray<uint4> g_NwbCsgReceiverSpanData;
-
-// Count layout: .x = span count, .y = flags.
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_COUNT, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_RECEIVER_SPAN_COUNT_IMAGE_FORMAT)]]
-RWTexture2DArray<uint2> g_NwbCsgReceiverSpanCount;
+// The event read and span write images share the global StorageImage table. Their historical local bindings 5/6/9/10
+// remain gaps; the target-generation slot cbuffer selects the correct typed array views.
+#define g_NwbCsgReceiverEventData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgPeelSlots.w))
+#define g_NwbCsgReceiverEventCount (NwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgSpanSlots.x))
+#define g_NwbCsgReceiverSpanData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgSpanSlots.y))
+#define g_NwbCsgReceiverSpanCount (NwbHeapStorageImage2DArrayUint2(g_NwbCsgBindlessResources.csgSpanSlots.z))
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,7 +74,7 @@ uint2 nwbCsgReceiverSpanBuildWorkExtent(){
 }
 
 uint nwbCsgReceiverSpanBuildLoadEventCount(const uint2 pixel, const uint eventLayerCount, inout uint inOutFlags){
-    const uint eventCount = g_NwbCsgReceiverEventCount.Load(int4(int2(pixel), 0, 0));
+    const uint eventCount = g_NwbCsgReceiverEventCount.Load(int3(int2(pixel), 0));
     // The event emit pass keeps counting past the storable layer budget, so a raw count above the
     // budget is exactly the overflow condition; no separate event-flags texture is required.
     if(eventCount > eventLayerCount)
@@ -91,7 +84,7 @@ uint nwbCsgReceiverSpanBuildLoadEventCount(const uint2 pixel, const uint eventLa
 }
 
 NwbCsgReceiverSurfaceEvent nwbCsgReceiverSpanBuildLoadEvent(const uint2 pixel, const uint eventIndex){
-    const int4 texel = int4(int2(pixel), int(eventIndex), 0);
+    const int3 texel = int3(int2(pixel), int(eventIndex));
     const uint4 data = g_NwbCsgReceiverEventData.Load(texel);
 
     NwbCsgReceiverSurfaceEvent result;

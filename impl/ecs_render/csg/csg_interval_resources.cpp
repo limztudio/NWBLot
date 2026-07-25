@@ -17,253 +17,6 @@ NWB_IMPL_BEGIN
 namespace __hidden_csg_interval_peel{
 
 
-static void AddCsgTextureBindingLayoutItem(
-    Core::BindingLayoutDesc& bindingLayoutDesc,
-    u32 slot,
-    CsgTextureAccess::Enum access
-){
-    switch(access){
-    case CsgTextureAccess::None:
-        break;
-    case CsgTextureAccess::SRV:
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(slot, 1));
-        break;
-    case CsgTextureAccess::UAV:
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(slot, 1));
-        break;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void AddCsgTextureBindingSetItem(
-    Core::BindingSetDesc& bindingSetDesc,
-    u32 slot,
-    Core::Texture* texture,
-    Core::Format::Enum format,
-    const Core::TextureSubresourceSet& subresources,
-    CsgTextureAccess::Enum access
-){
-    switch(access){
-    case CsgTextureAccess::None:
-        break;
-    case CsgTextureAccess::SRV:
-        bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-            slot,
-            texture,
-            format,
-            subresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        break;
-    case CsgTextureAccess::UAV:
-        bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
-            slot,
-            texture,
-            format,
-            subresources,
-            Core::TextureDimension::Texture2DArray
-        ));
-        break;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void AddCsgIntervalTargetLayoutItems(
-    Core::BindingLayoutDesc& bindingLayoutDesc,
-    CsgTextureAccess::Enum access
-){
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL, access);
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_DEPTH, access);
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_ID, access);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void AddCsgReceiverEventLayoutItems(
-    Core::BindingLayoutDesc& bindingLayoutDesc,
-    CsgTextureAccess::Enum access
-){
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DATA, access);
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_COUNT, access);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void AddCsgReceiverSpanLayoutItems(
-    Core::BindingLayoutDesc& bindingLayoutDesc,
-    CsgTextureAccess::Enum access
-){
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_DATA, access);
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_COUNT, access);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void AddCsgRemovedIntervalLayoutItems(
-    Core::BindingLayoutDesc& bindingLayoutDesc,
-    CsgTextureAccess::Enum access
-){
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DEPTH, access);
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_CAP_NORMAL, access);
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DATA, access);
-    AddCsgTextureBindingLayoutItem(bindingLayoutDesc, NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_COUNT, access);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void AddCsgIntervalTargetBindingSetItems(
-    Core::BindingSetDesc& bindingSetDesc,
-    const DeferredFrameTargets& targets,
-    const Core::TextureSubresourceSet& subresources,
-    CsgTextureAccess::Enum access
-){
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL,
-        targets.csgCapBackNormal.get(),
-        targets.csgCapNormalFormat,
-        subresources,
-        access
-    );
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_DEPTH,
-        targets.csgIntervalDepth.get(),
-        targets.csgIntervalDepthFormat,
-        subresources,
-        access
-    );
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_ID,
-        targets.csgIntervalId.get(),
-        targets.csgIntervalIdFormat,
-        subresources,
-        access
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void AddCsgReceiverEventBindingSetItems(
-    Core::BindingSetDesc& bindingSetDesc,
-    const DeferredFrameTargets& targets,
-    const Core::TextureSubresourceSet& eventSubresources,
-    const Core::TextureSubresourceSet& eventCounterSubresources,
-    CsgTextureAccess::Enum access
-){
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DATA,
-        targets.csgReceiverEventData.get(),
-        targets.csgReceiverEventDataFormat,
-        eventSubresources,
-        access
-    );
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_COUNT,
-        targets.csgReceiverEventCount.get(),
-        targets.csgReceiverEventCountFormat,
-        eventCounterSubresources,
-        access
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void AddCsgReceiverSpanBindingSetItems(
-    Core::BindingSetDesc& bindingSetDesc,
-    const DeferredFrameTargets& targets,
-    const Core::TextureSubresourceSet& spanSubresources,
-    const Core::TextureSubresourceSet& spanCounterSubresources,
-    CsgTextureAccess::Enum access
-){
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_DATA,
-        targets.csgReceiverSpanData.get(),
-        targets.csgReceiverSpanDataFormat,
-        spanSubresources,
-        access
-    );
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_COUNT,
-        targets.csgReceiverSpanCount.get(),
-        targets.csgReceiverSpanCountFormat,
-        spanCounterSubresources,
-        access
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void AddCsgRemovedIntervalBindingSetItems(
-    Core::BindingSetDesc& bindingSetDesc,
-    const DeferredFrameTargets& targets,
-    const Core::TextureSubresourceSet& removedIntervalSubresources,
-    const Core::TextureSubresourceSet& removedIntervalCounterSubresources,
-    CsgTextureAccess::Enum access
-){
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DEPTH,
-        targets.csgRemovedIntervalDepth.get(),
-        targets.csgRemovedIntervalDepthFormat,
-        removedIntervalSubresources,
-        access
-    );
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_CAP_NORMAL,
-        targets.csgRemovedIntervalCapNormal.get(),
-        targets.csgRemovedIntervalCapNormalFormat,
-        removedIntervalSubresources,
-        access
-    );
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DATA,
-        targets.csgRemovedIntervalData.get(),
-        targets.csgRemovedIntervalDataFormat,
-        removedIntervalSubresources,
-        access
-    );
-    AddCsgTextureBindingSetItem(
-        bindingSetDesc,
-        NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_COUNT,
-        targets.csgRemovedIntervalCount.get(),
-        targets.csgRemovedIntervalCountFormat,
-        removedIntervalCounterSubresources,
-        access
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static bool CreateCsgIntervalBindingLayout(
     Core::GraphicsArena& arena,
     Core::Device& device,
@@ -279,16 +32,15 @@ static void AddCsgRemovedIntervalBindingSetItems(
     Core::BindingLayoutDesc bindingLayoutDesc(arena);
     bindingLayoutDesc.setVisibility(visibility);
     bindingLayoutDesc.setUseDescriptorBuffer(true);
-    if(intervalAccess != CsgTextureAccess::None)
-        AddCsgIntervalTargetLayoutItems(bindingLayoutDesc, intervalAccess);
-    if(receiverEventAccess != CsgTextureAccess::None)
-        AddCsgReceiverEventLayoutItems(bindingLayoutDesc, receiverEventAccess);
-    if(removedIntervalAccess != CsgTextureAccess::None)
-        AddCsgRemovedIntervalLayoutItems(bindingLayoutDesc, removedIntervalAccess);
+    // All CSG interval/peel textures are target-generation StorageImage heap entries. Retain their historical local
+    // binding numbers as gaps and carry only the shared DeferredBindlessResourceSlots cbuffer at binding 17.
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES, 1));
     const bool usesSampleState = receiverEventAccess != CsgTextureAccess::None || removedIntervalAccess != CsgTextureAccess::None;
     if(usesSampleState)
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, 1));
+
+    (void)intervalAccess;
 
     layout = device.createBindingLayout(bindingLayoutDesc);
     return layout != nullptr;
@@ -317,6 +69,8 @@ static void AddCsgRemovedIntervalBindingSetItems(
         !meshViewBuffer
         || (usesSampleState && !sampleStateBuffer)
         || !layout
+        || !targets.bindless.valid()
+        || !targets.bindless.slotsBuffer
     )
         return false;
     if(
@@ -350,32 +104,10 @@ static void AddCsgRemovedIntervalBindingSetItems(
         return false;
 
     Core::BindingSetDesc bindingSetDesc(arena);
-    if(intervalAccess != CsgTextureAccess::None){
-        const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
-        AddCsgIntervalTargetBindingSetItems(bindingSetDesc, targets, csgPeelSubresources, intervalAccess);
-    }
-    if(receiverEventAccess != CsgTextureAccess::None){
-        const Core::TextureSubresourceSet csgReceiverEventSubresources(0, 1, 0, targets.csgReceiverEventLayerCount);
-        const Core::TextureSubresourceSet csgReceiverEventCounterSubresources(0, 1, 0, 1);
-        AddCsgReceiverEventBindingSetItems(
-            bindingSetDesc,
-            targets,
-            csgReceiverEventSubresources,
-            csgReceiverEventCounterSubresources,
-            receiverEventAccess
-        );
-    }
-    if(removedIntervalAccess != CsgTextureAccess::None){
-        const Core::TextureSubresourceSet csgRemovedIntervalSubresources(0, 1, 0, targets.csgRemovedIntervalLayerCount);
-        const Core::TextureSubresourceSet csgRemovedIntervalCounterSubresources(0, 1, 0, 1);
-        AddCsgRemovedIntervalBindingSetItems(
-            bindingSetDesc,
-            targets,
-            csgRemovedIntervalSubresources,
-            csgRemovedIntervalCounterSubresources,
-            removedIntervalAccess
-        );
-    }
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
+        NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES,
+        targets.bindless.slotsBuffer.get()
+    ));
     if(usesSampleState)
         bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, sampleStateBuffer));
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, meshViewBuffer));
@@ -399,8 +131,7 @@ static void AddCsgRemovedIntervalBindingSetItems(
     Core::BindingLayoutDesc bindingLayoutDesc(arena);
     bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
     bindingLayoutDesc.setUseDescriptorBuffer(true);
-    AddCsgReceiverEventLayoutItems(bindingLayoutDesc, CsgTextureAccess::SRV);
-    AddCsgReceiverSpanLayoutItems(bindingLayoutDesc, CsgTextureAccess::UAV);
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CsgIntervalDispatchPushConstants)));
 
     layout = device.createBindingLayout(bindingLayoutDesc);
@@ -426,28 +157,16 @@ static void AddCsgRemovedIntervalBindingSetItems(
         || !targets.csgReceiverSpanData
         || !targets.csgReceiverSpanCount
         || !layout
+        || !targets.bindless.valid()
+        || !targets.bindless.slotsBuffer
     )
         return false;
 
-    const Core::TextureSubresourceSet csgReceiverEventSubresources(0, 1, 0, targets.csgReceiverEventLayerCount);
-    const Core::TextureSubresourceSet csgReceiverEventCounterSubresources(0, 1, 0, 1);
-    const Core::TextureSubresourceSet csgReceiverSpanSubresources(0, 1, 0, targets.csgReceiverSpanLayerCount);
-    const Core::TextureSubresourceSet csgReceiverSpanCounterSubresources(0, 1, 0, 1);
     Core::BindingSetDesc bindingSetDesc(arena);
-    AddCsgReceiverEventBindingSetItems(
-        bindingSetDesc,
-        targets,
-        csgReceiverEventSubresources,
-        csgReceiverEventCounterSubresources,
-        CsgTextureAccess::SRV
-    );
-    AddCsgReceiverSpanBindingSetItems(
-        bindingSetDesc,
-        targets,
-        csgReceiverSpanSubresources,
-        csgReceiverSpanCounterSubresources,
-        CsgTextureAccess::UAV
-    );
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
+        NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES,
+        targets.bindless.slotsBuffer.get()
+    ));
 
     bindingSet = device.createBindingSet(bindingSetDesc, layout);
     return bindingSet != nullptr;
@@ -468,9 +187,7 @@ static void AddCsgRemovedIntervalBindingSetItems(
     Core::BindingLayoutDesc bindingLayoutDesc(arena);
     bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
     bindingLayoutDesc.setUseDescriptorBuffer(true);
-    AddCsgIntervalTargetLayoutItems(bindingLayoutDesc, CsgTextureAccess::SRV);
-    AddCsgReceiverSpanLayoutItems(bindingLayoutDesc, CsgTextureAccess::SRV);
-    AddCsgRemovedIntervalLayoutItems(bindingLayoutDesc, CsgTextureAccess::UAV);
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CsgIntervalDispatchPushConstants)));
 
     layout = device.createBindingLayout(bindingLayoutDesc);
@@ -501,30 +218,16 @@ static void AddCsgRemovedIntervalBindingSetItems(
         || !targets.csgRemovedIntervalData
         || !targets.csgRemovedIntervalCount
         || !layout
+        || !targets.bindless.valid()
+        || !targets.bindless.slotsBuffer
     )
         return false;
 
-    const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
-    const Core::TextureSubresourceSet csgReceiverSpanSubresources(0, 1, 0, targets.csgReceiverSpanLayerCount);
-    const Core::TextureSubresourceSet csgReceiverSpanCounterSubresources(0, 1, 0, 1);
-    const Core::TextureSubresourceSet csgRemovedIntervalSubresources(0, 1, 0, targets.csgRemovedIntervalLayerCount);
-    const Core::TextureSubresourceSet csgRemovedIntervalCounterSubresources(0, 1, 0, 1);
     Core::BindingSetDesc bindingSetDesc(arena);
-    AddCsgIntervalTargetBindingSetItems(bindingSetDesc, targets, csgPeelSubresources, CsgTextureAccess::SRV);
-    AddCsgReceiverSpanBindingSetItems(
-        bindingSetDesc,
-        targets,
-        csgReceiverSpanSubresources,
-        csgReceiverSpanCounterSubresources,
-        CsgTextureAccess::SRV
-    );
-    AddCsgRemovedIntervalBindingSetItems(
-        bindingSetDesc,
-        targets,
-        csgRemovedIntervalSubresources,
-        csgRemovedIntervalCounterSubresources,
-        CsgTextureAccess::UAV
-    );
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
+        NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES,
+        targets.bindless.slotsBuffer.get()
+    ));
 
     bindingSet = device.createBindingSet(bindingSetDesc, layout);
     return bindingSet != nullptr;
@@ -605,11 +308,16 @@ static void AddCsgRemovedIntervalBindingSetItems(
     if(pipeline)
         return true;
 
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
         .setComputeShader(shader)
         .addBindingLayout(intervalBindingLayout)
         .addBindingLayout(clipBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
 
     pipeline = device.createComputePipeline(pipelineDesc);
@@ -629,10 +337,15 @@ static void AddCsgRemovedIntervalBindingSetItems(
     if(pipeline)
         return true;
 
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
         .setComputeShader(shader)
         .addBindingLayout(receiverSpanBuildBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
 
     pipeline = device.createComputePipeline(pipelineDesc);
@@ -652,10 +365,15 @@ static void AddCsgRemovedIntervalBindingSetItems(
     if(pipeline)
         return true;
 
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
         .setComputeShader(shader)
         .addBindingLayout(intervalCombineBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
 
     pipeline = device.createComputePipeline(pipelineDesc);
@@ -679,6 +397,9 @@ static void AddCsgRemovedIntervalBindingSetItems(
     if(pipeline && pipeline->getFramebufferInfo() == framebufferInfo)
         return true;
 
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
     Core::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc
         .setVertexShader(vertexShader)
@@ -687,6 +408,8 @@ static void AddCsgRemovedIntervalBindingSetItems(
         .addBindingLayout(intervalSampleBindingLayout)
         .addBindingLayout(clipBindingLayout)
         .addBindingLayout(materialBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
 
     pipeline = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);

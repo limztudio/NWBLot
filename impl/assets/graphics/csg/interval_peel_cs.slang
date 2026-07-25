@@ -4,6 +4,7 @@
 
 #include "binding_slots.h"
 #include "constants.h"
+#include "bindless_resources.slangi"
 
 #include "../mesh/view_buffer.slangi"
 
@@ -31,15 +32,11 @@ struct NwbCsgIntervalPeelEntry{
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
 
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_CAP_NORMAL_IMAGE_FORMAT)]]
-RWTexture2DArray<float4> g_NwbCsgBackCapNormal;
-
-// Hardware depth (.xy = front/back) and linear depth (.zw = front/back) packed into one rgba32f layer.
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_DEPTH, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_INTERVAL_DEPTH_IMAGE_FORMAT)]]
-RWTexture2DArray<float4> g_NwbCsgIntervalDepth;
-
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_ID, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_INTERVAL_ID_IMAGE_FORMAT)]]
-RWTexture2DArray<uint> g_NwbCsgIntervalId;
+// Historical local bindings 0..2 are now gaps. The target-generation slots select their typed Texture2DArray UAVs
+// from the StorageImage heap; the device's required formatless-storage-image support permits the two float formats.
+#define g_NwbCsgBackCapNormal (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
+#define g_NwbCsgIntervalDepth (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))
+#define g_NwbCsgIntervalId (NwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgPeelSlots.z))
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

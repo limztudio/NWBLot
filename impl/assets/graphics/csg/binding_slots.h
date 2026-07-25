@@ -42,6 +42,9 @@
 #define NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_CAP_NORMAL 14
 #define NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DATA 15
 #define NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_COUNT 16
+// The CSG transient textures are global StorageImage heap entries. Keep their former local slots as intentional
+// gaps and carry the target-generation DeferredBindlessResourceSlots cbuffer in the spare binding 17.
+#define NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES 17
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

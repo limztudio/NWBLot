@@ -60,6 +60,23 @@ Texture3D<float4> g_NwbHeapSampledImage3Ds[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 RWTexture2D<float4> g_NwbHeapStorageImages[];
 
+// Storage-image descriptors carry their view dimension and format with the descriptor, so the same global
+// StorageImage table can expose typed Texture2DArray aliases. CSG uses these unformatted views for its transient
+// interval/peel images (RGBA16F/RGBA32F/R32_UINT/RGBA32_UINT/RG32_UINT); device creation already requires the
+// Vulkan storage-image read/write-without-format features. Keeping the aliases on binding 1 avoids proliferating
+// heap ABI classes for one descriptor type.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed aliases of the StorageImage descriptor table.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWTexture2DArray<float4> g_NwbHeapStorageImage2DArrayFloat4s[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWTexture2DArray<uint> g_NwbHeapStorageImage2DArrayUints[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWTexture2DArray<uint2> g_NwbHeapStorageImage2DArrayUint2s[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWTexture2DArray<uint4> g_NwbHeapStorageImage2DArrayUint4s[];
+#pragma warning(pop)
+
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 Buffer<uint> g_NwbHeapSampledBuffers[];
 
@@ -112,6 +129,24 @@ Texture2DArray<float4> NwbHeapSampledImage2DArray(const uint slot){
 
 Texture3D<float4> NwbHeapSampledImage3D(const uint slot){
     return g_NwbHeapSampledImage3Ds[slot];
+}
+
+// CSG's slot cbuffer is uniform per draw/dispatch, so these array lookups remain uniform like the fullscreen image
+// helpers above. A future per-invocation storage-image user must wrap its table subscript in NonUniformResourceIndex.
+RWTexture2DArray<float4> NwbHeapStorageImage2DArrayFloat4(const uint slot){
+    return g_NwbHeapStorageImage2DArrayFloat4s[slot];
+}
+
+RWTexture2DArray<uint> NwbHeapStorageImage2DArrayUint(const uint slot){
+    return g_NwbHeapStorageImage2DArrayUints[slot];
+}
+
+RWTexture2DArray<uint2> NwbHeapStorageImage2DArrayUint2(const uint slot){
+    return g_NwbHeapStorageImage2DArrayUint2s[slot];
+}
+
+RWTexture2DArray<uint4> NwbHeapStorageImage2DArrayUint4(const uint slot){
+    return g_NwbHeapStorageImage2DArrayUint4s[slot];
 }
 
 SamplerState NwbHeapSampler(const uint slot){

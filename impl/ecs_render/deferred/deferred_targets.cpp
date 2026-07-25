@@ -155,6 +155,10 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred bindless resources require the scene shading + light buffers"));
         return false;
     }
+    if(!targets.csgIntervalTargetsValid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred bindless resources require the CSG interval targets"));
+        return false;
+    }
 
     auto registerTexture = [&heap](
         Core::GpuDescriptorHandle& handle,
@@ -168,6 +172,30 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         if(!handle.valid())
             return false;
         if(heap.write(handle, Core::BindingSetItem::Texture_SRV(0u, texture, format, subresources, dimension)))
+            return true;
+        heap.free(handle);
+        handle = Core::GpuDescriptorHandle::invalid();
+        return false;
+    };
+
+    // CSG interval/peel targets are all UAV-capable Texture2DArray images. Their shader-side float/uint aliases
+    // share the StorageImage descriptor table, so register every target once as a storage image regardless of the
+    // pass that subsequently reads it.
+    auto registerStorageTexture = [&heap](
+        Core::GpuDescriptorHandle& handle,
+        Core::Texture* texture,
+        const Core::Format::Enum format
+    ) -> bool{
+        handle = heap.allocate(Core::GpuDescriptorClass::StorageImage);
+        if(!handle.valid())
+            return false;
+        if(heap.write(handle, Core::BindingSetItem::Texture_UAV(
+            0u,
+            texture,
+            format,
+            Core::s_AllSubresources,
+            Core::TextureDimension::Texture2DArray
+        )))
             return true;
         heap.free(handle);
         handle = Core::GpuDescriptorHandle::invalid();
@@ -231,6 +259,19 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         // shared singletons the deferred lighting pass now reads from the heap via its two spare avboit slot lanes.
         && registerConstantBuffer(bindless.sceneShading, deferredState().m_sceneShadingBuffer.get())
         && registerStructuredBuffer(bindless.lightList, deferredState().m_lightBuffer.get())
+        // CSG interval/peel resources use one persistent StorageImage descriptor each. Their target-generation slots
+        // are consumed by the CSG compute, material surface, and cap-fill shaders through the shared slot cbuffer.
+        && registerStorageTexture(bindless.csgCapBackNormal, targets.csgCapBackNormal.get(), targets.csgCapNormalFormat)
+        && registerStorageTexture(bindless.csgIntervalDepth, targets.csgIntervalDepth.get(), targets.csgIntervalDepthFormat)
+        && registerStorageTexture(bindless.csgIntervalId, targets.csgIntervalId.get(), targets.csgIntervalIdFormat)
+        && registerStorageTexture(bindless.csgReceiverEventData, targets.csgReceiverEventData.get(), targets.csgReceiverEventDataFormat)
+        && registerStorageTexture(bindless.csgReceiverEventCount, targets.csgReceiverEventCount.get(), targets.csgReceiverEventCountFormat)
+        && registerStorageTexture(bindless.csgReceiverSpanData, targets.csgReceiverSpanData.get(), targets.csgReceiverSpanDataFormat)
+        && registerStorageTexture(bindless.csgReceiverSpanCount, targets.csgReceiverSpanCount.get(), targets.csgReceiverSpanCountFormat)
+        && registerStorageTexture(bindless.csgRemovedIntervalDepth, targets.csgRemovedIntervalDepth.get(), targets.csgRemovedIntervalDepthFormat)
+        && registerStorageTexture(bindless.csgRemovedIntervalCapNormal, targets.csgRemovedIntervalCapNormal.get(), targets.csgRemovedIntervalCapNormalFormat)
+        && registerStorageTexture(bindless.csgRemovedIntervalData, targets.csgRemovedIntervalData.get(), targets.csgRemovedIntervalDataFormat)
+        && registerStorageTexture(bindless.csgRemovedIntervalCount, targets.csgRemovedIntervalCount.get(), targets.csgRemovedIntervalCountFormat)
         // The caustic resolve carries all sampled inputs through target-generation slots. The R32_UINT accumulator uses
         // the heap's dedicated typed uint Texture2DArray table; the remaining resources are floating-point Texture2Ds.
         && registerTexture(bindless.causticAccumulator, Core::GpuDescriptorClass::SampledImage2DArrayUint, targets.causticAccumulator.get(), targets.causticAccumulatorFormat, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::TextureDimension::Texture2DArray)
@@ -274,6 +315,17 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
     bindless.slots.avboitLinearSampler = bindless.avboitLinearSampler.slot();
     bindless.slots.sceneShading = bindless.sceneShading.slot();
     bindless.slots.lightList = bindless.lightList.slot();
+    bindless.slots.csgCapBackNormal = bindless.csgCapBackNormal.slot();
+    bindless.slots.csgIntervalDepth = bindless.csgIntervalDepth.slot();
+    bindless.slots.csgIntervalId = bindless.csgIntervalId.slot();
+    bindless.slots.csgReceiverEventData = bindless.csgReceiverEventData.slot();
+    bindless.slots.csgReceiverEventCount = bindless.csgReceiverEventCount.slot();
+    bindless.slots.csgReceiverSpanData = bindless.csgReceiverSpanData.slot();
+    bindless.slots.csgReceiverSpanCount = bindless.csgReceiverSpanCount.slot();
+    bindless.slots.csgRemovedIntervalDepth = bindless.csgRemovedIntervalDepth.slot();
+    bindless.slots.csgRemovedIntervalCapNormal = bindless.csgRemovedIntervalCapNormal.slot();
+    bindless.slots.csgRemovedIntervalData = bindless.csgRemovedIntervalData.slot();
+    bindless.slots.csgRemovedIntervalCount = bindless.csgRemovedIntervalCount.slot();
 
     Core::BufferDesc slotsBufferDesc;
     slotsBufferDesc
@@ -329,6 +381,17 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
             heap.free(targets.bindless.transparentHistB);
             heap.free(targets.bindless.transparentMomentsA);
             heap.free(targets.bindless.transparentMomentsB);
+            heap.free(targets.bindless.csgCapBackNormal);
+            heap.free(targets.bindless.csgIntervalDepth);
+            heap.free(targets.bindless.csgIntervalId);
+            heap.free(targets.bindless.csgReceiverEventData);
+            heap.free(targets.bindless.csgReceiverEventCount);
+            heap.free(targets.bindless.csgReceiverSpanData);
+            heap.free(targets.bindless.csgReceiverSpanCount);
+            heap.free(targets.bindless.csgRemovedIntervalDepth);
+            heap.free(targets.bindless.csgRemovedIntervalCapNormal);
+            heap.free(targets.bindless.csgRemovedIntervalData);
+            heap.free(targets.bindless.csgRemovedIntervalCount);
         }
     }
     targets.bindless = DeferredBindlessFrameResources{};

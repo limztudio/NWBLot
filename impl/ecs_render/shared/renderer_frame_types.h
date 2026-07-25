@@ -94,7 +94,7 @@ struct MaterialPassDrawContext{
     const Core::ViewportState& viewportState;
 };
 
-// Per-frame slot indirection for ordinary-pass bindless consumers. The data is a std140-compatible sequence of four
+// Per-frame slot indirection for ordinary-pass bindless consumers. The data is a std140-compatible sequence of seven
 // uint4 lanes in deferred/bindless_resources.slangi. Descriptor handles retain their class tag on
 // the CPU; shaders need only the global slot because each field names the descriptor array it indexes.
 struct DeferredBindlessResourceSlots{
@@ -117,8 +117,25 @@ struct DeferredBindlessResourceSlots{
     u32 avboitLinearSampler = 0u;
     u32 sceneShading = 0u;
     u32 lightList = 0u;
+
+    // CSG interval/peel targets are all Texture2DArray storage images. Their typed shader aliases share the global
+    // StorageImage descriptor table; these lanes only select the per-target heap slots.
+    u32 csgCapBackNormal = 0u;
+    u32 csgIntervalDepth = 0u;
+    u32 csgIntervalId = 0u;
+    u32 csgReceiverEventData = 0u;
+
+    u32 csgReceiverEventCount = 0u;
+    u32 csgReceiverSpanData = 0u;
+    u32 csgReceiverSpanCount = 0u;
+    u32 csgRemovedIntervalDepth = 0u;
+
+    u32 csgRemovedIntervalCapNormal = 0u;
+    u32 csgRemovedIntervalData = 0u;
+    u32 csgRemovedIntervalCount = 0u;
+    u32 _csgPad = 0u;
 };
-static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 16u, "Deferred bindless slots must match four std140 uint4 lanes");
+static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 28u, "Deferred bindless slots must match seven std140 uint4 lanes");
 
 // Heap registrations are owned by the deferred-target generation. Resize/recreate frees each handle through the
 // heap's deferred retirement path before releasing the texture it points at; the slot buffer is shared by shadows,
@@ -170,6 +187,19 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle transparentHistB = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle transparentMomentsA = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle transparentMomentsB = Core::GpuDescriptorHandle::invalid();
+    // CSG's eleven typed Texture2DArray intermediates are bound through the StorageImage heap table. The CSG
+    // interval/peel/surface/cap-fill layouts retain only this target-generation slot cbuffer locally.
+    Core::GpuDescriptorHandle csgCapBackNormal = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle csgIntervalDepth = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle csgIntervalId = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle csgReceiverEventData = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle csgReceiverEventCount = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle csgReceiverSpanData = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle csgReceiverSpanCount = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle csgRemovedIntervalDepth = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle csgRemovedIntervalCapNormal = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle csgRemovedIntervalData = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle csgRemovedIntervalCount = Core::GpuDescriptorHandle::invalid();
     bool slotsUploaded = false;
 
     [[nodiscard]] bool valid()const noexcept{
@@ -208,6 +238,17 @@ struct DeferredBindlessFrameResources{
             && transparentHistB.valid()
             && transparentMomentsA.valid()
             && transparentMomentsB.valid()
+            && csgCapBackNormal.valid()
+            && csgIntervalDepth.valid()
+            && csgIntervalId.valid()
+            && csgReceiverEventData.valid()
+            && csgReceiverEventCount.valid()
+            && csgReceiverSpanData.valid()
+            && csgReceiverSpanCount.valid()
+            && csgRemovedIntervalDepth.valid()
+            && csgRemovedIntervalCapNormal.valid()
+            && csgRemovedIntervalData.valid()
+            && csgRemovedIntervalCount.valid()
         ;
     }
 };

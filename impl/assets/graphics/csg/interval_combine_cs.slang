@@ -4,6 +4,7 @@
 
 #include "binding_slots.h"
 #include "constants.h"
+#include "bindless_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,36 +25,17 @@ struct NwbCsgIntervalDispatchPushConstants{
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
 
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<float4> g_NwbCsgBackCapNormal;
-
-// .xy = front/back hardware depth, .zw = front/back linear depth.
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_DEPTH, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<float4> g_NwbCsgIntervalDepth;
-
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_ID, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<uint> g_NwbCsgIntervalId;
-
-// Span data layout: .x = receiverIndex, .y = asuint(enter depth), .z = asuint(exit depth), .w = unused.
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_DATA, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<uint4> g_NwbCsgReceiverSpanData;
-
-// Count layout: .x = span count, .y = flags.
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SPAN_COUNT, NWB_CSG_INTERVAL_SET)]]
-Texture2DArray<uint2> g_NwbCsgReceiverSpanCount;
-
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DEPTH, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_REMOVED_INTERVAL_DEPTH_IMAGE_FORMAT)]]
-RWTexture2DArray<float4> g_NwbCsgRemovedIntervalDepth;
-
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_CAP_NORMAL, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_REMOVED_INTERVAL_CAP_NORMAL_IMAGE_FORMAT)]]
-RWTexture2DArray<float4> g_NwbCsgRemovedIntervalCapNormal;
-
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DATA, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_REMOVED_INTERVAL_DATA_IMAGE_FORMAT)]]
-RWTexture2DArray<uint4> g_NwbCsgRemovedIntervalData;
-
-// Count layout: .x = removed-interval count, .y = flags.
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_COUNT, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_REMOVED_INTERVAL_COUNT_IMAGE_FORMAT)]]
-RWTexture2DArray<uint2> g_NwbCsgRemovedIntervalCount;
+// Every input/output texture is a CSG StorageImage heap entry. The local binding numbers remain intentional gaps;
+// a single cbuffer at binding 17 selects the typed array aliases for this dispatch.
+#define g_NwbCsgBackCapNormal (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
+#define g_NwbCsgIntervalDepth (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))
+#define g_NwbCsgIntervalId (NwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgPeelSlots.z))
+#define g_NwbCsgReceiverSpanData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgSpanSlots.y))
+#define g_NwbCsgReceiverSpanCount (NwbHeapStorageImage2DArrayUint2(g_NwbCsgBindlessResources.csgSpanSlots.z))
+#define g_NwbCsgRemovedIntervalDepth (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgSpanSlots.w))
+#define g_NwbCsgRemovedIntervalCapNormal (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgRemovedSlots.x))
+#define g_NwbCsgRemovedIntervalData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgRemovedSlots.y))
+#define g_NwbCsgRemovedIntervalCount (NwbHeapStorageImage2DArrayUint2(g_NwbCsgBindlessResources.csgRemovedSlots.z))
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -174,12 +156,12 @@ void nwbCsgIntervalCombineAppendCandidate(
     inout uint inOutRemovedIntervalCount,
     inout uint inOutFlags
 ){
-    const int4 spanTexel = int4(int2(pixel), int(spanIndex), 0);
+    const int3 spanTexel = int3(int2(pixel), int(spanIndex));
     const uint4 spanData = g_NwbCsgReceiverSpanData.Load(spanTexel);
     const uint receiverIndex = spanData.x;
     const float2 spanDepth = float2(asfloat(spanData.y), asfloat(spanData.z));
 
-    const int4 intervalTexel = int4(int2(pixel), int(intervalIndex), 0);
+    const int3 intervalTexel = int3(int2(pixel), int(intervalIndex));
     const uint intervalId = g_NwbCsgIntervalId.Load(intervalTexel);
     if(intervalId == 0u)
         return;
@@ -262,7 +244,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex)
         entries[layerIndex] = nwbCsgInvalidRemovedIntervalEntry();
 
-    const uint2 spanCounts = g_NwbCsgReceiverSpanCount.Load(int4(int2(pixel), 0, 0));
+    const uint2 spanCounts = g_NwbCsgReceiverSpanCount.Load(int3(int2(pixel), 0));
     uint flags = 0u;
     flags |= nwbCsgIntervalCombineReceiverSpanFlagsToRemovedFlags(spanCounts.y);
 

@@ -27,6 +27,13 @@
 #undef NWB_CSG_INTERVAL_SAMPLE_DEFAULTED_MESH_VIEW_SET
 #endif
 
+// This include participates in two pipeline layouts: the receiver-surface material layout at its normal sample set,
+// and the cap-fill fullscreen layout after interval_cap_fill_ps overrides that set to 0. Bind the shared deferred
+// slot cbuffer at whichever local set this variant selected.
+#define NWB_CSG_BINDLESS_RESOURCES_SET NWB_CSG_INTERVAL_SAMPLE_SET
+#include "bindless_resources.slangi"
+#undef NWB_CSG_BINDLESS_RESOURCES_SET
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -47,23 +54,20 @@ struct NwbCsgIntervalSampleState{
 ConstantBuffer<NwbCsgIntervalSampleState> g_NwbCsgIntervalSampleState;
 
 #if NWB_CSG_RECEIVER_EVENTS_WRITABLE
-// Event data layout: .x = receiverIndex, .y = faceSign, .z = asuint(linear depth), .w = unused.
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DATA, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_EVENT_DATA_IMAGE_FORMAT)]]
-RWTexture2DArray<uint4> g_NwbCsgReceiverEventData;
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_COUNT, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_EVENT_COUNT_IMAGE_FORMAT)]]
-RWTexture2DArray<uint> g_NwbCsgReceiverEventCount;
+// Event data layout: .x = receiverIndex, .y = faceSign, .z = asuint(linear depth), .w = unused. The former local
+// bindings 5/6 are heap-selected through the shared cbuffer at binding 17.
+#define g_NwbCsgReceiverEventData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgPeelSlots.w))
+#define g_NwbCsgReceiverEventCount (NwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgSpanSlots.x))
 #endif
 
 #if NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DEPTH, NWB_CSG_INTERVAL_SAMPLE_SET)]]
-Texture2DArray<float4> g_NwbCsgRemovedIntervalDepth;
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_CAP_NORMAL, NWB_CSG_INTERVAL_SAMPLE_SET)]]
-Texture2DArray<float4> g_NwbCsgRemovedIntervalCapNormal;
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DATA, NWB_CSG_INTERVAL_SAMPLE_SET)]]
-Texture2DArray<uint4> g_NwbCsgRemovedIntervalData;
+// The cap-fill/sample reads use the same StorageImage entries as the combine producer. The old local bindings
+// 12/14/15/16 remain gaps; reads through a storage-image alias preserve the typed Load/GetDimensions contract.
+#define g_NwbCsgRemovedIntervalDepth (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgSpanSlots.w))
+#define g_NwbCsgRemovedIntervalCapNormal (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgRemovedSlots.x))
+#define g_NwbCsgRemovedIntervalData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgRemovedSlots.y))
 // Count layout: .x = removed-interval count, .y = flags.
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_COUNT, NWB_CSG_INTERVAL_SAMPLE_SET)]]
-Texture2DArray<uint2> g_NwbCsgRemovedIntervalCount;
+#define g_NwbCsgRemovedIntervalCount (NwbHeapStorageImage2DArrayUint2(g_NwbCsgBindlessResources.csgRemovedSlots.z))
 #endif
 
 
@@ -220,14 +224,14 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestRemovedIntervalCapAtPixel(const uint2 
         return result;
 
     const uint removedIntervalLayerCount = nwbCsgRemovedIntervalLayerCount();
-    const uint rawIntervalCount = g_NwbCsgRemovedIntervalCount.Load(int4(int2(intervalPixel), 0, 0)).x;
+    const uint rawIntervalCount = g_NwbCsgRemovedIntervalCount.Load(int3(int2(intervalPixel), 0)).x;
     const uint intervalCount = min(rawIntervalCount, removedIntervalLayerCount);
     [unroll]
     for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex){
         if(layerIndex >= intervalCount)
             break;
 
-        const int4 texel = int4(int2(intervalPixel), int(layerIndex), 0);
+        const int3 texel = int3(int2(intervalPixel), int(layerIndex));
         const uint4 intervalData = g_NwbCsgRemovedIntervalData.Load(texel);
         if((intervalData.y & NWB_CSG_REMOVED_INTERVAL_BACK_CAP_VISIBLE_FLAG) == 0u)
             continue;
@@ -260,14 +264,14 @@ bool nwbCsgReceiverRemovedIntervalPixelDiscardAtPixel(
         return false;
 
     const uint removedIntervalLayerCount = nwbCsgRemovedIntervalLayerCount();
-    const uint rawIntervalCount = g_NwbCsgRemovedIntervalCount.Load(int4(int2(intervalPixel), 0, 0)).x;
+    const uint rawIntervalCount = g_NwbCsgRemovedIntervalCount.Load(int3(int2(intervalPixel), 0)).x;
     const uint intervalCount = min(rawIntervalCount, removedIntervalLayerCount);
     [unroll]
     for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex){
         if(layerIndex >= intervalCount)
             break;
 
-        const int4 texel = int4(int2(intervalPixel), int(layerIndex), 0);
+        const int3 texel = int3(int2(intervalPixel), int(layerIndex));
         const uint4 intervalData = g_NwbCsgRemovedIntervalData.Load(texel);
         if(intervalData.x != receiverIndex)
             continue;

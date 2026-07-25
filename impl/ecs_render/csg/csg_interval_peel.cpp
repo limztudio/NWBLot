@@ -25,6 +25,45 @@ namespace __hidden_csg_interval_peel{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static void SetCsgIntervalPeelStorageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
+    commandList.setTextureState(targets.csgCapBackNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgIntervalId.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+}
+
+static void SetCsgReceiverSpanStorageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
+    // These load-only inputs still use StorageImage heap descriptors, whose Vulkan image layout is GENERAL.
+    commandList.setTextureState(targets.csgReceiverEventData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgReceiverEventCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgReceiverSpanData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgReceiverSpanCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+}
+
+static void SetCsgIntervalCombineStorageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
+    // The combine pass loads through StorageImage aliases, so all inputs retain the descriptor's GENERAL layout.
+    commandList.setTextureState(targets.csgCapBackNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgIntervalId.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgReceiverSpanData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgReceiverSpanCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgRemovedIntervalData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgRemovedIntervalCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+}
+
+static void SetCsgIntervalSampleStorageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
+    // Sampling is implemented as Load through StorageImage aliases, not sampled-image descriptors; keep GENERAL.
+    commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgRemovedIntervalData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.setTextureState(targets.csgRemovedIntervalCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static CsgIntervalSampleStateGpuData BuildCsgIntervalSampleState(
     const DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData
@@ -67,6 +106,7 @@ namespace __hidden_csg_interval_peel{
 
 static void DispatchCsgIntervalCompute(
     Core::CommandList& commandList,
+    Core::GpuDescriptorHeap& heap,
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
     Core::ComputePipeline* pipeline,
@@ -79,6 +119,9 @@ static void DispatchCsgIntervalCompute(
     if(extraBindingSet)
         computeState.addBindingSet(extraBindingSet);
     commandList.setComputeState(computeState);
+    // The CSG pipeline carries the persistent heap layouts at sets 8/9; bind after setComputeState installs that
+    // pipeline layout so its StorageImage table resolves the target-generation slots.
+    heap.bindCompute(commandList, *pipeline);
 
     const CsgIntervalDispatchPushConstants pushConstants =
         BuildCsgIntervalDispatchPushConstants(targets, csgFrameData)
@@ -150,6 +193,7 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalPeel, graphics().getDevice(), commandList);
 
+    __hidden_csg_interval_peel::SetCsgIntervalPeelStorageStates(commandList, targets);
     commandList.setResourceStatesForBindingSet(csgState().m_intervalPeelBindingSet.get());
     commandList.setResourceStatesForBindingSet(csgState().m_clipBindingSet.get());
     setCsgClipBufferStates(commandList);
@@ -157,6 +201,7 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
 
     __hidden_csg_interval_peel::DispatchCsgIntervalCompute(
         commandList,
+        graphics().getDevice()->getDescriptorHeap(),
         targets,
         csgFrameData,
         csgState().m_intervalPeelPipeline.get(),
@@ -182,11 +227,13 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgReceiverSpanBuild, graphics().getDevice(), commandList);
 
     commandList.endRenderPass();
+    __hidden_csg_interval_peel::SetCsgReceiverSpanStorageStates(commandList, targets);
     commandList.setResourceStatesForBindingSet(csgState().m_receiverSpanBuildBindingSet.get());
     commandList.commitBarriers();
 
     __hidden_csg_interval_peel::DispatchCsgIntervalCompute(
         commandList,
+        graphics().getDevice()->getDescriptorHeap(),
         targets,
         csgFrameData,
         csgState().m_receiverSpanBuildPipeline.get(),
@@ -211,11 +258,13 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalCombine, graphics().getDevice(), commandList);
 
     commandList.endRenderPass();
+    __hidden_csg_interval_peel::SetCsgIntervalCombineStorageStates(commandList, targets);
     commandList.setResourceStatesForBindingSet(csgState().m_intervalCombineBindingSet.get());
     commandList.commitBarriers();
 
     __hidden_csg_interval_peel::DispatchCsgIntervalCompute(
         commandList,
+        graphics().getDevice()->getDescriptorHeap(),
         targets,
         csgFrameData,
         csgState().m_intervalCombinePipeline.get(),
@@ -236,6 +285,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, graphics().getDevice(), commandList);
 
+    __hidden_csg_interval_peel::SetCsgIntervalSampleStorageStates(commandList, targets);
     commandList.setResourceStatesForBindingSet(csgState().m_intervalSampleBindingSet.get());
     commandList.setResourceStatesForBindingSet(csgState().m_clipBindingSet.get());
     commandList.setResourceStatesForBindingSet(csgState().m_intervalCapFillMaterialBindingSet.get());
@@ -256,6 +306,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     graphicsState.addBindingSet(csgState().m_clipBindingSet.get());
     graphicsState.addBindingSet(csgState().m_intervalCapFillMaterialBindingSet.get());
     commandList.setGraphicsState(graphicsState);
+    graphics().getDevice()->getDescriptorHeap().bindGraphics(commandList, *csgState().m_intervalCapFillPipeline);
 
     Core::DrawArguments drawArgs;
     drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);

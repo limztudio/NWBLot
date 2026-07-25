@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_BINDLESS_RESOURCES_SLANGI
+#define NWB_GRAPHICS_CSG_BINDLESS_RESOURCES_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "binding_slots.h"
+#include "../deferred/bindless_resources.slangi"
+
+
+// Interval/peel resources are all transient Texture2DArray UAVs registered in the target-generation StorageImage
+// heap. The producer/consumer passes keep their historical local texture positions as gaps and bind this shared
+// slot cbuffer at the spare binding 17 instead. interval_sample.slangi overrides the set for its material-pipeline
+// layout; standalone interval compute shaders use set 0 by default.
+#ifndef NWB_CSG_BINDLESS_RESOURCES_SET
+#define NWB_CSG_BINDLESS_RESOURCES_SET NWB_CSG_INTERVAL_SET
+#define NWB_CSG_BINDLESS_RESOURCES_DEFAULTED_SET 1
+#endif
+
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES, NWB_CSG_BINDLESS_RESOURCES_SET)]]
+ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbCsgBindlessResources;
+
+#ifdef NWB_CSG_BINDLESS_RESOURCES_DEFAULTED_SET
+#undef NWB_CSG_BINDLESS_RESOURCES_SET
+#undef NWB_CSG_BINDLESS_RESOURCES_DEFAULTED_SET
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

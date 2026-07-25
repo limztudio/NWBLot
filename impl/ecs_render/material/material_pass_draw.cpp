@@ -34,6 +34,7 @@ static void AssertCsgBindingSetsReady(
 static void SetCsgBindingSetResourceStates(
     RendererCsgSystem& csgSystem,
     Core::CommandList& commandList,
+    const DeferredFrameTargets& targets,
     const MaterialPipelineCsgBindingUse& csgBindingUse,
     const MaterialPassCsgBindingSets& bindingSets
 ){
@@ -41,10 +42,22 @@ static void SetCsgBindingSetResourceStates(
         return;
 
     csgSystem.setCsgClipBufferStates(commandList);
-    if(csgBindingUse.receiverSurface)
+    if(csgBindingUse.receiverSurface){
+        // Receiver-event images are heap-selected now, so their local CSG set no longer contributes automatic
+        // texture transitions. Preserve the historical pixel-UAV state explicitly before the material draw.
+        commandList.setTextureState(targets.csgReceiverEventData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.csgReceiverEventCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setResourceStatesForBindingSet(bindingSets.receiverSurface.get());
-    if(csgBindingUse.intervalSample)
+    }
+    if(csgBindingUse.intervalSample){
+        // Cap/interval sampling loads through StorageImage aliases, so its heap descriptors require GENERAL rather
+        // than the sampled-image shader-read layout.
+        commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.csgRemovedIntervalData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.csgRemovedIntervalCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setResourceStatesForBindingSet(bindingSets.intervalSample.get());
+    }
 }
 
 [[nodiscard]] Core::BindingSet* ResolvePassBindingSet(
@@ -271,6 +284,7 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         __hidden_material_pass_draw::SetCsgBindingSetResourceStates(
             m_renderer.csgSystem(),
             context.commandList,
+            deferredState().m_targets,
             csgBindingUse,
             csgBindingSets
         );
@@ -328,6 +342,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         __hidden_material_pass_draw::SetCsgBindingSetResourceStates(
             m_renderer.csgSystem(),
             context.commandList,
+            deferredState().m_targets,
             csgBindingUse,
             csgBindingSets
         );

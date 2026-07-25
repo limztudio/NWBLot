@@ -1341,15 +1341,24 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     // and each binding's offset within it, and record the single segment the block lives in. Push constants are still
     // carried by the pipeline layout, not the descriptor buffer, so they are allowed alongside descriptor-buffer
     // bindings. A set that mixes a sampler with resource descriptors is NOT segment-coherent (a descriptor-buffer set
-    // block lives in exactly one segment) and downgrades to non-compatible; an unknown/unsupported type, or a set
-    // with no descriptors, likewise downgrades. On downgrade the caller's opt-in is a silent no-op and the classic
-    // descriptor-set path serves the layout.
+    // block lives in exactly one segment) and downgrades to non-compatible; an unknown/unsupported type does too.
+    // A zero-binding layout is instead a compatible gap set: it needs no descriptor block. On downgrade the caller's
+    // opt-in is a silent no-op and the classic descriptor-set path serves the layout.
     if(desc.useDescriptorBuffer && m_context.extensions.EXT_descriptor_buffer && m_context.descriptorBufferManager && m_context.descriptorBufferManager->isEnabled() && !layout->m_descriptorSetLayouts.empty()){
         const VkDescriptorSetLayout setLayout = layout->m_descriptorSetLayouts[0];
         const DescriptorBufferSegmentKind::Enum segmentKind = VulkanDetail::ResolveDescriptorBufferSegmentKind(desc);
-        bool compatible = (segmentKind != DescriptorBufferSegmentKind::None);
+        bool hasDescriptors = false;
+        for(const auto& item : desc.bindings){
+            if(item.type != ResourceType::PushConstants && item.type != ResourceType::None){
+                hasDescriptors = true;
+                break;
+            }
+        }
+        // A zero-binding descriptor-buffer layout is a valid pipeline gap set. It carries no block allocation and
+        // is selected with the harmless zero offset when a caller supplies a null placeholder in the set sequence.
+        bool compatible = !hasDescriptors || (segmentKind != DescriptorBufferSegmentKind::None);
 
-        if(compatible){
+        if(compatible && hasDescriptors){
             // Confirm every non-push-constant binding is a type the path can serve.
             for(const auto& item : desc.bindings){
                 if(item.type == ResourceType::PushConstants || item.type == ResourceType::None)
@@ -1361,7 +1370,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
             }
         }
 
-        if(compatible){
+        if(compatible && hasDescriptors){
             VkDeviceSize setSizeBytes = 0;
             vkGetDescriptorSetLayoutSizeEXT(m_context.device, setLayout, &setSizeBytes);
             if(setSizeBytes == 0 || setSizeBytes > UINT32_MAX)

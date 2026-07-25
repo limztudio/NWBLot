@@ -86,14 +86,8 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     if(!m_avboitSystem.createAvboitPipelines())
         return false;
 
-    if(!m_materialSystem.createMeshShaderResources())
-        return false;
-
     if(!m_graphics.queryFeatureSupport(Core::Feature::Meshlets)){
         if(!m_materialSystem.createComputeEmulationResources())
-            return false;
-
-        if(!m_materialSystem.createEmulationViewBindingLayout())
             return false;
     }
 
@@ -126,6 +120,7 @@ void RendererSystem::invalidateResources(){
     // Mesh geometry heap descriptors retain their backing buffers independently of the MeshResources cache. Retire
     // them before clearing that cache so descriptor slots are eventually recycled after the in-flight quarantine.
     m_meshSystem.releaseAllMeshGeometryHeapHandles();
+    m_meshSystem.releaseMeshFrameHeapHandles();
     m_meshState.invalidateResources();
     m_materialState.invalidateResources();
     m_drawState.invalidateResources();

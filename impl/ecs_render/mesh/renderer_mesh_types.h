@@ -63,9 +63,6 @@ struct MeshResources : public RuntimeMeshBuffers{
     Core::BufferHandle triangleIndexBuffer;
     Core::BufferHandle attributeBuffer;     // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
     Core::RayTracingAccelStructHandle blas;
-    Core::BindingSetHandle meshBindingSet;
-    // Descriptor-buffer-compatible twin used by all AVBOIT material graphics pipelines, including CSG.
-    Core::BindingSetHandle bindlessMeshBindingSet;
     Core::BindingSetHandle computeBindingSet;
     // One persistent StorageBuffer heap handle per former mesh-source binding slot. Slots are lazy-created when a
     // material draw is prepared, cached with this mesh resource, and retired before runtime meshes are replaced.

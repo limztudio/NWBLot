@@ -29,6 +29,13 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct MeshFrameHeapSlots{
+    u32 instance = 0u;
+    u32 materialTyped = 0u;
+    u32 view = 0u;
+    u32 reserved = 0u;
+};
+
 struct ShaderDrivenPushConstants{
     u32 meshletCount = 0;
     u32 instanceIndex = 0;
@@ -36,6 +43,7 @@ struct ShaderDrivenPushConstants{
     u32 dispatchFlags = 0;
     Float4 viewportRect = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 scissorRect = Float4(0.f, 0.f, 0.f, 0.f);
+    MeshFrameHeapSlots frameHeapSlots;
 };
 
 struct TransparentDrawPushConstants{
@@ -70,11 +78,16 @@ struct SceneLightGpuData{
     Float4 params2 = Float4(0.00465f, 0.1f, 0.f, 0.f);
 };
 
+static_assert(sizeof(MeshFrameHeapSlots) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_COUNT, "Mesh frame heap-slot payload must stay a uint4");
+static_assert(offsetof(MeshFrameHeapSlots, instance) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_INSTANCE, "Instance heap slot must map to frame heap lane x");
+static_assert(offsetof(MeshFrameHeapSlots, materialTyped) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED, "Material heap slot must map to frame heap lane y");
+static_assert(offsetof(MeshFrameHeapSlots, view) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_VIEW, "View heap slot must map to frame heap lane z");
 static_assert(sizeof(ShaderDrivenPushConstants) == NWB_MESH_PUSH_CONSTANT_BYTE_SIZE, "ShaderDrivenPushConstants layout must stay stable");
 static_assert(offsetof(ShaderDrivenPushConstants, meshletCount) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_MESHLET_COUNT, "ShaderDrivenPushConstants dispatch.x must be meshlet count");
 static_assert(offsetof(ShaderDrivenPushConstants, instanceIndex) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX, "ShaderDrivenPushConstants dispatch.y must be instance index");
 static_assert(offsetof(ShaderDrivenPushConstants, materialConstantByteOffset) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET, "ShaderDrivenPushConstants dispatch.z must be material constant byte offset");
 static_assert(offsetof(ShaderDrivenPushConstants, dispatchFlags) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_FLAGS, "ShaderDrivenPushConstants dispatch.w must be dispatch flags");
+static_assert(offsetof(ShaderDrivenPushConstants, frameHeapSlots) == sizeof(u32) * NWB_MESH_PUSH_FRAME_HEAP_SLOT_WORD_OFFSET, "ShaderDrivenPushConstants frame heap slots must follow the viewport lanes");
 static_assert(sizeof(TransparentDrawPushConstants) == s_RendererAvboitTransparentDrawPushConstantSize, "TransparentDrawPushConstants layout must stay stable");
 static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
@@ -117,6 +130,7 @@ NWB_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     const u32 instanceIndex,
     const u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
+    const MeshFrameHeapSlots& frameHeapSlots,
     const u32 dispatchFlags
 ){
     ShaderDrivenPushConstants pushConstants;
@@ -124,6 +138,7 @@ NWB_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     pushConstants.instanceIndex = instanceIndex;
     pushConstants.materialConstantByteOffset = materialConstantByteOffset;
     pushConstants.dispatchFlags = dispatchFlags;
+    pushConstants.frameHeapSlots = frameHeapSlots;
 
     if(viewportState.viewports.empty())
         return pushConstants;
@@ -151,10 +166,18 @@ NWB_INLINE TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
     const AvboitFrameTargets& targets,
+    const MeshFrameHeapSlots& frameHeapSlots,
     const u32 dispatchFlags
 ){
     TransparentDrawPushConstants pushConstants;
-    pushConstants.mesh = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, dispatchFlags);
+    pushConstants.mesh = BuildShaderDrivenPushConstants(
+        meshletCount,
+        instanceIndex,
+        materialConstantByteOffset,
+        viewportState,
+        frameHeapSlots,
+        dispatchFlags
+    );
     pushConstants.avboit = BuildRendererAvboitPushConstants(targets);
     return pushConstants;
 }
@@ -165,9 +188,17 @@ NWB_INLINE void SetShaderDrivenPushConstants(
     const u32 instanceIndex,
     const u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
+    const MeshFrameHeapSlots& frameHeapSlots,
     const u32 dispatchFlags
 ){
-    const ShaderDrivenPushConstants pushConstants = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, dispatchFlags);
+    const ShaderDrivenPushConstants pushConstants = BuildShaderDrivenPushConstants(
+        meshletCount,
+        instanceIndex,
+        materialConstantByteOffset,
+        viewportState,
+        frameHeapSlots,
+        dispatchFlags
+    );
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 
@@ -178,9 +209,18 @@ NWB_INLINE void SetTransparentDrawPushConstants(
     const u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
     const AvboitFrameTargets& targets,
+    const MeshFrameHeapSlots& frameHeapSlots,
     const u32 dispatchFlags
 ){
-    const TransparentDrawPushConstants pushConstants = BuildTransparentDrawPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, targets, dispatchFlags);
+    const TransparentDrawPushConstants pushConstants = BuildTransparentDrawPushConstants(
+        meshletCount,
+        instanceIndex,
+        materialConstantByteOffset,
+        viewportState,
+        targets,
+        frameHeapSlots,
+        dispatchFlags
+    );
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 

@@ -29,8 +29,16 @@ struct NwbMeshViewBuffer{
     float4 g_NwbMeshFrustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
 };
 
+#ifndef NWB_MESH_VIEW_BUFFER_BINDLESS
+#define NWB_MESH_VIEW_BUFFER_BINDLESS 0
+#endif
+
+#if NWB_MESH_VIEW_BUFFER_BINDLESS
+#define g_NwbMeshViewBuffer NwbHeapMeshViewBuffer(nwbMeshFrameViewHeapSlot())
+#else
 [[vk::binding(NWB_MESH_BINDING_VIEW, NWB_MESH_VIEW_SET)]]
 ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> g_NwbMeshViewBuffer;
+#endif
 
 #define g_NwbMeshWorldToClip g_NwbMeshViewBuffer.g_NwbMeshWorldToClip
 #define g_NwbMeshClipToWorld g_NwbMeshViewBuffer.g_NwbMeshClipToWorld

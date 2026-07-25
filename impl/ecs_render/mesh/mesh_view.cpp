@@ -31,8 +31,8 @@ bool RendererMeshSystem::createMeshViewBuffer(){
         return false;
     }
 
+    releaseMeshFrameHeapHandles();
     drawState().m_meshViewBuffer = Move(meshViewBuffer);
-    destroyMeshBindingSets();
     return true;
 }
 

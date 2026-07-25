@@ -167,18 +167,15 @@ NwbMeshGeneratedVertex nwbMeshBuildGeneratedVertex(
     );
 }
 
-#include "material_typed_bindings.slangi"
-
 struct NwbMeshPushConstants{
     uint4 dispatch;
     float4 viewportRect;
     float4 scissorRect;
+    uint4 frameHeapSlots;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbMeshPushConstants> g_NwbMeshPushConstants;
-
-#include "view_buffer.slangi"
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
 [[vk::binding(NWB_MESH_BINDING_GENERATED_VERTEX, NWB_MESH_SET)]] RWStructuredBuffer<NwbMeshGeneratedVertex, Std430DataLayout> g_NwbMeshGeneratedVertices;
@@ -205,6 +202,18 @@ uint nwbMeshMaterialConstantByteOffset(){
     return g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET];
 }
 #endif
+
+uint nwbMeshFrameInstanceHeapSlot(){
+    return g_NwbMeshPushConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_INSTANCE];
+}
+
+uint nwbMeshFrameMaterialTypedHeapSlot(){
+    return g_NwbMeshPushConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED];
+}
+
+uint nwbMeshFrameViewHeapSlot(){
+    return g_NwbMeshPushConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_VIEW];
+}
 
 void nwbMeshLoadGeometryHeapSlots(const uint groupThreadIndex){
     if(groupThreadIndex == 0u){

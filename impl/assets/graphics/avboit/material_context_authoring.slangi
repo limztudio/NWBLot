@@ -25,6 +25,18 @@ uint nwbMeshMaterialConstantByteOffset(){
     return g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET];
 }
 
+uint nwbMeshFrameInstanceHeapSlot(){
+    return g_NwbAvboitDraw.nwbMeshFrameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_INSTANCE];
+}
+
+uint nwbMeshFrameMaterialTypedHeapSlot(){
+    return g_NwbAvboitDraw.nwbMeshFrameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED];
+}
+
+uint nwbMeshFrameViewHeapSlot(){
+    return g_NwbAvboitDraw.nwbMeshFrameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_VIEW];
+}
+
 NwbMeshInstanceData nwbMeshLoadInstance(){
     return g_NwbMeshInstances[nwbMeshInstanceIndex()];
 }

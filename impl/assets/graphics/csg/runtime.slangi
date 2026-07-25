@@ -52,6 +52,7 @@ struct NwbCsgMeshPushConstants{
     uint4 dispatch;
     float4 viewportRect;
     float4 scissorRect;
+    uint4 frameHeapSlots;
 };
 #endif
 

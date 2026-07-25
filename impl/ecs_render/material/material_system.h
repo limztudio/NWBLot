@@ -50,10 +50,7 @@ public:
     [[nodiscard]] bool findRendererPipeline(const MaterialPipelineKey& pipelineKey, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool hasTransparentRenderers(RendererResourceLookupMode::Enum lookupMode);
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
-    [[nodiscard]] bool createMeshShaderResources();
     [[nodiscard]] bool createComputeEmulationResources();
-    [[nodiscard]] bool createEmulationViewBindingLayout();
-    [[nodiscard]] bool createEmulationViewResources();
     void renderMaterialPass(
         Core::CommandList& commandList,
         Core::Framebuffer* framebuffer,

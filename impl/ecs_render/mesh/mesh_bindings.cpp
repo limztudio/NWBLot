@@ -14,63 +14,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererMeshSystem::destroyMeshBindingSets(){
-    drawState().m_emulationViewBindingSet = nullptr;
-    drawState().m_bindlessEmulationViewBindingSet = nullptr;
-    for(auto it = meshState().m_meshes.begin(); it != meshState().m_meshes.end(); ++it){
-        MeshResources& mesh = it.value();
-        mesh.meshBindingSet = nullptr;
-        mesh.bindlessMeshBindingSet = nullptr;
-        mesh.computeBindingSet = nullptr;
-    }
-}
-
-bool RendererMeshSystem::createMeshBindingSet(MeshResources& mesh){
-    if(mesh.meshBindingSet)
-        return true;
-    if(!drawState().m_meshBindingLayout){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh shader binding layout was not validated before mesh binding-set creation"));
-        return false;
-    }
-    if(!meshFrameBindingResourcesReady(NWB_TEXT("mesh binding set")))
-        return false;
-
-    Core::BindingSetDesc bindingSetDesc(arena());
-    addMeshDrawBindingItems(bindingSetDesc, mesh);
-
-    auto* device = graphics().getDevice();
-    mesh.meshBindingSet = device->createBindingSet(bindingSetDesc, drawState().m_meshBindingLayout);
-    if(!mesh.meshBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh shader binding set for mesh '{}'"), StringConvert(mesh.meshName.c_str()));
-        return false;
-    }
-
-    return true;
-}
-
-bool RendererMeshSystem::createBindlessMeshBindingSet(MeshResources& mesh){
-    if(mesh.bindlessMeshBindingSet)
-        return true;
-    if(!drawState().m_bindlessMeshBindingLayout){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: bindless mesh shader binding layout was not validated before mesh binding-set creation"));
-        return false;
-    }
-    if(!meshFrameBindingResourcesReady(NWB_TEXT("bindless mesh binding set")))
-        return false;
-
-    Core::BindingSetDesc bindingSetDesc(arena());
-    addMeshDrawBindingItems(bindingSetDesc, mesh);
-
-    auto* device = graphics().getDevice();
-    mesh.bindlessMeshBindingSet = device->createBindingSet(bindingSetDesc, drawState().m_bindlessMeshBindingLayout);
-    if(!mesh.bindlessMeshBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create bindless mesh shader binding set for mesh '{}'"), StringConvert(mesh.meshName.c_str()));
-        return false;
-    }
-
-    return true;
-}
-
 bool RendererMeshSystem::createComputeBindingSet(MeshResources& mesh){
     if(mesh.computeBindingSet)
         return true;
@@ -78,9 +21,6 @@ bool RendererMeshSystem::createComputeBindingSet(MeshResources& mesh){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute-emulation binding layout was not validated before mesh binding-set creation"));
         return false;
     }
-    if(!meshFrameBindingResourcesReady(NWB_TEXT("compute binding set")))
-        return false;
-
     if(!mesh.emulationVertexBuffer){
         const Name emulationVertexBufferName = DeriveName(mesh.meshName, AStringView(":emulation_vb"));
         if(!emulationVertexBufferName){
@@ -108,7 +48,6 @@ bool RendererMeshSystem::createComputeBindingSet(MeshResources& mesh){
     }
 
     Core::BindingSetDesc bindingSetDesc(arena());
-    addMeshDrawBindingItems(bindingSetDesc, mesh);
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(s_MeshGeneratedVertexBindingSlot, mesh.emulationVertexBuffer.get()));
 
     auto* device = graphics().getDevice();
@@ -121,6 +60,95 @@ bool RendererMeshSystem::createComputeBindingSet(MeshResources& mesh){
     }
 
     return true;
+}
+
+bool RendererMeshSystem::createMeshFrameHeapHandles(){
+    if(meshFrameHeapHandlesReady())
+        return true;
+
+    if(
+        drawState().m_instanceBufferHeapHandle.valid()
+        || drawState().m_materialTypedBufferHeapHandle.valid()
+        || drawState().m_meshViewBufferHeapHandle.valid()
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame heap registration is partially initialized"));
+        return false;
+    }
+    if(!drawState().m_instanceBuffer || !drawState().m_materialTypedBuffer || !drawState().m_meshViewBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame heap registration requires instance, typed-material, and view buffers"));
+        return false;
+    }
+
+    auto* device = graphics().getDevice();
+    if(!device || !device->getDescriptorHeap().isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame heap registration requires the initialized global descriptor heap"));
+        return false;
+    }
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    const Core::GpuDescriptorHandle instanceHandle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    const Core::GpuDescriptorHandle materialTypedHandle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    const Core::GpuDescriptorHandle viewHandle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
+    const bool registered =
+        instanceHandle.valid()
+        && materialTypedHandle.valid()
+        && viewHandle.valid()
+        && heap.write(instanceHandle, Core::BindingSetItem::StructuredBuffer_SRV(0u, drawState().m_instanceBuffer.get()))
+        && heap.write(materialTypedHandle, Core::BindingSetItem::StructuredBuffer_SRV(0u, drawState().m_materialTypedBuffer.get()))
+        && heap.write(viewHandle, Core::BindingSetItem::ConstantBuffer(0u, drawState().m_meshViewBuffer.get()))
+    ;
+    if(!registered){
+        if(instanceHandle.valid())
+            heap.free(instanceHandle);
+        if(materialTypedHandle.valid())
+            heap.free(materialTypedHandle);
+        if(viewHandle.valid())
+            heap.free(viewHandle);
+        return false;
+    }
+
+    drawState().m_instanceBufferHeapHandle = instanceHandle;
+    drawState().m_materialTypedBufferHeapHandle = materialTypedHandle;
+    drawState().m_meshViewBufferHeapHandle = viewHandle;
+    NWB_ASSERT(meshFrameHeapHandlesReady());
+    return true;
+}
+
+bool RendererMeshSystem::meshFrameHeapHandlesReady()const{
+    return
+        drawState().m_instanceBuffer
+        && drawState().m_materialTypedBuffer
+        && drawState().m_meshViewBuffer
+        && drawState().m_instanceBufferHeapHandle.valid()
+        && drawState().m_instanceBufferHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && drawState().m_materialTypedBufferHeapHandle.valid()
+        && drawState().m_materialTypedBufferHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && drawState().m_meshViewBufferHeapHandle.valid()
+        && drawState().m_meshViewBufferHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
+    ;
+}
+
+void RendererMeshSystem::populateMeshFrameHeapSlots(ECSRenderDetail::MeshFrameHeapSlots& outSlots)const{
+    NWB_ASSERT(meshFrameHeapHandlesReady());
+    outSlots.instance = drawState().m_instanceBufferHeapHandle.slot();
+    outSlots.materialTyped = drawState().m_materialTypedBufferHeapHandle.slot();
+    outSlots.view = drawState().m_meshViewBufferHeapHandle.slot();
+    outSlots.reserved = 0u;
+}
+
+void RendererMeshSystem::releaseMeshFrameHeapHandles(){
+    auto* device = graphics().getDevice();
+    if(device && device->getDescriptorHeap().isInitialized()){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+        if(drawState().m_instanceBufferHeapHandle.valid())
+            heap.free(drawState().m_instanceBufferHeapHandle);
+        if(drawState().m_materialTypedBufferHeapHandle.valid())
+            heap.free(drawState().m_materialTypedBufferHeapHandle);
+        if(drawState().m_meshViewBufferHeapHandle.valid())
+            heap.free(drawState().m_meshViewBufferHeapHandle);
+    }
+    drawState().m_instanceBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
+    drawState().m_materialTypedBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
+    drawState().m_meshViewBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
 
 bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
@@ -236,41 +264,6 @@ void RendererMeshSystem::releaseAllMeshGeometryHeapHandles(){
     for(auto it = meshState().m_meshes.begin(); it != meshState().m_meshes.end(); ++it)
         releaseMeshGeometryHeapHandles(it.value());
 }
-
-bool RendererMeshSystem::meshFrameBindingResourcesReady(const tchar* context)const{
-    if(!drawState().m_instanceBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires an instance buffer"), context);
-        return false;
-    }
-    if(!drawState().m_meshViewBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires a mesh view buffer"), context);
-        return false;
-    }
-    if(!drawState().m_materialTypedBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires a material typed buffer"), context);
-        return false;
-    }
-
-    return true;
-}
-
-void RendererMeshSystem::addMeshFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const{
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshInstanceBindingSlot, drawState().m_instanceBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(s_MeshViewBindingSlot, drawState().m_meshViewBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshMaterialTypedBindingSlot, drawState().m_materialTypedBuffer.get()));
-}
-
-void RendererMeshSystem::addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const{
-    static_cast<void>(mesh);
-    addMeshFrameBindingItems(bindingSetDesc);
-}
-
-void RendererMeshSystem::addMeshFrameBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshInstanceBindingSlot, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(s_MeshViewBindingSlot, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshMaterialTypedBindingSlot, 1));
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

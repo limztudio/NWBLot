@@ -19,52 +19,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMaterialSystem::createMeshShaderResources(){
-    auto* device = graphics().getDevice();
-    if(!drawState().m_meshBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc(arena());
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
-        // The ordinary material mesh set is resource-only, so Backend C can use it directly in descriptor-buffer
-        // pipelines. Immutable mesh streams moved to the global heap; this local set deliberately retains only the
-        // per-frame instance/material/view resources. Backend A consumes the same shape through descriptor sets.
-        bindingLayoutDesc.setUseDescriptorBuffer(true);
-        RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
-
-        drawState().m_meshBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!drawState().m_meshBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh shader binding layout"));
-            return false;
-        }
-    }
-
-    if(!drawState().m_bindlessMeshBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc(arena());
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
-        // This pure-resource twin is consumed by AVBOIT material pipelines together with the global resource/sampler
-        // heap. It remains separate from the ordinary frame set for now even though immutable mesh geometry is no
-        // longer local; the next slice can retire that redundant binding-set split without conflating it with this
-        // source-stream migration.
-        bindingLayoutDesc.setUseDescriptorBuffer(true);
-        RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
-
-        drawState().m_bindlessMeshBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!drawState().m_bindlessMeshBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create bindless mesh shader binding layout"));
-            return false;
-        }
-    }
-
-    return true;
-}
-
 bool RendererMaterialSystem::createComputeEmulationResources(){
     if(!drawState().m_computeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         bindingLayoutDesc.setUseDescriptorBuffer(true);
-        RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(s_MeshGeneratedVertexBindingSlot, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
@@ -141,77 +100,6 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
     return true;
 }
 
-bool RendererMaterialSystem::createEmulationViewBindingLayout(){
-    auto* device = graphics().getDevice();
-    if(!drawState().m_emulationViewBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc(arena());
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Vertex | Core::ShaderType::Pixel);
-        bindingLayoutDesc.setUseDescriptorBuffer(true);
-        RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
-
-        drawState().m_emulationViewBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!drawState().m_emulationViewBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation view binding layout"));
-            return false;
-        }
-    }
-
-    if(!drawState().m_bindlessEmulationViewBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc(arena());
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Vertex | Core::ShaderType::Pixel);
-        bindingLayoutDesc.setUseDescriptorBuffer(true);
-        RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
-
-        drawState().m_bindlessEmulationViewBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!drawState().m_bindlessEmulationViewBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create bindless emulation view binding layout"));
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool RendererMaterialSystem::createEmulationViewResources(){
-    auto* device = graphics().getDevice();
-    if(!createEmulationViewBindingLayout())
-        return false;
-
-    if(drawState().m_emulationViewBindingSet && drawState().m_bindlessEmulationViewBindingSet)
-        return true;
-    if(!drawState().m_instanceBuffer || !drawState().m_meshViewBuffer || !drawState().m_materialTypedBuffer)
-        return true;
-
-    if(!drawState().m_emulationViewBindingSet){
-        Core::BindingSetDesc bindingSetDesc(arena());
-        m_renderer.meshSystem().addMeshFrameBindingItems(bindingSetDesc);
-
-        drawState().m_emulationViewBindingSet = device->createBindingSet(bindingSetDesc, drawState().m_emulationViewBindingLayout);
-        if(!drawState().m_emulationViewBindingSet){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation view binding set"));
-            return false;
-        }
-    }
-
-    if(!drawState().m_bindlessEmulationViewBindingSet){
-        Core::BindingSetDesc bindingSetDesc(arena());
-        m_renderer.meshSystem().addMeshFrameBindingItems(bindingSetDesc);
-
-        drawState().m_bindlessEmulationViewBindingSet = device->createBindingSet(
-            bindingSetDesc,
-            drawState().m_bindlessEmulationViewBindingLayout
-        );
-        if(!drawState().m_bindlessEmulationViewBindingSet){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create bindless emulation view binding set"));
-            return false;
-        }
-    }
-
-    return true;
-}
-
 bool RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems){
     return prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems)
         && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems)
@@ -219,6 +107,11 @@ bool RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialP
 }
 
 bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems){
+    if(drawItems.empty())
+        return true;
+    if(!m_renderer.meshSystem().createMeshFrameHeapHandles())
+        return false;
+
     bool ready = true;
     const MaterialPassCsgBindingSets csgBindingSets{
         csgState().m_clipBindingSet,
@@ -236,20 +129,6 @@ bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Mater
             ready = false;
             return;
         }
-        const bool usesBindlessAvboitResources =
-            MaterialPipelinePassUsesRendererAvboit(drawItem.pipelineKey.pass)
-        ;
-        if(usesBindlessAvboitResources){
-            if(!mesh.bindlessMeshBindingSet && !m_renderer.meshSystem().createBindlessMeshBindingSet(mesh)){
-                ready = false;
-                return;
-            }
-        }
-        else if(!mesh.meshBindingSet && !m_renderer.meshSystem().createMeshBindingSet(mesh)){
-            ready = false;
-            return;
-        }
-
         if(!MaterialPassCsgResourcesReadyForPipelineKey(
             drawItem.pipelineKey,
             drawItem.pipelineKey.pass,
@@ -264,11 +143,7 @@ bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Mater
 bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems){
     if(drawItems.empty())
         return true;
-    if(
-        !createEmulationViewResources()
-        || !drawState().m_emulationViewBindingSet
-        || !drawState().m_bindlessEmulationViewBindingSet
-    )
+    if(!m_renderer.meshSystem().createMeshFrameHeapHandles())
         return false;
 
     bool ready = true;
@@ -332,9 +207,9 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
         return false;
     }
 
+    m_renderer.meshSystem().releaseMeshFrameHeapHandles();
     drawState().m_instanceBuffer = Move(instanceBuffer);
     drawState().m_instanceBufferCapacity = capacity;
-    m_renderer.meshSystem().destroyMeshBindingSets();
     m_renderer.csgSystem().destroyCsgIntervalCapFillMaterialBindingSet();
     return true;
 }
@@ -370,9 +245,9 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
         return false;
     }
 
+    m_renderer.meshSystem().releaseMeshFrameHeapHandles();
     drawState().m_materialTypedBuffer = Move(materialTypedBuffer);
     drawState().m_materialTypedBufferCapacity = capacity;
-    m_renderer.meshSystem().destroyMeshBindingSets();
     m_renderer.csgSystem().destroyCsgIntervalCapFillMaterialBindingSet();
     return true;
 }

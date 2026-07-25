@@ -27,7 +27,16 @@
 #define NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX 1u
 #define NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET 2u
 #define NWB_MESH_PUSH_DISPATCH_FLAGS 3u
-#define NWB_MESH_PUSH_CONSTANT_BYTE_SIZE 48u
+// The per-draw frame-resource heap slots occupy the fourth 16-byte lane of the material push constant. Keeping
+// them together lets both the mesh/compute stage and its independently compiled pixel stage reach the same
+// instance, typed-material, and camera buffers without recreating a local set-0 binding set.
+#define NWB_MESH_PUSH_FRAME_HEAP_SLOT_WORD_OFFSET 12u
+#define NWB_MESH_FRAME_HEAP_SLOT_INSTANCE 0u
+#define NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED 1u
+#define NWB_MESH_FRAME_HEAP_SLOT_VIEW 2u
+#define NWB_MESH_FRAME_HEAP_SLOT_RESERVED 3u
+#define NWB_MESH_FRAME_HEAP_SLOT_COUNT 4u
+#define NWB_MESH_PUSH_CONSTANT_BYTE_SIZE 64u
 
 #define NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT 6
 #define NWB_MESH_VIEW_BASE_FLOAT_COUNT 36u

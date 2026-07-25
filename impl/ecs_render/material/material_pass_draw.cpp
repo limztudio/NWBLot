@@ -47,13 +47,6 @@ static void SetCsgBindingSetResourceStates(
         commandList.setResourceStatesForBindingSet(bindingSets.intervalSample.get());
 }
 
-[[nodiscard]] constexpr bool UsesBindlessAvboitResources(
-    const MaterialPipelinePass::Enum pass,
-    const MaterialPipelineCsgBindingUse&
-){
-    return MaterialPipelinePassUsesRendererAvboit(pass);
-}
-
 [[nodiscard]] Core::BindingSet* ResolvePassBindingSet(
     const MaterialPassDrawContext& context,
     const MaterialPipelineCsgBindingUse&
@@ -101,6 +94,7 @@ bool RendererMaterialSystem::materialPassDrawResourcesReady(const MeshResources&
     return
         mesh.valid()
         && m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh)
+        && m_renderer.meshSystem().meshFrameHeapHandlesReady()
         && drawState().m_instanceBuffer
         && drawState().m_meshViewBuffer
         && drawState().m_materialTypedBuffer
@@ -127,18 +121,7 @@ bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(
         MaterialPipelineResources* pipelineResources = nullptr;
         if(!findMaterialPassDrawItemResources(drawItem, mesh, pipelineResources))
             return false;
-        const MaterialPipelineCsgBindingUse csgBindingUse =
-            MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, drawItem.pipelineKey.pass)
-        ;
-        const bool usesBindlessAvboitResources = __hidden_material_pass_draw::UsesBindlessAvboitResources(
-            drawItem.pipelineKey.pass,
-            csgBindingUse
-        );
-        const Core::BindingSetHandle& meshBindingSet = usesBindlessAvboitResources
-            ? mesh->bindlessMeshBindingSet
-            : mesh->meshBindingSet
-        ;
-        if(!materialPassDrawResourcesReady(*mesh) || !pipelineResources->meshletPipeline || !meshBindingSet){
+        if(!materialPassDrawResourcesReady(*mesh) || !pipelineResources->meshletPipeline){
             return false;
         }
 
@@ -159,8 +142,6 @@ bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(
 ){
     if(drawItems.empty())
         return true;
-    if(!drawState().m_emulationViewBindingSet || !drawState().m_bindlessEmulationViewBindingSet)
-        return false;
 
     for(const MaterialPassDrawItem& drawItem : drawItems){
         MeshResources* mesh = nullptr;
@@ -233,6 +214,8 @@ void RendererMaterialSystem::setMaterialPassDrawPushConstants(
     const MeshResources& mesh
 ){
     const u32 dispatchFlags = materialPassDrawDispatchFlags(context, drawItem, mesh);
+    ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots;
+    m_renderer.meshSystem().populateMeshFrameHeapSlots(frameHeapSlots);
     if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
         ECSRenderDetail::SetTransparentDrawPushConstants(
             context.commandList,
@@ -241,6 +224,7 @@ void RendererMaterialSystem::setMaterialPassDrawPushConstants(
             drawItem.materialConstantByteOffset,
             context.viewportState,
             *context.avboitTargets,
+            frameHeapSlots,
             dispatchFlags
         );
         return;
@@ -252,6 +236,7 @@ void RendererMaterialSystem::setMaterialPassDrawPushConstants(
         drawItem.instanceIndex,
         drawItem.materialConstantByteOffset,
         context.viewportState,
+        frameHeapSlots,
         dispatchFlags
     );
 }
@@ -279,13 +264,7 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         const MaterialPipelineCsgBindingUse csgBindingUse =
             MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
         const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
-        const bool usesBindlessAvboitResources = __hidden_material_pass_draw::UsesBindlessAvboitResources(context.pass, csgBindingUse);
         Core::BindingSet* const passBindingSet = __hidden_material_pass_draw::ResolvePassBindingSet(context, csgBindingUse);
-        Core::BindingSet* const meshBindingSet = usesBindlessAvboitResources
-            ? mesh.bindlessMeshBindingSet.get()
-            : mesh.meshBindingSet.get()
-        ;
-        NWB_ASSERT(meshBindingSet);
         __hidden_material_pass_draw::AssertCsgBindingSetsReady(csgBindingUse, csgBindingSets);
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);
@@ -300,7 +279,7 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         meshletState.setPipeline(pipelineResources.meshletPipeline.get());
         meshletState.setFramebuffer(context.framebuffer);
         meshletState.setViewport(context.viewportState);
-        meshletState.addBindingSet(meshBindingSet);
+        meshletState.addBindingSet(nullptr);
         if(passBindingSet)
             meshletState.addBindingSet(passBindingSet);
         else if(csgBindingUse.clip && usesAvboit)
@@ -327,7 +306,6 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
     if(drawItems.empty())
         return;
     NWB_ASSERT(drawState().m_meshViewBuffer);
-    NWB_ASSERT(drawState().m_emulationViewBindingSet);
 
     const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
     const MaterialPassCsgBindingSets csgBindingSets{
@@ -341,7 +319,6 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources.emulationPipeline);
         const MaterialPipelineCsgBindingUse csgBindingUse =
             MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
-        const bool usesBindlessAvboitResources = __hidden_material_pass_draw::UsesBindlessAvboitResources(context.pass, csgBindingUse);
         Core::BindingSet* const passBindingSet = __hidden_material_pass_draw::ResolvePassBindingSet(context, csgBindingUse);
         NWB_ASSERT(mesh.computeBindingSet);
         NWB_ASSERT(mesh.emulationVertexBuffer);
@@ -371,12 +348,15 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         // ordinary graphics raster stage.
         graphics().getDevice()->getDescriptorHeap().bindCompute(context.commandList, *pipelineResources.computePipeline.get());
 
+        ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots;
+        m_renderer.meshSystem().populateMeshFrameHeapSlots(frameHeapSlots);
         ECSRenderDetail::SetShaderDrivenPushConstants(
             context.commandList,
             mesh.meshletCount,
             drawItem.instanceIndex,
             drawItem.materialConstantByteOffset,
             context.viewportState,
+            frameHeapSlots,
             materialPassDrawDispatchFlags(context, drawItem, mesh)
         );
         {
@@ -397,17 +377,12 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
                 .setSlot(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX)
                 .setOffset(0)
         );
+        graphicsState.addBindingSet(nullptr);
         if(usesAvboit){
-            Core::BindingSet* const emulationViewBindingSet = pipelineResources.emulationGraphicsUsesMeshFrameSet
-                ? (usesBindlessAvboitResources ? drawState().m_bindlessEmulationViewBindingSet.get() : drawState().m_emulationViewBindingSet.get())
-                : nullptr
-            ;
-            graphicsState.addBindingSet(emulationViewBindingSet);
             graphicsState.addBindingSet(passBindingSet);
             __hidden_material_pass_draw::AddCsgGraphicsBindingSets(graphicsState, csgBindingUse, csgBindingSets);
         }
         else{
-            graphicsState.addBindingSet(drawState().m_emulationViewBindingSet.get());
             if(csgBindingUse.clip)
                 __hidden_material_pass_draw::AddCsgGraphicsBindingSets(graphicsState, csgBindingUse, csgBindingSets);
             else if(context.passBindingSet)
@@ -415,8 +390,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         }
 
         context.commandList.setGraphicsState(graphicsState);
-        if(usesBindlessAvboitResources)
-            graphics().getDevice()->getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.emulationPipeline.get());
+        graphics().getDevice()->getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.emulationPipeline.get());
 
         setMaterialPassDrawPushConstants(context, drawItem, mesh);
 

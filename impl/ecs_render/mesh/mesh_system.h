@@ -17,6 +17,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ECSRenderDetail{
+struct MeshFrameHeapSlots;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class RendererMeshSystem final : public RendererSystemSubsystemBase<RendererSystem>{
 public:
     explicit RendererMeshSystem(RendererSystem& renderer);
@@ -29,19 +37,16 @@ public:
     void pruneRuntimeMeshResources();
     [[nodiscard]] bool createMeshViewBuffer();
     [[nodiscard]] bool updateMeshViewBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
-    void destroyMeshBindingSets();
-    [[nodiscard]] bool createMeshBindingSet(MeshResources& mesh);
-    [[nodiscard]] bool createBindlessMeshBindingSet(MeshResources& mesh);
     [[nodiscard]] bool createComputeBindingSet(MeshResources& mesh);
+    [[nodiscard]] bool createMeshFrameHeapHandles();
+    [[nodiscard]] bool meshFrameHeapHandlesReady()const;
+    void populateMeshFrameHeapSlots(ECSRenderDetail::MeshFrameHeapSlots& outSlots)const;
+    void releaseMeshFrameHeapHandles();
     [[nodiscard]] bool createMeshGeometryHeapHandles(MeshResources& mesh);
     [[nodiscard]] bool meshGeometryHeapHandlesReady(const MeshResources& mesh)const;
     void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const;
     void releaseMeshGeometryHeapHandles(MeshResources& mesh);
     void releaseAllMeshGeometryHeapHandles();
-    [[nodiscard]] bool meshFrameBindingResourcesReady(const tchar* context)const;
-    void addMeshFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const;
-    void addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const;
-    static void addMeshFrameBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc);
     template<typename BindingHandler>
     static void forEachMeshSourceBindingSlot(BindingHandler&& handler){
         handler(s_MeshPositionBindingSlot, false);
@@ -88,16 +93,12 @@ private:
     static constexpr u32 s_MeshUv0BindingSlot = NWB_MESH_BINDING_UV0;
     static constexpr u32 s_MeshColorBindingSlot = NWB_MESH_BINDING_COLOR;
     static constexpr u32 s_MeshletDescBindingSlot = NWB_MESH_BINDING_MESHLET_DESC;
-    static constexpr u32 s_MeshMaterialTypedBindingSlot = NWB_MESH_BINDING_MATERIAL_TYPED;
     static constexpr u32 s_MeshletBoundsBindingSlot = NWB_MESH_BINDING_MESHLET_BOUNDS;
     static constexpr u32 s_MeshletPositionRefBindingSlot = NWB_MESH_BINDING_MESHLET_POSITION_REFS;
     static constexpr u32 s_MeshletAttributeRefBindingSlot = NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS;
     static constexpr u32 s_MeshletLocalVertexRefBindingSlot = NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS;
     static constexpr u32 s_MeshletPrimitiveIndexBindingSlot = NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES;
-    static constexpr u32 s_MeshInstanceBindingSlot = NWB_MESH_BINDING_INSTANCE;
-    static constexpr u32 s_MeshViewBindingSlot = NWB_MESH_BINDING_VIEW;
     static constexpr u32 s_MeshGeneratedVertexBindingSlot = NWB_MESH_BINDING_GENERATED_VERTEX;
-    static_assert(s_MeshMaterialTypedBindingSlot == 6u, "Mesh material typed payload binding must stay at slot 6");
 };
 
 

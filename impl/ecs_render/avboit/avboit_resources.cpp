@@ -70,8 +70,15 @@ bool RendererAvboitSystem::createAvboitResources(){
         arena(),
         *device,
         avboitState().m_emptyBindingLayout,
-        Core::ShaderType::Pixel,
-        [](Core::BindingLayoutDesc&){}
+        Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Vertex | Core::ShaderType::Pixel,
+        [](Core::BindingLayoutDesc& bindingLayoutDesc){
+            // Material pipelines retain this descriptor-buffer-compatible empty set at slot 0 after their frame
+            // resources moved into the global heap. It preserves the fixed AVBOIT/CSG low-set ABI without a live
+            // local descriptor set, and carries the maximum draw push-constant range now that the old frame layout
+            // no longer contributes one.
+            bindingLayoutDesc.setUseDescriptorBuffer(true);
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
+        }
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT empty binding layout"));
         return false;

@@ -143,13 +143,6 @@ struct MaterialPipelineAvboitBindingLayouts{
     const Core::BindingLayoutHandle& accumulate;
 };
 
-[[nodiscard]] constexpr bool UsesBindlessAvboitResources(
-    const MaterialPipelinePass::Enum pass,
-    const bool
-){
-    return MaterialPipelinePassUsesRendererAvboit(pass);
-}
-
 template<typename PipelineDesc>
 [[nodiscard]] bool AddAvboitBindingLayout(
     PipelineDesc& pipelineDesc,
@@ -280,7 +273,6 @@ bool RendererMaterialSystem::createRendererPipeline(
         MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
     const bool csgClipPipeline = csgBindingUse.clip;
     const bool avboitCsgClipPipeline = csgBindingUse.avboitClip;
-    const bool usesBindlessAvboitResources = __hidden_material_pipeline::UsesBindlessAvboitResources(pass, csgClipPipeline);
     ACompactString csgProjectEvaluatorModuleInclude;
     Core::GraphicsString csgProjectEvaluatorModuleAssignment(arena());
     AStringView materialProjectEvaluatorModuleAssignmentToAdd;
@@ -387,8 +379,6 @@ bool RendererMaterialSystem::createRendererPipeline(
             return failMaterialPipeline();
         }
     }
-    const bool materialDrivenAvboitPass = avboitPixelShaderSelection.materialDriven();
-
     switch(pass){
     case MaterialPipelinePass::Opaque:
         break;
@@ -421,6 +411,10 @@ bool RendererMaterialSystem::createRendererPipeline(
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material geometry pipeline requires the global descriptor heap"));
+        return failMaterialPipeline();
+    }
+    if(!avboitState().m_emptyBindingLayout){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material pipelines require the shared empty set-0 layout"));
         return failMaterialPipeline();
     }
 
@@ -468,14 +462,6 @@ bool RendererMaterialSystem::createRendererPipeline(
     };
 
     auto tryBuildMeshPipeline = [&]() -> bool{
-        const Core::BindingLayoutHandle& meshBindingLayout = usesBindlessAvboitResources
-            ? drawState().m_bindlessMeshBindingLayout
-            : drawState().m_meshBindingLayout
-        ;
-        if(!meshBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh shader resources were not validated before material pipeline creation"));
-            return false;
-        }
         if(!m_renderer.shaderSystem().loadShader(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, Core::ShaderType::Mesh, "ECSRender_RendererMesh"))
             return false;
         if(!loadPassPixelShader())
@@ -485,7 +471,9 @@ bool RendererMaterialSystem::createRendererPipeline(
         pipelineDesc.setMeshShader(resources.meshShader);
         pipelineDesc.setPixelShader(resources.pixelShader);
         pipelineDesc.setRenderState(renderState);
-        pipelineDesc.addBindingLayout(meshBindingLayout);
+        // Keep the fixed shader-set ABI dense after retiring the old per-mesh frame set: AVBOIT owns set 1 and
+        // CSG starts at set 1 (or set 2 behind AVBOIT), while the heap remains pinned at sets 8/9.
+        pipelineDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
         if(!__hidden_material_pipeline::AddAvboitBindingLayout(pipelineDesc, pass, csgClipPipeline, avboitBindingLayouts))
             return false;
         if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(pipelineDesc, csgBindingUse, csgBindingLayouts))
@@ -512,8 +500,6 @@ bool RendererMaterialSystem::createRendererPipeline(
     auto tryBuildComputePipeline = [&]() -> bool{
         if(
             !drawState().m_computeBindingLayout
-            || !drawState().m_emulationViewBindingLayout
-            || !drawState().m_bindlessEmulationViewBindingLayout
             || !drawState().m_emulationVertexShader
             || !drawState().m_emulationInputLayout
         ){
@@ -561,31 +547,17 @@ bool RendererMaterialSystem::createRendererPipeline(
         emulationDesc.setVertexShader(drawState().m_emulationVertexShader);
         emulationDesc.setPixelShader(resources.pixelShader);
         emulationDesc.setRenderState(renderState);
-        const bool emulationGraphicsUsesMeshFrameSet =
-            !MaterialPipelinePassUsesRendererAvboit(pass)
-            || csgClipPipeline
-            || materialDrivenAvboitPass
-        ;
-        const Core::BindingLayoutHandle& avboitViewBindingLayout = emulationGraphicsUsesMeshFrameSet
-            ? (usesBindlessAvboitResources ? drawState().m_bindlessEmulationViewBindingLayout : drawState().m_emulationViewBindingLayout)
-            : avboitState().m_emptyBindingLayout
-        ;
+        emulationDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
         if(MaterialPipelinePassUsesRendererAvboit(pass)){
-            emulationDesc.addBindingLayout(avboitViewBindingLayout);
             if(!__hidden_material_pipeline::AddAvboitBindingLayout(emulationDesc, pass, csgClipPipeline, avboitBindingLayouts))
                 return false;
         }
-        else{
-            emulationDesc.addBindingLayout(drawState().m_emulationViewBindingLayout);
-        }
         if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(emulationDesc, csgBindingUse, csgBindingLayouts))
             return false;
-        if(usesBindlessAvboitResources){
-            emulationDesc
-                .addBindingLayout(heap.getResourceLayout())
-                .addBindingLayout(heap.getSamplerLayout())
-            ;
-        }
+        emulationDesc
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
         resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
         if(!resources.emulationPipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"), StringConvert(materialKey.c_str()));
@@ -594,7 +566,6 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
 
         resources.renderPath = RenderPath::ComputeEmulation;
-        resources.emulationGraphicsUsesMeshFrameSet = emulationGraphicsUsesMeshFrameSet;
         return true;
     };
 

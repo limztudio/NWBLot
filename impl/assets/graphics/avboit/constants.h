@@ -50,7 +50,7 @@
 #define NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE 1u
 #define NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS 2u
 #define NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE 48u
-#define NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE 96u
+#define NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE 112u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

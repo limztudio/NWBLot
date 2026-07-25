@@ -23,6 +23,15 @@
 #define NWB_CSG_ENABLED 0
 #endif
 
+// Raster mesh and compute-emulation stages share the global descriptor heap for their frame data. Trace and
+// standalone CSG shaders include narrower headers directly and therefore retain their own local contracts.
+#ifndef NWB_MESH_FRAME_RESOURCES_BINDLESS
+#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
+#endif
+#ifndef NWB_MESH_VIEW_BUFFER_BINDLESS
+#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
+#endif
+
 // The mesh shader is engine-owned + generic (shared_ms.slang): it does not read typed material data, so it
 // requires no .bind interface. A material's constants are read per-pixel in its surface hook (see
 // material_ps_authoring.slangi); the typed-binding contract gates the pixel shader, not the mesh shader.

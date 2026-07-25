@@ -39,6 +39,7 @@ struct NwbAvboitDrawPushConstants{
     uint4 nwbMeshDispatch;
     float4 nwbMeshViewportRect;
     float4 nwbMeshScissorRect;
+    uint4 nwbMeshFrameHeapSlots;
     uint4 nwbAvboitFrame;
     uint4 nwbAvboitVolume;
     float4 nwbAvboitParams;

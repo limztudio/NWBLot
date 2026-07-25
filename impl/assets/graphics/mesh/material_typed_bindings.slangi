@@ -17,8 +17,8 @@
 
 
 // The per-instance data + the typed material-constant buffer, shared by the mesh stage (runtime.slangi) and
-// the pixel stage (the material pixel shader, via gbuffer_io.slangi). Both bind the same set/slots; the
-// material-bind generated accessors (nwbMaterialBind*) read these in whichever stage includes them.
+// the pixel stage (the material pixel shader, via gbuffer_io.slangi). Raster material shaders resolve both through
+// the global heap; trace and cap-fill users keep their dedicated local bindings by leaving the switch below off.
 struct NwbMeshInstanceData{
     float4 rotation;
     float3 translation;
@@ -29,8 +29,17 @@ struct NwbMeshInstanceData{
     uint geometryHeapSlots[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
 };
 
+#ifndef NWB_MESH_FRAME_RESOURCES_BINDLESS
+#define NWB_MESH_FRAME_RESOURCES_BINDLESS 0
+#endif
+
+#if NWB_MESH_FRAME_RESOURCES_BINDLESS
+#define g_NwbMaterialTypedWords NwbHeapMeshMaterialTypedWords(nwbMeshFrameMaterialTypedHeapSlot())
+#define g_NwbMeshInstances NwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())
+#else
 [[vk::binding(NWB_MESH_BINDING_MATERIAL_TYPED, NWB_MESH_SET)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMaterialTypedWords;
 [[vk::binding(NWB_MESH_BINDING_INSTANCE, NWB_MESH_SET)]] StructuredBuffer<NwbMeshInstanceData, Std430DataLayout> g_NwbMeshInstances;
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

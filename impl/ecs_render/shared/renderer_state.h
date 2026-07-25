@@ -147,18 +147,15 @@ public:
 
 
 private:
-    Core::BindingLayoutHandle m_meshBindingLayout;
-    // Regular AVBOIT material graphics paths need a descriptor-buffer-compatible mesh set so they can coexist with
-    // the global heap on Backend C. CSG continues to use m_meshBindingLayout and its classic companion layouts.
-    Core::BindingLayoutHandle m_bindlessMeshBindingLayout;
     Core::BindingLayoutHandle m_computeBindingLayout;
-    Core::BindingLayoutHandle m_emulationViewBindingLayout;
-    Core::BindingLayoutHandle m_bindlessEmulationViewBindingLayout;
     Core::BufferHandle m_instanceBuffer;
     Core::BufferHandle m_materialTypedBuffer;
     Core::BufferHandle m_meshViewBuffer;
-    Core::BindingSetHandle m_emulationViewBindingSet;
-    Core::BindingSetHandle m_bindlessEmulationViewBindingSet;
+    // Raster material stages reach these through the global heap. The handles retain the backing buffers until
+    // free()'s in-flight quarantine matures, so a capacity-growth replacement always gets fresh slots.
+    Core::GpuDescriptorHandle m_instanceBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_materialTypedBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_meshViewBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::ShaderHandle m_emulationVertexShader;
     Core::InputLayoutHandle m_emulationInputLayout;
     u8 m_meshViewGpuData[sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT] = {};

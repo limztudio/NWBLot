@@ -114,16 +114,13 @@ void RendererCsgState::invalidateResources(){
 
 
 void RendererDrawState::invalidateResources(){
-    m_meshBindingLayout.reset();
-    m_bindlessMeshBindingLayout.reset();
     m_computeBindingLayout.reset();
-    m_emulationViewBindingLayout.reset();
-    m_bindlessEmulationViewBindingLayout.reset();
     m_instanceBuffer.reset();
     m_materialTypedBuffer.reset();
     m_meshViewBuffer.reset();
-    m_emulationViewBindingSet.reset();
-    m_bindlessEmulationViewBindingSet.reset();
+    m_instanceBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_materialTypedBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_meshViewBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_emulationVertexShader.reset();
     m_emulationInputLayout.reset();
     m_meshViewGpuDataValid = false;

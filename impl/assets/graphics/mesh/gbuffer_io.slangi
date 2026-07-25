@@ -10,7 +10,16 @@
 
 
 #include "pixel_input.slangi"
-#include "material_typed_bindings.slangi"
+
+// Every raster material pixel shader uses the same heap-backed frame buffers as its mesh/compute producer. The
+// trace and cap-fill paths never include this file before their dedicated local material context is established.
+#ifndef NWB_MESH_FRAME_RESOURCES_BINDLESS
+#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
+#endif
+#ifndef NWB_MESH_VIEW_BUFFER_BINDLESS
+#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
+#endif
+#include "../bindless/bindless_heap_mesh.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,6 +85,15 @@ uint nwbMeshMaterialConstantByteOffset(){
 NwbMeshInstanceData nwbMeshLoadInstance(){
     return g_NwbMeshInstances[nwbMeshInstanceIndex()];
 }
+uint nwbMeshFrameInstanceHeapSlot(){
+    return g_NwbCsgMeshPushConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_INSTANCE];
+}
+uint nwbMeshFrameMaterialTypedHeapSlot(){
+    return g_NwbCsgMeshPushConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED];
+}
+uint nwbMeshFrameViewHeapSlot(){
+    return g_NwbCsgMeshPushConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_VIEW];
+}
 #elif defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI)
 uint nwbMeshShadingModelId(){
     return (g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
@@ -85,6 +103,7 @@ struct NwbMeshGBufferDrawConstants{
     uint4 dispatch;
     float4 viewportRect;
     float4 scissorRect;
+    uint4 frameHeapSlots;
 };
 [[vk::push_constant]]
 ConstantBuffer<NwbMeshGBufferDrawConstants> g_NwbMeshGBufferDrawConstants;
@@ -102,6 +121,15 @@ uint nwbMeshMaterialConstantByteOffset(){
 }
 NwbMeshInstanceData nwbMeshLoadInstance(){
     return g_NwbMeshInstances[nwbMeshInstanceIndex()];
+}
+uint nwbMeshFrameInstanceHeapSlot(){
+    return g_NwbMeshGBufferDrawConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_INSTANCE];
+}
+uint nwbMeshFrameMaterialTypedHeapSlot(){
+    return g_NwbMeshGBufferDrawConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED];
+}
+uint nwbMeshFrameViewHeapSlot(){
+    return g_NwbMeshGBufferDrawConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_VIEW];
 }
 #endif
 

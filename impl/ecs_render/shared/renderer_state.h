@@ -270,16 +270,13 @@ public:
 
 private:
     Core::BindingLayoutHandle m_emptyBindingLayout;
-    // Regular non-CSG AVBOIT material layouts are pure-resource descriptor-buffer shapes. Their CSG twins
-    // retain the old texture+sampler local contract until CSG graphics has a full Backend-C conversion.
+    // All AVBOIT material layouts are pure-resource descriptor-buffer shapes. CSG consumes the same target-generation
+    // heap slots as regular transparency, while its clip/interval tail is descriptor-buffer compatible too.
     Core::BindingLayoutHandle m_occupancyBindingLayout;
-    Core::BindingLayoutHandle m_csgOccupancyBindingLayout;
     Core::BindingLayoutHandle m_depthWarpBindingLayout;
     Core::BindingLayoutHandle m_extinctionBindingLayout;
-    Core::BindingLayoutHandle m_csgExtinctionBindingLayout;
     Core::BindingLayoutHandle m_integrateBindingLayout;
     Core::BindingLayoutHandle m_accumulateBindingLayout;
-    Core::BindingLayoutHandle m_csgAccumulateBindingLayout;
     Core::SamplerHandle m_linearSampler;
     Core::ShaderHandle m_depthWarpComputeShader;
     Core::ShaderHandle m_integrateComputeShader;

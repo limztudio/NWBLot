@@ -109,13 +109,10 @@ static void ClearCsgIntervalTargets(
 
 void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
     targets.occupancyBindingSet.reset();
-    targets.csgOccupancyBindingSet.reset();
     targets.depthWarpBindingSet.reset();
     targets.extinctionBindingSet.reset();
-    targets.csgExtinctionBindingSet.reset();
     targets.integrateBindingSet.reset();
     targets.accumulateBindingSet.reset();
-    targets.csgAccumulateBindingSet.reset();
 
     targets.lowFramebuffer.reset();
     targets.accumulationFramebuffer.reset();

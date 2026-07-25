@@ -42,16 +42,12 @@ struct AvboitFrameTargets{
     Core::BufferHandle controlBuffer;
     Core::BufferHandle extinctionBuffer;
     Core::BufferHandle extinctionOverflowBuffer;
-    // Regular material-driven AVBOIT passes use the target-generation bindless resource slots. CSG retains companion
-    // local sets until its graphics pipeline layouts receive their own descriptor-buffer conversion.
+    // All material-driven AVBOIT passes use the target-generation bindless resource slots, including CSG.
     Core::BindingSetHandle occupancyBindingSet;
-    Core::BindingSetHandle csgOccupancyBindingSet;
     Core::BindingSetHandle depthWarpBindingSet;
     Core::BindingSetHandle extinctionBindingSet;
-    Core::BindingSetHandle csgExtinctionBindingSet;
     Core::BindingSetHandle integrateBindingSet;
     Core::BindingSetHandle accumulateBindingSet;
-    Core::BindingSetHandle csgAccumulateBindingSet;
 
     [[nodiscard]] bool valid()const noexcept{
 #if defined(NWB_DEBUG)
@@ -78,13 +74,10 @@ struct AvboitFrameTargets{
             && extinctionBuffer != nullptr
             && extinctionOverflowBuffer != nullptr
             && occupancyBindingSet != nullptr
-            && csgOccupancyBindingSet != nullptr
             && depthWarpBindingSet != nullptr
             && extinctionBindingSet != nullptr
-            && csgExtinctionBindingSet != nullptr
             && integrateBindingSet != nullptr
             && accumulateBindingSet != nullptr
-            && csgAccumulateBindingSet != nullptr
         ;
 #else
         return accumulationFramebuffer != nullptr;

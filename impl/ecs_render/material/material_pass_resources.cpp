@@ -24,6 +24,9 @@ bool RendererMaterialSystem::createMeshShaderResources(){
     if(!drawState().m_meshBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
+        // The ordinary material mesh set is resource-only, so Backend C can use it directly in descriptor-buffer
+        // pipelines. Backend A keeps consuming the same shape through classic descriptor sets.
+        bindingLayoutDesc.setUseDescriptorBuffer(true);
         RendererMeshSystem::addMeshSourceBindingLayoutItems(bindingLayoutDesc);
         RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
@@ -38,9 +41,8 @@ bool RendererMaterialSystem::createMeshShaderResources(){
     if(!drawState().m_bindlessMeshBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
-        // This pure-resource twin is consumed only by regular AVBOIT material pipelines, together with
-        // the global resource/sampler heap. CSG keeps the classic layout above because its graphics tail is not yet
-        // wholesale descriptor-buffer compatible.
+        // This pure-resource twin is consumed by AVBOIT material pipelines together with the global resource/sampler
+        // heap, including CSG now that its graphics tail is descriptor-buffer compatible.
         bindingLayoutDesc.setUseDescriptorBuffer(true);
         RendererMeshSystem::addMeshSourceBindingLayoutItems(bindingLayoutDesc);
         RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
@@ -60,6 +62,7 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
     if(!drawState().m_computeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
+        bindingLayoutDesc.setUseDescriptorBuffer(true);
         RendererMeshSystem::addMeshSourceBindingLayoutItems(bindingLayoutDesc);
         RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(s_MeshGeneratedVertexBindingSlot, 1));
@@ -143,6 +146,7 @@ bool RendererMaterialSystem::createEmulationViewBindingLayout(){
     if(!drawState().m_emulationViewBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Vertex | Core::ShaderType::Pixel);
+        bindingLayoutDesc.setUseDescriptorBuffer(true);
         RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
 
@@ -230,7 +234,6 @@ bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Mater
         }
         const bool usesBindlessAvboitResources =
             MaterialPipelinePassUsesRendererAvboit(drawItem.pipelineKey.pass)
-            && drawItem.pipelineKey.csgMode == MaterialPipelineCsgMode::None
         ;
         if(usesBindlessAvboitResources){
             if(!mesh.bindlessMeshBindingSet && !m_renderer.meshSystem().createBindlessMeshBindingSet(mesh)){

@@ -1439,26 +1439,33 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
         binding.pImmutableSamplers = nullptr;
         bindings.push_back(binding);
 
-        VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
-        bindingFlags.push_back(flags);
+        // Descriptor-buffer layouts model update-after-bind and partially-bound access intrinsically. In particular,
+        // Vulkan forbids pairing VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT with the update-after-bind
+        // pool flag, so Backend C must not request the descriptor-indexing binding flags either. Backend A still uses
+        // the classic descriptor-table semantics below.
+        bindingFlags.push_back(0);
     }
 
-    if(!bindingFlags.empty())
-        bindingFlags.back() |= VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
-
     auto bindingFlagsInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutBindingFlagsCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO);
-    bindingFlagsInfo.bindingCount = static_cast<u32>(bindingFlags.size());
-    bindingFlagsInfo.pBindingFlags = bindingFlags.data();
+    const bool useDescriptorBuffer = desc.useDescriptorBuffer && m_context.extensions.EXT_descriptor_buffer;
+    if(!useDescriptorBuffer){
+        for(VkDescriptorBindingFlags& flags : bindingFlags)
+            flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+        if(!bindingFlags.empty())
+            bindingFlags.back() |= VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
+        bindingFlagsInfo.bindingCount = static_cast<u32>(bindingFlags.size());
+        bindingFlagsInfo.pBindingFlags = bindingFlags.data();
+    }
 
     auto layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
-    layoutInfo.pNext = &bindingFlagsInfo;
-    layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-    // Backend C: a bindless layout that opts in sets the descriptor-buffer create flag (same flag the classic path
-    // sets). The descriptor-buffer spec permits UPDATE_AFTER_BIND_POOL + PARTIALLY_BOUND + VARIABLE_DESCRIPTOR_COUNT
-    // alongside DESCRIPTOR_BUFFER_BIT_EXT, so the heap's persistent bindless binding flags are preserved and the
-    // driver-queried set size already includes the full VARIABLE_DESCRIPTOR_COUNT capacity.
-    if(desc.useDescriptorBuffer && m_context.extensions.EXT_descriptor_buffer){
+    if(useDescriptorBuffer){
+        // Descriptor buffers have a fixed, driver-queried block sized for the layout's full descriptorCount. They do
+        // not allocate descriptor sets, so variable-count and update-after-bind descriptor-set flags are inapplicable.
         layoutInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    }
+    else{
+        layoutInfo.pNext = &bindingFlagsInfo;
+        layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
     }
     layoutInfo.bindingCount = static_cast<u32>(bindings.size());
     layoutInfo.pBindings = bindings.data();

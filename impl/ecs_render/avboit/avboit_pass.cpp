@@ -339,9 +339,8 @@ void RendererAvboitSystem::renderAvboitPasses(
 
     buildTransparentCsgIntervals(commandList, targets, csgFrameState);
 
-    // Regular occupancy/extinction discover opaque depth only through the global descriptor heap, which normal
-    // BindingSet state tracking cannot see. Keep the explicit transition before either material pass; the CSG-local
-    // fallback may request the same state again, which is harmless.
+    // All occupancy/extinction variants discover opaque depth only through the global descriptor heap, which normal
+    // BindingSet state tracking cannot see. Keep the explicit transition before either material pass.
     commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 
@@ -371,8 +370,8 @@ void RendererAvboitSystem::renderAvboitPasses(
 
     dispatchAvboitIntegration(commandList, avboitTargets);
 
-    // Regular accumulation samples the integrated Texture3D through the heap, so transition it explicitly instead
-    // of relying on local BindingSet state tracking. CSG's companion set requests this state too.
+    // All accumulation variants sample the integrated Texture3D through the heap, so transition it explicitly
+    // instead of relying on local BindingSet state tracking.
     commandList.setTextureState(
         avboitTargets.transmittanceTexture.get(),
         ECSRenderDetail::s_FramebufferSubresources,

@@ -278,6 +278,7 @@ static void AddCsgRemovedIntervalBindingSetItems(
 
     Core::BindingLayoutDesc bindingLayoutDesc(arena);
     bindingLayoutDesc.setVisibility(visibility);
+    bindingLayoutDesc.setUseDescriptorBuffer(true);
     if(intervalAccess != CsgTextureAccess::None)
         AddCsgIntervalTargetLayoutItems(bindingLayoutDesc, intervalAccess);
     if(receiverEventAccess != CsgTextureAccess::None)
@@ -397,6 +398,7 @@ static void AddCsgRemovedIntervalBindingSetItems(
 
     Core::BindingLayoutDesc bindingLayoutDesc(arena);
     bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
+    bindingLayoutDesc.setUseDescriptorBuffer(true);
     AddCsgReceiverEventLayoutItems(bindingLayoutDesc, CsgTextureAccess::SRV);
     AddCsgReceiverSpanLayoutItems(bindingLayoutDesc, CsgTextureAccess::UAV);
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CsgIntervalDispatchPushConstants)));
@@ -465,6 +467,7 @@ static void AddCsgRemovedIntervalBindingSetItems(
 
     Core::BindingLayoutDesc bindingLayoutDesc(arena);
     bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
+    bindingLayoutDesc.setUseDescriptorBuffer(true);
     AddCsgIntervalTargetLayoutItems(bindingLayoutDesc, CsgTextureAccess::SRV);
     AddCsgReceiverSpanLayoutItems(bindingLayoutDesc, CsgTextureAccess::SRV);
     AddCsgRemovedIntervalLayoutItems(bindingLayoutDesc, CsgTextureAccess::UAV);
@@ -580,6 +583,7 @@ static void AddCsgRemovedIntervalBindingSetItems(
 
     Core::BindingLayoutDesc bindingLayoutDesc(arena);
     bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
+    bindingLayoutDesc.setUseDescriptorBuffer(true);
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_MESH_BINDING_MATERIAL_TYPED, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_MESH_BINDING_INSTANCE, 1));
 

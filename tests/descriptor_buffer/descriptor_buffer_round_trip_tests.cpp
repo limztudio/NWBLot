@@ -28,6 +28,8 @@
 #include <core/perf/timing.h>
 #include <impl/assets/graphics/avboit/binding_slots.h>
 #include <impl/assets/graphics/avboit/constants.h>
+#include <impl/assets/graphics/csg/binding_slots.h>
+#include <impl/assets/graphics/mesh/binding_slots.h>
 #include <tests/capturing_logger.h>
 
 // The manager lives in the Vulkan backend (Core::GraphicsBackend namespace). The test is inherently Vulkan-aware
@@ -482,6 +484,176 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitMaterialShapesBuildAsDescriptorBuffe
     EXPECT_TRUE(heap.isInitialized() && heap.usesDescriptorBuffer());
     EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
     EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
+}
+
+
+// CSG's material graphics tail no longer falls back to a local texture/sampler set. Its clip, receiver-surface,
+// interval-sample, and cap-material layouts are all pure-resource descriptor-buffer shapes, so a CSG AVBOIT pipeline
+// can carry the shared heap at sets 8/9 without mixing classic descriptor sets. Exercise the exact local shapes
+// through the live API; the smoke captures cover their shader/pipeline integration separately.
+TEST_F(DescriptorBufferRoundTripTest, CsgMaterialTailShapesBuildAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/csg_material_tail_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(64u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredSrv = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 64u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeTextureArray = [&](const Format::Enum format, const ResourceStates::Mask state) {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(16u)
+                .setHeight(16u)
+                .setArraySize(3u)
+                .setDimension(TextureDimension::Texture2DArray)
+                .setFormat(format)
+                .setInitialState(state)
+                .setKeepInitialState(true)
+        );
+    };
+    const TextureSubresourceSet arraySubresources(0u, 1u, 0u, 3u);
+
+    auto receiverRanges = makeStructuredSrv(96u);
+    auto cutters = makeStructuredSrv(112u);
+    auto materialTyped = makeStructuredSrv(4u);
+    auto instances = makeStructuredSrv(64u);
+    auto sampleState = makeConstantBuffer();
+    auto meshView = makeConstantBuffer();
+    auto receiverEventData = makeTextureArray(Format::RGBA32_UINT, ResourceStates::UnorderedAccess);
+    auto receiverEventCount = makeTextureArray(Format::R32_UINT, ResourceStates::UnorderedAccess);
+    auto removedDepth = makeTextureArray(Format::RGBA16_FLOAT, ResourceStates::ShaderResource);
+    auto removedCapNormal = makeTextureArray(Format::RGBA16_FLOAT, ResourceStates::ShaderResource);
+    auto removedData = makeTextureArray(Format::RGBA32_UINT, ResourceStates::ShaderResource);
+    auto removedCount = makeTextureArray(Format::R32_UINT, ResourceStates::ShaderResource);
+    ASSERT_TRUE(
+        receiverRanges && cutters && materialTyped && instances && sampleState && meshView
+        && receiverEventData && receiverEventCount && removedDepth && removedCapNormal && removedData && removedCount
+    );
+
+    BindingLayoutDesc clipLayoutDesc(descArena);
+    clipLayoutDesc.setVisibility(ShaderType::Mesh | ShaderType::Compute | ShaderType::Pixel);
+    clipLayoutDesc.setUseDescriptorBuffer(true);
+    clipLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CSG_BINDING_RECEIVER_RANGES, 1u));
+    clipLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CSG_BINDING_CUTTERS, 1u));
+    auto clipLayout = device.createBindingLayout(clipLayoutDesc);
+    ASSERT_NE(clipLayout.get(), nullptr);
+    ASSERT_TRUE(clipLayout->isDescriptorBufferCompatible());
+
+    BindingSetDesc clipSetDesc(descArena);
+    clipSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CSG_BINDING_RECEIVER_RANGES, receiverRanges.get()));
+    clipSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CSG_BINDING_CUTTERS, cutters.get()));
+    auto clipSet = device.createBindingSet(clipSetDesc, clipLayout);
+    ASSERT_NE(clipSet.get(), nullptr);
+
+    BindingLayoutDesc receiverSurfaceLayoutDesc(descArena);
+    receiverSurfaceLayoutDesc.setVisibility(ShaderType::Pixel);
+    receiverSurfaceLayoutDesc.setUseDescriptorBuffer(true);
+    receiverSurfaceLayoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DATA, 1u));
+    receiverSurfaceLayoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_COUNT, 1u));
+    receiverSurfaceLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, 1u));
+    receiverSurfaceLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, 1u));
+    auto receiverSurfaceLayout = device.createBindingLayout(receiverSurfaceLayoutDesc);
+    ASSERT_NE(receiverSurfaceLayout.get(), nullptr);
+    ASSERT_TRUE(receiverSurfaceLayout->isDescriptorBufferCompatible());
+
+    BindingSetDesc receiverSurfaceSetDesc(descArena);
+    receiverSurfaceSetDesc.addItem(BindingSetItem::Texture_UAV(
+        NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_DATA,
+        receiverEventData.get(),
+        Format::RGBA32_UINT,
+        arraySubresources,
+        TextureDimension::Texture2DArray
+    ));
+    receiverSurfaceSetDesc.addItem(BindingSetItem::Texture_UAV(
+        NWB_CSG_INTERVAL_BINDING_RECEIVER_EVENT_COUNT,
+        receiverEventCount.get(),
+        Format::R32_UINT,
+        arraySubresources,
+        TextureDimension::Texture2DArray
+    ));
+    receiverSurfaceSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, sampleState.get()));
+    receiverSurfaceSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, meshView.get()));
+    auto receiverSurfaceSet = device.createBindingSet(receiverSurfaceSetDesc, receiverSurfaceLayout);
+    ASSERT_NE(receiverSurfaceSet.get(), nullptr);
+
+    BindingLayoutDesc intervalSampleLayoutDesc(descArena);
+    intervalSampleLayoutDesc.setVisibility(ShaderType::Pixel);
+    intervalSampleLayoutDesc.setUseDescriptorBuffer(true);
+    intervalSampleLayoutDesc.addItem(BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DEPTH, 1u));
+    intervalSampleLayoutDesc.addItem(BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_CAP_NORMAL, 1u));
+    intervalSampleLayoutDesc.addItem(BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DATA, 1u));
+    intervalSampleLayoutDesc.addItem(BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_COUNT, 1u));
+    intervalSampleLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, 1u));
+    intervalSampleLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, 1u));
+    auto intervalSampleLayout = device.createBindingLayout(intervalSampleLayoutDesc);
+    ASSERT_NE(intervalSampleLayout.get(), nullptr);
+    ASSERT_TRUE(intervalSampleLayout->isDescriptorBufferCompatible());
+
+    BindingSetDesc intervalSampleSetDesc(descArena);
+    intervalSampleSetDesc.addItem(BindingSetItem::Texture_SRV(
+        NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DEPTH,
+        removedDepth.get(),
+        Format::RGBA16_FLOAT,
+        arraySubresources,
+        TextureDimension::Texture2DArray
+    ));
+    intervalSampleSetDesc.addItem(BindingSetItem::Texture_SRV(
+        NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_CAP_NORMAL,
+        removedCapNormal.get(),
+        Format::RGBA16_FLOAT,
+        arraySubresources,
+        TextureDimension::Texture2DArray
+    ));
+    intervalSampleSetDesc.addItem(BindingSetItem::Texture_SRV(
+        NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_DATA,
+        removedData.get(),
+        Format::RGBA32_UINT,
+        arraySubresources,
+        TextureDimension::Texture2DArray
+    ));
+    intervalSampleSetDesc.addItem(BindingSetItem::Texture_SRV(
+        NWB_CSG_INTERVAL_BINDING_REMOVED_INTERVAL_COUNT,
+        removedCount.get(),
+        Format::R32_UINT,
+        arraySubresources,
+        TextureDimension::Texture2DArray
+    ));
+    intervalSampleSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, sampleState.get()));
+    intervalSampleSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, meshView.get()));
+    auto intervalSampleSet = device.createBindingSet(intervalSampleSetDesc, intervalSampleLayout);
+    ASSERT_NE(intervalSampleSet.get(), nullptr);
+
+    BindingLayoutDesc capMaterialLayoutDesc(descArena);
+    capMaterialLayoutDesc.setVisibility(ShaderType::Pixel);
+    capMaterialLayoutDesc.setUseDescriptorBuffer(true);
+    capMaterialLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_MESH_BINDING_MATERIAL_TYPED, 1u));
+    capMaterialLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_MESH_BINDING_INSTANCE, 1u));
+    auto capMaterialLayout = device.createBindingLayout(capMaterialLayoutDesc);
+    ASSERT_NE(capMaterialLayout.get(), nullptr);
+    ASSERT_TRUE(capMaterialLayout->isDescriptorBufferCompatible());
+
+    BindingSetDesc capMaterialSetDesc(descArena);
+    capMaterialSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_MESH_BINDING_MATERIAL_TYPED, materialTyped.get()));
+    capMaterialSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_MESH_BINDING_INSTANCE, instances.get()));
+    auto capMaterialSet = device.createBindingSet(capMaterialSetDesc, capMaterialLayout);
+    ASSERT_NE(capMaterialSet.get(), nullptr);
 }
 
 

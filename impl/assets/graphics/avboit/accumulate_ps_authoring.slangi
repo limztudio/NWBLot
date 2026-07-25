@@ -77,34 +77,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Regular accumulation samples its target-generation transmittance volume and linear sampler through the persistent
-// heap. Transparent CSG keeps the established local pair until its graphics layouts become descriptor-buffer
-// compatible too.
-#if NWB_CSG_ENABLED
-[[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_TRANSMITTANCE, NWB_AVBOIT_TRANSPARENT_SET)]] Texture3D<float4> g_Transmittance;
-[[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER, NWB_AVBOIT_TRANSPARENT_SET)]] SamplerState g_LinearSampler;
-#else
+// All accumulation variants sample their target-generation transmittance volume and linear sampler through the
+// persistent heap. This keeps CSG's descriptor-buffer graphics tail on the same resource/sampler contract.
 #include "../deferred/bindless_resources.slangi"
 [[vk::binding(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, NWB_AVBOIT_TRANSPARENT_SET)]]
 ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbDeferredBindlessResources;
-#endif
 [[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, NWB_AVBOIT_TRANSPARENT_SET)]] StructuredBuffer<uint, Std430DataLayout> g_DepthWarp;
 [[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, NWB_AVBOIT_TRANSPARENT_SET)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
 
 Texture3D<float4> nwbAvboitTransmittanceTexture(){
-#if NWB_CSG_ENABLED
-    return g_Transmittance;
-#else
     return NwbHeapSampledImage3D(g_NwbDeferredBindlessResources.avboitSlots.x);
-#endif
 }
 
 SamplerState nwbAvboitAccumulationSampler(){
-#if NWB_CSG_ENABLED
-    return g_LinearSampler;
-#else
     return NwbHeapSampler(g_NwbDeferredBindlessResources.avboitSlots.y);
-#endif
 }
 
 struct NwbAvboitAccumulatePixelInput{

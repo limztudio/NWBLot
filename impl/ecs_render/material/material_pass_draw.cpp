@@ -49,30 +49,16 @@ static void SetCsgBindingSetResourceStates(
 
 [[nodiscard]] constexpr bool UsesBindlessAvboitResources(
     const MaterialPipelinePass::Enum pass,
-    const MaterialPipelineCsgBindingUse& csgBindingUse
+    const MaterialPipelineCsgBindingUse&
 ){
-    return !csgBindingUse.clip
-        && MaterialPipelinePassUsesRendererAvboit(pass)
-    ;
+    return MaterialPipelinePassUsesRendererAvboit(pass);
 }
 
 [[nodiscard]] Core::BindingSet* ResolvePassBindingSet(
     const MaterialPassDrawContext& context,
-    const MaterialPipelineCsgBindingUse& csgBindingUse
+    const MaterialPipelineCsgBindingUse&
 ){
-    if(!csgBindingUse.clip || !MaterialPipelinePassUsesRendererAvboit(context.pass) || !context.avboitTargets)
-        return context.passBindingSet;
-
-    switch(context.pass){
-    case MaterialPipelinePass::AvboitOccupancy:
-        return context.avboitTargets->csgOccupancyBindingSet.get();
-    case MaterialPipelinePass::AvboitExtinction:
-        return context.avboitTargets->csgExtinctionBindingSet.get();
-    case MaterialPipelinePass::AvboitAccumulate:
-        return context.avboitTargets->csgAccumulateBindingSet.get();
-    default:
-        return context.passBindingSet;
-    }
+    return context.passBindingSet;
 }
 
 template<typename GraphicsState>
@@ -372,8 +358,10 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         Core::ComputeState computeState;
         computeState.setPipeline(pipelineResources.computePipeline.get());
         computeState.addBindingSet(mesh.computeBindingSet.get());
-        if(csgBindingUse.clip && usesAvboit)
-            computeState.addBindingSet(nullptr);
+        if(csgBindingUse.avboitClip){
+            NWB_ASSERT(passBindingSet);
+            computeState.addBindingSet(passBindingSet);
+        }
         if(csgBindingUse.clip)
             computeState.addBindingSet(csgBindingSets.clip.get());
 

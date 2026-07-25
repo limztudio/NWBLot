@@ -103,7 +103,6 @@ struct MaterialPipelineCsgBindingLayouts{
     const Core::BindingLayoutHandle& clip;
     const Core::BindingLayoutHandle& receiverSurface;
     const Core::BindingLayoutHandle& intervalSample;
-    const Core::BindingLayoutHandle& avboitEmpty;
 };
 
 struct MaterialPipelineAvboitPixelShaderSelection{
@@ -140,39 +139,34 @@ struct MaterialPipelineAvboitPixelShaderSelection{
 
 struct MaterialPipelineAvboitBindingLayouts{
     const Core::BindingLayoutHandle& occupancy;
-    const Core::BindingLayoutHandle& csgOccupancy;
     const Core::BindingLayoutHandle& extinction;
-    const Core::BindingLayoutHandle& csgExtinction;
     const Core::BindingLayoutHandle& accumulate;
-    const Core::BindingLayoutHandle& csgAccumulate;
 };
 
 [[nodiscard]] constexpr bool UsesBindlessAvboitResources(
     const MaterialPipelinePass::Enum pass,
-    const bool csgClipPipeline
+    const bool
 ){
-    return !csgClipPipeline
-        && MaterialPipelinePassUsesRendererAvboit(pass)
-    ;
+    return MaterialPipelinePassUsesRendererAvboit(pass);
 }
 
 template<typename PipelineDesc>
 [[nodiscard]] bool AddAvboitBindingLayout(
     PipelineDesc& pipelineDesc,
     const MaterialPipelinePass::Enum pass,
-    const bool csgClipPipeline,
+    const bool,
     const MaterialPipelineAvboitBindingLayouts& bindingLayouts
 ){
     const Core::BindingLayoutHandle* bindingLayout = nullptr;
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy:
-        bindingLayout = csgClipPipeline ? &bindingLayouts.csgOccupancy : &bindingLayouts.occupancy;
+        bindingLayout = &bindingLayouts.occupancy;
         break;
     case MaterialPipelinePass::AvboitExtinction:
-        bindingLayout = csgClipPipeline ? &bindingLayouts.csgExtinction : &bindingLayouts.extinction;
+        bindingLayout = &bindingLayouts.extinction;
         break;
     case MaterialPipelinePass::AvboitAccumulate:
-        bindingLayout = csgClipPipeline ? &bindingLayouts.csgAccumulate : &bindingLayouts.accumulate;
+        bindingLayout = &bindingLayouts.accumulate;
         break;
     default:
         return true;
@@ -217,11 +211,6 @@ template<typename PipelineDesc>
         return true;
     if(!bindingLayouts.clip)
         return false;
-    if(csgBindingUse.avboitClip){
-        if(!bindingLayouts.avboitEmpty)
-            return false;
-        pipelineDesc.addBindingLayout(bindingLayouts.avboitEmpty);
-    }
     pipelineDesc.addBindingLayout(bindingLayouts.clip);
     return true;
 }
@@ -383,11 +372,8 @@ bool RendererMaterialSystem::createRendererPipeline(
         if(
             !avboitState().m_emptyBindingLayout
             || !avboitState().m_occupancyBindingLayout
-            || !avboitState().m_csgOccupancyBindingLayout
             || !avboitState().m_extinctionBindingLayout
-            || !avboitState().m_csgExtinctionBindingLayout
             || !avboitState().m_accumulateBindingLayout
-            || !avboitState().m_csgAccumulateBindingLayout
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT resources were not validated before material pipeline creation"));
             return failMaterialPipeline();
@@ -425,20 +411,16 @@ bool RendererMaterialSystem::createRendererPipeline(
     const __hidden_material_pipeline::MaterialPipelineCsgBindingLayouts csgBindingLayouts{
         csgState().m_clipBindingLayout,
         csgState().m_receiverSurfaceBindingLayout,
-        csgState().m_intervalSampleBindingLayout,
-        avboitState().m_emptyBindingLayout
+        csgState().m_intervalSampleBindingLayout
     };
     const __hidden_material_pipeline::MaterialPipelineAvboitBindingLayouts avboitBindingLayouts{
         avboitState().m_occupancyBindingLayout,
-        avboitState().m_csgOccupancyBindingLayout,
         avboitState().m_extinctionBindingLayout,
-        avboitState().m_csgExtinctionBindingLayout,
-        avboitState().m_accumulateBindingLayout,
-        avboitState().m_csgAccumulateBindingLayout
+        avboitState().m_accumulateBindingLayout
     };
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(usesBindlessAvboitResources && !heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: regular AVBOIT material pipeline requires the global descriptor heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT material pipeline requires the global descriptor heap"));
         return failMaterialPipeline();
     }
 
@@ -551,6 +533,13 @@ bool RendererMaterialSystem::createRendererPipeline(
         Core::ComputePipelineDesc computeDesc;
         computeDesc.setComputeShader(resources.computeShader);
         computeDesc.addBindingLayout(drawState().m_computeBindingLayout);
+        // AVBOIT CSG shader variants reserve set 1 for their material pass before placing the CSG clip set at 2.
+        // The mesh compute stage does not read this pass data, but binding the real pure-resource layout keeps the
+        // whole pipeline descriptor-buffer compatible and preserves the shader's fixed set numbering.
+        if(csgBindingUse.avboitClip
+            && !__hidden_material_pipeline::AddAvboitBindingLayout(computeDesc, pass, csgClipPipeline, avboitBindingLayouts)
+        )
+            return false;
         if(!__hidden_material_pipeline::AddCsgComputeBindingLayouts(computeDesc, csgBindingUse, csgBindingLayouts))
             return false;
         resources.computePipeline = device->createComputePipeline(computeDesc);

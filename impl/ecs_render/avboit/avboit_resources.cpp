@@ -98,24 +98,6 @@ bool RendererAvboitSystem::createAvboitResources(){
     if(!__hidden_avboit_resources::CreateBindingLayout(
         arena(),
         *device,
-        avboitState().m_csgOccupancyBindingLayout,
-        Core::ShaderType::Pixel,
-        [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            // Transparent CSG remains on its established local texture/sampler layout until the CSG graphics tail
-            // receives separate descriptor-buffer-compatible variants.
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_AVBOIT_BINDING_OPAQUE_DEPTH, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_AVBOIT_BINDING_POINT_SAMPLER, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
-        }
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT CSG occupancy binding layout"));
-        return false;
-    }
-
-    if(!__hidden_avboit_resources::CreateBindingLayout(
-        arena(),
-        *device,
         avboitState().m_depthWarpBindingLayout,
         Core::ShaderType::Compute,
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
@@ -145,25 +127,6 @@ bool RendererAvboitSystem::createAvboitResources(){
         }
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction binding layout"));
-        return false;
-    }
-
-    if(!__hidden_avboit_resources::CreateBindingLayout(
-        arena(),
-        *device,
-        avboitState().m_csgExtinctionBindingLayout,
-        Core::ShaderType::Pixel,
-        [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_AVBOIT_BINDING_OPAQUE_DEPTH, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_AVBOIT_BINDING_POINT_SAMPLER, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_DEPTH_WARP, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_CONTROL, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_EXTINCTION, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
-        }
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT CSG extinction binding layout"));
         return false;
     }
 
@@ -202,25 +165,6 @@ bool RendererAvboitSystem::createAvboitResources(){
         }
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding layout"));
-        return false;
-    }
-
-    if(!__hidden_avboit_resources::CreateBindingLayout(
-        arena(),
-        *device,
-        avboitState().m_csgAccumulateBindingLayout,
-        Core::ShaderType::Pixel,
-        [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_TRANSMITTANCE, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
-        }
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT CSG accumulation binding layout"));
         return false;
     }
 

@@ -5,6 +5,7 @@
 #include "shadow_reproject_merge_binding_slots.h"
 #include "shadow_resolve_binding_slots.h" // NWB_SHADOW_RESOLVE_GROUP_SIZE (the merge shares the resolve's group size)
 #include "sw_binding_slots.h"             // NWB_SW_SHADOW_SOFT_FACTOR + NWB_SCENE_SHADOW_SLOT_COUNT (via scene binding_slots)
+#include "../bindless/bindless_heap.slangi"
 #include "../scene/binding_slots.h"
 #include "../common/math.slangi"
 
@@ -39,24 +40,6 @@
 // n=0 everywhere, so the output is the pure current sample -- never garbage/black. Invalid receiver texels also pass through
 // the current sample. So a first frame degrades exactly to the pre-temporal single-frame trace.
 
-[[vk::binding(NWB_SHADOW_REPROJECT_MERGE_BINDING_SOFT_TRACE, NWB_SHADOW_REPROJECT_MERGE_SET)]]
-Texture2DArray<float4> g_NwbShadowMergeSoftTrace;
-
-[[vk::binding(NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_IN, NWB_SHADOW_REPROJECT_MERGE_SET)]]
-Texture2DArray<float4> g_NwbShadowMergeHistoryIn;
-
-[[vk::binding(NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_IN, NWB_SHADOW_REPROJECT_MERGE_SET)]]
-Texture2DArray<float4> g_NwbShadowMergeMomentsIn;
-
-[[vk::binding(NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_CURR, NWB_SHADOW_REPROJECT_MERGE_SET)]]
-Texture2D<float4> g_NwbShadowMergeGeometryCurr;
-
-[[vk::binding(NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_PREV, NWB_SHADOW_REPROJECT_MERGE_SET)]]
-Texture2D<float4> g_NwbShadowMergeGeometryPrev;
-
-[[vk::binding(NWB_SHADOW_REPROJECT_MERGE_BINDING_GBUFFER_WORLDPOS, NWB_SHADOW_REPROJECT_MERGE_SET)]]
-Texture2D<float4> g_NwbShadowMergeWorldPosition;
-
 [[vk::binding(NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_OUT, NWB_SHADOW_REPROJECT_MERGE_SET)]]
 RWTexture2DArray<float4> g_NwbShadowMergeHistoryOut;
 
@@ -65,7 +48,7 @@ RWTexture2DArray<float4> g_NwbShadowMergeMomentsOut;
 
 struct NwbShadowReprojectMergePushConstants{
     // The STASHED previous-frame worldToClip. row_major to match the C++ Float44U row-major raw dump (and the caustic
-    // view CB convention). 64 bytes; the 8 u32 scalars below bring the push to 96 bytes (within the 128-byte guarantee).
+    // view CB convention). 64 bytes; the 16 u32 scalars below bring the push to exactly 128 bytes.
     row_major float4x4 prevWorldToClip;
     uint width;          // FULL-res width  (to read the world-position G-buffer at the 2x texel)
     uint height;         // FULL-res height
@@ -74,7 +57,17 @@ struct NwbShadowReprojectMergePushConstants{
     uint lightSlotStart; // first active SOFT shadow slot to process
     uint lightSlotCount; // number of contiguous active SOFT slots (the C++ dispatches one slot per call -> 1)
     uint historyValid;   // 0 = no valid history this frame (first frame / after resize) -> force n=0 (pure current)
-    uint pad0;           // pad to a 16-byte multiple (8 u32 = 32 bytes after the 64-byte matrix -> 96 total)
+    // Global descriptor-heap inputs. The array inputs are selected independently for opaque vs transparent temporal
+    // accumulation; the geometry/world-position inputs are shared target-generation resources.
+    uint softTraceSlot;
+    uint historyInSlot;
+    uint momentsInSlot;
+    uint geometryCurrSlot;
+    uint geometryPrevSlot;
+    uint worldPositionSlot;
+    uint pad0;
+    uint pad1;
+    uint pad2;
 };
 
 [[vk::push_constant]]
@@ -98,7 +91,7 @@ float nwbShadowTemporalWorldSpacing(const float cameraDistance){
 // Half-res geometry cache accessors (see shadow_geometry_downsample_cs): .xy = octahedral normal, .z = camera distance,
 // .w = validity.
 float4 nwbShadowMergeGeomCurr(const int2 halfTexel){
-    return g_NwbShadowMergeGeometryCurr.Load(int3(halfTexel, 0));
+    return NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryCurrSlot).Load(int3(halfTexel, 0));
 }
 
 
@@ -127,7 +120,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         min((int)h.x * NWB_SW_SHADOW_SOFT_FACTOR, (int)g_NwbShadowMergePush.width - 1),
         min((int)h.y * NWB_SW_SHADOW_SOFT_FACTOR, (int)g_NwbShadowMergePush.height - 1)
     );
-    const float3 Wc = g_NwbShadowMergeWorldPosition.Load(int3(full, 0)).xyz;
+    const float3 Wc = NwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz;
 
     // STEP 1 REPROJECT: project the current world pos through the STASHED previous-frame worldToClip. This is EXACT for a
     // static receiver regardless of how the occluder moved (NDC->UV: y flipped, matching the caustic splat convention).
@@ -150,7 +143,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // receiver PASSES here by construction -- that is precisely why it is handled by the value gate B, not this one.)
     bool historyAccepted = false;
     if(onScreen && valid){
-        const float4 gp = g_NwbShadowMergeGeometryPrev.Load(int3(hp, 0));
+        const float4 gp = NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryPrevSlot).Load(int3(hp, 0));
         if(gp.w > 0.5){
             const float3 Np = nwbOctDecodeNormal(gp.xy);
             const bool planeOk = abs(gc.z - gp.z) < (NWB_SHADOW_TEMPORAL_PLANE_K * nwbShadowTemporalWorldSpacing(gc.z));
@@ -161,7 +154,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     for(uint slot = slotStart; slot < slotEnd; ++slot){
         // The current raw sample for this slot.
-        const float3 cur = g_NwbShadowMergeSoftTrace.Load(int4(texel, slot, 0)).rgb;
+        const float3 cur = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.softTraceSlot).Load(int4(texel, slot, 0)).rgb;
 
         // A background/invalid receiver has no meaningful shadow to accumulate -- pass the current sample straight through
         // and reset the moments with n=0 (so a receiver that appears next frame starts fresh, not from a stale history).
@@ -181,8 +174,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         float m1Prev = 0.0; // prev integrated luma mean       (moments.x); stays 0 when history rejected -> pure-current
         float m2Prev = 0.0; // prev integrated luma 2nd-moment (moments.y); stays 0 when history rejected -> pure-current
         if(historyAccepted){
-            hist = g_NwbShadowMergeHistoryIn.Load(int4(hp, slot, 0)).rgb;
-            const float3 mom = g_NwbShadowMergeMomentsIn.Load(int4(hp, slot, 0)).xyz;
+            hist = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.historyInSlot).Load(int4(hp, slot, 0)).rgb;
+            const float3 mom = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.momentsInSlot).Load(int4(hp, slot, 0)).xyz;
             m1Prev = mom.x;
             m2Prev = mom.y;
             n = mom.z;
@@ -199,9 +192,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         [unroll] for(int dy = -1; dy <= 1; ++dy){
             [unroll] for(int dx = -1; dx <= 1; ++dx){
                 const int2 t = int2(clamp(texel.x + dx, 0, hw - 1), clamp(texel.y + dy, 0, hh - 1));
-                if(g_NwbShadowMergeGeometryCurr.Load(int3(t, 0)).w <= 0.5)
+                if(NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryCurrSlot).Load(int3(t, 0)).w <= 0.5)
                     continue; // background tap -> no receiver, skip
-                const float3 s = g_NwbShadowMergeSoftTrace.Load(int4(t, slot, 0)).rgb;
+                const float3 s = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.softTraceSlot).Load(int4(t, slot, 0)).rgb;
                 mu += s;
                 mu2 += s * s;
                 const float sl = nwbShadowMergeLuma(s);

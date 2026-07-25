@@ -59,58 +59,10 @@ struct SoftShadowResolveBindingSetInputs{
     Core::Device& device,
     Core::BindingLayoutHandle& layout,
     DeferredFrameTargets& targets,
-    Core::Texture* const softTrace,
-    Core::Texture* const geometryCurr,
-    Core::Texture* const geometryPrev,
-    Core::Texture* const worldPosition,
-    Core::Texture* const histIn,
-    Core::Texture* const momentsIn,
     Core::Texture* const histOut,
     Core::Texture* const momentsOut
 ){
     Core::BindingSetDesc desc(arena);
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_REPROJECT_MERGE_BINDING_SOFT_TRACE,
-        softTrace,
-        targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_IN,
-        histIn,
-        targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_IN,
-        momentsIn,
-        targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_CURR,
-        geometryCurr,
-        targets.shadowSoftGeometryFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_PREV,
-        geometryPrev,
-        targets.shadowSoftGeometryFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_SHADOW_REPROJECT_MERGE_BINDING_GBUFFER_WORLDPOS,
-        worldPosition,
-        targets.worldPositionFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
     desc.addItem(Core::BindingSetItem::Texture_UAV(
         NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_OUT,
         histOut,
@@ -129,23 +81,26 @@ struct SoftShadowResolveBindingSetInputs{
 }
 
 struct ShadowReprojectMergeTextures{
-    Core::Texture* softTrace = nullptr;
-    Core::Texture* geometryCurr = nullptr;
-    Core::Texture* geometryPrev = nullptr;
-    Core::Texture* worldPosition = nullptr;
     Core::Texture* histA = nullptr;
     Core::Texture* histB = nullptr;
     Core::Texture* momentsA = nullptr;
     Core::Texture* momentsB = nullptr;
 };
 
+// The temporal merge's per-dispatch Array SRVs. The two geometry caches + full-res world-position are shared target
+// roles, so the dispatch helper obtains their texture pointers and heap slots directly from DeferredFrameTargets.
+struct ShadowReprojectMergeHeapResources{
+    Core::Texture* softTrace = nullptr;
+    Core::Texture* historyIn = nullptr;
+    Core::Texture* momentsIn = nullptr;
+    u32 softTraceSlot = 0u;
+    u32 historyInSlot = 0u;
+    u32 momentsInSlot = 0u;
+};
+
 struct ShadowReprojectMergeBindingCache{
     Core::BindingSetHandle& setAtoB;
     Core::BindingSetHandle& setBtoA;
-    const Core::Texture*& softTrace;
-    const Core::Texture*& geometryCurr;
-    const Core::Texture*& geometryPrev;
-    const Core::Texture*& worldPosition;
     const Core::Texture*& histA;
     const Core::Texture*& histB;
     const Core::Texture*& momentsA;
@@ -158,10 +113,6 @@ struct ShadowReprojectMergeBindingCache{
 ){
     return cache.setAtoB
         && cache.setBtoA
-        && cache.softTrace == textures.softTrace
-        && cache.geometryCurr == textures.geometryCurr
-        && cache.geometryPrev == textures.geometryPrev
-        && cache.worldPosition == textures.worldPosition
         && cache.histA == textures.histA
         && cache.histB == textures.histB
         && cache.momentsA == textures.momentsA
@@ -172,10 +123,6 @@ struct ShadowReprojectMergeBindingCache{
 void ClearShadowReprojectMergeCache(const ShadowReprojectMergeBindingCache& cache){
     cache.setAtoB = nullptr;
     cache.setBtoA = nullptr;
-    cache.softTrace = nullptr;
-    cache.geometryCurr = nullptr;
-    cache.geometryPrev = nullptr;
-    cache.worldPosition = nullptr;
     cache.histA = nullptr;
     cache.histB = nullptr;
     cache.momentsA = nullptr;
@@ -190,10 +137,6 @@ void StoreShadowReprojectMergeCache(
 ){
     cache.setAtoB = Move(setAtoB);
     cache.setBtoA = Move(setBtoA);
-    cache.softTrace = textures.softTrace;
-    cache.geometryCurr = textures.geometryCurr;
-    cache.geometryPrev = textures.geometryPrev;
-    cache.worldPosition = textures.worldPosition;
     cache.histA = textures.histA;
     cache.histB = textures.histB;
     cache.momentsA = textures.momentsA;
@@ -217,12 +160,6 @@ void StoreShadowReprojectMergeCache(
         device,
         layout,
         targets,
-        textures.softTrace,
-        textures.geometryCurr,
-        textures.geometryPrev,
-        textures.worldPosition,
-        textures.histA,
-        textures.momentsA,
         textures.histB,
         textures.momentsB
     );
@@ -231,12 +168,6 @@ void StoreShadowReprojectMergeCache(
         device,
         layout,
         targets,
-        textures.softTrace,
-        textures.geometryCurr,
-        textures.geometryPrev,
-        textures.worldPosition,
-        textures.histB,
-        textures.momentsB,
         textures.histA,
         textures.momentsA
     );
@@ -331,6 +262,16 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
             : rayTracingState().m_shadowReprojectMergeBindingSetBtoA.get())
         : nullptr
     ;
+    const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources opaqueMergeResources = frontIsA
+        ? __hidden_rt_softshadow::ShadowReprojectMergeHeapResources{
+            targets.shadowSoftHalfA.get(), targets.shadowHistA.get(), targets.shadowMomentsA.get(),
+            targets.bindless.shadowSoftHalfA.slot(), targets.bindless.shadowHistA.slot(), targets.bindless.shadowMomentsA.slot()
+        }
+        : __hidden_rt_softshadow::ShadowReprojectMergeHeapResources{
+            targets.shadowSoftHalfA.get(), targets.shadowHistB.get(), targets.shadowMomentsB.get(),
+            targets.bindless.shadowSoftHalfA.slot(), targets.bindless.shadowHistB.slot(), targets.bindless.shadowMomentsB.slot()
+        }
+    ;
     Core::BindingSet* const temporalPrepareSet = temporalActive
         ? (frontIsA
             ? rayTracingState().m_shadowResolveBindingSetTemporalHistB.get()
@@ -355,6 +296,47 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
     const u32 slotRangeStart = 0u;
     const u32 slotRangeCount = slotSpan;
 
+    const auto dispatchReprojectMerge = [&](Core::BindingSet* const bindingSet, const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources& resources){
+        NWB_ASSERT(bindingSet);
+        NWB_ASSERT(resources.softTrace);
+        NWB_ASSERT(resources.historyIn);
+        NWB_ASSERT(resources.momentsIn);
+        // The six sampled inputs are global-heap descriptors, so stage them explicitly before the local output-UAV
+        // binding set. The selected A/B input cannot alias that set's A/B output by the front-state invariant.
+        commandList.setTextureState(resources.softTrace, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(resources.historyIn, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(resources.momentsIn, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.shadowSoftGeometryPrev.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setResourceStatesForBindingSet(bindingSet);
+        commandList.commitBarriers();
+
+        ShadowReprojectMergePushConstants mergePush;
+        mergePush.prevWorldToClip = rayTracingState().m_prevWorldToClip;
+        mergePush.width = targets.width;
+        mergePush.height = targets.height;
+        mergePush.halfWidth = softHalfWidth;
+        mergePush.halfHeight = softHalfHeight;
+        mergePush.lightSlotStart = slotRangeStart;
+        mergePush.lightSlotCount = slotRangeCount;
+        mergePush.historyValid = historyValid;
+        mergePush.softTraceSlot = resources.softTraceSlot;
+        mergePush.historyInSlot = resources.historyInSlot;
+        mergePush.momentsInSlot = resources.momentsInSlot;
+        mergePush.geometryCurrSlot = targets.bindless.shadowSoftGeometry.slot();
+        mergePush.geometryPrevSlot = targets.bindless.shadowSoftGeometryPrev.slot();
+        mergePush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+
+        Core::ComputeState mergeState;
+        mergeState.setPipeline(rayTracingState().m_shadowReprojectMergePipeline.get());
+        mergeState.addBindingSet(bindingSet);
+        commandList.setComputeState(mergeState);
+        bindPassHeap(rayTracingState().m_shadowReprojectMergePipeline);
+        commandList.setPushConstants(&mergePush, sizeof(mergePush));
+        commandList.dispatch(softGroupsX, softGroupsY, 1u);
+    };
+
     // Denoise + upsample the whole active slot RANGE in ONE dispatch chain. With temporal on, a single range-wide
     // reproject-merge runs FIRST (accumulating this frame's trace into every slot's history), then the a-trous resolve
     // reads the accumulated history via temporalPrepareSet; else the resolve reads the raw trace directly.
@@ -362,28 +344,9 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         if(temporalActive){
             // Reproject-merge (half-res, whole range): reads the raw trace (soft-A) + prev history/moments + curr/prev
             // geometry + the full-res world-position G-buffer; writes the accumulated visibility (history-out) +
-            // moments for every slot layer. setResourceStatesForBindingSet transitions the raw trace + geometry +
-            // world-pos to SRV and the history/moments out to UAV (covering the whole array in one shot); a UAV barrier
-            // (enabled above) then orders the write before the resolve PREPARE reads history-out as an SRV.
-            commandList.setResourceStatesForBindingSet(mergeSet);
-            commandList.commitBarriers();
-
-            ShadowReprojectMergePushConstants mergePush;
-            mergePush.prevWorldToClip = rayTracingState().m_prevWorldToClip;
-            mergePush.width = targets.width;
-            mergePush.height = targets.height;
-            mergePush.halfWidth = softHalfWidth;
-            mergePush.halfHeight = softHalfHeight;
-            mergePush.lightSlotStart = slotRangeStart;
-            mergePush.lightSlotCount = slotRangeCount;
-            mergePush.historyValid = historyValid;
-
-            Core::ComputeState mergeState;
-            mergeState.setPipeline(rayTracingState().m_shadowReprojectMergePipeline.get());
-            mergeState.addBindingSet(mergeSet);
-            commandList.setComputeState(mergeState);
-            commandList.setPushConstants(&mergePush, sizeof(mergePush));
-            commandList.dispatch(softGroupsX, softGroupsY, 1u);
+            // moments for every slot layer. The helper explicitly stages the heap SRVs, binds sets 8/9 after the
+            // local output-UAV set, and dispatches the common RGB-safe merge pipeline.
+            dispatchReprojectMerge(mergeSet, opaqueMergeResources);
         }
 
         // Opaque soft resolve: scalar pipeline, its own base sets, OVERWRITE the visibility. The dispatch struct lets
@@ -494,6 +457,16 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
                 : rayTracingState().m_transparentReprojectMergeBindingSetBtoA.get())
             : nullptr
         ;
+        const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources transparentMergeResources = frontIsA
+            ? __hidden_rt_softshadow::ShadowReprojectMergeHeapResources{
+                targets.transparentSoftHalf.get(), targets.transparentHistA.get(), targets.transparentMomentsA.get(),
+                targets.bindless.transparentSoftHalf.slot(), targets.bindless.transparentHistA.slot(), targets.bindless.transparentMomentsA.slot()
+            }
+            : __hidden_rt_softshadow::ShadowReprojectMergeHeapResources{
+                targets.transparentSoftHalf.get(), targets.transparentHistB.get(), targets.transparentMomentsB.get(),
+                targets.bindless.transparentSoftHalf.slot(), targets.bindless.transparentHistB.slot(), targets.bindless.transparentMomentsB.slot()
+            }
+        ;
         Core::BindingSet* const transparentPrepareSet = transparentTemporalActive
             ? (frontIsA
                 ? rayTracingState().m_transparentResolveBindingSetTemporalHistB.get()
@@ -503,28 +476,9 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
 
         {
             if(transparentTemporalActive){
-                // Transparent reproject-merge (same RGB-safe merge pipeline; its own front/back set over the
-                // transparent hist/moments + transparentSoftHalf + the SHARED geometry caches + world-position). ONE
-                // range-wide dispatch, matching the opaque collapse: the shader loops [slotStart, slotStart+slotCount).
-                commandList.setResourceStatesForBindingSet(transparentMergeSet);
-                commandList.commitBarriers();
-
-                ShadowReprojectMergePushConstants transparentMergePush;
-                transparentMergePush.prevWorldToClip = rayTracingState().m_prevWorldToClip;
-                transparentMergePush.width = targets.width;
-                transparentMergePush.height = targets.height;
-                transparentMergePush.halfWidth = softHalfWidth;
-                transparentMergePush.halfHeight = softHalfHeight;
-                transparentMergePush.lightSlotStart = slotRangeStart;
-                transparentMergePush.lightSlotCount = slotRangeCount;
-                transparentMergePush.historyValid = historyValid;
-
-                Core::ComputeState transparentMergeState;
-                transparentMergeState.setPipeline(rayTracingState().m_shadowReprojectMergePipeline.get());
-                transparentMergeState.addBindingSet(transparentMergeSet);
-                commandList.setComputeState(transparentMergeState);
-                commandList.setPushConstants(&transparentMergePush, sizeof(transparentMergePush));
-                commandList.dispatch(softGroupsX, softGroupsY, 1u);
+                // Transparent reproject-merge uses the same RGB-safe pipeline and local A/B output sets as opaque;
+                // only its three Array heap inputs change to the transparent target generation.
+                dispatchReprojectMerge(transparentMergeSet, transparentMergeResources);
             }
 
             // Transparent RGB resolve: RGB pipeline, its OWN base sets (over transparentSoftHalf + the shared soft-A/B
@@ -1187,19 +1141,10 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
     if(!rayTracingState().m_shadowReprojectMergeBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Phase 3 (Backend C): the temporal reproject-merge is the third shadow-family pass migrated to VK_EXT_descriptor_buffer.
-        // Its shape is segment-coherent pure-resource (6 Texture_SRV + 2 Texture_UAV, no samplers) with push constants, which
-        // the descriptor-buffer path serves wholesale -- push constants stay in the pipeline layout, not the descriptor
-        // buffer, so they coexist with the opt-in. The opt-in declares intent only; where the extension is absent the backend
-        // downgrades this layout to non-descriptor-buffer-compatible and the classic descriptor-set path (Backend A) serves
-        // the pass unchanged, so no device capability gate is needed here.
+        // The six sampled inputs are global-heap reads selected by push constants. Retain the sparse local UAV bindings
+        // (6/7) rather than renumbering the ABI; Backend C's descriptor-buffer block now contains only those two writes.
+        // Backend A continues through the identical heap-backed shader contract using descriptor indexing.
         layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_REPROJECT_MERGE_BINDING_SOFT_TRACE, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_IN, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_IN, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_CURR, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_PREV, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_SHADOW_REPROJECT_MERGE_BINDING_GBUFFER_WORLDPOS, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_OUT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_OUT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowReprojectMergePushConstants)));
@@ -1228,6 +1173,13 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
         .setComputeShader(rayTracingState().m_shadowReprojectMergeShader)
         .addBindingLayout(rayTracingState().m_shadowReprojectMergeBindingLayout)
     ;
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(heap.isInitialized()){
+        pipelineDesc
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
+    }
     rayTracingState().m_shadowReprojectMergePipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowReprojectMergePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow reproject-merge compute pipeline"));
@@ -1252,18 +1204,11 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergeBindingSet(DeferredFram
     NWB_ASSERT(targets.shadowMomentsA);
     NWB_ASSERT(targets.shadowMomentsB);
 
-    // Two front/back sets so the accumulated-history SRV (history-in) and the accumulated-history UAV (history-out) never
-    // bind the SAME texture (the resource-state framework cannot resolve one texture to both SRV and UAV in one set):
-    //  - AtoB: histIn/momIn = A -> histOut/momOut = B  (used when m_softShadowHistoryFrontIsA == 1, i.e. A holds this frame's
-    //          incoming history; the merge writes B, which the temporal-histB resolve variant then denoises).
-    //  - BtoA: histIn/momIn = B -> histOut/momOut = A  (the mirror; A becomes the accumulated buffer the resolve reads).
-    // All other bindings are shared: SOFT_TRACE=soft-A, GEOMETRY_CURR/PREV, WORLDPOS=the full-res world-position G-buffer.
+    // Two front/back local sets retain only the output UAVs. The incoming history, raw trace, geometry caches, and
+    // world-position now arrive through immutable target-generation heap slots, but the A/B output roles still need
+    // separate local sets so their descriptor-buffer blocks remain immutable.
     auto* device = graphics().getDevice();
     const __hidden_rt_softshadow::ShadowReprojectMergeTextures textures{
-        targets.shadowSoftHalfA.get(),
-        targets.shadowSoftGeometry.get(),
-        targets.shadowSoftGeometryPrev.get(),
-        targets.worldPosition.get(),
         targets.shadowHistA.get(),
         targets.shadowHistB.get(),
         targets.shadowMomentsA.get(),
@@ -1272,10 +1217,6 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergeBindingSet(DeferredFram
     const __hidden_rt_softshadow::ShadowReprojectMergeBindingCache cache{
         rayTracingState().m_shadowReprojectMergeBindingSetAtoB,
         rayTracingState().m_shadowReprojectMergeBindingSetBtoA,
-        rayTracingState().m_shadowReprojectMergeSoftTrace,
-        rayTracingState().m_shadowReprojectMergeGeometryCurr,
-        rayTracingState().m_shadowReprojectMergeGeometryPrev,
-        rayTracingState().m_shadowReprojectMergeWorldPosition,
         rayTracingState().m_shadowReprojectMergeHistA,
         rayTracingState().m_shadowReprojectMergeHistB,
         rayTracingState().m_shadowReprojectMergeMomentsA,
@@ -1297,11 +1238,8 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergeBindingSet(DeferredFram
 
 
 bool RendererRayTracingSystem::ensureShadowTransparentReprojectMergeBindingSet(DeferredFrameTargets& targets){
-    // The two front/back TRANSPARENT reproject-merge binding sets (mirror of ensureShadowReprojectMergeBindingSet,
-    // over the colored buffers). They drive the SAME m_shadowReprojectMergePipeline (the merge shader is fully RGB-safe and
-    // reused verbatim); only the SOFT_TRACE / HISTORY / MOMENTS sources are the transparent buffers. The GEOMETRY_CURR/PREV
-    // caches + the full-res world-position are SHARED with the opaque merge (same receivers), so this frame's transparent
-    // history reprojects through the same stashed prevWorldToClip + gates against the same geometry as the opaque history.
+    // The two front/back TRANSPARENT reproject-merge sets mirror the opaque output-UAV sets. Their raw trace,
+    // history/moments inputs, shared geometry caches, and full-res world-position are heap reads selected per dispatch.
     NWB_ASSERT(rayTracingState().m_shadowReprojectMergeBindingLayout);
     NWB_ASSERT(targets.transparentSoftHalf);
     NWB_ASSERT(targets.shadowSoftGeometry);
@@ -1314,10 +1252,6 @@ bool RendererRayTracingSystem::ensureShadowTransparentReprojectMergeBindingSet(D
 
     auto* device = graphics().getDevice();
     const __hidden_rt_softshadow::ShadowReprojectMergeTextures textures{
-        targets.transparentSoftHalf.get(),
-        targets.shadowSoftGeometry.get(),
-        targets.shadowSoftGeometryPrev.get(),
-        targets.worldPosition.get(),
         targets.transparentHistA.get(),
         targets.transparentHistB.get(),
         targets.transparentMomentsA.get(),
@@ -1326,10 +1260,6 @@ bool RendererRayTracingSystem::ensureShadowTransparentReprojectMergeBindingSet(D
     const __hidden_rt_softshadow::ShadowReprojectMergeBindingCache cache{
         rayTracingState().m_transparentReprojectMergeBindingSetAtoB,
         rayTracingState().m_transparentReprojectMergeBindingSetBtoA,
-        rayTracingState().m_transparentReprojectMergeSoftTrace,
-        rayTracingState().m_transparentReprojectMergeGeometryCurr,
-        rayTracingState().m_transparentReprojectMergeGeometryPrev,
-        rayTracingState().m_transparentReprojectMergeWorldPosition,
         rayTracingState().m_transparentReprojectMergeHistA,
         rayTracingState().m_transparentReprojectMergeHistB,
         rayTracingState().m_transparentReprojectMergeMomentsA,
@@ -1362,8 +1292,8 @@ void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTarget
     //    make the merge read the WRONG buffer, so the hist/moments handles are deliberately NOT swapped -- only the selector.
     //  - GEOMETRY PING-PONG (a real HANDLE SWAP): unlike history, the geometry cache has no per-set selector -- the
     //    downsample ALWAYS writes shadowSoftGeometry and the merge ALWAYS reads shadowSoftGeometryPrev, so this frame's curr
-    //    must physically become next frame's prev. The handle swap changes which texture each role points at, so the
-    //    geometry-downsample + merge binding sets rebuild next frame via their tracked-pointer compare (as a resize does).
+    //    must physically become next frame's prev. The handle swap changes which texture each heap role names without
+    //    rewriting an in-flight descriptor; only the geometry-downsample output set tracks the changing current target.
     //  - SEED / VALID: the first merge has now run, so history is valid from next frame on.
     if(!rayTracingState().m_softShadowTemporalReady)
         return;

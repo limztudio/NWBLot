@@ -21,20 +21,22 @@
 // visibility (the a-trous then reads THIS instead of the raw trace, and it becomes next frame's history) + the next moments.
 #define NWB_SHADOW_REPROJECT_MERGE_SET 0
 
-// SRV: the raw half-res trace this frame -- the "current" sample the blend leans on. Texture2DArray, one layer per
+// Logical SRV positions retained for the pass ABI documentation. These six reads now come from global descriptor-heap
+// slots in the push constants, so they no longer occupy entries in the local descriptor-buffer layout.
+// Heap SRV: the raw half-res trace this frame -- the "current" sample the blend leans on. Texture2DArray, one layer per
 // shadow slot.
 #define NWB_SHADOW_REPROJECT_MERGE_BINDING_SOFT_TRACE       0
-// SRV: the PREVIOUS frame's accumulated visibility (the history buffer), Texture2DArray. Reprojected + gated + blended.
+// Heap SRV: the PREVIOUS frame's accumulated visibility (the history buffer), Texture2DArray. Reprojected + gated + blended.
 #define NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_IN       1
-// SRV: the PREVIOUS frame's moments (Texture2DArray: .x = m1 (luma), .y = m2 (luma^2), .z = n (history length in frames)).
+// Heap SRV: the PREVIOUS frame's moments (Texture2DArray: .x = m1 (luma), .y = m2 (luma^2), .z = n (history length in frames)).
 #define NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_IN       2
-// SRV: the CURRENT half-res geometry cache (shadowSoftGeometry: .xy = octahedral receiver normal, .z = camera distance,
+// Heap SRV: the CURRENT half-res geometry cache (shadowSoftGeometry: .xy = octahedral receiver normal, .z = camera distance,
 // .w = validity) -- the receiver geometry the reprojected pixel is compared AGAINST for the disocclusion gate.
 #define NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_CURR    3
-// SRV: the PREVIOUS half-res geometry cache (shadowSoftGeometryPrev) sampled at the reprojected history texel -- the
+// Heap SRV: the PREVIOUS half-res geometry cache (shadowSoftGeometryPrev) sampled at the reprojected history texel -- the
 // disocclusion gate compares curr-vs-prev camera distance (plane test) + normal agreement to detect a moving RECEIVER.
 #define NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_PREV    4
-// SRV: the FULL-res world-position G-buffer (Texture2D). The merge reads the CURRENT world position at the half pixel's
+// Heap SRV: the FULL-res world-position G-buffer (Texture2D). The merge reads the CURRENT world position at the half pixel's
 // 2x texel (the geometry cache stores camera-distance, not world-pos, so the reprojection reads world-pos directly, exactly
 // like the geometry downsample does) and projects it through prevWorldToClip to find the history texel.
 #define NWB_SHADOW_REPROJECT_MERGE_BINDING_GBUFFER_WORLDPOS 5

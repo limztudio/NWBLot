@@ -327,10 +327,6 @@ void RendererRayTracingState::invalidateResources(){
     m_shadowReprojectMergeHistB = nullptr;
     m_shadowReprojectMergeMomentsA = nullptr;
     m_shadowReprojectMergeMomentsB = nullptr;
-    m_shadowReprojectMergeSoftTrace = nullptr;
-    m_shadowReprojectMergeGeometryCurr = nullptr;
-    m_shadowReprojectMergeGeometryPrev = nullptr;
-    m_shadowReprojectMergeWorldPosition = nullptr;
     m_shadowResolveBindingSetTemporalHistA.reset();
     m_shadowResolveBindingSetTemporalHistB.reset();
     m_shadowResolveBindingSetTemporalHistATex = nullptr;
@@ -357,14 +353,10 @@ void RendererRayTracingState::invalidateResources(){
     m_transparentResolveBindingSetNormal = nullptr;
     m_transparentReprojectMergeBindingSetAtoB.reset();
     m_transparentReprojectMergeBindingSetBtoA.reset();
-    m_transparentReprojectMergeSoftTrace = nullptr;
     m_transparentReprojectMergeHistA = nullptr;
     m_transparentReprojectMergeHistB = nullptr;
     m_transparentReprojectMergeMomentsA = nullptr;
     m_transparentReprojectMergeMomentsB = nullptr;
-    m_transparentReprojectMergeGeometryCurr = nullptr;
-    m_transparentReprojectMergeGeometryPrev = nullptr;
-    m_transparentReprojectMergeWorldPosition = nullptr;
     m_softTransparentReady = false;
     m_softTransparentTemporalReady = false;
     m_swShadowEdgeStatsPendingTick = 0u;

@@ -203,8 +203,8 @@ private:
     void dispatchSoftShadowDenoiseAndTransparentFold(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 frameIndex, u32 softGroupsX, u32 softGroupsY);
     // Soft opaque shadow TEMPORAL accumulation: the reproject-merge pass
     // inserted per slot between the soft trace and the a-trous resolve. ensureShadowReprojectMergePipeline builds its
-    // pipeline + layout; ensureShadowReprojectMergeBindingSet builds the two front/back sets (history-in SRV and history-out
-    // UAV never alias). swapSoftShadowTemporalHistory stashes this frame's worldToClip for next-frame reprojection +
+    // pipeline + layout; ensureShadowReprojectMergeBindingSet builds the two front/back output-UAV sets while heap slots
+    // select all sampled inputs. swapSoftShadowTemporalHistory stashes this frame's worldToClip for next-frame reprojection +
     // ping-pongs the history / moments / geometry buffers at frame end (guarded on m_softShadowTemporalReady).
     [[nodiscard]] bool ensureShadowReprojectMergePipeline();
     [[nodiscard]] bool ensureShadowReprojectMergeBindingSet(DeferredFrameTargets& targets);

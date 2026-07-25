@@ -430,7 +430,8 @@ static_assert(sizeof(ShadowGeometryDownsamplePushConstants) == sizeof(u32) * 8u,
 // CPU mirror of shadow_reproject_merge_cs.slang's NwbShadowReprojectMergePushConstants (temporal accumulation):
 // the STASHED previous-frame worldToClip (64-byte row-major matrix -- Float44U's raw[16] is the row-major dump of the
 // mesh-view worldToClip, matching the shader's `row_major float4x4`) + the full/half dims + the active shadow-slot range +
-// the history-valid flag + one pad word to a 16-byte multiple. 64 + 8*4 = 96 bytes (within the 128-byte push guarantee).
+// the history-valid flag + six global-heap sampled-image slots. Three pad words complete four scalar lanes:
+// 64 + 16*4 = 128 bytes.
 struct ShadowReprojectMergePushConstants{
     Float44U prevWorldToClip = {};
     u32 width = 0u;          // FULL-res width (to read the world-position G-buffer at the 2x texel)
@@ -439,10 +440,18 @@ struct ShadowReprojectMergePushConstants{
     u32 halfHeight = 0u;     // HALF-res height
     u32 lightSlotStart = 0u; // first active SOFT shadow slot to process
     u32 lightSlotCount = 0u; // number of contiguous active SOFT slots (one per dispatch -> 1)
-    u32 historyValid = 0u;   // 0 = no valid history this frame (first frame / after resize) -> force n=0 (pure current)
-    u32 pad0 = 0u;           // pad to a 16-byte multiple (mirrors the shader's pad0)
+    u32 historyValid = 0u;       // 0 = no valid history this frame (first frame / after resize) -> force n=0 (pure current)
+    u32 softTraceSlot = 0u;      // SampledImage2DArray: raw trace for this merge signal
+    u32 historyInSlot = 0u;      // SampledImage2DArray: selected incoming history A/B
+    u32 momentsInSlot = 0u;      // SampledImage2DArray: selected incoming moments A/B
+    u32 geometryCurrSlot = 0u;   // SampledImage: current half-res geometry cache
+    u32 geometryPrevSlot = 0u;   // SampledImage: previous half-res geometry cache
+    u32 worldPositionSlot = 0u;  // SampledImage: full-res world-position G-buffer
+    u32 pad0 = 0u;
+    u32 pad1 = 0u;
+    u32 pad2 = 0u;
 };
-static_assert(sizeof(ShadowReprojectMergePushConstants) == sizeof(f32) * 16u + sizeof(u32) * 8u, "ShadowReprojectMergePushConstants must match the shader push-constant layout");
+static_assert(sizeof(ShadowReprojectMergePushConstants) == sizeof(f32) * 16u + sizeof(u32) * 16u, "ShadowReprojectMergePushConstants must match the shader push-constant layout");
 
 // CPU mirror of the caustic photon producer push constants, shared by BOTH the software compute producer
 // (caustic/caustic_photon_sw_cs.slang) and the hardware ray-traced producer (caustic/caustic_photon_hw_raygen.slang).

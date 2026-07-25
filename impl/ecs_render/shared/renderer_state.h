@@ -358,18 +358,14 @@ struct RtSceneBvhState{
     const Core::Texture* m_transparentResolveBindingSetWorldPos = nullptr;
     const Core::Texture* m_transparentResolveBindingSetNormal = nullptr;
     // The two front/back TRANSPARENT reproject-merge binding sets (SAME m_shadowReprojectMergePipeline/Layout drive both;
-    // the merge shader is fully RGB-safe and reused verbatim). Built over transparentSoftHalf (SOFT_TRACE) + transparentHist
-    // A/B (history) + transparentMomentsA/B (moments) + the SHARED shadowSoftGeometry/Prev + full-res world-position.
+    // the merge shader is fully RGB-safe and reused verbatim). They retain only the A/B output UAV roles; all inputs are
+    // target-generation global-heap reads selected by the per-dispatch push constants.
     Core::BindingSetHandle m_transparentReprojectMergeBindingSetAtoB; // histIn/momIn = A -> histOut/momOut = B
     Core::BindingSetHandle m_transparentReprojectMergeBindingSetBtoA; // histIn/momIn = B -> histOut/momOut = A
-    const Core::Texture* m_transparentReprojectMergeSoftTrace = nullptr;
     const Core::Texture* m_transparentReprojectMergeHistA = nullptr;
     const Core::Texture* m_transparentReprojectMergeHistB = nullptr;
     const Core::Texture* m_transparentReprojectMergeMomentsA = nullptr;
     const Core::Texture* m_transparentReprojectMergeMomentsB = nullptr;
-    const Core::Texture* m_transparentReprojectMergeGeometryCurr = nullptr;
-    const Core::Texture* m_transparentReprojectMergeGeometryPrev = nullptr;
-    const Core::Texture* m_transparentReprojectMergeWorldPosition = nullptr;
     // Software caustic photon producer (P3) — the no-hardware-ray-tracing fallback. It reuses the same software
     // scene/instance + per-mesh BVH buffers the SW shadow trace builds (the shared m_swShadowMesh* table serves
     // shadow, caustic, and GI alike), and adds the caustic-specific inputs
@@ -685,10 +681,9 @@ struct RtSoftShadowState{
     // Ping-pong selector: 1 = shadowHistA/MomentsA hold the INCOMING history this frame (merge writes B), 0 = the reverse.
     // Flipped by the frame-end swap. Also selects which merge binding set + which temporal resolve SOFT_HALF source is used.
     u32 m_softShadowHistoryFrontIsA = 1u;
-    // The reproject-merge pipeline (mirrors the m_shadowResolve* block). Two binding sets, front/back, so the history-in
-    // SRV and history-out UAV never alias the same texture: AtoB (histIn=A,momIn=A -> histOut=B,momOut=B) and BtoA (mirror).
-    // Both share SOFT_TRACE=shadowSoftHalfA, GEOMETRY_CURR=shadowSoftGeometry, GEOMETRY_PREV=shadowSoftGeometryPrev,
-    // WORLDPOS=targets.worldPosition. Rebuilt (tracked-pointer compare) when any bound target changes (resize / frame-end swap).
+    // The reproject-merge pipeline (mirrors the m_shadowResolve* block). Its two local binding sets retain the front/back
+    // output UAV roles: AtoB writes B and BtoA writes A. All SRVs use immutable target-generation global-heap handles, so
+    // these local sets only rebuild when an output history/moments target changes.
     Core::BindingLayoutHandle m_shadowReprojectMergeBindingLayout;
     Core::ShaderHandle m_shadowReprojectMergeShader;
     Core::ComputePipelineHandle m_shadowReprojectMergePipeline;
@@ -698,10 +693,6 @@ struct RtSoftShadowState{
     const Core::Texture* m_shadowReprojectMergeHistB = nullptr;
     const Core::Texture* m_shadowReprojectMergeMomentsA = nullptr;
     const Core::Texture* m_shadowReprojectMergeMomentsB = nullptr;
-    const Core::Texture* m_shadowReprojectMergeSoftTrace = nullptr;
-    const Core::Texture* m_shadowReprojectMergeGeometryCurr = nullptr;
-    const Core::Texture* m_shadowReprojectMergeGeometryPrev = nullptr;
-    const Core::Texture* m_shadowReprojectMergeWorldPosition = nullptr;
 };
 
 

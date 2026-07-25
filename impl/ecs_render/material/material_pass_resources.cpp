@@ -25,9 +25,9 @@ bool RendererMaterialSystem::createMeshShaderResources(){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
         // The ordinary material mesh set is resource-only, so Backend C can use it directly in descriptor-buffer
-        // pipelines. Backend A keeps consuming the same shape through classic descriptor sets.
+        // pipelines. Immutable mesh streams moved to the global heap; this local set deliberately retains only the
+        // per-frame instance/material/view resources. Backend A consumes the same shape through descriptor sets.
         bindingLayoutDesc.setUseDescriptorBuffer(true);
-        RendererMeshSystem::addMeshSourceBindingLayoutItems(bindingLayoutDesc);
         RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
 
@@ -42,9 +42,10 @@ bool RendererMaterialSystem::createMeshShaderResources(){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
         // This pure-resource twin is consumed by AVBOIT material pipelines together with the global resource/sampler
-        // heap, including CSG now that its graphics tail is descriptor-buffer compatible.
+        // heap. It remains separate from the ordinary frame set for now even though immutable mesh geometry is no
+        // longer local; the next slice can retire that redundant binding-set split without conflating it with this
+        // source-stream migration.
         bindingLayoutDesc.setUseDescriptorBuffer(true);
-        RendererMeshSystem::addMeshSourceBindingLayoutItems(bindingLayoutDesc);
         RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
 
@@ -63,7 +64,6 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         bindingLayoutDesc.setUseDescriptorBuffer(true);
-        RendererMeshSystem::addMeshSourceBindingLayoutItems(bindingLayoutDesc);
         RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(s_MeshGeneratedVertexBindingSlot, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
@@ -232,6 +232,10 @@ bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Mater
             ready = false;
             return;
         }
+        if(!m_renderer.meshSystem().createMeshGeometryHeapHandles(mesh)){
+            ready = false;
+            return;
+        }
         const bool usesBindlessAvboitResources =
             MaterialPipelinePassUsesRendererAvboit(drawItem.pipelineKey.pass)
         ;
@@ -277,6 +281,10 @@ bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Ma
         if(!ready)
             return;
         if(!pipelineResources.computePipeline || !pipelineResources.emulationPipeline){
+            ready = false;
+            return;
+        }
+        if(!m_renderer.meshSystem().createMeshGeometryHeapHandles(mesh)){
             ready = false;
             return;
         }

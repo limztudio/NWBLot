@@ -33,11 +33,14 @@ public:
     [[nodiscard]] bool createMeshBindingSet(MeshResources& mesh);
     [[nodiscard]] bool createBindlessMeshBindingSet(MeshResources& mesh);
     [[nodiscard]] bool createComputeBindingSet(MeshResources& mesh);
+    [[nodiscard]] bool createMeshGeometryHeapHandles(MeshResources& mesh);
+    [[nodiscard]] bool meshGeometryHeapHandlesReady(const MeshResources& mesh)const;
+    void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const;
+    void releaseMeshGeometryHeapHandles(MeshResources& mesh);
+    void releaseAllMeshGeometryHeapHandles();
     [[nodiscard]] bool meshFrameBindingResourcesReady(const tchar* context)const;
-    void addMeshSourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const;
     void addMeshFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const;
     void addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const;
-    static void addMeshSourceBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc);
     static void addMeshFrameBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc);
     template<typename BindingHandler>
     static void forEachMeshSourceBindingSlot(BindingHandler&& handler){

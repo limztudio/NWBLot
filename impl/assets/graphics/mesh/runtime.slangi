@@ -13,6 +13,7 @@
 #include "meshlet_payload.slangi"
 #include "binding_slots.h"
 #include "runtime_constants.h"
+#include "../bindless/bindless_heap_mesh.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -116,6 +117,10 @@ half4 nwbMeshGeneratedVertexColor(const NwbMeshGeneratedVertex generatedVertex){
 }
 
 groupshared uint g_NwbMeshletRasterFlags;
+// Every invocation in a meshlet group renders one draw item, so all source-stream slots are identical. Load them
+// once from the local per-draw instance record before any heap access instead of rereading that record at every
+// vertex/attribute fetch.
+groupshared uint g_NwbMeshGeometryHeapSlots[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
 
 void nwbMeshSetMeshletRasterFlags(const uint rasterFlags, const uint groupThreadIndex){
     if(groupThreadIndex == 0u)
@@ -164,18 +169,6 @@ NwbMeshGeneratedVertex nwbMeshBuildGeneratedVertex(
 
 #include "material_typed_bindings.slangi"
 
-[[vk::binding(NWB_MESH_BINDING_POSITION, NWB_MESH_SET)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbMeshPositions;
-[[vk::binding(NWB_MESH_BINDING_NORMAL, NWB_MESH_SET)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbMeshNormals;
-[[vk::binding(NWB_MESH_BINDING_TANGENT, NWB_MESH_SET)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbMeshTangents;
-[[vk::binding(NWB_MESH_BINDING_UV0, NWB_MESH_SET)]] StructuredBuffer<NwbMeshUv0, Std430DataLayout> g_NwbMeshUv0;
-[[vk::binding(NWB_MESH_BINDING_COLOR, NWB_MESH_SET)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbMeshColors;
-[[vk::binding(NWB_MESH_BINDING_MESHLET_DESC, NWB_MESH_SET)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbMeshlets;
-[[vk::binding(NWB_MESH_BINDING_MESHLET_BOUNDS, NWB_MESH_SET)]] ByteAddressBuffer g_NwbMeshletBounds;
-[[vk::binding(NWB_MESH_BINDING_MESHLET_POSITION_REFS, NWB_MESH_SET)]] ByteAddressBuffer g_NwbMeshletPositionRefDeltas;
-[[vk::binding(NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS, NWB_MESH_SET)]] ByteAddressBuffer g_NwbMeshletAttributeRefDeltas;
-[[vk::binding(NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS, NWB_MESH_SET)]] StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbMeshletLocalVertexRefs;
-[[vk::binding(NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES, NWB_MESH_SET)]] ByteAddressBuffer g_NwbMeshletPrimitiveIndices;
-
 struct NwbMeshPushConstants{
     uint4 dispatch;
     float4 viewportRect;
@@ -213,6 +206,20 @@ uint nwbMeshMaterialConstantByteOffset(){
 }
 #endif
 
+void nwbMeshLoadGeometryHeapSlots(const uint groupThreadIndex){
+    if(groupThreadIndex == 0u){
+        const NwbMeshInstanceData instance = g_NwbMeshInstances[nwbMeshInstanceIndex()];
+        for(uint slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
+            g_NwbMeshGeometryHeapSlots[slotIndex] = instance.geometryHeapSlots[slotIndex];
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+}
+
+uint nwbMeshGeometryHeapSlot(const uint meshBindingSlot){
+    return g_NwbMeshGeometryHeapSlots[meshBindingSlot];
+}
+
 uint nwbMeshDispatchFlags(){
     return g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS];
 }
@@ -234,12 +241,16 @@ float3 nwbMeshTransformDirection(float3 direction, const NwbMeshInstanceData ins
 
 uint nwbMeshLoadMeshletPrimitiveIndex(const uint primitiveIndex){
     const uint byteOffset = primitiveIndex;
-    const uint word = g_NwbMeshletPrimitiveIndices.Load(byteOffset & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
+    const uint word = NwbHeapRawBuffer(
+        nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES)
+    ).Load(byteOffset & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
     return (word >> ((byteOffset & NWB_MESHLET_PACKED_WORD_BYTE_MASK) * NWB_MESHLET_PACKED_BYTE_BITS)) & NWB_MESHLET_PACKED_BYTE_MASK;
 }
 
 NwbMeshletLocalVertexRef nwbMeshLoadMeshletLocalVertexRef(const NwbMeshletDesc meshlet, const uint localVertexIndex){
-    return g_NwbMeshletLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex];
+    return NwbHeapMeshletLocalVertexRefs(
+        nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS)
+    )[meshlet.localVertexOffset + localVertexIndex];
 }
 
 NwbMeshletPositionStreamRef nwbMeshLoadMeshletPositionRef(
@@ -247,7 +258,13 @@ NwbMeshletPositionStreamRef nwbMeshLoadMeshletPositionRef(
     const NwbMeshletRefDecodeInfo decodeInfo,
     const uint localDeformedPosition
 ){
-    return nwbMeshletDecodePositionRef(g_NwbMeshletPositionRefDeltas, meshlet, decodeInfo, localDeformedPosition, false);
+    return nwbMeshletDecodePositionRef(
+        NwbHeapRawBuffer(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_POSITION_REFS)),
+        meshlet,
+        decodeInfo,
+        localDeformedPosition,
+        false
+    );
 }
 
 NwbMeshletAttributeStreamRef nwbMeshLoadMeshletAttributeRef(
@@ -255,7 +272,12 @@ NwbMeshletAttributeStreamRef nwbMeshLoadMeshletAttributeRef(
     const NwbMeshletRefDecodeInfo decodeInfo,
     const uint localAttribute
 ){
-    return nwbMeshletDecodeAttributeRef(g_NwbMeshletAttributeRefDeltas, meshlet, decodeInfo, localAttribute);
+    return nwbMeshletDecodeAttributeRef(
+        NwbHeapRawBuffer(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS)),
+        meshlet,
+        decodeInfo,
+        localAttribute
+    );
 }
 
 NwbMeshSourceVertex nwbMeshLoadSourceVertex(
@@ -277,10 +299,18 @@ NwbMeshSourceVertex nwbMeshLoadSourceVertex(
     sourceVertex.position = objectPosition;
     sourceVertex.worldPosition = worldPosition;
     sourceVertex.clipPosition = clipPosition;
-    sourceVertex.normal = nwbMeshLoadHalf4(g_NwbMeshNormals[attributeRef.normal]).xyz;
-    sourceVertex.tangent = nwbMeshLoadHalf4(g_NwbMeshTangents[attributeRef.tangent]);
-    sourceVertex.uv0 = nwbMeshLoadUv0(g_NwbMeshUv0[attributeRef.uv0]);
-    sourceVertex.color = nwbMeshLoadHalf4(g_NwbMeshColors[attributeRef.color]);
+    sourceVertex.normal = nwbMeshLoadHalf4(
+        NwbHeapMeshHalf4s(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_NORMAL))[attributeRef.normal]
+    ).xyz;
+    sourceVertex.tangent = nwbMeshLoadHalf4(
+        NwbHeapMeshHalf4s(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_TANGENT))[attributeRef.tangent]
+    );
+    sourceVertex.uv0 = nwbMeshLoadUv0(
+        NwbHeapMeshUv0s(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_UV0))[attributeRef.uv0]
+    );
+    sourceVertex.color = nwbMeshLoadHalf4(
+        NwbHeapMeshHalf4s(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_COLOR))[attributeRef.color]
+    );
     return sourceVertex;
 }
 

@@ -21,7 +21,10 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     if(meshletIndex >= nwbMeshletCount())
         return;
 
-    const NwbMeshletDesc meshlet = g_NwbMeshlets[meshletIndex];
+    nwbMeshLoadGeometryHeapSlots(groupThreadID.x);
+    const NwbMeshletDesc meshlet = NwbHeapMeshletDescs(
+        nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_DESC)
+    )[meshletIndex];
     const NwbMeshletRefDecodeInfo decodeInfo = nwbMeshletBuildRefDecodeInfo(meshlet);
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbMeshletCullContext cullContext = nwbMeshBuildMeshletCullContext(meshletIndex, instance);
@@ -109,7 +112,10 @@ void main(
     }
 
     const uint groupThreadIndex = groupThreadID.x;
-    const NwbMeshletDesc meshlet = g_NwbMeshlets[meshletIndex];
+    nwbMeshLoadGeometryHeapSlots(groupThreadIndex);
+    const NwbMeshletDesc meshlet = NwbHeapMeshletDescs(
+        nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_DESC)
+    )[meshletIndex];
     const NwbMeshletRefDecodeInfo decodeInfo = nwbMeshletBuildRefDecodeInfo(meshlet);
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbMeshletCullContext cullContext = nwbMeshBuildMeshletCullContext(meshletIndex, instance);

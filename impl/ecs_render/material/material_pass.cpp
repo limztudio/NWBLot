@@ -393,6 +393,13 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     ) -> bool{
         NWB_ASSERT(mesh.valid());
 
+        const bool meshGeometryHeapReady = lookupMode == RendererResourceLookupMode::CreateMissing
+            ? m_renderer.meshSystem().createMeshGeometryHeapHandles(mesh)
+            : m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh)
+        ;
+        if(!meshGeometryHeapReady)
+            return false;
+
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
 
         MaterialSurfaceInfo* materialInfo = nullptr;
@@ -451,7 +458,9 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 return Limit<u32>::s_Max;
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
-            instanceData.push_back(ECSRenderDetail::BuildInstanceGpuData(transform, typedRanges));
+            InstanceGpuData instance = ECSRenderDetail::BuildInstanceGpuData(transform, typedRanges);
+            m_renderer.meshSystem().populateMeshGeometryHeapSlots(instance, mesh);
+            instanceData.push_back(Move(instance));
             if(csgReceiverLookupPtr)
                 csgFrameData.receiverRanges.push_back(CsgReceiverRangeGpuData{});
 #if defined(NWB_DEBUG)

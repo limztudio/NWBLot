@@ -419,8 +419,8 @@ bool RendererMaterialSystem::createRendererPipeline(
         avboitState().m_accumulateBindingLayout
     };
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-    if(usesBindlessAvboitResources && !heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT material pipeline requires the global descriptor heap"));
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material geometry pipeline requires the global descriptor heap"));
         return failMaterialPipeline();
     }
 
@@ -490,12 +490,14 @@ bool RendererMaterialSystem::createRendererPipeline(
             return false;
         if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(pipelineDesc, csgBindingUse, csgBindingLayouts))
             return false;
-        if(usesBindlessAvboitResources){
-            pipelineDesc
-                .addBindingLayout(heap.getResourceLayout())
-                .addBindingLayout(heap.getSamplerLayout())
-            ;
-        }
+        // The mesh stage resolves every immutable geometry stream through the global StorageBuffer heap. Keep both
+        // fixed heap layouts in every mesh pipeline so Backend A/Binder and Backend C descriptor-buffer binding use
+        // the same set-8/9 contract; the sampler layout is part of that frozen heap surface even though geometry uses
+        // only the resource table today.
+        pipelineDesc
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
 
         resources.meshletPipeline = device->createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
         if(!resources.meshletPipeline){
@@ -542,6 +544,12 @@ bool RendererMaterialSystem::createRendererPipeline(
             return false;
         if(!__hidden_material_pipeline::AddCsgComputeBindingLayouts(computeDesc, csgBindingUse, csgBindingLayouts))
             return false;
+        // The compute-emulation mesh stage shares the same heap-backed source-stream runtime as the mesh-shader
+        // path, so it needs the persistent tables before its dispatch as well.
+        computeDesc
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
         resources.computePipeline = device->createComputePipeline(computeDesc);
         if(!resources.computePipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), StringConvert(materialKey.c_str()));

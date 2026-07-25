@@ -123,6 +123,120 @@ bool RendererMeshSystem::createComputeBindingSet(MeshResources& mesh){
     return true;
 }
 
+bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
+    if(meshGeometryHeapHandlesReady(mesh))
+        return true;
+
+    auto* device = graphics().getDevice();
+    if(!device){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' cannot register geometry without a graphics device")
+            , StringConvert(mesh.meshName.c_str())
+        );
+        return false;
+    }
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' requires the initialized global descriptor heap")
+            , StringConvert(mesh.meshName.c_str())
+        );
+        return false;
+    }
+
+    // A failed earlier attempt leaves no live handles behind (the failure path below resets every acquired slot),
+    // so a non-empty partial set signals a broken lifetime transition rather than something we can safely merge.
+    for(const Core::GpuDescriptorHandle handle : mesh.geometryHeapHandles){
+        if(handle.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has a partial geometry heap registration")
+                , StringConvert(mesh.meshName.c_str())
+            );
+            return false;
+        }
+    }
+
+    Core::GpuDescriptorHandle acquired[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
+    bool registered = true;
+    forEachMeshSourceBuffer(mesh, [&](const u32 bindingSlot, const Core::BufferHandle& buffer, const bool){
+        if(!registered)
+            return;
+        if(!buffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no source buffer at binding {}")
+                , StringConvert(mesh.meshName.c_str())
+                , bindingSlot
+            );
+            registered = false;
+            return;
+        }
+
+        const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(!handle.valid()){
+            registered = false;
+            return;
+        }
+        if(!heap.write(handle, Core::BindingSetItem::StructuredBuffer_SRV(0u, buffer.get()))){
+            heap.free(handle);
+            registered = false;
+            return;
+        }
+        acquired[bindingSlot] = handle;
+    });
+
+    if(!registered){
+        for(const Core::GpuDescriptorHandle handle : acquired){
+            if(handle.valid())
+                heap.free(handle);
+        }
+        return false;
+    }
+
+    forEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool){
+        mesh.geometryHeapHandles[bindingSlot] = acquired[bindingSlot];
+    });
+    NWB_ASSERT(meshGeometryHeapHandlesReady(mesh));
+    return true;
+}
+
+bool RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)const{
+    bool ready = true;
+    forEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool){
+        const Core::GpuDescriptorHandle handle = mesh.geometryHeapHandles[bindingSlot];
+        ready = ready
+            && handle.valid()
+            && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        ;
+    });
+    return ready;
+}
+
+void RendererMeshSystem::populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const{
+    NWB_ASSERT(meshGeometryHeapHandlesReady(mesh));
+    for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
+        outInstance.geometryHeapSlots[slotIndex] = 0u;
+    forEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool){
+        outInstance.geometryHeapSlots[bindingSlot] = mesh.geometryHeapHandles[bindingSlot].slot();
+    });
+}
+
+void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
+    auto* device = graphics().getDevice();
+    if(device && device->getDescriptorHeap().isInitialized()){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+        for(Core::GpuDescriptorHandle& handle : mesh.geometryHeapHandles){
+            if(handle.valid())
+                heap.free(handle);
+            handle = Core::GpuDescriptorHandle::invalid();
+        }
+        return;
+    }
+
+    for(Core::GpuDescriptorHandle& handle : mesh.geometryHeapHandles)
+        handle = Core::GpuDescriptorHandle::invalid();
+}
+
+void RendererMeshSystem::releaseAllMeshGeometryHeapHandles(){
+    for(auto it = meshState().m_meshes.begin(); it != meshState().m_meshes.end(); ++it)
+        releaseMeshGeometryHeapHandles(it.value());
+}
+
 bool RendererMeshSystem::meshFrameBindingResourcesReady(const tchar* context)const{
     if(!drawState().m_instanceBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires an instance buffer"), context);
@@ -140,15 +254,6 @@ bool RendererMeshSystem::meshFrameBindingResourcesReady(const tchar* context)con
     return true;
 }
 
-void RendererMeshSystem::addMeshSourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const{
-    forEachMeshSourceBuffer(mesh, [&](const u32 bindingSlot, const Core::BufferHandle& buffer, const bool rawView){
-        if(rawView)
-            bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(bindingSlot, buffer.get()));
-        else
-            bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(bindingSlot, buffer.get()));
-    });
-}
-
 void RendererMeshSystem::addMeshFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const{
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshInstanceBindingSlot, drawState().m_instanceBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(s_MeshViewBindingSlot, drawState().m_meshViewBuffer.get()));
@@ -156,17 +261,8 @@ void RendererMeshSystem::addMeshFrameBindingItems(Core::BindingSetDesc& bindingS
 }
 
 void RendererMeshSystem::addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const{
-    addMeshSourceBindingItems(bindingSetDesc, mesh);
+    static_cast<void>(mesh);
     addMeshFrameBindingItems(bindingSetDesc);
-}
-
-void RendererMeshSystem::addMeshSourceBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
-    forEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool rawView){
-        if(rawView)
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(bindingSlot, 1));
-        else
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(bindingSlot, 1));
-    });
 }
 
 void RendererMeshSystem::addMeshFrameBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){

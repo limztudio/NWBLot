@@ -31,6 +31,7 @@ struct InstanceGpuData{
     Float4 rotation = Float4(0.f, 0.f, 0.f, 1.f);
     Float3UInt translation = Float3UInt(0.f, 0.f, 0.f, 0u);
     Float4 scale = Float4(1.f, 1.f, 1.f, 0.f);
+    u32 geometryHeapSlots[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
 };
 static_assert(offsetof(InstanceGpuData, rotation) == sizeof(f32) * NWB_MESH_INSTANCE_ROTATION_FLOAT_OFFSET, "InstanceGpuData rotation must be first");
 static_assert(offsetof(InstanceGpuData, translation) == sizeof(f32) * NWB_MESH_INSTANCE_TRANSLATION_FLOAT_OFFSET, "InstanceGpuData translation must follow rotation");
@@ -39,6 +40,10 @@ static_assert(
     "InstanceGpuData mutable offset must pack into translation.w"
 );
 static_assert(offsetof(InstanceGpuData, scale) == sizeof(f32) * NWB_MESH_INSTANCE_SCALE_FLOAT_OFFSET, "InstanceGpuData scale must follow translation payload");
+static_assert(
+    offsetof(InstanceGpuData, geometryHeapSlots) == sizeof(f32) * NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET,
+    "InstanceGpuData geometry heap slots must follow the transform payload"
+);
 static_assert(sizeof(InstanceGpuData) == sizeof(f32) * NWB_MESH_INSTANCE_FLOAT_COUNT, "InstanceGpuData stride must match the mesh shaders");
 static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must stay SIMD-aligned");
 
@@ -62,6 +67,9 @@ struct MeshResources : public RuntimeMeshBuffers{
     // Descriptor-buffer-compatible twin used by all AVBOIT material graphics pipelines, including CSG.
     Core::BindingSetHandle bindlessMeshBindingSet;
     Core::BindingSetHandle computeBindingSet;
+    // One persistent StorageBuffer heap handle per former mesh-source binding slot. Slots are lazy-created when a
+    // material draw is prepared, cached with this mesh resource, and retired before runtime meshes are replaced.
+    Core::GpuDescriptorHandle geometryHeapHandles[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
     Core::BufferHandle swBvhNodeBuffer;     // per-mesh software LBVH nodes (no-hardware-RT shadow fallback)
     Core::BufferHandle swBvhParentBuffer;   // per-mesh software LBVH parent links (persist across refits)
     Core::BindingSetHandle swBvhBindingSet; // per-mesh software LBVH build/refit binding set

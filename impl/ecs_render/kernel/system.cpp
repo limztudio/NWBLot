@@ -123,6 +123,9 @@ void RendererSystem::invalidateResources(){
     // Deferred target generations own ordinary image/sampler heap slots. Release those handles while both the target
     // resources and the device heap are still live; RendererDeferredState then drops the remaining resource handles.
     m_deferredSystem.resetDeferredFrameTargets();
+    // Mesh geometry heap descriptors retain their backing buffers independently of the MeshResources cache. Retire
+    // them before clearing that cache so descriptor slots are eventually recycled after the in-flight quarantine.
+    m_meshSystem.releaseAllMeshGeometryHeapHandles();
     m_meshState.invalidateResources();
     m_materialState.invalidateResources();
     m_drawState.invalidateResources();

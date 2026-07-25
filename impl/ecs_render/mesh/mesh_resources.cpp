@@ -463,6 +463,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
             return false;
         }
         if(foundMesh.value().runtimeMeshVersion != desc.version){
+            releaseMeshGeometryHeapHandles(foundMesh.value());
             meshState().m_meshes.erase(foundMesh);
         }
         else{
@@ -549,6 +550,7 @@ void RendererMeshSystem::pruneRuntimeMeshResources(){
             continue;
         }
 
+        releaseMeshGeometryHeapHandles(it.value());
         it = meshState().m_meshes.erase(it);
     }
 }

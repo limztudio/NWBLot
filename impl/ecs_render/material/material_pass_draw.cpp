@@ -98,12 +98,13 @@ void RendererMaterialSystem::setMaterialPassCommonBufferStates(
 }
 
 bool RendererMaterialSystem::materialPassDrawResourcesReady(const MeshResources& mesh)const{
-#if defined(NWB_DEBUG)
-    return mesh.valid() && drawState().m_instanceBuffer && drawState().m_meshViewBuffer && drawState().m_materialTypedBuffer;
-#else
-    static_cast<void>(mesh);
-    return true;
-#endif
+    return
+        mesh.valid()
+        && m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh)
+        && drawState().m_instanceBuffer
+        && drawState().m_meshViewBuffer
+        && drawState().m_materialTypedBuffer
+    ;
 }
 
 bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems){
@@ -307,8 +308,8 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         __hidden_material_pass_draw::AddCsgGraphicsBindingSets(meshletState, csgBindingUse, csgBindingSets);
 
         context.commandList.setMeshletState(meshletState);
-        if(usesBindlessAvboitResources)
-            graphics().getDevice()->getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.meshletPipeline.get());
+        // Geometry streams are heap-backed for every raster material pass (opaque and AVBOIT alike).
+        graphics().getDevice()->getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.meshletPipeline.get());
 
         setMaterialPassDrawPushConstants(context, drawItem, mesh);
         {
@@ -366,6 +367,9 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
             computeState.addBindingSet(csgBindingSets.clip.get());
 
         context.commandList.setComputeState(computeState);
+        // Compute-emulation runs the same heap-backed mesh runtime before the generated vertex buffer reaches the
+        // ordinary graphics raster stage.
+        graphics().getDevice()->getDescriptorHeap().bindCompute(context.commandList, *pipelineResources.computePipeline.get());
 
         ECSRenderDetail::SetShaderDrivenPushConstants(
             context.commandList,

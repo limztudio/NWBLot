@@ -38,7 +38,12 @@
 #define NWB_MESH_INSTANCE_TRANSLATION_FLOAT_OFFSET 4u
 #define NWB_MESH_INSTANCE_MATERIAL_MUTABLE_BYTE_OFFSET_FLOAT_OFFSET 7u
 #define NWB_MESH_INSTANCE_SCALE_FLOAT_OFFSET 8u
-#define NWB_MESH_INSTANCE_FLOAT_COUNT 12u
+// Raster mesh geometry now lives in the global descriptor heap. The per-draw instance record carries the
+// heap slot for each former mesh-set source binding (including the intentional binding-6 gap), so the shared
+// mesh shader can fetch its streams without growing the already-full AVBOIT draw push constant.
+#define NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET 12u
+#define NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT 12u
+#define NWB_MESH_INSTANCE_FLOAT_COUNT (NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET + NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT)
 
 #define NWB_MESH_RASTER_COLOR_LOCATION 0
 #define NWB_MESH_RASTER_NORMAL_LOCATION 1

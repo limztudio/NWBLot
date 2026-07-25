@@ -1,0 +1,72 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Global descriptor heap - typed mesh-stream views over the StorageBuffer class.
+//
+// Raster geometry is stored in eleven immutable streams with five different structured element layouts plus four
+// raw byte streams. They all share the StorageBuffer descriptor table: the type/stride below is a shader-side view,
+// exactly like the BVH-node alias in bindless_heap_bvh.slangi. Per-draw instance data carries the slot for each
+// former mesh-set binding.
+
+
+#ifndef NWB_GRAPHICS_BINDLESS_HEAP_MESH_SLANGI
+#define NWB_GRAPHICS_BINDLESS_HEAP_MESH_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "bindless_heap.slangi"
+#include "../mesh/meshlet_payload.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed views of the StorageBuffer descriptor table in bindless_heap.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbHeapMeshPositionBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbHeapMeshHalf4Buffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbMeshUv0, Std430DataLayout> g_NwbHeapMeshUv0Buffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbHeapMeshletDescBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbHeapMeshletLocalVertexRefBuffers[];
+#pragma warning(pop)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StructuredBuffer<NwbMeshPosition, Std430DataLayout> NwbHeapMeshPositions(const uint slot){
+    return g_NwbHeapMeshPositionBuffers[NonUniformResourceIndex(slot)];
+}
+
+StructuredBuffer<NwbMeshHalf4, Std430DataLayout> NwbHeapMeshHalf4s(const uint slot){
+    return g_NwbHeapMeshHalf4Buffers[NonUniformResourceIndex(slot)];
+}
+
+StructuredBuffer<NwbMeshUv0, Std430DataLayout> NwbHeapMeshUv0s(const uint slot){
+    return g_NwbHeapMeshUv0Buffers[NonUniformResourceIndex(slot)];
+}
+
+StructuredBuffer<NwbMeshletDesc, Std430DataLayout> NwbHeapMeshletDescs(const uint slot){
+    return g_NwbHeapMeshletDescBuffers[NonUniformResourceIndex(slot)];
+}
+
+StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> NwbHeapMeshletLocalVertexRefs(const uint slot){
+    return g_NwbHeapMeshletLocalVertexRefBuffers[NonUniformResourceIndex(slot)];
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

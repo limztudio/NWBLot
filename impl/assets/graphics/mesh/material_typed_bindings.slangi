@@ -10,6 +10,7 @@
 
 
 #include "binding_slots.h"
+#include "runtime_constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,6 +24,9 @@ struct NwbMeshInstanceData{
     float3 translation;
     uint materialMutableByteOffset;
     float4 scale;
+    // Indexed by the original NWB_MESH_BINDING_* source slot. Binding 6 remains an intentional unused gap;
+    // keeping its word preserves the direct C++/shader map and avoids renumbering the surviving local bindings.
+    uint geometryHeapSlots[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
 };
 
 [[vk::binding(NWB_MESH_BINDING_MATERIAL_TYPED, NWB_MESH_SET)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMaterialTypedWords;

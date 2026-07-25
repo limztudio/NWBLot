@@ -38,6 +38,9 @@
 #define NWB_AVBOIT_ACCUMULATE_BINDING_TRANSMITTANCE 1
 #define NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL 2
 #define NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER 3
+// Slots 1 (transmittance volume) + 3 (linear sampler) already fetch from the persistent heap; the shared
+// scene-shading cbuffer (4) + light list (5) now do too (deferred avboitSlots.z/.w). All four remain reserved
+// layout gaps -- do not renumber them.
 #define NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING 4
 #define NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST 5
 

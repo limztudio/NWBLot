@@ -416,9 +416,7 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitMaterialShapesBuildAsDescriptorBuffe
     auto control = makeStructuredSrv(4u);
     auto extinction = makeStructuredUav(4u);
     auto overflowDepth = makeStructuredUav(4u);
-    auto sceneShading = makeConstantBuffer();
-    auto lightList = makeStructuredSrv(16u);
-    ASSERT_TRUE(slots && coverage && depthWarp && control && extinction && overflowDepth && sceneShading && lightList);
+    ASSERT_TRUE(slots && coverage && depthWarp && control && extinction && overflowDepth);
 
     BindingLayoutDesc occupancyLayoutDesc(descArena);
     occupancyLayoutDesc.setVisibility(ShaderType::Pixel);
@@ -465,8 +463,7 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitMaterialShapesBuildAsDescriptorBuffe
     accumulateLayoutDesc.setUseDescriptorBuffer(true);
     accumulateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, 1u));
     accumulateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, 1u));
-    accumulateLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING, 1u));
-    accumulateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST, 1u));
+    // Scene-shading cbuffer + light list are heap-fetched now (avboitSlots.z/.w); slots 4/5 are reserved gaps.
     accumulateLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, 1u));
     accumulateLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE));
     auto accumulateLayout = device.createBindingLayout(accumulateLayoutDesc);
@@ -477,8 +474,6 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitMaterialShapesBuildAsDescriptorBuffe
     BindingSetDesc accumulateSetDesc(descArena);
     accumulateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, depthWarp.get()));
     accumulateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, control.get()));
-    accumulateSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING, sceneShading.get()));
-    accumulateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST, lightList.get()));
     accumulateSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, slots.get()));
     auto accumulateSet = device.createBindingSet(accumulateSetDesc, accumulateLayout);
     ASSERT_NE(accumulateSet.get(), nullptr);

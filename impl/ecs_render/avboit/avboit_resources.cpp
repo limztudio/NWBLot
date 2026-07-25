@@ -166,13 +166,12 @@ bool RendererAvboitSystem::createAvboitResources(){
         avboitState().m_accumulateBindingLayout,
         Core::ShaderType::Pixel,
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            // The regular accumulate shader fetches its Texture3D transmittance volume and linear sampler from the
-            // heap, leaving a pure-resource local set that Backend C can bind with the heap at sets 8/9.
+            // The regular accumulate shader fetches its Texture3D transmittance volume + linear sampler AND the shared
+            // scene-shading cbuffer + light list from the heap, leaving a pure-resource local set that Backend C can
+            // bind with the heap at sets 8/9.
             bindingLayoutDesc.setUseDescriptorBuffer(true);
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
         }

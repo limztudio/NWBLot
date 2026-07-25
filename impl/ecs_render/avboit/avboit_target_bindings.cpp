@@ -123,8 +123,8 @@ bool RendererAvboitSystem::createAvboitFrameTargetBindingSets(
     Core::BindingSetDesc accumulateBindingSetDesc(arena());
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, avboitTargets.depthWarpBuffer.get()));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, avboitTargets.controlBuffer.get()));
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get()));
+    // The scene-shading cbuffer + light list are read from the heap now (avboitSlots.z/.w), not this local set. The
+    // deferred lighting pass registers both shared singletons in the heap for this frame generation.
     __hidden_avboit_target_bindings::AddBindlessResourcesBinding(accumulateBindingSetDesc, createdTargets);
     if(!__hidden_avboit_target_bindings::CreateBindingSet(
         *device,
